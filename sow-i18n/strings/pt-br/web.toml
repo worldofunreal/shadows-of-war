@@ -574,6 +574,9 @@ leader_ewuare_civilization = "Reino do Benin"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Profetisa dos brúcteros, cuja autoridade e profecias são conhecidas sobretudo pelo relato romano de Tácito sobre a revolta batava."
 leader_veleda_civilization = "Brúcteros"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Conquistador turco-mongol (1336–1405) que governou de Samarcanda e construiu um império do Volga ao Ganges."
+leader_amir_timur_civilization = "Império Timúrida"
 
 [profile]
 ranked_1v1 = "Ranqueda 1x1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "Bairros das guildas"
 leader_ewuare_description = "Cada nível ativo de fábrica a até 20 casas de uma cidade própria ativa gera 1 de ouro extra por segundo de jogo. Várias cidades não acumulam o efeito."
 leader_veleda_ability = "Presa do Reno"
 leader_veleda_description = "Seus projéteis navais capturam navios de guerra inimigos derrotados em vez de afundá-los. Eles mudam de lado com 25% de vida e sem veterania."
+leader_amir_timur_ability = "Perseguição da Horda"
+leader_amir_timur_description = "As tribos que recuam do seu território perdem 35% mais tropas."
 
 [ranked]
 my_rank = "Meu ranque"

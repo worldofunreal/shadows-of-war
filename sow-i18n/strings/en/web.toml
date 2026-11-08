@@ -1030,6 +1030,9 @@ leader_ewuare_civilization = "Kingdom of Benin"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Bructerian prophetess whose authority and predictions are known mainly through Tacitus’ Roman account of the Batavian revolt."
 leader_veleda_civilization = "Bructeri"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Turco-Mongol conqueror (1336–1405) who ruled from Samarkand and built an empire from the Volga to the Ganges."
+leader_amir_timur_civilization = "Timurid Empire"
 
 [profile]
 laurels = "Laurels"
@@ -1923,6 +1926,8 @@ leader_ewuare_ability = "Guild Wards"
 leader_ewuare_description = "Each active factory level within 20 tiles of one of your active cities generates 1 extra gold per game second. Multiple cities do not stack."
 leader_veleda_ability = "Prize of the Rhine"
 leader_veleda_description = "Your naval shells capture defeated enemy warships instead of sinking them. Prizes change sides with 25% health and no veterancy."
+leader_amir_timur_ability = "Pursuit of the Horde"
+leader_amir_timur_description = "Tribes retreating from your land lose 35% more troops."
 
 [ranked]
 my_rank = "My rank"

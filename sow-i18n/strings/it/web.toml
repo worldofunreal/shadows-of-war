@@ -574,6 +574,9 @@ leader_ewuare_civilization = "Regno del Benin"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Profetessa dei Bructeri, la cui autorità e le cui previsioni sono note soprattutto dal resoconto romano di Tacito sulla rivolta batava."
 leader_veleda_civilization = "Bructeri"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Conquistatore turco-mongolo (1336-1405) che governò da Samarcanda e costruì un impero dal Volga al Gange."
+leader_amir_timur_civilization = "Impero timuride"
 
 [profile]
 ranked_1v1 = "Classificata 1v1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "Quartieri delle corporazioni"
 leader_ewuare_description = "Ogni livello attivo di fabbrica entro 20 caselle da una tua città attiva genera 1 oro extra al secondo di gioco. Più città non sommano l’effetto."
 leader_veleda_ability = "Preda del Reno"
 leader_veleda_description = "I tuoi proiettili navali catturano le navi da guerra nemiche sconfitte invece di affondarle. Cambiano schieramento con il 25% di salute e senza esperienza."
+leader_amir_timur_ability = "Inseguimento dell'Orda"
+leader_amir_timur_description = "Le tribù che si ritirano dal tuo territorio perdono il 35% di truppe in più."
 
 [ranked]
 my_rank = "Il mio rango"

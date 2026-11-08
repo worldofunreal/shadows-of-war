@@ -574,6 +574,9 @@ leader_ewuare_civilization = "贝宁王国"
 leader_veleda_name = "维莱达"
 leader_veleda_historical = "布鲁克特里人的女预言者；她的权威与预言主要见于塔西佗关于巴达维起义的罗马记述。"
 leader_veleda_civilization = "布鲁克特里人"
+leader_amir_timur_name = "埃米尔·帖木儿"
+leader_amir_timur_historical = "突厥-蒙古征服者（1336—1405），以撒马尔罕为中心，建立了从伏尔加河到恒河的帝国。"
+leader_amir_timur_civilization = "帖木儿帝国"
 
 [profile]
 ranked_1v1 = "排位 1v1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "行会街区"
 leader_ewuare_description = "每座在己方运作城市20格内的工厂，每个有效等级每游戏秒额外产出1金币。多座城市不叠加。"
 leader_veleda_ability = "莱茵河的战利舰"
 leader_veleda_description = "你的舰炮会俘获被击败的敌方战舰，而非将其击沉。俘获战舰以25%生命值加入己方，且无老兵经验。"
+leader_amir_timur_ability = "草原追击"
+leader_amir_timur_description = "从你的土地撤退的部落多损失35%兵力。"
 
 [ranked]
 my_rank = "我的段位"

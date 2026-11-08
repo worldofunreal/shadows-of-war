@@ -9473,6 +9473,28 @@
     }
    },
    "territory_color": "#5e718e"
+  },
+  {
+   "id": "amir_timur",
+   "name": "Amir Timur",
+   "entity": "Timurid Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 39.6542,
+   "lon": 66.9597,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Timur",
+   "avatar": "amir_timur",
+   "hero": {
+    "name": "Amir Timur",
+    "art_slug": "amir_timur",
+    "ability": {
+     "kind": "enemy_retreat_penalty",
+     "against": "tribe",
+     "percent": 35
+    }
+   },
+   "territory_color": "#3f6f4e"
   }
  ]
 }

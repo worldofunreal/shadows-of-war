@@ -574,6 +574,9 @@ leader_ewuare_civilization = "Benin Krallığı"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Batav isyanı hakkındaki Roma anlatılarında adı geçen, Brukterilerin kâhini; otoritesi ve kehanetleri çoğunlukla Tacitus’un eserlerinden bilinir."
 leader_veleda_civilization = "Brukteriler"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Semerkant'tan hükmeden ve Volga'dan Ganj'a uzanan bir imparatorluk kuran Türk-Moğol fatihi (1336-1405)."
+leader_amir_timur_civilization = "Timur İmparatorluğu"
 
 [profile]
 ranked_1v1 = "Dereceli 1'e 1"
@@ -1472,6 +1475,8 @@ leader_ewuare_ability = "Lonca Mahalleleri"
 leader_ewuare_description = "Kendi etkin şehrinin 20 kare yakınındaki her etkin fabrika seviyesi oyun saniyesi başına 1 ek altın üretir. Birden fazla şehir etkiyi katlamaz."
 leader_veleda_ability = "Ren Ganimeti"
 leader_veleda_description = "Gemi mermilerin yenilen düşman savaş gemilerini batırmak yerine ele geçirir. Gemiler %25 canla ve kıdem olmadan taraf değiştirir."
+leader_amir_timur_ability = "Orda Takibi"
+leader_amir_timur_description = "Topraklarından çekilen kabileler %35 daha fazla asker kaybeder."
 
 [ranked]
 my_rank = "Derecem"

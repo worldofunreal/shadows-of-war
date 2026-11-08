@@ -574,6 +574,9 @@ leader_ewuare_civilization = "Kerajaan Benin"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Peramal Bructeri yang otoritas dan ramalannya terutama dikenal melalui catatan Romawi Tacitus tentang pemberontakan Batavia."
 leader_veleda_civilization = "Bructeri"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Penakluk Turko-Mongol (1336–1405) yang memerintah dari Samarkand dan membangun kekaisaran dari Volga hingga Gangga."
+leader_amir_timur_civilization = "Kekaisaran Timuriyah"
 
 [profile]
 ranked_1v1 = "Peringkat 1v1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "Kawasan Gilda"
 leader_ewuare_description = "Setiap tingkat pabrik aktif dalam jarak 20 petak dari kota aktif milikmu menghasilkan 1 emas tambahan per detik permainan. Beberapa kota tidak menumpuk efeknya."
 leader_veleda_ability = "Rampasan Rhein"
 leader_veleda_description = "Peluru kapalmu merebut kapal perang musuh yang dikalahkan alih-alih menenggelamkannya. Kapal berpihak kepadamu dengan 25% kesehatan dan tanpa pengalaman."
+leader_amir_timur_ability = "Pengejaran Suku"
+leader_amir_timur_description = "Suku yang mundur dari tanahmu kehilangan 35% lebih banyak pasukan."
 
 [ranked]
 my_rank = "Peringkat saya"

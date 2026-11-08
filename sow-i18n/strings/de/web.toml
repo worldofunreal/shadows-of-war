@@ -574,6 +574,9 @@ leader_ewuare_civilization = "Königreich Benin"
 leader_veleda_name = "Veleda"
 leader_veleda_historical = "Brukterische Seherin, deren Autorität und Weissagungen vor allem durch Tacitus’ römischen Bericht über den Bataveraufstand bekannt sind."
 leader_veleda_civilization = "Brukterer"
+leader_amir_timur_name = "Amir Timur"
+leader_amir_timur_historical = "Turko-mongolischer Eroberer (1336–1405), der von Samarkand aus ein Reich von der Wolga bis zum Ganges schuf."
+leader_amir_timur_civilization = "Timuridenreich"
 
 [profile]
 ranked_1v1 = "Rangliste 1 gegen 1"
@@ -1468,6 +1471,8 @@ leader_ewuare_ability = "Zunftviertel"
 leader_ewuare_description = "Jede aktive Fabrikstufe im Umkreis von 20 Feldern einer eigenen aktiven Stadt erzeugt 1 zusätzliches Gold pro Spielsekunde. Mehrere Städte vervielfachen den Effekt nicht."
 leader_veleda_ability = "Prise vom Rhein"
 leader_veleda_description = "Deine Schiffsgeschosse erbeuten besiegte feindliche Kriegsschiffe, statt sie zu versenken. Sie wechseln mit 25% Gesundheit und ohne Veteranenrang die Seite."
+leader_amir_timur_ability = "Verfolgung der Horde"
+leader_amir_timur_description = "Stämme, die sich aus deinem Gebiet zurückziehen, verlieren 35 % mehr Truppen."
 
 [ranked]
 my_rank = "Mein Rang"
