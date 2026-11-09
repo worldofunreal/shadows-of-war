@@ -1,0 +1,49 @@
+[articles.en]
+text = "Windradyne was a Wiradjuri resistance leader in central-western New South Wales during the conflicts known as the Bathurst Wars."
+title = "Windradyne"
+lang = "en"
+url = "https://adb.anu.edu.au/biography/windradyne-13251"
+intro = [
+  "Windradyne (c. 1800–1829) was a Wiradjuri resistance leader from the upper Macquarie River region of central-western New South Wales. British settlement expanded into Wiradjuri country in the 1820s, and the resulting conflict around Bathurst is often called the Bathurst Wars.",
+  "The historical record is uneven. Much of what is written about Windradyne comes from colonial sources, which described him as a leader and sometimes blamed him for violence. The Australian Dictionary of Biography cautions that these accounts must be read in their colonial context; details of his death and its date have also been reported differently.",
+]
+sections = [
+  { "title" = "Resistance in Wiradjuri country", "paragraphs" = [
+      "As settlers moved beyond the Bathurst region, Wiradjuri communities faced the loss of access to their country, food sources, and waterways. Conflict intensified in the early 1820s. Museums and historical accounts describe Windradyne as one of the Wiradjuri leaders who resisted this expansion. His significance rests on the collective defense of Wiradjuri land, rather than on a documented claim that he ruled every Wiradjuri community.",
+      "The conflicts known as the Bathurst Wars involved several years of resistance and reprisals. Colonial accounts often reduced Indigenous resistance to the actions of particular individuals; they did not record the full range of Wiradjuri decision-making or perspectives. Windradyne's name became especially prominent in those records, while the experiences of the communities he represented remain less fully documented.",
+    ] },
+  { "title" = "The historical record", "paragraphs" = [
+      "Colonists also called Windradyne “Saturday,” a name that appears in contemporary records. Descriptions that label him an instigator come from those same colonial accounts and should not be treated as a neutral account of the conflict. The surviving evidence supports his place as a Wiradjuri resistance leader, but leaves uncertainty about particular events and the circumstances of his death in 1829.",
+      "Windradyne is remembered as a figure of Wiradjuri resistance during the expansion of British settlement in New South Wales. His story is best understood alongside the wider history of Wiradjuri communities and the limits of the written record, which was largely produced by the colonial society against which they were defending their country.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

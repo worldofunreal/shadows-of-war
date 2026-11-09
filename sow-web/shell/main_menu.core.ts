@@ -102,6 +102,8 @@ interface MenuUi {
     passwordDraft: string;
     storeCheckoutRequestId: string | null;
     storeCheckoutBusy: boolean;
+    /** `leaderId:currency` awaiting a second tap in portal hero unlocks. */
+    portalUnlockConfirm: string | null;
     purchaseModal: PurchaseModal | null;
     purchaseIntent: PurchaseIntent | null;
     storeCatalogLoading: boolean;
@@ -169,6 +171,7 @@ export const menuUi: MenuUi = {
     passwordDraft: "",
     storeCheckoutRequestId: null,
     storeCheckoutBusy: false,
+    portalUnlockConfirm: null,
     purchaseModal: null,
     purchaseIntent: null,
     storeCatalogLoading: false,
@@ -735,15 +738,37 @@ export function currentScreen() {
     return "home";
 }
 
+// Commands that start or join a match. A portal may run its between-match
+// between-match ad first; the command goes out when the ad ends.
+const MATCH_ENTRY_COMMANDS = new Set([
+    "quick_match",
+    "join_lobby",
+    "join_with_password",
+    "join_code",
+    "create_game",
+    "start_single_player",
+    "start_campaign_episode",
+]);
+
 export function send(type: string, extra?: Record<string, unknown>): boolean {
     const command = Object.assign({ type: type }, extra || {});
     const serialized = JSON.stringify(command);
-    if (typeof window.SOW_menu_command !== "function") {
-        pendingCommands.push(serialized);
+    if (MATCH_ENTRY_COMMANDS.has(type) && typeof window.SOW_portalBeforeMatch === "function") {
+        window.SOW_portalBeforeMatch(function () {
+            dispatchCommand(serialized);
+        });
         return true;
     }
-    window.SOW_menu_command(serialized);
+    dispatchCommand(serialized);
     return true;
+}
+
+function dispatchCommand(serialized: string) {
+    if (typeof window.SOW_menu_command !== "function") {
+        pendingCommands.push(serialized);
+        return;
+    }
+    window.SOW_menu_command(serialized);
 }
 
 window.SOW_flush_menu_commands = function () {

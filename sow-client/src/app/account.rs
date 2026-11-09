@@ -1464,6 +1464,16 @@ impl SowApp {
         self.post_profile_action("leader unlock", "/store/leaders/unlock", fields);
     }
 
+    pub(crate) fn double_match_reward(&mut self, match_id: String) {
+        let mut fields = serde_json::Map::new();
+        fields.insert("match_id".into(), serde_json::Value::String(match_id));
+        self.post_profile_action(
+            "reward double",
+            "/profile/reward-receipts/double",
+            fields,
+        );
+    }
+
     pub(crate) fn unlock_skin(&mut self, skin_id: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("skin_id".into(), serde_json::Value::String(skin_id));

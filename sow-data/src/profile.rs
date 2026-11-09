@@ -43,6 +43,9 @@ pub struct RewardReceipt {
     pub leader_xp: u32,
     pub crowns: u64,
     pub laurels: u64,
+    /// Premium currency paid by this receipt; older receipts omit it.
+    #[serde(default)]
+    pub gems: u64,
     #[serde(default)]
     pub unlocked_leaders: Vec<String>,
     /// Player level immediately before and after this receipt was applied.

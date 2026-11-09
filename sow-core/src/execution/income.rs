@@ -2,7 +2,8 @@ use crate::building::aggregate_buildings_per_player;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
     alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
-    trade_income_per_second, trade_troops_per_second, troop_income_per_second,
+    imperial_standard_income, trade_income_per_second, trade_troops_per_second,
+    troop_income_per_second,
 };
 use crate::game::GamePhase;
 
@@ -77,10 +78,26 @@ impl SowEngine {
             self.state.players[idx].max_troops = max_tr;
 
             let hero_gold = self.hero_gold_per_second(player_id);
-            if hero_gold > 0.0 {
+            let (_, standards_troops) = imperial_standard_income(agg, leader, &config);
+            if hero_gold > 0.0 || standards_troops > 0.0 {
                 if self.hero_income_active.insert(player_id) {
-                    let home = self.state.players[idx].home;
-                    self.state.announce_leader_ability(player_id, home);
+                    let marker = if matches!(
+                        leader.ability(),
+                        crate::geo_entities::Ability::ImperialStandards { .. }
+                    ) {
+                        let width = self.state.map.width;
+                        self.buildings
+                            .iter()
+                            .find(|building| {
+                                building.owner_id == player_id
+                                    && building.kind == crate::game::BuildingKind::City
+                                    && building.active_level() > 0
+                            })
+                            .map(|city| (city.tile_idx % width, city.tile_idx / width))
+                    } else {
+                        self.state.players[idx].home
+                    };
+                    self.state.announce_leader_ability(player_id, marker);
                 }
             } else {
                 self.hero_income_active.remove(&player_id);
@@ -91,7 +108,8 @@ impl SowEngine {
                     self.state.players[idx].alliances.len(),
                     leader,
                     &config,
-                );
+                )
+                + standards_troops;
             let mut troop_income = config.per_tick(troop_ps);
 
             if is_standard_bot {

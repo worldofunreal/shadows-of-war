@@ -88,6 +88,7 @@ export interface MenuRewardReceipt {
     leader_xp: number;
     crowns: number;
     laurels: number;
+    gems?: number;
     unlocked_leaders: string[];
     level_before?: number | null;
     level_after?: number | null;

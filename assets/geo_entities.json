@@ -9539,6 +9539,557 @@
     }
    },
    "territory_color": "#a25f55"
+  },
+  {
+   "id": "natavan",
+   "name": "Khurshid Banu Natavan",
+   "entity": "Karabakh",
+   "role": "nation",
+   "region": "asia",
+   "lat": 39.76,
+   "lon": 46.75,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Khurshidbanu_Natavan",
+   "avatar": "natavan",
+   "hero": {
+    "name": "Khurshid Banu Natavan",
+    "ability": {
+     "kind": "city_farm_founding"
+    }
+   },
+   "territory_color": "#478d7d"
+  },
+  {
+   "id": "tarabai",
+   "name": "Tarabai",
+   "entity": "Maratha Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 17.35,
+   "lon": 74.13,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Tarabai",
+   "avatar": "tarabai",
+   "hero": {
+    "name": "Tarabai",
+    "ability": {
+     "kind": "counter_levy",
+     "percent": 25,
+     "max_gold": 250
+    }
+   },
+   "territory_color": "#bc7043"
+  },
+  {
+   "id": "queen_suriyothai",
+   "name": "Suriyothai",
+   "entity": "Ayutthaya Kingdom",
+   "role": "nation",
+   "region": "asia",
+   "lat": 14.3594,
+   "lon": 100.5761,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Suriyothai",
+   "avatar": "queen_suriyothai",
+   "hero": {
+    "name": "Suriyothai",
+    "ability": {
+     "kind": "city_intercession",
+     "troops": 1500
+    }
+   },
+   "territory_color": "#c58d3e"
+  },
+  {
+   "id": "queen_cartimandua",
+   "name": "Cartimandua",
+   "entity": "Brigantes",
+   "role": "nation",
+   "region": "europe",
+   "lat": 54.0,
+   "lon": -1.5,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cartimandua",
+   "avatar": "queen_cartimandua",
+   "hero": {
+    "name": "Cartimandua",
+    "ability": {
+     "kind": "retreat_handover",
+     "percent": 25
+    }
+   },
+   "territory_color": "#795897"
+  },
+  {
+   "id": "thusnelda_cherusci",
+   "name": "Thusnelda",
+   "entity": "Cherusci",
+   "role": "nation",
+   "region": "europe",
+   "lat": 52.0,
+   "lon": 8.6,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Thusnelda",
+   "avatar": "thusnelda_cherusci",
+   "hero": {
+    "name": "Thusnelda",
+    "ability": {
+     "kind": "city_denial"
+    }
+   },
+   "territory_color": "#697d47"
+  },
+  {
+   "id": "pharaoh_hatshepsut",
+   "name": "Hatshepsut",
+   "entity": "Ancient Egypt",
+   "role": "nation",
+   "region": "africa",
+   "lat": 25.7206,
+   "lon": 32.6103,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Hatshepsut",
+   "avatar": "pharaoh_hatshepsut",
+   "hero": {
+    "name": "Hatshepsut",
+    "ability": {
+     "kind": "punt_gardens"
+    }
+   },
+   "territory_color": "#b58e4c"
+  },
+  {
+   "id": "lakshmibai",
+   "name": "Lakshmibai",
+   "entity": "Jhansi",
+   "role": "nation",
+   "region": "asia",
+   "lat": 25.3189,
+   "lon": 83.0128,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lakshmibai%2C_Rani_of_Jhansi",
+   "avatar": "lakshmibai",
+   "hero": {
+    "name": "Lakshmibai",
+    "ability": {
+     "kind": "last_city_relocation"
+    }
+   },
+   "territory_color": "#b96b38"
+  },
+  {
+   "id": "kabal_xook",
+   "name": "K’ab’al Xook",
+   "entity": "Yaxchilán",
+   "role": "nation",
+   "region": "americas",
+   "lat": 16.9,
+   "lon": -90.9667,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Lady_Xoc",
+   "avatar": "kabal_xook",
+   "hero": {
+    "name": "K’ab’al Xook",
+    "ability": {
+     "kind": "war_regalia",
+     "troops": 750
+    }
+   },
+   "territory_color": "#7c9b72"
+  },
+  {
+   "id": "mandukhai",
+   "name": "Mandukhai Khatun",
+   "entity": "Northern Yuan",
+   "role": "nation",
+   "region": "asia",
+   "lat": 46,
+   "lon": 105,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mandukhai",
+   "avatar": "mandukhai",
+   "hero": {
+    "name": "Mandukhai Khatun",
+    "ability": {
+     "kind": "reunification",
+     "percent": 25
+    }
+   },
+   "territory_color": "#8779b4"
+  },
+  {
+   "id": "queen_nefertiti",
+   "name": "Nefertiti",
+   "entity": "Ancient Egypt",
+   "role": "nation",
+   "region": "africa",
+   "lat": 27.64,
+   "lon": 30.9,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nefertiti",
+   "avatar": "queen_nefertiti",
+   "hero": {
+    "name": "Nefertiti",
+    "ability": {
+     "kind": "factory_city_upgrade_discount",
+     "percent": 35
+    }
+   },
+   "territory_color": "#d69439"
+  },
+  {
+   "id": "spartacus",
+   "name": "Spartacus",
+   "entity": "Spartacan Rebels",
+   "role": "tribe",
+   "region": "europe",
+   "lat": 41.08,
+   "lon": 14.25,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Spartacus",
+   "avatar": "spartacus",
+   "hero": {
+    "name": "Spartacus",
+    "ability": {
+     "kind": "factory_raid",
+     "troops_per_level": 300
+    }
+   },
+   "territory_color": "#ad513c"
+  },
+  {
+   "id": "emperor_qin_shi_huang",
+   "name": "Qin Shi Huang",
+   "entity": "Qin Dynasty",
+   "role": "nation",
+   "region": "asia",
+   "lat": 34.33,
+   "lon": 108.71,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Qin_Shi_Huang",
+   "avatar": "emperor_qin_shi_huang",
+   "hero": {
+    "name": "Qin Shi Huang",
+    "ability": {
+     "kind": "imperial_standards",
+     "percent": 25
+    }
+   },
+   "territory_color": "#8369a5"
+  },
+  {
+   "id": "baibars",
+   "name": "Baibars",
+   "entity": "Mamluk Sultanate",
+   "role": "nation",
+   "region": "africa",
+   "lat": 30.0444,
+   "lon": 31.2357,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Baybars",
+   "avatar": "baibars",
+   "hero": {
+    "name": "Baibars",
+    "ability": {
+     "kind": "siege_breach"
+    }
+   },
+   "territory_color": "#b87549"
+  },
+  {
+   "id": "suppiluliuma",
+   "name": "Suppiluliuma I",
+   "entity": "Hittite Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 40.02,
+   "lon": 34.62,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/%C5%A0uppiluliuma_I",
+   "avatar": "suppiluliuma",
+   "hero": {
+    "name": "Suppiluliuma I",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": "joint_front",
+     "percent": 25
+    }
+   },
+   "territory_color": "#946949"
+  },
+  {
+   "id": "cynethryth_mercia",
+   "name": "Cynethryth",
+   "entity": "Kingdom of Mercia",
+   "role": "nation",
+   "region": "europe",
+   "lat": 52.63,
+   "lon": -1.69,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Cynethryth",
+   "avatar": "cynethryth_mercia",
+   "hero": {
+    "name": "Cynethryth",
+    "ability": {
+     "kind": "cookham_exchange"
+    }
+   },
+   "territory_color": "#885865"
+  },
+  {
+   "id": "sibylla",
+   "name": "Sibylla of Jerusalem",
+   "entity": "Kingdom of Jerusalem",
+   "role": "nation",
+   "region": "asia",
+   "lat": 31.78,
+   "lon": 35.23,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sibylla_of_Jerusalem",
+   "avatar": "sibylla",
+   "hero": {
+    "name": "Sibylla of Jerusalem",
+    "ability": {
+     "kind": "second_crown"
+    }
+   },
+   "territory_color": "#555f8e"
+  },
+  {
+   "id": "sor_juana_ines_de_la_cruz",
+   "name": "Sor Juana Inés de la Cruz",
+   "entity": "New Spain",
+   "role": "nation",
+   "region": "americas",
+   "lat": 19.43,
+   "lon": -99.13,
+   "gender": "female",
+   "wikipedia": "https://es.wikipedia.org/wiki/Juana_In%C3%A9s_de_la_Cruz",
+   "avatar": "sor_juana_ines_de_la_cruz",
+   "hero": {
+    "name": "Sor Juana Inés de la Cruz",
+    "ability": {
+     "kind": "kitchen_philosophy"
+    }
+   },
+   "territory_color": "#695884"
+  },
+  {
+   "id": "khutulun_qaidu",
+   "name": "Khutulun",
+   "entity": "Ulus of Qaidu",
+   "role": "nation",
+   "region": "asia",
+   "lat": 42.85,
+   "lon": 74.6,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Khutulun",
+   "avatar": "khutulun_qaidu",
+   "hero": {
+    "name": "Khutulun",
+    "ability": {
+     "kind": "mounted_capture",
+     "percent": 20
+    }
+   },
+   "territory_color": "#a67748"
+  },
+  {
+   "id": "gudit_yodit",
+   "name": "Gudit",
+   "entity": "Ethiopian Highlands",
+   "role": "nation",
+   "region": "africa",
+   "lat": 14.13,
+   "lon": 38.72,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Gudit",
+   "avatar": "gudit_yodit",
+   "hero": {
+    "name": "Gudit",
+    "ability": {
+     "kind": "aksum_rout"
+    }
+   },
+   "territory_color": "#854d4c"
+  },
+  {
+   "id": "mithridates_vi",
+   "name": "Mithridates VI",
+   "entity": "Kingdom of Pontus",
+   "role": "nation",
+   "region": "asia",
+   "lat": 42.03,
+   "lon": 35.15,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mithridates_VI_Eupator",
+   "avatar": "mithridates_vi",
+   "hero": {
+    "name": "Mithridates VI",
+    "ability": {
+     "kind": "tigranes_aid",
+     "max_troops": 1000
+    }
+   },
+   "territory_color": "#755342"
+  },
+  {
+   "id": "sargon_of_akkad",
+   "name": "Sargon of Akkad",
+   "entity": "Akkadian Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 33.3,
+   "lon": 44.4,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Sargon_of_Akkad",
+   "avatar": "sargon_of_akkad",
+   "hero": {
+    "name": "Sargon of Akkad",
+    "ability": {
+     "kind": "akkad_garrison"
+    }
+   },
+   "territory_color": "#955c40"
+  },
+  {
+   "id": "kaahumanu_hawaii",
+   "name": "Kaʻahumanu",
+   "entity": "Kingdom of Hawaiʻi",
+   "role": "nation",
+   "region": "oceania",
+   "lat": 20.7702,
+   "lon": -156.2682,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ka%CA%BBahumanu",
+   "avatar": "kaahumanu_hawaii",
+   "hero": {
+    "name": "Kaʻahumanu",
+    "ability": {
+     "kind": "shared_feast"
+    }
+   },
+   "territory_color": "#a45e41"
+  },
+  {
+   "id": "hiawatha_haudenosaunee",
+   "name": "Hiawatha",
+   "entity": "Haudenosaunee Confederacy",
+   "role": "nation",
+   "region": "americas",
+   "lat": 43.01,
+   "lon": -76.2,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Hiawatha",
+   "avatar": "hiawatha_haudenosaunee",
+   "hero": {
+    "name": "Hiawatha",
+    "ability": {
+     "kind": "great_law_of_peace"
+    }
+   },
+   "territory_color": "#6f537d"
+  },
+  {
+   "id": "modu_chanyu",
+   "name": "Modu Chanyu",
+   "entity": "Xiongnu",
+   "role": "nation",
+   "region": "asia",
+   "lat": 48,
+   "lon": 105,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Modu_Chanyu",
+   "avatar": "modu_chanyu",
+   "hero": {
+    "name": "Modu Chanyu",
+    "ability": {
+     "kind": "contested_steppe",
+     "percent": 50
+    }
+   },
+   "territory_color": "#8c633b"
+  },
+  {
+   "id": "jalal_al_din_mangburni",
+   "name": "Jalal al-Din Mangburni",
+   "entity": "Khwarazmian Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 42.32,
+   "lon": 59.15,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Jalal_al-Din_Mangburni",
+   "avatar": "jalal_al_din_mangburni",
+   "hero": {
+    "name": "Jalal al-Din Mangburni",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": "sea_retreat",
+     "percent": 100
+    }
+   },
+   "territory_color": "#315b75"
+  },
+  {
+   "id": "naram_sin",
+   "name": "Naram Sin",
+   "entity": "Akkadian Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 33.3,
+   "lon": 44.4,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Naram-Sin_of_Akkad",
+   "avatar": "naram_sin",
+   "hero": {
+    "name": "Naram Sin",
+    "ability": {
+     "kind": "zagros_ascent",
+     "percent": 50
+    }
+   },
+   "territory_color": "#794436"
+  },
+  {
+   "id": "khosrow_i",
+   "name": "Khosrow I",
+   "entity": "Sasanian Empire",
+   "role": "nation",
+   "region": "asia",
+   "lat": 33.09,
+   "lon": 44.58,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Khosrow_I",
+   "avatar": "khosrow_i",
+   "hero": {
+    "name": "Khosrow I",
+    "ability": {
+     "kind": "regional_commands",
+     "percent": 25
+    }
+   },
+   "territory_color": "#684671"
+  },
+  {
+   "id": "muhumuza",
+   "name": "Muhumuza",
+   "entity": "Nyabingi Movement",
+   "role": "tribe",
+   "region": "africa",
+   "lat": -0.7489,
+   "lon": 29.7003,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Muhumuza",
+   "avatar": "muhumuza",
+   "hero": {
+    "name": "Muhumuza",
+    "ability": {
+     "kind": "nyabingi_network",
+     "percent": 50
+    }
+   },
+   "territory_color": "#587643"
   }
  ]
 }

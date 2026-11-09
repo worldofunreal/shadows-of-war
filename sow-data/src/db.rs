@@ -672,6 +672,12 @@ pub struct PlayerProfile {
     pub crazygames_synced_revision: u64,
     #[serde(default)]
     pub intro_completed: bool,
+    /// UTC day (days since the epoch) of the rewarded-video doubles counted
+    /// in `ad_doubles_today`; a new day resets the count.
+    #[serde(default)]
+    pub ad_double_day: u64,
+    #[serde(default)]
+    pub ad_doubles_today: u32,
     /// Present only for managed ranked opponents, never for public fillers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ranked_bot: Option<RankedBotProfile>,
@@ -753,6 +759,8 @@ impl Default for PlayerProfile {
             playgames_synced_revision: 0,
             crazygames_synced_revision: 0,
             intro_completed: false,
+            ad_double_day: 0,
+            ad_doubles_today: 0,
             ranked_bot: None,
         }
     }
@@ -786,6 +794,7 @@ impl PlayerProfile {
         stats.xp = stats.xp.saturating_add(reward.leader_xp);
         self.crowns = self.crowns.saturating_add(reward.crowns);
         self.laurels = self.laurels.saturating_add(reward.laurels);
+        self.gems = self.gems.saturating_add(reward.gems);
     }
 
     /// One ledger operation for every server-owned reward. Balances, newly
@@ -817,6 +826,7 @@ impl PlayerProfile {
                 laurels: reward
                     .laurels
                     .saturating_add(self.laurels.saturating_sub(laurels_before)),
+                gems: reward.gems,
                 unlocked_leaders: Vec::new(),
                 level_before: Some(level_before),
                 level_after: Some(self.level),
@@ -3239,6 +3249,8 @@ impl PlayerDb {
                         receipt.personal_closure_turn = Some(turn);
                         let did_apply = apply_verified_participant_reward_to_account(
                             account,
+                            &record.queue,
+                            &record.mode,
                             &closure.result,
                             participant,
                             Some(turn),
@@ -4707,6 +4719,51 @@ impl PlayerDb {
         Ok(account)
     }
 
+    /// Pays a verified public match's crowns and gems a second time, once per
+    /// match and at most `AD_DOUBLES_PER_DAY` times per UTC day. The caller
+    /// reports a finished rewarded video; portals offer no server proof, so
+    /// the cap and the recent-match window bound what a forged call earns.
+    pub async fn double_match_reward(
+        &self,
+        account_id: &str,
+        match_id: &str,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let match_id = match_id.trim();
+        if match_id.is_empty() || match_id.len() > 96 || match_id.contains(':') {
+            return Err("invalid match id".into());
+        }
+        let bonus_id = format!("verified_bonus:{match_id}");
+        let double_id = format!("{AD_DOUBLE_RECEIPT_PREFIX}{match_id}");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut failure = None;
+        let account = self
+            .update_account_atomic(
+                account_id,
+                &[match_id, bonus_id.as_str(), double_id.as_str()],
+                |account| {
+                    failure = double_match_reward_in_profile(
+                        &mut account.profile,
+                        match_id,
+                        &bonus_id,
+                        &double_id,
+                        now,
+                    )
+                    .err();
+                    if failure.is_none() {
+                        account.updated_at = now;
+                    }
+                },
+            )
+            .await?;
+        if let Some(error) = failure {
+            return Err(error.into());
+        }
+        Ok(account)
+    }
+
     /// Complete the offline tutorial once and grant its fixed onboarding reward.
     /// The account secret is verified by the HTTP handler before this method runs.
     pub async fn complete_tutorial(
@@ -5478,6 +5535,8 @@ impl PlayerDb {
                         include.push(
                             apply_verified_participant_reward_to_account(
                                 account,
+                                &record.queue,
+                                &record.mode,
                                 &result_for_write,
                                 participant,
                                 None,
@@ -5903,6 +5962,65 @@ fn provisional_match_record(start: &MatchStartRecord, now: u64) -> MatchRecord {
     }
 }
 
+pub const AD_DOUBLE_RECEIPT_PREFIX: &str = "ad_double:";
+pub const AD_DOUBLES_PER_DAY: u32 = 5;
+/// Only a match settled this recently can be doubled, so old history cannot
+/// be cashed in later.
+const AD_DOUBLE_WINDOW_SECS: u64 = 6 * 60 * 60;
+
+fn double_match_reward_in_profile(
+    profile: &mut PlayerProfile,
+    match_id: &str,
+    bonus_id: &str,
+    double_id: &str,
+    now: u64,
+) -> Result<(), &'static str> {
+    if profile.reward_receipts.contains_key(double_id) {
+        return Err("match reward already doubled");
+    }
+    let bonus = profile
+        .reward_receipts
+        .get(bonus_id)
+        .filter(|receipt| receipt.verification_status == Some(ReplayVerificationStatus::Verified))
+        .ok_or("match reward is not verified")?;
+    if now.saturating_sub(bonus.created_at) > AD_DOUBLE_WINDOW_SECS {
+        return Err("match reward is too old to double");
+    }
+    let participation = profile
+        .reward_receipts
+        .get(match_id)
+        .ok_or("match participation receipt is missing")?;
+    let crowns = participation.crowns.saturating_add(bonus.crowns);
+    let gems = participation.gems.saturating_add(bonus.gems);
+    let day = now / 86_400;
+    if profile.ad_double_day != day {
+        profile.ad_double_day = day;
+        profile.ad_doubles_today = 0;
+    }
+    if profile.ad_doubles_today >= AD_DOUBLES_PER_DAY {
+        return Err("daily reward doubles used");
+    }
+    profile.ad_doubles_today += 1;
+    profile.crowns = profile.crowns.saturating_add(crowns);
+    profile.gems = profile.gems.saturating_add(gems);
+    profile.reward_receipts.insert(
+        double_id.to_string(),
+        crate::profile::RewardReceipt {
+            id: double_id.to_string(),
+            match_id: match_id.to_string(),
+            crowns,
+            gems,
+            level_before: Some(profile.level),
+            level_after: Some(profile.level),
+            created_at: now,
+            status: crate::profile::RewardSettlementStatus::Applied,
+            verification_status: Some(ReplayVerificationStatus::Verified),
+            ..Default::default()
+        },
+    );
+    Ok(())
+}
+
 fn update_match_record_participant(
     record: &mut MatchRecord,
     account: &PlayerAccount,
@@ -6068,6 +6186,8 @@ fn apply_ranked_bot_stats_to_account(
 
 fn apply_verified_participant_reward_to_account(
     account: &mut PlayerAccount,
+    queue: &str,
+    mode: &str,
     result: &VerifiedMatchResult,
     participant: &crate::profile::VerifiedMatchParticipant,
     personal_closure_turn: Option<u64>,
@@ -6102,6 +6222,14 @@ fn apply_verified_participant_reward_to_account(
         leader_xp: earned.leader_xp.saturating_sub(participation.leader_xp),
         crowns: earned.crowns.saturating_sub(participation.crowns),
         laurels: earned.laurels.saturating_sub(participation.laurels),
+        gems: crate::rewards::match_gems(crate::rewards::GemInput {
+            queue,
+            mode,
+            won: participant.won,
+            players_defeated: participant.players_defeated,
+            empires_defeated: participant.empires_defeated,
+            played_seconds: result.duration_seconds,
+        }),
     };
     let result_hash = verified_participant_result_hash(result, participant, personal_closure_turn)?;
     let bonus_id = format!("verified_bonus:{}", result.match_id);
@@ -6341,6 +6469,11 @@ mod tests {
         db.remove_match_work(&work.key()).unwrap();
         assert!(db.match_work(&work.key()).unwrap().is_none());
     }
+    use super::{
+        AD_DOUBLE_RECEIPT_PREFIX, AD_DOUBLE_WINDOW_SECS, AD_DOUBLES_PER_DAY,
+        double_match_reward_in_profile,
+    };
+    use crate::profile::ReplayVerificationStatus;
     use super::{
         AccountKind, DISPLAY_NAME_MAX_CHARS, LeaderCareerStats, MatchRecord, PlayerAccount,
         PlayerDb, PlayerProfile, PurchaseRecord, VerifiedReceiptDecision, generated_display_name,
@@ -7346,11 +7479,99 @@ mod tests {
                 .unlocked_achievements
                 .contains("commander_victorious")
         );
-        assert_eq!(profile.laurels, 60);
+        // One win with one commander also completes the hero catalog's first
+        // roster, recruit and win entries, and those points reach the first
+        // laurel milestone in the same refresh; laurels are exactly the sum.
+        let expected = [
+            "caesar_wins_1",
+            "commander_victorious",
+            "first_command",
+            "first_victory",
+            "laurel_hoard",
+            "recruit_caesar",
+            "roster_1",
+        ];
+        assert_eq!(
+            profile
+                .unlocked_achievements
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            expected
+        );
+        let points: u64 = crate::rewards::all_achievements()
+            .iter()
+            .filter(|definition| expected.contains(&definition.id))
+            .map(|definition| definition.points)
+            .sum();
+        assert_eq!(profile.laurels, points);
+        assert_eq!(profile.laurels, 185);
 
         let laurels = profile.laurels;
         profile.refresh_achievements();
         assert_eq!(profile.laurels, laurels);
+    }
+
+    #[test]
+    fn ad_double_pays_a_recent_verified_match_once_within_the_daily_cap() {
+        let now = 10 * 86_400 + 600;
+        let mut profile = PlayerProfile::default();
+        let seed = |profile: &mut PlayerProfile, match_id: &str, verified: bool, at: u64| {
+            profile.reward_receipts.insert(
+                match_id.to_string(),
+                crate::profile::RewardReceipt {
+                    id: match_id.to_string(),
+                    match_id: match_id.to_string(),
+                    crowns: 25,
+                    created_at: at,
+                    ..Default::default()
+                },
+            );
+            let bonus_id = format!("verified_bonus:{match_id}");
+            profile.reward_receipts.insert(
+                bonus_id.clone(),
+                crate::profile::RewardReceipt {
+                    id: bonus_id,
+                    match_id: match_id.to_string(),
+                    crowns: 82,
+                    gems: 53,
+                    created_at: at,
+                    verification_status: verified.then_some(ReplayVerificationStatus::Verified),
+                    ..Default::default()
+                },
+            );
+        };
+        let double = |profile: &mut PlayerProfile, match_id: &str| {
+            double_match_reward_in_profile(
+                profile,
+                match_id,
+                &format!("verified_bonus:{match_id}"),
+                &format!("{AD_DOUBLE_RECEIPT_PREFIX}{match_id}"),
+                now,
+            )
+        };
+
+        seed(&mut profile, "m0", true, now - 60);
+        assert_eq!(double(&mut profile, "m0"), Ok(()));
+        assert_eq!((profile.crowns, profile.gems), (107, 53));
+        let receipt = &profile.reward_receipts["ad_double:m0"];
+        assert_eq!((receipt.crowns, receipt.gems), (107, 53));
+        assert_eq!(receipt.verification_status, Some(ReplayVerificationStatus::Verified));
+        assert_eq!(double(&mut profile, "m0"), Err("match reward already doubled"));
+
+        seed(&mut profile, "pending", false, now - 60);
+        assert_eq!(double(&mut profile, "pending"), Err("match reward is not verified"));
+        seed(&mut profile, "old", true, now - AD_DOUBLE_WINDOW_SECS - 1);
+        assert_eq!(double(&mut profile, "old"), Err("match reward is too old to double"));
+
+        for index in 1..AD_DOUBLES_PER_DAY {
+            let id = format!("m{index}");
+            seed(&mut profile, &id, true, now - 60);
+            assert_eq!(double(&mut profile, &id), Ok(()));
+        }
+        seed(&mut profile, "capped", true, now - 60);
+        assert_eq!(double(&mut profile, "capped"), Err("daily reward doubles used"));
+        assert_eq!(profile.crowns, 107 * u64::from(AD_DOUBLES_PER_DAY));
     }
 
     #[test]
@@ -7361,8 +7582,11 @@ mod tests {
             leader_xp: 25,
             crowns: 10,
             laurels: 0,
+            gems: 4,
         };
         assert!(profile.apply_reward_receipt("match-7", "match-7", "Boudica", reward, 1));
+        assert_eq!(profile.gems, 4);
+        assert_eq!(profile.reward_receipts["match-7"].gems, 4);
         let balance = (
             profile.xp,
             profile.crowns,
@@ -7370,6 +7594,7 @@ mod tests {
             profile.playgames_sync_revision,
         );
         assert!(!profile.apply_reward_receipt("match-7", "match-7", "Boudica", reward, 2));
+        assert_eq!(profile.gems, 4);
         assert_eq!(
             (
                 profile.xp,

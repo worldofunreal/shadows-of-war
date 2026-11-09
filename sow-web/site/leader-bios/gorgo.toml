@@ -1,0 +1,59 @@
+[articles.en]
+text = "Gorgo may refer to:Gorgons; the term \"Gorgo\" is the singular Another name for Medusa, one of the three monstrous Gorgons in Greek mythology Gorgo, one of the dogs that tore apart Actaeon Gorgo (mythology), a woman of king Aegyptus Gorgo (poet), rival of Sappho Gorgo, Queen of Sparta, queen of Sparta, daughter of king Cleomenes I and wife of king Leonidas I Görgö, the Hungarian name for the town of Spišský Hrhov, Slovakia Gorgo, a frazione (subdivision) of the comune of Latisana, Italy Gorgo (film), a 1961 film, or its protagonist, the giant monster Gorgo 681 Gorgo, an asteroid Gorgo, a former brush-footed butterfly genus now included in Erebia Gorgo, a character in the anime The Wonderful Adventures of Nils"
+title = "Gorgo, Queen of Sparta"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Gorgo,_Queen_of_Sparta"
+intro = [
+  "Gorgo (; Greek: Γοργώ [ɡorɡɔ͜ɔ́]; fl. 480 BC) was a Spartan woman and wife to King Leonidas I (r. 489–480 BC). She was the daughter and the only known child of Cleomenes I, Leonidas' half-brother and King of Sparta (r. 520–490 BC). Gorgo was also the mother of King Pleistarchus, her only son with King Leonidas I. She is notably one of the few female historical figures actually named by Herodotus, and is depicted in sources as intelligent and wise. Her birth date is uncertain, but based on Herodotus' dating, it is most likely to have been between 518 and 508 BC.",
+]
+sections = [
+  { "title" = "Early life and education", "paragraphs" = [
+      "According to Herodotus, Gorgo was the only child of King Cleomenes I of Sparta. The earliest anecdote of her life that he provides in The Histories comes when Aristagoras, seeking allies after the Ionian revolt, came to Sparta to try to convince Cleomenes to invade the Persian Empire. He cited the \"disgrace\" suffered by the Ionians in Anatolia and wove further tales of the wealth and resources to be reaped from an empire as vast as Persia. When he learned that the journey to Asia would take three months by sea, however, Cleomenes turned down Aristagoras' proposal and told him to leave Sparta, telling him that such a journey was out of the question for the Lacedaemonians. However, Aristagoras arrived at Cleomenes' home that evening, now offering increasing bribes going as high as 50 talents of silver. Gorgo, eight or nine years old at this point according to Herodotus, here stepped in and told her father to leave lest Aristagoras' bribes corrupt him. Cleomenes listened to his daughter's advice, removed himself, and Aristagoras left Sparta without being heard any further.",
+      "Spartan women such as Gorgo were ultimately expected to produce strong Spartan offspring, and to that end, partook in a physical-education curriculum similar to their male peers. As part of this curriculum, Gorgo would have learned sports such as running, discus and javelin throwing, and wrestling. Gorgo would not only have been taught these sports, but also competed against her peers in various contests. The belief was that if both parents were physically strong, their child would be, as well.",
+      "In addition to her physical education, Gorgo would have been educated in academic matters. As an elite woman, she would have been taught how to read and write. She would also have received an education in the arts, including music, dance, and poetry. The academic curriculum of Spartan women was notably at least equivalent, if not superior, to that of Spartan males. Because of this physical and mental training, Plutarch attributes an anecdote to Gorgo in which a foreign woman notes, \"You Spartan women are the only ones who rule their men.\" To which Gorgo replies, \"Yes, we are the only ones who give birth to men.\"",
+    ] },
+  { "title" = "Marriage and reign", "paragraphs" = [
+      "After Cleomenes's death in 489 BC, Gorgo was left as his sole heiress. By 490, she was apparently already married to her half-uncle Leonidas I. Despite being the daughter and wife of Spartan kings, Gorgo herself could not be considered a queen, as royal women in Sparta did not typically hold a special role in society. The title of \"queen\" being used to describe Greek women would not appear until the late Hellenistic period. That said, Gorgo did hold a certain amount of authority and influence in Spartan politics.",
+      "Arguably, Gorgo's most significant role occurred prior to the Persian invasion of 480 BC. According to Herodotus's Histories, Demaratus, then in exile at the Persian court, sent a warning to Sparta about Xerxes's pending invasion. To prevent the message from being intercepted by the Persians or their vassal states, the message was written on a wooden tablet and then covered with wax. The Spartans did not know what to do with the seemingly blank wax tablet, until Gorgo advised them to clear the wax off the tablet. She is described by David Kahn in his book The Codebreakers as one of the first female cryptanalysts whose name has been recorded.",
+      "Historian and novelist Helena P. Schrader speculates that in the time after the Battle of Marathon and leading up to the Battle of Thermopylae, Leonidas I would have travelled to other city-states to coordinate the Greek coalition, and that he brought Gorgo with him. Here, Schrader postulates, Gorgo would have had her famous exchange in which she told an Athenian woman that Spartan women were the only Greek women to \"give birth to men\".",
+    ] },
+  { "title" = "Children", "paragraphs" = [
+      "She had at least one son by Leonidas I, Pleistarchus, co-king of Sparta from 480 BC to his death in 458 BC.",
+      "Her son was a minor at his father's death, so his uncle Cleombrotus (died 480 BC) and his first cousin and heir Pausanias (r. 480–479 BC) acted as his regent and tutor. Pausanias was the architect of the combined Greek victory at the Battle of Plataea (479 BC). After Pausanias fell into disfavor and was accused of plotting treason, Pleistarchus ruled with the other king of Sparta, Leotychidas II (and then his grandson Archidamus) until his death 459/458 BC.",
+    ] },
+  { "title" = "In popular culture", "paragraphs" = [
+      "In the 1962 film The 300 Spartans, Gorgo was portrayed by Greek actress and future politician Anna Synodinou.",
+      "She makes a minor appearance in the 1998 comic series 300 by Frank Miller, who was heavily inspired by the aforementioned film. In the 2006 motion picture adaptation of the comic, 300, English actress Lena Headey plays Gorgo. In this version, she is more politically involved and has a prominent role in the events preceding and during the war with Persia. Headey reprised her role in the 2014 sequel, 300: Rise of an Empire.",
+      "Gorgo appears as one of two leaders of the Greek civilization in the video game Civilization VI, alongside Pericles. While Pericles focuses on cultural development, Gorgo's playstyle emphasizes generating culture through combat, in reference to Sparta's history of military conquest.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

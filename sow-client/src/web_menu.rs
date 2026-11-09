@@ -143,6 +143,11 @@ enum WebMenuCommand {
         account_id: String,
         receipt_ids: Vec<String>,
     },
+    /// Sent only after the portal reports a finished rewarded video.
+    DoubleMatchReward {
+        account_id: String,
+        match_id: String,
+    },
     SaveMenuGuideProgress {
         guide_id: String,
         completed_steps: Vec<String>,
@@ -666,6 +671,14 @@ pub fn sow_wake_event_loop() {
     wake_event_loop();
 }
 
+/// Portal bridges call this while an ad plays or the portal mutes the game.
+/// Sound effects run through Web Audio inside WASM, so muting page media
+/// elements alone would leave them audible.
+#[wasm_bindgen]
+pub fn sow_set_portal_audio_muted(muted: bool) {
+    sow_audio::set_host_muted(muted);
+}
+
 /// Called by the vanilla shell after the WASM module has initialized.
 #[wasm_bindgen]
 pub fn sow_menu_command(json: String) {
@@ -1057,6 +1070,14 @@ impl SowApp {
                 } => {
                     if self.progress_account_id.as_deref() == Some(account_id.as_str()) {
                         self.acknowledge_reward_receipts(receipt_ids);
+                    }
+                }
+                WebMenuCommand::DoubleMatchReward {
+                    account_id,
+                    match_id,
+                } => {
+                    if self.progress_account_id.as_deref() == Some(account_id.as_str()) {
+                        self.double_match_reward(match_id);
                     }
                 }
                 WebMenuCommand::SaveMenuGuideProgress {

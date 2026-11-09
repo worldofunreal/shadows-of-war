@@ -106,8 +106,20 @@
         return /poki\.com/i.test(ref) || /poki-gdn\.com/i.test(ref);
     }
 
+    // Sound effects play through Web Audio inside WASM; page media elements
+    // alone do not cover them.
+    function syncWasmAudio() {
+        if (typeof window.SOW_setPortalAudioMuted !== "function") {
+            return;
+        }
+        try {
+            window.SOW_setPortalAudioMuted(!!(window.SOW_adPlaying || window.SOW_PORTAL_MUTE_AUDIO));
+        } catch (e) {}
+    }
+
     function portalAdPause() {
         window.SOW_adPlaying = true;
+        syncWasmAudio();
         document.querySelectorAll("audio,video").forEach(function (el) {
             el.dataset.sowWasPaused = el.paused ? "1" : "0";
             el.pause();
@@ -117,8 +129,9 @@
 
     function portalAdResume() {
         window.SOW_adPlaying = false;
+        syncWasmAudio();
         document.querySelectorAll("audio,video").forEach(function (el) {
-            el.muted = false;
+            el.muted = !!window.SOW_PORTAL_MUTE_AUDIO;
             if (el.dataset.sowWasPaused !== "1") {
                 el.play().catch(function () {});
             }
@@ -204,6 +217,8 @@
         window.SOW_PORTAL_MUTE_AUDIO = !!settings.muteAudio;
         if (settings.muteAudio) {
             window.SOW_portalMuteGameAudio();
+        } else {
+            window.SOW_portalUnmuteGameAudio();
         }
         window.SOW_DISABLE_CHAT = !!settings.disableChat;
     }
@@ -790,12 +805,14 @@
     window.SOW_portalAdResume = portalAdResume;
 
     window.SOW_portalMuteGameAudio = function () {
+        syncWasmAudio();
         document.querySelectorAll("audio,video").forEach(function (el) {
             el.muted = true;
         });
     };
 
     window.SOW_portalUnmuteGameAudio = function () {
+        syncWasmAudio();
         if (window.SOW_PORTAL_MUTE_AUDIO || window.SOW_adPlaying) {
             return;
         }
@@ -1144,7 +1161,8 @@
         let token = null;
         try {
             if (window.CrazyGames.SDK.user.getUserToken) {
-                token = await window.CrazyGames.SDK.user.getUserToken();
+                // One signing key for every call: the SDK caches the token per key.
+                token = await window.CrazyGames.SDK.user.getUserToken({ signingKeyType: "IN_GAME_AUTH" });
             }
         } catch (e) {
             console.warn("CrazyGames getUserToken failed:", e);
@@ -1503,16 +1521,18 @@
         }
     };
 
+    // CrazyGames expects gameplayStart/gameplayStop in strict pairs. Boot and
+    // menu routes call stop without a match; those calls must not reach the
+    // SDK or request a midgame ad before the player has played.
+    let cgGameplayActive = false;
+
     window.SOW_portalGameplayStart = function (isRetry) {
-        if (isSiteEmbed() || window.SOW_adPlaying) {
+        if (isSiteEmbed() || window.SOW_adPlaying || cgGameplayActive) {
             return;
         }
-        // Off-portal (site or standalone embed): no CrazyGames/Poki machinery.
-        if (!isOnCrazyGames() && !isOnPoki() && typeof PokiSDK === "undefined") {
+        // Off-portal (site or standalone embed): no CrazyGames machinery.
+        if (!isOnCrazyGames()) {
             return;
-        }
-        if (typeof PokiSDK !== "undefined" && PokiSDK.gameplayStart) {
-            PokiSDK.gameplayStart();
         }
         if (!crazyGamesSdkReady()) {
             if (!isRetry) {
@@ -1526,6 +1546,7 @@
         }
         const game = crazyGameApi();
         if (game) {
+            cgGameplayActive = true;
             if (game.gameplayStart) {
                 game.gameplayStart();
             } else if (game.play) {
@@ -1538,8 +1559,42 @@
         return window.SOW_ENABLE_PORTAL_ADS === true;
     }
 
+    // Set once CrazyGames reports that this session serves no ads (Basic
+    // Launch, ad blocker). Rewarded buttons then disappear instead of staying
+    // clickable without effect.
+    let cgAdsUnavailable = false;
+
+    // Rewarded offers turn on by themselves once CrazyGames has actually
+    // played an ad (Full Launch). During Basic Launch every request answers
+    // adsDisabled, so the offer never shows a button without effect.
+    const CG_ADS_SERVED_KEY = "sow_cg_ads_served";
+    let cgAdsServed = false;
+    try {
+        cgAdsServed = window.localStorage.getItem(CG_ADS_SERVED_KEY) === "1";
+    } catch (_) {}
+
+    function noteAdServed() {
+        cgAdsServed = true;
+        try {
+            window.localStorage.setItem(CG_ADS_SERVED_KEY, "1");
+        } catch (_) {}
+    }
+
+    function noteAdError(error) {
+        const code = error && typeof error === "object" ? String(error.code || "") : String(error || "");
+        if (code === "adsDisabled" || code === "adblock") {
+            cgAdsUnavailable = true;
+        }
+        if (code === "adsDisabled") {
+            cgAdsServed = false;
+            try {
+                window.localStorage.removeItem(CG_ADS_SERVED_KEY);
+            } catch (_) {}
+        }
+    }
+
     function requestCrazyGamesMidgameAd() {
-        if (!portalAdsEnabled() || !crazyGamesSdkReady() || window.SOW_adPlaying) {
+        if (!portalAdsEnabled() || cgAdsUnavailable || !crazyGamesSdkReady() || window.SOW_adPlaying) {
             return;
         }
         const ad = window.CrazyGames.SDK.ad;
@@ -1548,12 +1603,14 @@
         }
         const callbacks = {
             adStarted: function () {
+                noteAdServed();
                 portalAdPause();
             },
             adFinished: function () {
                 portalAdResume();
             },
             adError: function (error) {
+                noteAdError(error);
                 console.warn("CrazyGames midgame ad error:", error);
                 portalAdResume();
             },
@@ -1565,10 +1622,63 @@
         }
     }
 
-    window.SOW_portalGameplayStop = function () {
-        if (typeof PokiSDK !== "undefined" && PokiSDK.gameplayStop) {
-            PokiSDK.gameplayStop();
+    function rewardedAdsEnabled() {
+        return (
+            isOnCrazyGames() &&
+            portalAdsEnabled() &&
+            cgAdsServed &&
+            !cgAdsUnavailable &&
+            window.SOW_hasAdblock !== true &&
+            crazyGamesSdkReady() &&
+            !!(window.CrazyGames.SDK.ad && window.CrazyGames.SDK.ad.requestAd)
+        );
+    }
+
+    window.SOW_portalRewardedAvailable = function () {
+        return rewardedAdsEnabled() && !window.SOW_adPlaying;
+    };
+
+    // Resolves true only after CrazyGames reports adFinished.
+    window.SOW_portalRewardedBreak = function () {
+        if (!window.SOW_portalRewardedAvailable()) {
+            return Promise.resolve(false);
         }
+        return new Promise(function (resolve) {
+            let settled = false;
+            const settle = function (value) {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                portalAdResume();
+                resolve(value);
+            };
+            try {
+                window.CrazyGames.SDK.ad.requestAd("rewarded", {
+                    adStarted: function () {
+                        portalAdPause();
+                    },
+                    adFinished: function () {
+                        settle(true);
+                    },
+                    adError: function (error) {
+                        noteAdError(error);
+                        console.warn("CrazyGames rewarded ad error:", error);
+                        settle(false);
+                    },
+                });
+            } catch (e) {
+                console.warn("CrazyGames rewarded requestAd failed:", e);
+                settle(false);
+            }
+        });
+    };
+
+    window.SOW_portalGameplayStop = function () {
+        if (!cgGameplayActive) {
+            return;
+        }
+        cgGameplayActive = false;
         if (crazyGamesSdkReady()) {
             const game = crazyGameApi();
             if (game) {

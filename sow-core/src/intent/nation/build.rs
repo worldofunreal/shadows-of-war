@@ -98,11 +98,10 @@ impl SowEngine {
 
                         if !wants_new || is_density_high {
                             if let Some(d) = stack_build_decision(
-                                &self.buildings,
+                                self,
                                 bot_id,
                                 kind,
                                 player_gold,
-                                &self.state.config,
                                 self.campaign_unlocks
                                     .as_ref()
                                     .map_or(kind.max_level(), |unlocks| {
@@ -213,11 +212,10 @@ impl SowEngine {
 
                         // Boxed in: stack on existing (player rules via apply_build_structure_intent)
                         if let Some(d) = stack_build_decision(
-                            &self.buildings,
+                            self,
                             bot_id,
                             kind,
                             player_gold,
-                            &self.state.config,
                             self.campaign_unlocks
                                 .as_ref()
                                 .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind)),

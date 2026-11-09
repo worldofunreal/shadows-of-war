@@ -110,14 +110,16 @@ test("tutorial HUD evaluates campaign availability without private campaign glob
         },
     );
     const locked = { buildings: {}, actions: [] };
-    const unlocked = { buildings: { City: 1, Port: 1 }, actions: ["warship"] };
+    const unlocked = { buildings: { City: 1 } as Record<string, number>, actions: ["warship"] };
     assert.equal(availability.campaignAllowsBuilding(locked, "City", 1), false);
     assert.equal(availability.campaignAllowsBuilding(unlocked, "City", 1), true);
     assert.equal(availability.campaignAllowsBuilding(unlocked, "City", 2), false);
     assert.equal(availability.campaignAllowsBuilding(unlocked, "Unknown", 1), false);
+    // Warships need the action unlocked and a level-1 Port.
     assert.equal(availability.campaignAllowsAction(unlocked, "warship"), false);
-    unlocked.buildings.Port = 2;
+    unlocked.buildings.Port = 1;
     assert.equal(availability.campaignAllowsAction(unlocked, "warship"), true);
+    assert.equal(availability.campaignAllowsAction({ buildings: { Port: 1 }, actions: [] }, "warship"), false);
     assert.equal(availability.campaignAllowsBuilding(null, "City", 1), true);
     assert.equal(availability.campaignAllowsAction(null, "warship"), true);
 });

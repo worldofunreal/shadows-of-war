@@ -45,9 +45,23 @@ def main():
             f"{ability['percent']}%" if 'percent' in ability else
             f"{ability['gold']} gold" if 'gold' in ability else
             f"{ability['troops']} troops" if 'troops' in ability else
+            f"up to {ability['max_troops']} troops/match" if 'max_troops' in ability else
+            f"{ability['troops_per_level']} troops/factory level" if 'troops_per_level' in ability else
             f"{ability['troops_per_gold']} troops/gold" if 'troops_per_gold' in ability else
             f"{ability['gold_per_second']} gold/s/level" if 'gold_per_second' in ability else
             "1 port/match" if ability['kind'] == 'coastal_founding' else
+            "1 farm/level-2 city upgrade" if ability['kind'] == 'city_farm_founding' else
+            "−1 level/city" if ability['kind'] == 'city_denial' else
+            "1 farm level/home port" if ability['kind'] == 'punt_gardens' else
+            "1 city/match" if ability['kind'] == 'last_city_relocation' else
+            "1 tower/captured tower" if ability['kind'] == 'siege_breach' else
+            "1 city level/lost farm" if ability['kind'] == 'cookham_exchange' else
+            "1 completed allied city/match" if ability['kind'] == 'second_crown' else
+            "50% of remaining upgrade time" if ability['kind'] == 'kitchen_philosophy' else
+            "1 recalled army/city" if ability['kind'] == 'aksum_rout' else
+            "1 tower/captured city" if ability['kind'] == 'akkad_garrison' else
+            "25% each, up to 500 troops" if ability['kind'] == 'shared_feast' else
+            "2 timed alliances restored/pair" if ability['kind'] == 'great_law_of_peace' else
             "1 tower level/city upgrade"
         )
         lines.append(

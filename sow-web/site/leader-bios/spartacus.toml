@@ -1,0 +1,149 @@
+[articles.en]
+text = "Spartacus was a Thracian gladiator who helped lead the revolt that broke out at Capua in 73 BCE. Plutarch describes fugitives using kitchen implements to escape and then seizing weapons in transit. Appian describes them arming themselves on the road and taking refuge on Vesuvius, where their ranks grew."
+title = "Spartacus"
+lang = "en"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Spartacus was a Thracian gladiator who helped lead the revolt that broke out at Capua in 73 BCE. Plutarch describes fugitives using kitchen implements to escape and then seizing weapons in transit. Appian describes them arming themselves on the road and taking refuge on Vesuvius, where their ranks grew."]
+sections = [{ title = "From Capua to Thurii", paragraphs = ["Plutarch names Spartacus as the foremost of three elected leaders. Appian also names Crixus and Oenomaus, and says that fugitives from slavery and some free rural workers joined. He connects the revolt’s growth to the distribution of spoils. At Thurii, he recounts, Spartacus restricted commerce in precious metals while buying iron and brass for arms. The ancient authors differ on the number of escapees and on details of the campaign. Both Plutarch and Appian describe the defeat by Crassus in 71 BCE. Their narratives preserve different accounts of the rebels’ decisions, equipment and plans."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.es]
+text = "Espartaco fue un gladiador tracio que encabezó la rebelión iniciada en Capua en el año 73 a. C. Plutarco cuenta que los fugitivos usaron utensilios de cocina para escapar y luego se apoderaron de armas que iban en carros. Apiano describe cómo se armaron en el camino y se refugiaron en el Vesubio, donde creció el grupo."
+title = "Espartaco"
+lang = "es"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Espartaco fue un gladiador tracio que encabezó la rebelión iniciada en Capua en el año 73 a. C. Plutarco cuenta que los fugitivos usaron utensilios de cocina para escapar y luego se apoderaron de armas que iban en carros. Apiano describe cómo se armaron en el camino y se refugiaron en el Vesubio, donde creció el grupo."]
+sections = [{ title = "De Capua a Turios", paragraphs = ["Plutarco sitúa a Espartaco al frente de tres jefes elegidos. Apiano también nombra a Crixo y Enómao, y dice que se unieron personas huidas de la esclavitud y algunos trabajadores libres del campo. Atribuye parte del crecimiento al reparto del botín. En Turios, según su relato, Espartaco restringió el comercio de metales preciosos y compró hierro y latón para armar a sus fuerzas. Los autores antiguos discrepan sobre el número de fugitivos y varios detalles de la campaña. Tanto Plutarco como Apiano cuentan la derrota frente a Craso en el año 71 a. C."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.fr]
+text = "Spartacus était un gladiateur thrace qui dirigea la révolte née à Capoue en 73 av. J.-C. Plutarque raconte que les fugitifs utilisèrent des ustensiles de cuisine pour s’évader et s’emparèrent ensuite d’armes transportées par des chariots. Appien les montre s’armant en chemin et se réfugiant au Vésuve, où leurs rangs grossirent."
+title = "Spartacus"
+lang = "fr"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Spartacus était un gladiateur thrace qui dirigea la révolte née à Capoue en 73 av. J.-C. Plutarque raconte que les fugitifs utilisèrent des ustensiles de cuisine pour s’évader et s’emparèrent ensuite d’armes transportées par des chariots. Appien les montre s’armant en chemin et se réfugiant au Vésuve, où leurs rangs grossirent."]
+sections = [{ title = "De Capoue à Thurii", paragraphs = ["Plutarque présente Spartacus comme le premier de trois chefs élus. Appien cite aussi Crixus et Œnomaüs et rapporte que des esclaves en fuite et certains travailleurs ruraux libres rejoignirent la révolte. Il relie sa croissance au partage du butin. À Thurii, Spartacus aurait limité le commerce des métaux précieux tout en achetant du fer et du laiton pour armer ses forces. Les récits antiques diffèrent sur le nombre de fugitifs et sur des détails de la campagne. Plutarque et Appien relatent tous deux la défaite face à Crassus en 71 av. J.-C."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.de]
+text = "Spartacus war ein thrakischer Gladiator und führte den Aufstand mit an, der 73 v. Chr. in Capua begann. Plutarch zufolge setzten die Flüchtenden Küchengeräte zur Flucht ein und erbeuteten unterwegs Waffen. Appian berichtet, dass sie sich auf dem Weg bewaffneten und auf dem Vesuv Zuflucht fanden, wo ihre Zahl wuchs."
+title = "Spartacus"
+lang = "de"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Spartacus war ein thrakischer Gladiator und führte den Aufstand mit an, der 73 v. Chr. in Capua begann. Plutarch zufolge setzten die Flüchtenden Küchengeräte zur Flucht ein und erbeuteten unterwegs Waffen. Appian berichtet, dass sie sich auf dem Weg bewaffneten und auf dem Vesuv Zuflucht fanden, wo ihre Zahl wuchs."]
+sections = [{ title = "Von Capua nach Thurioi", paragraphs = ["Plutarch nennt Spartacus den bedeutendsten von drei gewählten Anführern. Appian nennt auch Crixus und Oenomaus. Ihm zufolge schlossen sich entflohene Versklavte und freie Landarbeiter an. Er verbindet den Zulauf mit der Verteilung der Beute. In Thurioi habe Spartacus den Handel mit Edelmetallen eingeschränkt und Eisen sowie Messing für Waffen gekauft. Die antiken Autoren widersprechen einander bei der Zahl der Geflohenen und bei Einzelheiten des Feldzugs. Sowohl Plutarch als auch Appian schildern die Niederlage gegen Crassus 71 v. Chr."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.it]
+text = "Spartaco fu un gladiatore trace che guidò la rivolta iniziata a Capua nel 73 a.C. Plutarco racconta che i fuggitivi usarono utensili da cucina per evadere e poi si impadronirono di armi trasportate su carri. Appiano descrive come si armarono lungo la strada e trovarono rifugio sul Vesuvio, dove il gruppo crebbe."
+title = "Spartaco"
+lang = "it"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Spartaco fu un gladiatore trace che guidò la rivolta iniziata a Capua nel 73 a.C. Plutarco racconta che i fuggitivi usarono utensili da cucina per evadere e poi si impadronirono di armi trasportate su carri. Appiano descrive come si armarono lungo la strada e trovarono rifugio sul Vesuvio, dove il gruppo crebbe."]
+sections = [{ title = "Da Capua a Thurii", paragraphs = ["Plutarco presenta Spartaco come il principale dei tre capi eletti. Appiano nomina anche Crisso ed Enomao e racconta l’arrivo di schiavi fuggiti e di alcuni lavoratori rurali liberi. Collega la crescita del gruppo alla spartizione del bottino. A Thurii, secondo il suo racconto, Spartaco limitò il commercio di metalli preziosi e acquistò ferro e ottone per armare i suoi uomini. Gli autori antichi divergono sul numero dei fuggitivi e su alcuni dettagli della campagna. Plutarco e Appiano raccontano entrambi la sconfitta contro Crasso nel 71 a.C."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.tr]
+text = "Spartaküs, MÖ 73’te Capua’da başlayan ayaklanmanın önderlerinden olan Trakyalı bir gladyatördü. Plutarkhos, kaçanların mutfak gereçleriyle kurtulup daha sonra arabalarda taşınan silahları ele geçirdiğini anlatır. Appianos’a göre yolda silahlandılar ve Vezüv’e sığındılar. Orada safları genişledi."
+title = "Spartaküs"
+lang = "tr"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Spartaküs, MÖ 73’te Capua’da başlayan ayaklanmanın önderlerinden olan Trakyalı bir gladyatördü. Plutarkhos, kaçanların mutfak gereçleriyle kurtulup daha sonra arabalarda taşınan silahları ele geçirdiğini anlatır. Appianos’a göre yolda silahlandılar ve Vezüv’e sığındılar. Orada safları genişledi."]
+sections = [{ title = "Capua’dan Thurii’ye", paragraphs = ["Plutarkhos, Spartaküs’ü seçilen üç önderin başında gösterir. Appianos, Kriksus ve Oinomaos’un adını da verir. Kölelikten kaçanların ve bazı özgür tarım işçilerinin onlara katıldığını, ganimetin bölüşülmesinin yeni katılımları artırdığını aktarır. Onun anlatısında Spartaküs, Thurii’de değerli metal ticaretini sınırladı ve askerlerini silahlandırmak için demir ve pirinç satın aldı. Antik yazarlar kaçanların sayısı ve seferin ayrıntıları konusunda farklı bilgiler verir. Plutarkhos ve Appianos, Crassus karşısındaki MÖ 71 yenilgisini de anlatır."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.zh-CN]
+text = "斯巴达克斯是色雷斯出身的角斗士，也是公元前73年在卡普阿爆发的起义的首领之一。普鲁塔克记述，角斗士原本计划集体逃跑，消息泄露后，成功逃出的人先用厨房器具武装自己，又在路上夺取车载武器。阿庇安记述他们从路上取得武器，后来在维苏威山避难。两位作者对出逃者的人数和行动细节有不同说法，但都描述了这支队伍从规模很小的逃亡者团体发展为罗马必须认真对付的力量。"
+title = "斯巴达克斯"
+lang = "zh-CN"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["斯巴达克斯是色雷斯出身的角斗士，也是公元前73年在卡普阿爆发的起义的首领之一。普鲁塔克记述，角斗士原本计划集体逃跑，消息泄露后，成功逃出的人先用厨房器具武装自己，又在路上夺取车载武器。阿庇安记述他们从路上取得武器，后来在维苏威山避难。两位作者对出逃者的人数和行动细节有不同说法，但都描述了这支队伍从规模很小的逃亡者团体发展为罗马必须认真对付的力量。"]
+sections = [{ title = "从卡普阿到图里伊", paragraphs = ["普鲁塔克把斯巴达克斯列为三名获选首领中的第一人。阿庇安还写到克里克苏斯和奥诺马乌斯，并称许多逃离奴役的人以及一些自由的乡间劳工加入队伍。按阿庇安的说法，战利品的分配也吸引了新成员。普鲁塔克则提到牧民投奔起义军，其中一部分被安排做侦察或轻步兵。弗龙提努斯把维苏威山的突围当作战术范例，记述起义者用植物编成绳索，从罗马军认为无法通行的一侧下降。阿庇安还写到图里伊的故事：斯巴达克斯占领当地后限制贵金属交易，却购入铁和黄铜以装备队伍。这一段特别说明了起义军所需的军事物资，以及对补给的管理。关于战役的后续计划，普鲁塔克强调斯巴达克斯曾想越过阿尔卑斯山，让士兵回到各自的家乡；阿庇安也写到向阿尔卑斯山行军，但他还描述了向罗马推进及放弃这一计划的过程。不同记述无法拼成一份确定无疑的行军表。古代作者一致记下克拉苏最终击败起义军，战事通常以公元前71年为终点。普鲁塔克说起义军曾指望借船渡往西西里，弗龙提努斯和普鲁塔克对克拉苏封锁工事的突破也各有叙述。普鲁塔克写到封锁使军中补给短缺，部分部队在一个风雪交加的夜晚用泥土和树枝填平一小段壕沟，从那里穿越。阿庇安称斯巴达克斯在最后交战中负伤，遗体未被找到。游戏中以攻占敌方工厂给同一支军队补充兵力的规则，表现了记述中夺取和制造武器对起义军的意义。"] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.ja]
+text = "スパルタクスはトラキア出身の剣闘士で、紀元前73年にカプアで始まった反乱の指導者の一人だった。プルタルコスによると、集団で脱出する計画が漏れたあと、逃げ出した一部の剣闘士は台所の道具を武器とし、途中で輸送中の武器を奪った。アッピアノスは、逃亡者たちが道中で武器を手に入れ、ウェスウィウス山に身を寄せたと記す。脱出した人数と初期の行動には記録によって違いがある。"
+title = "スパルタクス"
+lang = "ja"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["スパルタクスはトラキア出身の剣闘士で、紀元前73年にカプアで始まった反乱の指導者の一人だった。プルタルコスによると、集団で脱出する計画が漏れたあと、逃げ出した一部の剣闘士は台所の道具を武器とし、途中で輸送中の武器を奪った。アッピアノスは、逃亡者たちが道中で武器を手に入れ、ウェスウィウス山に身を寄せたと記す。脱出した人数と初期の行動には記録によって違いがある。"]
+sections = [{ title = "カプアからトゥリイへ", paragraphs = ["プルタルコスは選ばれた三人の指導者の筆頭にスパルタクスを置く。アッピアノスはクリクススとオエノマウスにも言及し、奴隷身分から逃れた人々や自由身分の農村労働者が加わったと記す。戦利品の分配も勢力が拡大した理由に挙げられている。プルタルコスによれば地元の牧人たちも参加し、偵察や軽装歩兵を担った者がいた。フロンティヌスは、ウェスウィウス山で反乱軍が植物を編んだ綱を使って見張りの薄い急斜面を下ったという話を、包囲を逃れる策の例として載せる。アッピアノスによると、スパルタクスはトゥリイを占領したあと、貴金属の取引を制限する一方で、武器を整えるために鉄や真鍮を買い入れた。この逸話は、戦力の拡大に装備と補給が必要だったことを示している。その後の進路について、プルタルコスはアルプスを越えて兵をそれぞれの故郷に帰す計画を重視する。アッピアノスにはアルプスへの進軍に加え、ローマへ向かおうとしたことや、その方針を改めたことも書かれている。複数の古代の記述を照合すると、指導者の意図や事件の順序に食い違いが残る。最後にはローマの将軍クラッススが反乱軍を破り、紀元前71年に戦争は終結した。ゲームではトゥリイにまつわる物資調達の話を、敵工場を占領した部隊への増援として表現する。"] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.ko]
+text = "스파르타쿠스는 트라키아 출신 검투사로, 기원전 73년 카푸아에서 시작된 반란의 지도자 가운데 한 사람이었다. 플루타르코스는 집단 탈출 계획이 드러나자 탈출에 성공한 이들이 부엌 도구를 무기로 삼고 길에서 수레에 실린 무기를 빼앗았다고 전한다. 아피아노스는 일행이 도중에 무기를 얻고 베수비오산으로 피했다고 기록했다. 탈출한 사람의 수와 초기 이동의 세부 사항은 두 기록에서 차이를 보인다."
+title = "스파르타쿠스"
+lang = "ko"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["스파르타쿠스는 트라키아 출신 검투사로, 기원전 73년 카푸아에서 시작된 반란의 지도자 가운데 한 사람이었다. 플루타르코스는 집단 탈출 계획이 드러나자 탈출에 성공한 이들이 부엌 도구를 무기로 삼고 길에서 수레에 실린 무기를 빼앗았다고 전한다. 아피아노스는 일행이 도중에 무기를 얻고 베수비오산으로 피했다고 기록했다. 탈출한 사람의 수와 초기 이동의 세부 사항은 두 기록에서 차이를 보인다."]
+sections = [{ title = "카푸아에서 투리이까지", paragraphs = ["플루타르코스는 선출된 세 지도자 중 스파르타쿠스가 으뜸이었다고 기록한다. 아피아노스는 크릭수스와 오이노마오스의 이름도 밝히고, 노예 신분에서 달아난 사람들과 자유 신분의 농촌 노동자 일부가 가담했다고 말한다. 아피아노스는 전리품을 나누는 방식이 반란군의 규모를 키우는 데 도움이 됐다고 설명한다. 플루타르코스에 따르면 지역의 목동도 가담했고 그중 일부는 정찰병과 경보병이 되었다. 프론티누스는 베수비오산에서 식물 줄기를 엮은 밧줄을 써 경비가 성기던 급경사로 빠져나왔다는 이야기를 포위 탈출의 사례로 전한다. 아피아노스의 기록에서 스파르타쿠스는 투리이를 장악한 뒤 귀금속 거래를 제한하고 무기를 마련하기 위해 철과 황동을 구했다. 이는 반란군이 규모를 키우면서 장비를 공급할 수단도 필요했음을 보여 준다. 이후의 목표에 대해서는 플루타르코스가 알프스를 넘어 사람들을 고향으로 돌려보낼 계획을 강조한다. 아피아노스는 알프스로 향한 움직임과 함께 로마로 진격하려다가 계획을 바꾼 일도 기록한다. 고대 문헌은 전쟁의 전개와 지도자의 의도를 서로 다르게 서술한다. 반란군은 기원전 71년 로마의 크라수스에게 패했다. 게임에서는 투리이에서 무기 재료를 마련했다는 이야기를 바탕으로, 공장을 장악한 지상군에 병력이 보충되도록 했다."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.ar]
+text = "كان سبارتاكوس مصارعًا تراقيًا من قادة التمرد الذي بدأ في كابوا سنة 73 قبل الميلاد. يروي بلوتارخ أن الفارين استخدموا أدوات المطبخ للخروج، ثم استولوا على أسلحة كانت تُنقل بعربات. ويصف أبيان كيف تسلحوا في الطريق ولجأوا إلى جبل فيزوف، حيث زاد عددهم."
+title = "سبارتاكوس"
+lang = "ar"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["كان سبارتاكوس مصارعًا تراقيًا من قادة التمرد الذي بدأ في كابوا سنة 73 قبل الميلاد. يروي بلوتارخ أن الفارين استخدموا أدوات المطبخ للخروج، ثم استولوا على أسلحة كانت تُنقل بعربات. ويصف أبيان كيف تسلحوا في الطريق ولجأوا إلى جبل فيزوف، حيث زاد عددهم."]
+sections = [{ title = "من كابوا إلى ثوريي", paragraphs = ["يقدّم بلوتارخ سبارتاكوس على أنه أبرز ثلاثة قادة اختارهم الفارون. ويذكر أبيان أيضًا كريكسوس وأوينوماوس، ويقول إن أشخاصًا فروا من العبودية وبعض العمال الأحرار من الريف انضموا إلى التمرد. ويربط زيادة أعدادهم بتوزيع الغنائم. وفي ثوريي، بحسب روايته، قيّد سبارتاكوس تجارة المعادن النفيسة واشترى الحديد والنحاس الأصفر لتسليح رجاله. تختلف الروايات القديمة في عدد الفارين وفي تفاصيل الحملة. ويصف بلوتارخ وأبيان هزيمة الثوار أمام كراسوس سنة 71 قبل الميلاد، بعد أن اتسعت حركة بدأت بمجموعة صغيرة من المصارعين."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.ru]
+text = "Спартак был фракийским гладиатором и одним из руководителей восстания, начавшегося в Капуе в 73 году до н. э. Плутарх пишет, что беглецы воспользовались кухонной утварью, а затем захватили оружие, которое везли на повозках. У Аппиана они вооружаются в дороге и укрываются на Везувии, где их отряд растёт."
+title = "Спартак"
+lang = "ru"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Спартак был фракийским гладиатором и одним из руководителей восстания, начавшегося в Капуе в 73 году до н. э. Плутарх пишет, что беглецы воспользовались кухонной утварью, а затем захватили оружие, которое везли на повозках. У Аппиана они вооружаются в дороге и укрываются на Везувии, где их отряд растёт."]
+sections = [{ title = "От Капуи до Фурий", paragraphs = ["Плутарх называет Спартака главным среди трёх избранных вождей. Аппиан упоминает также Крикса и Эномая. По его словам, к восстанию присоединились беглые рабы и некоторые свободные сельские работники, а росту отряда помог раздел добычи. В Фуриях, как сообщает Аппиан, Спартак ограничил торговлю драгоценными металлами и покупал железо и латунь для изготовления оружия. Древние авторы расходятся в числе беглецов и деталях похода. И Плутарх, и Аппиан описывают поражение от Красса в 71 году до н. э."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.vi]
+text = "Spartacus là một đấu sĩ người Thrace, một trong những người lãnh đạo cuộc nổi dậy bắt đầu tại Capua năm 73 TCN. Plutarch kể rằng những người trốn thoát dùng dụng cụ nhà bếp rồi chiếm vũ khí đang được chở trên xe. Appian kể họ lấy vũ khí dọc đường và trú ở núi Vesuvius, nơi lực lượng của họ lớn dần."
+title = "Spartacus"
+lang = "vi"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Spartacus là một đấu sĩ người Thrace, một trong những người lãnh đạo cuộc nổi dậy bắt đầu tại Capua năm 73 TCN. Plutarch kể rằng những người trốn thoát dùng dụng cụ nhà bếp rồi chiếm vũ khí đang được chở trên xe. Appian kể họ lấy vũ khí dọc đường và trú ở núi Vesuvius, nơi lực lượng của họ lớn dần."]
+sections = [{ title = "Từ Capua đến Thurii", paragraphs = ["Plutarch đặt Spartacus ở vị trí đứng đầu trong ba thủ lĩnh được bầu. Appian cũng nhắc đến Crixus và Oenomaus. Theo ông, những người trốn khỏi cảnh nô lệ và một số lao động tự do ở nông thôn đã gia nhập. Ông gắn sự phát triển của lực lượng với cách chia chiến lợi phẩm. Tại Thurii, Spartacus được kể là đã hạn chế việc buôn bán kim loại quý và mua sắt cùng đồng thau để trang bị vũ khí. Các tác giả cổ đại ghi số người trốn thoát và một số chi tiết chiến dịch khác nhau. Plutarch và Appian đều thuật lại thất bại trước Crassus vào năm 71 TCN."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.id]
+text = "Spartakus adalah gladiator asal Trakia yang memimpin pemberontakan yang bermula di Capua pada 73 SM. Plutarkhos menceritakan bahwa para pelarian menggunakan peralatan dapur dan kemudian merebut senjata yang sedang diangkut. Appianus menggambarkan mereka bersenjata dalam perjalanan dan berlindung di Gunung Vesuvius, tempat jumlah mereka bertambah."
+title = "Spartakus"
+lang = "id"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Spartakus adalah gladiator asal Trakia yang memimpin pemberontakan yang bermula di Capua pada 73 SM. Plutarkhos menceritakan bahwa para pelarian menggunakan peralatan dapur dan kemudian merebut senjata yang sedang diangkut. Appianus menggambarkan mereka bersenjata dalam perjalanan dan berlindung di Gunung Vesuvius, tempat jumlah mereka bertambah."]
+sections = [{ title = "Dari Capua ke Thurii", paragraphs = ["Plutarkhos menempatkan Spartakus sebagai yang utama di antara tiga pemimpin terpilih. Appianus juga menyebut Crixus dan Oenomaus serta mencatat bahwa orang yang melarikan diri dari perbudakan dan beberapa pekerja pedesaan merdeka turut bergabung. Ia menghubungkan pertumbuhan pasukan dengan pembagian barang rampasan. Menurutnya, di Thurii, Spartakus membatasi perdagangan logam mulia dan membeli besi serta kuningan untuk membuat senjata. Sumber kuno berbeda mengenai jumlah pelarian dan beberapa rincian perang. Plutarkhos dan Appianus sama-sama mengisahkan kekalahan melawan Crassus pada 71 SM."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.fil]
+text = "Si Spartacus ay isang gladiator na taga-Thrace na namuno sa pag-aalsang nagsimula sa Capua noong 73 BK. Ayon kay Plutarch, gumamit ng mga kasangkapan sa kusina ang mga tumakas at saka inagaw ang mga armas na ibinibiyahe. Ayon kay Appian, nakakuha sila ng mga armas sa daan at sumilong sa Bundok Vesuvius, kung saan dumami sila."
+title = "Spartacus"
+lang = "fil"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Si Spartacus ay isang gladiator na taga-Thrace na namuno sa pag-aalsang nagsimula sa Capua noong 73 BK. Ayon kay Plutarch, gumamit ng mga kasangkapan sa kusina ang mga tumakas at saka inagaw ang mga armas na ibinibiyahe. Ayon kay Appian, nakakuha sila ng mga armas sa daan at sumilong sa Bundok Vesuvius, kung saan dumami sila."]
+sections = [{ title = "Mula Capua hanggang Thurii", paragraphs = ["Inilarawan ni Plutarch si Spartacus bilang pangunahing pinuno sa tatlong inihalal. Binanggit din ni Appian sina Crixus at Oenomaus, at ang pagsali ng mga tumakas mula sa pagkaalipin at ilang malalayang manggagawa sa bukid. Iniugnay niya ang paglaki ng pangkat sa pamamahagi ng nasamsam. Sa Thurii, ayon sa kanya, nilimitahan ni Spartacus ang kalakalan ng mamahaling metal at bumili ng bakal at laton upang gumawa ng armas. Magkakaiba ang mga sinaunang salaysay sa bilang ng mga nakatakas at sa ilang detalye ng kampanya. Kapwa isinalaysay nina Plutarch at Appian ang pagkatalo kay Crassus noong 71 BK."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]
+
+[articles.pt-BR]
+text = "Espártaco foi um gladiador trácio que liderou a revolta iniciada em Cápua em 73 a.C. Plutarco conta que os fugitivos usaram utensílios de cozinha para escapar e depois tomaram armas que estavam sendo transportadas. Apiano relata que se armaram no caminho e se refugiaram no Vesúvio, onde o grupo cresceu."
+title = "Espártaco"
+lang = "pt-BR"
+url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116"
+shortArticle = true
+intro = ["Espártaco foi um gladiador trácio que liderou a revolta iniciada em Cápua em 73 a.C. Plutarco conta que os fugitivos usaram utensílios de cozinha para escapar e depois tomaram armas que estavam sendo transportadas. Apiano relata que se armaram no caminho e se refugiaram no Vesúvio, onde o grupo cresceu."]
+sections = [{ title = "De Cápua a Túrios", paragraphs = ["Plutarco apresenta Espártaco como o principal entre três chefes eleitos. Apiano cita também Crixo e Enômao e conta que pessoas fugidas da escravidão e alguns trabalhadores rurais livres se juntaram à revolta. Ele relaciona o aumento do grupo à partilha dos despojos. Em Túrios, segundo seu relato, Espártaco restringiu o comércio de metais preciosos e comprou ferro e latão para armar suas forças. Os relatos antigos divergem sobre o número de fugitivos e sobre detalhes da campanha. Plutarco e Apiano descrevem a derrota para Crasso em 71 a.C."] }]
+sources = [{ title = "Appian, The Civil Wars, I.116–120", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Appian/Civil_Wars/1%2A.html#116" }, { title = "Plutarch, Life of Crassus, 8–11", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Crassus%2A.html#8" }, { title = "Frontinus, Stratagems, I.5.20–22", url = "https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Frontinus/Strategemata/1%2A.html" }]

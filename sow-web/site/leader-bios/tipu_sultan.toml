@@ -1,0 +1,133 @@
+[articles.en]
+text = "Tipu Sultan, commonly referred to as Sher-e-Mysore, was the Sultan of Mysore from 1782 until his death in 1799. He was a pioneer of rocket artillery."
+title = "Tipu Sultan"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Tipu_Sultan"
+intro = [
+  "Tipu Sultan (Urdu: [ʈiːpuː sʊlt̪aːn], Kannada: [ʈipːu sult̪aːn], Sultan Fateh Ali Sahab Tipu; 1 December 1751 – 4 May 1799), commonly referred to as Sher-e-Mysore (Tiger of Mysore), was the Sultan of Mysore from 1782 until his death in 1799. He was a pioneer of rocket artillery. He expanded the iron-cased Mysorean rockets and commissioned the military manual Fathul Mujahidin. The economy of Mysore reached a zenith during his reign. He deployed rockets against advances of British forces and their allies during the Anglo-Mysore Wars, including the Battle of Pollilur and Siege of Srirangapatna.",
+  "Tipu Sultan and his father Hyder Ali used their French-trained army in alliance with the French in their struggle with the British, and in Mysore's struggles with other surrounding powers: against the Marathas, Sira, and rulers of Malabar, Kodagu, Bednore, Carnatic, and Travancore. Tipu became the ruler of Mysore upon his father's death from cancer in 1782 during the Second Anglo-Mysore War. He negotiated with the British in 1784 with the Treaty of Mangalore which ended the war in status quo ante bellum.",
+  "Tipu's conflicts with his neighbours included the Maratha–Mysore War, which ended with the signing of the Treaty of Gajendragad.",
+  "Tipu remained an enemy of the British East India Company. He initiated an attack on British-allied Travancore in 1789. In the Third Anglo-Mysore War, he was forced into the Treaty of Seringapatam, losing a number of previously conquered territories, including Malabar and Mangalore. In the Fourth Anglo-Mysore War, a combined force of British East India Company troops supported by the Marathas and the Nizam of Hyderabad defeated Tipu. He was killed on 4 May 1799 while defending his stronghold of Seringapatam.",
+]
+sections = [
+  { "title" = "Early years", "paragraphs" = [
+      "Tipu Sultan was born into a Muslim family in Devanahalli, in present-day Bangalore Rural district, about 33 km (21 mi) north of Bangalore on 1 December 1751. He was named \"Tipu Sultan\" after the saint Tipu Mastan Aulia of Arcot. Being illiterate, Tipu's father Hyder Ali was very particular in giving his eldest son a religious education and a very early exposure to military and political affairs. At the age of 17 and onwards, Tipu was given charge of diplomatic and military missions and supported his father in his wars.",
+      "Tipu's father, Hyder Ali, was a military officer in service to the Kingdom of Mysore who had become the de facto ruler of Mysore in 1761 while his mother Fatima Fakhr-un-Nisa was the daughter of Mir Muin-ud-Din, the governor of the fort of Kadapa. Hyder Ali appointed able teachers to give Tipu an early education in subjects like Urdu, Persian, Arabic, Kannada, Beary, Quran, Islamic jurisprudence, riding, shooting and fencing.",
+      "Tipu Sultan's mother tongue was Urdu. The French noted that \"Their language is Moorish (Urdu) but they also speak Persian.\" Moors at the time was a European designation for Urdu: \"I have a deep knowledge [je possède à fond] of the common tongue of India, called Moors by the English, and Ourdouzebain by the natives of the land.\"",
+    ] },
+  { "title" = "Early military service", "paragraphs" = [
+      "Tipu Sultan was instructed in military tactics by French officers in the employment of his father. At age 15, he accompanied his father against the British in the First Anglo-Mysore War in 1766. He commanded a corps of cavalry in the invasion of Carnatic in 1767 at age 16. He also took part in the First Anglo-Maratha War of 1775–1779.",
+      "Alexander Beatson, who published a volume on the Fourth Mysore War entitled View of the Origin and Conduct of the War with Tippoo Sultaun, described Tipu Sultan as follows: \"His stature was about five feet eight inches; he had a short neck, square shoulders, and was rather corpulent: his limbs were small, particularly his feet and hands; he had large full eyes, small arched eyebrows, and an aquiline nose; his complexion was fair, and the general expression of his countenance, not void of dignity\".",
+      "In 1779, the British captured the French-controlled port of Mahé which Tipu had placed under his protection, providing some troops for its defence. In response, Hyder launched an invasion of the Carnatic, with the aim of driving the British out of Madras. During this campaign in September 1780, Tipu Sultan was dispatched by Hyder Ali with 10,000 men and 18 guns to intercept Colonel William Baillie who was on his way to join Sir Hector Munro. In the Battle of Pollilur, Tipu defeated Baillie. Out of 360 Europeans, about 200 were captured alive, and the sepoys, who were about 3800 men, suffered very high casualties. Munro was moving south with a separate force to join Baillie, but on hearing the news of the defeat he retreated to Madras, abandoning his artillery in a water tank at Kanchipuram.",
+    ] },
+  { "title" = "Ruler of Mysore", "paragraphs" = [
+      "On 29 December 1782, Tipu Sultan crowned himself Badshah or Emperor of Mysore with the title Nawab Tipu Sultan Bahadur at age 32, and struck coinage.",
+      "The Maratha Empire under its new Peshwa Madhavrao I regained most of Indian subcontinent, twice defeating Tipu's father in 1764 and then in 1767. In 1767 Maratha Peshwa Madhavrao defeated both Hyder Ali and Tipu Sultan and entered Srirangapatna, the capital of Mysore. Hyder Ali accepted the authority of Madhavrao who gave him the title of Nawab of Mysore.",
+      "Subsequently, to escape the treaty, Tipu tried to take some Maratha forts in Southern India captured by in the previous war and also stopped the tribute to Marathas which was promised by Hyder Ali. This brought Tipu in direct conflict with the Marathas, leading to Maratha–Mysore War",
+    ] },
+  { "title" = "Death", "paragraphs" = [
+      "Horatio Nelson defeated François-Paul Brueys D'Aigalliers at the Battle of the Nile in Egypt in 1798. Three armies marched into Mysore in 1799—one from Bombay and two British, one of which included Arthur Wellesley. They besieged the capital Srirangapatna in the Fourth Mysore War. There were more than 60,000 soldiers of the British East India Company, approximately 4,000 Europeans and the rest Indians; while Tipu Sultan's forces numbered only around 30,000. The betrayal by Tipu Sultan's ministers in working with the British and in weakening the walls, made an easy path for the besieging armies. The death of Tipu Sultan led British General Harris to exclaim \"Now India is ours.\"",
+      "When the British broke through the city walls, French military advisers told Tipu Sultan to escape via secret passages and to fight the rest of the wars from other forts, but he refused. Tipu famously said \"Better to live one day as a tiger than a thousand years as a sheep\".",
+      "Tipu Sultan was killed at the Hoally (Diddy) Gateway, which was located 300 yards (270 m) from the N.E. Angle of the Srirangapatna Fort. He was buried the next afternoon at the Gumaz, next to the grave of his father. Many members of the British East India Company believed that Nawab of Carnatic Umdat Ul-Umra secretly provided assistance to Tipu Sultan during the war and sought his deposition after 1799. These five men include Mir Sadiq, Purnaiya, two military commanders Saiyed Saheb and Qamaruddin, and Mir Nadim, commandant of the fort of Seringapatam. The episode of treachery as narrated by Hasan starts with the disobedience of Tipu's instructions. When he died there were jubilant celebrations in Britain, with authors, playwrights and painters creating works to celebrate it. The death of Tipu Sultan was celebrated with the declaration of a public holiday in Britain.",
+    ] },
+  { "title" = "Assessment and legacy", "paragraphs" = [
+      "The original copy of the Constitution of India bears a painting of Tipu Sultan. School and college textbooks in India officially recognize him as a \"freedom-fighter\" along with many other rulers of the 18th century who fought European powers.",
+      "Assessments of Tipu Sultan have often been passionate and divided. Successive Indian National Congress governments have often celebrated Tipu Sultan's memory and monuments and relics of his rule while the Bharatiya Janata Party has been largely critical.",
+      "In 2017 the 14th Indian president Ram Nath Kovind hailed Tipu Sultan in his address to the Karnataka Assembly on the occasion of the Diamond Jubilee celebrations of the state secretariat Vidhana Soudha saying \"Tipu Sultan died a heroic death fighting the British. He was also a pioneer in the development and use of Mysore rockets in warfare. This technology was later adopted by the Europeans.\"",
+    ] },
+]
+
+[articles.it]
+text = "Fateḥ ʿAlī Tīpū, conosciuto anche come Tigre del Mysore, Tippu Sultan o Tippoo Sahib, (Devanahalli, 1º dicembre 1751 – Srirangapatna, 4 maggio 1799), è stato un sultano indiano, de facto re del regno di Mysore dal 1782 fino alla sua morte. Riconosciuto come uno dei più grandi governatori Sud Asiatici di tutti i tempi, Tīpū Sulṭān fu il primo Indiano considerato come combattente per la libertà."
+title = "Fateḥ ʿAlī Tīpū"
+lang = "it"
+url = "https://it.wikipedia.org/wiki/Fate%E1%B8%A5_%CA%BFAl%C4%AB_T%C4%ABp%C5%AB"
+intro = [
+  "Fateḥ ʿAlī Tīpū, conosciuto anche come Tigre del Mysore, Tippu Sultan o Tippoo Sahib, (Devanahalli, 1º dicembre 1751 – Srirangapatna, 4 maggio 1799), è stato un sultano indiano, de facto re del regno di Mysore dal 1782 fino alla sua morte.",
+  "Riconosciuto come uno dei più grandi governatori Sud Asiatici di tutti i tempi, Tīpū Sulṭān fu il primo Indiano considerato come combattente per la libertà. Era il primo figlio di Hyder Ali e della sua seconda moglie, Fāṭima Fakhr al-nisāʾ.",
+  "Fateḥ ʿAlī Tīpū, oltre ad essere un intellettuale, fu anche un soldato e un poeta, parlando fluentemente kannada, indostano, persiano, arabo, inglese e francese. Nonostante la maggior parte della popolazione fosse induista egli era un devoto musulmano e acconsentì, su richiesta francese, alla costruzione della prima chiesa cristiana a Mysore. In virtù dell'alleanza con Napoleone e i Francesi e dell'ostilità verso gli Inglesi, sia Fateḥ ʿAlī Tīpū sia il padre Hyder Ali non esitarono a utilizzare il loro esercito, addestrato dagli stessi Francesi, contro l'Impero Maratha, Malabar, Coorg, Sira e Bednur.",
+  "Il suo regno conobbe una crescita sostenuta del reddito pro capite e della popolazione, un cambiamento strutturale nell'economia e un maggiore ritmo dell'innovazione tecnologica, e raggiunse il culmine del suo potere economico e militare e del suo dominio nella seconda metà del XVIII secolo, sotto il governo di Hyder Ali e di suo figlio Tīpū Sulṭān, superando il Mughal Bengal come potenza economica dominante dell'Asia meridionale. Durante questo periodo, il regno avviò guerre contro i Maratha, gli Inglesi e il Niẓām di Hyderābād, che culminarono nelle cosiddette Guerre anglo-mysore.",
+]
+sections = [
+  { "title" = "Biografia", "paragraphs" = [
+      "Tipu nacque il 1º dicembre 1751 a Devanahalli, nell'attuale Distretto rurale di Bangalore, a circa 33 chilometri a nord della città di Bangalore. Il suo nome derivava dal santo induista Tipu Mastan Aulia di Arcot.",
+      "Il padre di Tīpū, Hyder Ali, era stato un ufficiale militare al servizio del Regno di Mysore che rapidamente aveva guadagnato potere personale sino a divenire de facto regnante di Mysore dal 1761. Hyder si riteneva diretto discendente dalla tribù araba dei Quraysh, la medesima del profeta Maometto. Suo padre, Fateḥ Muḥammad, era nato a Kolar e aveva prestato servizio come comandante di 50 razzieri nell'esercito del Nawwāb del Karnataka. Fateḥ Muḥammad entrò poi al servizio dei raja della dinastia dei Wodeyar nel Regno di Mysore.",
+      "La madre di Tīpū, Fāṭima Fakhr al-Nisāʾ, era figlia di Mīr Muʿīn al-Dīn o di Shahal Tharique, governatore del forte di Kadapa. Hyder Ali nominò i migliori tra gli insegnanti del suo regno per istruire il figlio Tīpū, soprattutto perché gli insegnassero lingue come l'urdu, il persiano, l'arabo e il kannada, oltre al Corano, alla Legge islamica, all'equitazione, al tiro a segno e al salto ad ostacoli.",
+    ] },
+  { "title" = "Leadership, politica e innovazioni", "paragraphs" = [
+      "Tra le varie innovazioni volute da Tīpū risultano anche alcune innovazioni in campo militare, come il ricorso ai razzi.",
+      "Il padre di Tīpū aveva ampliato il ricorso all'uso dei razzi nell'esercito mysoreano, segnando una delle innovazioni principali della logistica militare dell'epoca. Impiegò circa 1 200 uomini specializzati per gestire il lancio dei razzi, in grado di calcolare balisticamente l'angolo di posizionamento in base al diametro del cilindro ed alla distanza del bersaglio. I razzi avevano delle lame montate sulle loro estremità, che potevano facilmente avere un effetto \"di massa\" sui nemici anche in vasta formazione. Tīpū dopo la morte di suo padre incrementò il corpo sino a 5 000 razzieri e li utilizzò largamente nella Battaglia di Pollilur, dimostrando che tali razzi erano molto più avanzati dei precedenti in quanto sfruttavano caratteristiche casse in ferro come camere di combustione per il propellente, permettendo così una maggiore gittata ai missili (circa 2 km) e una maggior loro durata.",
+      "I resoconti inglesi descrivono l'uso di questi razzi in particolare durante la terza e la quarta guerra anglo-mysore. Durante la battaglia di Srirangapatna del 1799, le pallottole inglesi colpirono un magazzino contenente razzi, che esplosero rovinosamente.",
+    ] },
+  { "title" = "La politica religiosa", "paragraphs" = [
+      "Come regnante musulmano di uno stato largamente induista, Tīpū incontrò subito il problema nello stabilire il proprio potere e legittimare il suo ruolo, nonché riconciliare il desiderio di essere visto come un devoto islamico pur tollerando il culto di maggioranza del suo popolo. Molti gruppi lo proclamarono grande guerriero della fede (Ghazi), mentre altri lo videro come un bigotto islamico che voleva solo massacrare gli indù.",
+      "Durante i primi anni del regno di Tīpū in particolare, egli apparve particolarmente duro come il padre nei confronti dei non-musulmani che fossero stati accusati di collaborazionismo con la Compagnia britannica delle Indie orientali o con i Maratha. Nel 1780, egli si autoproclamò Badshah (Padishah) o Imperatore di Mysore, e iniziò a coniare monete col suo nome, senza il permesso dell'Imperatore mughal Shah 'Alam II. H. D. Sharma scrive a tal proposito che nella sua corrispondenza con altri regnanti islamici come gli scià afghani della dinastia Durrani, Tipu utilizzò tale titolo e dichiarava spesso di voler creare un vero e proprio impero islamico nell'intera area indiana, sulle linee dell'impero mughal, che era ormai al declino in quell'epoca. Egli invitò persino Shāh Zamān a invadere l'India per aiutarlo in questa impresa. La sua alleanza coi Francesi poté quindi spiegarsi anche in questo senso, con l'intento di escludere dall'India gli invasori inglesi.",
+      "La figura di Tīpū come bigotto religioso fa ancora oggi discutere ed alcune fonti del XX secolo suggeriscono che egli fosse effettivamente in imbarazzo nel tollerare un pluralismo religioso. Il tesoriere di Tipu, Krishna Rao e il suo ministro della Sicurezza, Shamaiya Iyengar, erano induisti di religione. Nota è anche la sua corrispondenza con molti templi indiani ai quali donò gioielli e preziosi in segno della sua benevolenza, nonché terre e possedimenti in tutta l'India, così da farci pensare che il suo fosse essenzialmente un intento politico di alleanza piuttosto che segno di tolleranza religiosa. Tra il 1782 ed il 1799 Tīpū fece 34 donazioni a templi indiani con grande pubblicità di questi eventi. Il tempio di Srikanteswara a Nanjangud ancora oggi possiede una coppa ingioiellata dono del sultano.",
+    ] },
+  { "title" = "Discendenza", "paragraphs" = [
+      "Sua Altezza Reale Shahzada Sir Ghulam Muhammad Sultan Sahib, KCSI (marzo 1795 – 11 agosto 1872)",
+      "Dopo la morte di Tīpū, tutta la sua famiglia venne inviata a Calcutta per ordine dei Britannici. Una discendente di uno degli zii di Tīpū, Noor Inayat Khan, fu un'agente della Special Operations Executive durante la Seconda guerra mondiale. Arrestata dai tedeschi, fu uccisa nel campo di concentramento di Dachau nel 1944.",
+    ] },
+]
+
+[articles.ar]
+text = "السلطان تيبو (السلطان فاتح علي صاحب تيبو؛ 1 ديسمبر 1751 - 4 مايو 1799) المعروف بنمر ميسور، هو سلطان مملكة ميسور التي كانت تقع في جنوب الهند من عام 1782 حتى وفاته في عام 1799. يشتهر تيبو بتطويره للمدفعية الصاروخية إذ اخترعت في عهده صواريخ ميسور التي استخدمت في حروبه مع بريطانيا وحلفائها في الحروب الإنجليزية الميسورية مثل معركة بوليلور وحصار سرنجابتم."
+title = "السلطان تيبو"
+lang = "ar"
+url = "https://ar.wikipedia.org/wiki/%D8%A7%D9%84%D8%B3%D9%84%D8%B7%D8%A7%D9%86_%D8%AA%D9%8A%D8%A8%D9%88"
+intro = [
+  "السلطان تيبو (السلطان فاتح علي صاحب تيبو؛ 1 ديسمبر 1751 - 4 مايو 1799) المعروف بنمر ميسور، هو سلطان مملكة ميسور التي كانت تقع في جنوب الهند من عام 1782 حتى وفاته في عام 1799. يشتهر تيبو بتطويره للمدفعية الصاروخية إذ اخترعت في عهده صواريخ ميسور التي استخدمت في حروبه مع بريطانيا وحلفائها في الحروب الإنجليزية الميسورية مثل معركة بوليلور وحصار سرنجابتم. وكتب في عهده كذلك الدليل العسكري فتح المجاهدين.",
+  "تولى السلطان تيبو حكم ميسور بعد وفاة والده حيدر علي بالسرطان في عام 1782 في خضم الحرب الإنجليزية الميسورية الثانية، والتي انتهت بتوقيع معاهدة مانجالور في عام 1784 والتي بموجبها عادت مواقع السيطرة لما كانت عليه قبل الحرب. عرف عن تيبو عداوته الشديدة لشركة الهند الشرقية البريطانية وحلفائها، وقد خاض تيبو العديد من الحروب مع ممالك الهند المختلفة وذلك بجيشه المدرب على الطريقة الفرنسية، مثل إمبراطورية المارثا والتي انتهت الحرب بينهما بمعاهدة جاجندراغاد، وحكام مليبار وكوداجو وبيدنور وكارناتيك وترافنكور.",
+  "وقعت في عام 1790 الحرب الثالثة للملكته مع بريطانيا والتي انتهت بمعاهدة سرنجابتم وفقد السلطان لأراضي المليبار ومنغلور. ثم وقعت الحرب الرابعة التي تحالف فيها الإنجليز مع الماراثا ونظام حيدر أباد، وهي التي قتل فيها السلطان في 4 مايو 1799 أثناء دفاعه عن حصنه في سرنجابتم. كثرت الإصلاحات إدارية في عهد تيبو، فقد اعتمد أنظمة حديثة لسكة العملة وتقويم البلاد وجمع الضرائب وأنشئ صناعة الحرير في ميسور. وعرف عن السلطان حبه للعبة تشاناباتنا، وشغفه بالفنون وبالأخص النجارة.",
+]
+sections = [
+  { "title" = "نشأته", "paragraphs" = [
+      "ولد السلطان تيبو في ديوانا هللي، في منطقة بنغالور الشمالية على بعد حوالي 33 كـم (21 ميل) شمال بنغالور في 1 ديسمبر 1751. سمي تيبو تيمناً بالشيخ تيبو مستان الذي كان يعيش بمدينة أركوت. أبوه حيدر علي ضابط عسكري ميسوري صعد على عرش المملكة في عام 1761، أمه فاطمة فخر النساء ابنة مير معين الدين حاكم حصن كادابا.",
+      "حرص حيدر علي على تعليم ابنه بالطرق الأميرية وتعريضه للشؤون العسكرية والسياسية، وكلفه بمهام دبلوماسية وعسكرية منذ بلغ سبعة عشر عاما. وكلف حيدر معلمين لتعليم ابنه تيبو الأردية والفارسية والعربية والكنادية والبياري والقرآن والفقه الإسلامي وفنون ركوب الخيل والرماية والمبارزة.",
+    ] },
+  { "title" = "تدريبه العسكري", "paragraphs" = [
+      "رافق تيبو والده في حرب ميسور الأولى ضد البريطانيين في عام 1766 عندما كان عمره 15 عامًا، وقاد فرقة من الفرسان في غزو كارناتيك عام 1767، وشارك في الحرب الإنجليزية الماراثية الأولى بين عامي 1775 و1779.",
+      "وصفه ألكسندر بيتسون في كتابه عن حرب ميسور الرابعة قائلا: كان طويل القامة طوله حوالي خمسة أقدام وثماني بوصات، رقبته قصيرة وهو ممتلئ نوعًا ما وأطرافه صغيرة خاصةً قدميه ويديه. عيونه كبيرة وحواجبه صغيرة مقوسة، بشرته فاتحة ووجهه يشع بالكرامة.",
+      "قامت الحرب الإنجليزية الميسورية الثانية في عام 1779، بعد أن استولت بريطانيا على ميناء ماهي الخاضع للسلطة الفرنسية، وبسبب تحالف الفرنسيين مع ملوك ميسور، رد حيدر علي بغزو كارناتيك بهدف طرد البريطانيين من مدراس. أثناء الحرب قاد تيبو في سبتمبر 1780 قوة من 100,00 جندي و18 مدفعاً ليقطع الطريق على العقيد ويليام بيلي الذي كان متجهاً لدعم قوات هيكتور مونرو، وهو ما نجح فيه في معركة بوليلور، والتي أسر فيها 200 جندي من أصل 360 جندي أوروبي في الحملة البريطانية، وقتل كثير من السباهي الذين كان عددهم حوالي 3800 جندي. كان يفترض من مونر أن ينضم إلى قوات بيلي ثم يحارب ميسور، لكنه فضل الانسحاب إلى مدراس بعد سماعه بالهزيمة.",
+    ] },
+  { "title" = "توليه للحكم", "paragraphs" = [
+      "تُوج السلطان تيبو بادشاه باسم نواب سلطان تيبو بهادور في 29 ديسمبر 1782 وعمره وقتها 32 سنة، وهو الاسم الذي سكت به عملة السلطنة. وحرص تيبو في بداية حكمه على كبح سيطرت بريطانيا بتحالف مع إمبراطورية الماراثا والمغول.",
+      "سيطرت إمبراطورية الماراثا في عهد بيشوا مادهافراو الأول معظم شبه القارة الهندية، وهزمت علي حيدر والد تيبو مرتين واحدة في عام 1764 والأخرى في عام 1767، وفي الأخيرة اقتحم مادهافراو سرنجابتم عاصمة ميسور، ودخل حيدر علي تحت جناح إمبراطورية المارثا. س سعى تيبو إلى التنصّل من الاتفاقية، فسيطر على عدد من حصون الماراثا في جنوب الهند، كما أوقف دفع الجزية لهم، الأمر الذي أدى إلى اشتعال الحرب بين الطرفين.",
+      "وشهد هذا النزاع سلسلة من المعارك والحصارات المتبادلة؛ إذ انتصر ميسور على المارثا في حصار نارغوند في فبراير 1785، ثم استسلمت قواتها في حصار بادامي في مايو 1786، قبل أن تعود فتنتصر في حصار أدوني في يونيو من العام نفسه. وفي الشهر ذاته انتصر الماراثا في معركة جاجندراغاد، ثم مالت الكفّة مالت مجددًا لميسور في معركة سافانور في أكتوبر 1786، وانتصرت أيضا في حصار بهادور بندا في يناير 1787.",
+    ] },
+  { "title" = "الحرب الرابعة ووفاته", "paragraphs" = [
+      "لم يهدأ بال تيبو بعد الحرب الثالثة وحاول البحث عن حلفاء لدعمه في حربه مع شركة الهند الشرقية، اكتشفت الشركة هذا الأمر وحذرت تيبو من العواقب. ومع موقف تيبو الاستقلالي عن الشركة سيرت الأخيرة في أوائل مارس 1799 ثلاث جيوش نحو ميسور واحد من بومباي وقواتان بريطانيتان إحداهما بقيادة آرثر ولزلي، قوامها أكثر من 60,000 جندي منهم حوالي 4,000 أوروبي والبقية من الهنود، في حين قُدرت قوات السلطان تيبو بحوالي 30,000 فقط. تحاربت هذه الجيوش مع تيبو في معركة كورج فهزموه ثم حاصروا العاصمة سرنجابتم. وقعت عدة معارك بين الطرفين على أسوار الحصن، تمكن البريطانيون في 4 مايو من دخول العاصمة بعد ثقب جزء من أسوار المدينة وخيانة 5 من حاشية تيبو وهم مير صادق وبورناي والقائدان العسكريان سيد صاحب وقمر الدين ومير نديم الذين سهّلوا دخول القوات البريطانية إلى المدينة.",
+      "وعندما نجح البريطانيون في اختراق أسوار العاصمة، نصح المستشارون العسكريون الفرنسيون تيبو بالهروب عبر الممرات السرية ومواصلة القتال من الحصون الأخرى المتبقية، لكنه رفض، وقال مقولته الشهيرة: \"أن تعيش نمرًا يومًا واحدًا أفضل من أن تعيش خروف ألف عام\". قُتل السلطان تيبو غي يوم 4 مايو عند بوابة هولي (ديدي) الواقعة على بعد 300 يارد (270 م) من الزاوية الشمالية الشرقية لقلعة سرنجابتم، بعمر 46 عاما. ودُفن في عصر اليوم التالي بجانب والده في غوماز. احتفلت بريطانيا بمقتل السلطان تيبو واحتفل المؤلفون والكتاب المسرحيون والرسامون بذلك فصوروا مقتله في أعمالهم، وأُعلن يوم وفاة تيبو عطلة عامة في بريطانيا.",
+    ] },
+  { "title" = "إرثه", "paragraphs" = [
+      "توجد لوحة للسلطان تيبو في النسخة الأصلية من دستور الهند، تذكر المناهج الدراسية في المدارس والكليات أنه مقاتل للحرية قاوم القوى الأوروبية. تختلف النظرة السياسية للسلطان تيبو فبينما احتفت به حكومات المؤتمر الوطني الهندي وأثنت على إرثه، وعلى العكس غالبا ما ينتقد حزب بهاراتيا جاناتا سيرته.",
+      "أشاد الرئيس الهندي الرابع عشر رام نات كوفيند بالسلطان تيبو في عام 2017 أثناء خطابه في جمعية كرناتكا بمناسبة اليوبيل الماسي لأمانة الولاية فيدهانا سودها وقال \"مات شهيدًا بطلًا في معركته ضد البريطانيين، كان رائدًا تطوير واستخدام صواريخ ميسور\". وأثنى عليه المناضل الهندي سوبهاس تشاندرا بوز قائلا عنه وعن أبيه حيدر علي \" أسمائهما محفورة إلى الأبد بحروف من ذهب\" والرئيسان السابقان عبد الكلام وك. ر. نارايانان.",
+      "أما في باكستان، فاسم السلطان تيبو رمز للشجاعة والبسالة، فقد أثنى عليه رئيس الوزراء السابق عمران خان، وقالت رئيسة الوزراء السابقة بينظير بوتو \"من المؤلم أن يعتقد بعض الناس أن السلطان تيبو سلطان كان معاديا للهندوس\". وكان في مكتبة رئيس الوزراء السابق ذو الفقار علي بوتو رسائل للسلطان تيبو. واقتبس الوزير شهيد أحمد ختّك أقوال للسلطان تيبو في كلمة له بعام 2025 ينقد فيها رئيس الوزراء شهباز شريف.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

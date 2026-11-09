@@ -1,0 +1,55 @@
+[articles.en]
+text = "Francisco Tenamaztle, also Tenamaxtlan, Tenamaxtli or Tenamaxtle, was a leader of the Caxcan Indigenous people in Mexico during the Mixtón War of 1540–1542. He was later put on trial in Spain."
+title = "Francisco Tenamaztle"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Francisco_Tenamaztle"
+intro = [
+  "Francisco Tenamaztle (fl. 1540s–1550s), also Tenamaxtlan, Tenamaxtli or Tenamaxtle, was a leader of the Caxcan Indigenous people in Mexico during the Mixtón War of 1540–1542. He was later put on trial in Spain. With the support of Bartolomé de las Casas he defended the justice of his cause by appealing to King Carlos I.",
+]
+sections = [
+  { "title" = "Background", "paragraphs" = [
+      "The first contact of the Caxcan and other indigenous peoples of northwestern Mexico with the Spanish, was in 1529 when Nuño Beltrán de Guzmán set forth from Mexico City with 300–400 Spaniards and 5,000 to 8,000 Aztec and Tlaxcaltec allies on a march through the future states of Nayarit, Jalisco, Durango, Sinaloa, and Zacatecas. Over a six-year period Guzmán conducted frequent violent slave raids throughout Northern Mexico, enslaving thousands of natives. Guzmán and his lieutenants founded towns and Spanish settlements in the region, called Nueva Galicia, including Guadalajara, the first temporary site of which was at Tenamaztle’s home of Nochistlán, Zacatecas. The Spaniards encountered increased resistance as they moved further from the complex hierarchical societies of Central Mexico and attempted to force Indians into servitude through the encomienda system.",
+      "Tenamaztle was baptized a Catholic sometime after Guzmán’s expedition and given the Christian name Francisco. He became \"Lord Tlatoani of Nochistlan,\" an urban center and region in the southern part of Zacatecas. The Caxcan Indians are often considered part of the Chichimeca, a generic term used by the Spaniards and Aztecs for all the nomadic and semi-nomadic Native Americans living in the deserts of northern Mexico. However, the Caxcanes seem to have been sedentary, depending upon agriculture for their livelihood and living in permanent towns and settlements. They were, perhaps, the most northerly of the agricultural, town-and-city dwelling peoples of interior Mexico.",
+      "Presumably at the same time as his baptism, Tenamaztle also swore allegiance to the Spanish crown and was confirmed in his position and any property he owned. Spanish rule, however, was oppressive and in mid-1540 the Caxcanes and their allies, the Zacatecos and possibly other Chichimeca tribes, revolted. The command structure of the Caxcanes is unknown but the most prominent leader who emerged was Tenamaztle.",
+    ] },
+  { "title" = "The Mixtón War", "paragraphs" = [
+      "The spark which set off the Mixtón War was apparently the arrest of 18 rebellious Indian leaders and the hanging of nine of them in mid 1540. Later in the same year the Indians rose up to kill the encomendero Juan de Arze. Spanish authorities also became aware that the Indians were participating in \"devilish\" dances. After killing two Catholic priests, many Indians fled the encomiendas and took refuge in the mountains, especially on the hill fortress of Mixtón. Acting Governor Cristóbal de Oñate led a Spanish and Indian force to quell the rebellion. The Caxcanes killed a peace delegation of one priest and ten Spanish soldiers. Oñate attempted to storm Mixtón, but the Indians on the summit repelled his attack. Oñate then requested reinforcements from the capital, Mexico City.",
+      "The Viceroy Antonio de Mendoza called upon the experienced conquistador Pedro de Alvarado to assist in putting down the revolt. Alvarado declined to await reinforcements and attacked Mixton in June 1541 with four hundred Spaniards and an unknown number of Indian allies. He was met there by an Indian army, estimated by the Spanish to number 15,000, under Tenamaztle and Don Diego, a Zacateco. The first attack of the Spanish was repulsed with ten Spaniards and many Indian allies killed. Subsequent attacks by Alvarado were also unsuccessful and on June 24 he was crushed when a horse fell on him. He subsequently died on July 4.",
+      "Emboldened, the Indians led by Tenamaztle attacked Guadalajara in September but were repulsed. The Indian army retired to Nochistlan and other strongpoints. The Spanish authorities were now thoroughly alarmed and feared that the revolt would spread. They assembled a force of 450 Spaniards and 30 to 60 thousand Aztec, Tlaxcalan and other Indians and under Viceroy Mendoza invaded the land of the Caxcanes. With his overwhelming force, Mendoza reduced the Indian strongholds one-by-one in a war of no quarter. On November 9, 1541, he captured the city of Nochistlan and Tenamaztle—but the Indian leader later escaped. In early 1542 the stronghold of Mixton fell to the Spaniards and the rebellion was over. The aftermath of the Caxcan's defeat was that \"thousands were dragged off in chains to the mines, and many of the survivors (mostly women and children) were transported from their homelands to work on Spanish farms and haciendas. By the viceroy's order men, women and children were seized and executed, some by cannon fire, some torn apart by dogs, and others stabbed. The reports of the excessive violence against civilian Indians caused the Council of the Indies to undertake a secret investigation into the conduct of the viceroy.",
+    ] },
+  { "title" = "Trial in Spain", "paragraphs" = [
+      "In Spain, Tenamaztle was imprisoned in Valladolid, (now Morelia), and later took up residence in a Dominican monastery. Here he met Bartolomé de las Casas who helped him plead his case. The wheels of justice rolled slowly and it was July 1, 1555 before he had an opportunity to present his case to the King and the Council of the Indies.",
+      "Tenamaztle’s strategy was to (1) establish that he was the rightful tlatoani of Nochistlan; (2) demonstrate that the Caxcan had received the Spanish in peace and that he should have all the rights of a vassal of the King of Spain; (3) accuse Nuño de Guzmán, Cristóbal de Oñate and Miguel de Ibarra of exploiting and murdering Indians; and, (4) declare that the war of the Caxcanes was \"natural justice\" because of the abuses of the Spaniards. He petitioned that his lands, wife, and children be returned to him.",
+      "Tenamaztle asked the king to consider \"the unparalleled wrongs and evils that the Caxcanes had endured at the hands of the Spanish\" and said that the objective of the Indians was not to rebel but to \"flee the inhuman cruelty to which they were subjected.\" The trial proceeded without decision for more than one year. The last known document related to the trial is dated August 7, 1556. Nothing more is known of the disposition of the case or of Tenamaztle. He probably died in Spain.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

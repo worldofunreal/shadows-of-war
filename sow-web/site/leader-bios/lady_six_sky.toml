@@ -1,0 +1,83 @@
+[articles.en]
+text = "Lady Six Sky, also known as Lady Wac Chanil Ahau or Wak Chanil Ajaw, was a Maya queen of Naranjo who was born in Dos Pilas. She lived in Naranjo from 682 to her death in 741."
+title = "Lady Six Sky"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Lady_Six_Sky"
+intro = [
+  "Lady Six Sky (possibly Ix Wak Chan Jalam Ajaw Lem? in ancient Mayan), also known as Lady Wac Chanil Ahau or Wak Chanil Ajaw (d. 741 CE), was a Maya queen of Naranjo who was born in Dos Pilas. She lived in Naranjo from 682 to her death (or shortly before her death) in 741. During that time, she likely served as the ruler of the city; however, monuments such as Stela 24 suggest she was never formally recognized as such, since she continued to use the emblem glyph of Dos Pilas throughout her life.",
+  "Because the reading of her name is currently contested, scholars typically refer to her as Lady Six Sky, which is the English translation of a readable portion of her name (Wak Chan meaning Six Sky).",
+  "Monuments that refer to Lady Six Sky include Naranjo stelae 3, 18, 24, 29, 31, and 46.",
+]
+sections = [
+  { "title" = "Personal life", "paragraphs" = [
+      "Lady Six Sky was the daughter of B'alaj Chan K'awiil of Dos Pilas and a woman who may have been named Lady B'ulu ? or Lady B'uluka'l. Though Lady B'ulu was not B'alaj Chan K'awiil's first wife, she carried the prestigious title ochk'in kalo'mte (loosely, \"western autocrat\") on Stela 24, suggesting a high level of political power.",
+      "In 682 CE, Lady Six Sky arrived in Naranjo to establish a new dynasty at the behest of her father. She was part of an arranged marriage between the Maya cities of Dos Pilas and Naranjo (in modern Guatemala) to bring Naranjo into the Calakmul–Dos Pilas alliance. This may have been a direct response to Tikal's recent defeat of Calakmul.",
+      "Little is known about her husband, though he may have been a low-status cousin of the previous king, K’ahk’ Xiiw Chan Chaahk. This king had been defeated two years earlier by Caracol, leaving a power vacuum. Her husband's name appears on Naranjo Stela 46. Though the reading is not yet fully deciphered, it was something like K'ak' U ? Chan Chaak.",
+    ] },
+  { "title" = "Daykeeper and Warrior-Queen", "paragraphs" = [
+      "Despite never receiving the title Holy Lady of Naranjo, Lady Six Sky commissioned monuments in Naranjo that note she performed important rituals, some shortly after her arrival. For example, Stela 29 describes a burning ritual on August 31, 682, just three days after her arrival in Naranjo. But her early days in Naranjo may have been beset by rival claims to the throne, and she did not begin seriously commissioning monuments until almost two decades into her rule.",
+      "That said, she may have been responsible for a method of counting moon phases that spread during the Period of Uniformity; during this time, Glyph C values across the Maya area remained consistent. She had a penchant for celebrating the rare \"Tikal Cycle\" period endings which happened on #.#.3.0.0 days of the Maya Long Count calendar; she celebrated 9.13.3.0.0 (March 1, 695) and 9.14.3.0.0 (November 17, 714), both memorialized on Stela 29.",
+      "She also supervised the production of high-quality pottery, a trend which continued during the rule of her son, who became known as Pure (or White) Artisan for his patronage of the arts.",
+    ] },
+  { "title" = "Rediscovery in the 20th century", "paragraphs" = [
+      "Tatiana Proskouriakoff first recognized the name of the queen in the 1960s during her pioneering studies of the historical side of Maya inscriptions. She nicknamed the queen \"Lady of Tikal\" because of the use of the Mutal emblem glyph; it was not until later that scholars realized more than one city used the same glyph.",
+    ] },
+  { "title" = "In popular culture", "paragraphs" = [
+      "Lady Six Sky leads the Mayan civilization in the New Frontier season pass of the 4X video game Civilization VI.",
+      "She is the subject of the 2012 historical fiction Lady Six Sky by Elaine Lowe and has been depicted in contemporary art by Miguel Omaña.",
+    ] },
+]
+
+[articles.ru]
+text = "Иш-Вак-Чан-Ахав (майя: Ix-6 CHAN-?-Ajaw — «Леди шести небес-? Королева»; 15 июля 669 или позже — 11 февраля 741), также известная под прозвищем Леди шести небес (англ."
+title = "Иш-Вак-Чан-Ахав"
+lang = "ru"
+url = "https://ru.wikipedia.org/wiki/%D0%98%D1%88-%D0%92%D0%B0%D0%BA-%D0%A7%D0%B0%D0%BD-%D0%90%D1%85%D0%B0%D0%B2"
+intro = [
+  "Иш-Вак-Чан-Ахав (майя: Ix-6 CHAN-?-Ajaw — «Леди шести небес-? Королева»; 15 июля 669 или позже — 11 февраля 741), также известная под прозвищем Леди шести небес (англ. Lady Six Sky) — правительница Саальского царства со столицей в Наранхо. Она родилась в Дос-Пиласе, но с 682 до своей смерти (или незадолго до неё) жила в столице Наранхо. За это время она де-факто была правительницей Сааля. Однако она использовала эмблемный иероглиф Дос-Пиласа, поэтому вероятно, она не была официальной правительницей.",
+]
+sections = [
+  { "title" = "Имя", "paragraphs" = [
+      "Татьяна Проскурякова, американский археолог и исследователь культур Мезоамерики, впервые установила имя царицы в 1960-х годах во время своих исследований. Но поскольку чтение имени правительницы в настоящее время оспаривается, ей дали прозвище «Леди шести небес».",
+    ] },
+  { "title" = "Биография", "paragraphs" = [
+      "Иш-Вак-Чан-Ахав родилась 15 июля 669 года в Дос-Пиласе — столице Южного Мутульского царства. Её отцом был первый правитель Южного Мутуля Балах-Чан-Кавиль, сын правителя Мутульского царства Кинич-Муван-Холя II, а матерью — Леди Булу.",
+      "В 680 году Сааль напал на царство Канту. Канту было союзником Канульского царства (в этот союз входил и Южный Мутуль), поэтому между 680 и 682 годами союзниками Кануля был нанесён ответный удар, в результате которого правящая династия в Саале оборвалась. По воле отца Иш-Вак-Чан-Ахав прибыла в Наранхо для восстановления правящей династии. Она вышла замуж за родственника царей династии. Имя её мужа появляется на Стеле 46 из Наранхо и читается как Как-У-?-Чан-Чак. Через три дня после её прибытия в Наранхо она провела формальный ритуал, посещая пирамиду, вероятно, чтобы повторно освятить династический храм. Во время своего правления она установила Стелы 3, 18, 24, 29, 31 и 46.",
+      "Во время пребывания в Наранхо она предположительно была царицей, однако в своей титулатуре она всегда использовала эмблемный иероглиф Дос-Пиласа. Спустя более 5 лет после её прибытия в Наранхо, 6 января 688 года, она родила сына, будущего царя Сааля — Как-Тилиу-Чан-Чака. Несмотря на то, что в течение многих лет учёные обсуждали, был ли Как-Тилиу-Чан-Чак её сыном или нет, текст на обнаруженной в 2017 году Стеле 46 подтвердил их родственные связи.",
+    ] },
+  { "title" = "В культуре", "paragraphs" = [
+      "Иш-Вак-Чан-Ахав возглавляет цивилизацию майя в сезонном пропуске New Frontier в игре жанра 4X Civilization VI.",
+    ] },
+  { "title" = "Литература", "paragraphs" = [
+      "Helmke C. The heart and stomach of a king': A study of the regency of Lady Six Sky at Naranjo, Guatemala // Contributions in New World Archaeology. — 2017.",
+      "Martin S., Grube N. Chronicle of the Maya Kings and Queens: Deciphering the Dynasties of the Ancient Maya (англ.). — Thames & Hudson, 2008. — 240 p. — ISBN 9780500287262.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

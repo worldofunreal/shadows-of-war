@@ -827,7 +827,7 @@ mod movement_tests {
     }
 
     #[test]
-    fn transport_ten_tiles_eta_matches_four_and_a_half_tiles_per_second_at_one_x() {
+    fn transport_ten_tiles_eta_matches_base_speed_at_one_x() {
         let mut config = GameConfig::default();
         config.global_speed_multiplier = 1.0;
         let mut fleet = transport();
@@ -839,7 +839,8 @@ mod movement_tests {
             .remaining_eta_seconds()
             .expect("moving transport has an ETA");
 
-        assert!((eta - (10.0 / 4.5)).abs() < 1e-5);
+        // The base speed is a balance value; the ETA must follow it exactly.
+        assert!((eta - (10.0 / TRANSPORT_BASE_SPEED_TILES_PER_SECOND) as f32).abs() < 1e-5);
     }
 
     #[test]

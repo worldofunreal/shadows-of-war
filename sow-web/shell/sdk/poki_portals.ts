@@ -10,7 +10,11 @@
     let gameplayReady = false;
     let gameplayActive = false;
     let firstInputSeen = false;
-    let resumePending = false;
+    // A match was played since the last break. Poki's commercialBreak runs
+    // before the player's next match starts, never inside a running match:
+    // multiplayer keeps going while an ad plays.
+    let breakPending = false;
+    let breakRunning = false;
     let inputInstalled = false;
     const progressKey = "sow_player_progress";
     let adFocus = null;
@@ -33,8 +37,16 @@
         } catch {}
     }
 
+    function syncWasmAudio() {
+        if (typeof window.SOW_setPortalAudioMuted !== "function") return;
+        try {
+            window.SOW_setPortalAudioMuted(!!(window.SOW_adPlaying || window.SOW_PORTAL_MUTE_AUDIO));
+        } catch {}
+    }
+
     function portalAdPause() {
         window.SOW_adPlaying = true;
+        syncWasmAudio();
         adFocus = document.activeElement || null;
         document.querySelectorAll("audio,video").forEach(function (el) {
             el.dataset.sowWasPaused = el.paused ? "1" : "0";
@@ -46,6 +58,7 @@
 
     function portalAdResume() {
         window.SOW_adPlaying = false;
+        syncWasmAudio();
         document.querySelectorAll("audio,video").forEach(function (el) {
             el.muted = window.SOW_PORTAL_MUTE_AUDIO || el.dataset.sowWasMuted === "1";
             if (el.dataset.sowWasPaused !== "1") el.play().catch(function () {});
@@ -67,6 +80,7 @@
 
     function muteGameAudio() {
         window.SOW_PORTAL_MUTE_AUDIO = true;
+        syncWasmAudio();
         document.querySelectorAll("audio,video").forEach(function (el) {
             el.muted = true;
         });
@@ -74,51 +88,76 @@
 
     function unmuteGameAudio() {
         window.SOW_PORTAL_MUTE_AUDIO = false;
+        syncWasmAudio();
         if (window.SOW_adPlaying) return;
         document.querySelectorAll("audio,video").forEach(function (el) {
             el.muted = false;
         });
     }
 
-    function startGameplayAfterAd() {
+    function startGameplay() {
         if (!gameplayReady || gameplayActive || !sdk || typeof sdk.gameplayStart !== "function") return;
         gameplayActive = true;
-        sdk.gameplayStart();
+        try {
+            sdk.gameplayStart();
+        } catch {}
     }
 
-    function requestCommercialBreakThenStart() {
-        if (!sdk || typeof sdk.commercialBreak !== "function") {
-            startGameplayAfterAd();
+    // Runs the pending commercial break (if any) and then the player's match
+    // command. Called by the menu for commands that start or join a match.
+    function beforeMatch(proceed) {
+        if (breakRunning) return;
+        if (!breakPending || !sdk || typeof sdk.commercialBreak !== "function") {
+            breakPending = false;
+            proceed();
             return;
         }
+        breakPending = false;
+        breakRunning = true;
         portalAdPause();
+        const finish = function () {
+            breakRunning = false;
+            portalAdResume();
+            proceed();
+        };
         try {
-            Promise.resolve(sdk.commercialBreak())
-                .then(function () {
-                    portalAdResume();
-                    startGameplayAfterAd();
-                })
-                .catch(function (error) {
-                    console.warn("Poki commercialBreak failed:", error);
-                    portalAdResume();
-                    startGameplayAfterAd();
-                });
+            Promise.resolve(sdk.commercialBreak()).then(finish, function (error) {
+                console.warn("Poki commercialBreak failed:", error);
+                finish();
+            });
         } catch (error) {
             console.warn("Poki commercialBreak failed:", error);
+            finish();
+        }
+    }
+
+    // Rewarded video. Resolves true only when Poki reports the video played.
+    function rewardedBreak() {
+        if (breakRunning || window.SOW_adPlaying || !sdk || typeof sdk.rewardedBreak !== "function") {
+            return Promise.resolve(false);
+        }
+        breakRunning = true;
+        portalAdPause();
+        const finish = function (success) {
+            breakRunning = false;
             portalAdResume();
-            startGameplayAfterAd();
+            return success === true;
+        };
+        try {
+            return Promise.resolve(sdk.rewardedBreak()).then(finish, function (error) {
+                console.warn("Poki rewardedBreak failed:", error);
+                return finish(false);
+            });
+        } catch (error) {
+            console.warn("Poki rewardedBreak failed:", error);
+            return Promise.resolve(finish(false));
         }
     }
 
     function onFirstInput() {
         if (!gameplayReady || firstInputSeen || window.SOW_adPlaying) return;
         firstInputSeen = true;
-        if (resumePending) {
-            resumePending = false;
-            requestCommercialBreakThenStart();
-        } else {
-            startGameplayAfterAd();
-        }
+        startGameplay();
     }
 
     function blockGameInputDuringAd(event) {
@@ -202,6 +241,12 @@
         safeLocalSet(progressKey, window.SOW_PORTAL_PROGRESS_JSON);
     };
 
+    window.SOW_portalBeforeMatch = beforeMatch;
+    window.SOW_portalRewardedAvailable = function () {
+        return !!(sdk && typeof sdk.rewardedBreak === "function") && !window.SOW_adPlaying && !breakRunning;
+    };
+    window.SOW_portalRewardedBreak = rewardedBreak;
+
     window.SOW_pokiMeasure = measure;
     window.SOW_pokiOpenExternalLink = function (url) {
         if (sdk && typeof sdk.openExternalLink === "function") sdk.openExternalLink(String(url));
@@ -247,7 +292,7 @@
         if (!gameplayReady && !gameplayActive) return;
         gameplayReady = false;
         firstInputSeen = false;
-        resumePending = gameplayActive;
+        if (gameplayActive) breakPending = true;
         if (gameplayActive && sdk && typeof sdk.gameplayStop === "function") {
             try {
                 sdk.gameplayStop();

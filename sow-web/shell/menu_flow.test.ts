@@ -1500,3 +1500,207 @@ test("starting a match directly closes the welcome without another visible step"
     assert.equal(guide.calls.at(-1).status, "skipped");
     assert.deepEqual(guide.renderedSteps, ["welcome_heroes"]);
 });
+
+function makeRewardDoubleHarness({ available = true, watched = true, receipts = [] } = {}) {
+    const start = shellSource.indexOf('const VERIFIED_BONUS_PREFIX = "verified_bonus:";');
+    const end = shellSource.indexOf("function maybePresentRewards() {");
+    assert.ok(start >= 0 && end > start, "the reward double offer sits before maybePresentRewards");
+    const sent = [];
+    const appended = [];
+    let presented = 0;
+    class Element {
+        constructor(choice) {
+            this.choice = choice;
+        }
+        closest() {
+            return { dataset: { rewardDouble: this.choice } };
+        }
+    }
+    const makeLayer = () => {
+        const buttons = [{ disabled: false }, { disabled: false }];
+        const layer = {
+            className: "",
+            innerHTML: "",
+            removed: false,
+            listeners: [],
+            buttons,
+            addEventListener(type, listener) {
+                this.listeners.push(listener);
+            },
+            remove() {
+                this.removed = true;
+            },
+            querySelector: () => ({ focus() {} }),
+            querySelectorAll: () => buttons,
+            click(choice) {
+                const event = { target: new Element(choice), preventDefault() {}, stopPropagation() {} };
+                this.listeners.forEach((listener) => listener(event));
+            },
+        };
+        return layer;
+    };
+    const context = {
+        Element,
+        Set,
+        Number,
+        Promise,
+        document: { createElement: makeLayer },
+        root: { appendChild: (layer) => appended.push(layer) },
+        menuUi: { state: { account_id: "account-a", reward_receipts: receipts } },
+        window: available
+            ? {
+                  SOW_portalRewardedAvailable: () => true,
+                  SOW_portalRewardedBreak: () => Promise.resolve(watched),
+              }
+            : {},
+        esc: (value) => String(value),
+        SOW_t: (key) => key,
+        currencyAsset: (kind) => kind + ".webp",
+        send: (command, fields) => sent.push([command, fields]),
+        maybePresentRewards: () => {
+            presented += 1;
+        },
+    };
+    vm.runInNewContext(
+        shellSource.slice(start, end) + "\nthis.offer = offerRewardDouble;",
+        context,
+    );
+    return { offer: context.offer, sent, appended, get presented() { return presented; } };
+}
+
+const doubleReceipts = [
+    { id: "match-1", match_id: "match-1", crowns: 25, gems: 3 },
+    { id: "verified_bonus:match-1", match_id: "match-1", crowns: 82, gems: 50 },
+];
+
+test("reward double offer pays only after a finished video, once per match, with equal buttons", async () => {
+    const unavailable = makeRewardDoubleHarness({ available: false, receipts: doubleReceipts });
+    assert.equal(unavailable.offer(doubleReceipts, "account-a"), false, "no portal hook, no offer (Jest, site)");
+    assert.equal(unavailable.appended.length, 0);
+
+    const harness = makeRewardDoubleHarness({ receipts: doubleReceipts });
+    assert.equal(harness.offer(doubleReceipts, "account-a"), true);
+    const layer = harness.appended[0];
+    assert.match(layer.innerHTML, /\+107/, "participation and verified crowns are both offered");
+    assert.match(layer.innerHTML, /\+53/, "participation and verified gems are both offered");
+    const buttons = [...layer.innerHTML.matchAll(/<button class='([^']+)'[^>]*data-reward-double='(\w+)'/g)];
+    assert.deepEqual(
+        buttons.map((match) => [match[1], match[2]]),
+        [
+            ["sow-menu__secondary", "continue"],
+            ["sow-menu__secondary", "watch"],
+        ],
+        "Continue and the video button share one style and size",
+    );
+    assert.match(layer.innerHTML, /<svg class='sow-menu__reward-double-video'/);
+    assert.equal(harness.offer(doubleReceipts, "account-a"), false, "one offer per match");
+
+    layer.click("watch");
+    assert.ok(layer.buttons.every((button) => button.disabled), "buttons lock while the video runs");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(JSON.parse(JSON.stringify(harness.sent)), [
+        ["double_match_reward", { account_id: "account-a", match_id: "match-1" }],
+    ]);
+    assert.equal(layer.removed, true);
+    assert.equal(harness.presented, 1, "the normal reward presentation continues");
+
+    const skipped = makeRewardDoubleHarness({ watched: false, receipts: doubleReceipts });
+    assert.equal(skipped.offer(doubleReceipts, "account-a"), true);
+    skipped.appended[0].click("watch");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(skipped.sent, [], "an unfinished or failed video pays nothing");
+    assert.equal(skipped.presented, 1);
+
+    const declined = makeRewardDoubleHarness({ receipts: doubleReceipts });
+    assert.equal(declined.offer(doubleReceipts, "account-a"), true);
+    declined.appended[0].click("continue");
+    assert.deepEqual(declined.sent, []);
+    assert.equal(declined.presented, 1);
+
+    const already = [...doubleReceipts, { id: "ad_double:match-1", match_id: "match-1" }];
+    assert.equal(
+        makeRewardDoubleHarness({ receipts: already }).offer(doubleReceipts, "account-a"),
+        false,
+        "a match already doubled is not offered again",
+    );
+    assert.equal(
+        makeRewardDoubleHarness({ receipts: doubleReceipts }).offer([doubleReceipts[0]], "account-a"),
+        false,
+        "unverified matches get no offer",
+    );
+});
+
+function makeCrazyGamesAdHarness({ stored = null, midgame = "finished" } = {}) {
+    const start = portalSource.indexOf("function portalAdsEnabled()");
+    const end = portalSource.indexOf("window.SOW_portalGameplayStop = function", start);
+    assert.ok(start >= 0 && end > start, "CrazyGames ad block is present");
+    const storage = new Map(stored ? [["sow_cg_ads_served", stored]] : []);
+    const rewardedRequests = [];
+    const window = {
+        SOW_ENABLE_PORTAL_ADS: true,
+        localStorage: {
+            getItem: (key) => (storage.has(key) ? storage.get(key) : null),
+            setItem: (key, value) => storage.set(key, String(value)),
+            removeItem: (key) => storage.delete(key),
+        },
+        CrazyGames: {
+            SDK: {
+                ad: {
+                    requestAd(kind, callbacks) {
+                        if (kind === "rewarded") {
+                            rewardedRequests.push(kind);
+                            callbacks.adStarted();
+                            callbacks.adFinished();
+                            return;
+                        }
+                        if (midgame === "disabled") {
+                            callbacks.adError({ code: "adsDisabled" });
+                            return;
+                        }
+                        callbacks.adStarted();
+                        callbacks.adFinished();
+                    },
+                },
+            },
+        },
+    };
+    const context = {
+        window,
+        console: { warn() {} },
+        Promise,
+        String,
+        isOnCrazyGames: () => true,
+        crazyGamesSdkReady: () => true,
+        portalAdPause() {},
+        portalAdResume() {},
+    };
+    vm.runInNewContext(
+        portalSource.slice(start, end) + "\nthis.requestMidgame = requestCrazyGamesMidgameAd;",
+        context,
+    );
+    return { window, storage, rewardedRequests, requestMidgame: context.requestMidgame };
+}
+
+test("CrazyGames rewarded offers switch on only after a real ad plays", async () => {
+    const basic = makeCrazyGamesAdHarness({ midgame: "disabled" });
+    assert.equal(basic.window.SOW_portalRewardedAvailable(), false, "no button before any ad played");
+    basic.requestMidgame();
+    assert.equal(basic.window.SOW_portalRewardedAvailable(), false, "Basic Launch keeps rewarded off");
+    assert.equal(await basic.window.SOW_portalRewardedBreak(), false);
+    assert.deepEqual(basic.rewardedRequests, []);
+
+    const full = makeCrazyGamesAdHarness();
+    assert.equal(full.window.SOW_portalRewardedAvailable(), false);
+    full.requestMidgame();
+    assert.equal(full.window.SOW_portalRewardedAvailable(), true, "a served midgame proves ads are live");
+    assert.equal(full.storage.get("sow_cg_ads_served"), "1");
+    assert.equal(await full.window.SOW_portalRewardedBreak(), true);
+
+    const returning = makeCrazyGamesAdHarness({ stored: "1" });
+    assert.equal(returning.window.SOW_portalRewardedAvailable(), true, "returning players keep the offer");
+
+    const revoked = makeCrazyGamesAdHarness({ stored: "1", midgame: "disabled" });
+    revoked.requestMidgame();
+    assert.equal(revoked.window.SOW_portalRewardedAvailable(), false, "adsDisabled turns the offer back off");
+    assert.equal(revoked.storage.has("sow_cg_ads_served"), false);
+});

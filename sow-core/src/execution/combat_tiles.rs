@@ -7,7 +7,7 @@ use crate::game_config::max_tiles_cap_for_troops;
 use crate::geo_entities::{Ability, LossWhen, Side, Source, Target};
 use crate::map::TerrainType;
 use crate::rng::{NextIntExt, stable_tile_sample};
-use std::collections::{BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
 const CAPTURE_COST_VARIATION_SALT: u64 = 0xA076_1D64_78BD_642F;
 const CAPTURE_COST_VARIATION: f64 = 0.10;
@@ -770,6 +770,31 @@ impl SowEngine {
 
         // attacks are sorted on insertion
 
+        let intercession_possible = !self.attacks.is_empty()
+            && self.state.config.buildings_enabled
+            && self.state.players.iter().any(|player| {
+                player.alive && matches!(player.leader.ability(), Ability::CityIntercession { .. })
+            });
+        let nyabingi_possible =
+            !self.attacks.is_empty()
+                && self.state.players.iter().any(|p| {
+                    p.alive && matches!(p.leader.ability(), Ability::NyabingiNetwork { .. })
+                });
+        // Evaluate both fronts before resolving either one so attack order cannot
+        // remove the bonus for the other army in the same combat tick.
+        let mut regional_defenses = BTreeMap::new();
+        if self.attacks.len() >= 2 && self.state.config.attack_cost_enemy > 0.0 {
+            for p in &self.state.players {
+                let multiplier = crate::execution::hero_effects::regional_commands_multiplier(
+                    &self.state,
+                    &self.attacks,
+                    p,
+                );
+                if multiplier > 1.0 {
+                    regional_defenses.insert(p.id, multiplier);
+                }
+            }
+        }
         let mut elimination_candidates = Vec::new();
         let mut territory_changes = Vec::new();
         let mut to_remove = Vec::new();
@@ -777,7 +802,45 @@ impl SowEngine {
         for i in 0..self.attacks.len() {
             // Need to borrow state and buildings mutably but not the entire self array
             // Actually, we can borrow state and defense grid and attacks[i] simultaneously
+            let retreat = &self.attacks[i];
+            let tigranes_aid = if retreat.retreating {
+                self.tigranes_aid_city(retreat)
+            } else {
+                None
+            };
+            let beneficiary = if retreat.retreating {
+                crate::execution::hero_effects::retreat_beneficiary(
+                    &self.state,
+                    &self.attacks,
+                    retreat.owner_id,
+                    retreat.target_owner,
+                )
+            } else {
+                None
+            };
+            let pact_loss = self.state.player(retreat.owner_id).map_or(1.0, |owner| {
+                owner.leader.attacker_loss_multiplier(LossWhen::JointFront)
+            });
+            let pact_allies = if pact_loss < 1.0 {
+                crate::execution::hero_effects::joint_front_allies(
+                    &self.state,
+                    &self.attacks,
+                    retreat,
+                )
+            } else {
+                Vec::new()
+            };
             let execution = &mut self.attacks[i];
+            let regional_defense = regional_defenses
+                .get(&execution.target_owner)
+                .copied()
+                .filter(|_| {
+                    !crate::execution::hero_effects::allied(
+                        &self.state,
+                        execution.target_owner,
+                        execution.owner_id,
+                    )
+                });
 
             if execution.retreating {
                 let refund = execution.troops.max(0.0);
@@ -800,18 +863,11 @@ impl SowEngine {
                     } else {
                         // The defender's leader can make retreating from its land costlier;
                         // the retreating leader's `Retreat` ability softens that loss.
-                        let penalty = self.state.player(execution.target_owner).map_or(1.0, |p| {
-                            targeted_multiplier(
+                        let (penalty, softening) =
+                            crate::execution::hero_effects::retreat_loss_multipliers(
                                 &self.state,
-                                execution.target_owner,
-                                execution.owner_id,
-                                execution.troops,
-                                |t| p.leader.enemy_retreat_penalty_multiplier(t),
-                            )
-                        });
-                        let softening = self.state.player(execution.owner_id).map_or(1.0, |p| {
-                            p.leader.attacker_loss_multiplier(LossWhen::Retreat)
-                        });
+                                execution,
+                            );
                         if penalty != 1.0 {
                             self.state.announce_leader_ability_to(
                                 execution.target_owner,
@@ -828,15 +884,57 @@ impl SowEngine {
                         }
                         1.0 - RETREAT_PENALTY_VS_PLAYER * penalty * softening
                     };
-                    let back = refund * factor;
+                    let mut back = refund * factor;
+                    if let Some((ally, percent)) = beneficiary
+                        && back > 0.0
+                        && let Some(recipient) = self.state.player_mut(ally)
+                    {
+                        let diverted = crate::execution::hero_effects::retreat_handover_amount(
+                            recipient, back, percent,
+                        );
+                        if diverted > 0.0 {
+                            recipient.credit_troops_capped(diverted, recipient.max_troops);
+                            back -= diverted;
+                            let tile = execution
+                                .to_conquer
+                                .peek()
+                                .map(|next| (next.x, next.y))
+                                .or_else(|| {
+                                    self.state
+                                        .player(execution.target_owner)
+                                        .and_then(|p| p.home)
+                                });
+                            self.state.announce_leader_ability_to(
+                                execution.target_owner,
+                                &[ally, execution.owner_id],
+                                tile,
+                            );
+                        }
+                    }
                     if let Some(player) = self.state.player_mut(execution.owner_id) {
+                        let before = player.troops;
                         player.credit_troops_capped(back, player.max_troops);
+                        let returned = player.troops - before;
                         if execution.target_owner != 0
                             && matches!(player.leader.ability(), Ability::ReturnCampaign { .. })
                             && tick_now.saturating_sub(execution.created_tick) >= return_min_ticks
                         {
                             player.return_campaign =
                                 Some((execution.target_owner, tick_now + return_window_ticks));
+                        }
+                        if let Some((city, limit)) = tigranes_aid {
+                            let aid = returned
+                                .min(f64::from(limit))
+                                .min(player.max_troops - player.troops);
+                            if aid > 0.0 {
+                                player.credit_troops(aid);
+                                self.hero_claims.insert((execution.owner_id, 0, 0));
+                                self.state.announce_leader_ability_to(
+                                    execution.owner_id,
+                                    &[city.owner_id],
+                                    Some((city.tile_idx % map_w, city.tile_idx / map_w)),
+                                );
+                            }
                         }
                     }
                 }
@@ -911,6 +1009,35 @@ impl SowEngine {
                     |t| player.leader.conquest_speed_multiplier(t),
                 );
             }
+
+            let steppe_discount = if execution.target_owner == 0 {
+                match self
+                    .state
+                    .player(execution.owner_id)
+                    .map(|p| p.leader.ability())
+                {
+                    Some(Ability::ContestedSteppe { percent }) => {
+                        f64::from(percent.min(100)) / 100.0
+                    }
+                    _ => 0.0,
+                }
+            } else {
+                0.0
+            };
+
+            let ascent_speed =
+                self.state
+                    .player(execution.owner_id)
+                    .map_or(1.0, |p| match p.leader.ability() {
+                        Ability::ZagrosAscent { percent } => 1.0 + f64::from(percent) / 100.0,
+                        _ => 1.0,
+                    });
+
+            let factory_raid = self.state.config.buildings_enabled
+                && execution.target_owner != 0
+                && self.state.player(execution.owner_id).is_some_and(|player| {
+                    matches!(player.leader.ability(), Ability::FactoryRaid { .. })
+                });
 
             let mut stale_pops = 0u32;
             let max_stale_pops = 256;
@@ -1062,7 +1189,35 @@ impl SowEngine {
                             Some((target_tile.x, target_tile.y)),
                         );
                     }
-                    let tile_cost = tile_cost * city_multiplier;
+                    let ascent = ascent_speed > 1.0
+                        && execution.target_owner != 0
+                        && crate::execution::hero_effects::zagros_ascent_target(
+                            &self.state,
+                            execution.owner_id,
+                            target_tile.x,
+                            target_tile.y,
+                        );
+                    let tile_cost =
+                        tile_cost * city_multiplier / if ascent { ascent_speed } else { 1.0 };
+
+                    let tile = (target_tile.x, target_tile.y);
+                    let mut tile_cost = tile_cost;
+                    if nyabingi_possible
+                        && terrain_type == TerrainType::Highland
+                        && let Some((hero, percent)) =
+                            crate::execution::hero_effects::nyabingi_support(
+                                &self.state,
+                                tile,
+                                Some(execution.owner_id),
+                            )
+                    {
+                        tile_cost *= 1.0 + f64::from(percent) / 100.0;
+                        self.state.announce_leader_ability_to(
+                            hero,
+                            &[execution.target_owner, execution.owner_id],
+                            Some(tile),
+                        );
+                    }
 
                     // Check if we can afford this tile on this tick using expectation-invariant deterministic RNG
                     if budget < tile_cost {
@@ -1077,6 +1232,29 @@ impl SowEngine {
                         }
                     } else {
                         budget -= tile_cost;
+                    }
+
+                    if intercession_possible
+                        && execution.target_owner != 0
+                        && self
+                            .building_grid
+                            .iter_in_range(target_tile.x, target_tile.y, 0)
+                            .any(|city| city.x == target_tile.x && city.y == target_tile.y)
+                        && let Some(city) = self.buildings.iter().copied().find(|b| {
+                            b.kind == crate::game::BuildingKind::City
+                                && u64::from(b.tile_idx) == tile_idx
+                                && b.owner_id == execution.target_owner
+                        })
+                        && let Some(loss) = crate::execution::hero_effects::intercede_for_city(
+                            &mut self.state,
+                            &mut self.hero_claims,
+                            city,
+                            execution.owner_id,
+                        )
+                    {
+                        execution.troops = (execution.troops - loss).max(0.0);
+                        execution.to_conquer.push(target_tile);
+                        break;
                     }
 
                     let terrain_loss =
@@ -1094,7 +1272,8 @@ impl SowEngine {
                     );
                     let landing_loss =
                         landing_attacker_loss(&self.state, execution.owner_id, execution.landed);
-                    if terrain_loss != 1.0
+                    if ascent
+                        || terrain_loss != 1.0
                         || city_loss != 1.0
                         || target_loss != 1.0
                         || coast_loss != 1.0
@@ -1112,14 +1291,29 @@ impl SowEngine {
                     let loss_multiplier =
                         terrain_multiplier * city_loss * target_loss * coast_loss * landing_loss;
 
+                    let mut def_loss = 0.0;
                     if execution.target_owner == 0 {
-                        // Neutral: attacker pays constant base cost scaled by terrain multiplier
-                        execution.troops -= (self.state.config.attack_cost_neutral
-                            * loss_multiplier)
+                        let mut loss = self.state.config.attack_cost_neutral * loss_multiplier
                             / troop_strength;
+                        if steppe_discount > 0.0
+                            && loss > 0.0
+                            && crate::execution::hero_effects::contested_steppe(
+                                &self.state,
+                                execution.owner_id,
+                                target_tile.x,
+                                target_tile.y,
+                            )
+                        {
+                            loss *= 1.0 - steppe_discount;
+                            self.state.announce_leader_ability_to(
+                                execution.owner_id,
+                                &[],
+                                Some((target_tile.x, target_tile.y)),
+                            );
+                        }
+                        execution.troops -= loss;
                     } else {
                         // PvP: Combat resolution
-                        let mut def_loss = 0.0;
                         // Hero tower-defense ability scales the towers' extra losses.
                         let tower_defense = self
                             .state
@@ -1175,12 +1369,38 @@ impl SowEngine {
                                 tile,
                             );
                         }
-                        let atk_loss = (self.state.config.attack_cost_enemy
+                        let mut atk_loss = (self.state.config.attack_cost_enemy
                             * loss_multiplier
                             * (1.0 + tower_extra)
                             * recapture)
                             / troop_strength;
 
+                        if atk_loss > 0.0
+                            && let Some(ally) =
+                                crate::execution::hero_effects::joint_front_supporter(
+                                    &self.state,
+                                    &pact_allies,
+                                    (target_tile.x, target_tile.y),
+                                )
+                        {
+                            atk_loss *= pact_loss;
+                            self.state.announce_leader_ability_to(
+                                execution.owner_id,
+                                &[execution.target_owner, ally],
+                                tile,
+                            );
+                        }
+                        if let Some(multiplier) = regional_defense
+                            && atk_loss > 0.0
+                            && atk_loss < execution.troops
+                        {
+                            atk_loss *= multiplier;
+                            self.state.announce_leader_ability_to(
+                                execution.target_owner,
+                                &[execution.owner_id],
+                                tile,
+                            );
+                        }
                         execution.troops -= atk_loss;
 
                         // Deduct from defender
@@ -1270,7 +1490,10 @@ impl SowEngine {
                     elimination_candidates.extend(
                         eliminated
                             .into_iter()
-                            .map(|(victim, x, y)| (victim, execution.owner_id, x, y)),
+                            // On the last tile, def_loss is the entire defending reserve.
+                            .map(|(victim, x, y)| {
+                                (victim, execution.owner_id, x, y, Some(def_loss))
+                            }),
                     );
                     if let Some(change) = candidates {
                         territory_changes.push(change);
@@ -1282,6 +1505,29 @@ impl SowEngine {
                         self.state.announce_leader_ability(
                             execution.owner_id,
                             Some((target_tile.x, target_tile.y)),
+                        );
+                    }
+
+                    if factory_raid
+                        && self
+                            .building_grid
+                            .iter_non_city_in_range(target_tile.x, target_tile.y, 0)
+                            .any(|entry| {
+                                entry.kind == crate::game::BuildingKind::Factory
+                                    && entry.x == target_tile.x
+                                    && entry.y == target_tile.y
+                            })
+                        && let Some(factory) = self.buildings.iter().copied().find(|building| {
+                            building.kind == crate::game::BuildingKind::Factory
+                                && building.owner_id == execution.target_owner
+                                && u64::from(building.tile_idx) == tile_idx
+                        })
+                    {
+                        crate::execution::hero_effects::raid_captured_factory(
+                            &mut self.state,
+                            &mut self.hero_claims,
+                            execution,
+                            factory,
                         );
                     }
 
@@ -1328,8 +1574,19 @@ impl SowEngine {
             self.ai_attack_index_dirty = true;
         }
 
-        elimination_candidates.extend(self.annex_enclosed_components(territory_changes));
-        for (victim, conqueror, x, y) in elimination_candidates {
+        elimination_candidates.extend(
+            self.annex_enclosed_components(territory_changes)
+                .into_iter()
+                .map(|(victim, conqueror, x, y)| (victim, conqueror, x, y, None)),
+        );
+        for (victim, conqueror, x, y, last_defenders) in elimination_candidates {
+            crate::execution::hero_effects::recruit_conquered_reserves(
+                &mut self.state,
+                conqueror,
+                victim,
+                (x, y),
+                last_defenders,
+            );
             self.eliminate_player(victim, conqueror, x, y, false);
         }
         self.hero_coastal_foundings();

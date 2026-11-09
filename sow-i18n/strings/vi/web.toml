@@ -271,6 +271,118 @@ campaign_chronicles = "CHIẾN DỊCH\nBIÊN NIÊN"
 campaign_unavailable = "Không có chiến dịch."
 
 [heroes]
+leader_muhumuza_name = "Muhumuza"
+leader_muhumuza_historical = "Muhumuza, còn được ghi là Muhumusa, lãnh đạo phong trào kháng cự ở vùng cao Ndorwa và Kigezi, hai bên biên giới Rwanda và Uganda ngày nay. Với vai trò người đồng cốt của Nyabingi, bà dựa vào một truyền thống tâm linh đã bén rễ trong các cộng đồng địa phương. Bà tập hợp người ủng hộ để chống triều đình vua Musinga và sự bành trướng của chế độ thực dân châu Âu."
+leader_muhumuza_civilization = "Phong trào Nyabingi"
+
+leader_khosrow_i_name = "Khosrow I"
+leader_khosrow_i_historical = "Khosrow I, còn gọi là Anushirvan, cai trị Đế quốc Sasan từ năm 531 đến 579. Ông tổ chức quân đội thành bốn bộ chỉ huy khu vực. Những con dấu còn lại ghi chức danh các tướng phụ trách phía đông, nam, tây và bắc. Ông cũng tiếp tục cuộc đo đạc đất đai khởi sự dưới thời cha mình là Kavad I và dựa vào đó để ấn định mức thuế đất."
+leader_khosrow_i_civilization = "Đế quốc Sasan"
+
+leader_naram_sin_name = "Naram Sin"
+leader_naram_sin_historical = "Naram Sin, cháu nội của Sargon, cai trị Đế quốc Akkad trong thiên niên kỷ thứ ba TCN. Bia chiến thắng của ông kỷ niệm một chiến dịch chống người Lullubi ở dãy Zagros. Phù điêu khắc cảnh nhà vua và binh lính tiến lên sườn núi. Naram Sin cao lớn hơn các nhân vật khác và đội mũ có sừng, biểu tượng gắn với thần linh."
+leader_naram_sin_civilization = "Đế quốc Akkad"
+
+leader_jalal_al_din_mangburni_name = "Jalal al-Din Mangburni"
+leader_jalal_al_din_mangburni_historical = "Jalal al-Din Mangburni kế vị cha mình là Muhammad II khi quân Mông Cổ đang đánh tan Đế quốc Khwarezm. Ông tập hợp binh lính ở Ghazni và đánh bại một đạo quân Mông Cổ tại Parwan năm 1221. Thành Cát Tư Hãn truy đuổi ông tới sông Ấn. Jalal al-Din thua trận, nhưng cưỡi ngựa qua sông và một phần binh lực của ông cũng tới được bờ bên kia."
+leader_jalal_al_din_mangburni_civilization = "Đế quốc Khwarezm"
+
+leader_modu_chanyu_name = "Mặc Đốn Thiền Vu"
+leader_modu_chanyu_historical = "Mặc Đốn lên ngôi thiền vu vào khoảng năm 209 TCN và đưa Hung Nô trở thành một thế lực lớn trên thảo nguyên phía đông. Sử gia Trung Hoa Tư Mã Thiên kể rằng người Đông Hồ láng giềng liên tiếp đưa ra yêu sách để thử vị thủ lĩnh mới. Mặc Đốn hai lần nhượng bộ, nhưng khi họ đòi dải đất không người ở giữa các đồn biên giới, ông từ chối và đem quân tấn công."
+leader_modu_chanyu_civilization = "Hung Nô"
+
+leader_hiawatha_haudenosaunee_name = "Hiawatha"
+leader_hiawatha_haudenosaunee_historical = "Truyền thống truyền miệng Haudenosaunee nhớ đến Hiawatha, còn gọi là Aionwatha, vì đã giúp Người Kiến Tạo Hòa Bình tập hợp năm dân tộc Mohawk, Oneida, Onondaga, Cayuga và Seneca. Theo lời kể của người Onondaga, khi Hiawatha đau buồn, Người Kiến Tạo Hòa Bình dùng các chuỗi hạt vỏ sò, gọi là wampum, khi nói lời an ủi. Hiawatha sau đó giúp đưa thông điệp hòa bình đến các dân tộc. Thời điểm họ liên kết chưa được xác định chính xác."
+leader_hiawatha_haudenosaunee_civilization = "Liên minh Haudenosaunee"
+
+leader_kaahumanu_hawaii_name = "Kaʻahumanu"
+leader_kaahumanu_hawaii_historical = "Khi Kamehameha I qua đời năm 1819, Kaʻahumanu tuyên bố sẽ chia sẻ quyền cai trị với người kế vị là Liholiho, tức Kamehameha II. Bà là người đầu tiên giữ chức kuhina nui. Trong những năm đầu, chức vụ này có thẩm quyền tương đương nhà vua trong các quyết định về đất đai, thỏa thuận và tư pháp. Kaʻahumanu tiếp tục cai trị với tư cách nhiếp chính cho Kauikeaouli, tức Kamehameha III, đến khi qua đời năm 1832."
+leader_kaahumanu_hawaii_civilization = "Vương quốc Hawaiʻi"
+
+leader_sargon_of_akkad_name = "Sargon xứ Akkad"
+leader_sargon_of_akkad_historical = "Sargon lập vương triều Akkad ở Lưỡng Hà vào cuối thiên niên kỷ thứ ba TCN. Các bia ký hoàng gia kể về chiến thắng trước Lugalzagesi xứ Uruk và việc phá thành lũy của những thành phố như Uruk và Ur. Văn bản dùng để ca ngợi chiến thắng, một số còn lại qua bản sao của những người chép sử nhiều đời sau. Bia ký cũng nhắc tới người Akkad được đưa vào các chức vụ cai quản ở vùng bị chinh phục. Hồ sơ hành chính cho thấy một số tập quán địa phương vẫn tồn tại dưới chính quyền mới."
+leader_sargon_of_akkad_civilization = "Đế quốc Akkad"
+
+leader_mithridates_vi_name = "Mithridates VI"
+leader_mithridates_vi_historical = "Mithridates VI Eupator cai trị Pontus ở bờ nam Biển Đen. Ông mở rộng ảnh hưởng của vương quốc quanh vùng biển này và đối đầu với La Mã tại Anatolia. Trong cuộc chiến thứ ba với La Mã, tướng Lucullus đẩy ông khỏi Pontus. Mithridates nương náu với Tigranes II của Armenia, người đã cưới con gái ông. Liên minh giúp vua Pontus có nơi tập hợp lực lượng và có thêm quân để trở về."
+leader_mithridates_vi_civilization = "Vương quốc Pontus"
+
+leader_gudit_yodit_name = "Gudit"
+leader_gudit_yodit_historical = "Truyền thống Ethiopia nhớ đến Gudit, còn gọi là Yodit, như một nữ vương nổi dậy chống Aksum. Lịch sử các thượng phụ Alexandria kể về lời cầu viện vào thế kỷ X của một nhà cai trị Ethiopia không được nêu tên gửi cho George xứ Nubia. Sử sách kể một nữ vương của người Bani al-Hamwiyah đã bắt tù binh, đốt các thành phố và buộc nhà cai trị phải chạy từ nơi này sang nơi khác. Bản gốc bức thư đã thất lạc. Nội dung được lưu qua sử sách giáo hội, gắn cuộc khủng hoảng với yêu cầu bổ nhiệm một vị tổng giám mục mới."
+leader_gudit_yodit_civilization = "Cao nguyên Ethiopia"
+
+leader_khutulun_qaidu_name = "Khutulun"
+leader_khutulun_qaidu_historical = "Khutulun, còn viết là Qutulun, là công chúa và chỉ huy quân sự người Mông Cổ ở Trung Á. Cha bà là Qaidu, người đứng đầu một lãnh địa của dòng Ögödei và chống lại quyền lực của Hốt Tất Liệt cùng những người kế vị. Marco Polo gọi bà là Aijaruc và kể bà thường cưỡi ngựa tiến lên trong các chiến dịch để bắt lính địch. Ông cũng kể những người cầu hôn đem ngựa ra đánh cược trong các trận đấu vật. Số ngựa và các chiến thắng trong câu chuyện ấy khó kiểm chứng."
+leader_khutulun_qaidu_civilization = "Lãnh địa Qaidu"
+
+leader_sor_juana_ines_de_la_cruz_name = "Sor Juana Inés de la Cruz"
+leader_sor_juana_ines_de_la_cruz_historical = "Sor Juana Inés de la Cruz là nhà văn và nữ tu dòng Thánh Giêrônimô ở Tân Tây Ban Nha thế kỷ XVII. Các nguồn đưa ra hai năm sinh là 1648 và 1651. Bà sống tại tu viện San Jerónimo ở Thành phố México, nơi bà viết thơ và kịch, trong đó có El divino Narciso. Năm 1690 bà viết bài phê bình một bài giảng của tu sĩ Dòng Tên người Bồ Đào Nha António Vieira. Giám mục Puebla, Manuel Fernández de Santa Cruz, cho in bài viết dưới tên Carta atenagórica và gửi lời răn tới tác giả với bút danh Sor Filotea de la Cruz."
+leader_sor_juana_ines_de_la_cruz_civilization = "Tân Tây Ban Nha"
+
+leader_sibylla_name = "Sibylla của Jerusalem"
+leader_sibylla_historical = "Sibylla là con gái của Amalric xứ Jerusalem và Agnes xứ Courtenay. Trước khi lên ngôi nữ vương, bà nắm giữ bá quốc Jaffa và Ascalon. Văn thư do bà ban hành năm 1177 ghi việc bà cấp tháp, vườn và nguồn thu ở Ascalon cho bá tước Rodrigo và các thành viên dòng tu của ông. Bà có một con trai với người chồng đầu, William xứ Montferrat, sau này là vua Baldwin V. Khi con trai qua đời năm 1186, Sibylla đòi vương miện Jerusalem theo quyền kế vị của mình và đưa người chồng thứ hai, Guy xứ Lusignan, lên ngôi vua bên cạnh bà."
+leader_sibylla_civilization = "Vương quốc Jerusalem"
+
+leader_cynethryth_mercia_name = "Cynethryth"
+leader_cynethryth_mercia_historical = "Cynethryth là vương hậu Mercia vào cuối thế kỷ VIII và sau đó là viện trưởng tu viện Cookham. Tên bà xuất hiện với tư cách người làm chứng trong các văn thư thời vua Offa. Bà cũng là mẹ của Ecgfrith, người kế vị ông. Những đồng bạc mang tên và tước hiệu vương hậu của bà là trường hợp hiếm trong lịch sử nước Anh thời Anglo-Saxon. Một số đồng còn mang tên Eoba, người đúc tiền có liên hệ với Canterbury. Các hiện vật cho biết tước hiệu của bà đã được lưu hành công khai, dù chưa rõ ai đặt làm những đồng tiền đó."
+leader_cynethryth_mercia_civilization = "Vương quốc Mercia"
+
+leader_suppiluliuma_name = "Suppiluliuma I"
+leader_suppiluliuma_historical = "Suppiluliuma I cai trị Hatti vào thế kỷ XIV TCN. Các chiến dịch của ông mở rộng quyền kiểm soát của Hittite tới miền bắc Syria. Tại đây ông đưa con trai Piyassili lên làm vua Carchemish. Thỏa thuận với Shattiwaza của Mitanni gắn việc hỗ trợ một người tranh ngôi với một trật tự chính trị mới."
+leader_suppiluliuma_civilization = "Đế quốc Hittite"
+
+leader_baibars_name = "Baibars"
+leader_baibars_historical = "Al-Zahir Baibars cai trị Vương triều Mamluk từ năm 1260 đến 1277. Một đồng dinar vàng từ Cairo được lưu giữ tại Louvre mang tên và tước hiệu của ông. Các chiến dịch của ông mở rộng quyền kiểm soát của Mamluk ở Levant. Năm 1271 ông dẫn đầu liên quân chống pháo đài Krak des Chevaliers của dòng Hiệp sĩ Cứu tế."
+leader_baibars_civilization = "Vương triều Mamluk"
+
+leader_emperor_qin_shi_huang_name = "Tần Thủy Hoàng"
+leader_emperor_qin_shi_huang_historical = "Tần Thủy Hoàng tên là Doanh Chính. Ông xưng là hoàng đế đầu tiên sau khi nước Tần đánh bại các đối thủ cuối cùng vào năm 221 TCN. Chính quyền của ông áp dụng các chuẩn cân đong và đo lường của nước Tần trên những vùng mới chinh phục. Văn khắc còn lại trên quả cân và đồ đong ghi nhận cuộc cải cách."
+leader_emperor_qin_shi_huang_civilization = "Nhà Tần"
+
+leader_spartacus_name = "Spartacus"
+leader_spartacus_historical = "Spartacus là một đấu sĩ người Thrace, một trong những người lãnh đạo cuộc nổi dậy bắt đầu tại Capua năm 73 TCN. Plutarch kể rằng những người trốn thoát dùng dụng cụ nhà bếp rồi chiếm vũ khí đang được chở trên xe. Appian kể họ lấy vũ khí dọc đường và trú ở núi Vesuvius, nơi lực lượng của họ lớn dần."
+leader_spartacus_civilization = "Nghĩa quân Spartacus"
+
+leader_queen_nefertiti_name = "Nefertiti"
+leader_queen_nefertiti_historical = "Nefertiti là Đại Vương Phi của Akhenaten dưới Vương triều thứ Mười tám của Ai Cập. Tại Akhetaten, nay là Amarna, bà giữ vai trò nổi bật trong việc thờ thần Aten. Một mảnh đá thạch anh đỏ ở Bảo tàng Petrie khắc cảnh bà rót lễ vật dưới những tia sáng của đĩa mặt trời."
+leader_queen_nefertiti_civilization = "Ai Cập cổ đại"
+
+leader_mandukhai_name = "Mandukhai Khatun"
+leader_mandukhai_historical = "Mandukhai Khatun nắm quyền lực chính trị và quân sự trong cộng đồng người Mông Cổ vào cuối thế kỷ XV. Sau khi Manduul Khan qua đời, bà góp phần khôi phục quyền cai trị của dòng dõi Thành Cát Tư Hãn trong cuộc kế vị gắn với Dayan Khan. Sử biên niên Mông Cổ viết sau đó còn ghi rằng bà chỉ huy các chiến dịch chống người Oirat."
+leader_mandukhai_civilization = "Bắc Nguyên"
+
+leader_kabal_xook_name = "K’ab’al Xook"
+leader_kabal_xook_historical = "K’ab’al Xook làm lễ cung hiến Công trình 23 vào năm 726 tại Yaxchilán, một thành phố Maya bên sông Usumacinta thuộc bang Chiapas ngày nay. Bà là một trong những người vợ chính của vua Itzamnaaj B’alam. Tên bà xuất hiện trong văn khắc, còn hình ảnh của bà được chạm trên ba phiến đá đặt phía trên các cửa ra vào."
+leader_kabal_xook_civilization = "Yaxchilán"
+
+leader_lakshmibai_name = "Lakshmibai"
+leader_lakshmibai_historical = "Lakshmibai, rani của Jhansi, phản đối Công ty Đông Ấn sáp nhập xứ sở của bà sau khi Gangadhar Rao qua đời. Công ty từ chối công nhận con nuôi của họ là người kế vị. Trong cuộc nổi dậy Ấn Độ năm 1857–1858, bà lãnh đạo việc phòng thủ Jhansi trước quân của Hugh Rose. Khi quân Anh chiếm Jhansi năm 1858, bà thoát ra và gặp các lực lượng nổi dậy khác ở Kalpi, trong đó có các đội quân liên quan đến Tatya Tope. Bà tiếp tục chiến đấu sau khi Kalpi thất thủ và qua đời gần Gwalior tháng 6 năm 1858."
+leader_lakshmibai_civilization = "Jhansi"
+
+leader_pharaoh_hatshepsut_name = "Hatshepsut"
+leader_pharaoh_hatshepsut_historical = "Hatshepsut cai trị Ai Cập vào thế kỷ XV TCN, dưới Vương triều thứ Mười tám. Ban đầu bà nhiếp chính cho cháu trai kiêm con riêng của chồng là Thutmose III. Sau đó bà nắm danh hiệu và quyền lực của pharaon trong khi ông tiếp tục đồng trị vì. Công trình bà cho xây gồm đền tưởng niệm bậc thềm ở Deir el-Bahari. Phù điêu ở hành lang giữa phía nam mô tả đoàn bà phái đến Punt, cuộc gặp của sứ đoàn Ai Cập với người địa phương và cảnh chất hàng lên tàu. Ngôi đền đặt chuyến đi trong bối cảnh vương quyền và nghi lễ."
+leader_pharaoh_hatshepsut_civilization = "Ai Cập cổ đại"
+
+leader_thusnelda_cherusci_name = "Thusnelda"
+leader_thusnelda_cherusci_historical = "Thusnelda là một phụ nữ quý tộc người Cherusci vào đầu thế kỷ I CN. Cha bà, Segestes, tìm sự hỗ trợ của La Mã, còn chồng bà, Arminius, lãnh đạo cuộc kháng cự. Theo Tacitus, năm 15 quân của Arminius vây Segestes, khiến ông cầu cứu Germanicus. Quân La Mã phá vòng vây và giữ Thusnelda, lúc đó đang mang thai. Trong lời phát biểu mà Tacitus gán cho Segestes, ông thừa nhận bà ở đó trái ý mình. Sử gia La Mã mô tả bà đối diện cảnh bị bắt mà không van xin."
+leader_thusnelda_cherusci_civilization = "Người Cherusci"
+
+leader_queen_cartimandua_name = "Cartimandua"
+leader_queen_cartimandua_historical = "Cartimandua cai trị người Brigantes ở miền bắc nước Anh ngày nay vào thế kỷ I CN. Sử gia La Mã Tacitus để lại nguồn kể chính còn tồn tại về thời bà cầm quyền. Năm 51, Caratacus, một thủ lĩnh chống La Mã, tìm đến bà xin nương náu sau khi thất trận. Cartimandua bắt ông và giao cho người La Mã. Tacitus cũng kể về xung đột giữa bà và Venutius, cùng việc quân La Mã cứu bà năm 69, sau đó Venutius giữ ngôi."
+leader_queen_cartimandua_civilization = "Người Brigantes"
+
+leader_queen_suriyothai_name = "Suriyothai"
+leader_queen_suriyothai_historical = "Suriyothai là vương hậu Ayutthaya dưới triều Maha Chakkraphat. Bà được nhắc đến trong các câu chuyện về cuộc xâm lược của quân vua Miến Điện Tabinshwehti, được niên biểu của tỉnh Ayutthaya ghi vào năm 1548. Theo truyền thống biên niên sử hoàng gia, bà cưỡi voi theo quân ra trận. Khi nhà vua gặp nguy hiểm, bà thúc voi vào giữa ông và chỉ huy đối phương rồi bị thương chí mạng. Câu chuyện ghi lại quyết định của bà trên chiến trường và tác động của nó đối với nhà vua và quân đội."
+leader_queen_suriyothai_civilization = "Vương quốc Ayutthaya"
+
+leader_tarabai_name = "Tarabai"
+leader_tarabai_historical = "Tarabai (1675–1761) nắm chính quyền Maratha sau khi Rajaram qua đời năm 1700, làm nhiếp chính cho con trai nhỏ Shivaji. Bà điều phối các chỉ huy và bảo vệ pháo đài trước quân của hoàng đế Mughal Aurangzeb. Sử gia Richard M. Eaton mô tả việc bà đưa quân lên phía bắc vào đất Mughal trong khi các pháo đài Maratha bị vây. Địa chí Satara ghi bà giao việc giám sát các pháo đài cho Parashuram Trimbak. Sau khi Aurangzeb mất năm 1707, người tranh ngôi Shahu trở về và cuộc xung đột trong hoàng tộc Maratha bắt đầu."
+leader_tarabai_civilization = "Đế quốc Maratha"
+
+leader_natavan_name = "Khurshid Banu Natavan"
+leader_natavan_historical = "Khurshid Banu Natavan là nhà thơ và người bảo trợ văn hóa Azerbaijan quê ở Shusha, nơi bà qua đời năm 1897. Các nguồn đã xuất bản ghi những năm sinh khác nhau, trong đó có 1830 và 1832. Cha bà, Mehdiqulu Khan, là vị khan cuối cùng của Karabakh. Natavan dùng tài sản thừa kế của gia đình để hỗ trợ các công trình công cộng và hoạt động văn hóa. Năm 1872 bà đứng đầu Majlis-i Uns, nhóm văn chương quy tụ các nhà thơ ở Shusha và giao lưu với những nhóm khác. Bà sáng tác ghazal và thơ bi ai, đồng thời để lại một tập minh họa."
+leader_natavan_civilization = "Karabakh"
+
 leader_mavia_name = "Mavia"
 leader_mavia_historical = "Mavia, còn gọi là Mawiyya, lãnh đạo các cộng đồng Ả Rập ở biên giới phía đông La Mã và ký hòa ước với đế quốc vào cuối thế kỷ thứ tư."
 leader_mavia_civilization = "Người Ả Rập Tanukh"
@@ -726,9 +838,10 @@ crowns_count = "{amount} vương miện"
 buy = "XUY"
 unlock = "KHÔNG CÓ THỂ"
 unlocked = "ĐÃ MỞ KHÓA"
+confirm_unlock = "XÁC NHẬN"
 equip = "TRANG BỊ"
 equipped = "ĐÃ ĐÃ ĐÃ"
-territory_pattern = "Name"
+territory_pattern = "Họa tiết lãnh thổ"
 territory_patterns = "Các mẫu địa cầu"
 kingdom_vault = "NƯỚC QUỐC GIA VAULT"
 build_next_army = "Hãy xây dựng đội quân tiếp theo của bạn."
@@ -796,7 +909,7 @@ save_settings = "Tải cài đặt dưới dạng JSON"
 map_borders = "Ánh & xạ Viền"
 border_thickness = "Viền"
 border_darkness = "Viền"
-shore_thickness = "Name"
+shore_thickness = "Độ dày bờ"
 conquest_duration = "Thời điểm kết thúc"
 opacity = "Độ trong suốt"
 reset = "REST"
@@ -973,6 +1086,10 @@ ability_restriction_defeated = "Anh hùng của bạn không còn trong trận."
 
 
 [endgame]
+reward_double_title = "Nhân đôi phần thưởng"
+reward_double_body = "Xem một video ngắn để nhận lại vương miện và đá quý của trận này."
+reward_continue = "TIẾP TỤC"
+reward_double_watch = "XEM VIDEO"
 stat_kills = "Hạ gục"
 stat_assists = "Hỗ trợ"
 stat_max_territory = "Lãnh thổ tối đa"
@@ -991,6 +1108,90 @@ crowns = "VƯƠNG MIỆN"
 gems = "ĐÁ QUÝ"
 
 [site]
+leader_muhumuza_ability = "Mạng lưới Nyabingi"
+leader_muhumuza_description = "Các ô vùng cao của bạn và đồng minh cần thêm 50% công sức để chiếm ở những nơi chúng giáp nhau."
+
+leader_khosrow_i_ability = "Bộ chỉ huy khu vực"
+leader_khosrow_i_description = "Khi ít nhất hai đối thủ khác nhau cùng tấn công bạn trên bộ, quân của họ mất thêm 25% binh lính trên mỗi ô chiếm được của bạn."
+
+leader_naram_sin_ability = "Tiến lên dãy Zagros"
+leader_naram_sin_description = "Quân của bạn chiếm các ô núi của đối thủ nhanh hơn 50% khi chúng giáp vùng cao do bạn kiểm soát."
+
+leader_jalal_al_din_mangburni_ability = "Vượt sông Ấn"
+leader_jalal_al_din_mangburni_description = "Khi tàu chở quân đang rút lui tới bờ biển của bạn, toàn bộ quân còn trên tàu trở về trong giới hạn quân số."
+
+leader_modu_chanyu_ability = "Thảo nguyên tranh chấp"
+leader_modu_chanyu_description = "Lục quân của bạn mất ít hơn 50% binh lính khi chiếm một ô đồng bằng trung lập giáp lãnh thổ đối thủ."
+
+leader_hiawatha_haudenosaunee_ability = "Đại Luật Hòa Bình"
+leader_hiawatha_haudenosaunee_description = "Khi hai đồng minh của bạn lập liên minh mới với nhau, cả hai liên minh có thời hạn của bạn với họ được gia hạn về thời lượng đầy đủ. Một lần cho mỗi cặp trong mỗi trận."
+
+leader_kaahumanu_hawaii_ability = "Chung bàn"
+leader_kaahumanu_hawaii_description = "Lần đầu gửi ít nhất 500 quân cho mỗi đồng minh khi cả hai đều có trang trại đang hoạt động, mỗi bên nhận thêm quân bằng 25% số đã gửi, tối đa 500 mỗi bên và trong giới hạn quân."
+
+leader_sargon_of_akkad_ability = "Đồn binh Akkad"
+leader_sargon_of_akkad_description = "Khi chiếm thành phố địch đang hoạt động mà bạn chưa có tháp trong phạm vi 12 ô, dựng miễn phí một tháp cấp 1 trên ô hợp lệ gần nhất của bạn trong phạm vi đó. Một lần cho mỗi thành phố chiếm được."
+
+leader_mithridates_vi_ability = "Viện binh của Tigranes"
+leader_mithridates_vi_description = "Nếu một đồng minh có thành phố đang hoạt động, rút khỏi cuộc tấn công trên bộ chống đối thủ sau ít nhất 3 giây sẽ cho số viện binh bằng số quân trở về, tối đa 1.000 và trong giới hạn quân. Một lần mỗi trận."
+
+leader_gudit_yodit_ability = "Cuộc tháo chạy khỏi Aksum"
+leader_gudit_yodit_description = "Khi chiếm một thành phố địch đang hoạt động, buộc đội quân trên bộ lớn nhất của chủ cũ đang tấn công một người chơi phải rút lui. Một lần cho mỗi thành phố chiếm được."
+
+leader_khutulun_qaidu_ability = "Bắt địch trên lưng ngựa"
+leader_khutulun_qaidu_description = "Khi mở cuộc tấn công trên bộ vào đối thủ đang tấn công bạn trên bộ, tuyển 20% số quân bạn đánh bại trong cuộc đụng độ đầu tiên vào lực lượng dự bị, tối đa bằng giới hạn quân."
+
+leader_sor_juana_ines_de_la_cruz_ability = "Triết lý nhà bếp"
+leader_sor_juana_ines_de_la_cruz_description = "Khi hoàn tất nâng cấp một trang trại, thời gian còn lại của lần nâng cấp thành phố đang diễn ra gần nhất của bạn trong phạm vi 12 ô giảm một nửa."
+
+leader_sibylla_ability = "Vương miện thứ hai"
+leader_sibylla_description = "Nếu có một thành phố đang hoạt động khi lập liên minh mới, thành phố được khởi công sớm nhất của đồng minh mới sẽ hoàn thành ngay nếu họ chưa có thành phố hoạt động. Một lần mỗi trận."
+
+leader_cynethryth_mercia_ability = "Thỏa thuận Cookham"
+leader_cynethryth_mercia_description = "Khi đối thủ chiếm một trang trại đang hoạt động của bạn, thành phố đã xây xong có cấp thấp nhất của bạn trong phạm vi 12 ô tăng một cấp, tối đa cấp 4. Mỗi trang trại chỉ kích hoạt một lần."
+
+leader_suppiluliuma_ability = "Hiệp ước Mitanni"
+leader_suppiluliuma_description = "Quân bộ của bạn mất ít hơn 25% binh lính khi chiếm ô địch giáp lãnh thổ của đồng minh đang tấn công cùng đối thủ trên bộ."
+
+leader_baibars_ability = "Công binh thành Krak"
+leader_baibars_description = "Khi chiếm một tháp địch đang hoạt động, bạn phá hủy tháp đang hoạt động gần nhất của cùng đối thủ, trong phạm vi 12 ô và có cấp hoạt động thấp hơn. Mỗi tháp chiếm được chỉ kích hoạt một lần mỗi trận."
+
+leader_emperor_qin_shi_huang_ability = "Chuẩn đo lường đế quốc"
+leader_emperor_qin_shi_huang_description = "Khi thành phố, nhà máy và nông trại của bạn có tổng cấp đang hoạt động bằng nhau và lớn hơn không, nhà máy sản xuất thêm 25% vàng và nông trại tạo thêm 25% quân."
+
+leader_spartacus_ability = "Kho vũ khí Thurii"
+leader_spartacus_description = "Khi đạo quân trên bộ của bạn chiếm trung tâm một nhà máy địch đang hoạt động, đạo quân đó nhận 300 lính cho mỗi cấp đang hoạt động của nhà máy. Mỗi nhà máy chỉ kích hoạt một lần mỗi trận."
+
+leader_queen_nefertiti_ability = "Khối đá Talatat của Amarna"
+leader_queen_nefertiti_description = "Nâng cấp thành phố tốn ít hơn 35% vàng nếu bạn có một nhà máy đang hoạt động cách thành phố đó không quá 12 ô."
+
+leader_mandukhai_ability = "Thống nhất thảo nguyên"
+leader_mandukhai_description = "Khi loại một đối thủ bằng cách chiếm phần lãnh thổ còn lại của họ, bạn tuyển 25% quân dự bị còn lại của đối thủ, tối đa đến giới hạn quân của mình."
+
+leader_kabal_xook_ability = "Quân hiệu Yaxchilán"
+leader_kabal_xook_description = "Khi có một thành phố đang hoạt động và ít nhất 750 quân dự bị, bạn gửi 750 quân dự bị vào đợt tấn công đường bộ mới của đồng minh nhắm vào một đối thủ chung. Mỗi đồng minh một lần trong mỗi trận."
+
+leader_lakshmibai_ability = "Cứ điểm Kalpi"
+leader_lakshmibai_description = "Khi đối thủ chiếm thành phố đang hoạt động cuối cùng của bạn, lập miễn phí một thành phố cấp 1 trên ô hợp lệ gần nhất thuộc lãnh thổ của bạn, cách thành phố đã mất tối đa 24 ô. Một lần mỗi trận."
+
+leader_pharaoh_hatshepsut_ability = "Vườn Punt"
+leader_pharaoh_hatshepsut_description = "Khi tàu buôn của bạn hoàn thành tuyến tới cảng nước ngoài, tăng một cấp cho trang trại đã hoàn tất có cấp thấp nhất của bạn trong phạm vi 12 ô quanh cảng xuất phát, tối đa cấp 4. Một lần mỗi cảng xuất phát."
+
+leader_thusnelda_cherusci_ability = "Bất khuất trong cảnh giam cầm"
+leader_thusnelda_cherusci_description = "Khi đối thủ chiếm một thành phố của bạn có cấp hoạt động từ 2 trở lên, thành phố mất một cấp đã hoàn thành và mọi nâng cấp đang diễn ra bị hủy. Một lần mỗi thành phố."
+
+leader_queen_cartimandua_ability = "Giao nộp Caratacus"
+leader_queen_cartimandua_description = "Khi bộ binh địch rút khỏi lãnh thổ của bạn, chuyển 25% quân sống sót cho đồng minh có đạo quân trên bộ lớn nhất đang đánh kẻ địch đó và còn chỗ trong quân dự bị. Phần dư trở về phía địch."
+
+leader_queen_suriyothai_ability = "Hộ vệ Ayutthaya"
+leader_queen_suriyothai_description = "Khi bộ binh địch sắp chiếm trung tâm của thành phố đồng minh đang hoạt động, dùng 1.500 quân dự bị để chặn đợt chiếm này và loại tối đa 1.500 quân địch. Một lần mỗi thành phố đồng minh."
+
+leader_tarabai_ability = "Chauth phản kích"
+leader_tarabai_description = "Chiếm một tháp đã hoàn tất của đối thủ đang tấn công bạn trên bộ để lấy 25% số vàng của họ, tối đa 250. Một lần mỗi tháp."
+
+leader_natavan_ability = "Đài nước Shusha"
+leader_natavan_description = "Khi một thành phố của bạn nâng cấp xong lên cấp 2, lập miễn phí một trang trại cấp 1 tại ô hợp lệ gần nhất trong phạm vi 12 ô từ thành phố."
+
 leader_mavia_ability = "Hòa ước Moses"
 leader_mavia_description = "Khi kết minh với đối thủ trong lúc hai bên có cuộc tấn công trên bộ, quân tấn công sống sót của cả hai bên trở về không chịu tổn thất rút lui, tối đa bằng giới hạn quân số."
 
@@ -1317,7 +1518,7 @@ cookies_dont_ads = "Không có bánh quy quảng cáo và quảng cáo dựa tr�
 cookies_dont_sell = "Không bán hay chia sẻ dữ liệu cá nhân để quảng cáo."
 cookies_dont_tracking = "Không theo dấu chéo hay đánh dấu chéo."
 cookies_dont_body = "Bởi vì không có theo dõi hành vi, kiểm soát quyền riêng tư toàn cầu và không theo dõi tín hiệu không có gì để tắt — và chúng tôi tôn trọng GPC như một giảm giá/chia sẻ tối ưu."
-cookies_controls_title = "Name"
+cookies_controls_title = "Quyền kiểm soát của bạn"
 cookies_controls_clear = "Xóa dữ liệu trang web trong cài đặt trình duyệt để xóa ID phiên và tài nguyên đã lưu bộ nhớ đệm. Trò chơi vẫn hoạt động và bắt đầu phiên mới."
 cookies_controls_block = "Chặn tất cả các kho lưu trữ lại có thể buộc phải giảm tải xuống hàng loạt tài sản trò chơi và thiết lập lại tùy thích mỗi lần ghé thăm."
 cookies_controls_rights = "Để biết quyền cá nhân-dữ liệu (các quyền truy cập, xóa, khả năng chuyển giao), xem chính sách riêng tư — email"
@@ -1332,7 +1533,7 @@ terms_updated = "Cập nhật lần cuối: 2026 · World of Unreal"
 terms_acceptance_title = "Chấp nhận và cao cả"
 terms_acceptance_body = "Những điều khoản này là một thỏa thuận ràng buộc giữa anh và World of Unreal Quản lý việc sử dụng Shadows of War trên bóng tối chiến tranh.io, sân ga đối tác và khách hàng bản địa. bằng cách chơi, cài đặt, hoặc truy cập dịch vụ bạn đồng ý với những điều khoản này. nếu bạn không đồng ý, đừng sử dụng dịch vụ."
 terms_acceptance_age = "Bạn phải ít nhất 13 tuổi. người chơi 13 đến 17 tuổi chỉ có thể chơi với sự cho phép và giám sát của cha mẹ hoặc người bảo hộ."
-terms_changes_title = "Name"
+terms_changes_title = "Thay đổi trò chơi và dịch vụ"
 terms_changes_body = "Nhiều người chơi đòi hỏi máy phục vụ của chúng ta phải truy cập vào máy chủ. Chúng ta có thể sửa đổi, tạm dừng hoặc ngừng lại bất cứ phần nào của dịch vụ — chế độ, bản đồ, mùa, bảng dẫn đầu, các sự kiện — bất cứ lúc nào, dù có hay không có trách nhiệm với bạn."
 terms_accounts_title = "Tài khoản"
 terms_accounts_body = "Trò chơi vô danh tạo một mã nhận diện tài khoản chính thống được cất giữ trên thiết bị của bạn với tên hiển thị. Việc dọn sạch kho chứa nơi Mạng tạo một tài khoản mới; thay đổi tên không bao giờ thay đổi ID tài khoản. Mã số tài khoản của bạn là khóa tiến trình, không phải mật khẩu — giữ bảo mật thiết bị của bạn."

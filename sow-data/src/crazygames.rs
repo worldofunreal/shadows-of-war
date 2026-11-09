@@ -26,25 +26,103 @@ struct SubmitScoresRequest {
     scores: Vec<ScoreEntry>,
 }
 
-pub async fn verify_user_token(token: &str) -> Result<String, String> {
-    let resp = reqwest::get("https://sdk.crazygames.com/publicKey.json")
+const JWKS_URL: &str = "https://userportal.crazygames.com/.well-known/jwks.json";
+const LEGACY_PUBLIC_KEY_URL: &str = "https://sdk.crazygames.com/publicKey.json";
+/// CrazyGames rotates keys rarely; a cached key is refetched after this long
+/// or immediately when a token names a key id the cache does not hold.
+const KEY_CACHE_SECS: u64 = 60 * 60;
+
+struct CachedKeys {
+    fetched_at: std::time::Instant,
+    jwks: Option<jsonwebtoken::jwk::JwkSet>,
+    legacy_pem: Option<String>,
+}
+
+static KEYS: std::sync::Mutex<Option<CachedKeys>> = std::sync::Mutex::new(None);
+
+fn cached<T>(read: impl FnOnce(&CachedKeys) -> Option<T>) -> Option<T> {
+    let guard = KEYS.lock().ok()?;
+    let keys = guard.as_ref()?;
+    if keys.fetched_at.elapsed().as_secs() > KEY_CACHE_SECS {
+        return None;
+    }
+    read(keys)
+}
+
+fn store(update: impl FnOnce(&mut CachedKeys)) {
+    if let Ok(mut guard) = KEYS.lock() {
+        let keys = guard.get_or_insert_with(|| CachedKeys {
+            fetched_at: std::time::Instant::now(),
+            jwks: None,
+            legacy_pem: None,
+        });
+        keys.fetched_at = std::time::Instant::now();
+        update(keys);
+    }
+}
+
+async fn jwk_for(kid: &str, refresh: bool) -> Result<jsonwebtoken::jwk::Jwk, String> {
+    if !refresh
+        && let Some(jwk) = cached(|keys| keys.jwks.as_ref()?.find(kid).cloned())
+    {
+        return Ok(jwk);
+    }
+    let set: jsonwebtoken::jwk::JwkSet = reqwest::get(JWKS_URL)
         .await
-        .map_err(|e| format!("failed to fetch CrazyGames public key: {e}"))?;
-    let key_body: PublicKeyResponse = resp
+        .map_err(|e| format!("failed to fetch CrazyGames JWKS: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("invalid CrazyGames JWKS: {e}"))?;
+    let jwk = set
+        .find(kid)
+        .cloned()
+        .ok_or_else(|| format!("CrazyGames JWKS has no key {kid}"))?;
+    store(|keys| keys.jwks = Some(set));
+    Ok(jwk)
+}
+
+async fn legacy_key(refresh: bool) -> Result<String, String> {
+    if !refresh && let Some(pem) = cached(|keys| keys.legacy_pem.clone()) {
+        return Ok(pem);
+    }
+    let key_body: PublicKeyResponse = reqwest::get(LEGACY_PUBLIC_KEY_URL)
+        .await
+        .map_err(|e| format!("failed to fetch CrazyGames public key: {e}"))?
         .json()
         .await
         .map_err(|e| format!("invalid CrazyGames public key response: {e}"))?;
     if key_body.public_key.is_empty() {
         return Err("CrazyGames public key is empty".into());
     }
+    store(|keys| keys.legacy_pem = Some(key_body.public_key.clone()));
+    Ok(key_body.public_key)
+}
 
-    let key = DecodingKey::from_rsa_pem(key_body.public_key.as_bytes())
-        .map_err(|e| format!("invalid CrazyGames public key PEM: {e}"))?;
+async fn decoding_key(kid: Option<&str>, refresh: bool) -> Result<DecodingKey, String> {
+    match kid {
+        // Tokens requested with `signingKeyType: "IN_GAME_AUTH"` name their
+        // JWKS key; `ingame-auth-legacy` and kid-less tokens use the old key.
+        Some(kid) if kid != "ingame-auth-legacy" => DecodingKey::from_jwk(&jwk_for(kid, refresh).await?)
+            .map_err(|e| format!("invalid CrazyGames JWK: {e}")),
+        _ => DecodingKey::from_rsa_pem(legacy_key(refresh).await?.as_bytes())
+            .map_err(|e| format!("invalid CrazyGames public key PEM: {e}")),
+    }
+}
+
+pub async fn verify_user_token(token: &str) -> Result<String, String> {
+    let header = jsonwebtoken::decode_header(token)
+        .map_err(|e| format!("CrazyGames token header is invalid: {e}"))?;
+    let kid = header.kid.as_deref();
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_exp = true;
-
-    let token_data = decode::<CrazyTokenClaims>(token, &key, &validation)
-        .map_err(|e| format!("CrazyGames token verification failed: {e}"))?;
+    // A cached key may predate a rotation: retry once with fresh keys.
+    let mut result = decode::<CrazyTokenClaims>(token, &decoding_key(kid, false).await?, &validation);
+    if result.as_ref().is_err_and(|e| {
+        matches!(e.kind(), jsonwebtoken::errors::ErrorKind::InvalidSignature)
+    }) {
+        result = decode::<CrazyTokenClaims>(token, &decoding_key(kid, true).await?, &validation);
+    }
+    let token_data = result.map_err(|e| format!("CrazyGames token verification failed: {e}"))?;
     if token_data.claims.user_id.is_empty() {
         return Err("CrazyGames token missing userId".into());
     }

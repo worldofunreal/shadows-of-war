@@ -42,7 +42,7 @@ impl SowEngine {
         }
 
         for (building, old_owner) in transfers {
-            self.hero_city_transferred(building, old_owner);
+            self.hero_structure_transferred(building, old_owner);
         }
     }
 

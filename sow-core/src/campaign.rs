@@ -116,8 +116,15 @@ mod tests {
             actions: actions.clone(),
         };
         assert!(granted.allows_action(CampaignAction::TradeShip));
-        assert!(!granted.allows_action(CampaignAction::Warship));
+        // Warships need a level-1 Port, the same as trade ships.
+        assert!(granted.allows_action(CampaignAction::Warship));
         assert!(!granted.allows_action(CampaignAction::Nuke));
+        let no_port = CampaignUnlocks {
+            buildings: HashMap::from([(BuildingKind::City, 3)]),
+            actions: actions.clone(),
+        };
+        assert!(!no_port.allows_action(CampaignAction::Warship));
+        assert!(!no_port.allows_action(CampaignAction::TradeShip));
         assert!(CampaignAction::TransportFleet.required_building().is_none());
 
         let unlocked = CampaignUnlocks {

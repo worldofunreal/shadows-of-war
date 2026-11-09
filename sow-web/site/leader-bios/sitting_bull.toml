@@ -1,0 +1,151 @@
+[articles.en]
+text = "Sitting Bull was a Hunkpapa Lakota leader who led his people during years of resistance against United States government policies. Sitting Bull was killed by Indian agency police accompanied by U.S."
+title = "Sitting Bull"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Sitting_Bull"
+intro = [
+  "Sitting Bull (Lakota: Tȟatȟáŋka Íyotake [tˣaˈtˣə̃ka ˈɪjɔtakɛ]; c. 1831–37 – December 15, 1890) was a Hunkpapa Lakota leader who led his people during years of resistance against United States government policies. Sitting Bull was killed by Indian agency police accompanied by U.S. officers and supported by U.S. troops on the Standing Rock Indian Reservation during an attempt to arrest him at a time when authorities feared that he would join the Ghost Dance movement.",
+  "Before the Battle of the Little Bighorn, Sitting Bull had a vision in which he saw many soldiers, \"as thick as grasshoppers\", falling upside down into the Lakota camp, which his people took as a foreshadowing of a major victory in which many soldiers would be killed. About three weeks later, the confederated Lakota tribes with the Northern Cheyenne defeated the 7th Cavalry under Lt. Col. George Armstrong Custer on June 25, 1876, annihilating Custer's battalion and seeming to fulfill Sitting Bull's prophetic vision. Sitting Bull's leadership inspired his people to a major victory. In response, the U.S. government sent thousands more soldiers to the area, forcing many of the Lakota to surrender over the next year. Sitting Bull refused to surrender, and in May 1877, he led his band north to Wood Mountain, North-West Territories, now Saskatchewan. He remained there until 1881, when he and most of his band returned to U.S. territory and surrendered to U.S. forces.",
+  "After working as a performer with Buffalo Bill's Wild West show, Sitting Bull returned to the Standing Rock Agency in South Dakota. Because of fears that Sitting Bull would use his influence to support the Ghost Dance movement, Indian Service agent James McLaughlin at Fort Yates ordered his arrest. During an ensuing struggle between Sitting Bull's followers and the agency police, Sitting Bull was shot in the chest and head by Standing Rock policemen Lieutenant Bull Head (Tatankapah, Lakota: Tȟatȟáŋka Pȟá) and Red Tomahawk (Marcelus Chankpidutah, Lakota: Čhaŋȟpí Dúta), after the police were fired upon by Sitting Bull's supporters. His body was taken to nearby Fort Yates for burial. In 1953, his Lakota family exhumed what were believed to be his remains, reburying them near Mobridge, South Dakota, near his birthplace.",
+]
+sections = [
+  { "title" = "Early life", "paragraphs" = [
+      "Sitting Bull was born on land later included in the Dakota Territory sometime between 1831 and 1837. In 2007, Sitting Bull's great-grandson asserted from family oral tradition that Sitting Bull was born along the Yellowstone River, south of present-day Miles City, Montana. He was named Ȟoká Psíče (Jumping Badger) at birth, and nicknamed Húŋkešni [ˈhʊ̃kɛʃnɪ] or \"Slow\", an allusion to his careful and unhurried nature.",
+      "When Sitting Bull was 14 years old, he accompanied a group of Lakota warriors, which included his father and his uncle Four Horns, in a raiding party to take horses from a camp of Crow warriors. He displayed bravery by riding forward and counting coup on one of the surprised Crow, which was witnessed by the other mounted Lakota. Upon returning to camp, his father gave a celebratory feast at which he conferred his own name upon his son. The name, Tȟatȟáŋka Íyotake, in the Lakota language, roughly translates to \"Buffalo Bull Who Sits Down\", but Americans commonly refer to him as \"Sitting Bull\". Thereafter, Sitting Bull's father was known as Jumping Bull. At this ceremony before the entire band, Sitting Bull's father presented his son with an eagle feather to wear in his hair, a warrior's horse, and a hardened buffalo hide shield to mark his son's passage into manhood as a Lakota warrior.",
+      "During the Dakota War of 1862, in which Sitting Bull's people were not involved, several bands of eastern Dakota people killed an estimated 300 to 800 settlers and soldiers in south-central Minnesota in response to poor treatment by the government and in an effort to drive the whites away. Despite being embroiled in the American Civil War, the United States Army retaliated in 1863 and 1864, even against bands that had not been involved in the hostilities. In 1864, two brigades of about 2,200 soldiers under Brigadier General Alfred Sully attacked a village. The defenders were led by Sitting Bull, Gall and Inkpaduta. The Lakota and Dakota were driven out, but skirmishing continued into August at the Battle of the Badlands.",
+    ] },
+  { "title" = "Red Cloud's War", "paragraphs" = [
+      "From 1866 to 1868, Red Cloud, a leader of the Oglala Lakota, fought against U.S. forces, attacking their forts in an effort to keep control of the Powder River Country in present-day Montana. In support of Red Cloud, Sitting Bull led numerous war parties against Fort Berthold, Fort Stevenson, and Fort Buford and their allies from 1865 to 1868. The uprising has come to be known as Red Cloud's War.",
+      "By early 1868, the U.S. government desired a peaceful settlement to the conflict. It agreed to Red Cloud's demands that the U.S. abandon Forts Phil Kearny and C.F. Smith. Gall of the Hunkpapa and other representatives of the Hunkpapa, Blackfeet and Yankton Dakota, signed a form of the Treaty of Fort Laramie on July 2, 1868, at Fort Rice (near Bismarck, North Dakota). Sitting Bull did not agree to the treaty. He told the Jesuit missionary Pierre Jean De Smet, who sought him on behalf of the government: \"I wish all to know that I do not propose to sell any part of my country.\" He continued his hit-and-run attacks on forts in the upper Missouri area throughout the late 1860s and early 1870s.",
+      "The events between 1866 and 1868 mark a historically debated period of Sitting Bull's life. According to historian Stanley Vestal, who conducted interviews with surviving Hunkpapa in 1930, Sitting Bull was made \"Supreme Chief of the whole Sioux Nation\" at this time. Historians and ethnologists later refuted this, since Lakota society was highly decentralized. Lakota bands and their elders made individual decisions, including whether or not to wage war.",
+    ] },
+  { "title" = "Great Sioux War of 1876", "paragraphs" = [
+      "In the late 1860s, Sitting Bull's band of Hunkpapa continued to attack migrating parties and forts. In 1871, when the Northern Pacific Railway conducted a survey for a route across the northern plains directly through Hunkpapa lands, it encountered stiff Lakota resistance. The same railway people returned the following year accompanied by federal troops. Sitting Bull and the Hunkpapa attacked the survey party, which was forced to turn back.",
+      "In 1873, the military accompaniment for the surveyors was increased again, but Sitting Bull's forces resisted the survey \"most vigorously.\" The Panic of 1873 forced the Northern Pacific Railway's backers, such as Jay Cooke, into bankruptcy, which halted construction of the railroad through Lakota, Dakota, and Nakota territory.",
+      "After the 1848 discovery of gold in the Sierra Nevada and dramatic gains in new wealth from it, other men became interested in the potential for gold mining in the Black Hills.",
+    ] },
+  { "title" = "Annie Oakley", "paragraphs" = [
+      "In 1884, show promoter Alvaren Allen asked Agent James McLaughlin to allow Sitting Bull to tour parts of Canada and the northern United States. The show was called the \"Sitting Bull Connection\". It was during this tour that Sitting Bull met Annie Oakley in present-day Minnesota. Sitting Bull was so impressed with Oakley's skills with firearms that he offered $65 (equal to $2,329 today) for a photographer to take a photo of the two together.",
+      "The admiration and respect were mutual. Oakley stated that Sitting Bull made a \"great pet\" of her. In observing Oakley, Sitting Bull's respect for the young sharpshooter grew. Oakley was quite modest in her attire, deeply respectful of others, and had a remarkable stage persona despite being a woman who stood only five feet in height. Sitting Bull felt that she was \"gifted\" by supernatural means in order to shoot so accurately with both hands. As a result of his esteem, he symbolically \"adopted\" her as a daughter in 1884. He named her \"Little Sure Shot\", a name that Oakley used throughout her career.",
+    ] },
+  { "title" = "Legacy", "paragraphs" = [
+      "Following Sitting Bull's death, his cabin on the Grand River was taken to Chicago for use as an exhibit at the 1893 World's Columbian Exposition. Indigenous dancers also performed at the exposition. In September 1989, the U.S. Postal Service released a Great Americans series 28¢ postage stamp featuring his likeness.",
+      "In March 1996, Standing Rock College was renamed Sitting Bull College in his honor. The college serves as an institution of higher education in Sitting Bull's home of Standing Rock Reservation, with campuses in North and South Dakota.",
+      "In August 2010, a research team led by Eske Willerslev, an ancient DNA expert at the University of Copenhagen, announced its intention to sequence the genome of Sitting Bull, with the approval of his descendants, using a hair sample obtained during his lifetime.",
+    ] },
+]
+
+[articles.ja]
+text = "シッティング・ブル（Sitting Bull）、本名タタンカ・イヨタケ（Tatanka Iyotake）、（1831年 - 1890年12月15日）は、ネイティブ・アメリカン（アメリカ・インディアン）のラコタ・スー族のオグララ族に属するハンクパパ族の戦士、呪術師。しばしば誤解されるが酋長、族長、指導者ではない。"
+title = "シッティング・ブル"
+lang = "ja"
+url = "https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%83%E3%83%86%E3%82%A3%E3%83%B3%E3%82%B0%E3%83%BB%E3%83%96%E3%83%AB"
+intro = [
+  "シッティング・ブル（Sitting Bull）、本名タタンカ・イヨタケ（Tatanka Iyotake）、（1831年 - 1890年12月15日）は、ネイティブ・アメリカン（アメリカ・インディアン）のラコタ・スー族のオグララ族に属するハンクパパ族の戦士、呪術師。しばしば誤解されるが酋長、族長、指導者ではない。",
+]
+sections = [
+  { "title" = "生い立ち", "paragraphs" = [
+      "スー族の年代記が伝えるタタンカ・イヨタケの生い立ちは次のようなものである。タタンカ・イヨタケ、またはタタンカ・ヨタンカ（座れる雄牛）は、ダコタ準州（現在で言うサウスダコタ州）のグランド川のそばである暗い夜に、ハンクパパ族のリターンズ・アゲイン、またはジャンピング・ブルという名の大戦士のひとり息子として生まれた。この赤ん坊の力強い泣き声と、ふくろうの鳴き声とともに雲間から現れた満月を見て、父親はこの赤ん坊が将来偉大な人物となるだろうと予感し、「ホカ・プシチャ（跳ねるアナグマ）」と名付けた。",
+      "父、リターンズ・アゲインは狩猟民族の呪術師であり、狩猟動物との交信が生業だった。あるとき、父親リターンズ・アゲインが3人の戦士と狩りに出て、野営のたき火を囲んでいるときに、一頭のバッファローが近づいてきた。バッファローは神秘的なささやきで、「座る雄牛、跳ねる雄牛、雌牛と共に立つ雄牛、孤独な雄牛」の四つの名を繰り返した。リターンズ・アゲインは直ちにこれを「バッファローが自分、あるいは他者に贈る新しい名を選ばせているのだ」と理解し、「タタンカ・イヨタケ（座せる雄牛＝シッティング・ブル）」という名を選び、これを贈り名とした。",
+      "女ばかりの兄弟のなかで、男は彼一人だった。一番上の姉のプリティー・フェザーは背負子に彼を入れて馬に載せ、草原を走って勇者の歌を聞かせてくれた。一度トラボイ（二本の棒を犬や馬に結わえ、地引橇にしたもの）を引いていた犬が暴走したことがあったが、子供用の駕籠に入っていた幼いシッティング・ブルは泣き出すどころか大喜びしていた。幼い頃から思慮深く、食べ物などに悠然と手を伸ばす様子を見て、父親は次に彼に「ハンケシュニー（ゆっくり）」という名をつけた。この児童の生まれたときからの豪胆さは、早くからハンクパパでも認められ、叔父のフォア・ホーンも、この少年の将来性について、リターンズ・アゲインの予言に同意した。",
+    ] },
+  { "title" = "白人との戦い", "paragraphs" = [
+      "拡大する合衆国の植民は、1860年代にミシシッピー河を越え、スー族の住む大平原に伸びてきた。すべてのインディアン部族がフロンティアの障害として駆除され、保留地に隔離され、その領土が軍事力によって強奪されていた。保留地で飢餓状態となったダコタ・スー族が1862年に起こしたダコタ族の大暴動は、エイブラハム・リンカーン大統領とアメリカ軍によって徹底的に弾圧され、多くのスー族同胞がミネソタの領土を奪われ、西部の保留地に強制移住させられてきた。彼らダコタ族から、シッティング・ブルはインディアン保留地での暮らしがいかにひどいものかを聞いた。",
+      "1863年6月、ダコタ族の大暴動を受けてアメリカ軍は西部方面に軍事遠征を行い、ここで初めてシッティング・ブルのハンクパパ族はワシチュー（白人）と戦を交えた。ハンクパパ族はダコタ族ではなく、ラコタ族だったが、合衆国は「スー族の皆殺し」を政策にしており、彼らも同じスー族として、ハンクパパの領土を侵犯したアメリカ軍によって攻撃を受けたのである。",
+      "1864年7月、アルフレッド・サリー将軍率いるアメリカ軍騎兵隊が、ターカホクチー山でサンテ・スー（ダコタ族）とテトン・スー（ラコタ族）を襲い、スー族防衛戦士団と交戦となった（ターカホクチー山での戦い）。シッティングブルはこの防衛戦のなかで、「同胞をワシチューの世界から遠ざけ、理不尽な条約に決して署名しない」との決意を固めた。9月2日には、現在のモンタナ州ボウマンで、スー族の領土を荒らす白人の幌馬車隊を攻撃し、左の尻を銃弾で負傷した。",
+    ] },
+  { "title" = "カナダへの亡命", "paragraphs" = [
+      "1877年5月、シッティング・ブルはあくまでも保留地に入らず、彼を慕う者たちとともに、自由を求めて「大いなる母」（ビクトリア女王）の治めるカナダへと逃れた。10月にテリー将軍が和平委員長となり、シッティング・ブルが部族員を米国の保留地に連れ戻すなら「全面恩赦」で迎えると持ちかけた。しかしシッティング・ブルはこう答えた。",
+      "「この国は今や我々の国だ。我々はこの土地に留まり、スー族で溢れるようにするつもりだ。我々は我々の国をお前たちにやらなかった。お前たちは我々の国を盗んだのだ。お前たちは嘘をつくためにここへ来ている。いいからその嘘を持ってとっとと国へ帰れ。」",
+      "1877年10月23日、「ニューヨーク・ヘラルド」紙は、「シッティング・ブルの新しい故郷」と、国境の地図付きでこの有名な大戦士の「カナダ亡命」を書きたてた。彼らは国境の地で、4年間を過ごした。カナダの白人騎馬警官隊は手厚くはないが公平だった。しかし、スー族に狩猟のための広大な土地を割譲せよというシッティング・ブルの要求はその都度拒否された。合衆国側への遠征は、アメリカ軍によって阻止された。だが、カナダでもバッファローはほとんど白人によって絶滅させられており、カナダの激しい冬の寒さと飢餓が彼らを襲った。大戦士ピジ（ゴール）も合衆国に投降し、1881年にはカナダに留まるスー族は年寄りや彼の身内の185人となった。カナダ政府が彼らへの食糧供給を拒否したとき、ついにシッティング・ブルは飢えた同胞を救うため、合衆国への投降を決意した。彼はカナダの騎馬警官に「我々は見捨てられた」と述べている。",
+    ] },
+  { "title" = "保留地での生活", "paragraphs" = [
+      "1883年、シッティング・ブルは北西510キロメートルのミズーリ川沿いのスタンディングロック保留地管理事務所に移送された。この保留地の監督官はジェームズ・マクローリンという、白人とスー族の混血の妻を持つ男だった。マクローリンはシッティング・ブルの影響力を非常に警戒していた。マクローリンは事あるごとに彼に干渉した。彼が二人の妻を持っていることにも干渉し、一人にするよう強要した。シッティング・ブルは「そんなに言うなら、お前が妻それぞれのところへ行って直接彼女らに言えばいいだろう」と答えた。インディアンの社会では結婚も離婚も個人の自由とされている。",
+      "武装解除され、保留地に入ったシッティング・ブルを、白人社会は名士扱いし始めた。白人は彼を「すべてのスー族の大指導者」だと思い込んでいるから、アパッチ族のジェロニモをそう扱ったように、彼を見世物として面白がったのである。",
+      "1884年9月、彼は「部族の窮状を大統領に直訴できる」とのアルバレン・アレンという白人興行主の約束に乗せられて、合衆国15都市での見世物興行に出かけた。アレンはシッティング・ブルを「カスター中佐を殺した張本人」と宣伝し、彼が友好的な挨拶を述べている横で、これを白人群衆に対してリトルビッグホーンでの身の毛もよだつような話に捏造して紹介した。この興行で、シッティング・ブルは女ガンマンのアニー・オークレイの曲撃ちを見て感激し、彼女を何度も「ワタンヤ・シシリア」（小さな名射撃手）と呼んだ。だが、アレンが約束した大統領との会談は結局反故にされた。",
+    ] },
+  { "title" = "死後の影響", "paragraphs" = [
+      "スー族の精神的支柱であったこの大戦士の死は、スー族社会に新たな恐慌を与えた。あちこちのスー族のバンドが保留地から脱走し、アメリカ軍がこれを追った。絶望的な状況の中で、スー族のゴースト・ダンス流行はさらに高まった。",
+      "彼を慕っていたバンドの一団は、豪雪の中南方160キロメートルを旅し、タタンカ・イヨタケのいとこであるシハ・タンカ（ビッグフット）酋長の属するバンドに合流した。アメリカ軍はこれを追跡し、ついにはこれらを無差別虐殺した（ウンデット・ニーの虐殺）。",
+    ] },
+  { "title" = "その死", "paragraphs" = [
+      "白人達はシッティング・ブルを「扇動者」として逮捕したがり、軍・民が逮捕権を巡って争った。まず筆頭はマクローリン保留地監督官だった。ネルソン・マイルズ将軍は民間人である保留地監督官を軽蔑しており、マクローリンを出し抜こうと、シッティング・ブルの旧友であるバッファロー・ビル・コディを利用して砦におびき出そうと企んだ。対するマクローリンは、自分がないがしろにされたことに腹を立て、連邦政府に掛け合ってマイルズのこの計画を阻止した。",
+      "1890年12月14日、シッティング・ブルがスタンディングロック保留地の南にあるパインリッジ保留地管理事務所を訪ねるらしいと聞いたマクローリンは、これを彼の逮捕の絶好の機会だと考え、「ゴースト・ダンスの首謀者」との虚偽の報告によって逮捕状を取った。周りのインディアンたちを警戒して、マクローリンは彼の逮捕をインディアン警官に任せることとした。「インディアン警官」というのは、保留地管理官が保留地で従順な部族民から選んだインディアンの警察官である。マクローリンはこの任務をスー族警官のヘンリー・ブル・ヘッド警部補に命じた。",
+      "12月15日の早朝、43人のインディアン警官がグランド川そばのシッティング・ブルの小屋を取り囲んだ。ブルヘッドは小屋に押し入って、シッティング・ブルを寝床から引きずり出した。シェイプヘッド巡査部長が「抵抗すれば、この場で射殺する」と警告した。シッティング・ブルは「いいだろう、服を着るから待ってくれ」と言ったが、押さえつけられたまま服を着るよう強要されたので、揉み合いとなった。この事態に、小屋の周辺にはスー族が集まりだしていた。シッティング・ブルは戸外に引きずり出されたときに覚悟を決めた。彼はこう言った。",
+    ] },
+]
+
+[articles.ko]
+text = "타탕카 이요타케(라코타어: Tȟatȟáŋka Íyotake [tˣaˈtˣə̃ka ˈijɔtakɛ], 1831년 경 ~ 1890년 12월 15일)는 라코타족이 미국 정부와 맞선 시기 라코타족의 한 갈래인 훙크파파족(라코타어: Húŋkpapȟa, 원을 이룬 부족들의 끝자락 부족)의 지도자였다. 영어권에선 그의 이름을 직역한 시팅 불(Sitting Bull, 앉은 소)로 널리 알려졌다."
+title = "타탕카 이요타케"
+lang = "ko"
+url = "https://ko.wikipedia.org/wiki/%ED%83%80%ED%83%95%EC%B9%B4_%EC%9D%B4%EC%9A%94%ED%83%80%EC%BC%80"
+intro = [
+  "타탕카 이요타케(라코타어: Tȟatȟáŋka Íyotake [tˣaˈtˣə̃ka ˈijɔtakɛ], 1831년 경 ~ 1890년 12월 15일)는 라코타족이 미국 정부와 맞선 시기 라코타족의 한 갈래인 훙크파파족(라코타어: Húŋkpapȟa, 원을 이룬 부족들의 끝자락 부족)의 지도자였다. 영어권에선 그의 이름을 직역한 시팅 불(Sitting Bull, 앉은 소)로 널리 알려졌다.",
+  "1876년 제7 기병연대와 샤이엔족과 라코타족의 연합 부대가 맞서 싸운 리틀빅혼 전투를 승리로 이끌었다. 이 전투는 아메리카 원주민이 미군을 상대로 거둔 몇 안되는 승리이다. 타탕카 이오타케는 전투 전에 많은 병사들이 라코타족 진영에 매뚜기떼처럼 뛰어들어오는 환영을 보았다고 한다. 제7 기병연대는 전투 끝에 궤멸하였다. 미국 정부는 수천의 병력을 추가로 파병하여 라코타족의 항복을 압박하였다. 타탕카 이오타케는 기병대에게 쫓기는 와중에도 항복을 거부하고 1877년 5월 오늘날 캐나다의 서스캐처원주에 해당하는 노스웨스트 영토의 우드산으로 무리를 이끌었다. 라코타족은 1881년까지 이곳에 머물다가 미군에 항복하기로 하고 다시 미국 영토로 돌아왔다. 항복한 아메리카 원주민들은 뿔뿔히 나뉘어 수감되어 고문을 겪는 피해를 입었다. 이들은 1883년 스탠딩락 인디언 보호구역에 정착하였다.",
+  "1885년 타탕카 이오타케는 버펄로 빌이 이끄는 《버펄로 빌의 와일드 웨스트》 쇼에 출연하였다. 그의 출연은 세간의 관심을 끌었으며 그가 공연중에 라코타어로 외친 말에 대해서는 설왕설래가 많았다. 어떤 이는 \"백인을 증오한다\"라는 뜻이었다고 주장하였다. 그는 쇼를 마치고 스탠딩락으로 돌아왔다.",
+  "타탕카 이오타케가 \"유령의 춤\" 운동을 지지한다는 소문이 돌았다. 이 군무(群舞) 운동은 그간 미국 정부에 의해 희생된 아메리카 원주민들의 원혼을 달래고 네이션을 넘어 단결을 꾀하는 운동으로 신흥 종교적인 성격을 갖고 있었다. 인디언 관리국의 인디언 요원이었던 흰머리(White Hair) 제임스 맥러플린은 타탕카 이오타케의 체포를 지시하였다. 그의 지지자들과 경찰이 충돌하는 와중에 타탕카 이오타케는 스탠딩락 경찰관이었던 인디언 요원 타탕카파(Tȟatȟáŋka Pȟá, 황소 머리)와 창크피 두타(Čhaŋȟpí Dúta, 붉은 도끼)가 쏜 총탄에 옆구리와 머리를 맞았다. 그의 시신은 인근의 예이츠 요새로 운구되어 묻혔다.",
+]
+sections = [
+  { "title" = "출생과 성장", "paragraphs" = [
+      "타탕카 이오타케는 훗날 다코타 준주가 되는 북아메리카 중서부에서 태어났다. 그가 태어날 무렵 이 지역은 아직 미합중국의 영토가 아니었다. 타탕카 이오타케가 태어난 장소가 정확히 어디인지는 알 수 없지만, 2007년 그의 증손자는 집안에서 전해오는 이야기로 오늘날 몬타나주 마일시티에 해당하는 옐로스톤강 근처라고 들었다고 말하였다. 태어날 당시 이름은 뛰는 오소리였고 언행이 신중하였기 때문에 훙케시니(Húŋkešni, 느림보)라는 별명으로 불렸다고 한다. 14세가 되던 해 라코타족 전사가 되었다. 그의 첫 임무는 아브소르카족의 말을 빼앗아 오는 것이었다. 그는 용감히 뛰어들어 상대 전사 한 명을 무찔렀고 이로서 무찌른 적의 수를 나타내는 카운팅 쿱을 새길 수 있었다. 그의 아버지와 삼촌은 매우 기뻐하면서 아이의 이름을 타탕카 이오타케로 바꾸어 축하하였다. 이 말은 라코타어로 자신의 자리에 앉아 무리 너머를 보는 들소라는 뜻이다. 훗날 이 이름이 영어로 간단히 직역되어 \"시팅 불\"로 알려지게 되었다. 그의 아버지 이름이 뛰는 소였기 때문에 이 축하 의식은 사실상 후계자에 대한 공인 의식이었다고 할 수 있다. 그는 머리에 독수리 깃을 꽂고 전사의 말을 받았으며 아버지는 들소 가죽으로 만든 방패에 아들이 라코타 전사로서 살아갈 여정을 표시하였다.",
+      "1862년 미국 정부와 수족 사이에는 다코타 전쟁이 벌어졌지만 타탕카 이오타케의 부족은 이에 관여하지 않았다. 다코다 전쟁은 미국 정부가 중남부 미네소타주의 흉작으로 굶주리고 있던 다코타족의 요구를 받아들이지 않자 이들이 3백명에서 8백명 사이의 서부 정착민들과 병사를 살해하여 일어난 사건으로 당시 미합중국 육군은 남북 전쟁으로 여력이 없는 상황이었다. 미군은 1864년이 되어서야 다코타족을 진압하였다. 타탕카 이오타케의 라코타족은 이일에 관여하지 않았지만 2천2백명의 병사를 이끌고 나선 앨프레드 셜리 장군은 둘을 구분하지 않고 공격하였고, 킬디어산 전투에서 다코타족과 라코타족은 연합하여 미군에 맞서야 하였다. 타탕카 이오타케는 라코다의 피지(라코타어: Phizí, 쓸개), 다코다의 잉크파두타(다코타어: Iŋkpáduta, 붉은 점)와 함께 방어를 지휘하였다. 라코타와 다코타는 밀려났지만 8월의 배드랜즈 전투까지 소규모 전투를 이어나갔다.",
+      "9월에 들어 타탕카 이오타케는 백여명의 라코타 훙크파파들과 함께 오늘날 노스다코타주의 마르머스 인근에 모였다. 그들은 제임스 L. 피스크 대위가 이끄는 마차 행렬을 기습하기로 하였다. 이 기습에서 타탕카 이오타케는 엉덩이에 총상을 입었다. 왼쪽 엉덩이를 파고든 총알은 등쪽으로 빠져나갔지만 부상은 심하지 않았다.",
+    ] },
+  { "title" = "붉은 구름 전쟁", "paragraphs" = [
+      "1866년부터 1868년까지 라코타족의 일원인 오걸랄라는 마흐피야 루타(라코타어: Maȟpíya Lúta, 붉은 구름)를 지도자로 삼아 미군과 싸웠고 몬타나의 파워 리버 카운티에 있는 요새를 점령하였다. 마흐피야 루타의 지원을 받은 타탕카 이오타케는 버솔드, 스티븐슨, 버포드와 같은 요새를 여러 차례 공격하였다. 당시 아메리카 원주민의 봉기는 붉은 구름 전쟁으로 불린다.",
+      "1868년 초 미국 정부는 아메리카 원주민과의 충돌을 평화적으로 마무리하려고 하였고, 마흐피야 루타가 요구한 필키르니, C. F. 스미스 요새의 철수를 승락하였다. 피지는 1868년 7월 2일 라코타의 다른 일원이었던 시하사파(라코타어: Sihásapa, 검은 발), 다코타의 일원이었던 양크톤의 훙크파파들을 대표하여 라라미 요새 조약에 서명하였다. 이 조약은 사우스다코다주를 중심으로 한 그레이트 수 보호구역을 설치하고 이 지역이 아메리카 원주민의 영토임을 인정하는 것이었다. 보호구역에는 그레이트 수 네이션을 이루는 오체티 샤코윙(수어: Oceti Sakowin, 일곱 원로회의 모닥불)의 수족들이 정착하게 된다. 타탕카 이오타케는 이 조약을 인정하지 않았는데 그는 당시 정부측의 연락책이었던 예수회 선교사 피에르 장 드스메에게 \"나는 내 나라의 작은 일부라도 팔 생각이 없다\"고 말했다. 타탕카 이오타케는 이후 1860년대에서 1870년대를 지나는 동안 미주리주 등지에서 치고 빠지는 공격을 구사하며 미군과 싸움을 계속하였다.",
+      "붉은 구름 전쟁이 있었던 1866년에서 1868년 사이의 사건들은 타탕카 이오타케의 삶 중에서도 논쟁이 있는 기간이다. 사학자 스텐리 베스탈은 1930년대까지 생존해 있던 훙크파파와 인터뷰를 통해 당시 타탕카 이오타케는 전체 수족의 최고 추장이었다고 밝혔지만, 후대의 사학자들과 민족학자 들은 이러한 주장이 과장이라고 본다. 당시 타탕카 이오타케가 속한 라코타족은 서로 다른 여러 갈래의 하위 그룹으로 나뉘어 있었고, 이들은 심지어 전쟁이 진행되는 중에도 느슨한 연대 외에는 각자 독자적인 사회를 이루고 있었기 때문이다.",
+    ] },
+  { "title" = "블랙힐스 전쟁", "paragraphs" = [
+      "타탕카 이오타케가 이끄는 라코타족 전사들은 1860년대 내내 \"백인\" 이주자 정착지와 요새들을 공격하였다. 1871년 노던 퍼시픽 레일웨이가 대평원 북부를 관통하는 철도를 놓기 위해 라코타 보호구역을 가로지르는 경로를 측량하였다. 이 철도는 사람과 물자뿐만 아니라 군대도 몰고 들어올 것이 분명하였다. 타탕카 이오타케와 훙크파파들은 측량팀을 공격하여 보호구역 밖으로 몰아내었다. 1873년 측량팀은 군대의 지원을 받으며 다시 들어왔지만 타탕카 이오타케는 \"필사적으로\" 이들을 저지하였다. 1873년 대불황으로 노던 퍼시픽 레일웨이를 후원하던 제이 쿡과 같은 자산가들이 파산하였고 라코타족, 다코타족, 나코타족과 같은 수족의 영토를 지나던 철도의 부설은 지연되었다.",
+      "1848년 시에라네바다 산맥에서 금이 발견되어 극적인 일확천금의 소문이 퍼져 나간 이후, 블랙힐스에 있을 지 모를 금광을 찾아 해메는 사람들은 골드 러시의 물결을 이루었다. 1874년 조지 암스트롱 커스터 준장은 노스다코타주의 비스마르크 근처인 에이브리험 링컨 요새에서 블랙힐스로 행군하여 새 요새를 세우고자 하였다. 미군이 직접 블랙힐스로 향한다는 소식은 사람들에게 그곳에 금광이 있다는 확신을 심어 주었고 유럽계 미국인들은 너도 나도 블랙힐스로 몰려들었다.",
+      "타탕카 이오타케는 커스터의 행군과 주둔을 공격하진 않았지만, 미국인들은 원주민 영토였던 블랙힐스에 정착과 채광을 허용하라는 정부에 대한 압박을 늘려가고 있었다. 수족으로부터 블랙힐스를 사들이려는 협상이 결렬되자 워싱턴의 정부는 수족의 영토를 보호하겠다고 약속하였던 1868년 라라미 요새 조약을 비켜갈 방법을 모색하였다. 미국 정부는 타탕카 이오타케를 비롯한 일부 수족의 정착지 공격을 빌미로 삼았다. 1875년 11월 율리시스 S. 그랜트 대통령은 그레이트 수 보호구역 밖에 있는 모든 수족을 예외 없이 보호구역 안으로 이주시키라는 명령을 내렸다. 1876년 2월 1일 미국 내무부는 보호구역 밖에 거주하는 \"호전적\"인 그룹의 목록을 작성하였다. 내무부가 이들을 \"호전적\"이라고 인증하였으므로 타탕카 이오타케를 비롯한 보호구역 외부의 수족들에 대한 군사 조치의 근거가 마련되었다.",
+    ] },
+  { "title" = "애니 오클리", "paragraphs" = [
+      "1884년 쇼 흥행사 앨버런 맬런은 인디언 요원 제임스 맥러플린의 허가를 받아 타탕카 이오타케를 《시팅 불 커넥션》 쇼에 출연시켜 캐나다와 미국 북부를 순회 공연하였다. 이 공연 중에 타탕카 이오타케는 미네소타에서 애니 오클리를 만났다. 그는 명사수였던 애니 오클리의 묘기 사격을 보고 깊은 인상을 받았고 65 달러(오늘날 가치로 1,850 달러)를 내고 함께 사진을 찍었다. 오클리는 5 피트의 단신에 불과하였지만 무대 위에서 그 누구보다 훌륭한 사격 솜씨를 뽐냈다. 타탕카 이오타케는 오클리가 양 손에 초자연적인 \"축복\"을 받았다고 생각하였다. 오클리도 타탕카 이오타케를 지극히 존중하였고 1884년 타탕카 이오타케는 오클리를 수양 딸로 삼고 \"리틀 슈어 샷\"(영어: Little Sure Shot, 귀여운 백발백중)이라는 아메리카 원주민식 이름을 주었다. 오클리는 이후 공연에서 자신의 이름 앞에 수양 아버지가 준 이름을 걸었다.",
+    ] },
+]
+
+[articles.ar]
+text = "الثور الجالس محارب من الهنود الحمر (بالإنكليزية Sitting Bull) (بلغة السيو Tatanka Iyotaqe) عاش بين أعوام 1834 تقريبا – 1890 وهو زعيم قبيلة هونكبابا وهم فرع من التيتون وهم قبائل من السيو انتصر على خيالة الولايات المتحدة في معركة لتل بيج هورن. تميز بفخره واعتزازه بنفسه وعدم ثقته بالرجل الأبيض وعزمه الشديد على طرد الأغراب ولم يوقع أي معاهدة مع الحكومة الأمريكية ولم يقبل الهدايا التي قدمها الهنود الآخرون."
+title = "الثور الجالس"
+lang = "ar"
+url = "https://ar.wikipedia.org/wiki/%D8%A7%D9%84%D8%AB%D9%88%D8%B1_%D8%A7%D9%84%D8%AC%D8%A7%D9%84%D8%B3"
+intro = [
+  "الثور الجالس محارب من الهنود الحمر (بالإنكليزية Sitting Bull) (بلغة السيو Tatanka Iyotaqe) عاش بين أعوام 1834 تقريبا – 1890 وهو زعيم قبيلة هونكبابا وهم فرع من التيتون وهم قبائل من السيو انتصر على خيالة الولايات المتحدة في معركة لتل بيج هورن. تميز بفخره واعتزازه بنفسه وعدم ثقته بالرجل الأبيض وعزمه الشديد على طرد الأغراب ولم يوقع أي معاهدة مع الحكومة الأمريكية ولم يقبل الهدايا التي قدمها الهنود الآخرون.",
+  "ولد الثور الجالس في قبيلة هونكبابا واشترك منذ وقت مبكر من حياته في جماعات هندية مقاتلة وكانت بعض هذه الجماعات معروفة بأسماء مثل القلب القوي، الآكلون الصامتون وكان هو وقومه يعتاشون على الجواميس.",
+  "أول مناوشاته مع الرجل الأبيض كانت في يونيو 1863 عند رده على الجيش الأمريكي بعد مذبحة منيسوتا والتي لم يكن لقبائل التيتون يد فيها، وفي السنة اللاحقة اشتبك مع الجيش في معركة جبل كيلدير في داكوتا فأصبح بعدها على طريق الحرب دائما وشجاعته وحكمته جعلت منه زعيم أمة السيو كلها عام 1867.",
+  "عندما اكتشف الذهب في التلال السوداء في داكوتا الجنوبية ووايومينغ في منتصف السبعينات تم خرق المعاهدة الثانية التي وقعت في حصن لارامي عام 1868 مثل كل المعاهدات، وبمجيء المنقبين بدأ يزداد تحدي الثور الجالس ولحماية المهاجرين البيض أمر المفوض شفرون الهنود بالرحيل إلى المحميات عام 1875، وذلك يتم في موعد أقصى عند 31 يناير 1876 أو يصبحوا معادين للولايات المتحدة، وحتى الثور الجالس امتثل للأوامر فلم يكن معقولا له أن ينقل بلدته 400 كم في الطقس القاسي في ذلك الوقت.",
+]
+sections = [
+  { "title" = "النشأة", "paragraphs" = [
+      "وُلد الثور الجالس على أرض أُدرجت لاحقًا في إقليم داكوتا. في عام 2007، أكد حفيد الثور الجالس من التقاليد الشفوية العائلية أن الثور الجالس وُلد على طول نهر يلوستون، جنوب مدينة مايلز الحالية، مونتانا. كان اسمه Ȟoká Psíče (الغرير القافز) عند الولادة، ولُقب Húŋkešni أو البطيء يقال لوصف طبيعته الحذرة وغير المستعجلة. عندما كان يبلغ من العمر أربعة عشر عامًا، رافق مجموعة من محاربي لاكوتا (بما في ذلك والده وعمه فور هورنز) في مجموعة مداهمة لأخذ الخيول من معسكر لمحاربي الغراب. أظهر شجاعة من خلال التقدم إلى الأمام وعد الانقلاب على أحد الغراب المتفاجئين، والذي شاهده الآخر على متن لاكوتا. عند عودته إلى المخيم، أقام والده وليمة احتفالية منح فيها ابنه اسمه. بُسِّط الاسم إلى Tȟatȟáŋka Íyotake، والذي يعني تقريبًا في لغة لاكوتا الجاموس الذي وضع نفسه لرعاية القطيع، ليصبح الثور الجالس. بعد ذلك، عُرف والد الثور الجالس باسم القافز. في هذا الحفل أمام الفرقة بأكملها، قدم والد الثور الجالس لابنه ريشة نسر ليرتديها في شعره، وحصان محارب، ودرع جلدي جاموس مخبأ لإعلان انتقال ابنه إلى مرحلة الرجولة كمحارب من لاكوتا.",
+      "خلال حرب داكوتا عام 1862، التي لم يشارك فيها شعب الثور الجالس بول، قتلت عدة مجموعات من سكان داكوتا الشرقية ما يقدر بنحو 300 إلى 800 مستوطن وجندي في جنوب وسط منيسوتا ردًا على سوء المعاملة من قبل الحكومة وفي محاولة لإبعاد البيض. على الرغم من تورطه في الحرب الأهلية الأمريكية، انتقم جيش الولايات المتحدة في عامي 1863 و 1864، حتى ضد العصابات التي لم تشارك في الأعمال العدائية. في عام 1864، هاجم لواءان من حوالي 2200 جندي بقيادة العميد ألفريد سولي قرية الثور الجالس. وقاد الثور الجالس المدافعون وجال وإنك بادوتا. حُيدت لاكوتا وداكوتا من الصراع، لكن المناوشات استمرت حتى أغسطس في معركة الأراضي الوعرة.",
+      "في سبتمبر، واجه الثور الجالس وحوالي مئة هونكابا من لاكوتا كتيبة صغيرة بالقرب من مارماث الآن، داكوتا الشمالية. لقد تركهم قطار واغن بقيادة الكابتن جيمس إل فيسك لإجراء بعض الإصلاحات لعربة مقلوبة. عندما قاد هجومًا، أصيب الثور الجالس برصاص جندي في الفخذ الأيسر. خرجت الرصاصة من أسفل ظهره، ولم يكن الجرح خطيرًا.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

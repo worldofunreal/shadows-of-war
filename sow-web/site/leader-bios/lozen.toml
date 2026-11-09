@@ -1,0 +1,56 @@
+[articles.en]
+text = "Lozen was a warrior and prophet of the Chihenne Chiricahua Apache. She was the sister of Victorio, a prominent chief."
+title = "Lozen"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Lozen"
+intro = [
+  "Lozen (c. 1840 – June 17, 1889) was a warrior and prophet of the Chihenne Chiricahua Apache. She was the sister of Victorio, a prominent chief. Born into the Chihenne band during the 1840s, Lozen was, according to legends, able to use her powers in battle to learn the movements of the enemy. According to James Kaywaykla, Victorio introduced her to Nana, \"Lozen is my right hand ... strong as a man, braver than most, and cunning in strategy. Lozen is a shield to her people\".",
+]
+sections = [
+  { "title" = "Victorio's Campaign", "paragraphs" = [
+      "In the 1870s, Victorio and his band of Apaches were moved to the deplorable conditions of the San Carlos Reservation in Arizona. He and his followers left the reservation around 1877 and began marauding and raiding, all while evading capture by the military. Lozen fought beside Victorio when he and his followers rampaged against the European invaders who had appropriated their homeland around west New Mexico's Black Mountain.",
+      "As the band fled and fought American forces in Victorio's War (1879–1881), Lozen inspired women and children, frozen in fear, to cross the surging Rio Grande. \"I saw a magnificent woman on a beautiful horse—Lozen, sister of Victorio. Lozen the woman warrior!\", remembers James Kaywaykla, a child at the time, riding behind his grandmother. \"High above her head she held her rifle. There was a glitter as her right foot lifted and struck the shoulder of her horse. He reared, then plunged into the torrent. She turned his head upstream, and he began swimming\".",
+      "Immediately, the other women and the children followed her into the torrent. When they reached the far bank of the river, cold and wet but alive, Lozen came to Kaywaykla's mother, Gouyen. \"You take charge, now\", she said. \"I must return to the warriors\", who stood between their women and children and the onrushing cavalry. Lozen drove her horse back across the wild river and returned to her comrades.",
+    ] },
+  { "title" = "End of Apache Wars and Lozen's later years", "paragraphs" = [
+      "Knowing the survivors would need her, Lozen immediately left the Mescalero Reservation and rode alone southwest across the desert, threading her way undetected through U.S. and Mexican military patrols. She rejoined the decimated band in the Sierra Madre (in northwestern Chihuahua), now led by the 74-year-old patriarch Nana.",
+      "Lozen fought beside Geronimo after his breakout from the San Carlos reservation in 1885, in the last campaign of the Apache Wars. With the band pursued relentlessly, she used her power to locate their enemies—the U.S. and Mexican cavalries. According to Alexander B. Adams in his book Geronimo, \"she would stand with her arms outstretched, chant a prayer to Ussen, the Apaches' supreme deity, and slowly turn around.\" Lozen's prayer is translated in Eve Ball's book In the Days of Victorio:",
+      "According to Laura Jane Moore in the book Sifters, Native American Women's Lives: In 1885 Geronimo and Naiche fled their reservation with 140 followers including Lozen after rumors began circulating that their leaders were to be imprisoned at Alcatraz Island. Lozen and Dahteste began negotiating peace treaties. One of which was that the Apache leaders would be imprisoned for two years then would have their freedom. The American's leaders dismissed the peace treaty and Lozen and Dahteste continued to negotiate. The Apache rebels believed they had strong resolve until it was revealed all the Chiricahuas had been rounded up and sent to Florida. If they wanted to rejoin their kin, the Apache needed to head east. The Apache warriors agreed to surrender and laid down their arms. Five days later they were on a train bound to Florida.",
+    ] },
+  { "title" = "In popular culture", "paragraphs" = [
+      "Lozen is a major character in the novel The Hebrew Kid and the Apache Maiden, by Robert J. Avrech.",
+    ] },
+  { "title" = "Novels involving Lozen as a character", "paragraphs" = [
+      "Robert J. Avrech (2006). The Hebrew Kid and the Apache Maiden. Seraphic Press. ISBN 978-0-9754382-2-0.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

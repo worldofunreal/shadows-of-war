@@ -1,0 +1,174 @@
+[articles.en]
+text = "The Queen of Sheba, named Bilqis in Arabic and Makeda in Geʽez, is a figure first mentioned in the Hebrew Bible. In the original story, she brings a caravan of valuable gifts for Solomon, the fourth King of Israel and Judah."
+title = "Queen of Sheba"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Queen_of_Sheba"
+intro = [
+  "The Queen of Sheba, named Bilqis in Arabic and Makeda in Geʽez, is a figure first mentioned in the Hebrew Bible. In the original story, she brings a caravan of valuable gifts for Solomon, the fourth King of Israel and Judah. This account has undergone extensive elaborations in Judaism, Ethiopian Christianity, and Islam. It has consequently become the subject of one of the most widespread and fertile cycles of legends in West Asia and Northeast Africa, as well as in other regions where the Abrahamic religions have had a significant impact.",
+  "Modern historians and archaeologists identify Sheba as one of the South Arabian kingdoms, which existed in modern-day Yemen. However, because no trace of her has ever been found, the Queen of Sheba's existence is disputed among historians.",
+]
+sections = [
+  { "title" = "Narrative", "paragraphs" = [
+      "The Queen of Sheba (Hebrew: מַלְכַּת שְׁבָא, romanized: Malkaṯ Šəḇāʾ, in the Hebrew Bible; Koine Greek: βασίλισσα Σαβά, romanized: basílissa Sabá, in the Septuagint; Syriac: ܡܠܟܬ ܫܒܐ, romanized: Malkat Šəḇāʾ; Ge'ez: ንግሥተ ሳባ, romanized: Nəgśətä Saba), whose name is not stated, came to Jerusalem \"with a very great retinue, with camels bearing spices, and very much gold, and precious stones\" (1 Kings 10:2). \"Never again came such an abundance of spices\" (10:10; 2 Chronicles 9:1–9) as those she gave to Solomon.",
+      "The use of the term ḥiddot or 'riddles' (1 Kings 10:1), an Aramaic loanword, indicates a late origin for the text.",
+      "Sheba was quite well known in the classical world. Sheba and Seba are differentiated at some points in the Bible, but not in indigenous inscriptions.",
+    ] },
+  { "title" = "Religious interpretations", "paragraphs" = [
+      "According to Josephus (Ant. 8:165–173), the queen of Sheba was the queen of Egypt and Ethiopia, and brought to Israel the first specimens of the balsam, which grew in the Holy Land in the historian's time. Josephus (Antiquities 2.5‒10) represents Cambyses as conquering the capital of Aethiopia, and changing its name from Seba to Meroe. Josephus affirms that the Queen of Sheba or Saba came from this region, and that it bore the name of Saba before it was known by that of Meroe. There seems also some affinity between the word Saba and the name or title of the kings of the Aethiopians, Sabaco.",
+      "The Talmud (Bava Batra 15b) says: \"Whoever says malkath Sheba (I Kings X, 1) means a woman is mistaken; ... it means the kingdom (מַלְכֻת) of Sheba\".",
+      "A Yemenite manuscript entitled \"Midrash ha-Hefez\" (published by S. Schechter in Folk-Lore, 1890, pp. 353 et seq.) gives nineteen riddles, most of which are found scattered through the Talmud and the Midrash, which the author of the \"Midrash ha-Hefez\" attributes to the Queen of Sheba. Most of these riddles are simply Bible questions, some not of a very edifying character. The two that are genuine riddles are: \"Without movement while living, it moves when its head is cut off\", and \"Produced from the ground, man produces it, while its food is the fruit of the ground\". The answer to the former is, \"a tree, which, when its top is removed, can be made into a moving ship\"; the answer to the latter is, \"a wick\".",
+    ] },
+  { "title" = "Scholarly interpretations", "paragraphs" = [
+      "The dating of the story of the Queen of Sheba is not well established. A significant number of biblical philologists believe that an early version of the story of the Queen of Sheba existed before the composition of the Deuteronomistic history (c. 640–609 BCE) and was revised and placed therein by an anonymous redactor labelled the Deuteronomist (Dtr) by textual scholars. However, many scholars believe that the account from the Third Book of Kings in its present form was compiled during the so-called Second Deuteronomic Revision (Dtr2), produced during the Babylonian Captivity (c. 550 BCE). The purpose of the story seems to be to glorify the figure of King Solomon, who is portrayed as a ruler who enjoyed authority and captured the imagination of other rulers. Such an exaltation is dissonant with the general critical tone of the Deuteronomic history towards King Solomon. Later, this account was also placed in II Chronicles, written in the Settlement era.",
+      "Researchers have noted that the Queen of Sheba's visit to Jerusalem could conceivably have been a trade mission related to the Israelite king's efforts to settle on the shores of the Red Sea and thereby undermine the monopoly of Saba and other South Arabian kingdoms on caravan trade with Syria and Mesopotamia. Assyrian sources confirm that South Arabia was engaged in international trade as early as 890 BC, so the arrival in Jerusalem in Solomon's time of a trading mission from a South Arabian kingdom is plausible.",
+      "There is, however, debate about the chronological plausibility of this event: Solomon lived from approximately 965 to 926 BC, while it has been argued that the first traces of the Sabean monarchy appear some 150 years later. On the other hand, Peter Stein argues that archaeological and epigraphic evidence indicates that the Sabean kingdom had already emerged by the 10th century BC.",
+    ] },
+  { "title" = "In art and culture", "paragraphs" = [
+      "The 12th century cathedrals at Strasbourg, Chartres, Rochester and Canterbury include artistic renditions in stained glass windows and doorjamb decorations. Likewise of Romanesque art, the enamel depiction of a black woman at Klosterneuburg Monastery. The Queen of Sheba, standing in water before Solomon, is depicted on a window in King's College Chapel, Cambridge.",
+      "The Queen of Sheba was a popular feature in the Italian Renaissance. It can be found in the doors of the Florence Baptistery by Lorenzo Ghiberti, frescoes by Benozzo Gozzoli in Pisa, and in the Raphael Loggie.",
+      "Piero della Francesca's frescoes in Arezzo (c. 1466) on the Legend of the True Cross contain two panels on the visit of the Queen of Sheba to Solomon. The legend links the beams of Solomon's palace (adored by Queen of Sheba) to the wood of the crucifixion. The Renaissance continuation of the analogy between the Queen's visit to Solomon and the adoration of the Magi is evident in the Triptych of the Adoration of the Magi (c. 1510) by Hieronymus Bosch.",
+    ] },
+]
+
+[articles.de]
+text = "Die Königin von Saba (hebräisch מַלְכַּת שְׁבָא Malkat Šĕvaʾ, äthiopisch ንግሥት ሳባ nigist Saba) ist eine biblische Gestalt, die im 10. Jahrhundert vor Christus eine Reise zum Hof König Salomos in Jerusalem unternommen haben soll."
+title = "Königin von Saba"
+lang = "de"
+url = "https://de.wikipedia.org/wiki/K%C3%B6nigin_von_Saba"
+intro = [
+  "Die Königin von Saba (hebräisch מַלְכַּת שְׁבָא Malkat Šĕvaʾ, äthiopisch ንግሥት ሳባ nigist Saba) ist eine biblische Gestalt, die im 10. Jahrhundert vor Christus eine Reise zum Hof König Salomos in Jerusalem unternommen haben soll. Außer dem Tanach, der frühesten schriftlichen Erwähnung, erscheint sie auch im Koran und in äthiopischen Legenden, nicht jedoch in Quellen aus dem antiken Saba im heutigen Jemen. Ob ihr Reich tatsächlich dort oder in der Region um Aksum in Äthiopien gelegen hat, ist daher bis heute ebenso ungeklärt wie die Frage, ob die legendäre Königin eine historische Person zum Vorbild hatte.",
+]
+sections = [
+  { "title" = "Biblische Quellen", "paragraphs" = [
+      "In den alttestamentlichen Büchern finden sich Verweise im 1. Buch der Könige 10,1–13 (ca. 6. Jh. v. Chr.) und im 2. Buch der Chronik 9,1–12 (ca. 5. Jh. v. Chr.).",
+      "Die Königin erfährt von der Weisheit König Salomos und findet sich an seinem Hof in Jerusalem ein, um das Gehörte zu überprüfen. Überwältigt von dem, was sie sieht, schenkt sie ihm „hundertundzwanzig Zentner Gold und sehr viel Spezerei und Edelsteine“.",
+      "Im Neuen Testament wird die Königin von Saba als „Königin des Südens“ bezeichnet. In der Endzeit soll sie erneut erscheinen, um über die Menschen im Gericht Zeugnis zu geben (Mt 12,42 ; Lk 11,31 ).",
+    ] },
+  { "title" = "Jüdische Quellen", "paragraphs" = [
+      "Bei Flavius Josephus wird sie als Königin des Südens, wörtlich als „Beherrscherin von Aegypten und Aethiopien“ bezeichnet, die den Samen des Weihrauchbaums nach Palästina brachte (Antiquitates Judaicae 2:249, 94 n. Chr.).",
+      "Im Targum Sheni (vermutlich 8. Jahrhundert n. Chr.) wird, ausgehend vom Talmud, die biblische Geschichte durch ältere mündliche Überlieferungen ergänzt. Hier erscheint Salomo als Herr der Tiere, dem ein Wiedehopf die Nachricht von einer sagenhaft reichen Königin von Saba übermittelt.",
+    ] },
+  { "title" = "Arabisch-islamische Quellen", "paragraphs" = [
+      "Weitere Angaben über die Königin von Saba, die im Islam aufgrund ihrer Weisheit sehr geschätzt wird, finden sich im Koran (Sure 27, Verse 22–44) und bei den Autoren al-Tabari, al-Tha'alabi und al-Kisa'i. Im islamischen Kulturkreis trägt sie den Namen arabisch بلقيس, DMG Bilqīs (andere übliche Transkription Bilkis oder Balkis, auch Aziz). Nach ihr sind auch die ausgestorbene Jemen-Gazelle (Gazella bilkis) und der Asteroid (585) Bilkis benannt.",
+    ] },
+  { "title" = "Äthiopische Quellen", "paragraphs" = [
+      "Besondere Bedeutung hat die Legende der Königin in der äthiopischen Geschichte. Sie wird im 14. Jahrhundert in Aksum im Werk Der Ruhm der Könige (Kebra Nagast) festgehalten. Die Königin trägt den Namen Mâkedâ und soll Salomo in Jerusalem besucht haben. Dabei soll sie mit ihm Menelik, den Stammvater der äthiopischen Könige, gezeugt haben. Weiter heißt es, Menelik sei später selbst nach Jerusalem gereist und habe von dort die Bundeslade mit den beiden Tafeln der Zehn Gebote nach Äthiopien entführt. Die Dynastie der Salomoniden, die von 1270 bis 1975 über Äthiopien herrschte, führte sich auf diese Verbindung zwischen Makeda und Salomo zurück. Der letzte Kaiser Abessiniens, Haile Selassie, bezeichnete sich als 225. Nachfolger des Sohnes der Königin von Saba.",
+    ] },
+  { "title" = "Historizität der Königin von Saba", "paragraphs" = [
+      "Es bleibt offen, ob die Königin von Saba wirklich existiert hat, da noch keine Nennung der Königin in sabäischen Inschriften aus dieser Zeit gefunden wurde. Als biblische Erzählung können die Ursprünge auch auf ältere Traditionen der kanaanäischen, chaldäischen oder sumerischen Mythologie zurückgehen. Belegt ist, dass es arabische Königinnen gab, z. B. Zabibê, Königin von Aribi von 744 bis 727 v. Chr. Der schriftliche biblische Text entstand vermutlich erst zwischen dem 7. und 6. Jahrhundert v. Chr. Es ist denkbar, dass König Salomo zwar Verbindungen zu einer arabischen Königin unterhielt, dass der Name Saba aber eingefügt wurde, um die Bedeutung Salomos durch die Verbindung mit dem damals blühenden Sabäerreich hervorzuheben. Nach einer anderen Theorie basiert die Erzählung der Königin von Saba auf einer Heiligen Hochzeit. Das würde insbesondere erklären, warum die christlichen Äthiopier den Ursprung ihres Herrscherhauses aus einer unehelichen Beziehung zwischen Makeda und Salomo, aus der der legendäre König Menelik I. hervorging, ableiten.",
+    ] },
+]
+
+[articles.tr]
+text = "Saba Melikesi Belkıs (Habeşçe: Nigist Saba), günümüz Habeşistan (Etiyopya) veya Yemen'in olduğu topraklarda hüküm sürdüğü farz edilen, tarih öncesi Saba Krallığı'nın (İbranice Sh'va veya Seba שבא, Arapça Saba veya Sebe سبأ, Habeşçe ሳባ) hükümdarıdır. Modern arkeoloji bu krallığın mevcudiyeti konusunda şüphecidir."
+title = "Belkıs"
+lang = "tr"
+url = "https://tr.wikipedia.org/wiki/Belk%C4%B1s"
+intro = [
+  "Saba Melikesi Belkıs (Habeşçe: Nigist Saba), günümüz Habeşistan (Etiyopya) veya Yemen'in olduğu topraklarda hüküm sürdüğü farz edilen, tarih öncesi Saba Krallığı'nın (İbranice Sh'va veya Seba שבא, Arapça Saba veya Sebe سبأ, Habeşçe ሳባ) hükümdarıdır. Modern arkeoloji bu krallığın mevcudiyeti konusunda şüphecidir. Kitabı Mukaddes'te kraliçenin isminden bahsedilmez. Habeş kültüründe \"bu şekilde değil, böyle değil\" gibi anlamlara gelen Makeda ismiyle anılır. İslam kültüründe Belkıs olarak bilinir. Ayrıca bazı kaynaklarda Lilith, Nikaule veya Nicaula (Nikola) olarak da geçer.",
+]
+sections = [
+  { "title" = "Eski Ahit'e göre", "paragraphs" = [
+      "Saba Kraliçesi (Melikesi), İsrail Kralı Solomon'un (Süleyman Peygamber) bilgeliğini duydu ve onu sorularıyla test etmek amacıyla beraberinde baharat, altın ve değerli taşlardan müteşekkil birçok hediye ile yola çıktı (1. Krallar 10:1-13 ve 2. Tarihler 9:1-12). Kraliçe, Süleyman'ın bilgeliği ve serveti karşısında hayrete düştü ve Süleyman'ın tanrısına dua etti. Süleyman kraliçeye hediyelerle karşılık verdi ve \"ne isterse alabileceğini\" söyledi. Kraliçe zaten çok zengindi ve Süleyman'a hediye olarak 4,5 ton altın getirmişti (1. Krallar 10.10).",
+      "Süleyman'ın Özdeyişleri'nde Saba Kraliçesi ile Süleyman arasındaki ilişkiye dair bazı göndermeler vardır ve bunlar zaman zaman ikilinin birbirlerine âşık oldukları şeklinde yorumlanır.",
+    ] },
+  { "title" = "Sonraki dönem Yahudi efsanelerinde", "paragraphs" = [
+      "Yahudi tarihçi Josephus Antiquitiesde Saba Kraliçesi'nin öğrenmeye olan tutkusundan bahseder. Onu \"Nikaule\" olarak adlandırır. Muhtemelen bu ismi Herodot'un Nitocris'ine benzeterek oluşturmuştur.",
+      "Sonraki dönemlerde yazılan Targumlarda yer alan Yahudi efsanelerinde Belkıs daha öyküsel (mitolojik) bir anlatımla ifade edilmiştir. Saba Kraliçesi'nin testlerinden oluşan manilerin derlenmesi için büyük çaba sarf edilmiştir.",
+    ] },
+  { "title" = "Günümüz Afrika kültüründe", "paragraphs" = [
+      "Afrikalı ve Afrika kökenli Amerikalı akademisyenler, uzun süredir Saba Kraliçesi'nin \"siyahî\" kimliğinden soyutlanmaya çalışılmasından rahatsızlık duymaktadırlar. Saba Kraliçesi'nin Kitabı Mukaddes'te bahsi geçen iki siyahî kraliçeden biri olduğu düşünülmektedir. Diğer siyahî kraliçe Kandake'dir. Josephus, Saba Kraliçesi'nden \"Mısır ve Habeşistan Kraliçesi\" olarak bahseder. İlk papazlardan Origenes ve Jerome onu, \"Siyah Afrika milletlerinin kraliçesi\" olarak tanımlamışlardır. Strabon'a göre Habeşistanlılar M.Ö. 2. yüzyılda, doğu Afrika sahillerinde ve Arap sahil şeridinde de yaşamışlardır. Ayrıca Homer şöyle demiştir: \"Mısır'a komşu olan Etiyopyalılar (Habeşistanlılar) ikiye ayrılır; bir kısmı Asya'da yaşar, diğerleri Libya'da (Afrika) yaşar. Aslında birbirlerinden hiçbir farkları yoktur\". Birçok müslüman tarihçi eski çağlarda Arabistan'ın Habeşistan'ı da kontrol ettiğini ileri sürmüşlerdir. Aslında Etiyopya Arabistan'ın güney ucunu (bugünkü Yemen) kontrol altında bulundurmuştur. Mısır'ın güneyinde veya Afrika veya Arabistan sahil şeritlerinde yaşayan siyahi halkın tamamına Etiyopyalı denir.",
+    ] },
+  { "title" = "İslami kaynaklarda", "paragraphs" = [
+      "Kur'an'da melikenin ismi geçmez ama Arap kaynaklarında \"Belkıs\" olarak adlandırılır. Kur'an'daki öyküsü Eski Ahit'e benzer niteliktedir. Hüdhüd kuşu, hayvanlarla konuşabilen Süleyman Peygamber'e Saba adlı bir ülkeye gittiğini ve oradaki halkın güneşe taptıklarını söyler. Süleyman melikeye kendisine itaat etmeye davet eden bir mektup gönderir. Melike adamlarına danışır. Onlar \"Biz güçlü kuvvetli kimseleriz, zorlu savaş erbabıyız; buyruk ise senindir, artık ne buyuracağını sen düşün\" derler. Melike, elçileriyle Süleyman'a hediyeler gönderir. Süleyman hediyeleri önemsemez ve Allah'ın kendisine çok daha iyilerini bahşettiğini söyler.",
+      "Cinlerden biri gidip melikenin tahtını getirebileceğini belirtir. Süleyman'ın bilgili adamlarından biri de \"Gözünü açıp kapamadan ben onu sana getiririm\" der. Bu zatın, Süleyman'ın veziri Âsaf bin Berahya veya Hızır olduğu rivayet edilir. Kimin getirdiği belirtilmez.",
+      "Melike gelince önceden getirilmiş olan tahtı bazı değişikliklere uğratılır ve kendisine gösterilir. Senin tahtın böylemi? sorusuna Melike \"tıpkı aynısı\" diye cevap verir. (Neml 41-42) Daha sonra Süleyman'ın camdan köşküne girince zemini su sanarak eteklerini toplar. Süleyman onun su değil billur olduğunu belirtir. Rivayete göre Süleyman Peygamber bilgisine çok güvenen melikeyi şaşırtmak için camdan zeminin altından su akıtmış ve içine balıklar koymuştur.",
+    ] },
+]
+
+[articles.ja]
+text = "シバの女王（シバのじょおう、ヘブライ語: מלכת שבא Malkat Shva、ゲエズ語：ንግሥተ ሳባ Nigist Saba、アラビア語: ملكة سبأ Malikat Sabaʾ）は、旧約聖書に登場する女王。本名は伝承によって異なりニカウレー、ビルキース、マーケダー などと呼称される。"
+title = "シバの女王"
+lang = "ja"
+url = "https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%90%E3%81%AE%E5%A5%B3%E7%8E%8B"
+intro = [
+  "シバの女王（シバのじょおう、ヘブライ語: מלכת שבא Malkat Shva、ゲエズ語：ንግሥተ ሳባ Nigist Saba、アラビア語: ملكة سبأ Malikat Sabaʾ）は、旧約聖書に登場する女王。本名は伝承によって異なりニカウレー、ビルキース、マーケダー などと呼称される。",
+]
+sections = [
+  { "title" = "概要", "paragraphs" = [
+      "シバの女王についてもっとも古い記録は『旧約聖書』「列王記上」10章および「歴代誌下」9章にみえる。それによると、「シバの女王はソロモンの知恵の噂を伝え聞くと、多くの随員を伴って、香料、大量の金、宝石などの贈り物をラクダで運び、難問を以って彼を試そうとエルサレムを訪問した。女王はソロモンに数々の質問を浴びせるが、ソロモンに答えられないことは何もなかった。また、その宮殿、食卓の料理、居並ぶ臣下、神殿の燔祭などの様子を目の当たりにした女王は感嘆し、ソロモンが仕える神を称え、金200キカル（1キカルは約34.2 kgなので6.84 t）と非常に多くの香料や宝石を贈った。ソロモンも女王に対して贈り物をしたほか、彼女の望むものを与えた。こうして女王一行は故国に帰還した。」という内容である。この通り『旧約聖書』には女王の名前もシバ国の位置も記されていないが、後世になると地域や宗派によって様々な伝承が付随することになる。",
+      "女王の統治する国の名称シバは、ヘブライ語『旧約聖書』の表記「シェバ（שבא）」を英語で「Sheba（シーバ）」と転写したのが日本語に入ったことから一般化した表記で、英語の以外の多くの欧米語では「Saba」と表記される。なお、ギリシア語訳聖書では「サバ」、アラビア語では「サバァ（سبأ）」であり、先イスラーム期の古代南アラビア語での発音は「シャバァ」だったと推定されている。",
+    ] },
+  { "title" = "シバ国の位置", "paragraphs" = [
+      "1世紀の人物、フラウィウス・ヨセフス著の『ユダヤ古代誌』によるとシバの女王は「エジプトとエチオピアを支配した女王」で、名前はニカウレー(Nikaule)と記されている。ヨセフスの指す「サバ」は『旧約聖書』「イザヤ書」にあるエジプトやスーダン南方の「セバ（Saba）」と「列王記」の「シバ（Sheba）」との混同あるいは同一視があると指摘されている。",
+      "一方で、紀元前4世紀から前1世紀にかけてテオフラストス、アガタルキデス、ストラボンなどの著作に南アラビアの香辛料の産地として「サバ」という国が記されている。また、5世紀のフィロストルギオス著の『教会史』では、女王の国は南アラビアにあったとしている。『教会史』によると4世紀ごろに南アラビアを支配していたヒムヤル王国（現イエメン西岸）は、かつてサバと呼ばれ、その首都から女王がソロモンに会うために出立したと記されている。しかし、紀元前7世紀ごろにサバ王カリブイル・ワタルがアッシリア王に貢納したことを記した碑文より以前、つまりソロモンの活動した紀元前10世紀ごろにシバ国が存在したことを証明する資料や碑文などは発見されていないため史実性は否定されている。",
+      "王国の所在地については上記のようにエチオピア近辺と南アラビアの二説があるが、両地域はまったくの無関係ではない。南アラビアのサバ国と、対岸のエリトリア、エチオピア北部には、両地域の深い関係を示す遺跡や碑文が多数残されている。また、紀元前5世紀ごろの王は「ダァマトとサバのムッカリブ」と称したが、現地民のダァマトと移民のサバを支配するムッカリブ（王たちの支配者）という意味で、この「ムッカリブ」は同時代の南アラビアでも使用されたなど称号に関しても両地域の関係性が見られる。",
+    ] },
+  { "title" = "ユダヤ教における伝説", "paragraphs" = [
+      "あるときソロモンは東西の諸王を招いて大宴会を開いた。その酒宴に遅参した鳥のヤツガシラに激怒したが、ヤツガシラの話す驚くほど豊かな東方の都市キトルとその地を治めるシェバの女王に興味を示し、女王に親書を届けるように命じた。その親書には恭順の表敬訪問を女王に命じるもので、来なければ攻め滅ぼすと脅すものであった。女王はまずソロモンへの手紙と贈り物、6000の少年少女を乗せた船を送り出し、自身は陸路で旅立った。ソロモンとガラスの広間で対面した女王だったが、ガラスを水と勘違いして裾をたくし上げたため、毛深い足を見られてしまいソロモンにからからかわれる。それを無視して女王は三つの謎を問いかける。",
+      "3. その頭を嵐が駆け抜け、大声で泣き叫ぶ。その頭は葦のよう。それは自由人には栄誉の種で、貧乏人には不名誉の種。死せる者には栄誉の種、生ける者には不名誉の種。鳥にとっては喜びの種、魚にとっては嘆きの種。",
+      "中世に作られた『ベン・シラのアルファベット』にはさらに別の逸話が載せられている。新バビロニアのネブカドネザル2世は、7歳にして賢人と噂のベン・シラとの問答で「脱毛剤の作り方は、詳しくは自身のお母上にお尋ねください。」と言われて困惑する。ベン・シラが語ることによると、数十年前、ソロモンは対面したシバの女王が美しくも毛深いことを気にして、召使に命じて脱毛剤を施した。そうして女王に対して想いを遂げたが、その結果生まれたのがネブカドネザル2世であったという。",
+    ] },
+  { "title" = "キリスト教における伝説", "paragraphs" = [
+      "「マタイによる福音書」ではイエスが直接言及している。イエスは律法学者やファリサイ派の人々から「しるし」を見せるように迫られた際、「しるし」なしでも回心した例として「南の国」「地の果てから来た」女王をあげて彼らを諌めている。またイエスは審判の日、女王が蘇り不信仰者たちを断罪するだろうと予言しており、これ以降、女王は回心する異教徒の原型とみなされ、ソロモンと女王を主題とした絵画や彫刻が多く作られることになる。",
+      "ヤコブス・デ・ウォラギネ著の『黄金伝説』には聖十字架伝説に付随して女王の逸話が残る。ウォラギネ自身も内容に懐疑的な歴史書によると、アダムがエデンを追放される原因となった木の枝は大天使ミカエルを通じてセツ（アダムの子）に渡され、それが大きくなりソロモンの時代まで残っていた。この木を切り出して建設中の神殿の建材に使おうとしたが、どうにも長さが合わず沼の橋として捨て置いていた。その後、シバの女王がエルサレムへ訪れた際にこの橋を見ると、いつか世界の救い主がこの木に掛けられることを心眼で見抜き、その場で跪いて拝礼したという。ソロモンは女王からその話を聞くと、木を地下深く埋めた。月日が流れその地には神殿の犠牲獣を洗う堀が造られ、イエスの磔刑の際にひとりでに木が浮かび上がってきたという。",
+    ] },
+  { "title" = "イスラームにおける伝説", "paragraphs" = [
+      "『クルアーン』第27番目の章「蟻（アン・ナムル）」に「サバアの女王」の話が載せられている。前述の『タルグム・シェーニー』の記述と重なる部分が多い。スレイマーン（ソロモン）が精霊、人間、鳥類に大動員を掛けた際に、ヤツガシラが遅刻をしてきた。訳を問うとサバアという国に君臨する女王がアッラーを差し置いて太陽を崇拝していると報告してきた。それを聞いた王は、恭順の表敬訪問を命じる親書を送った。女王側が使者に贈り物を持たせて様子を見ようとしたがそれを追い返し、女王の玉座を自身の臣下に所望すると啓典の知識を持つ者が一瞬で持ってきた。王が訪れた女王に対して、装いを変えた玉座について聞いてみると「自身の物らしい」と答えた（スレイマーンはアッラーに帰依していないゆえに知恵が行き詰まり明言できないのだろうと解釈する）。女王は宮殿に招かれたが、水晶の床を水が張られていると勘違いして裾を捲くってしまう。王にその思い違いを正されると、自らの過ちを認めアッラーに帰依する、という内容である。",
+      "その後のイスラーム世界の文学や歴史書においてこの逸話は様々な発展を遂げるが、およそ共通している点は、女王の親はフドフード、あるいはフドハードという名で、母親はジン。女王の名はビルキースと呼ばれ、女王は母親のジンの影響で毛深いということがあげられる。",
+    ] },
+]
+
+[articles.ar]
+text = "بلقيس أو ملكة سبأ (العبرية: מַלְכַּת שְׁבָא) ملكة أسطورية حكمت مملكة سبأ في اليمن القديم. ورد ذكرها في الكتب المقدسة دون التصريح باسمها."
+title = "بلقيس"
+lang = "ar"
+url = "https://ar.wikipedia.org/wiki/%D8%A8%D9%84%D9%82%D9%8A%D8%B3"
+intro = [
+  "بلقيس أو ملكة سبأ (العبرية: מַלְכַּת שְׁבָא) ملكة أسطورية حكمت مملكة سبأ في اليمن القديم. ورد ذكرها في الكتب المقدسة دون التصريح باسمها. زارت الملك سليمان، وأسهب المفسرون والإخباريون في تفاصيل ذلك اللقاء حتى غدت شخصيتها مادة خصبة لكتب القصص والروايات والفنون العالمية، وتعدّ مصدر فخر لليمنيين، و‌الإثيوبيين.",
+  "لم تكشف الآثار وجود بلقيس أو أي ملكة أنثى حكمت اليمن القديم أو إثيوبيا في آلاف النقوش المكتشفة، ويرى المختصون أن قصة ملكة سبأ «أسطورة تأسيس» أجنبية، نشأت خارج حضارة اليمن القديم، متأثرة بسمعتها الدولية بتجارة اللبان والبخور وثراء ممالكها الباذخ.",
+]
+sections = [
+  { "title" = "اسم بلقيس", "paragraphs" = [
+      "لا يرد اسم الملكة في القرآن ولا في التوراة، وإنما تسميها كتب المفسرين والمؤرخين المسلمين \"بلقيس\"، وقد اقترح الباحثون لهذا الاسم اشتقاقات شتى، أبرزها:",
+      "الأصل اليوناني παλλακίς: اقترح غوستاف روش (1880) أن «بلقيس» إنما هو استعارة من اليونانية παλλακίς (پَلَكيس)،أو من صيغتها العبرية pîlegeš، أي «المحظية»، عشيقة سليمان. وأيده زالتسبرغروعممه أوليندورف في «دائرة المعارف الإسلامية» بصفته الرأي الأرجح، وقبله كل من مونتغمري وات ونبيه فارس وآخرون، وتشكك فيه روزفيتا شتيغنر إذ لم يصلنا أي نص يهودي يصف ملكة سبأ بأنها «محظية pîlegeš».",
+      "الأصل الفارسي «پري»: في الترجمة الفارسية لتاريخ الطبري يوحي البلعمي بوجود صلة بين بلقيس وكلمة «پري» (الجن الفارسية)، إذ جعل أم بلقيس پريّة، واستبعد كل من فون روت وروش ذلك، وترى روزفيتا شتيغنر فيه وجاهة تستحق بحث أكثر عن تأثير هندي أو فارسي محتمل.",
+    ] },
+  { "title" = "في اليهودية", "paragraphs" = [
+      "ترد القصة في موضعين متطابقين تقريباً من التناخ. نصُّ سفر الملوك الأول (10: 1–13)، وسفر أخبار الأيام الثاني (9: 1–12):",
+      "جاءت ملكة سبأ بحسب أسفار الأنبياء من بلد الذهب والبخور. وروى المؤرخ اليهودي يوسيفوس القصة بتوسع في كتاب «عاديات اليهود» (8: 6، 5–6)، لكنه جعل الزائرة «ملكة مصر والحبشة» وسمّاها «نيكاولي»، وخفّض كمية الذهب من مئة وعشرين إلى عشرين وزنة؛ وهو أول تحوّل ينقل موطن الملكة من الجزيرة العربية إلى أفريقيا.",
+      "أما التراث الرباني فقد انشغل بألغاز ملكة سبأ التي امتحنت بها سليمان، ولا يذكر التلمودان اللقاءَ أصلاً، بل رأى بعض الأحبار أن «ملكة سبأ» ليست إلا «مملكة سبأ». وترى شتيغنر أن قول الحاخام يوناتان هذا يتعلق بذكر «سبأ» في سفر أيوب (1: 15) لا بملكة سفر الملوك الأول. ويلاحظ المؤرخ يعقوب لاسنر أن ألغاز «مدراش الأمثال» (مِدراش مِشلي) الأربعة تدور كلها حول نظام الطبيعة وهوية الجنس، فهي عن الحيض والحمل والرضاع، وعن بنتَي لوط، وعن تمييز الصبيان من البنات وقد أُلبسوا لباساً واحداً، وعن تمييز المختونين من غيرهم؛ ومغزاها أن تعرف المرأة مكانها فلا تحاول التفوق على الرجل، وأن بني إسرائيل مفضّلون على غيرهم.",
+    ] },
+  { "title" = "في المسيحية", "paragraphs" = [
+      "يذكر العهد الجديد الملكة مرتين بلقبٍ واحد، على لسان يسوع في خطابه للفريسيين الذين طلبوا آية:",
+      "و«التيمن» هو «الجنوب» (باليونانية βασίλισσα νότου basilissa nótou)؛ وقد صارت «ملكة الجنوب» في الإنجيلين، ومعها «أهل نينوى»، شاهدةً من الأمم على الدينونة، ونموذجاً لمن قطعت «أقاصي الأرض» طلباً للحكمة. وقد عُنيت الكنيسة الأولى بالملكة أساساً لأن المسيح ذكرها؛ ثم أقام إيزيدور الإشبيلي في القرن السابع تفسيراً رمزياً صار معياراً في القرون الوسطى: سليمان صورة للمسيح الذي يبني بيت الله في أورشليم السماوية، والملكة الآتية من الجنوب «تُفهم على أنها الكنيسة التي تجتمع من أقاصي العالم لتسمع صوت الله»؛ وتبعه بيدا الذي شبّه رحلتها بـ«رحلة العروس إلى عريسها»، ووجد هو وإيزيدور إشارة خفية إليها في المزمور 45 («عن يمينك جلست الملكة بذهب أوفير»). ونُحتت صورتها بين الملوك والأنبياء على واجهات كاتدرائيات شارتر وأميان وريمس في القرنين الثاني عشر والثالث عشر، وفي مدينة شارتر تجثم عند قدميها خادمة حبشية. وربط تفسيرٌ آخر بينها وبين المجوس الثلاثة القادمين من المشرق بالذهب والبخور والمرّ، استناداً إلى نبوءة إشعياء (60: 6) «كلهم من شبا يأتون، يحملون ذهباً ولباناً» والمزمور 72 («ملوك شبا وسبأ يقدمون هدية»)، حتى صُوّرت الملكة أمام سليمان على ياقة أحد المجوس في لوحة هيرونيموس بوش.",
+      "غير أن أهم تمثيلات الملكة في فن القرون الوسطى المتأخرة تستند إلى حكاية لا سند لها في الكتاب المقدس، هي أسطورة الصليب الحقيقي، كما دوّنها يعقوب الفوراجيني في كتاب «الأسطورة الذهبية» أواخر القرن الثالث عشر: فغصنٌ من شجرة المعرفة غرسه شيث على قبر آدم صار شجرة عظيمة قطعها سليمان لبناء الهيكل، فلم تستقم للبنّائين، فألقوها جسراً على بركة، «ولما جاءت ملكة سبأ لتمتحن سليمان بمسائل، كان عليها أن تعبر البركة، فرأت بالروح أن مخلّص العالم سيُعلَّق يوماً على هذه الشجرة، فأبت أن تطأها بقدمها وجثت تسجد لها»، فأمر سليمان بدفن الخشبة التي ستُستخرج فيما بعد لصنع الصليب. ومصادر هذه الأسطورة بيزنطية، كتاريخ جورجيوس هامارتولوس (القرن التاسع) الذي جعل الملكة «سيبيلاً» (عرّافة) وروى أنها ألبست جواريها لباس الرجال والرجالَ لباس النساء لتمتحن حكمة سليمان، وهو الموتيف نفسه الموجود في التفاسير الإسلامية؛ ومن هنا جاءت في الغرب «Regina Sibilla» الملكة العرّافة. وفي نصوص لاتينية من القرن الثاني عشر وُصفت الملكة بأنها «سيدة سبأ والحبشة، سيبيلا، ذات قدمي إوزّ وعينين كالنجم»، فنشأت في فرنسا وألمانيا أسطورة «الملكة ذات قدم الإوزّ» (reine pédauque) التي تُشفى من عاهتها حين تخوض الجدول؛ ويرى واتسون وشاستيل أن هذا التشوّه ليس إلا صدى غربياً، عبر بيزنطة، لساقي بلقيس المشعرتين في الرواية الإسلامية.",
+    ] },
+  { "title" = "في الإسلام", "paragraphs" = [
+      "يروي القرآن قصة الملكة في سورة النمل في سياق أخبار سليمان وجنوده من الجن والإنس والطير، حين تفقّد الطير فلم يجد الهدهد وتوعّده (الآيتان 20–21)، ثم:",
+      "تختلف الرواية القرآنية عن التوراتية اختلافاً بيّناً: فالمبادرة هنا لسليمان لا للملكة، والهدهد مجرد رسول، والملكة وقومها عبدة شمس، والغاية هداية الملكة الوثنية على يد الملك المؤمن؛ ثم إن القرآن يسكت عمّا بعد اتباعها سليمان.",
+      "ولاحظ غرونباوم أن الهدهد بعد أن وصف عرش الملكة بأنه «عظيم» (الآية 23) ختم كلامه بأن الله «رب العرش العظيم» (الآية 26)، كأنه لا عرش يستحق هذا الوصف غير عرش الله. ورأى هارتمان في مشاورة الملكة ملأَها (الآيات 29–33) أثراً لما عُرف من تقيّد ملوك اليمن برأي «الكبراء 𐩫𐩨𐩧». وتلاحظ شتيغنر أن الثعلبي يورد في «عرائس المجالس» الحوار بين الملكة وكبراء قومها بألفاظ الآيات تقريباً، وأن ترجوم شيناي يُظهر كذلك أن القرار الأخير للملكة نفسها.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+it = "en"
+
+zh-CN = "en"
+
+ko = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

@@ -72,6 +72,29 @@ pub fn gold_income_per_second(
             * leader.resource_bonus_multiplier(Source::Territory, Resource::Gold)
 }
 
+/// Extra gold and troops per game second from balanced active districts.
+pub fn imperial_standard_income(
+    agg: BuildingAggregate,
+    leader: Leader,
+    cfg: &GameConfig,
+) -> (f64, f64) {
+    let crate::geo_entities::Ability::ImperialStandards { percent } = leader.ability() else {
+        return (0.0, 0.0);
+    };
+    if !cfg.buildings_enabled
+        || agg.city_levels == 0
+        || agg.city_levels != agg.factory_levels
+        || agg.city_levels != agg.farm_levels
+    {
+        return (0.0, 0.0);
+    }
+    let multiplier = f64::from(percent) / 100.0;
+    (
+        cfg.factory_gold_income * agg.factory_income_level_weight * multiplier,
+        cfg.farm_troop_income * f64::from(agg.farm_levels) * multiplier,
+    )
+}
+
 /// Per-game-second gold from the player's active alliances, paid only to the hero
 /// whose ability pays for them.
 pub fn alliance_gold_per_second(alliances: usize, leader: Leader, cfg: &GameConfig) -> f64 {
@@ -287,7 +310,7 @@ mod tests {
 
     #[test]
     fn aggregation_preserves_level_progression_for_each_building() {
-        use crate::building::{aggregate_buildings_per_player, Building};
+        use crate::building::{Building, aggregate_buildings_per_player};
         use crate::game::BuildingKind;
 
         let make = |id, kind, level| Building {

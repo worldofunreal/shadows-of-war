@@ -28,6 +28,39 @@ impl SowEngine {
             })
     }
 
+    /// Shared price for the confirmation UI and authoritative upgrade intent.
+    pub fn structure_upgrade_quote(&self, building_id: u64) -> Option<(f64, bool)> {
+        let index = self
+            .buildings
+            .binary_search_by_key(&building_id, |building| building.id)
+            .ok()?;
+        let building = self.buildings[index];
+        Some(
+            if self.tutorial_city_upgrade_is_free(building.owner_id, building_id) {
+                (0.0, false)
+            } else {
+                self.paid_structure_upgrade_quote(building)
+            },
+        )
+    }
+
+    pub(super) fn paid_structure_upgrade_quote(&self, building: Building) -> (f64, bool) {
+        let owned_levels =
+            crate::building::count_kind(&self.buildings, building.owner_id, building.kind);
+        let cost = structure_upgrade_cost_gold(
+            building.kind,
+            building.level.saturating_add(1),
+            owned_levels,
+            &self.state.config,
+        );
+        let discount = self.hero_city_upgrade_discount(building);
+        if discount > 0 && cost.is_finite() && cost > 0.0 {
+            (cost * f64::from(100 - discount) / 100.0, true)
+        } else {
+            (cost, false)
+        }
+    }
+
     pub(super) fn apply_build_structure_intent(
         &mut self,
         player_id: u16,
@@ -170,16 +203,8 @@ impl SowEngine {
             return;
         }
 
-        let owned_levels = crate::building::count_kind(&self.buildings, player_id, building.kind);
-        let cost = if self.tutorial_city_upgrade_is_free(player_id, building_id) {
-            0.0
-        } else {
-            structure_upgrade_cost_gold(
-                building.kind,
-                target_level,
-                owned_levels,
-                &self.state.config,
-            )
+        let Some((cost, discounted)) = self.structure_upgrade_quote(building_id) else {
+            return;
         };
         let Some(player_mut) = self.state.player_mut(player_id) else {
             return;
@@ -206,6 +231,13 @@ impl SowEngine {
             kind: b.kind,
             level: b.level,
         });
+        if discounted {
+            let width = self.state.map.width;
+            self.state.announce_leader_ability(
+                player_id,
+                Some((building.tile_idx % width, building.tile_idx / width)),
+            );
+        }
     }
 }
 

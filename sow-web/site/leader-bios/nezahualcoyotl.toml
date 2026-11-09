@@ -1,0 +1,77 @@
+[articles.en]
+text = "Nezahualcóyotl (1402–1472) ruled Texcoco in the Valley of Mexico. He is remembered as a poet and ruler whose legacy is closely tied to the region’s political alliances and waterworks."
+title = "Nezahualcóyotl — INAH historical sources"
+lang = "en"
+url = "https://lugares.inah.gob.mx/en/node/4356"
+intro = [
+  "Nezahualcóyotl (1402–1472) was the ruler of Texcoco, a major Acolhua city in the Valley of Mexico. Mexico’s National Institute of Anthropology and History remembers him as both a poet and an engineer, connecting his legacy to the water systems of Tenochtitlan and the gardens and palaces of Texcoco.",
+  "The surviving account of his life comes through later historical records and archaeological places associated with his reign. The landscape at Tetzcotzinco offers a concrete view of that legacy: channels, aqueducts, reservoirs, and stone-carved structures attributed to the Texcoco ruler.",
+]
+sections = [
+  { "title" = "Exile and return to Texcoco", "paragraphs" = [
+      "The INAH account of Tetzcotzinco describes Nezahualcóyotl hiding in its forest while pursued by the Tepanecs. It then recounts how regional allies defeated the Tepanec ruler Maxtla and restored Texcoco’s position. The episode links his political story to the wider alliances that reshaped power in the Valley of Mexico.",
+    ] },
+  { "title" = "Waterworks at Tetzcotzinco", "paragraphs" = [
+      "At the height of Texcoco under Nezahualcóyotl, Tetzcotzinco became a major architectural and hydraulic site. INAH describes a system that brought spring water along channels and aqueducts between the hills, alongside terraces, pools, and structures carved into the rock. The surviving remains show the scale of Acolhua engineering and the way water shaped the ceremonial landscape.",
+    ] },
+  { "title" = "A poet and builder remembered", "paragraphs" = [
+      "INAH’s National Museum of History presents Nezahualcóyotl as a poet, sage, engineer, and urban designer. Its account associates his reign with gardens and palaces at Texcoco and waterworks serving Tenochtitlan. These works, together with the archaeological remains at Tetzcotzinco, form the clearest material record of the ruler’s enduring reputation.",
+    ] },
+]
+sources = [
+  { "title" = "Tetzcotzinco — INAH", "url" = "https://lugares.inah.gob.mx/en/node/4356" },
+  { "title" = "Nezahualcóyotl, the king and water — INAH", "url" = "https://mnh.inah.gob.mx/nezahualcoyotl-el-rey-y-el-agua" },
+]
+
+[articles.es]
+text = "Nezahualcóyotl (1402–1472) gobernó Texcoco, en el Valle de México. Se le recuerda como poeta y gobernante; su legado se relaciona con las alianzas políticas de la región y sus obras hidráulicas."
+title = "Nezahualcóyotl — fuentes históricas del INAH"
+lang = "es"
+url = "https://lugares.inah.gob.mx/es/node/4356"
+intro = [
+  "Nezahualcóyotl (1402–1472) fue gobernante de Texcoco, una importante ciudad acolhua del Valle de México. El Instituto Nacional de Antropología e Historia lo recuerda como poeta e ingeniero, y vincula su legado con los sistemas de agua de Tenochtitlan y con los jardines y palacios de Texcoco.",
+  "Los relatos que han llegado hasta nuestros días proceden de registros históricos posteriores y de sitios arqueológicos asociados con su gobierno. Tetzcotzinco muestra una parte concreta de ese legado: canales, acueductos, depósitos y estructuras labradas en la roca que se atribuyen al gobernante texcocano.",
+]
+sections = [
+  { "title" = "Exilio y regreso a Texcoco", "paragraphs" = [
+      "El relato del INAH sobre Tetzcotzinco cuenta que Nezahualcóyotl se ocultó en sus bosques mientras era perseguido por los tepanecas. Después, aliados de la región derrotaron a Maxtla, gobernante tepaneca, y restauraron la posición de Texcoco. El episodio conecta su historia política con las alianzas que transformaron el poder en el Valle de México.",
+    ] },
+  { "title" = "Las obras hidráulicas de Tetzcotzinco", "paragraphs" = [
+      "Durante el apogeo de Texcoco bajo Nezahualcóyotl, Tetzcotzinco se convirtió en un importante conjunto arquitectónico e hidráulico. El INAH describe un sistema que conducía agua de manantiales por canales y acueductos entre los cerros, junto con terrazas, albercas y construcciones labradas en la roca. Los restos muestran la escala de la ingeniería acolhua y el papel del agua en aquel paisaje ceremonial.",
+    ] },
+  { "title" = "El recuerdo del poeta y constructor", "paragraphs" = [
+      "El Museo Nacional de Historia del INAH presenta a Nezahualcóyotl como poeta, sabio, ingeniero y urbanista. Su relato relaciona su gobierno con jardines y palacios en Texcoco y con obras que llevaban agua a Tenochtitlan. Esas construcciones, junto con los restos de Tetzcotzinco, forman parte del registro material que sostiene la memoria del gobernante.",
+    ] },
+]
+sources = [
+  { "title" = "Tetzcotzinco — INAH", "url" = "https://lugares.inah.gob.mx/en/node/4356" },
+  { "title" = "Nezahualcóyotl, the king and water — INAH", "url" = "https://mnh.inah.gob.mx/nezahualcoyotl-el-rey-y-el-agua" },
+]
+
+[fallbacks]
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

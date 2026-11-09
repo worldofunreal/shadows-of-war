@@ -92,6 +92,12 @@ pub fn set_master_volume(volume: f32) {
     native::set_master_volume(volume);
 }
 
+/// Silences every sound effect while the host requires it (portal ads or the
+/// portal's mute setting), without touching the player's saved volume.
+pub fn set_host_muted(muted: bool) {
+    native::set_host_muted(muted);
+}
+
 #[cfg(feature = "preview")]
 pub use native::export_sfx_preview;
 

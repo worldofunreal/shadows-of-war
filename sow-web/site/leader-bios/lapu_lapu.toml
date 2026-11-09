@@ -1,0 +1,66 @@
+[articles.en]
+text = "Lapulapu, also spelled Lapu-Lapu, and whose name was first recorded as Çilapulapu, was a Datu of Mactan, an island now part of the Philippines."
+title = "Lapulapu"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Lapulapu"
+intro = [
+  "Lapulapu (fl. 1521), also spelled Lapu-Lapu, and whose name was first recorded as Çilapulapu, was a Datu of Mactan, an island now part of the Philippines.",
+  "Lapulapu is known for the 1521 Battle of Mactan, where he and his forces defeated Spanish expeditionary troops led by Portuguese explorer Ferdinand Magellan, who was killed in the battle. Magellan's death ended his voyage of circumnavigation and delayed Spanish expansion into the archipelago until the expedition of Miguel López de Legazpi in 1565.",
+  "Lapulapu is widely commemorated in Philippine historiography and popular tradition as a symbol of resistance to Spanish colonization. Monuments to Lapulapu have been erected throughout the Philippines in his honor. The Philippine National Police (PNP) and the Bureau of Fire Protection (BFP) use his image as part of their official seals.",
+  "Besides being a rival of another datu of Mactan named Zula (it being unclear if they were equal co-rulers or not) and also of Rajah Humabon of neighboring Cebu, very little is reliably known about his life. The only existing primary source mentioning him by name is the account of Antonio Pigafetta, and according to historian Resil B. Mojares, no European who left a primary record of Magellan's voyage \"actually saw him, knew what he looked like, heard him speak (his recorded words of defiance and pride are all indirect), or mentioned that he was present in the battle of Mactan that made him famous.\"",
+]
+sections = [
+  { "title" = "Battle of Mactan", "paragraphs" = [
+      "Lapulapu was one of the two chiefs of Mactan before the Spanish arrived in the archipelago, the other being Zula. When Portuguese explorer Ferdinand Magellan arrived in the Philippines in the service of Spain, Zula was one of those who gave tribute to the Spanish king while Lapulapu refused.",
+      "In the midnight of April 27, 1521, Magellan led a force of around 60 Spaniards and 20 to 30 war boats (karakoa) of Humabon's warriors from Cebu. They arrived in Mactan three hours before dawn. However, because of the presence of rock outcroppings and coral reefs, Magellan's ships could not land on the shores of Mactan. Their ships were forced to anchor \"two crossbow flights\" away from the beach. According to Antonio Pigafetta, they faced around 1,500 warriors of Lapulapu armed with large cutlass iron swords called \"Kampilan (Scimitar)\" and large shields, bows, and \"bamboo\" spears.",
+      "Magellan repeated his offer not to attack them if Lapulapu swore fealty to Rajah Humabon, obeyed the Spanish king, and paid tribute, which Lapulapu again rejected. At the taunting request of Lapulapu, the battle did not begin until morning. Magellan, perhaps hoping to impress Humabon's warriors with the superiority of European armor and weapons, told Humabon's warriors to remain in their ships. Magellan and 49 of the heavily armored Spaniards (armed with lances, swords, crossbows, and muskets) waded ashore to meet Lapulapu's forces. They set fire to a few houses on the shore in an attempt to scare them. Instead, Lapulapu's warriors became infuriated and charged. Two Spaniards were killed immediately in the fighting, and Magellan was wounded in the leg with a poisoned arrow. He ordered a retreat, which most of his men followed except for a few who remained to protect him. Magellan was recognized as the captain by the natives, and became the focus of the attack. Outnumbered and encumbered by their armor, Magellan's forces were quickly overwhelmed and killed along with Magellan. Some remaining survivors escaped to their waiting ships.",
+    ] },
+  { "title" = "Name", "paragraphs" = [
+      "The earliest record of Lapulapu's name comes from Venetian diarist Antonio Pigafetta who accompanied Magellan's expedition. Pigafetta noted the names of two Datus of the island of Matan (Mactan), the chiefs Zula and Çilapulapu. Pigafetta's account of Magellan's voyage, which contains the only mention of Lapulapu by name in an undisputed primary source, exists in several variant manuscripts and print editions, the earliest dating to around 1524.",
+      "In an annotation for his 1890 edition of Antonio de Morga's 1609 Sucesos de las islas Filipinas, José Rizal spells the name as Si Lapulapu. This supplements a passage where Morga mentions Magellan's death in Mactan, but does not mention the Mactan leader by name. In Philippine languages, si (plural siná) is an article used to indicate personal names. Thus Si Lapulapu, as rendered by Rizal, was subsequently interpreted by others to mean this way (though Rizal never explicitly asserts this himself) and the Si was dropped, eventually cementing the Mactan leader's name in Filipino culture as Lapulapu, Lapu-lapu, or Lapu-Lapu (e.g. Siya si Lapulapu \"He is Lapulapu\" vs. Siya si Si Lapulapu \"He is Si Lapulapu\"). However, this meaning for Si or Çi in Lapulapu's recorded name is doubtful because not all names recorded by Pigafetta contain it, as would be the case if it were. In an annotation of his 1800 edition of Pigafetta's account, Carlo Amoretti surmised that the Si or Çi found in several native names recorded by Pigafetta was an honorific title. E. P. Patanñe (1999) thus proposes that this usage of Si was derived from a corruption of the Sanskrit title Sri.",
+      "In 1604, Fr. Prudencio de Sandoval in his Historia de la Vida y Hechos del Emperador Carlos V spelled the name as Calipulapo, perhaps through transposing the first A and I and misreading the Ç. This further became Cali Pulaco in the 1614 poem Que Dios le perdone (May God Forgive Him) by mestizo de sangley poet Carlos Calao. This rendition, spelled as Kalipulako, was later adopted as one of the pseudonyms of the Philippine hero Mariano Ponce during the Propaganda Movement. The 1898 Philippine Declaration of Independence of Cavite II el Viejo, also mentions Lapulapu under the name Rey Kalipulako de Manktan [sic] (King Kalipulako of Mactan). This name variation has further led to claims that Lapulapu was a Caliph and thus Muslim, whereas Pigafetta notes that the region was not Islamized.",
+    ] },
+  { "title" = "Origins", "paragraphs" = [
+      "There is no reliable written record of Lapulapu's origins, but the Cebuano oral tradition holds that the Sugbuanons of Opong was once ruled by a Datu named Mangal and later succeeded by his son named Lapulapu.",
+    ] },
+  { "title" = "Religion", "paragraphs" = [
+      "The historical record strongly suggests that Lapulapu was an adherent of Visayan indigenous animistic anito beliefs. The inhabitants of the Sulu Archipelago believe that Lapulapu was a Muslim belonging to the Tausūg or the Sama-Bajau people of Mindanao, a claim made by the now dissolved Sultanate of Sulu that many historians negate. Moreover, prominent Cebuano anthropologist José Eleazar Bersales says that Cebu was never islamized, referenced from an excavation in Boljoon in southern Cebu. Direct evidences such as accounts of Pigafetta and the native oral tradition did not indicate Lapulapu as a Muslim but a Visayan animist and a Sugbuanon native.",
+      "Cebuanos were predominantly animist at the time of the arrival of the Spanish. Visayans were noted for their widespread practice of tattooing; hence, Spaniards referred to them as the Pintados. Pigafetta, who recorded Magellan's encounter with the Cebuanos, explicitly described Rajah Humabon as tattooed. He also records the consumption of pork, dog meat, and palm wine (arak) by the Cebuanos, as well as the common custom of penile piercings (tugbuk or sakra). Tattooing, body modification, pork, dog meat, and alcohol are all ḥarām (forbidden) in Islam.",
+      "The supreme deity of the Visayans, as explicitly recorded by contemporary historians, was identified as Abba by Pigafetta and Kan-Laon (also spelled Laon) by the Jesuit historian Pedro Chirino in 1604, comparable to the Tagalog \"Bathala\". There is no mention of Islam. This is in contrast to the other locations visited by the Magellan expedition where Pigafetta readily identifies the Muslims whom they encountered; he would call them Moros after the Muslim Moors of medieval Spain and northern Africa, to distinguish them from the polytheistic \"heathens\". In fact, during the mass baptism of the Cebuanos to Christianity, he clearly identifies them as \"heathens,\" not Moros:",
+    ] },
+  { "title" = "Legacy", "paragraphs" = [
+      "On April 27, 2017, President Rodrigo Duterte declared April 27 (the date when the Battle of Mactan happened) as Lapu-Lapu Day for honoring as the first hero in the country who defeated foreign rule. Duterte also signed Executive Order No. 17 creating the Order of Lapu-Lapu which recognizes the services of government workers and private citizens in relation to the campaigns and advocacies of the President. During the First Regular Season of the 14th Congress of the Philippines, Senator Richard Gordon introduced a bill proposing to declare April 27 as an official Philippine national holiday to be known as Adlaw ni Lapu-Lapu, (Cebuano, \"Day of Lapu-Lapu\").",
+      "The government of British Columbia, Canada, officially recognised April 27 as Lapu-Lapu Day in 2023, acknowledging the cultural contributions of the Filipino Canadians, one of the largest immigrant groups in the province. Each year, Lapu-Lapu Day is celebrated by Filipino Canadians in Vancouver.",
+      "On April 27, 2024, Lapu-Lapu Day, 300 practitioners of the Philippine martial art arnis performed a historical reenactment of the Battle of Mactan at Mactan Shrine, witnessed by Mayor Junard Chan.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

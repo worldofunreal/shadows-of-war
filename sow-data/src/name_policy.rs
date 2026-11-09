@@ -4,7 +4,7 @@
 //! Names are filtered before they are stored or broadcast. The list is kept
 //! in code so the policy version is part of every server build.
 
-pub const POLICY_VERSION: u32 = 2;
+pub const POLICY_VERSION: u32 = 3;
 pub const MAX_CHARS: usize = 16;
 
 const BLOCKED_TERMS: &[&str] = &[
@@ -38,6 +38,31 @@ const BLOCKED_TERMS: &[&str] = &[
     "whore",
     "zorra",
 ];
+
+/// Poki's reference profanity list (github.com/MauriceButler/badwords,
+/// MIT), folded with `filter_key`, minus common surnames and game words it
+/// would block (wang, cox, shi, sh, pawn, sob). Terms of six or more
+/// characters match anywhere in a name; shorter ones match a whole word, so
+/// "Cassius" or "Swanky" stay valid while "ass" or "Wank" alone do not.
+const POKI_TERMS: &str = include_str!("name_policy_terms.txt");
+const POKI_SUBSTRING_MIN_CHARS: usize = 6;
+
+fn poki_terms() -> &'static (Vec<&'static str>, std::collections::HashSet<&'static str>) {
+    static TERMS: std::sync::LazyLock<(Vec<&'static str>, std::collections::HashSet<&'static str>)> =
+        std::sync::LazyLock::new(|| {
+            let mut long = Vec::new();
+            let mut short = std::collections::HashSet::new();
+            for term in POKI_TERMS.lines().map(str::trim).filter(|term| !term.is_empty()) {
+                if term.len() >= POKI_SUBSTRING_MIN_CHARS {
+                    long.push(term);
+                } else {
+                    short.insert(term);
+                }
+            }
+            (long, short)
+        });
+    &TERMS
+}
 
 fn fold_char(ch: char) -> Option<char> {
     let lower = ch.to_lowercase().next().unwrap_or(ch);
@@ -107,7 +132,17 @@ pub fn is_allowed(value: &str) -> bool {
         return false;
     }
     let key = filter_key(value);
-    !BLOCKED_TERMS.iter().any(|term| key.contains(term))
+    if BLOCKED_TERMS.iter().any(|term| key.contains(term)) {
+        return false;
+    }
+    let (long, short) = poki_terms();
+    if long.iter().any(|term| key.contains(term)) {
+        return false;
+    }
+    !value
+        .split(|ch: char| !(ch.is_alphanumeric() || matches!(ch, '$' | '@')))
+        .map(filter_key)
+        .any(|word| short.contains(word.as_str()))
 }
 
 #[cfg(test)]
@@ -128,6 +163,18 @@ mod tests {
         assert!(is_allowed("Caesar"));
         assert!(is_allowed("Lady Six Sky"));
         assert!(is_allowed("Ragnar-42"));
+        assert!(is_allowed("Cassius"));
+        assert!(is_allowed("Swanky"));
+        assert!(is_allowed("Wang Wei"));
+    }
+
+    #[test]
+    fn applies_the_poki_reference_list() {
+        assert!(!is_allowed("goddamn"));
+        assert!(!is_allowed("Pr1ck"));
+        assert!(!is_allowed("big ass"));
+        assert!(!is_allowed("Wank_King"));
+        assert!(!is_allowed("tw4t"));
     }
 
     #[test]

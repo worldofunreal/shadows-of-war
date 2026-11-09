@@ -1,6 +1,7 @@
 use crate::engine::SowEngine;
 use crate::execution::refund_fleet_troops_to_player;
 use crate::game::{GameEvent, GamePhase};
+use crate::geo_entities::LossWhen;
 use crate::warp_fleet::best_shore_spawn_for_transport;
 
 impl SowEngine {
@@ -247,9 +248,19 @@ impl SowEngine {
             if fleet.retreating {
                 if owner_here == fleet.owner_id {
                     let deaths = fleet.troops * crate::warp_fleet::FLEET_RETREAT_SHORE_MALUS;
-                    let survivors = fleet.troops - deaths;
                     if let Some(p) = self.state.player_mut(fleet.owner_id) {
-                        p.credit_troops_capped(survivors, p.max_troops);
+                        let loss_multiplier =
+                            p.leader.attacker_loss_multiplier(LossWhen::SeaRetreat);
+                        let ordinary_return =
+                            (p.troops + (fleet.troops - deaths)).min(p.max_troops);
+                        p.credit_troops_capped(
+                            fleet.troops - deaths * loss_multiplier,
+                            p.max_troops,
+                        );
+                        if loss_multiplier < 1.0 && p.troops > ordinary_return {
+                            self.state
+                                .announce_leader_ability(fleet.owner_id, Some((lx, ly)));
+                        }
                     }
                 } else {
                     refund_fleet_troops_to_player(&mut self.state, fleet.owner_id, fleet.troops);
@@ -353,6 +364,13 @@ impl SowEngine {
 
         elimination_candidates.extend(self.annex_enclosed_components(territory_changes));
         for (victim, conqueror, x, y) in elimination_candidates {
+            crate::execution::hero_effects::recruit_conquered_reserves(
+                &mut self.state,
+                conqueror,
+                victim,
+                (x, y),
+                None,
+            );
             self.eliminate_player(victim, conqueror, x, y, false);
         }
         self.execute_warship_ai();

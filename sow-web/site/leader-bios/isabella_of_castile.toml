@@ -1,0 +1,365 @@
+[articles.en]
+text = "Isabella I, also known as Isabella the Catholic, was Queen of Castile and León from 1474 until her death in 1504. She was also Queen of Aragon from 1479 until her death as the wife of King Ferdinand II."
+title = "Isabella I of Castile"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Isabella_I_of_Castile"
+intro = [
+  "Isabella I (Spanish: Isabel I; 22 April 1451 – 26 November 1504), also known as Isabella the Catholic (Spanish: Isabel la Católica), was Queen of Castile and León from 1474 until her death in 1504. She was also Queen of Aragon from 1479 until her death as the wife of King Ferdinand II. Reigning together over a dynastically unified Spain, Isabella and Ferdinand are known as the Catholic Monarchs. Her reign marked the end of the Reconquista and also the start of the Spanish Empire, allowing Spain to become a major force in European politics.",
+  "Isabella's marriage to Ferdinand of Aragon in 1469 created the basis of the de facto unification of Spain. With Ferdinand's help, she won the War of the Castilian Succession, securing her position as Queen of Castile. Isabella reorganized the governmental system, brought the crime rate down, and unburdened the kingdom of the debt which her half-brother King Henry IV had left behind. Her reforms and those she made with her husband had an influence that extended well beyond the borders of their united kingdoms.",
+  "Isabella and Ferdinand are known for being the first monarchs to be referred to as the queen and king of Spain, respectively. Their actions included completion of the Reconquista, the Alhambra Decree which ordered the mass expulsion of Jews from Spain, initiating the Spanish Inquisition, financing Christopher Columbus's 1492 voyage to the New World, and establishing the Spanish Empire, making Spain a major power in Europe and the world and ultimately ushering in the Spanish Golden Age.",
+  "Together with her husband, Isabella was granted the title of \"Catholic Monarch\" by Pope Alexander VI, a Spaniard. Her beatification process was opened in 1958, and in 1974 she was granted the title of Servant of God.",
+]
+sections = [
+  { "title" = "Life", "paragraphs" = [
+      "Isabella was born in Madrigal de las Altas Torres to King John II of Castile and his second wife, Isabella of Portugal, on 22 April 1451 (Maundy Thursday). At the time of Isabella's birth, she was second in line to the throne after her older half-brother Henry. Henry was 26 at that time and married, but childless. Isabella's younger brother Alfonso was born two years later on 17 November 1453, demoting her position to third in line. When her father died in 1454, her half-brother ascended to the throne as King Henry IV. Isabella and her brother Alfonso were left in King Henry's care. Isabella, Alfonso, and their mother then moved to Arévalo.",
+      "This is the letter that King John II sent to the city of Segovia to announce the birth:",
+      "I let you know that by the grace of Our Lord, this past Thursday, Queen Doña Isabel, my very dear and beloved wife, gave birth to a princess. I share this news so that you may give many thanks to God.",
+    ] },
+  { "title" = "Coronation and the war with Portugal", "paragraphs" = [
+      "On 12 December 1474, news of King Henry IV's death in Madrid (which had happened on 11 December) reached Segovia. This prompted Isabella to take refuge within the walls of the Alcázar of Segovia, where she received the support of Andres de Cabrera and Segovia's council. The next day, Isabella was proclaimed Queen of Castile and León. When she arrived in Ávila and was similarly proclaimed queen there, she was welcomed by members of the Jewish community, who greeted her with Torah scrolls, trumpets, and drums.",
+      "Isabella's reign got off to a rocky start. King Henry IV did not name a successor on his deathbed, so when Isabella ascended to the throne in 1474, there were already several plots against her. Diego Pacheco, the Marquis of Villena, and his followers maintained that Joanna la Beltraneja, Henry's daughter, was the rightful queen. Shortly after the Marquis made his claim, the Archbishop of Toledo—his great-uncle and a longtime supporter of Isabella—left court to plot with him. They made plans to have Joanna marry her uncle King Afonso V of Portugal and invade Castile to claim the throne for themselves.",
+      "In May 1475, King Afonso and his army crossed into Spain and advanced to Plasencia. Here he married the young Joanna. A long and bloody war for the Castilian succession then took place. The war went back and forth for almost a year, until the Battle of Toro on 1 March 1476, in which both sides claimed and celebrated victory: the troops of King Afonso V were beaten by the Castilian centre-left commanded by the Duke of Alba and Cardinal Mendoza while the forces led by John of Portugal defeated the Castilian right wing and remained in possession of the battlefield.",
+    ] },
+  { "title" = "Reign", "paragraphs" = [
+      "On 13 December 1474, in Segovia's main square, Isabella pledged to uphold the Church's commandments, protect the integrity of Castile, and respect the rights of the nobility and towns. She was then formally proclaimed queen of Castile by the assembly.",
+      "When Isabella came to the throne in 1474, Castile was in a state of despair due to her brother Henry's reign. It was known that Henry IV was a big spender and did little to enforce the laws of his kingdom. It was even said by one Castilian denizen of the time that murder, rape, and robbery happened without punishment. Because of this, Isabella needed desperately to find a way to reform her kingdom. Due to the measures she imposed, historians during her lifetime saw her to be more inclined to justice than to mercy, and indeed far more rigorous and unforgiving than her husband Ferdinand.",
+      "Isabella's first major reform came during the cortes of Madrigal in 1476 in the form of a police force, La Santa Hermandad (the Holy Brotherhood). Up until then, during the late medieval period, the expression hermandad had been used to describe groups of men who came together of their own accord to regulate law and order by patrolling the roads and countryside and punishing malefactors. These brotherhoods were often suppressed by the monarchs and the justice system, in most parts of the country, was under the control of the nobility instead of royal officials.",
+    ] },
+  { "title" = "Death", "paragraphs" = [
+      "Isabella officially withdrew from governmental affairs on 14 September 1504 and she died that same year on 26 November at the Medina del Campo Royal Palace of uterine cancer, leading to dropsy and fluid retention. She had already been in decline since the deaths of her son Prince John of Asturias in 1497, her mother Isabella of Portugal in 1496, and her daughter Princess Isabella of Asturias in 1498. She is entombed in Granada in the Capilla Real (built by her grandson, Charles V, Holy Roman Emperor), alongside her husband Ferdinand, her daughter Joanna, and other relatives. She requested that the body of her daughter Isabella be moved to rest by her side in Granada, but this was never done. The museum next to the Capilla Real holds her crown and sceptre.",
+    ] },
+  { "title" = "Legacy and popular culture", "paragraphs" = [
+      "Outside of Europe, Isabella is most remembered for enabling Christopher Columbus's voyage to the New World, which ushered in an era of great wealth for Spain and Europe. Her reign saw the establishment of the Spanish Empire, which in turn ultimately led to creation of most of the nations that occupy the Americas today.",
+      "Within Europe, Isabella and her husband notably completed the Reconquista, driving out the most significant Muslim influence in Western Europe and firmly establishing Spain and the Iberian peninsula as staunchly Catholic. Her reign also saw the dawn of the infamous Spanish Inquisition.",
+      "Isabella is portrayed by Sigourney Weaver in the 1992 film, 1492: Conquest of Paradise.",
+    ] },
+]
+
+[articles.es]
+text = "Isabel I de Castilla (Madrigal de las Altas Torres, 22 de abril de 1451-Medina del Campo, 26 de noviembre de 1504) fue reina de Castilla​ desde 1474 hasta 1504, reina consorte de Sicilia desde 1469 y de Aragón desde 1479,​ por su matrimonio con Fernando de Aragón. También ejerció como señora de Vizcaya."
+title = "Isabel I de Castilla"
+lang = "es"
+url = "https://es.wikipedia.org/wiki/Isabel_I_de_Castilla"
+intro = [
+  "Isabel I de Castilla (Madrigal de las Altas Torres, 22 de abril de 1451-Medina del Campo, 26 de noviembre de 1504) fue reina de Castilla​ desde 1474 hasta 1504, reina consorte de Sicilia desde 1469 y de Aragón desde 1479,​ por su matrimonio con Fernando de Aragón. También ejerció como señora de Vizcaya. Se la conoce también como Isabel la Católica, título que le fue otorgado a ella y a su marido por el papa Alejandro VI mediante la bula Si convenit, el 19 de diciembre de 1496.​ Es por lo que se conoce al matrimonio real con el nombre de Reyes Católicos, título que usarían en adelante prácticamente todos los reyes de España.",
+  "Se casó el 19 de octubre de 1469 con el príncipe Fernando de Aragón. Por el hecho de ser primos segundos necesitaban una bula papal de dispensa que solo consiguieron de Sixto IV a través de su enviado el cardenal Rodrigo Borgia en 1472. Ella y su esposo Fernando conquistaron el Reino nazarí de Granada y acordaron una red de alianzas matrimoniales que hicieron que su nieto, Carlos V, heredase las coronas de Castilla y de Aragón, así como otros territorios europeos, y se convirtiese en emperador del Sacro Imperio Romano.​",
+  "Isabel y Fernando se hicieron con el trono tras una larga lucha, primero contra el rey Enrique IV (véase Conflicto por la sucesión de Enrique IV de Castilla) y de 1475 a 1479 en la guerra de Sucesión castellana contra los partidarios de la otra pretendiente al trono, Juana.​ Isabel reorganizó el sistema de gobierno y la administración, centralizando competencias que antes ostentaban los nobles; reformó el sistema de seguridad ciudadana y llevó a cabo una reforma económica para reducir la deuda que el reino había heredado de su hermanastro y predecesor en el trono, Enrique IV. Tras ganar la guerra de Granada los Reyes Católicos expulsaron a los judíos de sus reinos.​",
+  "Concedió apoyo a Cristóbal Colón en la búsqueda de las Indias Occidentales, lo que llevó al descubrimiento de América.​​ Dicho acontecimiento tendría como consecuencia la conquista de las tierras descubiertas y la creación del Imperio español.",
+]
+sections = [
+  { "title" = "Biografía", "paragraphs" = [
+      "Isabel de Castilla nació a las 4:30 después del mediodía,​ del 22 de abril de 1451, día de Jueves Santo. Era hija del rey Juan II de Castilla y de su segunda esposa, Isabel de Portugal. Sus abuelos paternos eran los reyes de Castilla, Enrique III y Catalina de Lancaster, y los maternos, el infante Juan de Portugal, hijo a su vez de Juan I de Portugal, y de Isabel de Barcelos (de la casa de Braganza).",
+      "La fuente más importante que se conserva sobre el nacimiento es la carta que Juan II envió a la ciudad de Segovia anunciando el nacimiento:​",
+      "La infanta nació en Madrigal de las Altas Torres,​ donde la reina Isabel de Portugal residía circunstancialmente, en el palacio que hoy ocupa el monasterio de Nuestra Señora de Gracia. Se trataba por entonces de una pequeña villa amurallada de realengo, dote de la reina, perteneciente a la jurisdicción de la tierra de la villa de Arévalo. Fue bautizada en la iglesia de San Nicolás de la misma Madrigal de las Altas Torres, recibiendo el nombre de su madre, que por entonces no era frecuente en Castilla. El lugar y la fecha de nacimiento han sido históricamente discutidos, teniendo en cuenta que cuando nació, nadie era consciente de la importancia que esa niña iba a tener en el futuro.",
+    ] },
+  { "title" = "Testamento y sucesión", "paragraphs" = [
+      "En su testamento, la reina estipuló que la heredera al trono era su hija Juana pero, debido al frágil estado mental que padecía, sería Fernando quien administraría y gobernaría en Castilla en su nombre hasta que el príncipe Carlos, el primer hijo varón de Juana y Felipe, alcanzase la mayoría de edad.​ Después de los hijos de Juana, la línea sucesoria pasaría a María, la hija menor de Isabel, y solo después a Catalina.​",
+      "Sin embargo, llegado el momento, la nobleza castellana se posicionó en su mayoría contraria al gobierno de Fernando. El poder en Castilla pasó en su lugar a la figura de Felipe I, siendo este efímero debido a su repentina muerte en Burgos a los pocos meses de iniciarse su reinado. Ante la situación de crisis política y la incapacidad de Juana para ejercer el poder, será la figura del cardenal Cisneros quien asuma la regencia provisional del reino, garantizando la continuidad gubernativa hasta la vuelta de Fernando, de nuevo como regente. Mientras tanto, Juana fue recluida en Tordesillas por decisión de su padre, gobernando este último hasta su muerte en 1516. La cuestión sucesoria se resolvió con la llegada y proclamación de Carlos, hijo de Juana y nieto de los Reyes Católicos, en 1517.",
+      "Por otra parte, en su testamento, Isabel les pidió a sus sucesores que se esforzaran en conquistar para el cristianismo el norte de África, así como la evangelización del antiguo Reino nazarí de Granada, conquistado en 1492,​ y que promovieran la conversión al cristianismo a los habitantes de América —«las yslas y Tierra Firme del Mar Oçéano»— y se les tratase justamente.​",
+    ] },
+  { "title" = "Posteridad", "paragraphs" = [
+      "Durante los siglos XVI y XVII la figura de Isabel fue relativamente eclipsada en la memoria histórica por la de su marido, el rey Fernando,​ al que los cronistas de aquellos tiempos pintaban de magnánimo, afable, templado y dispuesto a negociar, en contraste con el rigor e inflexibilidad que se proyectaba en los retratos de Isabel.​ A principios del siglo XIX Diego Clemencín escribió un Elogio de la Reina Católica, que por primera vez se centró en la figura de la reina, a la que colmó de virtudes, relegando a su marido a un segundo plano. Esta obra influyó en todos los historiadores siguientes hasta al menos mediados del siglo XX.​​ En 1815 el rey Fernando VII, tras regresar a España y restaurar el absolutismo, creó la Orden de Isabel la Católica, alta condecoración que sigue otorgando en la actualidad el Gobierno español. Más tarde, los liberales y románticos españoles del siglo XIX tendieron a tener una imagen positiva de los Reyes Católicos, a los que consideraban los últimos monarcas nacionales.​",
+      "En 1883 se trasladó a Madrid una estatua fundida en Roma, obra de Manuel Oms. La inauguración del monumento se produjo el 30 de noviembre de 1883, presidida por Alfonso XII, el resto de la familia real y el príncipe heredero de Alemania, el futuro emperador como Federico III. En 1958 el monumento fue trasladado al límite de los jardines del Museo de Ciencias Naturales con el Paseo de la Castellana.",
+      "A partir de 1938, la dictadura de Francisco Franco utilizó profusamente en su propaganda la figura y los símbolos de Isabel la Católica.",
+    ] },
+  { "title" = "Descendencia", "paragraphs" = [
+      "Isabel tuvo al menos siete hijos con Fernando (el cual tuvo otros hijos antes, durante y después de su matrimonio con Isabel):",
+      "Isabel (1 o 2 de octubre de 1470-23 de agosto de 1498), princesa de Asturias (1476-1480; 1498), contrajo matrimonio con el infante Alfonso en 1490, pero este murió el año siguiente. Isabel inicialmente no quiso acceder a un nuevo matrimonio, pero en 1497 contrajo nuevas nupcias con el tío​ del fallecido, Manuel, que fue rey de Portugal con el nombre de Manuel I, el Afortunado.​ Fue reina de Portugal entre 1497 y 1498, y murió en el parto de su primer hijo Miguel de Paz.",
+      "Juan (30 de junio de 1478-4 de octubre de1497), príncipe de Asturias (1480-1497). En 1497, contrajo matrimonio con Margarita de Austria (hija del emperador germánico Maximiliano I de Habsburgo); murió de tuberculosis poco después. Tuvo una hija póstuma que nació muerta. Margarita se fue de España y se encargó por un tiempo de su sobrino Carlos, futuro emperador Carlos V.",
+    ] },
+]
+
+[articles.fr]
+text = "Isabelle Ire de Castille (en espagnol Isabel I de Castilla), dite Isabelle Ire la Catholique (en espagnol Isabel la Católica), née le 22 avril 1451 à Madrigal de las Altas Torres et morte le 26 novembre 1504 à Medina del Campo, est reine de Castille et León de 1474 à 1504, et par son mariage avec Ferdinand d'Aragon, reine d'Aragon, de Majorque, de Valence, de Sardaigne, de Sicile (1479–1504) et de Naples (1503–1504). Après une jeunesse difficile à la cour de son demi-frère Henri IV, elle devient reine de Castille en 1474 en évinçant la princesse Jeanne, présentée comme illégitime."
+title = "Isabelle la Catholique"
+lang = "fr"
+url = "https://fr.wikipedia.org/wiki/Isabelle_la_Catholique"
+intro = [
+  "Isabelle Ire de Castille (en espagnol Isabel I de Castilla), dite Isabelle Ire la Catholique (en espagnol Isabel la Católica), née le 22 avril 1451 à Madrigal de las Altas Torres et morte le 26 novembre 1504 à Medina del Campo, est reine de Castille et León de 1474 à 1504, et par son mariage avec Ferdinand d'Aragon, reine d'Aragon, de Majorque, de Valence, de Sardaigne, de Sicile (1479–1504) et de Naples (1503–1504).",
+  "Après une jeunesse difficile à la cour de son demi-frère Henri IV, elle devient reine de Castille en 1474 en évinçant la princesse Jeanne, présentée comme illégitime. Il s'ensuit une guerre de succession de 1476 à 1479, au terme de laquelle Isabelle reste reine de Castille (traité d’Alcáçovas).",
+  "Son règne est marqué par deux événements historiques majeurs : la conquête du royaume de Grenade (1482–1492), c'est-à-dire la fin de la Reconquista, commencée au IXe siècle ; la découverte en 1492, par Christophe Colomb, Génois au service de la Castille, d'îles des Caraïbes, qui vont se révéler appartenir non pas aux « Indes », comme Christophe Colomb l'espérait, mais à un nouveau monde, l'Amérique.",
+]
+sections = [
+  { "title" = "Avant son avènement (1451–1474)", "paragraphs" = [
+      "Née dans le palais de son père à Madrigal de las Altas Torres (actuelle province d'Ávila), elle est la fille du roi Jean II de Castille (1405–1454) et de sa seconde épouse, Isabelle de Portugal.",
+      "À la mort de Jean II, le trône de Castille revient au demi-frère d'Isabelle, beaucoup plus âgé, Henri IV (1425-1474), fils du roi et de Marie d'Aragon (1396-1445).",
+      "Isabelle passe ses premières années à Madrigal, avec sa mère Isabelle, atteinte de démence, et son frère Alphonse (1453–1468), puis à l'avènement d'Henri IV, à Arévalo (province d'Avila). Tous trois vivent dans des conditions difficiles au château d'Arévalo en raison de la faiblesse des moyens qui leur sont alloués par le roi Henri IV et de l'état de santé d'Isabelle de Portugal. Isabelle est une enfant triste, sérieuse et calme.",
+    ] },
+  { "title" = "Le règne d'Isabelle (1474-1504)", "paragraphs" = [
+      "À la mort d'Henri IV, qui ne laisse aucun testament, usurpant la place de sa nièce Jeanne de Castille, Isabelle se proclame reine de Castille et León à Ségovie le 13 décembre 1474, fondant sa légitimité sur le traité des Taureaux de Guisando. Elle se fait couronner à Ségovie.",
+      "Pour faire valoir les droits de son épouse Jeanne sur la Castille, Alphonse V de Portugal prend la tête d'une coalition, avec pour allié le roi de France, Louis XI. L'affrontement a lieu à la bataille de Toro, en 1476, mais la situation tourne au profit des rois catholiques avec la reconnaissance d'Isabelle la Catholique par les Cortes de Castille.",
+      "Quand en 1479, les troupes portugaises quittent la Castille, Jeanne de Castille, La Beltraneja, renonce à ses droits et s'enferme dans un couvent pour y finir ses jours.",
+    ] },
+  { "title" = "Descendance", "paragraphs" = [
+      "Isabelle d'Aragon (1470-1498), épouse d'Alphonse, infant de Portugal, puis du roi de Portugal Manuel Ier, son cousin ;",
+      "Jean (1478-1497), prince des Asturies, épouse Marguerite d'Autriche mais meurt quelques mois plus tard ;",
+      "Jeanne Ire de Castille (1479-1555), dite Jeanne la Folle, héritière des royaumes de Castille, puis d'Aragon, et mère de Charles Quint ;",
+    ] },
+  { "title" = "Postérité", "paragraphs" = [
+      "Isabelle a vécu cinquante-trois ans, dont trente ans en tant que reine de Castille et vingt-six en tant que reine consort d'Aragon aux côtés de Fernand II. Depuis 1974, elle est considérée comme servante de Dieu par l'Église catholique.",
+      "La vie pieuse de la reine Isabelle, présentée par l'historiographie comme un modèle de vertu, fait d'elle une possible candidate à la béatification par l'Église catholique romaine. Entamé en 1958 à l'initiative du diocèse de Valladolid, le procès est largement soutenu par le dictateur Francisco Franco et les évêques d'Espagne : en 2002, à l'approche du 500e anniversaire de sa mort, les deux tiers de la Conférence épiscopale approuvent une requête destinée à accélérer le traitement de sa cause. De nombreux hommes d'Église espagnols et latino-américains, et particulièrement les cardinaux Rouco et Cañizares (qui ont célébré le 500e anniversaire) défendent son action en faveur de l'évangélisation de l'Amérique. En 2018, les assemblées des provinces ecclésiastiques de Grenade et de Séville appuient à l'unanimité une reprise du procès. On prête également à cette reine deux miracles : « les guérisons d’une citoyenne des États-Unis atteinte d’un cancer du pancréas et d’un prêtre espagnol victime d’une hémorragie cérébrale ».",
+      "Cependant, ses responsabilités dans l'expulsion des Juifs d'Espagne et leur persécution, l'établissement de l'Inquisition, les exactions de l'évangélisation ainsi que l’esclavage des Indiens et son autoritarisme apparaissent comme autant d'éléments à charge, susceptibles de faire obstacle à sa béatification.",
+    ] },
+]
+
+[articles.it]
+text = "Isabella I di Castiglia, detta Isabella La Cattolica (in castigliano: Isabel I de Castilla e la Católica; Madrigal de las Altas Torres, 22 aprile 1451 – Medina del Campo, 26 novembre 1504), è stata regina di Castiglia e León dal 1474 al 1504, regina consorte di Aragona, Sicilia, Valencia, Sardegna, Maiorca e titolare di Corsica, contessa consorte di Barcellona e delle contee catalane dal 1479 al 1504. Isabella I di Castiglia e suo marito Ferdinando II di Aragona unirono le corone della Spagna in unione dinastica, passando alla storia come i primi re di Spagna."
+title = "Isabella di Castiglia"
+lang = "it"
+url = "https://it.wikipedia.org/wiki/Isabella_di_Castiglia"
+intro = [
+  "Isabella I di Castiglia, detta Isabella La Cattolica (in castigliano: Isabel I de Castilla e la Católica; Madrigal de las Altas Torres, 22 aprile 1451 – Medina del Campo, 26 novembre 1504), è stata regina di Castiglia e León dal 1474 al 1504, regina consorte di Aragona, Sicilia, Valencia, Sardegna, Maiorca e titolare di Corsica, contessa consorte di Barcellona e delle contee catalane dal 1479 al 1504. Isabella I di Castiglia e suo marito Ferdinando II di Aragona unirono le corone della Spagna in unione dinastica, passando alla storia come i primi re di Spagna.",
+]
+sections = [
+  { "title" = "Biografia", "paragraphs" = [
+      "Appartenente al casato di Trastámara, era figlia del re di Castiglia Léon Giovanni II e di Isabella del Portogallo.",
+      "I suoi nonni paterni erano Enrico III di Castiglia e Caterina di Lancaster; quelli materni don Giovanni d'Aviz (figlio del re del Portogallo Giovanni I e di sua moglie Filippa di Lancaster), e Isabella di Braganza, figlia del duca di Braganza Alfonso e di Beatriz Pereira de Alvim (unica figlia di Nuno Álvares Pereira, conestabile del regno e conte di Arraiolos, Barcelos e Ourém).",
+      "Quando i suoi genitori si unirono in matrimonio il 17 agosto del 1447 a Madrigal de las Altas Torres, suo padre Giovanni II era vedovo di Maria d'Aragona, figlia del re Ferdinando I, dalla quale aveva avuto un figlio, Enrico, nato nel 1425.",
+    ] },
+  { "title" = "Discendenza", "paragraphs" = [
+      "Isabella ebbe da Ferdinando sette figli, cinque dei quali sopravvissuti, ma un solo maschio, premorto ai genitori. Di conseguenza, i regni di Aragona e Castiglia vennero infine ereditati dal nipote Carlo, poi anche imperatore del Sacro Romano Impero:",
+      "Isabella (1470 - 1498). Fu regina del Portogallo, ma morì di parto mettendo al mondo il suo unico figlio, Michele, che morì infante;",
+      "Figlio nato morto (31 maggio 1475). Isabella si trovava a Cebreros quando entrò in travaglio prematuramente, abortendo;",
+    ] },
+  { "title" = "Bibliografia", "paragraphs" = [
+      "Gabriella Airaldi-Consuelo Varela, Isabella di Castiglia. Una ferrea vocazione al potere, Genova, Edizioni Costa & Nolan, 1992.",
+      "Ernest Belenguer, Ferdinando e Isabella. I Re Cattolici, Roma, Salerno Editrice, 1999.",
+      "Jean Dumont, La regina diffamata. La verità su Isabella la Cattolica, a cura di V. Messori, SEI, Torino 2003.",
+    ] },
+  { "title" = "Collegamenti esterni", "paragraphs" = [
+      "Isabella la Cattolica, in Dizionario di storia, Istituto dell'Enciclopedia Italiana, 2010.",
+      "(EN) J.R.L. Highfield, Isabella I, su Enciclopedia Britannica, Encyclopædia Britannica, Inc.",
+      "(CA) Isabella di Castiglia, su Gran Enciclopèdia Catalana, Grup Enciclopèdia Catalana.",
+    ] },
+]
+
+[articles.tr]
+text = "I. Isabel, Kastilyalı Isabella veya Katolik Isabel (İspanyolca: Isabel I; 22 Nisan 1451 - 26 Kasım 1504), Kastilya (1474-1504) ve Aragon (1479-1504) Kraliçesi."
+title = "I. Isabel"
+lang = "tr"
+url = "https://tr.wikipedia.org/wiki/I._Isabel"
+intro = [
+  "I. Isabel, Kastilyalı Isabella veya Katolik Isabel (İspanyolca: Isabel I; 22 Nisan 1451 - 26 Kasım 1504), Kastilya (1474-1504) ve Aragon (1479-1504) Kraliçesi. Bu iki Krallığı 1479'dan sonra kocası Aragon Kralı II. Fernando ile birlikte yönetmiştir. Hükümdarlığı sırasında İspanya'nın birliğini sağlamış ve Kristof Kolomb'un Yeni Dünya'yı keşfiyle güçlü bir sömürge imparatorluğunun temelleri atılmıştır.",
+]
+sections = [
+  { "title" = "Hayatı", "paragraphs" = [
+      "Kastilya kralı II. Juan ile Portekizli Isabel'in kızı, sonradan babasının yerine tahta çıkan IV. Enrique'nin ise üvey kardeşiydi. On üç yaşındayken kralın gözetimi altında yetişmesi için saraya getirildi. Kardeşi Afonso'nun çevresinde toplanmış olan Enrique'nin muhalifleri, onun Temmuz 1468'de ölümü üzerine Isabel'e yöneldiler. Ama Isabel muhalefetin sözcüsü olmayı kabul etmedi ve Toros de Guisando Antlaşması'yla (19 Eylül 1468) IV. Enrique tarafından tahtın vârisi ilan edildi.",
+      "Tahtın varisi olması nedeniyle, Isabel'in yapacağı evlilik İspanya'da ve dış ülkelerde yoğun tartışmalara yol açtı. Portekiz, Fransa ve Aragon değişik önerilerde bulundular. Enrique, Isabel'in Portekiz kralı V. Afonso, Fransızlar ise Guienne dükü ile evlenmesini istiyordu. Ama Isabel, danışmanlarının da etkisiyle Aragon tahtının varisi Fernando ile evlenmeye karar verdi ve Enrique'nin onayı olmadan Ekim 1469'da Valladolid'deki Juan de Vivero Sarayı'nda onunla evlendi. Bu evliliğe karşı çıkan bir grup Kastilya soylusu, tahtın gerçek varisinin Isabel değil Enrique'nin la Beltraneja olarak bilinen kızı Juana olduğunu öne sürdüler. Kral da, Isabel'in kendisinin onayını almadan Fernando'yla evlenmekle tahta itaatsizlik ettiğini, böylece 1468 anlaşmasını çiğnediğini ileri sürerek bu grubu destekledi ve Juana'nın tahta çıkabilmesi için Guienne dükünün desteğinin sağlamaya çalıştı. Isabel ve Enrique daha sonra uzlaşmaya vardılarsa da, uzun yıllardan beri süren taht mücadelesi, kralın ölümünün (1474) hemen ardından bir iç savaşa dönüştü.",
+    ] },
+  { "title" = "Taht savaşı", "paragraphs" = [
+      "Savaş çıktığında kendini Segovia'da kraliçe ilan etmiş olan Isabel, aralarında Kardinal Mendoza ile Kastilya kraliyet ordusu başkomutanı Velasco'nın da bulunduğu bir grup Kastilya soylusunun desteğini almıştı. Juana'yı destekleyen grubun içinde ise Toledo başpiskoposu, Calatrava tarikatının önderi ve Villene markisi yer alıyordu. Bu arada Juana'yla nişanlanan Portekiz kralı V. Afonso da Isabel'e karşı savaşa girişmişti. Isabel'in hükümdarlığının ilk dört yılı boyunca süren iç savaş, Juana'yı destekleyen Kastilyalı soyluların ve Portekiz kralının yenilgisiyle sonuçlandı (24 Şubat 1479). Aynı yıl Aragon kralı II. Juan'ın ölümü üzerine Kastilya ve Aragon krallıkları Isabel ve Fernando'nun yönetimi altında birleşti.",
+      "Böylece modern İspanya'nın temelleri atılmış oldu. Ama kişisel plandaki bu birliğin etkili bir siyasi birliğe dönüşmesi için uzun zaman geçmesi gerekecekti. Fernando ilk vasiyetnamesinde (1475), Isabel'i Aragon tahtının vârisi olarak belirlemiş ve uyruklarının Kastilya ile kurulacak bir birlikten büyük yararlar sağlayacaklarını açıkça ilan etmişti. Bununla birlikte, her iki krallık uzun yıllar kendi kurumları ve yasaları uyarınca yönetildi. Isabel ve Fernando İber Yarımadası'ndaki son Müslüman kalesi olan Gırnata Emirliği'ni ele geçirerek uzun yıllardan beri süren Reconquista (İspanya'nın yeniden fethi) mücadelesini sona erdirmeye karar verdiler. Ama 1482'de Gırnata'ya karşı başlatılan ve güçlükle sürdürülen sefer Kastilya'nın mali olanaklarını tüketti. Savaşın yönetimiyle yakından ilgilenen Isabel, 1491'de Fernando'yla birlikte Gırnata yakınlarındaki Santa Fe'de karargâh kurdu ve 2 Ocak 1492'de Gırnata'nın düşmesine değin orada kaldı.",
+      "Isabel'i Santa Fe'de ziyaret eden Kristof Kolomb, Avrupalıların Amerika kıtasına yerleşmesiyle sonuçlanacak yolculuğa çıkmak için onun desteğini istedi. Isabel'in bu seferin masraflarını karşılamak amacıyla mücevherlerini verdiği ileri sürüldüyse de, Kolomb'a yalnızca sınırlı bir mali destek sağladığı bilinmektedir. Bu yolculuğun sonunda keşfedilen Yeni Dünya, daha önceki keşif seferlerinde de olduğu gibi papalığın onayıyla Kastilya tahtına bırakıldı.",
+    ] },
+  { "title" = "Görünüş ve kişilik", "paragraphs" = [
+      "Isabella kısa boyluydu, tıknazdı, çok açık tenliydi ve çilek-sarı ile kumral arası bir saç rengine sahipti. Bununla birlikte, diğer açıklamalar saçını altın (sarı) olarak tanımlar. Bazı portreler onu esmer olarak gösteriyor. Bunun nedeni, eski portrelerde meydana gelen ve genellikle saç pigmentlerinin koyu kahverengiye dönmesine neden olan bir olgudur. 15. ve 16. yüzyıllardan kalma birçok portre bunun kanıttı. Bununla birlikte, Burgonyalı heykeltıraş Philippe de Vigarny'nin (şu anda Fransa olan Langres'te doğmuş) Granada Katedrali'ndeki heykeli de onu koyu saçlı bir esmer olarak gösteriyor.",
+      "Kızları Joanna ve Catherine'in görünüş olarak ona en çok benzediği düşünülüyordu. Isabella sade, ılımlı bir yaşam tarzı sürdürdü ve hayatında en çok dindar ruhu onu etkiledi, Endülüs'teki Müslümanlara karşı düşmanlığına rağmen Isabella'nın çağdaşları onu şu şekilde tanımladı:",
+      "Andrés Bernáldez: \"Çalışkan bir kadındı, çok güçlü, çok ihtiyatlı, bilge, çok dürüst, iffetli, dindar, sağduyulu, doğru sözlü, açık, hilesiz. Bu çok Katolik ve mutlu Kraliçe'nin mükemmelliklerini kim sayabilir ki, her zaman övgüye çok layık.\"",
+    ] },
+  { "title" = "Son yılları", "paragraphs" = [
+      "Isabel'in hükümdarlığının son yıllarında önce tek oğlu ve vârisi Juan (1497), ardından da kızı Portekiz kraliçesi Isabel (1498), daha sonra da kendisinden İspanya ile Portekiz'i birleştirmesi beklenen torunu Miguel (1500) öldü. Bunun üzerine sonradan Deli lakabıyla anılan öteki kızı Juana Kastilya tahtının vârisi ilan edildi. Isabel'in son yıllarında kazandığı en büyük başarılardan biri askeri amaçla kurulmuş olan Alcantara, Calatrava ve Santiago tarikatlarına ait geniş toprakların krallığa bağlanması oldu.",
+      "Isabel'in yaşamına ve hükümdarlık yıllarına ilişkin başlıca kaynak vasiyetnamesidir. İber Yarımadasında siyasi birliğin sağlanması, Cebelitarık üzerinde denetim kurulması, Kuzey Afrika'daki yayılma politikası, Yeni Dünya yerlilerine karşı izlenen siyaset ve kilise reformları gibi önemli siyasi konulardaki değerlendirmelerinin yer aldığı bu vasiyetname, İspanya tarihine ışık tutan önemli bir belge niteliğindedir.",
+    ] },
+]
+
+[articles.zh]
+text = "伊莎贝尔一世（西班牙語：Isabel I；1451年4月22日—1504年11月26日），1474年12月11日起為卡斯蒂利亚女王，1479年1月20日起為阿拉贡王后，1504年3月31日起為那不勒斯王后。她及丈夫兼堂弟费尔南多二世完成了收复失地运动，为日后他们的外孙卡洛斯一世统一西班牙奠定了基础。其支援克里斯托弗·哥伦布開拓新大陸，為發展西方世界作出重大的貢獻。另外她重用的弗朗西斯科·希梅内斯·德·西斯内罗斯樞機大力提升了王權並壓制了貴族的跋扈，讓王權藉由「宗教裁判所深入到基層民眾，讓人民成為教會的順民，以及王室的順民。」"
+title = "伊莎贝尔一世 (卡斯蒂利亚)"
+lang = "zh"
+url = "https://zh.wikipedia.org/wiki/%E4%BC%8A%E8%8E%8E%E8%B4%9D%E5%B0%94%E4%B8%80%E4%B8%96_%28%E5%8D%A1%E6%96%AF%E8%92%82%E5%88%A9%E4%BA%9A%29"
+intro = [
+  "伊莎贝尔一世（西班牙語：Isabel I；1451年4月22日—1504年11月26日），1474年12月11日起為卡斯蒂利亚女王，1479年1月20日起為阿拉贡王后，1504年3月31日起為那不勒斯王后。她及丈夫兼堂弟费尔南多二世完成了收复失地运动，为日后他们的外孙卡洛斯一世统一西班牙奠定了基础。其支援克里斯托弗·哥伦布開拓新大陸，為發展西方世界作出重大的貢獻。另外她重用的弗朗西斯科·希梅内斯·德·西斯内罗斯樞機大力提升了王權並壓制了貴族的跋扈，讓王權藉由「宗教裁判所深入到基層民眾，讓人民成為教會的順民，以及王室的順民。」",
+]
+sections = [
+  { "title" = "生平", "paragraphs" = [
+      "1474年，恩里克四世過世，只有一个女儿胡安娜，恩里克四世被權貴們指為「不能人道，無法生育」，而胡安娜是他親信和王后的私生子。伊莎贝尔一世迅速继承了王位。胡安娜於1475年嫁给了葡萄牙国王阿方索五世。阿方索五世因此发兵声称胡安娜应该继承王位，但1476年在托罗一役彻底失败。阿方索五世被迫签署《阿爾卡索瓦什和約》，放弃对卡斯蒂利亚王位的一切要求。1478年伊莎贝尔一世在教宗的批准下成立宗教裁判所，迫害非天主教人士並大力提升了王權。1479年，费尔南多二世的父王過世，费尔南多和伊莎贝尔一世分別成为阿拉贡国王和王后。1480年，这对夫妇召集群臣和34位平民代表制定了一系列法律、为未来的西班牙奠定了法理基础。",
+      "伊莎貝拉一世任內時常召開名為「卡斯蒂利亞法院」的國家議會，並且將大部分的行政權託付給「卡斯蒂利亚王国會議」。卡斯蒂利亚王国會議的成員由王室任命，是推行專制政治的有力新工具。她與中產階級聯手對抗貴族階級，並以城鎮的民兵為其軍事力量的後盾，她又將傳統封建貴族的三大軍團交由费尔南多掌管、壓制，解除了貴族的軍事威脅。她對於牧羊業老闆所組的「馬士達」公會堂則較為縱容，因為政府的稅收主要來自牧羊業，這種情形一直持續到新大陸的財富大量輸入西班牙之前。",
+      "同年，在对克里斯托弗·哥伦布向西航海去印度的计划三次拒绝之后，伊莎贝拉一世终于同意资助哥伦布的探险。由于财政吃紧，伊莎贝尔一世拿出一个自己的装满首饰的首饰盒给哥伦布作为资助，同时答应哥伦布的条件：他和他的后代將任为卡斯蒂利亚开拓的殖民地总督，并获得一成的利润。8月3日哥伦布启航。次年携带着一些美洲原住民和黃金凯旋，西班牙从此进入了海外冒险和殖民的地理大发现。1494年，伊莎贝拉一世和费尔南多二世通过《托德西利亚斯条约》和葡萄牙瓜分了世界。伊莎贝拉一世曾经试图为了保护印第安人免受西班牙殖民者的虐待而组建了一个美洲原住民事务处。但後來的西班牙征服者並沒有遵守女王的規定，反而極力迫害美洲原住民。",
+    ] },
+  { "title" = "子女", "paragraphs" = [
+      "伊莎貝爾 （1470年10月1日－1498年8月23日）——先是嫁给了葡萄牙王储阿方索，在后者過世后嫁给了他的叔父葡萄牙国王曼努埃尔一世 (葡萄牙)，随后因難產而過世，其子在两岁时夭折。",
+      "胡安娜（1479年11月6日－1555年4月13日）——嫁给了神圣罗马帝国皇帝馬克西米利安一世之子菲利普一世，并和后者一起统治卡斯蒂利亞。她的儿子是第一位西班牙國王查理五世 (神圣罗马帝国)。",
+      "亞拉岡的瑪麗亞 (1482-1517)（1482年6月29日－1517年3月7日）——在其姐姐亞拉岡的伊莎貝爾 (1470-1498)過世后嫁给姐夫曼努埃尔一世 (葡萄牙)，育有六个子女。",
+    ] },
+]
+
+[articles.vi]
+text = "Isabel I của Castilla (tiếng Tây Ban Nha: Isabel I de Castilla; tiếng Bồ Đào Nha: Isabel I de Castela; tiếng Anh: Isabella of Castile; tiếng Đức: Isabella I. von Kastilien; tiếng Pháp: Isabelle Ire de Castille; 22 tháng 4 năm 1451 — 26 tháng 11 năm 1504), hay còn được gọi là Isabel la Católica (Isabel Công giáo), là Nữ vương của Vương quốc Castilla và León và là một trong những quân chủ vĩ đại nhất của lịch sử Tây Ban Nha."
+title = "Isabel I của Castilla"
+lang = "vi"
+url = "https://vi.wikipedia.org/wiki/Isabel_I_c%E1%BB%A7a_Castilla"
+intro = [
+  "Isabel I của Castilla (tiếng Tây Ban Nha: Isabel I de Castilla; tiếng Bồ Đào Nha: Isabel I de Castela; tiếng Anh: Isabella of Castile; tiếng Đức: Isabella I. von Kastilien; tiếng Pháp: Isabelle Ire de Castille; 22 tháng 4 năm 1451 — 26 tháng 11 năm 1504), hay còn được gọi là Isabel la Católica (Isabel Công giáo), là Nữ vương của Vương quốc Castilla và León và là một trong những quân chủ vĩ đại nhất của lịch sử Tây Ban Nha. Cùng với chồng, Ferrando II của Aragón, bà đã có công trong việc mang lại sự ổn định cho các vương quốc này, làm cơ sở cho việc thống nhất Tây Ban Nha bởi người cháu ngoại của hai người là Hoàng đế Karl V của Thánh chế La Mã.",
+  "Sau khi giành được quyền kế vị, bà đã cải tổ lại bộ máy hành chính của Castilla, đem tỉ lệ tệ nạn xuống mức thấp nhất trong nhiều năm qua. Bà cũng cố gắng xoay trở xóa đi số nợ quốc gia khổng lồ mà người anh của bà, Enrique IV của Castilla, đã để lại khi qua đời. Sự cải cách của bà cùng chồng mình, Ferrando II xứ Aragón, đã giúp sự liên minh giữa Castilla và Aragón thêm lớn mạnh, mở rộng thêm tầm ảnh hưởng ra bên ngoài. Bà cùng chồng mình được biết đến nhiều vì công cuộc khép tội những người Do Thái và người Hồi giáo trên liên bang 2 vương quốc, buộc tội họ trước Tòa án dị giáo hoặc là phải cải đạo Cơ-đốc, hoặc là bị trục xuất khỏi vùng đất này. Trong chuyến hành trình đi tìm Tân thế giới của Cristoforo Colombo năm 1492, sự kiện này mở đầu căn bản biến Tây Ban Nha trở thành một cường quốc có ảnh hưởng toàn cầu và đến toàn bộ Châu Âu trong suốt hơn 1 thế kỷ. Trong một số trường hợp, bà thậm chí còn có quyền lực hơn cả chồng mình, và thường được xem là một trong những người phụ nữ quyền lực nhất trong lịch sử Châu Âu.",
+  "Vì những chiến công bảo vệ Công giáo trước Hồi giáo, điển hình là chiến thắng vang dội trước Vương quốc Hồi giáo Granada, Isabel cùng chồng mình đã được Giáo hoàng Alexanđê VI phong làm Quân chủ Công giáo, the Catholic, và hai vợ chồng bà trở thành Song vương có danh tiếng nhất thế giới Công giáo khi ấy. Năm 1974, bà được phong tước hiệu Tôi tớ Chúa (Servant of God) bởi Giáo hội Công giáo La Mã, nhưng vẫn chưa được phong làm Á thánh, theo yêu cầu của Tín ngưỡng tôn giáo Jesus.",
+]
+sections = [
+  { "title" = "Thân thế", "paragraphs" = [
+      "Isabel sinh vào ngày 22 tháng 4 năm 1451 tại Madrigal de las Altas Torres, Ávila, là con gái của Quốc vương Juan II và Vương hậu Isabel của Bồ Đào Nha. Bà được mô tả có dáng người khá bệ vệ và khỏe mạnh, nước da trắng sáng, mái tóc có màu trộn lẫn giữa màu dâu tây lai vàng và nâu vàng. Tuy nhiên, hầu hết các tranh chân dung vẽ bà đều có tóc màu ngăm đen.",
+      "Khi sinh ra, Isabel nằm thứ 2 trong danh sách thừa kế, chỉ sau người anh trai cùng cha khác mẹ là Enrique IV của Castilla. Enrique khi đó đã 26 tuổi, dù đã kết hôn nhưng chưa có con. Ngày 17 tháng 11, năm 1453, em trai ruột của Isabel là Alfonso, Thân vương xứ Asturias sinh ra, nằm thứ 3 trong danh sách thừa kế sau chị là Isabel.",
+      "Năm 1454, Quốc vương Juan II thăng hà, Henry IV kế vị. Isabel cùng mẹ và em trai nằm dưới sự quản lý của Enrique IV, không lâu sau họ chuyển ra sinh sống tại Arévalo. Điều kiện sinh sống của cả ba mẹ con rất tệ, vì anh trai bà Henry IV không tuân theo di mệnh của vua cha là đảm bảo cho 3 mẹ con không thiếu thốn về tài chính vật chất. Dù vậy, dưới sự chăm sóc của mẹ bà, Isabel vẫn được hưởng một chế độ giáo dục cao và có một lòng mộ đạo sâu sắc.",
+    ] },
+  { "title" = "Dưới triều Vua Enrique IV", "paragraphs" = [
+      "Khi Vương hậu của Vua Enrique, Joana của Bồ Đào Nha đang mang thai vương nữ Juana, Isabel và Alfonso được triệu về triều đình ở Segovia và chịu sự quản lý gay gắt của Henry cho tới khi hoàn tất việc học của cả hai. Trong khi Alfonso chịu sự quản lý của một gia sư trong khi Isabel trở thành Thị nữ trong đoàn tùy tùng của Vương hậu Joan. Vì vậy, cuộc sống của Isabel được cải thiện hơn so với tình trạng khó khăn nghèo nàn trước đây, bà không phải thiếu quần áo và thức ăn như khi còn sống ở Arévalo. Bà tiếp tục hoàn thiện các kỹ năng đọc, viết, lịch sử, âm nhạc, toán học và thần học. Hằng ngày, Isabel cùng các Thị nữ của mình học tập và trau dồi lòng mộ đạo, bà rất ít khi rời khỏi Segovia vì Vua anh Henry không cho phép.",
+      "Trước nguy cơ không có con trai thừa kế, các quý tộc Castilla lo lắng và ép buộc Vua Enrique phải chỉ định người em trai khác mẹ Alfonso, cũng là em cùng mẹ của Isabel, được chỉ định làm Trữ quân. Tình hình kế vị này đã gây một sự khủng hoảng trong triều đình Vua Henry khi ấy, các lãnh chúa thậm chí còn lôi kéo, ép buộc Alfonso phải tự lập, dẫn đến Trận Olmedo thứ hai diễn ra vào năm 1467, giữa các lãnh chúa ủng hộ Alfonso với quân đội của Vua Henry. Kết quả của cuộc chiến này là sự nhượng bộ của Vua Henry, công nhận Alfonso là Trữ quân, đồng thời giao điều kiện Alfonso phải cưới con gái của ông là Juana xứ Castilla, cũng là cháu gái của Alfonso và Isabel.",
+      "Năm 1468, tháng 7, chỉ vừa vài tháng sau khi được lập làm Trữ quân, Alfonso qua đời vì bệnh cảm. Phe lãnh chúa ủng hộ Alfonso nghi ngờ Trữ quân bị hạ độc, và họ lại khơi mào một cuộc chiến khác và đề nghị Isabel trở thành Trữ quân, bởi vì Isabel có tên trong hàng ngũ thừa kế trong di chúc sớm của Vua Enrique. Isabel, thay vì công khai về phe nổi loạn, đã đến gặp Vua Enrique tại Toros de Guisando, và ngay sau đó được chỉ định làm Trữ quân thay cho vương nữ Juana của Castilla. Theo nội dung đề nghị, Isabel không được phép kết hôn khi nhà vua chưa cho phép, và nhà vua cũng không được ép buộc bà kết hôn nếu bà không muốn.",
+    ] },
+  { "title" = "Hôn nhân", "paragraphs" = [
+      "Vấn đề hôn nhân của Isabel đã diễn ra từ rất sớm. Bà đã được đề nghị hứa hôn trên bàn cân chính trị từ khi 6 tuổi, và đối tượng chính là Ferrando, con trai của Juan, Quốc vương Navarra và cũng là người chồng tương lai của bà. Vào thời điểm ấy, Vua John và Vua Henry đang có một liên minh vững chãi và muốn củng cố thêm bằng hôn nhân. Tuy nhiên, khi anh trai của Vua Juan là Alifonso V của Aragón qua đời năm 1458, và lúc này Vua Juan của Navarra thừa hưởng Vương quốc Aragón rộng lớn cùng các lãnh địa khắp Châu Âu như Sicily và Sardinia. Với thế cục này, Vua Juan trở nên mạnh hơn và không còn thấy cần thiết khi thiết đặt liên minh với Castilla nữa.",
+      "Vua Enrique lúc này cực kỳ thèm khát một liên minh vững chắc, và ông nhắm đến người con trai cả của Vua John, Charles, Vương công xứ Viana. Vương công Charles có một mối quan hệ căng thẳng với vua cha, trong khi đó Vua John đang rất yêu thích đứa con thứ Ferdinand, và đó là lý do khiến ông muốn có một liên minh với Vua Henry để củng cố quyền lực của mình trong tương lai. Và để thiết đặt liên minh này, Charles sẽ được hứa hôn với Isabel. Vua John sau đó biết được tin về mối liên hệ này, và ông cảm thấy tức giận và bị đe dọa, do không chỉ Charles có ý chống đối, mà mối hôn nhân giữa Isabel vốn được dành cho Ferdinand - đứa con mà ông yêu thích nhất. Sau cùng, Charles bị vua cha giam cầm và chết không lâu sau.",
+      "Năm 1465, Isabel được hứa hôn cho Afonso V của Bồ Đào Nha - anh vợ của Vua Henry. Người trung gian của Vương hậu đã đến gặp Vua Henry để thiết đặt hôn nhân, song Isabel tỏ ra thận trọng và từ chối. Thời gian ấy, khắp Castilla diễn ra những cuộc nội chiến vì các lãnh chúa chỉ trích Vua Henry thiếu khả năng cai trị, và vì lý do đó mà nhà vua rất muốn cuộc hôn nhân của Isabel thành công, để có thể tạo một liên minh hùng mạnh bảo vệ ngai vàng của mình. Sau đó, Isabel được hứa hôn với Pedro Girón Acuña Pacheco, thủ lĩnh của Hội hiệp sĩ Calatrava và là anh trai của sủng thần của Vua Henry là Juan Pacheco. Thỏa thuận cuộc hôn nhân này giúp triều đình Vua Henry thoát khỏi cảnh phá sản, khi Don Pedro đồng ý hiến một lượng lớn vàng vào quốc khố. Isabel biết được tin đã rất kinh ngạc cùng sợ hãi, bà cầu nguyện trước Chúa mong sao cuộc hôn nhân này không diễn ra. Năm 1466, Don Pedro mắc một cơn bệnh lạ và qua đời, khi đang trên đường đến gặp vị hôn thê của mình.",
+    ] },
+  { "title" = "Cuộc chiến đầu tiên", "paragraphs" = [
+      "Năm 1474, ngày 12 tháng 12, Vua Henry IV qua đời ở Madrid, tin tức nhanh chóng chuyển đến triều đình Segovia. Isabel nhanh chóng dời đến Lâu đài Segovia, nơi bà nhận được toàn bộ sự ủng hộ của Andres de Cabrera và các triều thần thề tận trung với bà. Ngày hôm sau, 13 tháng 12, Isabel tuyên bố trở thành Nữ vương của Castilla và León.",
+      "Sự lên ngôi của Isabel về cơ bản là đầy chông gai, đây là bởi vì con gái của Vua Henry IV, vương nữ Juana, đã trưởng thành vào thời điểm ấy, cũng như không ít người nhận thấy Isabel không thích hợp trở thành Nữ vương. Diego Lopez de Pacheco, Hầu tước Villena, đã cùng các phe phái thề tận trung với vương nữ Juana. Sau tuyên bố của Hầu tước Villena, Tổng giám mục Toledo là Alfonso Carrillo de Acuña, một người từng tận trung với Isabel đã quay ra ủng hộ vương nữ Juana và rời khỏi Segovia để về phe Hầu tước Villena. Cả hai người bày mưu vương nữ Juana sẽ kết hôn với người cậu, Vua Afonso V của Bồ Đào Nha, và sau đó cả hai sẽ đưa quân đội Bồ Đào Nha đến xâm lược Castilla để giành lại ngôi báu. Vào tháng 5 năm 1475, Vua Alfonso đem quân vượt qua biên giới Castilla và tiến đến Plasencia, nơi mà ông ta cưới vương nữ Joanna, người cháu gái chỉ mới 13 tuổi. Đó là sự khởi đầu của cuộc chiến kế vị Castilla, mà lịch sử gọi là [War of the Castilian Succession].",
+      "Ngày 1 tháng 3 năm 1476, diễn ra Trận Toro, một cuộc chiến còn gây tranh cãi vì cả hai bên đều tuyên bố mình là người thắng, song lại có ý nghĩa lịch sử trọng đại đối với Isabel và Ferdinand. Sau đó, quân đội của Joanna la Beltraneja bị giải thể, và quân Bồ Đào Nha rút lui khỏi Castilla. Nhà sử học Justo L. González tóm tắt:",
+    ] },
+]
+
+[articles.ar]
+text = "الملكة إيزابيلا الأولى (22 أبريل 1451 - 26 نوفمبر1504) ملكة صقلية (1469-1504) وملكة قشتالة وليون (1474-1504) ثم إسبانيا بعد وحدتها مع مملكة أراغون (1479-1504)، وملكة نابولي (1504)، كانت لقراراتها أثار في تاريخ الأندلس، ففي عهدها انتهت حروب الاسترداد بسقوط غرناطة، وأقرت بإجبار مسلمي ويهود إسبانيا على اعتناق المسيحية أو القتل أو الرحيل، وكانت من دعم رحلة كولومبوس في رحلته الاستكشافية التي أدت إلى وصوله لأمريكا."
+title = "إيزابيلا الأولى ملكة قشتالة"
+lang = "ar"
+url = "https://ar.wikipedia.org/wiki/%D8%A5%D9%8A%D8%B2%D8%A7%D8%A8%D9%8A%D9%84%D8%A7_%D8%A7%D9%84%D8%A3%D9%88%D9%84%D9%89_%D9%85%D9%84%D9%83%D8%A9_%D9%82%D8%B4%D8%AA%D8%A7%D9%84%D8%A9"
+intro = [
+  "الملكة إيزابيلا الأولى (22 أبريل 1451 - 26 نوفمبر1504) ملكة صقلية (1469-1504) وملكة قشتالة وليون (1474-1504) ثم إسبانيا بعد وحدتها مع مملكة أراغون (1479-1504)، وملكة نابولي (1504)، كانت لقراراتها أثار في تاريخ الأندلس، ففي عهدها انتهت حروب الاسترداد بسقوط غرناطة، وأقرت بإجبار مسلمي ويهود إسبانيا على اعتناق المسيحية أو القتل أو الرحيل، وكانت من دعم رحلة كولومبوس في رحلته الاستكشافية التي أدت إلى وصوله لأمريكا.",
+]
+sections = [
+  { "title" = "العائلة", "paragraphs" = [
+      "سميت إيزابيلا ولي عهد تاج كاستيا من قبل أخيها غير الشقيق إنريكي الرابع ملك قشتالة وأصبحت ملكة كاستيا في 1469.",
+    ] },
+  { "title" = "قبل غزو غرناطة", "paragraphs" = [
+      "كانت دراستها دينية كاثوليكية، في وقت كانت تسيطر على الكاثوليك في إسبانيا فكرة واحدة هي التخلص من المسلمين وطردهم خارج إسبانيا. أصبحت ملكة قشتالة عندما توفي أخيها هنري الرابع وتزوجت من فرناندو الثاني الأراجوني.",
+    ] },
+  { "title" = "الحملة على غرناطة", "paragraphs" = [
+      "شنت مع زوجها حملة عسكرية للاستيلاء على مدينة غرناطة من حكامها بني الأحمر وكانت غرناطة آخر معاقل المسلمين في إسبانيا وبسقوط حكم أبو عبد الله عام 1492 انتهى الحكم الإسلامي في الأندلس، وقد أمرت الملكة إيزابيلا بإنشاء محاكم التفتيش بمعاونة الملك فيليب وبمراقبة توماس دي توركيمادا، المحاكم التي قامت بطرد ثلاثة ملايين من المسلمين، أما الذين لم يغادروا الأندلس بعد سقوطها، أجبروا على التحول للكاثوليكية. أطلق عليها البابا إسكندر السادس وزوجها، لقب الملوك الكاثوليك.",
+    ] },
+  { "title" = "ما بعد غرناطة", "paragraphs" = [
+      "صارت اللغة القشتالية، في عهدها إلى أوجها، بكتابة معجم للغة في عهدها، لتصبح بعدها، اللغة الأسبانية المعروفة حاليا.",
+      "قامت بعد تردد (9 سنوات من الانتظار، كما ردت طلبه 3 مرات) بدعم كريستوفر كولمبوس إلى اكتشاف العالم الجديد. وتم تسمية مستوطنة باسمها هي لا إيزابيلا.",
+    ] },
+  { "title" = "مملكة إسبانيا", "paragraphs" = [
+      "اندمج تاج أراغون مع تاج كاستيا لتتكون مملكة إسبانيا، أصبحت مملكة فالنسيا عضوا في الملكية الإسبانية.",
+      "اتحدت مملكة كاستيا ومملكة ليون مع مملكة أراجون واستطاع الملك فيرنانديو والملكة إيزابيلا، الاستيلاء على الممالك العربية في الأندلس الواحدة تلو الأخرى إلى أن سقطت في أيديهم غرناطة آخر قواعد المسلمين سنة 1492.",
+    ] },
+  { "title" = "استقرار إسبانيا", "paragraphs" = [
+      "ضمنت الملكة إيزابيلا الاستقرار السياسي طويل الأجل في إسبانيا عن طريق ترتيب الزيجات الاستراتيجية لكل من أطفالها الخمسة. أولى بناتها إيزابيلا الصغيرة، تزوجت من أمير البرتغال أفونسو، لكنه مات في السادسة عشر من عمره من حادثة ركوب خيل، من ثم تزوجت مانويل الأول ملك البرتغال، ولكن سرعان ما ماتت إيزابيلا قبل ولادة ولي عهد البرتغال.",
+      "خوانا المجنونة، ابنة إيزابيلا الثانية، تزوجت من فيليب الوسيم، ملك بوهيميا (النمسا) والمعنون إلى التاج من الإمبراطور الروماني المقدس وقد كفل هذا التحالف مع الإمبراطورية الرومانية المقدسة الإقليم القوي، بعيدة المدى الذي أكد إسبانيا مستقبل الأمن السياسي.",
+      "تزوج خوان ابن إيزابيلا الأول والوحيد، من مارغريت دوقة سافوي، والحفاظ على علاقات مع عائلة هابسبورغ النمساوية، وعلى إسبانيا التي كانت تعتمد إلى حد بعيد.",
+    ] },
+]
+
+[articles.ru]
+text = "Изабе́лла I Касти́льская, также Изабелла Католи́чка (исп. Isabel I la Católica; 22 апреля 1451[…], монастырь Благодатной Девы Марии, Мадригаль-де-лас-Альтас-Торрес, Королевство Кастилия и Леон — 26 ноября 1504, Дворец Тестаментарио, Медина-дель-Кампо, Королевство Кастилия и Леон) — королева Кастилии и Леона."
+title = "Изабелла I (королева Кастилии)"
+lang = "ru"
+url = "https://ru.wikipedia.org/wiki/%D0%98%D0%B7%D0%B0%D0%B1%D0%B5%D0%BB%D0%BB%D0%B0_I_%28%D0%BA%D0%BE%D1%80%D0%BE%D0%BB%D0%B5%D0%B2%D0%B0_%D0%9A%D0%B0%D1%81%D1%82%D0%B8%D0%BB%D0%B8%D0%B8%29"
+intro = [
+  "Изабе́лла I Касти́льская, также Изабелла Католи́чка (исп. Isabel I la Católica; 22 апреля 1451[…], монастырь Благодатной Девы Марии, Мадригаль-де-лас-Альтас-Торрес, Королевство Кастилия и Леон — 26 ноября 1504, Дворец Тестаментарио, Медина-дель-Кампо, Королевство Кастилия и Леон) — королева Кастилии и Леона. Супруга Фердинанда II Арагонского, династический брак которых положил начало объединению Испании в единое государство.",
+]
+sections = [
+  { "title" = "Биография", "paragraphs" = [
+      "После смерти отца в 1454 году королём Кастилии стал старший брат Изабеллы — Энрике IV. Из-за своей неспособности произвести потомство этот правитель получил прозвище «Бессильный».",
+      "Второй раз король женился на Жуане Португальской, сестре короля Афонсу V Африканца, которая также, как говорили, оставшись нетронутой после первой брачной ночи, вскоре взяла себе в любовники Бельтрана де ла Куэву. Рождённая ею девочка, Хуана, воспринималась всеми как плод адюльтера и получила прозвище «Бельтранеха» в честь своего предполагаемого отца. Со второй женой король также развёлся.",
+      "Эти факторы — бессилие короля Энрике, измены королевы Жуаны и сомнительность происхождения её дочери Хуаны сделали вопрос престолонаследия актуальным. Знать принудила короля Энрике назвать наследником своего младшего брата Альфонсо (XII) Соперника (Изабелла была средним ребёнком). Король первоначально согласился, предполагая, что Альфонсо женится на его дочери Хуане Бельтранехе, но спустя некоторое время передумал.",
+    ] },
+  { "title" = "Характер и внешность Изабеллы", "paragraphs" = [
+      "Изабелла была известна умом, энергией, непреклонным характером, отличалась упорством, богобоязненностью и самонадеянностью. Она проводила время то в походах, где, сидя на лошади, сама нередко командовала отрядами, то в кабинете, где вместе со своими секретарями занималась чтением и составлением государственных бумаг.",
+      "Во внешности королевы особо выделялись зеленовато-голубые глаза, характерные для династии Трастамара. Цвет лица был нежным, волосы золотистыми, рост — невысокий, а телосложение не особенно изящным. Тем не менее отмечали, что в облике её было врожденное благородство и достоинство.",
+      "Так как детство своё она провела вдали от двора и её не рассматривали как наследницу, образование её было достаточно слабым. Её обучили чтению, письму и хорошим манерам. Вышивание осталось её любимым занятием и отдыхом от государственных дел. Многие пробелы в своём образовании ей впоследствии пришлось навёрстывать самой.",
+    ] },
+  { "title" = "Дети", "paragraphs" = [
+      "Изабелла Астурийская (2 октября 1470 — 24 августа 1498) — первым браком за инфантом Афонсу Португальским, вторым за его дядей Мануэлем I Португальским, следующим наследником престола.",
+      "Хуана I Кастильская (6 ноября 1479 — 12 июня 1555) — королева Кастилии, замужем за Филиппом Красивым (братом Маргариты Австрийской, это были двойные браки).",
+      "Мария Арагонская (29 июня 1482 — 7 марта 1517) — после смерти сестры Изабеллы стала следующей женой Мануэля I Португальского",
+    ] },
+  { "title" = "Образ в культуре", "paragraphs" = [
+      "«Христофор Колумб» (Великобритания, 1949). В роли Изабеллы Кастильской — Флоренс Элдридж.",
+      "«Христофор Колумб» (Италия, США, Франция, Германия. 1985). Роль исполняет Фэй Дануэй.",
+      "«1492: Завоевание рая» (США, Франция, Испания, 1992). В роли Изабеллы Кастильской — Сигурни Уивер.",
+    ] },
+  { "title" = "Литература", "paragraphs" = [
+      "Изабелла Кастильская // Энциклопедический словарь Брокгауза и Ефрона : в 86 т. (82 т. и 4 доп.). — СПб., 1890—1907.",
+    ] },
+]
+
+[articles.id]
+text = "Isabel I dari Kastila (bahasa Spanyol: Isabel I de Castilla; bahasa Inggris: Isabelle; 22 April 1451 – 26 November 1504), juga dikenal sebagai Isabel sang Katolik (Isabel la Católica), adalah Ratu Kastila dan Leon. Melalui pernikahan, dia adalah Permaisuri Aragon sebagai istri dari Fernando II pada 19 Oktober 1469."
+title = "Isabel dari Kastila"
+lang = "id"
+url = "https://id.wikipedia.org/wiki/Isabel_dari_Kastila"
+intro = [
+  "Isabel I dari Kastila (bahasa Spanyol: Isabel I de Castilla; bahasa Inggris: Isabelle; 22 April 1451 – 26 November 1504), juga dikenal sebagai Isabel sang Katolik (Isabel la Católica), adalah Ratu Kastila dan Leon. Melalui pernikahan, dia adalah Permaisuri Aragon sebagai istri dari Fernando II pada 19 Oktober 1469. Pernikahan mereka menjadi dasar penyatuan politik Spanyol di bawah kepemimpinan cucu mereka Carlos I atau Karl V, Raja Kastila dan Aragon dan Kaisar Romawi Suci, serta mengawali masa keemasan Spanyol.",
+  "Di ranah politik, Isabel membuktikan dirinya sebagai pemimpin yang cakap. Setelah mengawali masa-masa sulit di awal pemerintahan, Isabel berhasil menekan tingkat kejahatan dan menghapuskan warisan utang-utang dari masa pemerintahan kakak tirinya.",
+  "Paus Aleksander VI memberikan gelar \"Penguasa Katolik\" (Spanyol: los Reyes Católicos) kepada Fernando dan Isabel lantaran dipandang telah melindungi agama Katolik di kerajaan mereka, seperti diselesaikannya reconquista dengan mengalahkan Sultan Granada Muhammad XII (Sultan Boabdil) dan pengusiran umat Muslim dan Yahudi dari Spanyol (lihat Inkuisisi Spanyol). Isabel juga dikenal akan dukungannya terhadap Kristoforus Kolumbus dalam upaya menemukan dunia baru. Kebijakan Isabel terkait reconquista dan dukungannya akan penjelajahan samudera menjadi salah satu hal yang mengubah geopolitik dunia, pergeseran batas wilayah dunia Kristen dan Islam, dan pemantik awal bagi bangsa Eropa melakukan penjelajahan samudera dan kolonialisme pada masa setelahnya, membuat Isabel menjadi salah satu tokoh paling berpengaruh di dunia.",
+]
+sections = [
+  { "title" = "Awal kehidupan", "paragraphs" = [
+      "Isabel lahir di Madrigal de las Altas Torres, Ávila pada 22 April 1451 dari Juan II, Raja Kastila dengan permaisuri keduanya, Isabel, putri João, putra João I, Raja Portugal. Isabel berada di urutan kedua sebagai pewaris takhta saat kelahirannya setelah Enrique (Henry dalam ejaan Inggris), putra Juan II dengan permaisuri pertamanya, Maria. Enrique berusia 26 tahun saat itu, tetapi belum mempunyai anak. Pada 17 November 1453, Permaisuri Isabel melahirkan seorang putra, Alfonso, membuat kedudukan Isabel sebagai pewaris takhta turun di urutan ketiga. Saat Juan II mangkat pada 1454, saudara tiri Isabel naik takhta sebagai Enrique IV. Isabel dan Alfonso kini berada dalam pemeliharaan raja yang baru. Bersama ibunya dan Alfonso, Isabel dipindahkan ke Arévalo.",
+      "Masa ini adalah masa sulit dalam kehidupan Isabel. Mereka hidup di kastil mereka dalam keadaan miskin dan kekurangan uang. Meskipun mendiang Juan II mewasiatkan agar Isabel bersama ibunya dan Alfonso diberi penghidupan yang layak, nyatanya Enrique tidak mengindahkan wasiat ayahnya dan menempatkan mereka ke dalam kehidupan yang ketat. Meski hidup dalam keadaan kekurangan, Isabel diajarkan untuk tetap melakukan kebajikan dan menanamkan rasa hormat yang mendalam terhadap agama.",
+      "Saat istri Enrique, Permaisuri Joan, hendak melahirkan, Isabel dan Alfonso dipanggil ke istana (Segovia) atas perintah langsung dari Raja dan untuk menyelesaikan pendidikan mereka. Alfonso ditempatkan dalam pengawasan seorang guru, sedangkan Isabel menjadi bagian dari rumah tangga Permaisuri.",
+    ] },
+  { "title" = "Pernikahan", "paragraphs" = [
+      "Pernikahan Isabel bukanlah suatu pertanyaan yang baru. Saat berusia enam tahun, Isabel sudah dijodohkan dengan Fernando (Ferdinand dalam ejaan Inggris), putra dari Joan II, Raja Aragon (keluarganya merupakan keluarga cabang dari Wangsa Trastámara). Pernikahan ini diharapkan dapat membuat hubungan pertemanan kedua kerajaan lestari. Namun perjanjian ini tidak berlangsung lama.",
+      "Paman Fernando, Alfonso V, mangkat pada 1458. Semua wilayah Alfonso di Spanyol, begitu juga kepulauan Sisilia dan Sardinia, jatuh ke tangan saudaranya, Joan II. Kedudukan Joan II menjadi lebih kuat dari sebelumnya, membuatnya tidak merasa membutuhkan perlindungan dari persekutuannya dengan Enrique. Ini membuat Enrique membutuhkan sekutu baru dan dia menjalin persekutuan dengan Carlos (Charles dalam ejaan Inggris), putra Joan II yang lain. Carlos menjalin persekutuan rahasia dengan Enrique dan hendak melanjutkannya dengan menikahi Isabel, tetapi kemudian Joan II memenjarakannya atas dakwaan berusaha melakukan pemberontakan. Carlos meninggal pada tahun 1461.",
+      "Pada 1465, Enrique berusaha menikahkan Isabel dengan Alfonso V, Raja Portugal, yang merupakan saudara dari istri Enrique. Namun dalam hal ini, Isabel menolak untuk memberi persetujuan.",
+    ] },
+  { "title" = "Perang dengan Portugal", "paragraphs" = [
+      "Setelah mangkatnya Enrique IV, Isabel naik takhta sebagai Ratu Kastila dan León pada 1474 dan suaminya menjadi raja jure uxoris dengan gelar Fernando V pada 1475. Setelah mangkatnya Raja Juan II pada 1479, barulah Fernando naik takhta di kerajaan asalnya sebagai Raja Aragon dengan gelar Fernando II dan Isabel menjadi Permaisuri Aragon.",
+      "Masa kekuasaan Isabel langsung diawali dengan berbagai kesulitan, seperti menghadapi gerakan pemberontakan. Diego Pacheco, Marqués Villena bersama para pendukungnya menetapkan Juana, putri mendiang Enrique IV sebagai ratu yang sah. Segera setelah mengeluarkan pernyataan sikap tersebut, Uskup Agung Toledo yang merupakan pendukung lama Isabel berbalik mendukung Diego yang masih merupakan kerabat dekatnya. Uskup Agung dan Diego berencana menikahkan Juana dengan pamannya, Alfonso V, Raja Portugal, dan menyerang Kastila guna merebut takhta untuk mereka.",
+      "Pada Mei 1475, Alfonso dan pasukannya melewati perbatasan Spanyol dan maju hingga Plasencia dan menikahi Juana. Perang panjang dan berdarah untuk memperebutkan takhta Kastila dimulai dan berlangsung hingga sekitar satu tahun sampai tanggal 1 Maret 1476 ketika terjadi Perang Toro, perang yang kedua pihaknya menyatakan sebagai pemenang dan merayakan kemenangan tersebut: pasukan Alfonso berhasil dikalahkan oleh pasukan sayap kiri Kastila yang dipimpin oleh Adipati Alba dan Kardinal Mendoza, sedangkan pasukan yang dipimpin Pangeran João (kelak menjadi João II, Raja Portugal) mengalahkan pasukan sayap kanan Kastila dan tetap menguasai medan laga.",
+    ] },
+  { "title" = "Pembaruan", "paragraphs" = [
+      "Saat Isabel naik takhta pada tahun 1474, Kastila berada dalam keputusasaan. Sudah diketahui bahwa Enrique termasuk raja yang boros dan tidak banyak mengupayakan penegakan hukum di kerajaan. Dikatakan oleh salah seorang Kastila bahwa pada saat itu pembunuhan, pemerkosaan, dan perampokan terjadi tanpa dikenai hukuman. Karena masalah ini, Isabel berusaha untuk memperbarui kerajaannya. Para sejarawan di masanya memandang Isabel lebih cenderung pada keadilan daripada belas kasih, juga dikenal lebih keras dan tanpa ampun dibandingkan suaminya, Fernando.",
+      "Pembaruan besar pertama yang dilakukan Isabel adalah pembentukan pasukan keamanan pada 1476, yakni La Santa Hermandad (Persaudaraan Suci). Saat itu bukan kali pertama Kastila menyaksikan Hermandad, tetapi pertama kalinya lembaga ini dikelola oleh pihak istana. Pada masa abad pertengahan akhir, Hermandad digambarkan sebagai sekelompok lelaki, atas kesadaran pribadi, yang bersama-sama berpatroli di jalan dan pedesaan untuk menghukum para penjahat sesuai hukum. Sebelum 1476, persaudaraan ini sering ditekan oleh penguasa. Sebelum 1476, lembaga kehakiman di sebagian besar negara lebih berada di bawah kendali anggota pembangkang dari bangsawan daripada dalam kendali pejabat istana. Untuk menyelesaikan permasalahan, pada pertemuan dewan 1476, pimpinan Hermandad dimapankan untuk Kastila, Leon, dan Asturias. Pasukan keamanan dibentuk dari orang-orang lokal yang bertujuan untuk mengatur hukuman atas kejahatan yang terjadi di kerajaan. Pada 1477, Isabel mengunjungi Extremadura dan Andalusia untuk mengenalkan pasukan keamanan ini.",
+      "Guna menjaga pembaruannya diatur dalam hukum, Isabel menunjuk dua pejabat guna mengembalikan kedamaian di Galisia pada 1481. Wilayah ini sudah menjadi sasaran bangsawan tiran sejak masa ayah Isabel, Juan II. Mereka berhasil mengusir lebih dari 1.500 perampok dari Galisia.",
+    ] },
+]
+
+[articles.pt]
+text = "Isabel I (Madrigal de las Altas Torres, 22 de abril de 1451 – Medina del Campo, 26 de novembro de 1504), apelidada de \"Isabel, a Católica\", foi a Rainha de Castela e Leão de 1474 até sua morte, além de Rainha Consorte de Aragão a partir de 1479 e Imperatriz titular do Império Bizantino de 1502 até sua morte. Era filha do rei João II e sua esposa Isabel de Portugal."
+title = "Isabel I de Castela"
+lang = "pt"
+url = "https://pt.wikipedia.org/wiki/Isabel_I_de_Castela"
+intro = [
+  "Isabel I (Madrigal de las Altas Torres, 22 de abril de 1451 – Medina del Campo, 26 de novembro de 1504), apelidada de \"Isabel, a Católica\", foi a Rainha de Castela e Leão de 1474 até sua morte, além de Rainha Consorte de Aragão a partir de 1479 e Imperatriz titular do Império Bizantino de 1502 até sua morte. Era filha do rei João II e sua esposa Isabel de Portugal.",
+  "Casou-se com o seu primo em segundo-grau, o príncipe Fernando de Aragão e, devido ao seu parentesco próximo, tiveram de pedir permissão ao Papa. No entanto, com a ajuda de Rodrigo Bórgia, o papa Sisto IV acabou por aceitar o casamento, uma vez que considerava a união conveniente para os interesses da Igreja. Isabel e o seu marido Fernando criaram as bases para a unificação política da Espanha através do seu neto, Carlos I, que se tornaria imperador do Sacro Império Romano.",
+  "Depois de uma luta para reclamar o seu direito ao trono, Isabel reorganizou o sistema de governo e da administração, centralizando competências ostentadas anteriormente pelos nobres; reformou o sistema de segurança dos cidadãos de tal forma que a taxa de criminalidade desceu drasticamente e levou a cabo uma reforma económica para reduzir a dívida que o reino tinha herdado do seu meio-irmão e predecessor no trono, Henrique IV. As suas reformas e as que realizou com o marido, tiveram grande influência mesmo fora das fronteiras dos seus reinos. Juntamente com o seu marido, Isabel participou na guerra de Granada através da qual conseguiram reconquistar terras muçulmanas, expulsando-os assim da Península Ibérica. Posteriormente decretaram também a expulsão dos judeus da região através do Decreto de Alhambra. Por estas medidas, tanto Isabel como o seu marido foram reconhecidos pela Santa Sé como \"defensores ou protectores da fé\", recebendo o título de Reis Católicos.",
+  "Contudo, Isabel foi recordada sobretudo pelo apoio incondicional que deu a Cristóvão Colombo na sua busca pelas Índias Ocidentais, uma missão que o levaria a descobrir a América. Este acontecimento levou posteriormente às descobertas e ao surgimento do Império Espanhol.",
+]
+sections = [
+  { "title" = "Primeiros Anos", "paragraphs" = [
+      "Isabel de Castela, filha de João II de Castela e da sua segunda esposa, Isabel de Portugal, nasceu em Madrigal de las Altas Torres, na província de Ávila, no dia 22 de abril de 1451, numa Quinta-Feira Santa, no palácio que hoje em dia é ocupado pelo Mosteiro de Nossa Senhora da Graça. O lugar e a data de nascimento foram discutidos historicamente, uma vez que quando nasceu, ninguém suspeitava da importância histórica que teria a menina no futuro. Madrigal era na altura uma pequena vila movimentada onde a sua mãe, Isabel de Avis, residia ocasionalmente. Foi da sua mãe que recebeu o nome Isabel que, na altura, ainda não era muito usado em Espanha.",
+      "Dois anos depois, em Tordesilhas, nasceu o seu irmão Afonso. Anteriormente, fruto do matrimónio entre João II de Castela e Maria de Aragão, e por tanto irmão paterno de Isabel, tinha nascido Henrique, que ocuparia o trono em 1454 e seria conhecido como Henrique IV, o Impotente.",
+      "Após a morte do seu pai em 1454, Isabel retirou-se com a sua mãe e irmão Afonso para a vila de Arévalo, onde assistiria aos ataques de loucura da sua mãe, Isabel. Esta foi uma época de dificuldades, inclusivamente económicas, pois embora o seu pai tivesse deixado disposições importantes no testamento a favor da sua mãe, o rei Henrique IV não as cumpre reiteradamente. Nesta adversidade, Isabel fortaleceu-se com leituras católicas e livros religiosos. A sua amizade com Santa Beatriz de Silva também a ajudou. Mais tarde, já rainha, Isabel ajudou-a a fundar a Ordem da Imaculada Conceição e ofereceu-lhe os palácios de Galiana na cidade de Toledo. Outras personagens importantes, neste momento e em geral durante a sua vida, foram Gutierre de Cárdenas, e a sua esposa Teresa Enríquez y Gonzalo Chacón.",
+    ] },
+  { "title" = "Acordos matrimoniais", "paragraphs" = [
+      "Desde os três anos de idade Isabel esteve comprometida com Fernando, filho do rei João II de Aragão.",
+      "No entanto, Henrique IV acabou com este acordo seis anos depois para comprometer a irmã com Carlos, príncipe de Viana. O casamento não chegou a realizar-se devido à oposição férrea de João II de Aragão. Também foram inúteis as tentativas de Henrique IV de casá-la com o rei Afonso V de Portugal, primo em segundo-grau de Isabel e quase vinte anos mais velho do que ela. Em 1464, conseguiu reuni-los no Mosteiro de Guadalupe, mas Isabel recusou-o devido à diferença de idades entre ambos.",
+      "Mais tarde, quando tinha dezesseis anos, Isabel ficou comprometida de Pedro Girón, Mestre de Calatrava e irmão de dom Juan Pacheco. Diz-se que Isabel rogou aos céus para que não se realizasse o seu casamento com este varão de quarenta e três anos. Dom Pedro morreu de apendicite durante a viagem para se encontrar com a sua prometida.",
+    ] },
+  { "title" = "Isabel, Rainha de Castela", "paragraphs" = [
+      "Isabel ascendeu ao trono depois de vencer a Guerra de Sucessão Castelhana, ocorrida entre 1475 a 1479, enfrentando os partidários da sua sobrinha Joana. No entanto, após a vitória fez-se justiça, mas também se ofereceu o perdão real a todos aqueles que o pediram. Foi então que se construiu o Mosteiro de São João dos Reis.",
+      "Isabel proclama-se rainha de Castela no dia 13 de dezembro de 1474 em Segóvia, usando como base o Tratado dos Touros de Guisando. Da Fortaleza de Segóvia dirigiu-se para a Igreja de São Miguel, junto à praça maior. Depois de jurar por Deus, pela Cruz e pelos Evangelhos que seria obediente aos mandamentos da Santa Igreja, os presentes juram-lhe lealdade. De seguida entrou no templo segurando o escudo de Castela e abraçada às suas dobras.",
+      "A partir desse momento, impôs-se a tarefa de garantir a segurança nas estradas e nas aldeias, dado que os anos de guerra tinham favorecido actos de pilhagem e delinquência. Para isso, criou-se a Santa Irmandade que foi eficaz e um bom instrumento de justiça.",
+    ] },
+  { "title" = "Morte", "paragraphs" = [
+      "Isabel encontrava-se em Medina del Campo quando adoeceu de cancro do útero, doença que a mataria. A rainha mandou que se rezassem missas pela sua saúde que se transformaram em missas pela sua alma quando teve a certeza de que o seu fim se aproximava. Consciente, pediu a extrema unção e o Santíssimo Sacramento.",
+      "Faleceu pouco antes do meio-dia de 26 de novembro de 1504, no Palácio Real de Medina del Campo.",
+      "Inicialmente foi enterrada no mosteiro de São Francisco de Alhambra no dia 18 de dezembro de 1504, numa sepultura simples como era seu desejo. Pouco depois os seus restos mortais, juntamente com os do seu esposo Fernando, o Católico, foram transladados para a Capela Real de Granada. A sua filha Joana I e o marido dela, Filipe I de Castela, também estão lá enterrados. Também foi neste local que se enterrou o seu neto Miguel, filho do rei Manuel I de Portugal que faleceu pouco antes de completar dois anos de idade, e a mãe dele, a infanta Isabel, filha mais velha dos Reis Católicos.",
+    ] },
+]
+
+[fallbacks]
+
+de = "en"
+
+zh-CN = "zh"
+
+ja = "vi"
+
+ko = "en"
+
+fil = "vi"
+
+pt-BR = "pt"

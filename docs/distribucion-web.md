@@ -165,6 +165,24 @@ El orden compara el ahorro incremental de cada técnica por separado contra el c
 
 WebP y MP4/WebM ya llevan compresión; los mapas se publican en Brotli. El WASM del paquete Poki sigue plano; Brotli es solo una opción de transferencia si la plataforma admite `Content-Encoding: br`. El ZIP local mide 6.94 MB menos que la carpeta, pero no representa por sí mismo lo descargado por el jugador. Los PNG de unidades sí mostraron ahorro lossless medible. `dist/` no es una medida de subida porque acumula compilaciones, cachés y paquetes de más de un destino.
 
+## Anuncios y economía por portal
+
+Estado del 9 nov. 2026. Ningún portal tiene aún el juego publicado; esto es lo que el código ya hace en cada build.
+
+| Portal | Anuncios en el build | Recompensado |
+| --- | --- | --- |
+| Poki | `commercialBreak` solo antes de entrar a la siguiente partida, y solo si ya se jugó una (`SOW_portalBeforeMatch` en `sdk/poki_portals.ts`). Nunca en el primer input ni a mitad de partida. | `rewardedBreak`; la recompensa solo se paga si la promesa devuelve `true`. |
+| CrazyGames | Midgame entre partidas, solo después de juego real; los pares `gameplayStart`/`gameplayStop` no se duplican. Si el SDK responde `adsDisabled` (Basic Launch) o hay adblock, se dejan de pedir anuncios. | Se enciende solo cuando CrazyGames ya sirvió un anuncio real (Full Launch) y lo recuerda en `localStorage`; en Basic Launch todo pedido responde `adsDisabled` y la oferta nunca aparece. Si `adsDisabled` vuelve, se apaga otra vez. Sin flag ni paso manual. |
+| Jest | Ninguno. El verificador del paquete rechaza `commercialBreak`, `rewardedBreak`, `SOW_ENABLE_PORTAL_ADS` y el SDK de Poki. | No hay oferta; el shell no la muestra sin el hook del portal. |
+
+El audio del juego (WASM) se silencia durante cada anuncio y cuando el portal lo pide (`SOW_setPortalAudioMuted`).
+
+**Doblar recompensas.** Al volver de una partida pública verificada, el menú ofrece una sola vez “Continuar” o “Ver video”, con botones del mismo tamaño y un icono de video. Si el anuncio termina, el servidor (`POST /profile/reward-receipts/double`) vuelve a pagar las coronas y gemas de esa partida. Reglas en `sow-data/src/db.rs`: solo partidas con bono verificado, dentro de las 6 h siguientes, una vez por partida y como máximo 5 por día UTC.
+
+**Gemas por partida** (`match_gems` en `sow-data/src/rewards.rs`, solo en Matchmaking y Ranked 1v1 verificados): 3 por jugar al menos 5 min o ganar, 4 si además derrotaste jugadores o imperios. Ganar suma 50 en FFA público y 25 en el resto (Teams, HvN, Ranked 1v1). Las coronas no cambian: 25 por participar, +75 por ganar, más bonos por bajas, imperios y asistencias.
+
+**Revisión de Poki.** Poki revisa el uso de anuncios en su QA antes de publicar; esta oferta sigue sus reglas publicadas de recompensado (opcional, botón de continuar del mismo tamaño, icono de video, sin pago si el video falla).
+
 ## Verificación local
 
 Los tests siguientes son resultados registrados del trabajo previo; no se reejecutaron en esta revisión. Sí se volvió a ejecutar el empaquetado oficial local de Poki; no despliega ni sube.
@@ -174,6 +192,7 @@ Los tests siguientes son resultados registrados del trabajo previo; no se reejec
 - `cargo test -p sow-dist --bin sow poki_package_keeps_runtime_assets_and_only_drops_explicit_exclusions`: pasó; verifica que el empaquetador conserva avatar, atlas, icono, video de campaña MP4 y navegación usados, y elimina únicamente las exclusiones declaradas.
 - `cargo test -p sow-render full_avatar_atlas_holds_every_catalog_portrait_within_gpu_limits` (3 nov.): pasó; verifica celdas de 128 px, que todo el catálogo cabe en 32 filas de 32 y UV dentro de la textura.
 - `./sow poki`: pasó el 2 nov. a las 21:12. Recompiló WASM y shell con los shaders actuales, validó los 15 catálogos, regeneró el staging, comprobó inventarios de assets/mapas y publicó `dist/poki` tras pasar `verify_poki_layout`. La auditoría posterior encontró 1,160 rutas de avatar del catálogo y 1,160 archivos coincidentes; las rutas de assets/mapas son locales. Salida: 1,532 archivos / 64,959,867 B. Log: `dist/logs/poki-20261102-210802.log`.
+- `./sow poki` y `./sow jest` (9 nov.): pasaron con el flujo de anuncios nuevo. `dist/poki`: 1,461 archivos / 56,586,026 B; el verificador Poki exige `SOW_portalRewardedBreak` y `double_match_reward` antes de aceptar `rewardedBreak`. El verificador Jest confirmó que su paquete no lleva anuncios. `menu_flow.test.ts` cubre la oferta (botones iguales, pago solo con video terminado, una vez por partida) y el encendido automático en CrazyGames.
 - La revisión visual de nameplates, expresiones y calidad de compresión sigue pendiente del dueño del juego.
 
 ## Siguiente verificación
