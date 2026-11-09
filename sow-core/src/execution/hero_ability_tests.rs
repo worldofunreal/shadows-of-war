@@ -35,6 +35,7 @@ fn measurement(ability: Ability) -> u16 {
         Ability::SurplusTreasury { .. } => 407,
         Ability::GuildNetwork { .. } => 408,
         Ability::WarshipPrize { .. } => 409,
+        Ability::Armistice { .. } => 410,
         Ability::AttackStrength { against, .. } => 100 + target_index(against),
         Ability::ConquestSpeed { against, .. } => 120 + target_index(against),
         Ability::DefenseStrength { against, .. } => 300 + target_index(against),
@@ -424,6 +425,43 @@ fn alliance_marks(leader: Leader) -> usize {
     owner_marks(&engine)[1]
 }
 
+fn armistice_refund(leader: Leader, attacker: u16) -> (f64, usize) {
+    let mut engine = arena(32, 16, leader, Some(Leader::of("cleopatra")));
+    engine.state.player_mut(attacker).unwrap().troops = 2_000.0;
+    send(
+        &mut engine,
+        attacker,
+        GameplayIntent::Attack(AttackIntent {
+            target_owner: 3 - attacker,
+            troops: Some(1_000.0),
+        }),
+    );
+    assert_eq!(engine.attacks.len(), 1);
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::ProposeAlliance { target_player: 2 },
+    );
+    send(
+        &mut engine,
+        2,
+        GameplayIntent::AcceptAlliance { target_player: 1 },
+    );
+    assert!(engine.attacks[0].retreating);
+    let before = engine.state.player(attacker).unwrap().troops;
+    engine.execute_combat();
+    let refund = engine.state.player(attacker).unwrap().troops - before;
+    if matches!(leader.ability(), Ability::Armistice { .. }) {
+        assert_eq!(refund, 1_000.0);
+        assert!(engine.state.events.iter().any(|event| matches!(
+            event,
+            GameEvent::AbilityTriggered { owner_id: 1, tile: Some(_), affected }
+                if affected.contains(&2)
+        )));
+    }
+    (refund, owner_marks(&engine)[1])
+}
+
 /// Marks `leader` shows when one of its trade ships leaves port.
 fn trade_marks(leader: Leader) -> usize {
     let mut engine = engine_with_ports(
@@ -776,6 +814,19 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
         let base = baseline_for(hero);
         let ability = hero.ability();
         let (changed, shown, control) = match ability.situation() {
+            Ability::Armistice { .. } => {
+                let mut changed = true;
+                let mut shown = 0;
+                let mut control = 0;
+                for attacker in [1, 2] {
+                    let (refund, marks) = armistice_refund(hero, attacker);
+                    let (ordinary, baseline_marks) = armistice_refund(plain, attacker);
+                    changed &= refund > ordinary;
+                    shown += marks;
+                    control += baseline_marks;
+                }
+                (changed, shown, control)
+            }
             Ability::CoastalFounding
             | Ability::AlliedCityGrant { .. }
             | Ability::CityTowerUpgrade

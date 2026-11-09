@@ -40,6 +40,19 @@ pub(crate) fn allied(state: &crate::game::GameState, a: u16, b: u16) -> bool {
             || a.alliances.contains(&b.id) && b.alliances.contains(&a.id)))
 }
 
+pub(crate) fn armistice(state: &crate::game::GameState, a: u16, b: u16) -> Option<(u16, u32)> {
+    if !allied(state, a, b) {
+        return None;
+    }
+    [a, b]
+        .into_iter()
+        .filter_map(|id| match state.player(id)?.leader.ability() {
+            Ability::Armistice { percent } if percent > 0 => Some((id, percent.min(100))),
+            _ => None,
+        })
+        .max_by_key(|&(id, percent)| (percent, std::cmp::Reverse(id)))
+}
+
 fn nearby(a: u32, b: u32, width: u32) -> bool {
     let dx = (a % width).abs_diff(b % width);
     let dy = (a / width).abs_diff(b / width);
@@ -183,6 +196,21 @@ impl SowEngine {
             ),
             Ability::WarshipPrize { .. } => ready(self.fleets.iter().any(|f| {
                 f.owner_id == owner && f.unit_type == UnitType::Warship && f.troops > 0.0
+            })),
+            Ability::Armistice { .. } => ready(self.attacks.iter().any(|attack| {
+                let rival = if attack.owner_id == owner {
+                    attack.target_owner
+                } else if attack.target_owner == owner {
+                    attack.owner_id
+                } else {
+                    return false;
+                };
+                attack.troops > 0.0
+                    && !attack.retreating
+                    && self.state.player(rival).is_some_and(|other| {
+                        other.alive
+                            && !(self.state.config.ranked_1v1 && p.is_human() && other.is_human())
+                    })
             })),
             Ability::ResourceBonus {
                 source, resource, ..

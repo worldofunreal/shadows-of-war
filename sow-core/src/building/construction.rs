@@ -36,7 +36,11 @@ impl SowEngine {
                     .player(b.owner_id)
                     .is_some_and(|player| structure_marks_leader(player.leader, b.kind))
                 {
-                    self.state.announce_leader_ability(b.owner_id, None);
+                    let width = self.state.map.width;
+                    self.state.announce_leader_ability(
+                        b.owner_id,
+                        Some((b.tile_idx % width, b.tile_idx / width)),
+                    );
                 }
                 self.state.events.push(GameEvent::StructureReady {
                     id: b.id,

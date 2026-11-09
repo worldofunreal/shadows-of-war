@@ -98,3 +98,5 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Ewuare the Great | Guild Wards | Each active factory level within 20 tiles of one of your active cities generates 1 extra gold per game second. Multiple cities do not stack. | guild_network | 1 gold/s/level | `gameplay/icons/abilities/ewuare.webp` |
 | Veleda | Prize of the Rhine | Your naval shells capture defeated enemy warships instead of sinking them. Prizes change sides with 25% health and no veterancy. | warship_prize | 25% | `gameplay/icons/abilities/veleda.webp` |
 | Amir Timur | Pursuit of the Horde | Tribes retreating from your land lose 35% more troops. | enemy_retreat_penalty | 35% | `gameplay/icons/abilities/amir_timur.webp` |
+| Queen Nandi | Herds of Emkhindini | Your farms produce 25% more troops. | resource_bonus (farm / troops) | 25% | `gameplay/icons/abilities/queen_nandi.webp` |
+| Mavia | Peace of Moses | When you ally with a rival during a land attack between you, both sides withdraw their surviving armies without retreat losses, up to their troop caps. | armistice | 100% | `gameplay/icons/abilities/mavia.webp` |

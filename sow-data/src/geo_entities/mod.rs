@@ -107,6 +107,8 @@ pub enum Ability {
     GuildNetwork { gold_per_second: u32 },
     /// A lethal naval shell takes an enemy warship as a damaged prize.
     WarshipPrize { percent: u32 },
+    /// Armies on either side of an alliance return without land retreat losses.
+    Armistice { percent: u32 },
 }
 
 /// Who an attack, conquest or retreat is aimed at. `Larger`, `Smaller`, `Richer`,
@@ -230,6 +232,7 @@ impl Ability {
             | Ability::ReturnCampaign { percent }
             | Ability::AllyPatronage { percent }
             | Ability::WarshipPrize { percent }
+            | Ability::Armistice { percent }
             | Ability::EnemyRetreatPenalty { percent, .. } => percent,
             Ability::CoastalFounding
             | Ability::AlliedCityGrant { .. }
@@ -285,6 +288,7 @@ impl Ability {
             Ability::ReturnCampaign { .. } => Ability::ReturnCampaign { percent: 0 },
             Ability::AllyPatronage { .. } => Ability::AllyPatronage { percent: 0 },
             Ability::WarshipPrize { .. } => Ability::WarshipPrize { percent: 0 },
+            Ability::Armistice { .. } => Ability::Armistice { percent: 0 },
             Ability::AlliedCityGrant { .. } => Ability::AlliedCityGrant { gold: 0 },
             Ability::SharedCitySpoils { .. } => Ability::SharedCitySpoils { gold: 0 },
             Ability::CityEvacuation { .. } => Ability::CityEvacuation { troops: 0 },
@@ -311,6 +315,7 @@ impl Ability {
             Ability::CoastalFounding | Ability::WarshipPrize { .. } => Cue::Naval,
             Ability::AlliedCityGrant { .. }
             | Ability::SharedCitySpoils { .. }
+            | Ability::Armistice { .. }
             | Ability::AllyPatronage { .. } => Cue::Alliance,
             Ability::CityTowerUpgrade => Cue::Tower,
             Ability::CityEvacuation { .. } => Cue::Retreat,

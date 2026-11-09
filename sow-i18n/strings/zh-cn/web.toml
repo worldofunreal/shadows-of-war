@@ -271,6 +271,14 @@ campaign_chronicles = "喀麦隆\n争 辩"
 campaign_unavailable = "竞选没有结果。"
 
 [heroes]
+leader_mavia_name = "玛维娅"
+leader_mavia_historical = "玛维娅也被称为马维娅。她曾领导罗马东部边境的阿拉伯社群，并于公元四世纪后期与罗马帝国议和。"
+leader_mavia_civilization = "塔努赫阿拉伯人"
+
+leader_queen_nandi_name = "南迪王太后"
+leader_queen_nandi_historical = "南迪·卡贝贝约生于1764年，卒于1827年。她来自埃兰盖尼社群，在儿子恰卡取得祖鲁人的领导权后成为王太后。"
+leader_queen_nandi_civilization = "祖鲁王国"
+
 locked = "已锁定"
 oceania = "大洋洲"
 leader_caesar_name = "尤利乌斯·凯撒"
@@ -983,6 +991,12 @@ crowns = "王冠"
 gems = "环球环球网"
 
 [site]
+leader_mavia_ability = "摩西之约"
+leader_mavia_description = "与正在和你进行陆战的对手结盟时，双方尚存的进攻部队撤回且不受撤退损失，返还兵力受各自上限限制。"
+
+leader_queen_nandi_ability = "埃姆金迪尼的牛群"
+leader_queen_nandi_description = "你的农场多产出25%的兵力。"
+
 view_profile = "查看领袖档案"
 all_leaders = "所有领袖"
 historical_name = "历史姓名"

@@ -271,6 +271,14 @@ campaign_chronicles = "KAMPANYE\nKRONIK"
 campaign_unavailable = "Kampanye tidak tersedia."
 
 [heroes]
+leader_mavia_name = "Mavia"
+leader_mavia_historical = "Mavia, juga dikenal sebagai Mawiyya, memimpin komunitas Arab di perbatasan timur Romawi dan berdamai dengan kekaisaran pada akhir abad keempat."
+leader_mavia_civilization = "Arab Tanukh"
+
+leader_queen_nandi_name = "Ratu Nandi"
+leader_queen_nandi_historical = "Nandi kaBhebhe (sekitar 1764–1827) berasal dari komunitas eLangeni dan menjadi ibu suri setelah putranya Shaka berkuasa di kalangan Zulu."
+leader_queen_nandi_civilization = "Kerajaan Zulu"
+
 locked = "TERKUNCI"
 oceania = "Oseania"
 leader_caesar_name = "Julius Caesar"
@@ -983,6 +991,12 @@ crowns = "MAHKOTA"
 gems = "PERMATA"
 
 [site]
+leader_mavia_ability = "Perdamaian Musa"
+leader_mavia_description = "Jika kamu bersekutu dengan lawan saat ada serangan darat di antara kalian, pasukan penyerang yang selamat dari kedua pihak kembali tanpa kerugian mundur, hingga batas pasukan masing-masing."
+
+leader_queen_nandi_ability = "Kawanan Ternak Emkhindini"
+leader_queen_nandi_description = "Ladangmu menghasilkan 25% lebih banyak pasukan."
+
 view_profile = "Lihat profil pemimpin"
 all_leaders = "Semua pemimpin"
 historical_name = "Nama historis"
