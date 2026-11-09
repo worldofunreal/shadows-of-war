@@ -697,6 +697,9 @@ leader_veleda_civilization = "Mga Bructeri"
 leader_amir_timur_name = "Amir Timur"
 leader_amir_timur_historical = "Mananakop na Turko-Mongol (1336–1405) na naghari mula sa Samarkand at nagtayo ng imperyo mula Volga hanggang Ganges."
 leader_amir_timur_civilization = "Imperyong Timurid"
+leader_ivan_the_terrible_name = "Ivan the Terrible"
+leader_ivan_the_terrible_historical = "Si Ivan IV Vasilyevich (1530–1584) ay kinoronahang tsar noong 1547. Sa kanyang paghahari nabuo ang bayarang permanenteng hukbong Streltsy at nasakop ng Muscovy ang Kazan at Astrakhan; nagdulot ng marahas na panunupil ang oprichnina at pinagtatalunan pa rin ang kahulugan nito."
+leader_ivan_the_terrible_civilization = "Russia"
 
 [profile]
 ranked_1v1 = "Ranggo 1v1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "Bihag ng Rhine"
 leader_veleda_description = "Binibihag ng mga bala ng iyong barko ang natalong barkong pandigma ng kaaway sa halip na palubugin ito. Lilipat ito sa iyong panig na may 25% kalusugan at walang karanasan."
 leader_amir_timur_ability = "Paghahabol sa Tribu"
 leader_amir_timur_description = "Ang mga tribong umuurong mula sa lupain mo ay nawawalan ng 35% higit pang tropa."
+leader_ivan_the_terrible_ability = "Pagtawag sa Streltsy"
+leader_ivan_the_terrible_description = "Kapag nakabihag ka ng kumpletong lungsod ng kaaway at may puwang ang iyong reserba, magdagdag ng hanggang 750 kawal. Isang beses bawat laban, ayon sa limitasyon ng iyong hukbo."
 
 [ranked]
 my_rank = "Ranggo ko"

@@ -11,7 +11,7 @@
   place-items: center;
   padding: max(16px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
     max(16px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
-  background: radial-gradient(circle at 50% 24%, rgb(16 24 34 / 72%), rgb(4 6 10 / 88%));
+  background: radial-gradient(circle at 50% 24%, rgb(20 22 28 / 76%), rgb(5 6 8 / 90%));
   animation: sow-settings-backdrop-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -70,10 +70,10 @@
   height: 34px;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--sow-gold) 52%, transparent);
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgb(243 177 43 / 18%), rgb(12 18 24 / 85%));
-  color: var(--sow-gold-bright);
+  border: 1px solid var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-button-radius);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sow-control-accent) 20%, transparent), rgb(12 13 18 / 90%));
+  color: var(--sow-control-accent-bright);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
 }
 
@@ -146,7 +146,7 @@
   align-items: center;
   gap: 7px;
   margin: 0;
-  color: var(--sow-gold-bright);
+  color: var(--sow-control-accent-bright);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -157,7 +157,7 @@
   flex: 0 0 14px;
   width: 14px;
   height: 14px;
-  color: var(--sow-gold);
+  color: var(--sow-control-accent);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -175,8 +175,8 @@
   margin: 0;
   padding: 8px 12px;
   border: 1px solid var(--sow-tactical-surface-border);
-  border-top-color: color-mix(in srgb, var(--sow-accent) 30%, var(--sow-tactical-surface-border));
-  border-radius: 8px;
+  border-top-color: color-mix(in srgb, var(--sow-control-accent) 30%, var(--sow-tactical-surface-border));
+  border-radius: var(--sow-button-radius);
   background: var(--sow-tactical-surface-compact-bg);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
   font-size: 13px;
@@ -188,7 +188,7 @@
 }
 
 #sow-menu .sow-menu__settings-controls > .sow-hud__setting-row:hover {
-  border-color: color-mix(in srgb, var(--sow-gold) 45%, var(--sow-tactical-surface-border));
+  border-color: var(--sow-tactical-surface-accent-border);
 }
 
 /* AAA Big Fat Slider */
@@ -220,9 +220,9 @@
   padding: 5px;
   box-sizing: border-box;
   border-radius: 6px;
-  border: 1px solid rgb(243 177 43 / 24%);
-  background: rgb(243 177 43 / 9%);
-  color: var(--sow-gold-bright);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  background: color-mix(in srgb, var(--sow-control-accent) 10%, transparent);
+  color: var(--sow-control-accent-bright);
 }
 
 #sow-menu .sow-menu__settings-controls .sow-menu__slider-label {
@@ -245,21 +245,21 @@
   font-variant-numeric: tabular-nums;
   padding: 2px 10px;
   border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--sow-gold-bright) 45%, transparent);
-  background: rgb(9 13 18 / 90%);
-  color: var(--sow-gold-bright);
+  border: 1px solid var(--sow-tactical-surface-accent-border);
+  background: var(--sow-tactical-panel-base);
+  color: var(--sow-control-accent-bright);
   box-shadow:
     inset 0 1px 3px rgb(0 0 0 / 70%),
-    0 0 10px rgb(243 177 43 / 22%);
+    0 0 10px color-mix(in srgb, var(--sow-control-accent) 24%, transparent);
 }
 
 #sow-menu .sow-menu__settings-controls .sow-menu__music-spectrum {
   display: block;
   width: 100%;
   height: 20px;
-  border: 1px solid rgb(243 177 43 / 20%);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: 4px;
-  background: linear-gradient(180deg, rgb(4 7 10 / 78%), rgb(14 18 23 / 92%));
+  background: var(--sow-tactical-track-bg);
   box-shadow: inset 0 1px 3px rgb(0 0 0 / 75%);
   pointer-events: none;
 }
@@ -286,15 +286,13 @@
 #sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-runnable-track {
   width: 100%;
   height: 16px;
-  border-radius: 8px;
+  border-radius: var(--sow-tactical-track-radius);
   background:
-    linear-gradient(90deg, #d97706 0%, #f59e0b 35%, #fbbf24 75%, #fef08a 100%) 0 0 /
+    var(--sow-fill-construction-gradient) 0 0 /
       var(--sow-music-fill, 80%) 100% no-repeat,
-    linear-gradient(180deg, #070a0e 0%, #111720 100%);
-  border: 1.5px solid var(--sow-tactical-track-border);
-  box-shadow:
-    inset 0 2px 5px rgb(0 0 0 / 85%),
-    0 1px 0 rgb(255 255 255 / 8%);
+    var(--sow-tactical-track-bg);
+  border: 1px solid var(--sow-tactical-track-border);
+  box-shadow: var(--sow-tactical-track-shadow);
   transition:
     box-shadow 0.16s ease,
     border-color 0.16s ease,
@@ -304,15 +302,13 @@
 #sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-track {
   width: 100%;
   height: 16px;
-  border-radius: 8px;
+  border-radius: var(--sow-tactical-track-radius);
   background:
-    linear-gradient(90deg, #d97706 0%, #f59e0b 35%, #fbbf24 75%, #fef08a 100%) 0 0 /
+    var(--sow-fill-construction-gradient) 0 0 /
       var(--sow-music-fill, 80%) 100% no-repeat,
-    linear-gradient(180deg, #070a0e 0%, #111720 100%);
-  border: 1.5px solid var(--sow-tactical-track-border);
-  box-shadow:
-    inset 0 2px 5px rgb(0 0 0 / 85%),
-    0 1px 0 rgb(255 255 255 / 8%);
+    var(--sow-tactical-track-bg);
+  border: 1px solid var(--sow-tactical-track-border);
+  box-shadow: var(--sow-tactical-track-shadow);
   transition:
     box-shadow 0.16s ease,
     border-color 0.16s ease,
@@ -321,43 +317,43 @@
 
 #sow-menu .sow-menu__settings-controls input[type="range"]:hover::-webkit-slider-runnable-track,
 #sow-menu .sow-menu__settings-controls input[type="range"]:active::-webkit-slider-runnable-track {
-  border-color: color-mix(in srgb, var(--sow-gold) 55%, var(--sow-tactical-track-border));
+  border-color: var(--sow-tactical-track-accent-border);
   box-shadow:
-    inset 0 2px 5px rgb(0 0 0 / 85%),
-    0 0 14px rgb(245 158 11 / 40%),
+    var(--sow-tactical-track-shadow),
+    0 0 14px color-mix(in srgb, var(--sow-control-accent) 42%, transparent),
     0 1px 0 rgb(255 255 255 / 12%);
 }
 
 #sow-menu .sow-menu__settings-controls input[type="range"]:hover::-moz-range-track,
 #sow-menu .sow-menu__settings-controls input[type="range"]:active::-moz-range-track {
-  border-color: color-mix(in srgb, var(--sow-gold) 55%, var(--sow-tactical-track-border));
+  border-color: var(--sow-tactical-track-accent-border);
   box-shadow:
-    inset 0 2px 5px rgb(0 0 0 / 85%),
-    0 0 14px rgb(245 158 11 / 40%),
+    var(--sow-tactical-track-shadow),
+    0 0 14px color-mix(in srgb, var(--sow-control-accent) 42%, transparent),
     0 1px 0 rgb(255 255 255 / 12%);
 }
 
 #sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 32px;
-  height: 32px;
-  margin-top: -9.5px;
+  width: 34px;
+  height: 34px;
+  margin-top: -9px;
   border-radius: 8px;
-  border: 2px solid var(--sow-gold-bright);
+  border: 2px solid var(--sow-control-accent-bright);
   background:
     repeating-linear-gradient(
         90deg,
         transparent,
         transparent 3px,
-        rgb(255 255 255 / 28%) 3px,
-        rgb(255 255 255 / 28%) 5px
+        rgb(255 255 255 / 32%) 3px,
+        rgb(255 255 255 / 32%) 5px
       )
       center / 13px 14px no-repeat,
-    linear-gradient(145deg, #2c3c4e 0%, #111822 100%);
+    linear-gradient(145deg, #283344 0%, #10151e 100%);
   box-shadow:
     0 4px 12px rgb(0 0 0 / 85%),
-    0 0 12px rgb(245 158 11 / 45%),
+    0 0 12px color-mix(in srgb, var(--sow-control-accent) 45%, transparent),
     inset 0 1px 0 rgb(255 255 255 / 45%),
     inset 0 -1px 0 rgb(0 0 0 / 70%);
   cursor: grab;
@@ -369,23 +365,23 @@
 }
 
 #sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-thumb {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 8px;
-  border: 2px solid var(--sow-gold-bright);
+  border: 2px solid var(--sow-control-accent-bright);
   background:
     repeating-linear-gradient(
         90deg,
         transparent,
         transparent 3px,
-        rgb(255 255 255 / 28%) 3px,
-        rgb(255 255 255 / 28%) 5px
+        rgb(255 255 255 / 32%) 3px,
+        rgb(255 255 255 / 32%) 5px
       )
       center / 13px 14px no-repeat,
-    linear-gradient(145deg, #2c3c4e 0%, #111822 100%);
+    linear-gradient(145deg, #283344 0%, #10151e 100%);
   box-shadow:
     0 4px 12px rgb(0 0 0 / 85%),
-    0 0 12px rgb(245 158 11 / 45%),
+    0 0 12px color-mix(in srgb, var(--sow-control-accent) 45%, transparent),
     inset 0 1px 0 rgb(255 255 255 / 45%),
     inset 0 -1px 0 rgb(0 0 0 / 70%);
   cursor: grab;
@@ -399,10 +395,10 @@
 #sow-menu .sow-menu__settings-controls input[type="range"]:hover::-webkit-slider-thumb,
 #sow-menu .sow-menu__settings-controls input[type="range"]:hover::-moz-range-thumb {
   border-color: #ffffff;
-  transform: scale(1.1);
+  transform: scale(1.08);
   box-shadow:
     0 4px 16px rgb(0 0 0 / 90%),
-    0 0 18px rgb(255 213 79 / 75%),
+    0 0 18px color-mix(in srgb, var(--sow-control-accent-bright) 75%, transparent),
     inset 0 1px 0 rgb(255 255 255 / 65%);
 }
 
@@ -410,10 +406,10 @@
 #sow-menu .sow-menu__settings-controls input[type="range"]:active::-moz-range-thumb {
   cursor: grabbing;
   border-color: #ffffff;
-  transform: scale(1.18);
+  transform: scale(1.15);
   box-shadow:
     0 6px 22px rgb(0 0 0 / 95%),
-    0 0 24px rgb(255 213 79 / 95%),
+    0 0 24px color-mix(in srgb, var(--sow-control-accent-bright) 95%, transparent),
     0 0 10px #ffffff,
     inset 0 1px 0 rgb(255 255 255 / 80%);
   filter: brightness(1.15);
@@ -426,15 +422,15 @@
 
 #sow-menu .sow-menu__settings-controls .sow-hud__switch {
   border: 1px solid rgb(255 255 255 / 16%);
-  background: rgb(9 13 18 / 78%);
+  background: var(--sow-tactical-track-bg);
   box-shadow: inset 0 2px 4px rgb(0 0 0 / 55%);
   cursor: pointer;
 }
 
 #sow-menu .sow-menu__settings-controls .sow-hud__switch:checked {
-  border-color: color-mix(in srgb, var(--sow-gold-bright) 70%, transparent);
-  background: linear-gradient(90deg, var(--sow-gold), var(--sow-gold-bright));
-  box-shadow: 0 0 12px rgb(243 177 43 / 35%);
+  border-color: color-mix(in srgb, var(--sow-control-accent-bright) 70%, transparent);
+  background: linear-gradient(90deg, var(--sow-control-accent), var(--sow-control-accent-bright));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sow-control-accent) 40%, transparent);
 }
 
 /* Dropdowns */
@@ -510,8 +506,8 @@
 }
 
 .sow-menu__settings-account.is-pending .sow-menu__account-dot {
-  background: var(--sow-gold-bright);
-  box-shadow: 0 0 8px rgb(243 177 43 / 75%);
+  background: var(--sow-control-accent-bright);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--sow-control-accent) 75%, transparent);
 }
 
 .sow-menu__account-value {
@@ -529,7 +525,7 @@
 }
 
 .sow-menu__account-pending {
-  color: var(--sow-gold-bright);
+  color: var(--sow-control-accent-bright);
   font-size: 10px;
   letter-spacing: 0.1em;
 }
@@ -607,7 +603,7 @@
 .sow-menu__settings-link:hover,
 .sow-menu__settings-link:focus-visible {
   border-color: var(--sow-accent);
-  background: linear-gradient(180deg, rgb(240 169 43 / 16%), rgb(15 21 25 / 78%));
+  background: linear-gradient(180deg, rgb(245 197 66 / 16%), rgb(18 20 26 / 84%));
   color: var(--sow-accent-bright);
   outline: var(--sow-tactical-focus-outline);
   outline-offset: var(--sow-tactical-focus-offset);
@@ -645,11 +641,15 @@
 
 .sow-menu__settings-link--social:hover,
 .sow-menu__settings-link--social:focus-visible {
-  border-color: var(--sow-gold);
-  background: rgb(243 177 43 / 15%);
-  box-shadow: 0 0 14px rgb(243 177 43 / 35%);
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: color-mix(in srgb, var(--sow-control-accent) 15%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--sow-control-accent) 35%, transparent);
   transform: translateY(-2px);
   outline: none;
+}
+
+.sow-menu__settings-link--social:active {
+  transform: scale(0.95);
 }
 
 .sow-menu__settings-link--social::after {
@@ -659,11 +659,11 @@
   left: 0;
   width: 100%;
   height: 2px;
-  background: var(--sow-gold);
+  background: var(--sow-control-accent);
   transform: scaleX(0);
   transform-origin: center;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 0 8px rgb(245 158 11 / 60%);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--sow-control-accent) 60%, transparent);
 }
 
 .sow-menu__settings-link--social:hover::after,
@@ -719,7 +719,7 @@
 }
 
 .sow-menu__settings-delete-status {
-  color: var(--sow-gold-bright);
+  color: var(--sow-control-accent-bright);
 }
 
 .sow-menu__settings-delete-error {
@@ -932,15 +932,15 @@
   }
 
   #sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-thumb {
-    width: 24px;
-    height: 24px;
-    margin-top: -6px;
+    width: 26px;
+    height: 26px;
+    margin-top: -7px;
     border-radius: 6px;
   }
 
   #sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-thumb {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     border-radius: 6px;
   }
 
@@ -1008,16 +1008,16 @@
   }
 
   .sow-menu__settings-link--social {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    min-height: 30px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
     border-radius: 6px;
   }
 
   .sow-menu__settings-link--social .sow-menu__settings-social-icon {
-    width: 15px;
-    height: 15px;
+    width: 17px;
+    height: 17px;
   }
 
   .sow-menu__settings-delete {

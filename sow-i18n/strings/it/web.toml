@@ -697,6 +697,9 @@ leader_veleda_civilization = "Bructeri"
 leader_amir_timur_name = "Amir Timur"
 leader_amir_timur_historical = "Conquistatore turco-mongolo (1336-1405) che governò da Samarcanda e costruì un impero dal Volga al Gange."
 leader_amir_timur_civilization = "Impero timuride"
+leader_ivan_the_terrible_name = "Ivan il Terribile"
+leader_ivan_the_terrible_historical = "Ivan IV Vasil’evič (1530–1584) fu incoronato zar nel 1547. Durante il suo governo nacque il corpo permanente e stipendiato degli strelizzi e la Moscovia conquistò Kazan’ e Astrachan’; in seguito l’opričnina impose una dura repressione, ancora discussa dagli storici."
+leader_ivan_the_terrible_civilization = "Russia"
 
 [profile]
 ranked_1v1 = "Classificata 1v1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "Preda del Reno"
 leader_veleda_description = "I tuoi proiettili navali catturano le navi da guerra nemiche sconfitte invece di affondarle. Cambiano schieramento con il 25% di salute e senza esperienza."
 leader_amir_timur_ability = "Inseguimento dell'Orda"
 leader_amir_timur_description = "Le tribù che si ritirano dal tuo territorio perdono il 35% di truppe in più."
+leader_ivan_the_terrible_ability = "Leva degli strelizzi"
+leader_ivan_the_terrible_description = "Conquistare una città nemica completata arruola fino a 750 soldati se hai spazio nelle riserve. Una volta per partita, entro il tuo limite di truppe."
 
 [ranked]
 my_rank = "Il mio rango"

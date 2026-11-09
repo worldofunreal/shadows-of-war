@@ -12,10 +12,10 @@ const UNIT_CELL_PX: u32 = 64;
 const BADGE_CELL_PX: u32 = 128;
 const GUTTER_PX: u32 = 2;
 const ART_MARGIN_PX: u32 = 2;
-/// Every building and level needs art: `assets/art/buildings/<kind>-<level>.png`.
+/// Every building and level needs art: `assets/art/buildings/<kind>-<level>.webp`.
 const BUILDING_KINDS: [&str; 5] = ["City", "Factory", "Port", "Tower", "Farm"];
 const BUILDING_LEVELS: u8 = 4;
-/// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.png`.
+/// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.webp`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
 // ponytail: one 128px strip, 27 cells = 3456px; switch to a grid before it passes 4096px.
 pub const BADGES: [&str; 27] = [
@@ -47,7 +47,7 @@ pub const BADGES: [&str; 27] = [
     "range",
     "speed",
 ];
-/// Map movers, `assets/art/units/<name>.png`, packed 4x2 in sow-render
+/// Map movers, `assets/art/units/<name>.webp`, packed 4x2 in sow-render
 /// `MoverSpriteId` order (embedded in the game, never published).
 const UNITS: [&str; 5] = [
     "transport-ship",
@@ -69,11 +69,12 @@ pub struct PackBuildingAtlasArgs {
 }
 
 fn art_source(dir: &Path, stem: &str) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
-    ["png", "webp"]
-        .iter()
-        .map(|ext| dir.join(format!("{stem}.{ext}")))
-        .find(|path| path.is_file())
-        .ok_or_else(|| format!("missing art: {}/{stem}.png", dir.display()).into())
+    let path = dir.join(format!("{stem}.webp"));
+    path.is_file()
+        .then_some(path)
+        .ok_or_else(|| {
+            format!("missing art: {}", dir.join(format!("{stem}.webp")).display()).into()
+        })
 }
 
 pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {

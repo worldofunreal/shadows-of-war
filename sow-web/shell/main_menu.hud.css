@@ -17,7 +17,7 @@
   --sow-panel-wash: var(--sow-tactical-panel-wash);
   --sow-panel-card: var(--sow-tactical-surface-card-bg);
   --sow-line: var(--sow-tactical-surface-border);
-  --sow-muted: #9da9ad;
+  --sow-muted: var(--sow-control-muted);
   --sow-surface-shadow: var(--sow-tactical-card-shadow);
   --sow-dock-reserve: 88px;
 }
@@ -26,16 +26,13 @@
   --sow-hud-top-edge: max(12px, var(--sow-sat));
   --sow-hud-right-edge: max(16px, var(--sow-sar));
   --sow-hud-toolbar-side-offset: 66px; /* 54px toolbar + 12px gap */
-  --sow-cyan: #9abfc5;
+  --sow-cyan: #38bdf8;
   --sow-red: #de8581;
   --sow-green: #a6c5a8;
   --sow-panel-soft: rgb(255 255 255 / 4%);
   --sow-hud-layout-top-reserve: 72px;
   --sow-hud-layout-bottom-edge: calc(100dvh - 80px);
   --sow-button-radius: 4px;
-  --sow-button-dark-bg: linear-gradient(145deg, rgb(35 46 51 / 92%), rgb(15 22 27 / 98%));
-  --sow-button-dark-border: rgb(211 223 219 / 18%);
-  --sow-button-dark-shadow: inset 0 1px rgb(255 255 255 / 4%);
   position: fixed;
   inset: 0;
   z-index: 90;
@@ -523,7 +520,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   inset-inline-end: 4px;
   min-width: 14px;
   padding: 1px 3px;
-  border: 1px solid rgb(10 16 21 / 95%);
+  border: 1px solid var(--sow-tactical-panel-base);
   border-radius: 4px;
   background: #b86461;
   color: #fff;
@@ -2463,7 +2460,7 @@ html[dir="rtl"] .sow-hud__leaderboard-search {
   gap: 6px;
   padding: 5px 8px;
   border-bottom: 1px solid var(--sow-line);
-  background: #0f161b;
+  background: var(--sow-tactical-panel-base);
 }
 .sow-hud__dev-search-icon {
   width: 13px;
@@ -3126,7 +3123,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-bezel {
-  fill: rgb(7 11 14 / 94%);
+  fill: rgb(9 10 13 / 94%);
   stroke: color-mix(in srgb, var(--sow-gold) 48%, transparent);
   stroke-width: 0.5;
 }
@@ -3149,7 +3146,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-wedge {
-  fill: color-mix(in srgb, var(--ring-accent) 7%, rgb(24 33 39));
+  fill: color-mix(in srgb, var(--ring-accent) 7%, rgb(22 24 30));
   stroke: rgb(255 255 255 / 7%);
   stroke-width: 0.35;
   transition: fill 120ms ease;
@@ -3177,12 +3174,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-sector.is-empty .sow-hud__ring-wedge {
-  fill: rgb(5 8 10 / 72%);
+  fill: rgb(7 8 11 / 72%);
   stroke: rgb(255 255 255 / 3%);
 }
 
 .sow-hud__ring-sector.is-hot .sow-hud__ring-wedge {
-  fill: color-mix(in srgb, var(--ring-accent) 24%, rgb(30 40 46));
+  fill: color-mix(in srgb, var(--ring-accent) 24%, rgb(28 31 39));
 }
 
 .sow-hud__ring-sector.is-hot .sow-hud__ring-rim {
@@ -3191,7 +3188,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-sector.is-disabled .sow-hud__ring-wedge {
-  fill: rgb(14 19 23);
+  fill: rgb(15 17 22);
 }
 
 .sow-hud__ring-sector.is-disabled .sow-hud__ring-rim {
@@ -3200,7 +3197,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-sector.is-disabled.is-hot .sow-hud__ring-wedge {
-  fill: rgb(22 28 33);
+  fill: rgb(22 24 30);
 }
 
 .sow-hud__ring-sector.is-arming .sow-hud__ring-hold {
@@ -3213,7 +3210,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-hub-plate {
-  fill: rgb(9 14 17);
+  fill: rgb(11 12 16);
   stroke: color-mix(in srgb, var(--sow-gold) 55%, transparent);
   stroke-width: 0.7;
 }
@@ -3291,7 +3288,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--sow-gold) 45%, transparent);
   border-radius: 50%;
-  background: rgb(9 14 17);
+  background: rgb(11 12 16);
 }
 
 .sow-hud__ring-face img {
@@ -3313,7 +3310,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   height: 17px;
   border: 1px solid var(--sow-line);
   border-radius: 50%;
-  background: rgb(8 12 15);
+  background: rgb(9 10 13);
   color: var(--sow-muted);
 }
 
@@ -4525,7 +4522,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   border: 1px solid rgb(222 133 129 / 46%);
   border-top-color: rgb(222 133 129 / 68%);
   border-radius: 5px 5px 12px 4px;
-  background: linear-gradient(145deg, rgb(25 37 44 / 98%), rgb(10 16 21 / 99%));
+  background: var(--sow-panel-card);
   color: #f5f1e8;
   font-size: 12px;
 }
@@ -4567,7 +4564,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   background: radial-gradient(
     circle at center,
     color-mix(in srgb, var(--sow-gold) 12%, transparent) 0%,
-    rgb(10 16 21 / 94%) 100%
+    var(--sow-tactical-panel-base) 100%
   );
   box-shadow:
     0 10px 30px rgb(0 0 0 / 46%),
@@ -5139,7 +5136,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   );
   overflow: hidden;
   padding: 0;
-  background: linear-gradient(150deg, rgb(25 37 44 / 98%), rgb(8 14 18 / 99%) 72%);
+  background: var(--sow-panel-card);
   text-align: start;
 }
 

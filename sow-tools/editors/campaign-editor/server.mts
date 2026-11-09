@@ -25,7 +25,7 @@ let mapRosterSaving = false;
 let mapGenerating = false;
 let mapUploading = false;
 const mapSourcesDir = path.join(root, "assets/map_sources");
-const worldMapPng = path.join(mapSourcesDir, "giantworldmap.png");
+const worldMapWebp = path.join(mapSourcesDir, "giantworldmap.webp");
 // Upload target from the owner's environment, e.g. SOW_MAPS_UPLOAD_TARGET=ionos:/var/db/sow/maps-uploaded
 const uploadTarget = parseUploadTarget(process.env.SOW_MAPS_UPLOAD_TARGET || "");
 const uploadToken = process.env.SOW_MAPS_RELOAD_TOKEN || "";
@@ -227,7 +227,7 @@ async function cropBoundingBox(crop) {
     map_grid_frame: [frameX, frameY, frameWidth, frameHeight],
     longitude: [west, east],
     latitude: [north, south],
-  } = manifest.sources["giantworldmap.png"];
+  } = manifest.sources["giantworldmap.webp"];
   const lon = (x) => west + ((x - frameX) / frameWidth) * (east - west);
   const lat = (y) => north - ((y - frameY) / frameHeight) * (north - south);
   const [x, y, width, height] = crop;
@@ -856,7 +856,7 @@ async function handle(req, res) {
         args = [
           "import-map-source",
           "--input", mapSourcesDir,
-          "--image", worldMapPng,
+          "--image", worldMapWebp,
           "--name", mapId,
           "--maps-root", mapsDir,
           "--crop", crop.join(","),

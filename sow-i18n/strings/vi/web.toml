@@ -697,6 +697,9 @@ leader_veleda_civilization = "Người Bructeri"
 leader_amir_timur_name = "Amir Timur"
 leader_amir_timur_historical = "Nhà chinh phục Turk-Mông Cổ (1336–1405) cai trị từ Samarkand và dựng nên đế quốc từ Volga đến sông Hằng."
 leader_amir_timur_civilization = "Đế quốc Timurid"
+leader_ivan_the_terrible_name = "Ivan Bạo Chúa"
+leader_ivan_the_terrible_historical = "Ivan IV Vasilyevich (1530–1584) được đăng quang làm Sa hoàng năm 1547. Dưới triều ông, quân Streltsy thường trực có lương được thành lập và Moskva chinh phục Kazan cùng Astrakhan; oprichnina sau đó gây ra đàn áp tàn bạo và đến nay vẫn còn nhiều cách diễn giải lịch sử."
+leader_ivan_the_terrible_civilization = "Nga"
 
 [profile]
 ranked_1v1 = "Xếp hạng 1v1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "Chiến hạm sông Rhine"
 leader_veleda_description = "Đạn hải quân của bạn bắt giữ chiến hạm địch bị đánh bại thay vì đánh chìm. Chiến hạm đổi phe với 25% máu và không có kinh nghiệm."
 leader_amir_timur_ability = "Truy kích bộ lạc"
 leader_amir_timur_description = "Các bộ lạc rút khỏi lãnh thổ của bạn mất thêm 35% quân."
+leader_ivan_the_terrible_ability = "Tuyển mộ Streltsy"
+leader_ivan_the_terrible_description = "Khi chiếm một thành phố địch đã hoàn thành, tuyển tối đa 750 quân nếu kho dự bị còn chỗ. Một lần mỗi trận, không vượt giới hạn quân số."
 
 [ranked]
 my_rank = "Hạng của tôi"

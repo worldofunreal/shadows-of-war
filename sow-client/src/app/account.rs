@@ -1153,10 +1153,7 @@ impl SowApp {
             self.progress = portal;
         }
         self.progress.preferred_leader = Some(cloud_preferred_leader.unwrap_or_else(|| {
-            sow_data::commerce::assigned_leader_for_account(
-                &account_id,
-                sow_data::commerce::current_rotation_period(),
-            )
+            sow_core::player::Leader::of("boudica")
         }));
         if !account_switch {
             self.progress

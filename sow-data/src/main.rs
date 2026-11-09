@@ -387,14 +387,25 @@ struct RewardReceiptsAckRequest {
     receipt_ids: Vec<String>,
 }
 
-async fn handle_store_catalog() -> Json<sow_data::commerce::StoreCatalog> {
-    Json(sow_data::commerce::catalog_for_profile(
+async fn handle_store_catalog(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<sow_data::commerce::StoreCatalog>, StatusCode> {
+    let period = sow_data::commerce::current_rotation_period();
+    let rotation = state
+        .db
+        .free_hero_rotation_for_period(period)
+        .map_err(|error| {
+            error!("hero rotation unavailable: {error}");
+            StatusCode::SERVICE_UNAVAILABLE
+        })?;
+    Ok(Json(sow_data::commerce::catalog_for_profile(
         &Default::default(),
         &Default::default(),
         0,
         0,
-        sow_data::commerce::current_rotation_period(),
-    ))
+        period,
+        &rotation,
+    )))
 }
 
 async fn store_account_for_request(
@@ -1743,6 +1754,13 @@ async fn main() {
         .warm_connection()
         .await
         .expect("Failed to initialize the Redb account authority");
+    let initial_rotation = player_db
+        .current_free_hero_rotation()
+        .expect("Failed to initialize the durable hero rotation");
+    info!(
+        "Initialized durable free hero rotation with {} heroes",
+        initial_rotation.len()
+    );
     player_db
         .ensure_current_season()
         .expect("Failed to initialize current profile season");

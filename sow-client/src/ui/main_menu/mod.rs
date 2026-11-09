@@ -151,6 +151,7 @@ impl Default for MainMenuState {
                 0,
                 0,
                 0,
+                &[],
             ),
             selected_skin: None,
             store_busy: false,

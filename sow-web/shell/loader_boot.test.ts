@@ -225,16 +225,16 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const applyCloudProfile = accountSource.slice(applyCloudProfileStart, applyCloudProfileEnd);
     assert.match(
         applyCloudProfile,
-        /cloud_preferred_leader\.unwrap_or_else\([\s\S]*?assigned_leader_for_account\([\s\S]*?current_rotation_period\(\)/,
-        "a missing cloud preference resolves to the account's free-rotation leader, not Boudica",
+        /cloud_preferred_leader\.unwrap_or_else\([\s\S]*?Leader::of\("boudica"\)/,
+        "the client fallback uses the permanently free hero instead of recalculating rotation",
     );
     const tutorialCompleteStart = dataDbSource.indexOf("pub async fn complete_tutorial(");
     const tutorialCompleteEnd = dataDbSource.indexOf("/// Register expected players", tutorialCompleteStart);
     const tutorialComplete = dataDbSource.slice(tutorialCompleteStart, tutorialCompleteEnd);
     assert.match(
         tutorialComplete,
-        /assigned_leader_for_account\(\s*account_id,\s*crate::commerce::current_rotation_period\(\)\s*,?\s*\)/,
-        "an account missing its preference receives its normal free-rotation assignment",
+        /let assigned = self\.assigned_free_hero\(account_id\)\?;[\s\S]*?unwrap_or\(assigned\)/,
+        "tutorial fallback uses the persistent server rotation",
     );
     assert.doesNotMatch(tutorialComplete, /Leader::Boudica/);
     const enterLoaderStart = sessionSource.indexOf("pub(crate) fn begin_enter_game_loader");

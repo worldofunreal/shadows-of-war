@@ -694,7 +694,7 @@
     const response = await fetch("/assets/map_sources/thumbnail_frames.json", { cache: "no-store" });
     if (!response.ok) throw new Error("Map source manifest unavailable");
     const manifest = await response.json(),
-      source = manifest.sources && manifest.sources["giantworldmap.png"];
+      source = manifest.sources && manifest.sources["giantworldmap.webp"];
     const frame = source && source.map_grid_frame;
     if (
       !source ||
@@ -714,7 +714,7 @@
         image.onload = resolve;
         image.onerror = () => reject(new Error("High-resolution world map unavailable"));
       });
-    image.src = "/assets/map_sources/giantworldmap.png";
+    image.src = "/assets/map_sources/giantworldmap.webp";
     await ready;
     if (image.naturalWidth !== source.width || image.naturalHeight !== source.height)
       throw new Error("World map source dimensions do not match its manifest");

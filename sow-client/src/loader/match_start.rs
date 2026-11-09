@@ -176,9 +176,19 @@ impl SowApp {
         let leader = if tutorial {
             config.player_leader
         } else if self.ui.app.main_menu_state.prefer_random_leader {
-            let period = sow_data::commerce::current_rotation_period();
-            let available =
-                sow_data::commerce::available_leaders(&self.progress.owned_leaders, period);
+            let rotation = self
+                .ui
+                .app
+                .main_menu_state
+                .store_catalog
+                .free_leaders
+                .iter()
+                .filter_map(|id| sow_data::commerce::leader_from_id(id))
+                .collect::<Vec<_>>();
+            let available = sow_data::commerce::available_leaders(
+                &self.progress.owned_leaders,
+                &rotation,
+            );
             if available.is_empty() {
                 self.ui.app.main_menu_state.selected_leader
             } else {

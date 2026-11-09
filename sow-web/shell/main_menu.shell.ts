@@ -130,6 +130,7 @@ let completedLoaderCycleId = -1;
 let deleteBusy = false;
 let deleteError = "";
 let activeMenuPointerId: number | null = null;
+let isDraggingSettingsSlider = false;
 let renderPending = false;
 let renderFlushTimer: number | null = null;
 let disconnectNoticeTimer: number | null = null;
@@ -1185,6 +1186,9 @@ function syncOverlay(key: string, markup: string) {
         }
     } else if (current.outerHTML !== next.outerHTML) {
         if (key === "settings") {
+            if (isDraggingSettingsSlider) {
+                return;
+            }
             const activeRange = current.querySelector<HTMLInputElement>(
                 "input[type='range']:active, input[type='range']:focus",
             );
@@ -2383,10 +2387,11 @@ function updateDynamic() {
     const fpsPingInput = root.querySelector<HTMLInputElement>("[data-setting='show_fps_ping']");
     const devToolsInput = root.querySelector<HTMLInputElement>("[data-setting='show_dev_tools']");
     const musicInteracting =
-        musicInput &&
-        (document.activeElement === musicInput ||
-            musicInput.matches(":active") ||
-            activeMenuPointerId !== null);
+        isDraggingSettingsSlider ||
+        (musicInput &&
+            (document.activeElement === musicInput ||
+                musicInput.matches(":active") ||
+                activeMenuPointerId !== null));
     if (musicInput && !musicInteracting)
         musicInput.value = String(settings.music_volume == null ? 0.8 : settings.music_volume);
     if (fpsPingInput && document.activeElement !== fpsPingInput)
@@ -3233,6 +3238,9 @@ root.addEventListener("click", function (event) {
 
 document.addEventListener("pointerdown", function (event) {
     const target = event.target instanceof Element ? event.target : null;
+    if (target instanceof HTMLInputElement && target.type === "range" && target.dataset.setting === "music_volume") {
+        isDraggingSettingsSlider = true;
+    }
     const interactive =
         target?.closest("[data-command], button, input, textarea, a, [role='button']") || null;
     if (interactive && root.contains(interactive)) activeMenuPointerId = event.pointerId;
@@ -3245,6 +3253,7 @@ document.addEventListener("pointerdown", function (event) {
 
 function finishMenuPointer(event: PointerEvent) {
     if (activeMenuPointerId !== event.pointerId || renderFlushTimer !== null) return;
+    isDraggingSettingsSlider = false;
     renderFlushTimer = setTimeout(function () {
         renderFlushTimer = null;
         activeMenuPointerId = null;
@@ -3252,8 +3261,14 @@ function finishMenuPointer(event: PointerEvent) {
     }, 0);
 }
 
-document.addEventListener("pointerup", finishMenuPointer);
-document.addEventListener("pointercancel", finishMenuPointer);
+document.addEventListener("pointerup", function (event) {
+    isDraggingSettingsSlider = false;
+    finishMenuPointer(event);
+});
+document.addEventListener("pointercancel", function (event) {
+    isDraggingSettingsSlider = false;
+    finishMenuPointer(event);
+});
 
 /* POKI_SHARED_AUTH_EVENTS_BEGIN */
 window.addEventListener("wou:auth-state-change", function () {
@@ -3658,6 +3673,7 @@ root.addEventListener("change", function (event) {
     }
     if (!input.dataset.setting) return;
     if (input.dataset.setting === "music_volume") {
+        isDraggingSettingsSlider = false;
         const val = Number(input.value);
         if (menuUi.state) {
             if (!menuUi.state.settings) menuUi.state.settings = {} as any;
@@ -3826,6 +3842,7 @@ function handleMenuStateUpdate(raw: string, parsed: MenuState) {
         window.SOW_tutorial_menu_state_update(menuUi.state);
     }
     syncProfilePreload(menuUi.state!);
+    if (menuUi.state!.phase === "MainMenu" && menuUi.state!.profile_ready) loadStoreCatalog();
     if (menuUi.state!.waiting && menuUi.passwordLobbyId != null) {
         menuUi.passwordLobbyId = null;
         menuUi.passwordDraft = "";

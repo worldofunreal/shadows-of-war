@@ -1,8 +1,8 @@
 # Arte fuente: dónde reemplazar y cómo se distribuye
 
-Los originales editables viven en `assets/art/`; las tomas propias del landing y las capturas viven en `assets/site/media/`. Reemplaza el archivo fuente en su carpeta y conserva el nombre esperado por el juego.
+Las fuentes editables viven en `assets/art/`; las tomas propias del landing y las capturas viven en `assets/site/media/`. El arte raster se conserva en WebP: fotos a calidad 90 y arte de píxel, logotipos y datos de imagen en WebP lossless. Reemplaza el archivo fuente en su carpeta y conserva el nombre esperado por el juego.
 
-- Conserva el original en alta resolución; no lo reduzcas ni lo recomprimas para la distribución.
+- Conserva las dimensiones de la fuente; `sow-dist` genera las variantes optimizadas para distribución sin reemplazar la fuente.
 - Usa transparencia para íconos, unidades y edificios. Los barcos pixel art conservan sus bordes con un perfil de remuestreo puntual.
 - `sow-dist/art-optimization.toml` define dimensiones, calidad y peso máximo por tipo de salida. `./sow l` y `./sow p` aplican esos perfiles al material de distribución y fallan si falta una receta o se excede un límite.
 - Ejecuta `./sow art-preview` para muestras de perfiles, o `./sow art-preview ability_icon` para revisar todos los iconos de habilidades. El reporte y sus derivados se escriben en `dist/.sow-state/art-preview/`; los originales no se modifican.
@@ -15,7 +15,7 @@ Los originales editables viven en `assets/art/`; las tomas propias del landing y
 |---|---|---|
 | Splash de escritorio | `assets/art/loader/sow-splash-desktop.webp` | `assets/shell/loader/sow-splash-desktop.webp`; lo comparten el loader y la portada del landing. |
 | Splash móvil | `assets/art/loader/sow-splash-mobile.webp` | `assets/shell/loader/sow-splash-mobile.webp`; cada dispositivo usa su propio hash para la caché. |
-| Icono de aplicación | `assets/art/brand/app-icon.png` | Iconos PWA y densidades Android generados por `sow-dist`; no mantengas copias fuente en `assets/site/icons/` ni en `sow-dist/deploy/android/.../res/mipmap-*/`. |
+| Icono de aplicación | `assets/art/brand/app-icon.webp` | Iconos PWA y densidades Android PNG generados por `sow-dist`; no mantengas copias fuente en `assets/site/icons/` ni en `sow-dist/deploy/android/.../res/mipmap-*/`. |
 
 Las escenas de sección (`step-*`, `closing-*`) siguen siendo ilustraciones independientes de `assets/site/media/`. La apertura del landing usa los dos splash maestros de arriba; no hay copias `opening-*` en `assets/site/media/`.
 
@@ -67,12 +67,12 @@ Las escenas son independientes de la hoja y se publican si el archivo existe. Si
 | `icons/` | `arrow-up`, `arrow-right`, `arrow-down`, `arrow-left`, `cancel`, `confirm` | flechas y botones al colocar un edificio | atlas |
 | `units/` | `transport-ship`, `trade-ship`, `warship`, `atom-bomb`, `sam-missile` | barcos y misiles que se mueven por el mapa | atlas, celda de 64 px |
 | `store/` | `sow_gems_500`, `sow_gems_1200`, `sow_gems_2600` | paquetes de gemas | 128 px |
-| `brand/` | `sow.svg`, `sow-long.svg`, `tower.svg`, `app-icon.png` | marca e iconos de la aplicación | SVG minificado; iconos PWA/Android generados del maestro |
+| `brand/` | `sow.svg`, `sow-long.svg`, `tower.svg`, `app-icon.webp` | marca e iconos de la aplicación | SVG minificado; iconos PWA/Android generados del maestro |
 | `loader/` | `sow-splash-*`, `loader_empty`, `loader_full` | apertura compartida y barras de carga | WebP con límite por perfil |
 | `skins/` | mismos SVG | skins | SVG minificado |
 | `music/` | mismo nombre | música del juego | optimizador de audio existente |
 
-Los iconos fuente pueden conservarse a alta resolución. `sow-dist` los reduce según su perfil; los atlas se generan desde el arte fuente y conservan el tratamiento de bordes configurado. Tú solo reemplazas el archivo maestro.
+Los iconos WebP fuente pueden conservarse a alta resolución. `sow-dist` los reduce según su perfil; los atlas se generan desde el arte fuente y conservan el tratamiento de bordes configurado. Tú solo reemplazas el archivo maestro.
 
 Los tres sprites de barcos vienen de OpenFront; las bombas y misiles todavía usan imágenes provisionales. Las demás imágenes provisionales están marcadas en `assets/SOURCES.toml`.
 
@@ -90,7 +90,7 @@ Las escenas propias del landing viven aquí; la portada usa los splash maestros 
 | `hero-loop` | Video opcional de portada: bucle de 12 s, sin sonido. Se pausa fuera de pantalla y respeta la preferencia de reducir movimiento. Mientras no exista, se muestra la portada fija correspondiente al dispositivo. |
 | `gameplay` | Video opcional de una partida, de 30 a 45 s. La sección aparece solo cuando existe. |
 
-Los prompts exactos, sus referencias originales en orden y el encargo de animación viven en [el manifiesto de arte del landing](../site/landing-art.json). Los originales de las imágenes son WebP, PNG o JPG; los videos admiten MP4, MOV, WebM o MKV. El publicador produce WebP para las imágenes, WebM y MP4 para los videos.
+Los prompts exactos, sus referencias originales en orden y el encargo de animación viven en [el manifiesto de arte del landing](../site/landing-art.json). Las fuentes raster de imágenes se guardan en WebP; los videos admiten MP4, MOV, WebM o MKV. El publicador produce WebP para las imágenes, WebM y MP4 para los videos.
 
 ## Agregar un héroe jugable
 

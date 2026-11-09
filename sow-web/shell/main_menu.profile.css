@@ -7,21 +7,31 @@
   --sow-profile-line: var(--sow-tactical-surface-border);
   --sow-profile-gold-line: var(--sow-tactical-surface-accent-border);
   --sow-profile-panel: var(--sow-tactical-surface-card-bg);
+  --sow-profile-gold: var(--sow-control-accent);
+  --sow-profile-gold-bright: var(--sow-control-accent-bright);
+  --sow-profile-gold-deep: #b89230;
+  --sow-profile-gold-glow: rgba(245, 197, 66, 0.25);
+  --sow-profile-win: #10b981;
+  --sow-profile-win-glow: rgba(16, 185, 129, 0.3);
+  --sow-profile-loss: #ef4444;
+  --sow-profile-loss-glow: rgba(239, 68, 68, 0.25);
+  --sow-profile-card-bg: var(--sow-tactical-surface-card-bg);
+  --sow-profile-card-border: var(--sow-tactical-surface-accent-border-soft);
   color-scheme: dark;
 }
 
 #sow-menu[data-screen="profile"] .sow-menu__backdrop {
   position: fixed;
   background-image:
-    linear-gradient(90deg, rgba(6, 8, 12, 0.96) 0%, rgba(6, 8, 12, 0.82) 48%, rgba(6, 8, 12, 0.72) 100%),
-    linear-gradient(0deg, rgba(6, 8, 12, 0.94) 0%, rgba(6, 8, 12, 0.42) 68%, rgba(6, 8, 12, 0.7) 100%);
-  background-color: #06080c;
+    linear-gradient(90deg, rgba(9, 10, 13, 0.97) 0%, rgba(9, 10, 13, 0.84) 48%, rgba(9, 10, 13, 0.74) 100%),
+    linear-gradient(0deg, rgba(9, 10, 13, 0.95) 0%, rgba(9, 10, 13, 0.44) 68%, rgba(9, 10, 13, 0.72) 100%);
+  background-color: #090a0d;
 }
 
 #sow-menu[data-screen="profile"] .sow-menu__backdrop::after {
   background:
-    linear-gradient(90deg, rgba(8, 10, 14, 0.24), transparent 58%),
-    linear-gradient(0deg, rgba(8, 10, 14, 0.45), transparent 55%);
+    linear-gradient(90deg, rgba(9, 10, 13, 0.24), transparent 58%),
+    linear-gradient(0deg, rgba(9, 10, 13, 0.45), transparent 55%);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__main {
@@ -62,19 +72,6 @@
 /* ==========================================================================
    2. Cinematic Commander Canvas & Prestige Dossier Header
    ========================================================================== */
-#sow-menu[data-screen="profile"] {
-  --sow-profile-gold: #f5c542;
-  --sow-profile-gold-bright: #ffe8a3;
-  --sow-profile-gold-deep: #b89230;
-  --sow-profile-gold-glow: rgba(245, 197, 66, 0.25);
-  --sow-profile-win: #10b981;
-  --sow-profile-win-glow: rgba(16, 185, 129, 0.3);
-  --sow-profile-loss: #ef4444;
-  --sow-profile-loss-glow: rgba(239, 68, 68, 0.25);
-  --sow-profile-card-bg: linear-gradient(180deg, rgba(22, 24, 28, 0.88) 0%, rgba(12, 13, 16, 0.98) 100%);
-  --sow-profile-card-border: rgba(245, 197, 66, 0.16);
-}
-
 #sow-menu[data-screen="profile"] .sow-profile__heading {
   position: relative;
   display: flex;
@@ -349,9 +346,9 @@
   margin: 4px 0 0;
   padding: 4px 12px 4px 6px;
   border-radius: 20px;
-  background: rgba(14, 18, 27, 0.75);
+  background: var(--sow-profile-surface-soft);
   border: 1px solid rgba(245, 197, 66, 0.2);
-  color: #cbd5e1;
+  color: #f5f1e8;
   font-size: 12px;
   font-weight: 600;
 }
@@ -405,9 +402,9 @@
   gap: 12px;
   padding: 14px 12px;
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(24, 26, 30, 0.85) 0%, rgba(13, 14, 18, 0.98) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-top: 1px solid rgba(245, 197, 66, 0.35);
+  background: var(--sow-profile-panel);
+  border: 1px solid var(--sow-profile-line);
+  border-top: 1px solid var(--sow-profile-gold-line);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -686,8 +683,8 @@
   gap: 10px;
   padding: 16px 20px;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(22, 24, 28, 0.85) 0%, rgba(13, 14, 18, 0.98) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--sow-profile-panel);
+  border: 1px solid var(--sow-profile-line);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
@@ -699,7 +696,7 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievements-progress-header span {
-  color: #94a3b8;
+  color: var(--sow-muted);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -707,7 +704,7 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievements-progress-header strong {
-  color: #f1f5f9;
+  color: #f5f1e8;
   font-size: 13px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -767,8 +764,8 @@
   gap: 14px;
   padding: 16px 18px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(22, 24, 28, 0.85) 0%, rgba(13, 14, 18, 0.98) 100%);
+  border: 1px solid var(--sow-profile-line);
+  background: var(--sow-profile-panel);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   position: relative;
   content-visibility: auto;
@@ -1180,9 +1177,9 @@
   align-items: center;
   gap: 14px;
   padding: 12px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--sow-profile-line);
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(22, 24, 28, 0.85) 0%, rgba(12, 13, 16, 0.98) 100%);
+  background: var(--sow-profile-panel);
   color: var(--sow-text);
   text-align: start;
   margin-bottom: 10px;
@@ -1316,9 +1313,9 @@
   min-height: 74px;
   margin-bottom: 10px;
   padding: 12px 18px 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--sow-profile-line);
   border-radius: 10px;
-  background: linear-gradient(90deg, rgba(20, 22, 26, 0.92) 0%, rgba(12, 13, 16, 0.98) 100%);
+  background: var(--sow-profile-panel);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
   color: var(--sow-text);
   text-align: start;
@@ -1524,8 +1521,8 @@
   padding: 0 20px;
   border: 1px solid rgba(245, 197, 66, 0.3);
   border-radius: var(--sow-button-radius);
-  background: linear-gradient(180deg, rgba(22, 24, 28, 0.88) 0%, rgba(12, 13, 16, 0.98) 100%);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  background: var(--sow-button-dark-bg);
+  box-shadow: var(--sow-button-dark-shadow);
   color: var(--sow-gold-bright, #ffe8a3);
   font-size: 11px;
   font-weight: 800;
@@ -1712,7 +1709,7 @@
   border: 1px solid rgba(245, 197, 66, 0.25);
   border-top: 1px solid rgba(245, 197, 66, 0.55);
   border-radius: 12px;
-  background: radial-gradient(ellipse at 50% 0%, rgba(245, 197, 66, 0.14), transparent 70%), linear-gradient(180deg, rgba(22, 24, 28, 0.9), rgba(12, 13, 16, 0.98));
+  background: radial-gradient(ellipse at 50% 0%, rgba(245, 197, 66, 0.14), transparent 70%), var(--sow-profile-panel);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
 }
 
@@ -1992,23 +1989,23 @@
   outline-offset: var(--sow-tactical-focus-offset);
 }
 
-#sow-menu[data-screen="profile"] .sow-ranked__overview { padding: clamp(18px, 3vw, 28px); border: 1px solid #7b653d; border-radius: 12px; background: radial-gradient(ellipse at 0 0, #65513533, transparent 60%), linear-gradient(135deg, #1b2029, #0d111a); }
+#sow-menu[data-screen="profile"] .sow-ranked__overview { padding: clamp(18px, 3vw, 28px); border: 1px solid #7b653d; border-radius: 12px; background: radial-gradient(ellipse at 0 0, #65513533, transparent 60%), var(--sow-profile-panel); }
 .sow-ranked__hero { display: flex; gap: 28px; align-items: center; }
 .sow-ranked__summary { display: grid; flex: 1; min-width: 0; gap: 12px; }
 .sow-ranked__summary h2 { margin: 0; color: #fff0d2; font-family: var(--font-display, serif); font-size: clamp(24px, 3vw, 34px); }
 .sow-ranked__summary .sow-ranked__placements { justify-content: start; margin: 0; }
-.sow-ranked__leagues { list-style: none; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); padding: 20px 0 0; margin: 24px 0 0; border-top: 1px solid #424650; gap: 8px; }
-.sow-ranked__leagues li { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 8px 2px; border: 1px solid transparent; border-radius: 8px; color: #aab4c5; }
+.sow-ranked__leagues { list-style: none; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); padding: 20px 0 0; margin: 24px 0 0; border-top: 1px solid var(--sow-tactical-surface-border); gap: 8px; }
+.sow-ranked__leagues li { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 8px 2px; border: 1px solid transparent; border-radius: 8px; color: var(--sow-muted); }
 .sow-ranked__leagues .sow-ranked__emblem { width: min(100%, 72px); }
 .sow-ranked__leagues strong { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
-.sow-ranked__leagues small { color: #bac4d2; font-variant-numeric: tabular-nums; font-size: 11px; }
+.sow-ranked__leagues small { color: var(--sow-muted); font-variant-numeric: tabular-nums; font-size: 11px; }
 .sow-ranked__leagues .is-current { color: #ffe1a1; background: #b98c3422; border-color: #bca069; }
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row { grid-template-columns: 32px 48px minmax(0,1fr) auto; min-height: 76px; transition: background 140ms, border-color 140ms; }
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem { width: 48px; }
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem b { font-size: 8px; padding: 1px 4px; }
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row.is-self { border-color: #d2ad67; background: #c1973c18; }
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong { display: grid; text-align: end; gap: 3px; font-variant-numeric: tabular-nums; }
-#sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong small { font-weight: 400; color: #bac3d3; font-size: 10px; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong small { font-weight: 400; color: var(--sow-muted); font-size: 10px; }
 @media (max-width: 600px) {
   .sow-ranked__hero { flex-direction: column; gap: 14px; text-align: center; }
   .sow-ranked__hero > .sow-ranked__emblem { width: 132px; }
@@ -2021,8 +2018,8 @@
 
 #sow-menu[data-screen="store"] .sow-menu__backdrop {
   background-image:
-    linear-gradient(90deg, rgba(6, 8, 12, 0.98), rgba(6, 8, 12, 0.86) 42%, rgba(6, 8, 12, 0.72)),
-    linear-gradient(0deg, rgba(6, 8, 12, 0.96), rgba(6, 8, 12, 0.42) 70%, rgba(6, 8, 12, 0.78)),
+    linear-gradient(90deg, rgba(9, 10, 13, 0.98), rgba(9, 10, 13, 0.86) 42%, rgba(9, 10, 13, 0.72)),
+    linear-gradient(0deg, rgba(9, 10, 13, 0.96), rgba(9, 10, 13, 0.42) 70%, rgba(9, 10, 13, 0.78)),
     var(--sow-hero);
 }
 
@@ -2084,7 +2081,7 @@
   padding: 8px 12px;
   border: 1px solid var(--sow-line);
   border-radius: 7px;
-  background: rgba(9, 11, 15, 0.72);
+  background: var(--sow-tactical-surface-subcard-bg);
   color: #fff;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
@@ -2233,9 +2230,9 @@
   align-items: center;
   gap: 12px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
-  background: rgba(10, 13, 18, 0.78);
+  background: var(--sow-tactical-surface-subcard-bg);
 }
 
 .sow-store__skin-art {
@@ -2244,9 +2241,9 @@
   height: 58px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(243, 177, 43, 0.35);
+  border: 1px solid rgba(245, 197, 66, 0.35);
   border-radius: 6px;
-  background: #10131a;
+  background: #0d0e13;
 }
 
 .sow-store__skin-art img {
@@ -2500,8 +2497,8 @@
 
 #sow-menu[data-screen="heroes"] .sow-menu__backdrop {
   background-image:
-    linear-gradient(90deg, rgba(6, 8, 12, 0.98), rgba(6, 8, 12, 0.84) 42%, rgba(6, 8, 12, 0.68)),
-    linear-gradient(0deg, rgba(6, 8, 12, 0.96), rgba(6, 8, 12, 0.4) 70%, rgba(6, 8, 12, 0.78)),
+    linear-gradient(90deg, rgba(9, 10, 13, 0.98), rgba(9, 10, 13, 0.84) 42%, rgba(9, 10, 13, 0.68)),
+    linear-gradient(0deg, rgba(9, 10, 13, 0.96), rgba(9, 10, 13, 0.4) 70%, rgba(9, 10, 13, 0.78)),
     var(--sow-hero);
 }
 

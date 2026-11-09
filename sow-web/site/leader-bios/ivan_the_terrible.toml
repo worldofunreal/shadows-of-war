@@ -1,0 +1,41 @@
+[articles.en]
+text = "Ivan IV Vasilyevich (1530–1584), known in English as Ivan the Terrible, became the first ruler crowned tsar of all Russia in 1547. His long reign joined ambitious reforms and territorial expansion with severe repression."
+title = "Ivan IV of Russia"
+lang = "en"
+url = "https://rusmuseumvrm.ru/reference/classifier/keyword/epoha_syuzhet._epoha_ivana_groznogo.php?lang=en&p=806&page=1&ps=100&show=asc"
+intro = [
+  "Ivan IV Vasilyevich was born in 1530, became grand prince as a small child after his father’s death in 1533, and was crowned tsar in 1547. The title presented him as sovereign of all Russia. His rule lasted until 1584 and became one of the most consequential, and most disputed, periods in Muscovite history.",
+  "The reforms of the 1550s strengthened central government and military service. A new law code, the Sudebnik, was adopted in 1550, and the paid Streltsy corps became a permanent force. Muscovite armies conquered the Kazan Khanate in 1552 and Astrakhan in 1556, extending the state along the Volga. The later Livonian War, fought from 1558 to 1583 in an effort to reach the Baltic, ended without the success Ivan sought.",
+]
+sections = [
+  { title = "Reform and expansion", paragraphs = [
+      "The Streltsy were not a legendary personal guard but a standing service force, paid and organized under the state. Their creation belongs to a broader program of legal, administrative, and military reform in the 1550s. The conquest of Kazan was a major turning point: it brought a Muslim Tatar khanate under Muscovite rule and raised new questions about governing a population with different religious and political traditions. Astrakhan followed four years later.",
+      "These victories did not make Ivan’s reign an uninterrupted success. The Livonian War consumed resources for decades and failed to secure the Baltic access the tsar wanted. The Cambridge History of Russia describes the period as one of ambitious political and military projects whose aims did not always fit together, and notes Ivan’s often inconsistent response to pressures within the dynasty, provinces, and foreign policy.",
+    ] },
+  { title = "The oprichnina and a contested legacy", paragraphs = [
+      "In 1565 Ivan separated an oprichnina domain and troops under his personal authority. The policy targeted boyar families and helped concentrate power, but it also involved confiscations, executions, and violence. The Russian Museum’s account emphasizes the brutal repression and the sharply divided historical assessment of Ivan. Explanations for the oprichnina and its consequences remain debated; it should not be reduced to a simple story of modernization or military success.",
+      "The ability ‘Streltsy Muster’ is a game interpretation of the permanent, paid force established during Ivan’s reforms. In play, capturing a completed enemy city can call up to 750 reserve troops once, subject to the normal troop cap. That capture trigger is a gameplay device, not a claim that the Streltsy were historically recruited after each city conquest.",
+    ] },
+]
+shortArticle = false
+sources = [
+  { title = "The Epoch of Ivan the Terrible (Virtual Russian Museum)", url = "https://rusmuseumvrm.ru/reference/classifier/keyword/epoha_syuzhet._epoha_ivana_groznogo.php?lang=en&p=806&page=1&ps=100&show=asc" },
+  { title = "Ivan IV (1533–1584), The Cambridge History of Russia", url = "https://www.cambridge.org/core/books/abs/cambridge-history-of-russia/ivan-iv-15331584/DFC46740A994E5BCEF3A2B1E472CE792" },
+  { title = "Muscovite Imperial Claims to the Kazan Khanate, Slavic Review", url = "https://www.cambridge.org/core/journals/slavic-review/article/abs/muscovite-imperial-claims-to-the-kazan-khanate/2794649002A307D3BE5474CC166F0659" },
+]
+
+[fallbacks]
+ar = "en"
+de = "en"
+es = "en"
+fil = "en"
+fr = "en"
+id = "en"
+it = "en"
+ja = "en"
+ko = "en"
+"pt-BR" = "en"
+ru = "en"
+tr = "en"
+vi = "en"
+"zh-CN" = "en"

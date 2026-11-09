@@ -697,6 +697,9 @@ leader_veleda_civilization = "ブルクテリ族"
 leader_amir_timur_name = "アミール・ティムール"
 leader_amir_timur_historical = "サマルカンドを拠点に、ヴォルガ川からガンジス川に至る帝国を築いたテュルク・モンゴル系の征服者（1336–1405）。"
 leader_amir_timur_civilization = "ティムール朝"
+leader_ivan_the_terrible_name = "イヴァン雷帝"
+leader_ivan_the_terrible_historical = "イヴァン4世（1530–1584）は1547年にツァーリとして戴冠した。治世に常備・有給のストレリツィ軍が組織され、カザンとアストラハンが征服された。一方、後のオプリーチニナは苛烈な弾圧をもたらし、その歴史的評価は今も議論されている。"
+leader_ivan_the_terrible_civilization = "ロシア"
 
 [profile]
 ranked_1v1 = "ランク1対1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "ライン川の鹵獲船"
 leader_veleda_description = "艦砲で撃破した敵軍艦を沈めずに鹵獲する。耐久力25%、熟練度なしで味方になる。"
 leader_amir_timur_ability = "草原の追撃"
 leader_amir_timur_description = "あなたの土地から撤退する部族は、失う兵が35%増える。"
+leader_ivan_the_terrible_ability = "ストレリツィの召集"
+leader_ivan_the_terrible_description = "完成した敵の都市を占領したとき、予備兵力に余裕があれば最大750人を召集する。1試合に1回、兵力上限まで。"
 
 [ranked]
 my_rank = "自分のランク"

@@ -461,6 +461,7 @@ impl SowEngine {
                     | Ability::SharedFeast
                     | Ability::CounterLevy { .. }
                     | Ability::SharedCitySpoils { .. }
+                    | Ability::StreltsyMuster { .. }
                     | Ability::CityEvacuation { .. }
                     | Ability::CityIntercession { .. }
                     | Ability::GuildNetwork { .. }
@@ -751,6 +752,23 @@ impl SowEngine {
                     && !allied(&self.state, owner, b.owner_id)
                     && !self.hero_claims.contains(&(owner, b.id, 0))
             })),
+            Ability::StreltsyMuster { .. } => {
+                if self.hero_claims.contains(&(owner, 0, 0)) {
+                    Spent
+                } else {
+                    ready(
+                        p.troops < p.max_troops
+                            && self.buildings.iter().any(|city| {
+                                city.kind == BuildingKind::City
+                                    && !city.under_construction
+                                    && city.active_level() > 0
+                                    && city.owner_id != 0
+                                    && city.owner_id != owner
+                                    && !allied(&self.state, owner, city.owner_id)
+                            }),
+                    )
+                }
+            }
             Ability::AksumRout => ready(self.buildings.iter().any(|&city| {
                 let map = &self.state.map;
                 map.owner_id(city.tile_idx % map.width, city.tile_idx / map.width) == city.owner_id
@@ -1806,6 +1824,26 @@ impl SowEngine {
         }
         if building.under_construction {
             return;
+        }
+        if self.state.config.buildings_enabled
+            && let Some(captor) = self.state.player(building.owner_id)
+            && captor.alive
+            && captor.tile_count > 0
+            && building.kind == BuildingKind::City
+            && building.active_level() > 0
+            && let Ability::StreltsyMuster { troops } = captor.leader.ability()
+            && !self.hero_claims.contains(&(building.owner_id, 0, 0))
+        {
+            let gained = {
+                let captor = self.state.player_mut(building.owner_id).unwrap();
+                let before = captor.troops;
+                captor.credit_troops_capped(f64::from(troops), captor.max_troops);
+                captor.troops - before
+            };
+            if gained > 0.0 && self.hero_claims.insert((building.owner_id, 0, 0)) {
+                self.state
+                    .announce_leader_ability_to(building.owner_id, &[previous_owner], tile);
+            }
         }
         if let Some(captor) = self.state.player(building.owner_id)
             && captor.alive

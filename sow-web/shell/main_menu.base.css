@@ -1,12 +1,12 @@
 /* Shared menu frame, controls, feedback, and modal primitives. */
 
 #sow-menu {
-  --sow-gold: #f3b12b;
-  --sow-gold-bright: #ffd36a;
+  --sow-gold: var(--sow-control-accent);
+  --sow-gold-bright: var(--sow-control-accent-bright);
   --sow-laurel-bright: #e9d5ff;
   --sow-cyan: #38bdf8;
   --sow-line: var(--sow-tactical-surface-border);
-  --sow-muted: rgba(235, 231, 220, 0.62);
+  --sow-muted: var(--sow-control-muted);
   --sow-menu-header-height: 56px;
   --sow-menu-nav-rail: 0;
   --sow-menu-nav-height: 3.75rem;
@@ -82,16 +82,16 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   background-image:
     linear-gradient(
       90deg,
-      rgba(8, 10, 14, 0.96) 0%,
-      rgba(8, 10, 14, 0.82) 23%,
-      rgba(8, 10, 14, 0.18) 62%,
-      rgba(8, 10, 14, 0.28) 100%
+      rgba(9, 10, 13, 0.97) 0%,
+      rgba(9, 10, 13, 0.84) 24%,
+      rgba(9, 10, 13, 0.18) 62%,
+      rgba(9, 10, 13, 0.32) 100%
     ),
-    linear-gradient(0deg, rgba(8, 10, 14, 0.82) 0%, transparent 36%), var(--sow-hero);
+    linear-gradient(0deg, rgba(9, 10, 13, 0.86) 0%, transparent 38%), var(--sow-hero);
   background-position: right center;
   background-size: cover;
   background-repeat: no-repeat;
-  background-color: #101319;
+  background-color: #090a0d;
 }
 
 .sow-menu__backdrop::after {
@@ -101,8 +101,8 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   background: radial-gradient(
     circle at 74% 48%,
     transparent 0 20%,
-    rgba(8, 10, 14, 0.28) 72%,
-    rgba(8, 10, 14, 0.64) 100%
+    rgba(9, 10, 13, 0.3) 72%,
+    rgba(9, 10, 13, 0.68) 100%
   );
   pointer-events: none;
 }
@@ -174,16 +174,16 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   width: var(--sow-topbar-avatar);
   height: var(--sow-topbar-avatar);
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--sow-gold) 66%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 70%, transparent);
   border-radius: 6px;
-  background-color: rgb(5 10 13);
+  background-color: rgb(9 10 13);
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
   box-shadow:
-    0 0 0 2px rgb(5 10 13 / 84%),
-    0 0 12px color-mix(in srgb, var(--sow-gold) 20%, transparent),
-    inset 0 1px 0 rgb(255 255 255 / 12%);
+    0 0 0 2px rgb(9 10 13 / 88%),
+    0 0 12px color-mix(in srgb, var(--sow-gold) 22%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 14%);
   cursor: pointer;
   transition:
     border-color 160ms ease,
@@ -193,8 +193,8 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 .sow-menu__avatar:hover {
   border-color: var(--sow-gold-bright);
   box-shadow:
-    0 0 0 2px rgb(5 10 13 / 84%),
-    0 0 16px color-mix(in srgb, var(--sow-gold) 45%, transparent);
+    0 0 0 2px rgb(9 10 13 / 88%),
+    0 0 16px color-mix(in srgb, var(--sow-gold) 48%, transparent);
 }
 
 .sow-menu__name {
@@ -551,7 +551,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 
 /* Each balance is one compact, beveled plate with its own metal and light color. */
 .sow-menu__currency {
-  --sow-currency-rgb: 244 189 76;
+  --sow-currency-rgb: 245 197 66;
   --sow-currency-tilt: -4deg;
   position: relative;
   isolation: isolate;
@@ -565,15 +565,15 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   height: var(--sow-topbar-pill-height);
   padding: 0 6px;
   border: 1px solid rgb(var(--sow-currency-rgb) / 42%);
-  border-top-color: rgb(var(--sow-currency-rgb) / 75%);
+  border-top-color: rgb(var(--sow-currency-rgb) / 78%);
   border-radius: 5px;
   background:
-    linear-gradient(120deg, rgb(var(--sow-currency-rgb) / 15%), transparent 62%),
-    linear-gradient(180deg, #222a2e, #0b1116 56%, #10191e);
+    linear-gradient(120deg, rgb(var(--sow-currency-rgb) / 14%), transparent 62%),
+    linear-gradient(180deg, #1d1f27, #0b0c10 56%, #11131a);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 13%),
-    inset 0 -2px 0 rgb(0 0 0 / 42%),
-    0 2px 4px rgb(0 0 0 / 38%);
+    inset 0 -2px 0 rgb(0 0 0 / 48%),
+    0 2px 5px rgb(0 0 0 / 45%);
   color: #fff;
   white-space: nowrap;
 }
@@ -806,9 +806,9 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   padding: 20px;
   border: 1px solid var(--reward-color);
   border-radius: 22px;
-  background: linear-gradient(155deg, #1b2430, #0a0d14 78%);
+  background: linear-gradient(155deg, #1b1d24, #090a0d 78%);
   box-shadow:
-    0 18px 55px rgba(0, 0, 0, 0.75),
+    0 18px 55px rgba(0, 0, 0, 0.78),
     0 0 40px var(--reward-glow),
     inset 0 1px rgba(255, 255, 255, 0.16);
   transform-origin: 50% 65%;
@@ -855,7 +855,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   place-items: center;
   border: 3px solid var(--reward-color);
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 28%, #374451, #111923 60%, #080b12);
+  background: radial-gradient(circle at 35% 28%, #2e313d, #12141c 60%, #08090c);
   box-shadow:
     0 0 0 8px rgba(255, 255, 255, 0.045),
     0 0 42px var(--reward-glow),
@@ -915,7 +915,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   bottom: calc(env(safe-area-inset-bottom) + 18px);
   width: 46px;
   height: 46px;
-  background: rgba(13, 16, 23, 0.9);
+  background: var(--sow-button-dark-bg);
   color: #fff;
   font-size: 30px;
 }
@@ -1330,8 +1330,8 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   width: 42px;
   height: 42px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(24, 28, 36, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(20, 22, 28, 0.88);
   color: #e5e7eb;
   font-size: 22px;
   line-height: 1;
@@ -1353,9 +1353,9 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 .sow-menu__icon-button:hover {
   border-color: var(--sow-gold);
   color: var(--sow-gold-bright);
-  background: rgba(35, 41, 54, 0.95);
+  background: rgba(28, 30, 38, 0.96);
   transform: translateY(-1px);
-  box-shadow: 0 0 12px rgba(243, 177, 43, 0.25);
+  box-shadow: 0 0 12px rgba(245, 197, 66, 0.25);
 }
 
 .sow-menu__ghost-button:hover {
@@ -1377,8 +1377,15 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   overflow-x: hidden;
   overflow-y: visible;
   padding: 22px;
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
   border-inline-start: 3px solid var(--sow-gold);
-  background: linear-gradient(90deg, rgba(9, 11, 15, 0.88), rgba(9, 11, 15, 0.56));
+  border-radius: var(--sow-tactical-surface-radius);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow:
+    var(--sow-tactical-card-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -1407,8 +1414,16 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 }
 
 .sow-menu__quick-match {
-  min-height: 56px;
-  padding-block: 8px;
+  min-height: 58px;
+  padding-block: 10px;
+  border-color: rgba(253, 224, 71, 0.82);
+  background:
+    linear-gradient(135deg, rgba(255, 248, 214, 0.24) 0%, transparent 46%),
+    var(--sow-button-primary-bg);
+  box-shadow:
+    0 8px 24px rgba(245, 158, 11, 0.32),
+    inset 0 1px 0 rgba(255, 252, 235, 0.52),
+    inset 0 -2px 0 rgba(120, 53, 15, 0.42);
 }
 
 .sow-menu__quick-match > div {
@@ -1417,15 +1432,17 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 }
 
 .sow-menu__quick-match strong {
-  font-size: 12px;
+  font-size: 12.5px;
   letter-spacing: 0.1em;
+  color: #0b0c10;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .sow-menu__quick-match small {
-  color: rgba(255, 244, 220, 0.74);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  color: rgba(14, 16, 22, 0.82);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
 }
 
 #sow-menu[data-screen="home"] .sow-menu__command {
@@ -1486,7 +1503,8 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   transition:
     transform 160ms ease,
     filter 160ms ease,
-    border-color 160ms ease;
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .sow-menu__primary {
@@ -1511,6 +1529,18 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   font-size: 11px;
 }
 
+.sow-menu__campaign-btn {
+  border-color: rgba(245, 197, 66, 0.34);
+  border-inline-start: 3px solid var(--sow-gold);
+  background:
+    linear-gradient(90deg, rgba(245, 197, 66, 0.11) 0%, transparent 56%),
+    var(--sow-button-dark-bg);
+}
+
+.sow-menu__campaign-btn span {
+  color: var(--sow-gold-bright);
+}
+
 .sow-menu__danger {
   border-color: rgba(236, 104, 78, 0.5);
   color: #ffb1a2;
@@ -1533,14 +1563,22 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   filter: brightness(1.08);
 }
 
+.sow-menu__secondary:hover {
+  border-color: rgba(245, 197, 66, 0.58);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.52),
+    0 0 12px rgba(245, 197, 66, 0.14);
+}
+
 .sow-menu__join input,
 .sow-menu__field {
   min-width: 0;
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
   outline: 0;
-  background: rgba(0, 0, 0, 0.38);
+  background: rgba(7, 8, 11, 0.72);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55);
   color: #fff;
 }
 
@@ -1818,7 +1856,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   min-height: 480px;
   overflow: hidden;
   isolation: isolate;
-  background: #080b11;
+  background: #090a0d;
 }
 
 .sow-purchase-modal__visual::before,
@@ -1845,8 +1883,8 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   background: radial-gradient(
     circle at center,
     transparent 22%,
-    rgba(8, 10, 14, 0.08) 45%,
-    rgba(8, 10, 14, 0.86) 100%
+    rgba(9, 10, 13, 0.08) 45%,
+    rgba(9, 10, 13, 0.88) 100%
   );
 }
 
@@ -1871,7 +1909,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 .sow-purchase-modal__visual--bundle {
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 50% 42%, rgba(243, 177, 43, 0.24), transparent 46%), #0b1018;
+  background: radial-gradient(circle at 50% 42%, rgba(245, 197, 66, 0.22), transparent 46%), #0b0c10;
 }
 
 .sow-purchase-modal__art-image--skin {
@@ -1901,7 +1939,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   min-width: 0;
   flex-direction: column;
   padding: clamp(28px, 4vw, 48px);
-  background: linear-gradient(150deg, rgba(24, 27, 34, 0.98), rgba(9, 11, 15, 0.98));
+  background: var(--sow-tactical-surface-card-bg);
 }
 
 .sow-purchase-modal__copy .sow-menu__modal-head {
@@ -2081,7 +2119,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   z-index: 4;
   justify-content: center;
   gap: 28px;
-  background: linear-gradient(105deg, rgba(18, 20, 28, 0.92), #090b11);
+  background: var(--sow-tactical-surface-card-bg);
 }
 
 .sow-purchase-modal.is-success .sow-purchase-modal__copy .sow-menu__modal-actions {
@@ -2296,7 +2334,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   .sow-purchase-modal.is-success .sow-purchase-modal__copy {
     gap: 16px;
     padding: clamp(18px, 5vw, 26px);
-    background: linear-gradient(180deg, #171b23, #090b11);
+    background: var(--sow-tactical-surface-card-bg);
   }
 
   .sow-purchase-modal.is-success .sow-purchase-modal__copy .sow-menu__modal-head {
@@ -2341,14 +2379,14 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   inset: 0;
   min-height: 0;
   max-height: none;
-  background: #080b11;
+  background: #090a0d;
 }
 
 .sow-purchase-modal.is-leader .sow-purchase-modal__visual::after {
   background:
-    linear-gradient(0deg, rgba(6, 8, 12, 0.96), rgba(6, 8, 12, 0.7) 28%, transparent 76%),
-    linear-gradient(90deg, rgba(6, 8, 12, 0.2), transparent 72%),
-    radial-gradient(circle at center, transparent 34%, rgba(8, 10, 14, 0.6) 100%);
+    linear-gradient(0deg, rgba(9, 10, 13, 0.96), rgba(9, 10, 13, 0.72) 28%, transparent 76%),
+    linear-gradient(90deg, rgba(9, 10, 13, 0.22), transparent 72%),
+    radial-gradient(circle at center, transparent 34%, rgba(9, 10, 13, 0.62) 100%);
 }
 
 .sow-purchase-modal.is-leader .sow-purchase-modal__art-image {
@@ -2367,10 +2405,10 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   min-width: 0;
   overflow: hidden;
   padding: clamp(12px, 2.4vw, 24px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-inline-start: 3px solid var(--sow-control-accent-bright);
   border-radius: 10px;
-  background: linear-gradient(155deg, rgba(13, 18, 27, 0.9), rgba(7, 10, 16, 0.84));
+  background: var(--sow-tactical-surface-card-bg);
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.58),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -2725,7 +2763,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   border-color: color-mix(in srgb, var(--rank-glow) 65%, #343a45);
   background:
     radial-gradient(ellipse at 50% 0, #34334155, transparent 55%),
-    linear-gradient(150deg, #20232c, #0c1019 80%);
+    linear-gradient(150deg, #1d1f27, #090a0d 80%);
   box-shadow:
     0 30px 90px #0009,
     0 0 70px color-mix(in srgb, var(--rank-glow) 12%, transparent);

@@ -58,6 +58,7 @@ fn measurement(ability: Ability) -> u16 {
         Ability::AkkadGarrison => 431,
         Ability::SharedFeast => 432,
         Ability::GreatLawOfPeace => 433,
+        Ability::StreltsyMuster { .. } => 435,
         Ability::ContestedSteppe { .. } => 434,
         Ability::ZagrosAscent { .. } => 436,
         Ability::RegionalCommands { .. } => 437,
@@ -889,6 +890,7 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
             | Ability::NyabingiNetwork { .. }
             | Ability::CounterLevy { .. }
             | Ability::SharedCitySpoils { .. }
+            | Ability::StreltsyMuster { .. }
             | Ability::CityEvacuation { .. }
             | Ability::CityIntercession { .. }
             | Ability::RetreatHandover { .. }
@@ -1308,6 +1310,7 @@ fn every_hero_has_a_catalog_ability() {
             | Ability::SharedFeast
             | Ability::GreatLawOfPeace
             | Ability::SiegeBreach => 1,
+            Ability::StreltsyMuster { troops } => troops,
             Ability::AlliedCityGrant { gold } | Ability::SharedCitySpoils { gold } => gold,
             Ability::CityEvacuation { troops }
             | Ability::CityIntercession { troops }
@@ -1349,6 +1352,56 @@ fn al_ghafiqi_has_a_mountain_campaign_ability() {
     );
     assert_eq!(hero.attacker_loss_multiplier(LossWhen::Mountain), 0.75);
     assert_eq!(hero.attacker_loss_multiplier(LossWhen::Highland), 1.0);
+}
+
+#[test]
+fn ivan_streltsy_muster_waits_for_room_and_triggers_only_once() {
+    use super::hero_effects::AbilityState::{Conditional, Spent};
+
+    let hero = Leader::of("ivan_the_terrible");
+    assert_eq!(
+        hero.ability(),
+        Ability::StreltsyMuster { troops: 750 }
+    );
+    let mut engine = arena(64, 32, hero, Some(Leader::of("cleopatra")));
+    engine.state.player_mut(1).unwrap().troops = 10_000.0;
+    engine.state.player_mut(1).unwrap().max_troops = 10_000.0;
+    engine
+        .state
+        .set_tile_owner(40, 40, 2);
+    engine.add_building(Building {
+        id: 1,
+        owner_id: 2,
+        kind: BuildingKind::City,
+        tile_idx: 40 * 64 + 40,
+        level: 1,
+        under_construction: false,
+        ticks_until_complete: 0,
+    });
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+    engine.state.set_tile_owner(40, 40, 1);
+    engine.sync_building_ownership();
+    assert_eq!(engine.state.player(1).unwrap().troops, 10_000.0);
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+
+    engine.state.player_mut(1).unwrap().troops = 9_500.0;
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+    engine.state.set_tile_owner(40, 40, 2);
+    engine.sync_building_ownership();
+    engine.state.player_mut(1).unwrap().troops = 9_500.0;
+
+    engine.state.set_tile_owner(40, 40, 1);
+    engine.sync_building_ownership();
+    assert_eq!(engine.state.player(1).unwrap().troops, 10_000.0);
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Spent);
+    assert_eq!(owner_marks(&engine)[1], 1);
+
+    engine.state.set_tile_owner(40, 40, 2);
+    engine.sync_building_ownership();
+    engine.state.set_tile_owner(40, 40, 1);
+    engine.sync_building_ownership();
+    assert_eq!(engine.state.player(1).unwrap().troops, 10_000.0);
+    assert_eq!(owner_marks(&engine)[1], 1);
 }
 
 #[test]
@@ -1496,6 +1549,7 @@ fn boudica_strikes_outnumbered_rivals_in_a_real_match() {
         "any-account",
         &Default::default(),
         crate::commerce::current_rotation_period(),
+        &[],
     );
     assert_eq!(pick.resolved, boudica);
     let info = crate::protocol::PlayerInfo {
@@ -3863,6 +3917,29 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 value,
                 "recapture cannot mint gold again"
             );
+            (value, owner_marks(&e)[1])
+        }
+        Ability::StreltsyMuster { .. } => {
+            use super::hero_effects::AbilityState::{Ready, Spent};
+            let active = matches!(leader.ability(), Ability::StreltsyMuster { .. });
+            e.state.player_mut(1).unwrap().troops = 1_000.0;
+            e.state.player_mut(1).unwrap().max_troops = 10_000.0;
+            e.add_building(make(1, 2, BuildingKind::City, 40, 40, 1, false));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            let before = e.state.player(1).unwrap().troops;
+            e.state.set_tile_owner(40, 40, 1);
+            e.sync_building_ownership();
+            let value = e.state.player(1).unwrap().troops - before;
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Spent);
+            }
+            e.state.set_tile_owner(40, 40, 2);
+            e.sync_building_ownership();
+            e.state.set_tile_owner(40, 40, 1);
+            e.sync_building_ownership();
+            assert_eq!(e.state.player(1).unwrap().troops - before, value);
             (value, owner_marks(&e)[1])
         }
         Ability::CityEvacuation { .. } => {

@@ -1153,6 +1153,9 @@ leader_veleda_civilization = "Bructeri"
 leader_amir_timur_name = "Amir Timur"
 leader_amir_timur_historical = "Turco-Mongol conqueror (1336–1405) who ruled from Samarkand and built an empire from the Volga to the Ganges."
 leader_amir_timur_civilization = "Timurid Empire"
+leader_ivan_the_terrible_name = "Ivan the Terrible"
+leader_ivan_the_terrible_historical = "Ivan IV Vasilyevich (1530–1584), crowned tsar in 1547. His government established the paid, standing Streltsy force and expanded into Kazan and Astrakhan; the later oprichnina imposed brutal repression and remains contested in historical interpretation."
+leader_ivan_the_terrible_civilization = "Russia"
 
 [profile]
 laurels = "Laurels"
@@ -2155,6 +2158,8 @@ leader_veleda_ability = "Prize of the Rhine"
 leader_veleda_description = "Your naval shells capture defeated enemy warships instead of sinking them. Prizes change sides with 25% health and no veterancy."
 leader_amir_timur_ability = "Pursuit of the Horde"
 leader_amir_timur_description = "Tribes retreating from your land lose 35% more troops."
+leader_ivan_the_terrible_ability = "Streltsy Muster"
+leader_ivan_the_terrible_description = "Capturing a completed enemy city while your reserves have room musters up to 750 troops. Once per match, within your troop cap."
 
 [ranked]
 my_rank = "My rank"

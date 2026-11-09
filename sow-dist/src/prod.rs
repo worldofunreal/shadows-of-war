@@ -546,7 +546,7 @@ fn android_inputs(paths: &Paths) -> Result<Vec<PathBuf>> {
         project.join("app/proguard-rules.pro"),
         project.join("app/src/main"),
         paths.android_resources.clone(),
-        paths.root.join("assets/art/brand/app-icon.png"),
+        paths.root.join("assets/art/brand/app-icon.webp"),
         paths.art_pipeline()?.config_path.clone(),
         project.join("build.gradle"),
         project.join("settings.gradle"),
