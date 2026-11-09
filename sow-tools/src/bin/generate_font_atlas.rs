@@ -7,13 +7,14 @@
 //!   sow-web/site/fonts/noto-sans-arabic-regular.ttf \
 //!   sow-web/site/fonts/noto-sans-cjk-regular.ttc \
 //!   sow-render/src/text/unicode_name_glyphs.txt \
-//!   assets/generated/msdf-atlas.png \
+//!   assets/generated/msdf-atlas.webp \
 //!   assets/generated/msdf-atlas.json
 //!
 //! The corpus sections select Vietnamese Latin diacritics, Cyrillic, Japanese,
 //! Korean, Simplified and Traditional Chinese, and Arabic glyphs; they stay separate from the ghost-name list.
 
 use ab_glyph::{Font, FontRef, GlyphId, PxScale, ScaleFont};
+use image::ImageEncoder;
 use rustybuzz::{Direction, Face as ShapeFace, UnicodeBuffer};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -83,7 +84,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 8 {
         eprintln!(
-            "Usage: {} <latin.ttf> <cyrillic.ttf> <arabic.ttf> <cjk.ttc> <unicode-glyphs.txt> <out.png> <out.json>",
+            "Usage: {} <latin.ttf> <cyrillic.ttf> <arabic.ttf> <cjk.ttc> <unicode-glyphs.txt> <out.webp> <out.json>",
             args.first()
                 .map(String::as_str)
                 .unwrap_or("generate-font-atlas")
@@ -401,16 +402,16 @@ fn main() {
 
     let image = image::RgbImage::from_raw(ATLAS_SIZE, ATLAS_SIZE, atlas_pixels)
         .expect("Failed to create atlas image");
-    // Best compression: the atlas is embedded in the WASM, and the default
-    // fast PNG is ~4x larger for identical pixels.
-    let file = std::fs::File::create(&args[6]).expect("Failed to create atlas PNG");
-    image
-        .write_with_encoder(image::codecs::png::PngEncoder::new_with_quality(
-            std::io::BufWriter::new(file),
-            image::codecs::png::CompressionType::Best,
-            image::codecs::png::FilterType::Adaptive,
-        ))
-        .expect("Failed to save atlas PNG");
+    // The atlas is linear distance-field data, so keep every channel exact.
+    let file = std::fs::File::create(&args[6]).expect("Failed to create atlas WebP");
+    image::codecs::webp::WebPEncoder::new_lossless(std::io::BufWriter::new(file))
+        .write_image(
+            image.as_raw(),
+            ATLAS_SIZE,
+            ATLAS_SIZE,
+            image::ExtendedColorType::Rgb8,
+        )
+        .expect("Failed to save atlas WebP");
 
     let chars_json: Vec<serde_json::Value> = sheets
         .iter()
@@ -441,7 +442,7 @@ fn main() {
         .filter_map(|sheet| sheet.character.chars().next().map(|ch| ch.to_string()))
         .collect();
     let atlas_json = serde_json::json!({
-        "pages": ["msdf-atlas.png"],
+        "pages": ["msdf-atlas.webp"],
         "chars": chars_json,
         "info": {
             "face": "Work Sans + Noto Sans Cyrillic + Noto Sans Arabic + Noto Sans CJK JP/KR/SC/TC",

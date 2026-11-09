@@ -767,16 +767,6 @@ impl Default for PlayerProfile {
 }
 
 impl PlayerProfile {
-    pub fn for_account(account_id: &str) -> Self {
-        let mut profile = Self::default();
-        let leader = crate::commerce::assigned_leader_for_account(
-            account_id,
-            crate::commerce::current_rotation_period(),
-        );
-        profile.preferred_leader = Some(crate::commerce::leader_wire_id(leader).to_string());
-        profile
-    }
-
     pub fn sync_level(&mut self) {
         self.level = 1 + self.xp / 100;
     }
@@ -1117,6 +1107,34 @@ impl PlayerDb {
             })
             .await?;
         Ok(connection.clone())
+    }
+
+    pub fn current_free_hero_rotation(
+        &self,
+    ) -> Result<Vec<crate::leaders::Leader>, Box<dyn std::error::Error + Send + Sync>> {
+        self.free_hero_rotation_for_period(crate::commerce::current_rotation_period())
+    }
+
+    pub fn free_hero_rotation_for_period(
+        &self,
+        period: u64,
+    ) -> Result<Vec<crate::leaders::Leader>, Box<dyn std::error::Error + Send + Sync>> {
+        let db = self
+            .redb_db
+            .as_ref()
+            .ok_or("hero rotation database unavailable")?;
+        crate::redb_store::free_hero_rotation_for_period(db, period)
+    }
+
+    fn assigned_free_hero(
+        &self,
+        account_id: &str,
+    ) -> Result<crate::leaders::Leader, Box<dyn std::error::Error + Send + Sync>> {
+        let period = crate::commerce::current_rotation_period();
+        let rotation = self.free_hero_rotation_for_period(period)?;
+        Ok(crate::commerce::assigned_leader_for_account(
+            account_id, period, &rotation,
+        ))
     }
 
     /// Establish storage before accepting requests; an unavailable account
@@ -2359,11 +2377,7 @@ impl PlayerDb {
             return Ok(account);
         }
         let assigned =
-            crate::commerce::leader_wire_id(crate::commerce::assigned_leader_for_account(
-                &account.id,
-                crate::commerce::current_rotation_period(),
-            ))
-            .to_string();
+            crate::commerce::leader_wire_id(self.assigned_free_hero(&account.id)?).to_string();
         let updated = self
             .update_account_atomic(&account.id, &[], |account| {
                 if account.profile.preferred_leader.is_none() {
@@ -3391,7 +3405,7 @@ impl PlayerDb {
             self.insert_account(PlayerAccount {
                 id: account_id.to_string(),
                 display_name: generated_display_name(),
-                profile: PlayerProfile::for_account(account_id),
+                profile: PlayerProfile::default(),
                 linked_identities: vec![LinkedIdentity {
                     provider: provider.clone(),
                     environment: environment.clone(),
@@ -3480,7 +3494,7 @@ impl PlayerDb {
                 .as_secs();
             let inserted = self
                 .insert_account(PlayerAccount {
-                    profile: PlayerProfile::for_account(&id),
+                    profile: PlayerProfile::default(),
                     id,
                     display_name: generated_display_name(),
                     linked_identities: vec![LinkedIdentity {
@@ -3577,7 +3591,7 @@ impl PlayerDb {
             let account = PlayerAccount {
                 id: random_id.clone(),
                 display_name: display_name.clone(),
-                profile: PlayerProfile::for_account(&random_id),
+                profile: PlayerProfile::default(),
                 linked_identities: Vec::new(),
                 kind: AccountKind::Human,
                 auth_secret_hash: None,
@@ -3586,6 +3600,7 @@ impl PlayerDb {
             };
             let (account, created) = self.insert_account(account).await?;
             if created {
+                let account = self.ensure_starting_leader(account).await?;
                 let account = self.ensure_welcome_grant(account).await?;
                 info!("Created anonymous account {}", account.id);
                 return Ok(account);
@@ -3662,11 +3677,14 @@ impl PlayerDb {
         requested_leader: Option<&str>,
     ) -> Result<crate::commerce::LeaderResolution, Box<dyn std::error::Error + Send + Sync>> {
         let account = self.load_account(account_id).await?;
+        let period = crate::commerce::current_rotation_period();
+        let rotation = self.free_hero_rotation_for_period(period)?;
         Ok(crate::commerce::resolve_leader(
             requested_leader,
             account_id,
             &account.profile.owned_leaders,
-            crate::commerce::current_rotation_period(),
+            period,
+            &rotation,
         ))
     }
 
@@ -3675,11 +3693,10 @@ impl PlayerDb {
         account_id: &str,
     ) -> Result<crate::leaders::Leader, Box<dyn std::error::Error + Send + Sync>> {
         let account = self.load_account(account_id).await?;
-        crate::commerce::draw_available_leader(
-            &account.profile.owned_leaders,
-            crate::commerce::current_rotation_period(),
-        )
-        .ok_or_else(|| "no available leaders".into())
+        let period = crate::commerce::current_rotation_period();
+        let rotation = self.free_hero_rotation_for_period(period)?;
+        crate::commerce::draw_available_leader(&account.profile.owned_leaders, &rotation)
+            .ok_or_else(|| "no available leaders".into())
     }
 
     pub async fn update_leader_selection(
@@ -3699,6 +3716,8 @@ impl PlayerDb {
             )
         };
         let period = crate::commerce::current_rotation_period();
+        let rotation = self.free_hero_rotation_for_period(period)?;
+        let assigned = crate::commerce::assigned_leader_for_account(account_id, period, &rotation);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -3711,8 +3730,6 @@ impl PlayerDb {
                     account.profile.prefer_random_leader = false;
                 } else {
                     if account.profile.preferred_leader.is_none() {
-                        let assigned =
-                            crate::commerce::assigned_leader_for_account(account_id, period);
                         account.profile.preferred_leader =
                             Some(crate::commerce::leader_wire_id(assigned).to_string());
                     }
@@ -4770,6 +4787,7 @@ impl PlayerDb {
         &self,
         account_id: &str,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let assigned = self.assigned_free_hero(account_id)?;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -4806,12 +4824,7 @@ impl PlayerDb {
                     .preferred_leader
                     .as_deref()
                     .and_then(crate::commerce::leader_from_id)
-                    .unwrap_or_else(|| {
-                        crate::commerce::assigned_leader_for_account(
-                            account_id,
-                            crate::commerce::current_rotation_period(),
-                        )
-                    });
+                    .unwrap_or(assigned);
                 account.profile.preferred_leader =
                     Some(crate::commerce::leader_wire_id(leader).to_string());
                 let reward = crate::rewards::calculate(crate::rewards::RewardInput {

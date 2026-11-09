@@ -1029,7 +1029,7 @@ fn collect_art_preview_assets(root: &Path) -> Result<Vec<ArtPreviewAsset>> {
             push_preview_asset(&mut assets, path.to_path_buf(), "avatar_portrait_192", None);
         } else if relative == "avatars/random.webp" || relative == "avatars/default.webp" {
             push_preview_asset(&mut assets, path.to_path_buf(), "avatar_portrait_256", None);
-        } else if relative == "brand/app-icon.png" {
+        } else if relative == "brand/app-icon.webp" {
             push_preview_asset(&mut assets, path.to_path_buf(), "app_icon", Some((512, 512)));
             push_preview_asset(&mut assets, path.to_path_buf(), "poki_thumbnail", None);
         } else if relative == "loader/sow-splash-desktop.webp" {
@@ -1039,7 +1039,7 @@ fn collect_art_preview_assets(root: &Path) -> Result<Vec<ArtPreviewAsset>> {
         } else if relative.starts_with("loader/") {
             push_preview_asset(&mut assets, path.to_path_buf(), "loader_ui", None);
         } else if relative.starts_with("units/") {
-            let profile = if ["transport-ship.png", "trade-ship.png", "warship.png"].contains(&name.as_ref()) { "pixel_art" } else { "unit_icon" };
+            let profile = if ["transport-ship.webp", "trade-ship.webp", "warship.webp"].contains(&name.as_ref()) { "pixel_art" } else { "unit_icon" };
             push_preview_asset(&mut assets, path.to_path_buf(), profile, None);
         }
     }
@@ -1160,7 +1160,7 @@ const GENERATED_FILES: [(&str, &str); 3] = [
 ];
 const PORTRAIT_PX: u32 = 192;
 const HERO_PORTRAIT_PX: u32 = 256;
-/// Landing shots (assets/site/media/<stem>.<png|jpg|webp>): until the owner drops a
+/// Landing shots (assets/site/media/<stem>.webp): until the owner drops a
 /// capture, each slot publishes current game art (dir, stem) so nothing stale shows.
 const SITE_STILLS: [(&str, (&str, &str)); 12] = [
     ("game-expand", ("assets/maps/world", "thumbnail")),
@@ -1204,8 +1204,7 @@ const SITE_BADGES: [&str; 6] = [
     "worldofunreal.svg",
 ];
 const SITE_STATIC_MEDIA: [&str; 0] = [];
-const SITE_SOURCE_ONLY_MEDIA: [&str; 10] = [
-    "caesar-cutout.png",
+const SITE_SOURCE_ONLY_MEDIA: [&str; 9] = [
     "caesar-cutout.webp",
     "session-battle.webp",
     "session-conflict.webp",
@@ -1232,6 +1231,13 @@ fn site_media_ready(out: &Path) -> bool {
 /// used by the shell, the WASM client and the CDN. Unknown art fails the build so a
 /// dropped file can never sit unused or unpublished.
 fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Result<()> {
+    for entry in walkdir::WalkDir::new(root.join("assets")) {
+        let entry = entry?;
+        let ext = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or_default();
+        if entry.file_type().is_file() && ["png", "jpg", "jpeg"].contains(&ext.to_ascii_lowercase().as_str()) {
+            bail!("source raster must be WebP: {}", entry.path().display());
+        }
+    }
     let art = root.join("assets/art");
     if !pipeline.local_preview {
         verify_playable_hero_icons(&art.join("icons/abilities"), "source art")?;
@@ -1353,7 +1359,18 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
             ));
         }
     }
-    // Hero scenes are optional; publish whichever desktop/mobile art is present.
+    // Every playable hero needs a desktop and a mobile scene; a placeholder is fine.
+    for leader in sow_core::player::Leader::all() {
+        for variant in ["desktop", "mobile"] {
+            let base = leader.art_slug();
+            let has_scene = ["webp", "png", "jpg", "jpeg"].iter().any(|ext| {
+                art.join("heroes").join(format!("{base}_{variant}.{ext}")).is_file()
+            });
+            if !has_scene && !pipeline.local_preview {
+                bail!("hero {base} needs a {variant} scene in {}", art.join("heroes").display());
+            }
+        }
+    }
     for file in sorted_files(&art.join("heroes"))? {
         let stem = file_stem(&file);
         if !stem.ends_with("_desktop") && !stem.ends_with("_mobile") {
@@ -1376,7 +1393,7 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
             let stem = cell.as_str().unwrap_or_default();
             known_icons.insert(
                 source_named(&art.join("icons"), stem)
-                    .with_context(|| format!("missing art: assets/art/icons/{stem}.png"))?,
+                    .with_context(|| format!("missing art: assets/art/icons/{stem}.webp"))?,
             );
         }
     }
@@ -1384,10 +1401,10 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         let Some(src) = source_named(&art.join(dir), stem) else {
             if pipeline.local_preview {
                 eprintln!("⚠ Local art missing: assets/art/{dir}/{stem}");
-                publish(&art.join(dir).join(format!("{stem}.png")), rel, Some(profile))?;
+                publish(&art.join(dir).join(format!("{stem}.webp")), rel, Some(profile))?;
                 continue;
             }
-            bail!("missing art: assets/art/{dir}/{stem}.png");
+            bail!("missing art: assets/art/{dir}/{stem}.webp");
         };
         known_icons.insert(src.clone());
         publish(&src, rel, Some(profile))?;
@@ -1417,12 +1434,14 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            let relative = if dir == "units" {
-                format!("{rel_dir}/{}.webp", file_stem(&file))
+            let (relative, profile) = if dir == "units" {
+                (format!("{rel_dir}/{}.webp", file_stem(&file)), None)
+            } else if dir == "brand" && name == "app-icon.webp" {
+                (format!("{rel_dir}/app-icon.png"), Some("app_icon"))
             } else {
-                format!("{rel_dir}/{name}")
+                (format!("{rel_dir}/{name}"), None)
             };
-            publish(&file, &relative, None)?;
+            publish(&file, &relative, profile)?;
         }
     }
     // A fresh checkout may not have the packed atlases yet: `pack_art_atlases`
@@ -1459,7 +1478,7 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         publish(&src, &relative, Some(profile))?;
     }
     drop(publish);
-    let icon_master = art.join("brand/app-icon.png");
+    let icon_master = art.join("brand/app-icon.webp");
     let app_icons = out.join("site-icons");
     for (name, side) in [
         ("icon-192.png", 192),
@@ -6389,7 +6408,7 @@ fn package_poki(
         fs::remove_file(stale_bridge)?;
     }
     optimize_poki_thumbnail(
-        &paths.root.join("assets/art/brand/app-icon.png"),
+        &paths.root.join("assets/art/brand/app-icon.webp"),
         &package
             .parent()
             .context("Poki staging directory has no parent")?

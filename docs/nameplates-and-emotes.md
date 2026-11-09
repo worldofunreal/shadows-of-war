@@ -156,7 +156,7 @@ solo lee ese formato y rechaza versiones anteriores o sin el campo.
 - `sow-render/src/nameplate.rs`: tierra, escala, prioridad y proporción de
   insignias.
 - `sow-render/src/text/renderer.rs`: `gameplay_atlas_covers_every_localized_emote_phrase`;
-  una frase con caracteres nuevos obliga a regenerar `assets/generated/msdf-atlas.png`
+  una frase con caracteres nuevos obliga a regenerar `assets/generated/msdf-atlas.webp`
   con `sow-tools/src/bin/generate_font_atlas.rs`.
 - `sow-web/shell/map_interaction.test.ts` y `avatar_presentation.test.ts`
   (`bun test sow-web/shell`).

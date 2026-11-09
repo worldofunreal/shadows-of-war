@@ -697,6 +697,9 @@ leader_veleda_civilization = "브룩테리족"
 leader_amir_timur_name = "아미르 티무르"
 leader_amir_timur_historical = "사마르칸트에서 통치하며 볼가강에서 갠지스강에 이르는 제국을 세운 투르크-몽골계 정복자(1336–1405)."
 leader_amir_timur_civilization = "티무르 제국"
+leader_ivan_the_terrible_name = "이반 뇌제"
+leader_ivan_the_terrible_historical = "이반 4세 바실리예비치(1530–1584)는 1547년 차르로 대관했다. 그의 통치기에 유급 상비군인 스트렐치가 창설되고 카잔과 아스트라한이 정복되었다. 이후 오프리치니나는 잔혹한 탄압을 낳았으며 역사적 평가는 지금도 논쟁적이다."
+leader_ivan_the_terrible_civilization = "러시아"
 
 [profile]
 ranked_1v1 = "랭크 1대1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "라인강의 포획선"
 leader_veleda_description = "함포로 격파한 적 군함을 침몰시키지 않고 포획한다. 체력 25%, 숙련도 없음 상태로 아군이 된다."
 leader_amir_timur_ability = "초원의 추격"
 leader_amir_timur_description = "내 영토에서 퇴각하는 부족은 병력을 35% 더 잃습니다."
+leader_ivan_the_terrible_ability = "스트렐치 소집"
+leader_ivan_the_terrible_description = "완성된 적 도시를 점령하면 예비 병력에 여유가 있을 때 최대 750명을 모집한다. 경기당 한 번, 병력 한도 내에서 적용된다."
 
 [ranked]
 my_rank = "내 랭크"

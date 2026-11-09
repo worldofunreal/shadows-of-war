@@ -231,7 +231,7 @@
   position: absolute;
   inset: 32% 0 0;
   z-index: 1;
-  background: linear-gradient(0deg, rgba(8, 10, 14, 0.95), rgba(8, 10, 14, 0));
+  background: linear-gradient(0deg, rgba(9, 10, 13, 0.96), rgba(9, 10, 13, 0));
   pointer-events: none;
 }
 

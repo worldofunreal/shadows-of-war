@@ -95,6 +95,8 @@ pub enum Ability {
     CityTowerUpgrade,
     /// A newly captured enemy city pays a fixed purse shared with living allies.
     SharedCitySpoils { gold: u32 },
+    /// Capturing a completed enemy city musters one capped reserve regiment.
+    StreltsyMuster { troops: u32 },
     /// Losing a city mobilizes reserves once per city, within the troop cap.
     CityEvacuation { troops: u32 },
     /// A retreat after at least three seconds opens a thirty-second return window.
@@ -308,6 +310,7 @@ impl Ability {
             | Ability::PuntGardens
             | Ability::LastCityRelocation
             | Ability::SharedCitySpoils { .. }
+            | Ability::StreltsyMuster { .. }
             | Ability::CityEvacuation { .. }
             | Ability::CityIntercession { .. }
             | Ability::WarRegalia { .. }
@@ -378,6 +381,7 @@ impl Ability {
             },
             Ability::AlliedCityGrant { .. } => Ability::AlliedCityGrant { gold: 0 },
             Ability::SharedCitySpoils { .. } => Ability::SharedCitySpoils { gold: 0 },
+            Ability::StreltsyMuster { .. } => Ability::StreltsyMuster { troops: 0 },
             Ability::CityEvacuation { .. } => Ability::CityEvacuation { troops: 0 },
             Ability::CityIntercession { .. } => Ability::CityIntercession { troops: 0 },
             Ability::WarRegalia { .. } => Ability::WarRegalia { troops: 0 },
@@ -423,6 +427,7 @@ impl Ability {
             Ability::ConquestSpeed { .. }
             | Ability::Reunification { .. }
             | Ability::MountedCapture { .. }
+            | Ability::StreltsyMuster { .. }
             | Ability::ContestedSteppe { .. }
             | Ability::ZagrosAscent { .. }
             | Ability::FactoryRaid { .. } => Cue::Conquest,

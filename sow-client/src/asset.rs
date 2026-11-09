@@ -726,6 +726,16 @@ impl SowApp {
                         );
                         continue;
                     }
+                    if operation == "leader selection" && status == Some(400) {
+                        // The server rejected the request itself; resending the same body cannot succeed.
+                        self.progress.leader_selection_pending = false;
+                        self.profile_action_retry_at = None;
+                        self.ui.app.main_menu_state.store_busy = false;
+                        self.ui.app.main_menu_state.error_message =
+                            Some(crate::ui::UiText::new("store.action_unavailable"));
+                        log::error!("[profile] leader selection rejected status=400; not retrying");
+                        continue;
+                    }
                     if operation == "leader selection"
                         || operation.starts_with("campaign completion:")
                     {

@@ -37,7 +37,7 @@
 .sow-menu__queue-map-overlay {
   width: 100%;
   padding: 10px;
-  background: linear-gradient(0deg, rgba(8, 10, 14, 0.95), transparent);
+  background: linear-gradient(0deg, rgba(9, 10, 13, 0.96), transparent);
   display: flex;
   flex-direction: column;
   gap: 4px;

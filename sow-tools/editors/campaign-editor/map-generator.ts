@@ -349,5 +349,5 @@
     resize();
   });
   image.addEventListener("error", () => setStatus("Could not load the world map reference.", true));
-  image.src = "/assets/map_sources/giantworldmap.png";
+  image.src = "/assets/map_sources/giantworldmap.webp";
 })();

@@ -697,6 +697,9 @@ leader_veleda_civilization = "Brúcteros"
 leader_amir_timur_name = "Amir Timur"
 leader_amir_timur_historical = "Conquistador turco-mongol (1336–1405) que governou de Samarcanda e construiu um império do Volga ao Ganges."
 leader_amir_timur_civilization = "Império Timúrida"
+leader_ivan_the_terrible_name = "Ivan, o Terrível"
+leader_ivan_the_terrible_historical = "Ivan IV Vasilyevich (1530–1584) foi coroado tsar em 1547. Durante seu governo surgiu o corpo permanente e assalariado dos streltsy, e Moscóvia conquistou Kazan e Astracã; depois, a opríchnina impôs uma repressão brutal cuja interpretação histórica continua controversa."
+leader_ivan_the_terrible_civilization = "Rússia"
 
 [profile]
 ranked_1v1 = "Ranqueda 1x1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "Presa do Reno"
 leader_veleda_description = "Seus projéteis navais capturam navios de guerra inimigos derrotados em vez de afundá-los. Eles mudam de lado com 25% de vida e sem veterania."
 leader_amir_timur_ability = "Perseguição da Horda"
 leader_amir_timur_description = "As tribos que recuam do seu território perdem 35% mais tropas."
+leader_ivan_the_terrible_ability = "Recrutamento dos streltsy"
+leader_ivan_the_terrible_description = "Ao capturar uma cidade inimiga concluída, recrute até 750 soldados se houver espaço na reserva. Uma vez por partida, respeitando seu limite de tropas."
 
 [ranked]
 my_rank = "Meu ranque"

@@ -697,6 +697,9 @@ leader_veleda_civilization = "Bructeri"
 leader_amir_timur_name = "Amir Timur"
 leader_amir_timur_historical = "Penakluk Turko-Mongol (1336–1405) yang memerintah dari Samarkand dan membangun kekaisaran dari Volga hingga Gangga."
 leader_amir_timur_civilization = "Kekaisaran Timuriyah"
+leader_ivan_the_terrible_name = "Ivan yang Mengerikan"
+leader_ivan_the_terrible_historical = "Ivan IV Vasilyevich (1530–1584) dinobatkan sebagai tsar pada 1547. Pada masa pemerintahannya dibentuk pasukan tetap Streltsy bergaji dan Moskow menaklukkan Kazan serta Astrakhan; oprichnina kemudian membawa represi brutal yang makna sejarahnya masih diperdebatkan."
+leader_ivan_the_terrible_civilization = "Rusia"
 
 [profile]
 ranked_1v1 = "Peringkat 1v1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "Rampasan Rhein"
 leader_veleda_description = "Peluru kapalmu merebut kapal perang musuh yang dikalahkan alih-alih menenggelamkannya. Kapal berpihak kepadamu dengan 25% kesehatan dan tanpa pengalaman."
 leader_amir_timur_ability = "Pengejaran Suku"
 leader_amir_timur_description = "Suku yang mundur dari tanahmu kehilangan 35% lebih banyak pasukan."
+leader_ivan_the_terrible_ability = "Pengerahan Streltsy"
+leader_ivan_the_terrible_description = "Saat merebut kota musuh yang telah selesai dibangun, kerahkan hingga 750 prajurit jika cadanganmu masih memiliki ruang. Sekali per pertandingan, sesuai batas pasukanmu."
 
 [ranked]
 my_rank = "Peringkat saya"

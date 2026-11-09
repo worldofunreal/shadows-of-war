@@ -128,3 +128,4 @@ Generado por `scripts/export-hero-abilities.py`. No editar a mano.
 | Naram Sin | Zagros Ascent | Your armies capture rival mountain tiles 50% faster when they border highlands you control. | zagros_ascent | 50% | `gameplay/icons/abilities/naram_sin.webp` |
 | Khosrow I | Regional Commands | While two or more different rivals are attacking you by land, their armies lose 25% more troops per tile they take from you. | regional_commands | 25% | `gameplay/icons/abilities/khosrow_i.webp` |
 | Muhumuza | Nyabingi Network | Your highland tiles and allied highland tiles require 50% more effort to capture wherever they border each other. | nyabingi_network | 50% | `gameplay/icons/abilities/muhumuza.webp` |
+| Ivan the Terrible | Streltsy Muster | Capturing a completed enemy city while your reserves have room musters up to 750 troops. Once per match, within your troop cap. | streltsy_muster | up to 750 troops/match | `gameplay/icons/abilities/ivan_the_terrible.webp` |

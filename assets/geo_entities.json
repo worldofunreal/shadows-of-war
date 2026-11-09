@@ -10090,6 +10090,26 @@
     }
    },
    "territory_color": "#587643"
+  },
+  {
+   "id": "ivan_the_terrible",
+   "name": "Ivan the Terrible",
+   "entity": "Russia",
+   "role": "nation",
+   "region": "europe",
+   "lat": 55.7522,
+   "lon": 37.6156,
+   "gender": "male",
+   "wikipedia": "https://en.wikipedia.org/wiki/Ivan_the_Terrible",
+   "avatar": "ivan_the_terrible",
+   "hero": {
+    "name": "Ivan the Terrible",
+    "ability": {
+     "kind": "streltsy_muster",
+     "troops": 750
+    }
+   },
+   "territory_color": "#8a2432"
   }
  ]
 }

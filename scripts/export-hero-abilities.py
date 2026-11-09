@@ -44,6 +44,7 @@ def main():
         number = (
             f"{ability['percent']}%" if 'percent' in ability else
             f"{ability['gold']} gold" if 'gold' in ability else
+            f"up to {ability['troops']} troops/match" if ability['kind'] == 'streltsy_muster' else
             f"{ability['troops']} troops" if 'troops' in ability else
             f"up to {ability['max_troops']} troops/match" if 'max_troops' in ability else
             f"{ability['troops_per_level']} troops/factory level" if 'troops_per_level' in ability else

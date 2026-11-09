@@ -34,6 +34,7 @@ import type {
 import { renderFeedback } from "./main_menu.surfaces.ts";
 
 // Store state, rendering, catalog, and purchase actions.
+let loadedRotationPeriod = -1;
 
 // Store funnel: store_open -> store_buy_tap -> store_checkout_open (real
 // money only) -> store_purchase_complete. Taxonomy lives in
@@ -1125,8 +1126,14 @@ export function beginStoreRestore() {
 }
 
 export function loadStoreCatalog() {
-    if (menuUi.storeCatalogLoading || menuUi.storeCatalogLoaded || Date.now() < menuUi.storeCatalogRetryAt)
-        return;
+    const state = menuUi.state;
+    if (!state) return;
+    const expectedPeriod = Number(state.store && state.store.rotation_period) || 0;
+    if (
+        menuUi.storeCatalogLoading ||
+        (menuUi.storeCatalogLoaded && loadedRotationPeriod >= expectedPeriod) ||
+        Date.now() < menuUi.storeCatalogRetryAt
+    ) return;
     menuUi.storeCatalogLoading = true;
     fetch(profileApi("/store/catalog"), { headers: { Accept: "application/json" } })
         .then(function (response) {
@@ -1134,6 +1141,8 @@ export function loadStoreCatalog() {
             return response.json();
         })
         .then(function (catalog: MenuStore) {
+            if (Number(catalog.rotation_period) < expectedPeriod || catalog.free_leaders.length !== 8)
+                throw new Error("stale or invalid hero rotation");
             const current = menuUi.state!.store || {};
             const localLeaders = current.leaders || [];
             const localSkins = current.skins || [];
@@ -1148,15 +1157,11 @@ export function loadStoreCatalog() {
                             .toLowerCase()
                     );
                 });
-                return Object.assign(
-                    {},
-                    leader,
-                    local && {
-                        owned: local.owned,
-                        free_rotation: local.free_rotation,
-                        available: local.available,
-                    },
-                );
+                const owned = local ? local.owned : leader.owned;
+                return Object.assign({}, leader, {
+                    owned: owned,
+                    available: leader.permanently_free || leader.free_rotation || owned,
+                });
             });
             catalog.skins = (catalog.skins || []).map(function (skin) {
                 const local = localSkins.find(function (item) {
@@ -1167,6 +1172,32 @@ export function loadStoreCatalog() {
             menuUi.state!.store = Object.assign({}, current, catalog, {
                 gems: current.gems == null ? 0 : current.gems,
                 crowns: current.crowns == null ? 0 : current.crowns,
+            });
+            const offers = new Map(
+                catalog.leaders.map(function (leader) {
+                    return [
+                        String(leader.id).replace(/[^a-z0-9]/gi, "").toLowerCase(),
+                        leader,
+                    ] as const;
+                }),
+            );
+            menuUi.state!.leaders = menuUi.state!.leaders.map(function (leader) {
+                const offer = offers.get(
+                    String(leader.id).replace(/[^a-z0-9]/gi, "").toLowerCase(),
+                );
+                return offer
+                    ? Object.assign({}, leader, {
+                          free_rotation: offer.free_rotation,
+                          permanently_free: offer.permanently_free,
+                          owned: offer.owned,
+                          available: offer.available,
+                      })
+                    : leader;
+            });
+            loadedRotationPeriod = Number(catalog.rotation_period);
+            send("sync_free_rotation", {
+                rotation_period: loadedRotationPeriod,
+                free_leaders: catalog.free_leaders,
             });
             menuUi.storeCatalogLoaded = true;
         })

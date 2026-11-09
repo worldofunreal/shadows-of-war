@@ -1,7 +1,7 @@
 :root {
   /* The one action accent shared by menu, HUD and story overlay. */
-  --sow-accent: #f59e0b;
-  --sow-accent-bright: #ffc061;
+  --sow-accent: #f5c542;
+  --sow-accent-bright: #fde047;
   /* Outlined white text used by the HUD and story overlay. */
   --sow-text-ink: #1b1108;
   --sow-text-outline: 0.18em var(--sow-text-ink);
@@ -9,43 +9,47 @@
   --sow-button-radius: 8px;
   --sow-button-weight: 800;
   --sow-button-tracking: 0.08em;
-  --sow-button-primary-bg: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
-  --sow-button-primary-border: rgba(243, 177, 43, 0.65);
-  --sow-button-primary-text: #111318;
-  --sow-button-primary-shadow: 0 2px 8px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  --sow-button-dark-bg: linear-gradient(180deg, rgba(26, 30, 40, 0.85) 0%, rgba(14, 17, 23, 0.95) 100%);
-  --sow-button-dark-border: rgba(255, 255, 255, 0.16);
+  --sow-button-primary-bg: linear-gradient(180deg, #f5c542 0%, #d97706 100%);
+  --sow-button-primary-border: rgba(245, 197, 66, 0.72);
+  --sow-button-primary-text: #0d0e12;
+  --sow-button-primary-shadow:
+    0 4px 14px rgba(245, 158, 11, 0.28),
+    inset 0 1px 0 rgba(255, 248, 220, 0.38);
+  --sow-button-dark-bg: linear-gradient(180deg, rgba(24, 26, 33, 0.92) 0%, rgba(12, 13, 18, 0.98) 100%);
+  --sow-button-dark-border: rgba(255, 255, 255, 0.12);
   --sow-button-dark-text: #f5f1e8;
-  --sow-button-dark-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --sow-control-accent: #f3b12b;
-  --sow-control-accent-bright: #ffd36a;
-  --sow-control-muted: rgba(235, 231, 220, 0.62);
-  --sow-control-panel: rgba(12, 15, 20, 0.98);
-  --sow-tactical-panel-base: rgb(10 16 21 / 97%);
-  --sow-tactical-panel: linear-gradient(145deg, rgb(25 37 44 / 96%), var(--sow-tactical-panel-base) 72%);
-  --sow-tactical-panel-wash: linear-gradient(180deg, rgb(240 169 43 / 8%) 0%, rgb(15 21 25 / 0%) 46%);
+  --sow-button-dark-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --sow-control-accent: var(--sow-accent);
+  --sow-control-accent-bright: var(--sow-accent-bright);
+  --sow-control-muted: rgba(235, 231, 220, 0.65);
+  --sow-control-panel: rgba(11, 12, 16, 0.98);
+  --sow-tactical-panel-base: rgb(9 10 13 / 98%);
+  --sow-tactical-panel: linear-gradient(155deg, rgb(22 24 30 / 96%), var(--sow-tactical-panel-base) 74%);
+  --sow-tactical-panel-wash: linear-gradient(180deg, rgb(245 197 66 / 7%) 0%, rgb(11 12 16 / 0%) 44%);
   --sow-tactical-surface-card-bg: var(--sow-tactical-panel-wash), var(--sow-tactical-panel);
   --sow-tactical-surface-subcard-bg: linear-gradient(
     180deg,
-    rgb(255 255 255 / 3%),
-    rgb(8 12 15 / 52%)
+    rgb(20 22 28 / 92%),
+    rgb(10 11 15 / 96%)
   );
   --sow-tactical-surface-compact-bg: var(--sow-button-dark-bg);
-  --sow-tactical-surface-border: rgb(255 255 255 / 12%);
-  --sow-tactical-surface-accent-border: color-mix(in srgb, var(--sow-control-accent) 58%, transparent);
-  --sow-tactical-surface-accent-border-soft: color-mix(in srgb, var(--sow-control-accent) 34%, var(--sow-tactical-surface-border));
-  --sow-tactical-surface-highlight: inset 0 1px 0 rgb(255 255 255 / 8%);
-  --sow-tactical-surface-compact-shadow: var(--sow-button-dark-shadow), inset 0 1px 0 rgb(255 255 255 / 5%);
+  --sow-tactical-surface-border: rgb(255 255 255 / 9%);
+  --sow-tactical-surface-accent-border: color-mix(in srgb, var(--sow-control-accent) 52%, transparent);
+  --sow-tactical-surface-accent-border-soft: color-mix(in srgb, var(--sow-control-accent) 32%, var(--sow-tactical-surface-border));
+  --sow-tactical-surface-highlight: inset 0 1px 0 rgb(255 255 255 / 7%);
+  --sow-tactical-surface-compact-shadow: var(--sow-button-dark-shadow), inset 0 1px 0 rgb(255 255 255 / 6%);
   --sow-tactical-card-shadow:
-    0 14px 30px rgb(0 0 0 / 62%), 0 0 0 1px rgb(0 0 0 / 55%), inset 0 1px 0 rgb(255 255 255 / 9%);
+    0 16px 36px rgb(0 0 0 / 68%), 0 0 0 1px rgb(0 0 0 / 60%), inset 0 1px 0 rgb(255 255 255 / 8%);
   --sow-tactical-modal-shadow:
-    0 24px 80px rgb(0 0 0 / 60%), 0 0 0 1px rgb(0 0 0 / 50%), inset 0 1px 0 rgb(255 255 255 / 7%);
+    0 28px 84px rgb(0 0 0 / 72%), 0 0 0 1px rgb(0 0 0 / 60%), inset 0 1px 0 rgb(255 255 255 / 8%);
   --sow-tactical-surface-radius-tight: 4px;
   --sow-tactical-surface-radius-compact: 8px;
   --sow-tactical-surface-radius: 12px;
   --sow-tactical-surface-blur: 10px;
-  --sow-tactical-track-bg: linear-gradient(180deg, rgb(7 11 14 / 94%), rgb(13 19 23 / 96%));
-  --sow-tactical-track-border: rgb(255 255 255 / 12%);
+  --sow-tactical-track-bg: linear-gradient(180deg, rgb(7 8 11 / 96%), rgb(13 15 20 / 98%));
+  --sow-tactical-track-border: rgb(255 255 255 / 11%);
   --sow-tactical-track-accent-border: color-mix(in srgb, var(--sow-control-accent) 42%, transparent);
   --sow-tactical-track-shadow:
     inset 0 2px 5px rgb(0 0 0 / 65%), 0 1px 0 rgb(255 255 255 / 6%);
@@ -263,15 +267,13 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
   bottom: max(1rem, env(safe-area-inset-bottom));
   width: min(32rem, calc(100vw - 2rem));
   padding: 1.25rem 1.375rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top: 1px solid rgba(245, 158, 11, 0.45);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top: 1px solid var(--sow-tactical-surface-accent-border);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(16, 20, 28, 0.94) 0%, rgba(10, 13, 18, 0.98) 100%);
+  background: var(--sow-tactical-surface-card-bg);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  box-shadow:
-    0 20px 48px rgb(0 0 0 / 64%),
-    inset 0 1px rgb(255 255 255 / 8%);
+  box-shadow: var(--sow-tactical-card-shadow);
   color: var(--sow-button-dark-text);
   font: 400 0.875rem/1.55 var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
 }
@@ -290,9 +292,9 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
   padding-left: max(1.5rem, env(safe-area-inset-left), calc((100vw - 72rem) / 2));
   padding-right: max(1.5rem, env(safe-area-inset-right), calc((100vw - 72rem) / 2));
   border: 0;
-  border-top: 1px solid rgba(245, 158, 11, 0.35);
+  border-top: 1px solid var(--sow-tactical-surface-accent-border);
   border-radius: 0;
-  background: linear-gradient(180deg, rgba(14, 18, 26, 0.94) 0%, rgba(9, 12, 17, 0.98) 100%);
+  background: var(--sow-tactical-surface-card-bg);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow:

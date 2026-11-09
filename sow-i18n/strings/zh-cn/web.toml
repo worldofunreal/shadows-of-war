@@ -697,6 +697,9 @@ leader_veleda_civilization = "布鲁克特里人"
 leader_amir_timur_name = "埃米尔·帖木儿"
 leader_amir_timur_historical = "突厥-蒙古征服者（1336—1405），以撒马尔罕为中心，建立了从伏尔加河到恒河的帝国。"
 leader_amir_timur_civilization = "帖木儿帝国"
+leader_ivan_the_terrible_name = "伊凡雷帝"
+leader_ivan_the_terrible_historical = "伊凡四世（1530–1584）于1547年加冕为沙皇。在他统治时期，领薪的常备射击军得以建立，莫斯科公国征服了喀山和阿斯特拉罕；后来的特辖制带来残酷镇压，其历史评价至今仍有争议。"
+leader_ivan_the_terrible_civilization = "俄罗斯"
 
 [profile]
 ranked_1v1 = "排位 1v1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "莱茵河的战利舰"
 leader_veleda_description = "你的舰炮会俘获被击败的敌方战舰，而非将其击沉。俘获战舰以25%生命值加入己方，且无老兵经验。"
 leader_amir_timur_ability = "草原追击"
 leader_amir_timur_description = "从你的土地撤退的部落多损失35%兵力。"
+leader_ivan_the_terrible_ability = "征召射击军"
+leader_ivan_the_terrible_description = "占领一座已建成的敌方城市时，若预备兵力有空位，征召最多750名士兵。每场比赛一次，且不超过兵力上限。"
 
 [ranked]
 my_rank = "我的段位"

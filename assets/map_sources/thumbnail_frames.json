@@ -5,7 +5,7 @@
     "height": 288
   },
   "sources": {
-    "giantworldmap.png": {
+    "giantworldmap.webp": {
       "sha256": "f12ddca2fcdd795f13900ba5061da86408f9fa5a4b56e15f162e356c7bf6be19",
       "width": 4110,
       "height": 1948,
@@ -25,7 +25,7 @@
         -78.8
       ]
     },
-    "eastanglia.png": {
+    "eastanglia.webp": {
       "sha256": "407dd6ae723602fab8136edc8fe2c896da788d7e77b910e5300de43935594945",
       "width": 896,
       "height": 504,
@@ -34,7 +34,7 @@
   },
   "maps": {
     "africa": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         1530,
         562,
@@ -43,7 +43,7 @@
       ]
     },
     "asia": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         2295,
         17,
@@ -52,7 +52,7 @@
       ]
     },
     "bajacalifornia": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         592,
         592,
@@ -61,7 +61,7 @@
       ]
     },
     "eastasia": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         3355,
         406,
@@ -70,7 +70,7 @@
       ]
     },
     "europe": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         1763,
         189,
@@ -79,7 +79,7 @@
       ]
     },
     "indiansubcontinent": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         2590,
         574,
@@ -88,7 +88,7 @@
       ]
     },
     "mena": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         1898,
         447,
@@ -97,7 +97,7 @@
       ]
     },
     "middleeast": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         2317,
         540,
@@ -106,7 +106,7 @@
       ]
     },
     "northamerica": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         121,
         4,
@@ -115,7 +115,7 @@
       ]
     },
     "oceania": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         3106,
         631,
@@ -124,7 +124,7 @@
       ]
     },
     "southamerica": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         575,
         723,
@@ -133,7 +133,7 @@
       ]
     },
     "southeastasia": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         3105,
         696,
@@ -142,7 +142,7 @@
       ]
     },
     "world": {
-      "source": "giantworldmap.png",
+      "source": "giantworldmap.webp",
       "frame": [
         129,
         -207,
@@ -151,7 +151,7 @@
       ]
     },
     "eastanglia": {
-      "source": "eastanglia.png",
+      "source": "eastanglia.webp",
       "frame": [
         0,
         0,

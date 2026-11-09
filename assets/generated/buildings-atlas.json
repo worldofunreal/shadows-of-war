@@ -8,32 +8,32 @@
     "City": {
       "1": {
         "height": 128,
-        "sha256": "0a88400bfafecdd4ab21d8b211ede1fa1c799118969117664c1be7b792464872",
-        "source": "city-1.png",
+        "sha256": "8e1bd3a1ab7cc36be024714523ae09a43f5e94d6e68c94e791a6aced3bc3a0aa",
+        "source": "city-1.webp",
         "width": 128,
         "x": 2,
         "y": 2
       },
       "2": {
         "height": 128,
-        "sha256": "815321988df1c1f9f2ba38e3872eda3151f9a7cfe2536ea1a3c0faac1ee43d22",
-        "source": "city-2.png",
+        "sha256": "8be72726a42eeb020ec259f89f706b8c961c71287e7c48663592c393b8b61190",
+        "source": "city-2.webp",
         "width": 128,
         "x": 134,
         "y": 2
       },
       "3": {
         "height": 128,
-        "sha256": "e86e6bd640d572bbab984eabe5076708ddcba27d093ae16acf352e9a168f1c6e",
-        "source": "city-3.png",
+        "sha256": "5277a2651d36be2720225381441bc357fbe903e871e63459a7cf2b981217888b",
+        "source": "city-3.webp",
         "width": 128,
         "x": 266,
         "y": 2
       },
       "4": {
         "height": 128,
-        "sha256": "f2b20ef36a9bae8b37e15f69a7b7839020da474573aa07fb958829eb070d638d",
-        "source": "city-4.png",
+        "sha256": "b6cae4be2fe3ef6598b6c57f645ea702035e26b7f577c5ec961059f9d28e1c04",
+        "source": "city-4.webp",
         "width": 128,
         "x": 398,
         "y": 2
@@ -42,32 +42,32 @@
     "Factory": {
       "1": {
         "height": 128,
-        "sha256": "7b4e141a64176b8a9e180c486f0e7b8d13529559e933f7827a01ad50cede1688",
-        "source": "factory-1.png",
+        "sha256": "fb9fdb9c6237ccf6b1ae69c8220d6ca824578427cb6e8fe1bcee4f159f2168f6",
+        "source": "factory-1.webp",
         "width": 128,
         "x": 530,
         "y": 2
       },
       "2": {
         "height": 128,
-        "sha256": "427c3c7f107145e87c1bcf48e76c88f14222fe0929fc95c2a66cf957e34d5e56",
-        "source": "factory-2.png",
+        "sha256": "2ace45e8ac5f421e38914149dae51f607b8de627276eee21017e60f81547ad04",
+        "source": "factory-2.webp",
         "width": 128,
         "x": 2,
         "y": 134
       },
       "3": {
         "height": 128,
-        "sha256": "85a80fa3d2f85da21b4d840fb2f38f0ed862300d14dc0cdffc3042486b80bcad",
-        "source": "factory-3.png",
+        "sha256": "bad1d1d2b02161e95a1bcc9bcf6e639932601518650f79bbbde53b7eb932f8b4",
+        "source": "factory-3.webp",
         "width": 128,
         "x": 134,
         "y": 134
       },
       "4": {
         "height": 128,
-        "sha256": "262f9b7dc68c5e78d08584e101346cf542a1d8377402f9e1e3b413691a7c8858",
-        "source": "factory-4.png",
+        "sha256": "a8914e12aadc9054dbb2093f50c5e239e5f2878fa557d48d135e3cf17fc243e5",
+        "source": "factory-4.webp",
         "width": 128,
         "x": 266,
         "y": 134
@@ -76,32 +76,32 @@
     "Farm": {
       "1": {
         "height": 128,
-        "sha256": "c43e8f5068eb1bb5564d083f5aa2fc56781583991279f2c636927016795de3de",
-        "source": "farm-1.png",
+        "sha256": "627d9bfde0f16cec59f0d8c1d8275cb2277baf9d1235708ddbb361262070fe7c",
+        "source": "farm-1.webp",
         "width": 128,
         "x": 134,
         "y": 398
       },
       "2": {
         "height": 128,
-        "sha256": "295385f3e6611c11403a9b8bc4e630a80ebba7b9cb23f12e81ae8ccdf719c6f8",
-        "source": "farm-2.png",
+        "sha256": "e484b91077b8a9bb319a7c7b8ca2b776e3fb9c5870f85e2c00ee6a7be043527a",
+        "source": "farm-2.webp",
         "width": 128,
         "x": 266,
         "y": 398
       },
       "3": {
         "height": 128,
-        "sha256": "19f21e9bfe6af61ab37c5df2d56091a429cb1de4730a595e7ad4508386b1e1ac",
-        "source": "farm-3.png",
+        "sha256": "7feb2f58d68ecd1b3e8405813f4fcf131b1915821b8a9d1f42e1cc0248c8936a",
+        "source": "farm-3.webp",
         "width": 128,
         "x": 398,
         "y": 398
       },
       "4": {
         "height": 128,
-        "sha256": "be792c544f487cfc04ccd3842b24f44257c5a054252117d8942beb896f558584",
-        "source": "farm-4.png",
+        "sha256": "5d37d255b304785ea9593b880d344807626d44bb2353a6fd4d06efd0d2f16fe1",
+        "source": "farm-4.webp",
         "width": 128,
         "x": 530,
         "y": 398
@@ -110,32 +110,32 @@
     "Port": {
       "1": {
         "height": 128,
-        "sha256": "6447321c11fa1e9afda171fd9d3d3e9c9d436298eb6cda0293d3ebf0bcbfb399",
-        "source": "port-1.png",
+        "sha256": "fca321ae3ea152b52640fffec70f1411d8250f126927ceeca8f9837b31c7a486",
+        "source": "port-1.webp",
         "width": 128,
         "x": 398,
         "y": 134
       },
       "2": {
         "height": 128,
-        "sha256": "4848c863a67ee194cb29ea165f94af884f810828474178124ae40ac6b3730004",
-        "source": "port-2.png",
+        "sha256": "10d21c0d00fa7f8a524f350ad5c98e53ab8a20bce769b88fbef9331c2ebd26dd",
+        "source": "port-2.webp",
         "width": 128,
         "x": 530,
         "y": 134
       },
       "3": {
         "height": 128,
-        "sha256": "cf30e29c35b297f35973b6ac8566120deee88e3317af8996cf0b2117e994fbe4",
-        "source": "port-3.png",
+        "sha256": "58c6481609e9d1d9cbf56d0cfa86c54270af199588053c3f249993201bc025ae",
+        "source": "port-3.webp",
         "width": 128,
         "x": 2,
         "y": 266
       },
       "4": {
         "height": 128,
-        "sha256": "b7263e9b0805d5163991b6992b817bba1f885aba884ecd9dc508cfcc9759eabc",
-        "source": "port-4.png",
+        "sha256": "75fd0b4636eaf41e58960d35f2aa50b34006f53dd9f032e380fc45a733cc6ef3",
+        "source": "port-4.webp",
         "width": 128,
         "x": 134,
         "y": 266
@@ -144,32 +144,32 @@
     "Tower": {
       "1": {
         "height": 128,
-        "sha256": "a0e0372dc2a3909e3b19f9def149d8700dd59c3c0c9e1a55d248e0a5a9f25ac6",
-        "source": "tower-1.png",
+        "sha256": "c1003d307c19d3850f7baa735c7ed9fd008ca3a60fc763262ee2dae9a6a37360",
+        "source": "tower-1.webp",
         "width": 128,
         "x": 266,
         "y": 266
       },
       "2": {
         "height": 128,
-        "sha256": "f06aa46095976c79a2c326020073483237f66e5a74b127e2b2273a167b4bc40f",
-        "source": "tower-2.png",
+        "sha256": "31f002ebbf6439b22829b5fc4f1892790412d8a92105010bb17ba12016685ea0",
+        "source": "tower-2.webp",
         "width": 128,
         "x": 398,
         "y": 266
       },
       "3": {
         "height": 128,
-        "sha256": "4d2e03fd557e5b10b82e11f78c5a1b41e4737c02fd9803cf1a36a8bc70442c5c",
-        "source": "tower-3.png",
+        "sha256": "d5ad86a63dee1138faf1fcbdad031e34b417e42ebbc731bb62ba6f9a2c5122fa",
+        "source": "tower-3.webp",
         "width": 128,
         "x": 530,
         "y": 266
       },
       "4": {
         "height": 128,
-        "sha256": "f0d0a39e4d3f83c24625bb44df6b33eadb24940564b5064f8e795b226118c10e",
-        "source": "tower-4.png",
+        "sha256": "5beb36d29bd810cb4efc8488a0bbbb4970a8354216ab09f4dbb4726d211a6207",
+        "source": "tower-4.webp",
         "width": 128,
         "x": 2,
         "y": 398

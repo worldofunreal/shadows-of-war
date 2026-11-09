@@ -2456,6 +2456,19 @@ test("heroes skill scales its title above its body, and skins live with the rost
         "a hero's buy row no longer carries the skins entry",
     );
     assert.match(store.slice(skinsStart, skinsEnd), /data-command='open_skin_picker'/);
+    const catalogLoader = store.slice(store.indexOf("export function loadStoreCatalog()"));
+    assert.match(catalogLoader, /free_rotation: offer\.free_rotation/);
+    assert.match(catalogLoader, /send\("sync_free_rotation"/);
+    assert.doesNotMatch(
+        catalogLoader,
+        /free_rotation:\s*local\.free_rotation/,
+        "the weekly free lineup comes from the server catalog",
+    );
+    assert.match(
+        shellSource.slice(shellSource.indexOf("function handleMenuStateUpdate(")),
+        /phase === "MainMenu" && menuUi\.state!\.profile_ready\) loadStoreCatalog\(\)/,
+        "the persisted rotation loads before the player opens the store",
+    );
     assert.match(
         heroesSource,
         /renderHeroesRegionDropdown\(\) \+\s*renderSkinsButton\(\)/,

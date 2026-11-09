@@ -697,6 +697,9 @@ leader_veleda_civilization = "Brukteriler"
 leader_amir_timur_name = "Amir Timur"
 leader_amir_timur_historical = "Semerkant'tan hükmeden ve Volga'dan Ganj'a uzanan bir imparatorluk kuran Türk-Moğol fatihi (1336-1405)."
 leader_amir_timur_civilization = "Timur İmparatorluğu"
+leader_ivan_the_terrible_name = "Korkunç İvan"
+leader_ivan_the_terrible_historical = "IV. İvan Vasilyeviç (1530–1584), 1547’de tüm Rusya’nın ilk çarı olarak taç giydi. Yönetimi sırasında ücretli ve sürekli Streltsi ordusu kuruldu, Kazan ve Astrahan fethedildi; opriçnina ise daha sonra acımasız baskılar getirdi ve tarihsel yorumu hâlâ tartışmalıdır."
+leader_ivan_the_terrible_civilization = "Rusya"
 
 [profile]
 ranked_1v1 = "Dereceli 1'e 1"
@@ -1704,6 +1707,8 @@ leader_veleda_ability = "Ren Ganimeti"
 leader_veleda_description = "Gemi mermilerin yenilen düşman savaş gemilerini batırmak yerine ele geçirir. Gemiler %25 canla ve kıdem olmadan taraf değiştirir."
 leader_amir_timur_ability = "Orda Takibi"
 leader_amir_timur_description = "Topraklarından çekilen kabileler %35 daha fazla asker kaybeder."
+leader_ivan_the_terrible_ability = "Streltsi Seferberliği"
+leader_ivan_the_terrible_description = "Tamamlanmış bir düşman şehrini ele geçirince, yedeklerinde yer varsa en fazla 750 asker topla. Maç başına bir kez ve birlik sınırın içinde."
 
 [ranked]
 my_rank = "Derecem"

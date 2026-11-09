@@ -697,6 +697,9 @@ leader_veleda_civilization = "البروكتيري"
 leader_amir_timur_name = "أمير تيمور"
 leader_amir_timur_historical = "فاتح تركي مغولي (1336–1405) حكم من سمرقند وأقام إمبراطورية من الفولغا إلى الغانج."
 leader_amir_timur_civilization = "الإمبراطورية التيمورية"
+leader_ivan_the_terrible_name = "إيفان الرهيب"
+leader_ivan_the_terrible_historical = "إيفان الرابع فاسيليفيتش (1530–1584)، تُوّج أول قيصر لعموم روسيا سنة 1547. أُنشئت في عهده قوات الستريلتسي الدائمة المأجورة، ووسّعت حملتا قازان وأستراخان الدولة؛ ثم فرضت الأوبريتشنينا قمعًا عنيفًا لا تزال دلالته موضع نقاش."
+leader_ivan_the_terrible_civilization = "روسيا"
 
 [profile]
 ranked_1v1 = "مصنّف 1 ضد 1"
@@ -1700,6 +1703,8 @@ leader_veleda_ability = "غنيمة الراين"
 leader_veleda_description = "تأسر قذائفك البحرية سفن العدو الحربية المهزومة بدلاً من إغراقها. تنضم إليك بصحة 25% ودون خبرة قتالية."
 leader_amir_timur_ability = "مطاردة القبائل"
 leader_amir_timur_description = "القبائل التي تنسحب من أرضك تخسر جنودًا أكثر بنسبة 35%."
+leader_ivan_the_terrible_ability = "استدعاء الستريلتسي"
+leader_ivan_the_terrible_description = "عند الاستيلاء على مدينة عدو مكتملة بينما تتّسع احتياطياتك، استدعِ ما يصل إلى 750 جنديًا. مرة واحدة في المباراة وضمن حدّ قواتك."
 
 [ranked]
 my_rank = "رتبتي"

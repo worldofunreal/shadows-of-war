@@ -126,6 +126,10 @@ enum WebMenuCommand {
         leader_id: String,
     },
     SetRandomLeader,
+    SyncFreeRotation {
+        rotation_period: u64,
+        free_leaders: Vec<String>,
+    },
     UnlockLeader {
         leader_id: String,
         currency: String,
@@ -1045,6 +1049,38 @@ impl SowApp {
                     self.progress.leader_selection_pending = true;
                     self.save_local_progress();
                     self.persist_leader_selection();
+                }
+                WebMenuCommand::SyncFreeRotation {
+                    rotation_period,
+                    free_leaders,
+                } => {
+                    let current_period = sow_data::commerce::current_rotation_period();
+                    let mut rotation = free_leaders
+                        .iter()
+                        .filter_map(|id| sow_data::commerce::leader_from_id(id))
+                        .collect::<Vec<_>>();
+                    rotation.sort_unstable();
+                    rotation.dedup();
+                    if rotation_period < current_period
+                        || free_leaders.len() != sow_data::commerce::FREE_ROTATION_SIZE
+                        || rotation.len() != sow_data::commerce::FREE_ROTATION_SIZE
+                        || rotation.iter().any(|leader| leader.always_free())
+                    {
+                        log::warn!("[WEB MENU] rejected stale or invalid free hero rotation");
+                        continue;
+                    }
+                    let store = &mut self.ui.app.main_menu_state.store_catalog;
+                    store.rotation_period = rotation_period;
+                    store.free_leaders = rotation
+                        .iter()
+                        .map(|leader| sow_data::commerce::leader_id(*leader).to_string())
+                        .collect();
+                    for offer in &mut store.leaders {
+                        offer.free_rotation = sow_data::commerce::leader_from_id(&offer.id)
+                            .is_some_and(|leader| rotation.contains(&leader));
+                        offer.available =
+                            offer.permanently_free || offer.owned || offer.free_rotation;
+                    }
                 }
                 WebMenuCommand::UnlockLeader {
                     leader_id,
@@ -4048,6 +4084,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             app.progress.crowns,
             app.progress.gems,
             rotation_period,
+            &[],
         )
         .skins
         .into_iter()
@@ -4383,7 +4420,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "asset_path": skin.asset_path,
             "cost_gems": skin.cost_gems,
         })).unwrap_or(serde_json::Value::Null),
-        "player_leader": me.map(|player| leader_id(player.leader)),
+        "player_leader": me.map(|player| player.leader.id()),
         "player_avatar_expression": snapshot
             .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_pid))
             .and_then(|player| player_avatar_expression(player, app)),
@@ -4976,6 +5013,7 @@ struct MenuInputs {
     store_busy: bool,
     progress: crate::player_progress::PlayerProgress,
     rotation_period: u64,
+    free_leaders: Vec<String>,
     account_id: Option<String>,
     profile_ready: bool,
     name_save_pending: bool,
@@ -4990,6 +5028,8 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
     let state = &app.ui.app.main_menu_state;
     let splash = &app.ui.app.splash_state;
     let selected_leader = state.selected_leader;
+    let rotation_period =
+        sow_data::commerce::rotation_period((js_sys::Date::now().max(0.0) / 1000.0) as u64);
     let visible_route = state.visible_route();
     MenuInputs {
         phase: app.ui.app.phase,
@@ -5043,9 +5083,12 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
         custom_game_is_sp: state.custom_game_is_sp,
         store_busy: state.store_busy,
         progress: app.progress.clone(),
-        rotation_period: sow_data::commerce::rotation_period(
-            (js_sys::Date::now().max(0.0) / 1000.0) as u64,
-        ),
+        rotation_period,
+        free_leaders: if state.store_catalog.rotation_period == rotation_period {
+            state.store_catalog.free_leaders.clone()
+        } else {
+            Vec::new()
+        },
         account_id: app.progress_account_id.clone(),
         profile_ready: app.profile_last_applied_request > 0,
         name_save_pending: app.pending_display_name.is_some(),
@@ -5059,12 +5102,18 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
 
 fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
     let progress = &inputs.progress;
+    let free_leaders = inputs
+        .free_leaders
+        .iter()
+        .filter_map(|id| sow_data::commerce::leader_from_id(id))
+        .collect::<Vec<_>>();
     let store_catalog = sow_data::commerce::catalog_for_profile(
         &progress.owned_leaders,
         &progress.owned_skins,
         progress.crowns,
         progress.gems,
         inputs.rotation_period,
+        &free_leaders,
     );
     let leaders: Vec<serde_json::Value> = sow_core::player::Leader::all()
         .map(|leader| {

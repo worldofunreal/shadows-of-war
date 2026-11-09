@@ -1098,9 +1098,9 @@ test("playable map preview shares game geography and land checks", () => {
 
   const source = JSON.parse(
     fs.readFileSync(path.join(shell, "../../assets/map_sources/thumbnail_frames.json"), "utf8"),
-  ).sources["giantworldmap.png"];
+  ).sources["giantworldmap.webp"];
   assert.deepEqual(source.map_grid_frame, [16, 16, 4094, 1932]);
-  const sourceBytes = fs.readFileSync(path.join(shell, "../../assets/map_sources/giantworldmap.png"));
+  const sourceBytes = fs.readFileSync(path.join(shell, "../../assets/map_sources/giantworldmap.webp"));
   assert.equal(sourceBytes.toString("hex", 0, 8), "89504e470d0a1a0a");
   assert.equal(sourceBytes.readUInt32BE(16), source.width);
   assert.equal(sourceBytes.readUInt32BE(20), source.height);

@@ -29,28 +29,33 @@ test("art lives only in assets/art; tools write only assets/generated", () => {
     }
 });
 
+test("source raster images under assets are all WebP", () => {
+    const legacy = files(assets)
+        .filter((file) => /\.(png|jpe?g)$/i.test(file))
+        .map((file) => path.relative(assets, file));
+    assert.deepEqual(legacy, [], "source raster images must be converted to WebP");
+});
+
 test("every art slot the game draws has its file", () => {
     for (const kind of ["city", "factory", "port", "tower", "farm"]) {
         for (const level of [1, 2, 3, 4]) {
             assert.ok(
-                ["png", "webp"].some((ext) =>
-                    fs.existsSync(path.join(art, "buildings", `${kind}-${level}.${ext}`)),
-                ),
-                `missing assets/art/buildings/${kind}-${level}.png`,
+                fs.existsSync(path.join(art, "buildings", `${kind}-${level}.webp`)),
+                `missing assets/art/buildings/${kind}-${level}.webp`,
             );
         }
     }
     for (const unit of ["transport-ship", "trade-ship", "warship", "atom-bomb", "sam-missile"]) {
         assert.ok(
-            fs.existsSync(path.join(art, "units", unit + ".png")),
-            `missing assets/art/units/${unit}.png`,
+            fs.existsSync(path.join(art, "units", unit + ".webp")),
+            `missing assets/art/units/${unit}.webp`,
         );
     }
     const badges = JSON.parse(fs.readFileSync(path.join(assets, "generated/badges-atlas.json"), "utf8"));
     for (const name of badges.cells) {
         assert.ok(
-            ["png", "webp"].some((ext) => fs.existsSync(path.join(art, "icons", `${name}.${ext}`))),
-            `missing assets/art/icons/${name}.png`,
+            fs.existsSync(path.join(art, "icons", `${name}.webp`)),
+            `missing assets/art/icons/${name}.webp`,
         );
     }
     // One file per avatar name, in exactly one folder; each playable hero owns one 2x2 sheet.

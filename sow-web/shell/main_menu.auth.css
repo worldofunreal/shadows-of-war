@@ -7,8 +7,8 @@
   width: min(100%, 430px);
   padding: 28px;
   overflow: hidden;
-  border-color: rgba(56, 189, 248, 0.34);
-  background: linear-gradient(145deg, rgba(18, 23, 31, 0.98), rgba(8, 10, 14, 0.98));
+  border-color: rgba(245, 197, 66, 0.36);
+  background: var(--sow-tactical-surface-card-bg);
 }
 
 .sow-auth__glow {
