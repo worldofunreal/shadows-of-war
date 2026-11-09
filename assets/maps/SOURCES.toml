@@ -80,7 +80,7 @@ thumbnail_sha256 = "044cdc8daa9d2a8c7da8083a46ca6250497bcbfa71ff7f91da776a9311ac
 [recipes.eastanglia]
 origin_kind = "openfront_image_frame_corrected"
 source_path = "assets/map_sources/eastanglia.webp"
-source_sha256 = "407dd6ae723602fab8136edc8fe2c896da788d7e77b910e5300de43935594945"
+source_sha256 = "1c8d98a60e906f7455fa99592d35d6d719346737b2405f1d17a4459fcce352f4"
 source_upstream_sha256 = "bda748b7c90bcab287b5a2dc6f9fe8b263aeb5426138db9d4024688de9f6ebb8"
 source_correction = "Removed three disconnected inland water components >=400 source pixels; nearest 4-connected land fill."
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
