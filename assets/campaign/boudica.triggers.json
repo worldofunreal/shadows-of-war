@@ -1300,7 +1300,8 @@
       },
       "campaign_assault_on_enter": {
         "attacker_team": "Blue",
-        "target": "camulodunum"
+        "target": "camulodunum",
+        "preserve_relation": true
       },
       "marker": {
         "target": "trinovantes"
@@ -1452,7 +1453,8 @@
       "type": "scene",
       "campaign_assault_on_enter": {
         "attacker_team": "Blue",
-        "target": "londinium"
+        "target": "londinium",
+        "preserve_relation": true
       },
       "next": "boudica_londinium",
       "camera": {
@@ -1520,7 +1522,8 @@
       "type": "scene",
       "campaign_assault_on_enter": {
         "attacker_team": "Blue",
-        "target": "verulamium"
+        "target": "verulamium",
+        "preserve_relation": true
       },
       "next": "boudica_verulamium",
       "camera": {
