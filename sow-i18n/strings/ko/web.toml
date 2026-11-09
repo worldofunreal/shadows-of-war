@@ -271,6 +271,14 @@ campaign_chronicles = "학회소개\n주요 특징"
 campaign_unavailable = "캠페인 사용 불가."
 
 [heroes]
+leader_mavia_name = "마비아"
+leader_mavia_historical = "마비아 또는 마위야는 로마 동부 국경의 아랍 공동체를 이끌었으며 4세기 후반에 제국과 평화 협정을 맺었다."
+leader_mavia_civilization = "타누흐 아랍인"
+
+leader_queen_nandi_name = "난디 왕태후"
+leader_queen_nandi_historical = "난디 카베베(1764년경–1827년)는 엘랑게니 공동체 출신으로, 아들 샤카가 줄루의 통치자가 된 뒤 왕태후가 되었다."
+leader_queen_nandi_civilization = "줄루 왕국"
+
 locked = "잠김"
 oceania = "오세아니아"
 leader_caesar_name = "율리우스 카이사르"
@@ -983,6 +991,12 @@ crowns = "크라운"
 gems = "GEMS 소개"
 
 [site]
+leader_mavia_ability = "모세의 평화"
+leader_mavia_description = "서로 육상 공격을 진행 중인 상대와 동맹을 맺으면 양측의 생존 공격 부대가 철수 손실 없이 각자의 병력 한도까지 복귀합니다."
+
+leader_queen_nandi_ability = "엠킨디니의 소 떼"
+leader_queen_nandi_description = "내 농장이 병력을 25% 더 생산합니다."
+
 view_profile = "지도자 정보 보기"
 all_leaders = "모든 지도자"
 historical_name = "역사적 이름"

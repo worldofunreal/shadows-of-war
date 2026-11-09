@@ -271,6 +271,14 @@ campaign_chronicles = "KAMPAGNEN-\nCHRONIKEN"
 campaign_unavailable = "Kampagne nicht verfügbar."
 
 [heroes]
+leader_mavia_name = "Mavia"
+leader_mavia_historical = "Mavia, auch Mawiyya genannt, führte arabische Gemeinschaften an Roms Ostgrenze und schloss im späten vierten Jahrhundert Frieden mit dem Reich."
+leader_mavia_civilization = "Tanuchidische Araber"
+
+leader_queen_nandi_name = "Königin Nandi"
+leader_queen_nandi_historical = "Nandi kaBhebhe (um 1764–1827) stammte aus der Gemeinschaft der eLangeni und wurde nach dem Aufstieg ihres Sohnes Shaka zur Königinmutter der Zulu."
+leader_queen_nandi_civilization = "Königreich der Zulu"
+
 locked = "GESPERRT"
 oceania = "Ozeanien"
 leader_caesar_name = "Julius Caesar"
@@ -983,6 +991,12 @@ crowns = "KRONEN"
 gems = "EDELSTEINE"
 
 [site]
+leader_mavia_ability = "Frieden des Moses"
+leader_mavia_description = "Schließt du während eines Landangriffs zwischen dir und einem Gegner ein Bündnis mit ihm, kehren die Überlebenden beider Seiten ohne Rückzugsverluste bis zum jeweiligen Truppenlimit zurück."
+
+leader_queen_nandi_ability = "Herden von Emkhindini"
+leader_queen_nandi_description = "Deine Bauernhöfe erzeugen 25 % mehr Truppen."
+
 view_profile = "Anführerprofil ansehen"
 all_leaders = "Alle Anführer"
 historical_name = "Historischer Name"

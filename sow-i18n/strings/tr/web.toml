@@ -271,6 +271,14 @@ campaign_chronicles = "SEFER\nGÜNLÜKLERİ"
 campaign_unavailable = "Sefer kullanılamıyor."
 
 [heroes]
+leader_mavia_name = "Mavia"
+leader_mavia_historical = "Mawiyya olarak da bilinen Mavia, Roma’nın doğu sınırındaki Arap topluluklarına önderlik etti ve dördüncü yüzyılın sonlarında imparatorlukla barış yaptı."
+leader_mavia_civilization = "Tenuhî Arapları"
+
+leader_queen_nandi_name = "Kraliçe Nandi"
+leader_queen_nandi_historical = "ELangeni topluluğundan gelen Nandi kaBhebhe (yaklaşık 1764–1827), oğlu Shaka Zulular arasında iktidara yükselince kraliçe anne oldu."
+leader_queen_nandi_civilization = "Zulu Krallığı"
+
 locked = "KİLİTLİ"
 oceania = "Okyanusya"
 leader_caesar_name = "Jül Sezar"
@@ -983,6 +991,12 @@ crowns = "TAÇLAR"
 gems = "MÜCEVHERLER"
 
 [site]
+leader_mavia_ability = "Musa Barışı"
+leader_mavia_description = "Bir rakiple aranızda kara saldırısı sürerken ittifak kurarsan, iki taraf da hayatta kalan askerlerini geri çekilme kaybı olmadan kendi asker sınırına kadar geri alır."
+
+leader_queen_nandi_ability = "Emkhindini Sürüleri"
+leader_queen_nandi_description = "Çiftliklerin %25 daha fazla asker üretir."
+
 view_profile = "Lider profilini gör"
 all_leaders = "Tüm liderler"
 historical_name = "Tarihî adı"

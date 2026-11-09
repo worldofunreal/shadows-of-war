@@ -271,6 +271,14 @@ campaign_chronicles = "CAMPAGN\nMGA KARUNUNGAN"
 campaign_unavailable = "Walang kampanya."
 
 [heroes]
+leader_mavia_name = "Mavia"
+leader_mavia_historical = "Pinamunuan ni Mavia, na kilala rin bilang Mawiyya, ang mga pamayanang Arabo sa silangang hangganan ng Roma. Nakipagkasundo siya sa imperyo sa huling bahagi ng ikaapat na siglo."
+leader_mavia_civilization = "Mga Arabong Tanukhid"
+
+leader_queen_nandi_name = "Reyna Nandi"
+leader_queen_nandi_historical = "Si Nandi kaBhebhe (mga 1764–1827) ay nagmula sa pamayanang eLangeni. Naging inang reyna siya nang mamuno ang anak niyang si Shaka sa mga Zulu."
+leader_queen_nandi_civilization = "Kahariang Zulu"
+
 locked = "NAKAKANDADO"
 oceania = "Oceania"
 leader_caesar_name = "Julius Caesar"
@@ -983,6 +991,12 @@ crowns = "MGA KORONA"
 gems = "MGA GEM"
 
 [site]
+leader_mavia_ability = "Kapayapaan ni Moises"
+leader_mavia_description = "Kapag nakipag-alyansa ka sa karibal habang may pag-atake sa lupa sa pagitan ninyo, bumabalik ang mga nabubuhay na kawal ng magkabilang panig nang walang bawas sa pag-urong, hanggang sa kani-kanilang limitasyon."
+
+leader_queen_nandi_ability = "Mga Kawan ng Emkhindini"
+leader_queen_nandi_description = "Gumagawa ng 25% na mas maraming hukbo ang iyong mga bukid."
+
 view_profile = "Tingnan ang profile ng lider"
 all_leaders = "Lahat ng lider"
 historical_name = "Makasaysayang pangalan"

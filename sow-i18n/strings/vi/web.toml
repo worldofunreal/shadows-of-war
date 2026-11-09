@@ -271,6 +271,14 @@ campaign_chronicles = "CHIẾN DỊCH\nBIÊN NIÊN"
 campaign_unavailable = "Không có chiến dịch."
 
 [heroes]
+leader_mavia_name = "Mavia"
+leader_mavia_historical = "Mavia, còn gọi là Mawiyya, lãnh đạo các cộng đồng Ả Rập ở biên giới phía đông La Mã và ký hòa ước với đế quốc vào cuối thế kỷ thứ tư."
+leader_mavia_civilization = "Người Ả Rập Tanukh"
+
+leader_queen_nandi_name = "Nữ hoàng Nandi"
+leader_queen_nandi_historical = "Nandi kaBhebhe (khoảng 1764–1827) xuất thân từ cộng đồng eLangeni và trở thành thái hậu sau khi con trai Shaka lên nắm quyền trong cộng đồng Zulu."
+leader_queen_nandi_civilization = "Vương quốc Zulu"
+
 locked = "ĐÃ KHÓA"
 oceania = "Châu Đại Dương"
 leader_caesar_name = "Julius Caesar"
@@ -983,6 +991,12 @@ crowns = "VƯƠNG MIỆN"
 gems = "ĐÁ QUÝ"
 
 [site]
+leader_mavia_ability = "Hòa ước Moses"
+leader_mavia_description = "Khi kết minh với đối thủ trong lúc hai bên có cuộc tấn công trên bộ, quân tấn công sống sót của cả hai bên trở về không chịu tổn thất rút lui, tối đa bằng giới hạn quân số."
+
+leader_queen_nandi_ability = "Đàn gia súc Emkhindini"
+leader_queen_nandi_description = "Nông trại của bạn tạo thêm 25% binh lực."
+
 view_profile = "Xem hồ sơ lãnh đạo"
 all_leaders = "Tất cả lãnh đạo"
 historical_name = "Tên lịch sử"

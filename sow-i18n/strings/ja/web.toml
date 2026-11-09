@@ -271,6 +271,14 @@ campaign_chronicles = "キャンペーン\nクロニクル"
 campaign_unavailable = "キャンペーンはご利用いただけません。"
 
 [heroes]
+leader_mavia_name = "マウィヤ"
+leader_mavia_historical = "マウィヤはローマ東方国境のアラブ諸集団を率い、四世紀後半に帝国と和平を結んだ。ギリシア語の史料ではマウィアとも表記される。"
+leader_mavia_civilization = "タヌーフ系アラブ人"
+
+leader_queen_nandi_name = "ナンディ王母"
+leader_queen_nandi_historical = "ナンディ・カベベ（1764年頃–1827年）はエランゲニの出身で、息子シャカがズールーの支配者となった後に王母となった。"
+leader_queen_nandi_civilization = "ズールー王国"
+
 locked = "ロック中"
 oceania = "オセアニア"
 leader_caesar_name = "ユリウス・カエサル"
@@ -983,6 +991,12 @@ crowns = "クラウン"
 gems = "ギムス"
 
 [site]
+leader_mavia_ability = "モーセの和平"
+leader_mavia_description = "陸上で攻撃し合っている相手と同盟を結ぶと、双方の生存部隊が撤退損失なしで帰還する。帰還兵力はそれぞれの上限まで。"
+
+leader_queen_nandi_ability = "エムキンディニの牛群"
+leader_queen_nandi_description = "自分の農場が生み出す兵力が25%増える。"
+
 view_profile = "指導者の詳細を見る"
 all_leaders = "すべての指導者"
 historical_name = "歴史上の名前"

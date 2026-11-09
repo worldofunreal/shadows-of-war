@@ -9495,6 +9495,50 @@
     }
    },
    "territory_color": "#3f6f4e"
+  },
+  {
+   "id": "queen_nandi",
+   "name": "Queen Nandi",
+   "entity": "Zulu Kingdom",
+   "role": "nation",
+   "region": "africa",
+   "lat": -28.6,
+   "lon": 31.4,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Nandi_(mother_of_Shaka)",
+   "avatar": "queen_nandi",
+   "hero": {
+    "name": "Queen Nandi",
+    "ability": {
+     "kind": "resource_bonus",
+     "source": {
+      "district": "farm"
+     },
+     "resource": "troops",
+     "percent": 25
+    }
+   },
+   "territory_color": "#8a6731"
+  },
+  {
+   "id": "mavia",
+   "name": "Mavia",
+   "entity": "Tanukhid Arabs",
+   "role": "tribe",
+   "region": "asia",
+   "lat": 32.67,
+   "lon": 36.1,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Mawiyya",
+   "avatar": "mavia",
+   "hero": {
+    "name": "Mavia",
+    "ability": {
+     "kind": "armistice",
+     "percent": 100
+    }
+   },
+   "territory_color": "#a25f55"
   }
  ]
 }

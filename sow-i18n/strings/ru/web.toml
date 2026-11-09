@@ -271,6 +271,14 @@ campaign_chronicles = "КЕМПАЙГН\nХРОНИКЛЫ"
 campaign_unavailable = "Кампания недоступна."
 
 [heroes]
+leader_mavia_name = "Мавия"
+leader_mavia_historical = "Мавия, также известная как Мавийя, возглавляла арабские общины на восточной границе Рима и заключила мир с империей в конце IV века."
+leader_mavia_civilization = "Арабы-танухиды"
+
+leader_queen_nandi_name = "Королева Нанди"
+leader_queen_nandi_historical = "Нанди каБхебхе (около 1764–1827) происходила из общины элангени и стала королевой-матерью после прихода её сына Шаки к власти у зулусов."
+leader_queen_nandi_civilization = "Зулусское королевство"
+
 locked = "ЗАБЛОКИРОВАНО"
 oceania = "Океания"
 leader_caesar_name = "Юлий Цезарь"
@@ -983,6 +991,12 @@ crowns = "КОРОНЫ"
 gems = "ГЕМС"
 
 [site]
+leader_mavia_ability = "Мир Моисея"
+leader_mavia_description = "Если заключить союз с противником во время сухопутной атаки между вами, выжившие войска обеих сторон вернутся без потерь при отступлении, в пределах своих лимитов."
+
+leader_queen_nandi_ability = "Стада Эмхиндини"
+leader_queen_nandi_description = "Твои фермы производят на 25% больше войск."
+
 view_profile = "Открыть профиль лидера"
 all_leaders = "Все лидеры"
 historical_name = "Историческое имя"

@@ -271,6 +271,14 @@ campaign_chronicles = "حملة\nالسجلات"
 campaign_unavailable = "الحملة غير متاحة."
 
 [heroes]
+leader_mavia_name = "ماوية"
+leader_mavia_historical = "قادت ماوية، المعروفة أيضاً باسم مافيا، جماعات عربية على الحدود الشرقية لروما وعقدت صلحاً مع الإمبراطورية في أواخر القرن الرابع."
+leader_mavia_civilization = "العرب التنوخيون"
+
+leader_queen_nandi_name = "الملكة ناندي"
+leader_queen_nandi_historical = "تنتمي ناندي كابهيبي (نحو 1764–1827) إلى جماعة إيلانغيني، وأصبحت الملكة الأم بعدما تولى ابنها شاكا قيادة الزولو."
+leader_queen_nandi_civilization = "مملكة الزولو"
+
 locked = "مقفل"
 oceania = "أوقيانوسيا"
 leader_caesar_name = "يوليوس قيصر"
@@ -983,6 +991,12 @@ crowns = "التيجان"
 gems = "جواهر"
 
 [site]
+leader_mavia_ability = "صلح موسى"
+leader_mavia_description = "عند التحالف مع خصم خلال هجوم بري بينكما، تعود القوات الناجية لدى الطرفين دون خسائر انسحاب وفي حدود سقف قوات كل طرف."
+
+leader_queen_nandi_ability = "قطعان إمخينديني"
+leader_queen_nandi_description = "تنتج مزارعك قوات إضافية بنسبة 25٪."
+
 view_profile = "عرض ملف القائد"
 all_leaders = "جميع القادة"
 historical_name = "الاسم التاريخي"

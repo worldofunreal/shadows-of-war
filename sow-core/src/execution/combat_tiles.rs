@@ -782,8 +782,21 @@ impl SowEngine {
             if execution.retreating {
                 let refund = execution.troops.max(0.0);
                 if refund > 0.0 && refund.is_finite() {
+                    let armistice = crate::execution::hero_effects::armistice(
+                        &self.state,
+                        execution.owner_id,
+                        execution.target_owner,
+                    );
                     let factor = if execution.target_owner == 0 {
                         1.0
+                    } else if let Some((hero, percent)) = armistice {
+                        let tile = execution.to_conquer.peek().map(|next| (next.x, next.y));
+                        self.state.announce_leader_ability_to(
+                            hero,
+                            &[execution.owner_id, execution.target_owner],
+                            tile,
+                        );
+                        1.0 - RETREAT_PENALTY_VS_PLAYER * (1.0 - f64::from(percent) / 100.0)
                     } else {
                         // The defender's leader can make retreating from its land costlier;
                         // the retreating leader's `Retreat` ability softens that loss.
