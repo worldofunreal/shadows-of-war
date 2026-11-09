@@ -200,6 +200,7 @@ test("Trinovantes requires a real request, confirmed alliance and positive targe
     assert.deepEqual(assault.step.campaign_assault_on_enter, {
         attacker_team: "Blue",
         target: "camulodunum",
+        preserve_relation: true,
     });
     facts.elapsed_seconds = 1.2;
     assert.equal(machine.update(facts, ui).step.id, "boudica_camulodunum");
@@ -795,7 +796,17 @@ test("Boudica moves the city lesson after Suetonius without changing other campa
         {
             attacker_team: "Blue",
             target: "camulodunum",
+            preserve_relation: true,
         },
+    );
+    const alliedAssaults = definition.steps.filter(
+        (step) => step.campaign_assault_on_enter?.attacker_team === "Blue",
+    );
+    assert.equal(alliedAssaults.length, 3, "Camulodunum, Londinium and Verulamium use the allied army");
+    assert.equal(
+        alliedAssaults.every((step) => step.campaign_assault_on_enter.preserve_relation === true),
+        true,
+        "allied assaults must not turn Trinovantes into an enemy",
     );
     assert.deepEqual(definition.steps.find((step) => step.id === "boudica_trinovantes_assault").marker, {
         target: "trinovantes",
