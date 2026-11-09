@@ -6,7 +6,7 @@
   },
   "sources": {
     "giantworldmap.webp": {
-      "sha256": "f12ddca2fcdd795f13900ba5061da86408f9fa5a4b56e15f162e356c7bf6be19",
+      "sha256": "9245d235042da7f7b81655f23de231974996ab25b9fce2fe6d3e9fa31041ccc9",
       "width": 4110,
       "height": 1948,
       "projection": "equirectangular",
@@ -26,7 +26,7 @@
       ]
     },
     "eastanglia.webp": {
-      "sha256": "407dd6ae723602fab8136edc8fe2c896da788d7e77b910e5300de43935594945",
+      "sha256": "1c8d98a60e906f7455fa99592d35d6d719346737b2405f1d17a4459fcce352f4",
       "width": 896,
       "height": 504,
       "projection": "openfront_britannia_frame"
