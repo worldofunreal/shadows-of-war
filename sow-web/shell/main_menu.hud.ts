@@ -7,6 +7,7 @@ import {
     loadAvatarImage,
     setAvatarPortrait,
 } from "./avatar-presentation.ts";
+import { esc } from "./main_menu.core.ts";
 import { renderLocaleSettingRow } from "./main_menu.settings.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
 import type {
