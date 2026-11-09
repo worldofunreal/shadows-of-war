@@ -1,0 +1,149 @@
+[articles.en]
+text = "Al-Zahir Baibars ruled the Mamluk Sultanate from 1260 to 1277. A gold dinar from Cairo in the Louvre preserves his name and titles. His campaigns extended Mamluk control in the Levant, where in 1271 he led a coalition against the Hospitaller fortress of Krak des Chevaliers."
+title = "Baibars"
+lang = "en"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Al-Zahir Baibars ruled the Mamluk Sultanate from 1260 to 1277. A gold dinar from Cairo in the Louvre preserves his name and titles. His campaigns extended Mamluk control in the Levant, where in 1271 he led a coalition against the Hospitaller fortress of Krak des Chevaliers."]
+sections = [{ title = "The siege of the Krak des Chevaliers", paragraphs = ["The archaeological account describes the capture of the settlement below the fortress, followed by assaults on its outer defences. Siege machines struck the walls while sappers from Aleppo dug beneath towers on several fronts. A tower collapsed on March 30, allowing the besiegers into the lower ward. The remaining garrison asked for safe conduct on April 8. Baibars then ordered the defences restored. Accounts of his reign include a biography written by his own secretary, Ibn Abd al-Zahir. Its perspective and the surviving fortifications provide different kinds of evidence about the campaign."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.es]
+text = "Al-Zahir Baibars gobernó el Sultanato mameluco de 1260 a 1277. Un dinar de oro procedente de El Cairo y conservado en el Louvre lleva su nombre y sus títulos. Sus campañas extendieron el dominio mameluco en el Levante. En 1271 encabezó una coalición contra la fortaleza hospitalaria del Crac de los Caballeros."
+title = "Baibars"
+lang = "es"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Al-Zahir Baibars gobernó el Sultanato mameluco de 1260 a 1277. Un dinar de oro procedente de El Cairo y conservado en el Louvre lleva su nombre y sus títulos. Sus campañas extendieron el dominio mameluco en el Levante. En 1271 encabezó una coalición contra la fortaleza hospitalaria del Crac de los Caballeros."]
+sections = [{ title = "El sitio del Crac de los Caballeros", paragraphs = ["Según el estudio arqueológico, los sitiadores tomaron el poblado al pie de la fortaleza y asaltaron sus defensas exteriores. Las máquinas de asedio batían los muros mientras zapadores de Alepo excavaban bajo las torres en varios frentes. El 30 de marzo cayó una torre y se abrió el paso al recinto inferior. La guarnición que seguía resistiendo pidió salvoconducto el 8 de abril. Baibars ordenó luego restaurar las defensas. Su secretario, Ibn Abd al-Zahir, escribió una biografía del sultán. El relato de corte y las fortificaciones conservadas aportan evidencias de distinto tipo sobre la campaña."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.fr]
+text = "Al-Zahir Baybars régna sur le sultanat mamelouk de 1260 à 1277. Un dinar d’or du Caire conservé au Louvre porte son nom et ses titres. Ses campagnes étendirent l’autorité mamelouke au Levant. En 1271, il conduisit une coalition contre la forteresse hospitalière du Crac des Chevaliers."
+title = "Baybars"
+lang = "fr"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Al-Zahir Baybars régna sur le sultanat mamelouk de 1260 à 1277. Un dinar d’or du Caire conservé au Louvre porte son nom et ses titres. Ses campagnes étendirent l’autorité mamelouke au Levant. En 1271, il conduisit une coalition contre la forteresse hospitalière du Crac des Chevaliers."]
+sections = [{ title = "Le siège du Crac des Chevaliers", paragraphs = ["L’étude archéologique retrace la prise du bourg au pied du château, puis les assauts contre les défenses extérieures. Les engins frappèrent les murs tandis que des sapeurs d’Alep creusaient sous les tours sur plusieurs fronts. Le 30 mars, l’effondrement d’une tour ouvrit une brèche vers l’enceinte basse. Le reste de la garnison demanda un sauf-conduit le 8 avril. Baybars fit ensuite restaurer les défenses. Son secrétaire, Ibn Abd al-Zahir, rédigea une biographie du souverain. Le récit de cour et les fortifications conservées éclairent la campagne de différentes façons."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.de]
+text = "Al-Zahir Baibars regierte das Mamlukensultanat von 1260 bis 1277. Ein goldener Dinar aus Kairo im Louvre trägt seinen Namen und seine Titel. Seine Feldzüge weiteten die mamlukische Herrschaft in der Levante aus. 1271 führte er ein Bündnisheer gegen die Johanniterfestung Krak des Chevaliers."
+title = "Baibars"
+lang = "de"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Al-Zahir Baibars regierte das Mamlukensultanat von 1260 bis 1277. Ein goldener Dinar aus Kairo im Louvre trägt seinen Namen und seine Titel. Seine Feldzüge weiteten die mamlukische Herrschaft in der Levante aus. 1271 führte er ein Bündnisheer gegen die Johanniterfestung Krak des Chevaliers."]
+sections = [{ title = "Die Belagerung des Krak des Chevaliers", paragraphs = ["Der archäologische Bericht beschreibt die Einnahme des Ortes am Fuß der Burg und die Angriffe auf die äußeren Verteidigungsanlagen. Belagerungsmaschinen beschossen die Mauern. Sappeure aus Aleppo gruben an mehreren Fronten unter den Türmen. Als am 30. März ein Turm einstürzte, drangen die Belagerer in die untere Befestigung ein. Die verbliebene Besatzung bat am 8. April um freies Geleit. Baibars ließ die Anlagen wiederherstellen. Sein Sekretär Ibn Abd al-Zahir schrieb eine Biografie des Sultans. Dieser Bericht und die erhaltene Burg geben unterschiedliche Einblicke in den Feldzug."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.it]
+text = "Al-Zahir Baybars governò il sultanato mamelucco dal 1260 al 1277. Un dinaro d’oro del Cairo conservato al Louvre porta il suo nome e i suoi titoli. Le sue campagne estesero il dominio mamelucco nel Levante. Nel 1271 guidò una coalizione contro la fortezza ospitaliera del Krak dei Cavalieri."
+title = "Baybars"
+lang = "it"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Al-Zahir Baybars governò il sultanato mamelucco dal 1260 al 1277. Un dinaro d’oro del Cairo conservato al Louvre porta il suo nome e i suoi titoli. Le sue campagne estesero il dominio mamelucco nel Levante. Nel 1271 guidò una coalizione contro la fortezza ospitaliera del Krak dei Cavalieri."]
+sections = [{ title = "L’assedio del Krak dei Cavalieri", paragraphs = ["Lo studio archeologico ricostruisce la presa dell’abitato ai piedi del castello e gli assalti alle difese esterne. Le macchine colpirono le mura mentre gli zappatori di Aleppo scavavano sotto le torri su più fronti. Il crollo di una torre il 30 marzo aprì un varco verso la cinta inferiore. L’8 aprile la guarnigione superstite chiese un salvacondotto. Baybars fece poi riparare le difese. Il suo segretario Ibn Abd al-Zahir scrisse una biografia del sultano. Il racconto di corte e le fortificazioni superstiti offrono testimonianze di tipo diverso sulla campagna."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.tr]
+text = "El-Zâhir Baybars, 1260 ile 1277 arasında Memlûk Sultanlığı’nı yönetti. Louvre’daki Kahire menşeli bir altın dinar onun adını ve unvanlarını taşır. Seferleri Memlûk hâkimiyetini Levant’ta genişletti. 1271’de Hospitalierlerin Krak des Chevaliers kalesine karşı bir koalisyona komuta etti."
+title = "Baybars"
+lang = "tr"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["El-Zâhir Baybars, 1260 ile 1277 arasında Memlûk Sultanlığı’nı yönetti. Louvre’daki Kahire menşeli bir altın dinar onun adını ve unvanlarını taşır. Seferleri Memlûk hâkimiyetini Levant’ta genişletti. 1271’de Hospitalierlerin Krak des Chevaliers kalesine karşı bir koalisyona komuta etti."]
+sections = [{ title = "Krak des Chevaliers kuşatması", paragraphs = ["Arkeolojik araştırma, önce kale eteğindeki yerleşimin, ardından dış savunma hatlarının hedef alındığını gösterir. Kuşatma makineleri duvarları döverken Halep’ten gelen lağımcılar birkaç cephede kulelerin altında kazı yaptı. 30 Mart’ta bir kulenin çökmesi aşağı avluya girişi açtı. Kalan garnizon 8 Nisan’da güvenli geçiş istedi. Baybars, kalenin savunmalarının onarılmasını emretti. Kâtibi İbn Abdüzzâhir sultanın biyografisini yazdı. Saray anlatısı ve ayakta kalan tahkimat sefer hakkında farklı türden kanıtlar sunar."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.zh-CN]
+text = "扎希尔·拜巴尔斯在1260年至1277年统治马穆鲁克苏丹国。卢浮宫收藏一枚来自开罗的金币，正面铸有他的名字和头衔，背面则是宗教铭文。这类实物提供了同时代政权使用的称号。他在黎凡特的军事行动扩大了马穆鲁克的势力范围。1271年，他率联军围攻医院骑士团控制的骑士堡。这座堡垒的围攻过程，可以结合文献记述和建筑调查来了解。"
+title = "拜巴尔斯"
+lang = "zh-CN"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["扎希尔·拜巴尔斯在1260年至1277年统治马穆鲁克苏丹国。卢浮宫收藏一枚来自开罗的金币，正面铸有他的名字和头衔，背面则是宗教铭文。这类实物提供了同时代政权使用的称号。他在黎凡特的军事行动扩大了马穆鲁克的势力范围。1271年，他率联军围攻医院骑士团控制的骑士堡。这座堡垒的围攻过程，可以结合文献记述和建筑调查来了解。"]
+sections = [{ title = "骑士堡之围", paragraphs = ["法国文化部的考古专题记载，拜巴尔斯于1271年二月抵达，军中包括他自己的部队和来自哈马等地的盟军。围攻者先控制城堡脚下的居民点，再攻击外部防线。三月开始，攻城器械轰击城墙。夺下名为铁匠瓮城的外堡后，围攻方用礼服奖励有功人员，显示那一处防线的重要性。来自阿勒颇的工兵同时在南、北、东几面城墙的塔楼下挖掘坑道。三月三十日，一座塔楼倒塌，在防线中留下缺口。马穆鲁克军队从那里进入较低的外院，把攻城器械移入院内继续打击高处的防御工事。四月八日，剩余守军请求准许安全离开，苏丹同意。拜巴尔斯随后下令修复防御设施，以防沿海据点的军队反攻，也为了让堡垒能支援后续行动。南侧城墙受损尤其严重，后来重新砌过外表。北面的便门及其外侧防御设施、东面的城门一带也遭到严重破坏，这些地段在攻占后经过重建。对城墙、城门与修缮铭文的调查有助于区分围攻造成的破坏和后来进行的工程。拜巴尔斯的书记伊本·阿卜杜勒·扎希尔也撰写了他的传记。研究者结合其他历史作者来比较这部作品的宫廷立场与后来对苏丹的记忆。宫廷文字、城堡和金币分别保留了统治的不同面向。骑士堡的修筑也没有在一次围攻或一任苏丹结束时停止，后续工程延续到了拜巴尔斯去世以后。在游戏里，攻占一处塔楼后摧毁近处较弱的塔楼，表现的是工兵在外部防线取得突破后扩大战果的过程。"] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.ja]
+text = "アル＝ザーヒル・バイバルスは1260年から1277年までマムルーク朝を治めた。ルーヴル美術館が所蔵するカイロ由来の金貨には、その名と称号が刻まれている。彼の遠征でマムルーク朝の支配はレヴァントに広がり、1271年には聖ヨハネ騎士団が守るクラック・デ・シュヴァリエに対する連合軍を率いた。城に残る構造物と当時の文献は、この遠征を異なる角度から伝える。"
+title = "バイバルス"
+lang = "ja"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["アル＝ザーヒル・バイバルスは1260年から1277年までマムルーク朝を治めた。ルーヴル美術館が所蔵するカイロ由来の金貨には、その名と称号が刻まれている。彼の遠征でマムルーク朝の支配はレヴァントに広がり、1271年には聖ヨハネ騎士団が守るクラック・デ・シュヴァリエに対する連合軍を率いた。城に残る構造物と当時の文献は、この遠征を異なる角度から伝える。"]
+sections = [{ title = "クラック・デ・シュヴァリエの包囲", paragraphs = ["フランス文化省の考古学資料によると、バイバルスの軍は二月に要塞に近づいた。その軍には自軍のほか、ハマーなどの諸勢力の兵も含まれていた。まず城の麓の集落を押さえ、外側の防御線に攻撃をかけた。三月に攻城兵器が城壁を打ち始め、鍛冶屋のバービカンと呼ばれる外堡を取った際には褒賞が与えられた。アレッポから来た工兵は南、北、東の数か所で塔の下を掘った。三月三十日に塔の一つが崩れ、包囲軍はそこから外側の低い郭に入り、さらに攻城兵器を持ち込んだ。四月八日に残った守備隊は安全な退出を求め、バイバルスはこれを認めた。占領後は海岸の拠点からの反撃に備え、また次の遠征を支えるために防御設備の修復を命じた。南側はとりわけ損傷が大きく、壁の外面が造り直された。北の通用門や東門の周辺にも復旧工事が行われた。攻撃の跡と修復後の構造を比べることで、工事の前後関係が調べられている。バイバルスの書記イブン・アブド・アッザーヒルは、君主の生涯を記録した。こうした宮廷の伝記は当時の情報を残すと同時に、君主に仕える書き手の視点を持つ。現存する城壁や貨幣はそれとは異なる種類の史料である。修復や改造は彼の死後も続いた。ゲームでは一つの塔の占領を足がかりに、近くの弱い塔を崩す効果でこの攻城戦を表現している。"] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.ko]
+text = "알자히르 바이바르스는 1260년부터 1277년까지 맘루크 술탄국을 통치했다. 루브르박물관에 있는 카이로의 금 디나르에는 그의 이름과 칭호가 새겨져 있다. 그의 원정으로 레반트에서 맘루크의 지배가 확대되었으며 1271년에는 구호기사단의 요새 크라크 데 슈발리에를 공격하는 연합군을 이끌었다. 이 전투는 당시 기록과 현장에 남은 요새를 통해 살펴볼 수 있다."
+title = "바이바르스"
+lang = "ko"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["알자히르 바이바르스는 1260년부터 1277년까지 맘루크 술탄국을 통치했다. 루브르박물관에 있는 카이로의 금 디나르에는 그의 이름과 칭호가 새겨져 있다. 그의 원정으로 레반트에서 맘루크의 지배가 확대되었으며 1271년에는 구호기사단의 요새 크라크 데 슈발리에를 공격하는 연합군을 이끌었다. 이 전투는 당시 기록과 현장에 남은 요새를 통해 살펴볼 수 있다."]
+sections = [{ title = "크라크 데 슈발리에 공방전", paragraphs = ["프랑스 문화부의 고고학 자료에 따르면 바이바르스는 1271년 2월에 요새에 접근했다. 그의 군대에는 하마와 다른 지역에서 온 동맹군이 함께했다. 포위군은 먼저 성 아래의 마을을 장악하고 외곽 방어선을 공격했다. 3월부터 공성 병기로 성벽을 때렸다. 대장장이의 외보루로 불린 곳을 차지했을 때에는 공을 세운 사람들에게 예복을 주었다. 알레포에서 온 공병들은 남쪽과 북쪽, 동쪽의 여러 탑 아래를 팠다. 3월 30일 탑 하나가 무너지자 포위군이 틈으로 들어가 낮은 구역을 차지했고, 그곳으로 공성 장비를 옮겼다. 4월 8일 남아 있던 수비대가 안전한 퇴로를 요청하자 바이바르스는 이를 허락했다. 요새를 확보한 뒤에는 해안 거점의 반격에 대비하고 이후 원정을 지원할 수 있도록 방어 시설을 수리하라고 명했다. 남쪽 성벽은 특히 피해가 심해 바깥 면을 다시 쌓았다. 남은 건축물과 수리 과정에서 새겨진 명문은 전투로 파손된 곳과 후대에 고친 곳을 구분하는 데 도움이 된다. 궁정 서기 이븐 압드 알자히르는 술탄의 전기를 썼다. 그 기록은 술탄을 섬긴 사람의 관점에서 쓰였으며, 성벽과 화폐는 다른 종류의 증거를 제공한다. 게임에서는 탑 하나를 점령하면 근처의 더 약한 탑을 무너뜨리는 규칙으로 공병이 방어선에 틈을 낸 전술을 표현한다."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.ar]
+text = "حكم الظاهر بيبرس سلطنة المماليك من 1260 إلى 1277. ويحفظ متحف اللوفر دينارًا ذهبيًا من القاهرة يحمل اسمه وألقابه. وسّعت حملاته نفوذ المماليك في بلاد الشام. وفي سنة 1271 قاد تحالفًا ضد فرسان الإسبتارية في قلعة الحصن."
+title = "بيبرس"
+lang = "ar"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["حكم الظاهر بيبرس سلطنة المماليك من 1260 إلى 1277. ويحفظ متحف اللوفر دينارًا ذهبيًا من القاهرة يحمل اسمه وألقابه. وسّعت حملاته نفوذ المماليك في بلاد الشام. وفي سنة 1271 قاد تحالفًا ضد فرسان الإسبتارية في قلعة الحصن."]
+sections = [{ title = "حصار قلعة الحصن", paragraphs = ["يعرض البحث الأثري استيلاء المحاصرين على البلدة عند سفح القلعة، ثم هجماتهم على التحصينات الخارجية. ضربت آلات الحصار الأسوار، وحفر النقّابون القادمون من حلب تحت الأبراج على عدة جبهات. وفي 30 مارس انهار برج فدخل المحاصرون إلى الحصن السفلي. وفي 8 أبريل طلب من بقي من الحامية الأمان. وأمر بيبرس بعد ذلك بإصلاح الدفاعات. وكانت الواجهة الجنوبية من أشد الأجزاء تضررًا فأعيد بناء سطحها الخارجي. وكتب كاتبه ابن عبد الظاهر سيرة السلطان. وتقدّم رواية البلاط والتحصينات الباقية نوعين مختلفين من الأدلة على الحملة وما أعقبها من أعمال ترميم."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.ru]
+text = "Аз-Захир Бейбарс правил Мамлюкским султанатом с 1260 по 1277 год. На золотом динаре из Каира, который хранится в Лувре, указаны его имя и титулы. Его походы расширили власть мамлюков в Леванте. В 1271 году он возглавил коалицию против крепости госпитальеров Крак-де-Шевалье."
+title = "Бейбарс"
+lang = "ru"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Аз-Захир Бейбарс правил Мамлюкским султанатом с 1260 по 1277 год. На золотом динаре из Каира, который хранится в Лувре, указаны его имя и титулы. Его походы расширили власть мамлюков в Леванте. В 1271 году он возглавил коалицию против крепости госпитальеров Крак-де-Шевалье."]
+sections = [{ title = "Осада Крак-де-Шевалье", paragraphs = ["Археологическое исследование описывает захват поселения у подножия крепости и штурмы внешних укреплений. Осадные машины обстреливали стены, а сапёры из Алеппо вели подкопы под башни с разных сторон. 30 марта одна из башен обрушилась, открыв путь в нижний двор. 8 апреля оставшийся гарнизон попросил безопасного выхода. Бейбарс затем приказал восстановить оборонительные сооружения. Его секретарь Ибн Абд аз-Захир составил биографию султана. Придворный рассказ и сохранившиеся укрепления дают разные виды свидетельств о кампании."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.vi]
+text = "Al-Zahir Baibars cai trị Vương triều Mamluk từ năm 1260 đến 1277. Một đồng dinar vàng từ Cairo được lưu giữ tại Louvre mang tên và tước hiệu của ông. Các chiến dịch của ông mở rộng quyền kiểm soát của Mamluk ở Levant. Năm 1271 ông dẫn đầu liên quân chống pháo đài Krak des Chevaliers của dòng Hiệp sĩ Cứu tế."
+title = "Baibars"
+lang = "vi"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Al-Zahir Baibars cai trị Vương triều Mamluk từ năm 1260 đến 1277. Một đồng dinar vàng từ Cairo được lưu giữ tại Louvre mang tên và tước hiệu của ông. Các chiến dịch của ông mở rộng quyền kiểm soát của Mamluk ở Levant. Năm 1271 ông dẫn đầu liên quân chống pháo đài Krak des Chevaliers của dòng Hiệp sĩ Cứu tế."]
+sections = [{ title = "Cuộc vây hãm Krak des Chevaliers", paragraphs = ["Nghiên cứu khảo cổ thuật lại việc quân bao vây chiếm thị trấn dưới chân thành rồi tấn công các tuyến phòng thủ phía ngoài. Máy bắn đá công phá tường trong lúc công binh Aleppo đào dưới móng tháp ở nhiều hướng. Ngày 30 tháng 3 một tháp sập, mở đường vào khu thành thấp. Ngày 8 tháng 4, quân đồn trú còn lại xin được rút đi an toàn. Baibars sau đó ra lệnh tu bổ công sự. Thư ký Ibn Abd al-Zahir viết tiểu sử của ông. Ghi chép cung đình và các công sự còn lại cung cấp những loại bằng chứng khác nhau về chiến dịch."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.id]
+text = "Al-Zahir Baibars memerintah Kesultanan Mamluk pada 1260–1277. Sebuah dinar emas dari Kairo yang disimpan di Louvre memuat nama dan gelarnya. Kampanyenya memperluas kekuasaan Mamluk di Levant. Pada 1271 ia memimpin koalisi melawan benteng Hospitaller Krak des Chevaliers."
+title = "Baibars"
+lang = "id"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Al-Zahir Baibars memerintah Kesultanan Mamluk pada 1260–1277. Sebuah dinar emas dari Kairo yang disimpan di Louvre memuat nama dan gelarnya. Kampanyenya memperluas kekuasaan Mamluk di Levant. Pada 1271 ia memimpin koalisi melawan benteng Hospitaller Krak des Chevaliers."]
+sections = [{ title = "Pengepungan Krak des Chevaliers", paragraphs = ["Kajian arkeologi menguraikan perebutan permukiman di kaki benteng dan serangan terhadap pertahanan luarnya. Mesin kepung menghantam tembok sementara penggali dari Aleppo menggali di bawah menara pada beberapa sisi. Sebuah menara runtuh pada 30 Maret dan membuka jalan ke pelataran bawah. Sisa garnisun meminta jalan keluar yang aman pada 8 April. Baibars kemudian memerintahkan pemulihan pertahanan. Sekretarisnya, Ibn Abd al-Zahir, menulis biografi sang sultan. Catatan istana dan benteng yang masih berdiri memberikan jenis bukti yang berbeda tentang kampanye itu."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.fil]
+text = "Namuno si Al-Zahir Baibars sa Sultanatong Mamluk mula 1260 hanggang 1277. Nasa isang gintong dinar mula Cairo na nasa Louvre ang kanyang pangalan at mga titulo. Pinalawak ng kanyang mga kampanya ang pamumuno ng Mamluk sa Levant. Noong 1271, pinamunuan niya ang koalisyon laban sa kuta ng mga Hospitaller na Krak des Chevaliers."
+title = "Baibars"
+lang = "fil"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Namuno si Al-Zahir Baibars sa Sultanatong Mamluk mula 1260 hanggang 1277. Nasa isang gintong dinar mula Cairo na nasa Louvre ang kanyang pangalan at mga titulo. Pinalawak ng kanyang mga kampanya ang pamumuno ng Mamluk sa Levant. Noong 1271, pinamunuan niya ang koalisyon laban sa kuta ng mga Hospitaller na Krak des Chevaliers."]
+sections = [{ title = "Ang pagkubkob sa Krak des Chevaliers", paragraphs = ["Inilalarawan ng pag-aaral na arkeolohiko ang pagsakop sa pamayanan sa paanan ng kuta at paglusob sa mga panlabas na depensa. Binayo ng mga makinang pangkubkob ang pader habang naghuhukay ang mga inhinyero mula Aleppo sa ilalim ng mga tore sa ilang panig. Gumuho ang isang tore noong Marso 30 at nakapasok ang mga kumukubkob sa mababang bahagi ng kuta. Humingi ng ligtas na paglabas ang natitirang garison noong Abril 8. Ipinagawa ni Baibars ang pagkukumpuni ng mga depensa. Isinulat ng kanyang kalihim na si Ibn Abd al-Zahir ang buhay ng sultan. Magkaibang uri ng ebidensiya ang salaysay ng korte at ang natitirang kuta."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]
+
+[articles.pt-BR]
+text = "Al-Zahir Baibars governou o Sultanato Mameluco de 1260 a 1277. Um dinar de ouro do Cairo conservado no Louvre traz seu nome e seus títulos. Suas campanhas ampliaram o domínio mameluco no Levante. Em 1271, ele liderou uma coalizão contra a fortaleza hospitalária do Crac dos Cavaleiros."
+title = "Baibars"
+lang = "pt-BR"
+url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271"
+shortArticle = true
+intro = ["Al-Zahir Baibars governou o Sultanato Mameluco de 1260 a 1277. Um dinar de ouro do Cairo conservado no Louvre traz seu nome e seus títulos. Suas campanhas ampliaram o domínio mameluco no Levante. Em 1271, ele liderou uma coalizão contra a fortaleza hospitalária do Crac dos Cavaleiros."]
+sections = [{ title = "O cerco ao Crac dos Cavaleiros", paragraphs = ["O estudo arqueológico descreve a tomada do povoado ao pé da fortaleza e os ataques às defesas externas. Máquinas de cerco atingiram as muralhas enquanto sapadores de Alepo escavavam sob as torres em várias frentes. Em 30 de março, a queda de uma torre abriu passagem para o recinto inferior. A guarnição restante pediu salvo-conduto em 8 de abril. Baibars depois mandou restaurar as defesas. Seu secretário Ibn Abd al-Zahir escreveu a biografia do sultão. O relato da corte e as fortificações conservadas oferecem tipos diferentes de evidência sobre a campanha."] }]
+sources = [{ title = "French Ministry of Culture, Baybars’ Siege of 1271", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/baybars-siege-1271" }, { title = "French Ministry of Culture, The Krak des Chevaliers under the Mamluks", url = "https://archeologie.culture.gouv.fr/crac-chevaliers/en/krak-des-chevaliers-under-mamluks" }, { title = "Louvre, Mamluk Dinar in the Name of Baybars", url = "https://collections.louvre.fr/en/ark:/53355/cl010320831" }, { title = "Amina A. Elbendary, Changing Medieval Perceptions of al-Zahir Baybars", url = "https://knowledge.uchicago.edu/records/wrem2-htd76" }]

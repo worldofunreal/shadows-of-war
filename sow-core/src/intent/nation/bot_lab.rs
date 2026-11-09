@@ -2739,20 +2739,14 @@ fn s16_checkpoint_decision_and_state_reference() {
     // Target planning follows current OpenFront priorities and neutral captures
     // use the active global occupancy pacing curve.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x16a6_ddd7_de26_1f76),
-        (500, 0xf4e4_ee71_74ac_0b3a),
-        (750, 0x04ef_c0e9_b811_6ee2),
-        (1000, 0x0108_7cda_60a4_10bb),
-        (1250, 0x6241_7f8a_1f58_c713),
-        (1500, 0xeecd_99c4_c08b_68c8),
-        (1750, 0x0e3e_2959_3821_d551),
-        (2000, 0xb0cb_56c3_5f6c_3003),
-        (2102, 0x2835_5a25_264f_45a8),
+        (250, 0x1b7e_67c3_46b0_d173),
+        (500, 0x6dc4_f6f8_e5af_9a83),
+        (562, 0x99ac_2cd2_b7a8_6d68),
     ];
     assert_eq!(
         checkpoints,
         s16_building_rules_trace(false),
-        "same seed must reproduce the current format-6 checkpoints"
+        "same seed must reproduce the current format-7 checkpoints"
     );
     assert_eq!(
         checkpoints, REFERENCE,
@@ -2770,15 +2764,10 @@ fn historical_s16_building_rules_keep_recorded_results() {
     );
     // Historical building rules with the same leader and current pacing curve.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x9f2d_7cd6_4808_7ced),
-        (500, 0x27b1_ae70_acc5_538d),
-        (750, 0x3aa1_bfef_d479_66e5),
-        (1000, 0xd850_4ebc_282c_c694),
-        (1250, 0x7411_70d6_1f86_3a8a),
-        (1500, 0xf22e_fcd3_2b39_82e1),
-        (1750, 0x38ed_c3e4_d585_8de7),
-        (2000, 0x921b_daa0_8425_918d),
-        (2015, 0xab91_89fe_3308_643e),
+        (250, 0x35fa_b2f0_b812_d8c0),
+        (500, 0x55b8_af39_e9a8_9bdb),
+        (750, 0x8e65_79a5_a445_0312),
+        (946, 0x3b4b_b361_0e95_30f2),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

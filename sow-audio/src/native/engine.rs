@@ -1,6 +1,6 @@
 #[cfg(feature = "preview")]
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -19,6 +19,22 @@ pub(super) static MASTER_VOLUME: AtomicU32 = AtomicU32::new(800);
 pub fn set_master_volume(volume: f32) {
     let vol_u32 = (volume * 1000.0).clamp(0.0, 1000.0) as u32;
     MASTER_VOLUME.store(vol_u32, Ordering::Relaxed);
+}
+
+/// Host-owned silence (portal ads, portal mute setting). Kept apart from the
+/// player's volume so a portal can never overwrite the saved setting.
+static HOST_MUTED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_host_muted(muted: bool) {
+    HOST_MUTED.store(muted, Ordering::Relaxed);
+}
+
+fn output_gain() -> f32 {
+    if HOST_MUTED.load(Ordering::Relaxed) {
+        0.0
+    } else {
+        MASTER_VOLUME.load(Ordering::Relaxed) as f32 / 1000.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,7 +126,7 @@ impl AudioMixer {
         }
         self.voices.retain(|voice| voice.current.is_some());
 
-        let master = MASTER_VOLUME.load(Ordering::Relaxed) as f32 / 1000.0;
+        let master = output_gain();
         (
             (left * master).clamp(-1.0, 1.0),
             (right * master).clamp(-1.0, 1.0),

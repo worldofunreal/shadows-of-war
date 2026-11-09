@@ -400,6 +400,12 @@ impl SowApp {
                             && fleet.unit_type == sow_core::game::UnitType::TradeShip
                     })
                     .count() as u32;
+                let (_, standards_troops) =
+                    sow_core::execution::income_rates::imperial_standard_income(
+                        agg,
+                        player.leader,
+                        &self.sim.config,
+                    );
                 self.ui.app.hud_state.troop_rate =
                     (sow_core::execution::income_rates::troop_income_per_second(
                         player.tile_count,
@@ -414,7 +420,8 @@ impl SowApp {
                         trade_ships,
                         player.leader,
                         &self.sim.config,
-                    )) * self.sim.config.global_speed_multiplier;
+                    ) + standards_troops)
+                        * self.sim.config.global_speed_multiplier;
                 self.ui.app.hud_state.hero_income_rate =
                     e.hero_gold_per_second(my_pid) * self.sim.config.global_speed_multiplier;
                 self.ui.app.hud_state.gold_rate =

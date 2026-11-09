@@ -1,0 +1,67 @@
+[articles.es]
+text = "Cocijoeza, Cosijoeza, Cosiioeza o Cosihuesa (AFI: [kosi’ioeza])​ fue un coquitao (rey zapoteco) del reino zapoteco de Tehuantepec. Fue hijo de Cosiiopii I, subió al trono en 1450​ y reforzó la ciudad de Guiengola ante el expansionismo del Imperio azteca al cual derrotó."
+title = "Cocijoeza"
+lang = "es"
+url = "https://es.wikipedia.org/wiki/Cocijoeza"
+intro = [
+  "Cocijoeza, Cosijoeza, Cosiioeza o Cosihuesa (AFI: [kosi’ioeza])​ fue un coquitao (rey zapoteco) del reino zapoteco de Tehuantepec. Fue hijo de Cosiiopii I, subió al trono en 1450​ y reforzó la ciudad de Guiengola ante el expansionismo del Imperio azteca al cual derrotó. Era conocido por los mexicas con los nombres de Huitzquiauitl e Itzquiahuitl.​",
+  "En zapoteco clásico, Cosiioeza significa \"rayo de cuchillos\", \"temporal de cuchillos\"​ o también puede significar \"tiempo de cuchillos\".​ La etimología del nombre proviene de los vocablos cosiio: rayo y eza: cuchillo. En la época colonial los frailes escribían la \"ii\" del zapoteco como \"ij\" por lo que \"Cosijoeza\" debe leerse como \"Cosiioeza\".​",
+  "Esta pronunciación concuerda con la tonalidad del idioma zapoteco. La variedad en la escritura de su nombre radica en las múltiples fuentes que emplearon ortografías diferentes desde la época virreinal hasta la actual y a que corresponden a versiones del nombre en la variante del zapoteco de determinada región.",
+]
+sections = [
+  { "title" = "Guerra con el Imperio azteca", "paragraphs" = [
+      "La importancia geoestratégica del reino de Tehuantepec se debía a su condición de puente entre las tierras altas del centro del Anáhuac y la actual Guatemala,​ así como a su importante industria de sal en la costa, de orfebrería y de grana cochinilla. Debido a esto Tehuantepec se vio bajo el deseo de anexión del Imperio mexica.",
+      "Ante la amenaza que representaban los mexicas, en 1494 el rey Cocijoeza ordenó matar a los pochtecas que se encontraban en su territorio por ser estos espías,​ el emperador mexica Ahuizotl tomó estos asesinatos como casus belli con lo que en 1497​ inició la guerra mexica-zapoteca, la ciudad de Huaxyacac fue la primera en ser atacada y destruida, después lo fue Mitla, la campaña militar se extendió por el Istmo de Tehuantepec hasta llegar al Soconusco,​ esto llevó a Cocijoeza a proponer una alianza al rey mixteco,​ el cual aceptó y suministró 24 000 guerreros que se sumaron a los 36 000 del ejército zapoteca, juntos lograron expulsar a los mexicas.",
+      "Dado el latente riesgo de un ataque por parte de los mexicas, Cocijoeza edificó la ciudad fortificada de Guiengola.​ En 1497 Ahuizotl arremetió de nuevo contra los reinos aliados zapoteca y mixteca y envió un ejército al mando del general Tlacatecatl al bastión que representaba Guiengola,​ el sitio de la ciudad duró 7 meses, el ejército mexica agotado y desmoralizado no logró tomar la ciudad, Ahuizotl propuso entonces un tratado de paz a Cosiioeza en el que incluyó la mano de su hija, la princesa Xilavela.​ De esta unión, nacieron los príncipes Cosiiopii II y Pinopiaa.",
+    ] },
+  { "title" = "Los tres Cosiioezas", "paragraphs" = [
+      "Actualmente existe una confusión sobre tres reyes zapotecos que compartieron el mismo nombre de Cosiioeza, sin embargo estos personajes vivieron en épocas y lugares diferentes.​ Tal confusión se originó con fray Francisco de Burgoa en el siglo XVII (1670) quien mezcló a estos reyes en una misma historia. Dicha historia se popularizó con Manuel Martínez Gracida en su novela \"El rey Cosijoeza y su familia\" en el siglo XIX. El rey Cosiioeza I gobernó Zaachila durante la segunda mitad del siglo XIV y realizó una primera incursión al Istmo de Tehuantepec en torno al año 1370.​ El segundo Cosiioeza, descendiente del primero, gobernó el reino de Tehuantepec a mediados del siglo XV y fue quien enfrentó a los aztecas. El tercer Cosiioeza gobernó el reino de Zaachila a principios del siglo XVI y fue quien recibió a los españoles en los años de la conquista. Este último Cosiioeza fue bautizado como don Carlos.",
+    ] },
+]
+
+[articles.ru]
+text = "Косихоеса (Кокихоеса, правильнее Коси’иоэса, Косийоэса, Косийиоеса, сапотекск. Kosi’ioeza или Guxi Chikoeza, Гуси Чикоеса; ок."
+title = "Косихоеса"
+lang = "ru"
+url = "https://ru.wikipedia.org/wiki/%D0%9A%D0%BE%D1%81%D0%B8%D1%85%D0%BE%D0%B5%D1%81%D0%B0"
+intro = [
+  "Косихоеса (Кокихоеса, правильнее Коси’иоэса, Косийоэса, Косийиоеса, сапотекск. Kosi’ioeza или Guxi Chikoeza, Гуси Чикоеса; ок. 1450—1529) — кокитао (сапотекский правитель) царства Саачила. Имя на сапотекском языке означает «Буря обсидиановых ножей» или «Время обсидиановых ножей», иногда переводится как «Создатель молний». Ацтеки называли его Уискиауитль (Huizquiauitl). Он взошёл на престол в 1487 году, столкнулся с экспансией Тройственной конфедерации ацтеков и построил город Гуйенгола.",
+]
+sections = [
+  { "title" = "Правление", "paragraphs" = [
+      "Геостратегическое значение царства Саачила обусловлено его положением в качестве моста между центральным высокогорьем Анауак и землями майя, расположенными на территории современных штата Чьяпас и Гватемалы, а также его хозяйственной важностью (процветавшие тогда производство соли на побережье, ювелирное дело и изготовление кошенили продолжают оставаться важными отраслями в регионе, хотя и с меньшим экономическим влиянием, чем в прошлом). Стремление внешних сил контролировать её привело Саачилу под влияние ацтеков.",
+      "Перед лицом угрозы со стороны ацтеков в 1494 году Гуси Чикоеса приказал истребить находившихся на его территории торговцев-почтека по подозрению в шпионаже. Ацтекский тлатоани Ауисотль воспринял эти убийства как casus belli, и в 1497 году началась война. Первым подвергся нападению и разрушению город сапотеков Уашьакак, затем Митла. Военная кампания распространилась через перешеек Теуантепек и достигла Соконуско. Это привело к тому, что Гуси Чикоеса предложил союз миштекскому царю Дзауинданде. Последний этот союз принял и предоставил 24 тысяч воинов, которые присоединились к 36-тысячной армии Саачилы. Вместе им удалось изгнать ацтеков.",
+      "В 1497 году Ауисотль снова напал на союзные царства сапотеков и миштеков и отправил командующего армией Тлакатеката к сапотекскому бастиону, представлявшему собой Гуйенголу. Осада города длилась 7 месяцев. Затем Ауисотль предложил Косихоесе мирный договор, в который он включил руку своей дочери, принцессы Шилабелы. От этого союза родились принцы Косииопии II и Пинопиа. Ацтеки также получили право разместить небольшой гарнизон в долине Оахака и получать «в знак вежливости» дань ежегодно. Однако фактически сапотеки сохранили независимость и расширили свои владения с помощью ацтеков.",
+    ] },
+  { "title" = "Три Косихоесы", "paragraphs" = [
+      "Впоследствии при попытке реконструировать сапотекскую историю сложилась путаница относительно трёх царей сапотеков, которые носили одно и то же имя Косихоеса, хотя эти личности жили в разное время и в разных местах. Монах Франсиско де Бургоа в XVII веке смешал этих монархов в одной истории, которая в XIX веке была популяризирована Мануэлем Мартинесом Грасидой в его романе «Король Косихоеса и его семья» (El rey Cosijoeza y su familia). Первый Косихоеса правил Саачилой во второй половине XIV века и совершил первое вторжение на перешеек Теуантепек около 1370 года. Второй Косихоеса, потомок первого, правил на Теуантепека в середине XV века и столкнулся с ацтеками. Третий Косихоеса правил Саачилой в начале XVI века и успел поприветствовать испанцев в годы конкисты. Этот последний был крещён под именем Дон Карлос.",
+    ] },
+]
+
+[fallbacks]
+
+en = "es"
+
+fr = "es"
+
+de = "es"
+
+it = "es"
+
+tr = "es"
+
+zh-CN = "es"
+
+ja = "es"
+
+ko = "es"
+
+ar = "es"
+
+vi = "es"
+
+id = "es"
+
+fil = "es"
+
+pt-BR = "es"

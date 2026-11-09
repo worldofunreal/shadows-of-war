@@ -1,0 +1,485 @@
+[articles.en]
+text = "Timur, also known as Tamerlane, was a Turco-Mongol conqueror who founded the Timurid Empire in 1370 and ruled from Samarkand until his death in 1405."
+title = "Timur"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Timur"
+intro = [
+  "Timur (8 April 1336 – 18 February 1405), also known as Tamerlane, was a Turco-Mongol conqueror and the founder of the Timurid Empire. He was born into the Barlas tribe in Transoxiana, rose through the warfare that followed the break-up of the Chagatai Khanate, and was proclaimed sovereign in 1370 with Samarkand as his capital. He never took the title of khan: he married a Chinggisid princess, Saray Mulk Khanum, and ruled as amir with the title gurkani, \"son-in-law\", borrowing legitimacy from the line of Genghis Khan.",
+  "For three and a half decades his armies campaigned from the Volga to the Ganges and from the Caucasus to the Levant: Khorasan and Iran, Georgia, the Golden Horde of Tokhtamysh, the Delhi Sultanate in 1398, Syria and Iraq in 1400–1401, and the Ottoman state, whose sultan Bayezid I he defeated and captured at Ankara in 1402. He died at Otrar in 1405 while marching to invade Ming China. His empire broke apart among his descendants, but Timurid culture and the Mughal Empire founded by his descendant Babur carried his memory further.",
+]
+sections = [
+  { "title" = "Rise in Transoxiana", "paragraphs" = [
+      "Timur was born in April 1336 near Kesh, today Shahrisabz, south of Samarkand, into the Barlas, a Mongol tribe that had become Turkic-speaking and largely settled. His father Taraghai was a minor chief. The Arabic and Persian sources agree that he was a Muslim, and later chronicles describe an education in horse riding, archery and the politics of the Chagatai ulus, the Mongol realm that was already splitting into rival appanages.",
+      "Wounds taken in his twenties, apparently in fighting over sheep and later in battle, left him lame in the right leg and with a damaged right arm; Persian writers called him Timur-i lang, \"Timur the Lame\", which Europeans rendered as Tamerlane. In the 1360s he served local amirs and fought his brother-in-law Amir Husayn, and in 1370 he took Samarkand and had himself proclaimed ruler of Transoxiana. He then spent a decade securing the region against the khanates of Moghulistan and against rival amirs, and he put his own puppet khans on the Chagatai throne while keeping real power as amir.",
+    ] },
+  { "title" = "Campaigns in Iran, Iraq and Syria", "paragraphs" = [
+      "From 1381 Timur turned south and west. Herat, Sistan, Mazandaran and the cities of Khorasan were taken in a series of campaigns, and their rulers were killed, deported or turned into vassals who supplied troops. Several campaigns against Georgia, beginning in the 1380s, combined plunder with the enforcement of tribute and the destruction of churches, and were repeated for the rest of his reign.",
+      "In 1393 he occupied Baghdad and much of Iraq, and in 1400–1401 he moved into Syria, taking Aleppo and Damascus. The historian Ibn Khaldun, then in Damascus, was lowered from the walls to meet him and left a detailed account of the interview. Baghdad was retaken by its former rulers and then stormed again in 1401; contemporary chroniclers describe a massacre of the population and the destruction of much of the city, and they give death tolls that historians still consider unreliable.",
+    ] },
+  { "title" = "War against the Golden Horde", "paragraphs" = [
+      "Tokhtamysh, khan of the Golden Horde, had earlier been Timur's protégé, but the two fell out over Azerbaijan and the trade routes of the Caucasus. Tokhtamysh raided south in 1385, and Timur answered with two great campaigns into the steppe: at the Kondurcha River in 1391 and at the Terek in 1395. In the second he destroyed the Horde's camp and pursued the fleeing army across the Volga, sacking Sarai and Astrakhan.",
+      "These campaigns broke the Golden Horde's power for a generation and shifted the balance of the northern trade routes towards Samarkand. Timur's pursuit of a defeated nomadic army, mounted across hundreds of kilometres of open steppe, became the model of his steppe warfare, and it is the episode that gives his in-game ability its name.",
+    ] },
+  { "title" = "Delhi and Ankara", "paragraphs" = [
+      "In 1398 Timur marched into the Delhi Sultanate. He crossed the Indus, defeated the army of Sultan Nasir-ud-Din Mahmud Shah Tughluq near Delhi, and entered the city, which was then sacked and partly burned over several days. Prisoners taken earlier were killed before the battle, and the plunder, including war elephants and thousands of craftsmen and scholars, was sent back towards Samarkand.",
+      "Three years later he turned on the Ottoman sultan Bayezid I, whose growing power in Anatolia threatened Timur's vassals in eastern Asia Minor. After taking Sivas and defeating the Mamluks in Syria, Timur met Bayezid near Ankara on 28 July 1402. The Ottoman army broke when its Anatolian contingents changed sides, Bayezid was captured and died in captivity, and the Ottoman state fell into the civil war later called the Interregnum. Timur also took Smyrna from the Knights of Rhodes before withdrawing east.",
+    ] },
+  { "title" = "Government, memory and legacy", "paragraphs" = [
+      "Timur governed through governors, vassal rulers and garrisons rather than a fixed bureaucracy, and he financed Samarkand with the proceeds of conquest: the Bibi-Khanym Mosque, his palace and the tomb complex later known as the Gur-e Amir were built by craftsmen deported from conquered cities. He used mass killing and towers of skulls as deliberate policy in cities that resisted, above all Isfahan in 1387 and Delhi, and the sources disagree sharply about the numbers involved.",
+      "The main accounts come from Sharaf al-Din Ali Yazdi's panegyric Zafarnama, from the hostile Arab historian Ibn Arabshah, from Ibn Khaldun and from Ruy Gonzalez de Clavijo, the ambassador of Castile who reached Samarkand in 1404. Timur died at Otrar in February 1405 while his army was marching towards China, and his tomb was completed under his grandson Ulugh Beg. His descendant Babur founded the Mughal Empire in 1526, and modern Uzbekistan treats him as a founding national figure.",
+    ] },
+]
+
+[articles.es]
+text = "Timur, también conocido como Tamerlán, fue un conquistador turco-mongol que fundó el Imperio timúrida en 1370 y gobernó desde Samarcanda hasta su muerte en 1405."
+title = "Tamerlán"
+lang = "es"
+url = "https://es.wikipedia.org/wiki/Tamerl%C3%A1n"
+intro = [
+  "Timur (8 de abril de 1336 – 18 de febrero de 1405), también conocido como Tamerlán, fue un conquistador turco-mongol y el fundador del Imperio timúrida. Nació en la tribu Barlas de Transoxiana, ascendió durante la guerra que siguió a la desintegración del Kanato de Chagatai y fue proclamado soberano en 1370 con Samarcanda como capital. Nunca adoptó el título de kan: se casó con una princesa chingísida, Saray Mulk Khanum, y gobernó como amir con el título de gurkani, «yerno», tomando legitimidad del linaje de Gengis Kan.",
+  "Durante tres décadas y media, sus ejércitos hicieron campaña desde el Volga hasta el Ganges y desde el Cáucaso hasta el Levante: Jorasán e Irán, Georgia, la Horda de Oro de Tokhtamysh, el Sultanato de Delhi en 1398, Siria e Irak en 1400-1401, y el Estado otomano, cuyo sultán Bayaceto I derrotó y capturó en Ankara en 1402. Murió en Otrar en 1405 mientras marchaba para invadir la China Ming. Su imperio se desintegró entre sus descendientes, pero la cultura timúrida y el Imperio mogol fundado por su descendiente Babur llevaron su memoria más lejos.",
+]
+sections = [
+  { "title" = "Ascenso en Transoxiana", "paragraphs" = [
+      "Timur nació en abril de 1336 cerca de Kesh, actual Shahrisabz, al sur de Samarcanda, en los Barlas, una tribu mongola que se había vuelto de habla túrquica y en gran medida sedentaria. Su padre, Taraghai, era un jefe menor. Las fuentes árabes y persas coinciden en que era musulmán, y las crónicas posteriores describen una educación en equitación, tiro con arco y la política del ulus chagatai, el reino mongol que ya se estaba dividiendo en apanajes rivales.",
+      "Las heridas recibidas en la veintena, al parecer en luchas por ovejas y más tarde en batalla, le dejaron cojo de la pierna derecha y con el brazo derecho dañado; los escritores persas lo llamaron Timur-i lang, «Timur el Cojo», que los europeos tradujeron como Tamerlán. En la década de 1360 sirvió a amires locales y combatió contra su cuñado el amir Husayn, y en 1370 tomó Samarcanda y se hizo proclamar gobernante de Transoxiana. Pasó después una década asegurando la región frente a los kanatos de Mogulistán y frente a amires rivales, y colocó a sus propios kanes títeres en el trono chagatai mientras conservaba el poder real como amir.",
+    ] },
+  { "title" = "Campañas en Irán, Irak y Siria", "paragraphs" = [
+      "A partir de 1381, Timur se dirigió hacia el sur y el oeste. Herat, Sistán, Mazandarán y las ciudades de Jorasán fueron tomadas en una serie de campañas, y sus gobernantes fueron asesinados, deportados o convertidos en vasallos que aportaban tropas. Varias campañas contra Georgia, iniciadas en la década de 1380, combinaron el saqueo con la imposición de tributos y la destrucción de iglesias, y se repitieron durante el resto de su reinado.",
+      "En 1393 ocupó Bagdad y buena parte de Irak, y en 1400-1401 se adentró en Siria, tomando Alepo y Damasco. El historiador Ibn Jaldún, entonces en Damasco, fue descolgado de las murallas para reunirse con él y dejó un relato detallado de la entrevista. Bagdad fue recuperada por sus antiguos gobernantes y luego tomada al asalto de nuevo en 1401; los cronistas contemporáneos describen una matanza de la población y la destrucción de gran parte de la ciudad, y dan cifras de muertos que los historiadores siguen considerando poco fiables.",
+    ] },
+  { "title" = "Guerra contra la Horda de Oro", "paragraphs" = [
+      "Tokhtamysh, kan de la Horda de Oro, había sido antes protegido de Timur, pero ambos se enemistaron por Azerbaiyán y las rutas comerciales del Cáucaso. Tokhtamysh incursionó hacia el sur en 1385, y Timur respondió con dos grandes campañas en la estepa: en el río Kondurcha en 1391 y en el Terek en 1395. En la segunda destruyó el campamento de la Horda y persiguió al ejército en fuga a través del Volga, saqueando Sarai y Astracán.",
+      "Estas campañas quebraron el poder de la Horda de Oro durante una generación y desplazaron el equilibrio de las rutas comerciales septentrionales hacia Samarcanda. La persecución por parte de Timur de un ejército nómada derrotado, montada a lo largo de cientos de kilómetros de estepa abierta, se convirtió en el modelo de su guerra esteparia, y es el episodio que da nombre a su habilidad en el juego.",
+    ] },
+  { "title" = "Delhi y Ankara", "paragraphs" = [
+      "En 1398 Timur marchó contra el Sultanato de Delhi. Cruzó el Indo, derrotó cerca de Delhi al ejército del sultán Nasir-ud-Din Mahmud Shah Tughluq y entró en la ciudad, que fue entonces saqueada y parcialmente incendiada durante varios días. Los prisioneros hechos anteriormente fueron asesinados antes de la batalla, y el botín, incluidos elefantes de guerra y miles de artesanos y eruditos, fue enviado hacia Samarcanda.",
+      "Tres años después se volvió contra el sultán otomano Bayaceto I, cuyo creciente poder en Anatolia amenazaba a los vasallos de Timur en el Asia Menor oriental. Tras tomar Sivas y derrotar a los mamelucos en Siria, Timur se enfrentó a Bayaceto cerca de Ankara el 28 de julio de 1402. El ejército otomano se desmoronó cuando sus contingentes anatolios cambiaron de bando, Bayaceto fue capturado y murió en cautiverio, y el Estado otomano cayó en la guerra civil que después se llamó el Interregno. Timur también tomó Esmirna a los Caballeros de Rodas antes de retirarse hacia el este.",
+    ] },
+  { "title" = "Gobierno, memoria y legado", "paragraphs" = [
+      "Timur gobernó mediante gobernadores, gobernantes vasallos y guarniciones en lugar de una burocracia fija, y financió Samarcanda con los productos de la conquista: la mezquita Bibi-Khanym, su palacio y el complejo funerario conocido después como Gur-e Amir fueron construidos por artesanos deportados de ciudades conquistadas. Utilizó la matanza masiva y las torres de cráneos como política deliberada en las ciudades que se resistían, sobre todo Isfahán en 1387 y Delhi, y las fuentes discrepan marcadamente sobre las cifras involucradas.",
+      "Los principales relatos proceden del panegírico Zafarnama de Sharaf al-Din Ali Yazdi, del historiador árabe hostil Ibn Arabshah, de Ibn Jaldún y de Ruy González de Clavijo, el embajador de Castilla que llegó a Samarcanda en 1404. Timur murió en Otrar en febrero de 1405 mientras su ejército marchaba hacia China, y su tumba fue completada bajo su nieto Ulugh Beg. Su descendiente Babur fundó el Imperio mogol en 1526, y el Uzbekistán moderno lo considera una figura nacional fundacional.",
+    ] },
+]
+
+[articles.fr]
+text = "Timour, également connu sous le nom de Tamerlan, fut un conquérant turco-mongol qui fonda l'Empire timouride en 1370 et gouverna depuis Samarcande jusqu'à sa mort en 1405."
+title = "Tamerlan"
+lang = "fr"
+url = "https://fr.wikipedia.org/wiki/Tamerlan"
+intro = [
+  "Timour (8 avril 1336 – 18 février 1405), également connu sous le nom de Tamerlan, fut un conquérant turco-mongol et le fondateur de l'Empire timouride. Il naquit dans la tribu des Barlas, en Transoxiane, s'éleva au cours des guerres qui suivirent la désagrégation du khanat tchaghataï et fut proclamé souverain en 1370, avec Samarcande pour capitale. Il ne prit jamais le titre de khan : il épousa une princesse issue des Gengiskhanides, Saray Mulk Khanum, et régna comme émir avec le titre de gurkani, « gendre », empruntant sa légitimité à la lignée de Gengis Khan.",
+  "Pendant trois décennies et demie, ses armées menèrent campagne de la Volga au Gange et du Caucase au Levant : le Khorassan et l'Iran, la Géorgie, la Horde d'Or de Tokhtamych, le sultanat de Delhi en 1398, la Syrie et l'Irak en 1400–1401, ainsi que l'État ottoman, dont le sultan Bayezid Ier fut vaincu et capturé à Ankara en 1402. Il mourut à Otrar en 1405 alors qu'il marchait pour envahir la Chine des Ming. Son empire se disloqua entre ses descendants, mais la culture timouride et l'Empire moghol fondé par son descendant Babur portèrent sa mémoire plus loin.",
+]
+sections = [
+  { "title" = "Ascension en Transoxiane", "paragraphs" = [
+      "Timour naquit en avril 1336 près de Kech, aujourd'hui Chakhrisabz, au sud de Samarcande, dans la tribu des Barlas, une tribu mongole devenue turcophone et largement sédentarisée. Son père, Taraghaï, était un chef mineur. Les sources arabes et persanes s'accordent sur son appartenance à l'islam, et des chroniques ultérieures décrivent une formation à l'équitation, au tir à l'arc et à la politique de l'ulus tchaghataï, le domaine mongol qui se divisait déjà en apanages rivaux.",
+      "Des blessures reçues dans la vingtaine, apparemment lors de luttes pour des moutons puis au combat, le laissèrent boiteux de la jambe droite et avec le bras droit endommagé ; les auteurs persans le nommèrent Timur-i lang, « Timour le Boiteux », que les Européens rendirent par Tamerlan. Dans les années 1360, il servit des émirs locaux et combattit son beau-frère Amir Husayn, puis, en 1370, il prit Samarcande et se fit proclamer souverain de Transoxiane. Il consacra ensuite une décennie à sécuriser la région contre les khanats du Mogholistan et contre des émirs rivaux, et il plaça ses propres khans fantoches sur le trône tchaghataï tout en conservant le pouvoir réel comme émir.",
+    ] },
+  { "title" = "Campagnes en Iran, en Irak et en Syrie", "paragraphs" = [
+      "À partir de 1381, Timour se tourna vers le sud et l'ouest. Hérat, le Sistan, le Mazandéran et les villes du Khorassan furent pris au cours d'une série de campagnes, et leurs souverains furent tués, déportés ou transformés en vassaux fournissant des troupes. Plusieurs campagnes contre la Géorgie, commencées dans les années 1380, combinèrent pillage, imposition d'un tribut et destruction d'églises, et furent répétées jusqu'à la fin de son règne.",
+      "En 1393, il occupa Bagdad et une grande partie de l'Irak, et en 1400–1401, il entra en Syrie, prenant Alep et Damas. L'historien Ibn Khaldoun, alors à Damas, fut descendu des murailles pour le rencontrer et laissa un récit détaillé de l'entretien. Bagdad fut reprise par ses anciens souverains puis de nouveau prise d'assaut en 1401 ; les chroniqueurs contemporains décrivent un massacre de la population et la destruction d'une grande partie de la ville, et ils avancent des bilans de morts que les historiens jugent encore peu fiables.",
+    ] },
+  { "title" = "Guerre contre la Horde d'Or", "paragraphs" = [
+      "Tokhtamych, khan de la Horde d'Or, avait d'abord été le protégé de Timour, mais les deux hommes se brouillèrent au sujet de l'Azerbaïdjan et des routes commerciales du Caucase. Tokhtamych lança des raids vers le sud en 1385, et Timour répondit par deux grandes campagnes dans la steppe : à la rivière Kondourtcha en 1391 et au Terek en 1395. Lors de la seconde, il détruisit le camp de la Horde et poursuivit l'armée en fuite au-delà de la Volga, mettant à sac Saraï et Astrakhan.",
+      "Ces campagnes brisèrent la puissance de la Horde d'Or pour une génération et déplacèrent l'équilibre des routes commerciales septentrionales vers Samarcande. La poursuite par Timour d'une armée nomade vaincue, menée sur des centaines de kilomètres de steppe ouverte, devint le modèle de sa guerre des steppes, et c'est l'épisode qui donne son nom à sa capacité dans le jeu.",
+    ] },
+  { "title" = "Delhi et Ankara", "paragraphs" = [
+      "En 1398, Timour marcha sur le sultanat de Delhi. Il traversa l'Indus, vainquit l'armée du sultan Nasir-ud-Din Mahmud Shah Tughluq près de Delhi et entra dans la ville, qui fut alors mise à sac et partiellement incendiée pendant plusieurs jours. Des prisonniers faits auparavant furent tués avant la bataille, et le butin, notamment des éléphants de guerre et des milliers d'artisans et de savants, fut envoyé vers Samarcande.",
+      "Trois ans plus tard, il se retourna contre le sultan ottoman Bayezid Ier, dont la puissance croissante en Anatolie menaçait les vassaux de Timour en Asie Mineure orientale. Après avoir pris Sivas et vaincu les Mamelouks en Syrie, Timour rencontra Bayezid près d'Ankara le 28 juillet 1402. L'armée ottomane se disloqua lorsque ses contingents anatoliens changèrent de camp, Bayezid fut capturé et mourut en captivité, et l'État ottoman sombra dans la guerre civile appelée plus tard l'Interrègne. Timour prit également Smyrne aux chevaliers de Rhodes avant de se retirer vers l'est.",
+    ] },
+  { "title" = "Gouvernement, mémoire et héritage", "paragraphs" = [
+      "Timour gouverna par l'intermédiaire de gouverneurs, de souverains vassaux et de garnisons plutôt que par une bureaucratie fixe, et il finança Samarcande grâce aux produits de la conquête : la mosquée Bibi-Khanym, son palais et le complexe funéraire connu plus tard sous le nom de Gour-e Amir furent construits par des artisans déportés des villes conquises. Il recourut aux massacres de masse et aux tours de crânes comme politique délibérée dans les villes qui résistaient, surtout Ispahan en 1387 et Delhi, et les sources divergent fortement sur les chiffres concernés.",
+      "Les principaux récits proviennent du Zafarnama, panégyrique de Sharaf al-Din Ali Yazdi, de l'historien arabe hostile Ibn Arabshah, d'Ibn Khaldoun et de Ruy Gonzalez de Clavijo, ambassadeur de Castille qui atteignit Samarcande en 1404. Timour mourut à Otrar en février 1405 alors que son armée marchait vers la Chine, et son tombeau fut achevé sous son petit-fils Ulugh Beg. Son descendant Babur fonda l'Empire moghol en 1526, et l'Ouzbékistan moderne le considère comme une figure nationale fondatrice.",
+    ] },
+]
+
+[articles.de]
+text = "Timur, auch bekannt als Tamerlan, war ein turko-mongolischer Eroberer, der 1370 das Timuridenreich gründete und von Samarkand aus bis zu seinem Tod 1405 regierte."
+title = "Timur"
+lang = "de"
+url = "https://de.wikipedia.org/wiki/Timur"
+intro = [
+  "Timur (8. April 1336 – 18. Februar 1405), auch bekannt als Tamerlan, war ein turko-mongolischer Eroberer und der Begründer des Timuridenreiches. Er wurde in den Stamm Barlas in Transoxanien geboren, stieg durch die Kriege auf, die auf den Zerfall des Tschagatai-Khanats folgten, und wurde 1370 mit Samarkand als Hauptstadt zum Herrscher ausgerufen. Er nahm nie den Titel eines Khans an: Er heiratete eine Prinzessin aus der Linie Dschingis Khans, Saray Mulk Khanum, und herrschte als Emir mit dem Titel Gurkani, „Schwiegersohn“, wobei er seine Legitimität aus der Linie Dschingis Khans bezog.",
+  "Über dreieinhalb Jahrzehnte hinweg zogen seine Armeen von der Wolga bis zum Ganges und vom Kaukasus bis zur Levante: Chorasan und Iran, Georgien, die Goldene Horde Toktamyschs, das Delhi-Sultanat 1398, Syrien und Irak 1400–1401 sowie der osmanische Staat, dessen Sultan Bayezid I. er 1402 bei Ankara besiegte und gefangen nahm. Er starb 1405 in Otrar, während er zum Feldzug gegen das Ming-China aufbrach. Sein Reich zerfiel unter seinen Nachkommen, doch die timuridische Kultur und das von seinem Nachkommen Babur gegründete Mogulreich trugen seine Erinnerung weiter.",
+]
+sections = [
+  { "title" = "Aufstieg in Transoxanien", "paragraphs" = [
+      "Timur wurde im April 1336 nahe Kesh, dem heutigen Shahrisabz südlich von Samarkand, in den Barlas geboren, einem mongolischen Stamm, der turksprachig geworden und weitgehend sesshaft war. Sein Vater Taraghai war ein kleiner Häuptling. Die arabischen und persischen Quellen stimmen darin überein, dass er Muslim war, und spätere Chroniken beschreiben eine Erziehung in Reiten, Bogenschießen und der Politik des Tschagatai-Ulus, des mongolischen Reiches, das sich bereits in rivalisierende Apanagen aufspaltete.",
+      "Verletzungen, die er sich in seinen Zwanzigern zuzog, offenbar bei Kämpfen um Schafe und später in einer Schlacht, hinterließen ihn mit einem lahmen rechten Bein und einem beschädigten rechten Arm; persische Schriftsteller nannten ihn Timur-i lang, „Timur der Lahme“, was Europäer als Tamerlan wiedergaben. In den 1360er Jahren diente er lokalen Emiren und kämpfte gegen seinen Schwager Amir Husayn, und 1370 nahm er Samarkand ein und ließ sich zum Herrscher Transoxaniens ausrufen. Danach verbrachte er ein Jahrzehnt damit, die Region gegen die Khanate Moghulistans und gegen rivalisierende Emire zu sichern, und er setzte eigene Marionettenkhane auf den Tschagatai-Thron, während er die tatsächliche Macht als Emir behielt.",
+    ] },
+  { "title" = "Feldzüge im Iran, Irak und in Syrien", "paragraphs" = [
+      "Ab 1381 wandte sich Timur nach Süden und Westen. Herat, Sistan, Mazandaran und die Städte Chorasans wurden in einer Reihe von Feldzügen eingenommen, und ihre Herrscher wurden getötet, deportiert oder zu Vasallen gemacht, die Truppen stellten. Mehrere Feldzüge gegen Georgien, beginnend in den 1380er Jahren, verbanden Plünderung mit der Durchsetzung von Tribut und der Zerstörung von Kirchen und wurden für den Rest seiner Herrschaft wiederholt.",
+      "1393 besetzte er Bagdad und weite Teile des Irak, und 1400–1401 zog er nach Syrien und nahm Aleppo und Damaskus ein. Der Historiker Ibn Chaldun, damals in Damaskus, wurde von den Mauern herabgelassen, um ihn zu treffen, und hinterließ einen ausführlichen Bericht über die Unterredung. Bagdad wurde von seinen früheren Herrschern zurückerobert und dann 1401 erneut erstürmt; zeitgenössische Chronisten beschreiben ein Massaker an der Bevölkerung und die Zerstörung großer Teile der Stadt und nennen Opferzahlen, die Historiker bis heute als unzuverlässig betrachten.",
+    ] },
+  { "title" = "Krieg gegen die Goldene Horde", "paragraphs" = [
+      "Toktamysch, Khan der Goldenen Horde, war zuvor Timurs Schützling gewesen, doch die beiden zerstritten sich über Aserbaidschan und die Handelsrouten des Kaukasus. Toktamysch fiel 1385 nach Süden ein, und Timur antwortete mit zwei großen Feldzügen in die Steppe: 1391 am Fluss Kondurtscha und 1395 am Terek. Im zweiten zerstörte er das Lager der Horde und verfolgte das fliehende Heer über die Wolga, wobei er Sarai und Astrachan plünderte.",
+      "Diese Feldzüge brachen die Macht der Goldenen Horde für eine Generation und verschoben das Gleichgewicht der nördlichen Handelsrouten zugunsten Samarkands. Timurs Verfolgung eines besiegten Nomadenheeres, die über Hunderte Kilometer offener Steppe zu Pferde erfolgte, wurde zum Modell seiner Steppenkriegsführung, und es ist die Episode, die seiner Fähigkeit im Spiel ihren Namen gibt.",
+    ] },
+  { "title" = "Delhi und Ankara", "paragraphs" = [
+      "1398 marschierte Timur in das Delhi-Sultanat ein. Er überquerte den Indus, besiegte das Heer von Sultan Nasir-ud-Din Mahmud Shah Tughluq nahe Delhi und zog in die Stadt ein, die daraufhin mehrere Tage lang geplündert und teilweise niedergebrannt wurde. Zuvor gefangene Gefangene wurden vor der Schlacht getötet, und die Beute, darunter Kriegselefanten und Tausende Handwerker und Gelehrte, wurde nach Samarkand zurückgeschickt.",
+      "Drei Jahre später wandte er sich gegen den osmanischen Sultan Bayezid I., dessen wachsende Macht in Anatolien Timurs Vasallen in Ostkleinasien bedrohte. Nach der Einnahme von Sivas und der Niederlage der Mamluken in Syrien traf Timur am 28. Juli 1402 bei Ankara auf Bayezid. Das osmanische Heer brach zusammen, als seine anatolischen Kontingente die Seiten wechselten, Bayezid wurde gefangen genommen und starb in Gefangenschaft, und der osmanische Staat geriet in den später als Interregnum bezeichneten Bürgerkrieg. Timur nahm zudem Smyrna von den Rittern von Rhodos ein, bevor er sich nach Osten zurückzog.",
+    ] },
+  { "title" = "Herrschaft, Erinnerung und Vermächtnis", "paragraphs" = [
+      "Timur regierte durch Gouverneure, Vasallenherrscher und Garnisonen statt durch eine feste Bürokratie, und er finanzierte Samarkand mit den Erträgen seiner Eroberungen: Die Bibi-Khanym-Moschee, sein Palast und der später als Gur-e Amir bekannte Grabbau wurden von Handwerkern errichtet, die aus eroberten Städten deportiert worden waren. In Städten, die Widerstand leisteten, setzte er Massentötungen und Schädeltürme als bewusste Politik ein, vor allem in Isfahan 1387 und in Delhi, und die Quellen weichen in den genannten Zahlen stark voneinander ab.",
+      "Die wichtigsten Berichte stammen aus Scharaf al-Din Ali Yazdis Panegyrik Zafarnama, von dem feindlich gesinnten arabischen Historiker Ibn Arabschah, von Ibn Chaldun und von Ruy González de Clavijo, dem Gesandten Kastiliens, der 1404 Samarkand erreichte. Timur starb im Februar 1405 in Otrar, während sein Heer nach China marschierte, und sein Grab wurde unter seinem Enkel Ulugh Beg vollendet. Sein Nachkomme Babur gründete 1526 das Mogulreich, und das moderne Usbekistan betrachtet ihn als Gründungsfigur der Nation.",
+    ] },
+]
+
+[articles.it]
+text = "Timur, noto anche come Tamerlano, fu un conquistatore turco-mongolo che fondò l'Impero timuride nel 1370 e governò da Samarcanda fino alla sua morte nel 1405."
+title = "Tamerlano"
+lang = "it"
+url = "https://it.wikipedia.org/wiki/Tamerlano"
+intro = [
+  "Timur (8 aprile 1336 – 18 febbraio 1405), noto anche come Tamerlano, fu un conquistatore turco-mongolo e il fondatore dell'Impero timuride. Nacque nella tribù dei Barlas in Transoxiana, ascese attraverso le guerre seguite alla dissoluzione del Khanato Chagatai e fu proclamato sovrano nel 1370 con Samarcanda come capitale. Non assunse mai il titolo di khan: sposò una principessa chinggiside, Saray Mulk Khanum, e governò come amir con il titolo di gurkani, «genero», traendo legittimità dalla stirpe di Gengis Khan.",
+  "Per tre decenni e mezzo i suoi eserciti condussero campagne dal Volga al Gange e dal Caucaso al Levante: Khorasan e Iran, Georgia, l'Orda d'Oro di Tokhtamysh, il Sultanato di Delhi nel 1398, la Siria e l'Iraq nel 1400–1401, e lo Stato ottomano, il cui sultano Bayezid I sconfisse e catturò ad Ankara nel 1402. Morì a Otrar nel 1405 mentre marciava per invadere la Cina Ming. Il suo impero si disgregò tra i suoi discendenti, ma la cultura timuride e l'Impero Moghul, fondato dal suo discendente Babur, ne portarono più lontano la memoria.",
+]
+sections = [
+  { "title" = "Ascesa in Transoxiana", "paragraphs" = [
+      "Timur nacque nell'aprile 1336 presso Kesh, oggi Shahrisabz, a sud di Samarcanda, nella tribù dei Barlas, una tribù mongola divenuta di lingua turca e in gran parte sedentaria. Suo padre Taraghai era un capo minore. Le fonti arabe e persiane concordano sul fatto che fosse musulmano, e cronache posteriori descrivono un'educazione incentrata sull'equitazione, sul tiro con l'arco e sulla politica dell'ulus Chagatai, il dominio mongolo che già si andava dividendo in appannaggi rivali.",
+      "Le ferite riportate intorno ai vent'anni, apparentemente in scontri per il bestiame e poi in battaglia, lo lasciarono zoppo alla gamba destra e con il braccio destro menomato; gli scrittori persiani lo chiamarono Timur-i lang, «Timur lo zoppo», reso dagli europei come Tamerlano. Negli anni sessanta del Trecento servì amir locali e combatté il cognato Amir Husayn, e nel 1370 prese Samarcanda e si fece proclamare sovrano della Transoxiana. Trascorse poi un decennio a consolidare la regione contro i khanati del Moghulistan e contro amir rivali, e pose sul trono Chagatai propri khan fantoccio mantenendo il potere reale come amir.",
+    ] },
+  { "title" = "Campagne in Iran, Iraq e Siria", "paragraphs" = [
+      "Dal 1381 Timur si volse a sud e a ovest. Herat, Sistan, Mazandaran e le città del Khorasan furono prese in una serie di campagne, e i loro governanti furono uccisi, deportati o trasformati in vassalli che fornivano truppe. Diverse campagne contro la Georgia, iniziate negli anni ottanta del Trecento, unirono saccheggi, imposizione di tributi e distruzione di chiese, e furono ripetute per il resto del suo regno.",
+      "Nel 1393 occupò Baghdad e gran parte dell'Iraq, e nel 1400–1401 si mosse in Siria, prendendo Aleppo e Damasco. Lo storico Ibn Khaldun, allora a Damasco, fu calato dalle mura per incontrarlo e lasciò un resoconto dettagliato del colloquio. Baghdad fu ripresa dai suoi precedenti governanti e poi nuovamente espugnata nel 1401; i cronisti contemporanei descrivono un massacro della popolazione e la distruzione di gran parte della città, e riportano cifre di morti che gli storici considerano ancora inattendibili.",
+    ] },
+  { "title" = "Guerra contro l'Orda d'Oro", "paragraphs" = [
+      "Tokhtamysh, khan dell'Orda d'Oro, era stato in precedenza protetto di Timur, ma i due entrarono in conflitto per l'Azerbaigian e per le rotte commerciali del Caucaso. Tokhtamysh compì incursioni verso sud nel 1385, e Timur rispose con due grandi campagne nella steppa: al fiume Kondurcha nel 1391 e al Terek nel 1395. Nella seconda distrusse l'accampamento dell'Orda e inseguì l'esercito in fuga oltre il Volga, saccheggiando Sarai e Astrachan'.",
+      "Queste campagne infransero il potere dell'Orda d'Oro per una generazione e spostarono l'equilibrio delle rotte commerciali settentrionali verso Samarcanda. L'inseguimento da parte di Timur di un esercito nomade sconfitto, condotto a cavallo per centinaia di chilometri di steppa aperta, divenne il modello della sua guerra nelle steppe, ed è l'episodio che dà il nome alla sua abilità nel gioco.",
+    ] },
+  { "title" = "Delhi e Ankara", "paragraphs" = [
+      "Nel 1398 Timur marciò nel Sultanato di Delhi. Attraversò l'Indo, sconfisse l'esercito del sultano Nasir-ud-Din Mahmud Shah Tughluq nei pressi di Delhi ed entrò nella città, che fu poi saccheggiata e in parte incendiata per diversi giorni. I prigionieri catturati in precedenza furono uccisi prima della battaglia, e il bottino, compresi elefanti da guerra e migliaia di artigiani e studiosi, fu inviato verso Samarcanda.",
+      "Tre anni dopo si volse contro il sultano ottomano Bayezid I, la cui crescente potenza in Anatolia minacciava i vassalli di Timur nell'Asia Minore orientale. Dopo aver preso Sivas e sconfitto i Mamelucchi in Siria, Timur incontrò Bayezid presso Ankara il 28 luglio 1402. L'esercito ottomano si sbandò quando i suoi contingenti anatolici passarono al nemico, Bayezid fu catturato e morì in prigionia, e lo Stato ottomano precipitò nella guerra civile poi chiamata Interregno. Timur prese anche Smirne ai Cavalieri di Rodi prima di ritirarsi verso est.",
+    ] },
+  { "title" = "Governo, memoria ed eredità", "paragraphs" = [
+      "Timur governò mediante governatori, sovrani vassalli e guarnigioni anziché con una burocrazia fissa, e finanziò Samarcanda con i proventi delle conquiste: la moschea Bibi-Khanym, il suo palazzo e il complesso funerario poi noto come Gur-e Amir furono costruiti da artigiani deportati dalle città conquistate. Ricorse all'uccisione di massa e a torri di teschi come politica deliberata nelle città che resistevano, soprattutto a Isfahan nel 1387 e a Delhi, e le fonti discordano fortemente sul numero delle vittime.",
+      "I principali resoconti provengono dallo Zafarnama, panegirico di Sharaf al-Din Ali Yazdi, dallo storico arabo ostile Ibn Arabshah, da Ibn Khaldun e da Ruy González de Clavijo, l'ambasciatore di Castiglia che raggiunse Samarcanda nel 1404. Timur morì a Otrar nel febbraio 1405 mentre il suo esercito marciava verso la Cina, e la sua tomba fu completata sotto il nipote Ulugh Beg. Il suo discendente Babur fondò l'Impero Moghul nel 1526, e l'Uzbekistan moderno lo considera una figura nazionale fondatrice.",
+    ] },
+]
+
+[articles.tr]
+text = "Tamerlane olarak da bilinen Timur, 1370'te Timurlu İmparatorluğu'nu kuran ve 1405'teki ölümüne kadar Semerkant'tan yöneten Türk-Moğol bir fatihdi."
+title = "Timur"
+lang = "tr"
+url = "https://tr.wikipedia.org/wiki/Timur"
+intro = [
+  "Timur (8 Nisan 1336 – 18 Şubat 1405), Tamerlane olarak da bilinir, Türk-Moğol bir fatih ve Timurlu İmparatorluğu'nun kurucusuydu. Maveraünnehir'de Barlas kabilesinde doğdu, Çağatay Hanlığı'nın parçalanmasının ardından gelen savaşlar içinde yükseldi ve 1370'te başkenti Semerkant olmak üzere hükümdar ilan edildi. Hiçbir zaman han unvanını almadı: Cengiz Han soyundan bir prenses olan Saray Mülk Hanım ile evlendi ve Cengiz Han'ın soyundan meşruiyet ödünç alarak gürkani, yani \"damat\", unvanıyla emir olarak hükmetti.",
+  "Otuz beş yıl boyunca orduları Volga'dan Ganj'a ve Kafkasya'dan Levant'a sefer düzenledi: Horasan ve İran, Gürcistan, Toktamış'ın Altın Orda'sı, 1398'de Delhi Sultanlığı, 1400–1401'de Suriye ve Irak ve 1402'de Ankara'da Sultan I. Bayezid'i yenip esir aldığı Osmanlı devleti. 1405'te Ming Çin'i işgal etmek üzere yürürken Otrar'da öldü. İmparatorluğu torunları arasında dağıldı, ancak Timurlu kültürü ve torunu Babur'un kurduğu Babür İmparatorluğu onun hatırasını daha ileriye taşıdı.",
+]
+sections = [
+  { "title" = "Maveraünnehir'de Yükseliş", "paragraphs" = [
+      "Timur, Nisan 1336'da Semerkant'ın güneyinde, bugünkü Şahrisabz olan Kesh yakınlarında, Türkçe konuşan ve büyük ölçüde yerleşikleşmiş bir Moğol kabilesi olan Barlaslar içinde doğdu. Babası Taraghai küçük bir reisti. Arap ve Fars kaynakları onun Müslüman olduğu konusunda hemfikirdir; daha sonraki kronikler ise ata binme, okçuluk ve rakip appanajlara bölünmekte olan Moğol âlemi Çağatay ulusunun siyaseti konusunda bir eğitim aldığını anlatır.",
+      "Yirmili yaşlarında, görünüşe göre koyun yüzünden çıkan kavgada ve daha sonra savaşta aldığı yaralar, onu sağ bacağından topal ve sağ kolundan sakat bıraktı; Fars yazarlar ona Timur-i lang, \"Topal Timur\" dediler; Avrupalılar bunu Tamerlane olarak aktardı. 1360'larda yerel emirlere hizmet etti ve kayınbiraderi Emir Hüseyin ile savaştı; 1370'te Semerkant'ı aldı ve kendisini Maveraünnehir hükümdarı ilan ettirdi. Ardından on yılını bölgeyi Moghulistan hanlıklarına ve rakip emirlere karşı güvence altına almaya adadı; Çağatay tahtına kendi kukla hanlarını oturttu, gerçek iktidarı ise emir olarak elinde tuttu.",
+    ] },
+  { "title" = "İran, Irak ve Suriye'de Seferler", "paragraphs" = [
+      "1381'den itibaren Timur güneye ve batıya yöneldi. Herat, Sistan, Mazenderan ve Horasan şehirleri bir dizi seferle alındı; yöneticileri öldürüldü, sürgüne gönderildi ya da asker sağlayan vasallara dönüştürüldü. 1380'lerde başlayan Gürcistan'a karşı birkaç sefer, yağmayı haraç uygulaması ve kiliselerin yıkılmasıyla birleştirdi ve saltanatının geri kalanında tekrarlandı.",
+      "1393'te Bağdat'ı ve Irak'ın büyük bölümünü işgal etti; 1400–1401'de Suriye'ye girdi, Halep ve Şam'ı aldı. O sırada Şam'da bulunan tarihçi İbn Haldun, onunla görüşmek üzere surlardan aşağı indirildi ve görüşmeye dair ayrıntılı bir anlatı bıraktı. Bağdat eski yöneticileri tarafından geri alındı ve ardından 1401'de yeniden zorla ele geçirildi; çağdaş kronikçiler halkın katledilmesini ve şehrin büyük bölümünün tahrip edilmesini anlatır ve tarihçilerin hâlâ güvenilmez bulduğu ölü sayıları verir.",
+    ] },
+  { "title" = "Altın Orda'ya Karşı Savaş", "paragraphs" = [
+      "Altın Orda hanı Toktamış daha önce Timur'un himayesindeki biriydi, ancak ikisi Azerbaycan ve Kafkasya'nın ticaret yolları yüzünden birbirinden koptu. Toktamış 1385'te güneye akın düzenledi; Timur buna bozkıra iki büyük seferle karşılık verdi: 1391'de Kondurcha Nehri'nde ve 1395'te Terek'te. İkincisinde Orda'nın kampını yıktı ve kaçan orduyu Volga boyunca takip ederek Saray ve Astrahan'ı yağmaladı.",
+      "Bu seferler Altın Orda'nın gücünü bir nesil boyunca kırdı ve kuzey ticaret yollarının dengesini Semerkant lehine değiştirdi. Timur'un yenilmiş bir göçebe orduyu yüzlerce kilometre açık bozkır boyunca atla takip etmesi, onun bozkır savaşının modeli hâline geldi ve oyun içi yeteneğine adını veren de bu olaydır.",
+    ] },
+  { "title" = "Delhi ve Ankara", "paragraphs" = [
+      "1398'de Timur Delhi Sultanlığı'na yürüdü. İndus'u geçti, Sultan Nasirüddin Mahmud Şah Tuğluk'un ordusunu Delhi yakınlarında yendi ve şehre girdi; şehir ardından birkaç gün boyunca yağmalandı ve kısmen yakıldı. Daha önce alınan esirler savaştan önce öldürüldü ve savaş filleri ile binlerce zanaatkâr ve âlimi içeren ganimet Semerkant'a doğru geri gönderildi.",
+      "Üç yıl sonra, Anadolu'da artan gücü Timur'un Doğu Küçük Asya'daki vasallarını tehdit eden Osmanlı Sultanı I. Bayezid'e yöneldi. Sivas'ı aldıktan ve Suriye'de Memlükleri yendikten sonra Timur, 28 Temmuz 1402'de Ankara yakınlarında Bayezid'le karşılaştı. Anadolu birlikleri saf değiştirince Osmanlı ordusu dağıldı, Bayezid esir alındı ve esaret altında öldü; Osmanlı devleti daha sonra Fetret Devri olarak anılacak iç savaşa sürüklendi. Timur ayrıca doğuya çekilmeden önce Rodos Şövalyeleri'nden İzmir'i aldı.",
+    ] },
+  { "title" = "Yönetim, Hatıra ve Miras", "paragraphs" = [
+      "Timur, sabit bir bürokrasi yerine valiler, vasal hükümdarlar ve garnizonlar aracılığıyla yönetti ve Semerkant'ı fetih gelirleriyle finanse etti: Bibi-Khanym Camii, sarayı ve daha sonra Gur-e Amir olarak anılan türbe kompleksi, fethedilen şehirlerden sürülen zanaatkârlar tarafından inşa edildi. Direnç gösteren şehirlerde, özellikle 1387'de İsfahan ve Delhi'de, toplu öldürmeyi ve kafatası kulelerini bilinçli bir politika olarak kullandı ve kaynaklar olaya karışan sayılar konusunda keskin biçimde birbirinden ayrılır.",
+      "Başlıca anlatılar Şerefeddin Ali Yezdi'nin övgü dolu Zafarname'sinden, düşmanca bir tutum sergileyen Arap tarihçi İbn Arabshah'tan, İbn Haldun'dan ve 1404'te Semerkant'a ulaşan Kastilya elçisi Ruy Gonzalez de Clavijo'dan gelir. Timur, Şubat 1405'te ordusu Çin'e doğru yürürken Otrar'da öldü ve mezarı torunu Uluğ Bey döneminde tamamlandı. Torunu Babur 1526'da Babür İmparatorluğu'nu kurdu ve modern Özbekistan onu kurucu bir ulusal figür olarak görür.",
+    ] },
+]
+
+[articles.zh-cn]
+text = "帖木儿，又称塔梅尔兰，是突厥-蒙古征服者，于1370年建立帖木儿帝国，并以撒马尔罕为统治中心直至1405年去世。"
+title = "帖木儿"
+lang = "zh-cn"
+url = "https://zh.wikipedia.org/wiki/%E5%B8%96%E6%9C%A8%E5%84%BF"
+intro = [
+  "帖木儿（1336年4月8日—1405年2月18日），又称塔梅尔兰，是突厥-蒙古征服者、帖木儿帝国的创立者。他出生于河中地区的巴鲁剌思部，在察合台汗国解体后的战争中崛起，并于1370年被拥立为君主，以撒马尔罕为都城。他从未采用汗的称号：他娶了成吉思汗系公主萨拉伊·穆勒克·哈努姆，以埃米尔身份统治，并使用“古尔干尼”（意为“女婿”）称号，从成吉思汗世系借取合法性。",
+  "在三十五年间，他的军队从伏尔加河征战至恒河，从高加索征战至黎凡特：呼罗珊与伊朗、格鲁吉亚、托克塔米什的金帐汗国、1398年的德里苏丹国、1400—1401年的叙利亚与伊拉克，以及奥斯曼国家；1402年，他在安卡拉击败并俘获了奥斯曼苏丹巴耶济德一世。1405年，他在率军入侵明朝途中死于讹答剌。他的帝国在其后裔之间分裂，但帖木儿文化与由其后裔巴布尔建立的莫卧儿帝国将其记忆传播得更远。",
+]
+sections = [
+  { "title" = "在河中地区的崛起", "paragraphs" = [
+      "帖木儿于1336年4月出生于撒马尔罕以南的渴石（今沙赫里萨布兹）附近，出身于巴鲁剌思部；该部是已突厥语化并大体定居的蒙古部落。其父塔拉盖是一位小首领。阿拉伯文与波斯文史料一致认为他是穆斯林，后来的编年史则记述他受过骑术、射箭以及察合台兀鲁思政治方面的教育；察合台兀鲁思是当时已分裂为相互竞争封地的蒙古政权。",
+      "二十多岁时所受的伤——显然先是在争夺羊群的冲突中，后来又在战斗中——使他右腿跛行，右臂也受损；波斯作家称他为“Timur-i lang”，即“跛足帖木儿”，欧洲人将其转写为Tamerlane。1360年代，他先后效力于地方埃米尔，并与姻兄埃米尔·侯赛因作战；1370年，他夺取撒马尔罕，并宣布自己为河中地区的统治者。此后十年，他致力于使该地区免受蒙兀儿斯坦诸汗国和敌对埃米尔的威胁，同时在察合台汗位上扶植自己的傀儡汗，而自己以埃米尔身份掌握实权。",
+    ] },
+  { "title" = "在伊朗、伊拉克和叙利亚的征战", "paragraphs" = [
+      "自1381年起，帖木儿转向南方和西方。赫拉特、锡斯坦、马赞德兰以及呼罗珊诸城在一系列战役中被攻取，其统治者被杀、被驱逐或被变为提供军队的附庸。自1380年代开始，对格鲁吉亚的几次征战将掠夺与征收贡赋、毁坏教堂结合在一起，并在他统治余下时期反复进行。",
+      "1393年，他占领巴格达和伊拉克大部；1400—1401年，他进入叙利亚，攻取阿勒颇和大马士革。当时在大马士革的历史学家伊本·赫勒敦被从城墙上缒下与他相见，并留下了关于这次会面的详细记述。巴格达被其旧统治者夺回，随后又在1401年遭到强攻；同时代编年史家描述了居民遭屠杀和城市大部被毁的情况，他们给出的死亡数字至今仍被历史学家认为不可靠。",
+    ] },
+  { "title" = "对金帐汗国的战争", "paragraphs" = [
+      "金帐汗国汗托克塔米什早先曾受帖木儿庇护，但两人因阿塞拜疆和高加索商路而反目。托克塔米什于1385年向南袭扰，帖木儿则以两次深入草原的大规模征战回应：1391年在孔杜尔恰河，1395年在捷列克河。在第二次征战中，他摧毁了金帐汗国的营地，并越过伏尔加河追击逃散的军队，洗劫了萨莱和阿斯特拉罕。",
+      "这些征战使金帐汗国的力量中断了一代人之久，并使北方商路的重心转向撒马尔罕。帖木儿在开阔草原上数百公里追击战败游牧军队的行动，成为其草原战争的典范，也正是使他的游戏内能力得名的插曲。",
+    ] },
+  { "title" = "德里与安卡拉", "paragraphs" = [
+      "1398年，帖木儿进军德里苏丹国。他渡过印度河，在德里附近击败苏丹纳西尔丁·马哈茂德·沙·图格鲁克的军队，并进入该城；随后该城在数日间遭到洗劫并部分焚毁。此前俘获的俘虏在战前被杀死，包括战象以及数千名工匠和学者在内的战利品被送回撒马尔罕方向。",
+      "三年后，他转而对付奥斯曼苏丹巴耶济德一世，后者在安纳托利亚日益增长的势力威胁到帖木儿在小亚细亚东部的附庸。在攻取锡瓦斯并在叙利亚击败马穆鲁克之后，帖木儿于1402年7月28日在安卡拉附近与巴耶济德会战。奥斯曼军队因其安纳托利亚部队倒戈而崩溃，巴耶济德被俘并死于囚禁之中，奥斯曼国家陷入后来所称的“空位期”内战。帖木儿还在东撤前从罗得岛骑士团手中夺取了士麦那。",
+    ] },
+  { "title" = "统治、记忆与遗产", "paragraphs" = [
+      "帖木儿通过总督、附庸统治者和驻军而非固定官僚体系进行治理，并以征服所得资助撒马尔罕：比比哈努姆清真寺、他的宫殿以及后来被称为古尔-埃米尔陵墓的建筑群，均由从被征服城市迁徙来的工匠建造。对于抵抗的城市，他有意识地采取大规模屠杀和堆砌头骨塔的政策，尤其是1387年的伊斯法罕和德里；史料对所涉人数记载差异极大。",
+      "主要记载来自谢拉夫丁·阿里·亚兹迪的颂词式《胜利书》、敌视他的阿拉伯历史学家伊本·阿拉布沙、伊本·赫勒敦，以及卡斯蒂利亚大使鲁伊·贡萨莱斯·德·克拉维霍；后者于1404年抵达撒马尔罕。帖木儿于1405年2月在其军队向中国进军途中死于讹答剌，其陵墓在其孙乌鲁伯格主持下完成。他的后裔巴布尔于1526年建立莫卧儿帝国，现代乌兹别克斯坦则将他视为民族奠基人物。",
+    ] },
+]
+
+[articles.ja]
+text = "ティムールは、タメルランとしても知られ、1370年にティムール朝を建国し、1405年に死去するまでサマルカンドから統治したテュルク・モンゴル系の征服者であった。"
+title = "ティムール"
+lang = "ja"
+url = "https://ja.wikipedia.org/wiki/%E3%83%86%E3%82%A3%E3%83%A0%E3%83%BC%E3%83%AB"
+intro = [
+  "ティムール（1336年4月8日 – 1405年2月18日）は、タメルランとしても知られるテュルク・モンゴル系の征服者であり、ティムール朝の創始者である。彼はトランスオクシアナのバルラス部に生まれ、チャガタイ・ハン国の解体後に続く戦乱の中で台頭し、1370年にサマルカンドを首都として君主と宣言された。彼はハンの称号を決して名乗らなかった。チンギス・ハーンの血を引く王女サライ・ムルク・ハーヌムと結婚し、アミールとして「グルカーニ（婿）」の称号で統治し、チンギス・ハーンの系統から正統性を借り受けた。",
+  "35年余りの間、彼の軍勢はヴォルガ川からガンジス川まで、またコーカサスからレヴァントまで遠征した。すなわちホラーサーンとイラン、ジョージア、トクタミシュの金帳汗国、1398年のデリー・スルタン朝、1400–1401年のシリアとイラク、そして1402年にアンカラでスルタン・バヤズィト1世を撃破し捕虜としたオスマン国家である。彼は明への侵攻の行軍中であった1405年にオトラルで死去した。彼の帝国は子孫の間で分裂したが、ティムール朝文化と、彼の子孫バーブルが建国したムガル帝国は彼の記憶をさらに遠くへ運んだ。",
+]
+sections = [
+  { "title" = "トランスオクシアナでの台頭", "paragraphs" = [
+      "ティムールは1336年4月、サマルカンド南方のケシュ（現在のシャフリサブズ）付近で、モンゴル系の部族でありながらテュルク語を話し、かなり定住化していたバルラス部に生まれた。父タラガイは小規模な首長であった。アラビア語・ペルシア語の史料は彼がムスリムであったことで一致し、後代の年代記は乗馬、弓術、そしてすでに対立する分領へ分裂しつつあったモンゴル領域チャガタイ・ウルスの政治についての教育を記述している。",
+      "20代に負った傷、どうやら羊をめぐる争いの際および後に戦闘で負った傷により、彼は右脚が不自由となり、右腕も損傷した。ペルシアの著述家たちは彼を「ティムール・イ・ラング（跛のティムール）」と呼び、ヨーロッパ人はこれをタメルランとした。1360年代に彼は在地のアミールたちに仕え、姻戚アミール・フサインと戦い、1370年にサマルカンドを占領して自らをトランスオクシアナの支配者と宣言した。その後10年間、彼はモグーリスタンの諸ハン国や競合するアミールたちに対してこの地域を確保することに費やし、アミールとして実権を保持しつつ、自らの傀儡ハンをチャガタイの王座に据えた。",
+    ] },
+  { "title" = "イラン、イラク、シリアへの遠征", "paragraphs" = [
+      "1381年からティムールは南と西へ向かった。ヘラート、スィースターン、マーザンダラーン、そしてホラーサーンの諸都市は一連の遠征で奪取され、その支配者たちは殺害されるか、強制移住させられるか、兵員を供給する臣下とされた。1380年代に始まるジョージアへの数回の遠征は、略奪と貢納の強制および教会の破壊を結びつけ、彼の治世の残りの間も繰り返された。",
+      "1393年に彼はバグダードとイラクの大部分を占領し、1400–1401年にはシリアへ進んでアレッポとダマスカスを奪った。当時ダマスカスにいた歴史家イブン・ハルドゥーンは城壁から吊り下ろされて彼に会い、会見について詳細な記録を残した。バグダードは旧支配者たちによって奪回され、1401年に再び襲撃された。同時代の年代記作家たちは住民の虐殺と市の大部分の破壊を記述し、歴史家たちが今なお信頼できないと考える死者数を与えている。",
+    ] },
+  { "title" = "金帳汗国との戦争", "paragraphs" = [
+      "金帳汗国のハンであったトクタミシュは、以前はティムールの保護下にあったが、アゼルバイジャンとコーカサスの交易路をめぐって両者は対立した。トクタミシュは1385年に南方へ襲撃し、ティムールはステップへの二度の大遠征、すなわち1391年のコンドゥルチャ川と1395年のテレク川での遠征で応じた。二度目では彼は金帳汗国の陣営を破壊し、逃げる軍勢をヴォルガ川を越えて追跡し、サライとアストラハンを略奪した。",
+      "これらの遠征は金帳汗国の力を一世代にわたって打ち破り、北方の交易路の均衡をサマルカンドへ移した。敗れた遊牧民の軍勢を、広大なステップを何百キロメートルにもわたって騎行して追跡したティムールの手法は、彼のステップ戦争の模範となり、彼のゲーム内能力にその名を与える挿話ともなっている。",
+    ] },
+  { "title" = "デリーとアンカラ", "paragraphs" = [
+      "1398年にティムールはデリー・スルタン朝へ進軍した。彼はインダス川を渡り、デリー付近でスルタン、ナシル・ウッディーン・マフムード・シャー・トゥグルクの軍勢を破って市に入り、市はその後数日間にわたって略奪され、一部は焼かれた。それ以前に捕らえた捕虜は戦闘前に殺され、戦象や数千人の職人・学者を含む略奪品はサマルカンドへ向けて送り返された。",
+      "三年後、彼はオスマン・スルタン、バヤズィト1世に矛先を向けた。アナトリアで勢力を伸ばす同スルタンは、小アジア東部におけるティムールの臣下を脅かしていた。スィヴァスを奪い、シリアでマムルーク朝を破った後、ティムールは1402年7月28日にアンカラ付近でバヤズィトと対陣した。アナトリアの部隊が寝返ったためオスマン軍は崩れ、バヤズィトは捕らえられて捕虜のまま死去し、オスマン国家は後に空位時代と呼ばれる内戦に陥った。ティムールは東へ撤退する前にロードス騎士団からスミルナも奪った。",
+    ] },
+  { "title" = "統治、記憶、遺産", "paragraphs" = [
+      "ティムールは固定した官僚制ではなく、知事、臣下の支配者、駐屯軍を通じて統治し、征服による収益でサマルカンドの財政を支えた。ビービー・ハーヌム・モスク、彼の宮殿、後にグーリ・アミールとして知られる墓廟群は、征服された諸都市から強制移住させられた工匠たちによって建てられた。彼は抵抗した都市、とりわけ1387年のイスファハーンとデリーにおいて、大量殺戮と頭蓋骨の塔を意図的な政策として用い、史料は関係した数について大きく食い違っている。",
+      "主要な記述は、シャラフ・アッディーン・アリー・ヤズディーの頌辞『ザファルナーマ』、敵対的なアラブの歴史家イブン・アラブシャー、イブン・ハルドゥーン、そして1404年にサマルカンドへ到達したカスティーリャの使節ルイ・ゴンサレス・デ・クラビホによるものである。ティムールは1405年2月、軍が中国へ向けて行軍中にオトラルで死去し、彼の墓は孫ウルグ・ベクの下で完成した。彼の子孫バーブルは1526年にムガル帝国を建国し、現代ウズベキスタンは彼を建国期の国民的英雄として扱っている。",
+    ] },
+]
+
+[articles.ko]
+text = "티무르는 타메를란으로도 알려진 투르크-몽골계 정복자로, 1370년 티무르 제국을 건국하고 1405년 사망할 때까지 사마르칸트에서 통치하였다."
+title = "티무르"
+lang = "ko"
+url = "https://ko.wikipedia.org/wiki/%ED%8B%B0%EB%AC%B4%EB%A5%B4"
+intro = [
+  "티무르(1336년 4월 8일 – 1405년 2월 18일)는 타메를란으로도 알려진 투르크-몽골계 정복자이자 티무르 제국의 창건자이다. 그는 트란스옥시아나의 바를라스 부족에서 태어나 차가타이 칸국 붕괴 이후 이어진 전쟁 속에서 성장하였고, 1370년 사마르칸트를 수도로 삼아 군주로 선포되었다. 그는 결코 칸의 칭호를 취하지 않았다. 그는 칭기즈 칸의 혈통을 이은 공주 사라이 물크 하눔과 혼인하고 아미르로서 '구르카니(사위)'라는 칭호로 통치하며 칭기즈 칸의 계보에서 정통성을 빌려왔다.",
+  "35년 남짓 동안 그의 군대는 볼가강에서 갠지스강까지, 코카서스에서 레반트까지 원정하였다. 즉 호라산과 이란, 조지아, 토흐타미시의 황금 군단, 1398년의 델리 술탄국, 1400–1401년의 시리아와 이라크, 그리고 1402년 앙카라에서 술탄 바예지드 1세를 격파하고 포로로 잡은 오스만 국가였다. 그는 명나라를 침공하기 위해 행군하던 중 1405년 오트라르에서 사망하였다. 그의 제국은 후손들 사이에서 분열되었으나, 티무르 문화와 그의 후손 바부르가 건국한 무굴 제국은 그의 기억을 더 멀리 전하였다.",
+]
+sections = [
+  { "title" = "트란스옥시아나에서의 부상", "paragraphs" = [
+      "티무르는 1336년 4월 사마르칸트 남쪽의 케시(오늘날의 샤흐리사브즈) 부근에서, 몽골계 부족이면서 투르크어를 사용하고 상당히 정주화한 바를라스 부족에 태어났다. 그의 아버지 타라가이는 소규모 추장이었다. 아랍어 및 페르시아어 사료들은 그가 무슬림이었다는 점에서 일치하며, 후대 연대기들은 승마, 궁술, 그리고 이미 경쟁하는 분령들로 분열되던 몽골 영역인 차가타이 울루스의 정치에 관한 교육을 서술한다.",
+      "그는 20대에 입은 부상, 보아하니 양을 둘러싼 다툼 때와 이후 전투에서 입은 부상으로 오른쪽 다리가 불편해졌고 오른팔도 손상되었다. 페르시아의 저술가들은 그를 '티무르-이 랑(절름발이 티무르)'이라 불렀고, 유럽인들은 이를 타메를란으로 옮겼다. 1360년대에 그는 지역 아미르들에게 복무하고 인척 아미르 후사인과 싸웠으며, 1370년 사마르칸트를 점령하고 스스로를 트란스옥시아나의 통치자로 선포하였다. 그 후 10년 동안 그는 모굴리스탄의 여러 칸국과 경쟁 아미르들에 맞서 이 지역을 확보하는 데 보냈고, 아미르로서 실권을 유지하면서 자신의 꼭두각시 칸들을 차가타이 왕좌에 앉혔다.",
+    ] },
+  { "title" = "이란, 이라크, 시리아 원정", "paragraphs" = [
+      "1381년부터 티무르는 남쪽과 서쪽으로 방향을 돌렸다. 헤라트, 시스탄, 마잔다란, 그리고 호라산의 도시들은 일련의 원정으로 점령되었고, 그 통치자들은 살해되거나 강제 이주되거나 군대를 공급하는 신하가 되었다. 1380년대에 시작된 조지아에 대한 여러 원정은 약탈과 조공의 강요 및 교회 파괴를 결합하였고, 그의 통치 기간 내내 반복되었다.",
+      "1393년 그는 바그다드와 이라크의 상당 부분을 점령하였고, 1400–1401년에는 시리아로 진군하여 알레포와 다마스쿠스를 점령하였다. 당시 다마스쿠스에 있던 역사가 이븐 할둔은 성벽에서 내려와 그를 만났고 면담에 관한 상세한 기록을 남겼다. 바그다드는 이전 통치자들에게 탈환되었다가 1401년 다시 습격당하였다. 동시대 연대기 작가들은 주민의 학살과 도시 대부분의 파괴를 서술하며, 역사가들이 여전히 신뢰할 수 없다고 보는 사망자 수를 제시한다.",
+    ] },
+  { "title" = "황금 군단과의 전쟁", "paragraphs" = [
+      "황금 군단의 칸 토흐타미시는 이전에 티무르의 보호 아래 있었으나, 두 사람은 아제르바이잔과 코카서스의 교역로를 둘러싸고 대립하였다. 토흐타미시는 1385년 남쪽으로 습격하였고, 티무르는 초원으로의 두 차례 대원정, 즉 1391년 콘두르차강과 1395년 테레크강에서의 원정으로 응수하였다. 두 번째 원정에서 그는 황금 군단의 진영을 파괴하고 도망치는 군대를 볼가강 건너까지 추격하여 사라이와 아스트라한을 약탈하였다.",
+      "이 원정들은 황금 군단의 힘을 한 세대 동안 분쇄하고 북방 교역로의 균형을 사마르칸트 쪽으로 옮겼다. 패배한 유목민 군대를 수백 킬로미터의 열린 초원을 가로질러 기병으로 추격한 티무르의 방식은 그의 초원 전쟁의 모범이 되었으며, 그의 게임 내 능력에 그 이름을 부여한 사건이기도 하다.",
+    ] },
+  { "title" = "델리와 앙카라", "paragraphs" = [
+      "1398년 티무르는 델리 술탄국으로 진군하였다. 그는 인더스강을 건너 델리 부근에서 술탄 나시르 웃딘 마흐무드 샤 투글루크의 군대를 격파하고 도시에 들어갔으며, 도시는 이후 여러 날에 걸쳐 약탈되고 일부가 불탔다. 이전에 잡은 포로들은 전투 전에 살해되었고, 전쟁 코끼리와 수천 명의 장인 및 학자를 포함한 전리품은 사마르칸트로 보내졌다.",
+      "3년 후 그는 오스만 술탄 바예지드 1세에게 방향을 돌렸다. 아나톨리아에서 세력을 키우던 그 술탄은 소아시아 동부의 티무르 신하들을 위협하고 있었다. 시바스를 점령하고 시리아에서 맘루크를 격파한 뒤, 티무르는 1402년 7월 28일 앙카라 부근에서 바예지드와 대적하였다. 아나톨리아 부대가 편을 바꾸자 오스만 군대는 붕괴되었고, 바예지드는 포로로 잡혀 포로 신분으로 사망하였으며, 오스만 국가는 후에 공위 시대라 불린 내전에 빠졌다. 티무르는 동쪽으로 철수하기 전에 로도스 기사단으로부터 스미르나도 점령하였다.",
+    ] },
+  { "title" = "통치, 기억, 유산", "paragraphs" = [
+      "티무르는 고정된 관료제가 아니라 총독, 신하 통치자, 수비대를 통해 통치하였고, 정복의 수입으로 사마르칸트의 재정을 뒷받침하였다. 비비 하눔 모스크, 그의 궁전, 후에 구르 에 아미르로 알려진 묘역은 정복된 도시들에서 강제 이주된 장인들에 의해 건설되었다. 그는 저항한 도시들, 특히 1387년 이스파한과 델리에서 대량 학살과 두개골 탑을 의도적 정책으로 사용하였으며, 사료들은 관련된 수치에 관해 크게 엇갈린다.",
+      "주요 서술은 샤라프 앗딘 알리 야즈디의 찬가 『자파르나마』, 적대적인 아랍 역사가 이븐 아라브샤, 이븐 할둔, 그리고 1404년 사마르칸트에 도착한 카스티야 사절 루이 곤살레스 데 클라비호에게서 나온다. 티무르는 1405년 2월 군대가 중국을 향해 행군하던 중 오트라르에서 사망하였고, 그의 무덤은 손자 울루그 베크 치하에서 완성되었다. 그의 후손 바부르는 1526년 무굴 제국을 건국하였으며, 현대 우즈베키스탄은 그를 건국기의 국민적 인물로 대우한다.",
+    ] },
+]
+
+[articles.ar]
+text = "كان تيمور، المعروف أيضًا باسم تيمورلنك، فاتحًا تركيًا مغوليًا أسّس الإمبراطورية التيمورية في 1370 وحكم من سمرقند حتى وفاته في 1405."
+title = "تيمور"
+lang = "ar"
+url = "https://ar.wikipedia.org/wiki/%D8%AA%D9%8A%D9%85%D9%88%D8%B1_%D9%84%D9%86%D9%83"
+intro = [
+  "وُلد تيمور (8 أبريل 1336 – 18 فبراير 1405)، المعروف أيضًا باسم تيمورلنك، وكان فاتحًا تركيًا مغوليًا ومؤسس الإمبراطورية التيمورية. وُلد في قبيلة برلاس في بلاد ما وراء النهر، وصعد عبر الحروب التي أعقبت تفكك خانية جغتاي، وأُعلن حاكمًا في 1370 واتخذ سمرقند عاصمة له. لم يتخذ لقب خان قط: فقد تزوج الأميرة الجنكيزية ساراي ملك خانم، وحكم أميرًا بلقب كوركاني، أي «صهر»، مستعيرًا الشرعية من سلالة جنكيز خان.",
+  "وعلى مدى ثلاثة عقود ونصف، حملت جيوشه حملاتها من الفولغا إلى الغانج ومن القوقاز إلى بلاد الشام: خراسان وإيران، وجورجيا، والقبيلة الذهبية لتوختامش، وسلطنة دلهي في 1398، وسوريا والعراق في 1400–1401، والدولة العثمانية، التي هزم سلطانها بايزيد الأول وأسره في أنقرة في 1402. توفي في أوترار في 1405 أثناء مسيره لغزو الصين في عهد أسرة مينغ. تفككت إمبراطوريته بين أحفاده، لكن الثقافة التيمورية وإمبراطورية مغول الهند التي أسسها حفيده بابور حملتا ذكراه أبعد.",
+]
+sections = [
+  { "title" = "الصعود في بلاد ما وراء النهر", "paragraphs" = [
+      "وُلد تيمور في أبريل 1336 قرب كيش، وهي اليوم شهرسبز، جنوب سمرقند، في قبيلة برلاس، وهي قبيلة مغولية صارت ناطقة بالتركية ومستقرة إلى حد كبير. كان أبوه طاراغاي زعيمًا صغيرًا. تتفق المصادر العربية والفارسية على أنه كان مسلمًا، وتصف الحوليات اللاحقة تعليمًا في ركوب الخيل والرماية وسياسة أولوس جغتاي، وهو المجال المغولي الذي كان قد انقسم بالفعل إلى أقاليم متنافسة.",
+      "تركت الجروح التي أصابته في العشرينيات من عمره، فيما يبدو أثناء قتال على الأغنام ولاحقًا في المعركة، عرجًا في ساقه اليمنى وتلفًا في ذراعه اليمنى؛ ولذلك سماه الكتّاب الفرس تيمورِ لانغ، أي «تيمور الأعرج»، وهو ما نقله الأوروبيون باسم تيمورلنك. في ستينيات القرن الرابع عشر خدم أمراء محليين وقاتل صهره الأمير حسين، وفي 1370 استولى على سمرقند وأعلن نفسه حاكمًا على بلاد ما وراء النهر. ثم أمضى عقدًا في تأمين المنطقة ضد خانات مغولستان وضد الأمراء المنافسين، ونصّب خانات صورية على عرش جغتاي مع احتفاظه بالسلطة الفعلية أميرًا.",
+    ] },
+  { "title" = "الحملات في إيران والعراق وسوريا", "paragraphs" = [
+      "منذ 1381 اتجه تيمور جنوبًا وغربًا. فاستولى على هرات وسيستان ومازندران ومدن خراسان في سلسلة حملات، وقُتل حكامها أو رُحّلوا أو حُوّلوا إلى تابعين يمدّون بالجنود. وقد جمعت عدة حملات على جورجيا، بدأت في ثمانينيات القرن الرابع عشر، بين السلب وإنفاذ الجزية وتدمير الكنائس، وتكررت لبقية عهده.",
+      "في 1393 احتل بغداد وكثيرًا من العراق، وفي 1400–1401 تحرك إلى سوريا فاستولى على حلب ودمشق. وقد أُنزل المؤرخ ابن خلدون، وكان حينها في دمشق، من الأسوار لمقابلته، وترك رواية مفصلة عن المقابلة. واستعاد حكام بغداد السابقون المدينة ثم اقتحمت مرة أخرى في 1401؛ ويصف مؤرخو تلك الفترة مذبحة للسكان وتدميرًا لجزء كبير من المدينة، ويعطون أعدادًا للقتلى ما يزال المؤرخون يعدّونها غير موثوقة.",
+    ] },
+  { "title" = "الحرب ضد القبيلة الذهبية", "paragraphs" = [
+      "كان توختامش، خان القبيلة الذهبية، قد كان في وقت سابق من حماية تيمور ورعايته، لكنهما اختلفا حول أذربيجان وطرق التجارة في القوقاز. أغار توختامش جنوبًا في 1385، فردّ تيمور بحملتين كبيرتين إلى السهوب: عند نهر كوندورتشا في 1391 وعند تيريك في 1395. وفي الثانية دمّر مخيّم القبيلة وطارد الجيش الفارّ عبر الفولغا، فنهب سراي وأستراخان.",
+      "أضعفت هذه الحملات قوة القبيلة الذهبية لجيل كامل وحوّلت موازين طرق التجارة الشمالية نحو سمرقند. وقد صار مطاردة تيمور لجيش بدوي منهزم، ممتطيًا مئات الكيلومترات من السهوب المفتوحة، نموذجًا لحربه في السهوب، وهي الحلقة التي أعطت قدرته داخل اللعبة اسمها.",
+    ] },
+  { "title" = "دلهي وأنقرة", "paragraphs" = [
+      "في 1398 زحف تيمور إلى سلطنة دلهي. فعبر نهر السند، وهزم جيش السلطان ناصر الدين محمود شاه تغلق قرب دلهي، ودخل المدينة، التي نُهبت وأُحرقت جزئيًا على مدى عدة أيام. وقُتل الأسرى الذين أُخذوا سابقًا قبل المعركة، وأُرسلت الغنائم، بما فيها الفيلة الحربية وآلاف الحرفيين والعلماء، نحو سمرقند.",
+      "بعد ثلاث سنوات انقلب على السلطان العثماني بايزيد الأول، الذي كانت قوته المتنامية في الأناضول تهدد تابعي تيمور في آسيا الصغرى الشرقية. وبعد الاستيلاء على سيواس وهزيمة المماليك في سوريا، التقى تيمور ببايزيد قرب أنقرة في 28 يوليو 1402. فانهار الجيش العثماني عندما غيّرت وحداته الأناضولية ولاءها، وأُسر بايزيد ومات في الأسر، ووقعت الدولة العثمانية في حرب أهلية عُرفت لاحقًا باسم عهد الفترة. واستولى تيمور أيضًا على إزمير من فرسان رودس قبل أن ينسحب شرقًا.",
+    ] },
+  { "title" = "الحكم والذاكرة والإرث", "paragraphs" = [
+      "حكم تيمور عبر ولاة وحكام تابعين وحاميات، لا عبر بيروقراطية ثابتة، وموّل سمرقند من عائدات الفتح: فقد بُني مسجد بيبي خانم وقصره ومجمع الضريح المعروف لاحقًا باسم كور أمير على أيدي حرفيين رُحّلوا من مدن مفتوحة. واستخدم القتل الجماعي وأبراج الجماجم سياسةً متعمدة في المدن التي قاومت، ولا سيما أصفهان في 1387 ودلهي، وتتباين المصادر تباينًا حادًا في الأعداد.",
+      "تأتي الروايات الرئيسية من كتاب ظفرنامه المدائحي لشرف الدين علي يزدي، ومن المؤرخ العربي المعادي ابن عربشاه، ومن ابن خلدون، ومن روي غونثاليث دي كلافيخو، سفير قشتالة الذي وصل إلى سمرقند في 1404. توفي تيمور في أوترار في فبراير 1405 بينما كان جيشه يزحف نحو الصين، وأُكمل ضريحه في عهد حفيده أولوغ بيك. وقد أسس حفيده بابور إمبراطورية مغول الهند في 1526، وتعدّه أوزبكستان الحديثة شخصية وطنية مؤسِّسة.",
+    ] },
+]
+
+[articles.ru]
+text = "Тимур, известный также как Тамерлан, был тюрко-монгольским завоевателем, основавшим в 1370 году империю Тимуридов и правившим из Самарканда до своей смерти в 1405 году."
+title = "Тамерлан"
+lang = "ru"
+url = "https://ru.wikipedia.org/wiki/%D0%A2%D0%B0%D0%BC%D0%B5%D1%80%D0%BB%D0%B0%D0%BD"
+intro = [
+  "Тимур (8 апреля 1336 — 18 февраля 1405), известный также как Тамерлан, был тюрко-монгольским завоевателем и основателем империи Тимуридов. Он родился в племени барлас в Мавераннахре, возвысился в ходе войн, последовавших за распадом Чагатайского ханства, и в 1370 году был провозглашён государем со столицей в Самарканде. Он никогда не принимал титул хана: он женился на чингизидской царевне Сарай Мульк-ханым и правил как эмир с титулом гуркани, «зять», заимствуя легитимность у линии Чингисхана.",
+  "На протяжении трёх с половиной десятилетий его армии вели кампании от Волги до Ганга и от Кавказа до Леванта: Хорасан и Иран, Грузия, Золотая Орда Тохтамыша, Делийский султанат в 1398 году, Сирия и Ирак в 1400–1401 годах, а также Османское государство, султана которого Баязида I он разбил и захватил в плен при Анкаре в 1402 году. Он умер в Отраре в 1405 году, когда его армия шла на вторжение в империю Мин. Его империя распалась среди его потомков, но культура Тимуридов и империя Великих Моголов, основанная его потомком Бабуром, пронесли память о нём дальше.",
+]
+sections = [
+  { "title" = "Возвышение в Мавераннахре", "paragraphs" = [
+      "Тимур родился в апреле 1336 года близ Кеша, сегодня Шахрисабз, к югу от Самарканда, в племени барлас — монгольском племени, которое стало тюркоязычным и в значительной мере оседлым. Его отец Тарагай был мелким вождём. Арабские и персидские источники сходятся в том, что он был мусульманином, а более поздние хроники описывают обучение верховой езде, стрельбе из лука и политике Чагатайского улуса — монгольского государства, уже распадавшегося на соперничающие уделы.",
+      "Раны, полученные им в возрасте около двадцати лет, по-видимому, в столкновениях из-за овец, а позднее в сражении, оставили его хромым на правую ногу и с повреждённой правой рукой; персидские писатели называли его Тимур-и ланг, «Тимур Хромой», что европейцы передали как Тамерлан. В 1360-х годах он служил местным эмирам и воевал со своим родственником по браку амиром Хусейном, а в 1370 году взял Самарканд и провозгласил себя правителем Мавераннахра. Затем он провёл десятилетие, укрепляя регион против ханств Моголистана и соперничающих эмиров, и посадил на чагатайский престол своих марионеточных ханов, сохраняя реальную власть как эмир.",
+    ] },
+  { "title" = "Походы в Иран, Ирак и Сирию", "paragraphs" = [
+      "С 1381 года Тимур обратился на юг и запад. Герат, Систан, Мазендеран и города Хорасана были взяты в ходе ряда кампаний, а их правители убиты, депортированы или превращены в вассалов, поставлявших войска. Несколько кампаний против Грузии, начавшихся в 1380-х годах, сочетали грабёж с принуждением к выплате дани и разрушением церквей и повторялись до конца его правления.",
+      "В 1393 году он занял Багдад и большую часть Ирака, а в 1400–1401 годах двинулся в Сирию, взяв Алеппо и Дамаск. Историк Ибн Халдун, находившийся тогда в Дамаске, был спущен со стен для встречи с ним и оставил подробный рассказ об этой беседе. Багдад был отбит его прежними правителями, а затем снова взят штурмом в 1401 году; современные хронисты описывают массовое убийство населения и разрушение большей части города, приводя цифры погибших, которые историки до сих пор считают недостоверными.",
+    ] },
+  { "title" = "Война против Золотой Орды", "paragraphs" = [
+      "Тохтамыш, хан Золотой Орды, ранее был протеже Тимура, но они разошлись из-за Азербайджана и торговых путей Кавказа. Тохтамыш совершил набег на юг в 1385 году, и Тимур ответил двумя крупными походами в степь: у реки Кондурчи в 1391 году и на Тереке в 1395 году. Во втором он уничтожил лагерь Орды и преследовал бегущую армию за Волгой, разграбив Сарай и Астрахань.",
+      "Эти походы на поколение подорвали могущество Золотой Орды и сместили баланс северных торговых путей в сторону Самарканда. Преследование Тимуром разбитой кочевой армии, совершавшееся верхом на протяжении сотен километров открытой степи, стало образцом его степной войны, и именно этот эпизод дал название его игровой способности.",
+    ] },
+  { "title" = "Дели и Анкара", "paragraphs" = [
+      "В 1398 году Тимур двинулся в Делийский султанат. Он пересёк Инд, разбил армию султана Насир-уд-Дина Махмуд-шаха Туглака близ Дели и вошёл в город, который затем несколько дней грабили и частично сожгли. Ранее взятые пленники были убиты перед битвой, а добыча, включая боевых слонов и тысячи ремесленников и учёных, была отправлена обратно в сторону Самарканда.",
+      "Три года спустя он обратился против османского султана Баязида I, растущая власть которого в Анатолии угрожала вассалам Тимура в восточной Малой Азии. Взяв Сивас и разбив мамлюков в Сирии, Тимур встретился с Баязидом близ Анкары 28 июля 1402 года. Османская армия распалась, когда её анатолийские контингенты перешли на другую сторону, Баязид был захвачен и умер в плену, а Османское государство погрузилось в гражданскую войну, позднее названную Междуцарствием. Тимур также взял Смирну у рыцарей Родоса, прежде чем отступить на восток.",
+    ] },
+  { "title" = "Управление, память и наследие", "paragraphs" = [
+      "Тимур управлял через наместников, вассальных правителей и гарнизоны, а не через постоянную бюрократию, и финансировал Самарканд доходами от завоеваний: мечеть Биби-Ханым, его дворец и погребальный комплекс, позднее известный как Гур-Эмир, были построены ремесленниками, депортированными из завоёванных городов. Он использовал массовые убийства и башни из черепов как осознанную политику в городах, оказывавших сопротивление, прежде всего в Исфахане в 1387 году и в Дели, и источники резко расходятся относительно числа вовлечённых.",
+      "Основные свидетельства происходят из панегирика Шараф ад-Дина Али Йазди «Зафар-наме», от враждебного арабского историка Ибн Арабшаха, от Ибн Халдуна и от Руи Гонсалеса де Клавихо — посла Кастилии, достигшего Самарканда в 1404 году. Тимур умер в Отраре в феврале 1405 года, когда его армия шла к Китаю, а его гробница была завершена при его внуке Улугбеке. Его потомок Бабур основал империю Великих Моголов в 1526 году, а современный Узбекистан рассматривает его как основополагающую национальную фигуру.",
+    ] },
+]
+
+[articles.vi]
+text = "Timur, còn được gọi là Tamerlane, là một nhà chinh phục người Turk-Mông Cổ, người đã thành lập Đế quốc Timurid vào năm 1370 và cai trị từ Samarkand cho đến khi qua đời năm 1405."
+title = "Timur"
+lang = "vi"
+url = "https://vi.wikipedia.org/wiki/Timur"
+intro = [
+  "Timur (8 tháng 4 năm 1336 – 18 tháng 2 năm 1405), còn được gọi là Tamerlane, là một nhà chinh phục người Turk-Mông Cổ và là người sáng lập Đế quốc Timurid. Ông sinh ra trong bộ lạc Barlas ở Transoxiana, nổi lên qua các cuộc chiến sau khi Chagatai Khanate tan rã, và được tuyên bố là quân chủ vào năm 1370 với Samarkand làm thủ đô. Ông chưa bao giờ xưng danh hiệu khan: ông kết hôn với công chúa thuộc dòng dõi Thành Cát Tư Hãn, Saray Mulk Khanum, và cai trị với tư cách amir cùng danh hiệu gurkani, “con rể”, mượn tính chính danh từ dòng dõi Thành Cát Tư Hãn.",
+  "Trong ba thập kỷ rưỡi, quân đội của ông đã chinh chiến từ sông Volga đến sông Hằng và từ Kavkaz đến Levant: Khorasan và Iran, Gruzia, Hãn quốc Kim Trướng của Tokhtamysh, Vương quốc Hồi giáo Delhi vào năm 1398, Syria và Iraq vào năm 1400–1401, và nhà nước Ottoman, nơi ông đánh bại và bắt giữ sultan Bayezid I tại Ankara vào năm 1402. Ông qua đời tại Otrar vào năm 1405 khi đang hành quân xâm lược nhà Minh Trung Quốc. Đế quốc của ông tan rã giữa các hậu duệ, nhưng văn hóa Timurid và Đế quốc Mughal do hậu duệ Babur của ông thành lập đã mang ký ức về ông đi xa hơn.",
+]
+sections = [
+  { "title" = "Sự trỗi dậy ở Transoxiana", "paragraphs" = [
+      "Timur sinh vào tháng 4 năm 1336 gần Kesh, nay là Shahrisabz, phía nam Samarkand, trong bộ lạc Barlas, một bộ lạc Mông Cổ đã trở nên nói tiếng Turk và phần lớn đã định cư. Cha ông, Taraghai, là một thủ lĩnh nhỏ. Các nguồn sử liệu Ả Rập và Ba Tư đều nhất trí rằng ông là người Hồi giáo, và các biên niên sử về sau mô tả việc ông được giáo dục về cưỡi ngựa, bắn cung và chính trị của ulus Chagatai, vương quốc Mông Cổ vốn đã đang phân chia thành các lãnh địa đối địch.",
+      "Những vết thương nhận trong độ tuổi hai mươi, dường như trong cuộc tranh chấp về cừu và sau đó là trong trận chiến, khiến ông bị què chân phải và bị tổn thương cánh tay phải; các nhà văn Ba Tư gọi ông là Timur-i lang, “Timur Què”, mà người châu Âu chuyển thành Tamerlane. Trong thập niên 1360, ông phục vụ các amir địa phương và chiến đấu với người anh em cột chèo là Amir Husayn, và vào năm 1370, ông chiếm Samarkand và tự tuyên bố là người cai trị Transoxiana. Sau đó, ông dành một thập kỷ để củng cố khu vực trước các hãn quốc của Moghulistan và các amir đối địch, đồng thời đặt các khan bù nhìn của riêng mình lên ngai Chagatai trong khi giữ quyền lực thực sự với tư cách amir.",
+    ] },
+  { "title" = "Các chiến dịch ở Iran, Iraq và Syria", "paragraphs" = [
+      "Từ năm 1381, Timur quay về phía nam và phía tây. Herat, Sistan, Mazandaran và các thành phố của Khorasan lần lượt bị chiếm trong một loạt chiến dịch, và những người cai trị của chúng bị giết, bị trục xuất hoặc trở thành chư hầu cung cấp quân đội. Một số chiến dịch chống Gruzia, bắt đầu từ thập niên 1380, kết hợp cướp bóc với việc áp đặt cống nạp và phá hủy nhà thờ, và được lặp lại trong phần còn lại của triều đại ông.",
+      "Năm 1393, ông chiếm Baghdad và phần lớn Iraq, và vào năm 1400–1401, ông tiến vào Syria, chiếm Aleppo và Damascus. Nhà sử học Ibn Khaldun, khi đó ở Damascus, được hạ từ trên tường thành xuống để gặp ông và đã để lại một ghi chép chi tiết về cuộc gặp. Baghdad bị những người cai trị cũ tái chiếm rồi lại bị công phá vào năm 1401; các biên niên gia đương thời mô tả một cuộc thảm sát dân chúng và sự phá hủy phần lớn thành phố, đồng thời đưa ra những con số thương vong mà các nhà sử học vẫn coi là không đáng tin cậy.",
+    ] },
+  { "title" = "Chiến tranh chống Hãn quốc Kim Trướng", "paragraphs" = [
+      "Tokhtamysh, khan của Hãn quốc Kim Trướng, trước đó từng là người được Timur bảo trợ, nhưng hai người bất hòa vì Azerbaijan và các tuyến thương mại ở Kavkaz. Tokhtamysh đột kích về phía nam vào năm 1385, và Timur đáp trả bằng hai chiến dịch lớn vào thảo nguyên: tại sông Kondurcha năm 1391 và tại sông Terek năm 1395. Trong chiến dịch thứ hai, ông phá hủy doanh trại của Hãn quốc và truy đuổi đội quân đang tháo chạy qua sông Volga, cướp phá Sarai và Astrakhan.",
+      "Những chiến dịch này đã phá vỡ sức mạnh của Hãn quốc Kim Trướng trong một thế hệ và chuyển trọng tâm của các tuyến thương mại phía bắc về phía Samarkand. Việc Timur truy đuổi một đội quân du mục thất trận, di chuyển trên hàng trăm kilômét thảo nguyên mở, đã trở thành mô hình cho chiến tranh thảo nguyên của ông, và đây là sự kiện đã đặt tên cho năng lực trong trò chơi của ông.",
+    ] },
+  { "title" = "Delhi và Ankara", "paragraphs" = [
+      "Năm 1398, Timur tiến vào Vương quốc Hồi giáo Delhi. Ông vượt sông Indus, đánh bại quân đội của Sultan Nasir-ud-Din Mahmud Shah Tughluq gần Delhi, và tiến vào thành phố, nơi sau đó bị cướp phá và bị đốt cháy một phần trong nhiều ngày. Các tù nhân bị bắt trước đó đã bị giết trước trận chiến, và chiến lợi phẩm, bao gồm voi chiến cùng hàng nghìn thợ thủ công và học giả, được gửi trở lại về phía Samarkand.",
+      "Ba năm sau, ông quay sang đối phó với Sultan Ottoman Bayezid I, người mà quyền lực đang lớn mạnh ở Anatolia đe dọa các chư hầu của Timur ở phía đông Tiểu Á. Sau khi chiếm Sivas và đánh bại người Mamluk ở Syria, Timur gặp Bayezid gần Ankara vào ngày 28 tháng 7 năm 1402. Quân đội Ottoman tan rã khi các đội quân Anatolia của họ đổi phe, Bayezid bị bắt và chết trong cảnh giam cầm, và nhà nước Ottoman rơi vào cuộc nội chiến sau này được gọi là Thời kỳ Gián đoạn. Timur cũng chiếm Smyrna từ các Hiệp sĩ Rhodes trước khi rút về phía đông.",
+    ] },
+  { "title" = "Chính quyền, ký ức và di sản", "paragraphs" = [
+      "Timur cai trị thông qua các thống đốc, những người cai trị chư hầu và đồn trú thay vì một bộ máy quan liêu cố định, và ông tài trợ cho Samarkand bằng chiến lợi phẩm từ các cuộc chinh phục: Nhà thờ Hồi giáo Bibi-Khanym, cung điện của ông và khu lăng mộ sau này được gọi là Gur-e Amir được xây dựng bởi các thợ thủ công bị trục xuất từ các thành phố bị chinh phục. Ông sử dụng việc giết chóc hàng loạt và các tháp đầu lâu như một chính sách có chủ đích tại những thành phố kháng cự, trên hết là Isfahan năm 1387 và Delhi, và các nguồn sử liệu bất đồng gay gắt về số người liên quan.",
+      "Các ghi chép chính đến từ Zafarnama, tác phẩm ca ngợi của Sharaf al-Din Ali Yazdi, từ nhà sử học Ả Rập thù địch Ibn Arabshah, từ Ibn Khaldun và từ Ruy Gonzalez de Clavijo, đại sứ của Castile, người đã đến Samarkand năm 1404. Timur qua đời tại Otrar vào tháng 2 năm 1405 khi quân đội của ông đang hành quân về phía Trung Quốc, và lăng mộ của ông được hoàn thành dưới thời cháu nội Ulugh Beg. Hậu duệ Babur của ông đã thành lập Đế quốc Mughal vào năm 1526, và Uzbekistan hiện đại coi ông là một nhân vật quốc gia sáng lập.",
+    ] },
+]
+
+[articles.id]
+text = "Timur, juga dikenal sebagai Tamerlane, adalah seorang penakluk Turko-Mongol yang mendirikan Kekaisaran Timuriyah pada 1370 dan memerintah dari Samarkand hingga kematiannya pada 1405."
+title = "Timur"
+lang = "id"
+url = "https://id.wikipedia.org/wiki/Timur"
+intro = [
+  "Timur (8 April 1336 – 18 Februari 1405), juga dikenal sebagai Tamerlane, adalah seorang penakluk Turko-Mongol dan pendiri Kekaisaran Timuriyah. Ia lahir dalam suku Barlas di Transoksiana, menanjak melalui peperangan yang menyusul perpecahan Kekhanan Chagatai, dan diproklamasikan sebagai penguasa pada 1370 dengan Samarkand sebagai ibu kotanya. Ia tidak pernah mengambil gelar khan: ia menikahi seorang putri Chinggisid, Saray Mulk Khanum, dan memerintah sebagai amir dengan gelar gurkani, \"menantu laki-laki\", meminjam legitimasi dari garis keturunan Genghis Khan.",
+  "Selama tiga setengah dekade, pasukannya berkampanye dari Volga hingga Gangga dan dari Kaukasus hingga Levant: Khorasan dan Iran, Georgia, Golden Horde milik Tokhtamysh, Kesultanan Delhi pada 1398, Suriah dan Irak pada 1400–1401, serta negara Utsmaniyah, yang sultannya Bayezid I ia kalahkan dan tangkap di Ankara pada 1402. Ia meninggal di Otrar pada 1405 ketika sedang bergerak untuk menyerang Tiongkok Ming. Kekaisarannya terpecah di antara keturunannya, tetapi budaya Timuriyah dan Kekaisaran Mughal yang didirikan oleh keturunannya Babur membawa ingatannya lebih jauh.",
+]
+sections = [
+  { "title" = "Kebangkitan di Transoksiana", "paragraphs" = [
+      "Timur lahir pada April 1336 di dekat Kesh, kini Shahrisabz, di selatan Samarkand, dalam suku Barlas, sebuah suku Mongol yang telah menjadi penutur bahasa Turkik dan sebagian besar menetap. Ayahnya, Taraghai, adalah seorang kepala suku kecil. Sumber-sumber Arab dan Persia sepakat bahwa ia seorang Muslim, dan kronik-kronik kemudian menggambarkan pendidikannya dalam menunggang kuda, memanah, dan politik ulus Chagatai, wilayah Mongol yang sudah terpecah menjadi apanase-aparanase yang bersaing.",
+      "Luka-luka yang dideritanya pada usia dua puluhan, tampaknya dalam pertempuran memperebutkan domba dan kemudian dalam pertempuran, membuatnya pincang pada kaki kanan dan lengannya kanan rusak; para penulis Persia menyebutnya Timur-i lang, \"Timur si Pincang\", yang oleh orang Eropa diucapkan sebagai Tamerlane. Pada 1360-an ia mengabdi kepada amir-amir setempat dan bertempur melawan iparnya, Amir Husayn, dan pada 1370 ia merebut Samarkand dan memproklamasikan diri sebagai penguasa Transoksiana. Ia kemudian menghabiskan satu dekade untuk mengamankan wilayah itu terhadap kekhanan-kekhanan Moghulistan dan terhadap amir-amir saingan, dan ia menempatkan khan-khan bonekanya sendiri di takhta Chagatai sambil memegang kekuasaan nyata sebagai amir.",
+    ] },
+  { "title" = "Kampanye di Iran, Irak, dan Suriah", "paragraphs" = [
+      "Sejak 1381 Timur beralih ke selatan dan barat. Herat, Sistan, Mazandaran, dan kota-kota Khorasan direbut dalam serangkaian kampanye, dan para penguasanya dibunuh, dideportasi, atau dijadikan vasal yang memasok pasukan. Beberapa kampanye melawan Georgia, yang dimulai pada 1380-an, menggabungkan penjarahan dengan penegakan upeti dan penghancuran gereja-gereja, dan diulang sepanjang sisa pemerintahannya.",
+      "Pada 1393 ia menduduki Baghdad dan sebagian besar Irak, dan pada 1400–1401 ia bergerak ke Suriah, merebut Aleppo dan Damaskus. Sejarawan Ibn Khaldun, yang saat itu berada di Damaskus, diturunkan dari tembok untuk menemuinya dan meninggalkan catatan rinci tentang wawancara tersebut. Baghdad direbut kembali oleh para penguasa sebelumnya dan kemudian diserbu lagi pada 1401; para penulis kronik sezaman menggambarkan pembantaian penduduk dan kehancuran sebagian besar kota, dan mereka memberikan jumlah kematian yang masih dianggap tidak dapat diandalkan oleh para sejarawan.",
+    ] },
+  { "title" = "Perang melawan Golden Horde", "paragraphs" = [
+      "Tokhtamysh, khan Golden Horde, sebelumnya adalah anak didik Timur, tetapi keduanya berselisih mengenai Azerbaijan dan jalur perdagangan Kaukasus. Tokhtamysh menyerbu ke selatan pada 1385, dan Timur membalas dengan dua kampanye besar ke stepa: di Sungai Kondurcha pada 1391 dan di Terek pada 1395. Dalam kampanye kedua ia menghancurkan perkemahan Horde dan mengejar pasukan yang melarikan diri melintasi Volga, menjarah Sarai dan Astrakhan.",
+      "Kampanye-kampanye ini mematahkan kekuatan Golden Horde selama satu generasi dan menggeser keseimbangan jalur perdagangan utara ke arah Samarkand. Pengejaran Timur terhadap pasukan nomaden yang telah dikalahkan, yang dilakukan melintasi ratusan kilometer stepa terbuka, menjadi model perang stepanya, dan itulah episode yang memberi nama kemampuan dalam gimnya.",
+    ] },
+  { "title" = "Delhi dan Ankara", "paragraphs" = [
+      "Pada 1398 Timur bergerak masuk ke Kesultanan Delhi. Ia menyeberangi Indus, mengalahkan pasukan Sultan Nasir-ud-Din Mahmud Shah Tughluq di dekat Delhi, dan memasuki kota, yang kemudian dijarah dan sebagian dibakar selama beberapa hari. Tawanan yang diambil sebelumnya dibunuh sebelum pertempuran, dan jarahan, termasuk gajah perang serta ribuan pengrajin dan cendekiawan, dikirim kembali ke arah Samarkand.",
+      "Tiga tahun kemudian ia beralih menyerang sultan Utsmaniyah Bayezid I, yang kekuatannya yang tumbuh di Anatolia mengancam vasal-vasal Timur di Asia Kecil bagian timur. Setelah merebut Sivas dan mengalahkan Mamluk di Suriah, Timur bertemu Bayezid di dekat Ankara pada 28 Juli 1402. Pasukan Utsmaniyah pecah ketika kontingen-kontingen Anatolianya berpindah pihak, Bayezid ditangkap dan meninggal dalam tawanan, dan negara Utsmaniyah jatuh ke dalam perang saudara yang kemudian disebut Interregnum. Timur juga merebut Smyrna dari Ksatria Rhodes sebelum mundur ke timur.",
+    ] },
+  { "title" = "Pemerintahan, ingatan, dan warisan", "paragraphs" = [
+      "Timur memerintah melalui gubernur, penguasa vasal, dan garnisun alih-alih birokrasi tetap, dan ia membiayai Samarkand dengan hasil penaklukan: Masjid Bibi-Khanym, istananya, dan kompleks makam yang kemudian dikenal sebagai Gur-e Amir dibangun oleh para pengrajin yang dideportasi dari kota-kota yang ditaklukkan. Ia menggunakan pembunuhan massal dan menara tengkorak sebagai kebijakan yang disengaja di kota-kota yang melawan, terutama Isfahan pada 1387 dan Delhi, dan sumber-sumber sangat berbeda pendapat tentang jumlah yang terlibat.",
+      "Catatan-catatan utama berasal dari Zafarnama, panegirik karya Sharaf al-Din Ali Yazdi, dari sejarawan Arab yang bermusuhan Ibn Arabshah, dari Ibn Khaldun, dan dari Ruy Gonzalez de Clavijo, duta besar Kastilia yang mencapai Samarkand pada 1404. Timur meninggal di Otrar pada Februari 1405 ketika pasukannya sedang bergerak menuju Tiongkok, dan makamnya diselesaikan di bawah cucunya Ulugh Beg. Keturunannya Babur mendirikan Kekaisaran Mughal pada 1526, dan Uzbekistan modern memperlakukannya sebagai tokoh nasional pendiri.",
+    ] },
+]
+
+[articles.fil]
+text = "Si Timur, na kilala rin bilang Tamerlane, ay isang mananakop na Turko-Mongol na nagtatag ng Imperyong Timurid noong 1370 at naghari mula sa Samarkand hanggang sa kanyang kamatayan noong 1405."
+title = "Timur"
+lang = "fil"
+url = "https://tl.wikipedia.org/wiki/Timur"
+intro = [
+  "Si Timur (8 Abril 1336 – 18 Pebrero 1405), na kilala rin bilang Tamerlane, ay isang mananakop na Turko-Mongol at tagapagtatag ng Imperyong Timurid. Ipinanganak siya sa tribong Barlas sa Transoxiana, umangat sa pamamagitan ng pakikidigma na sumunod sa pagkasira ng Khanato ng Chagatai, at ipinahayag na soberanya noong 1370 na ang Samarkand ang kabisera. Hindi siya kailanman kumuha ng titulong khan: pinakasalan niya ang isang prinsesang Chinggisid, si Saray Mulk Khanum, at naghari bilang amir na may titulong gurkani, \"manugang\", na humihiram ng lehitimasyon mula sa linya ni Genghis Khan.",
+  "Sa loob ng tatlo at kalahating dekada, ang kanyang mga hukbo ay nagsagawa ng mga kampanya mula sa Volga hanggang sa Ganges at mula sa Caucasus hanggang sa Levant: Khorasan at Iran, Georgia, ang Golden Horde ni Tokhtamysh, ang Sultanatong Delhi noong 1398, Syria at Iraq noong 1400–1401, at ang estadong Ottoman, na ang sultan nitong si Bayezid I ay kanyang tinalo at nabihag sa Ankara noong 1402. Namatay siya sa Otrar noong 1405 habang nagmamartsa upang salakayin ang Ming China. Nagkawatak-watak ang kanyang imperyo sa mga inapo, ngunit ang kulturang Timurid at ang Imperyong Mughal na itinatag ng kanyang inapo na si Babur ay nagdala ng kanyang alaala nang higit pa.",
+]
+sections = [
+  { "title" = "Pagbangon sa Transoxiana", "paragraphs" = [
+      "Ipinanganak si Timur noong Abril 1336 malapit sa Kesh, ngayon ay Shahrisabz, sa timog ng Samarkand, sa tribong Barlas, isang tribong Mongol na naging nagsasalita ng Turko at malaking bahagi ay nanirahan na. Ang kanyang ama na si Taraghai ay isang maliit na pinuno. Nagkakasundo ang mga pinagmulang Arabe at Persa na siya ay isang Muslim, at inilalarawan ng mga huling kronika ang kanyang edukasyon sa pagsakay sa kabayo, pagpapana, at pulitika ng ulus ng Chagatai, ang kahariang Mongol na nahahati na noon sa magkaribal na mga appanage.",
+      "Ang mga sugat na natamo niya noong siya ay nasa edad na 20 hanggang 29, malamang sa pakikipaglaban tungkol sa mga tupa at kalaunan sa labanan, ay nag-iwan sa kanya na pilay sa kanang binti at may sirang kanang braso; tinawag siya ng mga manunulat na Persa na Timur-i lang, \"Timur na Pilay\", na isinalin ng mga Europeo bilang Tamerlane. Noong 1360s, naglingkod siya sa mga lokal na amir at nakipaglaban sa kanyang bayaw na si Amir Husayn, at noong 1370 ay sinakop niya ang Samarkand at ipinahayag ang kanyang sarili bilang pinuno ng Transoxiana. Pagkatapos, ginugol niya ang isang dekada sa pagpapatatag ng rehiyon laban sa mga khanato ng Moghulistan at laban sa magkaribal na mga amir, at inilagay niya ang kanyang sariling mga papet na khan sa trono ng Chagatai habang hawak ang tunay na kapangyarihan bilang amir.",
+    ] },
+  { "title" = "Mga kampanya sa Iran, Iraq, at Syria", "paragraphs" = [
+      "Mula 1381, bumaling si Timur sa timog at kanluran. Ang Herat, Sistan, Mazandaran, at mga lungsod ng Khorasan ay nakuha sa sunud-sunod na mga kampanya, at ang kanilang mga pinuno ay pinatay, ipinatapon, o ginawang basalyo na nagtustos ng mga hukbo. Ilang kampanya laban sa Georgia, na nagsimula noong 1380s, ay pinagsama ang pandarambong sa pagpapatupad ng tributo at pagwasak ng mga simbahan, at inulit sa natitirang bahagi ng kanyang paghahari.",
+      "Noong 1393, sinakop niya ang Baghdad at malaking bahagi ng Iraq, at noong 1400–1401 ay pumasok siya sa Syria, sinakop ang Aleppo at Damascus. Ang mananalaysay na si Ibn Khaldun, na noon ay nasa Damascus, ay ibinaba mula sa mga pader upang makipagkita sa kanya at nag-iwan ng detalyadong salaysay ng pakikipanayam. Muling nakuha ang Baghdad ng mga dating pinuno nito at muling sinalakay noong 1401; inilalarawan ng mga kontemporaneong kronista ang isang masaker sa populasyon at ang pagkawasak ng malaking bahagi ng lungsod, at nagbibigay sila ng mga bilang ng namatay na itinuturing pa ring hindi mapagkakatiwalaan ng mga mananalaysay.",
+    ] },
+  { "title" = "Digmaan laban sa Golden Horde", "paragraphs" = [
+      "Si Tokhtamysh, khan ng Golden Horde, ay dating protégé ni Timur, ngunit nagkaroon ng hidwaan ang dalawa tungkol sa Azerbaijan at mga rutang pangkalakal ng Caucasus. Nagsagawa ng pagsalakay si Tokhtamysh sa timog noong 1385, at ginantihan ito ni Timur ng dalawang malalaking kampanya sa steppe: sa Ilog Kondurcha noong 1391 at sa Terek noong 1395. Sa ikalawa, winasak niya ang kampo ng Horde at hinabol ang tumatakas na hukbo sa buong Volga, sinamsam ang Sarai at Astrakhan.",
+      "Sinira ng mga kampanyang ito ang kapangyarihan ng Golden Horde sa loob ng isang henerasyon at inilipat ang balanse ng hilagang rutang pangkalakal patungo sa Samarkand. Ang paghabol ni Timur sa isang natalong hukbong nomad, na isinagawa sa daan-daang kilometro ng bukas na steppe, ay naging modelo ng kanyang pakikidigma sa steppe, at ito ang pangyayaring nagbigay ng pangalan sa kanyang kakayahan sa loob ng laro.",
+    ] },
+  { "title" = "Delhi at Ankara", "paragraphs" = [
+      "Noong 1398, nagmartsa si Timur papasok sa Sultanatong Delhi. Tinawid niya ang Indus, tinalo ang hukbo ni Sultan Nasir-ud-Din Mahmud Shah Tughluq malapit sa Delhi, at pinasok ang lungsod, na pagkatapos ay sinamsam at bahagyang sinunog sa loob ng ilang araw. Ang mga bilanggo na nakuha nang mas maaga ay pinatay bago ang labanan, at ang samsam, kabilang ang mga elepanteng pandigma at libu-libong manggagawa at iskolar, ay ipinadala pabalik patungo sa Samarkand.",
+      "Makalipas ang tatlong taon, bumaling siya laban sa sultan ng Ottoman na si Bayezid I, na ang lumalaking kapangyarihan sa Anatolia ay nagbanta sa mga basalyo ni Timur sa silangang Asia Minor. Matapos sakupin ang Sivas at talunin ang mga Mamluk sa Syria, nakipagkita si Timur kay Bayezid malapit sa Ankara noong 28 Hulyo 1402. Nabuwag ang hukbong Ottoman nang lumipat ng panig ang mga kontingenteng Anatoliano nito, nabihag si Bayezid at namatay sa pagkabihag, at ang estadong Ottoman ay nahulog sa digmaang sibil na kalaunan ay tinawag na Interregnum. Sinakop din ni Timur ang Smyrna mula sa mga Kabalyero ng Rhodes bago umatras patungong silangan.",
+    ] },
+  { "title" = "Pamahalaan, alaala, at pamana", "paragraphs" = [
+      "Namahala si Timur sa pamamagitan ng mga gobernador, pinunong basalyo, at mga garison sa halip na isang nakapirming burukrasya, at pinondohan niya ang Samarkand ng mga kita mula sa pananakop: ang Moske ng Bibi-Khanym, ang kanyang palasyo, at ang kompleks ng libingan na kalaunan ay nakilala bilang Gur-e Amir ay itinayo ng mga manggagawang ipinatapon mula sa mga nasakop na lungsod. Ginamit niya ang malawakang pagpatay at mga tore ng bungo bilang sinadyang patakaran sa mga lungsod na lumaban, lalo na sa Isfahan noong 1387 at Delhi, at lubos na nagkakaiba ang mga pinagmulan tungkol sa bilang ng mga nasangkot.",
+      "Ang mga pangunahing salaysay ay nagmula sa Zafarnama, isang panegiriko ni Sharaf al-Din Ali Yazdi, mula sa pagalit na Arabeng mananalaysay na si Ibn Arabshah, mula kay Ibn Khaldun, at mula kay Ruy Gonzalez de Clavijo, ang embahador ng Castile na nakarating sa Samarkand noong 1404. Namatay si Timur sa Otrar noong Pebrero 1405 habang nagmamartsa ang kanyang hukbo patungong China, at ang kanyang libingan ay natapos sa ilalim ng kanyang apo na si Ulugh Beg. Itinatag ng kanyang inapo na si Babur ang Imperyong Mughal noong 1526, at itinuturing siya ng modernong Uzbekistan bilang isang pambansang pigurang tagapagtatag.",
+    ] },
+]
+
+[articles.pt-br]
+text = "Timur, também conhecido como Tamerlão, foi um conquistador turco-mongol que fundou o Império Timúrida em 1370 e governou a partir de Samarcanda até sua morte, em 1405."
+title = "Tamerlão"
+lang = "pt-br"
+url = "https://pt.wikipedia.org/wiki/Tamerl%C3%A3o"
+intro = [
+  "Timur (8 de abril de 1336 – 18 de fevereiro de 1405), também conhecido como Tamerlão, foi um conquistador turco-mongol e o fundador do Império Timúrida. Nasceu na tribo Barlas, na Transoxiana, ascendeu por meio da guerra que se seguiu à fragmentação do Canato de Chagatai e foi proclamado soberano em 1370, tendo Samarcanda como capital. Nunca assumiu o título de cã: casou-se com uma princesa chinggisida, Saray Mulk Khanum, e governou como emir com o título de gurkani, “genro”, tomando emprestada legitimidade à linhagem de Gêngis Cã.",
+  "Por três décadas e meia, seus exércitos fizeram campanha do Volga ao Ganges e do Cáucaso ao Levante: Corassã e Irã, Geórgia, a Horda de Ouro de Tokhtamysh, o Sultanato de Deli em 1398, a Síria e o Iraque em 1400–1401, e o Estado otomano, cujo sultão Bayezid I ele derrotou e capturou em Ancara em 1402. Morreu em Otrar em 1405, enquanto marchava para invadir a China Ming. Seu império desintegrou-se entre seus descendentes, mas a cultura timúrida e o Império Mogol, fundado por seu descendente Babur, levaram sua memória mais adiante.",
+]
+sections = [
+  { "title" = "Ascensão na Transoxiana", "paragraphs" = [
+      "Timur nasceu em abril de 1336 perto de Kesh, hoje Shahrisabz, ao sul de Samarcanda, na tribo Barlas, uma tribo mongol que passara a falar uma língua turca e se tornara em grande parte sedentária. Seu pai, Taraghai, era um chefe menor. As fontes árabes e persas concordam que ele era muçulmano, e crônicas posteriores descrevem uma educação em equitação, arco e flecha e na política do ulus de Chagatai, o domínio mongol que já se dividia em apanágios rivais.",
+      "Ferimentos sofridos aos vinte e poucos anos, aparentemente em brigas por ovelhas e mais tarde em batalha, deixaram-no coxo da perna direita e com o braço direito danificado; escritores persas chamavam-no Timur-i lang, “Timur, o Coxo”, que os europeus renderizaram como Tamerlane. Na década de 1360, serviu a emires locais e combateu seu cunhado, o emir Husayn, e, em 1370, tomou Samarcanda e fez-se proclamar governante da Transoxiana. Passou então uma década assegurando a região contra os canatos de Mogulistão e contra emires rivais, e colocou seus próprios cãs fantoches no trono chagatai, mantendo o poder real como emir.",
+    ] },
+  { "title" = "Campanhas no Irã, no Iraque e na Síria", "paragraphs" = [
+      "A partir de 1381, Timur voltou-se para o sul e para o oeste. Herat, Sistão, Mazandaran e as cidades de Corassã foram tomadas numa série de campanhas, e seus governantes foram mortos, deportados ou transformados em vassalos que forneciam tropas. Diversas campanhas contra a Geórgia, iniciadas na década de 1380, combinaram pilhagem com a imposição de tributo e a destruição de igrejas, e repetiram-se pelo resto de seu reinado.",
+      "Em 1393, ocupou Bagdá e grande parte do Iraque e, em 1400–1401, avançou para a Síria, tomando Alepo e Damasco. O historiador Ibn Khaldun, então em Damasco, foi descido das muralhas para encontrá-lo e deixou um relato detalhado da entrevista. Bagdá foi retomada por seus antigos governantes e depois tomada de assalto novamente em 1401; cronistas contemporâneos descrevem um massacre da população e a destruição de grande parte da cidade, e apresentam números de mortos que os historiadores ainda consideram pouco confiáveis.",
+    ] },
+  { "title" = "Guerra contra a Horda de Ouro", "paragraphs" = [
+      "Tokhtamysh, cã da Horda de Ouro, fora antes protegido de Timur, mas os dois romperam por causa do Azerbaijão e das rotas comerciais do Cáucaso. Tokhtamysh atacou o sul em 1385, e Timur respondeu com duas grandes campanhas pela estepe: no rio Kondurcha, em 1391, e no Terek, em 1395. Na segunda, destruiu o acampamento da Horda e perseguiu o exército em fuga através do Volga, saqueando Sarai e Astrakhan.",
+      "Essas campanhas quebraram o poder da Horda de Ouro por uma geração e deslocaram o equilíbrio das rotas comerciais do norte em direção a Samarcanda. A perseguição de Timur a um exército nômade derrotado, montada ao longo de centenas de quilômetros de estepe aberta, tornou-se o modelo de sua guerra nas estepes, e é o episódio que dá nome à sua habilidade no jogo.",
+    ] },
+  { "title" = "Deli e Ancara", "paragraphs" = [
+      "Em 1398, Timur marchou para o Sultanato de Deli. Cruzou o Indo, derrotou o exército do sultão Nasir-ud-Din Mahmud Shah Tughluq perto de Deli e entrou na cidade, que então foi saqueada e parcialmente incendiada ao longo de vários dias. Prisioneiros capturados antes foram mortos antes da batalha, e o butim, incluindo elefantes de guerra e milhares de artesãos e estudiosos, foi enviado de volta para Samarcanda.",
+      "Três anos depois, voltou-se contra o sultão otomano Bayezid I, cujo crescente poder na Anatólia ameaçava os vassalos de Timur na Ásia Menor oriental. Depois de tomar Sivas e derrotar os mamelucos na Síria, Timur encontrou Bayezid perto de Ancara em 28 de julho de 1402. O exército otomano desmoronou quando seus contingentes anatólios mudaram de lado, Bayezid foi capturado e morreu no cativeiro, e o Estado otomano mergulhou na guerra civil mais tarde chamada de Interregno. Timur também tomou Esmirna dos Cavaleiros de Rodes antes de recuar para o leste.",
+    ] },
+  { "title" = "Governo, memória e legado", "paragraphs" = [
+      "Timur governou por meio de governadores, governantes vassalos e guarnições, e não de uma burocracia fixa, e financiou Samarcanda com os proventos da conquista: a Mesquita de Bibi-Khanym, seu palácio e o complexo funerário mais tarde conhecido como Gur-e Amir foram construídos por artesãos deportados de cidades conquistadas. Usou o assassinato em massa e torres de crânios como política deliberada em cidades que resistiram, sobretudo Isfahan em 1387 e Deli, e as fontes divergem acentuadamente quanto aos números envolvidos.",
+      "Os principais relatos vêm do panegírico Zafarnama, de Sharaf al-Din Ali Yazdi, do historiador árabe hostil Ibn Arabshah, de Ibn Khaldun e de Ruy González de Clavijo, o embaixador de Castela que chegou a Samarcanda em 1404. Timur morreu em Otrar em fevereiro de 1405, enquanto seu exército marchava em direção à China, e seu túmulo foi concluído sob seu neto Ulugh Beg. Seu descendente Babur fundou o Império Mogol em 1526, e o Uzbequistão moderno o trata como figura nacional fundadora.",
+    ] },
+]
+
+[fallbacks]
+
+zh-CN = "zh-cn"
+
+pt-BR = "pt-br"

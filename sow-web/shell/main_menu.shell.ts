@@ -196,7 +196,7 @@ interface MenuMusicState {
 type RewardStage =
     | { kind: "leader"; amount: 0; slug: string; label: string }
     | { kind: "level"; amount: number; level: number; selector: string }
-    | { kind: "xp" | "crowns" | "laurels"; amount: number; selector: string };
+    | { kind: "xp" | "crowns" | "laurels" | "gems"; amount: number; selector: string };
 
 interface RewardItem {
     stage: RewardStage;
@@ -1488,13 +1488,15 @@ function ensureProgressionDisplay() {
                 sum.xp += Math.max(0, Number(receipt.xp) || 0);
                 sum.crowns += Math.max(0, Number(receipt.crowns) || 0);
                 sum.laurels += Math.max(0, Number(receipt.laurels) || 0);
+                sum.gems += Math.max(0, Number(receipt.gems) || 0);
                 return sum;
             },
-            { xp: 0, crowns: 0, laurels: 0 },
+            { xp: 0, crowns: 0, laurels: 0, gems: 0 },
         );
         canonical.xp = Math.max(0, canonical.xp - totals.xp);
         canonical.crowns = Math.max(0, canonical.crowns - totals.crowns);
         canonical.laurels = Math.max(0, canonical.laurels - totals.laurels);
+        canonical.gems = Math.max(0, canonical.gems - totals.gems);
         canonical.level = Math.floor(canonical.xp / 100) + 1;
     }
     writeProgression(canonical);
@@ -1620,7 +1622,9 @@ function createRewardStage(stages: RewardStage[], skip: () => void): RewardItem[
                                   ? "menu.xp"
                                   : stage.kind === "crowns"
                                     ? "store.crowns"
-                                    : "store.laurels",
+                                    : stage.kind === "gems"
+                                      ? "store.gems"
+                                      : "store.laurels",
                           ),
         );
         const medallion = document.createElement("span");
@@ -1637,7 +1641,9 @@ function createRewardStage(stages: RewardStage[], skip: () => void): RewardItem[
                 image.src = avatarImage(stage.slug);
                 image.alt = "";
             } else {
-                image.src = currencyAsset(stage.kind === "crowns" ? "crown" : "laurel");
+                image.src = currencyAsset(
+                    stage.kind === "crowns" ? "crown" : stage.kind === "gems" ? "gem" : "laurel",
+                );
             }
             emblem = image;
         }
@@ -1871,9 +1877,10 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             sum.xp += Math.max(0, Number(receipt.xp) || 0);
             sum.crowns += Math.max(0, Number(receipt.crowns) || 0);
             sum.laurels += Math.max(0, Number(receipt.laurels) || 0);
+            sum.gems += Math.max(0, Number(receipt.gems) || 0);
             return sum;
         },
-        { xp: 0, crowns: 0, laurels: 0 },
+        { xp: 0, crowns: 0, laurels: 0, gems: 0 },
     );
     const unlockedLeaderIds = Array.from(
         new Set(
@@ -1926,6 +1933,7 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     const stages: RewardStage[] = [
         { kind: "xp" as const, amount: totals.xp, selector: "[data-progression-xp-value]" },
         { kind: "crowns" as const, amount: totals.crowns, selector: "[data-progression-crowns-value]" },
+        { kind: "gems" as const, amount: totals.gems, selector: "[data-progression-gems-value]" },
         // Laurels live in the profile, so their card lands on the player's portrait.
         { kind: "laurels" as const, amount: totals.laurels, selector: ".sow-menu__portrait" },
         ...leaderStages,
@@ -1949,7 +1957,7 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             rewardAnimationShown.add(id);
         });
         acknowledgeShownReceipts(accountId);
-        maybePresentRewards();
+        if (!offerRewardDouble(receipts, accountId)) maybePresentRewards();
     }
 
     function complete(shown: boolean) {
@@ -2193,6 +2201,93 @@ function presentRankedResult(result: RankedResult) {
     motion = animateRankResult(card, result, reducedRewardMotion);
     rankedStageCleanup = motion.cancel;
     again.focus({ preventScroll: true });
+}
+
+const VERIFIED_BONUS_PREFIX = "verified_bonus:";
+const rewardDoubleOffered = new Set<string>();
+
+// One rewarded-video offer per verified public match: it pays the match's
+// crowns and gems again. Continue and the video button share size and
+// placement (Poki and CrazyGames rules); portals without rewarded video,
+// such as Jest, report it unavailable and never show the offer.
+function offerRewardDouble(receipts: MenuRewardReceipt[], accountId: string | null): boolean {
+    if (
+        !accountId ||
+        typeof window.SOW_portalRewardedAvailable !== "function" ||
+        typeof window.SOW_portalRewardedBreak !== "function" ||
+        !window.SOW_portalRewardedAvailable()
+    )
+        return false;
+    const bonus = receipts
+        .filter(function (receipt) {
+            return typeof receipt.id === "string" && receipt.id.indexOf(VERIFIED_BONUS_PREFIX) === 0;
+        })
+        .pop();
+    if (!bonus || rewardDoubleOffered.has(bonus.match_id)) return false;
+    const all = (menuUi.state && menuUi.state.reward_receipts) || [];
+    const already = all.some(function (receipt) {
+        return receipt.id === "ad_double:" + bonus.match_id;
+    });
+    const participation = all.find(function (receipt) {
+        return receipt.id === bonus.match_id;
+    });
+    const crowns = (Number(bonus.crowns) || 0) + (Number(participation && participation.crowns) || 0);
+    const gems = (Number(bonus.gems) || 0) + (Number(participation && participation.gems) || 0);
+    if (already || crowns + gems <= 0) return false;
+    rewardDoubleOffered.add(bonus.match_id);
+    const layer = document.createElement("div");
+    layer.className = "sow-menu__overlay sow-menu__reward-double";
+    const amounts =
+        "<span class='sow-menu__reward-double-amounts'>" +
+        (crowns > 0
+            ? "<span><img src='" + esc(currencyAsset("crown")) + "' alt=''>+" + crowns + "</span>"
+            : "") +
+        (gems > 0 ? "<span><img src='" + esc(currencyAsset("gem")) + "' alt=''>+" + gems + "</span>" : "") +
+        "</span>";
+    layer.innerHTML =
+        "<section class='sow-menu__modal' role='dialog' aria-modal='true' aria-label='" +
+        esc(SOW_t("endgame.reward_double_title")) +
+        "'><h2>" +
+        esc(SOW_t("endgame.reward_double_title")) +
+        "</h2><p>" +
+        esc(SOW_t("endgame.reward_double_body")) +
+        "</p>" +
+        amounts +
+        "<div class='sow-menu__reward-double-actions'>" +
+        "<button class='sow-menu__secondary' type='button' data-reward-double='continue'>" +
+        esc(SOW_t("endgame.reward_continue")) +
+        "</button><button class='sow-menu__secondary' type='button' data-reward-double='watch'>" +
+        "<svg class='sow-menu__reward-double-video' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linejoin='round' aria-hidden='true'><rect x='2' y='5' width='14' height='14' rx='2'/><path d='m16 10 6-4v12l-6-4z'/></svg>" +
+        esc(SOW_t("endgame.reward_double_watch")) +
+        "</button></div></section>";
+    const close = function () {
+        layer.remove();
+        maybePresentRewards();
+    };
+    layer.addEventListener("click", function (event) {
+        const choice =
+            event.target instanceof Element
+                ? event.target.closest<HTMLElement>("[data-reward-double]")
+                : null;
+        if (!choice) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (choice.dataset.rewardDouble !== "watch") {
+            close();
+            return;
+        }
+        layer.querySelectorAll("button").forEach(function (button) {
+            button.disabled = true;
+        });
+        window.SOW_portalRewardedBreak!().then(function (watched) {
+            if (watched && menuUi.state && menuUi.state.account_id === accountId)
+                send("double_match_reward", { account_id: accountId, match_id: bonus.match_id });
+            close();
+        });
+    });
+    root.appendChild(layer);
+    layer.querySelector<HTMLElement>("[data-reward-double='continue']")?.focus({ preventScroll: true });
+    return true;
 }
 
 function maybePresentRewards() {
@@ -2890,6 +2985,22 @@ root.addEventListener("click", function (event) {
         menuUi.heroesRegionFilter = "all";
         menuUi.tempSelectedLeader = null;
         menuUi.tempSelectedRandom = false;
+        render();
+        return;
+    }
+    // Portal builds (Poki, Jest) have no store module; their hero cards
+    // unlock with earned currency after a second confirming tap.
+    if (command === "portal_unlock_leader") {
+        const leaderId = target.dataset.leaderId;
+        const currency = target.dataset.currency === "gems" ? "gems" : "crowns";
+        if (!leaderId || (menuUi.state && menuUi.state.store_busy)) return;
+        const key = leaderId + ":" + currency;
+        if (menuUi.portalUnlockConfirm !== key) {
+            menuUi.portalUnlockConfirm = key;
+        } else {
+            menuUi.portalUnlockConfirm = null;
+            send("unlock_leader", { leader_id: leaderId, currency: currency });
+        }
         render();
         return;
     }

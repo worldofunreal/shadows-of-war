@@ -3596,62 +3596,223 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     ], Some(&paths.root))
 }
 
-fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
-    let site = root.join("sow-web/site");
-    let catalog: toml::Value = fs::read_to_string(site.join("leader-bio-sources.toml"))?
+fn load_leader_biography(
+    path: &Path,
+    leader_id: &str,
+    published_languages: &[&str],
+    distinct_articles: &mut std::collections::HashSet<String>,
+) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let source = fs::read_to_string(path)
+        .with_context(|| format!("read leader biography file {}", path.display()))?;
+    let record: toml::Value = source
         .parse()
-        .context("parse deduplicated leader biography catalog")?;
-    let articles = catalog.get("articles").and_then(toml::Value::as_table)
-        .context("leader biography catalog has no articles")?;
-    let references = catalog.get("leaders").and_then(toml::Value::as_table)
-        .context("leader biography catalog has no locale references")?;
-    let expected_leaders = sow_core::player::Leader::all().map(|leader| leader.id()).collect::<std::collections::HashSet<_>>();
+        .with_context(|| format!("parse leader biography file {}", path.display()))?;
+    let record = record.as_table().with_context(|| {
+        format!(
+            "leader biography file {} must contain a table",
+            path.display()
+        )
+    })?;
+    for field in record.keys() {
+        if field != "articles" && field != "fallbacks" {
+            bail!(
+                "leader biography file {} has unexpected field {field}",
+                path.display()
+            );
+        }
+    }
+    let articles = record
+        .get("articles")
+        .and_then(toml::Value::as_table)
+        .with_context(|| {
+            format!(
+                "leader biography file {} has no articles table",
+                path.display()
+            )
+        })?;
+    let fallbacks = record
+        .get("fallbacks")
+        .map(|value| {
+            value.as_table().with_context(|| {
+                format!(
+                    "leader biography file {} has an invalid fallbacks table",
+                    path.display()
+                )
+            })
+        })
+        .transpose()?;
     let mut used_articles = std::collections::HashSet::new();
-    let mut distinct_articles = std::collections::HashSet::new();
     let mut biographies = serde_json::Map::new();
 
-    for (_, code, _) in sow_i18n::Language::published_registry() {
-        let locale_refs = references.get(code).and_then(toml::Value::as_table)
-            .with_context(|| format!("leader biography locale {code} is missing"))?;
-        if locale_refs.len() != expected_leaders.len() {
-            bail!("leader biography locale {code} has {} references for {} leaders", locale_refs.len(), expected_leaders.len());
-        }
-        let mut locale = serde_json::Map::new();
-        for leader in sow_core::player::Leader::all() {
-            let id = leader.id();
-            let article_id = locale_refs.get(id).and_then(toml::Value::as_str)
-                .with_context(|| format!("leader biography reference missing: {code}/{id}"))?;
-            let article = articles.get(article_id).with_context(|| format!("leader biography article missing: {article_id}"))?;
-            if article.get("lang").and_then(toml::Value::as_str).is_none_or(str::is_empty) {
-                bail!("leader biography article {article_id} has no source language for {code}/{id}");
+    for &code in published_languages {
+        let (article_language, article) = if let Some(article) = articles.get(code) {
+            if fallbacks.is_some_and(|fallbacks| fallbacks.contains_key(code)) {
+                bail!(
+                    "leader biography file {} has both a direct article and a fallback for {code}/{leader_id}",
+                    path.display()
+                );
             }
-            if article.get("url").and_then(toml::Value::as_str).is_none_or(|url| !url.starts_with("https://")) {
-                bail!("leader biography article {article_id} needs an HTTPS source");
-            }
-            let value = serde_json::to_value(article)?;
-            let has_sections = value.get("sections").and_then(serde_json::Value::as_array).is_some_and(|sections| !sections.is_empty());
-            let short_article = value.get("shortArticle").and_then(serde_json::Value::as_bool) == Some(true);
-            if !value.get("intro").is_some_and(serde_json::Value::is_array) || (!has_sections && !short_article) {
-                bail!("leader biography article {article_id} is incomplete");
-            }
-            used_articles.insert(article_id.to_owned());
-            locale.insert(id.to_owned(), value);
+            (code, article)
+        } else {
+            let article_language = fallbacks
+                .and_then(|fallbacks| fallbacks.get(code))
+                .and_then(toml::Value::as_str)
+                .with_context(|| {
+                    format!(
+                        "leader biography language missing: {} for {code}/{leader_id}",
+                        path.display()
+                    )
+                })?;
+            let article = articles.get(article_language)
+                .with_context(|| format!("leader biography fallback in {} for {code}/{leader_id} targets missing article language {article_language}", path.display()))?;
+            (article_language, article)
+        };
+        let source_language = article
+            .get("lang")
+            .and_then(toml::Value::as_str)
+            .filter(|language| !language.is_empty())
+            .with_context(|| {
+                format!(
+                    "leader biography article language missing in {} for {code}/{leader_id}",
+                    path.display()
+                )
+            })?;
+        if source_language != article_language {
+            bail!(
+                "leader biography article language mismatch in {} for {code}/{leader_id}: key {article_language}, article declares {source_language}",
+                path.display()
+            );
         }
-        biographies.insert(code.to_owned(), serde_json::Value::Object(locale));
-    }
-    if references.len() != sow_i18n::Language::published_registry().count() {
-        bail!("leader biography catalog contains locale references that are not published");
-    }
-    if used_articles.len() != articles.len() {
-        bail!("leader biography catalog contains {} unreferenced article records", articles.len() - used_articles.len());
-    }
-    for (id, article) in articles {
-        let fingerprint = serde_json::to_string(article)?;
-        if !distinct_articles.insert(fingerprint) {
-            bail!("leader biography article {id} duplicates another stored article");
+        if article
+            .get("url")
+            .and_then(toml::Value::as_str)
+            .is_none_or(|url| !url.starts_with("https://"))
+        {
+            bail!(
+                "leader biography article in {} for {code}/{leader_id} needs an HTTPS source",
+                path.display()
+            );
         }
+        let value = serde_json::to_value(article)?;
+        let has_sections = value
+            .get("sections")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|sections| !sections.is_empty());
+        let short_article = value
+            .get("shortArticle")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true);
+        if !value.get("intro").is_some_and(serde_json::Value::is_array)
+            || (!has_sections && !short_article)
+        {
+            bail!(
+                "leader biography article in {} for {code}/{leader_id} is incomplete",
+                path.display()
+            );
+        }
+        used_articles.insert(article_language.to_owned());
+        biographies.insert(code.to_owned(), value);
     }
 
+    if let Some(fallbacks) = fallbacks {
+        for locale in fallbacks.keys() {
+            if !published_languages.contains(&locale.as_str()) {
+                bail!(
+                    "leader biography file {} has a fallback for unpublished language {locale}",
+                    path.display()
+                );
+            }
+        }
+    }
+    if used_articles.len() != articles.len() {
+        let unused_language = articles
+            .keys()
+            .find(|language| !used_articles.contains(language.as_str()))
+            .map(String::as_str)
+            .unwrap_or("<unknown>");
+        bail!(
+            "leader biography file {} has an unused article for language {unused_language}/{leader_id}",
+            path.display()
+        );
+    }
+    for (language, article) in articles {
+        let fingerprint = serde_json::to_string(article)?;
+        if !distinct_articles.insert(fingerprint) {
+            bail!(
+                "leader biography file {} duplicates another stored article for language {language}/{leader_id}",
+                path.display()
+            );
+        }
+    }
+    Ok(biographies)
+}
+
+fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
+    let site = root.join("sow-web/site");
+    let biography_directory = site.join("leader-bios");
+    let expected_leaders = sow_core::player::Leader::all()
+        .map(|leader| leader.id())
+        .collect::<std::collections::HashSet<_>>();
+    let published_languages = sow_i18n::Language::published_registry()
+        .map(|(_, code, _)| code)
+        .collect::<Vec<_>>();
+    let mut biography_files = std::collections::HashSet::new();
+    for entry in fs::read_dir(&biography_directory).with_context(|| {
+        format!(
+            "read leader biography directory {}",
+            biography_directory.display()
+        )
+    })? {
+        let path = entry?.path();
+        if path.extension().and_then(std::ffi::OsStr::to_str) != Some("toml") {
+            continue;
+        }
+        if !path.is_file() {
+            bail!("leader biography path is not a file: {}", path.display());
+        }
+        let id = path
+            .file_stem()
+            .and_then(std::ffi::OsStr::to_str)
+            .with_context(|| {
+                format!("leader biography filename is not UTF-8: {}", path.display())
+            })?;
+        if !expected_leaders.contains(id) {
+            bail!(
+                "leader biography file {} has unknown leader ID {id}",
+                path.display()
+            );
+        }
+        biography_files.insert(id.to_owned());
+    }
+    let mut distinct_articles = std::collections::HashSet::new();
+    let mut biographies = published_languages
+        .iter()
+        .map(|code| {
+            (
+                (*code).to_owned(),
+                serde_json::Value::Object(serde_json::Map::new()),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>();
+    for leader in sow_core::player::Leader::all() {
+        let id = leader.id();
+        let path = biography_directory.join(format!("{id}.toml"));
+        if !biography_files.contains(id) {
+            bail!("leader biography file is missing: {}", path.display());
+        }
+        let resolved =
+            load_leader_biography(&path, id, &published_languages, &mut distinct_articles)?;
+        for code in &published_languages {
+            let article = resolved.get(*code).with_context(|| {
+                format!("leader biography locale missing after load: {code}/{id}")
+            })?;
+            biographies
+                .get_mut(*code)
+                .and_then(serde_json::Value::as_object_mut)
+                .with_context(|| format!("leader biography output locale is invalid: {code}"))?
+                .insert(id.to_owned(), article.clone());
+        }
+    }
     let sagas: toml::Value = fs::read_to_string(site.join("leader-sagas.toml"))?
         .parse()
         .context("parse original leader sagas")?;
@@ -5574,7 +5735,11 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
     if html.contains("<iframe") || html.contains("href=\"https://") {
         bail!("poki bundle must not own an iframe or direct external href");
     }
-    if sdk.contains("rewardedBreak") {
+    // A rewarded video must pay something: the only consumer is the
+    // post-match double-reward offer, which asks the server to pay it.
+    if sdk.contains("rewardedBreak")
+        && !(html.contains("SOW_portalRewardedBreak") && html.contains("double_match_reward"))
+    {
         bail!("poki bridge must not request rewardedBreak without a product reward");
     }
     for forbidden in POKI_FORBIDDEN_MARKERS.iter().copied().chain([
@@ -7834,6 +7999,50 @@ mod tests {
                 );
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn leader_biographies_require_explicit_locales_and_fallbacks() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("sample_hero.toml");
+        let article = r#"[articles.en]
+lang = "en"
+url = "https://example.com/hero"
+intro = []
+shortArticle = true
+"#;
+
+        fs::write(&path, format!("{article}\n[fallbacks]\nfr = \"en\"\n"))?;
+        let mut distinct_articles = std::collections::HashSet::new();
+        let resolved =
+            load_leader_biography(&path, "sample_hero", &["en", "fr"], &mut distinct_articles)?;
+        assert_eq!(resolved["en"], resolved["fr"]);
+
+        fs::write(&path, article)?;
+        let error = load_leader_biography(
+            &path,
+            "sample_hero",
+            &["en", "fr"],
+            &mut std::collections::HashSet::new(),
+        )
+        .expect_err("missing French biography must fail");
+        let message = format!("{error:#}");
+        assert!(message.contains(path.to_str().context("temporary path is not UTF-8")?));
+        assert!(message.contains("fr/sample_hero"));
+
+        fs::write(&path, format!("{article}\n[fallbacks]\nfr = \"de\"\n"))?;
+        let error = load_leader_biography(
+            &path,
+            "sample_hero",
+            &["en", "fr"],
+            &mut std::collections::HashSet::new(),
+        )
+        .expect_err("broken French fallback must fail");
+        let message = format!("{error:#}");
+        assert!(message.contains(path.to_str().context("temporary path is not UTF-8")?));
+        assert!(message.contains("fr/sample_hero"));
+        assert!(message.contains("de"));
         Ok(())
     }
 

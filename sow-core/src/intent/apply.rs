@@ -3,6 +3,7 @@ use crate::diplomacy::{
     TRAITOR_STATUS_TICKS, alliance_can_renew,
 };
 use crate::engine::SowEngine;
+use crate::execution::hero_effects::allied;
 use crate::geo_entities::Source;
 use crate::player::PlayerType;
 use crate::protocol::{GameplayIntent, StampedIntent};
@@ -27,6 +28,7 @@ impl SowEngine {
         }
         let proposers = self.campaign_alliance_members(proposer);
         let targets = self.campaign_alliance_members(target);
+        let new_alliance = !allied(&self.state, proposer, target);
         for proposer_id in proposers {
             for &target_id in &targets {
                 if proposer_id == target_id
@@ -96,6 +98,9 @@ impl SowEngine {
                 }
                 self.retreat_mutual_aggression(proposer_id, target_id);
             }
+        }
+        if new_alliance {
+            self.hero_alliance_formed(proposer, target);
         }
     }
 
@@ -220,22 +225,23 @@ impl SowEngine {
                 });
         }
 
-        let allied = relation == crate::protocol::CampaignRelation::Allied;
+        let is_allied = relation == crate::protocol::CampaignRelation::Allied;
+        let new_alliance = is_allied && !allied(&self.state, human_id, target_id);
         if let Some(human) = self.state.player_mut(human_id) {
             human.alliances.retain(|&id| id != target_id);
             human.alliance_timers.remove(&target_id);
-            if allied {
+            if is_allied {
                 human.alliances.push(target_id);
             }
         }
         if let Some(target) = self.state.player_mut(target_id) {
             target.alliances.retain(|&id| id != human_id);
             target.alliance_timers.remove(&human_id);
-            if allied {
+            if is_allied {
                 target.alliances.push(human_id);
             }
         }
-        if allied {
+        if is_allied {
             if self.state.config.campaign_support.is_some()
                 && self.campaign_support_intervals.contains_key(&target_id)
             {
@@ -248,6 +254,9 @@ impl SowEngine {
         }
         self.campaign_relations.insert(target_id, relation);
         self.campaign_contact_resolved.insert(target_id);
+        if new_alliance {
+            self.hero_alliance_formed(human_id, target_id);
+        }
     }
 
     pub fn apply_intents(&mut self, intents: &[StampedIntent]) {
@@ -336,7 +345,7 @@ impl SowEngine {
 
     /// Troops the payer can give the receiver now. The payer keeps one troop and the
     /// receiver never goes past its max, so whatever does not fit stays with the payer.
-    fn troops_transferable(&self, payer: u16, receiver: u16, requested: f64) -> f64 {
+    pub(crate) fn troops_transferable(&self, payer: u16, receiver: u16, requested: f64) -> f64 {
         let spare = self
             .state
             .player(payer)
@@ -929,6 +938,7 @@ impl SowEngine {
                                 gold: actual_g,
                                 troops: actual_t,
                             });
+                        self.hero_shared_feast(sender, target, actual_t);
                     } else if self
                         .state
                         .player(sender)

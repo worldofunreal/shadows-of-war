@@ -1,0 +1,99 @@
+[articles.en]
+text = "Napoleon Bonaparte, was Emperor of the French from 18 May 1804 until his first abdication in 1814, with a brief restoration during the Hundred Days in 1815. He rose to prominence as a general during the French Revolution and led a series of military campaigns across Europe and the Middle East during the French Revolutionary and Napoleonic Wars."
+title = "Napoleon"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Napoleon"
+intro = [
+  "Napoleon Bonaparte (born Napoleone di Buonaparte; 15 August 1769 – 5 May 1821), was Emperor of the French from 18 May 1804 until his first abdication in 1814, with a brief restoration during the Hundred Days in 1815. He rose to prominence as a general during the French Revolution and led a series of military campaigns across Europe and the Middle East during the French Revolutionary and Napoleonic Wars. As a statesman, he implemented numerous legal and administrative reforms in France and Europe.",
+  "Born on the island of Corsica to a family of Italian origin, Napoleon moved to mainland France in 1779 and was commissioned as an officer in the French Royal Army in 1785. He supported the French Revolution in 1789 and promoted its cause in Corsica. He rose rapidly through the ranks after winning the siege of Toulon in 1793 and defeating royalist insurgents in Paris on 13 Vendémiaire in 1795. In 1796 he commanded a military campaign against the Austrians and their Italian allies in the War of the First Coalition, scoring decisive victories and becoming a national hero. He led an invasion of Egypt and Syria in 1798, which served as a springboard for his rise to political power. In November 1799 Napoleon engineered the Coup of 18 Brumaire against the French Directory and became First Consul of the Republic. He won the Battle of Marengo in 1800, which secured France's victory in the War of the Second Coalition, and in 1803 he sold the territory of Louisiana to the United States. In December 1804 Napoleon crowned himself Emperor of the French, further consolidating his power.",
+  "The breakdown of the Treaty of Amiens led to the War of the Third Coalition by 1805. Napoleon shattered the coalition with a decisive victory at the Battle of Austerlitz, which led to the dissolution of the Holy Roman Empire. In the War of the Fourth Coalition, Napoleon defeated Prussia at the Battle of Jena–Auerstedt in 1806, marched his Grande Armée into Eastern Europe, and defeated the Russians in 1807 at the Battle of Friedland. Seeking to extend his trade embargo against Britain, Napoleon invaded the Iberian Peninsula and installed his brother Joseph as King of Spain in 1808, provoking the Peninsular War. In 1809 the Austrians again challenged France in the War of the Fifth Coalition, during which Napoleon consolidated his dominance over Europe after winning the Battle of Wagram. In the summer of 1812 he launched an invasion of Russia. After forcing the Russians to abandon Moscow following the Battle of Borodino, Napoleon briefly occupied the city before conducting a catastrophic retreat of his army that winter. In 1813 Prussia and Austria joined Russia in the War of the Sixth Coalition, in which Napoleon was decisively defeated at the Battle of Leipzig. The coalition invaded France and captured Paris, forcing Napoleon to abdicate in April 1814. He was exiled to the Mediterranean island of Elba and the Bourbons were restored to power. Ten months later Napoleon escaped from Elba with around a thousand men and marched on Paris, reclaiming control of the country. His opponents responded by forming a Seventh Coalition, which defeated him at the Battle of Waterloo in June 1815. Napoleon was exiled to the remote island of Saint Helena in the South Atlantic, where he died of stomach cancer in 1821, aged 51.",
+  "Since his death, Napoleon has maintained a prominent place in historical research and popular culture. He is considered one of the greatest military commanders in history, and Napoleonic tactics are still studied at military schools worldwide. His legacy endures through the legal and administrative reforms he enacted in France and Western Europe, most notably the Napoleonic Code. He established a system of public education, abolished the vestiges of feudalism, emancipated Jews and other religious minorities, abolished the Spanish Inquisition, enacted the principle of equality before the law for an emerging middle class, and centralized state power at the expense of religious authorities. His conquests also acted as a catalyst for political change and the development of nation-states. However, he remains controversial because of his role in wars that devastated Europe, his looting of conquered territories, and his mixed record on civil rights. He abolished the free press, ended directly elected representative government, exiled and imprisoned critics of his regime, reinstated slavery in French colonies, banned the entry of black people and mulattos into France, reduced the civil rights of women and children, reintroduced a hereditary monarchy and nobility, and violently repressed popular uprisings against his rule.",
+]
+sections = [
+  { "title" = "Early life", "paragraphs" = [
+      "Napoleon's family was of Italian origin. His paternal ancestors, the Buonapartes, descended from a minor Tuscan noble family who emigrated to Corsica in the 16th century. His maternal ancestors, the Ramolinos, descended from a noble family from Lombardy. Napoleon's parents, Carlo Maria Buonaparte and Maria Letizia Ramolino, lived in the Maison Bonaparte in Ajaccio, where Napoleon was born on 15 August 1769. He had an elder brother, Joseph, and six younger siblings: Lucien, Elisa, Louis, Pauline, Caroline, and Jérôme. Five more siblings were stillborn or did not survive infancy. Napoleon was baptized as a Catholic under the name Napoleone di Buonaparte. In his youth, his name was also spelled as Nabulione, Nabulio, Napolionne, and Napulione.",
+      "Napoleon was born one year after the Republic of Genoa ceded Corsica to France through the Treaty of Versailles. His father supported Pasquale Paoli during the Corsican war of independence against France. After the Corsican defeat at the Battle of Ponte Novu in 1769 and Paoli's exile to Britain, Carlo became friends with the French governor Charles Louis de Marbeuf, who became his patron and a godfather to Napoleon. With Marbeuf's support, Carlo was named Corsican representative to the court of Louis XVI, and Napoleon obtained a royal bursary to a military academy in mainland France.",
+      "The dominant influence of Napoleon's childhood was his mother, whose firm discipline restrained a rambunctious child. Later in life, Napoleon said, \"The future destiny of the child is always the work of the mother.\" Napoleon's noble, moderately affluent background afforded him greater opportunities to study than were available to a typical Corsican of the time.",
+    ] },
+  { "title" = "Early career", "paragraphs" = [
+      "Upon graduating in September 1785, Bonaparte was commissioned a second lieutenant in La Fère artillery regiment. Bonaparte served in Valence and Auxonne until after the outbreak of the French Revolution in 1789 but spent long periods of leave in Corsica, which fed his Corsican nationalism. In September 1789 he returned to Corsica and promoted the French revolutionary cause. Paoli returned to the island in July 1790, but he had no sympathy for Bonaparte, as he deemed his father a traitor for having deserted the cause of Corsican independence.",
+      "Bonaparte plunged into a complex three-way struggle among royalists, revolutionaries, and Corsican nationalists. He became a supporter of the Jacobins and joined the pro-French Corsican Republicans who opposed Paoli's policy and his aspirations to secede. He was given command over a battalion of Corsican volunteers and promoted to captain in the regular army in 1792, despite exceeding his leave of absence and a dispute between his volunteers and the French garrison in Ajaccio.",
+      "In February 1793 Bonaparte took part in the failed French expedition to Sardinia. Following allegations that Paoli had sabotaged the expedition and that his regime was corrupt and incompetent, the French National Convention outlawed him. In early June, Bonaparte and 400 French troops failed to capture Ajaccio from Corsican volunteers, and the island came under the control of Paoli's supporters. When Bonaparte learned that the Corsican assembly had condemned him and his family, the Buonapartes fled to Toulon on the French mainland.",
+    ] },
+  { "title" = "Ruler of France", "paragraphs" = [
+      "Unknown to Bonaparte, the Directory had sent him orders to return from Egypt with his army to ward off a possible invasion of France, but these messages never arrived. By the time he reached Paris in October, France's situation had been improved by a series of victories. The republic, however, was bankrupt, and the ineffective Directory was unpopular. Despite the failures in Egypt, Bonaparte returned to a hero's welcome. The Directory discussed Bonaparte's desertion but was too weak to punish him.",
+      "Bonaparte formed an alliance with Talleyrand and leading members of the Council of Five Hundred and Directory—Lucien Bonaparte, Emmanuel Joseph Sieyès, Roger Ducos and Joseph Fouché—to overthrow the government. On 9 November 1799 (18 Brumaire according to the revolutionary calendar), the conspirators launched a coup and the following day, backed by grenadiers with fixed bayonets, forced the Council of Five Hundred to dissolve the Directory and appoint Bonaparte, Sieyès and Ducos provisional consuls.",
+      "On 13 December, Bonaparte introduced the Constitution of the Year VIII, under which three consuls were appointed for 10 years. Real power lay with Bonaparte as first consul, and his preferred candidates Cambacérès and Charles-François Lebrun were appointed as second and third consuls who only had an advisory role. The constitution also established a Legislative Body and Tribunate which were selected from indirectly elected candidates, and a Senate and Council of State which were effectively nominated by the executive. The constitution was approved by plebiscite on 7 February 1800. The official count was over three million in favour and 1,562 against. Lucien, however, had doubled the count of the \"yes\" vote to give the false impression that a majority of those eligible to vote had approved the constitution.",
+    ] },
+  { "title" = "Exile on Saint Helena", "paragraphs" = [
+      "Napoleon was held in British custody and transferred to the island of Saint Helena in the Atlantic Ocean, 1,870 km (1,010 nmi) from the west coast of Africa. Napoleon and 27 followers arrived at Jamestown in October 1815 on board HMS Northumberland. The prisoner was guarded by a garrison of 2,100 soldiers while a squadron of 10 ships continuously patrolled the waters to prevent escape. In the following years, there were rumours of escape plots, but no serious attempts were ever made.",
+      "Napoleon stayed for two months at a pavilion in Briars before he was moved to Longwood House, a 40-room wooden bungalow. The location and interior of the house were damp, windswept, rat-infested and unhealthy. The Times published articles insinuating the British government was trying to hasten his death. Napoleon often complained of his living conditions in letters to the island's governor Hudson Lowe while his attendants complained of \"colds, catarrhs, damp floors and poor provisions\".",
+      "Napoleon insisted on imperial formality. When he held a dinner party, men were expected to wear military dress and \"women [appeared] in evening gowns and gems. It was an explicit denial of the circumstances of his captivity\". He formally received visitors, read, and dictated his memoirs and commentaries on military campaigns. He studied English under Emmanuel, comte de Las Cases, for a few months but gave up as he was poor at languages.",
+    ] },
+  { "title" = "Memory and evaluation", "paragraphs" = [
+      "There is debate over whether Napoleon was \"an enlightened despot who laid the foundations of modern Europe\" or \"a megalomaniac who wrought greater misery than any man before the coming of Hitler\". He was compared to Adolf Hitler by Pieter Geyl in 1947 and Claude Ribbe in 2005. Most modern critics of Napoleon, however, reject the Hitler comparison, arguing that Napoleon did not commit genocide and did not engage in the mass murder and imprisonment of his political opponents. Nevertheless, David A. Bell and McLynn condemn his killing of 3,000–5,000 Turkish prisoners of war in Syria.",
+      "Historians have argued that his expansionist foreign policy was a major factor in the Napoleonic wars, which cost six million lives and caused economic disruption for a generation. McLynn and Correlli Barnett suggest that Napoleon's reputation as a military genius is exaggerated. Cobban and Susan P. Conner argue that Napoleon had insufficient regard for the lives of his soldiers and that his battle tactics led to excessive casualties.",
+      "Critics also cite Napoleon's exploitation of conquered territories. To finance his wars, Napoleon increased taxes and levies of troops from annexed territories and satellite states. He also introduced discriminatory tariff policies which promoted French trade at the expense of allies and satellite states. He institutionalized plunder: French museums contain art stolen by Napoleon's forces from across Europe. Artefacts were brought to the Musée du Louvre for a grand central museum, an example which would later be followed by others.",
+    ] },
+]
+
+[articles.ko]
+text = "나폴레옹 보나파르트(프랑스어: Napoléon Bonaparte, 코르시카어: Napoleone di Buonaparte, 이탈리아어: Napoleone Bonaparte, 독일어: Napoleon Bonaparte, 1769년 8월 15일 ~ 1821년 5월 5일)는 프랑스 제1공화국의 군인이자 1804년부터 1814년, 1815년까지 프랑스 제1제국의 황제였다. 흔히 나폴레옹(프랑스어: Napoléon)으로 불린다."
+title = "나폴레옹 보나파르트"
+lang = "ko"
+url = "https://ko.wikipedia.org/wiki/%EB%82%98%ED%8F%B4%EB%A0%88%EC%98%B9_%EB%B3%B4%EB%82%98%ED%8C%8C%EB%A5%B4%ED%8A%B8"
+intro = [
+  "나폴레옹 보나파르트(프랑스어: Napoléon Bonaparte, 코르시카어: Napoleone di Buonaparte, 이탈리아어: Napoleone Bonaparte, 독일어: Napoleon Bonaparte, 1769년 8월 15일 ~ 1821년 5월 5일)는 프랑스 제1공화국의 군인이자 1804년부터 1814년, 1815년까지 프랑스 제1제국의 황제였다. 흔히 나폴레옹(프랑스어: Napoléon)으로 불린다.",
+  "코르시카 섬의 하급 귀족 가문 출신의 군인으로, 프랑스 혁명 시기에 벌어진 전쟁에서 큰공을 세우며 국민적 영웅이 되었고, 쿠데타를 통해 제1통령이 된후 종신통령을 거쳐서 황제에 즉위했다. 그가 남긴 나폴레옹 법전은 전 세계의 민법에 많은 영향을 미쳤다. 또한 그는 군사적으로 현대전에까지 영향을 끼쳤고(클라우제비츠, 투하체프스키, 슐리펜 계획) 전술과 전략, 훈련, 조직, 군수, 의복과 포상 제도를 발전시켰다. 그의 프랑스 육군은 효율적으로 조직된 군대로 평가된다.",
+  "나폴레옹은 파리 육군사관학교에 재학중에 육군 포병 소위로 임관하였다. 프랑스 제1공화국 시절인 1793년에 툴롱 포위전에 참여하여 승리를 이끈후 준장으로 진급하여 24살에 장군이 되었다. 1796년에는 이탈리아 원정에서 대성공을 거두는 등 제1차 대프랑스 동맹 전쟁에서 강력한 반 프랑스 동맹군을 상대로 연승하면서 군인으로서 승승장구하였다.",
+  "19세기의 첫 10년 동안 나폴레옹이 이끄는 프랑스는 나폴레옹 전쟁을 주도하였다. 유럽의 강대국들을 상대로 많은 승리를 거두었으며 이를 통해 프랑스가 유럽의 패권국가 자리에 오르게 만들었다. 이후 나폴레옹은 유럽의 각국들을 분할하고 서로 견제하게 만들었고, 자신의 측근들과 친척들을 유럽 다른 나라들을 통치하게 해 프랑스의 위상을 유지했다.",
+]
+sections = [
+  { "title" = "어린 시절", "paragraphs" = [
+      "나폴레옹은 1769년 8월 15일, 이탈리아 서쪽의 코르시카 섬의 아작시오에서 8명의 자녀 중 둘째 아들로 태어났다. 나폴레옹의 출생시 이름은 나브리오네 디 부오나파르테(이탈리아어: Nabulione di Buonaparte)였다. 이름을 나브리오네로 지은 것은 요절한 장남인 나브리오네에서 따온 것이다. 그의 가문은 본래 이탈리아 토스카나 지역의 하급 귀족 가문으로 16세기에 코르시카로 이주했다. 아버지는 변호사이며 귀족회의 의원인 카를로 마리아 디 부오나파르테(프랑스식 이름은 샤를 마리 보나파르트Charles Marie Bonaparte)였으며, 어머니는 마리아 레티치아 라몰리노였다. 보나파르트 가문은 조상대대로 법조인을 많이 배출한 법률가 가문으로 나폴레옹의 아버지도 피사 대학에서 법률을 공부했다. 어머니의 출신 가문은 전통적으로 군인 집안이었다.",
+      "나폴레옹이 태어날 당시 코르시카 섬는 격변기속에 매우 혼란스러웠다. 제노바의 지배로부터 벗어나려는 코르시카인들의 오랜 독립투쟁이 있었고 1755년 독립운동가 파올리가 섬의 대부분을 점령한후 코르시카 공화국을 선포하면서 빛을 발하는 듯 했다. 이들을 진압할 능력이 없었던 제노바는 1768년에 베르사유 조약을 통해 프랑스에게 통치권을 양도하였다.",
+      "통치권 행사를 위해 프랑스가 코스시카를 침공하자 파올리의 지휘아래 코르시카인들은 무력으로 저항하였으나 1769년 5월 퐁트노보 전투에서 결정적으로 패배하면서 전세가 기울고 말았다. 파올리는 프랑스가 제시한 항복조건을 수용한후 영국으로 망명하였고 독립투쟁에 참여하였던 나폴레옹의 아버지 카를로는 임신 6개월 째인 아내를 두고 파울리를 따라 갈 수 없었던 것으로 보인다. 이때 아내의 배 속에 있던 아이가 바로 나폴레옹이었다.",
+    ] },
+  { "title" = "군사 학교 시절", "paragraphs" = [
+      "오탱 종교학교에서 4개월간 프랑스어를 배운 후 형 조제프와 이별하고 1779년 5월에 브리엔 군사학교에 입학했다. 브리엔 군사학교는 가난한 귀족 자제들에게 무상 교육을 제공하는 곳으로 입학경쟁율이 높았지만, 당시 코르시카의 총독이었던 마르뵈프 백작의 특별한 도움으로 입학할 수 있었다. 1784년 10월에 파리 육군사관학교에 입학했다.",
+      "나폴레옹은 4년 교육과정인 파리 육군사관 학교를 11개월만에 조기졸업하였다. 1785년 2월 24일 아버지 카를로가 위암으로 사망하여 수입이 끊기자 어머니는 생활고에 시달렸다. 나폴레옹은 고향에 있는 가족들의 생계를 책임지고자 일찍 직업군인이 되기로 결심하고 포병장교 임용시험을 준비한다. 통상 시험준비를 2년정도는 하는 편인데 나폴레옹은 7개월 가량 준비한 끝에 1785년 9월 총 합격자 58명 중 42등으로 시험에 합격했다.",
+    ] },
+  { "title" = "군인 시절", "paragraphs" = [
+      "1785년 9월, 16세의 나이에 소위로 임관한 나폴레옹은 10월 28일 파리 육군사관학교를 떠나 같은 해 11월 3일 발랑스에 주둔하고 있던 라페르 연대에 포병장교로 부임했다. 마송 도트브리브 대위의 포격 중대에 배치된 후 포병대 수습장교로서 10주간 기본훈련을 받았다. 훈련을 이수한 후 주어진 임무는 그다지 번거롭지 않았다. 병사관리, 수학, 포대 진지 구축, 화학, 물리학 강의를 듣는 것이었다. 군복무는 시간적으로 여유가 있었기 때문에 독서를 많이 했는데 주로 역사, 철학, 포병기술에 관한 책들을 많이 보았다. 퇴근후에는 소설을 습작하기도 했고 휴가를 받아 집을 떠나온 지 8년 만에 고향에 다녀오기도 했다. 1788년에는 라페르 연대가 오손으로 주둔지를 옮기자 그곳에서 근무를 하였다. 급여의 대부분은 고향집에 송금하였기 때문에 경제적으로는 궁핍하여 허름한 하숙집에서 생활하는 등 여유가 없는 편이었다. 그의 초임 장교시절에는 두각을 나타내거나 뛰어나지는 못했다.",
+      "1789년 7월 혁명이 발발하자 오손(Autun)에도 혼란스러운 일들이 벌어졌다. 민란이 일어나 과세 대장을 불태우고 총괄징세청부업자의 사무실이 파괴되기도 했다. 8월에는 혁명 주도세력인 제헌의회에 의해 봉건제가 폐지되고 인권선언이 발표되었다. 자유와 평등을 비롯한 혁명사상이 널리 퍼지며 군대 내부 분위기도 어수선해졌다. 바로 수습되기는 했으나 군기가 문란해져서 사병들이 장교를 농락하는 일도 벌어졌다.",
+      "나폴레옹은 휴가를 얻어 9월말에 귀향하였고 사면받은 후 돌아온 파올리와 함께 혁명으로 어수선해진 코르시카를 안정시키고자 노력했다. 피사대학교에서 법률 공부를 마치고 돌아와 있던 형 조제프를 지방의회 의원으로 당선시켰고 자신은 의용대의 부사령관이 되었다. 혁명정부는 부족한 병력보강을 위해 지방의회의 의용군 모집과 현역장교가 의용군 지휘관으로 활동하는 이중군적을 허용했기에 나폴레옹의 활동에는 문제가 없었다.",
+    ] },
+  { "title" = "브뤼메르 쿠데타", "paragraphs" = [
+      "나폴레옹이 이집트 원정에 나간 동안 프랑스는 국제적으로 사면초가에 빠져 있었다. 영국과 오스트리아가 다시 동맹을 맺고 프랑스의 왕정복고를 명분으로 프랑스를 위협하였다. 이때 주변 상황을 면밀히 파악하던 나폴레옹은 다음 원정인 인도 원정을 취소했다. 8월 프랑스 해군이 아부키르 만에서 호라시오 넬슨의 영국 함대에 패하고 프랑스 지중해 함대 주력이 전멸한다. 이 승리로 영국 해군이 해당지역의 제해권을 장악하게 되고 나폴레옹의 이집트 원정은 큰 차질을 빚게 된다. 프랑스 해군 전열함들이 전멸 당하고 두 척만 남게 되어 나폴레옹과 이집트 원정군은 고립되고 만다. 한편 프랑스가 대불동맹군에게 연패하며 위험에 처했다는 소식을 접한 나폴레옹은 클레베르 장군에게 원정군을 맡기고, 혁명 정부의 명령도 받지 않은 상태에서 이집트에서 탈출하여 10월에 프랑스로 귀국하였다.",
+      "나폴레옹의 행위는 탈영에 해당되었으나 당시 총재정부는 이를 처벌할 힘이 없었고, 정국은 극히 혼란스러운 상태였다. 나폴레옹은 혁명정부의 권력자 시에예스와 함께 쿠데타를 공모한후, 동생인 오백인회 의장 루시앵과 탈레랑의 도움으로 1799년 11월 9일 의사당에서 자신의 정부를 승인할 것을 요청하였다. 오백인회가 이를 거부하자 나폴레옹은 군대를 동원하여 쿠데타를 일으켰다. 오백인회를 해산시킨후 헌법을 폐기하고 3명의 통령을 두는 새 헌법을 만들어 1800년 2월 7일에 국민 투표에 부쳤다. 찬성 300만 표, 반대 1,567표가 나와 통과되었다. 물론 재산제한선거에 유권자수 약 700만명중 다수가 기권하였고 비밀투표가 아니었으며 투표결과는 내무장관이었던 루시앵에 의해 조작된 결과였다.",
+      "나폴레옹은 개인적인 인기를 등에 업고 프랑스 원로원으로부터 10년 임기의 제1통령으로 임명되었으며, 이로서 불과 30세 나이에 사실상 프랑스 정권을 자신의 손아귀에 넣었다. 통령 정부는 3명의 통령으로 구성되어 있었으나, 실질적으로 제2통령과 제3통령은 명예직에 불과하였고 권력은 제1통령인 나폴레옹에게 있었다. 제2통령은 법무, 제3통령은 재정을 책임지는 반면, 제1통령은 내정과 외교, 군사 등을 책임졌으므로 그 권한은 다른 통령에 비하여 더욱 막강하였다.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

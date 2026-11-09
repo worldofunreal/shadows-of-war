@@ -600,6 +600,10 @@
                 if (typeof wasm.SOW_wake_event_loop === "function") {
                     window.SOW_wake_event_loop = wasm.SOW_wake_event_loop;
                 }
+                if (typeof wasm.sow_set_portal_audio_muted === "function") {
+                    window.SOW_setPortalAudioMuted = wasm.sow_set_portal_audio_muted;
+                    wasm.sow_set_portal_audio_muted(!!(window.SOW_adPlaying || window.SOW_PORTAL_MUTE_AUDIO));
+                }
                 if (typeof wasm.sow_menu_command === "function") {
                     window.SOW_menu_command = wasm.sow_menu_command;
                     window.SOW_MENU_READY = true;

@@ -4,7 +4,9 @@
 //! - **Crowns** — the free spendable currency (leader unlocks, store).
 //! - **Laurels** — achievement points. Earned, never spent; the Google Play
 //!   "Laurel Hoard" achievement tracks them.
-//! Gems are the premium currency and are never produced here.
+//!
+//! Gems are the premium currency. Matches pay a small, server-verified gem
+//! bonus (`match_gems`); purchases remain the main source.
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RewardInput {
@@ -25,6 +27,8 @@ pub struct MatchReward {
     pub crowns: u64,
     /// Achievement points (never spent).
     pub laurels: u64,
+    /// Premium currency bonus. Only server-verified public results pay it.
+    pub gems: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -196,20 +200,36 @@ pub fn newly_unlocked_achievements(
     let mut unlocked = already_unlocked.clone();
     let mut newly_unlocked = Vec::new();
     let mut running_laurels = totals.laurels;
-    for achievement in all_achievements() {
-        let progress = if achievement.id == "laurel_hoard" {
-            running_laurels
-        } else {
-            achievement_progress(achievement.id, totals)
-        };
-        if progress >= achievement.target
+    // Point milestones count the points awarded in this same refresh, so they
+    // are checked after every other achievement and until none cascades.
+    for achievement in all_achievements()
+        .iter()
+        .filter(|achievement| achievement.category != "laurels")
+    {
+        if achievement_progress(achievement.id, totals) >= achievement.target
             && unlocked.insert(achievement.id.to_string())
         {
             newly_unlocked.push(*achievement);
             running_laurels = running_laurels.saturating_add(achievement.points);
         }
     }
-    newly_unlocked
+    loop {
+        let before = newly_unlocked.len();
+        for achievement in all_achievements()
+            .iter()
+            .filter(|achievement| achievement.category == "laurels")
+        {
+            if running_laurels >= achievement.target
+                && unlocked.insert(achievement.id.to_string())
+            {
+                newly_unlocked.push(*achievement);
+                running_laurels = running_laurels.saturating_add(achievement.points);
+            }
+        }
+        if newly_unlocked.len() == before {
+            break newly_unlocked;
+        }
+    }
 }
 
 /// Canonical NFTROPOLY/WOU-ID card token for an unlocked achievement. Same
@@ -566,6 +586,7 @@ pub fn calculate(input: RewardInput) -> MatchReward {
             leader_xp: 100,
             crowns: CROWNS_TUTORIAL,
             laurels: 0,
+            gems: 0,
         };
     }
 
@@ -594,7 +615,56 @@ pub fn calculate(input: RewardInput) -> MatchReward {
         // Laurels are achievement points, never match currency. They are
         // awarded only when the server unlocks an achievement.
         laurels: 0,
+        gems: 0,
     }
+}
+
+// Gem bonus per verified match (owner decision 2026-11): a small amount for
+// playing, more for a win, the most for the hardest win (public FFA). Teams,
+// HvN and Ranked 1v1 wins pay half of an FFA win.
+const GEMS_PLAYED: u64 = 3;
+const GEMS_PLAYED_WITH_DEFEATS: u64 = 4;
+const GEMS_WIN_FFA: u64 = 50;
+const GEMS_WIN_SIDE: u64 = 25;
+/// A match shorter than this pays no participation gems unless it was won,
+/// so joining and resigning cannot farm them.
+pub const GEMS_MIN_PLAYED_SECONDS: u32 = 300;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GemInput<'a> {
+    /// Match queue: "Matchmaking", "Custom" or "Ranked1v1".
+    pub queue: &'a str,
+    /// Game mode: "FFA", "Teams" or "HumansVsNations".
+    pub mode: &'a str,
+    pub won: bool,
+    pub players_defeated: u32,
+    pub empires_defeated: u32,
+    pub played_seconds: u32,
+}
+
+/// Gems for one verified participant. Custom lobbies pay none: their host
+/// controls the roster, so a win there proves nothing.
+pub fn match_gems(input: GemInput<'_>) -> u64 {
+    let public = input.queue == "Matchmaking";
+    if !public && input.queue != "Ranked1v1" {
+        return 0;
+    }
+    let mut gems = 0;
+    if input.won || input.played_seconds >= GEMS_MIN_PLAYED_SECONDS {
+        gems = if input.players_defeated.saturating_add(input.empires_defeated) > 0 {
+            GEMS_PLAYED_WITH_DEFEATS
+        } else {
+            GEMS_PLAYED
+        };
+    }
+    if input.won {
+        gems += if public && input.mode == "FFA" {
+            GEMS_WIN_FFA
+        } else {
+            GEMS_WIN_SIDE
+        };
+    }
+    gems
 }
 
 pub fn canonical_leader_name(value: &str) -> Option<String> {
@@ -634,6 +704,29 @@ mod tests {
     }
 
     #[test]
+    fn match_gems_pay_small_play_bonus_and_scale_wins_by_difficulty() {
+        use super::{GEMS_MIN_PLAYED_SECONDS, GemInput, match_gems};
+        let played = GemInput {
+            queue: "Matchmaking",
+            mode: "FFA",
+            played_seconds: GEMS_MIN_PLAYED_SECONDS,
+            ..Default::default()
+        };
+        assert_eq!(match_gems(played), 3);
+        assert_eq!(match_gems(GemInput { players_defeated: 1, ..played }), 4);
+        assert_eq!(match_gems(GemInput { won: true, ..played }), 53);
+        assert_eq!(match_gems(GemInput { won: true, mode: "Teams", ..played }), 28);
+        assert_eq!(
+            match_gems(GemInput { won: true, mode: "HumansVsNations", ..played }),
+            28
+        );
+        assert_eq!(match_gems(GemInput { won: true, queue: "Ranked1v1", ..played }), 28);
+        // Join-and-resign and host-controlled lobbies pay nothing.
+        assert_eq!(match_gems(GemInput { played_seconds: 60, ..played }), 0);
+        assert_eq!(match_gems(GemInput { won: true, queue: "Custom", ..played }), 0);
+    }
+
+    #[test]
     fn tutorial_reward_is_fixed_and_leader_names_are_whitelisted() {
         assert_eq!(
             calculate(RewardInput {
@@ -645,6 +738,7 @@ mod tests {
                 leader_xp: 100,
                 crowns: 100,
                 laurels: 0,
+                gems: 0,
             }
         );
         assert_eq!(canonical_leader_name("Boudica").as_deref(), Some("Boudica"));

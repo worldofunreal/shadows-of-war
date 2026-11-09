@@ -372,6 +372,14 @@ struct StorePurchasesRequest {
 }
 
 #[derive(Deserialize)]
+struct DoubleMatchRewardRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    match_id: String,
+}
+
+#[derive(Deserialize)]
 struct RewardReceiptsAckRequest {
     account_id: String,
     #[serde(default)]
@@ -638,6 +646,38 @@ async fn handle_reward_receipts_ack(
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
         Err(error) => (
             StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /profile/reward-receipts/double — pay a verified match's crowns and
+/// gems once more after the client reports a finished rewarded video.
+/// Portals give the server no proof of the view, so the daily cap in
+/// `double_match_reward` bounds what a forged call can earn.
+async fn handle_double_match_reward(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<DoubleMatchRewardRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    match state.db.double_match_reward(&account_id, &payload.match_id).await {
+        Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
+        Err(error) => (
+            StatusCode::CONFLICT,
             Json(ErrorResponse {
                 error: error.to_string(),
             }),
@@ -1809,6 +1849,10 @@ async fn main() {
         .route(
             "/profile/reward-receipts/ack",
             post(handle_reward_receipts_ack),
+        )
+        .route(
+            "/profile/reward-receipts/double",
+            post(handle_double_match_reward),
         )
         .route(
             "/store/purchases/{purchase_id}",

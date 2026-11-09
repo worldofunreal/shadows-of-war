@@ -109,6 +109,58 @@ pub enum Ability {
     WarshipPrize { percent: u32 },
     /// Armies on either side of an alliance return without land retreat losses.
     Armistice { percent: u32 },
+    /// Upgrading a city to level two establishes a nearby farm.
+    CityFarmFounding,
+    /// Taking an invading rival’s tower transfers a capped share of their gold.
+    CounterLevy { percent: u32, max_gold: u32 },
+    /// Commit reserve troops to intercept one conquest of an allied city center.
+    CityIntercession { troops: u32 },
+    /// Pass a share of retreat survivors to an ally attacking the same enemy.
+    RetreatHandover { percent: u32 },
+    /// A captured upgraded city loses an active level, once per city.
+    CityDenial,
+    /// A foreign trade arrival upgrades a farm near its home port, once per port.
+    PuntGardens,
+    /// Establish a replacement city after the loss of the last active city.
+    LastCityRelocation,
+    /// Equip each ally’s first eligible new land attack from this ruler’s reserves.
+    WarRegalia { troops: u32 },
+    /// Recruit part of a defeated rival’s reserves after a territorial conquest.
+    Reunification { percent: u32 },
+    /// A completed factory supplies discounted city upgrades within twelve tiles.
+    FactoryCityUpgradeDiscount { percent: u32 },
+    /// A land army gains troops for the active levels of each enemy factory it first captures.
+    FactoryRaid { troops_per_level: u32 },
+    /// Matching active city, factory and farm level totals boost factory gold and farm troops.
+    ImperialStandards { percent: u32 },
+    /// Taking an enemy tower demolishes a nearby lower-level tower of the same rival.
+    SiegeBreach,
+    /// Losing an active farm upgrades a nearby completed city once per farm.
+    CookhamExchange,
+    /// A new ally with no active city finishes their oldest city under construction.
+    SecondCrown,
+    /// Completing a farm upgrade halves the remaining time of a nearby city upgrade.
+    KitchenPhilosophy,
+    /// Recruit a share of the troops defeated when countercharging a land attack.
+    MountedCapture { percent: u32 },
+    /// Capturing a city recalls its former owner's largest land attack against a player.
+    AksumRout,
+    /// An allied city matches returning retreat survivors, once per match.
+    TigranesAid { max_troops: u32 },
+    /// Found a free tower near a captured active city without a nearby friendly tower.
+    AkkadGarrison,
+    /// A qualifying troop gift provides capped reinforcements to both farming allies.
+    SharedFeast,
+    /// Two allies forming their own pact renew their timed alliances with the hero.
+    GreatLawOfPeace,
+    /// Taking a neutral plain bordering a rival costs fewer troops.
+    ContestedSteppe { percent: u32 },
+    /// Rival mountain tiles bordering owned highlands require less capture effort.
+    ZagrosAscent { percent: u32 },
+    /// Invaders lose more troops per tile if two different rivals are attacking.
+    RegionalCommands { percent: u32 },
+    /// The hero's highland tiles and adjacent allied highlands are harder to capture.
+    NyabingiNetwork { percent: u32 },
 }
 
 /// Who an attack, conquest or retreat is aimed at. `Larger`, `Smaller`, `Richer`,
@@ -212,6 +264,10 @@ pub enum LossWhen {
     Landing,
     /// Conquering land that the target describes (`{"against": "richer"}`).
     Against(Target),
+    /// Conquering tiles that border an ally who is attacking the same rival by land.
+    JointFront,
+    /// A retreating transport returns to a shore held by its owner.
+    SeaRetreat,
 }
 
 impl Ability {
@@ -233,12 +289,38 @@ impl Ability {
             | Ability::AllyPatronage { percent }
             | Ability::WarshipPrize { percent }
             | Ability::Armistice { percent }
+            | Ability::RetreatHandover { percent }
+            | Ability::Reunification { percent }
+            | Ability::MountedCapture { percent }
+            | Ability::ContestedSteppe { percent }
+            | Ability::ZagrosAscent { percent }
+            | Ability::RegionalCommands { percent }
+            | Ability::NyabingiNetwork { percent }
+            | Ability::FactoryCityUpgradeDiscount { percent }
+            | Ability::ImperialStandards { percent }
+            | Ability::CounterLevy { percent, .. }
             | Ability::EnemyRetreatPenalty { percent, .. } => percent,
             Ability::CoastalFounding
             | Ability::AlliedCityGrant { .. }
             | Ability::CityTowerUpgrade
+            | Ability::CityFarmFounding
+            | Ability::CityDenial
+            | Ability::PuntGardens
+            | Ability::LastCityRelocation
             | Ability::SharedCitySpoils { .. }
             | Ability::CityEvacuation { .. }
+            | Ability::CityIntercession { .. }
+            | Ability::WarRegalia { .. }
+            | Ability::TigranesAid { .. }
+            | Ability::FactoryRaid { .. }
+            | Ability::SiegeBreach
+            | Ability::CookhamExchange
+            | Ability::SecondCrown
+            | Ability::KitchenPhilosophy
+            | Ability::AksumRout
+            | Ability::AkkadGarrison
+            | Ability::SharedFeast
+            | Ability::GreatLawOfPeace
             | Ability::SurplusTreasury { .. }
             | Ability::GuildNetwork { .. } => 0,
         }
@@ -289,25 +371,74 @@ impl Ability {
             Ability::AllyPatronage { .. } => Ability::AllyPatronage { percent: 0 },
             Ability::WarshipPrize { .. } => Ability::WarshipPrize { percent: 0 },
             Ability::Armistice { .. } => Ability::Armistice { percent: 0 },
+            Ability::RetreatHandover { .. } => Ability::RetreatHandover { percent: 0 },
+            Ability::CounterLevy { .. } => Ability::CounterLevy {
+                percent: 0,
+                max_gold: 0,
+            },
             Ability::AlliedCityGrant { .. } => Ability::AlliedCityGrant { gold: 0 },
             Ability::SharedCitySpoils { .. } => Ability::SharedCitySpoils { gold: 0 },
             Ability::CityEvacuation { .. } => Ability::CityEvacuation { troops: 0 },
+            Ability::CityIntercession { .. } => Ability::CityIntercession { troops: 0 },
+            Ability::WarRegalia { .. } => Ability::WarRegalia { troops: 0 },
+            Ability::Reunification { .. } => Ability::Reunification { percent: 0 },
+            Ability::MountedCapture { .. } => Ability::MountedCapture { percent: 0 },
+            Ability::ContestedSteppe { .. } => Ability::ContestedSteppe { percent: 0 },
+            Ability::ZagrosAscent { .. } => Ability::ZagrosAscent { percent: 0 },
+            Ability::RegionalCommands { .. } => Ability::RegionalCommands { percent: 0 },
+            Ability::NyabingiNetwork { .. } => Ability::NyabingiNetwork { percent: 0 },
+            Ability::TigranesAid { .. } => Ability::TigranesAid { max_troops: 0 },
+            Ability::ImperialStandards { .. } => Ability::ImperialStandards { percent: 0 },
+            Ability::FactoryRaid { .. } => Ability::FactoryRaid {
+                troops_per_level: 0,
+            },
+            Ability::FactoryCityUpgradeDiscount { .. } => {
+                Ability::FactoryCityUpgradeDiscount { percent: 0 }
+            }
             Ability::SurplusTreasury { .. } => Ability::SurplusTreasury { troops_per_gold: 0 },
             Ability::GuildNetwork { .. } => Ability::GuildNetwork { gold_per_second: 0 },
-            Ability::CoastalFounding | Ability::CityTowerUpgrade => self,
+            Ability::CoastalFounding
+            | Ability::CityTowerUpgrade
+            | Ability::CityFarmFounding
+            | Ability::CityDenial
+            | Ability::PuntGardens
+            | Ability::LastCityRelocation
+            | Ability::SiegeBreach
+            | Ability::CookhamExchange
+            | Ability::SecondCrown
+            | Ability::KitchenPhilosophy
+            | Ability::AksumRout
+            | Ability::AkkadGarrison
+            | Ability::SharedFeast
+            | Ability::GreatLawOfPeace => self,
         }
     }
 
     /// The visual family of this ability: the colour its effect is shown in.
     pub fn cue(self) -> Cue {
         match self {
-            Ability::AttackStrength { .. } | Ability::DefenseStrength { .. } => Cue::Strength,
-            Ability::ConquestSpeed { .. } => Cue::Conquest,
+            Ability::AttackStrength { .. }
+            | Ability::DefenseStrength { .. }
+            | Ability::RegionalCommands { .. } => Cue::Strength,
+            Ability::ConquestSpeed { .. }
+            | Ability::Reunification { .. }
+            | Ability::MountedCapture { .. }
+            | Ability::ContestedSteppe { .. }
+            | Ability::ZagrosAscent { .. }
+            | Ability::FactoryRaid { .. } => Cue::Conquest,
             Ability::ResourceBonus { .. } => Cue::Income,
             Ability::TowerLoss { .. } | Ability::TowerRange { .. } => Cue::Tower,
             Ability::CityCapture { .. }
             | Ability::CityDefense { .. }
             | Ability::CityTroopCapacity { .. } => Cue::City,
+            Ability::AttackerLoss {
+                when: LossWhen::JointFront,
+                ..
+            } => Cue::Alliance,
+            Ability::AttackerLoss {
+                when: LossWhen::SeaRetreat,
+                ..
+            } => Cue::Naval,
             Ability::AttackerLoss { .. } => Cue::Losses,
             Ability::AllianceCost { .. } => Cue::Alliance,
             Ability::WarshipCost { .. } => Cue::Naval,
@@ -316,11 +447,30 @@ impl Ability {
             Ability::AlliedCityGrant { .. }
             | Ability::SharedCitySpoils { .. }
             | Ability::Armistice { .. }
+            | Ability::WarRegalia { .. }
+            | Ability::SecondCrown
+            | Ability::TigranesAid { .. }
+            | Ability::SharedFeast
+            | Ability::GreatLawOfPeace
+            | Ability::NyabingiNetwork { .. }
             | Ability::AllyPatronage { .. } => Cue::Alliance,
-            Ability::CityTowerUpgrade => Cue::Tower,
-            Ability::CityEvacuation { .. } => Cue::Retreat,
+            Ability::CityTowerUpgrade | Ability::SiegeBreach | Ability::AkkadGarrison => Cue::Tower,
+            Ability::CityIntercession { .. }
+            | Ability::CityDenial
+            | Ability::LastCityRelocation
+            | Ability::CookhamExchange
+            | Ability::KitchenPhilosophy
+            | Ability::FactoryCityUpgradeDiscount { .. } => Cue::City,
+            Ability::CityEvacuation { .. }
+            | Ability::RetreatHandover { .. }
+            | Ability::AksumRout => Cue::Retreat,
             Ability::ReturnCampaign { .. } => Cue::Strength,
-            Ability::SurplusTreasury { .. } | Ability::GuildNetwork { .. } => Cue::Income,
+            Ability::SurplusTreasury { .. }
+            | Ability::GuildNetwork { .. }
+            | Ability::ImperialStandards { .. }
+            | Ability::CityFarmFounding
+            | Ability::CounterLevy { .. }
+            | Ability::PuntGardens => Cue::Income,
         }
     }
 }

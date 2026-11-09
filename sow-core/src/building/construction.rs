@@ -91,6 +91,7 @@ impl SowEngine {
         let mut route_cache = std::collections::HashMap::new();
         let mut retained = std::collections::HashMap::<u16, u32>::new();
         let mut to_remove = Vec::new();
+        let mut punt_arrivals = Vec::new();
 
         for (index, fleet) in self.fleets.iter_mut().enumerate() {
             if fleet.unit_type != UnitType::TradeShip || fleet.troops <= 0.0 {
@@ -108,14 +109,25 @@ impl SowEngine {
                 continue;
             }
 
-            let route_is_current = ports
+            let origin = ports
                 .iter()
-                .any(|port| port.owner_id == fleet.owner_id && port.tile_idx == fleet.src_tile)
+                .find(|port| port.owner_id == fleet.owner_id && port.tile_idx == fleet.src_tile);
+            let route_is_current = origin.is_some()
                 && ports
                     .iter()
                     .any(|port| port.tile_idx == fleet.dst_tile && port.owner_id != fleet.owner_id);
             let arrived = (fleet.path.is_empty() && fleet.path_cursor > 0)
                 || (!fleet.path.is_empty() && fleet.path_cursor >= fleet.path.len());
+            if arrived
+                && route_is_current
+                && let Some(origin) = origin
+                && self
+                    .state
+                    .player(fleet.owner_id)
+                    .is_some_and(|p| p.leader.ability() == Ability::PuntGardens)
+            {
+                punt_arrivals.push(origin.id);
+            }
             if fleet.path.is_empty() || arrived || !route_is_current {
                 let Some(route) = find_trade_route(
                     &sea_lanes,
@@ -138,6 +150,9 @@ impl SowEngine {
 
         for index in to_remove.into_iter().rev() {
             self.fleets.swap_remove(index);
+        }
+        for origin_id in punt_arrivals {
+            self.hero_trade_arrived(origin_id);
         }
         if !retained.is_empty() {
             self.fleets.sort_unstable_by_key(|fleet| fleet.id);

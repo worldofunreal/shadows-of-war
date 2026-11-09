@@ -271,6 +271,118 @@ campaign_chronicles = "CAMPAGN\nMGA KARUNUNGAN"
 campaign_unavailable = "Walang kampanya."
 
 [heroes]
+leader_muhumuza_name = "Muhumuza"
+leader_muhumuza_historical = "Pinamunuan ni Muhumuza, na naitala rin bilang Muhumusa, ang paglaban sa matataas na lupain ng Ndorwa at Kigezi sa magkabilang panig ng hangganan ngayon ng Rwanda at Uganda. Bilang midyum ng Nyabingi, umasa siya sa isang espirituwal na tradisyong nakaugat na sa mga pamayanan doon. Tinipon niya ang mga tagasunod laban sa korte ni Haring Musinga at sa paglawak ng pamamahalang kolonyal ng Europa."
+leader_muhumuza_civilization = "Kilusang Nyabingi"
+
+leader_khosrow_i_name = "Khosrow I"
+leader_khosrow_i_historical = "Si Khosrow I, na tinatawag ding Anushirvan, ang namuno sa Imperyong Sasanian mula 531 hanggang 579. Hinati niya ang pamunuan ng hukbo sa apat na kumand na panrehiyon. Makikita sa mga natirang selyo ang mga heneral na namahala sa silangan, timog, kanluran at hilaga. Ipinagpatuloy din niya ang pagsukat sa lupain na sinimulan sa panahon ng kanyang amang si Kavad I, at ibinatay rito ang takdang buwis sa lupa."
+leader_khosrow_i_civilization = "Imperyong Sasanian"
+
+leader_naram_sin_name = "Naram Sin"
+leader_naram_sin_historical = "Si Naram Sin, apo ni Sargon, ang namuno sa Imperyong Akkadian noong ikatlong milenyo BK. Ginugunita ng kanyang bantayog ng tagumpay ang kampanya laban sa mga Lullubi sa kabundukan ng Zagros. Makikita sa inukit na bato ang hari at mga kawal na umaakyat sa dalisdis. Mas malaki ang hari kaysa sa ibang tauhan at may suot siyang helmet na may mga sungay, isang sagisag na iniuugnay sa mga diyos."
+leader_naram_sin_civilization = "Imperyong Akkadian"
+
+leader_jalal_al_din_mangburni_name = "Jalal al-Din Mangburni"
+leader_jalal_al_din_mangburni_historical = "Hinalinhan ni Jalal al-Din Mangburni ang ama niyang si Muhammad II habang winawasak ng mga Mongol ang Imperyong Khwarazmian. Nagtipon siya ng hukbo sa Ghazni at tinalo ang isang hukbong Mongol sa Parwan noong 1221. Hinabol siya ni Genghis Khan hanggang sa Ilog Indus. Natalo si Jalal al-Din ngunit nakatawid sa ilog sakay ng kabayo. Nakarating din sa kabilang pampang ang ilang tauhan niya."
+leader_jalal_al_din_mangburni_civilization = "Imperyong Khwarazmian"
+
+leader_modu_chanyu_name = "Modu Chanyu"
+leader_modu_chanyu_historical = "Si Modu, na kilala rin bilang Maodun, ay naging chanyu noong bandang 209 BK. Sa pamumuno niya, naging pangunahing kapangyarihan ang Xiongnu sa silangang steppe. Ayon sa Tsinong historyador na si Sima Qian, sinubok ng karatig na Donghu ang bagong pinuno sa sunod-sunod na kahilingan. Dalawang beses pumayag si Modu, ngunit tumanggi siyang ibigay ang bahaging walang naninirahan sa pagitan ng mga himpilan at sinalakay niya ang Donghu."
+leader_modu_chanyu_civilization = "Xiongnu"
+
+leader_hiawatha_haudenosaunee_name = "Hiawatha"
+leader_hiawatha_haudenosaunee_historical = "Sa tradisyong pasalita ng Haudenosaunee, inaalala si Hiawatha, na tinatawag ding Aionwatha, sa pagtulong sa Tagapamayapa na tipunin ang mga bansang Mohawk, Oneida, Onondaga, Cayuga at Seneca. Ayon sa salaysay ng Onondaga, nagdadalamhati si Hiawatha nang gamitin ng Tagapamayapa ang mga hibla ng butil na yari sa kabibe, o wampum, habang nagbibigay ng aliw. Tumulong si Hiawatha na dalhin ang mensahe ng kapayapaan sa mga bansa. Hindi alam ang tiyak na petsa ng pagsasama nila."
+leader_hiawatha_haudenosaunee_civilization = "Konpederasyong Haudenosaunee"
+
+leader_kaahumanu_hawaii_name = "Kaʻahumanu"
+leader_kaahumanu_hawaii_historical = "Pagkamatay ni Kamehameha I noong 1819, ipinahayag ni Kaʻahumanu na makikibahagi siya sa pamamahala ng humalili sa kaniya na si Liholiho, o Kamehameha II. Siya ang unang humawak sa tungkulin ng kuhina nui. Sa mga unang taon, ang tungkulin ay may kapangyarihang maihahambing sa hari sa usapin ng lupa, kasunduan at katarungan. Patuloy siyang namahala bilang rehente ni Kauikeaouli, o Kamehameha III, hanggang sa pagkamatay niya noong 1832."
+leader_kaahumanu_hawaii_civilization = "Kaharian ng Hawaiʻi"
+
+leader_sargon_of_akkad_name = "Sargon ng Akkad"
+leader_sargon_of_akkad_historical = "Itinatag ni Sargon ang dinastiya ng Akkad sa Mesopotamia sa bandang dulo ng ikatlong milenyo BCE. Isinalaysay sa mga inskripsiyon ng hari ang pagkatalo ni Lugalzagesi ng Uruk at ang paggiba sa mga pader ng ilang lungsod, kabilang ang Uruk at Ur. Ginawa ang mga teksto upang ipagdiwang ang mga tagumpay. Ang ilan ay kilala sa mga kopyang ginawa ng mga eskriba pagkaraan ng paghahari niya. Binabanggit din sa mga inskripsiyon ang mga taga-Akkad na naging gobernador sa mga nasakop na lupain. Ipinapakita ng mga tala ng pamahalaan kung aling kaugaliang lokal ang nagpatuloy."
+leader_sargon_of_akkad_civilization = "Imperyong Akkadian"
+
+leader_mithridates_vi_name = "Mithridates VI"
+leader_mithridates_vi_historical = "Pinamunuan ni Mithridates VI Eupator ang Pontus sa timog na baybayin ng Dagat Itim. Pinalawak niya ang impluwensiya ng kaharian sa paligid ng dagat at hinarap ang Roma sa Anatolia. Sa ikatlong digmaan laban sa Roma, pinalayas siya ni Heneral Lucullus mula sa Pontus. Sumilong si Mithridates kay Tigranes II ng Armenia, na asawa ng anak niyang babae. Nagkaroon siya ng lugar na mapagtitipunan muli ng puwersa at ng hukbong makakasama sa pagbalik."
+leader_mithridates_vi_civilization = "Kaharian ng Pontus"
+
+leader_gudit_yodit_name = "Gudit"
+leader_gudit_yodit_historical = "Sa tradisyon ng Ethiopia, si Gudit o Yodit ay isang reynang naghimagsik laban sa Aksum. Isinalaysay sa Kasaysayan ng mga Patriyarka ng Alexandria ang isang pakiusap noong ikasampung siglo mula sa isang di-pinangalanang pinuno ng Ethiopia kay George ng Nubia. Ayon dito, isang reyna ng Bani al-Hamwiyah ang kumuha ng mga bihag, nagsunog ng mga lungsod at nagtaboy sa pinuno mula sa isang lugar patungo sa iba. Nawala ang orihinal na liham. Napanatili ang nilalaman sa kronika ng simbahan, na iniugnay ang krisis sa kahilingang magtalaga ng bagong obispong metropolitano."
+leader_gudit_yodit_civilization = "Kabundukan ng Ethiopia"
+
+leader_khutulun_qaidu_name = "Khutulun"
+leader_khutulun_qaidu_historical = "Si Khutulun, na isinusulat ding Qutulun, ay isang prinsesang Mongol at kumandante sa Gitnang Asya. Pinamunuan ng ama niyang si Qaidu ang isang nasasakupan ng angkan ni Ögödei at tinutulan ang kapangyarihan ni Kublai at ng mga humalili sa kaniya. Tinawag siyang Aijaruc ni Marco Polo, na nagkuwento na nauuna siyang mangabayo sa mga kampanya para manghuli ng kalaban. Isinalaysay rin ni Polo ang tungkol sa mga manliligaw na tumataya ng mga kabayo sa pakikipagbuno. Mahirap tiyakin ang mga panalo at bilang ng kabayo sa salaysay."
+leader_khutulun_qaidu_civilization = "Ulus ni Qaidu"
+
+leader_sor_juana_ines_de_la_cruz_name = "Sor Juana Inés de la Cruz"
+leader_sor_juana_ines_de_la_cruz_historical = "Si Sor Juana Inés de la Cruz ay manunulat at madreng Heronimita sa Bagong Espanya noong ikalabimpitong siglo. May mga sangguniang nagsasabing 1648 siya ipinanganak at mayroon ding nagsasabing 1651. Nanirahan siya sa kumbento ng San Jerónimo sa Lungsod ng Mexico, kung saan sumulat siya ng mga tula at dulang tulad ng El divino Narciso. Noong 1690, pinuna niya ang isang sermon ng Heswitang Portuges na si António Vieira. Inilathala iyon ng obispo ng Puebla na si Manuel Fernández de Santa Cruz bilang Carta atenagórica at sumulat siya sa may-akda gamit ang pangalang Sor Filotea de la Cruz."
+leader_sor_juana_ines_de_la_cruz_civilization = "Bagong Espanya"
+
+leader_sibylla_name = "Sibylla ng Jerusalem"
+leader_sibylla_historical = "Si Sibylla ay anak nina Amalric ng Jerusalem at Agnes ng Courtenay. Bago siya naging reyna, pinangasiwaan niya ang Jaffa at Ascalon bilang kondesa. Sa isang kasulatang inilabas niya noong 1177, nagkaloob siya ng mga tore, hardin at kita sa Ascalon kay Konde Rodrigo at sa mga kasapi ng orden nito. Si Baldwin V, na naging hari, ang anak niya sa una niyang asawa na si William ng Montferrat. Nang mamatay ang anak niya noong 1186, inangkin ni Sibylla ang korona ng Jerusalem sa sarili niyang karapatan at ginawang hari ang ikalawa niyang asawang si Guy ng Lusignan."
+leader_sibylla_civilization = "Kaharian ng Jerusalem"
+
+leader_cynethryth_mercia_name = "Cynethryth"
+leader_cynethryth_mercia_historical = "Si Cynethryth ay reyna ng Mercia sa huling bahagi ng ikawalong siglo at naging abadesa ng Cookham. Lumilitaw ang pangalan niya bilang saksi sa mga kasulatan noong panahon ni Offa. Siya ang ina ni Ecgfrith, na humalili kay Offa. May mga baryang pilak na may pangalan at titulo niya bilang reyna, isang pambihirang karangalan sa Inglatera noong panahon ng mga Anglo-Saxon. Nasa ilan sa mga baryang ito ang pangalan ni Eoba, isang tagagawa ng baryang iniuugnay sa Canterbury. Patunay ang mga ito na nakilala sa publiko ang titulo niya, bagaman hindi tiyak kung sino ang nagpagawa ng mga barya."
+leader_cynethryth_mercia_civilization = "Kaharian ng Mercia"
+
+leader_suppiluliuma_name = "Suppiluliuma I"
+leader_suppiluliuma_historical = "Namuno si Suppiluliuma I sa Hatti noong ika-14 na siglo BK. Pinalawak ng kanyang mga kampanya ang pamumuno ng mga Hittite sa hilagang Syria. Itinalaga niya ang anak niyang si Piyassili bilang hari ng Carchemish. Iniugnay ng kasunduan kay Shattiwaza ng Mitanni ang suporta sa isang naghahabol ng trono sa bagong kaayusang pampolitika."
+leader_suppiluliuma_civilization = "Imperyong Hittite"
+
+leader_baibars_name = "Baibars"
+leader_baibars_historical = "Namuno si Al-Zahir Baibars sa Sultanatong Mamluk mula 1260 hanggang 1277. Nasa isang gintong dinar mula Cairo na nasa Louvre ang kanyang pangalan at mga titulo. Pinalawak ng kanyang mga kampanya ang pamumuno ng Mamluk sa Levant. Noong 1271, pinamunuan niya ang koalisyon laban sa kuta ng mga Hospitaller na Krak des Chevaliers."
+leader_baibars_civilization = "Sultanatong Mamluk"
+
+leader_emperor_qin_shi_huang_name = "Qin Shi Huang"
+leader_emperor_qin_shi_huang_historical = "Si Qin Shi Huang, na ipinanganak na Ying Zheng, ang naging unang emperador matapos talunin ng kaharian ng Qin ang mga huling karibal nito noong 221 BK. Pinalawak ng pamahalaan niya ang mga pamantayan ng Qin sa timbang at sukat sa mga nasakop na lupain. Nakatala ang reporma sa mga inskripsiyon sa mga natitirang pabigat at panukat."
+leader_emperor_qin_shi_huang_civilization = "Dinastiyang Qin"
+
+leader_spartacus_name = "Spartacus"
+leader_spartacus_historical = "Si Spartacus ay isang gladiator na taga-Thrace na namuno sa pag-aalsang nagsimula sa Capua noong 73 BK. Ayon kay Plutarch, gumamit ng mga kasangkapan sa kusina ang mga tumakas at saka inagaw ang mga armas na ibinibiyahe. Ayon kay Appian, nakakuha sila ng mga armas sa daan at sumilong sa Bundok Vesuvius, kung saan dumami sila."
+leader_spartacus_civilization = "Mga Rebelde ni Spartacus"
+
+leader_queen_nefertiti_name = "Nefertiti"
+leader_queen_nefertiti_historical = "Si Nefertiti ang Dakilang Maharlikang Asawa ni Akhenaten noong Ikalabingwalong Dinastiya ng Ehipto. Sa Akhetaten, na ngayon ay Amarna, kitang-kita ang papel niya sa pagsamba kay Aten. Ipinakikita sa piraso ng pulang quartzite sa Petrie Museum ang pagbuhos niya ng alay sa ilalim ng sinag ng araw."
+leader_queen_nefertiti_civilization = "Sinaunang Ehipto"
+
+leader_mandukhai_name = "Mandukhai Khatun"
+leader_mandukhai_historical = "May kapangyarihang pampolitika at militar si Mandukhai Khatun sa mga Mongol noong huling bahagi ng ika-15 siglo. Pagkamatay ni Manduul Khan, tumulong siyang ibalik sa kapangyarihan ang angkan ni Genghis Khan sa paghaliling kaugnay ni Dayan Khan. Iniuugnay rin sa kanya ng mga sumunod na kronikang Mongol ang pamumuno sa mga kampanya laban sa mga Oirat."
+leader_mandukhai_civilization = "Hilagang Yuan"
+
+leader_kabal_xook_name = "K’ab’al Xook"
+leader_kabal_xook_historical = "Inialay ni K’ab’al Xook ang Istruktura 23 noong 726 sa Yaxchilán, isang lungsod ng mga Maya sa tabi ng Ilog Usumacinta sa kasalukuyang Chiapas. Isa siya sa mga pangunahing asawa ng pinunong si Itzamnaaj B’alam. Nakatala ang pangalan niya sa mga inskripsiyon at makikita ang kanyang anyo sa tatlong batong nakaukit sa ibabaw ng mga pintuan."
+leader_kabal_xook_civilization = "Yaxchilán"
+
+leader_lakshmibai_name = "Lakshmibai"
+leader_lakshmibai_historical = "Tinutulan ni Lakshmibai, rani ng Jhansi, ang pagsakop ng East India Company sa kaniyang estado pagkamatay ni Gangadhar Rao. Tumanggi ang kompanya na kilalanin ang anak nilang inampon bilang tagapagmana. Sa pag-aalsa sa India noong 1857–1858, pinamunuan ni Lakshmibai ang pagtatanggol sa Jhansi laban sa hukbo ni Hugh Rose. Nang sakupin ng mga Briton ang Jhansi noong 1858, nakatakas siya at nakipag-isa sa ibang rebelde sa Kalpi, kabilang ang mga puwersang kaugnay ni Tatya Tope. Nagpatuloy siyang lumaban matapos bumagsak ang Kalpi at namatay malapit sa Gwalior noong Hunyo 1858."
+leader_lakshmibai_civilization = "Jhansi"
+
+leader_pharaoh_hatshepsut_name = "Hatshepsut"
+leader_pharaoh_hatshepsut_historical = "Namuno si Hatshepsut sa Ehipto noong ika-15 siglo BK, sa Ikalabingwalong Dinastiya. Una siyang naging rehente para sa batang si Thutmose III, na pamangkin at anak sa asawa niya. Kinalaunan ay inangkin niya ang titulo at kapangyarihan ng paraon habang nanatiling kasamang pinuno si Thutmose. Kabilang sa mga ipinagawa niya ang templong may mga terasa sa Deir el-Bahari. Makikita sa mga ukit ng timog na gitnang portiko ang paglalakbay sa Punt, ang pakikipagtagpo ng mga sugo sa mga naninirahan doon, at ang pagkarga ng mga kalakal. Iniuugnay ng templo ang paglalakbay sa hari at sa ritwal."
+leader_pharaoh_hatshepsut_civilization = "Sinaunang Ehipto"
+
+leader_thusnelda_cherusci_name = "Thusnelda"
+leader_thusnelda_cherusci_historical = "Si Thusnelda ay isang babaeng maharlika ng mga Cherusci noong unang bahagi ng unang siglo CE. Humingi ng suporta sa Roma ang ama niyang si Segestes, habang pinamunuan ng asawa niyang si Arminius ang paglaban. Ayon kay Tacitus, kinubkob ng hukbo ni Arminius si Segestes noong 15 CE, kaya humingi ito ng tulong kay Germanicus. Binasag ng mga Romano ang pagkubkob at kinuha nila si Thusnelda, na nagdadalang-tao noon. Sa talumpating iniugnay ni Tacitus kay Segestes, sinabi nitong labag sa kalooban ng anak ang pananatili sa kaniya. Inilarawan ng historyador na Romano ang pagharap ni Thusnelda sa pagkabihag nang hindi nagmamakaawa."
+leader_thusnelda_cherusci_civilization = "Mga Cherusci"
+
+leader_queen_cartimandua_name = "Cartimandua"
+leader_queen_cartimandua_historical = "Pinamunuan ni Cartimandua ang mga Brigantes sa hilagang England ngayon noong unang siglo CE. Ang historyador na Romanong si Tacitus ang pangunahing natitirang sanggunian tungkol sa kaniyang pamumuno. Noong 51 CE, humingi ng kanlungan sa kaniya si Caratacus, pinuno ng paglaban sa Roma, matapos matalo. Binihag siya ni Cartimandua at ibinigay sa mga Romano. Isinalaysay din ni Tacitus ang tunggalian niya kay Venutius at ang tulong ng hukbong Romano na nagligtas sa kaniya noong 69, nang mapunta kay Venutius ang trono."
+leader_queen_cartimandua_civilization = "Mga Brigantes"
+
+leader_queen_suriyothai_name = "Suriyothai"
+leader_queen_suriyothai_historical = "Si Suriyothai ay reyna ng Ayutthaya sa paghahari ni Maha Chakkraphat. Naaalala siya sa mga salaysay tungkol sa pagsalakay ng hukbo ng haring Burmese na si Tabinshwehti, na inilalagay sa 1548 ng kronolohiya ng lalawigan ng Ayutthaya. Ayon sa tradisyon ng mga kronikang maharlika, sumama ang reyna sa hukbo sakay ng elepante. Nang malagay sa panganib ang hari, pumagitna siya sa hari at sa kumander ng kaaway at nasugatan nang ikinamatay niya. Iniuugnay ng salaysay ang pasiya niya sa labanan sa sinapit ng hari at ng hukbo."
+leader_queen_suriyothai_civilization = "Kaharian ng Ayutthaya"
+
+leader_tarabai_name = "Tarabai"
+leader_tarabai_historical = "Pinamunuan ni Tarabai (1675–1761) ang pamahalaang Maratha pagkamatay ni Rajaram noong 1700, bilang rehente ng kanilang batang anak na si Shivaji. Pinag-ugnay niya ang mga kumander at ipinagtanggol ang mga tanggulan laban sa hukbo ng emperador na Mughal na si Aurangzeb. Ayon sa historyador na si Richard M. Eaton, nagpadala siya ng mga kawal pahilaga sa lupain ng Mughal habang kinukubkob ang mga tanggulang Maratha. Itinala sa kasaysayan ng Satara na itinalaga niya si Parashuram Trimbak na mangasiwa sa mga tanggulan. Pagkamatay ni Aurangzeb noong 1707, nagbalik si Shahu bilang naghahabol sa trono at nagkaroon ng tunggalian sa naghaharing angkan."
+leader_tarabai_civilization = "Imperyong Maratha"
+
+leader_natavan_name = "Khurshid Banu Natavan"
+leader_natavan_historical = "Si Khurshid Banu Natavan ay isang makata at tagapagtaguyod ng sining na Azerbaijani mula sa Shusha, kung saan siya namatay noong 1897. Iba-iba ang taong ibinibigay ng mga nailathalang sanggunian para sa kaniyang kapanganakan, kabilang ang 1830 at 1832. Anak siya ni Mehdiqulu Khan, ang huling khan ng Karabakh. Ginamit niya ang minanang yaman para sa mga gawaing sibiko at pangkultura. Noong 1872, pinamunuan niya ang Majlis-i Uns, samahan ng mga makata sa Shusha na nakikipag-ugnayan sa ibang grupo. Sumulat siya ng mga ghazal at elehiya, at may natira rin siyang album na may mga guhit."
+leader_natavan_civilization = "Karabakh"
+
 leader_mavia_name = "Mavia"
 leader_mavia_historical = "Pinamunuan ni Mavia, na kilala rin bilang Mawiyya, ang mga pamayanang Arabo sa silangang hangganan ng Roma. Nakipagkasundo siya sa imperyo sa huling bahagi ng ikaapat na siglo."
 leader_mavia_civilization = "Mga Arabong Tanukhid"
@@ -726,6 +838,7 @@ crowns_count = "{amount} korona"
 buy = "BUMILI"
 unlock = "BUKSAN"
 unlocked = "NAKA-UNLOCK"
+confirm_unlock = "KUMPIRMAHIN"
 equip = "PAGSUBOK"
 equipped = "MAHAHAHALAGANG MAHIMULA"
 territory_pattern = "Ang disenyo ng look"
@@ -973,6 +1086,10 @@ ability_restriction_defeated = "Wala na sa laban ang iyong bayani."
 
 
 [endgame]
+reward_double_title = "Doblehin ang gantimpala"
+reward_double_body = "Manood ng maikling video para muling makuha ang mga korona at hiyas ng larong ito."
+reward_continue = "MAGPATULOY"
+reward_double_watch = "MANOOD NG VIDEO"
 stat_kills = "Napatay"
 stat_assists = "Tulong"
 stat_max_territory = "Pinakamalaking teritoryo"
@@ -991,6 +1108,90 @@ crowns = "MGA KORONA"
 gems = "MGA GEM"
 
 [site]
+leader_muhumuza_ability = "Ugnayang Nyabingi"
+leader_muhumuza_description = "Nangangailangan ng 50% na dagdag na pagsisikap para masakop ang mga tile ng mataas na lupain mo at ng mga kaalyado mo kung magkatabi ang mga ito."
+
+leader_khosrow_i_ability = "Mga Kumand na Panrehiyon"
+leader_khosrow_i_description = "Kapag dalawa o higit pang magkakaibang karibal ang sabay na umaatake sa iyo sa lupa, 25% na mas maraming kawal ang nawawala sa mga hukbo nila sa bawat tile na naaagaw nila sa iyo."
+
+leader_naram_sin_ability = "Pag-akyat sa Zagros"
+leader_naram_sin_description = "Mas mabilis nang 50% sumakop ang mga hukbo mo sa mga tile ng bundok ng karibal kapag katabi ang mga ito ng mataas na lupaing kontrolado mo."
+
+leader_jalal_al_din_mangburni_ability = "Pagtawid sa Indus"
+leader_jalal_al_din_mangburni_description = "Kapag nakabalik sa sarili mong baybayin ang umaatras na barkong panghakot, maibabalik ang lahat ng kawal na sakay pa nito hanggang sa limitasyon ng hukbo mo."
+
+leader_modu_chanyu_ability = "Pinagtatalunang Steppe"
+leader_modu_chanyu_description = "Kalahati ang nababawas na kawal sa mga hukbo mo sa lupa kapag sumakop sila ng neutral na tile ng kapatagang karatig ng teritoryo ng karibal."
+
+leader_hiawatha_haudenosaunee_ability = "Dakilang Batas ng Kapayapaan"
+leader_hiawatha_haudenosaunee_description = "Kapag bumuo ng bagong alyansa sa isa’t isa ang dalawa mong kakampi, ibinabalik sa buong tagal ang dalawa mong alyansang may takdang oras sa kanila. Minsan sa bawat pares kada laban."
+
+leader_kaahumanu_hawaii_ability = "Salu-salong Hapag"
+leader_kaahumanu_hawaii_description = "Sa unang pagpapadala ng hindi bababa sa 500 kawal sa bawat kakampi habang pareho kayong may aktibong sakahan, bawat isa ay makakatanggap ng dagdag na 25% ng ipinadala, hanggang 500 bawat isa at pasok sa kani-kaniyang limitasyon."
+
+leader_sargon_of_akkad_ability = "Mga Garison ng Akkad"
+leader_sargon_of_akkad_description = "Kapag nasakop mo ang isang aktibong lungsod ng kalaban na walang sarili mong tore sa loob ng 12 tile, magtayo nang libre ng antas 1 na tore sa pinakamalapit na angkop mong tile sa saklaw na iyon. Minsan bawat nasakop na lungsod."
+
+leader_mithridates_vi_ability = "Tulong ni Tigranes"
+leader_mithridates_vi_description = "Kung may aktibong lungsod ang isang kakampi, kapag umatras ka mula sa pag-atake sa lupa laban sa kalaban pagkalipas ng hindi bababa sa 3 segundo, makakakuha ka ng dagdag na hukbo na katumbas ng bilang ng mga bumalik, hanggang 1,000 at pasok sa limitasyon ng hukbo. Minsan bawat laban."
+
+leader_gudit_yodit_ability = "Pagtakas mula sa Aksum"
+leader_gudit_yodit_description = "Kapag nasakop mo ang isang aktibong lungsod ng kalaban, mapipilitang umatras ang pinakamalaking hukbo sa lupa ng dating may-ari na kasalukuyang umaatake sa isang manlalaro. Minsan bawat nasakop na lungsod."
+
+leader_khutulun_qaidu_ability = "Pagdakip sa Kabayo"
+leader_khutulun_qaidu_description = "Kapag naglunsad ka ng paglusob sa lupa laban sa kalabang umaatake na sa iyo sa lupa, 20% ng hukbong natalo mo sa unang sagupaan ang madaragdag sa reserba mo, hanggang sa limitasyon ng hukbo."
+
+leader_sor_juana_ines_de_la_cruz_ability = "Pilosopiya sa Kusina"
+leader_sor_juana_ines_de_la_cruz_description = "Kapag natapos ang pag-upgrade ng sakahan, mahahati sa dalawa ang natitirang oras ng pinakamalapit mong kasalukuyang pag-upgrade ng lungsod sa loob ng 12 tile."
+
+leader_sibylla_ability = "Ang Ikalawang Korona"
+leader_sibylla_description = "Kapag bumuo ka ng bagong alyansa habang may aktibo kang lungsod, agad na matatapos ang pinakamatagal nang itinatayong lungsod ng bago mong kakampi kung wala pa siyang aktibong lungsod. Minsan bawat laban."
+
+leader_cynethryth_mercia_ability = "Kasunduan sa Cookham"
+leader_cynethryth_mercia_description = "Kapag nasakop ng kalaban ang isa sa mga aktibo mong sakahan, tataas nang isang antas ang natapos mong lungsod na may pinakamababang antas sa loob ng 12 tile, hanggang antas 4. Minsan bawat sakahan."
+
+leader_suppiluliuma_ability = "Kasunduan sa Mitanni"
+leader_suppiluliuma_description = "Nawawalan ng 25% na mas kaunting sundalo ang iyong hukbong panlupa kapag sumasakop ng mga tile ng kaaway na katabi ng teritoryo ng kaalyadong umaatake rin sa parehong karibal sa lupa."
+
+leader_baibars_ability = "Mga Tagahukay ng Krak"
+leader_baibars_description = "Kapag nasakop mo ang isang aktibong tore ng kaaway, guguho ang pinakamalapit na aktibong tore ng parehong karibal na nasa loob ng 12 tile at may mas mababang aktibong antas. Isang beses bawat nasakop na tore sa bawat laban."
+
+leader_emperor_qin_shi_huang_ability = "Pamantayang Imperyal"
+leader_emperor_qin_shi_huang_description = "Habang magkakapantay at higit sa sero ang kabuuang aktibong antas ng iyong mga lungsod, pabrika at sakahan, lumilikha ng 25% na dagdag na ginto ang mga pabrika at 25% na dagdag na sundalo ang mga sakahan."
+
+leader_spartacus_ability = "Arsenal ng Thurii"
+leader_spartacus_description = "Kapag nasakop ng iyong hukbong panlupa ang sentro ng isang aktibong pabrika ng kaaway, makakakuha ito ng 300 sundalo sa bawat aktibong antas ng pabrika. Isang beses bawat pabrika sa bawat laban."
+
+leader_queen_nefertiti_ability = "Mga Talatat ng Amarna"
+leader_queen_nefertiti_description = "Mas mababa nang 35% ang gastos na ginto sa pagpapahusay ng isang lungsod kung may aktibo kang pabrika sa loob ng 12 tile mula rito."
+
+leader_mandukhai_ability = "Muling Pag-iisa ng Kapatagan"
+leader_mandukhai_description = "Kapag natalo mo ang isang karibal sa pagsakop sa natitira niyang teritoryo, kinukuha mo ang 25% ng natitira niyang reserbang sundalo hanggang sa limitasyon ng iyong hukbo."
+
+leader_kabal_xook_ability = "Sagisag ng Digmaan ng Yaxchilán"
+leader_kabal_xook_description = "Kung may aktibo kang lungsod at hindi bababa sa 750 reserbang sundalo, nagpapadala ka ng 750 mula sa reserba kapag naglunsad ang kaalyado ng bagong pag-atake sa lupa laban sa karibal ninyong dalawa. Isang beses bawat kaalyado sa bawat laban."
+
+leader_lakshmibai_ability = "Tangulan ng Kalpi"
+leader_lakshmibai_description = "Kapag sinakop ng kalaban ang huli mong aktibong lungsod, magtatag ng libreng lungsod na antas 1 sa pinakamalapit na angkop na lugar sa lupain mo sa loob ng 24 tile ng nawalang lungsod. Isang beses bawat laban."
+
+leader_pharaoh_hatshepsut_ability = "Mga Hardin ng Punt"
+leader_pharaoh_hatshepsut_description = "Kapag natapos ng iyong barkong pangkalakalan ang ruta sa dayuhang daungan, tataas ng isang antas ang sarili mong tapos na sakahang may pinakamababang antas sa loob ng 12 tile ng pinanggalingang daungan, hanggang antas 4. Isang beses bawat pinanggalingang daungan."
+
+leader_thusnelda_cherusci_ability = "Matatag sa Pagkabihag"
+leader_thusnelda_cherusci_description = "Kapag sinakop ng kalaban ang sarili mong lungsod na may aktibong antas 2 o mas mataas, mawawalan ito ng isang tapos na antas at makakansela ang kasalukuyang pag-upgrade. Isang beses bawat lungsod."
+
+leader_queen_cartimandua_ability = "Pagsuko kay Caratacus"
+leader_queen_cartimandua_description = "Kapag umatras ang hukbong panlupa ng kaaway mula sa iyong lupain, ibigay ang 25% ng mga nakaligtas sa kakamping may pinakamalaking aktibong hukbong panlupa laban sa kaaway na iyon at may puwang sa reserba. Babalik sa kaaway ang sobra."
+
+leader_queen_suriyothai_ability = "Bantay ng Ayutthaya"
+leader_queen_suriyothai_description = "Kapag malapit nang sakupin ng hukbong panlupa ng kaaway ang sentro ng aktibong lungsod ng kakampi, gumamit ng 1,500 reserbang kawal upang pigilan iyon at alisin ang hanggang 1,500 umaatake. Isang beses bawat lungsod ng kakampi."
+
+leader_tarabai_ability = "Chauth ng Pagsagupa"
+leader_tarabai_description = "Agawin ang tapos na tore ng kalabang umaatake sa iyo sa lupa para kunin ang 25% ng ginto niya, hanggang 250. Isang beses bawat tore."
+
+leader_natavan_ability = "Bukal ng Shusha"
+leader_natavan_description = "Kapag natapos ang pag-upgrade ng sarili mong lungsod sa antas 2, magtatag ng libreng sakahang antas 1 sa pinakamalapit na angkop na lugar sa loob ng 12 tile mula sa lungsod."
+
 leader_mavia_ability = "Kapayapaan ni Moises"
 leader_mavia_description = "Kapag nakipag-alyansa ka sa karibal habang may pag-atake sa lupa sa pagitan ninyo, bumabalik ang mga nabubuhay na kawal ng magkabilang panig nang walang bawas sa pag-urong, hanggang sa kani-kanilang limitasyon."
 

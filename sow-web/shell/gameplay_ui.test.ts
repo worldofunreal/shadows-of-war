@@ -288,7 +288,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
             ["17", "3", "1.2K", "12.3M", "100M"],
         );
     }
-    const statsRules = [...hudCss.matchAll(/\.sow-hud__endgame-stats\s*\{([^}]*)\}/g)];
+    const statsRules = [...hudCss.matchAll(/^\.sow-hud__endgame-stats\s*\{([^}]*)\}/gm)];
     assert.equal(statsRules.length, 1, "portrait and horizontal views share one responsive layout");
     assert.match(statsRules[0][1], /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(72px,\s*1fr\)\)/);
     const minimumStatWidth = Number(statsRules[0][1].match(/minmax\((\d+)px/)[1]);
@@ -300,8 +300,13 @@ test("endgame shows the five match stats with exact combat counts and compact to
     assert.match(statRule, /display:\s*flex/);
     assert.doesNotMatch(statRule, /border:|background:/);
     assert.match(hudCss, /\.sow-hud__endgame-stat \+ \.sow-hud__endgame-stat::before/);
-    assert.match(hudCss, /\.sow-hud__exit-card\s*\{\s*min-height: 0;[^}]*max-height: min\([^}]*60svh\)/);
-    assert.doesNotMatch(hudCss, /sow-hud__exit-content|\.sow-hud__exit-card \.sow-hud__endgame-stats/);
+    assert.match(hudCss, /\.sow-hud__exit-card\s*\{[^}]*min-height: 0;[^}]*max-height: min\([^}]*60svh\)/);
+    assert.doesNotMatch(hudCss, /sow-hud__exit-content/);
+    // The exit card fits in 60svh, so its five stats stay on one compact row.
+    const exitStatsRules = [...hudCss.matchAll(/\.sow-hud__exit-card \.sow-hud__endgame-stats\s*\{([^}]*)\}/g)];
+    assert.equal(exitStatsRules.length, 1);
+    assert.match(exitStatsRules[0][1], /grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/);
+    assert.match(hudCss, /\.sow-hud__exit-card \.sow-hud__endgame-stat b\s*\{\s*font-size: 10px;/);
     assert.match(hudCss, /\.sow-hud__exit-card \.sow-hud__endgame-actions\s*\{\s*flex: 0 0 auto;/);
 });
 

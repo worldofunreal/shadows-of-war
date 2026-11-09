@@ -1340,51 +1340,42 @@ impl SowApp {
                 )
             }
             MapMenuAction::UpgradeStructure => {
-                let building = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-                    snapshot
-                        .buildings
-                        .iter()
-                        .find(|building| building.tile_idx == tile_idx)
-                });
-                let Some(building) = building else {
+                let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
                     return (None, None);
                 };
-                (
-                    Some({
-                        let free_tutorial_upgrade =
-                            self.sim.engine.as_ref().is_some_and(|engine| {
-                                engine.tutorial_city_upgrade_is_free(
-                                    self.sim.my_player_id.unwrap_or_default(),
-                                    building.id,
-                                )
-                            });
-                        if free_tutorial_upgrade {
-                            0.0
-                        } else {
-                            let snapshot = self.sim.current_snapshot.as_ref();
+                let Some(building) = snapshot
+                    .buildings
+                    .iter()
+                    .find(|building| building.tile_idx == tile_idx)
+                else {
+                    return (None, None);
+                };
+                let cost = self
+                    .sim
+                    .engine
+                    .as_ref()
+                    .and_then(|engine| engine.structure_upgrade_quote(building.id))
+                    .map_or_else(
+                        || {
                             let owned_levels = snapshot
-                                .map(|snapshot| {
-                                    snapshot
-                                        .buildings
-                                        .iter()
-                                        .filter(|candidate| {
-                                            candidate.owner_id == building.owner_id
-                                                && candidate.kind == building.kind
-                                        })
-                                        .map(|candidate| candidate.level as u32)
-                                        .sum()
+                                .buildings
+                                .iter()
+                                .filter(|candidate| {
+                                    candidate.owner_id == building.owner_id
+                                        && candidate.kind == building.kind
                                 })
-                                .unwrap_or_default();
+                                .map(|candidate| u32::from(candidate.level))
+                                .sum();
                             sow_core::building::cost::structure_upgrade_cost_gold(
                                 building.kind,
                                 building.active_level().saturating_add(1),
                                 owned_levels,
                                 &self.sim.config,
                             )
-                        }
-                    }),
-                    Some(building.level),
-                )
+                        },
+                        |(cost, _)| cost,
+                    );
+                (Some(cost), Some(building.level))
             }
             _ => (None, None),
         }

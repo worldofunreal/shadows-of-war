@@ -1,4 +1,5 @@
 use crate::building::find_structure_site_near;
+use crate::engine::SowEngine;
 
 use crate::game::BuildingKind;
 use crate::protocol::GameplayIntent;
@@ -86,24 +87,18 @@ pub(super) fn pick_stack_click_tile(
 }
 
 pub(super) fn stack_build_decision(
-    buildings: &[crate::building::Building],
+    engine: &SowEngine,
     bot_id: u16,
     kind: BuildingKind,
     player_gold: f64,
-    cfg: &crate::game_config::GameConfig,
     max_level: u8,
 ) -> Option<BotDecision> {
-    let stack_tile = pick_stack_click_tile(buildings, bot_id, kind, max_level)?;
-    let building = buildings
+    let stack_tile = pick_stack_click_tile(&engine.buildings, bot_id, kind, max_level)?;
+    let building = engine
+        .buildings
         .iter()
         .find(|b| b.owner_id == bot_id && b.kind == kind && b.tile_idx == stack_tile)?;
-    let owned_levels = crate::building::count_kind(buildings, bot_id, kind);
-    let cost = crate::building::structure_upgrade_cost_gold(
-        kind,
-        building.level.saturating_add(1),
-        owned_levels,
-        cfg,
-    );
+    let (cost, _) = engine.paid_structure_upgrade_quote(*building);
     if player_gold < cost {
         return None;
     }

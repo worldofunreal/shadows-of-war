@@ -1,0 +1,320 @@
+[articles.en]
+text = "A near-contemporary Iberian chronicle says al-Ghafiqi’s army crossed mountainous Basque country, entered Frankish lands, fought Duke Eudo of Aquitaine near the Garonne and Dordogne, and continued after Eudo fled. Modern scholarship describes the campaign as an invasion of Aquitaine and records that Eudo later sought help from Charles Martel. Their armies met on the route between Tours and Poitiers. These reports place al-Ghafiqi’s command in a frontier conflict among Umayyad al-Andalus, Aquitaine, and the Frankish realms. Al-Ghafiqi was killed in the battle; Oxford notes that his army withdrew in good order. The encounter is commonly called the Battle of Tours or Poitiers. Its traditional date is October 732, but scholars have argued for late 733 or 734 based on Iberian chronology. The precise site and the battle’s broader significance are also disputed. This account therefore avoids treating one date, casualty total, or claim that the battle permanently ended Muslim activity in western Europe as settled fact."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "en"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "An Umayyad governor whose campaign crossed the Pyrenees into Aquitaine and ended in the disputed battle near Tours."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi served as governor of Umayyad al-Andalus and led a major expedition north of the Pyrenees. Surviving accounts describe the route and clashes, but do not support every later legend about the battle or its scale.",
+]
+sections = [
+  { "title" = "Campaign across the Pyrenees", "paragraphs" = [
+    "A near-contemporary Iberian chronicle says al-Ghafiqi’s army crossed mountainous Basque country, entered Frankish lands, fought Duke Eudo of Aquitaine near the Garonne and Dordogne, and continued after Eudo fled. Modern scholarship describes the campaign as an invasion of Aquitaine and records that Eudo later sought help from Charles Martel. Their armies met on the route between Tours and Poitiers. These reports place al-Ghafiqi’s command in a frontier conflict among Umayyad al-Andalus, Aquitaine, and the Frankish realms.",
+    "Al-Ghafiqi was killed in the battle; Oxford notes that his army withdrew in good order. The encounter is commonly called the Battle of Tours or Poitiers. Its traditional date is October 732, but scholars have argued for late 733 or 734 based on Iberian chronology. The precise site and the battle’s broader significance are also disputed. This account therefore avoids treating one date, casualty total, or claim that the battle permanently ended Muslim activity in western Europe as settled fact."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.es]
+text = "Una crónica ibérica cercana a los hechos cuenta que el ejército de al-Ghafiqi atravesó zonas montañosas vascas, entró en territorio franco y combatió contra el duque Eudes de Aquitania cerca de los ríos Garona y Dordoña. La crónica relata que Eudes huyó y que la campaña continuó. La investigación moderna describe la expedición como una invasión de Aquitania y señala que Eudes pidió después ayuda a Carlos Martel. Los ejércitos se enfrentaron en la ruta entre Tours y Poitiers. Estos relatos sitúan el mando de al-Ghafiqi en un conflicto fronterizo entre al-Ándalus omeya, Aquitania y los dominios francos. Al-Ghafiqi murió en la batalla; Oxford señala que su ejército se retiró en buen orden. El enfrentamiento suele llamarse batalla de Tours o de Poitiers. La fecha tradicional es octubre de 732, pero algunos estudiosos proponen finales de 733 o 734 a partir de la cronología ibérica. También se discuten el lugar exacto y la importancia general de la batalla. Por eso este relato no presenta como hechos seguros una fecha única, cifras de bajas ni la idea de que el combate acabó definitivamente con la presencia musulmana en Europa occidental."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "es"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Gobernador omeya de al-Ándalus; su campaña cruzó los Pirineos y terminó en la batalla, de fecha discutida, cerca de Tours."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi fue gobernador de al-Ándalus bajo los omeyas y dirigió una expedición al norte de los Pirineos. Las fuentes conservadas describen la ruta y los combates, pero no respaldan todas las leyendas posteriores sobre la batalla ni su escala.",
+]
+sections = [
+  { "title" = "La campaña al norte de los Pirineos", "paragraphs" = [
+    "Una crónica ibérica cercana a los hechos cuenta que el ejército de al-Ghafiqi atravesó zonas montañosas vascas, entró en territorio franco y combatió contra el duque Eudes de Aquitania cerca de los ríos Garona y Dordoña. La crónica relata que Eudes huyó y que la campaña continuó. La investigación moderna describe la expedición como una invasión de Aquitania y señala que Eudes pidió después ayuda a Carlos Martel. Los ejércitos se enfrentaron en la ruta entre Tours y Poitiers. Estos relatos sitúan el mando de al-Ghafiqi en un conflicto fronterizo entre al-Ándalus omeya, Aquitania y los dominios francos.",
+    "Al-Ghafiqi murió en la batalla; Oxford señala que su ejército se retiró en buen orden. El enfrentamiento suele llamarse batalla de Tours o de Poitiers. La fecha tradicional es octubre de 732, pero algunos estudiosos proponen finales de 733 o 734 a partir de la cronología ibérica. También se discuten el lugar exacto y la importancia general de la batalla. Por eso este relato no presenta como hechos seguros una fecha única, cifras de bajas ni la idea de que el combate acabó definitivamente con la presencia musulmana en Europa occidental."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.fr]
+text = "Une chronique ibérique proche des événements rapporte que l’armée d’al-Ghafiqi traversa les régions montagneuses basques, entra en territoire franc et combattit le duc Eudes d’Aquitaine près de la Garonne et de la Dordogne. Eudes aurait fui tandis que l’expédition se poursuivait. Les travaux modernes décrivent l’opération comme une invasion de l’Aquitaine et indiquent qu’Eudes demanda ensuite l’aide de Charles Martel. Leurs armées se rencontrèrent sur la route entre Tours et Poitiers. Ces récits replacent le commandement d’al-Ghafiqi dans un conflit frontalier entre l’al-Andalus omeyyade, l’Aquitaine et les territoires francs. Al-Ghafiqi fut tué lors de la bataille; Oxford précise que son armée se retira en bon ordre. L’affrontement est généralement appelé bataille de Tours ou de Poitiers. La date traditionnelle est octobre 732, mais certains chercheurs proposent la fin de 733 ou 734 à partir de la chronologie ibérique. Le lieu exact et la portée générale de la bataille sont également débattus. Ce récit ne présente donc comme certains ni une date unique, ni des chiffres de pertes, ni l’idée que le combat mit définitivement fin à la présence musulmane en Europe occidentale."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "fr"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Gouverneur omeyyade, il mena une campagne au-delà des Pyrénées jusqu’en Aquitaine; la date de la bataille près de Tours reste discutée."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi gouverna al-Andalus sous les Omeyyades et dirigea une importante expédition au nord des Pyrénées. Les récits conservés décrivent l’itinéraire et les combats, mais ne confirment pas toutes les légendes postérieures sur la bataille ou son ampleur.",
+]
+sections = [
+  { "title" = "La campagne au-delà des Pyrénées", "paragraphs" = [
+    "Une chronique ibérique proche des événements rapporte que l’armée d’al-Ghafiqi traversa les régions montagneuses basques, entra en territoire franc et combattit le duc Eudes d’Aquitaine près de la Garonne et de la Dordogne. Eudes aurait fui tandis que l’expédition se poursuivait. Les travaux modernes décrivent l’opération comme une invasion de l’Aquitaine et indiquent qu’Eudes demanda ensuite l’aide de Charles Martel. Leurs armées se rencontrèrent sur la route entre Tours et Poitiers. Ces récits replacent le commandement d’al-Ghafiqi dans un conflit frontalier entre l’al-Andalus omeyyade, l’Aquitaine et les territoires francs.",
+    "Al-Ghafiqi fut tué lors de la bataille; Oxford précise que son armée se retira en bon ordre. L’affrontement est généralement appelé bataille de Tours ou de Poitiers. La date traditionnelle est octobre 732, mais certains chercheurs proposent la fin de 733 ou 734 à partir de la chronologie ibérique. Le lieu exact et la portée générale de la bataille sont également débattus. Ce récit ne présente donc comme certains ni une date unique, ni des chiffres de pertes, ni l’idée que le combat mit définitivement fin à la présence musulmane en Europe occidentale."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.de]
+text = "Eine zeitnahe iberische Chronik berichtet, al-Ghafiqis Heer habe das gebirgige Baskenland durchquert, fränkisches Gebiet betreten und nahe Garonne und Dordogne gegen Herzog Eudo von Aquitanien gekämpft. Eudo sei geflohen, während der Feldzug weiterging. Die moderne Forschung beschreibt den Vorstoß als Invasion Aquitaniens und hält fest, dass Eudo später Karl Martell um Hilfe bat. Ihre Heere trafen auf der Route zwischen Tours und Poitiers aufeinander. Die Berichte verorten al-Ghafiqis Führung in einem Grenzkonflikt zwischen dem umayyadischen al-Andalus, Aquitanien und den fränkischen Herrschaftsgebieten. Al-Ghafiqi fiel in der Schlacht; Oxford zufolge zog sich sein Heer geordnet zurück. Die Auseinandersetzung wird meist Schlacht bei Tours oder Poitiers genannt. Als traditionelles Datum gilt Oktober 732, doch manche Forschende setzen sie aufgrund iberischer Chronologie auf Ende 733 oder 734. Auch der genaue Ort und die weiterreichende Bedeutung der Schlacht bleiben umstritten. Deshalb behandelt dieser Text weder ein einzelnes Datum noch Verlustzahlen oder die Behauptung, die Schlacht habe die muslimische Präsenz in Westeuropa dauerhaft beendet, als gesicherte Tatsachen."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "de"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Ein umayyadischer Statthalter führte einen Feldzug über die Pyrenäen nach Aquitanien; das Ende bei Tours ist umstritten datiert."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi war Statthalter des umayyadischen al-Andalus und führte einen großen Feldzug nördlich der Pyrenäen. Die erhaltenen Berichte schildern Route und Kämpfe, bestätigen jedoch nicht alle späteren Legenden über die Schlacht oder deren Ausmaß.",
+]
+sections = [
+  { "title" = "Der Feldzug über die Pyrenäen", "paragraphs" = [
+    "Eine zeitnahe iberische Chronik berichtet, al-Ghafiqis Heer habe das gebirgige Baskenland durchquert, fränkisches Gebiet betreten und nahe Garonne und Dordogne gegen Herzog Eudo von Aquitanien gekämpft. Eudo sei geflohen, während der Feldzug weiterging. Die moderne Forschung beschreibt den Vorstoß als Invasion Aquitaniens und hält fest, dass Eudo später Karl Martell um Hilfe bat. Ihre Heere trafen auf der Route zwischen Tours und Poitiers aufeinander. Die Berichte verorten al-Ghafiqis Führung in einem Grenzkonflikt zwischen dem umayyadischen al-Andalus, Aquitanien und den fränkischen Herrschaftsgebieten.",
+    "Al-Ghafiqi fiel in der Schlacht; Oxford zufolge zog sich sein Heer geordnet zurück. Die Auseinandersetzung wird meist Schlacht bei Tours oder Poitiers genannt. Als traditionelles Datum gilt Oktober 732, doch manche Forschende setzen sie aufgrund iberischer Chronologie auf Ende 733 oder 734. Auch der genaue Ort und die weiterreichende Bedeutung der Schlacht bleiben umstritten. Deshalb behandelt dieser Text weder ein einzelnes Datum noch Verlustzahlen oder die Behauptung, die Schlacht habe die muslimische Präsenz in Westeuropa dauerhaft beendet, als gesicherte Tatsachen."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.it]
+text = "Una cronaca iberica vicina agli eventi racconta che l’esercito di al-Ghafiqi attraversò le zone montuose basche, entrò in territorio franco e combatté il duca Eudo d’Aquitania presso i fiumi Garonna e Dordogna. Eudo sarebbe fuggito mentre la campagna proseguiva. Gli studi moderni descrivono la spedizione come un’invasione dell’Aquitania e riferiscono che in seguito Eudo chiese aiuto a Carlo Martello. I loro eserciti si scontrarono sulla strada tra Tours e Poitiers. Questi resoconti collocano il comando di al-Ghafiqi in un conflitto di frontiera fra l’al-Andalus omayyade, l’Aquitania e i territori franchi. Al-Ghafiqi morì nello scontro; Oxford osserva che il suo esercito si ritirò in buon ordine. La battaglia è chiamata di solito battaglia di Tours o di Poitiers. La data tradizionale è ottobre 732, ma alcuni studiosi propongono la fine del 733 o il 734 sulla base della cronologia iberica. Anche il luogo preciso e il significato più ampio dello scontro sono discussi. Perciò questo resoconto non presenta come certi una sola data, il numero delle perdite o l’affermazione che la battaglia pose fine per sempre alla presenza musulmana nell’Europa occidentale."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "it"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Governatore omayyade, guidò una campagna oltre i Pirenei in Aquitania; la data della battaglia presso Tours è discussa."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi fu governatore dell’al-Andalus omayyade e guidò una grande spedizione a nord dei Pirenei. Le fonti conservate descrivono il percorso e gli scontri, ma non confermano tutte le leggende successive sulla battaglia o sulla sua portata.",
+]
+sections = [
+  { "title" = "La campagna oltre i Pirenei", "paragraphs" = [
+    "Una cronaca iberica vicina agli eventi racconta che l’esercito di al-Ghafiqi attraversò le zone montuose basche, entrò in territorio franco e combatté il duca Eudo d’Aquitania presso i fiumi Garonna e Dordogna. Eudo sarebbe fuggito mentre la campagna proseguiva. Gli studi moderni descrivono la spedizione come un’invasione dell’Aquitania e riferiscono che in seguito Eudo chiese aiuto a Carlo Martello. I loro eserciti si scontrarono sulla strada tra Tours e Poitiers. Questi resoconti collocano il comando di al-Ghafiqi in un conflitto di frontiera fra l’al-Andalus omayyade, l’Aquitania e i territori franchi.",
+    "Al-Ghafiqi morì nello scontro; Oxford osserva che il suo esercito si ritirò in buon ordine. La battaglia è chiamata di solito battaglia di Tours o di Poitiers. La data tradizionale è ottobre 732, ma alcuni studiosi propongono la fine del 733 o il 734 sulla base della cronologia iberica. Anche il luogo preciso e il significato più ampio dello scontro sono discussi. Perciò questo resoconto non presenta come certi una sola data, il numero delle perdite o l’affermazione che la battaglia pose fine per sempre alla presenza musulmana nell’Europa occidentale."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.tr]
+text = "Olaylara yakın dönemde yazılmış bir İber kroniği, al-Gafiki’nin ordusunun dağlık Bask bölgelerini geçtiğini, Frank topraklarına girdiğini ve Akitanya Dükü Eudes ile Garonne ve Dordogne nehirleri yakınlarında savaştığını bildirir. Kroniğe göre Eudes kaçarken sefer devam etti. Modern araştırmalar bu harekâtı Akitanya’nın işgali olarak tanımlar ve Eudes’in daha sonra Charles Martel’den yardım istediğini belirtir. Ordular Tours ile Poitiers arasındaki güzergâhta karşılaştı. Bu kayıtlar, al-Gafiki’nin komutasını Emevî Endülüsü, Akitanya ve Frank toprakları arasındaki bir sınır çatışması bağlamına yerleştirir. Al-Gafiki savaşta öldürüldü; Oxford, ordusunun düzenini koruyarak geri çekildiğini belirtir. Çatışma genellikle Tours ya da Poitiers Savaşı olarak anılır. Geleneksel tarih Ekim 732’dir, ancak bazı araştırmacılar İber kronolojisine dayanarak 733’ün sonlarını veya 734’ü önerir. Kesin konum ve savaşın daha geniş tarihsel önemi de tartışmalıdır. Bu nedenle burada tek bir tarih, kayıp sayısı ya da savaşın Batı Avrupa’daki Müslüman varlığını kalıcı biçimde sona erdirdiği iddiası kesinleşmiş bilgi olarak sunulmaz."
+title = "Abd al-Rahman el-Gafiki"
+lang = "tr"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Emevî Endülüsü valisi, Pireneler’i aşarak Akitanya’ya uzanan sefere komuta etti; Tours yakınındaki savaşın tarihi tartışmalıdır."
+shortArticle = true
+intro = [
+  "Abd al-Rahman ibn Abd Allah al-Ghāfiqī, Emevî Endülüsü valisi olarak görev yaptı ve Pireneler’in kuzeyine büyük bir sefer düzenledi. Günümüze ulaşan anlatılar güzergâhı ve çatışmaları aktarır; ancak savaşın ölçeğine ilişkin sonraki bütün efsaneleri doğrulamaz.",
+]
+sections = [
+  { "title" = "Pireneler’i aşan sefer", "paragraphs" = [
+    "Olaylara yakın dönemde yazılmış bir İber kroniği, al-Gafiki’nin ordusunun dağlık Bask bölgelerini geçtiğini, Frank topraklarına girdiğini ve Akitanya Dükü Eudes ile Garonne ve Dordogne nehirleri yakınlarında savaştığını bildirir. Kroniğe göre Eudes kaçarken sefer devam etti. Modern araştırmalar bu harekâtı Akitanya’nın işgali olarak tanımlar ve Eudes’in daha sonra Charles Martel’den yardım istediğini belirtir. Ordular Tours ile Poitiers arasındaki güzergâhta karşılaştı. Bu kayıtlar, al-Gafiki’nin komutasını Emevî Endülüsü, Akitanya ve Frank toprakları arasındaki bir sınır çatışması bağlamına yerleştirir.",
+    "Al-Gafiki savaşta öldürüldü; Oxford, ordusunun düzenini koruyarak geri çekildiğini belirtir. Çatışma genellikle Tours ya da Poitiers Savaşı olarak anılır. Geleneksel tarih Ekim 732’dir, ancak bazı araştırmacılar İber kronolojisine dayanarak 733’ün sonlarını veya 734’ü önerir. Kesin konum ve savaşın daha geniş tarihsel önemi de tartışmalıdır. Bu nedenle burada tek bir tarih, kayıp sayısı ya da savaşın Batı Avrupa’daki Müslüman varlığını kalıcı biçimde sona erdirdiği iddiası kesinleşmiş bilgi olarak sunulmaz."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.zh]
+text = "一部接近事件年代的伊比利亚编年史称，加菲基的军队穿越巴斯克山区，进入法兰克人的领地，并在加龙河和多尔多涅河附近与阿基坦公爵欧多交战。编年史记载欧多逃离后，远征仍继续进行。现代研究将这次行动描述为对阿基坦的入侵，并指出欧多随后向查理·马特尔求援。双方军队在图尔和普瓦捷之间的道路上相遇。这些记载将加菲基的指挥置于倭马亚安达卢斯、阿基坦和法兰克诸势力之间的边境冲突之中，也说明这不是一场与周边政治毫无关系的单独战役。 加菲基在战斗中阵亡；牛津的研究指出，他的军队有秩序地撤退。这场冲突通常称为图尔战役或普瓦捷战役。传统说法将其日期定在732年10月，但一些学者依据伊比利亚年代记录，认为可能发生于733年末或734年。具体战场和这场战斗更广泛的历史意义也仍有争论。因此，本文不把单一日期、伤亡数字，或战斗永久终止穆斯林在西欧活动的说法，当作已经确定的事实。此外，研究者指出，战斗发生后，穆斯林军队仍继续袭扰法兰克领地，所以不能把这场交战写成西欧军事行动的绝对终点。它属于八世纪伊比利亚、阿基坦与法兰克势力彼此竞争的更长历史过程。史料的年代记录、叙述立场和保存状况各不相同，现代研究也会重新比较这些证据。阅读这段历史时，应将可由编年史支持的行动，与后来赋予战役的象征意义分开；这样既能看见阿尔-加菲基所率远征的真实范围，也不会把争论中的解释误当作确定事实。"
+title = "阿卜杜勒-拉赫曼·加菲基"
+lang = "zh"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "这位倭马亚王朝安达卢斯总督越过比利牛斯山远征阿基坦；图尔附近战役的年代仍有争议。"
+shortArticle = true
+intro = [
+  "阿卜杜勒-拉赫曼·伊本·阿卜杜拉·加菲基曾任倭马亚王朝安达卢斯的总督，并率领一支大军越过比利牛斯山向北远征。现存史料记载了行军路线和交战经过，但并不能证实后世有关战役规模的所有传说。",
+]
+sections = [
+  { "title" = "越过比利牛斯山的远征", "paragraphs" = [
+    "一部接近事件年代的伊比利亚编年史称，加菲基的军队穿越巴斯克山区，进入法兰克人的领地，并在加龙河和多尔多涅河附近与阿基坦公爵欧多交战。编年史记载欧多逃离后，远征仍继续进行。现代研究将这次行动描述为对阿基坦的入侵，并指出欧多随后向查理·马特尔求援。双方军队在图尔和普瓦捷之间的道路上相遇。这些记载将加菲基的指挥置于倭马亚安达卢斯、阿基坦和法兰克诸势力之间的边境冲突之中，也说明这不是一场与周边政治毫无关系的单独战役。",
+    "加菲基在战斗中阵亡；牛津的研究指出，他的军队有秩序地撤退。这场冲突通常称为图尔战役或普瓦捷战役。传统说法将其日期定在732年10月，但一些学者依据伊比利亚年代记录，认为可能发生于733年末或734年。具体战场和这场战斗更广泛的历史意义也仍有争论。因此，本文不把单一日期、伤亡数字，或战斗永久终止穆斯林在西欧活动的说法，当作已经确定的事实。此外，研究者指出，战斗发生后，穆斯林军队仍继续袭扰法兰克领地，所以不能把这场交战写成西欧军事行动的绝对终点。它属于八世纪伊比利亚、阿基坦与法兰克势力彼此竞争的更长历史过程。史料的年代记录、叙述立场和保存状况各不相同，现代研究也会重新比较这些证据。阅读这段历史时，应将可由编年史支持的行动，与后来赋予战役的象征意义分开；这样既能看见阿尔-加菲基所率远征的真实范围，也不会把争论中的解释误当作确定事实。"
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.ja]
+text = "事件に比較的近い時代のイベリア年代記によれば、アル＝ガーフィキーの軍はバスク地方の山地を越えてフランク領へ入り、ガロンヌ川とドルドーニュ川の近くでアキテーヌ公エウドと戦った。年代記はエウドが逃れた後も遠征が続いたと記す。近年の研究はこの進軍をアキテーヌへの侵攻と説明し、エウドが後にシャルル・マルテルへ援軍を求めたことを伝えている。両軍はトゥールとポワティエの間の道で対峙した。こうした記録は、アル＝ガーフィキーの指揮をウマイヤ朝アンダルス、アキテーヌ、フランク諸勢力の境界紛争の中に位置づける。 アル＝ガーフィキーはこの戦いで命を落とした。オックスフォードの研究は、彼の軍が秩序を保って退却したと記す。この戦いは一般にトゥールの戦い、またはポワティエの戦いと呼ばれる。伝統的には732年10月とされるが、イベリアの年代記を根拠に733年末または734年とする研究者もいる。正確な場所や戦いの歴史的意義にも議論がある。そのため本稿では、単一の日付、死傷者数、あるいはこの戦いが西ヨーロッパのイスラム勢力を永久に終わらせたという説を確定した事実として扱わない。また、史料の偏りや年代記の食い違いを考慮し、断定できる範囲を区別する必要がある。"
+title = "アブド・アッラフマーン・アル＝ガーフィキー"
+lang = "ja"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "ウマイヤ朝アンダルスの総督としてピレネーを越えアキテーヌへ遠征した。トゥール近郊の戦いの年代には異説がある。"
+shortArticle = true
+intro = [
+  "アブド・アッラフマーン・イブン・アブドゥッラー・アル＝ガーフィキーは、ウマイヤ朝統治下のアンダルスで総督を務め、ピレネー山脈の北へ大規模な遠征を率いた。現存する記録は進軍経路と戦闘を伝えるが、後世に語られた戦いの規模に関する伝説すべてを裏付けるものではない。",
+]
+sections = [
+  { "title" = "ピレネーを越えた遠征", "paragraphs" = [
+    "事件に比較的近い時代のイベリア年代記によれば、アル＝ガーフィキーの軍はバスク地方の山地を越えてフランク領へ入り、ガロンヌ川とドルドーニュ川の近くでアキテーヌ公エウドと戦った。年代記はエウドが逃れた後も遠征が続いたと記す。近年の研究はこの進軍をアキテーヌへの侵攻と説明し、エウドが後にシャルル・マルテルへ援軍を求めたことを伝えている。両軍はトゥールとポワティエの間の道で対峙した。こうした記録は、アル＝ガーフィキーの指揮をウマイヤ朝アンダルス、アキテーヌ、フランク諸勢力の境界紛争の中に位置づける。",
+    "アル＝ガーフィキーはこの戦いで命を落とした。オックスフォードの研究は、彼の軍が秩序を保って退却したと記す。この戦いは一般にトゥールの戦い、またはポワティエの戦いと呼ばれる。伝統的には732年10月とされるが、イベリアの年代記を根拠に733年末または734年とする研究者もいる。正確な場所や戦いの歴史的意義にも議論がある。そのため本稿では、単一の日付、死傷者数、あるいはこの戦いが西ヨーロッパのイスラム勢力を永久に終わらせたという説を確定した事実として扱わない。また、史料の偏りや年代記の食い違いを考慮し、断定できる範囲を区別する必要がある。"
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.ko]
+text = "사건과 가까운 시기에 작성된 이베리아 연대기는 알가피키의 군대가 바스크 산악 지대를 지나 프랑크 영토로 들어갔고, 가론강과 도르도뉴강 부근에서 아키텐 공작 에우도와 싸웠다고 전한다. 연대기에 따르면 에우도가 달아난 뒤에도 원정은 계속되었다. 현대 연구는 이를 아키텐 침공으로 설명하며, 에우도가 뒤이어 샤를 마르텔에게 도움을 요청했다고 기록한다. 양측 군대는 투르와 푸아티에 사이의 길에서 맞붙었다. 이 기록은 알가피키의 지휘를 우마이야 왕조의 알안달루스, 아키텐, 프랑크 세력 사이의 국경 분쟁 속에 놓는다. 알가피키는 전투에서 전사했다. 옥스퍼드 연구는 그의 군대가 질서를 유지하며 후퇴했다고 설명한다. 이 충돌은 보통 투르 전투 또는 푸아티에 전투라고 불린다. 전통적인 날짜는 732년 10월이지만, 일부 연구자는 이베리아 연대기를 근거로 733년 말이나 734년으로 본다. 정확한 전장과 전투의 더 넓은 의미도 논쟁 중이다. 따라서 이 글은 하나의 날짜나 사상자 수, 혹은 이 전투가 서유럽에서 무슬림 활동을 영구히 끝냈다는 주장을 확정된 사실로 다루지 않는다."
+title = "압드 알라흐만 알가피키"
+lang = "ko"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "우마이야 왕조의 알안달루스 총독으로서 피레네를 넘어 아키텐으로 진군했다. 투르 인근 전투의 연대는 논쟁 중이다."
+shortArticle = true
+intro = [
+  "압드 알라흐만 이븐 압둘라 알가피키는 우마이야 왕조 아래 알안달루스의 총독을 지냈으며 피레네 산맥 북쪽으로 대규모 원정을 이끌었다. 남아 있는 기록은 진군 경로와 전투를 설명하지만, 전투의 규모를 둘러싼 후대의 모든 전설을 입증하지는 않는다.",
+]
+sections = [
+  { "title" = "피레네 산맥을 넘은 원정", "paragraphs" = [
+    "사건과 가까운 시기에 작성된 이베리아 연대기는 알가피키의 군대가 바스크 산악 지대를 지나 프랑크 영토로 들어갔고, 가론강과 도르도뉴강 부근에서 아키텐 공작 에우도와 싸웠다고 전한다. 연대기에 따르면 에우도가 달아난 뒤에도 원정은 계속되었다. 현대 연구는 이를 아키텐 침공으로 설명하며, 에우도가 뒤이어 샤를 마르텔에게 도움을 요청했다고 기록한다. 양측 군대는 투르와 푸아티에 사이의 길에서 맞붙었다. 이 기록은 알가피키의 지휘를 우마이야 왕조의 알안달루스, 아키텐, 프랑크 세력 사이의 국경 분쟁 속에 놓는다.",
+    "알가피키는 전투에서 전사했다. 옥스퍼드 연구는 그의 군대가 질서를 유지하며 후퇴했다고 설명한다. 이 충돌은 보통 투르 전투 또는 푸아티에 전투라고 불린다. 전통적인 날짜는 732년 10월이지만, 일부 연구자는 이베리아 연대기를 근거로 733년 말이나 734년으로 본다. 정확한 전장과 전투의 더 넓은 의미도 논쟁 중이다. 따라서 이 글은 하나의 날짜나 사상자 수, 혹은 이 전투가 서유럽에서 무슬림 활동을 영구히 끝냈다는 주장을 확정된 사실로 다루지 않는다."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.ar]
+text = "تذكر مدونة إيبيرية كُتبت بعد الأحداث بوقت قريب أن جيش الغافقي اجتاز مناطق الباسك الجبلية ودخل أراضي الفرنجة، ثم قاتل دوق آكيتين أودو قرب نهري غارون ودوردوني. وتقول المدونة إن أودو فرّ بينما واصلت الحملة تقدمها. وتصف دراسات حديثة هذا التحرك بأنه اجتياح لآكيتين، وتشير إلى أن أودو طلب لاحقاً مساعدة شارل مارتل. والتقى الجيشان على الطريق بين تور وبواتييه. وتضع هذه الروايات قيادة الغافقي ضمن صراع حدودي بين الأندلس الأموية وآكيتين وممالك الفرنجة. قُتل الغافقي في المعركة؛ وتشير دراسة أكسفورد إلى أن جيشه انسحب بانتظام. ويُعرف الاشتباك عادة بمعركة تور أو بواتييه. ويؤرخ التقليد المعركة بأكتوبر 732، لكن بعض الباحثين يرجحون أواخر 733 أو سنة 734 استناداً إلى التسلسل الزمني الإيبيري. كما يظل موقعها الدقيق وأهميتها الأوسع موضع نقاش. لذلك لا يعرض هذا النص تاريخاً واحداً أو أعداداً للقتلى أو القول إن المعركة أنهت نهائياً الوجود الإسلامي في أوروبا الغربية بوصفها حقائق محسومة."
+title = "عبد الرحمن الغافقي"
+lang = "ar"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "قاد والي الأندلس الأموي حملة عبر جبال البرانس إلى آكيتين؛ وما زال تاريخ المعركة قرب تور موضع نقاش."
+shortArticle = true
+intro = [
+  "تولى عبد الرحمن بن عبد الله الغافقي ولاية الأندلس في العصر الأموي، وقاد حملة كبيرة إلى شمال جبال البرانس. وتصف الروايات الباقية مسار الحملة والاشتباكات، لكنها لا تثبت جميع الأساطير اللاحقة عن حجم المعركة.",
+]
+sections = [
+  { "title" = "الحملة عبر جبال البرانس", "paragraphs" = [
+    "تذكر مدونة إيبيرية كُتبت بعد الأحداث بوقت قريب أن جيش الغافقي اجتاز مناطق الباسك الجبلية ودخل أراضي الفرنجة، ثم قاتل دوق آكيتين أودو قرب نهري غارون ودوردوني. وتقول المدونة إن أودو فرّ بينما واصلت الحملة تقدمها. وتصف دراسات حديثة هذا التحرك بأنه اجتياح لآكيتين، وتشير إلى أن أودو طلب لاحقاً مساعدة شارل مارتل. والتقى الجيشان على الطريق بين تور وبواتييه. وتضع هذه الروايات قيادة الغافقي ضمن صراع حدودي بين الأندلس الأموية وآكيتين وممالك الفرنجة.",
+    "قُتل الغافقي في المعركة؛ وتشير دراسة أكسفورد إلى أن جيشه انسحب بانتظام. ويُعرف الاشتباك عادة بمعركة تور أو بواتييه. ويؤرخ التقليد المعركة بأكتوبر 732، لكن بعض الباحثين يرجحون أواخر 733 أو سنة 734 استناداً إلى التسلسل الزمني الإيبيري. كما يظل موقعها الدقيق وأهميتها الأوسع موضع نقاش. لذلك لا يعرض هذا النص تاريخاً واحداً أو أعداداً للقتلى أو القول إن المعركة أنهت نهائياً الوجود الإسلامي في أوروبا الغربية بوصفها حقائق محسومة."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.ru]
+text = "Близкая к событиям иберийская хроника сообщает, что войско аль-Гафики пересекло горные земли басков, вступило на франкскую территорию и сражалось с герцогом Аквитании Эдом у рек Гаронны и Дордони. По хронике, Эд бежал, а поход продолжился. Современные исследования называют выступление вторжением в Аквитанию и отмечают, что позднее Эд обратился за помощью к Карлу Мартеллу. Их армии встретились на дороге между Туром и Пуатье. Эти сообщения помещают командование аль-Гафики в пограничный конфликт между Омейским аль-Андалусом, Аквитанией и франкскими владениями. Аль-Гафики погиб в битве; Oxford отмечает, что его войско отступило организованно. Столкновение обычно называют битвой при Туре или Пуатье. Традиционная дата — октябрь 732 года, однако некоторые исследователи, опираясь на иберийскую хронологию, предлагают конец 733-го или 734 год. Точное место и более широкое значение битвы также обсуждаются. Поэтому здесь не выдаются за установленные факты одна конкретная дата, число потерь или утверждение, будто сражение навсегда прекратило мусульманское присутствие в Западной Европе."
+title = "Абд ар-Рахман аль-Гафики"
+lang = "ru"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Омейский наместник провёл поход через Пиренеи в Аквитанию; дата битвы у Тура остаётся предметом споров."
+shortArticle = true
+intro = [
+  "Абд ар-Рахман ибн Абдаллах аль-Гафики был наместником Омейского аль-Андалуса и возглавил крупный поход к северу от Пиренеев. Сохранившиеся свидетельства описывают маршрут и столкновения, но не подтверждают все поздние легенды о битве и её масштабе.",
+]
+sections = [
+  { "title" = "Поход через Пиренеи", "paragraphs" = [
+    "Близкая к событиям иберийская хроника сообщает, что войско аль-Гафики пересекло горные земли басков, вступило на франкскую территорию и сражалось с герцогом Аквитании Эдом у рек Гаронны и Дордони. По хронике, Эд бежал, а поход продолжился. Современные исследования называют выступление вторжением в Аквитанию и отмечают, что позднее Эд обратился за помощью к Карлу Мартеллу. Их армии встретились на дороге между Туром и Пуатье. Эти сообщения помещают командование аль-Гафики в пограничный конфликт между Омейским аль-Андалусом, Аквитанией и франкскими владениями.",
+    "Аль-Гафики погиб в битве; Oxford отмечает, что его войско отступило организованно. Столкновение обычно называют битвой при Туре или Пуатье. Традиционная дата — октябрь 732 года, однако некоторые исследователи, опираясь на иберийскую хронологию, предлагают конец 733-го или 734 год. Точное место и более широкое значение битвы также обсуждаются. Поэтому здесь не выдаются за установленные факты одна конкретная дата, число потерь или утверждение, будто сражение навсегда прекратило мусульманское присутствие в Западной Европе."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.vi]
+text = "Một biên niên sử Iberia gần thời điểm sự kiện ghi rằng quân của al-Ghafiqi vượt qua vùng núi của người Basque, tiến vào đất Frank và giao chiến với công tước Eudo xứ Aquitaine gần sông Garonne và Dordogne. Theo biên niên sử, Eudo bỏ chạy trong khi chiến dịch tiếp tục. Nghiên cứu hiện đại mô tả đây là cuộc tiến công vào Aquitaine và cho biết Eudo sau đó tìm sự trợ giúp của Charles Martel. Hai đạo quân gặp nhau trên tuyến đường giữa Tours và Poitiers. Các ghi chép đặt quyền chỉ huy của al-Ghafiqi trong một cuộc xung đột biên giới giữa al-Andalus thời Umayyad, Aquitaine và các lãnh địa Frank. Al-Ghafiqi tử trận; Oxford ghi nhận quân đội của ông rút lui có trật tự. Cuộc giao chiến thường được gọi là trận Tours hoặc Poitiers. Niên đại truyền thống là tháng 10 năm 732, nhưng một số học giả dựa trên niên đại Iberia và đề xuất cuối năm 733 hoặc năm 734. Địa điểm chính xác và ý nghĩa rộng hơn của trận đánh cũng còn tranh luận. Vì vậy, bài viết không coi một niên đại duy nhất, số thương vong hay nhận định rằng trận đánh chấm dứt vĩnh viễn sự hiện diện của người Hồi giáo ở Tây Âu là sự thật đã được xác lập."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "vi"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Vị thống đốc Umayyad chỉ huy chiến dịch vượt Pyrenees vào Aquitaine; niên đại trận chiến gần Tours vẫn còn tranh luận."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi từng làm thống đốc al-Andalus dưới quyền Umayyad và chỉ huy một cuộc viễn chinh lớn về phía bắc dãy Pyrenees. Các tư liệu còn lại mô tả lộ trình và những trận giao chiến, nhưng không xác nhận mọi truyền thuyết về quy mô trận đánh.",
+]
+sections = [
+  { "title" = "Chiến dịch vượt dãy Pyrenees", "paragraphs" = [
+    "Một biên niên sử Iberia gần thời điểm sự kiện ghi rằng quân của al-Ghafiqi vượt qua vùng núi của người Basque, tiến vào đất Frank và giao chiến với công tước Eudo xứ Aquitaine gần sông Garonne và Dordogne. Theo biên niên sử, Eudo bỏ chạy trong khi chiến dịch tiếp tục. Nghiên cứu hiện đại mô tả đây là cuộc tiến công vào Aquitaine và cho biết Eudo sau đó tìm sự trợ giúp của Charles Martel. Hai đạo quân gặp nhau trên tuyến đường giữa Tours và Poitiers. Các ghi chép đặt quyền chỉ huy của al-Ghafiqi trong một cuộc xung đột biên giới giữa al-Andalus thời Umayyad, Aquitaine và các lãnh địa Frank.",
+    "Al-Ghafiqi tử trận; Oxford ghi nhận quân đội của ông rút lui có trật tự. Cuộc giao chiến thường được gọi là trận Tours hoặc Poitiers. Niên đại truyền thống là tháng 10 năm 732, nhưng một số học giả dựa trên niên đại Iberia và đề xuất cuối năm 733 hoặc năm 734. Địa điểm chính xác và ý nghĩa rộng hơn của trận đánh cũng còn tranh luận. Vì vậy, bài viết không coi một niên đại duy nhất, số thương vong hay nhận định rằng trận đánh chấm dứt vĩnh viễn sự hiện diện của người Hồi giáo ở Tây Âu là sự thật đã được xác lập."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.id]
+text = "Sebuah kronik Iberia yang dekat dengan masa peristiwa itu menyebut pasukan al-Ghafiqi melintasi wilayah pegunungan Basque, memasuki daerah Franka, lalu bertempur melawan Adipati Eudo dari Aquitaine di dekat sungai Garonne dan Dordogne. Menurut kronik, Eudo melarikan diri sementara ekspedisi berlanjut. Kajian modern menggambarkan gerakan itu sebagai invasi ke Aquitaine dan mencatat bahwa Eudo kemudian meminta bantuan Charles Martel. Kedua pasukan bertemu di jalur antara Tours dan Poitiers. Catatan ini menempatkan kepemimpinan al-Ghafiqi dalam konflik perbatasan antara Al-Andalus Umayyah, Aquitaine, dan wilayah Franka. Al-Ghafiqi gugur dalam pertempuran; Oxford mencatat bahwa pasukannya mundur dengan tertib. Pertempuran itu biasanya disebut Pertempuran Tours atau Poitiers. Tanggal tradisionalnya adalah Oktober 732, tetapi sejumlah sejarawan mengusulkan akhir 733 atau 734 berdasarkan kronologi Iberia. Lokasi persis dan makna yang lebih luas juga diperdebatkan. Karena itu, tulisan ini tidak menyajikan satu tanggal, jumlah korban, atau klaim bahwa pertempuran tersebut secara permanen mengakhiri keberadaan Muslim di Eropa Barat sebagai fakta yang sudah pasti."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "id"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Gubernur Umayyah ini memimpin ekspedisi melintasi Pyrenees ke Aquitaine; tanggal pertempuran dekat Tours masih diperdebatkan."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi menjabat sebagai gubernur Al-Andalus pada masa Umayyah dan memimpin ekspedisi besar ke utara Pyrenees. Sumber yang masih ada menjelaskan rute dan pertempurannya, tetapi tidak membenarkan semua legenda kemudian mengenai skala pertempuran tersebut.",
+]
+sections = [
+  { "title" = "Ekspedisi melintasi Pyrenees", "paragraphs" = [
+    "Sebuah kronik Iberia yang dekat dengan masa peristiwa itu menyebut pasukan al-Ghafiqi melintasi wilayah pegunungan Basque, memasuki daerah Franka, lalu bertempur melawan Adipati Eudo dari Aquitaine di dekat sungai Garonne dan Dordogne. Menurut kronik, Eudo melarikan diri sementara ekspedisi berlanjut. Kajian modern menggambarkan gerakan itu sebagai invasi ke Aquitaine dan mencatat bahwa Eudo kemudian meminta bantuan Charles Martel. Kedua pasukan bertemu di jalur antara Tours dan Poitiers. Catatan ini menempatkan kepemimpinan al-Ghafiqi dalam konflik perbatasan antara Al-Andalus Umayyah, Aquitaine, dan wilayah Franka.",
+    "Al-Ghafiqi gugur dalam pertempuran; Oxford mencatat bahwa pasukannya mundur dengan tertib. Pertempuran itu biasanya disebut Pertempuran Tours atau Poitiers. Tanggal tradisionalnya adalah Oktober 732, tetapi sejumlah sejarawan mengusulkan akhir 733 atau 734 berdasarkan kronologi Iberia. Lokasi persis dan makna yang lebih luas juga diperdebatkan. Karena itu, tulisan ini tidak menyajikan satu tanggal, jumlah korban, atau klaim bahwa pertempuran tersebut secara permanen mengakhiri keberadaan Muslim di Eropa Barat sebagai fakta yang sudah pasti."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.fil]
+text = "Isinalaysay ng isang kronikang Iberian na malapit sa panahong iyon na tumawid ang hukbo ni al-Ghafiqi sa kabundukan ng mga Basque, pumasok sa lupain ng mga Frank, at nakipaglaban kay Duke Eudo ng Aquitaine malapit sa mga ilog ng Garonne at Dordogne. Ayon sa kronika, tumakas si Eudo habang nagpatuloy ang kampanya. Inilalarawan ng makabagong pananaliksik ang pagsulong bilang pananakop sa Aquitaine at itinatala na humingi kalaunan si Eudo ng tulong kay Charles Martel. Nagtagpo ang kanilang mga hukbo sa daan sa pagitan ng Tours at Poitiers. Inilalagay ng mga salaysay ang pamumuno ni al-Ghafiqi sa isang tunggalian sa hangganan ng Umayyad al-Andalus, Aquitaine, at mga lupain ng Frank. Napatay si al-Ghafiqi sa labanan; ayon sa Oxford, maayos na umatras ang kanyang hukbo. Karaniwang tinatawag ang sagupaan na Labanan sa Tours o Poitiers. Tradisyonal na itinatakda ito sa Oktubre 732, ngunit may mga iskolar na nagmumungkahi ng huling bahagi ng 733 o 734 batay sa kronolohiyang Iberian. Pinagtatalunan din ang eksaktong lugar at ang mas malawak na kahalagahan nito. Kaya hindi itinuturing ng salaysay na ito bilang tiyak ang iisang petsa, bilang ng nasawi, o pahayag na tuluyan nitong tinapos ang presensiyang Muslim sa Kanlurang Europa."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "fil"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Pinamunuan ng gobernador ng Umayyad al-Andalus ang kampanyang tumawid sa Pyrenees patungong Aquitaine; pinagtatalunan ang petsa ng labanan malapit sa Tours."
+shortArticle = true
+intro = [
+  "Nagsilbi si ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi bilang gobernador ng al-Andalus sa ilalim ng mga Umayyad at namuno sa isang malaking ekspedisyon pahilaga ng Pyrenees. Inilalarawan ng mga natitirang salaysay ang ruta at mga sagupaan, ngunit hindi pinatutunayan ang lahat ng sumunod na alamat tungkol sa laki ng labanan.",
+]
+sections = [
+  { "title" = "Ang kampanya sa kabila ng Pyrenees", "paragraphs" = [
+    "Isinalaysay ng isang kronikang Iberian na malapit sa panahong iyon na tumawid ang hukbo ni al-Ghafiqi sa kabundukan ng mga Basque, pumasok sa lupain ng mga Frank, at nakipaglaban kay Duke Eudo ng Aquitaine malapit sa mga ilog ng Garonne at Dordogne. Ayon sa kronika, tumakas si Eudo habang nagpatuloy ang kampanya. Inilalarawan ng makabagong pananaliksik ang pagsulong bilang pananakop sa Aquitaine at itinatala na humingi kalaunan si Eudo ng tulong kay Charles Martel. Nagtagpo ang kanilang mga hukbo sa daan sa pagitan ng Tours at Poitiers. Inilalagay ng mga salaysay ang pamumuno ni al-Ghafiqi sa isang tunggalian sa hangganan ng Umayyad al-Andalus, Aquitaine, at mga lupain ng Frank.",
+    "Napatay si al-Ghafiqi sa labanan; ayon sa Oxford, maayos na umatras ang kanyang hukbo. Karaniwang tinatawag ang sagupaan na Labanan sa Tours o Poitiers. Tradisyonal na itinatakda ito sa Oktubre 732, ngunit may mga iskolar na nagmumungkahi ng huling bahagi ng 733 o 734 batay sa kronolohiyang Iberian. Pinagtatalunan din ang eksaktong lugar at ang mas malawak na kahalagahan nito. Kaya hindi itinuturing ng salaysay na ito bilang tiyak ang iisang petsa, bilang ng nasawi, o pahayag na tuluyan nitong tinapos ang presensiyang Muslim sa Kanlurang Europa."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[articles.pt]
+text = "Uma crônica ibérica próxima dos acontecimentos relata que o exército de al-Ghafiqi atravessou áreas montanhosas bascas, entrou em território franco e combateu o duque Eudo da Aquitânia perto dos rios Garona e Dordonha. Eudo teria fugido enquanto a campanha prosseguia. Estudos modernos descrevem a expedição como uma invasão da Aquitânia e registram que Eudo depois pediu ajuda a Carlos Martel. Os exércitos se encontraram na rota entre Tours e Poitiers. Esses relatos situam o comando de al-Ghafiqi em um conflito de fronteira entre o al-Andalus omíada, a Aquitânia e os domínios francos. Al-Ghafiqi morreu na batalha; Oxford observa que seu exército recuou em boa ordem. O confronto é geralmente chamado de Batalha de Tours ou de Poitiers. A data tradicional é outubro de 732, mas alguns estudiosos propõem o fim de 733 ou 734 com base na cronologia ibérica. O local exato e a importância mais ampla do combate também são debatidos. Por isso, este relato não trata como fatos estabelecidos uma data única, números de baixas ou a afirmação de que a batalha encerrou definitivamente a presença muçulmana na Europa Ocidental."
+title = "Abd al-Rahman al-Ghafiqi"
+lang = "pt"
+url = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false"
+highlight = "Governador omíada, comandou uma campanha além dos Pireneus até a Aquitânia; a data da batalha perto de Tours é debatida."
+shortArticle = true
+intro = [
+  "ʿAbd al-Rahman ibn ʿAbd Allah al-Ghafiqi foi governador de al-Andalus sob os omíadas e liderou uma grande expedição ao norte dos Pireneus. Os relatos preservados descrevem o percurso e os combates, mas não confirmam todas as lendas posteriores sobre a batalha ou sua dimensão.",
+]
+sections = [
+  { "title" = "A campanha além dos Pireneus", "paragraphs" = [
+    "Uma crônica ibérica próxima dos acontecimentos relata que o exército de al-Ghafiqi atravessou áreas montanhosas bascas, entrou em território franco e combateu o duque Eudo da Aquitânia perto dos rios Garona e Dordonha. Eudo teria fugido enquanto a campanha prosseguia. Estudos modernos descrevem a expedição como uma invasão da Aquitânia e registram que Eudo depois pediu ajuda a Carlos Martel. Os exércitos se encontraram na rota entre Tours e Poitiers. Esses relatos situam o comando de al-Ghafiqi em um conflito de fronteira entre o al-Andalus omíada, a Aquitânia e os domínios francos.",
+    "Al-Ghafiqi morreu na batalha; Oxford observa que seu exército recuou em boa ordem. O confronto é geralmente chamado de Batalha de Tours ou de Poitiers. A data tradicional é outubro de 732, mas alguns estudiosos propõem o fim de 733 ou 734 com base na cronologia ibérica. O local exato e a importância mais ampla do combate também são debatidos. Por isso, este relato não trata como fatos estabelecidos uma data única, números de baixas ou a afirmação de que a batalha encerrou definitivamente a presença muçulmana na Europa Ocidental."
+  ] },
+]
+sources = [
+  { "title" = "Battle of Tours (732?), Oxford Bibliographies", "url" = "https://academic.oup.com/reference/62399/reference-article-abstract/555384777?login=false" },
+  { "title" = "Chronica Muzarabica 0047, University of Cologne", "url" = "https://saraceni.uni-koeln.de/wiki/Chronica_Muzarabica_0047" },
+]
+
+[fallbacks]
+
+zh-CN = "zh"
+
+pt-BR = "pt"

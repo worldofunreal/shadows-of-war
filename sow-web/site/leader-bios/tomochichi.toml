@@ -1,0 +1,49 @@
+[articles.en]
+text = "Tomochichi (to-mo-chi-chi') was the head chief of a Yamacraw town on the site of present-day Savannah, Georgia, in the 18th century. He gave land on Yamacraw Bluff to James Oglethorpe to build the city of Savannah."
+title = "Tomochichi"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Tomochichi"
+intro = [
+  "Tomochichi (to-mo-chi-chi') (c. 1644 – October 5, 1939) was the head chief of a Yamacraw town on the site of present-day Savannah, Georgia, in the 18th century. He gave land on Yamacraw Bluff to James Oglethorpe to build the city of Savannah. He remains a prominent historical figure of early Georgia history. As the principal mediator between the native population and the new British settlers during the first years of settlement, he contributed much to the establishment of peaceful relations between the two groups and to the ultimate success of Georgia.",
+]
+sections = [
+  { "title" = "Life", "paragraphs" = [
+      "Although much of his early life is unknown, Tomochichi was exiled from the Creek nation for unclear reasons and, along with several followers, he first settled in what is now Savannah, Georgia. Presumably, he was Creek and participated in their early activities with settlers in the colony of Carolina. In about 1730 Tomochichi created his own tribe of Yamacraw from an assortment of Creek and Yamasee Indians after the two nations disagreed over future relations with the British and the Spanish. His group, approximately two hundred people, settled on the bluffs of the Savannah River because the location was the resting place of his ancestors and had close proximity to British traders. When General James Oglethorpe and his fellow settlers reached the region in February 1733, they realized the need to negotiate fairly with the neighboring Indian tribes or risk the success of their enterprise. Mary Musgrove, daughter of a Creek mother and an English father, and her husband, John, served as interpreters for the general and the chief. Tomochichi had had previous contact with British colonists, making him unafraid yet cautious. The aging warrior had several different options available, but he decided to receive the new arrivals and to give them permission to establish Savannah in order to take advantage of trading and diplomatic connections.",
+      "The colonial charter of Georgia was established in 1732 (the colonial charter was contributed in the same year), and Tomochichi remained a lifelong friend of the early British colonists, also helping the settlers in Georgia to negotiate a treaty with the Lower Creeks (as well as settling previous disagreements with the Creek).",
+      "James Oglethorpe wrote the following account in a letter dated June 9, 1737:\"There seems a Door opened to our Colony towards the Conversion of the Indians. I have had many Conversations with their chief Men, the whole Tenour of which shews there is nothing wanting to their Conversion, but one, who understands their Language well, to explain to them the Mysteries of Religion; for as to the moral Part of Christianity they understand it and assent to it. They abhor Adultery, and do not approve of Plurality of Wives. Theft is a thing not know among the Creek Nation, tho' frequent, and even honourable, amongst the Uchees. Murder they look upon as a most abominable Crime, but do not esteem the killing of an Enemy, or one that has injured them, Murder. The Passion of Revenge, which they call Honour, and Drunkenness, which they learnt from our Traders, seem to be the two greatest Obstacles to their being truly Christians: But upon both these Points they hear Reason; and with respect to drinking of Rum, I have weaned those near me a good deal from it. As for Revenge, they say, as they have no executive Power of Justice amongst them, they are forced to kill the Man who has injured them, in order to prevent others from doing the like; but they do not think that any Injury, except Adultery, or Murder, deserves Revenge. They hold, that if a Man commits Adultery, the injur'd Husband is oblig'd to have Revenge, by cutting off the Ears of the Adulterer, which if he is too sturdy and strong to submit to, then the injured Husband kills him the first Time that he has an Opportunity so to do with Safety. In Cases of Murder, the next in Blood is obliged to kill the Murderer, or else he is looked upon as infamous in the Nation where he lives; and the Weakness of the executive Power is such…",
+    ] },
+  { "title" = "Death and legacy", "paragraphs" = [
+      "Tomochichi died on October 5, 1739, and while sources differ over his exact age, historians and contemporary observers generally agree that he was 95 when he died. (Lucian Lamar Knight estimates Tomochichi was 90 when Oglethorpe arrived on American shores). Before he died in 1739, he told the Creek Indians to remember how well the King treated them and he hoped that they would remain friends forever. It is believed one of his last wishes was to be \"buried among the whites\". He was given a public funeral by the colony, with Oglethorpe serving as one of the six pallbearers. His contributions to the colony of Georgia were celebrated with a British military funeral, and the grave site was commemorated with a marker of \"a Pyramid of Stone\" collected from the vicinity. Senauki, his wife, and his nephew, Toonahowi, were left in charge of the tribe, but he appointed no one to take his place as the impartial mediator between the Indians and the settlers.",
+      "The monument marking his gravesite was destroyed under unknown circumstances, the last known mention of the pyramid being in 1759. In the early 1870s, another monument was built on the site, this time an earthen mound with a decorative planter in the center, identical to at least four other mounds and planters built in other local squares. The planter is commonly mis-identified as the monument to Tomochichi, a mistake that arises from a 1937 Savannah Morning News article. The planter was later removed to make way for the William Washington Gordon Monument, honoring the founder of the Central of Georgia Railroad and the grandfather of Juliette Gordon Low, founder of the Girl Scouts. Upset with the lack of monument for Tomochichi, Gordon's daughter-in-law, Nellie Kinzie Gordon, had a new monument to his memory, a large granite boulder with a decorative copper plate, installed southeast of the original structure on April 21, 1899, by the Georgia Society of The National Society of The Colonial Dames of America. The Georgia Historical Commission later placed a large marker in Savannah's Wright Square, which details the achievements of the Yamacraw chieftain.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

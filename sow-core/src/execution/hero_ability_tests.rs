@@ -36,6 +36,32 @@ fn measurement(ability: Ability) -> u16 {
         Ability::GuildNetwork { .. } => 408,
         Ability::WarshipPrize { .. } => 409,
         Ability::Armistice { .. } => 410,
+        Ability::CityFarmFounding => 411,
+        Ability::CounterLevy { .. } => 412,
+        Ability::CityIntercession { .. } => 413,
+        Ability::RetreatHandover { .. } => 414,
+        Ability::CityDenial => 415,
+        Ability::PuntGardens => 416,
+        Ability::LastCityRelocation => 417,
+        Ability::WarRegalia { .. } => 418,
+        Ability::Reunification { .. } => 419,
+        Ability::FactoryCityUpgradeDiscount { .. } => 420,
+        Ability::FactoryRaid { .. } => 421,
+        Ability::ImperialStandards { .. } => 422,
+        Ability::SiegeBreach => 423,
+        Ability::CookhamExchange => 425,
+        Ability::SecondCrown => 426,
+        Ability::KitchenPhilosophy => 427,
+        Ability::MountedCapture { .. } => 428,
+        Ability::AksumRout => 429,
+        Ability::TigranesAid { .. } => 430,
+        Ability::AkkadGarrison => 431,
+        Ability::SharedFeast => 432,
+        Ability::GreatLawOfPeace => 433,
+        Ability::ContestedSteppe { .. } => 434,
+        Ability::ZagrosAscent { .. } => 436,
+        Ability::RegionalCommands { .. } => 437,
+        Ability::NyabingiNetwork { .. } => 438,
         Ability::AttackStrength { against, .. } => 100 + target_index(against),
         Ability::ConquestSpeed { against, .. } => 120 + target_index(against),
         Ability::DefenseStrength { against, .. } => 300 + target_index(against),
@@ -123,6 +149,14 @@ fn measurement(ability: Ability) -> u16 {
             when: LossWhen::Landing,
             ..
         } => 31,
+        Ability::AttackerLoss {
+            when: LossWhen::JointFront,
+            ..
+        } => 424,
+        Ability::AttackerLoss {
+            when: LossWhen::SeaRetreat,
+            ..
+        } => 435,
         Ability::AttackerLoss {
             when: LossWhen::Against(against),
             ..
@@ -830,8 +864,34 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
             Ability::CoastalFounding
             | Ability::AlliedCityGrant { .. }
             | Ability::CityTowerUpgrade
+            | Ability::CityFarmFounding
+            | Ability::CityDenial
+            | Ability::PuntGardens
+            | Ability::LastCityRelocation
+            | Ability::WarRegalia { .. }
+            | Ability::Reunification { .. }
+            | Ability::FactoryCityUpgradeDiscount { .. }
+            | Ability::FactoryRaid { .. }
+            | Ability::ImperialStandards { .. }
+            | Ability::SiegeBreach
+            | Ability::CookhamExchange
+            | Ability::SecondCrown
+            | Ability::KitchenPhilosophy
+            | Ability::MountedCapture { .. }
+            | Ability::AksumRout
+            | Ability::TigranesAid { .. }
+            | Ability::AkkadGarrison
+            | Ability::SharedFeast
+            | Ability::GreatLawOfPeace
+            | Ability::ContestedSteppe { .. }
+            | Ability::ZagrosAscent { .. }
+            | Ability::RegionalCommands { .. }
+            | Ability::NyabingiNetwork { .. }
+            | Ability::CounterLevy { .. }
             | Ability::SharedCitySpoils { .. }
             | Ability::CityEvacuation { .. }
+            | Ability::CityIntercession { .. }
+            | Ability::RetreatHandover { .. }
             | Ability::ReturnCampaign { .. }
             | Ability::AllyPatronage { .. }
             | Ability::SurplusTreasury { .. }
@@ -1070,6 +1130,107 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                 (cost < plain_cost, shown[1], control_shown[1])
             }
             Ability::AttackerLoss {
+                when: LossWhen::SeaRetreat,
+                ..
+            } => {
+                let (troops, shown) = sea_retreat_refund(hero, true, false);
+                let (ordinary, control_shown) = sea_retreat_refund(plain, true, false);
+                assert_eq!(sea_retreat_refund(hero, false, false), (9_750.0, 0));
+                assert_eq!(sea_retreat_refund(hero, true, true), (9_500.0, 0));
+                (
+                    troops == 10_000.0 && ordinary == 9_750.0,
+                    shown,
+                    control_shown,
+                )
+            }
+            Ability::AttackerLoss {
+                when: LossWhen::JointFront,
+                ..
+            } => {
+                use super::hero_effects::AbilityState::{Conditional, Ready};
+                let run = |leader: Leader, adjacent: bool, allied_attack: bool| {
+                    let active =
+                        leader.has_attacker_loss(LossWhen::JointFront) && adjacent && allied_attack;
+                    let mut battle = arena(12, 6, leader, Some(Leader::of("cleopatra")));
+                    battle.state.config.global_speed_multiplier = 100.0;
+                    battle.state.config.attack_cost_enemy = 100.0;
+                    for y in 0..12 {
+                        for x in 6..9 {
+                            if (x, y) != (6, 6) {
+                                battle.state.set_tile_owner(x, y, 0);
+                            }
+                        }
+                    }
+                    if adjacent {
+                        battle.state.set_tile_owner(6, 7, 3);
+                    } else {
+                        battle.state.set_tile_owner(8, 6, 3);
+                    }
+                    let attacker = battle.state.player_mut(1).unwrap();
+                    attacker.troops = 10_000.0;
+                    attacker.alliances.push(3);
+                    let ally = battle.state.player_mut(3).unwrap();
+                    ally.troops = 10_000.0;
+                    ally.alliances.push(1);
+                    battle.state.player_mut(2).unwrap().troops = 2000.0;
+                    send(
+                        &mut battle,
+                        1,
+                        GameplayIntent::Attack(AttackIntent {
+                            target_owner: 2,
+                            troops: Some(8000.0),
+                        }),
+                    );
+                    if allied_attack {
+                        send(
+                            &mut battle,
+                            3,
+                            GameplayIntent::Attack(AttackIntent {
+                                target_owner: 2,
+                                troops: Some(8000.0),
+                            }),
+                        );
+                        assert!(battle.attacks.iter().any(|attack| attack.owner_id == 3));
+                    }
+                    if leader.has_attacker_loss(LossWhen::JointFront) {
+                        assert_eq!(
+                            battle.hero_ability_feedback(1).unwrap().state,
+                            if active { Ready } else { Conditional }
+                        );
+                    }
+                    battle.execute_combat();
+                    let troops = battle
+                        .state
+                        .events
+                        .iter()
+                        .find_map(|event| match event {
+                            GameEvent::TileCaptured {
+                                x: 6,
+                                y: 6,
+                                new_owner: 1,
+                                troops,
+                                ..
+                            } => Some(*troops),
+                            _ => None,
+                        })
+                        .expect("the land attack must conquer the shared frontier");
+                    if active {
+                        assert!(battle.state.events.iter().any(|event| matches!(
+                            event,
+                            GameEvent::AbilityTriggered { owner_id: 1, tile: Some((6, 6)), affected }
+                                if affected == &[2, 3]
+                        )));
+                    }
+                    (troops, owner_marks(&battle)[1])
+                };
+                let (supported, shown) = run(hero, true, true);
+                let (ordinary, control) = run(plain, true, true);
+                assert_eq!(supported - ordinary, 25.0);
+                assert_eq!(run(hero, true, false), (ordinary, 0));
+                assert_eq!(run(hero, false, true), (ordinary, 0));
+                (supported > ordinary, shown, control)
+            }
+            Ability::AttackerLoss {
                 when: LossWhen::Against(against),
                 ..
             } => {
@@ -1133,11 +1294,28 @@ fn every_hero_has_a_catalog_ability() {
         // Fixed actions and resource amounts have no percentage. Validate their
         // actual magnitude instead of inventing a percentage for them.
         let magnitude = match ability {
-            Ability::CoastalFounding | Ability::CityTowerUpgrade => 1,
+            Ability::CoastalFounding
+            | Ability::CityTowerUpgrade
+            | Ability::CityFarmFounding
+            | Ability::CityDenial
+            | Ability::PuntGardens
+            | Ability::LastCityRelocation
+            | Ability::CookhamExchange
+            | Ability::SecondCrown
+            | Ability::KitchenPhilosophy
+            | Ability::AksumRout
+            | Ability::AkkadGarrison
+            | Ability::SharedFeast
+            | Ability::GreatLawOfPeace
+            | Ability::SiegeBreach => 1,
             Ability::AlliedCityGrant { gold } | Ability::SharedCitySpoils { gold } => gold,
-            Ability::CityEvacuation { troops } => troops,
+            Ability::CityEvacuation { troops }
+            | Ability::CityIntercession { troops }
+            | Ability::WarRegalia { troops } => troops,
             Ability::SurplusTreasury { troops_per_gold } => troops_per_gold,
+            Ability::FactoryRaid { troops_per_level } => troops_per_level,
             Ability::GuildNetwork { gold_per_second } => gold_per_second,
+            Ability::TigranesAid { max_troops } => max_troops,
             _ => ability.percent(),
         };
         assert!(magnitude > 0, "{hero:?} has a zero-strength ability");
@@ -1594,6 +1772,85 @@ fn landing_cost_per_tile(attacker: Leader) -> (f64, Marks) {
     army_loss_per_tile(&mut engine, 20)
 }
 
+/// Launch, sail into open water, then either recall or arrive at a destination gained en route.
+fn sea_retreat_refund(leader: Leader, recall: bool, limited_room: bool) -> (f64, usize) {
+    use super::hero_effects::AbilityState::{Conditional, Ready};
+    let active = leader.has_attacker_loss(LossWhen::SeaRetreat);
+    let mut engine = arena(20, 2, leader, Some(Leader::of("cleopatra")));
+    for y in 0..20 {
+        for x in 2..12 {
+            engine.state.set_tile_owner(x, y, 0);
+            engine.state.map.terrain[(y * 20 + x) as usize] = MapTile::from_byte(0x20);
+        }
+    }
+    engine.state.map.compute_shorelines();
+    engine.water = WaterComponents::compute(&engine.state.map, |_| {});
+    let p = engine.state.player_mut(1).unwrap();
+    p.troops = 10_000.0;
+    p.max_troops = 20_000.0;
+    if active {
+        assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+    }
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::LaunchFleet {
+            target_tile: 8 * 20 + 12,
+            troops: Some(1_000.0),
+        },
+    );
+    assert_eq!(engine.fleets.len(), 1);
+    let id = engine.fleets[0].id;
+    for _ in 0..4 {
+        engine.execute_fleets();
+    }
+    assert!(engine.state.map.terrain[engine.fleets[0].current_tile as usize].is_water());
+    if active {
+        assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Ready);
+    }
+    if limited_room {
+        engine.state.player_mut(1).unwrap().max_troops = 9_500.0;
+        if active {
+            assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+        }
+    }
+    if recall {
+        send(&mut engine, 1, GameplayIntent::RecallFleet { fleet_id: id });
+        assert!(engine.fleets[0].retreating);
+    } else {
+        let dst = engine.fleets[0].dst_tile;
+        engine.state.set_tile_owner(dst % 20, dst / 20, 1);
+    }
+    assert_eq!(owner_marks(&engine)[1], 0);
+    for _ in 0..120 {
+        engine.execute_fleets();
+        if engine.fleets.is_empty() {
+            break;
+        }
+    }
+    assert!(
+        engine.fleets.is_empty(),
+        "the transport must complete its return"
+    );
+    if active && recall && !limited_room {
+        assert!(engine.state.events.iter().any(|event| matches!(
+            event,
+            GameEvent::AbilityTriggered {
+                owner_id: 1,
+                tile: Some((1, _)),
+                ..
+            }
+        )));
+    }
+    if active {
+        assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+    }
+    (
+        engine.state.player(1).unwrap().troops,
+        owner_marks(&engine)[1],
+    )
+}
+
 /// Kin and Foreign follow the people each player is shown as, not the hero itself: a rival
 /// led by another hero of the same people is kin, a rival of another people is foreign, a
 /// catalog bot counts as its catalog people whatever random hero carries its ability, and
@@ -1992,6 +2249,1605 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             e.execute_construction();
             (f64::from(e.buildings[1].level), owner_marks(&e)[1])
         }
+        Ability::CityFarmFounding => {
+            e.add_building(make(1, 1, BuildingKind::City, 16, 16, 1, false));
+            e.state.next_building_id = 2;
+            e.state.player_mut(1).unwrap().gold = 1_000_000.0;
+            send(
+                &mut e,
+                1,
+                GameplayIntent::UpgradeStructure { building_id: 1 },
+            );
+            let duration = e.buildings[0].ticks_until_complete;
+            assert!(duration > 0);
+            for _ in 0..duration {
+                e.execute_construction();
+            }
+            let farms = e
+                .buildings
+                .iter()
+                .filter(|b| b.kind == BuildingKind::Farm)
+                .count();
+            (farms as f64, owner_marks(&e)[1])
+        }
+        Ability::SiegeBreach => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = leader.ability() == Ability::SiegeBreach;
+            e.add_building(make(1, 2, BuildingKind::Tower, 32, 16, 3, false));
+            e.add_building(make(2, 2, BuildingKind::Tower, 35, 16, 3, false));
+            e.add_building(make(3, 2, BuildingKind::Tower, 49, 16, 2, false));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.add_building(make(4, 2, BuildingKind::Tower, 32, 20, 2, false));
+            e.add_building(make(5, 2, BuildingKind::Tower, 39, 16, 1, false));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            e.state.set_tile_owner(32, 16, 1);
+            e.sync_building_ownership();
+            let destroyed = 5 - e.buildings.len();
+            assert_eq!(destroyed, usize::from(active));
+            assert_eq!(e.buildings.iter().any(|tower| tower.id == 4), !active);
+            assert_eq!(e.buildings[0].owner_id, 1);
+            if active {
+                assert!(e.building_grid.dirty && e.render_defense_dirty);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((32, 20)), affected }
+                        if affected == &[2]
+                )));
+            }
+            let shown = owner_marks(&e)[1];
+            e.state.events.clear();
+            e.state.set_tile_owner(32, 16, 2);
+            e.sync_building_ownership();
+            e.state.set_tile_owner(32, 16, 1);
+            e.sync_building_ownership();
+            assert_eq!(e.buildings.len(), 5 - destroyed);
+            assert_eq!(owner_marks(&e)[1], 0);
+            (destroyed as f64, shown)
+        }
+        Ability::ImperialStandards { .. } => {
+            use super::hero_effects::AbilityState::{Active, Conditional};
+            use super::income_rates::imperial_standard_income;
+            let active = matches!(leader.ability(), Ability::ImperialStandards { .. });
+            e.add_building(make(1, 1, BuildingKind::City, 8, 16, 2, false));
+            e.add_building(make(2, 1, BuildingKind::Factory, 16, 16, 2, false));
+            e.add_building(make(3, 1, BuildingKind::Farm, 24, 16, 2, true));
+            e.execute_income();
+            assert_eq!(e.hero_gold_per_second(1), 0.0);
+            assert_eq!(owner_marks(&e)[1], 0);
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+
+            let player = e.state.player_mut(1).unwrap();
+            player.troops = 0.0;
+            let before = player.gold;
+            e.execute_construction();
+            e.execute_income();
+            let player = e.state.player(1).unwrap();
+            let agg = e.building_aggregates[1];
+            let cfg = &e.state.config;
+            let (extra_gold, extra_troops) = imperial_standard_income(agg, leader, cfg);
+            assert_eq!(
+                (extra_gold, extra_troops),
+                if active {
+                    (
+                        cfg.factory_gold_income * 2.5 * 0.25,
+                        cfg.farm_troop_income * 2.0 * 0.25,
+                    )
+                } else {
+                    (0.0, 0.0)
+                }
+            );
+            assert_eq!(e.hero_gold_per_second(1), extra_gold);
+            let base_gold = gold_income_per_second(player.tile_count, agg, leader, cfg);
+            let base_troops = troop_income_per_second(player.tile_count, agg, leader, cfg);
+            assert!((player.gold - before - cfg.per_tick(base_gold + extra_gold)).abs() < 1e-8);
+            assert!((player.troops - cfg.per_tick(base_troops + extra_troops)).abs() < 1e-8);
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Active);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered {
+                        owner_id: 1,
+                        tile: Some((8, 16)),
+                        ..
+                    }
+                )));
+            }
+            let shown = owner_marks(&e)[1];
+            e.state.events.clear();
+            e.execute_income();
+            assert_eq!(owner_marks(&e)[1], 0);
+
+            e.state.set_tile_owner(24, 16, 2);
+            e.sync_building_ownership();
+            e.execute_income();
+            assert_eq!(e.hero_gold_per_second(1), 0.0);
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.state.set_tile_owner(24, 16, 1);
+            e.sync_building_ownership();
+            e.execute_income();
+            assert_eq!(owner_marks(&e)[1], shown);
+            (extra_gold + extra_troops, shown)
+        }
+        Ability::FactoryRaid { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::FactoryRaid { .. });
+            let mut battle = arena(12, 6, leader, Some(Leader::of("cleopatra")));
+            for y in 0..12 {
+                for x in 6..9 {
+                    if (x, y) != (6, 6) {
+                        battle.state.set_tile_owner(x, y, 0);
+                    }
+                }
+            }
+            battle.add_building(Building {
+                tile_idx: 6 * 12 + 6,
+                ..make(1, 2, BuildingKind::Factory, 6, 6, 1, true)
+            });
+            let take_factory = |battle: &mut SowEngine| {
+                battle.state.events.clear();
+                battle.state.player_mut(1).unwrap().troops = 10_000.0;
+                battle.state.player_mut(2).unwrap().troops = 2000.0;
+                send(
+                    battle,
+                    1,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner: 2,
+                        troops: Some(8000.0),
+                    }),
+                );
+                let id = battle.attacks[0].id;
+                for _ in 0..20 {
+                    battle.execute_combat();
+                    if battle.state.map.owner_id(6, 6) == 1 {
+                        break;
+                    }
+                    battle.state.tick += 1;
+                }
+                let troops = battle
+                    .state
+                    .events
+                    .iter()
+                    .find_map(|event| match event {
+                        GameEvent::TileCaptured {
+                            x: 6,
+                            y: 6,
+                            new_owner: 1,
+                            troops,
+                            ..
+                        } => Some(*troops),
+                        _ => None,
+                    })
+                    .expect("land attack must take the factory center");
+                let marks = owner_marks(battle)[1];
+                if !battle.attacks.is_empty() {
+                    send(battle, 1, GameplayIntent::CancelAttack { attack_id: id });
+                    battle.execute_combat();
+                }
+                battle.sync_building_ownership();
+                (troops, marks)
+            };
+            if active {
+                assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            let (ordinary, no_mark) = take_factory(&mut battle);
+            assert_eq!(no_mark, 0);
+            battle.state.set_tile_owner(6, 6, 2);
+            battle.sync_building_ownership();
+            battle.buildings[0].level = 3;
+            battle.buildings[0].under_construction = false;
+            if active {
+                battle.state.set_tile_owner(6, 6, 0);
+                assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
+                battle.state.set_tile_owner(6, 6, 2);
+                assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            let (reinforced, shown) = take_factory(&mut battle);
+            let gained = reinforced - ordinary;
+            assert_eq!(gained, if active { 900.0 } else { 0.0 });
+            if active {
+                assert!(battle.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((6, 6)), affected }
+                        if affected == &[2]
+                )));
+            }
+            battle.state.set_tile_owner(6, 6, 2);
+            battle.sync_building_ownership();
+            if active {
+                assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            assert_eq!(take_factory(&mut battle), (ordinary, 0));
+            (reinforced, shown)
+        }
+        Ability::FactoryCityUpgradeDiscount { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::FactoryCityUpgradeDiscount { .. });
+            let city = make(1, 1, BuildingKind::City, 16, 16, 1, false);
+            e.add_building(city);
+            let full_cost = crate::building::structure_upgrade_cost_gold(
+                BuildingKind::City,
+                2,
+                1,
+                &e.state.config,
+            );
+            e.state.player_mut(1).unwrap().gold = full_cost;
+            e.add_building(make(2, 2, BuildingKind::Factory, 22, 16, 1, false));
+            e.add_building(make(3, 1, BuildingKind::Factory, 16, 28, 1, true));
+            e.add_building(make(4, 1, BuildingKind::Factory, 16, 29, 1, false));
+            assert_eq!(e.structure_upgrade_quote(city.id), Some((full_cost, false)));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.execute_construction();
+            let expected_cost = if active { full_cost * 0.65 } else { full_cost };
+            let (price, discounted) = e.structure_upgrade_quote(city.id).unwrap();
+            assert!((price - expected_cost).abs() < 1e-8);
+            assert_eq!(discounted, active);
+            if active {
+                e.state.player_mut(1).unwrap().gold = price - 1.0;
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+                send(
+                    &mut e,
+                    1,
+                    GameplayIntent::UpgradeStructure {
+                        building_id: city.id,
+                    },
+                );
+                assert!(!e.buildings[0].under_construction);
+                assert_eq!(owner_marks(&e)[1], 0);
+                e.state.player_mut(1).unwrap().gold = price;
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            let before = e.state.player(1).unwrap().gold;
+            send(
+                &mut e,
+                1,
+                GameplayIntent::UpgradeStructure {
+                    building_id: city.id,
+                },
+            );
+            assert_eq!(e.buildings[0].level, 2);
+            assert!(e.buildings[0].under_construction);
+            assert_eq!(e.state.player(1).unwrap().gold, 0.0);
+            if active {
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered {
+                        owner_id: 1,
+                        tile: Some((16, 16)),
+                        ..
+                    }
+                )));
+            }
+            (full_cost - before, owner_marks(&e)[1])
+        }
+        Ability::Reunification { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::Reunification { .. });
+            let run = |room: f64| {
+                let mut battle = arena(12, 6, leader, Some(Leader::of("cleopatra")));
+                for y in 0..12 {
+                    for x in 6..12 {
+                        if (x, y) != (6, 6) && (x, y) != (11, 11) {
+                            battle.state.set_tile_owner(x, y, 1);
+                        }
+                    }
+                }
+                battle.state.config.attack_cost_enemy = 0.0;
+                let defender = battle.state.player_mut(2).unwrap();
+                defender.troops = 2000.0;
+                let attacker = battle.state.player_mut(1).unwrap();
+                attacker.troops = 10_000.0;
+                attacker.max_troops = 10_000.0 + room;
+                if active {
+                    assert_eq!(
+                        battle.hero_ability_feedback(1).unwrap().state,
+                        if room > 0.0 { Ready } else { Conditional }
+                    );
+                }
+                send(
+                    &mut battle,
+                    1,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner: 2,
+                        troops: Some(8000.0),
+                    }),
+                );
+                if active && room > 0.0 {
+                    assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Ready);
+                }
+                for _ in 0..20 {
+                    battle.execute_combat();
+                    if !battle.state.player(2).unwrap().alive {
+                        break;
+                    }
+                    battle.state.tick += 1;
+                }
+                let defender = battle.state.player(2).unwrap();
+                assert!(!defender.alive, "attack must take the last enemy tile");
+                assert_eq!(defender.troops, 0.0);
+                let recruited = battle.state.player(1).unwrap().troops - 10_000.0;
+                assert_eq!(recruited, if active { room.min(500.0) } else { 0.0 });
+                if active && room > 0.0 {
+                    assert!(battle.state.events.iter().any(|event| matches!(
+                        event,
+                        GameEvent::AbilityTriggered { owner_id: 1, tile: Some((6, 6)), affected }
+                            if affected == &[2]
+                    )));
+                }
+                (recruited, owner_marks(&battle)[1])
+            };
+            let result = run(750.0);
+            run(200.0);
+            assert_eq!(run(0.0).1, 0);
+            result
+        }
+        Ability::WarRegalia { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::WarRegalia { .. });
+            e.state.set_tile_owner(32, 16, 3);
+            e.state.set_tile_owner(63, 63, 2);
+            e.state.player_mut(1).unwrap().troops = 2000.0;
+            e.state.player_mut(1).unwrap().alliances.push(2);
+            e.state.player_mut(2).unwrap().alliances.push(1);
+            e.state.player_mut(2).unwrap().troops = 10_000.0;
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.add_building(make(1, 1, BuildingKind::City, 16, 16, 1, false));
+            if active {
+                e.state.player_mut(1).unwrap().troops = 749.0;
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+                e.state.player_mut(1).unwrap().troops = 2000.0;
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            let order = GameplayIntent::Attack(AttackIntent {
+                target_owner: 3,
+                troops: Some(1000.0),
+            });
+            send(&mut e, 2, order.clone());
+            let troops = e.attacks[0].troops;
+            let reserve = 2000.0 - e.state.player(1).unwrap().troops;
+            assert_eq!(reserve, if active { 750.0 } else { 0.0 });
+            assert_eq!(troops, 1000.0 + reserve);
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((32, 16)), affected }
+                        if affected == &[2, 3]
+                )));
+            }
+            send(&mut e, 2, order.clone());
+            assert_eq!(e.attacks[0].troops, troops + 1000.0);
+            let attack_id = e.attacks[0].id;
+            send(&mut e, 2, GameplayIntent::CancelAttack { attack_id });
+            e.execute_combat();
+            send(&mut e, 2, order);
+            assert_eq!(e.attacks[0].troops, 1000.0);
+            assert_eq!(2000.0 - e.state.player(1).unwrap().troops, reserve);
+            (troops, owner_marks(&e)[1])
+        }
+        Ability::LastCityRelocation => {
+            use super::hero_effects::AbilityState::{Conditional, Ready, Spent};
+            let active = leader.ability() == Ability::LastCityRelocation;
+            e.add_building(make(1, 1, BuildingKind::City, 8, 16, 1, false));
+            e.add_building(make(2, 1, BuildingKind::City, 20, 16, 1, false));
+            e.state.next_building_id = 3;
+            e.state.player_mut(1).unwrap().cities = 2;
+            let gold = e.state.player(1).unwrap().gold;
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.state.set_tile_owner(8, 16, 2);
+            e.sync_building_ownership();
+            assert_eq!(e.buildings.len(), 2);
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            e.state.set_tile_owner(20, 16, 2);
+            e.sync_building_ownership();
+            let founded = e.buildings.len() - 2;
+            assert_eq!(founded, usize::from(active));
+            assert_eq!(e.state.player(1).unwrap().gold, gold);
+            assert_eq!(e.state.player(1).unwrap().cities, u32::from(active));
+            if active {
+                let city = e.buildings[2];
+                assert_eq!(
+                    (city.kind, city.owner_id, city.active_level()),
+                    (BuildingKind::City, 1, 1)
+                );
+                let (x, y) = (city.tile_idx % 64, city.tile_idx / 64);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some(tile), .. }
+                        if *tile == (x, y)
+                )));
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Spent);
+                e.state.set_tile_owner(x, y, 2);
+                e.sync_building_ownership();
+                assert_eq!(e.buildings.len(), 3);
+            }
+            (founded as f64, owner_marks(&e)[1])
+        }
+        Ability::NyabingiNetwork { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::NyabingiNetwork { .. });
+            let (mut defended_tiles, mut marks) = (0, 0);
+            for (defender, linked, allied) in [
+                (1, true, false),
+                (1, false, true),
+                (1, true, true),
+                (2, true, true),
+            ] {
+                let plain = Leader::of("cleopatra");
+                let mut battle = arena(40, 8, leader, Some(plain));
+                for y in 0..40 {
+                    for x in 0..40 {
+                        let owner = if x >= 8 { 3 } else { 1 + (y % 2) as u16 };
+                        battle.state.set_tile_owner(x, y, owner);
+                        if x < 8 && (owner == defender || linked) {
+                            battle.state.map.terrain[(y * 40 + x) as usize] =
+                                MapTile::from_byte(0x8a);
+                        }
+                    }
+                }
+                if allied {
+                    send(
+                        &mut battle,
+                        1,
+                        GameplayIntent::ProposeAlliance { target_player: 2 },
+                    );
+                    send(
+                        &mut battle,
+                        2,
+                        GameplayIntent::AcceptAlliance { target_player: 1 },
+                    );
+                    assert!(super::hero_effects::allied(&battle.state, 1, 2));
+                }
+                if active {
+                    assert_eq!(
+                        battle.hero_ability_feedback(1).unwrap().state,
+                        if linked && allied { Ready } else { Conditional },
+                    );
+                }
+                battle.state.config.global_speed_multiplier = 2.0;
+                for id in [1, 2, 3] {
+                    battle.state.player_mut(id).unwrap().troops = 20_000.0;
+                }
+                battle.state.player_mut(3).unwrap().leader = plain;
+                send(
+                    &mut battle,
+                    3,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner: defender,
+                        troops: Some(10_000.0),
+                    }),
+                );
+                assert_eq!(battle.attacks.len(), 1);
+                assert_eq!(owner_marks(&battle)[1], 0);
+                battle.execute_combat();
+                let shown = owner_marks(&battle)[1];
+                assert_eq!(shown, usize::from(active && linked && allied));
+                if shown > 0 {
+                    assert!(battle.state.events.iter().any(|event| matches!(
+                        event, GameEvent::AbilityTriggered { owner_id: 1, tile: Some((7, y)), affected }
+                        if 1 + (*y % 2) as u16 == defender
+                            && affected.contains(&3)
+                            && (defender == 1 || affected.contains(&defender))
+                    )));
+                }
+                if linked && allied {
+                    defended_tiles += battle.state.player(defender).unwrap().tile_count;
+                    marks += shown;
+                }
+            }
+            (f64::from(defended_tiles), marks)
+        }
+        Ability::RegionalCommands { percent } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::RegionalCommands { .. });
+            let mut result = (0.0, 0);
+            for cancel in [true, false] {
+                let plain = Leader::of("cleopatra");
+                let mut battle = arena(24, 6, leader, Some(plain));
+                battle.state.config.global_speed_multiplier = 2.0;
+                battle.state.player_mut(1).unwrap().troops = 20_000.0;
+                battle.state.config.attack_cost_enemy = 100.0;
+                for y in 12..24 {
+                    battle.state.set_tile_owner(6, y, 3);
+                }
+                for id in [2, 3] {
+                    let p = battle.state.player_mut(id).unwrap();
+                    p.leader = plain;
+                    p.troops = 20_000.0;
+                    send(
+                        &mut battle,
+                        id,
+                        GameplayIntent::Attack(AttackIntent {
+                            target_owner: 1,
+                            troops: Some(10_000.0),
+                        }),
+                    );
+                    if active {
+                        assert_eq!(
+                            battle.hero_ability_feedback(1).unwrap().state,
+                            if id == 2 { Conditional } else { Ready },
+                        );
+                    }
+                }
+                assert_eq!(battle.attacks.len(), 2);
+                let mut invaders = vec![2, 3];
+                if cancel {
+                    let id = battle.attacks.iter().find(|a| a.owner_id == 3).unwrap().id;
+                    send(
+                        &mut battle,
+                        3,
+                        GameplayIntent::CancelAttack { attack_id: id },
+                    );
+                    invaders.pop();
+                    if active {
+                        assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
+                    }
+                }
+
+                battle.execute_combat();
+                let mut loss_per_tile = 0.0;
+                for &invader in &invaders {
+                    let expected = if active && !cancel {
+                        100.0 + f64::from(percent)
+                    } else {
+                        100.0
+                    };
+                    let mut taken = 0;
+                    let mut remaining = 10_000.0;
+                    // Capture events record the army after losses, even if it
+                    // finished the attack and returned home in the same tick.
+                    for event in &battle.state.events {
+                        if let GameEvent::TileCaptured {
+                            new_owner,
+                            previous_owner: 1,
+                            troops,
+                            ..
+                        } = event
+                            && *new_owner == invader
+                        {
+                            taken += 1;
+                            assert!((remaining - troops - expected).abs() < 1e-8);
+                            remaining = *troops;
+                        }
+                    }
+                    assert!(taken > 0);
+                    let loss = (10_000.0 - remaining) / f64::from(taken);
+                    loss_per_tile += loss;
+                }
+                let shown = owner_marks(&battle)[1];
+                assert_eq!(shown, usize::from(active && !cancel));
+                if active && !cancel {
+                    assert!(battle.state.events.iter().any(|event| matches!(
+                        event, GameEvent::AbilityTriggered { owner_id: 1, tile: Some((x,y)), affected }
+                            if affected.len() == 2 && invaders.iter().all(|id| affected.contains(id))
+                                && invaders.contains(&battle.state.map.owner_id(*x, *y))
+                    )));
+                }
+                if !cancel {
+                    result = (loss_per_tile, shown);
+                }
+            }
+            result
+        }
+        Ability::ZagrosAscent { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::ZagrosAscent { .. });
+            let (mut captured, mut marks) = (0, 0);
+            for (approach, target_owner) in [(0x80, 2), (0x8a, 0), (0x8a, 2)] {
+                let mut battle = arena(48, 6, leader, Some(Leader::of("cleopatra")));
+                battle.state.config.global_speed_multiplier = 1.0;
+                for y in 0..48 {
+                    battle.state.map.terrain[(y * 48 + 5) as usize] = MapTile::from_byte(approach);
+                    battle.state.map.terrain[(y * 48 + 6) as usize] = MapTile::from_byte(0x94);
+                    if target_owner == 0 {
+                        battle.state.set_tile_owner(6, y, 0);
+                    }
+                }
+                let qualifies = approach == 0x8a && target_owner != 0;
+                if active {
+                    assert_eq!(
+                        battle.hero_ability_feedback(1).unwrap().state,
+                        if qualifies { Ready } else { Conditional },
+                    );
+                }
+                battle.state.player_mut(1).unwrap().troops = 20_000.0;
+                battle.state.player_mut(2).unwrap().troops = 20_000.0;
+                send(
+                    &mut battle,
+                    1,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner,
+                        troops: Some(10_000.0),
+                    }),
+                );
+                assert_eq!(
+                    owner_marks(&battle)[1],
+                    0,
+                    "launch alone never triggers the mark"
+                );
+                battle.execute_combat();
+                let shown = owner_marks(&battle)[1];
+                assert_eq!(shown, usize::from(active && qualifies));
+                if active && qualifies {
+                    assert!(battle.state.events.iter().any(|event| matches!(
+                        event, GameEvent::AbilityTriggered { owner_id: 1, tile: Some((6, y)), affected }
+                        if affected == &[2] && battle.state.map.owner_id(6, *y) == 1
+                    )));
+                }
+                if qualifies {
+                    captured = (0..48)
+                        .filter(|&y| battle.state.map.owner_id(6, y) == 1)
+                        .count();
+                    marks = shown;
+                }
+            }
+            (captured as f64, marks)
+        }
+        Ability::ContestedSteppe { percent } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::ContestedSteppe { .. });
+            let mut remaining = 0.0;
+            let mut marks = 0;
+            // Same isolated tile and army each time, with a rival, ally or highland.
+            for (friendly, terrain) in [(true, 0x80), (false, 0x8a), (false, 0x80)] {
+                let mut battle = arena(12, 6, leader, Some(Leader::of("cleopatra")));
+                let (x, y) = (6, 6);
+                battle.state.map.terrain[(y * 12 + x) as usize] = MapTile::from_byte(terrain);
+                battle.state.set_tile_owner(x, y, 0);
+                if friendly {
+                    send(
+                        &mut battle,
+                        1,
+                        GameplayIntent::ProposeAlliance { target_player: 2 },
+                    );
+                    send(
+                        &mut battle,
+                        2,
+                        GameplayIntent::AcceptAlliance { target_player: 1 },
+                    );
+                    assert!(super::hero_effects::allied(&battle.state, 1, 2));
+                }
+                let eligible = active && !friendly && terrain == 0x80;
+                if active {
+                    assert_eq!(
+                        battle.hero_ability_feedback(1).unwrap().state,
+                        if eligible { Ready } else { Conditional },
+                    );
+                }
+                let initial = 20_000.0;
+                battle.state.player_mut(1).unwrap().troops = initial;
+                send(
+                    &mut battle,
+                    1,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner: 0,
+                        troops: Some(10_000.0),
+                    }),
+                );
+                for _ in 0..40 {
+                    battle.execute_combat();
+                    if battle.state.map.owner_id(x, y) == 1 {
+                        break;
+                    }
+                    battle.state.tick += 1;
+                }
+                assert_eq!(battle.state.map.owner_id(x, y), 1);
+                let ordinary_loss = battle.state.config.attack_cost_neutral
+                    * if terrain == 0x8a {
+                        battle.state.config.terrain_multiplier_highland
+                    } else {
+                        1.0
+                    };
+                let troops = attacker_troop_total(&battle);
+                let expected_loss = ordinary_loss
+                    * if eligible {
+                        1.0 - f64::from(percent) / 100.0
+                    } else {
+                        1.0
+                    };
+                assert!((initial - troops - expected_loss).abs() < 1e-8);
+                assert_eq!(owner_marks(&battle)[1], usize::from(eligible));
+                if eligible {
+                    assert!(battle.state.events.iter().any(|event| matches!(
+                        event,
+                        GameEvent::AbilityTriggered {
+                            owner_id: 1,
+                            tile: Some((6, 6)),
+                            ..
+                        }
+                    )));
+                }
+                if !friendly && terrain == 0x80 {
+                    remaining = troops;
+                    marks = owner_marks(&battle)[1];
+                }
+            }
+            (remaining, marks)
+        }
+        Ability::GreatLawOfPeace => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            use crate::diplomacy::ALLIANCE_DURATION_TICKS;
+            let active = leader.ability() == Ability::GreatLawOfPeace;
+            e.state.player_mut(1).unwrap().home = Some((12, 16));
+            let form = |e: &mut SowEngine, a, b| {
+                send(e, a, GameplayIntent::ProposeAlliance { target_player: b });
+                send(e, b, GameplayIntent::AcceptAlliance { target_player: a });
+                assert!(super::hero_effects::allied(&e.state, a, b));
+            };
+            form(&mut e, 1, 2);
+            form(&mut e, 1, 3);
+            form(&mut e, 2, 3);
+            assert_eq!(owner_marks(&e)[1], 0, "full clocks do not use the ability");
+            send(
+                &mut e,
+                2,
+                GameplayIntent::BreakAlliance { target_player: 3 },
+            );
+            let clocks = [(1, 2, 600), (2, 1, 600), (1, 3, 1_800), (3, 1, 1_800)];
+            for (player, ally, ticks) in clocks {
+                e.state
+                    .player_mut(player)
+                    .unwrap()
+                    .alliance_timers
+                    .insert(ally, ticks);
+            }
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            send(
+                &mut e,
+                3,
+                GameplayIntent::ProposeAlliance { target_player: 2 },
+            );
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            assert_eq!(e.state.player(1).unwrap().alliance_timers[&2], 600);
+            send(
+                &mut e,
+                2,
+                GameplayIntent::AcceptAlliance { target_player: 3 },
+            );
+            for (player, ally, ticks) in clocks {
+                assert_eq!(
+                    e.state.player(player).unwrap().alliance_timers[&ally],
+                    if active {
+                        ALLIANCE_DURATION_TICKS
+                    } else {
+                        ticks
+                    }
+                );
+            }
+            let gain = e.state.player(1).unwrap().alliance_timers[&2] - 600;
+            let marks = owner_marks(&e)[1];
+            if active {
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((12, 16)), affected }
+                        if affected == &[2, 3]
+                )));
+            }
+            send(
+                &mut e,
+                3,
+                GameplayIntent::BreakAlliance { target_player: 2 },
+            );
+            for (player, ally, ticks) in clocks {
+                e.state
+                    .player_mut(player)
+                    .unwrap()
+                    .alliance_timers
+                    .insert(ally, ticks);
+            }
+            form(&mut e, 2, 3);
+            assert_eq!(e.state.player(1).unwrap().alliance_timers[&2], 600);
+            assert_eq!(owner_marks(&e)[1], marks);
+            (f64::from(gain), marks)
+        }
+        Ability::SharedFeast => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = leader.ability() == Ability::SharedFeast;
+            let run = |cap: f64| {
+                let mut battle = arena(64, 32, leader, Some(Leader::of("cleopatra")));
+                let sender = battle.state.player_mut(1).unwrap();
+                sender.troops = 8_000.0;
+                sender.max_troops = 10_000.0;
+                sender.alliances.push(2);
+                let ally = battle.state.player_mut(2).unwrap();
+                ally.troops = 1_000.0;
+                ally.max_troops = cap;
+                ally.alliances.push(1);
+                battle.add_building(make(1, 1, BuildingKind::Farm, 16, 16, 1, false));
+                battle.add_building(make(2, 2, BuildingKind::Farm, 40, 16, 1, true));
+                let gift = |battle: &mut SowEngine, troops| {
+                    send(
+                        battle,
+                        1,
+                        GameplayIntent::SendResources {
+                            target_player: 2,
+                            gold: 0.0,
+                            troops,
+                        },
+                    );
+                };
+                if active {
+                    assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
+                }
+                gift(&mut battle, 500.0);
+                assert_eq!(owner_marks(&battle)[1], 0);
+                battle.execute_construction();
+                if active {
+                    assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Ready);
+                }
+                gift(&mut battle, 499.0);
+                assert_eq!(owner_marks(&battle)[1], 0);
+                assert_eq!(battle.state.player(1).unwrap().troops, 7_001.0);
+                assert_eq!(battle.state.player(2).unwrap().troops, 1_999.0);
+                gift(&mut battle, 2_400.0);
+                let sender_bonus = battle.state.player(1).unwrap().troops - 4_601.0;
+                let receiver_bonus = battle.state.player(2).unwrap().troops - 4_399.0;
+                assert_eq!(sender_bonus, if active { 500.0 } else { 0.0 });
+                assert_eq!(
+                    receiver_bonus,
+                    if active {
+                        (cap - 4_399.0).min(500.0)
+                    } else {
+                        0.0
+                    }
+                );
+                let marks = owner_marks(&battle)[1];
+                if active {
+                    assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
+                    assert!(battle.state.events.iter().any(|event| matches!(
+                        event,
+                        GameEvent::AbilityTriggered { owner_id: 1, tile: Some((16, 16)), affected }
+                            if affected == &[2]
+                    )));
+                }
+                let before = battle.state.player(1).unwrap().troops;
+                gift(&mut battle, 600.0);
+                let transferable = (cap - (4_399.0 + receiver_bonus)).min(600.0);
+                assert_eq!(
+                    battle.state.player(1).unwrap().troops,
+                    before - transferable
+                );
+                assert_eq!(owner_marks(&battle)[1], marks);
+                (sender_bonus + receiver_bonus, marks)
+            };
+            run(4_500.0);
+            run(10_000.0)
+        }
+        Ability::AkkadGarrison => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = leader.ability() == Ability::AkkadGarrison;
+            e.add_building(make(1, 2, BuildingKind::City, 32, 16, 1, false));
+            e.add_building(make(2, 1, BuildingKind::Tower, 26, 16, 1, true));
+            e.state.next_building_id = 3;
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.state.set_tile_owner(32, 16, 1);
+            e.sync_building_ownership();
+            assert_eq!(e.buildings.len(), 2);
+            e.state.set_tile_owner(32, 16, 2);
+            e.sync_building_ownership();
+            e.buildings.pop();
+            e.building_grid.mark_dirty();
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            e.state.config.global_speed_multiplier = 100.0;
+            e.state.player_mut(1).unwrap().gold = 12.0;
+            e.state.player_mut(1).unwrap().troops = 10_000.0;
+            e.state.player_mut(2).unwrap().troops = 0.0;
+            send(
+                &mut e,
+                1,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 2,
+                    troops: Some(8_000.0),
+                }),
+            );
+            e.attacks[0]
+                .to_conquer
+                .retain(|tile| (tile.x, tile.y) == (32, 16));
+            e.execute_combat();
+            assert_eq!(e.state.map.owner_id(32, 16), 1);
+            e.sync_building_ownership();
+            assert_eq!(e.state.player(1).unwrap().gold, 12.0);
+            let gained = e.buildings.len() - 1;
+            let marks = owner_marks(&e)[1];
+            assert_eq!(gained, usize::from(active));
+            if active {
+                let tower = e.buildings.pop().unwrap();
+                let tile = (tower.tile_idx % 64, tower.tile_idx / 64);
+                assert_eq!(tower.kind, BuildingKind::Tower);
+                assert_eq!(tower.active_level(), 1);
+                assert_eq!(e.state.map.owner_id(tile.0, tile.1), 1);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some(mark), .. }
+                        if *mark == tile
+                )));
+                e.building_grid.mark_dirty();
+                for owner in [2, 1] {
+                    e.state.set_tile_owner(32, 16, owner);
+                    e.sync_building_ownership();
+                }
+                assert_eq!(e.buildings.len(), 1);
+                assert_eq!(owner_marks(&e)[1], marks);
+            }
+            (gained as f64, marks)
+        }
+        Ability::TigranesAid { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready, Spent};
+            let active = matches!(leader.ability(), Ability::TigranesAid { .. });
+            let run = |ally: bool, elapsed_ticks: u64, committed: f64, cap: f64| {
+                let mut battle = arena(64, 32, leader, Some(Leader::of("cleopatra")));
+                battle.state.set_tile_owner(10, 16, 3);
+                battle.add_building(make(1, 3, BuildingKind::City, 10, 16, 1, false));
+                battle.state.player_mut(1).unwrap().troops = 5_000.0;
+                battle.state.player_mut(1).unwrap().max_troops = cap;
+                if ally {
+                    battle.state.player_mut(1).unwrap().alliances.push(3);
+                    battle.state.player_mut(3).unwrap().alliances.push(1);
+                }
+                let donor_troops = battle.state.player(3).unwrap().troops;
+                send(
+                    &mut battle,
+                    1,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner: 2,
+                        troops: Some(committed),
+                    }),
+                );
+                battle.state.tick += elapsed_ticks;
+                if active {
+                    assert_eq!(
+                        battle.hero_ability_feedback(1).unwrap().state,
+                        if ally && elapsed_ticks >= 30 && 5_000.0 - committed * 0.25 < cap {
+                            Ready
+                        } else {
+                            Conditional
+                        },
+                    );
+                }
+                let attack_id = battle.attacks[0].id;
+                send(&mut battle, 1, GameplayIntent::CancelAttack { attack_id });
+                battle.execute_combat();
+                assert_eq!(battle.state.player(3).unwrap().troops, donor_troops);
+                let ordinary = (5_000.0 - committed * 0.25).min(cap);
+                let gained = battle.state.player(1).unwrap().troops - ordinary;
+                let marks = owner_marks(&battle)[1];
+                assert_eq!(marks, usize::from(gained > 0.0));
+                if gained > 0.0 {
+                    assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Spent);
+                    assert!(battle.state.events.iter().any(|event| matches!(
+                        event,
+                        GameEvent::AbilityTriggered { owner_id: 1, tile: Some((10, 16)), affected }
+                            if affected == &[3]
+                    )));
+                    let before = battle.state.player(1).unwrap().troops;
+                    send(
+                        &mut battle,
+                        1,
+                        GameplayIntent::Attack(AttackIntent {
+                            target_owner: 2,
+                            troops: Some(1_000.0),
+                        }),
+                    );
+                    battle.state.tick += 30;
+                    let attack_id = battle.attacks[0].id;
+                    send(&mut battle, 1, GameplayIntent::CancelAttack { attack_id });
+                    battle.execute_combat();
+                    assert_eq!(battle.state.player(1).unwrap().troops, before - 250.0);
+                    assert_eq!(owner_marks(&battle)[1], marks);
+                }
+                (gained, marks)
+            };
+            assert_eq!(run(false, 30, 800.0, 10_000.0), (0.0, 0));
+            assert_eq!(run(true, 29, 800.0, 10_000.0), (0.0, 0));
+            assert_eq!(run(true, 30, 800.0, 4_800.0), (0.0, 0));
+            assert_eq!(
+                run(true, 30, 800.0, 4_900.0),
+                if active { (100.0, 1) } else { (0.0, 0) }
+            );
+            assert_eq!(
+                run(true, 30, 1_600.0, 10_000.0),
+                if active { (1_000.0, 1) } else { (0.0, 0) }
+            );
+            run(true, 30, 800.0, 10_000.0)
+        }
+        Ability::AksumRout => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = leader.ability() == Ability::AksumRout;
+            let fourth = Player::new_bot(4, "Fourth".into(), [0.8; 3], &e.state.config);
+            e.state.register_player(fourth);
+            e.state.set_tile_owner(61, 12, 4);
+            e.state.set_tile_owner(40, 12, 0);
+            e.add_building(make(1, 2, BuildingKind::City, 32, 16, 1, false));
+            e.add_building(make(2, 2, BuildingKind::City, 32, 20, 1, true));
+            let rival = e.state.player_mut(2).unwrap();
+            rival.troops = 10_000.0;
+            rival.max_troops = 20_000.0;
+            for (target_owner, troops) in [(0, 2_500.0), (3, 800.0), (4, 1_500.0)] {
+                send(
+                    &mut e,
+                    2,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner,
+                        troops: Some(troops),
+                    }),
+                );
+                if active && target_owner == 0 {
+                    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+                }
+            }
+            assert_eq!(e.attacks.len(), 3);
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            e.state.set_tile_owner(32, 20, 1);
+            e.sync_building_ownership();
+            assert!(!e.attacks.iter().any(|a| a.retreating));
+            e.state.set_tile_owner(32, 16, 1);
+            e.sync_building_ownership();
+            let recalled = e.attacks.iter().filter(|a| a.retreating).count();
+            assert_eq!(recalled, usize::from(active));
+            assert!(
+                e.attacks
+                    .iter()
+                    .all(|a| a.retreating == (active && a.target_owner == 4))
+            );
+            let marks = owner_marks(&e)[1];
+            if active {
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((32, 16)), affected }
+                        if affected == &[2]
+                )));
+            }
+            for owner in [2, 1] {
+                e.state.set_tile_owner(32, 16, owner);
+                e.sync_building_ownership();
+            }
+            assert_eq!(e.attacks.iter().filter(|a| a.retreating).count(), recalled);
+            assert_eq!(owner_marks(&e)[1], marks);
+            (recalled as f64, marks)
+        }
+        Ability::MountedCapture { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::MountedCapture { .. });
+            let run = |retreat: bool, cap: f64| {
+                let mut battle = arena(64, 32, leader, Some(Leader::of("cleopatra")));
+                let own = battle.state.player_mut(1).unwrap();
+                own.troops = 2_000.0;
+                own.max_troops = cap;
+                battle.state.player_mut(2).unwrap().troops = 2_000.0;
+                if active {
+                    assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
+                }
+                send(
+                    &mut battle,
+                    2,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner: 1,
+                        troops: Some(800.0),
+                    }),
+                );
+                let attack = &mut battle.attacks[0];
+                assert_eq!(attack.owner_id, 2);
+                attack.retreating = retreat;
+                let frontier = attack
+                    .to_conquer
+                    .peek()
+                    .map(|tile| (tile.x, tile.y))
+                    .unwrap();
+                if active {
+                    assert_eq!(
+                        battle.hero_ability_feedback(1).unwrap().state,
+                        if retreat { Conditional } else { Ready },
+                    );
+                }
+                send(
+                    &mut battle,
+                    1,
+                    GameplayIntent::Attack(AttackIntent {
+                        target_owner: 2,
+                        troops: Some(1_000.0),
+                    }),
+                );
+                let reserve_gain = battle.state.player(1).unwrap().troops - 1_000.0;
+                let own_army = battle.attacks.iter().find(|a| a.owner_id == 1).unwrap();
+                assert_eq!(own_army.troops, if retreat { 1_000.0 } else { 200.0 });
+                let marks = owner_marks(&battle)[1];
+                assert_eq!(marks, usize::from(reserve_gain > 0.0));
+                if reserve_gain > 0.0 {
+                    assert!(battle.state.events.iter().any(|event| matches!(
+                        event,
+                        GameEvent::AbilityTriggered { owner_id: 1, tile: Some(tile), affected }
+                            if *tile == frontier && affected == &[2]
+                    )));
+                }
+                (reserve_gain, marks)
+            };
+            assert_eq!(run(true, 2_000.0), (0.0, 0));
+            assert_eq!(run(false, 900.0), (0.0, 0));
+            assert_eq!(
+                run(false, 1_050.0),
+                if active { (50.0, 1) } else { (0.0, 0) },
+            );
+            let result = run(false, 2_000.0);
+            assert_eq!(result, if active { (160.0, 1) } else { (0.0, 0) });
+            result
+        }
+        Ability::KitchenPhilosophy => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = leader.ability() == Ability::KitchenPhilosophy;
+            e.state.player_mut(1).unwrap().gold = 1_000_000.0;
+            e.add_building(make(1, 1, BuildingKind::Farm, 16, 16, 1, false));
+            e.add_building(make(2, 1, BuildingKind::City, 24, 16, 1, false));
+            e.add_building(make(3, 1, BuildingKind::City, 29, 16, 1, false));
+            e.add_building(make(4, 1, BuildingKind::City, 20, 16, 1, false));
+            send(
+                &mut e,
+                1,
+                GameplayIntent::UpgradeStructure { building_id: 1 },
+            );
+            while e.buildings[0].ticks_until_complete > 5 {
+                e.execute_construction();
+            }
+            send(
+                &mut e,
+                1,
+                GameplayIntent::UpgradeStructure { building_id: 3 },
+            );
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            for building_id in [2, 4] {
+                send(&mut e, 1, GameplayIntent::UpgradeStructure { building_id });
+            }
+            e.add_building(make(5, 1, BuildingKind::Farm, 18, 16, 1, true));
+            let mut same_tick = make(6, 1, BuildingKind::City, 17, 16, 2, true);
+            same_tick.ticks_until_complete = 5;
+            e.add_building(same_tick);
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            let normal_remaining = e.buildings[3].ticks_until_complete - 5;
+            for _ in 0..4 {
+                e.execute_construction();
+            }
+            assert_eq!(owner_marks(&e)[1], 0, "new farms do not accelerate");
+            e.execute_construction();
+            assert_eq!(e.buildings[0].active_level(), 2);
+            assert_eq!(e.buildings[5].active_level(), 2);
+            assert_eq!(e.buildings[1].ticks_until_complete, normal_remaining);
+            assert_eq!(e.buildings[2].ticks_until_complete, normal_remaining);
+            let remaining = e.buildings[3].ticks_until_complete;
+            assert_eq!(
+                remaining,
+                if active {
+                    normal_remaining.div_ceil(2)
+                } else {
+                    normal_remaining
+                }
+            );
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered {
+                        owner_id: 1,
+                        tile: Some((20, 16)),
+                        ..
+                    }
+                )));
+            }
+            (f64::from(normal_remaining - remaining), owner_marks(&e)[1])
+        }
+        Ability::SecondCrown => {
+            use super::hero_effects::AbilityState::{Conditional, Ready, Spent};
+            let active = leader.ability() == Ability::SecondCrown;
+            let mut oldest = make(1, 2, BuildingKind::City, 40, 16, 1, true);
+            oldest.ticks_until_complete = 50;
+            e.add_building(oldest);
+            e.add_building(Building {
+                id: 2,
+                tile_idx: 16 * 64 + 50,
+                ..oldest
+            });
+            send(
+                &mut e,
+                2,
+                GameplayIntent::ProposeAlliance { target_player: 1 },
+            );
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.add_building(make(3, 1, BuildingKind::City, 15, 16, 1, false));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            assert_eq!(e.buildings[0].ticks_until_complete, 50);
+            send(
+                &mut e,
+                1,
+                GameplayIntent::AcceptAlliance { target_player: 2 },
+            );
+            assert!(e.state.player(1).unwrap().alliances.contains(&2));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Spent);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((40, 16)), affected }
+                        if affected == &[2]
+                )));
+            }
+            e.execute_construction();
+            assert_eq!(e.buildings[0].active_level(), u8::from(active));
+            assert_eq!(e.buildings[1].ticks_until_complete, 49);
+            if active {
+                assert!(
+                    e.state
+                        .events
+                        .iter()
+                        .any(|event| matches!(event, GameEvent::StructureReady { id: 1, .. }))
+                );
+            }
+
+            // A second otherwise eligible alliance cannot accelerate another city.
+            e.state.set_tile_owner(31, 12, 3);
+            e.add_building(Building {
+                id: 4,
+                owner_id: 3,
+                tile_idx: 12 * 64 + 31,
+                ..oldest
+            });
+            send(
+                &mut e,
+                1,
+                GameplayIntent::ProposeAlliance { target_player: 3 },
+            );
+            send(
+                &mut e,
+                3,
+                GameplayIntent::AcceptAlliance { target_player: 1 },
+            );
+            assert!(e.state.player(1).unwrap().alliances.contains(&3));
+            assert_eq!(e.buildings[3].ticks_until_complete, 50);
+            (f64::from(e.buildings[0].active_level()), owner_marks(&e)[1])
+        }
+        Ability::CookhamExchange => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = leader.ability() == Ability::CookhamExchange;
+            e.add_building(make(1, 1, BuildingKind::Farm, 31, 16, 2, false));
+            e.add_building(make(2, 1, BuildingKind::City, 18, 16, 1, false));
+            e.add_building(make(3, 1, BuildingKind::City, 24, 16, 4, false));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.add_building(make(4, 1, BuildingKind::City, 26, 16, 2, false));
+            e.add_building(make(5, 1, BuildingKind::City, 29, 16, 3, false));
+            e.add_building(make(6, 1, BuildingKind::City, 25, 16, 1, false));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            e.state.player_mut(1).unwrap().alliances.push(2);
+            e.state.player_mut(2).unwrap().alliances.push(1);
+            e.state.set_tile_owner(31, 16, 2);
+            e.sync_building_ownership();
+            assert_eq!(e.buildings[3].level, 2);
+            assert_eq!(owner_marks(&e)[1], 0);
+            e.state.set_tile_owner(31, 16, 1);
+            e.sync_building_ownership();
+            e.state.player_mut(1).unwrap().alliances.clear();
+            e.state.player_mut(2).unwrap().alliances.clear();
+            e.state.set_tile_owner(25, 16, 2);
+            e.state.set_tile_owner(31, 16, 2);
+            e.sync_building_ownership();
+            assert_eq!(e.buildings[0].owner_id, 2);
+            assert_eq!(e.buildings[5].owner_id, 2);
+            assert_eq!(e.buildings[5].level, 1);
+            assert_eq!(e.buildings[1].level, 1);
+            assert_eq!(e.buildings[4].level, 3);
+            let gained = e.buildings[3].level - 2;
+            assert_eq!(gained, u8::from(active));
+            let marks = owner_marks(&e)[1];
+            if active {
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((26, 16)), affected }
+                        if affected == &[2]
+                )));
+            }
+            e.state.set_tile_owner(31, 16, 1);
+            e.sync_building_ownership();
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.state.set_tile_owner(31, 16, 2);
+            e.sync_building_ownership();
+            assert_eq!(e.buildings[3].level, 2 + gained);
+            assert_eq!(owner_marks(&e)[1], marks);
+            (f64::from(gained), marks)
+        }
+        Ability::PuntGardens => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = leader.ability() == Ability::PuntGardens;
+            let mut trade = engine_with_ports(
+                &[port(1, 1, 650), port(2, 2, 660)],
+                vec![lane(
+                    1,
+                    1,
+                    2,
+                    &[651, 652, 653, 654, 655, 656, 657, 658, 659],
+                )],
+            );
+            trade.state.set_tile_owner(10, 10, 1);
+            trade.state.player_mut(1).unwrap().leader = leader;
+            trade.add_building(make(3, 1, BuildingKind::Farm, 10, 12, 2, false));
+            trade.add_building(make(4, 1, BuildingKind::Farm, 10, 14, 1, false));
+            trade.add_building(make(5, 1, BuildingKind::Farm, 10, 23, 1, false));
+            trade.execute_trade_ships();
+            assert_eq!(trade.buildings[3].level, 1);
+            assert_eq!(trade.fleets.len(), 1);
+            if active {
+                assert_eq!(trade.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            for _ in 0..32 {
+                if trade.fleets[0].path.is_empty() {
+                    break;
+                }
+                trade.execute_fleets();
+            }
+            assert!(trade.fleets[0].path.is_empty());
+            trade.execute_trade_ships();
+            let gained = trade.buildings[3].level - 1;
+            assert_eq!(gained, u8::from(active));
+            assert_eq!(trade.buildings[2].level, 2);
+            assert_eq!(trade.buildings[4].level, 1);
+            if active {
+                assert_eq!(trade.hero_ability_feedback(1).unwrap().state, Conditional);
+                assert!(trade.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered {
+                        owner_id: 1,
+                        tile: Some((10, 14)),
+                        ..
+                    }
+                )));
+            }
+            for _ in 0..32 {
+                if trade.fleets[0].path.is_empty() {
+                    break;
+                }
+                trade.execute_fleets();
+            }
+            assert!(trade.fleets[0].path.is_empty());
+            trade.execute_trade_ships();
+            assert_eq!(trade.buildings[3].level, 1 + gained);
+            (f64::from(gained), owner_marks(&trade)[1])
+        }
+        Ability::CityDenial => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let denies = leader.ability() == Ability::CityDenial;
+            let (x, y) = (16, 16);
+            e.add_building(make(1, 1, BuildingKind::City, x, y, 3, false));
+            e.state.player_mut(1).unwrap().gold = 1_000_000.0;
+            send(
+                &mut e,
+                1,
+                GameplayIntent::UpgradeStructure { building_id: 1 },
+            );
+            assert!(e.buildings[0].under_construction);
+            assert_eq!(e.buildings[0].active_level(), 3);
+            if denies {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            e.state.set_tile_owner(x, y, 2);
+            e.sync_building_ownership();
+            assert_eq!(e.buildings[0].owner_id, 2);
+            let denied = 3 - e.buildings[0].active_level();
+            assert_eq!(denied, u8::from(denies));
+            assert_eq!(e.buildings[0].under_construction, !denies);
+            if denies {
+                assert_eq!(e.buildings[0].ticks_until_complete, 0);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((16, 16)), affected }
+                        if affected == &[2]
+                )));
+            }
+            e.state.set_tile_owner(x, y, 1);
+            e.sync_building_ownership();
+            if denies {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.state.set_tile_owner(x, y, 2);
+            e.sync_building_ownership();
+            assert_eq!(e.buildings[0].active_level(), 3 - denied);
+            (f64::from(denied), owner_marks(&e)[1])
+        }
+        Ability::RetreatHandover { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let has_handover = matches!(leader.ability(), Ability::RetreatHandover { .. });
+            e.state.set_tile_owner(32, 16, 3);
+            e.state.player_mut(1).unwrap().alliances.push(3);
+            e.state.player_mut(3).unwrap().alliances.push(1);
+            e.state.player_mut(2).unwrap().troops = 10_000.0;
+            e.state.player_mut(2).unwrap().max_troops = 12_000.0;
+            e.state.player_mut(3).unwrap().troops = 10_000.0;
+            e.state.player_mut(3).unwrap().max_troops = 12_000.0;
+            send(
+                &mut e,
+                2,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 1,
+                    troops: Some(4000.0),
+                }),
+            );
+            if has_handover {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            send(
+                &mut e,
+                3,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 2,
+                    troops: Some(4000.0),
+                }),
+            );
+            // Preserve the active armies while measuring only the retreat.
+            e.state.config.global_speed_multiplier = 0.0;
+            let checkpoint = bincode::serialize(&e).unwrap();
+            let mut received = 0.0;
+            let mut shown = 0;
+            for (cap, expected) in [(6300.0, 300.0), (12_000.0, 750.0)] {
+                let mut run: SowEngine = bincode::deserialize(&checkpoint).unwrap();
+                run.state.player_mut(3).unwrap().max_troops = cap;
+                if has_handover {
+                    assert_eq!(run.hero_ability_feedback(1).unwrap().state, Ready);
+                }
+                let attack_id = run.attacks.iter().find(|a| a.owner_id == 2).unwrap().id;
+                send(&mut run, 2, GameplayIntent::CancelAttack { attack_id });
+                run.execute_combat();
+                let gained = run.state.player(3).unwrap().troops - 6000.0;
+                assert_eq!(gained, if has_handover { expected } else { 0.0 });
+                assert_eq!(run.state.player(2).unwrap().troops, 9000.0 - gained);
+                if has_handover {
+                    assert_eq!(run.hero_ability_feedback(1).unwrap().state, Conditional);
+                    assert!(run.state.events.iter().any(|event| matches!(
+                        event,
+                        GameEvent::AbilityTriggered { owner_id: 1, tile: Some(_), affected }
+                            if affected == &[3, 2]
+                    )));
+                }
+                received += gained;
+                shown += owner_marks(&run)[1];
+            }
+            (received, shown)
+        }
+        Ability::CityIntercession { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::CityIntercession { .. });
+            e.state.config.global_speed_multiplier = 100.0;
+            e.state.set_tile_owner(32, 16, 3);
+            e.state.player_mut(1).unwrap().troops = 3000.0;
+            e.state.player_mut(2).unwrap().troops = 0.0;
+            e.state.player_mut(3).unwrap().troops = 10_000.0;
+            e.state.player_mut(1).unwrap().alliances.push(2);
+            e.state.player_mut(2).unwrap().alliances.push(1);
+            e.add_building(make(1, 2, BuildingKind::City, 33, 16, 1, false));
+            if active {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+            }
+            send(
+                &mut e,
+                3,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 2,
+                    troops: Some(5000.0),
+                }),
+            );
+            let attack = e.attacks.iter_mut().find(|a| a.owner_id == 3).unwrap();
+            attack
+                .to_conquer
+                .retain(|tile| (tile.x, tile.y) == (33, 16));
+            assert!(!attack.to_conquer.is_empty());
+            e.execute_combat();
+            let saved = e.state.map.owner_id(33, 16) == 2;
+            let shown = owner_marks(&e)[1];
+            assert_eq!(saved, active);
+            if active {
+                assert_eq!(e.state.player(1).unwrap().troops, 1500.0);
+                assert_eq!(
+                    e.attacks.iter().find(|a| a.owner_id == 3).unwrap().troops,
+                    3500.0
+                );
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((33, 16)), affected }
+                        if affected == &[2, 3]
+                )));
+                e.execute_combat();
+                assert_eq!(e.state.map.owner_id(33, 16), 3);
+                assert_eq!(e.state.player(1).unwrap().troops, 1500.0);
+            }
+            (f64::from(u8::from(saved)), shown)
+        }
+        Ability::CounterLevy { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let has_levy = matches!(leader.ability(), Ability::CounterLevy { .. });
+            let initial_gold = e.state.player(1).unwrap().gold;
+            e.add_building(make(1, 2, BuildingKind::Tower, 32, 16, 1, false));
+            if has_levy {
+                assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
+            }
+            e.state.set_tile_owner(32, 16, 1);
+            e.sync_building_ownership();
+            assert_eq!(e.state.player(1).unwrap().gold, initial_gold);
+            e.state.set_tile_owner(32, 16, 2);
+            e.sync_building_ownership();
+
+            e.state.player_mut(2).unwrap().troops = 10_000.0;
+            send(
+                &mut e,
+                2,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 1,
+                    troops: Some(1000.0),
+                }),
+            );
+            for (id, x, rival_gold, expected) in [(1, 32, 600.0, 150.0), (2, 36, 2000.0, 250.0)] {
+                if id == 2 {
+                    e.add_building(make(id, 2, BuildingKind::Tower, x, 16, 1, false));
+                }
+                e.state.player_mut(2).unwrap().gold = rival_gold;
+                if has_levy {
+                    assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
+                }
+                let before = e.state.player(1).unwrap().gold;
+                e.state.set_tile_owner(x, 16, 1);
+                e.sync_building_ownership();
+                let gained = e.state.player(1).unwrap().gold - before;
+                assert_eq!(gained, if has_levy { expected } else { 0.0 });
+                assert_eq!(rival_gold - e.state.player(2).unwrap().gold, gained);
+                e.state.set_tile_owner(x, 16, 2);
+                e.sync_building_ownership();
+                e.state.set_tile_owner(x, 16, 1);
+                e.sync_building_ownership();
+                assert_eq!(e.state.player(1).unwrap().gold - before, gained);
+            }
+            if has_levy {
+                assert!(e.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some((32, 16)), affected }
+                        if affected == &[2]
+                )));
+            }
+            (
+                e.state.player(1).unwrap().gold - initial_gold,
+                owner_marks(&e)[1],
+            )
+        }
         Ability::SharedCitySpoils { .. } => {
             let before = e.state.player(1).unwrap().gold;
             e.add_building(make(1, 2, BuildingKind::City, 40, 40, 1, false));
@@ -2300,6 +4156,101 @@ fn redesigned_peter_founds_a_legal_port_during_real_conquest() {
         assert_eq!(e.state.player(1).unwrap().gold, gold);
         assert_eq!(owner_marks(&e)[1], 1);
     }
+}
+
+#[test]
+fn natavan_founds_one_farm_at_a_legal_site_when_the_city_reaches_level_two() {
+    use super::hero_effects::AbilityState::{Conditional, Ready};
+
+    let leader = Leader::of("natavan");
+    let mut engine = arena(64, 32, leader, Some(Leader::of("cleopatra")));
+    engine.state.map.terrain.fill(MapTile::from_byte(0x8a));
+    let city = Building {
+        id: 1,
+        owner_id: 1,
+        tile_idx: 16 * 64 + 16,
+        kind: BuildingKind::City,
+        level: 1,
+        under_construction: false,
+        ticks_until_complete: 0,
+    };
+    engine.add_building(city);
+    engine.state.next_building_id = 2;
+    engine.state.player_mut(1).unwrap().gold = 1_000_000.0;
+    // This diagonal site fits inside the search box, but is over twelve tiles away.
+    for y in 16..=17 {
+        for x in 27..=28 {
+            engine.state.map.terrain[y * 64 + x] = MapTile::from_byte(0x80);
+        }
+    }
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+    let bytes = bincode::serialize(&engine).unwrap();
+    let mut blocked: SowEngine = bincode::deserialize(&bytes).unwrap();
+    send(
+        &mut blocked,
+        1,
+        GameplayIntent::UpgradeStructure {
+            building_id: city.id,
+        },
+    );
+    for _ in 0..blocked.buildings[0].ticks_until_complete {
+        blocked.execute_construction();
+    }
+    assert_eq!(blocked.buildings[0].level, 2);
+    assert_eq!(blocked.buildings.len(), 1);
+    assert_eq!(owner_marks(&blocked)[1], 0);
+
+    // The only other eligible foundation is exactly twelve tiles from the city.
+    for y in 15..=16 {
+        for x in 27..=28 {
+            engine.state.map.terrain[y * 64 + x] = MapTile::from_byte(0x80);
+        }
+    }
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Ready);
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::UpgradeStructure {
+            building_id: city.id,
+        },
+    );
+    let gold_after_upgrade = engine.state.player(1).unwrap().gold;
+    let ticks = engine.buildings[0].ticks_until_complete;
+    assert!(ticks > 1);
+    for _ in 0..ticks - 1 {
+        engine.execute_construction();
+    }
+    assert_eq!(engine.buildings.len(), 1);
+    engine.execute_construction();
+    let farm = engine.buildings[1];
+    assert_eq!(farm.kind, BuildingKind::Farm);
+    assert_eq!(farm.tile_idx, 16 * 64 + 28);
+    assert_eq!(farm.active_level(), 1);
+    assert_eq!(engine.state.player(1).unwrap().gold, gold_after_upgrade);
+    assert!(engine.state.events.iter().any(|event| matches!(
+        event,
+        GameEvent::AbilityTriggered {
+            owner_id: 1,
+            tile: Some((28, 16)),
+            ..
+        }
+    )));
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+    engine.refresh_building_aggregates();
+    assert_eq!(engine.building_aggregates[1].farm_levels, 1);
+
+    send(
+        &mut engine,
+        1,
+        GameplayIntent::UpgradeStructure {
+            building_id: city.id,
+        },
+    );
+    for _ in 0..=engine.buildings[0].ticks_until_complete {
+        engine.execute_construction();
+    }
+    assert_eq!(engine.buildings[0].active_level(), 3);
+    assert_eq!(engine.buildings.len(), 2);
 }
 
 #[test]

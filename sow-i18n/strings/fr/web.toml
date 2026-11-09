@@ -271,6 +271,118 @@ campaign_chronicles = "CHRONIQUES DE\nCAMPAGNE"
 campaign_unavailable = "Campagne indisponible."
 
 [heroes]
+leader_muhumuza_name = "Muhumuza"
+leader_muhumuza_historical = "Muhumuza, aussi appelée Muhumusa, dirigea la résistance dans les hautes terres du Ndorwa et du Kigezi, de part et d’autre de l’actuelle frontière entre le Rwanda et l’Ouganda. Médium de Nyabingi, elle s’appuya sur une tradition spirituelle déjà implantée dans les communautés locales. Elle rallia des partisans contre la cour du roi Musinga et l’expansion de la domination coloniale européenne."
+leader_muhumuza_civilization = "Mouvement Nyabingi"
+
+leader_khosrow_i_name = "Khosro Ier"
+leader_khosrow_i_historical = "Khosro Ier, dit Anouchirvan, régna sur l’Empire sassanide de 531 à 579. Il réorganisa l’armée en quatre commandements régionaux. Des sceaux conservés nomment les généraux chargés de l’Est, du Sud, de l’Ouest et du Nord. Il poursuivit aussi l’arpentage lancé sous son père Kavadh Ier pour établir un barème fixe de l’impôt foncier."
+leader_khosrow_i_civilization = "Empire sassanide"
+
+leader_naram_sin_name = "Naram-Sin"
+leader_naram_sin_historical = "Naram-Sin, petit-fils de Sargon, régna sur l’empire d’Akkad au troisième millénaire av. J.-C. Sa stèle de victoire commémore une campagne contre les Lullubi dans les monts Zagros. Le relief montre le roi et ses soldats gravissant la pente. Naram-Sin domine les autres personnages par sa taille et porte un casque à cornes associé à la divinité."
+leader_naram_sin_civilization = "Empire d’Akkad"
+
+leader_jalal_al_din_mangburni_name = "Jalal al-Din Mangburni"
+leader_jalal_al_din_mangburni_historical = "Jalal al-Din Mangburni succéda à son père Muhammad II alors que l’invasion mongole disloquait l’Empire khwarezmien. Il rassembla ses troupes à Ghazni et vainquit une armée mongole à Parwan en 1221. Gengis Khan le poursuivit jusqu’à l’Indus. Jalal al-Din y perdit la bataille, mais traversa le fleuve à cheval et une partie de ses forces gagna aussi l’autre rive."
+leader_jalal_al_din_mangburni_civilization = "Empire khwarezmien"
+
+leader_modu_chanyu_name = "Modu Chanyu"
+leader_modu_chanyu_historical = "Modu, aussi appelé Maodun, prit le titre de chanyu vers 209 av. J.-C. et fit des Xiongnu une puissance de la steppe orientale. L’historien chinois Sima Qian raconte que leurs voisins Donghu éprouvèrent le nouveau chef par des demandes successives. Modu céda deux fois, puis refusa de livrer la bande inhabitée entre les avant-postes et lança une offensive."
+leader_modu_chanyu_civilization = "Xiongnu"
+
+leader_hiawatha_haudenosaunee_name = "Hiawatha"
+leader_hiawatha_haudenosaunee_historical = "La tradition orale haudenosaunee se souvient de Hiawatha, aussi appelé Aionwatha, pour son aide au Pacificateur dans le rapprochement des nations mohawk, oneida, onondaga, cayuga et seneca. Dans le récit onondaga, Hiawatha est en deuil et le Pacificateur lui adresse des paroles de consolation en tenant des rangs de perles de coquillage, le wampum. Hiawatha aide ensuite à porter le message de paix. La date exacte de l’union demeure inconnue."
+leader_hiawatha_haudenosaunee_civilization = "Confédération haudenosaunee"
+
+leader_kaahumanu_hawaii_name = "Kaʻahumanu"
+leader_kaahumanu_hawaii_historical = "À la mort de Kamehameha Ier en 1819, Kaʻahumanu annonça qu’elle partagerait le pouvoir avec son successeur Liholiho, Kamehameha II. Elle inaugura la charge de kuhina nui. Dans les premières années, cette fonction donnait une autorité comparable à celle du roi sur les terres, les accords et la justice. Kaʻahumanu continua à gouverner en tant que régente de Kauikeaouli, Kamehameha III, jusqu’à sa mort en 1832."
+leader_kaahumanu_hawaii_civilization = "Royaume d’Hawaï"
+
+leader_sargon_of_akkad_name = "Sargon d’Akkad"
+leader_sargon_of_akkad_historical = "Sargon fonda la dynastie d’Akkad en Mésopotamie vers la fin du troisième millénaire av. J.-C. Ses inscriptions royales célèbrent la défaite de Lugalzagesi d’Uruk et la démolition des remparts de villes comme Uruk et Ur. Certaines ne sont connues que par des copies réalisées longtemps après son règne. Les inscriptions mentionnent aussi des gens d’Akkad nommés à des postes de gouverneur dans les territoires conquis. Les archives administratives permettent de suivre les pratiques locales qui subsistèrent sous le nouveau pouvoir."
+leader_sargon_of_akkad_civilization = "Empire d’Akkad"
+
+leader_mithridates_vi_name = "Mithridate VI"
+leader_mithridates_vi_historical = "Mithridate VI Eupator régna sur le Pont, sur la rive sud de la mer Noire. Il étendit l’influence de son royaume autour de cette mer et affronta Rome en Anatolie. Durant la troisième guerre contre Rome, le général Lucullus le chassa du Pont. Mithridate se réfugia auprès de Tigrane II d’Arménie, qui avait épousé sa fille. Cette alliance lui permit de se regrouper et d’obtenir des hommes pour son retour."
+leader_mithridates_vi_civilization = "Royaume du Pont"
+
+leader_gudit_yodit_name = "Gudit"
+leader_gudit_yodit_historical = "La tradition éthiopienne se souvient de Gudit, aussi appelée Yodit, comme d’une reine qui se souleva contre Aksoum. L’Histoire des patriarches d’Alexandrie rapporte un appel adressé au Xe siècle à Georges de Nubie par un souverain éthiopien anonyme. Une reine des Bani al-Hamwiyah aurait fait des prisonniers, incendié des villes et chassé le souverain de lieu en lieu. La lettre originale est perdue. La chronique ecclésiastique en transmet le contenu et rattache la crise à une demande de nomination d’un nouveau métropolite."
+leader_gudit_yodit_civilization = "Hauts plateaux éthiopiens"
+
+leader_khutulun_qaidu_name = "Khutulun"
+leader_khutulun_qaidu_historical = "Khutulun, aussi appelée Qutulun, fut princesse et commandante mongole en Asie centrale. Son père Qaïdu dirigeait un domaine de la maison d’Ögödei et résistait à l’autorité de Kubilaï et de ses successeurs. Marco Polo l’appelle Aijaruc et raconte qu’elle s’avançait à cheval en campagne pour faire des prisonniers. Il décrit aussi des prétendants qui misaient des chevaux lors de combats de lutte. Les victoires et les nombres avancés dans ce récit restent difficiles à vérifier."
+leader_khutulun_qaidu_civilization = "Ulus de Qaïdu"
+
+leader_sor_juana_ines_de_la_cruz_name = "Sor Juana Inés de la Cruz"
+leader_sor_juana_ines_de_la_cruz_historical = "Sor Juana Inés de la Cruz fut écrivaine et religieuse hiéronymite dans la Nouvelle-Espagne du XVIIe siècle. Les sources divergent sur son année de naissance, 1648 ou 1651. Au couvent de San Jerónimo, à Mexico, elle écrivit de la poésie et du théâtre, dont El divino Narciso. En 1690 elle rédigea une critique d’un sermon du jésuite portugais António Vieira. Manuel Fernández de Santa Cruz, évêque de Puebla, la publia sous le titre de Carta atenagórica et s’adressa à l’autrice sous le nom de Sor Filotea de la Cruz."
+leader_sor_juana_ines_de_la_cruz_civilization = "Nouvelle-Espagne"
+
+leader_sibylla_name = "Sibylle de Jérusalem"
+leader_sibylla_historical = "Sibylle était la fille d’Amaury de Jérusalem et d’Agnès de Courtenay. Avant de devenir reine, elle détenait le comté de Jaffa et d’Ascalon. Dans une charte de 1177, elle accorda au comte Rodrigue et aux frères de son ordre des tours, un jardin et des revenus à Ascalon. Elle eut du comte Guillaume de Montferrat un fils, le futur Baudouin V. À la mort de ce dernier en 1186, Sibylle revendiqua la couronne de Jérusalem en son nom et fit de son second époux, Guy de Lusignan, un roi à ses côtés."
+leader_sibylla_civilization = "Royaume de Jérusalem"
+
+leader_cynethryth_mercia_name = "Cynethryth"
+leader_cynethryth_mercia_historical = "Cynethryth fut reine de Mercie à la fin du VIIIe siècle, puis abbesse de Cookham. Elle figure comme témoin dans des chartes du règne d’Offa et fut la mère de son successeur Ecgfrith. Des deniers d’argent portent son nom et son titre de reine, distinction exceptionnelle dans l’Angleterre anglo-saxonne. Plusieurs exemplaires sont signés par le monnayeur Eoba, dont l’activité est associée à Canterbury. Ces pièces attestent la diffusion de son titre, même si les conditions précises de l’émission demeurent incertaines."
+leader_cynethryth_mercia_civilization = "Royaume de Mercie"
+
+leader_suppiluliuma_name = "Suppiluliuma Ier"
+leader_suppiluliuma_historical = "Suppiluliuma Ier régna sur le Hatti au XIVe siècle av. J.-C. Ses campagnes étendirent le contrôle hittite au nord de la Syrie, où il plaça son fils Piyassili à la tête du royaume de Karkemish. Son accord avec Shattiwaza du Mitanni associait le soutien à un prétendant au trône à un nouvel ordre politique."
+leader_suppiluliuma_civilization = "Empire hittite"
+
+leader_baibars_name = "Baybars"
+leader_baibars_historical = "Al-Zahir Baybars régna sur le sultanat mamelouk de 1260 à 1277. Un dinar d’or du Caire conservé au Louvre porte son nom et ses titres. Ses campagnes étendirent l’autorité mamelouke au Levant. En 1271, il conduisit une coalition contre la forteresse hospitalière du Crac des Chevaliers."
+leader_baibars_civilization = "Sultanat mamelouk"
+
+leader_emperor_qin_shi_huang_name = "Qin Shi Huang"
+leader_emperor_qin_shi_huang_historical = "Qin Shi Huang, né Ying Zheng, devint le premier empereur des Qin après la victoire de son royaume sur ses derniers rivaux en 221 av. J.-C. Son gouvernement étendit les normes de poids et de mesure de Qin aux territoires conquis. Des inscriptions conservées sur des poids et des récipients attestent cette réforme."
+leader_emperor_qin_shi_huang_civilization = "Dynastie Qin"
+
+leader_spartacus_name = "Spartacus"
+leader_spartacus_historical = "Spartacus était un gladiateur thrace qui dirigea la révolte née à Capoue en 73 av. J.-C. Plutarque raconte que les fugitifs utilisèrent des ustensiles de cuisine pour s’évader et s’emparèrent ensuite d’armes transportées par des chariots. Appien les montre s’armant en chemin et se réfugiant au Vésuve, où leurs rangs grossirent."
+leader_spartacus_civilization = "Insurgés de Spartacus"
+
+leader_queen_nefertiti_name = "Néfertiti"
+leader_queen_nefertiti_historical = "Néfertiti était la grande épouse royale d’Akhenaton sous la XVIIIe dynastie égyptienne. À Akhetaton, aujourd’hui Amarna, elle occupait une place visible dans le culte d’Aton. Un fragment de quartzite rouge conservé au musée Petrie la montre en train de verser une libation sous les rayons du disque solaire."
+leader_queen_nefertiti_civilization = "Égypte antique"
+
+leader_mandukhai_name = "Mandukhai Khatun"
+leader_mandukhai_historical = "Mandukhai Khatun exerça une autorité politique et militaire parmi les Mongols à la fin du XVe siècle. Après la mort de Manduul Khan, elle contribua au retour de la lignée de Gengis Khan au pouvoir lors de la succession associée à Dayan Khan. Des chroniques mongoles plus tardives lui attribuent aussi le commandement de campagnes contre les Oïrats."
+leader_mandukhai_civilization = "Yuan du Nord"
+
+leader_kabal_xook_name = "K’ab’al Xook"
+leader_kabal_xook_historical = "K’ab’al Xook a consacré la Structure 23 en 726 à Yaxchilán, cité maya sur l’Usumacinta, dans l’actuel Chiapas. Épouse principale du souverain Itzamnaaj B’alam, elle est nommée dans les inscriptions et représentée sur trois reliefs de pierre qui surmontaient les portes de l’édifice."
+leader_kabal_xook_civilization = "Yaxchilán"
+
+leader_lakshmibai_name = "Lakshmibai"
+leader_lakshmibai_historical = "Lakshmibai, rani de Jhansi, s’opposa à l’annexion de son État par la Compagnie des Indes orientales après la mort de Gangadhar Rao. La Compagnie refusa de reconnaître leur fils adoptif comme successeur. Pendant la révolte indienne de 1857–1858, elle dirigea la défense de Jhansi contre les forces de Hugh Rose. Lorsque les Britanniques prirent Jhansi en 1858, elle s’échappa et rejoignit à Kalpi d’autres forces insurgées, dont celles liées à Tatya Tope. Elle poursuivit le combat après la chute de Kalpi et mourut près de Gwalior en juin 1858."
+leader_lakshmibai_civilization = "Jhansi"
+
+leader_pharaoh_hatshepsut_name = "Hatchepsout"
+leader_pharaoh_hatshepsut_historical = "Hatchepsout gouverna l’Égypte au XVe siècle av. J.-C., sous la XVIIIe dynastie. Elle fut d’abord régente du jeune Thoutmôsis III, son neveu et beau-fils. Elle prit ensuite le titre et les pouvoirs du pharaon tandis qu’il demeura corégent. Elle commanda notamment son temple en terrasses à Deir el-Bahari. Les reliefs du portique médian sud montrent l’expédition qu’elle envoya à Pount, la rencontre de la délégation égyptienne avec ses habitants et le chargement des marchandises. Le temple présente le voyage dans un cadre royal et religieux."
+leader_pharaoh_hatshepsut_civilization = "Égypte ancienne"
+
+leader_thusnelda_cherusci_name = "Thusnelda"
+leader_thusnelda_cherusci_historical = "Thusnelda était une noble chérusque du début du Ier siècle apr. J.-C. Son père Segestes recherchait l’appui de Rome, tandis que son époux Arminius dirigeait la résistance. Selon Tacite, en 15 les forces d’Arminius assiégèrent Segestes, qui appela Germanicus à l’aide. L’armée romaine leva le siège et prit sous sa garde Thusnelda, alors enceinte. Dans le discours que Tacite prête à Segestes, celui-ci dit qu’elle se trouvait chez lui contre son gré. L’historien romain la montre affrontant sa capture sans supplier."
+leader_thusnelda_cherusci_civilization = "Chérusques"
+
+leader_queen_cartimandua_name = "Cartimandua"
+leader_queen_cartimandua_historical = "Cartimandua gouverna les Brigantes dans le nord de l’actuelle Angleterre au Ier siècle apr. J.-C. L’historien romain Tacite est la principale source narrative conservée sur son règne. En 51, Caratacos, un chef de la résistance à Rome, chercha refuge auprès d’elle après une défaite. Elle le fit prisonnier et le livra aux Romains. Tacite relate aussi son conflit avec Venutios et l’intervention de troupes romaines qui la secoururent en 69, après quoi Venutios conserva le trône."
+leader_queen_cartimandua_civilization = "Brigantes"
+
+leader_queen_suriyothai_name = "Suriyothai"
+leader_queen_suriyothai_historical = "Suriyothai était reine d’Ayutthaya sous le règne de Maha Chakkraphat. Les récits de l’invasion par les forces du roi birman Tabinshwehti lui donnent un rôle dans une campagne que la province d’Ayutthaya date de 1548. Dans la tradition des chroniques royales, la reine rejoignit l’armée à dos d’éléphant. Quand le roi se trouva en danger, elle s’interposa entre lui et le commandant ennemi et fut mortellement blessée. Le récit lui attribue une décision prise sur le champ de bataille qui eut des conséquences pour le roi et son armée."
+leader_queen_suriyothai_civilization = "Royaume d’Ayutthaya"
+
+leader_tarabai_name = "Tarabai"
+leader_tarabai_historical = "Tarabai (1675–1761) prit la tête du gouvernement marathe à la mort de Rajaram en 1700, comme régente de leur jeune fils Shivaji. Elle coordonna les commandants et défendit les places fortes face à l’empereur moghol Aurangzeb. L’historien Richard M. Eaton décrit sa décision d’envoyer des forces au nord en territoire moghol alors que les forts marathes étaient assiégés. Le répertoire historique de Satara rapporte qu’elle confia la surveillance des forts à Parashuram Trimbak. Après la mort d’Aurangzeb en 1707, le retour du prétendant Shahu ouvrit une lutte au sein de la maison marathe."
+leader_tarabai_civilization = "Empire marathe"
+
+leader_natavan_name = "Khurshid Banu Natavan"
+leader_natavan_historical = "Khurshid Banu Natavan était une poétesse et mécène azerbaïdjanaise de Choucha, où elle mourut en 1897. Les sources publiées divergent sur son année de naissance et donnent notamment 1830 et 1832. Fille de Mehdiqulu Khan, le dernier khan du Karabagh, elle consacra des ressources de sa famille à des projets civiques et culturels. En 1872, elle prit la direction du Majlis-i Uns, un cercle qui réunissait des poètes à Choucha et échangeait avec d’autres cercles. Elle écrivit des ghazals et des élégies, et un album illustré témoigne également de son travail artistique."
+leader_natavan_civilization = "Karabagh"
+
 leader_mavia_name = "Mavia"
 leader_mavia_historical = "Mavia, aussi appelée Mawiyya, dirigea des communautés arabes de la frontière orientale romaine et conclut la paix avec l’Empire à la fin du IVe siècle."
 leader_mavia_civilization = "Arabes tanoukhides"
@@ -726,6 +838,7 @@ crowns_count = "{amount} couronnes"
 buy = "ACHETER"
 unlock = "DÉVERROUILLER"
 unlocked = "DÉBLOQUÉ"
+confirm_unlock = "CONFIRMER"
 equip = "ÉQUIPER"
 equipped = "ÉQUIPÉ"
 territory_pattern = "Motif de territoire"
@@ -973,6 +1086,10 @@ ability_restriction_defeated = "Votre héros ne participe plus à la partie."
 
 
 [endgame]
+reward_double_title = "Doublez vos récompenses"
+reward_double_body = "Regardez une courte vidéo pour recevoir à nouveau les couronnes et les gemmes de cette partie."
+reward_continue = "CONTINUER"
+reward_double_watch = "REGARDER LA VIDÉO"
 stat_kills = "Éliminations"
 stat_assists = "Assistances"
 stat_max_territory = "Territoire max."
@@ -991,6 +1108,90 @@ crowns = "COURONNES"
 gems = "GEMMES"
 
 [site]
+leader_muhumuza_ability = "Réseau de Nyabingi"
+leader_muhumuza_description = "Vos cases de hautes terres et celles de vos alliés exigent 50 % d’effort de conquête en plus là où elles se touchent."
+
+leader_khosrow_i_ability = "Commandements régionaux"
+leader_khosrow_i_description = "Tant que deux rivaux distincts ou plus vous attaquent par voie terrestre, leurs armées perdent 25 % de troupes en plus par case qu’elles vous prennent."
+
+leader_naram_sin_ability = "Ascension du Zagros"
+leader_naram_sin_description = "Vos armées prennent 50 % plus vite les cases de montagne rivales qui bordent des hautes terres que vous contrôlez."
+
+leader_jalal_al_din_mangburni_ability = "Traversée de l’Indus"
+leader_jalal_al_din_mangburni_description = "Lorsqu’un transport de troupes en retraite atteint votre côte, il restitue toutes les troupes encore à bord, dans la limite de votre capacité."
+
+leader_modu_chanyu_ability = "Steppe disputée"
+leader_modu_chanyu_description = "Vos armées terrestres perdent 50 % de troupes en moins en prenant une case de plaine neutre bordant un territoire rival."
+
+leader_hiawatha_haudenosaunee_ability = "Grande Loi de la Paix"
+leader_hiawatha_haudenosaunee_description = "Lorsque deux de vos alliés concluent une nouvelle alliance entre eux, vos deux alliances temporaires avec eux retrouvent leur durée complète. Une fois par paire et par partie."
+
+leader_kaahumanu_hawaii_ability = "Table commune"
+leader_kaahumanu_hawaii_description = "La première fois que vous envoyez au moins 500 soldats à chaque allié alors que vous possédez tous deux une ferme active, chacun reçoit un renfort de 25 % de l’envoi, jusqu’à 500 et dans la limite de sa capacité."
+
+leader_sargon_of_akkad_ability = "Garnisons d’Akkad"
+leader_sargon_of_akkad_description = "Lorsque vous capturez une ville ennemie active sans aucune de vos tours à 12 cases ou moins, construisez gratuitement une tour de niveau 1 sur votre site valide le plus proche dans ce rayon. Une fois par ville capturée."
+
+leader_mithridates_vi_ability = "Secours de Tigrane"
+leader_mithridates_vi_description = "Si un allié possède une ville active, se retirer d’une attaque terrestre contre un rival après au moins 3 secondes donne autant de renforts que de troupes revenues, jusqu’à 1 000 et dans la limite de capacité. Une fois par partie."
+
+leader_gudit_yodit_ability = "Fuite d’Aksoum"
+leader_gudit_yodit_description = "Lorsque vous capturez une ville ennemie active, la plus grande armée terrestre de son ancien propriétaire qui attaque un joueur est forcée de se retirer. Une fois par ville capturée."
+
+leader_khutulun_qaidu_ability = "Capture à cheval"
+leader_khutulun_qaidu_description = "Lorsque vous lancez une attaque terrestre contre un rival qui vous attaque déjà par voie terrestre, recrutez dans vos réserves 20 % des troupes vaincues lors du choc initial, dans la limite de votre capacité."
+
+leader_sor_juana_ines_de_la_cruz_ability = "Philosophie de cuisine"
+leader_sor_juana_ines_de_la_cruz_description = "Quand vous terminez l’amélioration d’une ferme, le temps restant de votre amélioration de ville en cours la plus proche dans un rayon de 12 cases est divisé par deux."
+
+leader_sibylla_ability = "La Seconde Couronne"
+leader_sibylla_description = "Si vous possédez une ville active en concluant une nouvelle alliance, la plus ancienne ville en construction de votre nouvel allié s’achève aussitôt s’il ne possède aucune ville active. Une fois par partie."
+
+leader_cynethryth_mercia_ability = "Accord de Cookham"
+leader_cynethryth_mercia_description = "Lorsqu’un rival s’empare d’une de vos fermes actives, votre ville achevée du plus bas niveau dans un rayon de 12 cases gagne un niveau, jusqu’au niveau 4. Une fois par ferme."
+
+leader_suppiluliuma_ability = "Pacte du Mitanni"
+leader_suppiluliuma_description = "Vos armées terrestres perdent 25 % de soldats en moins en prenant des cases ennemies qui bordent le territoire d’un allié attaquant le même adversaire par voie terrestre."
+
+leader_baibars_ability = "Sapeurs du Crac"
+leader_baibars_description = "Lorsque vous prenez une tour ennemie active, détruisez la tour active la plus proche du même rival dont le niveau actif est inférieur et qui se trouve à 12 cases ou moins. Une fois par tour prise et par partie."
+
+leader_emperor_qin_shi_huang_ability = "Poids et mesures impériaux"
+leader_emperor_qin_shi_huang_description = "Tant que vos villes, vos usines et vos fermes totalisent chacune le même nombre de niveaux actifs, supérieur à zéro, vos usines produisent 25 % d’or en plus et vos fermes 25 % de soldats en plus."
+
+leader_spartacus_ability = "Arsenal de Thurii"
+leader_spartacus_description = "Quand votre armée terrestre prend le centre d’une usine ennemie active, elle reçoit 300 soldats par niveau actif de cette usine. Une fois par usine et par partie."
+
+leader_queen_nefertiti_ability = "Talatates d’Amarna"
+leader_queen_nefertiti_description = "Améliorer une ville coûte 35 % d’or en moins si vous possédez une usine active à 12 cases ou moins de cette ville."
+
+leader_mandukhai_ability = "Réunification de la steppe"
+leader_mandukhai_description = "Lorsque vous éliminez un rival en conquérant le territoire qui lui reste, recrutez 25 % de ses soldats encore en réserve, dans la limite de votre capacité de troupes."
+
+leader_kabal_xook_ability = "Insignes de Yaxchilán"
+leader_kabal_xook_description = "Avec une ville active et au moins 750 soldats en réserve, engagez 750 de vos soldats quand un allié lance une nouvelle attaque terrestre contre un rival commun. Une fois par allié et par partie."
+
+leader_lakshmibai_ability = "Redoute de Kalpi"
+leader_lakshmibai_description = "Quand un rival prend votre dernière ville active, fondez gratuitement une ville de niveau 1 sur le site valide le plus proche dans votre territoire, à 24 cases ou moins de la ville perdue. Une fois par partie."
+
+leader_pharaoh_hatshepsut_ability = "Jardins de Pount"
+leader_pharaoh_hatshepsut_description = "Quand votre navire marchand termine une route vers un port étranger, améliorez d’un niveau votre ferme achevée de plus bas niveau à 12 cases ou moins du port de départ, jusqu’au niveau 4. Une fois par port de départ."
+
+leader_thusnelda_cherusci_ability = "Digne en captivité"
+leader_thusnelda_cherusci_description = "Quand un rival capture l’une de vos villes de niveau actif 2 ou plus, elle perd un niveau achevé et toute amélioration en cours est annulée. Une fois par ville."
+
+leader_queen_cartimandua_ability = "Livraison de Caratacos"
+leader_queen_cartimandua_description = "Lorsqu’une armée terrestre ennemie se replie de votre territoire, transférez 25% de ses survivants à l’allié qui a la plus grande armée terrestre active contre cet ennemi et de la place en réserve. Le surplus retourne à l’ennemi."
+
+leader_queen_suriyothai_ability = "Escorte d’Ayutthaya"
+leader_queen_suriyothai_description = "Lorsqu’une armée terrestre ennemie est sur le point de prendre le centre d’une ville alliée active, dépensez 1 500 soldats de réserve pour arrêter cette tentative et éliminer jusqu’à 1 500 attaquants. Une fois par ville alliée."
+
+leader_tarabai_ability = "Chauth de contre-attaque"
+leader_tarabai_description = "Capturez une tour achevée d’un rival qui vous attaque par voie terrestre pour lui prendre 25% de son or, jusqu’à 250. Une fois par tour."
+
+leader_natavan_ability = "Fontaine de Choucha"
+leader_natavan_description = "Lorsqu’une de vos villes termine son passage au niveau 2, fondez gratuitement une ferme de niveau 1 sur le site valide le plus proche, à 12 cases ou moins de la ville."
+
 leader_mavia_ability = "Paix de Moïse"
 leader_mavia_description = "Si vous concluez une alliance pendant une attaque terrestre entre vous et un rival, les deux camps récupèrent leurs troupes survivantes sans pertes de retraite, dans la limite de leurs effectifs."
 

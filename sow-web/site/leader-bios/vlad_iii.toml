@@ -1,0 +1,67 @@
+[articles.en]
+text = "Vlad III, commonly known as Vlad the Impaler or Vlad Dracula, was Voivode of Wallachia during three separate reigns. He was born in the House of Drăculești, as the son of Vlad II Dracul."
+title = "Vlad the Impaler"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Vlad_the_Impaler"
+intro = [
+  "Vlad III (1428–31 – 1476/77), commonly known as Vlad the Impaler (Romanian: Vlad Țepeș [ˈvlad ˈtsepeʃ]) or Vlad Dracula ( DRAK-yuu-lə, -⁠yə-; Romanian: Vlad Drăculea [ˈdrəkule̯a]), was Voivode of Wallachia during three separate reigns (1448, 1456–1462, and 1476). He was born in the House of Drăculești, as the son of Vlad II Dracul. Vlad is chiefly remembered for his efforts to strengthen central authority, suppress the power of rival boyars, and resist the expansion of the Ottoman Empire. His 1462 campaign against Sultan Mehmed II, including the Night Attack at Târgoviște, became one of the most notable military episodes of his reign. He was killed in battle in 1476 or 1477 during his final attempt to retain the Wallachian throne.",
+  "He was the second son of Vlad Dracul, who became the ruler of Wallachia in 1436. Vlad and his younger brother, Radu, were held as hostages in the Ottoman Empire in 1442 to secure their father's loyalty. Vlad's eldest brother Mircea and their father were murdered after John Hunyadi, regent-governor of Hungary, invaded Wallachia in 1447. Hunyadi installed Vlad's second cousin, Vladislav II, as the new voivode. Hunyadi launched a military campaign against the Ottomans in the autumn of 1448, and Vladislav accompanied him. Vlad broke into Wallachia with Ottoman support in October, but Vladislav returned, and Vlad sought refuge in the Ottoman Empire before the end of the year. Vlad went to Moldavia in 1449 or 1450 and later to Hungary.",
+  "Relations between Hungary and Vladislav later deteriorated, and in 1456 Vlad invaded Wallachia with Hungarian support. After killing Vladislav, Vlad began a purge among the Wallachian boyars to strengthen his position. He came into conflict with the Transylvanian Saxons, who supported his opponents, Dan and Basarab Laiotă (who were Vladislav's brothers), and Vlad's illegitimate half-brother, Vlad Călugărul. Vlad plundered the Saxon villages, taking the captured people to Wallachia, where he had them impaled (which inspired his epithet). Peace was restored in 1460.",
+  "The Ottoman Sultan, Mehmed II, ordered Vlad to pay homage to him personally, but Vlad had the Sultan's two envoys captured and impaled. In January 1462, he attacked Ottoman territory, massacring tens of thousands of Turks and Muslim Bulgarians. Mehmed launched a campaign against Wallachia to replace Vlad with Vlad's younger brother, Radu. Vlad attempted to capture the sultan at Târgoviște during the night of 16–17 June 1462. The Sultan and the main Ottoman army left Wallachia, but many Wallachians deserted Vlad's forces and joined Radu. Vlad went to Transylvania to seek assistance from Matthias Corvinus, King of Hungary, in late 1462, but Corvinus had him imprisoned.",
+]
+sections = [
+  { "title" = "Name", "paragraphs" = [
+      "The name Dracula, which is now primarily known as the name of a vampire, was for centuries known as the sobriquet of Vlad III. Diplomatic reports and popular stories referred to him as Dracula, Dracuglia, or Drakula already in the 15th century. He himself signed his two letters as \"Dragulya\" or \"Drakulya\" in the late 1470s. His name had its origin in the sobriquet of his father, Vlad Dracul (\"Vlad the Dragon\" in medieval Romanian), who received it after he became a member of the Order of the Dragon. Dracula is the Slavonic genitive form of Dracul, meaning \"[the son] of Dracul (of the Dragon)\". In modern Romanian, dracul means \"the devil\", which contributed to Vlad's reputation.",
+      "Vlad III is known as Vlad Țepeș (or Vlad the Impaler) in Romanian historiography. This sobriquet is connected to the impalement that was his favorite method of execution. The Ottoman writer Tursun Beg referred to him as Kazıklı Voyvoda (Impaler Lord) around 1500. Mircea the Shepherd, Voivode of Wallachia, used this sobriquet when referring to Vlad III in a letter of grant on 1 April 1551.",
+    ] },
+  { "title" = "Early life", "paragraphs" = [
+      "Vlad was the second legitimate son of Vlad II Dracul, who was himself an illegitimate son of Mircea I of Wallachia. Vlad II had won the moniker \"Dracul\" for his membership in the Order of the Dragon, a militant fraternity founded by Sigismund of Luxemburg, King of Hungary. The Order of the Dragon was dedicated to halting the Ottoman advance into Europe. Since he was old enough to be a candidate for the throne of Wallachia in 1448, Vlad III was probably born between 1428 and 1431. Vlad was most probably born after his father settled in Transylvania in 1429. Historian Radu Florescu writes that Vlad was born in the Transylvanian Saxon town of Segesvár, Kingdom of Hungary (now Sighișoara, Romania), where his father lived in a three-story stone house from 1431 to 1435. Modern historians identify Vlad's mother either as a daughter or kinswoman of Alexander I of Moldavia or as his father's unknown first wife.",
+      "Vlad II Dracul seized Wallachia after the death of his half-brother Alexander I Aldea in 1436. One of his charters (which was issued on 20 January 1437) preserves the first reference to Vlad III and his elder brother, Mircea, mentioning them as their father's \"firstborn sons\". They were mentioned in four further documents between 1437 and 1439. The last of the four charters also refers to their younger brother, Radu.",
+      "After a meeting with John Hunyadi, Voivode of Transylvania, Vlad II Dracul did not support an Ottoman invasion of Transylvania in March 1442. The Ottoman Sultan, Murad II, ordered him to come to Gallipoli to demonstrate his loyalty. Vlad and Radu accompanied their father to the Ottoman Empire, where they were all imprisoned. Vlad Dracul was released before the end of the year, but Vlad and Radu remained hostages to secure his loyalty. They were held imprisoned in the fortress of Eğrigöz, according to contemporaneous Ottoman chronicles. Their lives were especially in danger after their father supported Vladislaus, King of Poland and Hungary, against the Ottoman Empire during the Crusade of Varna in 1444. Vlad II Dracul was convinced that his two sons would be \"butchered for the sake of Christian peace\", but neither Vlad nor Radu was murdered or mutilated after their father's rebellion.",
+    ] },
+  { "title" = "Reigns", "paragraphs" = [
+      "Upon the death of his father and elder brother, Vlad became a potential claimant to Wallachia. Vladislav II of Wallachia accompanied John Hunyadi, who launched a campaign against the Ottoman Empire in September 1448. Taking advantage of his opponent's absence, Vlad broke into Wallachia at the head of an Ottoman army in early October. He had to accept that the Ottomans had captured the fortress of Giurgiu on the Danube and strengthened it.",
+      "The Ottomans defeated Hunyadi's army in the Battle of Kosovo between 17 and 18 October. Hunyadi's deputy, Nicholas Vízaknai, urged Vlad to come to meet him in Transylvania, but Vlad refused him. Vladislav II returned to Wallachia at the head of the remnants of his army. Vlad was forced to flee to the Ottoman Empire by 7 December 1448.",
+      "We bring you the news that [Nicholas Vízaknai] writes to us and asks us to be so kind as to come to him until [John Hunyadi] ... returns from the war. We are unable to do this because an emissary from Nicopolis came to us ... and said with great certainty that [Murad II had defeated Hunyadi]. ... If we come to [Vízaknai] now, the [Ottomans] could come and kill both you and us. Therefore, we ask you to have patience until we see what has happened to [Hunyadi]. ... If he returns from the war, we will meet him, and we will make peace with him. But if you will be our enemies now, and if something happens, ... you will have to answer for it before God",
+    ] },
+  { "title" = "Ancestry and descendants", "paragraphs" = [
+      "Vlad had two wives, according to modern specialists. His first wife may have been an illegitimate daughter of John Hunyadi, according to historian Alexandru Simon. They had one son, Mihnea the Evil, that was born in 1462. In 1462, Vlad and his wife were forewarned of an attack by Turkish forces on Poenari Castle led by Vlad's half-brother Radu cel Frumos. Not wanting to be captured and believing there was no escape, his wife threw herself from the tower and into the river below, Riul Daomnei – the Princess's River, named for the tragedy.",
+      "Vlad's second wife was Justina Szilágyi, who was a cousin of Matthias Corvinus, King of Hungary. She was the widow of Vencel Pongrác of Szentmiklós when \"Ladislaus Dragwlya\" married her, most probably in 1475. She survived Vlad Dracul, and married thirdly Pál Suki, then János Erdélyi. They had two children, the first being an unnamed son that was killed before 1486. Vlad's third son, Vlad Drakwlya, unsuccessfully laid claim to Wallachia around 1495. He was the forefather of the noble Dracula family.",
+      "While Vlad has three documented children, it is believed that he had another illegitimate son. During the 1462 siege, Vlad, his attendants, and an illegitimate son managed to escape into the mountains. While fleeing, his son fell off the saddle he was tied to and was lost in the woods. Vlad did not return to search for his son, leaving him behind. The boy, who was not yet in his teens, was found the following morning by a shepherd who took him in and raised him as his own. Vlad would return to the area 14 years later where he was reunited with his son and granted the shepherd riches in return for caring for the son. Not much else is known about the boy, however it is believed he stayed in the area and eventually became governor of the castle.",
+    ] },
+  { "title" = "Legacy", "paragraphs" = [
+      "Stories about Vlad's brutal acts began circulating during his lifetime. After his arrest, courtiers of Matthias Corvinus promoted their spread. The papal legate, Niccolo Modrussiense, had already written about such stories to Pope Pius II in 1462. Two years later, the Pope included them in his Commentaries.",
+      "It was even rumored that Vlad once dipped his bread into the blood of his impaled victims. So far, this remains legendary, as the story has not been confirmed.",
+      "Meistersinger Michael Beheim wrote a lengthy poem about Vlad's deeds, allegedly based on his conversation with a Catholic monk who had managed to escape from Vlad's prison. The poem, called Von ainem wutrich der heis Trakle waida von der Walachei (\"Story of a Despot Called Dracula, Voievod of Wallachia\"), was performed at the court of Frederick III, Holy Roman Emperor, in Wiener Neustadt during the winter of 1463. According to one of Beheim's stories, Vlad had two monks impaled to assist them to go to heaven, also ordering the impalement of their donkey because it began braying after its masters' death. Beheim also accused Vlad of duplicity, stating that Vlad had promised support to both Matthias Corvinus and Mehmed II but did not keep the promise.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

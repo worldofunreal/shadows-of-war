@@ -325,7 +325,7 @@ mod tests {
         let current = crate::protocol::gameplay_build_identity("0.1.3");
         assert_eq!(
             current,
-            format!("0.1.3/turns-6/net-6/rules-{}", crate::SIMULATION_RULES_ID)
+            format!("0.1.3/turns-7/net-7/rules-{}", crate::SIMULATION_RULES_ID)
         );
         assert_ne!(current, "0.1.3");
         let mut engine = engine();

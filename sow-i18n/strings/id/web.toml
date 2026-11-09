@@ -271,6 +271,118 @@ campaign_chronicles = "KAMPANYE\nKRONIK"
 campaign_unavailable = "Kampanye tidak tersedia."
 
 [heroes]
+leader_muhumuza_name = "Muhumuza"
+leader_muhumuza_historical = "Muhumuza, juga tercatat sebagai Muhumusa, memimpin perlawanan di dataran tinggi Ndorwa dan Kigezi, di kedua sisi perbatasan Rwanda dan Uganda saat ini. Sebagai perantara roh Nyabingi, ia bertumpu pada tradisi spiritual yang telah berakar di masyarakat setempat. Ia menghimpun pengikut untuk melawan istana Raja Musinga dan perluasan kekuasaan kolonial Eropa."
+leader_muhumuza_civilization = "Gerakan Nyabingi"
+
+leader_khosrow_i_name = "Khosrow I"
+leader_khosrow_i_historical = "Khosrow I, yang dikenal sebagai Anushirvan, memerintah Kekaisaran Sasaniyah dari 531 sampai 579. Ia membagi pimpinan militer menjadi empat komando wilayah. Meterai yang bertahan mencatat para panglima yang bertanggung jawab atas wilayah timur, selatan, barat, dan utara. Ia juga meneruskan pendataan tanah yang dimulai pada masa ayahnya, Kavad I, dan menjadikannya dasar untuk menetapkan tarif pajak tanah yang tetap."
+leader_khosrow_i_civilization = "Kekaisaran Sasaniyah"
+
+leader_naram_sin_name = "Naram Sin"
+leader_naram_sin_historical = "Naram Sin, cucu Sargon, memerintah Kekaisaran Akkadia pada milenium ketiga SM. Prasasti kemenangannya mengenang kampanye melawan bangsa Lullubi di Pegunungan Zagros. Reliefnya menggambarkan raja dan para prajurit mendaki lereng. Naram Sin digambarkan lebih besar daripada tokoh lain dan memakai helm bertanduk yang dikaitkan dengan keilahian."
+leader_naram_sin_civilization = "Kekaisaran Akkadia"
+
+leader_jalal_al_din_mangburni_name = "Jalal al-Din Mangburni"
+leader_jalal_al_din_mangburni_historical = "Jalal al-Din Mangburni menggantikan ayahnya, Muhammad II, ketika serbuan Mongol memecah Kekaisaran Khwarazm. Ia menghimpun pasukan di Ghazni dan mengalahkan tentara Mongol di Parwan pada 1221. Jenghis Khan mengejarnya hingga Sungai Indus. Jalal al-Din kalah dalam pertempuran itu, tetapi lolos dengan menyeberangi sungai dengan kuda. Sebagian pasukannya juga mencapai seberang."
+leader_jalal_al_din_mangburni_civilization = "Kekaisaran Khwarazm"
+
+leader_modu_chanyu_name = "Modu Chanyu"
+leader_modu_chanyu_historical = "Modu, yang juga disebut Maodun, menyandang gelar chanyu sekitar 209 SM dan menjadikan Xiongnu kekuatan besar di stepa timur. Sejarawan Tiongkok Sima Qian menuturkan bahwa tetangga mereka, Donghu, menguji penguasa baru itu dengan tuntutan berturut-turut. Modu dua kali mengalah, lalu menolak menyerahkan jalur tak berpenghuni di antara pos-pos perbatasan dan menyerang Donghu."
+leader_modu_chanyu_civilization = "Xiongnu"
+
+leader_hiawatha_haudenosaunee_name = "Hiawatha"
+leader_hiawatha_haudenosaunee_historical = "Tradisi lisan Haudenosaunee mengenang Hiawatha, juga disebut Aionwatha, karena membantu Sang Pembawa Damai menyatukan bangsa Mohawk, Oneida, Onondaga, Cayuga, dan Seneca. Dalam kisah Onondaga, Hiawatha sedang berduka, dan Sang Pembawa Damai menggunakan untaian manik-manik kerang yang disebut wampum untuk menyampaikan penghiburan. Hiawatha kemudian membantu membawa pesan damai kepada bangsa-bangsa itu. Tanggal pasti penyatuan mereka tidak diketahui."
+leader_hiawatha_haudenosaunee_civilization = "Konfederasi Haudenosaunee"
+
+leader_kaahumanu_hawaii_name = "Kaʻahumanu"
+leader_kaahumanu_hawaii_historical = "Ketika Kamehameha I meninggal pada 1819, Kaʻahumanu menyatakan akan berbagi kekuasaan dengan penggantinya, Liholiho, yang menjadi Kamehameha II. Ia menjadi orang pertama yang menjabat sebagai kuhina nui. Pada tahun-tahun awal, jabatan itu memiliki wewenang sebanding dengan raja dalam perkara tanah, perjanjian, dan peradilan. Ia terus memerintah sebagai wali bagi Kauikeaouli, Kamehameha III, hingga wafat pada 1832."
+leader_kaahumanu_hawaii_civilization = "Kerajaan Hawaiʻi"
+
+leader_sargon_of_akkad_name = "Sargon dari Akkad"
+leader_sargon_of_akkad_historical = "Sargon mendirikan dinasti Akkad di Mesopotamia pada akhir milenium ketiga SM. Prasasti kerajaan menceritakan kekalahan Lugalzagesi dari Uruk dan pembongkaran tembok beberapa kota, termasuk Uruk dan Ur. Teks-teks itu merayakan kemenangan. Sebagian bertahan melalui salinan yang dibuat para juru tulis lama setelah pemerintahannya. Prasasti juga menyebut orang-orang dari Akkad yang menduduki jabatan gubernur di wilayah taklukan. Dokumen administratif membantu menjelaskan praktik lokal yang tetap berjalan di bawah pemerintahan baru."
+leader_sargon_of_akkad_civilization = "Kekaisaran Akkad"
+
+leader_mithridates_vi_name = "Mithridates VI"
+leader_mithridates_vi_historical = "Mithridates VI Eupator memerintah Pontus di pesisir selatan Laut Hitam. Ia memperluas pengaruh kerajaannya di sekitar laut tersebut dan menantang Roma di Anatolia. Dalam perang ketiga melawan Roma, Jenderal Lucullus mengusirnya dari Pontus. Mithridates berlindung kepada Tigranes II dari Armenia, yang menikah dengan putrinya. Aliansi itu memberinya tempat untuk menghimpun kekuatan kembali dan pasukan untuk pulang."
+leader_mithridates_vi_civilization = "Kerajaan Pontus"
+
+leader_gudit_yodit_name = "Gudit"
+leader_gudit_yodit_historical = "Dalam tradisi Etiopia, Gudit atau Yodit dikenang sebagai ratu yang memberontak terhadap Aksum. Sejarah Para Patriark Aleksandria mencatat permohonan pada abad kesepuluh dari seorang penguasa Etiopia yang tidak disebut namanya kepada George dari Nubia. Menurut kisah itu, seorang ratu Bani al-Hamwiyah mengambil tawanan, membakar kota-kota, dan memaksa sang penguasa berpindah dari satu tempat ke tempat lain. Surat aslinya telah hilang. Kronik gereja melestarikan isinya dan mengaitkan krisis dengan permohonan pengangkatan uskup metropolitan baru."
+leader_gudit_yodit_civilization = "Dataran Tinggi Etiopia"
+
+leader_khutulun_qaidu_name = "Khutulun"
+leader_khutulun_qaidu_historical = "Khutulun, juga ditulis Qutulun, adalah putri Mongol dan panglima militer di Asia Tengah. Ayahnya, Qaidu, memimpin wilayah kekuasaan wangsa Ögödei dan menentang wewenang Kubilai beserta para penerusnya. Marco Polo menyebutnya Aijaruc dan berkisah bahwa ia memacu kudanya ke depan dalam peperangan untuk menawan prajurit musuh. Ia juga mengisahkan para pelamar yang mempertaruhkan kuda dalam pertandingan gulat. Kemenangan dan jumlah kuda dalam kisah itu sulit diverifikasi."
+leader_khutulun_qaidu_civilization = "Ulus Qaidu"
+
+leader_sor_juana_ines_de_la_cruz_name = "Sor Juana Inés de la Cruz"
+leader_sor_juana_ines_de_la_cruz_historical = "Sor Juana Inés de la Cruz adalah penulis dan biarawati Ordo Santo Hieronimus di Spanyol Baru pada abad ketujuh belas. Sumber-sumber menyebut 1648 dan 1651 sebagai kemungkinan tahun kelahirannya. Ia tinggal di biara San Jerónimo di Kota Meksiko, tempat ia menulis puisi dan drama seperti El divino Narciso. Pada 1690 ia menulis kritik atas khotbah Yesuit Portugis António Vieira. Uskup Puebla, Manuel Fernández de Santa Cruz, menerbitkannya sebagai Carta atenagórica dan menyurati penulis dengan nama Sor Filotea de la Cruz."
+leader_sor_juana_ines_de_la_cruz_civilization = "Spanyol Baru"
+
+leader_sibylla_name = "Sibylla dari Yerusalem"
+leader_sibylla_historical = "Sibylla adalah putri Amalric dari Yerusalem dan Agnes dari Courtenay. Sebelum menjadi ratu, ia memegang wilayah Jaffa dan Ascalon. Piagam yang dikeluarkannya pada 1177 mencatat pemberian menara, kebun, dan pendapatan di Ascalon kepada Count Rodrigo dan anggota ordo keagamaannya. Putranya dengan William dari Montferrat kelak menjadi Raja Baldwin V. Saat putranya wafat pada 1186, Sibylla menuntut mahkota Yerusalem dengan hak warisnya sendiri dan menjadikan suami keduanya, Guy dari Lusignan, raja yang memerintah bersamanya."
+leader_sibylla_civilization = "Kerajaan Yerusalem"
+
+leader_cynethryth_mercia_name = "Cynethryth"
+leader_cynethryth_mercia_historical = "Cynethryth adalah ratu Mercia pada akhir abad kedelapan dan kemudian menjadi abdis Cookham. Namanya tercatat sebagai saksi dalam piagam dari masa pemerintahan Offa. Ia juga ibu Ecgfrith, penerus Offa. Keping perak yang membawa nama dan gelarnya sebagai ratu merupakan peninggalan yang istimewa dari Inggris Anglo-Saxon. Sebagian keping yang masih ada mencantumkan nama Eoba, pembuat uang yang dikaitkan dengan Canterbury. Keping-keping itu membuktikan bahwa gelar Cynethryth beredar di muka umum, meskipun siapa yang memesan pembuatannya masih belum pasti."
+leader_cynethryth_mercia_civilization = "Kerajaan Mercia"
+
+leader_suppiluliuma_name = "Suppiluliuma I"
+leader_suppiluliuma_historical = "Suppiluliuma I memerintah Hatti pada abad ke-14 SM. Ekspedisinya memperluas kekuasaan Het ke Suriah utara. Ia menempatkan putranya, Piyassili, sebagai raja Karkemis. Perjanjiannya dengan Shattiwaza dari Mitanni menghubungkan dukungan bagi seorang penuntut takhta dengan tatanan politik baru."
+leader_suppiluliuma_civilization = "Kekaisaran Het"
+
+leader_baibars_name = "Baibars"
+leader_baibars_historical = "Al-Zahir Baibars memerintah Kesultanan Mamluk pada 1260–1277. Sebuah dinar emas dari Kairo yang disimpan di Louvre memuat nama dan gelarnya. Kampanyenya memperluas kekuasaan Mamluk di Levant. Pada 1271 ia memimpin koalisi melawan benteng Hospitaller Krak des Chevaliers."
+leader_baibars_civilization = "Kesultanan Mamluk"
+
+leader_emperor_qin_shi_huang_name = "Qin Shi Huang"
+leader_emperor_qin_shi_huang_historical = "Qin Shi Huang, yang lahir dengan nama Ying Zheng, menjadi kaisar pertama setelah kerajaan Qin mengalahkan lawan-lawannya yang terakhir pada 221 SM. Pemerintahnya menerapkan standar berat dan ukuran Qin di wilayah yang ditaklukkan. Prasasti pada anak timbangan dan wadah takar yang masih ada mendokumentasikan perubahan itu."
+leader_emperor_qin_shi_huang_civilization = "Dinasti Qin"
+
+leader_spartacus_name = "Spartakus"
+leader_spartacus_historical = "Spartakus adalah gladiator asal Trakia yang memimpin pemberontakan yang bermula di Capua pada 73 SM. Plutarkhos menceritakan bahwa para pelarian menggunakan peralatan dapur dan kemudian merebut senjata yang sedang diangkut. Appianus menggambarkan mereka bersenjata dalam perjalanan dan berlindung di Gunung Vesuvius, tempat jumlah mereka bertambah."
+leader_spartacus_civilization = "Pemberontak Spartakus"
+
+leader_queen_nefertiti_name = "Nefertiti"
+leader_queen_nefertiti_historical = "Nefertiti adalah Permaisuri Agung Akhenaten pada Dinasti Kedelapan Belas Mesir. Ia memegang peran yang terlihat dalam pemujaan Aten di Akhetaten, kini Amarna. Sebuah fragmen kuarsit merah di Museum Petrie memperlihatkan Nefertiti menuangkan persembahan cair di bawah sinar cakram matahari."
+leader_queen_nefertiti_civilization = "Mesir Kuno"
+
+leader_mandukhai_name = "Mandukhai Khatun"
+leader_mandukhai_historical = "Mandukhai Khatun memegang wewenang politik dan militer di kalangan bangsa Mongol pada akhir abad ke-15. Setelah Manduul Khan meninggal, ia membantu memulihkan kekuasaan keturunan Jenghis Khan dalam suksesi yang terkait dengan Dayan Khan. Kronik Mongol dari masa berikutnya juga mengaitkannya dengan kepemimpinan ekspedisi melawan orang Oirat."
+leader_mandukhai_civilization = "Yuan Utara"
+
+leader_kabal_xook_name = "K’ab’al Xook"
+leader_kabal_xook_historical = "K’ab’al Xook mendedikasikan Bangunan 23 pada tahun 726 di Yaxchilán, kota Maya di tepi Sungai Usumacinta, di wilayah Chiapas sekarang. Ia adalah salah satu istri utama penguasa Itzamnaaj B’alam. Namanya tercatat pada prasasti, sedangkan sosoknya tampak pada tiga relief batu yang ditempatkan di atas pintu bangunan."
+leader_kabal_xook_civilization = "Yaxchilán"
+
+leader_lakshmibai_name = "Lakshmibai"
+leader_lakshmibai_historical = "Lakshmibai, rani Jhansi, menentang pencaplokan negerinya oleh Perusahaan Hindia Timur setelah Gangadhar Rao wafat. Perusahaan menolak mengakui putra angkat mereka sebagai penerus. Pada Pemberontakan India 1857–1858, Lakshmibai memimpin pertahanan Jhansi melawan pasukan Hugh Rose. Ketika Inggris merebut Jhansi pada 1858, ia lolos dan bergabung dengan pasukan pemberontak lain di Kalpi, termasuk pasukan yang berhubungan dengan Tatya Tope. Ia terus bertempur setelah Kalpi jatuh dan meninggal dekat Gwalior pada Juni 1858."
+leader_lakshmibai_civilization = "Jhansi"
+
+leader_pharaoh_hatshepsut_name = "Hatshepsut"
+leader_pharaoh_hatshepsut_historical = "Hatshepsut memerintah Mesir pada abad kelima belas SM, pada masa Dinasti Kedelapan Belas. Awalnya ia menjadi wali bagi Thutmose III, keponakan sekaligus anak tirinya yang masih muda. Kemudian ia mengambil gelar dan kewenangan firaun, sementara Thutmose tetap menjadi penguasa bersama. Salah satu bangunan yang ia perintahkan adalah kuil peringatan bertingkat di Deir el-Bahari. Relief di serambi tengah bagian selatan menggambarkan ekspedisi yang dikirimnya ke Punt, pertemuan utusan Mesir dengan penduduk setempat, dan pemuatan barang ke kapal. Kuil itu menempatkan ekspedisi dalam konteks kerajaan dan keagamaan."
+leader_pharaoh_hatshepsut_civilization = "Mesir Kuno"
+
+leader_thusnelda_cherusci_name = "Thusnelda"
+leader_thusnelda_cherusci_historical = "Thusnelda adalah bangsawati Cherusci pada awal abad pertama Masehi. Ayahnya, Segestes, mencari dukungan Romawi, sedangkan suaminya, Arminius, memimpin perlawanan. Menurut Tacitus, pada 15 M pasukan Arminius mengepung Segestes, yang meminta bantuan Germanicus. Pasukan Romawi mematahkan pengepungan dan menahan Thusnelda, yang sedang hamil. Dalam pidato yang dinisbatkan Tacitus kepada Segestes, ia mengakui bahwa Thusnelda berada di rumahnya di luar kehendaknya. Sejarawan Romawi itu menggambarkannya menghadapi penawanan tanpa memohon."
+leader_thusnelda_cherusci_civilization = "Cherusci"
+
+leader_queen_cartimandua_name = "Cartimandua"
+leader_queen_cartimandua_historical = "Cartimandua memerintah bangsa Brigantes di wilayah Inggris utara sekarang pada abad pertama Masehi. Tacitus, sejarawan Romawi, adalah sumber naratif utama yang masih ada mengenai pemerintahannya. Pada 51 M, Caratacus, seorang pemimpin perlawanan terhadap Roma, meminta perlindungannya setelah kalah. Cartimandua menawannya dan menyerahkannya kepada orang Romawi. Tacitus juga mengisahkan perseteruannya dengan Venutius dan bantuan tentara Roma yang menyelamatkannya pada 69 M, ketika Venutius mengambil takhta."
+leader_queen_cartimandua_civilization = "Brigantes"
+
+leader_queen_suriyothai_name = "Suriyothai"
+leader_queen_suriyothai_historical = "Suriyothai adalah ratu Ayutthaya pada masa Maha Chakkraphat. Ia dikenang dalam kisah invasi pasukan raja Burma Tabinshwehti yang diberi tanggal 1548 dalam kronologi Provinsi Ayutthaya. Menurut tradisi kronik kerajaan, sang ratu ikut berperang dengan menunggang gajah. Saat raja terancam, ia memacu gajahnya ke antara raja dan komandan musuh dan terluka parah hingga tewas. Kisah itu mencatat keputusannya di medan perang dan dampaknya bagi raja dan pasukannya."
+leader_queen_suriyothai_civilization = "Kerajaan Ayutthaya"
+
+leader_tarabai_name = "Tarabai"
+leader_tarabai_historical = "Tarabai (1675–1761) mengambil alih pemerintahan Maratha setelah Rajaram wafat pada 1700, sebagai wali bagi putra mereka yang masih muda, Shivaji. Ia mengoordinasikan para panglima dan mempertahankan benteng dari pasukan kaisar Mughal Aurangzeb. Sejarawan Richard M. Eaton menjelaskan bahwa ia mengirim pasukan ke utara, ke wilayah Mughal, ketika benteng Maratha sendiri dikepung. Catatan sejarah Satara menyebut bahwa ia menyerahkan pengawasan benteng kepada Parashuram Trimbak. Setelah Aurangzeb wafat pada 1707, kembalinya penuntut takhta Shahu memicu perebutan di dalam keluarga penguasa."
+leader_tarabai_civilization = "Kekaisaran Maratha"
+
+leader_natavan_name = "Khurshid Banu Natavan"
+leader_natavan_historical = "Khurshid Banu Natavan adalah penyair dan pelindung seni Azerbaijan dari Shusha, tempat ia meninggal pada 1897. Sumber-sumber yang diterbitkan mencatat tahun kelahiran yang berbeda, termasuk 1830 dan 1832. Ayahnya, Mehdiqulu Khan, merupakan khan terakhir Karabakh. Natavan menggunakan sumber daya warisan keluarga untuk mendukung kegiatan masyarakat dan kebudayaan. Pada 1872 ia memimpin Majlis-i Uns, kelompok sastra yang menghimpun penyair Shusha dan berhubungan dengan kelompok lain. Ia menulis gazal dan elegi. Album bergambar yang ditinggalkannya juga menyimpan contoh karya seninya."
+leader_natavan_civilization = "Karabakh"
+
 leader_mavia_name = "Mavia"
 leader_mavia_historical = "Mavia, juga dikenal sebagai Mawiyya, memimpin komunitas Arab di perbatasan timur Romawi dan berdamai dengan kekaisaran pada akhir abad keempat."
 leader_mavia_civilization = "Arab Tanukh"
@@ -726,6 +838,7 @@ crowns_count = "{amount} mahkota"
 buy = "BELI"
 unlock = "BUKA"
 unlocked = "TERBUKA"
+confirm_unlock = "KONFIRMASI"
 equip = "PAKAI"
 equipped = "EKUIPPED"
 territory_pattern = "Pola wilayah"
@@ -973,6 +1086,10 @@ ability_restriction_defeated = "Pahlawanmu tidak lagi berada dalam pertandingan.
 
 
 [endgame]
+reward_double_title = "Gandakan hadiahmu"
+reward_double_body = "Tonton video singkat untuk mendapatkan lagi mahkota dan permata dari pertandingan ini."
+reward_continue = "LANJUTKAN"
+reward_double_watch = "TONTON VIDEO"
 stat_kills = "Kill"
 stat_assists = "Assist"
 stat_max_territory = "Wilayah maksimum"
@@ -991,6 +1108,90 @@ crowns = "MAHKOTA"
 gems = "PERMATA"
 
 [site]
+leader_muhumuza_ability = "Jaringan Nyabingi"
+leader_muhumuza_description = "Petak dataran tinggi milikmu dan sekutu memerlukan 50% lebih banyak upaya untuk direbut jika berbatasan satu sama lain."
+
+leader_khosrow_i_ability = "Komando Wilayah"
+leader_khosrow_i_description = "Saat dua lawan berbeda atau lebih menyerangmu lewat darat, pasukan mereka kehilangan 25% lebih banyak prajurit untuk setiap petak yang direbut darimu."
+
+leader_naram_sin_ability = "Mendaki Zagros"
+leader_naram_sin_description = "Pasukanmu merebut petak gunung lawan 50% lebih cepat jika petak itu berbatasan dengan dataran tinggi yang kamu kuasai."
+
+leader_jalal_al_din_mangburni_ability = "Menyeberangi Sungai Indus"
+leader_jalal_al_din_mangburni_description = "Saat kapal angkut pasukan yang mundur tiba di pantaimu, semua prajurit yang masih di kapal kembali hingga batas kapasitas pasukanmu."
+
+leader_modu_chanyu_ability = "Stepa Sengketa"
+leader_modu_chanyu_description = "Pasukan daratmu kehilangan 50% lebih sedikit prajurit saat merebut petak dataran netral yang berbatasan dengan wilayah lawan."
+
+leader_hiawatha_haudenosaunee_ability = "Hukum Agung Perdamaian"
+leader_hiawatha_haudenosaunee_description = "Saat dua sekutumu membentuk aliansi baru satu sama lain, kedua aliansi berjangka milikmu dengan mereka kembali ke durasi penuh. Sekali per pasangan per pertandingan."
+
+leader_kaahumanu_hawaii_ability = "Meja Bersama"
+leader_kaahumanu_hawaii_description = "Saat pertama kali kamu mengirim setidaknya 500 pasukan kepada tiap sekutu dan kalian sama-sama punya pertanian aktif, masing-masing menerima tambahan 25% dari jumlah yang dikirim, maksimal 500 dan sesuai batas pasukan masing-masing."
+
+leader_sargon_of_akkad_ability = "Garnisun Akkad"
+leader_sargon_of_akkad_description = "Saat merebut kota musuh aktif tanpa menara milikmu dalam jarak 12 petak, bangun menara level 1 gratis di petak sah milikmu yang terdekat dalam radius itu. Sekali per kota yang direbut."
+
+leader_mithridates_vi_ability = "Bantuan Tigranes"
+leader_mithridates_vi_description = "Jika sekutu memiliki kota aktif, mundur dari serangan darat terhadap lawan setelah sedikitnya 3 detik memberi bala bantuan sebanyak pasukan yang kembali, hingga 1.000 dan tidak melebihi batas pasukan. Sekali per pertandingan."
+
+leader_gudit_yodit_ability = "Pelarian dari Aksum"
+leader_gudit_yodit_description = "Saat merebut kota musuh yang aktif, paksa pasukan darat terbesar milik pemilik sebelumnya yang sedang menyerang seorang pemain untuk mundur. Sekali per kota yang direbut."
+
+leader_khutulun_qaidu_ability = "Tangkapan Berkuda"
+leader_khutulun_qaidu_description = "Saat melancarkan serangan darat terhadap lawan yang sedang menyerangmu lewat darat, rekrut 20% pasukan yang kamu kalahkan dalam bentrokan awal ke cadanganmu, hingga batas pasukan."
+
+leader_sor_juana_ines_de_la_cruz_ability = "Filsafat Dapur"
+leader_sor_juana_ines_de_la_cruz_description = "Saat peningkatan sebuah pertanian selesai, sisa waktu peningkatan kota milikmu yang sedang berlangsung dan paling dekat dalam jarak 12 petak dipangkas separuh."
+
+leader_sibylla_ability = "Mahkota Kedua"
+leader_sibylla_description = "Saat membentuk aliansi baru ketika kamu memiliki kota aktif, kota yang paling awal mulai dibangun oleh sekutu barumu langsung selesai jika mereka belum memiliki kota aktif. Sekali per pertandingan."
+
+leader_cynethryth_mercia_ability = "Kesepakatan Cookham"
+leader_cynethryth_mercia_description = "Saat lawan merebut salah satu pertanian aktifmu, kota milikmu yang sudah selesai dibangun dengan level terendah dalam jarak 12 petak naik satu level, hingga level 4. Sekali per pertanian."
+
+leader_suppiluliuma_ability = "Pakta Mitanni"
+leader_suppiluliuma_description = "Pasukan darat Anda kehilangan 25% lebih sedikit prajurit saat merebut petak musuh yang berbatasan dengan wilayah sekutu yang juga sedang menyerang lawan yang sama lewat darat."
+
+leader_baibars_ability = "Pasukan Penggali Krak"
+leader_baibars_description = "Saat merebut menara musuh yang aktif, Anda meruntuhkan menara aktif terdekat milik lawan yang sama dalam jarak 12 petak yang memiliki tingkat aktif lebih rendah. Sekali untuk setiap menara yang direbut dalam satu pertandingan."
+
+leader_emperor_qin_shi_huang_ability = "Standar Kekaisaran"
+leader_emperor_qin_shi_huang_description = "Selama kota, pabrik, dan pertanian Anda masing-masing memiliki total tingkat aktif yang sama dan lebih dari nol, pabrik menghasilkan 25% lebih banyak emas dan pertanian menghasilkan 25% lebih banyak pasukan."
+
+leader_spartacus_ability = "Gudang Senjata Thurii"
+leader_spartacus_description = "Saat pasukan darat Anda merebut pusat pabrik musuh yang aktif, pasukan itu mendapat 300 prajurit untuk setiap tingkat aktif pabrik tersebut. Sekali per pabrik dalam satu pertandingan."
+
+leader_queen_nefertiti_ability = "Talatat Amarna"
+leader_queen_nefertiti_description = "Peningkatan kota membutuhkan 35% lebih sedikit emas jika Anda memiliki pabrik aktif dalam jarak 12 petak dari kota tersebut."
+
+leader_mandukhai_ability = "Penyatuan Kembali Stepa"
+leader_mandukhai_description = "Saat menyingkirkan lawan dengan menaklukkan sisa wilayahnya, Anda merekrut 25% dari pasukan cadangannya yang tersisa, hingga batas pasukan Anda."
+
+leader_kabal_xook_ability = "Lencana Perang Yaxchilán"
+leader_kabal_xook_description = "Jika memiliki kota aktif dan sedikitnya 750 tentara cadangan, Anda mengirim 750 tentara cadangan saat sekutu memulai serangan darat baru terhadap lawan bersama. Sekali per sekutu dalam satu pertandingan."
+
+leader_lakshmibai_ability = "Benteng Kalpi"
+leader_lakshmibai_description = "Saat lawan merebut kota aktif terakhirmu, dirikan kota tingkat 1 gratis di lokasi sah terdekat dalam wilayahmu, maksimal 24 petak dari kota yang hilang. Sekali per pertandingan."
+
+leader_pharaoh_hatshepsut_ability = "Kebun Punt"
+leader_pharaoh_hatshepsut_description = "Saat kapal dagangmu menyelesaikan rute ke pelabuhan asing, naikkan satu tingkat pertanian rampung milikmu dengan tingkat terendah dalam jarak 12 petak dari pelabuhan keberangkatan, hingga tingkat 4. Sekali per pelabuhan keberangkatan."
+
+leader_thusnelda_cherusci_ability = "Tegar dalam Tawanan"
+leader_thusnelda_cherusci_description = "Saat lawan merebut kotamu dengan tingkat aktif 2 atau lebih, kota itu kehilangan satu tingkat yang sudah selesai dan peningkatan yang sedang berlangsung dibatalkan. Sekali per kota."
+
+leader_queen_cartimandua_ability = "Penyerahan Caratacus"
+leader_queen_cartimandua_description = "Saat pasukan darat musuh mundur dari wilayahmu, alihkan 25% pasukan yang selamat ke sekutu dengan pasukan darat aktif terbesar melawan musuh itu dan ruang cadangan. Sisanya kembali ke musuh."
+
+leader_queen_suriyothai_ability = "Pengawal Ayutthaya"
+leader_queen_suriyothai_description = "Saat pasukan darat musuh akan merebut pusat kota aktif milik sekutu, gunakan 1.500 pasukan cadangan untuk menggagalkan upaya itu dan menewaskan hingga 1.500 penyerang. Sekali per kota sekutu."
+
+leader_tarabai_ability = "Chauth Serangan Balik"
+leader_tarabai_description = "Rebut menara rampung milik lawan yang sedang menyerangmu di darat untuk mengambil 25% emasnya, hingga 250. Sekali per menara."
+
+leader_natavan_ability = "Pancuran Shusha"
+leader_natavan_description = "Saat kotamu selesai naik ke tingkat 2, dirikan pertanian tingkat 1 gratis di lokasi sah terdekat dalam jarak 12 petak dari kota."
+
 leader_mavia_ability = "Perdamaian Musa"
 leader_mavia_description = "Jika kamu bersekutu dengan lawan saat ada serangan darat di antara kalian, pasukan penyerang yang selamat dari kedua pihak kembali tanpa kerugian mundur, hingga batas pasukan masing-masing."
 

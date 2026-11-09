@@ -1,0 +1,49 @@
+[articles.en]
+text = "Yagan was a Whadjuk Noongar warrior in the Swan River region whose name became closely associated with resistance to British settlement."
+title = "Yagan"
+lang = "en"
+url = "https://ia.anu.edu.au/biography/yagan-2826"
+intro = [
+  "Yagan (c. 1795–1833) was a Whadjuk Noongar man from the Swan River region of Western Australia. Historical accounts describe him as a skilled spear warrior who took part in resistance after the British founded the Swan River Colony in 1829. His life is chiefly recorded in colonial documents, which reflect the viewpoint of the settlers who were taking Noongar land.",
+  "The Australian Dictionary of Biography presents an important limit to how his role should be described: Yagan was not a chief, and the evidence does not show him seeking to unite the local groups under one political leader. He was a prominent warrior and resistance figure, but should not be portrayed as a sovereign ruler of all Noongar people.",
+]
+sections = [
+  { "title" = "Whadjuk resistance", "paragraphs" = [
+      "Yagan lived in Whadjuk country, within the broader Noongar region around the Swan and Canning Rivers. The arrival of British settlers brought conflict over land and resources. Colonial records place Yagan among the people who resisted the new settlement and describe his skill with a spear. These sources tell us about his actions, but they were written by colonists and cannot fully represent Whadjuk or other Noongar perspectives.",
+      "Yagan's resistance took place within a wider Noongar response to colonisation. Noongar communities were diverse, and the evidence does not support treating them as a single political unit under Yagan's command. His historical importance comes from his own role as a warrior and from the way his story became associated with the defense of Noongar country.",
+    ] },
+  { "title" = "Death and remembrance", "paragraphs" = [
+      "Yagan was killed by settlers in 1833 after colonial authorities placed a bounty on him. His death became a well-known episode in the history of the Swan River Colony and of Noongar resistance. Later accounts often called him a leader, but that description should not erase the distinction between a prominent warrior and a chief with authority over all local groups.",
+      "Yagan remains an important figure in Noongar history and in public discussions of colonisation, resistance, and the treatment of Indigenous people in historical records. Reading his story with care means recognising both the documented actions attributed to him and the boundaries of a record created largely by his opponents.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

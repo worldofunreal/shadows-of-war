@@ -1,0 +1,56 @@
+[articles.en]
+text = "Sun Tzu was a Chinese military general, strategist, philosopher, and writer who lived during the Eastern Zhou period. Sun Tzu is traditionally credited as the author of The Art of War, a Classical Chinese text on military strategy from the Warring States period, though the earliest parts of the work probably date to at least a century after him."
+title = "Sun Tzu"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Sun_Tzu"
+intro = [
+  "Sun Tzu (; traditional Chinese: 孫子; simplified Chinese: 孙子; pinyin: Sūnzǐ) was a Chinese military general, strategist, philosopher, and writer who lived during the Eastern Zhou period (771–256 BC). Sun Tzu is traditionally credited as the author of The Art of War, a Classical Chinese text on military strategy from the Warring States period, though the earliest parts of the work probably date to at least a century after him.",
+  "The Han dynasty historian Sima Qian and other traditional Chinese historians placed him as a minister to King Helü of Wu and dated his lifetime to 544–496 BC. The name Sun Tzu—by which he is more popularly known—is an honorific which means \"Master Sun\". His birth name was said to be Sun Wu (traditional Chinese: 孫武; simplified Chinese: 孙武) and he is posthumously known by his courtesy name Changqing (Chinese: 長卿). Traditional accounts state that the general's descendant Sun Bin wrote a treatise on military tactics, also titled The Art of War. Since both Sun Wu and Sun Bin were referred to as \"Sun Tzu\" in classical Chinese texts, some historians thought them identical, prior to the rediscovery of Sun Bin's treatise in 1972.",
+]
+sections = [
+  { "title" = "Life", "paragraphs" = [
+      "The earliest account of Sun Tzu's life is a short biography in Shiji (Records of the Grand Historian) written around 97 BC by Sima Qian. It states that Sun Tzu was born in Qi - now in modern Shandong - near the end of the Spring and Autumn period (776–471 BC), and had the courtesy name of \"Wu.\" Mair considers the biography to be \"essentially fictional\". Sun Tzu is also mentioned in later Tang dynasty-period documents. Yuanhe Xingzuan (Compilation of Surnames from the Primal Accord Reign Period) written in 812 AD by Lin Bao says that Sun Tzu's descendants lived in Le'an from the Han dynasty but provides no evidence; there were no pre-Han places or governmental units called \"Le'an\" and Mair considers it \"impossible to bridge the gap of well over a thousand years\" between the Spring and Autumn period and the Tang period records. It is also unclear where Le'an is in modern China; the Le'an genealogy in the New Book of Tang has been associated with the Shandong counties of Boxing and Huimin; there is insufficient evidence to support either.",
+      "The Shiji biography consists of an account of how King Helü of Wu, having heard of Sun Wu's Art of War, summoned him to the palace and asked him to demonstrate his ability to train soldiers by training the king's harem of 180 concubines into soldiers.",
+      "Sun Tzu was said to have divided them into two companies, appointing the two concubines most favored by the king as the company commanders, and proceeded to give them orders, which they ignored, instead breaking out into laughter. Over the king's protestations, Sun Tzu then had the two concubines executed, at which the rest of the \"soldiers\" began to behave at once, and the king appointed Sun Wu as a general. He went on to lead the state of Wu to victory against the much larger state of Chu during the Battle of Boju in 506 BC. Later accounts also associate Sun Tzu with Wu Zixu, who was credited with the authorship of the Wuzi, another ancient Chinese military text. Zixu was said to have been a refugee from Chu, and he introduced Sun Wu to King Helu.",
+    ] },
+  { "title" = "The Art of War", "paragraphs" = [
+      "The environment that was fostered was marked by the Warring States period (475-221 BC). The Warring States period was marked by military conflicts and conquests, as well as political instability. This would then foster the development of philosophical and strategic texts like The Art of War.",
+      "The Art of War, traditionally ascribed to Sun Tzu, is a Classical Chinese text dating from the Warring States period. The work is composed of 13 chapters, each of which is devoted to a different set of skills or arts related to warfare and how they apply to military strategy and tactics. The book further outlines theories of battle, but it also advocates diplomacy and the cultivation of relationships with other nations as essential to the health of a state.",
+      "In addition, Taoist rhetoric is a component incorporated into the Art of War. According to Steven C. Combs in \"Sun-zi and the Art of War: The Rhetoric of Parsimony\", warfare is \"used as a metaphor for rhetoric, and that both are philosophically based arts.\" Combs writes: \"Warfare is analogous to persuasion, as a battle for hearts and minds.\" Combs compares Taoist and Aristotelian rhetoric, notably for the differences in persuasion. Taoist rhetoric in The Art of War is described as \"peaceful and passive, favoring silence over speech\". Frugal behavior, which is emphasized extensively in The Art of War as avoiding confrontation and being spiritual in nature, shapes basic principles in Taoism.",
+    ] },
+  { "title" = "Legacy", "paragraphs" = [
+      "Sun Tzu's Art of War has influenced many notable figures and is accepted as a masterpiece on strategy. It has been frequently cited and by generals and theorists since it was first published, translated, and distributed internationally.",
+      "The Art of War was one of the most widely read military treatises in the subsequent Warring States period, a time of constant war among seven ancient Chinese states—Zhao, Qi, Qin, Chu, Han, Wei, and Yan—who fought to control the vast expanse of fertile territory in Eastern China. For almost 1,500 years, it was the lead text in an anthology that was formalized as the Seven Military Classics by Emperor Shenzong of Song in 1080. The Art of War remains the most influential strategy text in East Asian warfare.",
+      "The Art of War appears throughout the bibliographical catalogs of the Chinese dynastic histories, but listings of its divisions and size varied widely. The strategist and warlord Cao Cao in the early 3rd century of the Common Era authored the earliest known commentary to the Art of War. Cao's preface makes clear that he edited the text and removed certain passages, but the extent of his changes was unclear historically. In the 12th century, Ji Tianbao compiled a collection of commentaries on The Art of War which included Cao Cao's commentary along with several later ones that are frequently cited, including Meng Shi (502–557), Li Quan (c. 750), Jia Lin (c. late 8th c.), Du You (735–812), Du Mu (803–852), Chen Hao (c. Tang dynasty), Mei Yaochen (1002 - 1060), Wang Xi (c. 1082), He Yanxi (c. late 11th c.), and Zhang Yu (c. Southern Song dynasty). Although most of these later commentaries have little value for philology or historical analysis of the original text, they attest the continued interest in the text throughout Chinese history.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

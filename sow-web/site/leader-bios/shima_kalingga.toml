@@ -1,0 +1,42 @@
+[articles.en]
+text = "Ratu Maharani Shima was the queen regnant of the Kalingga kingdom on the northern coast of Central Java. She reigned from circa 674 CE to 695 CE."
+title = "Shima of Kalingga"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Shima_of_Kalingga"
+intro = [
+  "Ratu Maharani Shima was the queen regnant of the Kalingga kingdom on the northern coast of Central Java. She reigned from circa 674 CE to 695 CE.",
+  "She introduced a law against thievery to encourage her people to be honest and uphold truth. According to tradition, a foreign king placed a bag filled with gold on the intersection in Kalingga to test the famed truthfulness and honesty of Kalingga people. The bag was left undisturbed for three years, until Shima's son, the crown prince, accidentally stepped on it. The queen ordered his execution; after a minister appealed to her on the prince's behalf, she reduced the sentence to mutilation of the foot which had touched the bag.",
+  "Shima's great-grandson is Sanjaya, who was the king of the Sunda and Galuh kingdoms, and also the founder of the Mataram kingdom of Central Java.",
+]
+sections = []
+shortArticle = true
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

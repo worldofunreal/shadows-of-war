@@ -76,6 +76,10 @@ declare global {
         SOW_tutorial_exit_context: (episodeId: string) => unknown;
         SOW_pokiMeasure: (category: string, what?: string, action?: string) => void;
         SOW_portalCaptureExperienceEvent: (event: unknown) => void;
+        SOW_portalBeforeMatch?: (proceed: () => void) => void;
+        SOW_portalRewardedAvailable?: () => boolean;
+        SOW_portalRewardedBreak?: () => Promise<boolean>;
+        SOW_setPortalAudioMuted?: (muted: boolean) => void;
         SOW_analyticsTrack: (name: string, props?: unknown) => void;
         SOW_menu_music_cinematic: (active: boolean) => void;
         SOW_LOCALE: string;

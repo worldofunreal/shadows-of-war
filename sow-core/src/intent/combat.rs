@@ -230,6 +230,13 @@ impl SowEngine {
             .collect();
         enemy_hits.sort_by_key(|&i| self.attacks[i].id);
 
+        let capture_rate = crate::execution::hero_effects::mounted_capture_rate(
+            &self.state,
+            player_id,
+            target_owner,
+        );
+        let mut recruits = 0.0;
+        let mut capture_tile = None;
         // Hero combat abilities count in the clash too, not only in tile combat.
         for &e_enemy in &enemy_hits {
             if remaining < self.state.config.attack_cost_neutral {
@@ -252,9 +259,26 @@ impl SowEngine {
             );
             let enemy_ex = &mut self.attacks[e_enemy];
             let clash = (enemy_ex.troops * enemy_strength).min(remaining * my_strength);
-            enemy_ex.troops -= clash / enemy_strength;
+            let defeated = clash / enemy_strength;
+            enemy_ex.troops -= defeated;
             enemy_ex.troops = enemy_ex.troops.max(0.0);
             remaining = (remaining - clash / my_strength).max(0.0);
+            if capture_rate > 0.0 && defeated > 0.0 {
+                recruits += defeated * capture_rate;
+                if capture_tile.is_none() {
+                    capture_tile = enemy_ex.to_conquer.peek().map(|tile| (tile.x, tile.y));
+                }
+            }
+        }
+        if recruits > 0.0
+            && let Some(p) = self.state.player_mut(player_id)
+        {
+            let recruits = recruits.min((p.max_troops - p.troops).max(0.0));
+            if recruits > 0.0 {
+                p.credit_troops(recruits);
+                self.state
+                    .announce_leader_ability_to(player_id, &[target_owner], capture_tile);
+            }
         }
 
         let mut to_remove = Vec::new();
@@ -333,6 +357,10 @@ impl SowEngine {
             return;
         }
 
+        if let Some(frontier) = fresh.peek() {
+            remaining +=
+                self.hero_equip_allied_attack(player_id, target_owner, (frontier.x, frontier.y));
+        }
         let exec_id = self.state.next_attack_id;
         self.state.next_attack_id = self.state.next_attack_id.wrapping_add(1).max(1);
         let created_tick = self.state.tick;

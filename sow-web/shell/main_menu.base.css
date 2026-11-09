@@ -1652,6 +1652,64 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   pointer-events: auto;
 }
 
+/* Rewarded-video offer after a verified match. Continue and the video
+   button share one size and style; portal rules forbid shrinking Continue. */
+.sow-menu__reward-double {
+  z-index: 40;
+}
+
+.sow-menu__reward-double .sow-menu__modal {
+  width: min(100%, 420px);
+  text-align: center;
+}
+
+.sow-menu__reward-double h2 {
+  margin: 0 0 8px;
+}
+
+.sow-menu__reward-double p {
+  margin: 0 0 16px;
+}
+
+.sow-menu__reward-double-amounts {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 20px;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.sow-menu__reward-double-amounts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sow-menu__reward-double-amounts img {
+  width: 28px;
+  height: 28px;
+}
+
+.sow-menu__reward-double-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.sow-menu__reward-double-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.sow-menu__reward-double-video {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+
 .sow-menu__modal {
   width: min(100%, 640px);
   max-height: min(90vh, 760px);

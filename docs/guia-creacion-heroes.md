@@ -54,7 +54,7 @@ Idiomas publicados: `ar`, `de`, `en`, `es`, `fil`, `fr`, `id`, `it`, `ja`, `ko`,
 
 ## 5. Biografía pública
 
-`sow-web/site/leader-bio-sources.toml` guarda los artículos y la referencia de cada líder por idioma. Cada idioma publicado debe referenciar un artículo para el ID nuevo. Incluye idioma del texto, URL HTTPS, título, introducción, una o más secciones y sus fuentes. Los artículos breves deben cumplir el mínimo de 700 caracteres combinados entre `highlight`, `intro` y párrafos; los demás requieren 1.200. El generador verifica longitud, referencias ausentes, fuentes y artículos sin uso.
+Las biografías viven en `sow-web/site/leader-bios/<id_del_héroe>.toml`, un archivo por héroe. Declara cada artículo bajo su idioma de origen, por ejemplo `[articles.es]` o `[articles.en]`, y conserva íntegros sus campos: idioma, URL HTTPS, título, introducción, secciones y fuentes. Cada idioma publicado debe resolver un artículo. Cuando una página reutilice un texto escrito en otro idioma, decláralo explícitamente en `[fallbacks]`, por ejemplo `fr = "en"`; la clave es el idioma publicado y el valor debe coincidir con una clave de `[articles]`. Conserva los códigos históricos tal como están escritos. El cargador no normaliza idiomas ni infiere sustituciones. Los artículos breves deben cumplir el mínimo de 700 caracteres combinados entre `highlight`, `intro` y párrafos; los demás requieren 1.200. El generador verifica longitud, referencias ausentes, fuentes y artículos sin uso.
 
 Usa fuentes que sostengan las afirmaciones, y atribuye explícitamente la incertidumbre cuando cambien la fecha, la autoría o el sentido del evento. Una referencia wiki no reemplaza una búsqueda de fuentes mejores cuando estas existen.
 

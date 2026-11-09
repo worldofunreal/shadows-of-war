@@ -1,0 +1,54 @@
+[articles.en]
+text = "Thánadëltth'ér or Thanadelthur was a woman of the Chipewyan Dënesųłı̨ne nation who served as a guide and interpreter for the Hudson's Bay Company. She was instrumental in forging a peace agreement between the Dënesųłı̨ne (Chipewyan) and the Cree people."
+title = "Thanadelthur"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Thanadelthur"
+intro = [
+  "Thánadëltth'ér or Thanadelthur (c. 1697 – 5 February 1717) was a woman of the Chipewyan Dënesųłı̨ne nation who served as a guide and interpreter for the Hudson's Bay Company. She was instrumental in forging a peace agreement between the Dënesųłı̨ne (Chipewyan) and the Cree people. She was trilingual, able to speak English, Chipewyan, and Cree.",
+]
+sections = [
+  { "title" = "Life", "paragraphs" = [
+      "Thanadelthur is thought to have been born during 1697. In early 1713, a party of Dënesųłı̨ne was attacked by Cree, who captured their women. Among them was Thanadelthur. Competition for women was sometimes the catalyst of tribal warfare; they were taken as prizes by the victors. Female slaves were valuable to the tribal workforce. Serving in this role contributed to the high female mortality rate.",
+      "After spending the winter with their Cree captors, Thanadelthur and one other woman escaped and attempted to rejoin their people. Cold and hunger prevented them from doing so, however. The two endured a year of hardship until Thanadelthur's travelling companion died.",
+      "Five days later Thanadelthur was discovered by goose hunters from the Hudson's Bay Company. She never wrote her own story although she became fluent in English while dealing with the Hudson's Bay Company. Her legacy as a guide and interpreter has been pieced together from references in the journals of members of the HBC.",
+    ] },
+  { "title" = "Legacy", "paragraphs" = [
+      "The Dënesųłı̨ne (Chipewyans) are a national group that is a member of a much larger ethnographic na-dene group whose culture is identified as the Dene, by anthropologists. The legacy of Thanadelthur has survived in the oral traditions of the Dene people and in the records of the Hudson's Bay Company. This later recognition and inclusion in historical records created by the trading company is a rare occurrence for a native person, even if she remained unnamed in documents: when her travels were recorded, she was identified repeatedly as the 'Slave Woman'. Her name has survived to be included in modern histories by means of records retained by the native tribes. In comparison, her story is of legends in the Denesųłı̨ne language. Reference to this says, she was our grandmother who brought the Cree and Dënesųłı̨ne together in peace. Publications of other oral histories gave way to the name that she is known by today. The name \"Tha-narelther\" was first published in an oral history in 1883 by a Catholic missionary to the Dene, named Father Emile Petitot. The name Tha-narelther meant \"falling sable.\" Petitot had heard the story from a man with Cree and Dene ancestry, named Alexis Enna-aze, who told him this story of a Chipewyan woman who convinced her people to trade with the Hudson's Bay Company. Edward S. Curtis in 1920 published his own version of the story he had learned from Dene people in Cold Lake, Alberta. It was similar to Petitot's, but Curtis called her Thanadelthur, which meant \"marten shake,\" and has become the name she is recognized by today. Explorer Samuel Hearne, who recorded Chipewyan society in the later 18th century, recorded that girls were named after a property of marten.",
+      "The lasting peace agreement honed by Thanadelthur paved the way for expansion of the Hudson's Bay Company farther north and led to further integration of the arriving Europeans into the groups of Indigenous people living on the land.",
+      "In 2000, the Historic Sites and Monuments Board of Canada recognized Thanadelthur as a national historic person of Canada.",
+    ] },
+  { "title" = "In popular media", "paragraphs" = [
+      "Thanadelthur is portrayed as a leading character in the James Archibald Houston's novel Running West, along with William Stewart and James Knight. The novel traces her life from the time she is captured and enslaved by Cree Indians, through the journey from York Factory to the land of the Dene, and their return.",
+      "Canadian musician Mike Ford recorded the song \"Thanadelthur\" on his second album Canada Needs You.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+it = "en"
+
+tr = "en"
+
+zh-CN = "en"
+
+ja = "en"
+
+ko = "en"
+
+ar = "en"
+
+ru = "en"
+
+vi = "en"
+
+id = "en"
+
+fil = "en"
+
+pt-BR = "en"

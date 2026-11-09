@@ -1,0 +1,326 @@
+[articles.en]
+text = "Ramesses II, commonly known as Ramesses the Great, was the third pharaoh of the Nineteenth Dynasty of Egypt. Ramesses II is often regarded as the greatest, most celebrated, and most powerful pharaoh of the New Kingdom, which itself was the most powerful period of ancient Egypt."
+title = "Ramesses II"
+lang = "en"
+url = "https://en.wikipedia.org/wiki/Ramesses_II"
+intro = [
+  "Ramesses II (; Ancient Egyptian: rꜥ-ms-sw, Rīꜥa-masē-sə, Ancient Egyptian pronunciation: [ɾiːʕamaˈseːsə]; c. 1303 BC – 1213 BC), commonly known as Ramesses the Great, was the third pharaoh of the Nineteenth Dynasty of Egypt. Ramesses II is often regarded as the greatest, most celebrated, and most powerful pharaoh of the New Kingdom, which itself was the most powerful period of ancient Egypt. He is also widely considered one of ancient Egypt's most successful warrior pharaohs, conducting no fewer than 15 military campaigns, all resulting in victories, excluding the Battle of Kadesh, which is generally considered a stalemate. His 66-year rule was also the longest recorded reign of any pharaoh (and one of the longest in history), possibly alongside Pepi II, who lived 1,000 years earlier and is said to have reigned for over 90 years.",
+  "In ancient Greek sources, he is called Ozymandias, derived from the first part of his Egyptian-language regnal name: Usermaatre Setepenre. Contemporary documents, particularly cuneiform letters discovered at Hattusa indicate that the name Ramesses was pronounced Riamessesa and the full titulary was pronounced Wasmuriya Satepnaria Riamessesa Maiamana. Ramesses was also referred to as the \"Great God\" by successor pharaohs, who prayed to enjoy his longevity and glory.",
+  "Ramesses ascended to the throne at age 25, and for the early part of his reign, he focused on building cities, temples, and monuments. After establishing the city of Pi-Ramesses in the Nile Delta, he designated it as Egypt's new capital and used it as the main staging point for his campaigns in Syria. Ramesses led several military expeditions into the Levant, where he reasserted Egyptian control over Canaan and Phoenicia; he also led a number of expeditions into Nubia, all commemorated in inscriptions at Beit el-Wali and Gerf Hussein. He celebrated an unprecedented thirteen or fourteen Sed festivals—more than any other pharaoh.",
+  "Estimates of his age at death vary, although 90 or 91 is considered to be the most likely figure. Upon his death, he was buried in a tomb (KV7) in the Valley of the Kings; his body was later moved to the Royal Cache, where it was discovered by archaeologists in 1881. Ramesses' mummy is now on display at the National Museum of Egyptian Civilization, located in the city of Cairo. Ramesses II was one of the few pharaohs who was worshipped as a deity during his lifetime.",
+]
+sections = [
+  { "title" = "Early life", "paragraphs" = [
+      "Ramesses II was not born a prince. His grandfather, Ramesses I, was a vizier (tjaty) and military officer during the reign of pharaoh Horemheb, who appointed Ramesses I as his successor; at that time, Ramesses II was about eleven years old.",
+      "After Ramesses I died, his son, Seti I became king, and designated his son Ramesses II as prince regent at about the age of fourteen.",
+    ] },
+  { "title" = "Reign length", "paragraphs" = [
+      "Ramesses's date of accession to the throne is recorded as III Shemu (11th month), day 27, which most Egyptologists believe to be 31 May 1279 BC.",
+      "The Jewish historian Josephus, in his book Contra Apionem which included material from Manetho's Aegyptiaca, assigned Ramesses II (\"Armesses Miamun\") a reign of 66 years, 2 months. This is essentially confirmed by the calendar of Papyrus Gurob fragment L, where Year 67, I Akhet day 18 of Ramesses II is immediately followed by Year 1, II Akhet day 19 of Merneptah (Ramesses II's son), meaning Ramesses II died about 2 months into his 67th Regnal year.",
+      "In 1994, A. J. Peden proposed that Ramesses II died between days 3 and 13 of II Akhet on the basis of Theban graffito 854+855, equated to Merneptah's Year 1 II Akhet day 2. The workman's village of Deir el-Medina preserves a fragment of a mid-20th dynasty necropolis journal (P. Turin prov. nr. 8538 recto I, 5; unpublished) which records that the date II Akhet day 6 was a Free feast day for the \"Sailing of UsimaRe-Setepenre.\" (for Ramesses II). As the Egyptologist Robert J. Demarée notes in a 2016 paper:",
+    ] },
+  { "title" = "Military campaigns", "paragraphs" = [
+      "Early in his life, Ramesses II embarked on numerous campaigns to restore possession of previously held territories lost to the Nubians and Hittites and to secure Egypt's borders. He was also responsible for suppressing some Nubian revolts and carrying out a campaign in Libya. Though the Battle of Kadesh often dominates the scholarly view of Ramesses II's military prowess and power, he nevertheless enjoyed more than a few outright victories over Egypt's enemies. During his reign, the Egyptian army is estimated to have totaled some 100,000 men: a formidable force that he used to strengthen Egyptian influence.",
+      "In his second year, Ramesses II decisively defeated the Sherden sea pirates who were wreaking havoc along Egypt's Mediterranean coast by attacking cargo-laden vessels travelling the sea routes to Egypt. The Sherden people probably came from the coast of Ionia, from southwest Anatolia or perhaps, also from the island of Sardinia. Ramesses posted troops and ships at strategic points along the coast and patiently lured the pirates to attack their perceived prey before ambushing them in a sea battle and capturing them all in a single action. A stele from Tanis speaks of them coming \"in their war-ships from the midst of the sea, and none were able to stand before them\". There probably was a naval battle somewhere near the mouth of the Nile, as shortly afterward, many Sherden are seen among the pharaoh's body-guard where they are conspicuous by their horned helmets with a ball projecting from the middle, their round shields, and the great Naue II swords with which they are depicted in inscriptions of the Battle of Kadesh. In that sea battle, together with the Sherden, the pharaoh also defeated the Lukka (L'kkw, possibly the people later known as the Lycians), and the Šqrsšw (Shekelesh) peoples.",
+      "The immediate antecedents to the Battle of Kadesh were the early campaigns of Ramesses II into Canaan. His first campaign seems to have taken place in the fourth year of his reign and was commemorated by the erection of what became the first of the Commemorative stelae of Nahr el-Kalb near what is now Beirut. The inscription is almost totally illegible due to weathering.",
+    ] },
+  { "title" = "Sed festivals", "paragraphs" = [
+      "As of Year 28 of his reign, Ramesses II favored the god Amun above all other divinities, as evidenced in the texts of two separate ostraca discovered at Deir el-Medina.",
+      "By tradition, in the 30th year of his reign, Ramesses celebrated a jubilee called the Sed festival. These were held to honour and rejuvenate the pharaoh's strength. Only halfway through what would be a 66-year reign, Ramesses had already eclipsed all but a few of his greatest predecessors in his achievements. He had brought peace, maintained Egyptian borders, and built numerous monuments across the empire. His country was more prosperous and powerful than it had been in nearly a century.",
+      "Sed festivals traditionally were held again every three years after the 30th year; Ramesses II, who sometimes held them after two years, eventually celebrated an unprecedented thirteen or fourteen.",
+    ] },
+  { "title" = "Death and burial", "paragraphs" = [
+      "The last dated record of Ramesses II's reign is Year 67, the first month of the flood season (Akhet), day 18. The next date, on the same document, is Year 1 (of Merneptah), second month of Akhet day 18, suggesting that Ramesses II died within the intervening weeks.. Peter J. Brand who has now written two biographies of Seti I and Ramesses II states thus:",
+      "In records from the Twentieth Dynasty, we learn the royal-tomb builders in Thebes commemorated the sixth day of the second month of the Inundation Season (Akhet) as the “day of sailing” of Ramesses II. So in mid-July, ca. 1213 BCE, Ramesses II breathed his last. He appears to have died in the north of Egypt, most likely at Piramesses.",
+      "Brand stresses that \"The day of a New Kingdom Pharaoh’s “sailing,” (hnw), is a euphemism for his death. The term hni also designates processions of divine cult images during religious festivals. Decades later, King Ramesses IV left a dedication text at Abydos in which he asked the gods to “...double for me the long lifespan and the extended reign of (Ramesses II), the great god... For indeed, (more) numerous are the things which I have done... than that which (Ramesses II)... did for you in his 67 years!” Classical authors including Manetho (third century BC) attributed Ramesses a reign of 66 years and 2 months. Accordingly, the length of Ramesses' reign appears to be sixty-six full years, with the king dying early in his sixty-seventh regnal year.",
+    ] },
+]
+
+[articles.it]
+text = "Ramses II (per intero in egizio: Usermaatra Setepenra Ramess(u) Meriamon; 1303 a.C. – Pi-Ramses, luglio/agosto 1213 o 1212 a.C.) è stato un faraone egizio, il terzo della XIX dinastia."
+title = "Ramses II"
+lang = "it"
+url = "https://it.wikipedia.org/wiki/Ramses_II"
+intro = [
+  "Ramses II (per intero in egizio: Usermaatra Setepenra Ramess(u) Meriamon; 1303 a.C. – Pi-Ramses, luglio/agosto 1213 o 1212 a.C.) è stato un faraone egizio, il terzo della XIX dinastia. Regnò dal 31 maggio 1279 a.C. al luglio o agosto del 1213 (o 1212) a.C..",
+  "Noto anche come Ramesse II, Ramsete II e Ramses il Grande e in greco come Osimandia (in greco antico Ὀσυμανδύας?, Osymandyas), è spesso ricordato come il più grande, potente e celebrato faraone dell'Impero Egizio. A causa della durata eccezionale del suo regno (quasi un settantennio: considerando però la sua associazione al trono quando il padre era ancora in vita, giunse a 75 anni di governo effettivo del Paese), che l'egittologo britannico Kenneth Kitchen ha paragonato a quello della regina Vittoria del Regno Unito, nell'egittologia è invalsa la tradizione di assegnare il suo nome all'intero periodo della sua dinastia (\"epoca/periodo/stile ramesside\"):",
+  "Ebbe modo di celebrare, nel corso del suo regno, ben 14 giubilei sed, il primo dei quali coincideva con il trentesimo anniversario di regno del sovrano e da lì in poi ogni tre anni: più di ogni altro re d'Egitto. Fece costruire numerosissimi monumenti in tutto il Paese e incidere i propri nomi su altrettante opere dei suoi predecessori: una tale quantità di oggetti d'arte, colossi, iscrizioni ed elementi architettonici fa sì che Ramses II sia attestato in praticamente ogni collezione di antichità egizie nel mondo: anche per questo, è probabilmente il più conosciuto dei faraoni. Fondò una nuova capitale, Pi-Ramses (\"Dimora di Ramses\"), nel delta del Nilo. Combatté a nord contro gli Ittiti e quindi a sud contro i Nubiani, assicurando il predominio dell'Egitto sulla Nubia e i suoi giacimenti auriferi; in questa colonia dell'impero egizio fece inoltre costruire sei templi: celeberrimi quelli di Abu Simbel. Dopo la battaglia di Qadeš, combattuta presso l'Oronte nel 5º anno del suo regno contro l'esercito del sovrano ittita Muwatalli II, la frontiera dell'Egitto venne ivi definitivamente stabilita. La pace fra le due potenze (le quali si spartirono le colonie siro-palestinesi) venne sancita nel 21º anno di regno del faraone tramite un trattato di pace pervenutoci quasi interamente: ebbe così inizio un periodo di forte stabilità per la regione, suggellato dal matrimonio di Ramses II con due principesse ittite. Morì all'età, sorprendente per la sua epoca, di 90 o 91 anni e fu sepolto in una grande tomba della Valle dei Re. Il suo corpo fu poi traslato in un nascondiglio di mummie regali e ivi scoperto nel 1881; si trova al Museo della Civiltà Egizia. Alcuni considerarono Ramses II come il faraone che si sarebbe opposto a Mosè nei fatti narrati dal Libro dell'Esodo; da altri…",
+]
+sections = [
+  { "title" = "Descrizione fisica", "paragraphs" = [
+      "Unica testimone dell'aspetto fisico del re, al di là delle canoniche idealizzazioni dell'arte egizia, è la sua mummia, conservata oggi al Museo egizio del Cairo, sbendata da Gaston Maspero il 1º giugno 1886 e studiata approfonditamente da un'équipe interdisciplinare al Musée de l'Homme di Parigi nel 1976. La statuaria regale era, infatti, di mera propaganda, destinata a raffigurare il re, sempre giovane, come sovrano benevolo, guerriero possente o dio vivente. Il naso di Ramses II era aquilino, lungo e sottile, le labbra carnose, il volto dalla forma ovale, occhi quasi a mandorla leggermente sporgenti, alti zigomi, mascella possente e piccolo mento quadrato. Nelle rappresentazioni artistiche, Ramses II presenta spesso un lieve sorriso che il poeta inglese Percy Bysshe Shelley (1792–1822), nella poesia \"Ozymandias\", definì",
+      "e che, viceversa, la scrittrice ed egittologa Amelia Edwards (1831–1892) interpretò come segno di",
+      "Dopo aver sbendato la mummia, Maspero annotò circa l'aspetto del faraone, cercando collegamenti tra l'aspetto e il carattere secondo un costume ottocentesco:",
+    ] },
+  { "title" = "Biografia", "paragraphs" = [
+      "Ramses II nacque intorno al 1303 a.C. da Seti (destinato a regnare dal 1294 al 1279 a.C.) e Tuia. È difficile stabilire il luogo di nascita a causa della mancanza di materiale archeologico in proposito, anche se è appurato che la sua famiglia fosse originaria del delta del Nilo, e più precisamente della città di Avaris, antica sede degli invasori Hyksos e centro del culto di Seth. L'egittologo scozzese Kenneth Kitchen è giunto alla conclusione che il futuro Ramses I, nonno di Ramses II, sarebbe nato indicativamente pochi anni prima di Tutankhamon (1341 a.C.), figlio di un comandante di nome Seti, capo degli arcieri, mentre suo zio, l'ufficiale Khaemuaset, era marito di Tamuadjesi, una parente del viceré di Kush e donna a capo dell'harem di Amon. Questi legami illustrano l'alto lignaggio della famiglia del futuro Ramses I, che incontrò il favore del suo ex-commilitone Horemheb, l'ultimo faraone della tumultuosa e gloriosa XVIII dinastia, il quale lo elevò al rango di visir. Ricoprì inoltre cariche prestigiose quali: \"Comandante delle truppe\", \"Capo degli arcieri\", \"Capo dei carri di Sua Maestà\", \"Soprintendente della cavalleria\", \"Capo delle fortezze di Sua Maestà\", \"Soprintendente delle Bocche del Nilo\", \"Scudiero di Sua Maestà\", \"Scriba reale\", \"Capo dei giudici\", \"Luogotenente del Re dell'Alto e Basso Egitto\", \"Messaggero del Re per tutti i Paesi stranieri\".Tra il 1295 e il 1292 a.C. Horemheb morì: si inaugurò così la XIX dinastia. All'epoca dell'ascesa al trono di suo nonno Ramses I, il futuro Ramses II aveva circa cinque anni, una sorella maggiore chiamata Tia e, stando a quanto emerso da iscrizioni del Tempio di Karnak, un fratello maggiore, Mehi, morto in giovane età. È altresì nota l'esistenza di una certa Henutmira, divenuta in seguito una delle sue mogli, nata…",
+      "Scelto molto presto dal padre come principe ereditario, così come attestano i rilievi dei templi di Seti I ad Abido e a Qurna, il giovane Ramses venne educato da suo cognato Tia, marito di sua sorella Tia e già scriba reale, scelto come suo precettore. Come tutti i membri maschili della sua famiglia, Ramses crebbe in ambito militare. Intorno ai dieci anni, Ramses venne quindi nominato comandante di una squadra di militari e partecipò probabilmente a una campagna paterna contro i Libici. Nel frattempo, durante i periodi di pace, il principe accompagnava suo padre sui cantieri regali e nelle visite ufficiali in tutto il Paese; questo apprendistato consisteva probabilmente nell'osservare cosa fosse necessario fare e come agire in determinate situazioni secondo l'esempio paterno.",
+      "Nel 7º anno del proprio regno, cioè quando il principe aveva sedici o diciassette anni, il faraone decise che Ramses fosse pronto per incarichi di maggior peso: durante una cerimonia pubblica, alla quale partecipava l'intera corte, lo nominò Principe reggente, conferendogli onori regali, fra i quali un \"nome d'incoronazione\", Usermaatra, che Ramses II manterrà una volta divenuto unico faraone regnante.",
+    ] },
+  { "title" = "La mummia", "paragraphs" = [
+      "Ramses II fu originariamente inumato nella tomba KV7 della Valle dei Re che aveva fatto predisporre per sé, ma, a causa degli endemici saccheggi fra le tombe reali, tra l'inverno e la primavera del 1090 a.C. i sacerdoti e il sindaco di Tebe ne trasferirono i resti all'interno della tomba di suo padre, Seti I, più facilmente sorvegliabile.",
+      "Nel giro di pochi anni anche la tomba di Seti I fu depredata, e la stessa salma di Ramses II venne spogliata e profanata. Il Sommo sacerdote di Amon, Pinedjem I, la fece nuovamente riparare al di sopra del torace nel 10º anno del proprio \"pontificato\" (circa il 1060 a.C., data registrata sul sudario), ponendogli inoltre fra le mani modestissimi scettri in legno di palma a sostituire quelli in oro andati perduti. La mummia di Ramses II fu quindi traslata nella tomba sotterranea della regina Ahmose-Inhapi, dopo aver provveduto a una nuova bendatura e averla deposta in un sarcofago riciclato, appartenuto al nonno Ramses I; settantadue ore dopo fu spostata definitivamente, e in gran segreto, nella tomba del Sommo sacerdote Pinedjem II. Il rocambolesco trasferimento dei resti di Ramses II e altri faraoni si svolse in tre notti, come annotarono i sacerdoti sul feretro stesso, e in una situazione di grande pericolo, passando sulla cresta della collina che sovrasta la Valle dei Re, quindi alla mercé dei predoni. Ramses II e molti altri sovrani della XVIII, XIX e XX dinastia furono così occultati nel celebre \"nascondiglio\" (DB320) di Deir el-Bahari, vicino al Tempio funerario di Hatshepsut: una stretta cripta lunga 8 metri introdotta da due corridoi di 7 e 60 metri e, prima ancora, da un pozzo verticale profondo 12 metri, dove le mummie rimasero indisturbate per i ventotto secoli successivi.",
+      "Il \"nascondiglio\" di Deir el-Bahari fu ufficialmente scoperto nel luglio del 1881, da parte del tedesco Émile Brugsch e di Ahmed Kamal, nell'ambito di alcune indagini su alcuni ricettatori di antichità egizie attivi all'epoca. Il corpo di Ramses II e quelli di tutti gli altri faraoni e aristocratici ricoverati nella spelonca furono immediatamente trasportati al Cairo. Il chedivè Tawfīq Pascià dispose che venisse sbendato per fugare ogni dubbio circa la sua identità, il che avvenne il 1º giugno 1886 alla presenza dei ministri e dei dignitari del Regno, per mano di Gaston Maspero e Urbain Bouriant. I cartigli di Ramses II furono individuati sul sudario posto sul petto del re per ordine del Sommo sacerdote Herihor: non esistevano più dubbi sull'identità della mummia. Lo scrittore francese Pierre Loti, che visitò l'attuale Museo del Cairo nel 1907, scrisse:",
+    ] },
+  { "title" = "Famiglia", "paragraphs" = [
+      "Nel primo ventennio di regno la dama più importante della corte di Ramses II, oltre alla grande consorte Nefertari, fu la regina madre Tuia. Tuia non godette di una particolare preminenza nella politica e nella vita pubblica del Paese, comparendo di rado sui monumenti del marito Seti I: viceversa, dopo l'ascesa al trono del figlio, nella tarda primavera del 1279 a.C., le furono tributati considerevoli onori. Ramses II fece rappresentare Tuia anche sulla facciata del Tempio maggiore di Abu Simbel: la statua della regina madre fu scolpita delle stesse dimensioni di altre donne della famiglia reale e figli di Ramses II. Fu inoltre raffigurata su un colosso del figlio all'interno del Ramesseum (il Tempio funerario di Ramses II) e, ancora, sulle pareti del Tempio medesimo; in una cappella a lei dedicata, Tuia era assimilata alla dea Hathor. Alcuni hanno ipotizzato che una così fervida celebrazione della propria madre da parte di Ramses II avesse anche fini politici. Non era necessario che la madre di un faraone fosse di sangue reale (numerosi sovrani, come Thutmose II e Thutmose III, erano nati da concubine o spose secondarie di ignoti natali), però era comunemente accettato che un re potesse rafforzare le proprie pretese al trono in virtù di un legame con una donna di sangue reale: Ramses II, nato prima che il padre divenisse faraone (e forse prima ancora che la propria famiglia salisse al trono) non ebbe una madre regale. Provvide così ad attribuirsi un padre divino formulando il mito della propria nascita divina: oltre che figlio di Seti I, Ramses II si considerò figlio di Amon stesso, seguendo i precedenti miti propagandistici di Hatshepsut e Amenofi III circa le proprie nascite miracolose, a lui sicuramente noti. A Tuia, in quanto oggetto dell'amore e del desiderio del…",
+      "In questo modo, Ramses II ebbe modo di affermare di essere stato predestinato a regnare e soprattutto di essere egli medesimo un semidio. Anche altri reperti riaffermano la divinità dei natali del faraone: un rilievo nel Complesso templare di Karnak raffigura il piccolo Ramses allattato da una dea, mentre sia a Karnak che nel Tempio funerario di Seti I ad Abido si vede il dio Khnum, vasaio degli dei, intento a plasmare il corpo del futuro re. Un lungo testo risalente al 35º anno di regno di Ramses II, individuato ad Abu Simbel e a Karnak e intitolato \"La Benedizione di Ptah a Ramses II\", indica invece Ptah come padre celeste del sovrano:",
+      "L'anziana Tuia era ancora in vita alla firma dell'importante trattato di pace egizio-hittita nel 21º anno di regno di Ramses II. La sua tomba, la QV80 nella Valle delle Regine, era pronta da tempo: si tratta di tre sale ipogee intagliate nella roccia e finemente decorate, terminante in un ambiente ipostilo. Tuia morì, sessantenne, intorno al 22º anno di regno del figlio (1258/1257 a.C.). Le sue bare furono deposte in un prezioso sarcofago in granito rosa. Nota in vita come Mut-Tuia, post mortem fu nota semplicemente come Tuia, forse a suggerire che la sua morte avrebbe posto fine a una status di divinità vivente (Mut era la dea-madre, regina di tutti gli dei).",
+    ] },
+]
+
+[articles.zh]
+text = "拉美西斯二世（埃及語：rꜥ-ms-sw，埃及語發音：[ɾiːʕamaˈseːsə]；约前1301年2月21日—前1213年7月或8月）或拉姆西斯二世、拉米西斯二世、拉姆塞斯二世，闻名于世的还有他的古希腊名称奥兹曼迪亚斯（古希臘語：Οσυμανδύας，羅馬化：Osymandýas），埃及第19王朝第3任法老（约前1279年5月31日－约前1213年7月或8月在位），其在位時期是埃及新王國最後的盛世。 拉美西斯二世經常被認為是古埃及歷史上最為重要的法老之一。當他以近90歲高齡過世時，已成了埃及的代表人物。然而他統治的時代已是埃及衰落的前夜，國家巨大的開銷加快了國力的下降。拉美西斯二世死後，埃及開始走向下坡。"
+title = "拉美西斯二世"
+lang = "zh"
+url = "https://zh.wikipedia.org/wiki/%E6%8B%89%E7%BE%8E%E8%A5%BF%E6%96%AF%E4%BA%8C%E4%B8%96"
+intro = [
+  "拉美西斯二世（埃及語：rꜥ-ms-sw，埃及語發音：[ɾiːʕamaˈseːsə]；约前1301年2月21日—前1213年7月或8月）或拉姆西斯二世、拉米西斯二世、拉姆塞斯二世，闻名于世的还有他的古希腊名称奥兹曼迪亚斯（古希臘語：Οσυμανδύας，羅馬化：Osymandýas），埃及第19王朝第3任法老（约前1279年5月31日－约前1213年7月或8月在位），其在位時期是埃及新王國最後的盛世。",
+  "拉美西斯二世經常被認為是古埃及歷史上最為重要的法老之一。當他以近90歲高齡過世時，已成了埃及的代表人物。然而他統治的時代已是埃及衰落的前夜，國家巨大的開銷加快了國力的下降。拉美西斯二世死後，埃及開始走向下坡。",
+]
+sections = [
+  { "title" = "生平", "paragraphs" = [
+      "當他的祖父暨第19王朝創始人拉美西斯一世登基時，他仍然是一個孩子，而拉美西斯的母親圖雅則是出生自貴族家庭，他是塞提一世已知的唯一兒子，過去曾有人認為他有一個兄長，這已被證偽。根據庫班石碑的記載，他10歲就擔任軍隊首領。塞提一世為了能確保兒子能順利繼承王位，便讓拉美西斯在15歲時成為輔政，在塞提一世過世後，年輕的拉美西斯成為埃及唯一的統治者。",
+      "拉美西斯二世對龐大土木工程的熱情使埃及各地都留下了他的痕跡：他在阿比多斯和拉美西姆興建許多廟宇；為卡納克神廟和盧克索神廟增添新結構；興建了以宏偉著稱的阿布辛拜勒神廟。許多前代法老修建的建築也被刻上了他的名字。",
+      "他進行了一系列的遠征，以恢復埃及對迦南的統治。他在敘利亞與同時代的另一強大帝國赫梯發生利益衝突。雙方在前1274年發生一次著名的戰役（卡疊石戰役）。约拉美西斯二世統治第21年，两国缔结和约，成为军事同盟。《埃及—赫梯和約》可說是歷史上第一份著名的國際協定，其埃及與赫梯文本均被保存下來，並為近代考古學者所發現。可能是出於對赫梯軍事力量的擔心，拉美西斯二世下令在東北尼羅河三角洲新建一座城市為首都，並將其命名為培爾—拉美西斯（意為拉美西斯的家）。",
+    ] },
+  { "title" = "家庭", "paragraphs" = [
+      "在他長達幾十年的統治里有過八名王后、不計其數的妃嬪以及超過一百多名的兒女，其最著名的妃子為第一位大皇后妮菲塔莉。妃子中也包括拉美西斯的女兒、赫梯的公主、數名高官和貴族的女兒，他的女兒王后以及古埃及所有女兒王后都沒有子嗣被證明，並且其中一位王女王后荷努特塔威被證明生前僅是王女，死後才被追封為王后，因此很可能只是禮儀婚姻，大部分妃嬪身份名字家世父母仍有待考察，以下列表為能夠考證的妃嬪：",
+      "妮菲塔莉（奈菲爾塔利）（Nefertari）：拉美西斯二世第一位皇后，拉美西斯二世最早與他結婚的數位妃嬪之一，也是新王国王后中迄今唯一被發現了複數生前祭祀她、將她奉為神明的神廟的王后。她在生前便完成了神化進程，並且在阿布辛貝勒小神廟聖所的壁畫中，神化和她與神化的拉美西斯二世坐在一起，被她的丈夫塵世的拉美西斯二世親自祭祀，她也是一位攝政王后，她被證明了頭銜「無論她說什麼，都會為她如是實現」，該頭銜的起源是古王國的太后妮瑪阿塔普，授予頭銜擁有者向宮廷下達任何命令的權力。她是古埃及歷史上第一名既不是王女也不是在位太后的阿蒙神妻，她至少生育了六名子女，家世不詳，但有多樣證據表明她與第十八王朝的法老阿伊乃至整個阿瑪爾那時代都有著一種聯繫，在拉美西斯二世第23年（公元前1256年）過逝。葬於王后谷QV66，她是整個拉美西斯王朝（第十八、十九王朝）唯一一位被記載於法老丈夫陵墓中的王后。",
+      "伊斯諾弗萊特（Isetnofret I）：拉美西斯二世的皇后，拉美西斯二世最早與他結婚數位妃嬪之一。她被認為是法老霍朗赫布的後裔，具體關係尚待進一步考證，記載蘚少。至少生育了四名子女，主要子女全部先後擔任過太子和皇后。沒有發現王女的稱號。考古證據顯示她於拉美西斯二世統治第30-33/34年過世，沒有證據證明她在生前得到了皇后的頭銜，所有能證明她皇后頭銜的證據都來自於她過世之後或與她的葬儀相關，她被認為在自己過世之後、晚於自己的親生女兒、被追封為皇后。法老麦伦普塔的母親。至今沒有發現墳墓，曾經被懷疑在帝王谷拉美西斯墓KV7和麥倫普塔墓KV8的中間，或被水淹沒。但帝王谷提及的陵墓已被證明屬於一位同名王女或王孫，她出土的陪葬品已證明她的陵墓在孟菲斯的薩卡拉。",
+    ] },
+  { "title" = "軼事", "paragraphs" = [
+      "1881年，拉美西斯二世的木乃伊被發現。1975年，法国医生莫里斯·布卡耶在开罗博物馆检查了这具木乃伊，发现它状况不佳。法国总统瓦莱里·季斯卡尔·德斯坦成功说服埃及当局将木乃伊送往法国进行处理。随后埃及政府將他的木乃伊送往法國，並以盛大的軍禮替他舉行出國儀式。而法國對其木乃伊，也在巴黎勒布爾熱機場以元首待遇隆重歡迎。一直有謠言指埃及政府特別發給其木乃伊一本國民護照，職業欄上註明“國王（已歿）”，以便運往法國，不過此事毫無事實根據。",
+    ] },
+  { "title" = "相關作品", "paragraphs" = [
+      "《出埃及記天地王者》（電影）：2014年美國聖經史詩片，改編聖經《出埃及記》，主要敘述摩西反抗埃及对猶太人的奴役，和法老王拉美西斯二世反目成仇，帶領猶太人出走红海的故事。",
+      "《刺客教條：起源》（遊戲）：拉美西斯二世在DLC法老的诅咒（The Curse of the Pharaohs）中登场。在这个DLC中，拉美西斯二世的亡灵与其他几位古埃及法老（阿肯那顿、纳芙蒂蒂和图坦卡蒙）一起被阿蒙神妻伊西朵拉召唤到现世，在底比斯街头大开杀戒。为还民众以安宁，玩家扮演的无形者巴耶克在化身为“巴”在大王后尼斐尔泰丽的指引下来到赫卜塞德，让这位法老永远地沉睡了下去。",
+    ] },
+]
+
+[articles.ja]
+text = "ラムセス2世（Ramesses II、紀元前1301年頃 - 紀元前1213年頃）は、エジプト新王国第19王朝のファラオ（在位：紀元前1279年頃 - 紀元前1213年頃）である。ラメセス2世、ラメス2世と表記される場合もある。 父王セティとの共同統治を経て即位したラムセス2世は、パレスチナ地域の帰属をヒッタイト帝国のムワタリ2世などとカデシュの戦いなどの数々のいくさで争い、エジプト各地に神と自身の業績をたたえる数多くの巨大建造物を築いた。積極的な外征を行い、ヌビアやリビュア、そしてアジアなどにおいてエジプト新王国の勢力圏を延ばした。 外交においては、ヒッタイトのハットゥシリ3世とは世界初の平和条約であるエジプト・ヒッタイト平和条約を締結した。エジプト国内では歴代ファラオの中でも稀にみる在位の長さを誇り、即位して以来約70年間に及んで王権を維持した。"
+title = "ラムセス2世"
+lang = "ja"
+url = "https://ja.wikipedia.org/wiki/%E3%83%A9%E3%83%A0%E3%82%BB%E3%82%B92%E4%B8%96"
+intro = [
+  "ラムセス2世（Ramesses II、紀元前1301年頃 - 紀元前1213年頃）は、エジプト新王国第19王朝のファラオ（在位：紀元前1279年頃 - 紀元前1213年頃）である。ラメセス2世、ラメス2世と表記される場合もある。",
+  "父王セティとの共同統治を経て即位したラムセス2世は、パレスチナ地域の帰属をヒッタイト帝国のムワタリ2世などとカデシュの戦いなどの数々のいくさで争い、エジプト各地に神と自身の業績をたたえる数多くの巨大建造物を築いた。積極的な外征を行い、ヌビアやリビュア、そしてアジアなどにおいてエジプト新王国の勢力圏を延ばした。",
+  "外交においては、ヒッタイトのハットゥシリ3世とは世界初の平和条約であるエジプト・ヒッタイト平和条約を締結した。エジプト国内では歴代ファラオの中でも稀にみる在位の長さを誇り、即位して以来約70年間に及んで王権を維持した。",
+]
+sections = [
+  { "title" = "概要", "paragraphs" = [
+      "その治世において、エジプトはリビュア・ヌビア・パレスチナに勢力を伸張した。紀元前1286年頃、総勢約2万の兵を率いてメソポタミアへの親征を開始し、カデシュの戦いを行った。その他にも多数の遠征をし強権的な外交戦略を展開した。",
+      "ラムセスという誕生名は、「ラーは彼に生を与えた者」という意味の「ra-mes-sw」のギリシア語読みである。なお、ラムセス3世以降の同名を称する第20王朝のファラオとの血縁関係は無いとされる。即位名はウセルマアトラー・セテプエンラー（User maat Ra-Setep en Ra）。これは「ラーのマアト（正義、真理、宇宙の秩序などの意）は力強い。（彼は）ラーに選ばれし者」を意味し、これをギリシャ語化した「オジマンディアス（コイネー：Οσυμανδύας、Osymandýas）」の名でも知られる。",
+      "年代には諸説あるが、22歳で即位し、66年間統治し、88歳で没したとされる。その間、王妃ネフェルタリのほか、何人もの王妃や側室との間に、賢者として名高いカエムワセト、後継者となるメルエンプタハなどおよそ50人の息子とおよそ60人の娘を設け、娘の中には父親であるラムセス2世と親子婚を行った者もいる。しかし、一般にはこれらは儀式的な結婚であったと考えられており、いかなる王女や王妃が子をもうけたという証拠もない。かつて娘を産んだと考えられていたビントアナトも例外ではない。また、子供の大半は養子であり、王の息子/娘の称号を与えられただけだという説もある。しかし、非常に大柄（約180cm）で、在位期間も他のファラオ達よりも長く、妃の数も多かったことが伝わっているラムセス2世が多くの子を残さなかったとは考えにくく、彼らは王の実子であると考える説もある。",
+    ] },
+  { "title" = "生涯", "paragraphs" = [
+      "紀元前1301年頃、ファラオ・セティ1世の王子として生まれた。母は妃トゥヤである。かつてラメセス2世に兄がいたと考えられていたが、この説は否定されている。考古学的証拠で名前が隠されていた人物は、ラメセス2世の兄ではなく、一般の官吏であることが判明した。",
+      "成長後のラムセス2世は少なくとも3年間ほどの父親のセティ1世との共同統治を行った。当初は父王セティ1世が外征・外交を、ラムセス2世は内政を司る形態が採られていたようであるとされている。その後、紀元前1279年、ラムセス2世は父の死後、22歳の時にファラオに即位したとされている。",
+      "ラムセス2世が属するエジプト第19王朝は前代のエジプト第18王朝から王位を譲られてからラムセス2世でまだ3代目であったが、ここからエジプトは再び強国へと返り咲くことになる。",
+    ] },
+  { "title" = "業績", "paragraphs" = [
+      "ナイルデルタの祖先の地に美しい王の町をつくり、また、カルナック神殿、ラムセウム、アブ・シンベル神殿などをはじめエジプト各地に多くの神殿などの記念建築物を建設し、その他にもオベリスク、宮殿、巨像などを多く建立し、その権勢と国力のほどを示した。",
+      "ラムセス2世は、紀元前1290年に首都をテーベから、ナイル川のデルタ地帯の東に作ったペル・ラムセスに遷都した。この新首都はラムセス2世によって、エジプト第2中間期のヒクソス王朝の時代の都であったアヴァリスの遺構の上に建てられた都市だった。王宮をテーベからそのさらに北に移転するという計画は、地政学的な理由によって動機づけられた。ペル・ラムセスはエジプトに敵対的なパレスチナのヒッタイト帝国との国境の近くに位置する。その為、この移転によってパレスチナの情勢や情報をより迅速にファラオの下に届けることができるようになった。また、軍の主力部隊が市内に駐留することもできたため、兵をすぐに動員することが可能となった。",
+      "その後、ペル・ラムセス市は1世紀にわたり繁栄し、30万人の住民が住んでいたという説もある。しかし、後の強大国家としての零落は市の重要性を低下させ、タニスへの遷都により都市は衰退した。",
+    ] },
+  { "title" = "家族", "paragraphs" = [
+      "セティ1世の王妃（側室の可能性の説もある）。夫の統治時代にはほとんど記録がなかったが、ラムセス2世即位後は活躍が目立つ。ラムセス2世がラムセウムの中トゥヤの記念堂を設立し（彼女とネフェルタリによって共同で所有された）、9mの巨像を建立し（より巨大なラムセス二世の巨像に付随しており、反対側には同規模のネフェルタリ像があったと考えられている。これはアメンホテプ三世のメムノン巨像に類似している）、彼女の墓はネフェルタリの墓と並んで、王妃の谷全体で最大規模の墓である（Qv80，壁画は焼失した。しかし、一部の壁の元の線画は識別可能であり、他の王妃の谷の墓と比較することで、学者たちはほぼ墓の中の原初の壁画を復元することができた。）。女神官「神妻（God's Wife)」の称号を持ち、大きな政治権力を持っていた。ラムセス二世の治世第21年に、エジプトとヒッタイトの間で和平条約が結ばれた際、彼女もその中で役割を果たし、ヒッタイト王室に二通の書簡を送った。",
+      "ラムセス2世の王妃（正妃）は、ネフェルタリ・メリエンムト（Nefertari-Meritmut）、イシスネフェルト1世(Iset-nofret)、ビントアナト(Bintanath)、ネベイタウェイ(Nebettawy)、メリトアメン(Meritamen)、ヘヌトミラー（Henutmire）、ヘヌトタアウィ（Henuttawy）、マートネフェルラー(Maathorneferure)",
+      "ラムセス2世最初の正妃であり、「世襲貴族女性（iryt-p`t）」や「神后（God's Wife)」の称号を持ち、数多いる妃の中で最も有名な妻である。ラムセス2世は即位前にネフェルタリと結婚した。彼女は「王の娘」の称号を持っていないので、王族出身ではなく、「世襲貴族女性（iryt-p`t）」は王族（太后、王妃、王女を含む）にとって、これは実際には一般的な称号であり、出自を示すものではない。",
+    ] },
+  { "title" = "聖書中のファラオ", "paragraphs" = [
+      "カイサリアのエウセビオスなどキリスト教教会史家の間には、ラムセス2世を『出エジプト記』に登場する、イスラエル人を奴隷から解放するようにモーセが要求したファラオと同一視する者がある。",
+      "また、次代ファラオのメルエンプタハとする可能性は更に高く、現在ではラムセス2世と聖書中のファラオを同一視する見方は少ない。また、『出エジプト記』1章11節にモーセ誕生の少し前のエピソードとして、イスラエルの民がファラオのために「ピトムとラムセス」という街を立てさせられたという記述があり、2章23節では出エジプトまでにファラオが世代交代した説明がある。",
+    ] },
+  { "title" = "ミイラ", "paragraphs" = [
+      "ラムセス2世のミイラは1881年に発見され、現在はカイロのエジプト考古学博物館に収められている。身長は173cmである（古代エジプトの成人男性の平均身長は160～165cmであった）。これが死亡時の身長であることとミイラ化によって収縮した分を踏まえれば、全盛期の王が伝承通りの体躯を誇っていた可能性が非常に高いと言われている。調査によって生前、関節炎を患っていたものの、死亡推定年齢は88～92歳であった（古代エジプト人の平均寿命は35～40歳）。また、ミイラに残っていた頭髪の毛根から髪の色は赤色であると推定されている。",
+      "1970年代になって、皮膚組織にカビの一種が発生したため、調査を兼ねてカビの除去と劣化防止処置を行うためフランスへ出国、儀仗兵が捧げ銃を行う国王への礼をもって迎えられた。この際に「生きているエジプト人の扱いでパスポートも支給され、職業の欄には『ファラオ』と記入されていた」とされる。ただし、一般に流布されている「ファラオのパスポート」の画像は、後に再現されたものであり、実物ではない。",
+    ] },
+]
+
+[articles.ko]
+text = "람세스 2세(世)(Ramesses II, 기원전 1313년 ~ 기원전 1213년)는 이집트 신왕국 제19왕조 제3대 파라오(재위:기원전 1279년 ~ 기원전 1213년)이다. 그의 치세 동안 이집트는 리비아, 누비아, 팔레스타인까지 세력을 확장해 번영하였다."
+title = "람세스 2세"
+lang = "ko"
+url = "https://ko.wikipedia.org/wiki/%EB%9E%8C%EC%84%B8%EC%8A%A4_2%EC%84%B8"
+intro = [
+  "람세스 2세(世)(Ramesses II, 기원전 1313년 ~ 기원전 1213년)는 이집트 신왕국 제19왕조 제3대 파라오(재위:기원전 1279년 ~ 기원전 1213년)이다.",
+  "그의 치세 동안 이집트는 리비아, 누비아, 팔레스타인까지 세력을 확장해 번영하였다. 그는 호전적인 히타이트와 전쟁에서 명성을 얻었는데, 그 후 그들과 평화롭게 되었다. 람세 2세, 라메세스 2세라고도 표기되었다. 람세스란 이름은 라에 의해 태어났다는 의미를 가진 '라 메스 시스'의 그리스어 음이다.",
+]
+sections = [
+  { "title" = "생애", "paragraphs" = [
+      "생몰연대에 대해서는 여러 가지 설이 있으나, 대체적으로 26세에 즉위하여 64년간 통치한 뒤 90세에 죽은 것으로 알려져 있다. 그 사이 첫 번째 왕비 네페르타리와 여러 명의 왕비 및 측실과의 사이에서 현자(賢者)로써 명성이 높았던 카엠와세드, 후계자였던 메르에프타하를 시작으로 매우 많은 자식들을 낳았다고 전해진다.",
+      "치세 전반기에는 히타이트와 팔레스타인을 사이에 두고 세력을 다투었다. 기원전 1274년 카데쉬 전투에서 직접 출정하여 히타이트 왕 무와탈리 2세와 전투를 벌였다. 이집트는 카데쉬 전투에서 거짓 정보에 속은 결과, 주력 군단이 괴멸당할 정도의 고전을 면치 못했다. 이후 전투의 결과에 대해서는 양측의 기록이 달라 아직까지 논란의 대상이다. 하지만 히타이트 세력을 팔레스타인에서 몰아내지는 못했다. 양쪽은 서로 상대를 물리치지 못하고, 장기간 전쟁을 계속하던 중 람세스 2세의 재위 21년째인 기원전 1268년에 이집트와 히타이트 사이에 평화조약을 체결하고 휴전하였다. 람세스 2세는 히타이트 왕녀를 왕비로 맞이하였다. 이것은 세계사에서 최초의 평화조약이라 평가했다. 또한 카데쉬 전투에 대한 람세스 2세의 승리 선전은 이집트군의 군사 제도 개혁을 방해했기에 훗날 재앙의 불씨로 남게 되었다.",
+      "람세스 2세는 또한 나일 제1 강을 넘어 누비아로 원정을 떠났다. 람세스 2세는 전승 기념비를 많이 세웠고, 현재도 기념비의 상당수가 남아있는 파라오가 되었다. 누비아는 후에 이집트에 동화되어 본가 이집트의 쇠퇴를 구원하는 형태의 왕조를 세우게 된다.",
+    ] },
+  { "title" = "업적", "paragraphs" = [
+      "그는 히타이트와 전쟁을 벌이기는 했지만 실리를 추구할 줄도 알아서 히타이트와 휴전을 맺어 50년 동안 평화를 유지했다. 또한 아부심벨 신전, 카르나크 신전, 라메세움 등의 거대한 건축물을 이집트 전역에 건설하기도 했다. 고대 파라오들에게 있어 자신의 업적을 후세에 알릴 수 있는 건축물은 매우 중요한 의미를 가지고 있다.",
+    ] },
+  { "title" = "성경과 람세스 2세", "paragraphs" = [
+      "비록 출애굽기에서는 파라오의 이름을 명시하지 않지만, 일부 성서학자들은 구약 출애굽기의 파라오를 람세스 2세로 추정하기도 한다. 람세스 2세가 비돔(탈 엘-레타바)의 요새와 신도시 라암셋(피람세스)를 건설하였다는 것과 제19왕조 동안 이집트에 거주하던 셈족들의 도시인 아바리스(탈 엘-다바)가 버려졌다는 것을 출애굽기와 연결하여 아바리스의 도시가 버려진 시기를 제19왕조의 그의 치세 동안으로, 그리고 그 이유를 셈족들이 이집트를 떠났기 때문이었을 것으로 추정하여 출애굽의 역사성을 증명하려는 성서 학자와 복음주의 계열의 학자들이 있다. 하지만, 아바리스는 람세스 2세가 피람세스를 완공하고, 피람세스가 더욱 더 성장하자 아바리스가 압도당했기 때문에 아바리스가 버려진 것이라고 보는 것이 일반적이다.",
+      "또한, 람세스 2세를 출애굽의 파라오로 보는 설은 출애굽기에서 언급되는 지명들인 얌수프(갈대바다), 비하히롯, 믹돌, 바알스본 등의 지명이 제19왕조와 제20왕조의 기록들(Papyrus Anastasi V, Papyrus Sllier IV, Papyrus Anastasi III)에서 등장한다는 것을 근거로 하고 있는 주장이기도 하다. 고센이라는 지명이 기원전 5세기의 아라비아 왕 게셈으로부터 유래했다는 것에 반대하는 학자들도 있다. 물론, 맨프레드 비탁 교수는 고센은 제19-20왕조 시절의 기록인 아나스타시 파피루스(Papyrus Anastasi IV)에서 와디 투밀랏(Wādī Ṭumīlāt)을 가리키는 이름으로 사용된 지명과 관련이 있을 것이라 제시하였다. 즉, 고센이라는 지명 역시 람세스 시대(제19-20왕조)에 부합한다는 것이다.",
+      "참고로, 아바리스는 힉소스인들이 패퇴당한 시점부터 도시의 절반 가까이 되는 부분이 버려졌지만, 이후에도 셈족 유목민들이 거주하여 제18왕조부터 람세스 2세의 시대 때까지 세트 신전 구역과 G6 구역, 곧 아바리스의 절반에 해당되는 부분만 지속적으로 점유되었고, 람세스 2세의 치세 동안 완전히 버려져 공동 묘지가 되었기에 출애굽이 그의 치세 동안에 있었던 사건으로 여겨지기도 한다. 또한, 이집트의 아바리스와 셈족 연구의 최고 권위자인 멘프레드 비탁은 출애굽의 파라오를 람세스 2세가 아니라 람세스 3세로 보고 있지만 430년에 대해서는 람세스 2세가 이집트의 셈족 도시인 아바리스의 셈족에 의해 바알-하닷과 동일시되었던 세트 신전의 건립 400주년을 기념하여 세운 비문과 관련된 것으로 보고 있으며, 람세스 2세의 세트 신전 건립 400주년 기념 비문(Year 400 Stela)은 힉소스 시대 초기의 종교가 람세스 시대까지 존속되고 보존되었음과 힉소스 잔당의 후예들이 람세스 시대까지 아바리스에서 삶을 이어나갔음을 보여준다고 주장하였다.",
+    ] },
+  { "title" = "창작물에서의 람세스 2세", "paragraphs" = [
+      "프랑스 이집트학자 크리스티앙 자크의 소설인 람세스(소설)은 이러한 람세스 2세의 삶에 관한 역사적 사료들과 성경의 내용, 그리고 작가의 상상력으로 쓰고 있으나, 지나친 역사왜곡을 하고 있다고 평가되기도 한다.",
+    ] },
+]
+
+[articles.ar]
+text = "رَمسِيس الثاني (حوالي 1303 ق.م – 1213 ق.م) يُشار إليه أيضًا باسم رمسيس الأكبر، كان الفرعون الثالث من حكام الأسرة التاسعة عشر المصرية (حكم 1279 ق.م – 1213 ق.م). ينظر إليه على أنه الفرعون الأكثر شهرة والأقوى طوال عهد الإمبراطورية المصرية."
+title = "رمسيس الثاني"
+lang = "ar"
+url = "https://ar.wikipedia.org/wiki/%D8%B1%D9%85%D8%B3%D9%8A%D8%B3_%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8A"
+intro = [
+  "رَمسِيس الثاني (حوالي 1303 ق.م – 1213 ق.م) يُشار إليه أيضًا باسم رمسيس الأكبر، كان الفرعون الثالث من حكام الأسرة التاسعة عشر المصرية (حكم 1279 ق.م – 1213 ق.م). ينظر إليه على أنه الفرعون الأكثر شهرة والأقوى طوال عهد الإمبراطورية المصرية. سماه خلفاؤه والحكام اللاحقين له بالجد الأعظم. قاد رمسيس الثاني عدة حملات عسكرية إلى بلاد الشام وأعاد السيطرة المصرية على كنعان. كما قاد كذلك حملات جنوبًا إلى النوبة حيث ذهب معه اثنان من أبنائه كما لوحظ منقوشًا على جدران معبد بيت الوالي.",
+  "نصّب رمسيس وهو في سن الرابعة عشر وليًا للعهد من قبل والده سيتي الأول. يعتقد بأنه جلس على العرش وهو في أواخر سنوات المراهقة وكما ويعرف بأنه حكم مصر في الفترة من 1291 ق.م إلى 1213 ق.م لفترة 78 عاما، وشهرين، وفقا لكلًا من مانيتون والسجلات التاريخية المعاصرة لمصر. وقيل عنه أنه قد عاش 99 عام، ولكن المُرجح أنه توفي في عمر 90 أو 91. فلو أصبح فرعون في 1279 ق.م كما يعتقد معظم علماء المصريات اليوم، لكان قد تولى العرش في عمر 31 1279 ق.م، استنادًا على تاريخ اِرتِقاءُه العَرش في موسم الحصاد الثالث يوم 27. احتفل رمسيس الثاني بأربعة عشر عيد «سِد» (يُحتفل به لأول مرة بعد ثلاثين عامًا من حكم الفرعون، ثم كل ثلاث سنوات) خلال فترة حكمه، وبذلك يفوق أي فرعون أخر. في وفاته، دفن في مقبرة في وادي الملوك؛ نُقِّلَت جثته لاحقا إلى الخبيئة الملكية حيث تم اكتشافه عام 1881، والآن هي معروضة بالمتحف القومي للحضارة المصرية.",
+  "تركزت الفترة الأولى من حكمه على بناء المدن والمعابد والمعالم الأثرية. أسس مدينة «بي رمسيس» في دلتا النيل لتكون عاصمته الجديدة والقاعدة الرئيسية لحملاته إلى سوريا. وقد بنيت هذه المدينة على أنقاض مدينة أواريس عاصمة الهكسوس عندما تولى الحكم، وكانت موقع المعبد الرئيسي لمجموعة. وهو معروف أيضا باسم أوزايمنديس في المصادر اليونانية، ترجمت حرفيًا إلى اليونانية لجزء من اسم تتويج رمسيس، «حقيقة رع العظيمة، اختيار رع».",
+]
+sections = [
+  { "title" = "عائلته", "paragraphs" = [
+      "رمسيس الثاني هو ابن الفرعون سيتي الأول والملكة تويا، وكان يُلقّب بالحاكم الشريك لوالدِه. رافقَ والده أثناء حملاته العسكرية على النوبة وبلاد الشام وليبيا وهو في عمر الرابعة عشر. قبيل سن 22 كان يقود الحملات بنفسه إلى النوبة مع أبنائه. عين رمسيس في مشاريع ترميم موسعة وبناء قصر جديد في أواريس. بعد وفاة سيتي الأول عام 1290 ق.م، تولى رمسيس الحكم. حكم رمسيس الثاني لما يقرب من 67 عام وتزوج كثيرًا من النساء، كما أنجب الكثيرين من محظيات وزوجات ثانوية. تزوج من بعض أميرات العائلة المالكة مثل نفرتاري وإست نفرت، كما تزوج من ابنة ملك خيتا وأطلق عليها الاسم المصري «ماعت نفرو رع»، كذلك يعرف أيضًا أنه تزوج ثلاث من بناته. تقلد أولاده الذكور المناصب المُهمة في الدولة، وأهمهم ابنه، خعمواس الذي فكر والده في السنة الثلاثين من حكمه في جعله وليًا للعهد، لكنه توفي في العام 55 من حكم والده. مات أكثر أبنائه الأوائل في حياته، لهذا خلفه ابنه الثالث عشر مرنبتاح من زوجته إست نفرت على العرش، وكان قد اختاره والده وليًا للعهد بعد وفاة خمواس.",
+    ] },
+  { "title" = "عهده", "paragraphs" = [
+      "تولى رمسيس الحكم بعد وفاة والده سيتي الأول بعد أن كان أختاره وليًا للعهد واشركه معه في إدارة الدولة. لا يعرف عمر رمسيس عندما مات والده، لكن يرجح أن يكون عمره أقل من 25 عام، إذ كان أبًا لطفلين ذهبا معه إلى بلاد النوبة كما لوحظ منقوشًا على جدران معبد بيت الوالي. لم يبدأ رمسيس عهده بنقض معاهدة الصداقة التي عقدها والده مع الحيثيين، بل وجه اهتمامه إلى توطيد حكمه فأمر بإنهاء كافة الأعمال غير المُنجزة والتي قد بدأها والده كمعبد أبيدوس. فكر بعد ذلك في استغلال مناجم الصحراء متبعًا في ذلك سياسة والده. في حوالي السنة الرابعة من عهده، ذهب بحملة إلى أطراف آسيا لتوطيد النفوذ المصري والاطمئنان على الموانئ والمواصلات. عاد بعد ذلك خلال عامه الخامس في الحكم إلى هناك معبأً جيوشه للصدام بالحيثيين وكان ذلك في معركة قادش. وذكر أن خلال عهد رمسيس الثاني، بلغ عدد أفراد الجيش المصري حوالي 100,000 رجل؛ فكانت قوة هائلة استخدمها لتعزيز النفوذ المصري.",
+    ] },
+  { "title" = "الحملات والمعارك", "paragraphs" = [
+      "قاد رمسيس الثاني عدة حملات شمالاً إلى بلاد الشام، وفي معركة قادش الثانية في العام الرابع من حكمه (1274 ق.م.)، قامت القوات المصرية تحت قيادته بالاشتباك مع قوات مُواتالّيس ملك الحيثيين استمرت لمدة خمسة عشر عاما ولكن لم يتمكن أي من الطرفين هزيمة الطرف الآخر. وبالتالي ففي العام الحادي والعشرين من حكمه (1258 ق.م.)، أبرم رمسيس الثاني معاهدة بين مصر والحيثيين مع خاتوشيلي الثالث، وهي أقدم معاهدة سلام في التاريخ.",
+      "قاد رمسيس الثاني أيضاً عدة حملات جنوب الشلال الأول إلى بلاد النوبة، وقد أنشأ رمسيس مدينة (بر رعميسو) في شرق الدلتا ومنها أدار معاركه مع الحيثيين وقد إدعى البعض أنه قد إتخذها عاصمة جديدة للبلاد وهذا بالطبع غير صحيح فلقد كانت عاصمة البلاد في مكانها في طيبة وأعظم ما ترك من معابد وآثار تركها هناك. وقد كان رمسيس الثاني متميز في فنون القتال والحروب وكان ذكى يفكر وياتى بالحل في نفس اللحظة وقد كان ماهرا أيضا في ركوب الخيل والقتال بالسيوف والمبارزة ورمى السهام وقد كان أيضا طيبا ذا روح أخلاقية ومحب لشعبه.",
+      "هزم رمسيس الثاني قراصنة البحر الشردانيين بشكل حاسم، حيث كانوا ينهبون سفن البضائع على طول ساحل مصر على البحر المتوسط. شعوب الشردان ربُمَّا جاءت من ساحل آيونيا أو من جنوب غرب الأناضول أو من جزيرة سردينيا. نشر رمسيس القوات والسفن في نقاط إستراتيجية على طول الساحل وانتظر إلى حين مهاجمة القراصنة على سفن مارة ثم هجم عليهم بمهارة على حين غرة في معركة بالبحر وقبض عليه جميعًا في آن واحد. تشهد لوحة تذكارية وجدت في تانس تتحدث بأنهم قدموا «في سفنهم الحربية من وسط البحر، ولم يقدر أي شئ في الوقوف أمامهم». لابد من أن كانت هناك كانت معركة بحرية في مكان ما بالقرب من مصب نهر النيل، وبعد ذلك بوقت قصير صورت النقوش الشردانيين بين حرس الفرعون ويبرزون من خلال خوذاتهم ذات القرون مع تكور بارز من الوسط، ودروعهم المستديرة وسيوفهم الكبيرة وصفت النقوش بأنها معركة قادش. في تلك المعركة البحرية جنبًا إلى جنب مع الشردان هزم الفرعون أيضًا شعب لوكا، وربما عُرفوا لاحقًا باسم (الليقيون) وشعوب البحر شيكلش.",
+    ] },
+  { "title" = "آثاره", "paragraphs" = [
+      "قام رمسيس خلال مدة حكمه ببناء عدد كبير من المبانى يفوق أي ملك مصري آخر، فقد بدأ بإتمام المعبد الذي بدأه والده في أبيدوس ثم بنى معبد صغير خاص به بجوار معبد والده ولكنه تهدم ولم يتبق منه إلا أطلال، وفي الكرنك أتم بناء المعبد الذي قد بدأه جده رمسيس الأول، وأقام في طيبة الرامسيوم (أطلق علماء القرن التاسع عشر على هذا المعبد الجنائزى اسم الرامسيوم نسبة إلى رمسيس الثاني) وهو معبد جنائزى ضخم بناه رمسيس لآمون ولنفسه، وتوجد له رأس ضخم أخذت من هذا المعبد ونقلت إلى المتحف البريطاني.",
+      "وأقام رمسيس أيضا التحفة الرائعة معبدى أبو سمبل المعبد الكبير له المنحوت في الصخر ويحرس مدخل المعبد أربعة تماثيل ضخمة لرمسيس الثاني وهو جالسٌ، ويزيد ارتفاع كل تمثال عن 20 مترا، والمعبد الصغير المنحوت أيضا في الصخر لزوجته نفرتاري وكان مكرسا لعبادة الإلهة حتحور إلهه الحب والتي تصور برأس بقرة، وتوجد في واجهة المعبد 6 تماثيل ضخمة واقفة 4 منهم لرمسيس الثاني و2 للملكة نفرتارى ويصل ارتفاع التمثال إلى حوالي 10 متر.",
+      "ووجود كل هذه الآثار له في الجنوب يدحض ادعاء البعض أن عاصمة الحكم في عهده كانت في الدلتا في مدينة (بر رعميس) لأن كل ما خلفه من آثار ومعابد عظيمة كانت في جنوب مصر حيث العاصمة كما هي طيبة.",
+    ] },
+]
+
+[articles.ru]
+text = "Рамсе́с II Великий (Рамзес II; егип. rꜥ-ms-sw Rīꜥa-masē-sə [ɾiːʕamaˈseːsə]) — фараон Древнего Египта из XIX династии, правивший приблизительно в 1279—1213 годах до н."
+title = "Рамсес II"
+lang = "ru"
+url = "https://ru.wikipedia.org/wiki/%D0%A0%D0%B0%D0%BC%D1%81%D0%B5%D1%81_II"
+intro = [
+  "Рамсе́с II Великий (Рамзес II; егип. rꜥ-ms-sw Rīꜥa-masē-sə [ɾiːʕamaˈseːsə]) — фараон Древнего Египта из XIX династии, правивший приблизительно в 1279—1213 годах до н. э. (согласно т. н. «короткой» ассиро-египетской хронологии). Один из величайших фараонов Древнего Египта. При нём Новоегипетское царство достигло пика своего могущества.",
+  "Сын Сети I и царицы Туйи. Ему преимущественно присваивался почётный титул А-нахту, то есть «Победитель». Памятники и папирусы нередко называют его и народным прозвищем Сесу или Сессу. Это, несомненно, то же имя, которое в предании Манефона упоминается таким образом: «Сетозис, который называется также Рамезес». У греков это имя превратилось в Сезостриса, героя легендарных сказаний и всемирного завоевателя.",
+  "Количество его памятников различной степени сохранности в Египте и Нубии крайне велико. Провёл 15 военных кампаний, окончившихся победой Египта (за исключением битвы при Кадеше). Основатель города Пер-Рамсес.",
+]
+sections = [
+  { "title" = "Начало царствования", "paragraphs" = [
+      "Рамсес II взошёл на престол в 27 день третьего месяца сезона шему (то есть Засухи). Молодому царю было в это время около двадцати лет.",
+      "Несмотря на огромное количество памятников и документов, носящих на себе имя Рамсеса II, история его более чем 66-летнего царствования освещается в источниках довольно неравномерно. Датированные документы существуют для каждого года его правления, но они крайне неоднородны: от памятников религиозного назначения до горшков из-под мёда из Дейр-эль-Медины.",
+      "Смена фараонов могла, как и в прежние времена, побудить у угнетённых народов надежды на удачные восстания. От первых месяцев правления Рамсеса сохранилось изображение привода ханаанских пленных к фараону, но оно несколько условное. Зато восстание в Нубии было, по-видимому, настолько значительное, что для его подавления потребовалось личное присутствие фараона. Страна была усмирена.",
+    ] },
+  { "title" = "Имя", "paragraphs" = [
+      "Диодор Сицилийский называет Рамсеса II Осимандий (др.-греч. Ὀσυμανδύας), видимо, возводя это имя от тронного имени Рамсеса — Усер-маат-Ра (или «Uashmuariya», как писали семиты).",
+    ] },
+  { "title" = "Война с хеттами", "paragraphs" = [
+      "Укрепив таким образом государство, Рамсес начал готовиться к большой войне с хеттами. Так как Рамсес называл «второй экспедицией» кампанию, которая завершилась битвой при Кадеше на 5-м году правления, можно предположить, что стела, установленная на 4-м году в Нахр-эль-Келб, к северу от Бейрута, является напоминанием о первой кампании. Несмотря на то, что практически весь текст утерян, изображение Ра-Хорахти, протягивающего руку к царю, ведущему пленника, позволяет говорить о некоем военном событии.",
+      "Видимо, в 4-й год правления Рамсес предпринял свой первый поход в Переднюю Азию, направленный на подчинение морского побережья Палестины и Финикии, в качестве необходимой предпосылки дальнейшего успешного ведения борьбы с хеттами. В ходе этого похода Рамсес взял город Берит и достиг реки Элевтерос (Эль-Кебира, «Собачьей реки»), где поставил свою памятную стелу. То, что Нахр-эль-Келб находится на территории, которую занимали племена амурру, вероятно, говорит о подчинении царя Аммуру Бентешины египетским властям. Произошло это, прежде всего, из-за активизации хеттских набегов, в то время как египетское присутствие гарантировало хоть какое-то спокойствие. Именно это событие стало поводом для объявления войны между Рамсесом II и хеттским правителем Муваталли II: это достаточно ясно из текста договора, подписанного Шаушкамувой, сыном Бентешины, и Тудхалией IV, сыном Муваталли.",
+      "Весной 5-го года своего правления Рамсес, собрав более чем 20-тысячное войско, выступил из пограничной крепости Чилу во второй поход. Через 29 дней, считая со дня выступления из Чилу, четыре воинских соединения египтян, названные в честь Амона, Ра, Птаха и Сета, в каждом из которых было около 5 тысяч воинов, разбили лагерь на расстоянии одного перехода от Кадеша. Одно из соединений, называвшееся по-ханаански «молодцы» (неарим), и составленное фараоном, видимо, из отборнейших воинов, ещё раньше было послано вдоль морского побережья, для последующего воссоединения с основными силами у Кадеша.",
+    ] },
+  { "title" = "Мирный договор между Египтом и Хеттским царством", "paragraphs" = [
+      "Со смертью Муваталли, произошедшей, вероятно, на 10-м году правления Рамсеса II, отношения между Египтом и Хатти заметно улучшились. Сын Муваталли, Урхи-Тешуб унаследовал престол под именем Мурсили III, однако вскоре был смещён своим дядей Хаттусили III, заключившим с Египтом мир.",
+      "Может быть, что примирению соперников постепенно способствовало образование сильной Ассирийской державы и связанные с этим опасения.",
+      "В начале зимы 21 года царствования Рамсеса II посол Хаттусили в сопровождении переводчика-египтянина прибыл в египетскую столицу Пер-Рамсес и вручил фараону от имени своего повелителя серебряную дощечку с клинописным текстом договора, заверенного печатями, изображавшими царя и царицу Хатти в объятиях их божеств. Договор был переведён на египетский язык и впоследствии увековечен на стенах Карнака и Рамессеума.",
+    ] },
+]
+
+[articles.vi]
+text = "Ramesses II (hay Ramesses đại đế, Ramses II, Rameses II, ông cũng được biết đến với tên Ozymandias theo tiếng Hy Lạp, từ sự chuyển ký tự từ tiếng Hy Lạp sang một phần tên ngai của Ramesses: User-maat-re Setep-en-re); là pharaon thứ ba của Vương triều thứ 19 trong lịch sử Ai Cập. Ông được ghi nhận là một trong những pharaon vĩ đại, quyền lực và được ca tụng nhiều nhất trong lịch sử."
+title = "Ramesses II"
+lang = "vi"
+url = "https://vi.wikipedia.org/wiki/Ramesses_II"
+intro = [
+  "(hay Ramesses đại đế, Ramses II, Rameses II, ông cũng được biết đến với tên Ozymandias theo tiếng Hy Lạp, từ sự chuyển ký tự từ tiếng Hy Lạp sang một phần tên ngai của Ramesses: User-maat-re Setep-en-re); là pharaon thứ ba của Vương triều thứ 19 trong lịch sử Ai Cập. Ông được ghi nhận là một trong những pharaon vĩ đại, quyền lực và được ca tụng nhiều nhất trong lịch sử. Những nhà văn người Hy Lạp cổ đại như Herodotus cho rằng những thành công của ông dẫn tới huyền thoại về Sesostris. Ông còn được nhiều người tin là pharaon trong cuốn Exodus. Những người thừa kế ông, cũng như những người Ai Cập sau này gọi ông là \"Ông tổ vĩ đại\" và xem ông như người cha của quốc gia.Ông là Pharaon vĩ đại nhất lịch sử Ai Cập cổ đại.",
+  "Ông ra đời khoảng năm 1303 TCN và ở tuổi 14, ông được vua cha Seti I chọn làm thái tử kế vị. Ông được tin là đã lên ngôi vua khi khoảng 24 tuổi và cai trị lãnh thổ Ai Cập từ 1279 TCN đến 1213 TCN cho tổng cộng là khoảng 66 năm 2 tháng theo Manetho. Ông là người thời xưa duy nhất được tin là sống được đến 90 tuổi. Nếu ông lên ngôi vua năm 1279 TCN như theo các nhà Ai Cập học thời nay tin rằng, ông lên ngôi vào ngày 31 tháng 5, 1279 TCN, căn cứ vào ngày tháng đăng quang được biết của III Shemu cho là ngày 27. Ramesses II đã tổ chức đến 14 lễ hội Sed trong vương triều ông-nhiều hơn các pharaon khác. Sau khi qua đời, ông được chôn ở ngôi mộ tại Thung lũng các vị vua; thi hài ông về sau đã được đưa tới nhà xác hoàng gia nơi nó được tìm thấy năm 1881, và hiện nay ở bảo tàng Ai Cập.",
+]
+sections = [
+  { "title" = "Tiểu sử", "paragraphs" = [
+      "Ramesses II sinh ra tại bờ Đông lưu vực sông Nile vào khoảng năm 1303 TCN, trong thời kỳ Tân vương quốc, một thời kì vàng son trong lịch sử cổ Ai Cập. Ông là con thứ của pharaon Seti và Tuya. Ai Cập đã được thống nhất làm một khối từ hơn 2000 năm trước (khoảng 3100 TCN bởi vua Hor-Aha), khi Ramesses II lên làm vua thì biên giới cực nam Ai Cập trải dài đến Nubia (tức Sudan ngày nay) và vùng ảnh hưởng lan rộng đến phía Bắc Syria, phía Tây đến tận Libya. vương triều dòng Ramesses (tức nhà tiền Ramessid) phát sinh từ việc pharaon Horemheb của Vương triều thứ 18 qua đời mà không có con nối vị và người tể tướng đầy quyền lực là Pramesse được chọn lên làm vua, lấy danh hiệu là Ramesses I, vị pharaon đầu tiên của Vương triều thứ 19. Sau khi Ramesses I qua đời, con là Seti I lên thay thế và sau đó lại truyền lại ngai vàng cho con là Ramesses II.",
+      "Trước Ramesses II khoảng 180 năm, pharaon Thutmosis III đã xây dựng một đế chế Ai Cập về phía Đông đến tận Palestine và Syria, về phía Nam đến tận Sudan. Nhưng đến thời đại pharaon Akhenaten thì sự điêu tàn của Ai Cập bắt đầu, Akhenaten chỉ lo chăm chút cho bản thân và bà vợ xinh đẹp, Nefertiti, mà quên đi việc triều chính. Khi thấy vương triều này bắt đầu suy yếu thì người Hittites, vốn là kẻ thù của truyền kiếp Ai Cập lập tức quấy nhiễu. Các pharaon kế vị Akhenaten cố gắng lập lại uy tín và trật tự nhưng đều thất bại, cho đến khi Pramesse, ông nội của Ramesses II được bầu từ Tể tướng lên ngôi vua. Làm vua được 16 tháng thì Ramesses I nhường ngôi cho Seti I. Lúc cha mình lên ngai vàng, Ramesses II mới 8 tuổi.",
+      "Có lẽ quãng đời thơ ấu của Ramesses II chỉ toàn là hương khói chiến tranh và chuyện đao binh. Seti I đã ấn vào đầu đứa con trai đạo lý \"da ngựa bọc thây\" với mơ ước lấy lại các vùng đất đã mất do người Hittites xâm chiếm, xây dựng lại một đế chế Ai Cập hùng mạnh, thiết lập các kỳ quan về kiến trúc, ca tụng Thần chiến tranh Ai Cập. Seti I tuyên chiến với Syria nhưng chưa cho Ramesses II ra trận. Năm lên 10, Ramesses II được vua cha phong làm Tổng tư lệnh danh dự quân đội và năm lên 14, Ramesses II tham gia trận đánh Lybia.",
+    ] },
+  { "title" = "Trị vì", "paragraphs" = [
+      "Khi vua cha Seti I băng hà năm 1279 TCN, Ramesses II bấy giờ lên ngai vàng Ai Cập, trở thành vị Pharaoh thứ ba của Vương triều thứ 19. Từ đây ông bắt đầu các chiến dịch quân sự và xây dựng các công trình xây dựng làm nên tên tuổi lẫy lừng của mình.",
+      "Khi lên ngôi mới được 5 năm (1275 TCN), Ramesses II nảy ra ý định đánh chiếm thành Kadesh của người Hittites với 20 nghìn quân tại Syria. Ông đã suýt thua vua Muwatalli II (Muwatallis) có đến 40 nghìn quân đang mai phục chờ đợi. Toán quân trinh thám của Ramesses đã không hoàn thành nhiệm vụ và đoàn chiến xa của ông bị đánh úp. Thình lình thần Amun lại mỉm cười đem lại may mắn cho ông, viện quân Ai Cập tràn đến. Vua Muwatalli II bất lực nhìn đoàn quân hùng hậu của mình tháo chạy trước vị pharaon trẻ tuổi, quân Hitties sợ hãi nhảy xuống sông chạy trốn.",
+      "Sau khi điểm lại quân số thì hai bên mới biết không ai đẩy lùi được ai, nhưng Ramesses II đã tuyên bố thắng trận và trở về quê hương. Về đến nhà Ramesses II tuyên bố chiến thắng tuy nhiên không phải nhờ đến quân tiếp viện mà là do ông - Ramesses đại đế. Để thể hiện dược sức mạnh của mình ông điều động tất cả các công nhân điêu khắc tại mọi đền đài của các pharaon trước trên khắp đất nước Ai Cập các lời ca tụng về mình. Trên tường của tất cả mọi khu đền đều có viết",
+    ] },
+  { "title" = "Gia đình", "paragraphs" = [
+      "Mẹ: Mut-Tuya (?-1257 TCN), trở thành Thái hậu dưới triều đại của Ramesses II, và là một trong những nhân vật quyền lực nhất trong hoàng gia. Bà được chôn cất trong lăng mộ QV80 ở Thung lũng các Vương Hậu.",
+      "Ramesses II có rất nhiều vợ, trong số đó chỉ có bảy người vợ được sắc phong chính thức \"Người vợ Hoàng gia Vĩ đại\":",
+      "Nefertari (?- 1255 TCN), người vợ được sủng ái nhất của Ramesses II. Bà được pharaoh xây hẳn một ngôi mộ trang trọng trong Thung lũng các Vương hậu.",
+    ] },
+  { "title" = "Pharaon trong cuốn Exodus", "paragraphs" = [
+      "Phần lớn nhà sử học cho rằng Seti I, cha Ramesses là vị pharaon đã đối xử tàn bạo với người Do Thái và nhà tiên tri Moses. Ông đã ra lệnh giết các em bé Do Thái khi Moses được sinh ra. Nhưng ông này đã được giấu đi và được một người công chúa, con gái Seti I và chị hoặc em của Ramses, nhận làm con nuôi. Moses đã muốn dẫn người Do Thái rời khỏi Ai Cập khi Ramesses đang cai trị Ai Cập, nhưng Ramesses bắt họ phải ở lại làm nô lệ và Ai Cập bị Chúa trời phạt mười năm bệnh dịch, Ramesses buộc phải nhượng bộ cho dân Do Thái rời khỏi Ai Cập.",
+      "Nhiều nhà sử học khác cho rằng Thutmosis III mới là pharaon đã đối xử tàn bạo với Moses và nữ hoàngHatshepsut, nhiếp chính của Thutmosis (ông ta lên ngôi khi còn là một cậu bé) đã nhận Moses làm con nuôi. Sau khi Hatshepsut mất thì Thutmosis càng tàn bạo với dân Do Thái. Người Do Thái đã rời khỏi Ai Cập trong khi con Thutmosis, Amenhotep II cai trị.",
+    ] },
+]
+
+[articles.id]
+text = "Ramses II atau Ramesses II (Bahasa Mesir Kuno: rꜥ-ms-sw, berarti \"(Tuhan) Ra lah yang melahirkannya\", Rīʿa-məsī-sū, diucapkan [ˈɾiːʕaʔ məˈsiːˌsuw]; sekitar 1303–1213 SM) adalah Fir'aun ketiga dari Dinasti ke-19 Mesir. Dia sering dianggap sebagai Fir'aun yang terbesar, terkuat dan paling terkenal dari periode Kerajaan Baru, yang mana periode itu sendiri merupakan periode terkuatnya Mesir pada zaman Mesir Kuno."
+title = "Ramses II"
+lang = "id"
+url = "https://id.wikipedia.org/wiki/Ramses_II"
+intro = [
+  "Ramses II atau Ramesses II (Bahasa Mesir Kuno: rꜥ-ms-sw, berarti \"(Tuhan) Ra lah yang melahirkannya\", Rīʿa-məsī-sū, diucapkan [ˈɾiːʕaʔ məˈsiːˌsuw]; sekitar 1303–1213 SM) adalah Fir'aun ketiga dari Dinasti ke-19 Mesir. Dia sering dianggap sebagai Fir'aun yang terbesar, terkuat dan paling terkenal dari periode Kerajaan Baru, yang mana periode itu sendiri merupakan periode terkuatnya Mesir pada zaman Mesir Kuno.",
+  "Ia dikenal sebagai Ozymandias dalam sumber-sumber Yunani (Bahasa Yunani Koine: Οσυμανδύας, diromanisasi: Osymandýas) yang berasal dari bagian pertama nama takhta-nya Ramses, Usermaatre Setepenre, \"Maat dari (Tuhan) Ra sangat kuat, Yang dipilih oleh (Tuhan) Ra\". Dia juga disebut Ramses Agung. Para penerusnya dan orang-orang Mesir pada kemudian hari menyebutnya sebagai \"Leluhur Agung\".",
+  "Pada usia 14 tahun, ia diangkat menjadi pangeran pemangku raja oleh ayahnya, Seti I. Kebanyakan ahli Mesir Kuno saat ini meyakini bahwa dia naik takhta pada tanggal 31 Mei 1279 SM, berdasarkan tanggal aksesi yang diketahui dari Musim Panen III, hari ke 27.",
+  "Pada awal pemerintahannya, dia memfokuskan pada pembangunan kota, kuil, dan monumen. Dia mendirikan kota Pi-Ramesses di Delta Nil sebagai ibu kota barunya dan menggunakannya sebagai basis utama untuk kampanyenya di Suriah. Dia memimpin beberapa ekspedisi militer ke Levant, menegaskan kembali kendali Mesir atas Kanaan. Dia juga memimpin ekspedisi ke selatan, ke Nubia, yang diperingati dalam prasasti di Beit el-Wali dan Gerf Hussein. Dia merayakan 13 atau 14 festival Sed yang mana lebih banyak dari firaun mana pun.",
+]
+sections = [
+  { "title" = "Pranala luar", "paragraphs" = [
+      "THE CLEVELAND MUSEUM OF ART: Relief of a King, probably Ramesses II Diarsipkan 2009-02-28 di Wayback Machine",
+      "List of Ramesses II's family members and state officials Diarsipkan 2008-07-24 di Wayback Machine",
+    ] },
+]
+
+[articles.pt]
+text = "Ramessés II ou Ramsés II, também conhecido pela titulatura helenizada Osimandias (em grego: Ὀσυμανδύας), foi o terceiro faraó da XIX dinastia egípcia, uma das dinastias que compõem o Império Novo. Reinou entre aproximadamente 1279 a.C."
+title = "Ramessés II"
+lang = "pt"
+url = "https://pt.wikipedia.org/wiki/Ramess%C3%A9s_II"
+intro = [
+  "Ramessés II ou Ramsés II, também conhecido pela titulatura helenizada Osimandias (em grego: Ὀσυμανδύας), foi o terceiro faraó da XIX dinastia egípcia, uma das dinastias que compõem o Império Novo. Reinou entre aproximadamente 1279 a.C. e 1213 a.C., tendo tido um dos mais prestigiosos reinados da história egípcia, nos aspetos econômico, administrativo, cultural e militar. Teve também um dos mais longos reinados da história egípcia, governando a nação por 66 anos. Houve 11 soberanos com o nome Ramessés no reino do Egito, mas somente a ele foi atribuído o epíteto de \"o Grande\".",
+  "Durante sua juventude, o príncipe Ramessés foi treinado no exército, o que mais tarde faria com que o mesmo se tornasse um reconhecido líder militar. Com a idade de 24 anos, Ramessés II ascendeu ao trono. Na primeira instância de seu reinado, esteve focado em manobras militares, proporcionou aos exércitos maior importância, sendo bem treinados e melhor tratados, como também foram feitas construções de fortificações nas fronteiras egípcias que ajudavam na movimentação das tropas e garantia segurança e proteção ao Egito. Além das conquistas militares, o que também fez com que Ramessés II fosse conhecido como “o Grande” foi a prosperidade de seu reinado onde, por exemplo, houve a construção de enormes templos.",
+  "Sua múmia, preservada no Museu Egípcio no Cairo, é a de um homem já idoso com um rosto longo e estreito, nariz proeminente e maxilar maciço. O reinado de conquistas e prosperidades de Ramessés II, o Grande, foi o último pico de poder do reino egípcio. Após sua morte o Egito conseguiu manter sua soberania. Ele foi um líder notável, exímio militar e administrador competente e fez com que o país fosse próspero em seu reinado. Alguns de seus feitos, no entanto, certamente devem ser levados para o seu estilo de publicidade, seu nome e seus registros de batalhas que foram encontrados em todo o Egito e na Núbia.",
+]
+sections = [
+  { "title" = "Vida familiar", "paragraphs" = [
+      "Filho do faraó Seti I e da rainha Tuia. O seu avô, Ramessés I, era um general de Horemebe, o último rei da XVIII dinastia, que o nomeou seu sucessor.",
+      "Aos dez anos, Ramessés recebeu o título de \"filho primogénito do rei\", o que correspondia a ser declarado herdeiro do trono. Seu pai introduziu-o no mundo das campanhas militares quando era ainda adolescente e Ramessés acompanhou-o contra os líbios e em campanhas em Canaã e Sinai.",
+      "Julga-se que pelo menos dez anos antes da morte do pai, Ramessés já era casado com Nefertari e Iseteneferte. A primeira seria a mais importante e célebre das várias esposas que Ramessés teve na sua vida, tendo sido a grande esposa real até sua morte, no ano 24 do reinado de Ramessés. Nefertari, que possui o túmulo mais famoso do Vale das Rainhas, deu à luz o primeiro filho de Ramessés, Amenófis, conhecendo-se pelo menos mais três filhos e duas filhas de ambos. As pesquisas documentam seis filhos com Nefertari.",
+    ] },
+  { "title" = "Campanhas militares", "paragraphs" = [
+      "Ramessés sucedeu ao pai em 1279 ou 1 278 a.C. No plano internacional os hititas, que viviam no que é hoje a Turquia, surgem como rivais do império egípcio no corredor sírio-cananeu.",
+      "No ano 4 do seu reinado, Ramessés conduz uma expedição militar exploratória que alcança a Fenícia. No rio Cão, perto da moderna Beirute, manda erguer um estela, cujo texto é hoje ilegível.",
+      "No ano seguinte inicia-se a guerra propriamente dita com os hititas. Ramessés atravessa a fronteira egípcia em Sila e um mês depois chega aos arredores da cidade de Cades, perto do rio Oronte, com o objectivo de expulsar os hititas do norte da Síria.",
+    ] },
+  { "title" = "Monumentos", "paragraphs" = [
+      "Ramessés é o faraó que deixou o maior legado em termos de monumentos. O soberano apropriou-se de obras de faraós do passado (incluindo dos faraós do Império Antigo, mas sobretudo do faraó Amenófis III), que apresentou como suas, mandou concluir edifícios e lançou as suas próprias obras. Entre as obras concluídas por Ramessés II encontram-se a sala hipostila do templo de Carnaque em Tebas e o templo funerário do seu pai em Abidos.",
+      "Foi também Ramessés um dos responsáveis pela destruição dos templos da cidade de Amarna, que eram os últimos vestígios da era de Aquenáton, faraó que pretendia fazer de Aton a divindade suprema. Os blocos de pedra destas estruturas foram reutilizados na cidade de Hermópolis Magna, situada na margem oposta de Amarna.",
+      "Pi-Ramessés ou Per-Ramessés foi a capital do Egito durante o reinado de Ramessés e até o fim da XX dinastia. Não foi descoberta, até o momento, a localização exata da cidade, mas sabe-se que era na região oriental do Delta.[carece de fontes]?",
+    ] },
+  { "title" = "Morte", "paragraphs" = [
+      "Ramessés faleceu no ano 67 do seu reinado, quando já teria mais de noventa anos. O Egito conseguiu continuar a exercer controle sobre Canaã e Sinai até a parte final da XIX dinastia.",
+      "O túmulo de Ramessés foi construído no Vale dos Reis (KV7), necrópole de eleição dos faraós do Império Novo, tendo sido preparado pelo seu vizir do sul, Pasar. Embora seja maior que o túmulo do seu pai, o túmulo não é tão ricamente decorado e encontra-se hoje danificado. Do seu espólio funerário restam poucos objetos, que estão espalhados por vários museus do mundo.",
+      "A múmia do faraó foi encontrada num túmulo coletivo de Deir Elbari no ano de 1881. Em 1885 a mesma foi colocada no Museu Egípcio do Cairo, onde permanece até hoje.",
+    ] },
+]
+
+[fallbacks]
+
+es = "en"
+
+fr = "en"
+
+de = "en"
+
+tr = "en"
+
+zh-CN = "zh"
+
+fil = "en"
+
+pt-BR = "pt"

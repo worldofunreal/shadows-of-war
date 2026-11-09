@@ -271,6 +271,118 @@ campaign_chronicles = "SEFER\nGÜNLÜKLERİ"
 campaign_unavailable = "Sefer kullanılamıyor."
 
 [heroes]
+leader_muhumuza_name = "Muhumuza"
+leader_muhumuza_historical = "Muhumusa adıyla da kayda geçen Muhumuza, bugünkü Ruanda-Uganda sınırının iki yanındaki Ndorwa ve Kigezi yüksek bölgelerinde direnişe önderlik etti. Nyabingi’nin medyumu olarak yöre halkı arasında kök salmış bir manevi geleneğe dayandı. Kral Musinga’nın sarayına ve Avrupa sömürge yönetiminin yayılmasına karşı yandaşlarını örgütledi."
+leader_muhumuza_civilization = "Nyabingi Hareketi"
+
+leader_khosrow_i_name = "I. Hüsrev"
+leader_khosrow_i_historical = "Enûşirvân adıyla da bilinen I. Hüsrev, 531’den 579’a kadar Sasani İmparatorluğu’nu yönetti. Orduyu dört bölge komutanlığı hâlinde yeniden düzenledi. Günümüze ulaşan mühürlerde doğu, güney, batı ve kuzeyden sorumlu komutanların unvanları bulunur. Babası I. Kavâd döneminde başlayan arazi sayımını da sürdürdü ve toprak vergisi için sabit oranlar belirledi."
+leader_khosrow_i_civilization = "Sasani İmparatorluğu"
+
+leader_naram_sin_name = "Naram-Sin"
+leader_naram_sin_historical = "Sargon’un torunu Naram-Sin, MÖ üçüncü binyılda Akad İmparatorluğu’nu yönetti. Zafer steli, Zagros Dağları’nda Lullubilere karşı düzenlenen bir seferi anımsatır. Kabartmada kral ve askerleri yamacı tırmanır. Naram-Sin diğer figürlerden daha büyük gösterilir ve tanrısallıkla ilişkilendirilen boynuzlu bir miğfer takar."
+leader_naram_sin_civilization = "Akad İmparatorluğu"
+
+leader_jalal_al_din_mangburni_name = "Celâleddin Harezmşah"
+leader_jalal_al_din_mangburni_historical = "Celâleddin Mengüberdi, Moğollar Harezmşahlar Devleti’ni parçalarken babası II. Muhammed’in yerine geçti. Gazne’de asker topladı ve 1221’de Pervan’da bir Moğol ordusunu yendi. Cengiz Han onu İndus’a kadar takip etti. Celâleddin savaşı kaybetti, ancak nehri atıyla geçti ve kuvvetlerinin bir bölümü de karşı kıyıya ulaşabildi."
+leader_jalal_al_din_mangburni_civilization = "Harezmşahlar Devleti"
+
+leader_modu_chanyu_name = "Mete Han"
+leader_modu_chanyu_historical = "Çin kaynaklarında Maodun adıyla anılan Mete, MÖ 209 dolaylarında şanyu unvanını aldı ve Hiung-nu topluluğunu doğu bozkırının büyük güçlerinden biri hâline getirdi. Çinli tarihçi Sima Qian’a göre komşu Donghular, yeni hükümdarı art arda taleplerle sınadı. Mete iki kez taviz verdi, ancak sınır karakolları arasındaki ıssız toprağı vermeyi reddetti ve saldırıya geçti."
+leader_modu_chanyu_civilization = "Hiung-nu"
+
+leader_hiawatha_haudenosaunee_name = "Hiawatha"
+leader_hiawatha_haudenosaunee_historical = "Haudenosaunee sözlü geleneği, Aionwatha adıyla da bilinen Hiawatha’yı Barış Yapıcı’ya Mohawk, Oneida, Onondaga, Cayuga ve Seneca halklarını bir araya getirmede yardım eden kişi olarak hatırlar. Onondaga anlatısında Hiawatha yas tutarken Barış Yapıcı, wampum denen deniz kabuğu boncuk dizilerini kullanarak ona teselli sözleri söyler. Hiawatha daha sonra barış çağrısının halklara iletilmesine yardım eder. Birleşmenin kesin tarihi bilinmez."
+leader_hiawatha_haudenosaunee_civilization = "Haudenosaunee Konfederasyonu"
+
+leader_kaahumanu_hawaii_name = "Kaʻahumanu"
+leader_kaahumanu_hawaii_historical = "I. Kamehameha 1819’da ölünce Kaʻahumanu, onun halefi Liholiho ile, yani II. Kamehameha ile yönetimi paylaşacağını açıkladı. Kuhina nui görevini üstlenen ilk kişi oldu. Bu makam ilk yıllarında toprak, anlaşmalar ve adalet konularında kralınkine denk bir yetki veriyordu. Kaʻahumanu, III. Kamehameha olarak bilinen Kauikeaouli’nin naibi olarak 1832’deki ölümüne kadar yönetimde kaldı."
+leader_kaahumanu_hawaii_civilization = "Hawaii Krallığı"
+
+leader_sargon_of_akkad_name = "Akadlı Sargon"
+leader_sargon_of_akkad_historical = "Sargon, MÖ üçüncü binyılın sonlarına doğru Mezopotamya’da Akad hanedanını kurdu. Kraliyet yazıtları, Uruklu Lugalzagesi’nin yenilgisini ve Uruk ile Ur gibi kentlerin surlarının yıkılmasını anlatır. Zaferleri yücelten bu metinlerin bir bölümü sonraki çağların kâtiplerinin kopyalarından bilinir. Yazıtlarda fethedilen topraklarda valilik görevleri üstlenen Akadlılardan da söz edilir. Yönetim belgeleri, yeni iktidar altında yerel uygulamaların hangilerinin sürdüğünü anlamamıza yardım eder."
+leader_sargon_of_akkad_civilization = "Akad İmparatorluğu"
+
+leader_mithridates_vi_name = "VI. Mithridates"
+leader_mithridates_vi_historical = "VI. Mithridates Eupator, Karadeniz’in güney kıyısındaki Pontus’u yönetti. Krallığının etkisini Karadeniz çevresinde genişletti ve Anadolu’da Roma’ya meydan okudu. Üçüncü savaş sırasında Romalı komutan Lucullus onu Pontus’tan çıkardı. Mithridates, kızıyla evli olan Ermenistan kralı II. Tigranes’e sığındı. Bu ittifak ona yeniden toparlanabileceği bir yer ve geri dönmek için asker sağladı."
+leader_mithridates_vi_civilization = "Pontus Krallığı"
+
+leader_gudit_yodit_name = "Gudit"
+leader_gudit_yodit_historical = "Etiyopya geleneğinde Gudit, diğer adıyla Yodit, Aksum’a karşı ayaklanan bir kraliçe olarak anılır. İskenderiye Patrikleri Tarihi, adı verilmeyen bir Etiyopya hükümdarının onuncu yüzyılda Nübye hükümdarı Georgios’a gönderdiği yardım çağrısını anlatır. Bani el-Hamviyye’nin kraliçesinin esir aldığını, kentleri yaktığını ve hükümdarı bir yerden diğerine kaçmaya zorladığını kaydeder. Mektubun aslı kayıptır. İçeriğini aktaran kilise kroniği krizi yeni bir metropolit atanması talebiyle ilişkilendirir."
+leader_gudit_yodit_civilization = "Etiyopya Yaylaları"
+
+leader_khutulun_qaidu_name = "Khutulun"
+leader_khutulun_qaidu_historical = "Qutulun olarak da yazılan Khutulun, Orta Asya’da yaşamış bir Moğol prensesi ve askeri komutandı. Babası Kaydu, Ögedey hanedanına bağlı bir yönetimin başındaydı ve Kubilay ile ardıllarının otoritesine karşı koydu. Marco Polo ona Aijaruc adını verir ve seferlerde atıyla öne çıkarak düşman savaşçılarını esir aldığını anlatır. Aynı anlatıda evlenmek isteyenlerin güreşlerde at ortaya koyduğu da söylenir. Bu zaferleri ve at sayılarını doğrulamak güçtür."
+leader_khutulun_qaidu_civilization = "Kaydu Ulusu"
+
+leader_sor_juana_ines_de_la_cruz_name = "Sor Juana Inés de la Cruz"
+leader_sor_juana_ines_de_la_cruz_historical = "Sor Juana Inés de la Cruz, on yedinci yüzyılda Yeni İspanya’da yaşayan bir yazar ve Aziz Hieronymus tarikatına bağlı bir rahibeydi. Kaynaklar doğum yılı için 1648 ve 1651 tarihlerini verir. Meksiko’daki San Jerónimo Manastırı’nda şiirler ve El divino Narciso gibi oyunlar yazdı. 1690’da Portekizli Cizvit António Vieira’nın bir vaazını eleştiren bir metin kaleme aldı. Puebla piskoposu Manuel Fernández de Santa Cruz metni Carta atenagórica adıyla yayımladı ve yazara Sor Filotea de la Cruz adıyla hitap etti."
+leader_sor_juana_ines_de_la_cruz_civilization = "Yeni İspanya"
+
+leader_sibylla_name = "Kudüs Kraliçesi Sibylla"
+leader_sibylla_historical = "Sibylla, Kudüs Kralı Amalrik ile Agnes de Courtenay’nin kızıydı. Kraliçe olmadan önce Yafa ve Aşkelon kontluğunu yönetti. 1177 tarihli kendi belgesinde Kont Rodrigo’ya ve onun tarikatındaki kardeşlerine Aşkelon’da kuleler, bir bahçe ve gelirler verdi. İlk eşi Montferratlı William’dan doğan oğlu daha sonra V. Baudouin adıyla kral oldu. Oğlu 1186’da ölünce Sibylla kendi miras hakkıyla Kudüs tacını istedi ve ikinci eşi Guy de Lusignan’ı yanında kral yaptı."
+leader_sibylla_civilization = "Kudüs Krallığı"
+
+leader_cynethryth_mercia_name = "Cynethryth"
+leader_cynethryth_mercia_historical = "Cynethryth sekizinci yüzyılın sonlarında Mercia kraliçesi, daha sonra Cookham başrahibesiydi. Offa döneminin kraliyet belgelerinde tanık olarak yer alır ve onun halefi Ecgfrith’in annesidir. Adını ve kraliçe unvanını taşıyan gümüş paralar, Anglosakson İngiltere’sinde sıra dışı bir konuma işaret eder. Günümüze ulaşan bazı örneklerde Canterbury ile ilişkilendirilen sikke ustası Eoba’nın adı yer alır. Paralar unvanın dolaşımda olduğunu gösterir, ancak basım emrini kimin verdiği kesin olarak bilinmez."
+leader_cynethryth_mercia_civilization = "Mercia Krallığı"
+
+leader_suppiluliuma_name = "I. Şuppiluliuma"
+leader_suppiluliuma_historical = "I. Şuppiluliuma MÖ 14. yüzyılda Hatti’yi yönetti. Seferleri Hitit hâkimiyetini Kuzey Suriye’ye yaydı. Burada oğlu Piyaşşili’yi Karkamış kralı olarak görevlendirdi. Mitannili Şattiwaza ile yaptığı antlaşma, bir taht adayına verilen desteği yeni bir siyasi düzenle birleştirdi."
+leader_suppiluliuma_civilization = "Hitit İmparatorluğu"
+
+leader_baibars_name = "Baybars"
+leader_baibars_historical = "El-Zâhir Baybars, 1260 ile 1277 arasında Memlûk Sultanlığı’nı yönetti. Louvre’daki Kahire menşeli bir altın dinar onun adını ve unvanlarını taşır. Seferleri Memlûk hâkimiyetini Levant’ta genişletti. 1271’de Hospitalierlerin Krak des Chevaliers kalesine karşı bir koalisyona komuta etti."
+leader_baibars_civilization = "Memlûk Sultanlığı"
+
+leader_emperor_qin_shi_huang_name = "Qin Shi Huang"
+leader_emperor_qin_shi_huang_historical = "Ying Zheng adıyla doğan Qin Shi Huang, devleti MÖ 221’de son rakiplerini yendikten sonra İlk İmparator unvanını aldı. Yönetimi, Qin’in ağırlık ve ölçü standartlarını fethedilen topraklara yaydı. Günümüze ulaşan ağırlıklar ve ölçü kapları üzerindeki yazıtlar bu düzenlemeyi belgeler."
+leader_emperor_qin_shi_huang_civilization = "Qin Hanedanı"
+
+leader_spartacus_name = "Spartaküs"
+leader_spartacus_historical = "Spartaküs, MÖ 73’te Capua’da başlayan ayaklanmanın önderlerinden olan Trakyalı bir gladyatördü. Plutarkhos, kaçanların mutfak gereçleriyle kurtulup daha sonra arabalarda taşınan silahları ele geçirdiğini anlatır. Appianos’a göre yolda silahlandılar ve Vezüv’e sığındılar. Orada safları genişledi."
+leader_spartacus_civilization = "Spartaküs’ün İsyancıları"
+
+leader_queen_nefertiti_name = "Nefertiti"
+leader_queen_nefertiti_historical = "Nefertiti, Mısır’ın On Sekizinci Hanedanı döneminde Akhenaton’un Büyük Kraliyet Eşi’ydi. Bugün Amarna olarak bilinen Akhetaton’da Aten tapımında görünür bir rol üstlendi. Petrie Müzesi’ndeki kırmızı kuvarsit bir parça, güneş diskinin ışınları altında içki sunusu yaptığını gösterir."
+leader_queen_nefertiti_civilization = "Antik Mısır"
+
+leader_mandukhai_name = "Manduhay Hatun"
+leader_mandukhai_historical = "Manduhay Hatun, 15. yüzyılın sonlarında Moğollar arasında siyasi ve askerî otorite sahibiydi. Manduul Han öldükten sonra Dayan Han’la anılan veraset sürecinde Cengiz Han soyunun yönetimini yeniden kurmaya yardım etti. Sonraki Moğol kronikleri, Oyratlara karşı seferlere komuta ettiğini de anlatır."
+leader_mandukhai_civilization = "Kuzey Yuan"
+
+leader_kabal_xook_name = "K’ab’al Xook"
+leader_kabal_xook_historical = "K’ab’al Xook, günümüzde Chiapas’ta bulunan Usumacinta kıyısındaki Maya kenti Yaxchilán’da 23 numaralı yapıyı 726 yılında adadı. Hükümdar Itzamnaaj B’alam’ın baş eşlerinden biriydi. Yazıtlarda adı geçer ve yapının üç girişinin üzerindeki taş kabartmalarda görülür."
+leader_kabal_xook_civilization = "Yaxchilán"
+
+leader_lakshmibai_name = "Lakshmibai"
+leader_lakshmibai_historical = "Jhansi’nin ranisi Lakshmibai, Gangadhar Rao’nun ölümünden sonra Doğu Hindistan Şirketi’nin devletini ilhak etmesine karşı çıktı. Şirket evlat edindikleri oğullarını tahtın varisi olarak tanımadı. Lakshmibai, 1857–1858 Hint Ayaklanması sırasında Hugh Rose’un kuvvetlerine karşı Jhansi’nin savunmasını yönetti. İngilizler 1858’de Jhansi’yi alınca kaçtı ve Tatya Tope’yle bağlantılı birlikler de dahil olmak üzere Kalpi’deki diğer isyancılara katıldı. Kalpi düştükten sonra savaşa devam etti ve Haziran 1858’de Gwalior yakınlarında öldü."
+leader_lakshmibai_civilization = "Jhansi"
+
+leader_pharaoh_hatshepsut_name = "Hatşepsut"
+leader_pharaoh_hatshepsut_historical = "Hatşepsut, MÖ on beşinci yüzyılda On Sekizinci Hanedan döneminde Mısır’ı yönetti. Önce genç yeğeni ve üvey oğlu III. Thutmose adına naiplik yaptı. Daha sonra firavun unvanını ve yetkilerini üstlendi, Thutmose ise ortak hükümdar olarak kaldı. Deyrülbahri’deki teraslı anıt tapınağı onun yaptırdığı eserler arasındadır. Güneydeki orta revakın kabartmaları Punt’a gönderdiği seferi, Mısır heyetinin yerel halkla buluşmasını ve malların gemilere yüklenmesini gösterir. Tapınak seferi kraliyet ve din bağlamında sunar."
+leader_pharaoh_hatshepsut_civilization = "Antik Mısır"
+
+leader_thusnelda_cherusci_name = "Thusnelda"
+leader_thusnelda_cherusci_historical = "Thusnelda, MS birinci yüzyıl başlarında yaşamış Kerusk soylusu bir kadındı. Babası Segestes Roma’nın desteğini ararken, eşi Arminius Roma’ya karşı direnişi yönetiyordu. Tacitus’a göre 15 yılında Arminius’un kuvvetleri Segestes’i kuşattı ve Segestes Germanicus’tan yardım istedi. Roma ordusu kuşatmayı kaldırdı ve hamile olan Thusnelda’yı gözetim altına aldı. Tacitus’un Segestes’e atfettiği konuşmada, onun kendi isteği dışında yanında bulunduğu belirtilir. Romalı tarihçi, Thusnelda’yı esarete yalvarmadan karşı koyan biri olarak anlatır."
+leader_thusnelda_cherusci_civilization = "Kerusklar"
+
+leader_queen_cartimandua_name = "Cartimandua"
+leader_queen_cartimandua_historical = "Cartimandua, MS birinci yüzyılda bugünkü kuzey İngiltere’de Brigantları yönetti. Roma tarihçisi Tacitus, hükümdarlığına ilişkin başlıca anlatı kaynağıdır. Roma’ya karşı direnişin önderlerinden Caratacus, MS 51’de yenilgiye uğradıktan sonra Cartimandua’ya sığındı. Cartimandua onu tutuklatıp Romalılara teslim etti. Tacitus, Venutius’la çatışmasını ve 69’da onu kurtaran Roma birliklerini de anlatır. Bundan sonra taht Venutius’ta kaldı."
+leader_queen_cartimandua_civilization = "Brigantlar"
+
+leader_queen_suriyothai_name = "Suriyothai"
+leader_queen_suriyothai_historical = "Suriyothai, Maha Chakkraphat döneminde Ayutthaya kraliçesiydi. Ayutthaya eyaletinin 1548’e tarihlediği, Burma kralı Tabinshwehti’nin ordusunun istilasıyla ilgili anlatılarda anılır. Kraliyet kroniklerinin aktardığına göre bir filin sırtında orduya katıldı. Kral tehlikeye düşünce onunla düşman komutanının arasına girdi ve ölümcül biçimde yaralandı. Anlatı, kraliçenin savaş alanında kralı ve ordusunu etkileyen bir karar aldığını aktarır."
+leader_queen_suriyothai_civilization = "Ayutthaya Krallığı"
+
+leader_tarabai_name = "Tarabai"
+leader_tarabai_historical = "Tarabai (1675–1761), Rajaram 1700’de ölünce küçük oğlu Şivaji adına naip olarak Maratha yönetimini üstlendi. Komutanları koordine etti ve Maratha kalelerini Babür İmparatoru Evrengzib’e karşı savundu. Tarihçi Richard M. Eaton, kendi kaleleri kuşatma altındayken Tarabai’nin kuzeye, Babür topraklarına kuvvet gönderdiğini anlatır. Satara’nın tarih kaydı, kalelerin gözetimini Paraşuram Trimbak’a verdiğini belirtir. Evrengzib’in 1707’de ölümünden sonra taht iddiacısı Şahu’nun dönüşü hanedan içinde mücadele başlattı."
+leader_tarabai_civilization = "Maratha İmparatorluğu"
+
+leader_natavan_name = "Hurşid Bânû Nâtevan"
+leader_natavan_historical = "Hurşid Bânû Nâtevan, 1897’de öldüğü Şuşa’dan bir Azerbaycanlı şair ve sanat hamisiydi. Yayımlanmış kaynaklar doğum yılı için 1830 ve 1832 gibi farklı tarihler verir. Karabağ’ın son hanı Mehdiqulu Han’ın kızıydı ve aile kaynaklarını kamusal ve kültürel işlere ayırdı. 1872’de Şuşa’da şairleri bir araya getiren ve başka şiir çevreleriyle ilişki kuran Meclis-i Üns’ün başına geçti. Gazeller ve mersiyeler yazdı. Resimli albümü de sanat çalışmalarından örnekler barındırır."
+leader_natavan_civilization = "Karabağ"
+
 leader_mavia_name = "Mavia"
 leader_mavia_historical = "Mawiyya olarak da bilinen Mavia, Roma’nın doğu sınırındaki Arap topluluklarına önderlik etti ve dördüncü yüzyılın sonlarında imparatorlukla barış yaptı."
 leader_mavia_civilization = "Tenuhî Arapları"
@@ -726,6 +838,7 @@ crowns_count = "{amount} taç"
 buy = "SATIN AL"
 unlock = "KİLİDİ AÇ"
 unlocked = "KİLİT AÇILDI"
+confirm_unlock = "ONAYLA"
 equip = "KUŞAN"
 equipped = "KUŞANILDI"
 territory_pattern = "Bölge deseni"
@@ -973,6 +1086,10 @@ ability_restriction_defeated = "Kahramanın artık maçta değil."
 
 
 [endgame]
+reward_double_title = "Ödüllerini ikiye katla"
+reward_double_body = "Bu maçın taçlarını ve mücevherlerini yeniden almak için kısa bir video izle."
+reward_continue = "DEVAM"
+reward_double_watch = "VİDEO İZLE"
 stat_kills = "Öldürme"
 stat_assists = "Asist"
 stat_max_territory = "En fazla bölge"
@@ -991,6 +1108,90 @@ crowns = "TAÇLAR"
 gems = "MÜCEVHERLER"
 
 [site]
+leader_muhumuza_ability = "Nyabingi Ağı"
+leader_muhumuza_description = "Senin ve müttefiklerinin birbirine komşu yüksek arazi karelerini ele geçirmek %50 daha fazla çaba gerektirir."
+
+leader_khosrow_i_ability = "Bölge Komutanlıkları"
+leader_khosrow_i_description = "En az iki farklı rakip sana karadan saldırırken, orduları senden aldıkları her karede %25 daha fazla asker kaybeder."
+
+leader_naram_sin_ability = "Zagros Tırmanışı"
+leader_naram_sin_description = "Orduların, kontrol ettiğin yüksek arazilere komşu rakip dağ karelerini %50 daha hızlı ele geçirir."
+
+leader_jalal_al_din_mangburni_ability = "İndus Geçişi"
+leader_jalal_al_din_mangburni_description = "Geri çekilen bir asker nakliye gemisi kendi kıyına ulaştığında, gemide kalan askerlerin tamamı kapasiten elverdiği ölçüde geri döner."
+
+leader_modu_chanyu_ability = "Çekişmeli Bozkır"
+leader_modu_chanyu_description = "Kara orduların, rakip toprağına komşu tarafsız bir ova karesini ele geçirirken %50 daha az asker kaybeder."
+
+leader_hiawatha_haudenosaunee_ability = "Büyük Barış Yasası"
+leader_hiawatha_haudenosaunee_description = "İki müttefikin birbiriyle yeni ittifak kurduğunda, onlarla olan iki süreli ittifakın tam süresine yenilenir. Maç başına her çift için bir kez."
+
+leader_kaahumanu_hawaii_ability = "Ortak Sofra"
+leader_kaahumanu_hawaii_description = "İkinizin de etkin çiftliği varken her müttefike ilk kez en az 500 asker gönderdiğinde, ikiniz de gönderilen miktarın %25’i kadar takviye alırsınız. Kişi başına en fazla 500 asker ve birlik sınırı geçerli."
+
+leader_sargon_of_akkad_ability = "Akad Garnizonları"
+leader_sargon_of_akkad_description = "12 kare içinde sana ait kule bulunmayan etkin bir düşman şehrini ele geçirirsen, bu alan içindeki en yakın uygun kendi karende ücretsiz 1. seviye kule kurarsın. Ele geçirilen her şehir için bir kez."
+
+leader_mithridates_vi_ability = "Tigranes’in Yardımı"
+leader_mithridates_vi_description = "Etkin bir şehri olan müttefikin varsa, bir rakibe yaptığın kara saldırısından en az 3 saniye sonra çekildiğinde dönen asker sayısı kadar takviye alırsın. En fazla 1.000 asker, birlik sınırını aşmadan. Maç başına bir kez."
+
+leader_gudit_yodit_ability = "Aksum’dan Kaçış"
+leader_gudit_yodit_description = "Etkin bir düşman şehrini ele geçirdiğinde, önceki sahibinin bir oyuncuya saldıran en büyük kara ordusunu geri çekilmeye zorlarsın. Ele geçirilen her şehir için bir kez."
+
+leader_khutulun_qaidu_ability = "Atlı Esir Alma"
+leader_khutulun_qaidu_description = "Sana karadan saldırmakta olan bir rakibe kara saldırısı başlattığında, ilk çarpışmada yendiğin birliklerin %20’sini asker sınırına kadar yedeklerine katarsın."
+
+leader_sor_juana_ines_de_la_cruz_ability = "Mutfak Felsefesi"
+leader_sor_juana_ines_de_la_cruz_description = "Bir çiftliğin yükseltmesini bitirdiğinde, 12 kare içindeki en yakın devam eden şehir yükseltmenin kalan süresi yarıya iner."
+
+leader_sibylla_ability = "İkinci Taç"
+leader_sibylla_description = "Etkin bir şehrin varken yeni bir ittifak kurarsan, yeni müttefikinin etkin şehri yoksa yapımına en önce başladığı şehir hemen tamamlanır. Maç başına bir kez."
+
+leader_cynethryth_mercia_ability = "Cookham Anlaşması"
+leader_cynethryth_mercia_description = "Bir rakip etkin çiftliklerinden birini ele geçirdiğinde, 12 kare içindeki en düşük seviyeli tamamlanmış şehrin bir seviye yükselir. En fazla 4. seviyeye çıkar ve her çiftlik için bir kez gerçekleşir."
+
+leader_suppiluliuma_ability = "Mitanni Antlaşması"
+leader_suppiluliuma_description = "Kara orduların, aynı rakibe karadan saldırmakta olan bir müttefikin toprağına komşu düşman karelerini ele geçirirken %25 daha az asker kaybeder."
+
+leader_baibars_ability = "Krak Lağımcıları"
+leader_baibars_description = "Etkin bir düşman kulesini ele geçirdiğinde, aynı rakibin 12 kare içindeki etkin seviyesi daha düşük olan en yakın etkin kulesini yıkarsın. Ele geçirilen kule başına maçta bir kez."
+
+leader_emperor_qin_shi_huang_ability = "İmparatorluk Ölçüleri"
+leader_emperor_qin_shi_huang_description = "Şehirlerinin, fabrikalarının ve çiftliklerinin etkin seviye toplamları birbirine eşit ve sıfırdan büyükse fabrikaların %25 daha fazla altın, çiftliklerin %25 daha fazla asker üretir."
+
+leader_spartacus_ability = "Thurii Cephaneliği"
+leader_spartacus_description = "Kara ordun etkin bir düşman fabrikasının merkezini ele geçirdiğinde fabrikanın her etkin seviyesi için 300 asker kazanır. Her maçta fabrika başına bir kez."
+
+leader_queen_nefertiti_ability = "Amarna Talatatları"
+leader_queen_nefertiti_description = "Şehre en fazla 12 kare uzaklıkta etkin bir fabrikan varsa o şehri yükseltmek %35 daha az altına mal olur."
+
+leader_mandukhai_ability = "Bozkırın Yeniden Birleşmesi"
+leader_mandukhai_description = "Bir rakibi kalan topraklarını ele geçirerek saf dışı bıraktığında, yedekte kalan askerlerinin %25’ini kendi asker sınırına kadar orduna katarsın."
+
+leader_kabal_xook_ability = "Yaxchilán Savaş Alâmetleri"
+leader_kabal_xook_description = "Etkin bir şehrin ve yedekte en az 750 askerin varsa bir müttefik ortak bir rakibe karşı yeni bir kara saldırısı başlattığında yedeğinden 750 asker gönderirsin. Maç başına her müttefik için bir kez."
+
+leader_lakshmibai_ability = "Kalpi Tabyesi"
+leader_lakshmibai_description = "Bir rakip son etkin şehrini ele geçirirse, kaybedilen şehrin 24 kare yakınında kendi toprağındaki en yakın geçerli alanda ücretsiz bir 1. seviye şehir kur. Maç başına bir kez."
+
+leader_pharaoh_hatshepsut_ability = "Punt Bahçeleri"
+leader_pharaoh_hatshepsut_description = "Ticaret gemin yabancı bir limana rotasını tamamladığında, kalkış limanının 12 kare yakınındaki en düşük seviyeli tamamlanmış çiftliğin bir seviye yükselir. Üst sınır 4. seviye. Kalkış limanı başına bir kez."
+
+leader_thusnelda_cherusci_ability = "Esarette Boyun Eğmez"
+leader_thusnelda_cherusci_description = "Bir rakip, etkin seviyesi 2 veya daha yüksek olan şehrini ele geçirirse şehir bir tamamlanmış seviye kaybeder ve süren yükseltme iptal edilir. Şehir başına bir kez."
+
+leader_queen_cartimandua_ability = "Caratacus’un Teslimi"
+leader_queen_cartimandua_description = "Düşman kara ordusu toprağından çekildiğinde, hayatta kalanların yüzde 25’ini o düşmana karşı en büyük etkin kara ordusuna ve yedekte boş yere sahip müttefikine aktar. Fazlası düşmana döner."
+
+leader_queen_suriyothai_ability = "Ayutthaya Muhafızları"
+leader_queen_suriyothai_description = "Bir düşman kara ordusu etkin bir müttefik şehrinin merkezini almak üzereyken, girişimi durdurmak ve en fazla 1.500 saldırganı saf dışı bırakmak için 1.500 yedek asker harca. Müttefik şehri başına bir kez."
+
+leader_tarabai_ability = "Karşı Akın Vergisi"
+leader_tarabai_description = "Sana karadan saldıran bir rakibin tamamlanmış kulesini ele geçirerek altınının yüzde 25’ini al. Kule başına bir kez, en fazla 250 altın."
+
+leader_natavan_ability = "Şuşa Çeşmesi"
+leader_natavan_description = "Şehirlerinden biri 2. seviyeye yükseltildiğinde, şehrin 12 kare yakınındaki en yakın geçerli alanda ücretsiz bir 1. seviye çiftlik kur."
+
 leader_mavia_ability = "Musa Barışı"
 leader_mavia_description = "Bir rakiple aranızda kara saldırısı sürerken ittifak kurarsan, iki taraf da hayatta kalan askerlerini geri çekilme kaybı olmadan kendi asker sınırına kadar geri alır."
 

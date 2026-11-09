@@ -2635,13 +2635,18 @@ test("city-rebuilt emote activates the Roman objective while its line plays", ()
     assert.equal(machine.update({}, {}).exchange, undefined);
     playOut(3300);
     const after = machine.update({}, {});
-    assert.equal(after.exchange, undefined);
+    assert.equal(
+        after.exchange.speaker,
+        "colonia_veterans",
+        "the looping Roman tease follows Boudica's line during the objective",
+    );
+    assert.equal(after.paused, false, "the Roman tease does not pause play");
     assert.equal(
         after.step.id,
         "boudica_outpost_colonia_veterans",
         "the active objective stays in place after the emotes",
     );
-    assert.deepEqual(spoken, ["boudica"]);
+    assert.deepEqual(spoken, ["boudica", "colonia_veterans"]);
 });
 
 test("active-objective exchanges wait for new contact, honor the reply pause, and run once", () => {
@@ -4209,14 +4214,14 @@ test("Boudica and Stonea exchange emotes, then show the paused City prompt after
     );
     assert.equal(view.reaction, "alliance_stonea");
     assert.equal(view.exchange.speaker, "stonea");
-    assert.equal(view.paused, false, "the game resumes during the friendship exchange");
+    assert.equal(view.paused, true, "the paused City guide holds play during the friendship exchange");
     assert.deepEqual(spoken, [["stonea", "greet"]]);
 
     for (now = 100; now < 10000 && view.exchange.presentation !== "dialogue"; now += 100)
         view = machine.update(facts, { hud_center_camera: 1 });
     assert.deepEqual(spoken, [
         ["stonea", "greet"],
-        ["boudica", "celebrate"],
+        ["boudica", "greet"],
     ]);
     assert.equal(view.exchange.speaker, "boudica");
     assert.equal(view.exchange.presentation, "dialogue");
@@ -4230,6 +4235,6 @@ test("Boudica and Stonea exchange emotes, then show the paused City prompt after
     assert.equal(view.paused, true, "the City guide remains paused until City is selected");
     assert.deepEqual(spoken, [
         ["stonea", "greet"],
-        ["boudica", "celebrate"],
+        ["boudica", "greet"],
     ]);
 });
