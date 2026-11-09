@@ -39,6 +39,17 @@ lossless = false
 max_bytes = 131072
 recipe_version = 1
 
+[profiles.avatar_expression_sheet]
+format = "webp"
+max_width = 512
+max_height = 512
+quality = 90
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 524288
+recipe_version = 1
+
 [profiles.fullbleed_wide]
 format = "webp"
 max_width = 1600

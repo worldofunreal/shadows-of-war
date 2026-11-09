@@ -756,7 +756,7 @@ impl ArtPipeline {
 
     fn validate_profile_set(&self) -> Result<()> {
         for required in [
-            "ability_icon", "avatar_portrait_192", "avatar_portrait_256", "fullbleed_wide", "fullbleed_tall",
+            "ability_icon", "avatar_portrait_192", "avatar_portrait_256", "avatar_expression_sheet", "fullbleed_wide", "fullbleed_tall",
             "poki_leader_wide", "poki_leader_tall",
             "site_still_wide", "site_still_tall", "ui_icon_128", "ui_icon_256",
             "unit_icon", "pixel_art", "atlas_lossless", "loader_ui", "app_icon",
@@ -926,6 +926,9 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
         return Some("ui_icon_256");
     }
     if path.starts_with("gameplay/avatars/") {
+        if path.starts_with("gameplay/avatars/hero-expression-sheets/") {
+            return Some("avatar_expression_sheet");
+        }
         return Some("avatar_portrait_256");
     }
     if path.starts_with("gameplay/units/") {
@@ -1727,6 +1730,7 @@ fn poki_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
 
 fn cg_asset_is_excluded(relative: &Path) -> bool {
     relative.starts_with("shell/brand")
+        || relative.starts_with("gameplay/avatars/expressions")
         || relative.starts_with("gameplay/icons/abilities")
         || (relative.starts_with("site/media")
             && ![
@@ -1739,10 +1743,58 @@ fn cg_asset_is_excluded(relative: &Path) -> bool {
 }
 
 fn cg_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
-    Ok(asset_file_inventory(root)?
+    let mut inventory = asset_file_inventory(root)?
         .into_iter()
         .filter(|relative| !cg_asset_is_excluded(relative))
-        .collect())
+        .collect::<Vec<_>>();
+    inventory.extend(sow_core::player::Leader::all().map(|leader| {
+        PathBuf::from(format!(
+            "gameplay/avatars/hero-expression-sheets/{}.webp",
+            leader.art_slug()
+        ))
+    }));
+    inventory.sort();
+    Ok(inventory)
+}
+
+fn pack_cg_avatar_expression_sheets(
+    hero_art: &Path,
+    packaged: &Path,
+    pipeline: &ArtPipeline,
+) -> Result<()> {
+    let temporary = tempfile::tempdir().context("create temporary CrazyGames avatar sheets")?;
+    let destination = packaged.join("gameplay/avatars/hero-expression-sheets");
+    fs::create_dir_all(&destination)?;
+    for leader in sow_core::player::Leader::all() {
+        let slug = leader.art_slug();
+        let source = hero_art.join(format!("{slug}.webp"));
+        let source_sheet = image::open(&source)
+            .with_context(|| format!("read hero expression sheet {}", source.display()))?
+            .to_rgba8();
+        let mut sheet = image::RgbaImage::new(HERO_PORTRAIT_PX * 2, HERO_PORTRAIT_PX * 2);
+        for expression in sow_core::emote::AvatarExpression::ALL {
+            let crop = hero_expression_crop(&source_sheet, expression)?;
+            let index = expression as u32;
+            image::imageops::overlay(
+                &mut sheet,
+                &crop,
+                ((index % 2) * HERO_PORTRAIT_PX).into(),
+                ((index / 2) * HERO_PORTRAIT_PX).into(),
+            );
+        }
+        let raw = temporary.path().join(format!("{slug}.png"));
+        sheet
+            .save(&raw)
+            .with_context(|| format!("write temporary expression sheet for {slug}"))?;
+        pipeline.publish_image(
+            &raw,
+            &destination.join(format!("{slug}.webp")),
+            "avatar_expression_sheet",
+            None,
+            None,
+        )?;
+    }
+    Ok(())
 }
 
 fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Result<serde_json::Value> {
@@ -1874,6 +1926,9 @@ fn verify_cg_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
     }
     for relative in expected {
         if relative == atlas {
+            continue;
+        }
+        if relative.starts_with("gameplay/avatars/hero-expression-sheets") {
             continue;
         }
         if file_sha256(&source.join(&relative))? != file_sha256(&packaged.join(&relative))? {
@@ -6237,8 +6292,8 @@ fn package_cg(
     version: &str,
     maps_cache_bust: &str,
 ) -> Result<()> {
-    // CrazyGames serves uploaded files from its CDN. The ability atlas keeps
-    // the complete runtime asset and map package below its 1,500-file cap.
+    // CrazyGames serves uploaded files from its CDN. The ability and portrait
+    // sheets keep the complete runtime art and map package below its 1,500-file cap.
     let (mut jh, mut wh) = (String::new(), String::new());
     for e in fs::read_dir(play_dir)? {
         let n = e?.file_name().to_string_lossy().into_owned();
@@ -6276,6 +6331,16 @@ fn package_cg(
         out.join("sow_client_bg.wasm"),
     )?;
     let ability_atlas = copy_cg_assets(&play_dir.join("assets"), &out.join("assets"), paths.art_pipeline()?)?;
+    let packaged_assets = out.join("assets");
+    pack_cg_avatar_expression_sheets(
+        &paths.root.join("assets/art/avatars/heroes"),
+        &packaged_assets,
+        paths.art_pipeline()?,
+    )?;
+    let expressions = packaged_assets.join("gameplay/avatars/expressions");
+    if expressions.is_dir() {
+        fs::remove_dir_all(expressions)?;
+    }
     copy_portal_maps(&play_dir.join("maps"), &out.join("maps"), paths.art_pipeline()?)?;
     verify_portal_map_inventory(&play_dir.join("maps"), &out.join("maps"))?;
     copy_shell(paths, out, WebTarget::CrazyGames)?;
