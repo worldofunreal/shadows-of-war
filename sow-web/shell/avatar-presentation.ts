@@ -26,6 +26,17 @@ const states = new WeakMap<HTMLImageElement, AnimationState>();
 const imageLoads = new Map<string, Promise<HTMLImageElement>>();
 const MAX_CACHED_AVATAR_IMAGES = 64;
 
+export function avatarExpressionSheet(path: string): { slug: string; index: number; sheet: string } | null {
+    const match = path.match(/(?:^|\/)gameplay\/avatars\/expressions\/([a-z0-9_]+)_(happy|fear|angry)\.webp(?:[?#]|$)/);
+    if (!match) return null;
+    const index = { happy: 0, fear: 2, angry: 3 }[match[2] as "happy" | "fear" | "angry"];
+    return {
+        slug: match[1],
+        index,
+        sheet: "gameplay/avatars/hero-expression-sheets/" + match[1] + ".webp",
+    };
+}
+
 export function avatarAssetUrl(path: string): string {
     const base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
     const url = base + "/" + path.split("/").map(encodeURIComponent).join("/");
@@ -44,31 +55,14 @@ function imageSource(image: HTMLImageElement): string {
     return image.getAttribute("src") || "";
 }
 
-/** One stable browser-native image load shared by the radial and the map atlas bridge. */
-export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
+function cachedImage(source: string, load: () => Promise<HTMLImageElement>): Promise<HTMLImageElement> {
     const cached = imageLoads.get(source);
     if (cached) {
         imageLoads.delete(source);
         imageLoads.set(source, cached);
         return cached;
     }
-    if (typeof Image === "undefined") return Promise.reject(new Error("Image API unavailable"));
-
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.decoding = "async";
-    image.src = source;
-    const promise =
-        typeof image.decode === "function"
-            ? image.decode().then(() => image)
-            : typeof image.addEventListener === "function"
-              ? new Promise<HTMLImageElement>((resolve, reject) => {
-                    image.addEventListener("load", () => resolve(image), { once: true });
-                    image.addEventListener("error", () => reject(new Error("avatar image load failed")), {
-                        once: true,
-                    });
-                })
-              : Promise.resolve(image);
+    const promise = load();
     imageLoads.set(source, promise);
     while (imageLoads.size > MAX_CACHED_AVATAR_IMAGES) {
         const oldest = imageLoads.keys().next().value;
@@ -79,6 +73,53 @@ export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
         if (imageLoads.get(source) === promise) imageLoads.delete(source);
     });
     return promise;
+}
+
+function loadNetworkImage(source: string): Promise<HTMLImageElement> {
+    return cachedImage(source, () => {
+        if (typeof Image === "undefined") return Promise.reject(new Error("Image API unavailable"));
+        const image = new Image();
+        image.crossOrigin = "anonymous";
+        image.decoding = "async";
+        image.src = source;
+        return typeof image.decode === "function"
+            ? image.decode().then(() => image)
+            : typeof image.addEventListener === "function"
+              ? new Promise<HTMLImageElement>((resolve, reject) => {
+                    image.addEventListener("load", () => resolve(image), { once: true });
+                    image.addEventListener("error", () => reject(new Error("avatar image load failed")), {
+                        once: true,
+                    });
+                })
+              : Promise.resolve(image);
+    });
+}
+
+async function cropExpression(image: HTMLImageElement, index: number): Promise<HTMLImageElement> {
+    const side = Math.floor(Math.min(image.naturalWidth, image.naturalHeight) / 2);
+    const canvas = document.createElement("canvas");
+    canvas.width = side;
+    canvas.height = side;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("avatar canvas unavailable");
+    context.drawImage(image, (index % 2) * side, Math.floor(index / 2) * side, side, side, 0, 0, side, side);
+    const cropped = new Image();
+    cropped.decoding = "async";
+    cropped.src = canvas.toDataURL("image/webp", 0.9);
+    if (typeof cropped.decode === "function") await cropped.decode();
+    return cropped;
+}
+
+/** One stable browser-native image load shared by the radial and the map atlas bridge. */
+export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
+    const packed =
+        typeof window !== "undefined" && window.SOW_PORTAL === "crazygames"
+            ? avatarExpressionSheet(source)
+            : null;
+    if (!packed) return loadNetworkImage(source);
+    return cachedImage(source, async () =>
+        cropExpression(await loadNetworkImage(avatarAssetUrl(packed.sheet)), packed.index),
+    );
 }
 
 /** The map atlas half of the shared loader: the radial's decoded image, scaled to one atlas cell off the main thread. */

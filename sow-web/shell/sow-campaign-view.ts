@@ -1,5 +1,10 @@
 import { campaignBaseExpressions } from "./campaign/rules.ts";
-import { setAvatarPortrait, type AvatarExpressionTransition } from "./avatar-presentation.ts";
+import {
+    avatarExpressionSheet,
+    loadAvatarImage,
+    setAvatarPortrait,
+    type AvatarExpressionTransition,
+} from "./avatar-presentation.ts";
 import {
     resolveUiTarget,
     resolveUiAnchor,
@@ -251,6 +256,14 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         episodeId: string,
     ): Promise<HTMLImageElement | null> {
         if (portraitCache.has(source)) return portraitCache.get(source)!;
+        if (host.SOW_PORTAL === "crazygames" && avatarExpressionSheet(source)) {
+            const promise = loadAvatarImage(source).catch((error) => {
+                reportPortraitFailure(source, speakerKey, stepId, episodeId, String(error));
+                return null;
+            });
+            portraitCache.set(source, promise);
+            return promise;
+        }
         const promise = new Promise<HTMLImageElement | null>((resolve) => {
             const candidate = doc.createElement("img");
             candidate.alt = "";

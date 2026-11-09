@@ -1535,6 +1535,44 @@ test("hero selection waits for its skill icon and uses the shared loader", () =>
         /\.sow-heroes__featured\.is-loading \.sow-hero-briefing--selection \.sow-hero-briefing__icon\s*\{\s*opacity:\s*0;/,
     );
 
+    const artLoaderStart = heroesSource.indexOf("function renderHeroesArtLoader(");
+    const artLoaderEnd = heroesSource.indexOf("export function renderHeroes()", artLoaderStart);
+    const loaderStart = coreSource.indexOf("export function renderShowcaseLoader(");
+    const loaderEnd = coreSource.indexOf("export function abilityIconMarkup(", loaderStart);
+    const context: Record<string, any> = {
+        esc: (v: unknown) => String(v ?? ""),
+        heroesAvatarUrl: (slug: string) => "/assets/gameplay/avatars/" + slug + ".webp",
+    };
+    vm.runInNewContext(
+        coreSource.slice(loaderStart, loaderEnd).replace(/\bexport\s+/g, "") +
+            "\n" +
+            heroesSource.slice(artLoaderStart, artLoaderEnd) +
+            "\nthis.renderHeroesArtLoader = renderHeroesArtLoader;",
+        context,
+    );
+    const artLoaderMarkup = String(context.renderHeroesArtLoader("artigas"));
+    assert.equal(
+        (artLoaderMarkup.match(/<div\b/g) || []).length,
+        (artLoaderMarkup.match(/<\/div>/g) || []).length,
+        "renderHeroesArtLoader must produce balanced <div> tags so it never closes .sow-heroes__workspace early",
+    );
+    assert.match(
+        artLoaderMarkup,
+        /^<div class='showcase-loader' data-hero-art-loader[^>]*><svg[\s\S]*<\/svg><img class='showcase-portrait'[^>]*><\/div>$/,
+    );
+
+    const renderHeroesBody = heroesSource.slice(artLoaderEnd);
+    assert.equal(
+        (renderHeroesBody.match(/<div\b/g) || []).length,
+        (renderHeroesBody.match(/<\/div>/g) || []).length,
+        "renderHeroes must keep balanced <div> tags",
+    );
+    assert.equal(
+        (renderHeroesBody.match(/<section\b/g) || []).length,
+        (renderHeroesBody.match(/<\/section>/g) || []).length,
+        "renderHeroes must keep balanced <section> tags",
+    );
+
     const artProfiles = fs.readFileSync(path.join(shell, "../../sow-dist/art-optimization.toml"), "utf8");
     const abilityProfile = artProfiles.match(/\[profiles\.ability_icon\]([\s\S]*?)(?=\n\[|$)/)?.[1] || "";
     assert.match(abilityProfile, /max_width = 128/);

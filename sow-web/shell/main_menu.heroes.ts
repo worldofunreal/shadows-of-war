@@ -16,6 +16,7 @@ import {
 } from "./main_menu.core.ts";
 import { activeScreenPanel } from "./main_menu.shell.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
+import { loadAvatarImage } from "./avatar-presentation.ts";
 import type { MenuLeader } from "./main_menu.state.ts";
 import { renderLeaderPurchase, renderSkinsButton } from "./main_menu.surfaces.ts";
 
@@ -29,6 +30,7 @@ type HeroesAvatarExpression = "calm" | "happy" | "angry";
 
 const heroesAvatarAnimations = new WeakMap<HTMLImageElement, Animation>();
 const heroesAvatarRevisions = new WeakMap<HTMLImageElement, number>();
+const heroesAvatarSources = new WeakMap<HTMLImageElement, string>();
 let heroesFeaturedEnterTimer: number | null = null;
 let heroesFeaturedPreloadUrl = "";
 let heroesFeaturedPreloadImage: HTMLImageElement | null = null;
@@ -39,6 +41,12 @@ function heroesAvatarUrl(slug: string, expression: HeroesAvatarExpression) {
             ? "gameplay/avatars/" + slug + ".webp"
             : "gameplay/avatars/expressions/" + slug + "_" + expression + ".webp";
     return asset(path);
+}
+
+function heroesAvatarMarkupUrl(slug: string, expression: HeroesAvatarExpression) {
+    return window.SOW_PORTAL === "crazygames" && expression !== "calm"
+        ? heroesAvatarUrl(slug, "calm")
+        : heroesAvatarUrl(slug, expression);
 }
 
 function setHeroesFeaturedPlaceholder(featured: HTMLElement, slug: string) {
@@ -75,14 +83,17 @@ function heroesMotionReduced() {
 function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expression: HeroesAvatarExpression) {
     if (!image || !slug) return;
     const source = heroesAvatarUrl(slug, expression);
+    const packed = window.SOW_PORTAL === "crazygames" && expression !== "calm";
     const previousSource = image.getAttribute("src") || image.src || "";
-    if (previousSource === source || (previousSource && previousSource.endsWith(source))) return;
+    if (heroesAvatarSources.get(image) === source) return;
+    if (!packed && (previousSource === source || (previousSource && previousSource.endsWith(source)))) return;
+    heroesAvatarSources.set(image, source);
     const revision = (heroesAvatarRevisions.get(image) || 0) + 1;
     heroesAvatarRevisions.set(image, revision);
     const running = heroesAvatarAnimations.get(image);
     if (running) running.cancel();
-    image.src = source;
-    if (heroesMotionReduced() || typeof image.animate !== "function") return;
+    if (packed) image.src = heroesAvatarUrl(slug, "calm");
+    else image.src = source;
 
     const animateLoadedAvatar = function () {
         if (
@@ -105,6 +116,22 @@ function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expressio
         );
         heroesAvatarAnimations.set(image, animation);
     };
+    if (packed) {
+        void loadAvatarImage(source).then((portrait) => {
+            if (heroesAvatarRevisions.get(image) !== revision) return;
+            image.src = portrait.src;
+            if (heroesMotionReduced() || typeof image.animate !== "function") return;
+            if (image.complete) {
+                if (typeof window.requestAnimationFrame === "function")
+                    window.requestAnimationFrame(animateLoadedAvatar);
+                else animateLoadedAvatar();
+            } else {
+                image.addEventListener("load", animateLoadedAvatar, { once: true });
+            }
+        }).catch(() => undefined);
+        return;
+    }
+    if (heroesMotionReduced() || typeof image.animate !== "function") return;
     if (image.complete) {
         if (typeof window.requestAnimationFrame === "function")
             window.requestAnimationFrame(animateLoadedAvatar);
@@ -298,7 +325,7 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const selected = leader.id === activeId;
     const locked = leader.available === false;
     const avatarSlug = leaderArtSlug(leader);
-    const avatarUrl = heroesAvatarUrl(avatarSlug, selected ? "angry" : "calm");
+    const avatarUrl = heroesAvatarMarkupUrl(avatarSlug, selected ? "angry" : "calm");
     return (
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
@@ -464,6 +491,12 @@ export function updateHeroesPreview() {
     // Panel-shape mapping — see heroesFeaturedArt(). Do not invert it.
     const featuredArt = heroesFeaturedArt(activeLeader.slug);
     const artSlug = leaderArtSlug(activeLeader);
+    if (briefing)
+        briefing.innerHTML = renderHeroBriefing(
+            randomSelected ? "random" : activeLeader,
+            "selection",
+            "sow-heroes-selected",
+        );
     if (image) {
         image.alt = randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader);
         const leaderId = randomSelected ? "random" : activeLeader.id;
@@ -506,12 +539,6 @@ export function updateHeroesPreview() {
             image.dataset.heroLeaderId = randomSelected ? "random" : activeLeader.id;
         }
     }
-    if (briefing)
-        briefing.innerHTML = renderHeroBriefing(
-            randomSelected ? "random" : activeLeader,
-            "selection",
-            "sow-heroes-selected",
-        );
     if (status) {
         const statusLabel = randomSelected ? "" : heroesStatusLabel(activeLeader);
         const statusLabelNode = status.querySelector("[data-hero-status-label]");
@@ -629,15 +656,14 @@ export function selectDropdown(key: string, value: string) {
 }
 
 function renderHeroesArtLoader(avatarSlug: string) {
-    return (
-        renderShowcaseLoader("showcase-loader-arc-art").replace(
-            "class='showcase-loader'",
-            "class='showcase-loader' data-hero-art-loader",
-        ) +
-        "<img class='showcase-portrait' data-hero-art-avatar src='" +
-        esc(heroesAvatarUrl(avatarSlug, "calm")) +
-        "' alt='' width='256' height='256' decoding='async'></div>"
-    );
+    return renderShowcaseLoader("showcase-loader-arc-art")
+        .replace("class='showcase-loader'", "class='showcase-loader' data-hero-art-loader")
+        .replace(
+            /<\/div>$/,
+            "<img class='showcase-portrait' data-hero-art-avatar src='" +
+                esc(heroesAvatarUrl(avatarSlug, "calm")) +
+                "' alt='' width='256' height='256' decoding='async'></div>",
+        );
 }
 
 export function renderHeroes() {
