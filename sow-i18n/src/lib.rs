@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
-pub const WEB_CATALOG_VERSION: u32 = 15;
+pub const WEB_CATALOG_VERSION: u32 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Language {
@@ -73,9 +73,11 @@ pub struct WebStrings {
     pub endgame: WebDomain,
     pub tutorial: WebDomain,
     pub site: WebDomain,
+    #[serde(default)]
+    pub missions: WebDomain,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WebDomain {
     #[serde(flatten)]
     pub values: BTreeMap<String, String>,

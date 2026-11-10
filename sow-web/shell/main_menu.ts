@@ -12,6 +12,7 @@ import "./main_menu.motion.ts";
 import "./main_menu.lobbies.ts";
 import "./main_menu.heroes.ts";
 import "./main_menu.profile.ts";
+import "./main_menu.missions.ts";
 import "./main_menu.surfaces.ts";
 import "./main_menu.tutorial.ts";
 import "./main_menu.shell.ts";

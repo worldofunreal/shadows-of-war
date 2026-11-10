@@ -113,6 +113,8 @@ interface MenuUi {
     reportTarget: string | null;
     reportSent: boolean;
     deleteArmed: boolean;
+    missionsModalOpen: boolean;
+    activeMissionsTab: "onboarding" | "daily";
 }
 
 export const menuUi: MenuUi = {
@@ -181,6 +183,8 @@ export const menuUi: MenuUi = {
     reportTarget: null,
     reportSent: false,
     deleteArmed: false,
+    missionsModalOpen: false,
+    activeMissionsTab: "onboarding",
 };
 
 export const profileCache: Record<string, ProfileCacheEntry> = Object.create(null);

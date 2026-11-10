@@ -5,6 +5,7 @@ import {
   rankOverview,
   rankedPointsBreakdownMarkup,
 } from "./main_menu.ranked.ts";
+import { avatarImageAttribute, setAvatarImage } from "./avatar-presentation.ts";
 import {
   asset,
   avatarImage,
@@ -667,9 +668,9 @@ function profileLeaderCard(leader: ProfileLeader) {
   return (
     "<article class='sow-profile__leader'>" +
     "<div class='sow-profile__leader-avatar-frame'>" +
-    "<img src='" +
-    esc(asset("gameplay/avatars/" + leaderArtSlug(leaderInfo) + ".webp")) +
-    "' alt='' width='52' height='52' loading='lazy'>" +
+    "<img " +
+    avatarImageAttribute(asset("gameplay/avatars/" + leaderArtSlug(leaderInfo) + ".webp")) +
+    " alt='' width='52' height='52' loading='lazy'>" +
     "<span class='sow-profile__leader-badge'>" +
     esc(level) +
     "</span>" +
@@ -773,9 +774,9 @@ function profileMatchRow(match: ProfileMatch) {
     esc(result) +
     "</span>" +
     (leader
-      ? "<div class='sow-profile__match-avatar-frame'><img class='sow-profile__match-avatar' src='" +
-        esc(asset("gameplay/avatars/" + leaderArtSlug(leader) + ".webp")) +
-        "' alt='' width='44' height='44' loading='lazy'></div>"
+      ? "<div class='sow-profile__match-avatar-frame'><img class='sow-profile__match-avatar' " +
+        avatarImageAttribute(asset("gameplay/avatars/" + leaderArtSlug(leader) + ".webp")) +
+        " alt='' width='44' height='44' loading='lazy'></div>"
       : "<span class='sow-profile__match-avatar' aria-hidden='true'></span>") +
     "<span class='sow-profile__match-context'><strong>" +
     esc(mode) +
@@ -902,9 +903,9 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
     "<div class='sow-profile__identity-card'>" +
     "<div class='sow-profile__avatar-container'>" +
     "<div class='sow-profile__avatar-medallion'>" +
-    "<img class='sow-profile__avatar' data-profile-avatar src='" +
-    esc(avatarUrl) +
-    "' alt='' width='88' height='88'>" +
+    "<img class='sow-profile__avatar' data-profile-avatar " +
+    avatarImageAttribute(avatarUrl) +
+    " alt='' width='88' height='88'>" +
     "</div>" +
     "<div class='sow-profile__level' title='" +
     esc(SOW_t("profile.level_label")) +
@@ -2196,9 +2197,9 @@ function profileAchievementCard(achievement: ProfileAchievement) {
 
   if (heroSlug) {
     badgeIcon =
-      "<img src='" +
-      esc(asset("gameplay/avatars/" + heroSlug + ".webp")) +
-      "' alt='' width='36' height='36' class='sow-profile__ach-hero-avatar' loading='lazy' />";
+      "<img " +
+      avatarImageAttribute(asset("gameplay/avatars/" + heroSlug + ".webp")) +
+      " alt='' width='36' height='36' class='sow-profile__ach-hero-avatar' loading='lazy' />";
   } else if (category === "battles") {
     badgeIcon =
       "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
@@ -2852,7 +2853,7 @@ export function syncProfileDom() {
     const avatarUrl = preferredLeader
       ? asset("gameplay/avatars/" + leaderArtSlug(preferredLeader) + ".webp")
       : avatarImage();
-    if (avatar.src !== avatarUrl) avatar.src = avatarUrl;
+    if (avatar.src !== avatarUrl) setAvatarImage(avatar, avatarUrl);
   }
   const hero = profileHeroImage(data && data.preferred_leader);
   if (root && root.dataset.hero !== hero) {

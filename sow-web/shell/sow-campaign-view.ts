@@ -1,6 +1,6 @@
 import { campaignBaseExpressions } from "./campaign/rules.ts";
 import {
-    avatarExpressionSheet,
+    avatarAtlasCell,
     loadAvatarImage,
     setAvatarPortrait,
     type AvatarExpressionTransition,
@@ -256,7 +256,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         episodeId: string,
     ): Promise<HTMLImageElement | null> {
         if (portraitCache.has(source)) return portraitCache.get(source)!;
-        if (host.SOW_PORTAL === "crazygames" && avatarExpressionSheet(source)) {
+        if (avatarAtlasCell(source)) {
             const promise = loadAvatarImage(source).catch((error) => {
                 reportPortraitFailure(source, speakerKey, stepId, episodeId, String(error));
                 return null;

@@ -373,6 +373,7 @@ impl SowApp {
                 }
                 self.input.dragging = !panel_button
                     && !self.machinima_camera_active()
+                    && (is_touch || !build_tool_selected)
                     && (self.ui.tutorial_camera_only
                         || (!warship_tool_selected
                             && self.ui.app.hud_state.selected_nuke_kind.is_none()));
@@ -499,6 +500,11 @@ impl SowApp {
                 .insert(finger_id.into_raw() as u64, (x, y));
         }
         let is_touch = matches!(source, winit::event::PointerSource::Touch { .. });
+        let touch_pan_scale = if self.ui.app.hud_state.building_placement.is_some() {
+            0.85
+        } else {
+            1.0
+        };
         // A code-directed camera move owns the view: drags and pinches start nothing until it lands.
         let machinima = self.machinima_camera_active();
         if machinima {
@@ -519,8 +525,8 @@ impl SowApp {
             let cx = (x1 + x2) * 0.5;
             let cy = (y1 + y2) * 0.5;
             if let Some((last_distance, last_x, last_y)) = self.input.last_pinch_state {
-                self.input.camera_x += (cx - last_x) as f32;
-                self.input.camera_y += (cy - last_y) as f32;
+                self.input.camera_x += (cx - last_x) as f32 * touch_pan_scale;
+                self.input.camera_y += (cy - last_y) as f32 * touch_pan_scale;
                 self.process_camera_zoom(
                     1.0 + ((distance - last_distance) as f32 * 0.005),
                     cx as f32,
@@ -552,8 +558,8 @@ impl SowApp {
                     self.input.tutorial_camera_drag_recorded = true;
                 }
                 self.close_map_context_menu();
-                self.input.camera_x += (x - self.input.last_mouse_x) as f32;
-                self.input.camera_y += (y - self.input.last_mouse_y) as f32;
+                self.input.camera_x += (x - self.input.last_mouse_x) as f32 * touch_pan_scale;
+                self.input.camera_y += (y - self.input.last_mouse_y) as f32 * touch_pan_scale;
                 self.clamp_camera_to_map();
             }
         } else if matches!(source, winit::event::PointerSource::Mouse)
@@ -563,6 +569,7 @@ impl SowApp {
                 .map_pointer_start
                 .as_ref()
                 .is_some_and(|start| !start.is_touch)
+            && self.ui.app.hud_state.building_placement.is_none()
         {
             self.record_tutorial_camera_drag_if_moved(x, y);
             self.close_map_context_menu();
@@ -940,8 +947,8 @@ mod tests {
             app.ui.app.hud_state.building_placement.unwrap().tile_idx,
             tile
         );
-        assert_eq!(app.input.camera_x, 40.0);
-        assert_eq!(app.input.camera_y, 20.0);
+        assert_eq!(app.input.camera_x, 0.0);
+        assert_eq!(app.input.camera_y, 0.0);
         let touch = |id| ButtonSource::Touch {
             finger_id: FingerId::from_raw(id),
             force: None,
@@ -964,6 +971,12 @@ mod tests {
             app.ui.app.hud_state.building_placement.unwrap().tile_idx,
             tile
         );
+        let camera_before_touch_pan = (app.input.camera_x, app.input.camera_y);
+        app.handle_pointer_button(true, touch(1), 40.0, 40.0, true);
+        app.handle_pointer_move(movement(1), 80.0, 60.0, true);
+        assert!((app.input.camera_x - camera_before_touch_pan.0 - 34.0).abs() < 0.001);
+        assert!((app.input.camera_y - camera_before_touch_pan.1 - 17.0).abs() < 0.001);
+        app.handle_pointer_button(false, touch(1), 80.0, 60.0, true);
         app.handle_pointer_button(true, touch(1), 160.0, 140.0, true);
         app.handle_pointer_button(true, touch(2), 260.0, 140.0, false);
         app.handle_pointer_move(movement(2), 280.0, 140.0, false);

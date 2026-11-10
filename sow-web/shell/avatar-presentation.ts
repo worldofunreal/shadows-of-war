@@ -22,19 +22,30 @@ type AnimationState = {
     outgoingBackground: OutgoingBackground | null;
 };
 
+/** A portrait's square cell inside a CrazyGames avatar sheet. */
+type AvatarCell = {
+    sheet: { url: string; width: number; height: number };
+    x: number;
+    y: number;
+    side: number;
+};
+
 const states = new WeakMap<HTMLImageElement, AnimationState>();
+/** The portrait an image was last asked to show when that portrait is a packed cell. */
+const atlasSources = new WeakMap<HTMLImageElement, string>();
 const imageLoads = new Map<string, Promise<HTMLImageElement>>();
 const MAX_CACHED_AVATAR_IMAGES = 64;
 
-export function avatarExpressionSheet(path: string): { slug: string; index: number; sheet: string } | null {
-    const match = path.match(/(?:^|\/)gameplay\/avatars\/expressions\/([a-z0-9_]+)_(happy|fear|angry)\.webp(?:[?#]|$)/);
-    if (!match) return null;
-    const index = { happy: 0, fear: 2, angry: 3 }[match[2] as "happy" | "fear" | "angry"];
-    return {
-        slug: match[1],
-        index,
-        sheet: "gameplay/avatars/hero-expression-sheets/" + match[1] + ".webp",
-    };
+/** The sheet cell behind a portrait URL or path. Null outside CrazyGames, where portraits are plain files. */
+export function avatarAtlasCell(source: string): AvatarCell | null {
+    const atlas = typeof window !== "undefined" ? window.SOW_AVATAR_ATLAS : undefined;
+    if (!atlas) return null;
+    const match = source.match(/(?:^|\/)(gameplay\/avatars\/[^?#]+\.webp)(?:[?#]|$)/);
+    const cell = match ? atlas.cells[match[1]] : undefined;
+    if (!cell) return null;
+    const [sheet, x, y, side] = cell;
+    const { path, width, height } = atlas.sheets[sheet];
+    return { sheet: { url: avatarAssetUrl(path), width, height }, x, y, side };
 }
 
 export function avatarAssetUrl(path: string): string {
@@ -53,6 +64,10 @@ export function avatarPortraitPath(slug: string, expression: AvatarExpression | 
 
 function imageSource(image: HTMLImageElement): string {
     return image.getAttribute("src") || "";
+}
+
+function escapeAttribute(value: string): string {
+    return value.replace(/[&<>"']/g, (char) => "&#" + char.charCodeAt(0) + ";");
 }
 
 function cachedImage(source: string, load: () => Promise<HTMLImageElement>): Promise<HTMLImageElement> {
@@ -95,14 +110,14 @@ function loadNetworkImage(source: string): Promise<HTMLImageElement> {
     });
 }
 
-async function cropExpression(image: HTMLImageElement, index: number): Promise<HTMLImageElement> {
-    const side = Math.floor(Math.min(image.naturalWidth, image.naturalHeight) / 2);
+/** Copies one square cell out of a loaded sheet into an image the page shows like any portrait. */
+async function cropCell(sheet: HTMLImageElement, cell: AvatarCell): Promise<HTMLImageElement> {
     const canvas = document.createElement("canvas");
-    canvas.width = side;
-    canvas.height = side;
+    canvas.width = cell.side;
+    canvas.height = cell.side;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("avatar canvas unavailable");
-    context.drawImage(image, (index % 2) * side, Math.floor(index / 2) * side, side, side, 0, 0, side, side);
+    context.drawImage(sheet, cell.x, cell.y, cell.side, cell.side, 0, 0, cell.side, cell.side);
     const cropped = new Image();
     cropped.decoding = "async";
     cropped.src = canvas.toDataURL("image/webp", 0.9);
@@ -112,14 +127,9 @@ async function cropExpression(image: HTMLImageElement, index: number): Promise<H
 
 /** One stable browser-native image load shared by the radial and the map atlas bridge. */
 export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
-    const packed =
-        typeof window !== "undefined" && window.SOW_PORTAL === "crazygames"
-            ? avatarExpressionSheet(source)
-            : null;
-    if (!packed) return loadNetworkImage(source);
-    return cachedImage(source, async () =>
-        cropExpression(await loadNetworkImage(avatarAssetUrl(packed.sheet)), packed.index),
-    );
+    const cell = avatarAtlasCell(source);
+    if (!cell) return loadNetworkImage(source);
+    return cachedImage(source, async () => cropCell(await loadNetworkImage(cell.sheet.url), cell));
 }
 
 /** The map atlas half of the shared loader: the radial's decoded image, scaled to one atlas cell off the main thread. */
@@ -149,17 +159,105 @@ export async function loadAvatarBitmap(path: string, size: number): Promise<Imag
 
 if (typeof window !== "undefined") window.SOW_loadAvatarBitmap = loadAvatarBitmap;
 
+/** The portrait an image is meant to show; for a packed cell the displayed src is only its cropped copy. */
 function sourceOf(image: HTMLImageElement): string {
-    return imageSource(image);
+    return atlasSources.get(image) ?? imageSource(image);
 }
 
 function setSource(image: HTMLImageElement, source: string, deferLoad = false): void {
     if (!source) return;
     if (sourceOf(image) !== source) {
-        image.crossOrigin = "anonymous";
-        image.src = source;
+        if (avatarAtlasCell(source)) {
+            setAvatarImage(image, source);
+        } else {
+            atlasSources.delete(image);
+            image.crossOrigin = "anonymous";
+            image.src = source;
+        }
     }
     if (!deferLoad) void loadAvatarImage(source).catch(() => undefined);
+}
+
+/** Shows the portrait at `source`. A packed cell is cropped first, so the image never points at a missing file. */
+export function setAvatarImage(image: HTMLImageElement, source: string): void {
+    if (!avatarAtlasCell(source)) {
+        atlasSources.delete(image);
+        image.src = source;
+        return;
+    }
+    atlasSources.set(image, source);
+    void loadAvatarImage(source)
+        .then((portrait) => {
+            if (atlasSources.get(image) === source) image.src = portrait.src;
+        })
+        .catch(() => undefined);
+}
+
+let markupWatcher: MutationObserver | null = null;
+
+/** Fills `data-avatar` images in markup once they are inserted. Installed only when sheets are packed. */
+function watchAvatarMarkup(): void {
+    if (markupWatcher || typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+    const fill = (node: Node): void => {
+        if (!(node instanceof Element)) return;
+        const images: Element[] = node.matches("img[data-avatar]")
+            ? [node]
+            : Array.from(node.querySelectorAll("img[data-avatar]"));
+        for (const image of images) {
+            const source = image.getAttribute("data-avatar");
+            if (source) setAvatarImage(image as HTMLImageElement, source);
+        }
+    };
+    markupWatcher = new MutationObserver((records) => {
+        for (const record of records) {
+            if (record.type === "attributes") fill(record.target);
+            else record.addedNodes.forEach(fill);
+        }
+    });
+    markupWatcher.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["data-avatar"],
+    });
+}
+
+/** The `src` attribute for an avatar inside an HTML string. Packed cells use `data-avatar`, filled once inserted. */
+export function avatarImageAttribute(source: string): string {
+    if (!avatarAtlasCell(source)) return "src='" + escapeAttribute(source) + "'";
+    watchAvatarMarkup();
+    return "data-avatar='" + escapeAttribute(source) + "'";
+}
+
+/** CSS declarations that paint the portrait at `source` as a background. A packed cell shows its sheet through background-size and -position. */
+export function avatarBackgroundCss(source: string): string {
+    const cell = avatarAtlasCell(source);
+    if (!cell) return "background-image:url('" + escapeAttribute(source) + "')";
+    const { url, width, height } = cell.sheet;
+    return (
+        "background-image:url('" + escapeAttribute(url) + "');background-repeat:no-repeat;" +
+        "background-size:" + percentOf(width, cell.side) + "% " + percentOf(height, cell.side) + "%;" +
+        "background-position:" + percentOf(cell.x, width - cell.side) + "% " + percentOf(cell.y, height - cell.side) + "%"
+    );
+}
+
+/** Paints the portrait at `source` as the background of `element`. */
+export function setAvatarBackground(element: HTMLElement, source: string): void {
+    const cell = avatarAtlasCell(source);
+    if (!cell) {
+        element.style.backgroundImage = "url(" + JSON.stringify(source) + ")";
+        return;
+    }
+    const { url, width, height } = cell.sheet;
+    element.style.backgroundImage = "url(" + JSON.stringify(url) + ")";
+    element.style.backgroundRepeat = "no-repeat";
+    element.style.backgroundSize = percentOf(width, cell.side) + "% " + percentOf(height, cell.side) + "%";
+    element.style.backgroundPosition =
+        percentOf(cell.x, width - cell.side) + "% " + percentOf(cell.y, height - cell.side) + "%";
+}
+
+function percentOf(part: number, whole: number): number {
+    return whole > 0 ? (part / whole) * 100 : 0;
 }
 
 function restoreOutgoingBackground(state: AnimationState): void {
@@ -271,7 +369,7 @@ export function setAvatarPortrait(
         return;
     }
 
-    const outgoingBackground = addOutgoingBackground(image, sourceOf(image));
+    const outgoingBackground = addOutgoingBackground(image, imageSource(image));
     setSource(image, source);
     const animation = image.animate(
         [
@@ -297,6 +395,7 @@ export function setAvatarPortrait(
 /** Stop a deferred portrait request and discard any in-flight expression animation. */
 export function clearAvatarPortrait(image: HTMLImageElement): void {
     settleAnimation(image, states.get(image));
+    atlasSources.delete(image);
     image.removeAttribute("src");
     image.hidden = true;
     states.delete(image);

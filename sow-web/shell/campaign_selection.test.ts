@@ -1,4 +1,5 @@
 import test from "node:test";
+import { avatarBackgroundCss, avatarImageAttribute, setAvatarBackground, setAvatarImage } from "./avatar-presentation.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";

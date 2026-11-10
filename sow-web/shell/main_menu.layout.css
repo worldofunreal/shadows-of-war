@@ -725,6 +725,8 @@
 
   #sow-menu[data-screen="home"] .sow-menu__battlefield {
     justify-content: flex-end;
+    align-self: stretch;
+    height: 100%;
   }
 }
 

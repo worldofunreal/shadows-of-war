@@ -199,6 +199,30 @@ export interface MenuMap {
     roster_presets?: { id: string; name: string }[];
 }
 
+export interface MenuMissionRecord {
+    id: string;
+    progress: number;
+    completed: boolean;
+    claimed: boolean;
+    claimed_at?: number | null;
+    doubled_by_ad?: boolean;
+}
+
+export interface MenuMission {
+    id: string;
+    category: "onboarding" | "daily";
+    title_key: string;
+    description_key: string;
+    target: number;
+    progress: number;
+    completed: boolean;
+    claimed: boolean;
+    crowns_reward: number;
+    gems_reward: number;
+    icon: string;
+    order: number;
+}
+
 export interface MenuProfileStats {
     wins: number;
     matches_played: number;
@@ -275,6 +299,8 @@ export interface MenuState {
     custom_game_is_private: boolean;
     custom_game_is_sp: boolean;
     settings: MenuSettings;
+    missions?: MenuMission[];
+    missions_progress?: Record<string, MenuMissionRecord>;
 }
 
 export interface HudAvatarIdentity {

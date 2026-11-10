@@ -1,4 +1,5 @@
 import { asset, avatarImage, esc, formatMapName, lobbyThumb, menuUi } from "./main_menu.core.ts";
+import { avatarImageAttribute } from "./avatar-presentation.ts";
 import type { MenuLobby, RankedLadder, RankedPointsBreakdown, RankedStep } from "./main_menu.state.ts";
 import type { ProfileRating } from "./main_menu.profile.ts";
 
@@ -101,8 +102,8 @@ export function renderRankedDuel(lobby: MenuLobby | null, loading = false): stri
     const rating = menuUi.rankedRating;
     const playerCard = (name: string, leader: string | null | undefined, opponent: boolean) =>
         "<article class='sow-ranked__player" + (opponent ? " sow-ranked__player--rival" : "") +
-        "'><img class='sow-ranked__portrait' src='" + esc(leader === undefined ? avatarImage() : avatarImage(leader)) +
-        "' alt='' width='128' height='128'><strong>" + esc(name) + "</strong>" +
+        "'><img class='sow-ranked__portrait' " + avatarImageAttribute(leader === undefined ? avatarImage() : avatarImage(leader)) +
+        " alt='' width='128' height='128'><strong>" + esc(name) + "</strong>" +
         (!opponent ? rankEmblem(rating?.placements_complete ? rating.tier : "unranked", rating?.placements_complete ? rating.division : null) +
             "<span>" + esc(rankLabel(rating)) + "</span>" : "<span>" + esc(SOW_t(loading ? "menu.loading" : rival?.is_ready ? "lobbies.ready" : "menu.loading")) + "</span>") + "</article>";
     return "<div class='sow-ranked__duel" + (lobby ? " is-found" : "") + "' data-ranked-match='" + esc(lobby?.id || "search") +

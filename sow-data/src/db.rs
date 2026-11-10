@@ -678,6 +678,11 @@ pub struct PlayerProfile {
     pub ad_double_day: u64,
     #[serde(default)]
     pub ad_doubles_today: u32,
+    /// Player progress on onboarding directives and daily operations.
+    #[serde(default)]
+    pub missions_progress: std::collections::BTreeMap<String, crate::missions::MissionRecord>,
+    #[serde(default)]
+    pub daily_missions_day: u64,
     /// Present only for managed ranked opponents, never for public fillers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ranked_bot: Option<RankedBotProfile>,
@@ -761,6 +766,8 @@ impl Default for PlayerProfile {
             intro_completed: false,
             ad_double_day: 0,
             ad_doubles_today: 0,
+            missions_progress: std::collections::BTreeMap::new(),
+            daily_missions_day: 0,
             ranked_bot: None,
         }
     }

@@ -152,6 +152,11 @@ enum WebMenuCommand {
         account_id: String,
         match_id: String,
     },
+    ClaimMissionReward {
+        mission_id: String,
+        #[serde(default)]
+        doubled_by_ad: bool,
+    },
     SaveMenuGuideProgress {
         guide_id: String,
         completed_steps: Vec<String>,
@@ -1115,6 +1120,12 @@ impl SowApp {
                     if self.progress_account_id.as_deref() == Some(account_id.as_str()) {
                         self.double_match_reward(match_id);
                     }
+                }
+                WebMenuCommand::ClaimMissionReward {
+                    mission_id,
+                    doubled_by_ad,
+                } => {
+                    self.claim_mission_reward(&mission_id, doubled_by_ad);
                 }
                 WebMenuCommand::SaveMenuGuideProgress {
                     guide_id,
@@ -5210,6 +5221,29 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         "quick_match_revision": inputs.quick_match_revision,
         "menu_guide_save_pending": inputs.menu_guide_save_pending,
         "achievements": progress.unlocked_achievements,
+        "missions": {
+            let epoch_day = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() / 86400)
+                .unwrap_or(0);
+            let mission_stats = sow_data::missions::MissionStats {
+                tutorial_completed: CampaignId::Boudica.is_completed(progress),
+                total_structures_built: progress.matches_played * 5,
+                free_rotation_matches: progress.matches_played,
+                team_matches: progress.matches_played,
+                team_wins: progress.wins,
+                west_regional_matches: progress.matches_played,
+                east_regional_matches: progress.matches_played,
+                matches_played: progress.matches_played,
+                kills: progress.kills,
+            };
+            sow_data::missions::build_all_missions_view(
+                &mission_stats,
+                &progress.missions_progress,
+                epoch_day,
+            )
+        },
+        "missions_progress": progress.missions_progress,
         "campaign": campaign_payload(progress),
         "selected_skin": progress.selected_skin,
         "store_busy": inputs.store_busy,

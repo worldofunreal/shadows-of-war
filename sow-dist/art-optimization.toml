@@ -39,15 +39,16 @@ lossless = false
 max_bytes = 131072
 recipe_version = 1
 
-[profiles.avatar_expression_sheet]
+# CrazyGames avatar sheets: up to 2048 px square, holding many 192 or 256 px portraits.
+[profiles.avatar_atlas]
 format = "webp"
-max_width = 512
-max_height = 512
+max_width = 2048
+max_height = 2048
 quality = 90
 alpha = "preserve"
 resample = "lanczos"
 lossless = false
-max_bytes = 524288
+max_bytes = 3145728
 recipe_version = 1
 
 [profiles.fullbleed_wide]

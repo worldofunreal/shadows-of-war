@@ -1619,8 +1619,10 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 .sow-menu__battlefield {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: flex-end;
+  align-self: stretch;
+  height: 100%;
   min-width: 0;
   min-height: 0;
 }
