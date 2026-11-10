@@ -31,7 +31,7 @@ use tokio::net::TcpListener;
 use tokio::sync::{Mutex, Semaphore, broadcast, mpsc};
 use tokio_tungstenite::tungstenite::protocol::Message;
 
-const DEFAULT_RELAY_WORKER_COUNT: usize = 4;
+const DEFAULT_RELAY_WORKER_COUNT: usize = 1;
 const RELAY_PORT_MIN: u16 = 25592;
 const RELAY_PORT_MAX: u16 = 26500;
 const RELAY_TICKET_TTL_SECS: u64 = 900;
@@ -292,7 +292,10 @@ impl RelayPortAllocator {
             }
             let candidate = self.next as u16;
             self.next += 1;
-            if self.used.insert(candidate) {
+            if !self.used.contains(&candidate)
+                && std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, candidate)).is_ok()
+            {
+                self.used.insert(candidate);
                 return Some(candidate);
             }
         }
@@ -355,12 +358,14 @@ async fn register_relay(rc: &RelayCandidate, worker: &RelayWorker) -> Result<(),
             .await
         {
             Ok(res) if res.status().is_success() => {
-                log::info!(
-                    "[RELAY] Lobby {} accepted by relay ({} OK)",
-                    rc.lobby_id,
-                    url
-                );
-                return Ok(());
+                let ready = res.json::<serde_json::Value>().await;
+                if ready.is_ok_and(|value| {
+                    value["ok"] == true && value["relay_port"].as_u64() == Some(rc.relay_port.into())
+                }) {
+                    log::info!("[RELAY] Lobby {} is listening on port {}", rc.lobby_id, rc.relay_port);
+                    return Ok(());
+                }
+                log::warn!("[RELAY] registration for lobby {} did not confirm port {}", rc.lobby_id, rc.relay_port);
             }
             Ok(res) => {
                 let status = res.status();
@@ -1244,15 +1249,11 @@ async fn run_ranked_queue(
 }
 
 // =============================================================================
-// RELAY INTEGRATION — worker-per-queue DPDK relay (no per-lobby processes)
+// RELAY INTEGRATION
 // =============================================================================
 //
-// Each worker process owns dynamic lobby ports selected by `port % 4` and one
-// kernel management port. The server registers the lobby and ONLY broadcasts
-// Start{relay_port, relay_host} after the owning worker answers 200 OK.
-//
-// Dynamic ports are bound by the long-lived worker process through the bridge
-// command ring, so no relay subprocess is created for an individual match.
+// Reserve a port during registration. A match process owns its bound socket
+// until its final turn delivery is durable, even across a control restart.
 
 /// All server events, comming from client
 enum ServerEvent {
@@ -1461,9 +1462,8 @@ async fn main() {
     let ranked_queue_tx_for_lobby = ranked_queue_tx.clone();
 
     // ── DEDICATED ASYNC RELAY WORKER TASK ──
-    // A worker owns many lobbies. The destination port is the ownership key;
-    // the client receives it only after the owning worker confirms that it
-    // successfully bound the port.
+    // Send the client its relay ticket and endpoint once the match process
+    // confirms that it owns the bound port.
     let relay_workers_for_task = relay_workers.clone();
     let relay_ports_for_task = relay_ports.clone();
     let relay_ports_for_tick = relay_ports.clone();
@@ -1504,7 +1504,11 @@ async fn main() {
                     return;
                 };
 
-                match register_relay(&rc, worker).await {
+                let registration = register_relay(&rc, worker).await;
+                // A live relay now owns the port in the kernel. Only starts
+                // without a registration response need a local reservation.
+                relay_ports.lock().await.release(rc.relay_port);
+                match registration {
                     Ok(()) => {
                         log::info!(
                             "[RELAY] Lobby {} registered with worker {} on dynamic port {}",
@@ -1580,7 +1584,6 @@ async fn main() {
                             rc.relay_port,
                             e
                         );
-                        relay_ports.lock().await.release(rc.relay_port);
 
                         let closed_msg = sow_core::protocol::ServerLobbyClosedMessage {
                             lobby_id: rc.lobby_id,
@@ -3204,7 +3207,7 @@ async fn catalog_json_handler() -> impl axum::response::IntoResponse {
 #[cfg(test)]
 mod relay_worker_tests {
     use super::{
-        DEFAULT_RELAY_WORKER_COUNT, RELAY_PORT_MAX, RELAY_PORT_MIN, RelayPortAllocator,
+        RELAY_PORT_MAX, RELAY_PORT_MIN, RelayPortAllocator,
         RankedQueueEntry, RankedQueueMessage, RankedQueuePlayer, ReplayStartPlayer,
         cancel_ranked_search, consume_ranked_queue_message, parse_relay_worker,
         send_relay_handoff_frame, verified_winner_identity,
@@ -3451,16 +3454,17 @@ mod relay_worker_tests {
     }
 
     #[test]
-    fn allocates_ports_in_range_and_by_worker_modulo() {
+    fn allocator_skips_bound_ports_and_releases_pending_reservations() {
         let mut allocator = RelayPortAllocator::new();
         let first = allocator.allocate().expect("first dynamic port");
-        let second = allocator.allocate().expect("second dynamic port");
         assert!((RELAY_PORT_MIN..=RELAY_PORT_MAX).contains(&first));
-        assert!((RELAY_PORT_MIN..=RELAY_PORT_MAX).contains(&second));
-        assert_eq!(first % DEFAULT_RELAY_WORKER_COUNT as u16, 0);
-        assert_eq!(second % DEFAULT_RELAY_WORKER_COUNT as u16, 1);
+        let live = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, first)).unwrap();
         allocator.release(first);
-        assert!(!allocator.used.contains(&first));
+        allocator.next = u32::from(first);
+        assert_ne!(allocator.allocate(), Some(first));
+        drop(live);
+        allocator.next = u32::from(first);
+        assert_eq!(allocator.allocate(), Some(first));
     }
 
     #[test]

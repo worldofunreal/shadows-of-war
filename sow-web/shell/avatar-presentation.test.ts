@@ -70,3 +70,64 @@ test("no shell module writes a packed avatar file straight into an image src", (
         .filter((file) => direct.test(fs.readFileSync(path.join(shell, file), "utf8")));
     assert.deepEqual(offenders, []);
 });
+
+test("data-avatar images are filled with their cropped cell once inserted", async () => {
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const saved = {
+        window: globals.window,
+        document: globals.document,
+        Element: globals.Element,
+        Image: globals.Image,
+        MutationObserver: globals.MutationObserver,
+    };
+    class FakeElement {
+        attributes: Record<string, string>;
+        constructor(attributes: Record<string, string>) {
+            this.attributes = attributes;
+        }
+        matches(selector: string) {
+            return selector === "img[data-avatar]" && "data-avatar" in this.attributes;
+        }
+        getAttribute(name: string) {
+            return this.attributes[name] ?? null;
+        }
+    }
+    class FakeImage extends FakeElement {
+        src = "";
+        crossOrigin = "";
+        decoding = "";
+        decode() {
+            return Promise.resolve();
+        }
+    }
+    const drawn: unknown[][] = [];
+    const canvas = {
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage: (...args: unknown[]) => void drawn.push(args) }),
+        toDataURL: () => "data:image/webp;base64,AAAA",
+    };
+    let deliver: (records: unknown[]) => void = () => undefined;
+    globals.window = { SOW_ASSETS_URL: "/assets", SOW_AVATAR_ATLAS: atlas };
+    globals.document = { documentElement: {}, createElement: () => canvas };
+    globals.Element = FakeElement;
+    globals.Image = FakeImage;
+    globals.MutationObserver = class {
+        constructor(callback: (records: unknown[]) => void) {
+            deliver = callback;
+        }
+        observe() {}
+    };
+    try {
+        const source = "/assets/gameplay/avatars/expressions/suppiluliuma_fear.webp";
+        assert.equal(avatarImageAttribute(source), "data-avatar='" + source + "'");
+        const image = new FakeImage({ "data-avatar": source });
+        deliver([{ type: "childList", addedNodes: [image] }]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.equal(image.src, "data:image/webp;base64,AAAA");
+        assert.equal((drawn[0][0] as { src: string }).src, "/assets/gameplay/avatars/atlas/heroes-256-0.webp");
+        assert.deepEqual(drawn[0].slice(1), [256, 0, 256, 256, 0, 0, 256, 256]);
+    } finally {
+        Object.assign(globals, saved);
+    }
+});

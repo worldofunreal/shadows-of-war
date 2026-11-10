@@ -1913,6 +1913,7 @@ async fn main() {
             "/profile/menu-guide-progress",
             post(handle_menu_guide_progress),
         )
+        .route("/profile/missions/claim", post(handle_claim_mission))
         .route("/profile/anonymous/report", post(handle_report_player))
         .route("/profile/anonymous/blocks", post(handle_blocks))
         .route("/profile/anonymous/delete", post(handle_self_delete))
@@ -2886,6 +2887,50 @@ async fn handle_menu_guide_progress(
             };
             (status, Json(ErrorResponse { error: message })).into_response()
         }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ClaimMissionRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    mission_id: String,
+    #[serde(default)]
+    doubled_by_ad: bool,
+}
+
+/// POST /profile/missions/claim — securely claim an authoritative mission reward.
+async fn handle_claim_mission(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<ClaimMissionRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+
+    match state
+        .db
+        .claim_mission_reward(&account_id, payload.mission_id.trim(), payload.doubled_by_ad)
+        .await
+    {
+        Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
+        Err(error) => (
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
