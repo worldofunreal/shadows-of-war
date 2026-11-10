@@ -19,6 +19,7 @@ export interface MenuLeader {
     available?: boolean;
     cost_crowns?: number;
     cost_gems?: number;
+    rarity?: "common" | "rare" | "epic" | "legendary";
 }
 
 export interface MenuLobby {

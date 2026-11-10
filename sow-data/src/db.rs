@@ -4032,8 +4032,8 @@ impl PlayerDb {
         }
         let leader_id = crate::commerce::leader_id(leader).to_string();
         let (cost, use_gems) = match currency {
-            "gems" => (crate::commerce::LEADER_UNLOCK_COST_GEMS, true),
-            "" | "crowns" => (crate::commerce::LEADER_UNLOCK_COST_CROWNS, false),
+            "gems" => (leader.price_gems(), true),
+            "" | "crowns" => (leader.price_crowns(), false),
             "laurels" => return Err("laurels are achievement points, not spendable".into()),
             _ => return Err("invalid leader unlock currency".into()),
         };
@@ -7617,7 +7617,7 @@ mod tests {
                 crate::profile::RewardReceipt {
                     id: match_id.to_string(),
                     match_id: match_id.to_string(),
-                    crowns: 25,
+                    crowns: 40,
                     created_at: at,
                     ..Default::default()
                 },
@@ -7628,7 +7628,7 @@ mod tests {
                 crate::profile::RewardReceipt {
                     id: bonus_id,
                     match_id: match_id.to_string(),
-                    crowns: 82,
+                    crowns: 107,
                     gems: 53,
                     created_at: at,
                     verification_status: verified.then_some(ReplayVerificationStatus::Verified),
@@ -7648,9 +7648,9 @@ mod tests {
 
         seed(&mut profile, "m0", true, now - 60);
         assert_eq!(double(&mut profile, "m0"), Ok(()));
-        assert_eq!((profile.crowns, profile.gems), (107, 53));
+        assert_eq!((profile.crowns, profile.gems), (147, 53));
         let receipt = &profile.reward_receipts["ad_double:m0"];
-        assert_eq!((receipt.crowns, receipt.gems), (107, 53));
+        assert_eq!((receipt.crowns, receipt.gems), (147, 53));
         assert_eq!(receipt.verification_status, Some(ReplayVerificationStatus::Verified));
         assert_eq!(double(&mut profile, "m0"), Err("match reward already doubled"));
 
@@ -7666,7 +7666,7 @@ mod tests {
         }
         seed(&mut profile, "capped", true, now - 60);
         assert_eq!(double(&mut profile, "capped"), Err("daily reward doubles used"));
-        assert_eq!(profile.crowns, 107 * u64::from(AD_DOUBLES_PER_DAY));
+        assert_eq!(profile.crowns, 147 * u64::from(AD_DOUBLES_PER_DAY));
     }
 
     #[test]

@@ -129,6 +129,20 @@ impl Leader {
         self.hero().free
     }
 
+    pub fn rarity(self) -> geo_entities::Rarity {
+        self.hero().rarity
+    }
+
+    /// Crowns to unlock; permanently free heroes carry 0. Laurels are never a price.
+    pub fn price_crowns(self) -> u64 {
+        self.hero().price_crowns
+    }
+
+    /// Gems to unlock: 90% of the crown price, rounded down.
+    pub fn price_gems(self) -> u64 {
+        self.price_crowns() * 9 / 10
+    }
+
     /// Canonical NFTROPOLY/WOU-ID card token; heroes not registered there have none.
     pub fn card_token_id(self) -> Option<&'static str> {
         self.hero().card.as_deref()
@@ -311,9 +325,9 @@ mod tests {
             (
                 "RichardTheLionheart",
                 "richard_the_lionheart",
-                "Richard the Lionheart",
+                "Richard",
             ),
-            ("LadySixSky", "lady_six_sky", "Lady Six Sky"),
+            ("LadySixSky", "lady_six_sky", "Six Sky"),
         ] {
             let leader: Leader = serde_json::from_value(serde_json::json!(wire)).unwrap();
             assert_eq!(
@@ -326,6 +340,42 @@ mod tests {
             );
         }
         assert_eq!(Leader::default().id(), "caesar");
+    }
+
+    #[test]
+    fn legacy_hero_names_resolve_after_renames() {
+        for leader in Leader::all() {
+            for alias in leader.legacy_ids() {
+                assert_eq!(
+                    crate::commerce::leader_from_id(alias),
+                    Some(leader),
+                    "legacy hero alias {alias:?} must resolve to {leader:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hero_prices_follow_their_rarity_band() {
+        use crate::geo_entities::Rarity;
+        let mut crowns = std::collections::HashSet::new();
+        let mut gems = std::collections::HashSet::new();
+        for leader in Leader::all().filter(|leader| !leader.always_free()) {
+            let band = match leader.rarity() {
+                Rarity::Common => 250..=530,
+                Rarity::Rare => 600..=1000,
+                Rarity::Epic => 1200..=2000,
+                Rarity::Legendary => 2500..=4000,
+            };
+            assert!(band.contains(&leader.price_crowns()), "{} is outside its band", leader.id());
+            assert!(crowns.insert(leader.price_crowns()), "duplicate crown price for {}", leader.id());
+            assert!(gems.insert(leader.price_gems()), "duplicate gem price for {}", leader.id());
+        }
+        assert!(Leader::all().filter(|leader| leader.always_free()).all(|leader| leader.price_crowns() == 0));
+        let total = Leader::all().count();
+        let count = |tier: Rarity| Leader::all().filter(|leader| leader.rarity() == tier).count();
+        assert!(count(Rarity::Common) * 100 <= total * 45, "Common is above 45%");
+        assert!(count(Rarity::Legendary) * 100 <= total * 8, "Legendary is above 8%");
     }
 
     #[test]

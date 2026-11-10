@@ -5149,6 +5149,7 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
                 "available": offer.available,
                 "cost_crowns": offer.cost_crowns,
                 "cost_gems": offer.cost_gems,
+                "rarity": leader.rarity(),
             })
         })
         .collect();

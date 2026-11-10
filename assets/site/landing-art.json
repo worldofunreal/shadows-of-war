@@ -8,7 +8,7 @@
       "references": [
         "assets/art/loader/sow-splash-desktop.webp",
         "references/heroes/boudica_mobile.webp",
-        "references/heroes/lady_six_sky_desktop.webp"
+        "references/heroes/six_sky_desktop.webp"
       ],
       "already_saved": true
     },
@@ -18,7 +18,7 @@
       "references": [
         "assets/art/loader/sow-splash-desktop.webp",
         "references/heroes/boudica_mobile.webp",
-        "references/heroes/lady_six_sky_desktop.webp"
+        "references/heroes/six_sky_desktop.webp"
       ],
       "already_saved": true
     },
@@ -63,7 +63,7 @@
       "output": "step-war.webp",
       "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Desktop frontier chapter, landscape 16:9. Cinematic breached medieval stone gate, splintered wood, distant smoke and sunlit dust. Richard the Lionheart on LEFT third, recognizable blond hair, crown, scar, red cloak, lion heraldry and chainmail from reference; his disciplined soldiers press toward gate on RIGHT. Crimson versus deep teal banners create clear competing borders. No gore. Expressive stylized sculpted character rendering, match supplied game heroes instead of photoreal live action. Keep rightmost fifth distant quiet smoke for breathing room; all faces/weapons safe.",
       "references": [
-        "references/heroes/richard_the_lionheart_desktop.webp",
+        "references/heroes/richard_desktop.webp",
         "references/heroes/boudica_desktop.webp"
       ],
       "already_saved": true
@@ -72,7 +72,7 @@
       "output": "step-war-mobile.webp",
       "prompt": "Use case: stylized-concept. Asset: original final Shadows of War landing artwork. Match the attached Shadows of War artwork: expressive sculpted faces, strong silhouettes, stylized three-dimensional characters, detailed cloth and metal, rich natural colors, cinematic sunlight, and layered atmospheric landscapes. Preserve established character identities, costumes, and emblems. Compose specifically around the page’s text area. No lettering, interface elements, or watermark. Mobile frontier chapter, portrait 4:5, ideally 1280x1600. Recompose a breached medieval gate vertically: Richard the Lionheart, exact blond crown/scar/red cloak/chainmail reference identity, in lower left three-quarter view holding sword down with both hands; his soldiers and crimson lion banners charge through a gate in upper right. Sunbeams through smoke, dust, stone rubble, deep teal enemy banner. No gore. Hero face, crown, sword and gate inside safe margins; energetic readable phone composition.",
       "references": [
-        "references/heroes/richard_the_lionheart_mobile.webp",
+        "references/heroes/richard_mobile.webp",
         "references/heroes/boudica_mobile.webp"
       ],
       "already_saved": true
@@ -83,7 +83,7 @@
       "references": [
         "assets/art/loader/sow-splash-desktop.webp",
         "references/heroes/boudica_desktop.webp",
-        "references/heroes/lady_six_sky_desktop.webp"
+        "references/heroes/six_sky_desktop.webp"
       ],
       "already_saved": true
     },
@@ -93,7 +93,7 @@
       "references": [
         "assets/art/loader/sow-splash-desktop.webp",
         "references/heroes/boudica_mobile.webp",
-        "references/heroes/lady_six_sky_mobile.webp"
+        "references/heroes/six_sky_mobile.webp"
       ],
       "already_saved": true
     }

@@ -177,6 +177,11 @@ test("every playable hero is complete: ability, art and texts in every language"
         const hero = entry.id;
         const slug = artSlug(entry);
         assert.ok(entry.hero.ability && entry.hero.name, `${hero} needs a catalog name and ability`);
+        assert.ok(
+            !/^(?:queen|king|emperor|empress|pharaoh|rani)_/.test(slug) &&
+                !/(?:_sultan|_emperor)$/.test(slug),
+            `${hero} art slug should omit title fillers: ${slug}`,
+        );
         const expressionFaces = [1, 2, 3, 4].map((n) => `avatars/heroes/${slug}_${n}.webp`);
         assert.equal(
             entry.hero.expressions,
@@ -187,7 +192,12 @@ test("every playable hero is complete: ability, art and texts in every language"
             !expressionFaces.some((file) => fs.existsSync(path.join(art, file))),
             `${hero} must use one sheet, not separate face files`,
         );
-        const heroFiles = [`avatars/heroes/${slug}.webp`, `icons/abilities/${slug}.webp`];
+        const heroFiles = [
+            `avatars/heroes/${slug}.webp`,
+            `icons/abilities/${slug}.webp`,
+            `heroes/${slug}_desktop.webp`,
+            `heroes/${slug}_mobile.webp`,
+        ];
         for (const file of heroFiles) {
             assert.ok(fs.existsSync(path.join(art, file)), `${hero} needs assets/art/${file}`);
         }
@@ -213,6 +223,16 @@ test("every playable hero is complete: ability, art and texts in every language"
                     !/^(?:heroes|site)\.leader_/.test(value),
                     `${key} must not expose a raw translation key in ${locale}`,
                 );
+                if (field === "name" && (locale === "en" || locale === "es")) {
+                    assert.ok(
+                        value.split(/\s+/).filter(Boolean).length <= 2,
+                        `${key} should use at most two words in ${locale}: ${value}`,
+                    );
+                    assert.ok(
+                        !/^(?:king|queen|emperor|empress|pharaoh|rani|mansa|lady|rey|reina|emperador|emperatriz|faraón|dama)\b|\b(?:tipu sultan|tipú sultán|wanli emperor)$/i.test(value),
+                        `${key} should omit title fillers in ${locale}: ${value}`,
+                    );
+                }
             }
         }
     }
