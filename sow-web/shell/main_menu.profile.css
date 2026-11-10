@@ -2827,10 +2827,10 @@
 .sow-hero-briefing__icon-slot {
   position: relative;
   display: grid;
-  flex: 0 0 48px;
+  flex: 0 0 54px;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   overflow: hidden;
   border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: var(--sow-tactical-surface-radius-tight);
@@ -2870,7 +2870,7 @@
 .sow-hero-briefing__description {
   margin: 0;
   color: rgba(245, 241, 232, 0.86);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: normal;
@@ -2932,9 +2932,12 @@
 }
 
 .sow-menu__leader-copy .sow-hero-briefing__icon-slot {
-  flex-basis: 56px;
-  width: 56px;
-  height: 56px;
+  flex-basis: 72px;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--sow-tactical-surface-radius-tight);
+  border: 1px solid rgba(245, 197, 66, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(245, 197, 66, 0.18);
 }
 
 .sow-menu__leader-copy .sow-hero-briefing__ability-name {
@@ -2949,10 +2952,11 @@
 }
 
 .sow-menu__leader-copy .sow-hero-briefing__description {
-  color: rgba(255, 255, 255, 0.86);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
 }
 
 .sow-hero-info__foot .sow-hero-briefing--modal {
@@ -3271,14 +3275,14 @@
   }
 
   #sow-menu[data-screen="home"] .sow-menu__leader-copy .sow-hero-briefing__icon-slot {
-    flex-basis: 48px;
-    width: 48px;
-    height: 48px;
+    flex-basis: 56px;
+    width: 56px;
+    height: 56px;
   }
 
   #sow-menu[data-screen="home"] .sow-menu__leader-copy .sow-hero-briefing__description {
-    font-size: 12px;
-    line-height: 1.4;
+    font-size: 11px;
+    line-height: 1.35;
   }
 
   .sow-heroes__grid {

@@ -1,4 +1,5 @@
 import { formatCompactNumber } from "./number-format.ts";
+import { avatarBackgroundCss, setAvatarBackground, setAvatarImage } from "./avatar-presentation.ts";
 import {
     animateRankResult,
     rankEmblem,
@@ -107,6 +108,7 @@ import {
     resumeExternalPurchaseDelivery,
     verifyAuthOtp,
 } from "./main_menu.surfaces.ts";
+import { claimMission, renderMissionsModal } from "./main_menu.missions.ts";
 import type { MenuRewardReceipt, MenuState, RankedResult } from "./main_menu.state.ts";
 
 // Shared menu chrome, overlays, lifecycle, events, and state bridge.
@@ -942,9 +944,9 @@ function renderTopbar() {
         "<div class='sow-menu__nameplate'>" +
         "<span class='sow-menu__portrait'><button class='sow-menu__avatar' type='button' data-command='open_leader_picker' aria-label='" +
         esc(SOW_t("menu.select_leader")) +
-        "' style=\"background-image:url('" +
-        esc(avatarImage()) +
-        "')\"></button>" +
+        "' style=\"" +
+        avatarBackgroundCss(avatarImage()) +
+        "\"></button>" +
         "<button class='sow-menu__level' type='button' data-command='open_profile' aria-label='" +
         esc(SOW_t("profile.level", { level })) +
         "'><strong data-progression-level-value>" +
@@ -1213,7 +1215,7 @@ function updateTopbar(): void {
     const avatar = topbar.querySelector<HTMLElement>(".sow-menu__avatar");
     const avatarUrl = avatarImage();
     if (avatar && avatar.dataset.avatarUrl !== avatarUrl) {
-        avatar.style.backgroundImage = "url(" + JSON.stringify(avatarUrl) + ")";
+        setAvatarBackground(avatar, avatarUrl);
         avatar.dataset.avatarUrl = avatarUrl;
     }
 }
@@ -1348,6 +1350,7 @@ export function render() {
     syncOverlay("skin-picker", typeof renderSkinPickerModal === "function" ? renderSkinPickerModal() : "");
     syncOverlay("hero-info", typeof renderHeroInfoModal === "function" ? renderHeroInfoModal() : "");
     syncOverlay("purchase", typeof renderPurchaseModal === "function" ? renderPurchaseModal() : "");
+    syncOverlay("missions", menuUi.missionsModalOpen ? renderMissionsModal() : "");
     syncOverlay("system-notice", renderSystemNotice());
 
     if (sameScreen && isTyping) {
@@ -1642,7 +1645,7 @@ function createRewardStage(stages: RewardStage[], skip: () => void): RewardItem[
         } else {
             const image = document.createElement("img");
             if (stage.kind === "leader") {
-                image.src = avatarImage(stage.slug);
+                setAvatarImage(image, avatarImage(stage.slug));
                 image.alt = "";
             } else {
                 image.src = currencyAsset(
@@ -2512,6 +2515,12 @@ root.addEventListener("click", function (event) {
         render();
         return;
     }
+    const missionsOverlay = clickedElement.closest("[data-menu-overlay='missions']");
+    if (missionsOverlay && clickedElement === missionsOverlay) {
+        menuUi.missionsModalOpen = false;
+        render();
+        return;
+    }
     const targetElement = clickedElement.closest("[data-command]");
     if (!(targetElement instanceof HTMLElement) || !root.contains(targetElement)) return;
     const target = targetElement;
@@ -3123,6 +3132,38 @@ root.addEventListener("click", function (event) {
         if (field && step) {
             stepCreateSlider(field, step);
             render();
+        }
+        return;
+    }
+    if (command === "open_missions") {
+        menuUi.missionsModalOpen = true;
+        render();
+        return;
+    }
+    if (command === "close_missions") {
+        menuUi.missionsModalOpen = false;
+        render();
+        return;
+    }
+    if (command === "switch_missions_tab") {
+        const tab = target.dataset.missionsTab;
+        if (tab === "onboarding" || tab === "daily") {
+            menuUi.activeMissionsTab = tab;
+            render();
+        }
+        return;
+    }
+    if (command === "claim_mission") {
+        const missionId = target.dataset.missionId;
+        if (missionId) {
+            claimMission(missionId, false);
+        }
+        return;
+    }
+    if (command === "claim_mission_double") {
+        const missionId = target.dataset.missionId;
+        if (missionId) {
+            claimMission(missionId, true);
         }
         return;
     }

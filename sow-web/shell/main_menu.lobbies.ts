@@ -1,4 +1,5 @@
 import { rankEmblem, rankLabel, rankTier, renderRankedDuel } from "./main_menu.ranked.ts";
+import { avatarBackgroundCss, avatarImageAttribute, setAvatarImage } from "./avatar-presentation.ts";
 import type { CampaignDefinition } from "./campaign/types.ts";
 import {
     asset,
@@ -481,7 +482,7 @@ export function updateCampaignSelection(episodeId: string): boolean {
     if (mapLabel) mapLabel.textContent = formatMapName(mapName);
 
     const advisorAvatar = featured.querySelector<HTMLImageElement>(".sow-campaign__advisor-avatar");
-    if (advisorAvatar) advisorAvatar.src = asset("gameplay/avatars/" + heroSlug + ".webp");
+    if (advisorAvatar) setAvatarImage(advisorAvatar, asset("gameplay/avatars/" + heroSlug + ".webp"));
     const advisorName = featured.querySelector<HTMLElement>(".sow-campaign__meta-advisor strong");
     if (advisorName) advisorName.textContent = heroName;
 
@@ -563,9 +564,9 @@ function renderCampaignEpisode(
         "'>" +
         "<div class='sow-campaign__episode-art' aria-hidden='true'><img class='sow-campaign__map-art' src='" +
         esc(mapArt) +
-        "' alt='' loading='lazy' decoding='async'><img class='sow-campaign__leader-art' src='" +
-        esc(avatar) +
-        "' alt='' loading='lazy' decoding='async'></div>" +
+        "' alt='' loading='lazy' decoding='async'><img class='sow-campaign__leader-art' " +
+        avatarImageAttribute(avatar) +
+        " alt='' loading='lazy' decoding='async'></div>" +
         "<div class='sow-campaign__episode-copy'><div class='sow-campaign__episode-status'>" +
         esc(status) +
         "</div>" +
@@ -727,9 +728,9 @@ export function renderCampaign() {
             "</div>" +
             "<div class='sow-campaign__featured-meta'>" +
             "<div class='sow-campaign__meta-item sow-campaign__meta-advisor'>" +
-            "<img class='sow-campaign__advisor-avatar' src='" +
-            esc(avatar) +
-            "' alt='' loading='lazy'>" +
+            "<img class='sow-campaign__advisor-avatar' " +
+            avatarImageAttribute(avatar) +
+            " alt='' loading='lazy'>" +
             "<div><small class='sow-campaign__meta-label'>" +
             esc(SOW_t("menu.heroes")) +
             "</small><strong>" +
@@ -775,9 +776,9 @@ export function renderCampaign() {
                     "' type='button' data-command='select_campaign_saga' data-saga-id='" +
                     esc(saga.id) +
                     "'>" +
-                    "<img class='sow-campaign__saga-avatar' src='" +
-                    esc(asset("gameplay/avatars/" + saga.heroSlug + ".webp")) +
-                    "' alt='' loading='lazy'>" +
+                    "<img class='sow-campaign__saga-avatar' " +
+                    avatarImageAttribute(asset("gameplay/avatars/" + saga.heroSlug + ".webp")) +
+                    " alt='' loading='lazy'>" +
                     "<span class='sow-campaign__saga-name'>" +
                     esc(saga.title) +
                     "</span>" +
@@ -1675,9 +1676,9 @@ function renderQueuePlayerRow(player: MenuLobbyPlayer, lobby: MenuLobby | null) 
         player.player_id +
         "'>" +
         "<div class='sow-menu__roster-left'>" +
-        "<div class='sow-menu__roster-avatar' style=\"background-image:url('" +
-        esc(avatarUrl) +
-        "')\"></div>" +
+        "<div class='sow-menu__roster-avatar' style=\"" +
+        avatarBackgroundCss(avatarUrl) +
+        "\"></div>" +
         "<div class='sow-menu__roster-name-group'>" +
         "<strong>" +
         esc(player.name) +

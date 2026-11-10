@@ -13,6 +13,7 @@ import {
     renderMainNavMarkup,
 } from "./main_menu.core.ts";
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
+import { renderDirectiveCard } from "./main_menu.missions.ts";
 import { renderSettingsPrivacySection } from "./main_menu.shell.ts";
 import { renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
 
@@ -70,6 +71,7 @@ export function renderCommandPanel() {
         renderPublicPanel("home") +
         "</div>" +
         "<div class='sow-menu__home-actions'>" +
+        renderDirectiveCard() +
         renderQuickMatchButton() +
         "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" +
         esc(SOW_t("menu.campaign")) +

@@ -1,31 +1,72 @@
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { test } from "node:test";
-import { avatarExpressionSheet } from "./avatar-presentation.ts";
+import { avatarAtlasCell, avatarBackgroundCss, avatarImageAttribute } from "./avatar-presentation.ts";
 
-test("CrazyGames hero expressions use their packed 2x2 sheet cells", () => {
-    assert.deepEqual(
-        ["happy", "fear", "angry"].map((expression) =>
-            avatarExpressionSheet(
-                `./assets/gameplay/avatars/expressions/suppiluliuma_${expression}.webp?v=123`,
-            ),
-        ),
-        [
-            {
-                slug: "suppiluliuma",
-                index: 0,
-                sheet: "gameplay/avatars/hero-expression-sheets/suppiluliuma.webp",
-            },
-            {
-                slug: "suppiluliuma",
-                index: 2,
-                sheet: "gameplay/avatars/hero-expression-sheets/suppiluliuma.webp",
-            },
-            {
-                slug: "suppiluliuma",
-                index: 3,
-                sheet: "gameplay/avatars/hero-expression-sheets/suppiluliuma.webp",
-            },
-        ],
-    );
-    assert.equal(avatarExpressionSheet("/assets/gameplay/avatars/caesar.webp"), null);
+const atlas = {
+    sheets: [{ path: "gameplay/avatars/atlas/heroes-256-0.webp", width: 512, height: 256 }],
+    cells: {
+        "gameplay/avatars/expressions/suppiluliuma_fear.webp": [0, 256, 0, 256],
+        "gameplay/avatars/caesar.webp": [0, 0, 0, 256],
+    },
+};
+
+function withWindow<T>(config: Record<string, unknown>, run: () => T): T {
+    const previous = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = { SOW_ASSETS_URL: "/assets", ...config };
+    try {
+        return run();
+    } finally {
+        (globalThis as { window?: unknown }).window = previous;
+    }
+}
+
+test("CrazyGames portraits resolve to their packed sheet cell", () => {
+    withWindow({ SOW_AVATAR_ATLAS: atlas }, () => {
+        assert.deepEqual(avatarAtlasCell("./assets/gameplay/avatars/expressions/suppiluliuma_fear.webp?v=123"), {
+            sheet: { url: "/assets/gameplay/avatars/atlas/heroes-256-0.webp", width: 512, height: 256 },
+            x: 256,
+            y: 0,
+            side: 256,
+        });
+        assert.equal(avatarAtlasCell("gameplay/avatars/unlisted.webp"), null);
+    });
+});
+
+test("outside CrazyGames every portrait keeps its own file and plain markup", () => {
+    withWindow({}, () => {
+        assert.equal(avatarAtlasCell("/assets/gameplay/avatars/caesar.webp"), null);
+        assert.equal(avatarImageAttribute("/assets/gameplay/avatars/caesar.webp"), "src='/assets/gameplay/avatars/caesar.webp'");
+        assert.equal(
+            avatarBackgroundCss("/assets/gameplay/avatars/caesar.webp"),
+            "background-image:url('/assets/gameplay/avatars/caesar.webp')",
+        );
+    });
+});
+
+test("CrazyGames markup defers packed portraits to data-avatar and backgrounds show the sheet cell", () => {
+    withWindow({ SOW_AVATAR_ATLAS: atlas }, () => {
+        assert.equal(
+            avatarImageAttribute("/assets/gameplay/avatars/caesar.webp"),
+            "data-avatar='/assets/gameplay/avatars/caesar.webp'",
+        );
+        assert.equal(
+            avatarBackgroundCss("/assets/gameplay/avatars/caesar.webp"),
+            "background-image:url('/assets/gameplay/avatars/atlas/heroes-256-0.webp');background-repeat:no-repeat;" +
+                "background-size:200% 100%;background-position:0% 0%",
+        );
+    });
+});
+
+test("no shell module writes a packed avatar file straight into an image src", () => {
+    const direct = /\bsrc\s*=\s*['"][^;]{0,160}?gameplay\/avatars\/|\.src\s*=[^;]{0,160}?gameplay\/avatars\//;
+    assert.match(`<img src='" + esc(asset("gameplay/avatars/caesar.webp")) + "'>`, direct);
+    assert.match('image.src = asset("gameplay/avatars/caesar.webp");', direct);
+    const shell = __dirname;
+    const offenders = fs
+        .readdirSync(shell)
+        .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts") && file !== "avatar-presentation.ts")
+        .filter((file) => direct.test(fs.readFileSync(path.join(shell, file), "utf8")));
+    assert.deepEqual(offenders, []);
 });

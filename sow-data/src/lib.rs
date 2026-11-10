@@ -22,6 +22,7 @@ pub mod db;
 pub mod events;
 pub mod geo_entities;
 pub mod leaders;
+pub mod missions;
 #[cfg(feature = "server")]
 pub mod moderation;
 pub mod name_policy;

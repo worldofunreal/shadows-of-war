@@ -83,6 +83,8 @@ pub struct PlayerProgress {
     pub menu_guides: std::collections::BTreeMap<String, sow_data::profile::MenuGuideProgress>,
     #[serde(default)]
     pub unlocked_achievements: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub missions_progress: std::collections::BTreeMap<String, sow_data::missions::MissionRecord>,
 }
 
 fn deserialize_leader<'de, D>(deserializer: D) -> Result<Option<Leader>, D::Error>
@@ -291,6 +293,7 @@ impl PlayerProgress {
         let local_receipts = std::mem::take(&mut self.reward_receipts);
         let local_achievements = std::mem::take(&mut self.unlocked_achievements);
         let local_guides = std::mem::take(&mut self.menu_guides);
+        let local_missions = std::mem::take(&mut self.missions_progress);
         let server_episodes = cloud.completed_episodes.clone();
         if cloud.has_history() || !self.has_history() {
             *self = cloud;
@@ -316,6 +319,9 @@ impl PlayerProgress {
         }
         for (id, receipt) in local_receipts {
             self.reward_receipts.entry(id).or_insert(receipt);
+        }
+        for (id, record) in local_missions {
+            self.missions_progress.entry(id).or_insert(record);
         }
         self.unlocked_achievements.extend(local_achievements);
         let confirmed_guides = std::mem::replace(&mut self.menu_guides, local_guides);

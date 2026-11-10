@@ -756,7 +756,7 @@ impl ArtPipeline {
 
     fn validate_profile_set(&self) -> Result<()> {
         for required in [
-            "ability_icon", "avatar_portrait_192", "avatar_portrait_256", "avatar_expression_sheet", "fullbleed_wide", "fullbleed_tall",
+            "ability_icon", "avatar_portrait_192", "avatar_portrait_256", "avatar_atlas", "fullbleed_wide", "fullbleed_tall",
             "poki_leader_wide", "poki_leader_tall",
             "site_still_wide", "site_still_tall", "ui_icon_128", "ui_icon_256",
             "unit_icon", "pixel_art", "atlas_lossless", "loader_ui", "app_icon",
@@ -926,8 +926,8 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
         return Some("ui_icon_256");
     }
     if path.starts_with("gameplay/avatars/") {
-        if path.starts_with("gameplay/avatars/hero-expression-sheets/") {
-            return Some("avatar_expression_sheet");
+        if path.starts_with("gameplay/avatars/atlas/") {
+            return Some("avatar_atlas");
         }
         return Some("avatar_portrait_256");
     }
@@ -1730,7 +1730,7 @@ fn poki_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
 
 fn cg_asset_is_excluded(relative: &Path) -> bool {
     relative.starts_with("shell/brand")
-        || relative.starts_with("gameplay/avatars/expressions")
+        || relative.starts_with("gameplay/avatars")
         || relative.starts_with("gameplay/icons/abilities")
         || (relative.starts_with("site/media")
             && ![
@@ -1747,54 +1747,166 @@ fn cg_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
         .into_iter()
         .filter(|relative| !cg_asset_is_excluded(relative))
         .collect::<Vec<_>>();
-    inventory.extend(sow_core::player::Leader::all().map(|leader| {
-        PathBuf::from(format!(
-            "gameplay/avatars/hero-expression-sheets/{}.webp",
-            leader.art_slug()
-        ))
-    }));
     inventory.sort();
     Ok(inventory)
 }
 
-fn pack_cg_avatar_expression_sheets(
-    hero_art: &Path,
-    packaged: &Path,
-    pipeline: &ArtPipeline,
-) -> Result<()> {
-    let temporary = tempfile::tempdir().context("create temporary CrazyGames avatar sheets")?;
-    let destination = packaged.join("gameplay/avatars/hero-expression-sheets");
-    fs::create_dir_all(&destination)?;
-    for leader in sow_core::player::Leader::all() {
-        let slug = leader.art_slug();
-        let source = hero_art.join(format!("{slug}.webp"));
-        let source_sheet = image::open(&source)
-            .with_context(|| format!("read hero expression sheet {}", source.display()))?
-            .to_rgba8();
-        let mut sheet = image::RgbaImage::new(HERO_PORTRAIT_PX * 2, HERO_PORTRAIT_PX * 2);
-        for expression in sow_core::emote::AvatarExpression::ALL {
-            let crop = hero_expression_crop(&source_sheet, expression)?;
-            let index = expression as u32;
-            image::imageops::overlay(
-                &mut sheet,
-                &crop,
-                ((index % 2) * HERO_PORTRAIT_PX).into(),
-                ((index / 2) * HERO_PORTRAIT_PX).into(),
+/// Largest side of a CrazyGames avatar sheet; a full 2048 sheet decodes to 16 MB.
+const CG_AVATAR_SHEET_PX: u32 = 2048;
+
+/// One published avatar on its way into a sheet.
+#[derive(Debug, Clone)]
+struct AvatarSource {
+    /// Path under `assets/`, e.g. `gameplay/avatars/caesar.webp`.
+    key: String,
+    /// Heroes share sheets; nations and tribes share sheets per region.
+    group: String,
+    side: u32,
+    file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PlacedAvatar {
+    key: String,
+    x: u32,
+    y: u32,
+    side: u32,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct AvatarSheet {
+    /// Path under `assets/`, e.g. `gameplay/avatars/atlas/europe-192-0.webp`.
+    path: String,
+    width: u32,
+    height: u32,
+    cells: Vec<PlacedAvatar>,
+}
+
+/// Places avatars in square grids. Avatars of one group and size share sheets, sorted by key
+/// so the layout is the same on every build.
+fn plan_avatar_sheets(avatars: &[AvatarSource]) -> Result<Vec<AvatarSheet>> {
+    let mut groups: std::collections::BTreeMap<(&str, u32), Vec<&AvatarSource>> = Default::default();
+    for avatar in avatars {
+        groups.entry((avatar.group.as_str(), avatar.side)).or_default().push(avatar);
+    }
+    let mut sheets = Vec::new();
+    for ((group, side), mut members) in groups {
+        if side == 0 || side > CG_AVATAR_SHEET_PX {
+            bail!("avatars in group {group} are {side} px; a sheet holds cells of 1..={CG_AVATAR_SHEET_PX} px");
+        }
+        members.sort_by(|a, b| a.key.cmp(&b.key));
+        let per_row = CG_AVATAR_SHEET_PX / side;
+        for (index, chunk) in members.chunks((per_row * per_row) as usize).enumerate() {
+            let columns = per_row.min(chunk.len() as u32);
+            let rows = (chunk.len() as u32).div_ceil(columns);
+            let cells = chunk
+                .iter()
+                .enumerate()
+                .map(|(slot, avatar)| {
+                    let slot = slot as u32;
+                    PlacedAvatar {
+                        key: avatar.key.clone(),
+                        x: (slot % columns) * side,
+                        y: (slot / columns) * side,
+                        side,
+                    }
+                })
+                .collect();
+            sheets.push(AvatarSheet {
+                path: format!("gameplay/avatars/atlas/{group}-{side}-{index}.webp"),
+                width: columns * side,
+                height: rows * side,
+                cells,
+            });
+        }
+    }
+    Ok(sheets)
+}
+
+/// Region name for each avatar stem, from the shared entity catalog.
+fn avatar_region_groups() -> std::collections::BTreeMap<String, String> {
+    sow_data::geo_entities::all()
+        .filter(|entity| entity.region != sow_data::geo_entities::Region::Unassigned)
+        .filter_map(|entity| {
+            let avatar = entity.avatar.clone()?;
+            Some((avatar, format!("{:?}", entity.region).to_lowercase()))
+        })
+        .collect()
+}
+
+/// Packs every published avatar under `assets/gameplay/avatars` into shared sheets and removes
+/// the loose files. Returns the index the CrazyGames shell reads as `window.SOW_AVATAR_ATLAS`.
+fn pack_cg_avatar_sheets(packaged: &Path, pipeline: &ArtPipeline) -> Result<serde_json::Value> {
+    let root = packaged.join("gameplay/avatars");
+    let regions = avatar_region_groups();
+    let heroes = sow_core::player::Leader::all()
+        .map(|leader| leader.art_slug().to_owned())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut avatars = Vec::new();
+    for entry in walkdir::WalkDir::new(&root).sort_by_file_name() {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let file = entry.path().to_path_buf();
+        if file.extension().and_then(|ext| ext.to_str()) != Some("webp") {
+            bail!("CrazyGames avatar {} must be a .webp portrait", file.display());
+        }
+        let key = file.strip_prefix(packaged)?.to_string_lossy().replace('\\', "/");
+        let stem = file_stem(&file);
+        let group = if key.starts_with("gameplay/avatars/expressions/") || heroes.contains(&stem) {
+            "heroes".to_owned()
+        } else {
+            regions.get(&stem).cloned().unwrap_or_else(|| "other".to_owned())
+        };
+        let (width, height) =
+            image::image_dimensions(&file).with_context(|| format!("read avatar {}", file.display()))?;
+        if width != height {
+            bail!("avatar {} must be square, not {width}x{height}", file.display());
+        }
+        avatars.push(AvatarSource { key, group, side: width, file });
+    }
+
+    let sheets = plan_avatar_sheets(&avatars)?;
+    let files = avatars
+        .iter()
+        .map(|avatar| (avatar.key.as_str(), avatar.file.as_path()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let scratch = tempfile::tempdir().context("create temporary CrazyGames avatar sheets")?;
+    let mut index_sheets = Vec::new();
+    let mut index_cells = serde_json::Map::new();
+    for (sheet_index, sheet) in sheets.iter().enumerate() {
+        let mut canvas = image::RgbaImage::new(sheet.width, sheet.height);
+        for cell in &sheet.cells {
+            let portrait = image::open(files[cell.key.as_str()])
+                .with_context(|| format!("read avatar {}", cell.key))?
+                .to_rgba8();
+            image::imageops::overlay(&mut canvas, &portrait, cell.x.into(), cell.y.into());
+            index_cells.insert(
+                cell.key.clone(),
+                serde_json::json!([sheet_index, cell.x, cell.y, cell.side]),
             );
         }
-        let raw = temporary.path().join(format!("{slug}.png"));
-        sheet
+        let raw = scratch.path().join(format!("sheet-{sheet_index}.png"));
+        canvas
             .save(&raw)
-            .with_context(|| format!("write temporary expression sheet for {slug}"))?;
-        pipeline.publish_image(
-            &raw,
-            &destination.join(format!("{slug}.webp")),
-            "avatar_expression_sheet",
-            None,
-            None,
-        )?;
+            .with_context(|| format!("write avatar sheet {}", sheet.path))?;
+        pipeline.publish_image(&raw, &packaged.join(&sheet.path), "avatar_atlas", None, None)?;
+        index_sheets.push(serde_json::json!({
+            "path": sheet.path,
+            "width": sheet.width,
+            "height": sheet.height,
+        }));
     }
-    Ok(())
+    // Loose portraits go only after every sheet is published, so a failed pack leaves the package whole.
+    for avatar in &avatars {
+        fs::remove_file(&avatar.file)?;
+    }
+    let expressions = root.join("expressions");
+    if expressions.is_dir() {
+        fs::remove_dir_all(expressions)?;
+    }
+    Ok(serde_json::json!({ "sheets": index_sheets, "cells": index_cells }))
 }
 
 fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Result<serde_json::Value> {
@@ -1899,10 +2011,18 @@ fn build_cg_ability_atlas(source: &Path, destination: &Path, pipeline: &ArtPipel
 }
 
 fn verify_cg_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
-    let expected = cg_asset_inventory(source)?;
-    let atlas = PathBuf::from("gameplay/icons/abilities-atlas.webp");
-    let mut expected = expected;
-    expected.push(atlas.clone());
+    let html = fs::read_to_string(
+        packaged
+            .parent()
+            .context("CrazyGames assets folder has no bundle root")?
+            .join("index.html"),
+    )?;
+    let avatar_atlas = cg_avatar_atlas_config(&html)?;
+    let mut expected = cg_asset_inventory(source)?;
+    expected.push(PathBuf::from("gameplay/icons/abilities-atlas.webp"));
+    for sheet in avatar_atlas["sheets"].as_array().into_iter().flatten() {
+        expected.push(PathBuf::from(sheet["path"].as_str().unwrap_or_default()));
+    }
     expected.sort();
     let actual = asset_file_inventory(packaged)?;
     if expected != actual {
@@ -1924,11 +2044,21 @@ fn verify_cg_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
             actual.len()
         );
     }
+    let indexed = avatar_atlas["cells"]
+        .as_object()
+        .map(|cells| cells.keys().cloned().collect::<std::collections::BTreeSet<_>>())
+        .unwrap_or_default();
+    let published = asset_file_inventory(&source.join("gameplay/avatars"))?
+        .into_iter()
+        .map(|relative| format!("gameplay/avatars/{}", relative.to_string_lossy()))
+        .collect::<std::collections::BTreeSet<_>>();
+    if indexed != published {
+        bail!("CrazyGames avatar index does not list exactly the published avatars");
+    }
     for relative in expected {
-        if relative == atlas {
-            continue;
-        }
-        if relative.starts_with("gameplay/avatars/hero-expression-sheets") {
+        if relative == Path::new("gameplay/icons/abilities-atlas.webp")
+            || relative.starts_with("gameplay/avatars/atlas")
+        {
             continue;
         }
         if file_sha256(&source.join(&relative))? != file_sha256(&packaged.join(&relative))? {
@@ -1936,6 +2066,56 @@ fn verify_cg_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
                 "CrazyGames runtime asset content mismatch: {}",
                 relative.display()
             );
+        }
+    }
+    Ok(())
+}
+
+/// The avatar index injected into the CrazyGames `index.html`.
+fn cg_avatar_atlas_config(html: &str) -> Result<serde_json::Value> {
+    let marker = "window.SOW_AVATAR_ATLAS = ";
+    let start = html
+        .find(marker)
+        .context("CrazyGames avatar atlas config is missing")?
+        + marker.len();
+    let end = html[start..]
+        .find(';')
+        .context("CrazyGames avatar atlas config is unterminated")?
+        + start;
+    serde_json::from_str(&html[start..end]).context("CrazyGames avatar atlas config is invalid JSON")
+}
+
+/// Checks the avatar index the shell reads: every sheet exists at its size, every cell lies
+/// inside its sheet, and every playable hero has its calm and expression portraits.
+fn verify_cg_avatar_atlas(dir: &Path, html: &str) -> Result<()> {
+    let config = cg_avatar_atlas_config(html)?;
+    let mut sizes = Vec::new();
+    for sheet in config["sheets"].as_array().context("CrazyGames avatar atlas has no sheets")? {
+        let path = sheet["path"].as_str().context("CrazyGames avatar sheet has no path")?;
+        let (width, height) = image::image_dimensions(dir.join("assets").join(path))
+            .with_context(|| format!("CrazyGames avatar sheet is missing: {path}"))?;
+        if width > CG_AVATAR_SHEET_PX || height > CG_AVATAR_SHEET_PX {
+            bail!("CrazyGames avatar sheet {path} is {width}x{height}; the limit is {CG_AVATAR_SHEET_PX}");
+        }
+        sizes.push((width, height));
+    }
+    let cells = config["cells"].as_object().context("CrazyGames avatar atlas has no cells")?;
+    for (key, cell) in cells {
+        let values = cell.as_array().filter(|values| values.len() == 4).context("CrazyGames avatar cell is malformed")?;
+        let [sheet, x, y, side] = [0, 1, 2, 3].map(|index| values[index].as_u64().unwrap_or(u64::MAX));
+        let (width, height) = *sizes
+            .get(sheet as usize)
+            .with_context(|| format!("CrazyGames avatar {key} points at a missing sheet"))?;
+        if side == 0 || x + side > u64::from(width) || y + side > u64::from(height) {
+            bail!("CrazyGames avatar {key} leaves its sheet");
+        }
+    }
+    for leader in sow_core::player::Leader::all() {
+        for expression in sow_core::emote::AvatarExpression::ALL {
+            let key = sow_core::emote::hero_portrait_path(leader.art_slug(), expression);
+            if !cells.contains_key(&key) {
+                bail!("CrazyGames avatar atlas is missing {key}");
+            }
         }
     }
     Ok(())
@@ -3376,6 +3556,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.hud.css",
             "main_menu.tutorial.css",
             "main_menu.profile.css",
+            "main_menu.missions.css",
         ],
         paths.is_local_preview(),
     )?;
@@ -5604,12 +5785,14 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
     verify_ranked_art(dir, "CrazyGames bundle")?;
     verify_gameplay_unit_art(dir, "CrazyGames bundle")?;
     verify_cg_ability_atlas(dir, &html)?;
+    verify_cg_avatar_atlas(dir, &html)?;
     for needle in [
         "sdk.crazygames.com/crazygames-sdk-v3.js",
         "SOW_trackExperienceEvent",
         "SOW_MAPS_URL = \"./maps\"",
         "SOW_ASSETS_URL = \"./assets\"",
         "window.SOW_ABILITY_ICON_ATLAS =",
+        "window.SOW_AVATAR_ATLAS =",
         "href=\"fonts/fonts.css?v=",
         "sow_client.js",
         "sow_client_bg.wasm",
@@ -6332,15 +6515,7 @@ fn package_cg(
     )?;
     let ability_atlas = copy_cg_assets(&play_dir.join("assets"), &out.join("assets"), paths.art_pipeline()?)?;
     let packaged_assets = out.join("assets");
-    pack_cg_avatar_expression_sheets(
-        &paths.root.join("assets/art/avatars/heroes"),
-        &packaged_assets,
-        paths.art_pipeline()?,
-    )?;
-    let expressions = packaged_assets.join("gameplay/avatars/expressions");
-    if expressions.is_dir() {
-        fs::remove_dir_all(expressions)?;
-    }
+    let avatar_atlas = pack_cg_avatar_sheets(&packaged_assets, paths.art_pipeline()?)?;
     copy_portal_maps(&play_dir.join("maps"), &out.join("maps"), paths.art_pipeline()?)?;
     verify_portal_map_inventory(&play_dir.join("maps"), &out.join("maps"))?;
     copy_shell(paths, out, WebTarget::CrazyGames)?;
@@ -6377,6 +6552,7 @@ fn package_cg(
     let mut lines: Vec<String> = html.lines().map(String::from).collect();
     let (mut sdk, mut boot) = (false, false);
     let ability_atlas_json = serde_json::to_string(&ability_atlas)?;
+    let avatar_atlas_json = serde_json::to_string(&avatar_atlas)?;
     for line in &mut lines {
         if line.contains("PORTAL_SDK_SLOT") {
             *line = "    <script src=\"https://sdk.crazygames.com/crazygames-sdk-v3.js\"></script>"
@@ -6384,7 +6560,7 @@ fn package_cg(
             sdk = true;
         } else if line.contains("/* PORTAL_BOOT_SLOT */") {
             *line = format!(
-                "        window.SOW_ENABLE_PORTAL_ADS = true; window.SOW_PORTAL = \"crazygames\"; window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; window.SOW_MAPS_URL = \"./maps\"; window.SOW_ASSETS_URL = \"./assets\"; window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\"; window.SOW_ABILITY_ICON_ATLAS = {ability_atlas_json};"
+                "        window.SOW_ENABLE_PORTAL_ADS = true; window.SOW_PORTAL = \"crazygames\"; window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; window.SOW_MAPS_URL = \"./maps\"; window.SOW_ASSETS_URL = \"./assets\"; window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\"; window.SOW_ABILITY_ICON_ATLAS = {ability_atlas_json}; window.SOW_AVATAR_ATLAS = {avatar_atlas_json};"
             );
             boot = true;
         }
@@ -8191,6 +8367,56 @@ shortArticle = true
         Ok(())
     }
 
+    fn avatar(key: &str, group: &str, side: u32) -> AvatarSource {
+        AvatarSource {
+            key: key.to_owned(),
+            group: group.to_owned(),
+            side,
+            file: PathBuf::from(key),
+        }
+    }
+
+    #[test]
+    fn avatar_sheets_keep_every_cell_inside_a_sheet_of_one_group() -> Result<()> {
+        let mut avatars: Vec<AvatarSource> = (0..205)
+            .map(|index| avatar(&format!("gameplay/avatars/nation_{index:03}.webp"), "europe", 192))
+            .collect();
+        avatars.extend((0..70).map(|index| {
+            avatar(&format!("gameplay/avatars/expressions/hero_{index:02}_fear.webp"), "heroes", 256)
+        }));
+        avatars.push(avatar("gameplay/avatars/random.webp", "other", 256));
+
+        let sheets = plan_avatar_sheets(&avatars)?;
+        let placed = sheets.iter().map(|sheet| sheet.cells.len()).sum::<usize>();
+        assert_eq!(placed, avatars.len(), "every avatar lands on exactly one sheet");
+        for sheet in &sheets {
+            assert!(sheet.width <= CG_AVATAR_SHEET_PX && sheet.height <= CG_AVATAR_SHEET_PX);
+            for cell in &sheet.cells {
+                assert!(cell.x + cell.side <= sheet.width, "{} leaves {}", cell.key, sheet.path);
+                assert!(cell.y + cell.side <= sheet.height, "{} leaves {}", cell.key, sheet.path);
+            }
+        }
+        // 205 nations at 192 px: 100 per full sheet, so three sheets for the europe group.
+        assert_eq!(sheets.iter().filter(|sheet| sheet.path.contains("europe-192")).count(), 3);
+        // 70 heroes at 256 px: 64 per sheet; random sits alone in its own sheet.
+        assert_eq!(sheets.iter().filter(|sheet| sheet.path.contains("heroes-256")).count(), 2);
+        assert!(sheets.iter().any(|sheet| sheet.path.contains("other-256") && sheet.cells.len() == 1));
+        Ok(())
+    }
+
+    #[test]
+    fn avatar_atlas_config_rejects_a_cell_outside_its_sheet() -> Result<()> {
+        let html = r#"<script>window.SOW_AVATAR_ATLAS = {"sheets":[{"path":"gameplay/avatars/atlas/x.webp","width":256,"height":256}],"cells":{"gameplay/avatars/caesar.webp":[0,128,0,256]}};</script>"#;
+        let config = cg_avatar_atlas_config(html)?;
+        assert_eq!(config["cells"]["gameplay/avatars/caesar.webp"][3], 256);
+        let dir = tempfile::tempdir()?;
+        fs::create_dir_all(dir.path().join("assets/gameplay/avatars/atlas"))?;
+        image::RgbaImage::new(256, 256).save(dir.path().join("assets/gameplay/avatars/atlas/x.webp"))?;
+        let error = verify_cg_avatar_atlas(dir.path(), html).unwrap_err();
+        assert!(error.to_string().contains("leaves its sheet"), "{error:#}");
+        Ok(())
+    }
+
     #[test]
     fn avatar_asset_tree_fingerprint_tracks_content_and_removed_duplicates() -> Result<()> {
         let temp = tempfile::tempdir()?;
@@ -8579,6 +8805,7 @@ shortArticle = true
             "main_menu.hud.css",
             "main_menu.tutorial.css",
             "main_menu.profile.css",
+            "main_menu.missions.css",
             "sow-campaign.ts",
             "sow-campaign-view.ts",
             "campaign/types.ts",
@@ -8603,6 +8830,7 @@ shortArticle = true
             "main_menu.jest.ts",
             "main_menu.heroes.ts",
             "main_menu.profile.ts",
+            "main_menu.missions.ts",
             "main_menu.tutorial.ts",
             "main_menu.shell.ts",
             "main_menu.hud.ts",

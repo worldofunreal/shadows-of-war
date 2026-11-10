@@ -5,6 +5,7 @@ import {
     avatarPortraitPath,
     clearAvatarPortrait,
     loadAvatarImage,
+    setAvatarImage,
     setAvatarPortrait,
 } from "./avatar-presentation.ts";
 import { esc } from "./main_menu.core.ts";
@@ -3092,7 +3093,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         image.onerror = function () {
             this.remove();
         };
-        image.src = avatarAssetUrl(avatarPortraitPath(slug, expression as AvatarExpression));
+        setAvatarImage(image, avatarAssetUrl(avatarPortraitPath(slug, expression as AvatarExpression)));
         face.appendChild(image);
         return face;
     }
@@ -4725,7 +4726,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (this.getAttribute("src") !== fallback) {
                 this.hidden = false;
                 this.crossOrigin = "anonymous";
-                this.src = fallback;
+                setAvatarImage(this, fallback);
                 if (!deferLoad) void loadAvatarImage(fallback).catch(() => undefined);
             } else {
                 this.hidden = true;
@@ -6490,8 +6491,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (hudRefs!.surrenderStats) hudRefs!.surrenderStats.classList.toggle("hidden", tutorialActive);
             renderEndgameStats(hudRefs!.surrenderStatValues, hud.player_endgame_stats);
             if (hudRefs!.surrenderPortrait) {
-                hudRefs!.surrenderPortrait.src = asset(
-                    "gameplay/avatars/" + (surrenderLeader.art_slug || surrenderLeader.slug) + ".webp",
+                setAvatarImage(
+                    hudRefs!.surrenderPortrait,
+                    asset("gameplay/avatars/" + (surrenderLeader.art_slug || surrenderLeader.slug) + ".webp"),
                 );
                 hudRefs!.surrenderPortrait.alt = surrenderLeader.name || SOW_t("hud.leader_avatar");
             }
@@ -6518,8 +6520,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 const activeLeaderId = (hud && hud.player_leader) || (hudState && hudState.selected_leader);
                 const activeLeader = leaderById(activeLeaderId);
                 if (hudRefs!.endgamePortrait) {
-                    hudRefs!.endgamePortrait.src = asset(
-                        "gameplay/avatars/" + (activeLeader.art_slug || activeLeader.slug) + ".webp",
+                    setAvatarImage(
+                        hudRefs!.endgamePortrait,
+                        asset("gameplay/avatars/" + (activeLeader.art_slug || activeLeader.slug) + ".webp"),
                     );
                     hudRefs!.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
                 }

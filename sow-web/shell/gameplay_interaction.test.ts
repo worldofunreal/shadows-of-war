@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import { avatarBackgroundCss, avatarImageAttribute, setAvatarBackground, setAvatarImage } from "./avatar-presentation.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
@@ -327,6 +328,7 @@ test("combat operations survive HUD and locale rebuilds, reuse rows, and reset o
         activeCelebrations: new Set(),
         avatarAssetUrl,
         avatarPortraitPath,
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         loadAvatarImage,
         setAvatarPortrait,
         hudRoot: new Element("root"),
@@ -667,6 +669,7 @@ test("HUD notifications coalesce, prioritize, reuse both entity avatars, and exp
         setAvatarPortrait,
         avatarAssetUrl,
         avatarPortraitPath,
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         loadAvatarImage,
         hudRoot: { dataset: {} },
         notificationCursor: 0,
@@ -1007,6 +1010,7 @@ test("notification cards render typed avatars, recover failed art, and clear reu
         asset: (path) => "/assets/" + path,
         avatarAssetUrl,
         avatarPortraitPath,
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         loadAvatarImage,
         hudIcon: (name) => name,
         statusIcon: (name) => name,
@@ -1146,6 +1150,7 @@ test("radial portraits follow live expressions without replacing buttons or canc
         asset: (path) => path,
         avatarAssetUrl: (path) => path,
         avatarPortraitPath,
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         avatarIdentityKeys: new WeakMap(),
         loadAvatarImage,
         setAvatarPortrait,

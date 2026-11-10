@@ -1,4 +1,5 @@
 import { formatCompactNumber } from "./number-format.ts";
+import { avatarBackgroundCss, avatarImageAttribute, setAvatarBackground, setAvatarImage } from "./avatar-presentation.ts";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -406,7 +407,7 @@ test("header keeps only the nickname and sizes it to the available space", () =>
     assert.ok(updateStart >= 0 && updateEnd > updateStart);
     const topbarUpdate = shellSource.slice(updateStart, updateEnd);
     assert.match(topbarUpdate, /const avatarUrl = avatarImage\(\)/);
-    assert.match(topbarUpdate, /avatar\.style\.backgroundImage =/);
+    assert.match(topbarUpdate, /setAvatarBackground\(avatar, avatarUrl\)/);
 
     const baseCss = menuCss["main_menu.base.css"];
     const layoutCss = menuCss["main_menu.layout.css"];
@@ -459,6 +460,7 @@ test("match history row shows the leader and verified KDA while provisional exit
             key === "profile.kda_value" ? `${values.kills}/${values.deaths}/${values.assists}` : key,
         asset: (path) => `/assets/${path}`,
         esc: (value) => String(value),
+        avatarImageAttribute,
         formatMapName: () => "Britain",
         leaderById: (id) => ({ slug: id.toLowerCase() }),
         leaderArtSlug,
@@ -1541,6 +1543,7 @@ test("hero selection waits for its skill icon and uses the shared loader", () =>
     const loaderEnd = coreSource.indexOf("export function abilityIconMarkup(", loaderStart);
     const context: Record<string, any> = {
         esc: (v: unknown) => String(v ?? ""),
+        avatarImageAttribute,
         heroesAvatarUrl: (slug: string) => "/assets/gameplay/avatars/" + slug + ".webp",
     };
     vm.runInNewContext(
@@ -1633,7 +1636,7 @@ test("hero selection stacks the skill below identity and the home briefing stays
         profileCss,
         /\.sow-menu__leader-copy \.sow-hero-briefing__ability-name\s*\{[^}]*font-size:\s*clamp\(16px/,
     );
-    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__icon-slot\s*\{[^}]*width:\s*56px/);
+    assert.match(profileCss, /\.sow-menu__leader-copy \.sow-hero-briefing__icon-slot\s*\{[^}]*width:\s*72px/);
     assert.doesNotMatch(
         compact,
         /\.sow-hero-briefing--selection\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*\.92fr/,
@@ -1939,6 +1942,7 @@ function rankedPresentationHarness() {
     const context = {
         asset: (value) => "/assets/" + value,
         avatarImage: (value) => "/avatars/" + (value || "random"),
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         esc: (value) =>
             String(value ?? "")
                 .replace(/&/g, "&amp;")
@@ -2230,6 +2234,7 @@ test("header nameplate owns avatar, nickname, level and XP bar; balances and set
         SOW_t: (key) => key,
         esc: String,
         avatarImage: () => "random.webp",
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         currencyAsset: (kind) => kind + ".webp",
         menuIcon: () => "settings",
         portalOffersStore: () => shop,
@@ -2429,6 +2434,7 @@ test("header refresh preserves a focused nickname and never recreates login", ()
             }),
         },
         avatarImage: () => "random.webp",
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         SOW_t: (key) => key,
     });
     refresh();

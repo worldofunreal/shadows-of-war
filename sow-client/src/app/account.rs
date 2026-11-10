@@ -1471,6 +1471,41 @@ impl SowApp {
         );
     }
 
+    pub(crate) fn claim_mission_reward(&mut self, mission_id: &str, doubled_by_ad: bool) {
+        let def = sow_data::missions::ONBOARDING_MISSIONS
+            .iter()
+            .chain(sow_data::missions::DAILY_MISSION_POOL.iter())
+            .find(|m| m.id == mission_id)
+            .copied();
+        if let Some(def) = def {
+            let record = self
+                .progress
+                .missions_progress
+                .entry(mission_id.to_string())
+                .or_default();
+            if !record.claimed {
+                record.id = mission_id.to_string();
+                record.completed = true;
+                record.claimed = true;
+                record.doubled_by_ad = doubled_by_ad;
+                let multiplier = if doubled_by_ad { 2 } else { 1 };
+                let crowns = def.crowns_reward * multiplier;
+                let gems = def.gems_reward * multiplier;
+                self.progress.crowns = self.progress.crowns.saturating_add(crowns);
+                self.progress.gems = self.progress.gems.saturating_add(gems);
+                self.save_local_progress();
+
+                let mut fields = serde_json::Map::new();
+                fields.insert(
+                    "mission_id".into(),
+                    serde_json::Value::String(mission_id.to_string()),
+                );
+                fields.insert("doubled_by_ad".into(), serde_json::Value::Bool(doubled_by_ad));
+                self.post_profile_action("claim mission", "/profile/missions/claim", fields);
+            }
+        }
+    }
+
     pub(crate) fn unlock_skin(&mut self, skin_id: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("skin_id".into(), serde_json::Value::String(skin_id));

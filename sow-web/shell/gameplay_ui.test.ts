@@ -1,4 +1,5 @@
 import { formatCompactNumber as formatEndgameCompact } from "./number-format.ts";
+import { avatarBackgroundCss, avatarImageAttribute, setAvatarBackground, setAvatarImage } from "./avatar-presentation.ts";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -271,6 +272,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
             formatEndgameExact: format.formatEndgameExact,
             formatEndgameCompact: format.formatEndgameCompact,
             renderEndgameStats: helpers.renderEndgameStats,
+            setAvatarImage,
             leaderById: () => ({ slug: "test", name: "Test" }),
             asset: (name) => "/assets/" + name,
         });
@@ -458,6 +460,7 @@ function makePlayerDialogsHarness() {
         asset: (name) => "/assets/" + name,
         avatarAssetUrl,
         avatarPortraitPath,
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         loadAvatarImage,
         SOW_t: (key) => context.window.SOW_LOCALE + ":" + key,
         setAvatarPortrait,
@@ -637,6 +640,7 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
         setAvatarPortrait,
         avatarAssetUrl,
         avatarPortraitPath,
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         loadAvatarImage,
         document: doc,
         hudRefs: makeRefs(),
@@ -931,6 +935,7 @@ test("map feedback reuses one compact card, clamps to the viewport, and releases
         setAvatarPortrait,
         avatarAssetUrl,
         avatarPortraitPath,
+        avatarImageAttribute, avatarBackgroundCss, setAvatarBackground, setAvatarImage,
         loadAvatarImage,
         window: {
             innerWidth: 375,

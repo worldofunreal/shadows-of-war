@@ -1101,9 +1101,10 @@ test("playable map preview shares game geography and land checks", () => {
   ).sources["giantworldmap.webp"];
   assert.deepEqual(source.map_grid_frame, [16, 16, 4094, 1932]);
   const sourceBytes = fs.readFileSync(path.join(shell, "../../assets/map_sources/giantworldmap.webp"));
-  assert.equal(sourceBytes.toString("hex", 0, 8), "89504e470d0a1a0a");
-  assert.equal(sourceBytes.readUInt32BE(16), source.width);
-  assert.equal(sourceBytes.readUInt32BE(20), source.height);
+  assert.equal(sourceBytes.toString("utf8", 0, 4), "RIFF");
+  assert.equal(sourceBytes.toString("utf8", 8, 12), "WEBP");
+  assert.equal(sourceBytes.readUIntLE(24, 3) + 1, source.width);
+  assert.equal(sourceBytes.readUIntLE(27, 3) + 1, source.height);
   void { naturalWidth: source.width, naturalHeight: source.height };
   const icelandSource = { x: 1717, y: 237 },
     icelandTarget = campaignMapPreviewApi.geoToMapPoint(

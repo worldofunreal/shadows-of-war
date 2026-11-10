@@ -27,4 +27,5 @@ tempfile = { workspace = true }
 toml = { workspace = true }
 sow-i18n = { workspace = true }
 sow-core = { workspace = true }
+sow-data = { workspace = true }
 sow-map = { workspace = true, features = ["generator"] }

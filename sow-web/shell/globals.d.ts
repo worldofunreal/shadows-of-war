@@ -100,6 +100,11 @@ declare global {
             rows: number;
             icons: Record<string, number>;
         };
+        /** CrazyGames only: avatar portraits packed into sheets; cells are [sheet, x, y, side]. */
+        SOW_AVATAR_ATLAS?: {
+            sheets: { path: string; width: number; height: number }[];
+            cells: Record<string, [number, number, number, number]>;
+        };
         SOW_BOOT_UI_BASE: string;
         SOW_PORTAL: string;
         SOW_SOURCE_URL: string;

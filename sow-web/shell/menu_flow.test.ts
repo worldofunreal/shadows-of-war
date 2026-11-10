@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import { avatarBackgroundCss, avatarImageAttribute, setAvatarBackground, setAvatarImage } from "./avatar-presentation.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
@@ -1225,6 +1226,7 @@ test("random leader remains available regardless of legacy guide progress", () =
         SOW_t: (key) => key,
         asset: (path) => "/assets/" + path,
         esc: (value) => String(value),
+        avatarImageAttribute,
     };
     context.menuUi.state = context.state;
     vm.runInNewContext(

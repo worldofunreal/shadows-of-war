@@ -16,6 +16,7 @@ import { renderPublicPanel } from "./main_menu.lobbies.ts";
 import { render, renderSettingsPrivacySection } from "./main_menu.shell.ts";
 import { renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
 import { isAndroidTwa } from "./main_menu.store.ts";
+import { renderDirectiveCard } from "./main_menu.missions.ts";
 
 export function renderCommandPanel() {
     return (
@@ -25,6 +26,7 @@ export function renderCommandPanel() {
         renderPublicPanel("home") +
         "</div>" +
         "<div class='sow-menu__home-actions'>" +
+        renderDirectiveCard() +
         renderQuickMatchButton() +
         "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" +
         esc(SOW_t("menu.campaign")) +
@@ -133,12 +135,6 @@ function renderSettingsLinks() {
               esc(SOW_t("menu.third_party_licenses")) +
               "</button>"
             : "";
-    const cookieSettings =
-        typeof window.SOW_analyticsManage === "function"
-            ? "<button class='sow-menu__settings-link' type='button' data-sow-cookie-settings>" +
-              esc(SOW_t("menu.cookie_settings")) +
-              "</button>"
-            : "";
     const socialButtons =
         "<div class='sow-menu__settings-social-row'>" +
         renderSettingsLink(
@@ -167,7 +163,6 @@ function renderSettingsLinks() {
         renderSettingsLink("https://shadowsofwar.io/terms/", "menu.terms") +
         renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy") +
         renderSettingsLink("https://shadowsofwar.io/cookies/", "menu.cookies") +
-        cookieSettings +
         renderSettingsLink(licenseUrl, "menu.license", "sow-menu__license-link") +
         androidOssLicenses +
         "</div>";

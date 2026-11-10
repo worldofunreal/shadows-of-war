@@ -16,7 +16,7 @@ import {
 } from "./main_menu.core.ts";
 import { activeScreenPanel } from "./main_menu.shell.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
-import { loadAvatarImage } from "./avatar-presentation.ts";
+import { avatarAtlasCell, avatarImageAttribute, loadAvatarImage } from "./avatar-presentation.ts";
 import type { MenuLeader } from "./main_menu.state.ts";
 import { renderLeaderPurchase, renderSkinsButton } from "./main_menu.surfaces.ts";
 
@@ -50,10 +50,18 @@ function heroesAvatarMarkupUrl(slug: string, expression: HeroesAvatarExpression)
 }
 
 function setHeroesFeaturedPlaceholder(featured: HTMLElement, slug: string) {
-    featured.style.setProperty(
-        "--sow-hero-featured-placeholder",
-        "url(" + JSON.stringify(heroesAvatarUrl(slug, "calm")) + ")",
-    );
+    const calm = heroesAvatarUrl(slug, "calm");
+    if (!avatarAtlasCell(calm)) {
+        featured.style.setProperty("--sow-hero-featured-placeholder", "url(" + JSON.stringify(calm) + ")");
+        return;
+    }
+    featured.dataset.heroPlaceholder = slug;
+    void loadAvatarImage(calm)
+        .then((portrait) => {
+            if (featured.dataset.heroPlaceholder !== slug) return;
+            featured.style.setProperty("--sow-hero-featured-placeholder", "url(" + JSON.stringify(portrait.src) + ")");
+        })
+        .catch(() => undefined);
 }
 
 function preloadHeroesFeaturedArt(leader: MenuLeader) {
@@ -83,7 +91,7 @@ function heroesMotionReduced() {
 function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expression: HeroesAvatarExpression) {
     if (!image || !slug) return;
     const source = heroesAvatarUrl(slug, expression);
-    const packed = window.SOW_PORTAL === "crazygames" && expression !== "calm";
+    const packed = avatarAtlasCell(source) !== null;
     const previousSource = image.getAttribute("src") || image.src || "";
     if (heroesAvatarSources.get(image) === source) return;
     if (!packed && (previousSource === source || (previousSource && previousSource.endsWith(source)))) return;
@@ -92,8 +100,7 @@ function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expressio
     heroesAvatarRevisions.set(image, revision);
     const running = heroesAvatarAnimations.get(image);
     if (running) running.cancel();
-    if (packed) image.src = heroesAvatarUrl(slug, "calm");
-    else image.src = source;
+    if (!packed) image.src = source;
 
     const animateLoadedAvatar = function () {
         if (
@@ -337,9 +344,9 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         "' aria-pressed='" +
         selected +
         "'>" +
-        "<span class='sow-heroes__card-art'><img src='" +
-        esc(avatarUrl) +
-        "' alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
+        "<span class='sow-heroes__card-art'><img " +
+        avatarImageAttribute(avatarUrl) +
+        " alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
         "<span class='sow-heroes__card-copy'><strong>" +
         esc(leaderDisplayName(leader)) +
         "</strong><small>" +
@@ -376,9 +383,9 @@ function renderRandomLeaderCard(selected: boolean) {
         "' type='button' data-command='preview_random_leader' aria-pressed='" +
         selected +
         "'>" +
-        "<span class='sow-heroes__card-art'><img src='" +
-        esc(avatarUrl) +
-        "' alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
+        "<span class='sow-heroes__card-art'><img " +
+        avatarImageAttribute(avatarUrl) +
+        " alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
         "<span class='sow-heroes__card-copy'><strong>" +
         esc(randomLeaderName()) +
         "</strong><em>" +
@@ -660,9 +667,9 @@ function renderHeroesArtLoader(avatarSlug: string) {
         .replace("class='showcase-loader'", "class='showcase-loader' data-hero-art-loader")
         .replace(
             /<\/div>$/,
-            "<img class='showcase-portrait' data-hero-art-avatar src='" +
-                esc(heroesAvatarUrl(avatarSlug, "calm")) +
-                "' alt='' width='256' height='256' decoding='async'></div>",
+            "<img class='showcase-portrait' data-hero-art-avatar " +
+                avatarImageAttribute(heroesAvatarUrl(avatarSlug, "calm")) +
+                " alt='' width='256' height='256' decoding='async'></div>",
         );
 }
 
