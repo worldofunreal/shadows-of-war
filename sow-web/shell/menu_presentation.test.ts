@@ -1419,13 +1419,18 @@ test("one hero briefing renders identity and the named ability without exposing 
 test("weekly free rotation always keeps its localized hero tag", () => {
     const predicateStart = heroesSource.indexOf("function isWeeklyFreeRotation");
     const predicateEnd = heroesSource.indexOf("\n}", predicateStart) + 2;
+    const rarityStart = heroesSource.indexOf("function heroesRarityLabel");
+    const rarityEnd = heroesSource.indexOf("\n}", rarityStart) + 2;
     const labelStart = heroesSource.indexOf("function heroesStatusLabel");
     const labelEnd = heroesSource.indexOf("\n}", labelStart) + 2;
     assert.ok(predicateStart >= 0 && predicateEnd > predicateStart);
+    assert.ok(rarityStart >= 0 && rarityEnd > rarityStart);
     assert.ok(labelStart >= 0 && labelEnd > labelStart);
     const context = { SOW_t: (key) => key };
     vm.runInNewContext(
         heroesSource.slice(predicateStart, predicateEnd) +
+            "\n" +
+            heroesSource.slice(rarityStart, rarityEnd) +
             "\n" +
             heroesSource.slice(labelStart, labelEnd) +
             "\nthis.heroesStatusLabel = heroesStatusLabel;",
@@ -1442,6 +1447,16 @@ test("weekly free rotation always keeps its localized hero tag", () => {
         context.heroesStatusLabel({ ...weeklyLeader, owned: true }),
         "",
         "owned heroes do not get the free-rotation tag",
+    );
+    assert.equal(
+        context.heroesStatusLabel({ ...weeklyLeader, rarity: "epic" }),
+        "heroes.rarity_epic · heroes.weekly_free_rotation",
+        "the tier comes first, then the availability tag",
+    );
+    assert.equal(
+        context.heroesStatusLabel({ id: "Boudica", available: true, permanently_free: true, rarity: "legendary" }),
+        "heroes.rarity_legendary",
+        "Boudica shows her tier but no availability tag",
     );
     assert.equal(
         context.heroesStatusLabel({ ...weeklyLeader, permanently_free: true }),

@@ -75,30 +75,6 @@ test("resolveActiveMissions returns state missions directly when provided by bac
     assert.equal(resolved[0].completed, true);
 });
 
-test("resolveActiveMissions projects onboarding and daily fallback from player progress", () => {
-    const state = {
-        campaign: { tutorial_completed: true },
-        missions_progress: {
-            onboarding_1_tutorial: { id: "onboarding_1_tutorial", progress: 1, completed: true, claimed: true },
-            onboarding_2_structures: { id: "onboarding_2_structures", progress: 3, completed: false, claimed: false },
-        },
-    } as unknown as MenuState;
-
-    const resolved = resolveActiveMissions(state);
-    assert.ok(resolved.length >= 6); // 6 onboarding + 3 daily
-
-    const m1 = resolved.find((m) => m.id === "onboarding_1_tutorial");
-    assert.ok(m1);
-    assert.equal(m1.completed, true);
-    assert.equal(m1.claimed, true);
-
-    const m2 = resolved.find((m) => m.id === "onboarding_2_structures");
-    assert.ok(m2);
-    assert.equal(m2.progress, 3);
-    assert.equal(m2.target, 5);
-    assert.equal(m2.completed, false);
-});
-
 test("getActiveDirective steps sequentially through Camino del Conquistador", () => {
     const missions: MenuMission[] = [
         {

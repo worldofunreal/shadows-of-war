@@ -92,7 +92,7 @@
   },
   {
    "id": "alexander",
-   "name": "Alexander the Great",
+   "name": "Alexander",
    "entity": "Macedon",
    "role": "nation",
    "region": "europe",
@@ -108,7 +108,8 @@
      "against": "richer",
      "percent": 15
     },
-    "card": "sow-alexander"
+    "card": "sow-alexander",
+    "legacy_ids": ["Alexander the Great"]
    },
    "territory_color": "#3873c7"
   },
@@ -136,7 +137,7 @@
   },
   {
    "id": "richard_the_lionheart",
-   "name": "Richard the Lionheart",
+   "name": "Richard",
    "entity": "Angevin England",
    "role": "nation",
    "region": "europe",
@@ -144,22 +145,24 @@
    "lon": -0.13,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Richard_I_of_England",
-   "avatar": "richard_the_lionheart",
+   "avatar": "richard",
    "hero": {
-    "name": "Richard the Lionheart",
+    "name": "Richard",
     "ability": {
      "kind": "resource_bonus",
      "source": "alliance",
      "resource": "gold",
      "percent": 50
     },
-    "card": "sow-richard"
+    "card": "sow-richard",
+    "art_slug": "richard",
+    "legacy_ids": ["Richard the Lionheart"]
    },
    "territory_color": "#c72e24"
   },
   {
    "id": "vercingetorix",
-   "name": "Arverni",
+   "name": "Vercingetorix",
    "entity": "Arverni",
    "role": "tribe",
    "region": "europe",
@@ -176,7 +179,8 @@
      "resource": "troops",
      "percent": 50
     },
-    "card": "sow-vercingetorix"
+    "card": "sow-vercingetorix",
+    "legacy_ids": ["Arverni"]
    },
    "territory_color": "#478538"
   },
@@ -205,7 +209,7 @@
   },
   {
    "id": "lady_six_sky",
-   "name": "Lady Six Sky",
+   "name": "Six Sky",
    "entity": "Naranjo",
    "role": "nation",
    "region": "americas",
@@ -213,21 +217,23 @@
    "lon": -89.26,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lady_Six_Sky",
-   "avatar": "lady_six_sky",
+   "avatar": "six_sky",
    "hero": {
-    "name": "Lady Six Sky",
+    "name": "Six Sky",
     "ability": {
      "kind": "attack_strength",
      "against": "smaller",
      "percent": 50
     },
-    "card": "sow-lady-six-sky"
+    "card": "sow-lady-six-sky",
+    "art_slug": "six_sky",
+    "legacy_ids": ["Lady Six Sky"]
    },
    "territory_color": "#289494"
   },
   {
    "id": "leonidas",
-   "name": "Leonidas I",
+   "name": "Leonidas",
    "entity": "Sparta",
    "role": "nation",
    "region": "europe",
@@ -243,7 +249,8 @@
      "side": "defender",
      "percent": 50
     },
-    "card": "sow-leonidas"
+    "card": "sow-leonidas",
+    "legacy_ids": ["Leonidas I"]
    },
    "territory_color": "#9e6b38"
   },
@@ -415,7 +422,7 @@
   },
   {
    "id": "amina_de_zazzau",
-   "name": "Amina of Zazzau",
+   "name": "Amina",
    "entity": "Zazzau (modern Nigeria)",
    "role": "nation",
    "region": "africa",
@@ -423,15 +430,17 @@
    "lon": 7.7,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Amina_of_Zazzau",
-   "avatar": "amina_de_zazzau",
+   "avatar": "amina",
    "territory_color": "#c05430",
    "hero": {
-    "name": "Amina of Zazzau",
+    "name": "Amina",
     "ability": {
      "kind": "city_capture",
      "side": "defender",
      "percent": 50
-    }
+    },
+    "art_slug": "amina",
+    "legacy_ids": ["Amina of Zazzau"]
    }
   },
   {
@@ -1819,7 +1828,7 @@
   },
   {
    "id": "tipu_sultan",
-   "name": "Tipu Sultan",
+   "name": "Tipu",
    "entity": "Kingdom of Mysore",
    "role": "nation",
    "region": "asia",
@@ -1827,15 +1836,17 @@
    "lon": 76.68,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Tipu_Sultan",
-   "avatar": "tipu_sultan",
+   "avatar": "tipu",
    "territory_color": "#641e16",
    "hero": {
-    "name": "Tipu Sultan",
+    "name": "Tipu",
     "ability": {
      "kind": "conquest_speed",
      "against": "poorer",
      "percent": 30
-    }
+    },
+    "art_slug": "tipu",
+    "legacy_ids": ["Tipu Sultan"]
    }
   },
   {
@@ -2068,7 +2079,7 @@
   },
   {
    "id": "william_the_conqueror",
-   "name": "William the Conqueror",
+   "name": "William",
    "entity": "Duchy of Normandy",
    "role": "nation",
    "region": "europe",
@@ -2076,14 +2087,16 @@
    "lon": -0.37,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/William_the_Conqueror",
-   "avatar": "william_the_conqueror",
+   "avatar": "william",
    "territory_color": "#b87808",
    "hero": {
-    "name": "William the Conqueror",
+    "name": "William",
     "ability": {
      "kind": "tower_range",
      "percent": 50
-    }
+    },
+    "art_slug": "william",
+    "legacy_ids": ["William the Conqueror"]
    }
   },
   {
@@ -2482,7 +2495,7 @@
   },
   {
    "id": "salote_tupou_iii",
-   "name": "Sālote Tupou III",
+   "name": "Sālote III",
    "entity": "Tonga",
    "role": "nation",
    "region": "oceania",
@@ -2490,15 +2503,17 @@
    "lon": -175.2018,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/S%C4%81lote_Tupou_III",
-   "avatar": "salote_tupou_iii",
+   "avatar": "salote_iii",
    "territory_color": "#c27d29",
    "hero": {
-    "name": "Sālote Tupou III",
+    "name": "Sālote III",
     "ability": {
      "kind": "alliance_cost",
      "against": "nation",
      "percent": 50
-    }
+    },
+    "art_slug": "salote_iii",
+    "legacy_ids": ["Sālote Tupou III"]
    }
   },
   {
@@ -7660,7 +7675,7 @@
   },
   {
    "id": "rani_durgavati",
-   "name": "Rani Durgavati",
+   "name": "Durgavati",
    "entity": "Gond Kingdom of Garha-Katanga",
    "role": "nation",
    "region": "asia",
@@ -7668,20 +7683,22 @@
    "lon": 79.94,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Rani_Durgavati",
-   "avatar": "rani_durgavati",
+   "avatar": "durgavati",
    "territory_color": "#a0287a",
    "hero": {
-    "name": "Rani Durgavati",
+    "name": "Durgavati",
     "ability": {
      "kind": "enemy_retreat_penalty",
      "against": "nation",
      "percent": 50
-    }
+    },
+    "art_slug": "durgavati",
+    "legacy_ids": ["Rani Durgavati"]
    }
   },
   {
    "id": "empress_gi",
-   "name": "Empress Gi",
+   "name": "Gi",
    "entity": "Yuan Dynasty",
    "role": "nation",
    "region": "asia",
@@ -7689,15 +7706,17 @@
    "lon": 116.4074,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Empress_Gi",
-   "avatar": "empress_gi",
+   "avatar": "gi",
    "territory_color": "#c94f7c",
    "hero": {
-    "name": "Empress Gi",
+    "name": "Gi",
     "ability": {
      "kind": "alliance_cost",
      "against": "human",
      "percent": 50
-    }
+    },
+    "art_slug": "gi",
+    "legacy_ids": ["Empress Gi"]
    }
   },
   {
@@ -7767,7 +7786,7 @@
   },
   {
    "id": "joan_of_arc",
-   "name": "Joan of Arc",
+   "name": "Joan",
    "entity": "France",
    "role": "nation",
    "region": "europe",
@@ -7775,20 +7794,22 @@
    "lon": 5.675,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Joan_of_Arc",
-   "avatar": "joan_of_arc",
+   "avatar": "joan",
    "territory_color": "#1ca084",
    "hero": {
-    "name": "Joan of Arc",
+    "name": "Joan",
     "ability": {
      "kind": "attack_strength",
      "against": "other_player",
      "percent": 25
-    }
+    },
+    "art_slug": "joan",
+    "legacy_ids": ["Joan of Arc"]
    }
   },
   {
    "id": "catherine_the_great",
-   "name": "Catherine the Great",
+   "name": "Catherine",
    "entity": "Russian Empire",
    "role": "nation",
    "region": "europe",
@@ -7796,20 +7817,22 @@
    "lon": 14.5553,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Catherine_the_Great",
-   "avatar": "catherine_the_great",
+   "avatar": "catherine",
    "territory_color": "#8e44ad",
    "hero": {
-    "name": "Catherine the Great",
+    "name": "Catherine",
     "ability": {
      "kind": "tower_loss",
      "side": "attacker",
      "percent": 50
-    }
+    },
+    "art_slug": "catherine",
+    "legacy_ids": ["Catherine the Great"]
    }
   },
   {
    "id": "isabella_of_castile",
-   "name": "Isabella I of Castile",
+   "name": "Isabella I",
    "entity": "Castile / Spain",
    "role": "nation",
    "region": "europe",
@@ -7817,20 +7840,22 @@
    "lon": -4.9957,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Isabella_I_of_Castile",
-   "avatar": "isabella_of_castile",
+   "avatar": "isabella_i",
    "territory_color": "#4884c8",
    "hero": {
-    "name": "Isabella I of Castile",
+    "name": "Isabella I",
     "ability": {
      "kind": "city_capture",
      "side": "attacker",
      "percent": 50
-    }
+    },
+    "art_slug": "isabella_i",
+    "legacy_ids": ["Isabella I of Castile"]
    }
   },
   {
    "id": "cyrus_the_great",
-   "name": "Cyrus the Great",
+   "name": "Cyrus",
    "entity": "Achaemenid Empire",
    "role": "nation",
    "region": "asia",
@@ -7838,15 +7863,17 @@
    "lon": 52.4078,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Cyrus_the_Great",
-   "avatar": "cyrus_the_great",
+   "avatar": "cyrus",
    "territory_color": "#333955",
    "hero": {
-    "name": "Cyrus the Great",
+    "name": "Cyrus",
     "ability": {
      "kind": "conquest_speed",
      "against": "anyone",
      "percent": 25
-    }
+    },
+    "art_slug": "cyrus",
+    "legacy_ids": ["Cyrus the Great"]
    }
   },
   {
@@ -7872,7 +7899,7 @@
   },
   {
    "id": "suleiman",
-   "name": "Suleiman the Magnificent",
+   "name": "Suleiman",
    "entity": "Ottoman Empire",
    "role": "nation",
    "region": "asia",
@@ -7883,12 +7910,13 @@
    "avatar": "suleiman",
    "territory_color": "#f1c40f",
    "hero": {
-    "name": "Suleiman the Magnificent",
+    "name": "Suleiman",
     "ability": {
      "kind": "conquest_speed",
      "against": "smaller",
      "percent": 25
-    }
+    },
+    "legacy_ids": ["Suleiman the Magnificent"]
    }
   },
   {
@@ -7914,7 +7942,7 @@
   },
   {
    "id": "trieu_thi_trinh",
-   "name": "Lady Triệu",
+   "name": "Triệu",
    "entity": "Vietnam",
    "role": "nation",
    "region": "asia",
@@ -7922,20 +7950,22 @@
    "lon": 105.9,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Lady_Tri%E1%BB%87u",
-   "avatar": "trieu_thi_trinh",
+   "avatar": "trieu",
    "territory_color": "#00cece",
    "hero": {
-    "name": "Lady Triệu",
+    "name": "Triệu",
     "ability": {
      "kind": "attack_strength",
      "against": "larger",
      "percent": 25
-    }
+    },
+    "art_slug": "trieu",
+    "legacy_ids": ["Lady Triệu"]
    }
   },
   {
    "id": "musa_i",
-   "name": "Mansa Musa",
+   "name": "Musa",
    "entity": "Mali Empire",
    "role": "nation",
    "region": "africa",
@@ -7943,15 +7973,17 @@
    "lon": -7.9,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Mansa_Musa",
-   "avatar": "musa_i",
+   "avatar": "musa",
    "territory_color": "#6c5ce7",
    "hero": {
-    "name": "Mansa Musa",
+    "name": "Musa",
     "ability": {
      "kind": "attacker_loss",
      "when": "recapture_window",
      "percent": 50
-    }
+    },
+    "art_slug": "musa",
+    "legacy_ids": ["Mansa Musa"]
    }
   },
   {
@@ -8149,7 +8181,7 @@
   },
   {
    "id": "mary_of_burgundy",
-   "name": "Mary of Burgundy",
+   "name": "Mary",
    "entity": "Burgundian Netherlands",
    "role": "nation",
    "region": "europe",
@@ -8157,14 +8189,16 @@
    "lon": 4.35,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Mary_of_Burgundy",
-   "avatar": "mary_of_burgundy",
+   "avatar": "mary",
    "hero": {
-    "name": "Mary of Burgundy",
+    "name": "Mary",
     "ability": {
      "kind": "alliance_cost",
      "against": "larger",
      "percent": 30
-    }
+    },
+    "art_slug": "mary",
+    "legacy_ids": ["Mary of Burgundy"]
    },
    "territory_color": "#a367e9"
   },
@@ -9072,7 +9106,7 @@
   },
   {
    "id": "wanli",
-   "name": "Wanli Emperor",
+   "name": "Wanli",
    "entity": "China / Ming dynasty",
    "role": "nation",
    "region": "asia",
@@ -9087,7 +9121,8 @@
      "kind": "enemy_retreat_penalty",
      "against": "smaller",
      "percent": 50
-    }
+    },
+    "legacy_ids": ["Wanli Emperor"]
    },
    "territory_color": "#922b21"
   },
@@ -9180,7 +9215,7 @@
   },
   {
    "id": "boleslaw_ii",
-   "name": "Bolesław II the Bold",
+   "name": "Bolesław II",
    "entity": "Poland",
    "role": "nation",
    "region": "europe",
@@ -9196,13 +9231,14 @@
      "kind": "conquest_speed",
      "against": "foreign",
      "percent": 25
-    }
+    },
+    "legacy_ids": ["Bolesław II the Bold"]
    },
    "territory_color": "#b3242f"
   },
   {
    "id": "abd_al_rahman_al_ghafiqi",
-   "name": "Abd al-Rahman al-Ghafiqi",
+   "name": "Al-Ghafiqi",
    "entity": "Umayyad al-Andalus",
    "role": "nation",
    "region": "europe",
@@ -9210,15 +9246,16 @@
    "lon": -4.77,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Abd_al-Rahman_ibn_Abd_Allah_al-Ghafiqi",
-   "avatar": "abd_al_rahman_al_ghafiqi",
+   "avatar": "al_ghafiqi",
    "hero": {
-    "name": "Abd al-Rahman al-Ghafiqi",
-    "art_slug": "abd_al_rahman_al_ghafiqi",
+    "name": "Al-Ghafiqi",
+    "art_slug": "al_ghafiqi",
     "ability": {
      "kind": "attacker_loss",
      "when": "mountain",
      "percent": 25
-    }
+    },
+    "legacy_ids": ["Abd al-Rahman al-Ghafiqi"]
    },
    "territory_color": "#087c68"
   },
@@ -9268,7 +9305,7 @@
   },
   {
    "id": "peter_the_great",
-   "name": "Peter the Great",
+   "name": "Peter",
    "entity": "Russia",
    "role": "nation",
    "region": "europe",
@@ -9276,19 +9313,20 @@
    "lon": 37.6175,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Peter_the_Great",
-   "avatar": "peter_the_great",
+   "avatar": "peter",
    "hero": {
-    "name": "Peter the Great",
-    "art_slug": "peter_the_great",
+    "name": "Peter",
+    "art_slug": "peter",
     "ability": {
      "kind": "coastal_founding"
-    }
+    },
+    "legacy_ids": ["Peter the Great"]
    },
    "territory_color": "#c85a4b"
   },
   {
    "id": "empress_suiko",
-   "name": "Empress Suiko",
+   "name": "Suiko",
    "entity": "Yamato Japan",
    "role": "nation",
    "region": "asia",
@@ -9296,14 +9334,15 @@
    "lon": 135.82,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Empress_Suiko",
-   "avatar": "empress_suiko",
+   "avatar": "suiko",
    "hero": {
-    "name": "Empress Suiko",
-    "art_slug": "empress_suiko",
+    "name": "Suiko",
+    "art_slug": "suiko",
     "ability": {
      "kind": "allied_city_grant",
      "gold": 50
-    }
+    },
+    "legacy_ids": ["Empress Suiko"]
    },
    "territory_color": "#7d58a3"
   },
@@ -9329,7 +9368,7 @@
   },
   {
    "id": "king_david",
-   "name": "King David",
+   "name": "David",
    "entity": "Kingdom of Israel",
    "role": "nation",
    "region": "asia",
@@ -9337,14 +9376,15 @@
    "lon": 35.23,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/David",
-   "avatar": "king_david",
+   "avatar": "david",
    "hero": {
-    "name": "King David",
-    "art_slug": "king_david",
+    "name": "David",
+    "art_slug": "david",
     "ability": {
      "kind": "shared_city_spoils",
      "gold": 200
-    }
+    },
+    "legacy_ids": ["King David"]
    },
    "territory_color": "#5772a8"
   },
@@ -9371,7 +9411,7 @@
   },
   {
    "id": "muhammad_of_ghor",
-   "name": "Muhammad of Ghor",
+   "name": "Muhammad Ghor",
    "entity": "Ghurid Sultanate",
    "role": "nation",
    "region": "asia",
@@ -9379,14 +9419,15 @@
    "lon": 64.9,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Muhammad_of_Ghor",
-   "avatar": "muhammad_of_ghor",
+   "avatar": "muhammad_ghor",
    "hero": {
-    "name": "Muhammad of Ghor",
-    "art_slug": "muhammad_of_ghor",
+    "name": "Muhammad Ghor",
+    "art_slug": "muhammad_ghor",
     "ability": {
      "kind": "return_campaign",
      "percent": 35
-    }
+    },
+    "legacy_ids": ["Muhammad of Ghor"]
    },
    "territory_color": "#4c8c7c"
   },
@@ -9444,12 +9485,13 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Ewuare",
    "avatar": "ewuare",
    "hero": {
-    "name": "Ewuare the Great",
+    "name": "Ewuare",
     "art_slug": "ewuare",
     "ability": {
      "kind": "guild_network",
      "gold_per_second": 1
-    }
+    },
+    "legacy_ids": ["Ewuare the Great"]
    },
    "territory_color": "#79563a"
   },
@@ -9498,7 +9540,7 @@
   },
   {
    "id": "queen_nandi",
-   "name": "Queen Nandi",
+   "name": "Nandi",
    "entity": "Zulu Kingdom",
    "role": "nation",
    "region": "africa",
@@ -9506,9 +9548,9 @@
    "lon": 31.4,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Nandi_(mother_of_Shaka)",
-   "avatar": "queen_nandi",
+   "avatar": "nandi_zulu",
    "hero": {
-    "name": "Queen Nandi",
+    "name": "Nandi",
     "ability": {
      "kind": "resource_bonus",
      "source": {
@@ -9516,7 +9558,9 @@
      },
      "resource": "troops",
      "percent": 25
-    }
+    },
+    "art_slug": "nandi_zulu",
+    "legacy_ids": ["Queen Nandi"]
    },
    "territory_color": "#8a6731"
   },
@@ -9542,7 +9586,7 @@
   },
   {
    "id": "natavan",
-   "name": "Khurshid Banu Natavan",
+   "name": "Natavan",
    "entity": "Karabakh",
    "role": "nation",
    "region": "asia",
@@ -9552,10 +9596,11 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Khurshidbanu_Natavan",
    "avatar": "natavan",
    "hero": {
-    "name": "Khurshid Banu Natavan",
+    "name": "Natavan",
     "ability": {
      "kind": "city_farm_founding"
-    }
+    },
+    "legacy_ids": ["Khurshid Banu Natavan"]
    },
    "territory_color": "#478d7d"
   },
@@ -9590,13 +9635,14 @@
    "lon": 100.5761,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Suriyothai",
-   "avatar": "queen_suriyothai",
+   "avatar": "suriyothai_siam",
    "hero": {
     "name": "Suriyothai",
     "ability": {
      "kind": "city_intercession",
      "troops": 1500
-    }
+    },
+    "art_slug": "suriyothai_siam"
    },
    "territory_color": "#c58d3e"
   },
@@ -9610,13 +9656,14 @@
    "lon": -1.5,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Cartimandua",
-   "avatar": "queen_cartimandua",
+   "avatar": "cartimandua_brigantes",
    "hero": {
     "name": "Cartimandua",
     "ability": {
      "kind": "retreat_handover",
      "percent": 25
-    }
+    },
+    "art_slug": "cartimandua_brigantes"
    },
    "territory_color": "#795897"
   },
@@ -9649,12 +9696,13 @@
    "lon": 32.6103,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Hatshepsut",
-   "avatar": "pharaoh_hatshepsut",
+   "avatar": "hatshepsut_egypt",
    "hero": {
     "name": "Hatshepsut",
     "ability": {
      "kind": "punt_gardens"
-    }
+    },
+    "art_slug": "hatshepsut_egypt"
    },
    "territory_color": "#b58e4c"
   },
@@ -9727,13 +9775,14 @@
    "lon": 30.9,
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Nefertiti",
-   "avatar": "queen_nefertiti",
+   "avatar": "nefertiti_egypt",
    "hero": {
     "name": "Nefertiti",
     "ability": {
      "kind": "factory_city_upgrade_discount",
      "percent": 35
-    }
+    },
+    "art_slug": "nefertiti_egypt"
    },
    "territory_color": "#d69439"
   },
@@ -9759,7 +9808,7 @@
   },
   {
    "id": "emperor_qin_shi_huang",
-   "name": "Qin Shi Huang",
+   "name": "Ying Zheng",
    "entity": "Qin Dynasty",
    "role": "nation",
    "region": "asia",
@@ -9767,13 +9816,15 @@
    "lon": 108.71,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Qin_Shi_Huang",
-   "avatar": "emperor_qin_shi_huang",
+   "avatar": "ying_zheng",
    "hero": {
-    "name": "Qin Shi Huang",
+    "name": "Ying Zheng",
     "ability": {
      "kind": "imperial_standards",
      "percent": 25
-    }
+    },
+    "art_slug": "ying_zheng",
+    "legacy_ids": ["Qin Shi Huang"]
    },
    "territory_color": "#8369a5"
   },
@@ -9838,7 +9889,7 @@
   },
   {
    "id": "sibylla",
-   "name": "Sibylla of Jerusalem",
+   "name": "Sibylla",
    "entity": "Kingdom of Jerusalem",
    "role": "nation",
    "region": "asia",
@@ -9848,16 +9899,17 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Sibylla_of_Jerusalem",
    "avatar": "sibylla",
    "hero": {
-    "name": "Sibylla of Jerusalem",
+    "name": "Sibylla",
     "ability": {
      "kind": "second_crown"
-    }
+    },
+    "legacy_ids": ["Sibylla of Jerusalem"]
    },
    "territory_color": "#555f8e"
   },
   {
    "id": "sor_juana_ines_de_la_cruz",
-   "name": "Sor Juana Inés de la Cruz",
+   "name": "Sor Juana",
    "entity": "New Spain",
    "role": "nation",
    "region": "americas",
@@ -9865,12 +9917,14 @@
    "lon": -99.13,
    "gender": "female",
    "wikipedia": "https://es.wikipedia.org/wiki/Juana_In%C3%A9s_de_la_Cruz",
-   "avatar": "sor_juana_ines_de_la_cruz",
+   "avatar": "sor_juana",
    "hero": {
-    "name": "Sor Juana Inés de la Cruz",
+    "name": "Sor Juana",
     "ability": {
      "kind": "kitchen_philosophy"
-    }
+    },
+    "art_slug": "sor_juana",
+    "legacy_ids": ["Sor Juana Inés de la Cruz"]
    },
    "territory_color": "#695884"
   },
@@ -9935,7 +9989,7 @@
   },
   {
    "id": "sargon_of_akkad",
-   "name": "Sargon of Akkad",
+   "name": "Sargon",
    "entity": "Akkadian Empire",
    "role": "nation",
    "region": "asia",
@@ -9943,12 +9997,14 @@
    "lon": 44.4,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Sargon_of_Akkad",
-   "avatar": "sargon_of_akkad",
+   "avatar": "sargon",
    "hero": {
-    "name": "Sargon of Akkad",
+    "name": "Sargon",
     "ability": {
      "kind": "akkad_garrison"
-    }
+    },
+    "art_slug": "sargon",
+    "legacy_ids": ["Sargon of Akkad"]
    },
    "territory_color": "#955c40"
   },
@@ -10012,7 +10068,7 @@
   },
   {
    "id": "jalal_al_din_mangburni",
-   "name": "Jalal al-Din Mangburni",
+   "name": "Jalal Mangburni",
    "entity": "Khwarazmian Empire",
    "role": "nation",
    "region": "asia",
@@ -10020,14 +10076,16 @@
    "lon": 59.15,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Jalal_al-Din_Mangburni",
-   "avatar": "jalal_al_din_mangburni",
+   "avatar": "jalal_mangburni",
    "hero": {
-    "name": "Jalal al-Din Mangburni",
+    "name": "Jalal Mangburni",
     "ability": {
      "kind": "attacker_loss",
      "when": "sea_retreat",
      "percent": 100
-    }
+    },
+    "art_slug": "jalal_mangburni",
+    "legacy_ids": ["Jalal al-Din Mangburni"]
    },
    "territory_color": "#315b75"
   },
@@ -10093,7 +10151,7 @@
   },
   {
    "id": "ivan_the_terrible",
-   "name": "Ivan the Terrible",
+   "name": "Ivan IV",
    "entity": "Russia",
    "role": "nation",
    "region": "europe",
@@ -10101,13 +10159,15 @@
    "lon": 37.6156,
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Ivan_the_Terrible",
-   "avatar": "ivan_the_terrible",
+   "avatar": "ivan_iv",
    "hero": {
-    "name": "Ivan the Terrible",
+    "name": "Ivan IV",
     "ability": {
      "kind": "streltsy_muster",
      "troops": 750
-    }
+    },
+    "art_slug": "ivan_iv",
+    "legacy_ids": ["Ivan the Terrible"]
    },
    "territory_color": "#8a2432"
   },

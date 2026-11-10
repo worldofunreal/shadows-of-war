@@ -572,8 +572,8 @@ const XP_PER_EMPIRE: u32 = 8;
 const XP_PER_TRIBE: u32 = 2;
 const XP_PER_ASSIST: u32 = 5;
 
-const CROWNS_PARTICIPATION: u64 = 25;
-const CROWNS_WIN: u64 = 75;
+const CROWNS_PARTICIPATION: u64 = 40;
+const CROWNS_WIN: u64 = 100;
 const CROWNS_PER_KILL: u64 = 2;
 const CROWNS_PER_EMPIRE: u64 = 5;
 const CROWNS_PER_ASSIST: u64 = 2;
@@ -687,7 +687,7 @@ mod tests {
         });
         assert_eq!(loss.xp, 30);
         assert_eq!(loss.leader_xp, 30);
-        assert_eq!(loss.crowns, 35);
+        assert_eq!(loss.crowns, 50);
         assert_eq!(loss.laurels, 0);
 
         let win = calculate(RewardInput {
@@ -699,7 +699,7 @@ mod tests {
         });
         assert_eq!(win.xp, 163);
         assert_eq!(win.leader_xp, 163);
-        assert_eq!(win.crowns, 107);
+        assert_eq!(win.crowns, 147);
         assert_eq!(win.laurels, 0);
     }
 

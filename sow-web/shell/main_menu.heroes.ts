@@ -288,11 +288,20 @@ root.addEventListener("focusout", function (event) {
     setHeroesCardAvatar(card, card.classList.contains("is-selected") ? "angry" : "calm");
 });
 
+function heroesRarityLabel(leader: MenuLeader) {
+    return leader.rarity ? SOW_t("heroes.rarity_" + leader.rarity) : "";
+}
+
 function heroesStatusLabel(leader: MenuLeader) {
-    if (!leader || leader.id === "Boudica") return "";
-    if (leader.permanently_free) return SOW_t("heroes.always_free");
-    if (isWeeklyFreeRotation(leader)) return SOW_t("heroes.weekly_free_rotation");
-    return "";
+    if (!leader) return "";
+    const rarity = heroesRarityLabel(leader);
+    if (leader.id === "Boudica") return rarity;
+    const status = leader.permanently_free
+        ? SOW_t("heroes.always_free")
+        : isWeeklyFreeRotation(leader)
+          ? SOW_t("heroes.weekly_free_rotation")
+          : "";
+    return [rarity, status].filter(Boolean).join(" · ");
 }
 
 // OWNER DECISION — DO NOT "FIX" THIS MAPPING.
@@ -330,6 +339,7 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const locked = leader.available === false;
     const avatarSlug = leaderArtSlug(leader);
     const avatarUrl = heroesAvatarMarkupUrl(avatarSlug, selected ? "angry" : "calm");
+    const rarity = heroesRarityLabel(leader);
     return (
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
@@ -348,7 +358,9 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         esc(leaderDisplayName(leader)) +
         "</strong><small>" +
         esc(leaderCivilization(leader)) +
-        "</small></span>" +
+        "</small>" +
+        (rarity ? "<em>" + esc(rarity) + "</em>" : "") +
+        "</span>" +
         "</button>"
     );
 }

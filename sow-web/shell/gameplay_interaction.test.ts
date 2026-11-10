@@ -1111,15 +1111,15 @@ test("hero ability notices show that hero's ability icon in the seal", () => {
         asset: (p) => "/assets/" + p,
         hudIcon: (name) => "<svg data-icon='" + name + "'></svg>",
         statusIcon: (name) => "<svg data-icon='" + name + "'></svg>",
-        leaderById: (id) => ({ art_slug: id }),
+        leaderById: (id) => ({ art_slug: id === "lady_six_sky" ? "six_sky" : id }),
     });
     assert.match(
         notificationIcon("hud.elimination", { hero: "lady_six_sky", victim: "Tribe" }),
-        /<img class='sow-hud__notification-ability' src='\/assets\/gameplay\/icons\/abilities\/lady_six_sky\.webp'/,
+        /<img class='sow-hud__notification-ability' src='\/assets\/gameplay\/icons\/abilities\/six_sky\.webp'/,
     );
     assert.doesNotMatch(notificationIcon("hud.elimination", { hero: "x'><script>" }), /<img/);
     assert.doesNotMatch(notificationIcon("hud.elimination", { victim: "Tribe" }), /<img/);
-    assert.ok(fs.existsSync(path.join(shell, "../../assets/art/icons/abilities/lady_six_sky.webp")));
+    assert.ok(fs.existsSync(path.join(shell, "../../assets/art/icons/abilities/six_sky.webp")));
     assert.ok(hudCss.includes(".sow-hud__notification-ability"));
 });
 

@@ -8,11 +8,6 @@ pub const FREE_ROTATION_SIZE: usize = 8;
 pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
 // Unix weeks start Thursday; this aligns rotations to Tuesday 08:00 UTC (02:00 Mexico City).
 const ROTATION_RESET_OFFSET_SECS: u64 = 40 * 60 * 60;
-// ponytail: one balancing constant until real retention data exists; move pricing to live config then.
-// Crowns are the free spendable currency (owner decision 2026-09); laurels are
-// achievement points and are never a price.
-pub const LEADER_UNLOCK_COST_CROWNS: u64 = 500;
-pub const LEADER_UNLOCK_COST_GEMS: u64 = 450;
 /// One-time starter grant for every human account, regardless of identity
 /// provider. Bots never receive it.
 pub const WELCOME_GEMS: u64 = 475;
@@ -566,16 +561,8 @@ pub fn catalog_for_profile(
                 id: leader_id(leader).to_string(),
                 name: leader.display_name().to_string(),
                 civilization: leader.civilization().to_string(),
-                cost_crowns: if permanently_free {
-                    0
-                } else {
-                    LEADER_UNLOCK_COST_CROWNS
-                },
-                cost_gems: if permanently_free {
-                    0
-                } else {
-                    LEADER_UNLOCK_COST_GEMS
-                },
+                cost_crowns: leader.price_crowns(),
+                cost_gems: leader.price_gems(),
                 free_rotation,
                 permanently_free,
                 owned,
@@ -738,9 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn leader_has_dual_currency_price() {
-        assert_eq!(LEADER_UNLOCK_COST_CROWNS, 500);
-        assert_eq!(LEADER_UNLOCK_COST_GEMS, 450);
+    fn welcome_grant_is_fixed() {
         assert_eq!(WELCOME_GEMS, 475);
     }
 
@@ -751,7 +736,8 @@ mod tests {
         let catalog = catalog_for_profile(&owned, &owned, 725, 0, 0, &rotation);
         let value = serde_json::to_value(&catalog).unwrap();
         assert_eq!(value["crowns"], 725);
-        assert_eq!(value["leaders"][0]["cost_crowns"], 500);
+        let first = Leader::all().next().unwrap();
+        assert_eq!(value["leaders"][0]["cost_crowns"], first.price_crowns());
     }
 
     #[test]
@@ -765,7 +751,8 @@ mod tests {
                 .iter()
                 .filter(|leader| !leader.permanently_free)
                 .all(|leader| {
-                    leader.cost_gems == 450 && leader.cost_crowns == LEADER_UNLOCK_COST_CROWNS
+                    let hero = leader_from_id(&leader.id).unwrap();
+                    leader.cost_gems == hero.price_gems() && leader.cost_crowns == hero.price_crowns()
                 })
         );
         let free = catalog

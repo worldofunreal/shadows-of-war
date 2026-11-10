@@ -1943,7 +1943,7 @@ fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Res
 }
 
 fn build_cg_ability_atlas(source: &Path, destination: &Path, pipeline: &ArtPipeline) -> Result<serde_json::Value> {
-    const CELL_SIZE: u32 = 256;
+    const CELL_SIZE: u32 = 128;
     const COLUMNS: u32 = 9;
 
     let mut slugs = sow_core::player::Leader::all()
@@ -5874,7 +5874,7 @@ fn verify_cg_ability_atlas(dir: &Path, html: &str) -> Result<()> {
         .get("cellSize")
         .and_then(serde_json::Value::as_u64)
         .context("CrazyGames ability atlas has invalid cell size")? as u32;
-    if cell_size != 256 || width != columns * cell_size || height != rows * cell_size {
+    if cell_size != 128 || width != columns * cell_size || height != rows * cell_size {
         bail!("CrazyGames ability atlas image dimensions do not match its config");
     }
     if file_sha256(&path)? != expected_hash {
