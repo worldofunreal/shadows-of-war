@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "Империя Тимуридов"
 leader_ivan_the_terrible_name = "Иван Грозный"
 leader_ivan_the_terrible_historical = "Иван IV Васильевич (1530–1584) был венчан на царство в 1547 году. При нём создали постоянное оплачиваемое войско стрельцов и завоевали Казань и Астрахань; позднее опричнина принесла жестокие репрессии, а её историческая оценка остаётся спорной."
 leader_ivan_the_terrible_civilization = "Россия"
+leader_erendira_name = "Эрендира"
+leader_erendira_historical = "Легендарная пурепеча из Мичоакана; документы XVI века не подтверждают эту историю."
+leader_erendira_civilization = "Пурепеча"
 
 [profile]
 ranked_1v1 = "Рейтинг 1 на 1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "Погоня за Ордой"
 leader_amir_timur_description = "Племена, отступающие с вашей земли, теряют на 35% больше войск."
 leader_ivan_the_terrible_ability = "Сбор стрельцов"
 leader_ivan_the_terrible_description = "При захвате завершённого вражеского города призовите до 750 воинов, если в резерве есть место. Один раз за матч, в пределах лимита войск."
+leader_erendira_ability = "Захваченный конь"
+leader_erendira_description = "Когда вражеская армия теряет воинов, нападая на вашу землю, пополните войско на 15% этих потерь, не превышая лимит войск."
 
 [ranked]
 my_rank = "Мой ранг"

@@ -94,7 +94,7 @@ fn max_server_connections() -> Result<usize, String> {
 #[derive(Clone, Debug)]
 struct RelayWorker {
     id: usize,
-    host: String,
+    host: Option<String>,
     mgmt_url: String,
 }
 
@@ -248,7 +248,7 @@ fn parse_relay_worker(spec: &str, id: usize) -> Option<RelayWorker> {
     let scheme = relay_mgmt_scheme();
     Some(RelayWorker {
         id,
-        host: host.to_string(),
+        host: (host != "-").then(|| host.to_string()),
         mgmt_url: format!("{scheme}://{mgmt_host}:{mgmt_port}"),
     })
 }
@@ -1527,7 +1527,7 @@ async fn main() {
                                 players: rc.start_players.clone(),
                                 missed_turns: vec![],
                                 relay_port: Some(rc.relay_port),
-                                relay_host: Some(worker.host.clone()),
+                                relay_host: worker.host.clone(),
                             };
                             let handoff_result = async {
                                 let ticket = rc.player_tickets.get(player_id).ok_or_else(|| {
@@ -3448,9 +3448,12 @@ mod relay_worker_tests {
         ] {
             let worker = parse_relay_worker(input, id).expect("valid worker");
             assert_eq!(worker.id, id);
-            assert_eq!(worker.host, "relay-a.example");
+            assert_eq!(worker.host.as_deref(), Some("relay-a.example"));
             assert_eq!(worker.mgmt_url, format!("https://mgmt.example:{port}"));
         }
+        let local = parse_relay_worker("-:shadowsofwar.io:8083", 0).unwrap();
+        assert_eq!(local.host, None);
+        assert_eq!(local.mgmt_url, "https://shadowsofwar.io:8083");
     }
 
     #[test]

@@ -971,12 +971,36 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.equal(root.querySelector(".sow-ranked__loader"), matchup, "progress updates keep the same matchup node");
     window.SOW_syncWebLoader({ ...rankedLoad, ranked_matchup_html: undefined, phase: "Playing", loader_progress: 0.95 });
     assert.equal(root.querySelector(".sow-ranked__loader"), matchup, "the smaller Playing payload retains the encounter until the loader completes");
+    // The Boudica art finishes loading before the game is ready, so completion does not wait on it.
+    leaderPreloads.at(-1).onload();
+    await new Promise(setImmediate);
     window.SOW_syncWebLoader({ ...rankedLoad, loader_done: true, loader_progress: 1 });
     assert.equal(root.querySelector(".sow-ranked__loader"), null, "a ready game never waits for the matchup animation");
     [...timers.values()][0]();
     timers.clear();
     window.SOW_syncWebLoader(state("ExitGame", "Boudica", 0.4));
     assert.equal(root.querySelector(".sow-ranked__loader"), null, "the encounter does not leak into the return loader");
+
+    // The menu preview and the match loader share one prepared-art slot. Switching
+    // heroes while matchmaking must not leave the match on an empty frame.
+    window.SOW_syncWebLoader(state("Boot", null, 1, "MainMenu", true));
+    [...timers.values()][0]();
+    timers.clear();
+    window.SOW_prepareLeaderArt("caesar");
+    window.SOW_syncWebLoader(state("EnterGame", "Ragnar", 0.5));
+    const matchArtRequest = leaderPreloads.at(-1);
+    assert.match(matchArtRequest.src, /ragnar_/, "the match requests the hero it started with, not the menu preview");
+    assert.equal(findPicture(), null, "the match waits for its own art instead of showing the menu preview");
+    window.SOW_syncWebLoader(state("EnterGame", "Ragnar", 1, "Playing", true));
+    assert.equal(timers.size, 0, "a finished match waits for its own art before fading out");
+    matchArtRequest.onload();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(findPicture().children[0], matchArtRequest, "the match art is attached once its own image is ready");
+    [...timers.values()][0]();
+    timers.clear();
+    assert.equal(root.style.visibility, "hidden", "the match loader closes after its art is shown");
 });
 
 test("game exit resets Battle and replays the screen entrance after the loader", () => {

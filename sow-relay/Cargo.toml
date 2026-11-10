@@ -17,7 +17,6 @@ env_logger = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util", "fs", "process"] }
 tokio-tungstenite = { workspace = true, features = ["handshake"] }
 futures-util = { workspace = true }
-redis = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }

@@ -1156,6 +1156,9 @@ leader_amir_timur_civilization = "Timurid Empire"
 leader_ivan_the_terrible_name = "Ivan the Terrible"
 leader_ivan_the_terrible_historical = "Ivan IV Vasilyevich (1530–1584), crowned tsar in 1547. His government established the paid, standing Streltsy force and expanded into Kazan and Astrakhan; the later oprichnina imposed brutal repression and remains contested in historical interpretation."
 leader_ivan_the_terrible_civilization = "Russia"
+leader_erendira_name = "Eréndira"
+leader_erendira_historical = "Legendary Purépecha heroine from Michoacán; no 16th-century record confirms her story."
+leader_erendira_civilization = "Purépecha"
 
 [profile]
 laurels = "Laurels"
@@ -2160,6 +2163,8 @@ leader_amir_timur_ability = "Pursuit of the Horde"
 leader_amir_timur_description = "Tribes retreating from your land lose 35% more troops."
 leader_ivan_the_terrible_ability = "Streltsy Muster"
 leader_ivan_the_terrible_description = "Capturing a completed enemy city while your reserves have room musters up to 750 troops. Once per match, within your troop cap."
+leader_erendira_ability = "The Stolen Horse"
+leader_erendira_description = "When an enemy army loses troops while attacking your territory, recruit 15% of those losses, up to your troop cap."
 
 [ranked]
 my_rank = "My rank"

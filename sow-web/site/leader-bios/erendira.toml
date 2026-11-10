@@ -1,0 +1,46 @@
+[articles.es]
+text = "Eréndira es una heroína de la memoria purépecha cuya fama se apoya principalmente en una leyenda literaria, no en una biografía confirmada. La versión más conocida cuenta que tomó un caballo de los españoles, aprendió a montarlo y se unió a la resistencia. El estudio de Ana Cristina Ramírez Barreto no la encuentra en documentos de los siglos XVI y XVII y sitúa el personaje en la ficción histórica de Eduardo Ruiz. Esa falta de registro impide presentarla como una persona históricamente comprobada; sí permite estudiar cómo la leyenda dio forma a la memoria michoacana y a la representación de las mujeres purépecha."
+title = "Eréndira: leyenda purépecha y memoria histórica"
+lang = "es"
+url = "https://www.scielo.org.mx/scielo.php?pid=S0185-39292010000300004&script=sci_arttext"
+intro = [
+  "Eréndira ocupa un lugar conocido en la memoria cultural de Michoacán, pero conviene separar la fuerza de su leyenda de lo que se puede demostrar históricamente. No se ha localizado una mujer con ese nombre en los documentos purépecha y españoles de los siglos XVI y XVII que suelen usarse para narrar la conquista. La investigación de Ana Cristina Ramírez Barreto trata a la heroína de la versión popular como una figura literaria, no como una gobernante cuya biografía esté establecida.",
+  "La obra temprana que dio forma a la historia aparece en el segundo volumen de Michoacán: paisajes, tradiciones y leyendas, de Eduardo Ruiz, publicado en 1900. Ruiz tomó materiales de crónicas coloniales y de la Relación de Michoacán, pero reconoció que sus relatos también contenían imaginación y leyendas. Por eso, el caballo, la rebelión y las decisiones que se atribuyen a Eréndira describen el relato de Ruiz y sus versiones posteriores, no hechos confirmados de una persona documentada."
+]
+sections = [
+  { title = "La historia que cuenta la leyenda", paragraphs = [
+      "En la narración de Ruiz, una joven purépecha toma un caballo abandonado por los españoles, aprende a montarlo y se suma a quienes resisten la conquista en Michoacán. El caballo —un recurso militar desconocido en la región— se convierte en símbolo de apropiarse de una ventaja del invasor. La historia continúa con episodios de amor y evangelización; sus versiones no son uniformes y algunas cambian de manera importante el papel de Eréndira.",
+      "El Instituto Nacional de los Pueblos Indígenas vuelve a contarla como una leyenda de una mujer dueña de sí y dispuesta a defender lo suyo. Esa presentación es valiosa como memoria y tradición narrativa, pero no reemplaza evidencia biográfica del siglo XVI."
+    ] },
+  { title = "Qué está documentado", paragraphs = [
+      "Ramírez Barreto contrasta el relato con la Relación de Michoacán y señala que no se ha encontrado a Eréndira en documentos de los siglos XVI y XVII. Su estudio rastrea la heroína conocida hasta la recreación de Ruiz, quien explicó que sus libros mezclaban fuentes históricas con elementos imaginados y leyendas recibidas por tradición. La conclusión más prudente es que Eréndira, tal como aparece en esa historia, es una figura legendaria; no sabemos si detrás de ella hubo una persona real con otra identidad.",
+      "La misma investigación observa que la Relación de Michoacán sí describe a mujeres que intervinieron juntas para impedir el saqueo del tesoro de Tangaxoan durante la conquista. La fuente no las llama Eréndira. Mantener esa diferencia reconoce la agencia de mujeres purépecha documentadas sin atribuirles una identidad que el texto no ofrece."
+    ] },
+  { title = "De relato a emblema", paragraphs = [
+      "La popularidad de Eréndira creció mucho en el siglo XX. Durante las décadas cardenistas, la imagen de la mujer purépecha a caballo apareció en murales y otros proyectos públicos de memoria regional. Más tarde, el cine volvió a contar la historia desde una perspectiva purépecha. Cada versión refleja también a quienes la narraron y el momento político en que lo hicieron; la leyenda ha seguido cambiando junto con la manera de representar la conquista y a sus mujeres.",
+      "La habilidad El caballo arrebatado es una interpretación de juego del episodio legendario: cuando un ejército enemigo pierde tropas al atacar su territorio, Eréndira recluta el 15% de esas bajas, sin exceder el límite de tropas. No afirma que una Eréndira histórica realizara esa táctica."
+    ] }
+]
+shortArticle = false
+sources = [
+  { title = "Ana Cristina Ramírez Barreto, ‘Eréndiras de leyenda y carne y hueso’, Relaciones. Estudios de Historia y Sociedad (2010)", url = "https://www.scielo.org.mx/scielo.php?pid=S0185-39292010000300004&script=sci_arttext" },
+  { title = "Instituto Nacional de los Pueblos Indígenas, ‘Leyendas de los pueblos indígenas: La princesa purépecha Eréndira’ (2021)", url = "https://www.gob.mx/inpi/es/articulos/leyendas-de-los-pueblos-indigenas-la-princesa-purepecha-erendira-descarga-la-publicacion-en-pdf?idiom=es%2F1000" },
+  { title = "Eduardo Ruiz, Michoacán: paisajes, tradiciones y leyendas, vol. 2 (1900), texto primario de la versión literaria", url = "https://books.google.co.cr/books?id=KUsTAAAAYAAJ" },
+  { title = "Instituto de Investigaciones Históricas, UNAM, Relación de Michoacán", url = "https://historicas.unam.mx/publicaciones/publicadigital/libros/317_01/317_01_04_07_RelacionMichoacan.pdf" }
+]
+
+[fallbacks]
+ar = "es"
+de = "es"
+en = "es"
+fil = "es"
+fr = "es"
+id = "es"
+it = "es"
+ja = "es"
+ko = "es"
+"pt-BR" = "es"
+ru = "es"
+tr = "es"
+vi = "es"
+"zh-CN" = "es"

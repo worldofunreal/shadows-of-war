@@ -3,6 +3,7 @@
 use super::{MAX_MGMT_BODY_BYTES, Registry, handle_http_local, register_body};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io;
 use std::os::fd::AsRawFd;
@@ -10,6 +11,7 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::process::Command;
@@ -77,14 +79,23 @@ impl Supervisor {
         let root = std::env::var_os("RUNTIME_DIRECTORY")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("/var/run/sow-relay"));
-        DirBuilder::new().mode(0o700).recursive(true).create(&root)?;
+        DirBuilder::new()
+            .mode(0o700)
+            .recursive(true)
+            .create(&root)?;
         let metadata = root.symlink_metadata()?;
-        if !metadata.is_dir() || metadata.uid() != unsafe { libc::geteuid() }
+        if !metadata.is_dir()
+            || metadata.uid() != unsafe { libc::geteuid() }
             || metadata.mode() & 0o077 != 0
         {
-            return Err(io::Error::other("relay runtime directory must be private and owned by the relay user"));
+            return Err(io::Error::other(
+                "relay runtime directory must be private and owned by the relay user",
+            ));
         }
-        Ok(Self { root, registration: Mutex::new(()) })
+        Ok(Self {
+            root,
+            registration: Mutex::new(()),
+        })
     }
 
     fn lock_path(&self, id: u64) -> PathBuf {
@@ -97,14 +108,23 @@ impl Supervisor {
 
     pub fn claim(&self, id: u64) -> io::Result<MatchClaim> {
         let lock = self.lock_path(id);
-        let file = OpenOptions::new().read(true).write(true).create(true).truncate(false)
-            .mode(0o600).open(&lock)?;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(&lock)?;
         match_lock(&file, libc::F_SETLK)?;
         // A previous owner may have unlinked the lock between open and fcntl.
         if file.metadata()?.ino() != fs::metadata(&lock)?.ino() {
             return Err(io::Error::other("match lock was replaced during startup"));
         }
-        Ok(MatchClaim { _file: file, lock, socket: self.socket_path(id) })
+        Ok(MatchClaim {
+            _file: file,
+            lock,
+            socket: self.socket_path(id),
+        })
     }
 
     fn owns_match(&self, id: u64) -> io::Result<bool> {
@@ -120,23 +140,37 @@ impl Supervisor {
     }
 
     async fn forward(
-        &self, id: u64, method: &str, path: &str, body: &[u8],
+        &self,
+        id: u64,
+        method: &str,
+        path: &str,
+        body: &[u8],
     ) -> io::Result<Option<(String, Value)>> {
         if !self.owns_match(id)? {
             return Ok(None);
         }
-        let request = serde_json::to_vec(&ManagementRequest { method, path, body: body.to_vec() })?;
+        let request = serde_json::to_vec(&ManagementRequest {
+            method,
+            path,
+            body: body.to_vec(),
+        })?;
         let result = timeout(Duration::from_secs(3), async {
             let mut stream = UnixStream::connect(self.socket_path(id)).await?;
             stream.write_all(&request).await?;
             stream.shutdown().await?;
             let mut response = Vec::new();
-            stream.take((IPC_LIMIT + 1) as u64).read_to_end(&mut response).await?;
+            stream
+                .take((IPC_LIMIT + 1) as u64)
+                .read_to_end(&mut response)
+                .await?;
             if response.len() > IPC_LIMIT {
                 return Err(io::Error::other("match response is too large"));
             }
             serde_json::from_slice(&response).map_err(io::Error::from)
-        }).await.map_err(io::Error::other).and_then(|result| result);
+        })
+        .await
+        .map_err(io::Error::other)
+        .and_then(|result| result);
         match result {
             Ok(response) => Ok(Some(response)),
             Err(_) if !self.owns_match(id)? => Ok(None),
@@ -145,10 +179,13 @@ impl Supervisor {
     }
 
     async fn lobby(&self, id: u64) -> io::Result<Option<Value>> {
-        let Some((status, response)) = self.forward(id, "GET", "/internal/lobbies", &[]).await? else {
+        let Some((status, response)) = self.forward(id, "GET", "/internal/lobbies", &[]).await?
+        else {
             return Ok(None);
         };
-        let lobbies = response["lobbies"].as_array().filter(|_| status == "200 OK")
+        let lobbies = response["lobbies"]
+            .as_array()
+            .filter(|_| status == "200 OK")
             .ok_or_else(|| io::Error::other("match did not report its roster"))?;
         if lobbies.is_empty() {
             return Ok(None);
@@ -169,8 +206,12 @@ impl Supervisor {
                 Err(error) => return Err(error),
             };
             let name = file.file_name();
-            let Some(id) = name.to_str().and_then(|name| name.strip_prefix("match-"))
-                .and_then(|name| name.strip_suffix(".lock")).and_then(|id| id.parse().ok()) else {
+            let Some(id) = name
+                .to_str()
+                .and_then(|name| name.strip_prefix("match-"))
+                .and_then(|name| name.strip_suffix(".lock"))
+                .and_then(|id| id.parse().ok())
+            else {
                 continue;
             };
             if let Some(lobby) = self.lobby(id).await? {
@@ -181,26 +222,40 @@ impl Supervisor {
     }
 
     async fn launch(&self, id: u64, port: u16, body: &[u8]) -> io::Result<()> {
-        let binary = std::env::var_os("SOW_RELAY_BIN").map(PathBuf::from)
-            .map_or_else(std::env::current_exe, Ok)?.canonicalize()?;
-        let log_dir = std::env::var_os("SOW_RELAY_LOG_DIR").map(PathBuf::from)
+        let binary = std::env::var_os("SOW_RELAY_BIN")
+            .map(PathBuf::from)
+            .map_or_else(std::env::current_exe, Ok)?
+            .canonicalize()?;
+        let log_dir = std::env::var_os("SOW_RELAY_LOG_DIR")
+            .map(PathBuf::from)
             .unwrap_or_else(|| self.root.clone());
-        let log = OpenOptions::new().create(true).append(true).mode(0o600)
+        let log = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .mode(0o600)
             .open(log_dir.join("relay-matches.log"))?;
         let mut command = Command::new(binary);
-        command.arg("--match")
+        command
+            .arg("--match")
             .stdin(Stdio::piped())
-            .stdout(log.try_clone()?).stderr(log)
-            .env_remove("SOW_DB_SECRET").env_remove("SOW_RELAY_CONTROL_SECRET");
+            .stdout(log.try_clone()?)
+            .stderr(log)
+            .env_remove("SOW_DB_SECRET")
+            .env_remove("SOW_RELAY_CONTROL_SECRET");
         command.as_std_mut().process_group(0);
         let mut child = command.spawn()?;
         let ready = timeout(Duration::from_secs(10), async {
-            let mut stdin = child.stdin.take().ok_or_else(|| io::Error::other("missing match stdin"))?;
+            let mut stdin = child
+                .stdin
+                .take()
+                .ok_or_else(|| io::Error::other("missing match stdin"))?;
             stdin.write_all(body).await?;
             drop(stdin);
             loop {
                 if let Some(status) = child.try_wait()? {
-                    return Err(io::Error::other(format!("match {id} exited during startup ({status})")));
+                    return Err(io::Error::other(format!(
+                        "match {id} exited during startup ({status})"
+                    )));
                 }
                 if let Ok(Some(lobby)) = self.lobby(id).await {
                     if lobby["relay_port"].as_u64() == Some(port.into())
@@ -212,7 +267,10 @@ impl Supervisor {
                 }
                 sleep(Duration::from_millis(25)).await;
             }
-        }).await.map_err(|_| io::Error::other(format!("match {id} did not become ready"))).and_then(|result| result);
+        })
+        .await
+        .map_err(|_| io::Error::other(format!("match {id} did not become ready")))
+        .and_then(|result| result);
         if ready.is_err() {
             let _ = child.kill().await;
             let _ = child.wait().await;
@@ -228,7 +286,9 @@ impl Supervisor {
     }
 
     pub async fn request(&self, method: &str, path: &str, body: &[u8]) -> Response {
-        self.route(method, path, body).await.unwrap_or_else(|err| error("503 Service Unavailable", err))
+        self.route(method, path, body)
+            .await
+            .unwrap_or_else(|err| error("503 Service Unavailable", err))
     }
 
     async fn route(&self, method: &str, path: &str, body: &[u8]) -> io::Result<Response> {
@@ -238,17 +298,22 @@ impl Supervisor {
                 ("200 OK", json!({"ok":true}))
             }
             ("GET", "/internal/lobbies") => ("200 OK", json!({"lobbies":self.lobbies().await?})),
-            ("GET", "/internal/metrics") => ("200 OK", json!({
-                "proc_id":std::process::id(),
-                "executable":std::env::current_exe()?,
-                "listener_count":self.lobbies().await?.len(),
-                "lobby_drain_supported":true,
-                "lobby_registration_paused":self.paused()?,
-                "ws_write_timeout_ms":super::ws_write_timeout_ms(),
-            })),
+            ("GET", "/internal/metrics") => (
+                "200 OK",
+                json!({
+                    "proc_id":std::process::id(),
+                    "executable":std::env::current_exe()?,
+                    "listener_count":self.lobbies().await?.len(),
+                    "lobby_drain_supported":true,
+                    "lobby_registration_paused":self.paused()?,
+                    "ws_write_timeout_ms":super::ws_write_timeout_ms(),
+                }),
+            ),
             ("POST", "/internal/drain") => {
-                let Some(draining) = serde_json::from_slice::<Value>(body).ok()
-                    .and_then(|value| value["draining"].as_bool()) else {
+                let Some(draining) = serde_json::from_slice::<Value>(body)
+                    .ok()
+                    .and_then(|value| value["draining"].as_bool())
+                else {
                     return Ok(error("400 Bad Request", "draining must be boolean"));
                 };
                 let _registration = self.registration.lock().await;
@@ -267,25 +332,41 @@ impl Supervisor {
                 };
                 let _registration = self.registration.lock().await;
                 if self.paused()? {
-                    return Ok(error("503 Service Unavailable", "relay is paused for deployment"));
+                    return Ok(error(
+                        "503 Service Unavailable",
+                        "relay is paused for deployment",
+                    ));
                 }
                 let id = request.lobby_id;
                 let port = request.relay_port;
                 let existing = self.lobby(id).await?;
                 if let Some(lobby) = &existing {
-                    if lobby["relay_port"].as_u64() != Some(port.into()) || lobby["closing"] == true {
-                        return Ok(error("409 Conflict", "lobby already owns another port or is closing"));
+                    if lobby["closing"] == true
+                        || lobby["registration_sha"] != hex::encode(Sha256::digest(body))
+                    {
+                        return Ok(error(
+                            "409 Conflict",
+                            "lobby already owns another registration or is closing",
+                        ));
                     }
                 } else {
                     self.launch(id, port, body).await?;
                 }
-                ("200 OK", json!({"ok":true,"existing":existing.is_some(),"relay_port":port}))
+                (
+                    "200 OK",
+                    json!({"ok":true,"existing":existing.is_some(),"relay_port":port}),
+                )
             }
             ("POST", "/internal/match/result" | "/internal/lobby/close") => {
                 let request = serde_json::from_slice::<Value>(body).unwrap_or_default();
-                let id = request["match_id"].as_str().and_then(|id| id.parse().ok())
-                    .or_else(|| request["lobby_id"].as_u64()).filter(|id| *id != 0);
-                let Some(id) = id else { return Ok(error("400 Bad Request", "match id required")); };
+                let id = request["match_id"]
+                    .as_str()
+                    .and_then(|id| id.parse().ok())
+                    .or_else(|| request["lobby_id"].as_u64())
+                    .filter(|id| *id != 0);
+                let Some(id) = id else {
+                    return Ok(error("400 Bad Request", "match id required"));
+                };
                 match self.forward(id, method, path, body).await? {
                     Some((status, value)) => {
                         let status = match status.as_str() {
@@ -296,7 +377,9 @@ impl Supervisor {
                         };
                         (status, value)
                     }
-                    None if path == "/internal/lobby/close" => ("200 OK", json!({"ok":true,"removed":false})),
+                    None if path == "/internal/lobby/close" => {
+                        ("200 OK", json!({"ok":true,"removed":false}))
+                    }
                     None => ("200 OK", json!({"match_id":id.to_string()})),
                 }
             }
@@ -306,23 +389,40 @@ impl Supervisor {
     }
 }
 
-pub async fn serve_match(listener: UnixListener, registry: Registry) {
+pub async fn serve_match(listener: UnixListener, registry: Registry, registration_sha: String) {
+    let registration_sha: Arc<str> = registration_sha.into();
     while let Ok((mut stream, _)) = listener.accept().await {
-        if !stream.peer_cred().is_ok_and(|cred| cred.uid() == unsafe { libc::geteuid() }) {
+        if !stream
+            .peer_cred()
+            .is_ok_and(|cred| cred.uid() == unsafe { libc::geteuid() })
+        {
             continue;
         }
         let registry = registry.clone();
+        let registration_sha = registration_sha.clone();
         tokio::spawn(async move {
             let _ = timeout(Duration::from_secs(3), async {
                 let mut bytes = Vec::new();
-                (&mut stream).take((IPC_LIMIT + 1) as u64).read_to_end(&mut bytes).await?;
+                (&mut stream)
+                    .take((IPC_LIMIT + 1) as u64)
+                    .read_to_end(&mut bytes)
+                    .await?;
                 if bytes.len() > IPC_LIMIT {
                     return Err(io::Error::other("match request is too large"));
                 }
                 let request: ManagementRequest<'_> = serde_json::from_slice(&bytes)?;
-                let response = handle_http_local(&registry, request.method, request.path, &request.body).await;
+                let mut response =
+                    handle_http_local(&registry, request.method, request.path, &request.body).await;
+                if let Some(lobby) = response
+                    .1
+                    .get_mut("lobbies")
+                    .and_then(|lobbies| lobbies.get_mut(0))
+                {
+                    lobby["registration_sha"] = json!(&*registration_sha);
+                }
                 stream.write_all(&serde_json::to_vec(&response)?).await
-            }).await;
+            })
+            .await;
         });
     }
 }

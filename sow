@@ -16,7 +16,7 @@ COMMANDS:
   m, map                Serve the campaign editor locally on port 8777
   l, local              Build WASM + webroot and serve it locally on port 4173
   native                Fast-build and open the native Electron/WASM game
-   p, prod              Run production build & deploy (WASM + FreeBSD + Azure, no Android)
+   p, prod              Run production build & deploy (WASM + FreeBSD backend and relay)
    a, android           Build the Android AAB and publish it to Google Play alpha
    poki                 Build the self-contained Poki upload folder (no upload/deploy)
    jest                 Build the self-contained Jest bundle + dist/jest.zip (no deploy)
@@ -29,9 +29,10 @@ EXAMPLES:
   ./sow l              # Build and serve the local web client (Ctrl-C to stop)
   ./sow native         # Build and open the native desktop client
   SOW_NATIVE_RELEASE=1 ./sow  # Compare with optimized WASM in Electron, without an installer
-   ./sow p              # Production build and deploy to IONOS & Azure
+   ./sow p              # Production build and deploy to IONOS
    ./sow p -v           # Production deploy with public version bump
   ./sow p --server-only # Deploy only the FreeBSD game server
+  ./sow p --relay-only  # Upgrade the relay control with matches running
    ./sow poki           # Build dist/poki for local review and Poki Inspector
    ./sow jest           # Jest bundle + upload zip (upload via console/MCP, never auto)
    ./sow art-preview ability_icon # Compare distribution quality for all ability icons

@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "الإمبراطورية التيمورية"
 leader_ivan_the_terrible_name = "إيفان الرهيب"
 leader_ivan_the_terrible_historical = "إيفان الرابع فاسيليفيتش (1530–1584)، تُوّج أول قيصر لعموم روسيا سنة 1547. أُنشئت في عهده قوات الستريلتسي الدائمة المأجورة، ووسّعت حملتا قازان وأستراخان الدولة؛ ثم فرضت الأوبريتشنينا قمعًا عنيفًا لا تزال دلالته موضع نقاش."
 leader_ivan_the_terrible_civilization = "روسيا"
+leader_erendira_name = "إيرينديرا"
+leader_erendira_historical = "بطلة بورِيبيتشا أسطورية من ميتشواكان؛ لا يوجد سجل من القرن السادس عشر يؤكد قصتها."
+leader_erendira_civilization = "شعب البوريبيتشا"
 
 [profile]
 ranked_1v1 = "مصنّف 1 ضد 1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "مطاردة القبائل"
 leader_amir_timur_description = "القبائل التي تنسحب من أرضك تخسر جنودًا أكثر بنسبة 35%."
 leader_ivan_the_terrible_ability = "استدعاء الستريلتسي"
 leader_ivan_the_terrible_description = "عند الاستيلاء على مدينة عدو مكتملة بينما تتّسع احتياطياتك، استدعِ ما يصل إلى 750 جنديًا. مرة واحدة في المباراة وضمن حدّ قواتك."
+leader_erendira_ability = "الحصان المنتزع"
+leader_erendira_description = "عندما يفقد جيش عدو جنودًا أثناء مهاجمة أراضيك، جنّد 15٪ من خسائره، ضمن حد قواتك."
 
 [ranked]
 my_rank = "رتبتي"

@@ -291,4 +291,67 @@ test("main_menu.missions.css provides symmetrical multi-viewport responsive rule
 
     // Mobile vertical portrait rules (width <= 680px)
     assert.match(css, /@media\s*\(max-width:\s*680px\),\s*\(orientation:\s*portrait\)/);
+
+    // Mission reward celebration stage & banner styles
+    assert.match(css, /\.sow-menu__reward-stage--mission/);
+    assert.match(css, /\.sow-menu__mission-banner/);
+    assert.match(css, /\.sow-menu__mission-title/);
+    assert.match(css, /\.sow-menu__mission-shockwave/);
+    assert.match(css, /\.sow-menu__mission-desc/);
+    assert.match(css, /\.sow-menu__reward-card--gems/);
+});
+
+test("claimMission invokes registered mission claim celebration handler", () => {
+    let claimedMission: any = null;
+    let claimedDoubled: boolean | null = null;
+
+    menuUi.state = {
+        missions: [
+            {
+                id: "onboarding_1_tutorial",
+                category: "onboarding",
+                title_key: "missions.onboarding_tutorial_title",
+                description_key: "missions.onboarding_tutorial_desc",
+                target: 1,
+                progress: 1,
+                completed: true,
+                claimed: false,
+                crowns_reward: 200,
+                gems_reward: 25,
+                icon: "shield",
+                order: 1,
+            },
+        ],
+    } as unknown as MenuState;
+
+    const originalSend = (globalThis as any).window.SOW_send;
+    (globalThis as any).window.SOW_send = () => true;
+
+    const { setMissionClaimHandler } = require("./main_menu.missions.ts");
+    setMissionClaimHandler((mission: any, doubled: boolean) => {
+        claimedMission = mission;
+        claimedDoubled = doubled;
+    });
+
+    claimMission("onboarding_1_tutorial", false);
+
+    assert.ok(claimedMission, "handler should be called");
+    assert.equal(claimedMission.id, "onboarding_1_tutorial");
+    assert.equal(claimedMission.crowns_reward, 200);
+    assert.equal(claimedMission.gems_reward, 25);
+    assert.equal(claimedDoubled, false);
+    assert.equal(claimedMission.claimed, true, "mission should be optimistically marked claimed");
+
+    setMissionClaimHandler(null);
+    (globalThis as any).window.SOW_send = originalSend;
+});
+
+test("missionIconSvg renders valid distinct tactical SVGs for all icon types", () => {
+    const { missionIconSvg } = require("./main_menu.missions.ts");
+    const icons = ["shield", "tower", "sword", "swords", "rotation", "crosshair", "team", "globe", "crown"];
+    for (const icon of icons) {
+        const svg = missionIconSvg(icon);
+        assert.ok(svg.startsWith("<svg"), `Icon ${icon} should render an SVG element`);
+        assert.ok(svg.endsWith("</svg>"), `Icon ${icon} should properly close SVG element`);
+    }
 });

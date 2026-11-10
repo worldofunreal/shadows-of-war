@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "Kekaisaran Timuriyah"
 leader_ivan_the_terrible_name = "Ivan yang Mengerikan"
 leader_ivan_the_terrible_historical = "Ivan IV Vasilyevich (1530–1584) dinobatkan sebagai tsar pada 1547. Pada masa pemerintahannya dibentuk pasukan tetap Streltsy bergaji dan Moskow menaklukkan Kazan serta Astrakhan; oprichnina kemudian membawa represi brutal yang makna sejarahnya masih diperdebatkan."
 leader_ivan_the_terrible_civilization = "Rusia"
+leader_erendira_name = "Eréndira"
+leader_erendira_historical = "Pahlawan perempuan Purépecha legendaris dari Michoacán; tidak ada catatan abad ke-16 yang membuktikan kisahnya."
+leader_erendira_civilization = "Purépecha"
 
 [profile]
 ranked_1v1 = "Peringkat 1v1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "Pengejaran Suku"
 leader_amir_timur_description = "Suku yang mundur dari tanahmu kehilangan 35% lebih banyak pasukan."
 leader_ivan_the_terrible_ability = "Pengerahan Streltsy"
 leader_ivan_the_terrible_description = "Saat merebut kota musuh yang telah selesai dibangun, kerahkan hingga 750 prajurit jika cadanganmu masih memiliki ruang. Sekali per pertandingan, sesuai batas pasukanmu."
+leader_erendira_ability = "Kuda yang Direbut"
+leader_erendira_description = "Saat pasukan musuh kehilangan prajurit ketika menyerang wilayahmu, rekrut 15% dari kehilangan itu, hingga batas pasukanmu."
 
 [ranked]
 my_rank = "Peringkat saya"

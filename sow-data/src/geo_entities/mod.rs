@@ -145,6 +145,8 @@ pub enum Ability {
     KitchenPhilosophy,
     /// Recruit a share of the troops defeated when countercharging a land attack.
     MountedCapture { percent: u32 },
+    /// Turn a share of enemy attack losses on one's territory into recruits.
+    MountedDefenseCapture { percent: u32 },
     /// Capturing a city recalls its former owner's largest land attack against a player.
     AksumRout,
     /// An allied city matches returning retreat survivors, once per match.
@@ -294,6 +296,7 @@ impl Ability {
             | Ability::RetreatHandover { percent }
             | Ability::Reunification { percent }
             | Ability::MountedCapture { percent }
+            | Ability::MountedDefenseCapture { percent }
             | Ability::ContestedSteppe { percent }
             | Ability::ZagrosAscent { percent }
             | Ability::RegionalCommands { percent }
@@ -387,6 +390,9 @@ impl Ability {
             Ability::WarRegalia { .. } => Ability::WarRegalia { troops: 0 },
             Ability::Reunification { .. } => Ability::Reunification { percent: 0 },
             Ability::MountedCapture { .. } => Ability::MountedCapture { percent: 0 },
+            Ability::MountedDefenseCapture { .. } => {
+                Ability::MountedDefenseCapture { percent: 0 }
+            }
             Ability::ContestedSteppe { .. } => Ability::ContestedSteppe { percent: 0 },
             Ability::ZagrosAscent { .. } => Ability::ZagrosAscent { percent: 0 },
             Ability::RegionalCommands { .. } => Ability::RegionalCommands { percent: 0 },
@@ -444,7 +450,7 @@ impl Ability {
                 when: LossWhen::SeaRetreat,
                 ..
             } => Cue::Naval,
-            Ability::AttackerLoss { .. } => Cue::Losses,
+            Ability::AttackerLoss { .. } | Ability::MountedDefenseCapture { .. } => Cue::Losses,
             Ability::AllianceCost { .. } => Cue::Alliance,
             Ability::WarshipCost { .. } => Cue::Naval,
             Ability::EnemyRetreatPenalty { .. } => Cue::Retreat,

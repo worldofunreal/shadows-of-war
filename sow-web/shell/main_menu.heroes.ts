@@ -262,19 +262,16 @@ root.addEventListener(
 );
 root.addEventListener("pointerover", function (event) {
     const card = heroesAvatarCard(event);
-    if (
-        !card ||
-        card.classList.contains("is-selected") ||
-        (event.relatedTarget instanceof Node && card.contains(event.relatedTarget))
-    )
-        return;
+    if (!card || card.classList.contains("is-selected")) return;
+    if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
     setHeroesCardAvatar(card, "happy");
     const leader = leaderById(card.dataset.leaderId);
     if (leader) preloadHeroesFeaturedArt(leader);
 });
 root.addEventListener("pointerout", function (event) {
     const card = heroesAvatarCard(event);
-    if (!card || (event.relatedTarget instanceof Node && card.contains(event.relatedTarget))) return;
+    if (!card) return;
+    if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
     setHeroesCardAvatar(card, card.classList.contains("is-selected") ? "angry" : "calm");
 });
 root.addEventListener("focusin", function (event) {

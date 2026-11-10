@@ -11,7 +11,7 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 /// 6: buildings use kind-specific footprints.
 /// 7: ships are built toward a target tile instead of a named port.
 pub const GAMEPLAY_FORMAT_VERSION: u64 = 7;
-pub const LIVE_PROTOCOL_VERSION: u64 = 7;
+pub const LIVE_PROTOCOL_VERSION: u64 = 8;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
     format!(
@@ -417,8 +417,8 @@ pub struct ServerStartMessage {
     pub players: Vec<PlayerInfo>,
     pub missed_turns: Vec<Turn>,
     pub relay_port: Option<u16>,
-    /// Direct relay TLS hostname for the assigned DPDK worker. Offline and
-    /// local fixtures may omit it because they do not use a relay.
+    /// Direct relay hostname. With a relay port and no host, the client uses
+    /// the orchestrator origin's `/relay/<port>/ws/` route.
     #[serde(default)]
     pub relay_host: Option<String>,
 }

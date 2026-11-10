@@ -8138,13 +8138,23 @@ fn main() -> Result<()> {
 
     let mut cmd = String::new();
     let mut bump = false;
-    let mut server_only = false;
+    let mut backend_only = None;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "-v" | "--version" => bump = true,
-            "--server-only" => server_only = true,
+            flag @ ("--server-only" | "--relay-only") => {
+                let selected = if flag == "--server-only" {
+                    prod::BackendOnly::Server
+                } else {
+                    prod::BackendOnly::Relay
+                };
+                if backend_only.is_some_and(|previous| previous != selected) {
+                    bail!("choose one of --server-only and --relay-only");
+                }
+                backend_only = Some(selected);
+            }
             "--rotate-secrets" => {}
             _ if cmd.is_empty() => cmd = args[i].clone(),
             other => bail!("unknown argument: {other}"),
@@ -8152,8 +8162,8 @@ fn main() -> Result<()> {
         i += 1;
     }
 
-    if server_only && cmd != "p" && cmd != "prod" {
-        bail!("--server-only is only valid with ./sow p");
+    if backend_only.is_some() && cmd != "p" && cmd != "prod" {
+        bail!("--server-only and --relay-only are only valid with ./sow p");
     }
 
     let local_preview = matches!(cmd.as_str(), "l" | "local" | "");
@@ -8167,7 +8177,7 @@ fn main() -> Result<()> {
     let paths = if local_preview {
         Paths::discover_for_local()?
     } else if cmd == "p" || cmd == "prod" {
-        Paths::discover_for_prod(server_only)?
+        Paths::discover_for_prod(backend_only.is_some())?
     } else if cmd == "poki" {
         Paths::discover_for_poki()?
     } else {
@@ -8175,7 +8185,7 @@ fn main() -> Result<()> {
     };
 
     match cmd.as_str() {
-        "p" | "prod" => prod::execute(&paths, bump, server_only),
+        "p" | "prod" => prod::execute(&paths, bump, backend_only),
         "a" | "android" => prod::execute_android(&paths),
         "jest" => cmd_jest(&paths),
         "poki" => cmd_poki(&paths),

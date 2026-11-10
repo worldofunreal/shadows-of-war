@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "帖木儿帝国"
 leader_ivan_the_terrible_name = "伊凡雷帝"
 leader_ivan_the_terrible_historical = "伊凡四世（1530–1584）于1547年加冕为沙皇。在他统治时期，领薪的常备射击军得以建立，莫斯科公国征服了喀山和阿斯特拉罕；后来的特辖制带来残酷镇压，其历史评价至今仍有争议。"
 leader_ivan_the_terrible_civilization = "俄罗斯"
+leader_erendira_name = "埃伦迪拉"
+leader_erendira_historical = "米却肯的普雷佩查传奇女英雄；没有16世纪文献证实她的故事。"
+leader_erendira_civilization = "普雷佩查"
 
 [profile]
 ranked_1v1 = "排位 1v1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "草原追击"
 leader_amir_timur_description = "从你的土地撤退的部落多损失35%兵力。"
 leader_ivan_the_terrible_ability = "征召射击军"
 leader_ivan_the_terrible_description = "占领一座已建成的敌方城市时，若预备兵力有空位，征召最多750名士兵。每场比赛一次，且不超过兵力上限。"
+leader_erendira_ability = "夺来的战马"
+leader_erendira_description = "敌军进攻你的领土并损失兵力时，征召其损失兵力的15%，但不超过你的兵力上限。"
 
 [ranked]
 my_rank = "我的段位"

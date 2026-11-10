@@ -325,20 +325,20 @@
         return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
     }
 
-    function waitForExitLeaderArt(prepared: LeaderArt, slug: string, cycleId: number | null) {
-        if (pendingExitArt && pendingExitArt.prepared === prepared && pendingExitArt.cycleId === cycleId)
+    function waitForLeaderArt(prepared: LeaderArt, slug: string, cycleId: number | null, job: string | undefined) {
+        if (pendingLeaderArt && pendingLeaderArt.prepared === prepared && pendingLeaderArt.cycleId === cycleId)
             return;
-        pendingExitArt = { prepared, cycleId };
+        pendingLeaderArt = { prepared, cycleId };
         prepared.promise.then(() => {
-            if (!pendingExitArt || pendingExitArt.prepared !== prepared || pendingExitArt.cycleId !== cycleId)
+            if (!pendingLeaderArt || pendingLeaderArt.prepared !== prepared || pendingLeaderArt.cycleId !== cycleId)
                 return;
-            pendingExitArt = null;
+            pendingLeaderArt = null;
             if (activeLoaderCycleId !== cycleId || completedLoaderCycleId >= cycleId) return;
             const current = latestLoaderState;
             if (
                 !current ||
                 loaderCycleId(current) !== cycleId ||
-                current.loader_job !== "ExitGame" ||
+                current.loader_job !== job ||
                 leaderSlugForState(current) !== slug
             )
                 return;
@@ -419,12 +419,19 @@
 
         if (loaderArtKey === key || loaderArtKey === key + ":failed") return null;
 
-        const prepared =
+        let prepared =
             state.loader_job === "ExitGame" && activeMatchArt && activeMatchArt.slug === slug
                 ? activeMatchArt
                 : preparedLeaderArt && preparedLeaderArt.slug === slug
                   ? preparedLeaderArt
                   : null;
+        if (!prepared && state.loader_job === "EnterGame" && preparedLeaderArt && loaderArtKey !== key + ":unready") {
+            // The menu hero preview left another hero in the shared slot; the match loads the hero it started with.
+            // An empty or failed slot is not retried.
+            prepareLeaderArt(slug);
+            prepared = preparedLeaderArt && preparedLeaderArt.slug === slug ? preparedLeaderArt : null;
+            activeMatchArt = prepared;
+        }
         if (!prepared) {
             if (loaderArtKey !== key + ":unready") {
                 showBootSplash(key + ":unready");
@@ -435,8 +442,9 @@
             if (loaderArtKey !== key + ":unready") {
                 showBootSplash(key + ":unready");
             }
-            if (state.loader_job === "ExitGame") waitForExitLeaderArt(prepared, slug, loaderCycleId(state));
-            return state.loader_job === "ExitGame" ? prepared : null;
+            if (!transition) return null;
+            waitForLeaderArt(prepared, slug, loaderCycleId(state), state.loader_job);
+            return prepared;
         }
 
         const image = prepared.image;
@@ -477,7 +485,7 @@
     let finishingLoaderCycleId = -1;
     let bootSplashPicture: HTMLElement | null = null;
     let latestLoaderState: LoaderState | null = null;
-    let pendingExitArt: { prepared: LeaderArt; cycleId: number | null } | null = null;
+    let pendingLeaderArt: { prepared: LeaderArt; cycleId: number | null } | null = null;
 
     function isMobile() {
         return window.innerWidth < MOBILE_BREAKPOINT;
@@ -719,7 +727,7 @@
             bootSplashPicture = null;
             if (latestLoaderState && latestLoaderState.loader_job === "ExitGame") {
                 activeMatchArt = null;
-                pendingExitArt = null;
+                pendingLeaderArt = null;
             }
             if (!loaderReadyDispatched) {
                 loaderReadyDispatched = true;
@@ -757,7 +765,7 @@
         if (cycleId === null || cycleId < activeLoaderCycleId || cycleId <= completedLoaderCycleId) return;
         if (cycleId > activeLoaderCycleId) {
             activeLoaderCycleId = cycleId;
-            pendingExitArt = null;
+            pendingLeaderArt = null;
             if (finishing) {
                 cancelFinishTimers();
                 finishing = false;
@@ -766,8 +774,11 @@
             }
         }
         if (finishing && finishingLoaderCycleId === cycleId) return;
+        // The final Playing payload omits the hero catalog; keep this cycle's catalog so its art still resolves.
+        if (!state.leaders && latestLoaderState && latestLoaderState.leaders && loaderCycleId(latestLoaderState) === cycleId)
+            state = { ...state, leaders: latestLoaderState.leaders };
         latestLoaderState = state;
-        if (state.loader_done === true && state.loader_job !== "ExitGame") {
+        if (state.loader_done === true && state.loader_job === "Boot") {
             finish(cycleId);
             return;
         }

@@ -1401,6 +1401,26 @@ impl SowEngine {
                                 tile,
                             );
                         }
+                        let captured = atk_loss.min(execution.troops.max(0.0))
+                            * crate::execution::hero_effects::mounted_defense_capture_rate(
+                                &self.state,
+                                execution.target_owner,
+                                execution.owner_id,
+                            );
+                        if captured > 0.0
+                            && let Some(defender) =
+                                self.state.player_mut(execution.target_owner)
+                        {
+                            let before = defender.troops;
+                            defender.credit_troops_capped(captured, defender.max_troops);
+                            if defender.troops > before {
+                                self.state.announce_leader_ability_to(
+                                    execution.target_owner,
+                                    &[execution.owner_id],
+                                    tile,
+                                );
+                            }
+                        }
                         execution.troops -= atk_loss;
 
                         // Deduct from defender

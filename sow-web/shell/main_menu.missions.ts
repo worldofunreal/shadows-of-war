@@ -46,7 +46,7 @@ const FALLBACK_ONBOARDING: FallbackMissionDef[] = [
         crowns_reward: 250,
         gems_reward: 35,
         target: 1,
-        icon: "sword",
+        icon: "rotation",
         order: 3,
     },
     {
@@ -93,7 +93,7 @@ const FALLBACK_DAILY_POOL: FallbackMissionDef[] = [
         crowns_reward: 150,
         gems_reward: 20,
         target: 3,
-        icon: "sword",
+        icon: "swords",
         order: 1,
     },
     {
@@ -270,7 +270,7 @@ export function getActiveDirective(missions: MenuMission[]): MenuMission | null 
     return onboarding[onboarding.length - 1] || null;
 }
 
-function missionIconSvg(icon: string): string {
+export function missionIconSvg(icon: string): string {
     switch (icon) {
         case "shield":
             return (
@@ -288,6 +288,24 @@ function missionIconSvg(icon: string): string {
             return (
                 "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
                 "<polyline points='14.5 17.5 3 6 3 3 6 3 17.5 14.5'/><line x1='13' y1='19' x2='19' y2='13'/><line x1='16' y1='16' x2='20' y2='20'/><line x1='19' y1='21' x2='21' y2='19'/>" +
+                "</svg>"
+            );
+        case "swords":
+            return (
+                "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+                "<path d='M14.5 17.5 3 6 3 3 6 3 17.5 14.5M13 19l6-6M16 16l4 4M19 21l2-2'/><path d='M9.5 17.5 21 6 21 3 18 3 6.5 14.5M11 19l-6-6M8 16l-4 4M5 21l-2-2'/>" +
+                "</svg>"
+            );
+        case "rotation":
+            return (
+                "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+                "<path d='M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16'/><path d='M16 16h5v5'/>" +
+                "</svg>"
+            );
+        case "crosshair":
+            return (
+                "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+                "<circle cx='12' cy='12' r='8'/><line x1='12' y1='2' x2='12' y2='6'/><line x1='12' y1='18' x2='12' y2='22'/><line x1='2' y1='12' x2='6' y2='12'/><line x1='18' y1='12' x2='22' y2='12'/><circle cx='12' cy='12' r='2'/>" +
                 "</svg>"
             );
         case "team":
@@ -317,7 +335,7 @@ function missionIconSvg(icon: string): string {
     }
 }
 
-function videoPlayIconSvg(): string {
+export function videoPlayIconSvg(): string {
     return (
         "<svg class='sow-missions__video-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linejoin='round' aria-hidden='true'>" +
         "<rect x='2' y='5' width='14' height='14' rx='2'/><path d='m16 10 6-4v12l-6-4z'/>" +
@@ -622,17 +640,63 @@ export function renderMissionsModal(): string {
     );
 }
 
+export type MissionClaimHandler = (mission: MenuMission, doubled: boolean) => void;
+
+let missionClaimHandler: MissionClaimHandler | null = null;
+
+export function setMissionClaimHandler(handler: MissionClaimHandler | null): void {
+    missionClaimHandler = handler;
+}
+
 export function claimMission(missionId: string, doubleWithAd: boolean): void {
     if (!missionId) return;
+
+    const missions = resolveActiveMissions(menuUi.state);
+    const mission = missions.find((m) => m.id === missionId);
+
+    const markClaimed = () => {
+        const state = menuUi.state;
+        if (state) {
+            if (Array.isArray(state.missions)) {
+                const m = state.missions.find((x) => x.id === missionId);
+                if (m) m.claimed = true;
+            }
+            if (!state.missions_progress) {
+                state.missions_progress = {};
+            }
+            if (!state.missions_progress[missionId]) {
+                state.missions_progress[missionId] = {
+                    id: missionId,
+                    progress: mission ? mission.target : 1,
+                    completed: true,
+                    claimed: true,
+                };
+            } else {
+                state.missions_progress[missionId].claimed = true;
+                state.missions_progress[missionId].completed = true;
+            }
+        }
+        if (mission) {
+            mission.claimed = true;
+        }
+    };
 
     if (doubleWithAd && isRewardedAdAvailable()) {
         window.SOW_portalRewardedBreak!().then(function (watched: boolean) {
             if (watched) {
+                markClaimed();
                 send("claim_mission_reward", { mission_id: missionId, doubled_by_ad: true });
+                if (mission && missionClaimHandler) {
+                    missionClaimHandler(mission, true);
+                }
             }
         });
         return;
     }
 
+    markClaimed();
     send("claim_mission_reward", { mission_id: missionId, doubled_by_ad: false });
+    if (mission && missionClaimHandler) {
+        missionClaimHandler(mission, false);
+    }
 }

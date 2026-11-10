@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "Timuridenreich"
 leader_ivan_the_terrible_name = "Iwan der Schreckliche"
 leader_ivan_the_terrible_historical = "Iwan IV. Wassiljewitsch (1530–1584) wurde 1547 als erster Zar von ganz Russland gekrönt. Unter seiner Regierung entstand das dauerhaft besoldete Strelitzenheer; Kasan und Astrachan wurden erobert. Die Opritschnina brachte später brutale Repression, deren historische Deutung umstritten bleibt."
 leader_ivan_the_terrible_civilization = "Russland"
+leader_erendira_name = "Eréndira"
+leader_erendira_historical = "Legendäre purépecha Heldin aus Michoacán; kein Beleg aus dem 16. Jahrhundert bestätigt ihre Geschichte."
+leader_erendira_civilization = "Purépecha"
 
 [profile]
 ranked_1v1 = "Rangliste 1 gegen 1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "Verfolgung der Horde"
 leader_amir_timur_description = "Stämme, die sich aus deinem Gebiet zurückziehen, verlieren 35 % mehr Truppen."
 leader_ivan_the_terrible_ability = "Strelitzenaufgebot"
 leader_ivan_the_terrible_description = "Eroberst du eine fertiggestellte feindliche Stadt und hast Platz in deiner Reserve, mustere bis zu 750 Soldaten ein. Einmal pro Partie, begrenzt durch dein Truppenlimit."
+leader_erendira_ability = "Das erbeutete Pferd"
+leader_erendira_description = "Verliert ein feindliches Heer beim Angriff auf dein Gebiet Truppen, rekrutierst du 15 % seiner Verluste, bis zu deinem Truppenlimit."
 
 [ranked]
 my_rank = "Mein Rang"
