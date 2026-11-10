@@ -10110,6 +10110,26 @@
     }
    },
    "territory_color": "#8a2432"
+  },
+  {
+   "id": "erendira",
+   "name": "Eréndira",
+   "entity": "Purépecha",
+   "role": "tribe",
+   "region": "americas",
+   "lat": 19.515,
+   "lon": -101.608,
+   "gender": "female",
+   "wikipedia": "https://www.scielo.org.mx/scielo.php?pid=S0185-39292010000300004&script=sci_arttext",
+   "avatar": "erendira",
+   "hero": {
+    "name": "Eréndira",
+    "ability": {
+     "kind": "mounted_defense_capture",
+     "percent": 15
+    }
+   },
+   "territory_color": "#9a4c39"
   }
  ]
 }

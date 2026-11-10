@@ -165,9 +165,13 @@ async fn voluntary_exit_recorded(read: &mut Reader, account_id: &str, match_id: 
 }
 
 async fn ready_relay(url: &Url, message: ClientMessage) -> (Writer, Reader, String) {
-    let (socket, _) = tokio_tungstenite::connect_async(url.as_str())
-        .await
-        .unwrap();
+    let (socket, _) = tokio::time::timeout(
+        std::time::Duration::from_secs(12),
+        tokio_tungstenite::connect_async(url.as_str()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!("timed out connecting to {url}"))
+    .unwrap_or_else(|error| panic!("connect to {url}: {error}"));
     let (mut write, mut read) = socket.split();
     ws_send(&mut write, &message).await;
     let mut reconnect = None;
@@ -206,25 +210,34 @@ async fn result(http: &reqwest::Client, base: &Url, account: &Value, match_id: u
     .unwrap()
 }
 
-async fn relay_control(host: &str, request: Value) -> Value {
-    let host = host.to_string();
-    let request = request.to_string().replace('\'', "'\\''");
-    let command = format!(r#"sudo -u sowrelay python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.settimeout(120); s.connect("/run/sow-relay/upgrade.sock"); s.sendall(sys.argv[1].encode()); s.shutdown(socket.SHUT_WR); print(s.makefile("rb").read(65537).decode())' '{request}'"#);
+async fn port_owner(host: &str, port: u16) -> Option<Value> {
+    let host = host.to_owned();
+    let command = format!(r#"
+set -eu
+set -- $(sudo jexec sow-server sockstat -4l -p {port} | awk '$2=="sow-relay" {{print $3, $6}}')
+[ "$#" -ne 0 ] || exit 0
+test "$#" -eq 2
+pid=$1
+test "$2" = "127.0.0.1:{port}"
+exe=$(sudo jexec sow-server procstat -b "$pid" | awk 'NR==2 {{print $NF}}')
+test -n "$exe"
+printf '%s\n' "$pid"
+sudo sha256 -q "$exe"
+"#);
     let output = tokio::task::spawn_blocking(move || Command::new("ssh")
         .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
             "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3", &host, &command])
         .output().unwrap()).await.unwrap();
-    assert!(output.status.success(), "relay handover control failed: {}", String::from_utf8_lossy(&output.stderr));
-    serde_json::from_slice(&output.stdout).expect("relay control must return JSON")
-}
-
-async fn port_owner(host: &str, port: u16) -> Value {
-    // Read the coordinator's existing ownership table, not a second registry.
-    relay_control(host, json!({"port_owner":port})).await
+    assert!(output.status.success(), "relay ownership query failed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let mut lines = stdout.lines();
+    let pid = lines.next()?.parse::<u32>().unwrap();
+    let sha = lines.next().expect("relay executable digest missing");
+    Some(json!({"pid":pid,"sha256":sha}))
 }
 
 async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version: &str,
-    host: &str, binary: &str, accounts: &[Value], old_port: u16,
+    host: &str, sync: &std::path::Path, accounts: &[Value], old_port: u16,
     first_write: &mut Writer, first_read: &mut Reader, second_write: &mut Writer, second_read: &mut Reader)
 {
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
@@ -278,12 +291,21 @@ async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version:
         (counts, max_gap)
     };
     let exercise = async {
-        let changed = relay_control(host,
-            json!({"binary":binary})).await;
-        assert_eq!(changed["ok"], true);
-        let new_generation = changed["generation"].as_i64().unwrap();
-        let old_owner = port_owner(host, old_port).await;
-        assert_eq!(old_owner["owner"].as_i64(), Some(1 - new_generation));
+        let old_owner = port_owner(host, old_port).await.expect("original match has no process");
+        std::fs::write(sync.join("ready"), old_port.to_string()).unwrap();
+        let expected_sha = tokio::time::timeout(std::time::Duration::from_secs(180), async {
+            loop {
+                match std::fs::read_to_string(sync.join("activated")) {
+                    Ok(sha) => break sha,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => panic!("could not read relay activation: {error}"),
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        }).await.expect("production pipeline did not confirm relay activation");
+        assert_eq!(expected_sha.len(), 64, "relay activation failed");
+        assert_eq!(port_owner(host, old_port).await.as_ref(), Some(&old_owner),
+            "the original match must retain its process and executable");
         ws_send(first_write, &ClientMessage::Ping { client_time:probes[0] }).await;
         ws_send(second_write, &ClientMessage::Ping { client_time:probes[1] }).await;
         let (mut host_write, mut host_read, host_join) =
@@ -299,9 +321,10 @@ async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version:
         let (start, host_ticket) = started(&mut host_read).await;
         let (_, peer_ticket) = started(&mut peer_read).await;
         let port = start.relay_port.unwrap();
-        assert_eq!(port_owner(host, port).await["owner"].as_i64(), Some(new_generation),
-            "new match must be owned by the replacement generation");
-        let direct = direct_relay_url(url, start.relay_host.as_deref().unwrap(), port).unwrap();
+        let new_owner = port_owner(host, port).await.expect("new match has no process");
+        assert_ne!(new_owner["pid"], old_owner["pid"]);
+        assert_eq!(new_owner["sha256"], expected_sha, "new match must run the candidate executable");
+        let direct = sow_net::relay_url(url, start.relay_host.as_deref(), port).unwrap();
         let (mut host_relay, mut host_game, _) = ready_relay(&direct, ClientMessage::ReadyWithTicket {
             lobby_id:id, player_id:host_join.player_id, ticket:host_ticket,
         }).await;
@@ -354,7 +377,7 @@ impl Drop for KillOnDrop {
     }
 }
 
-pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::path::Path>, handover_host: Option<&str>, handover_binary: Option<&str>) {
+pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::path::Path>, handover_host: Option<&str>, handover_sync: Option<&std::path::Path>, proxied_relay_host: Option<&str>) {
     // Compile before any live match exists: a cold build inside the return deadline
     // failed verification twice. The timed run below then pays only for the return.
     let built = Command::new("cargo")
@@ -482,12 +505,25 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     let (first_start, first_ticket) = started(&mut first_read).await;
     let (second_start, second_ticket) = started(&mut second_read).await;
     let (third_start, third_ticket) = started(&mut third_read).await;
-    let relay_url = direct_relay_url(
+    let relay_url = sow_net::relay_url(
         url,
-        first_start.relay_host.as_deref().unwrap(),
+        first_start.relay_host.as_deref(),
         first_start.relay_port.unwrap(),
     )
     .unwrap();
+    if let Some(host) = proxied_relay_host {
+        let port = first_start.relay_port.unwrap();
+        assert!(
+            first_start.relay_host.is_none()
+                && relay_url.scheme() == "wss"
+                && relay_url.port_or_known_default() == Some(443)
+                && relay_url.origin() == url.origin()
+                && relay_url.path() == format!("/relay/{port}/ws/"),
+            "expected the IONOS relay behind the public HTTPS proxy, got {relay_url}"
+        );
+        assert!(port_owner(host, port).await.is_some(), "local relay has no loopback listener");
+        pass(&format!("Public relay uses {relay_url} with a loopback upstream"));
+    }
     let (mut other_write, other_read, reconnect) = ready_relay(
         &relay_url,
         ClientMessage::ReadyWithTicket {
@@ -681,7 +717,7 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     }
     if let Some(host) = handover_host {
         verify_handover(url, base, &http, version.trim(), host,
-            handover_binary.unwrap_or("/usr/local/libexec/sow-relay/sow-relay"), &handover_accounts,
+            handover_sync.expect("relay activation sync directory missing"), &handover_accounts,
             first_start.relay_port.unwrap(), &mut other_write, &mut other_read,
             &mut survivor_write, &mut survivor_read).await;
         other_write.close().await.unwrap();
@@ -869,6 +905,14 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         );
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
+    if let Some(host) = handover_host {
+        let port = first_start.relay_port.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(45), async {
+            while port_owner(host, port).await.is_some() {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        }).await.expect("original relay kept its game listener after durable closure");
+    }
     let after_closure = result(&http, base, &first, match_id).await;
     assert_eq!(after_closure["state"], "confirmed");
     for field in ["xp", "crowns", "laurels"] {
@@ -933,9 +977,9 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     let (finish_start, finish_host_ticket) = started(&mut finish_host_read).await;
     let (_, finish_second_ticket) = started(&mut finish_second_read).await;
     let (_, finish_third_ticket) = started(&mut finish_third_read).await;
-    let finish_relay_url = direct_relay_url(
+    let finish_relay_url = sow_net::relay_url(
         url,
-        finish_start.relay_host.as_deref().unwrap(),
+        finish_start.relay_host.as_deref(),
         finish_start.relay_port.unwrap(),
     )
     .unwrap();
@@ -1125,9 +1169,9 @@ async fn start_ranked_session(
         ["oceania", "southeastasia", "northamerica", "world"].contains(&map.as_str()),
         "ranked match used a map outside its private pool: {map}"
     );
-    let direct = direct_relay_url(
+    let direct = sow_net::relay_url(
         url,
-        start.relay_host.as_deref().unwrap(),
+        start.relay_host.as_deref(),
         start.relay_port.unwrap(),
     )
     .unwrap();

@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "Império Timúrida"
 leader_ivan_the_terrible_name = "Ivan, o Terrível"
 leader_ivan_the_terrible_historical = "Ivan IV Vasilyevich (1530–1584) foi coroado tsar em 1547. Durante seu governo surgiu o corpo permanente e assalariado dos streltsy, e Moscóvia conquistou Kazan e Astracã; depois, a opríchnina impôs uma repressão brutal cuja interpretação histórica continua controversa."
 leader_ivan_the_terrible_civilization = "Rússia"
+leader_erendira_name = "Eréndira"
+leader_erendira_historical = "Heroína purépecha lendária de Michoacán; nenhum registro do século XVI confirma sua história."
+leader_erendira_civilization = "Purépecha"
 
 [profile]
 ranked_1v1 = "Ranqueda 1x1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "Perseguição da Horda"
 leader_amir_timur_description = "As tribos que recuam do seu território perdem 35% mais tropas."
 leader_ivan_the_terrible_ability = "Recrutamento dos streltsy"
 leader_ivan_the_terrible_description = "Ao capturar uma cidade inimiga concluída, recrute até 750 soldados se houver espaço na reserva. Uma vez por partida, respeitando seu limite de tropas."
+leader_erendira_ability = "O cavalo tomado"
+leader_erendira_description = "Quando um exército inimigo perde tropas ao atacar seu território, recrute 15% dessas perdas, respeitando seu limite de tropas."
 
 [ranked]
 my_rank = "Meu ranque"

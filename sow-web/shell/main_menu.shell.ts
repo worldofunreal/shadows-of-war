@@ -108,7 +108,14 @@ import {
     resumeExternalPurchaseDelivery,
     verifyAuthOtp,
 } from "./main_menu.surfaces.ts";
-import { claimMission, renderMissionsModal } from "./main_menu.missions.ts";
+import {
+    claimMission,
+    renderMissionsModal,
+    setMissionClaimHandler,
+    missionIconSvg,
+    videoPlayIconSvg,
+    type MenuMission,
+} from "./main_menu.missions.ts";
 import type { MenuRewardReceipt, MenuState, RankedResult } from "./main_menu.state.ts";
 
 // Shared menu chrome, overlays, lifecycle, events, and state bridge.
@@ -3275,6 +3282,266 @@ root.addEventListener("click", function (event) {
     if (target.dataset.lobbyId) payload.lobby_id = Number(target.dataset.lobbyId);
     if (target.dataset.playerId) payload.target_player_id = Number(target.dataset.playerId);
     send(command, payload);
+});
+
+function playCelebrationSound(kind: "fanfare" | "fly" | "impact") {
+    try {
+        if (typeof window === "undefined") return;
+        const AudioCtx = window.AudioContext;
+        if (typeof AudioCtx !== "function") return;
+        if (!menuMusic.audioContext) {
+            menuMusic.audioContext = new AudioCtx();
+        }
+        const ctx = menuMusic.audioContext;
+        if (!ctx || typeof ctx.createOscillator !== "function") return;
+        if (ctx.state === "suspended") {
+            void ctx.resume();
+        }
+        const now = ctx.currentTime;
+        if (kind === "fanfare") {
+            const subOsc = ctx.createOscillator();
+            const subGain = ctx.createGain();
+            subOsc.type = "sine";
+            subOsc.frequency.setValueAtTime(90, now);
+            subOsc.frequency.exponentialRampToValueAtTime(42, now + 0.35);
+            subGain.gain.setValueAtTime(0.35, now);
+            subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+            subOsc.connect(subGain);
+            subGain.connect(ctx.destination);
+            subOsc.start(now);
+            subOsc.stop(now + 0.4);
+
+            const notes = [261.63, 392.0, 523.25, 659.25, 783.99, 1046.5];
+            notes.forEach(function (freq, idx) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = idx < 2 ? "triangle" : "sine";
+                osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+                gain.gain.setValueAtTime(0.001, now + idx * 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.18, now + idx * 0.08 + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.55);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now + idx * 0.08);
+                osc.stop(now + idx * 0.08 + 0.58);
+            });
+        } else if (kind === "fly") {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.exponentialRampToValueAtTime(1100, now + 0.38);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.42);
+        } else if (kind === "impact") {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(1320, now);
+            osc.frequency.exponentialRampToValueAtTime(740, now + 0.22);
+            gain.gain.setValueAtTime(0.18, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.28);
+        }
+    } catch {
+        // Safe ignore
+    }
+}
+
+export interface MissionCelebrationOptions {
+    missionId: string;
+    title: string;
+    description?: string;
+    category: string;
+    icon: string;
+    crowns: number;
+    gems: number;
+    doubledWithAd: boolean;
+}
+
+export function runMissionRewardCelebration(options: MissionCelebrationOptions) {
+    if (rewardAnimationRunning) return;
+    rewardAnimationRunning = true;
+    const token = ++rewardAnimationToken;
+
+    if (menuUi.state) {
+        menuUi.state.crowns = (menuUi.state.crowns || 0) + options.crowns;
+        menuUi.state.gems = (menuUi.state.gems || 0) + options.gems;
+    }
+    render();
+
+    const stages: RewardStage[] = [];
+    if (options.crowns > 0) {
+        stages.push({
+            kind: "crowns",
+            amount: options.crowns,
+            selector: "[data-progression-crowns-value]",
+        });
+    }
+    if (options.gems > 0) {
+        stages.push({
+            kind: "gems",
+            amount: options.gems,
+            selector: "[data-progression-gems-value]",
+        });
+    }
+
+    const canonical = progressionFromState();
+    const baseline = Object.assign({}, canonical, {
+        crowns: Math.max(0, canonical.crowns - options.crowns),
+        gems: Math.max(0, canonical.gems - options.gems),
+    });
+    const startingProg = displayedProgression || baseline;
+    writeProgression(startingProg);
+
+    function finish(shown: boolean) {
+        if (token !== rewardAnimationToken) return;
+        rewardAnimationToken += 1;
+        rewardAnimationRunning = false;
+        removeRewardStage();
+        writeProgression(progressionFromState());
+        render();
+    }
+
+    function complete(shown: boolean) {
+        if (!shown || !activeRewardStage) {
+            finish(shown);
+            return;
+        }
+        activeRewardStage.classList.add("is-exiting");
+        window.setTimeout(function () {
+            finish(true);
+        }, 240);
+    }
+
+    if (!stages.length) {
+        finish(true);
+        return;
+    }
+
+    const items = createRewardStage(stages, function () {
+        finish(true);
+    });
+
+    if (activeRewardStage) {
+        activeRewardStage.classList.add("sow-menu__reward-stage--mission");
+        const cards = activeRewardStage.querySelector(".sow-menu__reward-cards");
+        const banner = document.createElement("div");
+        banner.className = "sow-menu__mission-banner";
+        const categoryLabel =
+            options.category === "onboarding"
+                ? SOW_t("missions.tab_onboarding")
+                : SOW_t("missions.tab_daily");
+        banner.innerHTML =
+            "<div class='sow-menu__mission-banner-aura' aria-hidden='true'></div>" +
+            "<div class='sow-menu__mission-shockwave' aria-hidden='true'></div>" +
+            "<div class='sow-menu__mission-badge'>" +
+            "<div class='sow-menu__mission-badge-rays' aria-hidden='true'></div>" +
+            "<span class='sow-menu__mission-icon' aria-hidden='true'>" +
+            missionIconSvg(options.icon) +
+            "</span>" +
+            "</div>" +
+            "<div class='sow-menu__mission-kicker-wrap'>" +
+            "<span class='sow-menu__mission-kicker-wing' aria-hidden='true'></span>" +
+            "<div class='sow-menu__mission-kicker'>" +
+            esc(categoryLabel) +
+            " · " +
+            esc(SOW_t("missions.mission_completed") || "Misión Cumplida") +
+            "</div>" +
+            "<span class='sow-menu__mission-kicker-wing' aria-hidden='true'></span>" +
+            "</div>" +
+            "<div class='sow-menu__mission-title-box'>" +
+            "<h2 class='sow-menu__mission-title'>" +
+            esc(options.title) +
+            "</h2>" +
+            "<div class='sow-menu__mission-title-sheen' aria-hidden='true'></div>" +
+            "</div>" +
+            (options.description
+                ? "<p class='sow-menu__mission-desc'>" + esc(options.description) + "</p>"
+                : "") +
+            (options.doubledWithAd
+                ? "<div class='sow-menu__mission-doubled-badge'>" +
+                  videoPlayIconSvg() +
+                  " <span>" +
+                  esc(SOW_t("missions.claim_doubled")) +
+                  "</span></div>"
+                : "");
+        if (cards) {
+            activeRewardStage.insertBefore(banner, cards);
+        } else {
+            activeRewardStage.appendChild(banner);
+        }
+    }
+
+    playCelebrationSound("fanfare");
+
+    if (reducedRewardMotion()) {
+        items.forEach(function (item) {
+            item.amount.textContent = "+" + item.stage.amount;
+        });
+        return;
+    }
+
+    function next(index: number) {
+        if (token !== rewardAnimationToken || root.hidden || document.visibilityState !== "visible") {
+            finish(false);
+            return;
+        }
+        if (index >= stages.length) {
+            animateProgressionTo(progressionFromState(), 900, token).then(complete);
+            return;
+        }
+        const item = items[index];
+        const stage = item.stage;
+        playCelebrationSound("fly");
+        flyRewardCard({ card: item.card, stage: stage }, token).then(function (arrived) {
+            if (!arrived) {
+                finish(false);
+                return;
+            }
+            playCelebrationSound("impact");
+            playRewardImpact(stage.selector, stage.kind, 1.2);
+            pulseRewardCounter(stage.selector, false);
+            const currentProg = displayedProgression || progressionFromState();
+            const nextValues = Object.assign({}, currentProg);
+            if (stage.kind === "crowns" || stage.kind === "gems") {
+                nextValues[stage.kind] = progressionFromState()[stage.kind];
+            }
+            animateProgressionTo(nextValues, 380, token).then(function (shownNext) {
+                if (!shownNext) {
+                    finish(false);
+                    return;
+                }
+                next(index + 1);
+            });
+        });
+    }
+
+    revealRewardAmounts(items, token).then(function (shown) {
+        if (shown) next(0);
+        else finish(false);
+    });
+}
+
+setMissionClaimHandler(function (mission: MenuMission, doubled: boolean) {
+    const multiplier = doubled ? 2 : 1;
+    runMissionRewardCelebration({
+        missionId: mission.id,
+        title: SOW_t(mission.title_key),
+        description: SOW_t(mission.description_key),
+        category: mission.category,
+        icon: mission.icon,
+        crowns: mission.crowns_reward * multiplier,
+        gems: mission.gems_reward * multiplier,
+        doubledWithAd: doubled,
+    });
 });
 
 document.addEventListener("pointerdown", function (event) {

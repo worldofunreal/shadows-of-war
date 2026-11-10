@@ -7,7 +7,6 @@ use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
 use log::{error, info, warn};
 use rand::{RngCore, rngs::OsRng};
-use redis::Commands;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use sha2::{Digest, Sha256};
 use sow_core::game_config::{BotDifficulty, GameConfig};
@@ -139,51 +138,54 @@ impl RelayAdmissionPolicy {
             }
             return false;
         }
-        if !state.by_ip.contains_key(&ip) && state.by_ip.len() >= MAX_ADMISSION_IPS {
-            let count = self.rejected_global.fetch_add(1, Ordering::Relaxed) + 1;
-            if count.is_power_of_two() {
-                warn!(
-                    "[admission] IP table cap rejected peer={} count={count}",
-                    peer
-                );
-            }
-            return false;
-        }
-        {
-            let entry = state.by_ip.entry(ip).or_insert_with(|| IpAdmissionState {
-                active: 0,
-                window_started: now,
-                accepted_in_window: 0,
-            });
-            if now.duration_since(entry.window_started) >= Duration::from_secs(1) {
-                entry.window_started = now;
-                entry.accepted_in_window = 0;
-            }
-            if entry.active >= self.max_connections_per_ip {
-                let count = self.rejected_per_ip.fetch_add(1, Ordering::Relaxed) + 1;
+        // Nginx limits players by real IP. Loopback peers all share its address.
+        if !ip.is_loopback() {
+            if !state.by_ip.contains_key(&ip) && state.by_ip.len() >= MAX_ADMISSION_IPS {
+                let count = self.rejected_global.fetch_add(1, Ordering::Relaxed) + 1;
                 if count.is_power_of_two() {
                     warn!(
-                        "[admission] per-IP connection cap rejected peer={} count={count}",
+                        "[admission] IP table cap rejected peer={} count={count}",
                         peer
                     );
                 }
                 return false;
             }
-            if entry.accepted_in_window >= self.handshakes_per_ip {
-                let count = self.rejected_rate.fetch_add(1, Ordering::Relaxed) + 1;
-                if count.is_power_of_two() {
-                    warn!(
-                        "[admission] per-IP handshake rate rejected peer={} count={count}",
-                        peer
-                    );
+            {
+                let entry = state.by_ip.entry(ip).or_insert_with(|| IpAdmissionState {
+                    active: 0,
+                    window_started: now,
+                    accepted_in_window: 0,
+                });
+                if now.duration_since(entry.window_started) >= Duration::from_secs(1) {
+                    entry.window_started = now;
+                    entry.accepted_in_window = 0;
                 }
-                return false;
+                if entry.active >= self.max_connections_per_ip {
+                    let count = self.rejected_per_ip.fetch_add(1, Ordering::Relaxed) + 1;
+                    if count.is_power_of_two() {
+                        warn!(
+                            "[admission] per-IP connection cap rejected peer={} count={count}",
+                            peer
+                        );
+                    }
+                    return false;
+                }
+                if entry.accepted_in_window >= self.handshakes_per_ip {
+                    let count = self.rejected_rate.fetch_add(1, Ordering::Relaxed) + 1;
+                    if count.is_power_of_two() {
+                        warn!(
+                            "[admission] per-IP handshake rate rejected peer={} count={count}",
+                            peer
+                        );
+                    }
+                    return false;
+                }
             }
+            let entry = state.by_ip.get_mut(&ip).expect("admission entry inserted");
+            entry.active += 1;
+            entry.accepted_in_window += 1;
         }
         state.active += 1;
-        let entry = state.by_ip.get_mut(&ip).expect("admission entry inserted");
-        entry.active += 1;
-        entry.accepted_in_window += 1;
         let active = state.active as u64;
         self.accepted.fetch_add(1, Ordering::Relaxed);
         self.active_peak.fetch_max(active, Ordering::Relaxed);
@@ -251,13 +253,12 @@ fn db_client(db_url: &str) -> Result<reqwest::Client, String> {
             return Ok(client.clone());
         }
     }
-    let client = build_db_client(db_url)?;
+    let client = build_db_client()?;
     *pool = Some((db_url.to_string(), client.clone()));
     Ok(client)
 }
 
-fn build_db_client(db_url: &str) -> Result<reqwest::Client, String> {
-    let _ = db_url;
+fn build_db_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .no_proxy()
         .timeout(Duration::from_secs(30))
@@ -288,7 +289,7 @@ fn ticket_is_current(expires_at: u64) -> bool {
             .unwrap_or(false)
 }
 
-/// TLS acceptor for direct browser connections. Reload it when Certbot swaps
+/// TLS acceptor for the loopback control API. Reload it when Certbot swaps
 /// either file so new connections use the renewed certificate without
 /// restarting workers or interrupting existing games.
 #[derive(PartialEq, Eq)]
@@ -407,20 +408,6 @@ fn base_mgmt_port() -> u16 {
         .unwrap_or(DEFAULT_MGMT_PORT)
 }
 
-/// Advertised relay address (data PIP) written to `sow:relay:{lobby_id}`.
-fn relay_host() -> String {
-    if let Ok(host) = std::env::var("SOW_RELAY_HOST") {
-        if !host.trim().is_empty() {
-            return host.trim().to_string();
-        }
-    }
-    "127.0.0.1".to_string()
-}
-
-fn relay_addr(port: u16) -> String {
-    format!("{}:{port}", relay_host())
-}
-
 /// Seconds without any frame before a connection is classified as the
 /// orchestration/operations WS (the optional bot/backfill client sends nothing,
 /// while players send their admission frame within ~2s).
@@ -505,25 +492,6 @@ struct ClientChannel {
     sender: mpsc::Sender<Arc<Vec<u8>>>,
     missed_ticks: u32,
     generation: u64,
-}
-
-// ---- redis helpers ----------------------------------------------------------
-
-fn redis_connect() -> Option<redis::Connection> {
-    let url = std::env::var("SOW_VALKEY_URL")
-        .or_else(|_| std::env::var("SOW_REDIS_URL"))
-        .unwrap_or_else(|_| "redis://127.0.0.1/".to_string());
-    redis::Client::open(url)
-        .ok()
-        .and_then(|c| c.get_connection().ok())
-}
-
-static REDIS_CON: OnceLock<Arc<std::sync::Mutex<Option<redis::Connection>>>> = OnceLock::new();
-
-fn redis_shared() -> Arc<std::sync::Mutex<Option<redis::Connection>>> {
-    REDIS_CON
-        .get_or_init(|| Arc::new(std::sync::Mutex::new(redis_connect())))
-        .clone()
 }
 
 // One participation owner; transport channels never decide final exit.
@@ -770,13 +738,13 @@ async fn main() {
 
 async fn run() -> io::Result<()> {
     configured_db_url().map_err(io::Error::other)?;
-    if current_tls_acceptor().is_none() {
-        return Err(io::Error::other("relay TLS certificate and key are required"));
-    }
     let supervisor = Arc::new(supervisor::Supervisor::open()?);
     match std::env::args().nth(1).as_deref() {
         None => {
             require_secret("SOW_RELAY_CONTROL_SECRET")?;
+            if current_tls_acceptor().is_none() {
+                return Err(io::Error::other("relay control TLS certificate and key are required"));
+            }
             let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, base_mgmt_port())).await?;
             info!("[relay] TLS control listening at {}", listener.local_addr()?);
             mgmt_http(listener, supervisor).await
@@ -789,7 +757,7 @@ async fn run() -> io::Result<()> {
                 .take((MAX_MGMT_BODY_BYTES + 1) as u64)
                 .read_to_end(&mut data)?;
             let body = register_body(&data).map_err(io::Error::other)?;
-            run_match(supervisor, body).await
+            run_match(supervisor, body, hex::encode(Sha256::digest(data))).await
         }
         Some(_) => Err(io::Error::other("unknown relay argument")),
     }
@@ -822,17 +790,21 @@ fn register_body(data: &[u8]) -> Result<RegisterBody, String> {
     Ok(body)
 }
 
-async fn run_match(supervisor: Arc<supervisor::Supervisor>, body: RegisterBody) -> io::Result<()> {
+async fn run_match(
+    supervisor: Arc<supervisor::Supervisor>,
+    body: RegisterBody,
+    registration_sha: String,
+) -> io::Result<()> {
     let admission = RelayAdmissionPolicy::from_env().map_err(io::Error::other)?;
     RELAY_ADMISSION.set(admission).map_err(|_| io::Error::other("admission already initialized"))?;
     let id = body.lobby_id;
     let port = body.relay_port;
     let control = supervisor.claim(id)?;
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).await?;
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await?;
     let registry: Registry = Arc::new(RwLock::new(HashMap::new()));
     let tick = spawn_lobby(&registry, body).await;
     let control_listener = control.listen()?;
-    let control_task = tokio::spawn(supervisor::serve_match(control_listener, registry.clone()));
+    let control_task = tokio::spawn(supervisor::serve_match(control_listener, registry.clone(), registration_sha));
     let mut connections = tokio::task::JoinSet::new();
     let mut generation = 0;
     tokio::pin!(tick);
@@ -1229,22 +1201,6 @@ async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> tokio::task::Jo
 
     registry.write().await.insert(state.id, state.clone());
 
-    // Per-lobby Redis registration: sow:relay:{lobby_id} -> relay addr (TTL 60,
-    // refreshed by the tick loop heartbeat every 10s).
-    {
-        let redis_con = redis_shared();
-        let key = format!("sow:relay:{}", state.id);
-        let val = relay_addr(body.relay_port);
-        tokio::task::spawn_blocking(move || {
-            let mut guard = redis_con.lock().unwrap();
-            if let Some(ref mut con) = *guard {
-                if let Err(e) = con.set_ex::<_, _, ()>(&key, val, 60) {
-                    error!("[REDIS] SETEX {key} FAILED: {e}");
-                }
-            }
-        });
-    }
-
     tokio::spawn(tick_task(
         state.clone(),
         registry.clone(),
@@ -1501,18 +1457,6 @@ async fn tick_task(
                         total_intents
                     );
                     last_status = std::time::Instant::now();
-                    // Heartbeat: refresh per-lobby Redis TTL.
-                    let redis_con = redis_shared();
-                    let key = format!("sow:relay:{}", state.id);
-                    let val = relay_addr(state.relay_port);
-                    tokio::task::spawn_blocking(move || {
-                        let mut guard = redis_con.lock().unwrap();
-                        if let Some(ref mut con) = *guard {
-                            if let Err(e) = con.set_ex::<_, _, ()>(&key, val, 60) {
-                                error!("[REDIS] SETEX {key} FAILED: {e}");
-                            }
-                        }
-                    });
                 }
             }
             Some(event) = ev_rx.recv() => {
@@ -1663,52 +1607,39 @@ async fn ws_task(
         peer, fd, generation
     );
     let accept_to_task_us = accepted_at.elapsed().as_micros();
-    let tls_started = Instant::now();
 
     // These timings are intentionally emitted once per connection, without
-    // payloads or credentials. They distinguish bridge scheduling, TLS, WS,
-    // and first-frame delays while keeping the hot packet path unchanged.
-    let log_handshake_timing = |result: &str, tls_us: u128, ws_us: u128, first_frame_us: u128| {
+    // payloads or credentials. TLS for this route terminates at Nginx.
+    let log_handshake_timing = |result: &str, ws_us: u128, first_frame_us: u128| {
         info!(
-            "[relay] handshake_timing port={} peer={} fd={} generation={} accept_to_task_us={} tls_us={} ws_us={} first_frame_us={} result={}",
+            "[relay] handshake_timing port={} peer={} fd={} generation={} accept_to_task_us={} ws_us={} first_frame_us={} result={}",
             listener_port,
             peer,
             fd,
             generation,
             accept_to_task_us,
-            tls_us,
             ws_us,
             first_frame_us,
             result
         );
     };
 
-    // TLS handshake (if cert configured), then WebSocket upgrade.
-    let Some(acceptor) = current_tls_acceptor() else { return };
-    let stream = match tokio::time::timeout(
-        Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
-        acceptor.accept(conn),
-    ).await {
-        Ok(Ok(tls)) => {
-            tls
-        }
-        Ok(Err(error)) => {
-            warn!("[tls] handshake fail fd={fd} err={error}");
-            log_handshake_timing("tls_error", tls_started.elapsed().as_micros(), 0, 0);
-            return;
-        }
-        Err(_) => {
-            warn!("[tls] handshake timeout fd={fd} peer={peer}");
-            log_handshake_timing("tls_timeout", tls_started.elapsed().as_micros(), 0, 0);
-            return;
-        }
-    };
-
-    let tls_us = tls_started.elapsed().as_micros();
     let ws_started = Instant::now();
     let ws = match tokio::time::timeout(
         Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
-        tokio_tungstenite::accept_async(stream),
+        tokio_tungstenite::accept_hdr_async(
+            conn,
+            |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                if request.uri().path() == "/ws/" {
+                    Ok(response)
+                } else {
+                    Err(tokio_tungstenite::tungstenite::http::Response::builder()
+                        .status(404)
+                        .body(None)
+                        .expect("valid WebSocket rejection response"))
+                }
+            },
+        ),
     )
     .await
     {
@@ -1716,13 +1647,13 @@ async fn ws_task(
         Ok(Err(e)) => {
             let ws_us = ws_started.elapsed().as_micros();
             warn!("[ws] handshake fail fd={} err={}", fd, e);
-            log_handshake_timing("ws_error", tls_us, ws_us, 0);
+            log_handshake_timing("ws_error", ws_us, 0);
             return;
         }
         Err(_) => {
             let ws_us = ws_started.elapsed().as_micros();
             warn!("[ws] handshake timeout fd={} peer={}", fd, peer);
-            log_handshake_timing("ws_timeout", tls_us, ws_us, 0);
+            log_handshake_timing("ws_timeout", ws_us, 0);
             return;
         }
     };
@@ -1812,19 +1743,19 @@ async fn ws_task(
         Ok(Some(Err(e))) => {
             first_frame_us = first_frame_started.elapsed().as_micros();
             warn!("[ws] recv err fd={} err={}", fd, e);
-            log_handshake_timing("first_frame_error", tls_us, ws_us, first_frame_us);
+            log_handshake_timing("first_frame_error", ws_us, first_frame_us);
             return;
         }
         Ok(None) => {
             first_frame_us = first_frame_started.elapsed().as_micros();
-            log_handshake_timing("closed_before_first_frame", tls_us, ws_us, first_frame_us);
+            log_handshake_timing("closed_before_first_frame", ws_us, first_frame_us);
             return;
         }
         Err(_) => {
             first_frame_us = first_frame_started.elapsed().as_micros();
             // Nothing in the grace window → optional orchestration/operations
             // WS (the bot/backfill compatibility client uses this feed).
-            log_handshake_timing("orchestrator_grace_timeout", tls_us, ws_us, first_frame_us);
+            log_handshake_timing("orchestrator_grace_timeout", ws_us, first_frame_us);
             orchestrator_task(&mut write, &mut read, &registry).await;
             return;
         }
@@ -1843,7 +1774,7 @@ async fn ws_task(
     if role.is_none() {
         warn!("[relay] rejecting unowned/invalid player connection fd={fd}");
         let _ = write.send(Message::Close(None)).await;
-        log_handshake_timing("invalid_first_frame", tls_us, ws_us, first_frame_us);
+        log_handshake_timing("invalid_first_frame", ws_us, first_frame_us);
         return;
     }
 
@@ -1866,10 +1797,10 @@ async fn ws_task(
                 })
                 .await;
         }
-        log_handshake_timing("admission_write_error", tls_us, ws_us, first_frame_us);
+        log_handshake_timing("admission_write_error", ws_us, first_frame_us);
         return;
     }
-    log_handshake_timing("success", tls_us, ws_us, first_frame_us);
+    log_handshake_timing("success", ws_us, first_frame_us);
 
     // Relay player: the per-connection loop, routed to its lobby.
     let my_lobby: Option<Arc<LobbyState>> = match &role {
@@ -2320,10 +2251,10 @@ where
 /// lobbies for bot/backfill compatibility and operations tooling.
 async fn orchestrator_task(
     write: &mut futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<tokio_rustls::server::TlsStream<TcpStream>>,
+        tokio_tungstenite::WebSocketStream<TcpStream>,
         Message,
     >,
-    read: &mut futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio_rustls::server::TlsStream<TcpStream>>>,
+    read: &mut futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<TcpStream>>,
     registry: &Registry,
 ) {
     let mut ticker = interval(Duration::from_secs(1));

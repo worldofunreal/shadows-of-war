@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "ティムール朝"
 leader_ivan_the_terrible_name = "イヴァン雷帝"
 leader_ivan_the_terrible_historical = "イヴァン4世（1530–1584）は1547年にツァーリとして戴冠した。治世に常備・有給のストレリツィ軍が組織され、カザンとアストラハンが征服された。一方、後のオプリーチニナは苛烈な弾圧をもたらし、その歴史的評価は今も議論されている。"
 leader_ivan_the_terrible_civilization = "ロシア"
+leader_erendira_name = "エレンディラ"
+leader_erendira_historical = "ミチョアカンの伝説上のプレペチャ人女性英雄。16世紀の史料ではその物語を確認できない。"
+leader_erendira_civilization = "プレペチャ"
 
 [profile]
 ranked_1v1 = "ランク1対1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "草原の追撃"
 leader_amir_timur_description = "あなたの土地から撤退する部族は、失う兵が35%増える。"
 leader_ivan_the_terrible_ability = "ストレリツィの召集"
 leader_ivan_the_terrible_description = "完成した敵の都市を占領したとき、予備兵力に余裕があれば最大750人を召集する。1試合に1回、兵力上限まで。"
+leader_erendira_ability = "奪われた馬"
+leader_erendira_description = "敵軍があなたの領土を攻撃して兵を失うと、その損失の15%を兵として加える。兵力上限まで。"
 
 [ranked]
 my_rank = "自分のランク"

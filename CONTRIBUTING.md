@@ -6,22 +6,20 @@ For local launch instructions, see the [README](README.md#run-locally).
 
 ## Relay builds and upgrades
 
-The relay uses the F-Stack `v2.0` source selected by `SOW_FSTACK_REPO` and its
-bundled DPDK 24.11.8. The [production builder](sow-dist/src/prod.rs) applies the
-[tracked integration patch](fstack-bridge/patches/fstack-2.0.patch), builds DPDK
-in a private prefix inside the existing Debian 12 builder, and checks the
-native interface before linking. It does not use the builder's system DPDK.
-The process/queue layout and packet options live in
-[the relay configuration](fstack-bridge/echo-vf.ini).
+The production relay runs as the `sow_relay` FreeBSD service in the
+`sow-server` jail. Its HTTPS control endpoint is `127.0.0.1:8083`. Each match
+owns an independent Tokio process and game port until the final turn batch
+is acknowledged by the durable recorder.
 
-Compatible application updates use F-Stack's shared handover protocol. Existing
-matches, reconnect credentials, TLS sessions and pending turn deliveries remain
-with their original workers; new matches go to the replacement generation.
-Library, configuration, or supervisor changes require an empty match registry
-and a controlled restart. Old workers have no match-duration shutdown deadline.
-The existing production acceptance test checks continuous old-player traffic,
-new-match ownership, reconnects, and confirmed rewards across a live handover.
-Deployment continues to use `./sow p` only when requested by the owner.
+`./sow p` publishes the relay alongside the backend. Use `./sow p --relay-only`
+for an independent relay upgrade. The update replaces the control process
+while running matches keep their original executable and connections. The
+production acceptance fixture verifies continuous turns, reconnection,
+new-match ownership, and confirmed rewards across that update.
+
+The initial IONOS cutover requires inbound TCP `25592–26500` in the IONOS
+Cloud Panel firewall policy. The pipeline probes both ends of the range
+before changing the public relay DNS record.
 
 ## Pull requests
 

@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "Timur İmparatorluğu"
 leader_ivan_the_terrible_name = "Korkunç İvan"
 leader_ivan_the_terrible_historical = "IV. İvan Vasilyeviç (1530–1584), 1547’de tüm Rusya’nın ilk çarı olarak taç giydi. Yönetimi sırasında ücretli ve sürekli Streltsi ordusu kuruldu, Kazan ve Astrahan fethedildi; opriçnina ise daha sonra acımasız baskılar getirdi ve tarihsel yorumu hâlâ tartışmalıdır."
 leader_ivan_the_terrible_civilization = "Rusya"
+leader_erendira_name = "Eréndira"
+leader_erendira_historical = "Michoacánlı efsanevi Purépecha kadın kahraman; 16. yüzyıldan hiçbir kayıt öyküsünü doğrulamıyor."
+leader_erendira_civilization = "Purépecha"
 
 [profile]
 ranked_1v1 = "Dereceli 1'e 1"
@@ -1709,6 +1712,8 @@ leader_amir_timur_ability = "Orda Takibi"
 leader_amir_timur_description = "Topraklarından çekilen kabileler %35 daha fazla asker kaybeder."
 leader_ivan_the_terrible_ability = "Streltsi Seferberliği"
 leader_ivan_the_terrible_description = "Tamamlanmış bir düşman şehrini ele geçirince, yedeklerinde yer varsa en fazla 750 asker topla. Maç başına bir kez ve birlik sınırın içinde."
+leader_erendira_ability = "Ele Geçirilen At"
+leader_erendira_description = "Bir düşman ordusu topraklarına saldırırken asker kaybederse, bu kayıpların %15’ini birliklerine kat; birlik sınırını aşma."
 
 [ranked]
 my_rank = "Derecem"

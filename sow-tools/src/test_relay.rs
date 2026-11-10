@@ -5,7 +5,7 @@
 //!   2. Send authenticated JoinWithAuth, receive JoinAck
 //!   3. Send MapDownloadProgress(100) + LobbyReady
 //!   4. Wait for ServerMessage::Start with relay_port + relay_host
-//!   5. Connect to the relay directly (wss://relay_host:relay_port/ws/)
+//!   5. Connect to the relay using the route advertised by Start
 //!   6. Send ReadyWithTicket to relay
 //!   7. Receive at least one Turn
 //!   8. Send Leave, disconnect
@@ -16,6 +16,7 @@ use clap::Parser;
 use futures_util::{SinkExt, StreamExt};
 use reqwest::Url;
 use sow_core::protocol::{AuthProof, ClientMessage, ServerMessage};
+use sow_net::relay_url;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
 mod reward_return;
@@ -44,20 +45,6 @@ fn parse_websocket_url(value: &str) -> Result<Url, String> {
     }
 
     Ok(url)
-}
-
-/// Direct relay URL from a `Start{relay_host, relay_port}` handoff.
-/// Keeps the orchestrator URL's scheme; production always supplies both fields.
-fn direct_relay_url(orchestrator_url: &Url, relay_host: &str, relay_port: u16) -> Option<Url> {
-    let mut url = orchestrator_url.clone();
-    if url.set_host(Some(relay_host)).is_err() {
-        return None;
-    }
-    let _ = url.set_port(Some(relay_port));
-    url.set_path("/ws/");
-    url.set_query(None);
-    url.set_fragment(None);
-    Some(url)
 }
 
 fn step(n: u8, label: &str) {
@@ -157,12 +144,15 @@ struct Args {
     database_url: Option<Url>,
     #[arg(long)]
     audit_accounts_file: Option<std::path::PathBuf>,
-    /// Exercise live F-Stack handover during the existing reward acceptance test.
+    /// Require the same-origin route for the production reward audit.
     #[arg(long, requires = "verify_rewards")]
+    require_proxied_relay: Option<String>,
+    /// Exercise a live relay upgrade during the reward acceptance test.
+    #[arg(long, requires_all = ["verify_rewards", "verify_handover_sync_dir"])]
     verify_handover_relay_host: Option<String>,
-    /// Candidate binary installed by the official deployment pipeline.
+    /// Coordination directory shared with the official release activation.
     #[arg(long, requires = "verify_handover_relay_host")]
-    verify_handover_relay_binary: Option<String>,
+    verify_handover_sync_dir: Option<std::path::PathBuf>,
 }
 
 #[tokio::main]
@@ -190,7 +180,8 @@ async fn main() {
                 .expect("--database-url is required for reward verification"),
             args.audit_accounts_file.as_deref(),
             args.verify_handover_relay_host.as_deref(),
-            args.verify_handover_relay_binary.as_deref(),
+            args.verify_handover_sync_dir.as_deref(),
+            args.require_proxied_relay.as_deref(),
         )
         .await;
         return;
@@ -367,11 +358,8 @@ async fn main() {
     // ── Step 5: Connect to relay ────────────────────────────────────────────
     step(5, &format!("Connecting to relay on port {relay_port}..."));
 
-    let host = relay_host
-        .as_deref()
-        .unwrap_or_else(|| fail("Start message has no relay_host!"));
-    let relay_url = direct_relay_url(&url, host, relay_port)
-        .unwrap_or_else(|| fail(&format!("Invalid relay_host in Start: {host}")));
+    let relay_url = relay_url(&url, relay_host.as_deref(), relay_port)
+        .unwrap_or_else(|| fail("Invalid relay URL in Start!"));
     eprintln!("  Relay URL: {relay_url}");
 
     // Retry connection for up to 5 seconds (relay may still be booting)
@@ -461,7 +449,7 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Args, direct_relay_url, parse_websocket_url};
+    use super::{Args, relay_url, parse_websocket_url};
     use clap::Parser;
 
     #[test]
@@ -472,11 +460,11 @@ mod tests {
     }
 
     #[test]
-    fn direct_relay_url_uses_start_host_and_port() {
+    fn relay_url_uses_start_host_and_port() {
         let orchestrator = parse_websocket_url("wss://shadowsofwar.io/ws/").unwrap();
 
         assert_eq!(
-            direct_relay_url(&orchestrator, "relay.shadowsofwar.io", 25_592)
+            relay_url(&orchestrator, Some("relay.shadowsofwar.io"), 25_592)
                 .unwrap()
                 .as_str(),
             "wss://relay.shadowsofwar.io:25592/ws/"
@@ -484,10 +472,18 @@ mod tests {
     }
 
     #[test]
-    fn direct_relay_url_rejects_invalid_host() {
+    fn relay_url_rejects_invalid_host() {
         let orchestrator = parse_websocket_url("wss://shadowsofwar.io/ws/").unwrap();
 
-        assert!(direct_relay_url(&orchestrator, "not a host!", 25_592).is_none());
+        assert!(relay_url(&orchestrator, Some("not a host!"), 25_592).is_none());
+    }
+
+    #[test]
+    fn relay_without_host_uses_the_matchmaking_origin() {
+        let orchestrator = parse_websocket_url("wss://ws.shadowsofwar.io/ws/?fixture=1").unwrap();
+        let relay = relay_url(&orchestrator, None, 25_592).unwrap();
+        assert_eq!(relay.as_str(), "wss://ws.shadowsofwar.io/relay/25592/ws/");
+        assert_eq!(relay.port_or_known_default(), Some(443));
     }
 
     #[test]

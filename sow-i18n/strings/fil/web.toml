@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "Imperyong Timurid"
 leader_ivan_the_terrible_name = "Ivan the Terrible"
 leader_ivan_the_terrible_historical = "Si Ivan IV Vasilyevich (1530–1584) ay kinoronahang tsar noong 1547. Sa kanyang paghahari nabuo ang bayarang permanenteng hukbong Streltsy at nasakop ng Muscovy ang Kazan at Astrakhan; nagdulot ng marahas na panunupil ang oprichnina at pinagtatalunan pa rin ang kahulugan nito."
 leader_ivan_the_terrible_civilization = "Russia"
+leader_erendira_name = "Eréndira"
+leader_erendira_historical = "Maalamatang bayaning Purépecha mula sa Michoacán; walang tala mula ika-16 na siglo ang nagpapatunay sa kuwento niya."
+leader_erendira_civilization = "Purépecha"
 
 [profile]
 ranked_1v1 = "Ranggo 1v1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "Paghahabol sa Tribu"
 leader_amir_timur_description = "Ang mga tribong umuurong mula sa lupain mo ay nawawalan ng 35% higit pang tropa."
 leader_ivan_the_terrible_ability = "Pagtawag sa Streltsy"
 leader_ivan_the_terrible_description = "Kapag nakabihag ka ng kumpletong lungsod ng kaaway at may puwang ang iyong reserba, magdagdag ng hanggang 750 kawal. Isang beses bawat laban, ayon sa limitasyon ng iyong hukbo."
+leader_erendira_ability = "Ang Inagaw na Kabayo"
+leader_erendira_description = "Kapag nawalan ng kawal ang hukbo ng kaaway habang inaatake ang iyong teritoryo, mag-recruit ng 15% ng mga nawala nito, hanggang sa limitasyon ng iyong hukbo."
 
 [ranked]
 my_rank = "Ranggo ko"

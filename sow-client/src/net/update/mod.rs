@@ -193,13 +193,11 @@ impl SowApp {
                 relay_host
             );
 
-            // Connect directly to the relay host (F-Stack endpoint with TLS).
-            // Browser clients use wss:// — the relay terminates TLS.
-            if let Some(host) = relay_host {
-                self.net.ws_url = format!("wss://{}:{}/ws/", host, relay_port);
-            } else if let Ok(mut url) = url::Url::parse(&self.net.ws_url) {
-                let _ = url.set_port(Some(relay_port));
-                self.net.ws_url = url.to_string();
+            if let Some(url) = url::Url::parse(&self.net.orchestrator_url)
+                .ok()
+                .and_then(|url| sow_net::relay_url(&url, relay_host.as_deref(), relay_port))
+            {
+                self.net.ws_url = url.into();
             }
 
             log::info!("[CLIENT NET] Handoff URL resolved to: {}", self.net.ws_url);

@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "Đế quốc Timurid"
 leader_ivan_the_terrible_name = "Ivan Bạo Chúa"
 leader_ivan_the_terrible_historical = "Ivan IV Vasilyevich (1530–1584) được đăng quang làm Sa hoàng năm 1547. Dưới triều ông, quân Streltsy thường trực có lương được thành lập và Moskva chinh phục Kazan cùng Astrakhan; oprichnina sau đó gây ra đàn áp tàn bạo và đến nay vẫn còn nhiều cách diễn giải lịch sử."
 leader_ivan_the_terrible_civilization = "Nga"
+leader_erendira_name = "Eréndira"
+leader_erendira_historical = "Nữ anh hùng Purépecha huyền thoại ở Michoacán; không có tư liệu thế kỷ 16 xác nhận câu chuyện này."
+leader_erendira_civilization = "Purépecha"
 
 [profile]
 ranked_1v1 = "Xếp hạng 1v1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "Truy kích bộ lạc"
 leader_amir_timur_description = "Các bộ lạc rút khỏi lãnh thổ của bạn mất thêm 35% quân."
 leader_ivan_the_terrible_ability = "Tuyển mộ Streltsy"
 leader_ivan_the_terrible_description = "Khi chiếm một thành phố địch đã hoàn thành, tuyển tối đa 750 quân nếu kho dự bị còn chỗ. Một lần mỗi trận, không vượt giới hạn quân số."
+leader_erendira_ability = "Chiến mã đoạt lại"
+leader_erendira_description = "Khi quân địch mất quân lúc tấn công lãnh thổ của bạn, tuyển thêm 15% số quân tổn thất đó, không vượt giới hạn quân số."
 
 [ranked]
 my_rank = "Hạng của tôi"

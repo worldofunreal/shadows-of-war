@@ -168,6 +168,25 @@ pub(crate) fn mounted_capture_rate(state: &GameState, owner: u16, rival: u16) ->
     f64::from(percent.min(100)) / 100.0
 }
 
+pub(crate) fn mounted_defense_capture_rate(
+    state: &GameState,
+    defender: u16,
+    attacker: u16,
+) -> f64 {
+    let Some(Ability::MountedDefenseCapture { percent }) =
+        state.player(defender).map(|p| p.leader.ability())
+    else {
+        return 0.0;
+    };
+    if !state.player(defender).is_some_and(|p| p.alive)
+        || !state.player(attacker).is_some_and(|p| p.alive)
+        || allied(state, defender, attacker)
+    {
+        return 0.0;
+    }
+    f64::from(percent.min(100)) / 100.0
+}
+
 fn reunification_troops(state: &GameState, winner: &Player, rival: &Player, reserves: f64) -> f64 {
     let Ability::Reunification { percent } = winner.leader.ability() else {
         return 0.0;
@@ -994,6 +1013,16 @@ impl SowEngine {
                             && !attack.retreating
                             && attack.troops >= self.state.config.attack_cost_enemy
                             && mounted_capture_rate(&self.state, owner, attack.owner_id) > 0.0
+                    }),
+            ),
+            Ability::MountedDefenseCapture { .. } => ready(
+                p.troops < p.max_troops
+                    && self.attacks.iter().any(|attack| {
+                        attack.target_owner == owner
+                            && !attack.retreating
+                            && attack.troops >= self.state.config.attack_cost_enemy
+                            && mounted_defense_capture_rate(&self.state, owner, attack.owner_id)
+                                > 0.0
                     }),
             ),
             Ability::AttackerLoss {

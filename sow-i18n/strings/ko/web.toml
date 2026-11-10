@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "티무르 제국"
 leader_ivan_the_terrible_name = "이반 뇌제"
 leader_ivan_the_terrible_historical = "이반 4세 바실리예비치(1530–1584)는 1547년 차르로 대관했다. 그의 통치기에 유급 상비군인 스트렐치가 창설되고 카잔과 아스트라한이 정복되었다. 이후 오프리치니나는 잔혹한 탄압을 낳았으며 역사적 평가는 지금도 논쟁적이다."
 leader_ivan_the_terrible_civilization = "러시아"
+leader_erendira_name = "에렌디라"
+leader_erendira_historical = "미초아칸의 전설적인 푸레페차 여성 영웅. 16세기 기록에서는 그녀의 이야기가 확인되지 않는다."
+leader_erendira_civilization = "푸레페차"
 
 [profile]
 ranked_1v1 = "랭크 1대1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "초원의 추격"
 leader_amir_timur_description = "내 영토에서 퇴각하는 부족은 병력을 35% 더 잃습니다."
 leader_ivan_the_terrible_ability = "스트렐치 소집"
 leader_ivan_the_terrible_description = "완성된 적 도시를 점령하면 예비 병력에 여유가 있을 때 최대 750명을 모집한다. 경기당 한 번, 병력 한도 내에서 적용된다."
+leader_erendira_ability = "빼앗은 말"
+leader_erendira_description = "적군이 당신의 영토를 공격하다 병력을 잃으면 그 손실의 15%를 병력으로 모집한다. 병력 한도까지 적용된다."
 
 [ranked]
 my_rank = "내 랭크"

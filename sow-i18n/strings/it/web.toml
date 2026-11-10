@@ -700,6 +700,9 @@ leader_amir_timur_civilization = "Impero timuride"
 leader_ivan_the_terrible_name = "Ivan il Terribile"
 leader_ivan_the_terrible_historical = "Ivan IV Vasil’evič (1530–1584) fu incoronato zar nel 1547. Durante il suo governo nacque il corpo permanente e stipendiato degli strelizzi e la Moscovia conquistò Kazan’ e Astrachan’; in seguito l’opričnina impose una dura repressione, ancora discussa dagli storici."
 leader_ivan_the_terrible_civilization = "Russia"
+leader_erendira_name = "Eréndira"
+leader_erendira_historical = "Eroina purépecha leggendaria del Michoacán; nessun documento del XVI secolo conferma la sua storia."
+leader_erendira_civilization = "Purépecha"
 
 [profile]
 ranked_1v1 = "Classificata 1v1"
@@ -1705,6 +1708,8 @@ leader_amir_timur_ability = "Inseguimento dell'Orda"
 leader_amir_timur_description = "Le tribù che si ritirano dal tuo territorio perdono il 35% di truppe in più."
 leader_ivan_the_terrible_ability = "Leva degli strelizzi"
 leader_ivan_the_terrible_description = "Conquistare una città nemica completata arruola fino a 750 soldati se hai spazio nelle riserve. Una volta per partita, entro il tuo limite di truppe."
+leader_erendira_ability = "Il cavallo sottratto"
+leader_erendira_description = "Quando un esercito nemico perde truppe attaccando il tuo territorio, recluta il 15% delle perdite, entro il tuo limite di truppe."
 
 [ranked]
 my_rank = "Il mio rango"

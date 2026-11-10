@@ -63,6 +63,7 @@ fn measurement(ability: Ability) -> u16 {
         Ability::ZagrosAscent { .. } => 436,
         Ability::RegionalCommands { .. } => 437,
         Ability::NyabingiNetwork { .. } => 438,
+        Ability::MountedDefenseCapture { .. } => 441,
         Ability::AttackStrength { against, .. } => 100 + target_index(against),
         Ability::ConquestSpeed { against, .. } => 120 + target_index(against),
         Ability::DefenseStrength { against, .. } => 300 + target_index(against),
@@ -879,6 +880,7 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
             | Ability::SecondCrown
             | Ability::KitchenPhilosophy
             | Ability::MountedCapture { .. }
+            | Ability::MountedDefenseCapture { .. }
             | Ability::AksumRout
             | Ability::TigranesAid { .. }
             | Ability::AkkadGarrison
@@ -1402,6 +1404,22 @@ fn ivan_streltsy_muster_waits_for_room_and_triggers_only_once() {
     engine.sync_building_ownership();
     assert_eq!(engine.state.player(1).unwrap().troops, 10_000.0);
     assert_eq!(owner_marks(&engine)[1], 1);
+}
+
+#[test]
+fn erendira_recruits_from_enemy_losses_on_her_territory() {
+    let hero = Leader::of("erendira");
+    let ability = Ability::MountedDefenseCapture { percent: 15 };
+    assert_eq!(hero.ability(), ability);
+
+    let (reinforced, marks) = redesigned_effect(hero, ability);
+    let (control, control_marks) = redesigned_effect(Leader::of("caesar"), ability);
+    assert!(
+        reinforced > control,
+        "Eréndira recruits a share of attacking casualties: {reinforced} versus {control}"
+    );
+    assert_eq!(marks, 1, "the defensive recruitment cue is shown");
+    assert_eq!(control_marks, 0, "a hero without the ability shows no cue");
 }
 
 #[test]
@@ -3449,6 +3467,44 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             let result = run(false, 2_000.0);
             assert_eq!(result, if active { (160.0, 1) } else { (0.0, 0) });
             result
+        }
+        Ability::MountedDefenseCapture { .. } => {
+            use super::hero_effects::AbilityState::{Conditional, Ready};
+            let active = matches!(leader.ability(), Ability::MountedDefenseCapture { .. });
+            let mut battle = arena(64, 32, leader, Some(Leader::of("cleopatra")));
+            battle.state.player_mut(1).unwrap().troops = 3_000.0;
+            battle.state.player_mut(1).unwrap().max_troops = 10_000.0;
+            battle.state.player_mut(2).unwrap().troops = 5_000.0;
+            send(
+                &mut battle,
+                2,
+                GameplayIntent::Attack(AttackIntent {
+                    target_owner: 1,
+                    troops: Some(2_500.0),
+                }),
+            );
+            if active {
+                assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Ready);
+                battle.state.player_mut(1).unwrap().troops = 10_000.0;
+                assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
+                battle.state.player_mut(1).unwrap().troops = 3_000.0;
+            }
+            let before = battle.state.player(1).unwrap().troops;
+            for _ in 0..100 {
+                battle.state.tick += 1;
+                battle.execute_combat();
+            }
+            let value = battle.state.player(1).unwrap().troops - before;
+            let marks = owner_marks(&battle)[1];
+            if active {
+                assert_eq!(marks, 1);
+                assert!(battle.state.events.iter().any(|event| matches!(
+                    event,
+                    GameEvent::AbilityTriggered { owner_id: 1, tile: Some(_), affected }
+                        if affected == &[2]
+                )));
+            }
+            (value, marks)
         }
         Ability::KitchenPhilosophy => {
             use super::hero_effects::AbilityState::{Conditional, Ready};
