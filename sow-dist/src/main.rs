@@ -4268,7 +4268,7 @@ fn landing_leader_showcase(english: &serde_json::Value) -> Result<String> {
             <h3 data-detail-name data-i18n="heroes.leader_{id}_name">{name}</h3>
             <p class="showcase-historical" data-detail-historical data-i18n="heroes.leader_{id}_historical"{hidden}>{historical}</p></div>
             <div class="showcase-trait"><p class="showcase-label" data-i18n="site.command_trait">{trait_label}</p>
-            <div class="showcase-ability-row"><img class="showcase-ability-icon" data-detail-ability-icon src="/assets/gameplay/icons/abilities/{art_slug}.webp" alt="" aria-hidden="true" width="48" height="48"><div class="showcase-ability-copy"><p class="showcase-ability" data-detail-ability data-i18n="site.leader_{id}_ability">{ability}</p>
+            <div class="showcase-ability-row"><img class="showcase-ability-icon" data-detail-ability-icon src="/assets/gameplay/icons/abilities/{art_slug}.webp" alt="" aria-hidden="true" width="84" height="84"><div class="showcase-ability-copy"><p class="showcase-ability" data-detail-ability data-i18n="site.leader_{id}_ability">{ability}</p>
             <p class="showcase-description" data-detail-description data-i18n="site.leader_{id}_description">{description}</p></div></div></div>
             <a class="leader-profile-link" data-detail-profile href="/leaders/{id}/" data-i18n="site.view_profile">{profile_label}</a>
           </div>"#,

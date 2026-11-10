@@ -1233,18 +1233,18 @@ html[dir="rtl"] .hero-link:hover::after {
 }
 .showcase-ability-row {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-columns: 84px minmax(0, 1fr);
   align-items: start;
-  gap: 12px;
+  gap: 16px;
 }
 .showcase-ability-icon {
   display: block;
-  width: 48px;
-  height: 48px;
-  border: 1px solid rgb(255 190 49 / 36%);
-  border-radius: 8px;
+  width: 84px;
+  height: 84px;
+  border: 1.5px solid rgb(255 190 49 / 40%);
+  border-radius: 12px;
   object-fit: cover;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 35%);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 40%), 0 0 12px rgb(255 190 49 / 16%);
 }
 .showcase-ability-copy {
   min-width: 0;
@@ -2488,13 +2488,14 @@ html[dir="rtl"] .leader-arrow {
     margin: 0;
   }
   .showcase-ability-row {
-    grid-template-columns: 36px minmax(0, 1fr);
-    gap: 10px;
-    align-items: center;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
   }
   .showcase-ability-icon {
-    width: 36px;
-    height: 36px;
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
   }
   .showcase-description {
     font-size: 12.5px;
