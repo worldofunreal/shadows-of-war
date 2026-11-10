@@ -1,0 +1,38 @@
+#!/bin/sh
+
+# PROVIDE: sow_relay
+# REQUIRE: LOGIN valkey sow_database
+# BEFORE: sow_server
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="sow_relay"
+rcvar="sow_relay_enable"
+load_rc_config "$name"
+: ${sow_relay_enable:=NO}
+
+SOW_RELAY_BIN=/srv/sow/current/bin/sow-relay
+RUNTIME_DIRECTORY=/var/run/sow-relay
+SOW_RELAY_LOG_DIR=/var/log/sow/relay
+relay_env=/usr/local/etc/sow/relay.env
+
+pidfile="/var/run/${name}.pid"
+child_pidfile="/var/run/${name}.child.pid"
+command=/usr/sbin/daemon
+command_args="-f -P ${pidfile} -p ${child_pidfile} -r -R 2 -H -o ${SOW_RELAY_LOG_DIR}/control.log -T ${name} -u sowrelay ${SOW_RELAY_BIN}"
+required_files="${SOW_RELAY_BIN} ${relay_env}"
+start_precmd=sow_relay_prestart
+
+sow_relay_prestart()
+{
+    . "$relay_env"
+    install -d -o sowrelay -g sowrelay -m 0700 "$RUNTIME_DIRECTORY" "$SOW_RELAY_LOG_DIR"
+    export SOW_RELAY_BIN RUNTIME_DIRECTORY SOW_RELAY_LOG_DIR
+    export RUST_LOG SOW_RELAY_HOST SOW_RELAY_CONTROL_SECRET SOW_RELAY_SETTLEMENT_SECRET
+    export SOW_RELAY_TLS_CERT SOW_RELAY_TLS_KEY SOW_DB_URL
+    export SOW_RELAY_MAX_CONNECTIONS SOW_RELAY_MAX_CONNECTIONS_PER_IP SOW_RELAY_HANDSHAKES_PER_IP
+    export SOW_WS_WRITE_TIMEOUT_MS
+}
+
+run_rc_command "$1"

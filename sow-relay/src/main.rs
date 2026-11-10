@@ -1,35 +1,10 @@
-//! sow-relay — one F-Stack worker process over the DPDK bridge.
-//!
-//! Each lobby owns one dynamic TCP port in 1024..=65535. The destination port
-//! modulo the number of F-Stack queues selects the owning worker. Lobbies are
-//! registered by sow-server via that worker's kernel management port (HTTPS in
-//! production):
-//!
-//!     POST /internal/lobby/register   {lobby_id, tick_number, tick_rate_ms,
-//!                                      players, config?}
-//!     GET  /internal/lobbies          active lobby roster (ops/validation)
-//!     POST /internal/drain            pause or resume lobby registration
-//!
-//! `SOW_RELAY_BASE_MGMT_PORT` selects the first management port; worker IDs
-//! increment it for subsequent workers.
-//! selects the management port; game listeners are created dynamically when
-//! the owning worker accepts a lobby registration.
-//!
-//! Connections arrive via RSS on the game port. The first frame decides the
-//! role: a ticketed Ready frame → relay player routed to its registered lobby;
-//! silence for ORCHESTRATOR_GRACE_SECS → the optional orchestration/operations
-//! WS (LobbiesBroadcast feed for bot/backfill compatibility and tooling).
-//!
-//! The per-lobby game loop (ticks, intents, missed-tick drop, MatchTracker,
-//! finalize upload) is the sow-relay logic, now keyed by registry lookup.
+//! Local TLS control service and independent Tokio relay processes for live matches.
 
 mod progress;
 mod supervisor;
 
-use fstack_bridge::bridge::{self, Ev};
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
-use libc::{c_int, c_void};
 use log::{error, info, warn};
 use rand::{RngCore, rngs::OsRng};
 use redis::Commands;
@@ -44,16 +19,14 @@ use sow_core::protocol::{
 };
 use sow_core::spawn_rate_limit::SpawnIntentRateLimit;
 use std::collections::{HashMap, HashSet};
-use std::ffi::CString;
-use std::io::BufReader;
-use std::net::{IpAddr, SocketAddr};
-use std::pin::Pin;
-use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
+use std::io::{self, BufReader};
+use std::os::fd::AsRawFd;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
-use std::task::{Context, Poll};
 use std::time::{Instant, SystemTime};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio::time::{Duration, interval};
@@ -64,8 +37,8 @@ use tokio_tungstenite::tungstenite::{
 };
 
 const DEFAULT_MGMT_PORT: u16 = 8080;
-const DYNAMIC_PORT_MIN: u16 = 1024;
-const DEFAULT_EXPECTED_WORKER_COUNT: u16 = 3;
+const GAME_PORTS: std::ops::RangeInclusive<u16> = 25592..=26500;
+const LOCAL_DB_URL: &str = "http://127.0.0.1:25585";
 const MAX_MGMT_BODY_BYTES: usize = 2 * 1024 * 1024;
 const MGMT_CLOCK_SKEW_SECS: u64 = 30;
 const MGMT_NONCE_TTL_SECS: u64 = 120;
@@ -75,6 +48,7 @@ const DEFAULT_HANDSHAKES_PER_IP: u32 = 512;
 const MAX_ADMISSION_IPS: usize = 65_536;
 const HANDSHAKE_TIMEOUT_SECS: u64 = 10;
 type HmacSha256 = Hmac<Sha256>;
+type MgmtNonceCache = Arc<Mutex<HashMap<String, u64>>>;
 
 struct IpAdmissionState {
     active: usize,
@@ -100,8 +74,7 @@ struct RelayAdmissionPolicy {
 }
 
 static RELAY_ADMISSION: OnceLock<RelayAdmissionPolicy> = OnceLock::new();
-static RELAY_DRAINING: AtomicBool = AtomicBool::new(false);
-static LOBBY_REGISTRATION_GATE: OnceLock<RwLock<()>> = OnceLock::new();
+
 
 impl RelayAdmissionPolicy {
     fn from_env() -> Result<Self, String> {
@@ -249,38 +222,22 @@ impl RelayAdmissionPolicy {
     }
 }
 
-fn relay_accept_filter(peer: SocketAddr) -> bool {
-    RELAY_ADMISSION
-        .get()
-        .is_none_or(|policy| policy.try_accept(peer))
-}
+struct AdmissionGuard(SocketAddr);
 
-fn relay_close_hook(peer: SocketAddr) {
-    if let Some(policy) = RELAY_ADMISSION.get() {
-        policy.on_close(peer);
+impl Drop for AdmissionGuard {
+    fn drop(&mut self) {
+        if let Some(policy) = RELAY_ADMISSION.get() {
+            policy.on_close(self.0);
+        }
     }
-}
-
-fn strict_runtime_security() -> bool {
-    std::env::var("SOW_MGMT_TLS_REQUIRED").ok().as_deref() == Some("1")
 }
 
 fn configured_db_url() -> Result<String, String> {
-    let db_url =
-        std::env::var("SOW_DB_URL").unwrap_or_else(|_| "http://127.0.0.1:25585".to_string());
-    let parsed =
-        reqwest::Url::parse(&db_url).map_err(|e| format!("invalid SOW_DB_URL={db_url}: {e}"))?;
-    if strict_runtime_security() && parsed.scheme() != "https" {
-        return Err("SOW_DB_URL must use https when SOW_MGMT_TLS_REQUIRED=1".to_string());
+    let url = std::env::var("SOW_DB_URL").unwrap_or_else(|_| LOCAL_DB_URL.to_string());
+    if url.trim_end_matches('/') != LOCAL_DB_URL {
+        return Err(format!("relay settlement requires {LOCAL_DB_URL}"));
     }
-    if let Ok(raw_ip) = std::env::var("SOW_DB_RESOLVE_IP") {
-        raw_ip
-            .parse::<IpAddr>()
-            .map_err(|e| format!("invalid SOW_DB_RESOLVE_IP={raw_ip}: {e}"))?;
-    } else if strict_runtime_security() {
-        return Err("SOW_DB_RESOLVE_IP must be set when SOW_MGMT_TLS_REQUIRED=1".to_string());
-    }
-    Ok(db_url)
+    Ok(LOCAL_DB_URL.to_string())
 }
 
 fn db_client(db_url: &str) -> Result<reqwest::Client, String> {
@@ -300,35 +257,13 @@ fn db_client(db_url: &str) -> Result<reqwest::Client, String> {
 }
 
 fn build_db_client(db_url: &str) -> Result<reqwest::Client, String> {
-    let parsed =
-        reqwest::Url::parse(db_url).map_err(|e| format!("invalid database URL {db_url}: {e}"))?;
-    let mut builder = reqwest::Client::builder()
+    let _ = db_url;
+    reqwest::Client::builder()
         .no_proxy()
         .timeout(Duration::from_secs(30))
-        .redirect(reqwest::redirect::Policy::none());
-    if let Ok(raw_ip) = std::env::var("SOW_DB_RESOLVE_IP") {
-        let ip = raw_ip
-            .parse::<IpAddr>()
-            .map_err(|e| format!("invalid SOW_DB_RESOLVE_IP={raw_ip}: {e}"))?;
-        if let Some(host) = parsed.host_str() {
-            if host.parse::<IpAddr>().is_err() {
-                let port = parsed
-                    .port()
-                    .unwrap_or_else(|| if parsed.scheme() == "http" { 80 } else { 443 });
-                builder = builder.resolve(host, SocketAddr::new(ip, port));
-            }
-        }
-    }
-    builder
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| format!("build database client: {e}"))
-}
-
-fn validate_runtime_security() -> Result<(), String> {
-    if !strict_runtime_security() {
-        return Err("SOW_MGMT_TLS_REQUIRED must be 1; refusing insecure relay startup".to_string());
-    }
-    configured_db_url().map(|_| ())
 }
 
 fn decode_ticket_digest(value: &str) -> Option<[u8; 32]> {
@@ -352,21 +287,6 @@ fn ticket_is_current(expires_at: u64) -> bool {
             .map(|now| now.as_secs() <= expires_at)
             .unwrap_or(false)
 }
-
-fn expected_worker_count() -> u16 {
-    std::env::var("SOW_RELAY_WORKER_COUNT")
-        .ok()
-        .and_then(|value| value.parse::<u16>().ok())
-        .filter(|count| (1..=64).contains(count))
-        .unwrap_or(DEFAULT_EXPECTED_WORKER_COUNT)
-}
-
-static WORKER_QUEUE_ID: AtomicU16 = AtomicU16::new(0);
-static WORKER_QUEUE_COUNT: AtomicU16 = AtomicU16::new(1);
-static LISTENER_COUNT: AtomicU64 = AtomicU64::new(0);
-static DISPATCH_LOCAL: AtomicU64 = AtomicU64::new(0);
-static DISPATCH_REDIRECTED: AtomicU64 = AtomicU64::new(0);
-static DISPATCH_UNMATCHED: AtomicU64 = AtomicU64::new(0);
 
 /// TLS acceptor for direct browser connections. Reload it when Certbot swaps
 /// either file so new connections use the renewed certificate without
@@ -470,8 +390,8 @@ fn current_tls_acceptor() -> Option<TlsAcceptor> {
     let state = TLS_ACCEPTOR.get_or_init(|| StdMutex::new(TlsAcceptorState::default()));
     let mut state = state.lock().unwrap_or_else(|error| error.into_inner());
     if state.files != files {
-        state.files = files;
         if let Some(acceptor) = load_tls_acceptor() {
+            state.files = files;
             state.acceptor = Some(acceptor);
         } else if state.acceptor.is_some() {
             warn!("[tls] certificate reload failed; retaining the current certificate");
@@ -487,11 +407,6 @@ fn base_mgmt_port() -> u16 {
         .unwrap_or(DEFAULT_MGMT_PORT)
 }
 
-fn worker_port(base: u16, queue_id: u16) -> Result<u16, String> {
-    base.checked_add(queue_id)
-        .ok_or_else(|| format!("worker port overflow: base={base} queue={queue_id}"))
-}
-
 /// Advertised relay address (data PIP) written to `sow:relay:{lobby_id}`.
 fn relay_host() -> String {
     if let Ok(host) = std::env::var("SOW_RELAY_HOST") {
@@ -504,37 +419,6 @@ fn relay_host() -> String {
 
 fn relay_addr(port: u16) -> String {
     format!("{}:{port}", relay_host())
-}
-
-unsafe extern "C" fn relay_packet_dispatcher(
-    data: *mut c_void,
-    len: *mut u16,
-    queue_id: u16,
-    nb_queues: u16,
-) -> c_int {
-    if data.is_null() || len.is_null() {
-        return queue_id as c_int;
-    }
-    let bytes = unsafe { std::slice::from_raw_parts(data as *const u8, *len as usize) };
-    let route = |target| {
-        fstack_bridge::packet::tcp_destination_port(bytes)
-            .map(|port| unsafe { supervisor::native::sow_reload_route(port, target) })
-            .unwrap_or(target as c_int)
-    };
-    match fstack_bridge::tcp_destination_queue(bytes, nb_queues, DYNAMIC_PORT_MIN) {
-        Some(target) if target == queue_id => {
-            DISPATCH_LOCAL.fetch_add(1, Ordering::Relaxed);
-            route(target)
-        }
-        Some(target) => {
-            DISPATCH_REDIRECTED.fetch_add(1, Ordering::Relaxed);
-            route(target)
-        }
-        None => {
-            DISPATCH_UNMATCHED.fetch_add(1, Ordering::Relaxed);
-            queue_id as c_int
-        }
-    }
 }
 
 /// Seconds without any frame before a connection is classified as the
@@ -565,8 +449,6 @@ fn ws_write_timeout_ms() -> u64 {
     })
 }
 
-/// Per-connection bridge RX capacity (inbound DPDK mbuf guards).
-const BRIDGE_RX_CAP: usize = 256;
 
 /// Event channel capacity.
 const EVENT_CHANNEL: usize = 1024;
@@ -577,7 +459,7 @@ const WS_PING_SECS: u64 = 15;
 
 /// Liveness: reap a player connection after this many seconds without a
 /// single received frame (data, Ping, or Pong). A SIGKILLed peer whose FIN
-/// was lost under DPDK load sends nothing, so it is reaped here instead of
+/// was lost during handoff sends nothing, so it is reaped here instead of
 /// lingering in the lobby forever.
 const RX_DEADLINE_SECS: u64 = 45;
 
@@ -877,200 +759,112 @@ struct RelayAuthState {
 
 type Registry = Arc<RwLock<HashMap<u64, Arc<LobbyState>>>>;
 
-// ---- main (bridge boot — same shape as the fstack-bridge examples) ----------
-
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     env_logger::init();
-    if let Some(result) = supervisor::command_line() {
-        if let Err(error) = result { eprintln!("{error}"); std::process::exit(78); }
-        return;
-    }
-    if std::env::var("SOW_RELAY_SETTLEMENT_SECRET")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .is_none()
-    {
-        eprintln!("SOW_RELAY_SETTLEMENT_SECRET must be set; refusing shared settlement auth");
-        std::process::exit(78);
-    }
-    if std::env::var("SOW_RELAY_CONTROL_SECRET")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .is_none()
-    {
-        eprintln!("SOW_RELAY_CONTROL_SECRET must be set; refusing unauthenticated management");
-        std::process::exit(78);
-    }
-    if let Err(e) = validate_runtime_security() {
-        eprintln!("{e}");
-        std::process::exit(78);
-    }
-    if std::env::args().any(|arg| arg == "--fstack-supervisor") {
-        let args: Vec<_> = std::env::args().collect();
-        let config = args.windows(2).find(|pair| pair[0] == "--conf")
-            .map(|pair| std::path::PathBuf::from(&pair[1]));
-        let result = config.ok_or_else(|| std::io::Error::other("--conf required"))
-            .and_then(supervisor::run);
-        if let Err(error) = result { error!("[reload] {error}"); std::process::exit(78); }
-        return;
-    }
-    let primary = match supervisor::attach_child() {
-        Ok(primary) => primary,
-        Err(error) => { error!("[reload] cannot attach worker: {error}"); std::process::exit(78); }
-    };
-
-    let admission = match RelayAdmissionPolicy::from_env() {
-        Ok(policy) => policy,
-        Err(e) => {
-            eprintln!("[sow-relay] invalid admission-control configuration: {e}");
-            std::process::exit(78);
-        }
-    };
-    if RELAY_ADMISSION.set(admission).is_err() {
-        eprintln!("[sow-relay] admission policy initialized twice");
-        std::process::exit(78);
-    }
-    if let Err(e) = bridge::set_accept_filter(relay_accept_filter) {
-        eprintln!("[sow-relay] failed to install accept filter: {e}");
-        std::process::exit(78);
-    }
-    if let Err(e) = bridge::set_close_hook(relay_close_hook) {
-        eprintln!("[sow-relay] failed to install close hook: {e}");
-        std::process::exit(78);
-    }
-    let policy = RELAY_ADMISSION.get().expect("admission policy installed");
-    info!(
-        "[BOOT] admission max_connections={} max_connections_per_ip={} handshakes_per_ip={}",
-        policy.max_connections, policy.max_connections_per_ip, policy.handshakes_per_ip
-    );
-    // Identity line: the pipeline stamps git/f-stack/knob into the unit drop-in.
-    info!(
-        "[BOOT] git={} fstack={} ws_write_timeout_ms={} dpdk={} foundation={} generation={}",
-        supervisor::BUILD_GIT,
-        std::env::var("SOW_FSTACK_VERSION").unwrap_or_else(|_| "unknown".to_string()),
-        ws_write_timeout_ms(), supervisor::DPDK, supervisor::FOUNDATION, supervisor::generation()
-    );
-
-    let prog_args: Vec<CString> = std::env::args()
-        .filter(|a| !a.starts_with("--fstack-"))
-        .map(|a| CString::new(a).unwrap())
-        .collect();
-    let base_mgmt = base_mgmt_port();
-
-    // TLS: load cert if configured, otherwise plain ws://.
-    let tls_enabled = current_tls_acceptor().is_some();
-    if tls_enabled {
-        info!("[BOOT] TLS enabled — browser connects via wss:// directly");
-    } else {
-        info!("[BOOT] TLS disabled — plain ws:// (dev mode)");
-    }
-    if std::env::var("SOW_MGMT_TLS_REQUIRED").ok().as_deref() == Some("1") && !tls_enabled {
-        error!("[sow-relay] management TLS is required but the relay certificate is unavailable");
-        std::process::exit(78);
-    }
-
-    // TAP dev loop: inject --no-pci + net_tap0 vdev (FSTACK_TAP=1). Empty for the physical VF.
-    let mut extra_eal: Vec<&str> = Vec::new();
-    if std::env::var("FSTACK_TAP").ok().as_deref() == Some("1") {
-        extra_eal.push("--no-pci");
-        extra_eal.push("--iova-mode=va"); // TAP vdev needs VA IOVA (no physical NIC for PA)
-        extra_eal.push("--vdev=net_tap0,iface=tap0");
-        info!("[sow-relay] TAP mode (--no-pci + --iova-mode=va + net_tap0)");
-    } else {
-        info!("[sow-relay] physical VF mode (config.ini [dpdk] allow=)");
-    }
-
-    unsafe {
-        if let Err(code) = fstack_bridge::init(&prog_args, &extra_eal) {
-            error!("[sow-relay] init failed (code={})", code);
-            std::process::exit(1);
-        }
-        if primary {
-            if fstack_bridge::ff_is_slim_primary() == 0 {
-                error!("[reload] resident primary requires primary_slim=1");
-                std::process::exit(78);
-            }
-            fstack_bridge::ff_run(supervisor::primary_tick, ptr::null_mut());
-            return;
-        }
-
-        let (mut pid, mut qid, mut nbq, mut reta) = (0u16, 0u16, 0u16, 0u16);
-        if fstack_bridge::ff_rss_self_queue_info(&mut pid, &mut qid, &mut nbq, &mut reta) != 0 {
-            error!("[sow-relay] unable to inspect F-Stack worker queue");
-            std::process::exit(1);
-        }
-        if qid >= nbq || nbq == 0 {
-            error!(
-                "[sow-relay] invalid F-Stack queue assignment: proc_id={pid} queue_id={qid} nb_queues={nbq}"
-            );
-            std::process::exit(1);
-        }
-        let expected_workers = expected_worker_count();
-        if nbq != expected_workers {
-            error!(
-                "[sow-relay] dynamic routing requires {} F-Stack queues, got {}",
-                expected_workers, nbq
-            );
-            std::process::exit(1);
-        }
-        let expected_process = qid + u16::from(supervisor::managed());
-        if pid != expected_process {
-            error!(
-                "[sow-relay] unexpected worker assignment: proc_id={pid} queue_id={qid} expected_proc_id={expected_process}"
-            );
-            std::process::exit(1);
-        }
-        let mport = match worker_port(base_mgmt, qid) {
-            Ok(port) => port,
-            Err(e) => {
-                error!("[sow-relay] {e}");
-                std::process::exit(1);
-            }
-        };
-        WORKER_QUEUE_ID.store(qid, Ordering::Relaxed);
-        WORKER_QUEUE_COUNT.store(nbq, Ordering::Relaxed);
-        info!(
-            "[BOOT] proc_id={} queue_id={} nb_queues={} reta_size={} dynamic_ports={}..65535 mgmt_port={}",
-            pid, qid, nbq, reta, DYNAMIC_PORT_MIN, mport
-        );
-        fstack_bridge::ff_regist_packet_dispatcher(relay_packet_dispatcher);
-
-        bridge::setup();
-        bridge::KQ = fstack_bridge::ff_kqueue();
-        if bridge::KQ < 0 {
-            error!("[sow-relay] ff_kqueue failed");
-            std::process::exit(1);
-        }
-
-        let registry: Registry = Arc::new(RwLock::new(HashMap::new()));
-
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-            .expect("tokio runtime");
-        rt.spawn(mgmt_http(registry.clone(), mport));
-        rt.spawn(bridge_worker(registry.clone()));
-
-        info!(
-            "[BOOT] dynamic game listeners, mgmt :{}, entering ff_run",
-            mport
-        );
-        fstack_bridge::ff_run(supervisor::worker_tick, ptr::null_mut());
+    if let Err(error) = run().await {
+        error!("[relay] {error}");
+        std::process::exit(1);
     }
 }
 
-// ---- mgmt HTTP (kernel — never touches the bridge) ----------------
-//
-// Bind address is SOW_MGMT_LISTEN (default 127.0.0.1). Production sets it to
-// 0.0.0.0 so the orchestrator (other host) can register lobbies; access is
-// then locked down by the cloud NSG to the orchestrator's IP only.
-
-fn mgmt_listen() -> String {
-    std::env::var("SOW_MGMT_LISTEN").unwrap_or_else(|_| "127.0.0.1".to_string())
+async fn run() -> io::Result<()> {
+    configured_db_url().map_err(io::Error::other)?;
+    if current_tls_acceptor().is_none() {
+        return Err(io::Error::other("relay TLS certificate and key are required"));
+    }
+    let supervisor = Arc::new(supervisor::Supervisor::open()?);
+    match std::env::args().nth(1).as_deref() {
+        None => {
+            require_secret("SOW_RELAY_CONTROL_SECRET")?;
+            let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, base_mgmt_port())).await?;
+            info!("[relay] TLS control listening at {}", listener.local_addr()?);
+            mgmt_http(listener, supervisor).await
+        }
+        Some("--match") => {
+            use std::io::Read;
+            require_secret("SOW_RELAY_SETTLEMENT_SECRET")?;
+            let mut data = Vec::new();
+            io::stdin()
+                .take((MAX_MGMT_BODY_BYTES + 1) as u64)
+                .read_to_end(&mut data)?;
+            let body = register_body(&data).map_err(io::Error::other)?;
+            run_match(supervisor, body).await
+        }
+        Some(_) => Err(io::Error::other("unknown relay argument")),
+    }
 }
 
-type MgmtNonceCache = Arc<Mutex<HashMap<String, u64>>>;
+fn require_secret(key: &str) -> io::Result<()> {
+    if std::env::var(key).is_ok_and(|value| !value.trim().is_empty()) {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!("{key} is required")))
+    }
+}
+
+fn register_body(data: &[u8]) -> Result<RegisterBody, String> {
+    if data.len() > MAX_MGMT_BODY_BYTES {
+        return Err("registration is too large".into());
+    }
+    let body: RegisterBody = serde_json::from_slice(data).map_err(|error| error.to_string())?;
+    if body.lobby_id == 0 || !GAME_PORTS.contains(&body.relay_port) || body.ticket_expires_at == 0
+        || !body.tick_rate_ms.is_finite() || body.tick_rate_ms < 1.0
+    {
+        return Err("invalid lobby id, game port, ticket expiration or tick rate".into());
+    }
+    if body.players.iter().any(|player| {
+        !player.is_internal
+            && player.relay_ticket_digest.as_deref().and_then(decode_ticket_digest).is_none()
+    }) {
+        return Err("relay ticket digest required for every network player".into());
+    }
+    Ok(body)
+}
+
+async fn run_match(supervisor: Arc<supervisor::Supervisor>, body: RegisterBody) -> io::Result<()> {
+    let admission = RelayAdmissionPolicy::from_env().map_err(io::Error::other)?;
+    RELAY_ADMISSION.set(admission).map_err(|_| io::Error::other("admission already initialized"))?;
+    let id = body.lobby_id;
+    let port = body.relay_port;
+    let control = supervisor.claim(id)?;
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).await?;
+    let registry: Registry = Arc::new(RwLock::new(HashMap::new()));
+    let tick = spawn_lobby(&registry, body).await;
+    let control_listener = control.listen()?;
+    let control_task = tokio::spawn(supervisor::serve_match(control_listener, registry.clone()));
+    let mut connections = tokio::task::JoinSet::new();
+    let mut generation = 0;
+    tokio::pin!(tick);
+    let result = loop {
+        tokio::select! {
+            result = &mut tick => break result.map_err(io::Error::other),
+            accepted = listener.accept() => {
+                let (stream, peer) = accepted?;
+                if !RELAY_ADMISSION.get().expect("admission initialized").try_accept(peer) {
+                    continue;
+                }
+                let _ = stream.set_nodelay(true);
+                let guard = AdmissionGuard(peer);
+                let registry = registry.clone();
+                generation += 1;
+                connections.spawn(async move {
+                    let _guard = guard;
+                    ws_task(stream, generation, peer, port, Instant::now(), registry).await;
+                });
+            }
+            _ = connections.join_next(), if !connections.is_empty() => {}
+        }
+    };
+    drop(listener);
+    // Terminal frames were queued before the durable final acknowledgment.
+    let _ = tokio::time::timeout(
+        Duration::from_secs(WS_PING_SECS) + Duration::from_millis(ws_write_timeout_ms()),
+        async { while connections.join_next().await.is_some() {} },
+    ).await;
+    control_task.abort();
+    result
+}
 
 fn mgmt_header<'a>(headers: &'a HashMap<String, String>, name: &str) -> Option<&'a str> {
     headers.get(&name.to_ascii_lowercase()).map(String::as_str)
@@ -1129,14 +923,6 @@ async fn verify_mgmt_auth(
     if mac.verify_slice(&provided).is_err() {
         return false;
     }
-    if supervisor::managed() {
-        let digest = Sha256::digest(nonce.as_bytes());
-        let result = unsafe { supervisor::native::sow_reload_nonce(
-            digest.as_ptr(), now.as_secs(), MGMT_NONCE_TTL_SECS) };
-        if result < 0 { error!("[mgmt] shared nonce cache unavailable or full"); }
-        return result == 1;
-    }
-
     let mut cache = nonce_cache.lock().await;
     let cutoff = now.as_secs().saturating_sub(MGMT_NONCE_TTL_SECS);
     cache.retain(|_, seen| *seen >= cutoff);
@@ -1156,103 +942,28 @@ async fn verify_mgmt_auth(
     true
 }
 
-async fn bind_game_port(port: u16) -> Result<(), String> {
-    if !(DYNAMIC_PORT_MIN..=u16::MAX).contains(&port) {
-        return Err(format!("relay port {port} outside dynamic range"));
-    }
-    let claim = unsafe { supervisor::native::sow_reload_claim(port) };
-    if claim < 0 { return Err("relay port belongs to the previous worker generation".into()); }
-    let newly_bound = match bridge::listen_port(port).await {
-        Ok(value) => value,
-        Err(error) => {
-            if claim > 0 { unsafe { supervisor::native::sow_reload_release(port); } }
-            return Err(error);
-        }
-    };
-    if !newly_bound {
-        return Ok(());
-    }
-    LISTENER_COUNT.fetch_add(1, Ordering::Relaxed);
-
-    let redis_con = redis_shared();
-    tokio::task::spawn_blocking(move || {
-        let mut guard = redis_con.lock().unwrap();
-        if let Some(ref mut con) = *guard {
-            if let Err(e) = con.sadd::<_, _, ()>("sow:ports", port) {
-                error!("[REDIS] SADD sow:ports {port} FAILED: {e}");
-            }
-        }
-    });
-    Ok(())
-}
-
-async fn release_game_port(port: u16) {
-    let removed = match bridge::unlisten_port(port).await {
-        Ok(removed) => removed,
-        Err(e) => {
-            error!("[relay] failed to close dynamic listener {port}: {e}");
-            return;
-        }
-    };
-    if !removed {
-        return;
-    }
-    unsafe { supervisor::native::sow_reload_release(port); }
-    LISTENER_COUNT
-        .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
-            Some(n.saturating_sub(1))
-        })
-        .ok();
-
-    let redis_con = redis_shared();
-    tokio::task::spawn_blocking(move || {
-        let mut guard = redis_con.lock().unwrap();
-        if let Some(ref mut con) = *guard {
-            if let Err(e) = con.srem::<_, _, ()>("sow:ports", port) {
-                error!("[REDIS] SREM sow:ports {port} FAILED: {e}");
-            }
-        }
-    });
-}
-
-async fn mgmt_http(registry: Registry, mport: u16) {
-    let listen = mgmt_listen();
-    let listener = match supervisor::management_listener(&listen, mport).await {
-        Ok(l) => l,
-        Err(e) => {
-            error!("[mgmt] bind {}:{} failed: {}", listen, mport, e);
-            return;
-        }
-    };
-    if let Err(error) = supervisor::start_management(registry.clone()).await {
-        error!("[reload] internal management failed: {error}");
-        std::process::exit(78);
-    }
-    info!("[mgmt] http listening on {}:{}", listen, mport);
+async fn mgmt_http(listener: TcpListener, supervisor: Arc<supervisor::Supervisor>) -> io::Result<()> {
     let nonce_cache: MgmtNonceCache = Arc::new(Mutex::new(HashMap::new()));
-
+    let connections = Arc::new(tokio::sync::Semaphore::new(64));
     loop {
-        let (sock, _) = match listener.accept().await {
-            Ok(x) => x,
-            Err(_) => continue,
-        };
-        let reg = registry.clone();
+        let (sock, _) = listener.accept().await?;
+        let Ok(permit) = connections.clone().try_acquire_owned() else { continue };
+        let Some(acceptor) = current_tls_acceptor() else { continue };
+        let supervisor = supervisor.clone();
         let nonce_cache = nonce_cache.clone();
-        let tls_acceptor = current_tls_acceptor();
         tokio::spawn(async move {
-            if let Some(acceptor) = tls_acceptor {
+            let _permit = permit;
+            let _ = tokio::time::timeout(Duration::from_secs(30), async {
                 match acceptor.accept(sock).await {
-                    Ok(tls) => mgmt_connection(tls, reg, nonce_cache).await,
-                    Err(e) => warn!("[mgmt] TLS handshake failed: {e}"),
+                    Ok(tls) => mgmt_connection(tls, supervisor, nonce_cache).await,
+                    Err(error) => warn!("[mgmt] TLS handshake failed: {error}"),
                 }
-            } else {
-                mgmt_connection(sock, reg, nonce_cache).await;
-            }
+            }).await;
         });
     }
 }
 
-async fn mgmt_connection<S>(mut sock: S, registry: Registry, nonce_cache: MgmtNonceCache)
+async fn mgmt_connection<S>(mut sock: S, supervisor: Arc<supervisor::Supervisor>, nonce_cache: MgmtNonceCache)
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
@@ -1313,7 +1024,7 @@ where
     let authorized =
         path == "/healthz" || verify_mgmt_auth(&method, &path, body, &headers, &nonce_cache).await;
     let (status, resp) = if authorized {
-        handle_http(&registry, &method, &path, body).await
+        supervisor.request(&method, &path, body).await
     } else {
         (
             "401 Unauthorized",
@@ -1327,15 +1038,6 @@ where
         resp_body
     );
     let _ = sock.write_all(out.as_bytes()).await;
-}
-
-async fn handle_http(
-    registry: &Registry,
-    method: &str,
-    path: &str,
-    body: &[u8],
-) -> (&'static str, serde_json::Value) {
-    supervisor::route_management(registry, method, path, body).await
 }
 
 async fn handle_http_local(
@@ -1380,108 +1082,6 @@ async fn handle_http_local(
             }
             ("200 OK", serde_json::json!({"match_id":id.to_string()}))
         }
-        ("GET", "/healthz") => {
-            if supervisor::managed() && unsafe {
-                supervisor::native::sow_reload_ready(supervisor::generation(),
-                    WORKER_QUEUE_ID.load(Ordering::Relaxed).into()) == 0
-            } {
-                return ("503 Service Unavailable", serde_json::json!({"ok":false,"reason":"worker is not polling yet"}));
-            }
-            ("200 OK", serde_json::json!({"ok":true}))
-        }
-        ("POST", "/internal/lobby/register") => {
-            let _registration = LOBBY_REGISTRATION_GATE
-                .get_or_init(|| RwLock::new(()))
-                .read()
-                .await;
-            if RELAY_DRAINING.load(Ordering::Acquire) || supervisor::paused() {
-                return (
-                    "503 Service Unavailable",
-                    serde_json::json!({"error":"relay is paused for deployment"}),
-                );
-            }
-            let rb: RegisterBody = match serde_json::from_slice(body) {
-                Ok(b) => b,
-                Err(e) => {
-                    return (
-                        "400 Bad Request",
-                        serde_json::json!({ "error": format!("bad body: {e}") }),
-                    );
-                }
-            };
-            if rb.lobby_id == 0 {
-                return (
-                    "400 Bad Request",
-                    serde_json::json!({ "error": "lobby_id required" }),
-                );
-            }
-            if rb.ticket_expires_at == 0 {
-                return (
-                    "400 Bad Request",
-                    serde_json::json!({ "error": "ticket_expires_at required" }),
-                );
-            }
-            if rb.players.iter().any(|player| {
-                !player.is_internal
-                    && player
-                        .relay_ticket_digest
-                        .as_deref()
-                        .and_then(decode_ticket_digest)
-                        .is_none()
-            }) {
-                return (
-                    "400 Bad Request",
-                    serde_json::json!({ "error": "relay ticket digest required for every network player" }),
-                );
-            }
-            if !(DYNAMIC_PORT_MIN..=u16::MAX).contains(&rb.relay_port) {
-                return (
-                    "400 Bad Request",
-                    serde_json::json!({ "error": "relay_port must be in 1024..=65535" }),
-                );
-            }
-            let queue_id = WORKER_QUEUE_ID.load(Ordering::Relaxed);
-            let queue_count = WORKER_QUEUE_COUNT.load(Ordering::Relaxed);
-            if queue_count == 0 || rb.relay_port % queue_count != queue_id {
-                return (
-                    "409 Conflict",
-                    serde_json::json!({
-                        "error": "relay_port belongs to another worker",
-                        "relay_port": rb.relay_port,
-                        "worker": rb.relay_port % queue_count.max(1),
-                        "this_worker": queue_id,
-                    }),
-                );
-            }
-            if let Err(e) = bind_game_port(rb.relay_port).await {
-                return ("409 Conflict", serde_json::json!({ "error": e }));
-            }
-            let existing = registry.read().await.get(&rb.lobby_id).cloned();
-            if let Some(existing) = existing {
-                if existing.relay_port != rb.relay_port {
-                    return (
-                        "409 Conflict",
-                        serde_json::json!({ "error": "lobby already owns another relay port" }),
-                    );
-                }
-                return (
-                    "200 OK",
-                    serde_json::json!({ "ok": true, "existing": true }),
-                );
-            }
-            let port = rb.relay_port;
-            if let Err(error) = spawn_lobby(registry, rb).await {
-                release_game_port(port).await;
-                return (
-                    "503 Service Unavailable",
-                    serde_json::json!({"error":format!("cannot persist match registration: {error}")}),
-                );
-            }
-            (
-                "200 OK",
-                serde_json::json!({ "ok": true, "existing": false, "relay_port": port }),
-            )
-        }
         ("GET", "/internal/lobbies") => {
             let reg = registry.read().await;
             let lobbies: Vec<serde_json::Value> = reg
@@ -1490,6 +1090,10 @@ async fn handle_http_local(
                     serde_json::json!({
                         "lobby_id": id,
                         "relay_port": st.relay_port,
+                        "proc_id": std::process::id(),
+                        "executable": std::env::current_exe().ok(),
+                        "closing": st.closing.load(Ordering::Acquire),
+                        "admission": RELAY_ADMISSION.get().map(RelayAdmissionPolicy::metrics),
                         "roster_total": st.roster_total,
                         "internal_bot_count": st.internal_bot_count,
                         "expected_external_connections": st.expected_external_connections,
@@ -1499,55 +1103,6 @@ async fn handle_http_local(
                 .collect();
             ("200 OK", serde_json::json!({ "lobbies": lobbies }))
         }
-        ("POST", "/internal/drain") => {
-            let draining = match serde_json::from_slice::<serde_json::Value>(body)
-                .ok()
-                .and_then(|value| value.get("draining").and_then(serde_json::Value::as_bool))
-            {
-                Some(draining) => draining,
-                None => {
-                    return (
-                        "400 Bad Request",
-                        serde_json::json!({"error":"draining must be boolean"}),
-                    );
-                }
-            };
-            let gate = LOBBY_REGISTRATION_GATE.get_or_init(|| RwLock::new(()));
-            if draining {
-                if supervisor::managed() { unsafe { supervisor::native::sow_reload_pause(1); } }
-                else { RELAY_DRAINING.store(true, Ordering::Release); }
-                drop(gate.write().await);
-            } else {
-                let _guard = gate.write().await;
-                if supervisor::managed() { unsafe { supervisor::native::sow_reload_pause(0); } }
-                else { RELAY_DRAINING.store(false, Ordering::Release); }
-            }
-            ("200 OK", serde_json::json!({"draining":draining}))
-        }
-        ("GET", "/internal/metrics") => (
-            "200 OK",
-            serde_json::json!({
-                "proc_id": std::process::id(),
-                "listener_count": LISTENER_COUNT.load(Ordering::Relaxed),
-                "queue_id": WORKER_QUEUE_ID.load(Ordering::Relaxed),
-                "queue_count": WORKER_QUEUE_COUNT.load(Ordering::Relaxed),
-                "generation": supervisor::generation(),
-                "active_generation": supervisor::active(),
-                "foundation": supervisor::FOUNDATION,
-                "dpdk": supervisor::DPDK,
-                "managed_reload": supervisor::managed(),
-                "git": supervisor::BUILD_GIT,
-                "dispatch_local": DISPATCH_LOCAL.load(Ordering::Relaxed),
-                "dispatch_redirected": DISPATCH_REDIRECTED.load(Ordering::Relaxed),
-                "dispatch_unmatched": DISPATCH_UNMATCHED.load(Ordering::Relaxed),
-                "lobby_drain_supported": true,
-                "lobby_registration_paused": RELAY_DRAINING.load(Ordering::Acquire) || supervisor::paused(),
-                "admission": RELAY_ADMISSION
-                    .get()
-                    .map(RelayAdmissionPolicy::metrics)
-                    .unwrap_or_else(|| serde_json::json!({ "initialized": false })),
-            }),
-        ),
         ("POST", "/internal/lobby/close") => {
             let lobby_id: u64 = serde_json::from_slice::<serde_json::Value>(body)
                 .ok()
@@ -1589,7 +1144,7 @@ async fn handle_http_local(
     }
 }
 
-async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Result<Arc<LobbyState>, String> {
+async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> tokio::task::JoinHandle<()> {
     let spawn_phase_end_tick = deployment_end_tick(body.config.as_ref(), body.tick_rate_ms);
     let roster_total = body.players.len();
     let internal_bot_count = body.players.iter().filter(|p| p.is_internal).count();
@@ -1697,8 +1252,7 @@ async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Result<Arc<Lobb
         body.tick_rate_ms as u64,
         body.tick_number,
         spawn_phase_end_tick,
-    ));
-    Ok(state)
+    ))
 }
 
 // ---- per-lobby tick loop -----------------------------------------------------
@@ -1858,7 +1412,6 @@ async fn tick_task(
                     drop(clients);
                     let closures = state.tracker.lock().unwrap().participant_closures();
                     finalize_lobby(&state, &registry, closures, closing).await;
-                    release_game_port(state.relay_port).await;
                     break;
                 }
 
@@ -2074,106 +1627,7 @@ async fn tick_task(
     info!("[relay] lobby {} tick task ended", state.id);
 }
 
-// ---- bridge worker (dispatch — same shape as the fstack-bridge examples) -----
-
-async fn bridge_worker(registry: Registry) {
-    let rx = bridge::rx_ring();
-    let notify = bridge::notify();
-    let mut conns: HashMap<c_int, mpsc::Sender<bridge::ZcRxGuard>> = HashMap::new();
-
-    loop {
-        while let Some(ev) = rx.pop() {
-            match ev {
-                Ev::Accept {
-                    fd,
-                    generation,
-                    peer,
-                    listener_port,
-                    accepted_at,
-                } => {
-                    let (tx, rx_conn) = mpsc::channel(BRIDGE_RX_CAP);
-                    conns.insert(fd, tx);
-                    tokio::spawn(ws_task(
-                        fd,
-                        generation,
-                        peer,
-                        listener_port,
-                        accepted_at,
-                        rx_conn,
-                        registry.clone(),
-                    ));
-                }
-                Ev::Data { fd, guard } => match conns.get(&fd) {
-                    Some(tx) => match tx.try_send(guard) {
-                        Ok(()) => {}
-                        Err(TrySendError::Full(guard)) => {
-                            error!(
-                                "[bridge] per-connection RX budget exhausted fd={fd}; closing connection to preserve TLS stream integrity"
-                            );
-                            drop(guard);
-                            conns.remove(&fd);
-                        }
-                        Err(TrySendError::Closed(guard)) => drop(guard),
-                    },
-                    None => drop(guard),
-                },
-                Ev::Closed { fd } => {
-                    conns.remove(&fd);
-                }
-            }
-        }
-        notify.notified().await;
-    }
-}
-
 // ---- per-connection protocol task -------------------------------------------
-
-/// Unified stream: either plain Conn or TLS-wrapped Conn.
-/// tokio-tungstenite needs AsyncRead + AsyncWrite; we delegate both.
-enum MaybeTlsConn {
-    Plain(bridge::Conn),
-    Tls(Box<tokio_rustls::server::TlsStream<bridge::Conn>>),
-}
-
-impl AsyncRead for MaybeTlsConn {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            MaybeTlsConn::Plain(c) => Pin::new(c).poll_read(cx, buf),
-            MaybeTlsConn::Tls(c) => Pin::new(c.as_mut()).poll_read(cx, buf),
-        }
-    }
-}
-
-impl AsyncWrite for MaybeTlsConn {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        match self.get_mut() {
-            MaybeTlsConn::Plain(c) => Pin::new(c).poll_write(cx, buf),
-            MaybeTlsConn::Tls(c) => Pin::new(c.as_mut()).poll_write(cx, buf),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            MaybeTlsConn::Plain(c) => Pin::new(c).poll_flush(cx),
-            MaybeTlsConn::Tls(c) => Pin::new(c.as_mut()).poll_flush(cx),
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            MaybeTlsConn::Plain(c) => Pin::new(c).poll_shutdown(cx),
-            MaybeTlsConn::Tls(c) => Pin::new(c.as_mut()).poll_shutdown(cx),
-        }
-    }
-}
 
 #[derive(Clone)]
 enum Role {
@@ -2196,30 +1650,27 @@ fn role_session_id(role: &Option<Role>) -> Option<u64> {
 }
 
 async fn ws_task(
-    fd: c_int,
+    conn: TcpStream,
     generation: u64,
     peer: SocketAddr,
     listener_port: u16,
     accepted_at: Instant,
-    rx: mpsc::Receiver<bridge::ZcRxGuard>,
     registry: Registry,
 ) {
+    let fd = conn.as_raw_fd();
     info!(
         "[relay] connect origin=external_network peer={} fd={} generation={}",
         peer, fd, generation
     );
-    let conn = bridge::Conn::new(fd, generation, rx);
     let accept_to_task_us = accepted_at.elapsed().as_micros();
     let tls_started = Instant::now();
-    let mut tls_us = 0u128;
 
     // These timings are intentionally emitted once per connection, without
     // payloads or credentials. They distinguish bridge scheduling, TLS, WS,
     // and first-frame delays while keeping the hot packet path unchanged.
     let log_handshake_timing = |result: &str, tls_us: u128, ws_us: u128, first_frame_us: u128| {
         info!(
-            "[relay] handshake_timing worker={} port={} peer={} fd={} generation={} accept_to_task_us={} tls_us={} ws_us={} first_frame_us={} result={}",
-            WORKER_QUEUE_ID.load(Ordering::Relaxed),
+            "[relay] handshake_timing port={} peer={} fd={} generation={} accept_to_task_us={} tls_us={} ws_us={} first_frame_us={} result={}",
             listener_port,
             peer,
             fd,
@@ -2233,34 +1684,27 @@ async fn ws_task(
     };
 
     // TLS handshake (if cert configured), then WebSocket upgrade.
-    let stream = if let Some(acceptor) = current_tls_acceptor() {
-        match tokio::time::timeout(
-            Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
-            acceptor.accept(conn),
-        )
-        .await
-        {
-            Ok(Ok(tls)) => {
-                tls_us = tls_started.elapsed().as_micros();
-                MaybeTlsConn::Tls(Box::new(tls))
-            }
-            Ok(Err(e)) => {
-                tls_us = tls_started.elapsed().as_micros();
-                warn!("[tls] handshake fail fd={} err={}", fd, e);
-                log_handshake_timing("tls_error", tls_us, 0, 0);
-                return;
-            }
-            Err(_) => {
-                tls_us = tls_started.elapsed().as_micros();
-                warn!("[tls] handshake timeout fd={} peer={}", fd, peer);
-                log_handshake_timing("tls_timeout", tls_us, 0, 0);
-                return;
-            }
+    let Some(acceptor) = current_tls_acceptor() else { return };
+    let stream = match tokio::time::timeout(
+        Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
+        acceptor.accept(conn),
+    ).await {
+        Ok(Ok(tls)) => {
+            tls
         }
-    } else {
-        MaybeTlsConn::Plain(conn)
+        Ok(Err(error)) => {
+            warn!("[tls] handshake fail fd={fd} err={error}");
+            log_handshake_timing("tls_error", tls_started.elapsed().as_micros(), 0, 0);
+            return;
+        }
+        Err(_) => {
+            warn!("[tls] handshake timeout fd={fd} peer={peer}");
+            log_handshake_timing("tls_timeout", tls_started.elapsed().as_micros(), 0, 0);
+            return;
+        }
     };
 
+    let tls_us = tls_started.elapsed().as_micros();
     let ws_started = Instant::now();
     let ws = match tokio::time::timeout(
         Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
@@ -2876,10 +2320,10 @@ where
 /// lobbies for bot/backfill compatibility and operations tooling.
 async fn orchestrator_task(
     write: &mut futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<MaybeTlsConn>,
+        tokio_tungstenite::WebSocketStream<tokio_rustls::server::TlsStream<TcpStream>>,
         Message,
     >,
-    read: &mut futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<MaybeTlsConn>>,
+    read: &mut futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio_rustls::server::TlsStream<TcpStream>>>,
     registry: &Registry,
 ) {
     let mut ticker = interval(Duration::from_secs(1));
@@ -2946,7 +2390,7 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
 }
 
 #[cfg(test)]
-mod dispatcher_tests {
+mod tests {
     use super::{
         AdmissionState, IpAdmissionState, MatchTracker, Participation, RECONNECT_GRACE,
         RelayAdmissionPolicy, Turn, admit_gameplay_intent, deployment_end_tick, ticket_matches,

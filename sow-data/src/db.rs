@@ -4861,6 +4861,81 @@ impl PlayerDb {
         Ok(account)
     }
 
+    pub async fn claim_mission_reward(
+        &self,
+        account_id: &str,
+        mission_id: &str,
+        doubled_by_ad: bool,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let def = crate::missions::ONBOARDING_MISSIONS
+            .iter()
+            .chain(crate::missions::DAILY_MISSION_POOL.iter())
+            .find(|m| m.id == mission_id)
+            .copied()
+            .ok_or_else(|| format!("unknown mission: {mission_id}"))?;
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let mut failure: Option<String> = None;
+        let account = self
+            .update_account_atomic(account_id, &[mission_id], |account| {
+                if account.kind != AccountKind::Human {
+                    failure = Some("missions are only available for human accounts".to_string());
+                    return;
+                }
+                let record = account
+                    .profile
+                    .missions_progress
+                    .entry(mission_id.to_string())
+                    .or_default();
+                if record.claimed {
+                    failure = Some("mission reward already claimed".to_string());
+                    return;
+                }
+                let is_completed = if mission_id == "onboarding_1_tutorial" {
+                    account.profile.reward_receipts.contains_key("tutorial")
+                        || account.profile.completed_episodes.contains("tutorial")
+                        || account.profile.intro_completed
+                        || record.completed
+                        || record.progress >= 1
+                } else {
+                    record.completed || record.progress >= def.target
+                };
+
+                if !is_completed {
+                    failure = Some(format!(
+                        "mission requirement not met: progress {} < target {}",
+                        record.progress, def.target
+                    ));
+                    return;
+                }
+
+                let multiplier: u64 = if doubled_by_ad { 2 } else { 1 };
+                let crowns = def.crowns_reward.saturating_mul(multiplier);
+                let gems = def.gems_reward.saturating_mul(multiplier);
+
+                account.profile.crowns = account.profile.crowns.saturating_add(crowns);
+                account.profile.gems = account.profile.gems.saturating_add(gems);
+
+                record.id = mission_id.to_string();
+                record.completed = true;
+                record.claimed = true;
+                record.claimed_at = Some(now);
+                record.doubled_by_ad = doubled_by_ad;
+                account.updated_at = now;
+            })
+            .await?;
+
+        if let Some(err) = failure {
+            return Err(err.into());
+        }
+
+        Ok(account)
+    }
+
     /// Register expected players for an upcoming match.
     /// Recover the single orchestrator's sequence from durable registrations and legacy history.
     /// ponytail: one orchestrator owns allocation; use a database allocator before adding another.
@@ -8011,5 +8086,89 @@ mod tests {
         assert_eq!(rows[0]["completed"], 6);
         assert_eq!(rows[0]["exited"], 3);
         assert_eq!(rows[0]["completion_rate"], 0.6);
+    }
+
+    #[tokio::test]
+    async fn mission_claim_is_server_authoritative_prevents_double_claims_and_credits_balances() {
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("mission-claims.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
+        let player = "0123456789abcdef0123456789abcdef";
+        let mut account = test_account(AccountKind::Human);
+        account.id = player.to_string();
+        account.profile.crowns = 100;
+        account.profile.gems = 50;
+        db.insert_account_sync(account).unwrap();
+
+        // 1. Incomplete mission claim fails
+        let err = db
+            .claim_mission_reward(player, "onboarding_1_tutorial", false)
+            .await;
+        assert!(err.is_err());
+
+        // 2. Mark tutorial complete and claim
+        db.update_account_atomic(player, &[], |acc| {
+            acc.profile
+                .completed_episodes
+                .insert("tutorial".to_string());
+        })
+        .await
+        .unwrap();
+
+        let updated = db
+            .claim_mission_reward(player, "onboarding_1_tutorial", false)
+            .await
+            .unwrap();
+        // 150 Crowns + 25 Gems added to 100 Crowns + 50 Gems
+        assert_eq!(updated.profile.crowns, 250);
+        assert_eq!(updated.profile.gems, 75);
+        let record = updated
+            .profile
+            .missions_progress
+            .get("onboarding_1_tutorial")
+            .unwrap();
+        assert!(record.claimed);
+        assert!(!record.doubled_by_ad);
+
+        // 3. Attempting double claim fails
+        let double_claim_err = db
+            .claim_mission_reward(player, "onboarding_1_tutorial", false)
+            .await;
+        assert!(double_claim_err.is_err());
+
+        // 4. Claiming with doubled_by_ad: true doubles the reward
+        db.update_account_atomic(player, &[], |acc| {
+            acc.profile.missions_progress.insert(
+                "onboarding_2_structures".to_string(),
+                crate::missions::MissionRecord {
+                    id: "onboarding_2_structures".to_string(),
+                    progress: 5,
+                    completed: true,
+                    claimed: false,
+                    claimed_at: None,
+                    doubled_by_ad: false,
+                },
+            );
+        })
+        .await
+        .unwrap();
+
+        let doubled = db
+            .claim_mission_reward(player, "onboarding_2_structures", true)
+            .await
+            .unwrap();
+        // onboarding_2 gives 200 Crowns, 30 Gems * 2 = 400 Crowns, 60 Gems
+        // 250 + 400 = 650, 75 + 60 = 135
+        assert_eq!(doubled.profile.crowns, 650);
+        assert_eq!(doubled.profile.gems, 135);
+        let rec2 = doubled
+            .profile
+            .missions_progress
+            .get("onboarding_2_structures")
+            .unwrap();
+        assert!(rec2.claimed);
+        assert!(rec2.doubled_by_ad);
     }
 }

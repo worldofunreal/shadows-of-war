@@ -274,3 +274,21 @@ test("claimMission sends doubled_by_ad when video ad watched", async () => {
     (globalThis as any).window.SOW_portalRewardedAvailable = () => false;
     (globalThis as any).window.SOW_send = originalSend;
 });
+
+test("main_menu.missions.css provides symmetrical multi-viewport responsive rules", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const cssPath = path.resolve(__dirname, "main_menu.missions.css");
+    const css = fs.readFileSync(cssPath, "utf8");
+
+    // Symmetrical base styling
+    assert.match(css, /\.sow-directive-card\s*\{[^}]*margin:\s*0/);
+    assert.match(css, /\.sow-directive-card\s*\{[^}]*width:\s*100%/);
+
+    // Landscape compact rules (height <= 560px)
+    assert.match(css, /@media\s*\(orientation:\s*landscape\)\s*and\s*\(max-height:\s*560px\)/);
+    assert.match(css, /\.sow-directive__desc\s*\{[^}]*display:\s*none/);
+
+    // Mobile vertical portrait rules (width <= 680px)
+    assert.match(css, /@media\s*\(max-width:\s*680px\),\s*\(orientation:\s*portrait\)/);
+});

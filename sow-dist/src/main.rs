@@ -8418,6 +8418,40 @@ shortArticle = true
     }
 
     #[test]
+    fn avatar_atlas_requires_all_four_faces_of_every_leader() -> Result<()> {
+        let mut cells = serde_json::Map::new();
+        for leader in sow_core::player::Leader::all() {
+            for expression in sow_core::emote::AvatarExpression::ALL {
+                let key = sow_core::emote::hero_portrait_path(leader.art_slug(), expression);
+                cells.insert(key, serde_json::json!([0, 0, 0, 256]));
+            }
+        }
+        let dir = tempfile::tempdir()?;
+        fs::create_dir_all(dir.path().join("assets/gameplay/avatars/atlas"))?;
+        image::RgbaImage::new(256, 256).save(dir.path().join("assets/gameplay/avatars/atlas/x.webp"))?;
+        let html = |cells: &serde_json::Map<String, serde_json::Value>| {
+            let atlas = serde_json::json!({
+                "sheets": [{ "path": "gameplay/avatars/atlas/x.webp", "width": 256, "height": 256 }],
+                "cells": cells,
+            });
+            format!("<script>window.SOW_AVATAR_ATLAS = {atlas};</script>")
+        };
+        verify_cg_avatar_atlas(dir.path(), &html(&cells))?;
+        let leader = sow_core::player::Leader::all()
+            .into_iter()
+            .next()
+            .context("no playable leader")?;
+        let missing = sow_core::emote::hero_portrait_path(
+            leader.art_slug(),
+            sow_core::emote::AvatarExpression::Fear,
+        );
+        cells.remove(&missing);
+        let error = verify_cg_avatar_atlas(dir.path(), &html(&cells)).unwrap_err();
+        assert!(error.to_string().contains(&missing), "{error:#}");
+        Ok(())
+    }
+
+    #[test]
     fn avatar_asset_tree_fingerprint_tracks_content_and_removed_duplicates() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let avatars = temp.path().join("avatars");

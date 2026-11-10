@@ -1748,10 +1748,13 @@ pub(super) async fn handle_result(
             .get("relay_worker_index")
             .and_then(serde_json::Value::as_u64)
             .ok_or("registered relay owner missing")?;
-        let worker = workers
-            .iter()
-            .find(|w| w.id as u64 == owner)
-            .ok_or("registered relay owner unavailable")?;
+        // The local control service resolves the live owner by match ID,
+        // including notifications for completed matches recorded on Azure.
+        let worker = match workers.as_slice() {
+            [local] => local,
+            workers => workers.iter().find(|worker| worker.id as u64 == owner)
+                .ok_or("registered relay owner unavailable")?,
+        };
         let path = "/internal/match/result";
         let body = serde_json::to_vec(&command).map_err(|e| e.to_string())?;
         let secret = env::var("SOW_RELAY_CONTROL_SECRET").map_err(|e| e.to_string())?;
