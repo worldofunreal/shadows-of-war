@@ -57,7 +57,7 @@ function start({
 } = {}) {
   const local = storage();
   const session = storage();
-  if (choice) local.setItem("sow_analytics_consent_v2", JSON.stringify({ choice, policy: "2026-10-06" }));
+  if (choice) local.setItem("sow_analytics_consent_v2", JSON.stringify({ choice, policy: "2026-11-10" }));
   const fetchCalls = [];
   const domListeners = new Map();
   const windowListeners = new Map();
@@ -204,10 +204,32 @@ test("accepting sends consented events only to the first-party endpoint", () => 
   assert.equal(runtime.fetchCalls[0].options.credentials, "omit");
   const batch = JSON.parse(runtime.fetchCalls[0].options.body);
   assert.equal(batch.events[0].consented, true);
-  assert.equal(batch.events[0].consent_version, "2026-10-06");
+  assert.equal(batch.events[0].consent_version, "2026-11-10");
   assert.equal(batch.events[0].portal, "site");
   assert.equal(batch.events[0].platform, "web");
   assert.equal(batch.events[0].device_class, "mobile");
+});
+
+test("match funnel stores only the consented closed labels", () => {
+  const runtime = start({ pathname: "/play/", gameShell: true, choice: "accepted" });
+  runtime.window.SOW_analyticsTrack("match_ended_client", {
+    mode: "ranked_1v1",
+    outcome: "win",
+    duration_bucket: "5_15m",
+  });
+  runtime.window.SOW_analyticsTrack("match_ended_client", {
+    mode: "ranked_1v1",
+    outcome: "win",
+    duration_bucket: "5_15m",
+    player_id: 44,
+  });
+  const events = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  assert.deepEqual(events[0].props, {
+    mode: "ranked_1v1",
+    outcome: "win",
+    duration_bucket: "5_15m",
+  });
+  assert.equal(events[1].props, undefined);
 });
 
 test("landing visit keeps only a short lowercase source tag from the link", () => {

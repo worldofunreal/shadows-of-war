@@ -195,20 +195,18 @@ test("Trinovantes requires a real request, confirmed alliance and positive targe
     assert.equal(machine.update(facts, ui).step.id, "boudica_city_upgrade_wait");
     assert.equal(machine.view().paused, false);
     facts.structure_levels.city = 2;
-    const assault = until("boudica_trinovantes_assault");
+    const assault = until("boudica_camulodunum");
     assert.equal(facts.structure_levels.city, 2, "the City reaches level 2 before the allied assault");
     assert.deepEqual(assault.step.campaign_assault_on_enter, {
         attacker_team: "Blue",
         target: "camulodunum",
         preserve_relation: true,
     });
-    facts.elapsed_seconds = 1.2;
-    assert.equal(machine.update(facts, ui).step.id, "boudica_camulodunum");
     for (let t = 0; t < 3500; t += 100) {
         now += 100;
         machine.update(facts, ui);
     }
-    assert.equal(spoken.length, 11, "the Trinovantes reply finishes after the next objective is active");
+    assert.equal(spoken.length, 10, "the Camulodunum exchange finishes after the next objective is active");
     assert.equal(machine.view().step.next, "boudica_ninth_legion_set_attack_ratio");
 
     const missing = campaign.create(definition, "boudica_select_city_upgrade", roster, () => now);
@@ -227,9 +225,9 @@ test("Trinovantes requires a real request, confirmed alliance and positive targe
     );
     assert.equal(missing.view().step.id, "boudica_camulodunum");
     assert.equal(
-        missing.state.completed.includes("boudica_trinovantes_assault"),
+        definition.steps.some((step) => step.id === "boudica_trinovantes_assault"),
         false,
-        "an eliminated tribe never receives an assault order",
+        "no separate wait step delays the Camulodunum objective",
     );
 });
 
@@ -314,7 +312,7 @@ test("Boudica guides alliance requests to surviving tribes before Suetonius", ()
         assert.equal(wrongRequest.step.id, item.request);
         assert.equal(wrongRequest.paused, true);
         facts.alliance_request_faction_ids = [item.faction];
-        assert.equal(until(item.next).step.id, item.next);
+        assert.equal(until(item.next).state.id, item.next);
     }
     assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true }).errors, []);
 
@@ -326,7 +324,7 @@ test("Boudica guides alliance requests to surviving tribes before Suetonius", ()
     );
     const noneRemain = campaign.create(definition, sequence[0].target, roster, () => now);
     assert.equal(
-        noneRemain.update({ eliminated_faction_ids: sequence.map((item) => item.faction) }, {}).step.id,
+        noneRemain.update({ eliminated_faction_ids: sequence.map((item) => item.faction) }, {}).state.id,
         "boudica_final_battle_intro",
         "the final battle starts when every target is gone",
     );
@@ -560,8 +558,7 @@ test("Boudica keeps open neutral clans, makes every Roman enemy, and orders the 
         "after Camulodunum, the Ninth tutorial continues without repeating the upgrade",
     );
     assert.equal(stepsById.get("boudica_ninth_legion_intro").next, "boudica_select_city_upgrade");
-    assert.equal(stepsById.get("boudica_city_upgrade_wait").next, "boudica_trinovantes_assault");
-    assert.equal(stepsById.get("boudica_trinovantes_assault").next, "boudica_camulodunum");
+    assert.equal(stepsById.get("boudica_city_upgrade_wait").next, "boudica_camulodunum");
     assert.equal(
         stepsById.get("boudica_ninth_legion").next,
         "boudica_londinium_intro",
@@ -756,7 +753,7 @@ test("Boudica moves the city lesson after Suetonius without changing other campa
     );
     assert.equal(next("boudica_camera_home"), "boudica_choose_city");
     const friendship = definition.reactions.find((reaction) => reaction.id === "alliance_stonea");
-    const cityPrompt = friendship.exchange[2];
+    const cityPrompt = friendship.exchange[0];
     assert.equal(cityPrompt.presentation, "dialogue");
     assert.equal(cityPrompt.speaker, "boudica");
     assert.equal(cityPrompt.body_key, "tutorial.campaign_boudica_boudica_city_intro_body");
@@ -786,13 +783,12 @@ test("Boudica moves the city lesson after Suetonius without changing other campa
         false,
     );
     assert.equal(next("boudica_share_sent"), "boudica_ninth_legion_intro");
-    assert.equal(next("boudica_trinovantes_assault"), "boudica_camulodunum");
     assert.equal(next("boudica_aid_kept"), "boudica_ninth_legion_intro");
-    assert.equal(next("boudica_city_upgrade_wait"), "boudica_trinovantes_assault");
+    assert.equal(next("boudica_city_upgrade_wait"), "boudica_camulodunum");
     assert.equal(next("boudica_camulodunum"), "boudica_ninth_legion_set_attack_ratio");
     assert.equal(next("boudica_outpost_colonia_veterans"), "boudica_outpost_tax_collectors");
     assert.deepEqual(
-        definition.steps.find((step) => step.id === "boudica_trinovantes_assault").campaign_assault_on_enter,
+        definition.steps.find((step) => step.id === "boudica_camulodunum").campaign_assault_on_enter,
         {
             attacker_team: "Blue",
             target: "camulodunum",
@@ -808,13 +804,9 @@ test("Boudica moves the city lesson after Suetonius without changing other campa
         true,
         "allied assaults must not turn Trinovantes into an enemy",
     );
-    assert.deepEqual(definition.steps.find((step) => step.id === "boudica_trinovantes_assault").marker, {
-        target: "trinovantes",
+    assert.deepEqual(definition.steps.find((step) => step.id === "boudica_camulodunum").marker, {
+        target: "camulodunum",
     });
-    assert.equal(
-        definition.steps.find((step) => step.id === "boudica_trinovantes_assault").unavailable_next,
-        "boudica_camulodunum",
-    );
     assert.equal(
         definition.steps.find((step) => step.id === "boudica_aid_kept").campaign_assault_on_enter,
         undefined,
@@ -1812,7 +1804,7 @@ test("campaign negotiation uses the canonical HUD gold balance, not player-list 
             commands.some((command) => command.type === "focus_world"),
             false,
         );
-        const cameraTimer = timers.find((timer) => !timer.cancelled && timer.delay === 3250);
+        const cameraTimer = timers.find((timer) => !timer.cancelled && timer.delay === 0);
         assert.ok(cameraTimer, "the reaction focus uses the shared camera delay");
         cameraTimer.callback();
         viewOptions.onChoice("pay");
@@ -3309,10 +3301,10 @@ test("Stonea contact opens the zoom briefing and defers friendship emotes until 
     assert.equal(friendship.pause_game, false, "friendship emotes resume play after Home");
     assert.deepEqual(
         friendship.exchange.map((line) => line.speaker),
-        ["stonea", "boudica", "boudica"],
+        ["boudica", "stonea", "boudica"],
     );
-    assert.equal(friendship.exchange[2].presentation, "dialogue");
-    assert.equal(friendship.exchange[2].body_key, "tutorial.campaign_boudica_boudica_city_intro_body");
+    assert.equal(friendship.exchange[0].presentation, "dialogue");
+    assert.equal(friendship.exchange[0].body_key, "tutorial.campaign_boudica_boudica_city_intro_body");
 
     const spoken = [];
     const machine = campaign.create(definition, "boudica_first_contact", roster, undefined, {
@@ -4219,29 +4211,27 @@ test("Boudica and Stonea exchange emotes, then show the paused City prompt after
 
     view = machine.update(facts, { hud_center_camera: 1 });
     assert.equal(
-        view.step.id,
+        view.state.id,
         "boudica_choose_city",
         "the guided City objective is ready behind the exchange",
     );
     assert.equal(view.reaction, "alliance_stonea");
-    assert.equal(view.exchange.speaker, "stonea");
-    assert.equal(view.paused, true, "the paused City guide holds play during the friendship exchange");
-    assert.deepEqual(spoken, [["stonea", "greet"]]);
-
-    for (now = 100; now < 10000 && view.exchange.presentation !== "dialogue"; now += 100)
-        view = machine.update(facts, { hud_center_camera: 1 });
-    assert.deepEqual(spoken, [
-        ["stonea", "greet"],
-        ["boudica", "greet"],
-    ]);
     assert.equal(view.exchange.speaker, "boudica");
     assert.equal(view.exchange.presentation, "dialogue");
     assert.equal(view.exchange.title_key, "tutorial.campaign_boudica_boudica_city_intro_title");
     assert.equal(view.exchange.body_key, "tutorial.campaign_boudica_boudica_city_intro_body");
     assert.equal(view.paused, true, "the modal pauses play before the new City action");
     assert.equal(machine.advance(null, view.step.id), true);
+
     view = machine.update(facts, { hud_center_camera: 1 });
-    assert.equal(view.exchange, undefined, "continuing the prompt ends the exchange");
+    assert.equal(view.step.id, "boudica_choose_city");
+    assert.equal(view.exchange.speaker, "stonea");
+    assert.equal(view.paused, true, "the paused City guide holds play during the friendship exchange");
+    assert.deepEqual(spoken, [["stonea", "greet"]]);
+
+    for (now = 100; now < 10000 && view.exchange; now += 100)
+        view = machine.update(facts, { hud_center_camera: 1 });
+    assert.equal(view.exchange, undefined, "finishing the friendship emotes ends the exchange");
     assert.equal(view.step.id, "boudica_choose_city");
     assert.equal(view.paused, true, "the City guide remains paused until City is selected");
     assert.deepEqual(spoken, [

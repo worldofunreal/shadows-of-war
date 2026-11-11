@@ -195,6 +195,7 @@
     }
 
     function measure(category, what, action) {
+        if (window.SOW_adPlaying || breakRunning) return;
         if (!sdk || typeof sdk.measure !== "function") return;
         if (arguments.length === 1) {
             const parts = String(category || "").split("|");

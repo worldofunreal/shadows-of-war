@@ -219,9 +219,7 @@ impl SowEngine {
             player_id,
         ));
         fleet.recalculate_eta(
-            self.state
-                .config
-                .per_tick(crate::warp_fleet::TRANSPORT_BASE_SPEED_TILES_PER_SECOND),
+            crate::warp_fleet::transport_base_steps_per_tick(self.state.config.tick_rate_ms),
             self.state.config.tick_rate_ms,
         );
         self.add_fleet(fleet);

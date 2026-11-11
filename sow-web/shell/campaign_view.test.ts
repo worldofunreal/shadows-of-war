@@ -809,7 +809,7 @@ test("Boudica video completion reveals its dialogue before the attack objective"
     view.destroy();
 });
 
-test("cinematic waits for the loader and swaps in hashed WebM+MP4 sources with a poster", async () => {
+test("cinematic resolves media through its asset root and waits for the loader", async () => {
     const timers = new Map();
     let timerId = 0;
     class Element {
@@ -969,7 +969,7 @@ test("cinematic waits for the loader and swaps in hashed WebM+MP4 sources with a
     };
     vm.runInNewContext(campaignViewBundle, sandbox, { filename: "sow-campaign-view.ts" });
     const view = sandbox.SOWCampaignView.mount(root, {
-        asset: (value) => "/" + value,
+        asset: (value) => "./assets/" + value + "?v=hash1234",
         translate: (key) => key,
         roster: { factions: [] },
         onContinue() {},
@@ -1008,14 +1008,14 @@ test("cinematic waits for the loader and swaps in hashed WebM+MP4 sources with a
     assert.deepEqual(
         video.children.map((child) => [child.src, child.tagName]),
         [
-            ["/assets/campaign/boudica/intro.720p.555d0500.webm", "source"],
-            ["/assets/campaign/boudica/intro.720p.555d0500.mp4", "source"],
+            ["./assets/campaign/boudica/intro.720p.555d0500.webm?v=hash1234", "source"],
+            ["./assets/campaign/boudica/intro.720p.555d0500.mp4?v=hash1234", "source"],
         ],
         "WebM first, MP4 as fallback",
     );
     assert.equal(
         video.getAttribute("poster"),
-        "/assets/campaign/boudica/intro.720p.555d0500.poster.webp",
+        "./assets/campaign/boudica/intro.720p.555d0500.poster.webp?v=hash1234",
         "the poster comes from the same stem",
     );
 
@@ -2701,8 +2701,8 @@ test("a marked campaign decision smoothly focuses its player target once on entr
         commands.some((command) => command.type === "focus_world"),
         false,
     );
-    const focusTimer = timers.find((timer) => !timer.cancelled && timer.delay === 3250);
-    assert.ok(focusTimer, "the marker focus waits for the shared camera delay");
+    const focusTimer = timers.find((timer) => !timer.cancelled && timer.delay === 0);
+    assert.ok(focusTimer, "the marker focus uses the shared camera timer");
     focusTimer.callback();
     const focuses = commands.filter((command) => command.type === "focus_world");
     assert.equal(focuses.length, 1, JSON.stringify(commands));
@@ -2799,8 +2799,8 @@ test("a narrated scene films its camera shot once, from the speaker to its subje
         commands.some((command) => command.type === "focus_world"),
         false,
     );
-    const shotTimer = timers.find((timer) => !timer.cancelled && timer.delay === 3250);
-    assert.ok(shotTimer, "the authored shot uses the shared camera delay");
+    const shotTimer = timers.find((timer) => !timer.cancelled && timer.delay === 0);
+    assert.ok(shotTimer, "the authored shot uses the shared camera timer");
     shotTimer.callback();
     const shots = commands.filter((command) => command.type === "focus_world");
     assert.equal(shots.length, 1, JSON.stringify(commands));
@@ -3594,7 +3594,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(intro.next, "boudica_select_city_upgrade");
     assert.equal(
         definition.steps.find((step) => step.id === "boudica_city_upgrade_wait").next,
-        "boudica_trinovantes_assault",
+        "boudica_camulodunum",
     );
     assert.equal(definition.steps.find((step) => step.id === "boudica_camulodunum").next, ratioStepId);
     assert.equal(
@@ -3617,58 +3617,29 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(ratioMachine.view().paused, true, "the battlefield stays still while adjusting the slider");
     for (const value of [0.25, 0.5, 0.99])
         assert.equal(ratioMachine.update({ attack_ratio: value }, {}).step.id, ratioStepId);
-    assert.equal(ratioMachine.update({ attack_ratio: 1 }, {}).step.id, strikeDialog.id);
+    const strikeView = ratioMachine.update({ attack_ratio: 1 }, {});
+    assert.equal(strikeView.state.id, strikeDialog.id);
     assert.equal(
-        strikeDialog.exchange[0].delay_ms,
-        300,
-        "the dialogue follows the Legion emote after its configured gap",
-    );
-    assert.equal(
-        ratioMachine.view().waiting,
-        true,
-        "the exchange stays active while the Legion emote is shown",
-    );
-    assert.equal(ratioMachine.view().exchange_phase, "speaking");
-    assert.equal(ratioMachine.view().paused, false, "the lead emote leaves play active");
-    ratioClock = 2999;
-    assert.equal(ratioMachine.view().exchange_phase, "speaking");
-    ratioClock = 3000;
-    ratioMachine.update({ attack_ratio: 1 }, {});
-    assert.equal(ratioMachine.view().exchange_phase, "gap");
-    ratioClock = 3299;
-    ratioMachine.update({ attack_ratio: 1 }, {});
-    assert.equal(ratioMachine.view().waiting, true, "the configured 300ms gap keeps dialogue hidden");
-    ratioClock = 3300;
-    ratioMachine.update({ attack_ratio: 1 }, {});
-    assert.equal(
-        ratioMachine.view().exchange_phase,
+        strikeDialog.exchange[0].presentation,
         "dialogue",
-        "Boudica's dialogue appears when the emote and configured gap finish",
+        "Boudica's strike dialogue opens immediately without emote dead air",
     );
-    assert.equal(ratioMachine.view().paused, true, "the modal pauses while the dialogue is read");
-    for (let t = 0; t < 60000; t += 100) {
-        ratioClock += 100;
-        ratioMachine.update({ attack_ratio: 1 }, {});
-    }
-    assert.equal(ratioMachine.view().waiting, false, "the strike dialogue reveals after its emote");
-    assert.equal(ratioMachine.view().paused, true, "the game remains paused after the dialogue is revealed");
-    for (let t = 0; t < 60000; t += 100) {
-        const current = ratioMachine.view();
-        if (current.state.id === legionObjective.id) break;
-        if (current.exchange_phase === "dialogue")
-            assert.equal(
-                ratioMachine.advance(null, current.step.id),
-                true,
-                "the player's continue closes the strike dialogue",
-            );
-        ratioClock += 100;
-        ratioMachine.update({ attack_ratio: 1 }, {});
-    }
+    assert.equal(strikeView.waiting, false);
+    assert.equal(strikeView.exchange_phase, "dialogue");
+    assert.equal(strikeView.paused, true, "the modal pauses while the dialogue is read");
     assert.equal(
-        ratioMachine.view().state.id,
-        legionObjective.id,
-        "the strike scene continues once its emote and dialogue have played",
+        ratioMachine.advance(null, strikeView.step.id),
+        true,
+        "the player's continue closes the strike dialogue",
     );
+    const afterStrike = ratioMachine.update({ attack_ratio: 1 }, {});
+    assert.equal(
+        afterStrike.state.id,
+        legionObjective.id,
+        "continuing the strike dialogue immediately activates the Ninth Legion objective while emotes play in the background",
+    );
+    assert.equal(afterStrike.exchange_phase, "speaking");
+    assert.equal(afterStrike.paused, false);
 });
 
 test("tutorial hand and ripple fade in at screen center and glide together to the dimmed Home button", () => {
@@ -3718,14 +3689,15 @@ test("shipped Roman outposts speak their taunt, reply and last words with Englis
             (reaction) => reaction.when.target === encounter.target,
         );
         const contact = reactions.find((reaction) => reaction.when.type === "contact");
-        const lastWords = reactions.find((reaction) => reaction.when.type === "pre_defeat");
-        assert.ok(
-            contact && lastWords,
-            encounter.target + " has a first-contact taunt and a last-words reaction",
+        const preDefeat = reactions.find((reaction) => reaction.when.type === "pre_defeat");
+        assert.ok(contact, encounter.target + " has a first-contact taunt reaction");
+        assert.equal(
+            preDefeat,
+            undefined,
+            encounter.target + " does not hold its last tile on pre_defeat",
         );
         assert.equal(contact.during, encounter.gate);
-        assert.equal(lastWords.during, encounter.gate);
-        for (const line of [...contact.exchange, ...lastWords.exchange]) {
+        for (const line of contact.exchange) {
             assert.ok(definition.speakers[line.speaker], line.speaker + " is a named speaker");
             const key = line.emote_text_key.replace(/^tutorial\./, "");
             assert.ok(copy.includes(key + " = "), key + " has English copy");

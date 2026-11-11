@@ -25,6 +25,8 @@ import type {
     HudMapMenu,
     HudMapMenuBuilding,
     HudMapMenuItem,
+    HudMarket,
+    HudMarketSide,
     HudNotification,
     HudStateEnvelope,
     HudDevParameter,
@@ -214,6 +216,18 @@ type HudRefs = {
     inboxRenderKey: string;
     transfer: HTMLElement;
     transferTarget: HTMLElement;
+    market: HTMLElement;
+    marketButton: HTMLButtonElement;
+    marketAmount: HTMLInputElement;
+    marketPrice: HTMLInputElement;
+    marketTrade: HTMLButtonElement;
+    marketPost: HTMLButtonElement;
+    marketCancel: HTMLButtonElement;
+    marketStatus: HTMLElement;
+    marketStock: HTMLElement;
+    marketOrder: HTMLElement;
+    marketOrderText: HTMLElement;
+    marketLimitLabel: HTMLElement;
     transferClose: HTMLElement;
     transferReturnFocus: HTMLElement | null;
     transferGold: HTMLInputElement;
@@ -399,6 +413,111 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return true;
     }
 
+    let marketSide: HudMarketSide = "buy";
+    let marketPriceEdited = false;
+    let marketRequestId = 0;
+    let marketPending: number | null = null;
+    let marketResult: HudMarket["feedback"] = null;
+
+    function marketLots(): number {
+        const size = hudState?.hud?.market?.troops_per_lot;
+        const lots = size ? Number(hudRefs?.marketAmount.value) / size : 0;
+        return Number.isInteger(lots) && lots > 0 && lots <= 0xffffffff ? lots : 0;
+    }
+
+    function requestMarketQuote(): void {
+        send("preview_market", { side: marketSide, lots: marketLots() });
+        if (hudRefs && hudState?.hud) renderMarket(hudState.hud);
+    }
+
+    function sendMarketAction(command: string): void {
+        const refs = hudRefs;
+        const market = hudState?.hud?.market;
+        if (!refs || !market || marketPending !== null) return;
+        const lots = marketLots();
+        const request_id = marketRequestId = ((marketRequestId + 1) >>> 0) || 1;
+        const fields: HudCommandPayload = { request_id };
+        if (command === "market_trade") {
+            if (market.side !== marketSide || market.lots !== lots || market.quote_gold == null) return;
+            Object.assign(fields, { side: marketSide, lots, limit_gold: market.quote_gold });
+        } else if (command === "place_market_order") {
+            const gold_per_lot = Number(refs.marketPrice.value);
+            if (!lots || !Number.isInteger(gold_per_lot) || gold_per_lot <= 0 || gold_per_lot > 0xffffffff / lots) return;
+            Object.assign(fields, { side: marketSide, lots, gold_per_lot });
+        }
+        if (send(command, fields)) {
+            marketPending = request_id;
+            marketResult = null;
+            renderMarket(hudState!.hud!);
+        }
+    }
+
+    function renderMarket(hud: MenuHudPayload): void {
+        const refs = hudRefs;
+        if (!refs?.market) return;
+        const market = hud.market;
+        const wasOpen = !refs.market.classList.contains("hidden");
+        refs.marketButton.hidden = !hud.market_available;
+        refs.marketButton.setAttribute("aria-expanded", String(Boolean(market)));
+        refs.market.classList.toggle("hidden", !market);
+        if (!market) {
+            if (!hud.market_available) {
+                marketPending = null;
+                marketResult = null;
+            }
+            if (wasOpen && refs.market.contains(document.activeElement) && !refs.marketButton.hidden) {
+                restoreHudFocus(refs.marketButton);
+            }
+            return;
+        }
+        const size = market.troops_per_lot;
+        if (wasOpen === false && !refs.marketAmount.value) {
+            refs.marketAmount.value = String(market.lots * size || size);
+        }
+        refs.marketAmount.min = refs.marketAmount.step = String(size);
+        for (const preset of refs.market.querySelectorAll<HTMLButtonElement>("[data-market-lots]")) {
+            const label = (Number(preset.dataset.marketLots) * size).toLocaleString(window.SOW_LOCALE || "en");
+            if (preset.textContent !== label) preset.textContent = label;
+        }
+        if (marketPending !== null && market.feedback?.request_id === marketPending) {
+            marketPending = null;
+            marketResult = market.feedback;
+        }
+        const pending = marketPending !== null;
+        const lots = marketLots();
+        const current = market.side === marketSide && market.lots === lots;
+        const buy = marketSide === "buy";
+        const format = (value: number) => value.toLocaleString(window.SOW_LOCALE || "en");
+        const label = (key: string, values?: Record<string, string>) => SOW_t("hud.market_" + key, values);
+        for (const button of refs.market.querySelectorAll<HTMLButtonElement>("[data-market-side]")) {
+            button.setAttribute("aria-pressed", String(button.dataset.marketSide === marketSide));
+        }
+        refs.marketStock.textContent = market.side === marketSide
+            ? label(buy ? "stock_buy" : "stock_sell", { troops: format(market.available_lots * size) }) : "";
+        const quote = current ? market.quote_gold : null;
+        refs.marketTrade.disabled = pending || quote === null;
+        refs.marketTrade.textContent = quote === null ? label(buy ? "buy" : "sell")
+            : label(buy ? "buy_for" : "sell_for", { troops: format(lots * size), gold: format(quote) });
+        if (!marketPriceEdited && market.side === marketSide) refs.marketPrice.value = String(market.best_price ?? "");
+        const price = Number(refs.marketPrice.value);
+        refs.marketLimitLabel.textContent = label(buy ? "limit_buy" : "limit_sell", { troops: format(size) });
+        refs.marketPost.textContent = label(market.order ? "replace" : "post");
+        refs.marketPost.disabled = pending || !lots || !Number.isInteger(price) || price <= 0 || price > 0xffffffff / lots;
+        refs.marketOrder.hidden = !market.order;
+        refs.marketCancel.disabled = pending;
+        refs.marketOrderText.textContent = market.order ? label(market.order.side === "buy" ? "order_buy" : "order_sell", {
+            troops: format(market.order.lots * size), gold: format(market.order.gold_per_lot), lot: format(size),
+        }) : "";
+        const outcome = marketResult?.outcome;
+        const status = pending ? label("pending") : outcome?.kind === "traded"
+            ? label(outcome.side === "buy" ? "bought" : "sold", { troops: format(outcome.lots * size), gold: format(outcome.gold) })
+            : outcome?.kind === "rejected" ? label(outcome.reason)
+            : outcome ? label(outcome.kind)
+            : current && market.quote_failure ? label(market.quote_failure) : "";
+        if (refs.marketStatus.textContent !== status) refs.marketStatus.textContent = status;
+        if (!wasOpen) restoreHudFocus(document.getElementById("sow-hud-market-close"));
+    }
+
     function updateHudSafeArea() {
         if (!hudRoot || typeof window.getComputedStyle !== "function") return;
         const probe = document.createElement("span");
@@ -439,6 +558,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function setHudPanel(panel: HudPanel) {
         const previous = activeHudPanel;
         const next = previous === panel ? null : panel;
+        if (next && hudState?.hud?.market) send("close_market");
         if (next !== "settings" && hudDropdownOpenKey) {
             hudDropdownOpenKey = null;
             if (hudRefs && hudRoot) syncDropdownScope(hudRoot, null);
@@ -1009,8 +1129,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     function leaderById(id: string | null | undefined): MenuLeader {
         const leaders = hudState && Array.isArray(hudState.leaders) ? hudState.leaders : [];
+        const normalize = function (value: unknown) {
+            return String(value || "")
+                .replace(/[^a-z0-9]/gi, "")
+                .toLowerCase();
+        };
+        const wanted = normalize(id);
         const found = leaders.find(function (leader) {
-            return leader.id === id;
+            return (
+                normalize(leader.id) === wanted ||
+                normalize(leader.slug) === wanted ||
+                normalize(leader.art_slug) === wanted
+            );
         });
         if (found) return found;
         if (id) {
@@ -1319,6 +1449,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             inboxRenderKey: "",
             transfer: requiredHudElement("sow-hud-transfer"),
             transferTarget: requiredHudElement("sow-hud-transfer-target"),
+            market: requiredHudElement("sow-hud-market"),
+            marketButton: requiredHudButton("sow-hud-market-button"),
+            marketAmount: requiredHudInput("sow-hud-market-amount"),
+            marketPrice: requiredHudInput("sow-hud-market-price"),
+            marketTrade: requiredHudButton("sow-hud-market-trade"),
+            marketPost: requiredHudButton("sow-hud-market-post"),
+            marketCancel: requiredHudButton("sow-hud-market-cancel"),
+            marketStatus: requiredHudElement("sow-hud-market-status"),
+            marketStock: requiredHudElement("sow-hud-market-stock"),
+            marketOrder: requiredHudElement("sow-hud-market-order"),
+            marketOrderText: requiredHudElement("sow-hud-market-order-text"),
+            marketLimitLabel: requiredHudElement("sow-hud-market-limit-label"),
             transferClose: requiredHudElement("sow-hud-transfer-close"),
             transferReturnFocus: null,
             transferGold: requiredHudInput("sow-hud-transfer-gold"),
@@ -1384,6 +1526,43 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             dockStack: requiredHudElement("sow-hud-dock-stack"),
             mapFeedback: document.createElement("div"),
         };
+    }
+
+    function marketMarkup(): string {
+        const label = (key: string) => esc(SOW_t("hud.market_" + key));
+        return `<aside class="sow-hud__dialog sow-hud__transfer sow-hud__market hidden" id="sow-hud-market" role="dialog" aria-labelledby="sow-hud-market-title">
+            <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon" aria-hidden="true">${hudIcon("transfer", "sow-hud__inline-icon")}</span>
+                <h3 id="sow-hud-market-title">${label("title")}</h3>
+                <button class="sow-hud__close-btn" id="sow-hud-market-close" type="button" data-command="close_market" aria-label="${esc(SOW_t("menu.close"))}">✕</button>
+            </div>
+            <div class="sow-hud__dialog-body">
+                <div class="sow-hud__market-row">
+                    <button type="button" data-command="market_side" data-market-side="buy" aria-pressed="true">${label("buy")}</button>
+                    <button type="button" data-command="market_side" data-market-side="sell" aria-pressed="false">${label("sell")}</button>
+                </div>
+                <p id="sow-hud-market-stock"></p>
+                <label>${hudIcon("troops", "sow-hud__inline-icon")} ${esc(SOW_t("hud.troops"))}
+                    <input id="sow-hud-market-amount" type="number" inputmode="numeric" autocomplete="off">
+                </label>
+                <div class="sow-hud__market-row">
+                    ${[1, 5, 10].map((lots) => `<button class="sow-hud__transfer-preset" type="button" data-command="market_amount" data-market-lots="${lots}"></button>`).join("")}
+                </div>
+                <button class="sow-hud__market-primary" id="sow-hud-market-trade" type="button" data-command="market_trade" disabled></button>
+                <p id="sow-hud-market-status" role="status"></p>
+                <details id="sow-hud-market-details"><summary>${label("leave_order")}</summary>
+                    <label><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="${currencyAsset("gold")}" alt="">
+                        <span id="sow-hud-market-limit-label"></span>
+                        <input id="sow-hud-market-price" type="number" inputmode="numeric" min="1" step="1" autocomplete="off">
+                    </label>
+                    <button id="sow-hud-market-post" type="button" data-command="place_market_order" disabled></button>
+                </details>
+                <section id="sow-hud-market-order" aria-labelledby="sow-hud-market-order-title" hidden>
+                    <strong id="sow-hud-market-order-title">${label("my_order")}</strong>
+                    <p id="sow-hud-market-order-text"></p>
+                    <button id="sow-hud-market-cancel" type="button" data-command="cancel_market_order">${esc(SOW_t("endgame.cancel"))}</button>
+                </section>
+            </div>
+        </aside>`;
     }
 
     function ensureHudDom() {
@@ -1473,6 +1652,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudIcon("troops", "sow-hud__inline-icon") +
             '<b id="sow-hud-nameplate-troop-rate">0/s</b></span>' +
             "  </div></div></div>" +
+            '<button class="sow-hud__market-entry" id="sow-hud-market-button" type="button" data-command="open_market" aria-controls="sow-hud-market" aria-expanded="false" hidden>' +
+            hudIcon("transfer", "sow-hud__inline-icon") + esc(SOW_t("hud.market_button")) + '</button>' +
             '<details class="sow-hud__hero-ability" id="sow-hud-hero-ability" hidden>' +
             '<summary><span id="sow-hud-hero-ability-icon" aria-hidden="true"></span>' +
             '<span id="sow-hud-hero-ability-name"></span>' +
@@ -1848,6 +2029,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</span></button>" +
             "</div>" +
             "</aside>" +
+            marketMarkup() +
             '<div class="sow-hud__modal-backdrop sow-hud__betrayal-backdrop hidden" id="sow-hud-betrayal-modal">' +
             '  <section class="sow-hud__dialog sow-hud__betrayal" role="dialog" aria-modal="true" aria-labelledby="sow-hud-betrayal-title" aria-describedby="sow-hud-betrayal-copy">' +
             '    <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon sow-hud__betrayal-mark" aria-hidden="true">' +
@@ -2159,6 +2341,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         hudRoot.addEventListener("input", function (event) {
             const target = event.target;
             if (!(target instanceof Element)) return;
+            if (target === hudRefs?.marketAmount) {
+                marketResult = null;
+                requestMarketQuote();
+                return;
+            }
+            if (target === hudRefs?.marketPrice && hudState?.hud) {
+                marketPriceEdited = true;
+                marketResult = null;
+                renderMarket(hudState.hud);
+                return;
+            }
             const searchInput = target.closest<HTMLInputElement>("#sow-hud-lb-search");
             if (searchInput) {
                 leaderboardFilterQuery = searchInput.value.trim().toLowerCase();
@@ -3419,7 +3612,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     function ringActivate(menu: HTMLElement, target: "hub" | number | null): void {
-        console.info("[RING TRACE] activate target=" + String(target));
         if (target === "hub") {
             // The center goes back inside a submenu; at the root it focuses the nameplate and closes.
             const back = menu.querySelector<HTMLButtonElement>("[data-map-back]");
@@ -3570,16 +3762,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 const menu = openRingMenu();
                 const press = ring.press;
                 ring.press = null;
-                console.info(
-                    "[RING TRACE] pointerup button=" +
-                        event.button +
-                        " type=" +
-                        event.pointerType +
-                        " menu=" +
-                        Boolean(menu) +
-                        " fromOpen=" +
-                        (press ? press.fromOpen : "none"),
-                );
                 if (!menu || !press || press.id !== event.pointerId) {
                     if (menu) ringHoldCancel(menu);
                     return;
@@ -4807,7 +4989,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function notificationIcon(key: string, values: Record<string, string>): string {
         // A notice that names the hero whose ability fired shows that ability's icon.
         if (/^[a-z][a-z0-9_]*$/.test(values.hero || "")) {
-            const artSlug = leaderById(values.hero).art_slug || values.hero;
+            const hero = leaderById(values.hero);
+            const artSlug = hero.art_slug || hero.slug || values.hero;
             if (typeof window.SOW_abilityIconMarkup === "function") {
                 return window.SOW_abilityIconMarkup(
                     artSlug,
@@ -5826,6 +6009,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function renderHud(forceNotifications = false): void {
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
+            marketPending = null;
+            marketResult = null;
             closeLeaderboard();
             hudRoot.hidden = true;
             if (hudDevLayer) hudDevLayer.hidden = true;
@@ -5882,6 +6067,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         syncCompactHudDensity(hudScreen);
 
         const hud = hudState.hud;
+        renderMarket(hud);
         const settings = hudState.settings || DEFAULT_HUD_SETTINGS;
         const settingsOpen = activeHudPanel === "settings";
         const inboxOpen = activeHudPanel === "inbox";
@@ -6566,6 +6752,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 leaderboardOpen ||
                 inboxOpen ||
                 hud.transfer ||
+                hud.market ||
                 betrayalOpen ||
                 surrenderModalOpen ||
                 isOver ||
@@ -6718,7 +6905,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     if (mapButton.dataset.ringHold === "true" && !ring.holdConfirmed) return;
                     const action = mapButton.dataset.mapAction;
                     if (!action) return;
-                    console.info("[RING TRACE] map_menu_action " + action + " trusted=" + event.isTrusted);
                     send("map_menu_action", {
                         session: Number(mapMenu.dataset.session),
                         tile_idx: Number(mapMenu.dataset.tileIdx),
@@ -6815,6 +7001,35 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 send("dev_vfx_all", { on: btn.dataset.on === "1" });
             } else if (cmd === "clear_emote") {
                 send("clear_emote");
+            } else if (cmd === "open_market" && hudRefs) {
+                if (hudState?.hud?.market) {
+                    send("close_market");
+                } else {
+                    setHudPanel(null);
+                    marketSide = "buy";
+                    marketPriceEdited = false;
+                    hudRefs.marketAmount.value = "";
+                    hudRefs.marketPrice.value = "";
+                    hudRefs.market.querySelector("details")?.removeAttribute("open");
+                    send("preview_market", { side: marketSide, lots: 1 });
+                }
+            } else if (cmd === "close_market") {
+                send("close_market");
+            } else if (cmd === "market_side" && hudRefs) {
+                const side = btn.dataset.marketSide;
+                if ((side === "buy" || side === "sell") && side !== marketSide) {
+                    marketSide = side;
+                    marketPriceEdited = false;
+                    marketResult = null;
+                    hudRefs.marketPrice.value = "";
+                    requestMarketQuote();
+                }
+            } else if (cmd === "market_amount" && hudRefs && hudState?.hud?.market) {
+                hudRefs.marketAmount.value = String(Number(btn.dataset.marketLots) * hudState.hud.market.troops_per_lot);
+                marketResult = null;
+                requestMarketQuote();
+            } else if (cmd === "market_trade" || cmd === "place_market_order" || cmd === "cancel_market_order") {
+                sendMarketAction(cmd);
             } else if (cmd === "open_transfer") {
                 setHudPanel(null);
                 send("open_transfer", { target_player_id: Number(btn.dataset.playerId) });
@@ -7130,6 +7345,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 send("clear_placement");
                 return;
             }
+            if (event.key === "Escape" && hudState?.hud?.market) {
+                event.preventDefault();
+                event.stopPropagation();
+                send("close_market");
+                return;
+            }
             if (
                 event.key === "Escape" &&
                 hudRefs &&
@@ -7219,6 +7440,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         emoteTextKey = "";
         if (!hudState) return;
         const active = document.activeElement;
+        const marketDraft = hudRefs && hudState.hud?.market ? {
+            amount: hudRefs.marketAmount.value,
+            price: hudRefs.marketPrice.value,
+            details: hudRefs.market.querySelector("details")?.open,
+            focus: hudRefs.market.contains(active) ? active?.id : null,
+        } : null;
         const transferDraft =
             hudRefs && hudRefs.transfer && !hudRefs.transfer.classList.contains("hidden")
                 ? {
@@ -7252,6 +7479,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
         renderHud(true);
         const refreshedRefs = hudRefs as HudRefs | null;
+        if (marketDraft && refreshedRefs) {
+            refreshedRefs.marketAmount.value = marketDraft.amount;
+            refreshedRefs.marketPrice.value = marketDraft.price;
+            const details = refreshedRefs.market.querySelector("details");
+            if (details) details.open = Boolean(marketDraft.details);
+            if (hudState.hud) renderMarket(hudState.hud);
+            if (marketDraft.focus) restoreHudFocus(document.getElementById(marketDraft.focus));
+        }
         if (
             transferDraft &&
             refreshedRefs &&

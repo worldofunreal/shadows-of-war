@@ -109,6 +109,24 @@ export function renderMainNav(active: string | null | undefined) {
     );
 }
 
+function renderAccountControl() {
+    const identity = window.SOW_PLATFORM_IDENTITY;
+    const registered = identity?.provider === "jest" && identity.registered === true;
+    const accountName = registered ? identity?.displayName || "Player" : SOW_t("menu.anonymous");
+    return (
+        "<div class='sow-menu__settings-account " +
+        (registered ? "is-registered" : "is-guest") +
+        "'><span class='sow-menu__account-dot' aria-hidden='true'></span><strong class='sow-menu__account-value'>" +
+        esc(accountName) +
+        "</strong></div>" +
+        (registered
+            ? ""
+            : "<button class='sow-menu__secondary sow-menu__settings-signin' type='button' data-command='jest_login'>" +
+              esc(SOW_t("menu.sign_in")) +
+              "</button>")
+    );
+}
+
 export function renderSettings() {
     const settings = menuUi.state!.settings || {};
     const vol = settings.music_volume == null ? 0.8 : settings.music_volume;
@@ -121,13 +139,6 @@ export function renderSettings() {
         "<svg class='sow-menu__settings-sec-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>";
     const musicSvg =
         "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'/><path d='M15.54 8.46a5 5 0 0 1 0 7.07'/><path d='M19.07 4.93a10 10 0 0 1 0 14.14'/></svg>";
-    const accountControl =
-        "<div class='sow-menu__settings-account is-guest'><span class='sow-menu__account-dot' aria-hidden='true'></span><strong class='sow-menu__account-value'>" +
-        esc(SOW_t("menu.anonymous")) +
-        "</strong></div>" +
-        "<button class='sow-menu__secondary sow-menu__settings-signin' type='button' data-command='jest_login'>" +
-        esc(SOW_t("menu.sign_in")) +
-        "</button>";
     return (
         "" +
         "<div class='sow-menu__overlay' data-menu-overlay='settings'>" +
@@ -168,7 +179,7 @@ export function renderSettings() {
         "<span>" +
         esc(SOW_t("menu.account")) +
         "</span></h3><div class='sow-menu__settings-account-deck'>" +
-        accountControl +
+        renderAccountControl() +
         "</div></section>" +
         renderSettingsPrivacySection("") +
         "</div>" +
@@ -190,4 +201,9 @@ document.addEventListener("click", function (event) {
     if (typeof window.SOW_jestLogin === "function") {
         window.SOW_jestLogin();
     }
+});
+
+window.addEventListener("sow:platform-identity-changed", function () {
+    const accountDeck = document.querySelector(".sow-menu__settings-account-deck");
+    if (accountDeck) accountDeck.innerHTML = renderAccountControl();
 });

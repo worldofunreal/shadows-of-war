@@ -76,6 +76,8 @@ impl SowApp {
         self.sim.relay_reconnect_ticket = None;
         self.ui.app.hud_state.spawn_timer_secs = None;
         self.ui.app.hud_state.sync_state = None;
+        self.ui.app.hud_state.market_preview = None;
+        self.ui.app.hud_state.market_send_failed = None;
         self.ui.app.hud_state.clear_notifications();
         self.ui.app.main_menu_state.wait_timer_secs = 0.0;
         self.ui.app.main_menu_state.cached_map = None;
@@ -436,8 +438,12 @@ impl SowApp {
                         if self.ui.app.splash_state.target_phase.is_none() {
                             self.ui.app.splash_state.target_phase =
                                 Some(crate::ClientPhase::Playing);
+                            self.portal_match_started_at = Some(web_time::Instant::now());
                             crate::store_portals::gameplay_start();
-                            crate::store_portals::track_product_event("match_started_client");
+                            crate::store_portals::track_product_event_with(
+                                "match_started_client",
+                                &serde_json::json!({ "mode": self.portal_match_mode }),
+                            );
                         }
 
                         // Clear pending init data to completely finish EnterGame phase

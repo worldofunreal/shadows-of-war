@@ -458,6 +458,28 @@ html[dir="rtl"] #sow-hud-dev-layer {
   min-width: 0;
 }
 
+.sow-hud__nameplate:has(> .sow-hud__market-entry:not([hidden])) {
+  height: calc(var(--sow-player-panel-height) + 35px + 2rem + 3px);
+  grid-auto-rows: 2rem;
+}
+
+#sow-hud .sow-hud__market-entry {
+  grid-column: 1 / -1;
+  grid-row: 5;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  min-block-size: 2rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem;
+  pointer-events: auto;
+}
+
+#sow-hud .sow-hud__market-entry[hidden] {
+  display: none;
+}
+
 .sow-hud__nameplate-stat {
   display: flex;
   align-items: center;
@@ -5154,6 +5176,62 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   );
 }
 
+.sow-hud__market .sow-hud__dialog-body {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.65rem;
+}
+
+.sow-hud__market :is(p, label, summary) {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sow-hud__market label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+#sow-hud .sow-hud__market input {
+  flex: 1 1 6rem;
+  min-inline-size: 0;
+  text-align: end;
+}
+
+.sow-hud__market-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.sow-hud__market-row button {
+  flex: 1 1 auto;
+}
+
+#sow-hud .sow-hud__market :is(button[aria-pressed="true"], .sow-hud__market-primary:not(:disabled)) {
+  border-color: var(--sow-gold);
+  color: var(--sow-gold);
+}
+
+.sow-hud__market button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sow-hud__market :is(details, #sow-hud-market-order) {
+  border-block-start: 1px solid var(--sow-tactical-surface-border);
+  padding-block-start: 0.625rem;
+}
+
+.sow-hud__market :is(details, #sow-hud-market-order) > :not(:first-child) {
+  margin-block-start: 0.5rem;
+}
+
+.sow-hud__market summary {
+  cursor: pointer;
+}
+
 .sow-hud__betrayal-backdrop {
   padding-block: calc(var(--sow-hud-dialog-view-top, 0px) + max(0.5rem, var(--sow-sat)))
     calc(var(--sow-hud-dialog-view-bottom, 0px) + max(0.5rem, var(--sow-sab)));
@@ -5480,6 +5558,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   touch-action: manipulation;
 }
 
+.sow-hud__market-entry,
+.sow-hud__market button:not(.sow-hud__close-btn),
 .sow-hud__transfer-actions button,
 .sow-hud__request-actions button {
   display: inline-flex;

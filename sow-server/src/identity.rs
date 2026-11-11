@@ -193,6 +193,98 @@ impl IdentityState {
         }
     }
 
+    pub(crate) async fn sync_wou_achievement_cards(&self) -> Result<usize, String> {
+        let Some(secret) = self.inner.wou_sow_identity_secret.as_deref() else {
+            return Ok(0);
+        };
+        let (client, wou_url) = wou_client()?;
+        let catalog_url = format!(
+            "{}/api/v1/assets/collections/sow-achievements/tokens",
+            wou_url.trim_end_matches('/')
+        );
+        let response = client
+            .get(catalog_url)
+            .timeout(Duration::from_secs(8))
+            .send()
+            .await
+            .map_err(|error| format!("WOU-ID achievement catalog lookup failed: {error}"))?;
+        let mut registered = std::collections::HashSet::new();
+        if response.status().is_success() {
+            let tokens = response
+                .json::<Vec<serde_json::Value>>()
+                .await
+                .map_err(|error| format!("WOU-ID achievement catalog was unreadable: {error}"))?;
+            registered.extend(
+                tokens
+                    .iter()
+                    .filter_map(|token| token.get("id").and_then(serde_json::Value::as_str))
+                    .map(str::to_owned),
+            );
+        } else if response.status() != reqwest::StatusCode::NOT_FOUND {
+            return Err(format!(
+                "WOU-ID achievement catalog returned HTTP {}",
+                response.status()
+            ));
+        }
+
+        let tokens: Vec<serde_json::Value> = sow_data::rewards::all_achievements()
+            .iter()
+            .filter_map(|achievement| {
+                let id = sow_data::rewards::achievement_card_token_id(achievement.id);
+                (!registered.contains(&id)).then(|| {
+                    serde_json::json!({
+                        "id": id,
+                        "collection": "sow-achievements",
+                        "metadata": {
+                            "name": achievement.title,
+                            "description": achievement.description,
+                            "image": "/logo.svg",
+                            "attributes": [
+                                { "trait_type": "Game", "value": "Shadows of War" },
+                                { "trait_type": "Type", "value": "Achievement" },
+                                { "trait_type": "Category", "value": achievement.category },
+                                { "trait_type": "Points", "value": achievement.points.to_string() },
+                                { "trait_type": "Target", "value": achievement.target.to_string() }
+                            ],
+                            "collection": "sow-achievements"
+                        },
+                        "max_supply": 100000
+                    })
+                })
+            })
+            .collect();
+        if tokens.is_empty() {
+            return Ok(0);
+        }
+
+        let count = tokens.len();
+        let collection = serde_json::json!({
+            "id": "sow-achievements",
+            "name": "Shadows of War Achievements",
+            "symbol": "SOWACH",
+            "description": "Laurels made permanent: every achievement in Shadows of War leaves a card.",
+            "image": "/logo.svg"
+        });
+        let response = client
+            .post(format!(
+                "{}/api/v1/internal/assets/tokens",
+                wou_url.trim_end_matches('/')
+            ))
+            .bearer_auth(secret)
+            .json(&serde_json::json!({ "collection": collection, "tokens": tokens }))
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|error| format!("WOU-ID achievement catalog sync failed: {error}"))?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "WOU-ID achievement catalog sync returned HTTP {}",
+                response.status()
+            ));
+        }
+        Ok(count)
+    }
+
     async fn db_resolve(
         &self,
         provider: &str,

@@ -258,6 +258,11 @@ if source then
   redis.call('HINCRBY', KEYS[18], source .. '|' .. event_name, 1)
   redis.call('EXPIRE', KEYS[18], ARGV[1])
 end
+local flow_dimension = ARGV[10] or ''
+if flow_dimension ~= '' then
+  redis.call('HINCRBY', KEYS[19], event_name .. '|' .. flow_dimension, 1)
+  redis.call('EXPIRE', KEYS[19], ARGV[1])
+end
 return 1
 "#;
 
@@ -351,6 +356,83 @@ fn aggregate_tutorial_steps(
                 "exited": counts[2],
                 "completion_rate": if counts[0] == 0 { serde_json::Value::Null } else { serde_json::json!(counts[1] as f64 / counts[0] as f64) },
             })
+        })
+        .collect()
+}
+
+fn aggregate_match_flow(rows: &[std::collections::HashMap<String, u64>]) -> Vec<serde_json::Value> {
+    use std::collections::BTreeMap;
+
+    let allowed_events = [
+        "matchmaking_joined",
+        "matchmaking_cancelled",
+        "lobby_joined",
+        "lobby_join_failed",
+        "match_started_client",
+        "match_ended_client",
+        "match_exit",
+    ];
+    let allowed_keys = [
+        "mode",
+        "outcome",
+        "wait_bucket",
+        "duration_bucket",
+        "reason_category",
+    ];
+    let mut totals = BTreeMap::<String, u64>::new();
+    for row in rows {
+        for (field, count) in row {
+            let Some((event, dimensions)) = field.split_once('|') else {
+                continue;
+            };
+            if !allowed_events.contains(&event) {
+                continue;
+            }
+            let mut pairs = Vec::new();
+            for dimension in dimensions.split('|') {
+                let Some((key, value)) = dimension.split_once('=') else {
+                    pairs.clear();
+                    break;
+                };
+                if !allowed_keys.contains(&key)
+                    || value.is_empty()
+                    || !value.bytes().all(|byte| {
+                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'
+                    })
+                {
+                    pairs.clear();
+                    break;
+                }
+                pairs.push((key, value));
+            }
+            if !pairs.iter().any(|(key, _)| *key == "mode") {
+                continue;
+            }
+            let canonical = pairs
+                .iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect::<Vec<_>>()
+                .join("|");
+            let key = format!("{event}|{canonical}");
+            let total = totals.entry(key).or_default();
+            *total = total.saturating_add(*count);
+        }
+    }
+
+    totals
+        .into_iter()
+        .map(|(key, count)| {
+            let mut parts = key.split('|');
+            let event = parts.next().unwrap_or_default();
+            let mut row = serde_json::Map::new();
+            row.insert("event".into(), serde_json::Value::String(event.into()));
+            row.insert("count".into(), serde_json::json!(count));
+            for dimension in parts {
+                if let Some((key, value)) = dimension.split_once('=') {
+                    row.insert(key.into(), serde_json::Value::String(value.into()));
+                }
+            }
+            serde_json::Value::Object(row)
         })
         .collect()
 }
@@ -1356,9 +1438,11 @@ impl PlayerDb {
                 .and_then(|props| props.get("ref"))
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default();
+            let match_flow_dimension =
+                crate::events::match_flow_dimension(event).unwrap_or_default();
             pipe.cmd("EVAL")
                 .arg(RECORD_ANALYTICS_EVENT)
-                .arg(18)
+                .arg(19)
                 .arg(format!(
                     "sow:analytics:event_id:{portal}:{}",
                     event.event_id
@@ -1389,6 +1473,7 @@ impl PlayerDb {
                 ))
                 .arg(format!("sow:analytics:refs:{portal}:{date}"))
                 .arg(format!("sow:analytics:by_ref:{portal}:{date}"))
+                .arg(format!("sow:analytics:match_flow:{portal}:{date}"))
                 .arg(ANALYTICS_TTL_SECONDS)
                 .arg(day_number)
                 .arg(&event.session_id)
@@ -1397,7 +1482,8 @@ impl PlayerDb {
                 .arg(event.device_class.as_deref().unwrap_or("unknown"))
                 .arg(&event.name)
                 .arg(tutorial_step)
-                .arg(source_ref);
+                .arg(source_ref)
+                .arg(match_flow_dimension);
         }
         let outcomes: Vec<i64> = pipe.query_async(&mut con).await?;
         outcomes
@@ -1515,7 +1601,9 @@ impl PlayerDb {
                 .cmd("HGETALL")
                 .arg(format!("sow:analytics:by_device:{portal}:{date}"))
                 .cmd("HGETALL")
-                .arg(format!("sow:analytics:by_ref:{portal}:{date}"));
+                .arg(format!("sow:analytics:by_ref:{portal}:{date}"))
+                .cmd("HGETALL")
+                .arg(format!("sow:analytics:match_flow:{portal}:{date}"));
         }
         let dimensions: Vec<std::collections::HashMap<String, u64>> =
             dimensions_pipe.query_async(&mut con).await?;
@@ -1525,12 +1613,17 @@ impl PlayerDb {
             std::collections::HashMap::<String, std::collections::HashMap<String, u64>>::new();
         let mut by_ref =
             std::collections::HashMap::<String, std::collections::HashMap<String, u64>>::new();
+        let mut match_flow_rows = Vec::new();
         for (index, dimension_rows) in dimensions.iter().enumerate() {
+            if index % 4 == 3 {
+                match_flow_rows.push(dimension_rows.clone());
+                continue;
+            }
             for (field, count) in dimension_rows {
                 let Some((dimension, event)) = field.split_once('|') else {
                     continue;
                 };
-                let target = match index % 3 {
+                let target = match index % 4 {
                     0 => &mut by_build,
                     1 => &mut by_device,
                     _ => &mut by_ref,
@@ -1543,6 +1636,7 @@ impl PlayerDb {
                 *total = total.saturating_add(*count);
             }
         }
+        let match_flow = aggregate_match_flow(&match_flow_rows);
         for (date, start) in daily {
             let mut events = serde_json::Map::new();
             let mut event_sessions = serde_json::Map::new();
@@ -1645,6 +1739,7 @@ impl PlayerDb {
                 "device_class": by_device,
                 "source": by_ref,
             },
+            "match_flow": match_flow,
             "daily": daily_rows,
             "retention": { "site": retention },
             "tutorial_steps": tutorial_steps,
@@ -4895,20 +4990,29 @@ impl PlayerDb {
                     failure = Some("mission reward already claimed".to_string());
                     return;
                 }
-                let is_completed = if mission_id == "onboarding_1_tutorial" {
-                    account.profile.reward_receipts.contains_key("tutorial")
+
+                let stats = crate::missions::MissionStats {
+                    tutorial_completed: account.profile.intro_completed
+                        || account.profile.reward_receipts.contains_key("tutorial")
                         || account.profile.completed_episodes.contains("tutorial")
-                        || account.profile.intro_completed
+                        || account.profile.matches_played > 0
                         || record.completed
-                        || record.progress >= 1
-                } else {
-                    record.completed || record.progress >= def.target
+                        || record.progress >= 1,
+                    total_structures_built: (account.profile.matches_played * 5).max(record.progress),
+                    free_rotation_matches: account.profile.matches_played.max(record.progress),
+                    team_matches: account.profile.matches_played.max(record.progress),
+                    team_wins: account.profile.wins.max(record.progress),
+                    west_regional_matches: account.profile.matches_played.max(record.progress),
+                    east_regional_matches: account.profile.matches_played.max(record.progress),
+                    matches_played: account.profile.matches_played.max(record.progress),
+                    kills: account.profile.kills.max(record.progress),
                 };
 
-                if !is_completed {
+                let view = crate::missions::evaluate_mission_progress(&def, &stats, Some(record));
+                if !view.completed && !record.completed {
                     failure = Some(format!(
                         "mission requirement not met: progress {} < target {}",
-                        record.progress, def.target
+                        view.progress, def.target
                     ));
                     return;
                 }
@@ -4921,6 +5025,7 @@ impl PlayerDb {
                 account.profile.gems = account.profile.gems.saturating_add(gems);
 
                 record.id = mission_id.to_string();
+                record.progress = view.progress.max(def.target);
                 record.completed = true;
                 record.claimed = true;
                 record.claimed_at = Some(now);
@@ -8088,6 +8193,34 @@ mod tests {
         assert_eq!(rows[0]["completion_rate"], 0.6);
     }
 
+    #[test]
+    fn match_flow_counts_merge_only_valid_closed_dimension_keys() {
+        let rows = vec![
+            std::collections::HashMap::from([
+                (
+                    "match_ended_client|mode=ranked_1v1|outcome=win|duration_bucket=5_15m"
+                        .to_string(),
+                    2,
+                ),
+                ("match_ended_client|player_name=private".to_string(), 100),
+            ]),
+            std::collections::HashMap::from([
+                (
+                    "match_ended_client|mode=ranked_1v1|outcome=win|duration_bucket=5_15m"
+                        .to_string(),
+                    3,
+                ),
+                ("unknown_event|mode=ranked_1v1".to_string(), 100),
+            ]),
+        ];
+        let rows = super::aggregate_match_flow(&rows);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["event"], "match_ended_client");
+        assert_eq!(rows[0]["mode"], "ranked_1v1");
+        assert_eq!(rows[0]["outcome"], "win");
+        assert_eq!(rows[0]["count"], 5);
+    }
+
     #[tokio::test]
     async fn mission_claim_is_server_authoritative_prevents_double_claims_and_credits_balances() {
         let temp = tempfile::tempdir().unwrap();
@@ -8138,19 +8271,9 @@ mod tests {
             .await;
         assert!(double_claim_err.is_err());
 
-        // 4. Claiming with doubled_by_ad: true doubles the reward
+        // 4. Claiming with doubled_by_ad: true doubles the reward and evaluates from stats
         db.update_account_atomic(player, &[], |acc| {
-            acc.profile.missions_progress.insert(
-                "onboarding_2_structures".to_string(),
-                crate::missions::MissionRecord {
-                    id: "onboarding_2_structures".to_string(),
-                    progress: 5,
-                    completed: true,
-                    claimed: false,
-                    claimed_at: None,
-                    doubled_by_ad: false,
-                },
-            );
+            acc.profile.matches_played = 1;
         })
         .await
         .unwrap();
@@ -8170,5 +8293,6 @@ mod tests {
             .unwrap();
         assert!(rec2.claimed);
         assert!(rec2.doubled_by_ad);
+        assert_eq!(rec2.progress, 5);
     }
 }

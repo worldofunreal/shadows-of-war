@@ -1,4 +1,9 @@
-import type { CampaignMachineView, CampaignRecord, CampaignStep } from "./types.ts";
+import type {
+    CampaignMachine,
+    CampaignMachineView,
+    CampaignRecord,
+    CampaignStep,
+} from "./types.ts";
 
 export const TUTORIAL_HOVER_RADIUS = 72;
 
@@ -34,6 +39,7 @@ export type TutorialRenderContext = CampaignRecord & {
 interface TutorialGuideState {
     episodeId: string | null;
     latestHud: CampaignRecord | null;
+    machine: CampaignMachine | null;
     cameraShotStepId: string | null;
     guidedScrollStepId: string | null;
     guidedControl: HTMLElement | null;
@@ -638,15 +644,16 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
 
     function syncCameraShot(step: CampaignStep, hud: CampaignRecord) {
         const camera = step.camera;
-        if (!camera || runtime.cameraShotStepId === step.id) return;
+        const ownerStepId = String((runtime.machine && runtime.machine.state.id) || step.id);
+        if (!camera || runtime.cameraShotStepId === ownerStepId) return;
         const to = campaignPlayer(hud, camera.to);
         if (!onMap(to)) return;
         let from = campaignPlayer(hud, camera.from || "player");
         if (!onMap(from)) from = to;
         if (
             scheduleCameraMove(
-                "shot:" + step.id,
-                step.id,
+                "shot:" + ownerStepId,
+                ownerStepId,
                 {
                     x: Number(to.centroid_x) + 0.5,
                     y: Number(to.centroid_y) + 0.5,
@@ -663,7 +670,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                 },
             )
         ) {
-            runtime.cameraShotStepId = step.id;
+            runtime.cameraShotStepId = ownerStepId;
         }
     }
 

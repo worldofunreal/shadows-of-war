@@ -320,8 +320,19 @@ impl PlayerProgress {
         for (id, receipt) in local_receipts {
             self.reward_receipts.entry(id).or_insert(receipt);
         }
-        for (id, record) in local_missions {
-            self.missions_progress.entry(id).or_insert(record);
+        for (id, local_record) in local_missions {
+            let entry = self.missions_progress.entry(id).or_insert(local_record.clone());
+            if local_record.claimed {
+                entry.claimed = true;
+                if entry.claimed_at.is_none() {
+                    entry.claimed_at = local_record.claimed_at;
+                }
+                entry.doubled_by_ad = entry.doubled_by_ad || local_record.doubled_by_ad;
+            }
+            if local_record.completed {
+                entry.completed = true;
+            }
+            entry.progress = entry.progress.max(local_record.progress);
         }
         self.unlocked_achievements.extend(local_achievements);
         let confirmed_guides = std::mem::replace(&mut self.menu_guides, local_guides);
@@ -559,5 +570,44 @@ mod tests {
         assert_eq!(old.gems, 475);
         assert_eq!(old.intro_completed, Some(false));
         assert!(!old.completed_episodes.contains("six_sky_ep1"));
+    }
+
+    #[test]
+    fn claimed_mission_stays_claimed_when_cloud_profile_merges() {
+        let mut local = PlayerProgress::default();
+        local.missions_progress.insert(
+            "onboarding_1_tutorial".to_string(),
+            sow_data::missions::MissionRecord {
+                id: "onboarding_1_tutorial".to_string(),
+                progress: 1,
+                completed: true,
+                claimed: true,
+                claimed_at: Some(12345),
+                doubled_by_ad: true,
+            },
+        );
+
+        let mut cloud = PlayerProgress {
+            matches_played: 1,
+            ..Default::default()
+        };
+        cloud.missions_progress.insert(
+            "onboarding_1_tutorial".to_string(),
+            sow_data::missions::MissionRecord {
+                id: "onboarding_1_tutorial".to_string(),
+                progress: 1,
+                completed: true,
+                claimed: false,
+                claimed_at: None,
+                doubled_by_ad: false,
+            },
+        );
+
+        local.merge_boot_profile(cloud);
+
+        let rec = local.missions_progress.get("onboarding_1_tutorial").unwrap();
+        assert!(rec.claimed);
+        assert!(rec.doubled_by_ad);
+        assert_eq!(rec.claimed_at, Some(12345));
     }
 }

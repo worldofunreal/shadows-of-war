@@ -146,6 +146,7 @@ impl SowEngine {
             return;
         }
 
+        self.prune_market_orders();
         self.state.events.clear(); // Prevent unbounded memory leak (was growing infinitely on tile capture)
         self.state.tick();
 
@@ -205,6 +206,7 @@ impl SowEngine {
                 p_b.alliance_timers.remove(&a);
             }
         }
+        self.clear_market_orders();
     }
 
     fn apply_campaign_support(&mut self) {

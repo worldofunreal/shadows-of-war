@@ -78,6 +78,8 @@ pub struct HudState {
     pub map_feedback: Option<HudMapFeedback>,
     pub notification_revision: u64,
     pub show_ask_panel: Option<u16>,
+    pub market_preview: Option<(sow_core::protocol::MarketSide, u32)>,
+    pub market_send_failed: Option<u32>,
     /// The radial's Send or Request. `None` lets the panel lead with the stronger side.
     pub transfer_mode: Option<TransferMode>,
     pub prev_resource_requests: Vec<u16>,
@@ -112,6 +114,8 @@ impl Default for HudState {
             map_feedback: None,
             notification_revision: 0,
             show_ask_panel: None,
+            market_preview: None,
+            market_send_failed: None,
             transfer_mode: None,
             prev_resource_requests: Vec::new(),
             transfer_confirm_pending: false,

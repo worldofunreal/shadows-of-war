@@ -126,10 +126,21 @@ impl SowApp {
     }
 
     pub(crate) fn send_leave_message(&mut self) {
+        let cancel_matchmaking =
+            self.ui.app.main_menu_state.ranked_search_active && self.sim.my_lobby_id.is_none();
+        if cancel_matchmaking {
+            if let Some(started_at) = self.portal_join_started_at.take() {
+                crate::store_portals::track_product_event_with(
+                    "matchmaking_cancelled",
+                    &serde_json::json!({
+                        "mode": self.portal_match_mode,
+                        "wait_bucket": crate::store_portals::wait_bucket(Some(started_at)),
+                    }),
+                );
+            }
+        }
         if let Some(client) = self.net.client.as_ref() {
-            let leave = if self.ui.app.main_menu_state.ranked_search_active
-                && self.sim.my_lobby_id.is_none()
-            {
+            let leave = if cancel_matchmaking {
                 sow_core::protocol::ClientMessage::CancelRankedSearch
             } else {
                 sow_core::protocol::ClientMessage::Leave {}
@@ -258,7 +269,13 @@ impl SowApp {
         };
         if was_playing {
             if !self.progress_match_recorded {
-                crate::store_portals::track_product_event("match_exit");
+                crate::store_portals::track_product_event_with(
+                    "match_exit",
+                    &serde_json::json!({
+                        "mode": self.portal_match_mode,
+                        "duration_bucket": crate::store_portals::duration_bucket(self.portal_match_started_at),
+                    }),
+                );
             }
             crate::store_portals::gameplay_stop();
         }

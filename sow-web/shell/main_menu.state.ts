@@ -549,7 +549,29 @@ export interface HudTutorial {
     pointer?: { x: number; y: number; [key: string]: number | boolean | undefined } | null;
 }
 
+export type HudMarketSide = "buy" | "sell";
+
+export interface HudMarket {
+    side: HudMarketSide;
+    lots: number;
+    troops_per_lot: number;
+    available_lots: number;
+    best_price: number | null;
+    quote_gold: number | null;
+    quote_failure: string | null;
+    order: { side: HudMarketSide; lots: number; gold_per_lot: number } | null;
+    feedback: {
+        request_id: number;
+        outcome:
+            | { kind: "traded"; side: HudMarketSide; lots: number; gold: number }
+            | { kind: "posted" | "cancelled" }
+            | { kind: "rejected"; reason: string };
+    } | null;
+}
+
 export interface MenuHudPayload {
+    market_available?: boolean;
+    market?: HudMarket;
     camera_zoom_state: { current: number; floor: number; ceiling: number };
     gold: number;
     troops: number;

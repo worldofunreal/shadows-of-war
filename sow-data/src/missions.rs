@@ -297,49 +297,50 @@ pub fn evaluate_mission_progress(
 ) -> MissionView {
     let raw_progress = match def.requirement {
         MissionRequirement::CompleteTutorial => {
-            if stats.tutorial_completed {
+            if stats.tutorial_completed || saved_progress.map(|r| r.completed || r.progress >= 1).unwrap_or(false) {
                 1
             } else {
                 0
             }
         }
         MissionRequirement::BuildStructures { count } => {
-            let p = saved_progress.map(|r| r.progress).unwrap_or(stats.total_structures_built);
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.total_structures_built);
             p.min(count)
         }
         MissionRequirement::PlayFreeRotationHero { count } => {
-            let p = saved_progress.map(|r| r.progress).unwrap_or(stats.free_rotation_matches);
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.free_rotation_matches);
             p.min(count)
         }
         MissionRequirement::PlayTeamGame { count } => {
-            let p = saved_progress.map(|r| r.progress).unwrap_or(stats.team_matches);
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.team_matches);
             p.min(count)
         }
         MissionRequirement::PlayRegionalHero { region_group, count } => {
-            let p = saved_progress.map(|r| r.progress).unwrap_or(if region_group == "west" {
+            let stat = if region_group == "west" {
                 stats.west_regional_matches
             } else {
                 stats.east_regional_matches
-            });
+            };
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stat);
             p.min(count)
         }
         MissionRequirement::WinTeamGame { count } => {
-            let p = saved_progress.map(|r| r.progress).unwrap_or(stats.team_wins);
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.team_wins);
             p.min(count)
         }
         MissionRequirement::PlayMatches { count } => {
-            let p = saved_progress.map(|r| r.progress).unwrap_or(stats.matches_played);
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.matches_played);
             p.min(count)
         }
         MissionRequirement::EliminateUnits { count } => {
-            let p = saved_progress.map(|r| r.progress).unwrap_or(stats.kills);
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.kills);
             p.min(count)
         }
     };
 
     let target = def.target;
     let progress = raw_progress.min(target);
-    let completed = progress >= target;
+    let completed = progress >= target || saved_progress.map(|r| r.completed).unwrap_or(false);
     let claimed = saved_progress.map(|r| r.claimed).unwrap_or(false);
 
     MissionView {

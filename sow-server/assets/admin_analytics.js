@@ -28,7 +28,10 @@
       ["Consenting accounts today", today.active_accounts || 0],
       ["Site visits", funnel.landing_visit || 0],
       ["Game shells loaded", funnel.shell_loaded || 0],
+      ["Quick match attempts", funnel.menu_quick_match || 0],
       ["Matchmaking joins", funnel.matchmaking_joined || 0],
+      ["Queue cancellations", funnel.matchmaking_cancelled || 0],
+      ["Lobby join failures", funnel.lobby_join_failed || 0],
       ["Match starts", funnel.match_started_client || 0],
       ["Match ends", funnel.match_ended_client || 0],
       ["Explicit early exits", funnel.match_exit || 0]
@@ -79,6 +82,15 @@
       cell(row, name.replaceAll("_", " "));
       cell(row, Number(count).toLocaleString());
       cell(row, Number(funnelSessions[name] || 0).toLocaleString());
+    });
+    rows($("match-flow"), report.match_flow || [], (row, flow) => {
+      cell(row, flow.event.replaceAll("_", " "));
+      cell(row, flow.mode?.replaceAll("_", " ") || "—");
+      cell(row, flow.outcome || "—");
+      cell(row, flow.wait_bucket || "—");
+      cell(row, flow.duration_bucket || "—");
+      cell(row, flow.reason_category?.replaceAll("_", " ") || "—");
+      cell(row, Number(flow.count).toLocaleString());
     });
     renderDimensions("by-build", report.dimensions?.build);
     renderDimensions("by-device", report.dimensions?.device_class);

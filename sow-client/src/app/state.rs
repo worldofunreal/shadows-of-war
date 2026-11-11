@@ -985,6 +985,11 @@ pub struct SowApp {
     pub join_waiting_for_identity: bool,
     /// A queued join with no target/config enters the server matchmaking pool.
     pub join_matchmaking: bool,
+    /// Coarse, consented funnel timing only; never sent to the match server.
+    pub portal_join_started_at: Option<web_time::Instant>,
+    pub portal_match_started_at: Option<web_time::Instant>,
+    /// Closed analytics enum shared with the web event allowlist.
+    pub portal_match_mode: &'static str,
     pub progress_match_recorded: bool,
     pub progress_session_defeats: crate::player_progress::SessionDefeats,
     #[cfg(target_arch = "wasm32")]

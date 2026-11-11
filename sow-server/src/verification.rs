@@ -14,7 +14,7 @@ use std::{
 
 const SLICE: Duration = Duration::from_millis(100);
 const RESIDENT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-const CHECKPOINT_FORMAT: u32 = 4;
+const CHECKPOINT_FORMAT: u32 = 5;
 
 fn allocated_bytes<T>(values: &Vec<T>) -> u64 {
     values.capacity().saturating_mul(std::mem::size_of::<T>()) as u64

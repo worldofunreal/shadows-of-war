@@ -10,8 +10,9 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 /// Persisted turn recordings; changing live messages must not change this.
 /// 6: buildings use kind-specific footprints.
 /// 7: ships are built toward a target tile instead of a named port.
-pub const GAMEPLAY_FORMAT_VERSION: u64 = 7;
-pub const LIVE_PROTOCOL_VERSION: u64 = 8;
+/// 8: allied market orders and deterministic settlement.
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 8;
+pub const LIVE_PROTOCOL_VERSION: u64 = 9;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
     format!(
@@ -133,6 +134,30 @@ pub enum GameplayIntent {
         pay_gold: f64,
         pay_troops: f64,
     },
+    MarketTrade {
+        request_id: u32,
+        side: MarketSide,
+        lots: u32,
+        limit_gold: u32,
+    },
+    PlaceMarketOrder {
+        request_id: u32,
+        side: MarketSide,
+        lots: u32,
+        gold_per_lot: u32,
+    },
+    CancelMarketOrder {
+        request_id: u32,
+    },
+}
+
+pub const MARKET_TROOPS_PER_LOT: u32 = 100;
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MarketSide {
+    Buy,
+    Sell,
 }
 
 /// Boat control frame for INK TIDE lockstep turns.

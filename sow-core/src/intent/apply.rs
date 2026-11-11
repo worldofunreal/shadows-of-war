@@ -338,7 +338,7 @@ impl SowEngine {
     }
 
     /// Gold the payer can give now: the requested amount, capped at what it holds.
-    fn gold_transferable(&self, payer: u16, requested: f64) -> f64 {
+    pub(crate) fn gold_transferable(&self, payer: u16, requested: f64) -> f64 {
         let held = self.state.player(payer).map_or(0.0, |p| p.gold.max(0.0));
         requested.max(0.0).min(held)
     }
@@ -346,15 +346,19 @@ impl SowEngine {
     /// Troops the payer can give the receiver now. The payer keeps one troop and the
     /// receiver never goes past its max, so whatever does not fit stays with the payer.
     pub(crate) fn troops_transferable(&self, payer: u16, receiver: u16, requested: f64) -> f64 {
-        let spare = self
-            .state
+        requested.max(0.0).min(self.troops_spare(payer)).min(self.troop_room(receiver))
+    }
+
+    pub(crate) fn troops_spare(&self, payer: u16) -> f64 {
+        self.state
             .player(payer)
-            .map_or(0.0, |p| (p.troops - 1.0).max(0.0));
-        let room = self
-            .state
+            .map_or(0.0, |p| (p.troops - 1.0).max(0.0))
+    }
+
+    pub(crate) fn troop_room(&self, receiver: u16) -> f64 {
+        self.state
             .player(receiver)
-            .map_or(0.0, |p| (p.max_troops - p.troops).max(0.0));
-        requested.max(0.0).min(spare).min(room)
+            .map_or(0.0, |p| (p.max_troops - p.troops).max(0.0))
     }
 
     /// Records a request, or a trade when it carries a price. A plain request is cut to
@@ -428,7 +432,7 @@ impl SowEngine {
     }
 
     /// Moves amounts already checked by the caller.
-    fn move_resources(&mut self, payer: u16, receiver: u16, gold: f64, troops: f64) {
+    pub(crate) fn move_resources(&mut self, payer: u16, receiver: u16, gold: f64, troops: f64) {
         if let Some(p) = self.state.player_mut(payer) {
             p.gold -= gold;
             p.troops -= troops;
@@ -963,6 +967,18 @@ impl SowEngine {
                             receiver_id: target,
                         });
                 }
+            }
+            GameplayIntent::MarketTrade { request_id, side, lots, limit_gold } => {
+                let result = self.trade_at_market(stamped.player_id, *side, *lots, *limit_gold);
+                self.record_market_feedback(stamped.player_id, *request_id, result);
+            }
+            GameplayIntent::PlaceMarketOrder { request_id, side, lots, gold_per_lot } => {
+                let result = self.place_market_order(stamped.player_id, *side, *lots, *gold_per_lot);
+                self.record_market_feedback(stamped.player_id, *request_id, result);
+            }
+            GameplayIntent::CancelMarketOrder { request_id } => {
+                let result = self.cancel_market_order(stamped.player_id);
+                self.record_market_feedback(stamped.player_id, *request_id, result);
             }
             GameplayIntent::RequestResources {
                 target_player,

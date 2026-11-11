@@ -403,6 +403,9 @@ pub struct SowEngine {
     /// Bot id → tick when another betrayal is allowed.
     pub alliance_betray_cooldown_until: std::collections::HashMap<PlayerId, u32>,
     pub resource_requests_proposed: Vec<ResourceRequestProposed>,
+    market_orders: Vec<market::MarketOrder>,
+    #[serde(skip)]
+    market_feedback: std::collections::BTreeMap<PlayerId, market::MarketFeedback>,
     /// `(proposer, target)` → tick when another resource request is allowed.
     pub resource_request_cooldown_until: std::collections::HashMap<(PlayerId, PlayerId), u32>,
     /// Campaign progression is episode-local and absent from every other match.
@@ -535,6 +538,8 @@ impl SowEngine {
             alliance_request_cooldown_until: std::collections::HashMap::new(),
             alliance_betray_cooldown_until: std::collections::HashMap::new(),
             resource_requests_proposed: Vec::new(),
+            market_orders: Vec::new(),
+            market_feedback: Default::default(),
             resource_request_cooldown_until: std::collections::HashMap::new(),
             campaign_unlocks,
             campaign_unlock_revision: 0,
@@ -1860,6 +1865,7 @@ impl SowEngine {
     }
 }
 
+pub mod market;
 mod snapshot;
 mod spawn;
 pub use spawn::HumanSpawn;

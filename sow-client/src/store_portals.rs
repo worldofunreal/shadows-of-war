@@ -81,6 +81,32 @@ pub fn track_product_event_with(name: &str, props: &serde_json::Value) {
     call_window_hook_str("SOW_trackExperienceEvent", &payload);
 }
 
+pub fn wait_bucket(started_at: Option<web_time::Instant>) -> &'static str {
+    let Some(started_at) = started_at else {
+        return "unknown";
+    };
+    let seconds = started_at.elapsed().as_secs();
+    match seconds {
+        0..=4 => "under_5s",
+        5..=14 => "5_15s",
+        15..=59 => "15_60s",
+        _ => "60s_plus",
+    }
+}
+
+pub fn duration_bucket(started_at: Option<web_time::Instant>) -> &'static str {
+    let Some(started_at) = started_at else {
+        return "unknown";
+    };
+    let seconds = started_at.elapsed().as_secs();
+    match seconds {
+        0..=59 => "under_1m",
+        60..=299 => "1_5m",
+        300..=899 => "5_15m",
+        _ => "15m_plus",
+    }
+}
+
 pub fn load_stop() {
     call_window_hook("SOW_portalLoadStop");
 }
@@ -125,6 +151,20 @@ pub fn is_poki() -> bool {
             .and_then(|value| value.as_string())
             .is_some_and(|portal| portal == "poki")
             || read_runtime_bool("poki").unwrap_or(false)
+    }
+}
+
+pub fn is_jest() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        get_window_value("SOW_PORTAL")
+            .and_then(|value| value.as_string())
+            .is_some_and(|portal| portal == "jest")
+            || read_runtime_bool("jest").unwrap_or(false)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        false
     }
 }
 
@@ -177,14 +217,18 @@ pub fn load_portal_progress() -> Option<crate::player_progress::PlayerProgress> 
             .and_then(|value| value.as_string())
             .filter(|value| !value.is_empty())
             .or_else(|| {
-                window()
-                    .and_then(|window| window.local_storage().ok().flatten())
-                    .and_then(|storage| {
-                        storage
-                            .get_item(crate::player_progress::STORAGE_KEY)
-                            .ok()
-                            .flatten()
-                    })
+                if is_jest() {
+                    None
+                } else {
+                    window()
+                        .and_then(|window| window.local_storage().ok().flatten())
+                        .and_then(|storage| {
+                            storage
+                                .get_item(crate::player_progress::STORAGE_KEY)
+                                .ok()
+                                .flatten()
+                        })
+                }
             })?;
         let mut value: serde_json::Value = serde_json::from_str(&json).ok()?;
         crate::player_progress::migrate_legacy_currency_json(&mut value);
@@ -198,8 +242,10 @@ pub fn save_portal_progress(progress: &crate::player_progress::PlayerProgress) {
     };
     call_window_hook_str("SOW_portalSaveProgress", &json);
     #[cfg(target_arch = "wasm32")]
-    if let Some(storage) = window().and_then(|window| window.local_storage().ok().flatten()) {
-        let _ = storage.set_item(crate::player_progress::STORAGE_KEY, &json);
+    if !is_jest() {
+        if let Some(storage) = window().and_then(|window| window.local_storage().ok().flatten()) {
+            let _ = storage.set_item(crate::player_progress::STORAGE_KEY, &json);
+        }
     }
 }
 

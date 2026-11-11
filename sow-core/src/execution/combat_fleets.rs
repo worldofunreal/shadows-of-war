@@ -38,11 +38,9 @@ impl SowEngine {
         let mut to_remove = Vec::new();
         let mut elimination_candidates = Vec::new();
         let mut territory_changes = Vec::new();
-        let transport_base_steps_per_tick = self
-            .state
-            .config
-            .per_tick(crate::warp_fleet::TRANSPORT_BASE_SPEED_TILES_PER_SECOND);
         let tick_rate_ms = self.state.config.tick_rate_ms;
+        let transport_base_steps_per_tick =
+            crate::warp_fleet::transport_base_steps_per_tick(tick_rate_ms);
 
         for i in 0..self.fleets.len() {
             let fleet = &mut self.fleets[i];

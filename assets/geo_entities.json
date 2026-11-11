@@ -13,6 +13,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Julius_Caesar",
    "avatar": "caesar",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 3440,
     "name": "Caesar",
     "ability": {
      "kind": "attacker_loss",
@@ -35,6 +37,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Cleopatra",
    "avatar": "cleopatra",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 4000,
     "name": "Cleopatra",
     "ability": {
      "kind": "resource_bonus",
@@ -58,6 +62,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Ragnar_Lodbrok",
    "avatar": "danish_vikings",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 490,
     "name": "Ragnar",
     "ability": {
      "kind": "conquest_speed",
@@ -80,6 +86,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Sun_Tzu",
    "avatar": "sun_tzu",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 2500,
     "name": "Sun Tzu",
     "ability": {
      "kind": "conquest_speed",
@@ -102,6 +110,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Alexander_the_Great",
    "avatar": "alexander",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 3625,
     "name": "Alexander",
     "ability": {
      "kind": "conquest_speed",
@@ -125,6 +135,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Genghis_Khan",
    "avatar": "borjigin_mongols",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 3250,
     "name": "Genghis Khan",
     "ability": {
      "kind": "attack_strength",
@@ -147,6 +159,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Richard_I_of_England",
    "avatar": "richard",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 515,
     "name": "Richard",
     "ability": {
      "kind": "resource_bonus",
@@ -172,6 +186,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Vercingetorix",
    "avatar": "arverni",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 455,
     "name": "Vercingetorix",
     "ability": {
      "kind": "resource_bonus",
@@ -196,6 +212,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Boudica",
    "avatar": "iceni",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 0,
     "name": "Boudica",
     "ability": {
      "kind": "attack_strength",
@@ -219,6 +237,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Lady_Six_Sky",
    "avatar": "six_sky",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 640,
     "name": "Six Sky",
     "ability": {
      "kind": "attack_strength",
@@ -243,6 +263,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Leonidas_I",
    "avatar": "leonidas",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 2690,
     "name": "Leonidas",
     "ability": {
      "kind": "tower_loss",
@@ -266,6 +288,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Napoleon",
    "avatar": "napoleon",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 3815,
     "name": "Napoleon",
     "ability": {
      "kind": "conquest_speed",
@@ -433,6 +457,8 @@
    "avatar": "amina",
    "territory_color": "#c05430",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 980,
     "name": "Amina",
     "ability": {
      "kind": "city_capture",
@@ -492,6 +518,8 @@
    "avatar": "yaa_asantewaa",
    "territory_color": "#6a4c9c",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 925,
     "name": "Yaa Asantewaa",
     "ability": {
      "kind": "attack_strength",
@@ -765,6 +793,8 @@
    "avatar": "anacaona",
    "territory_color": "#2aa8c4",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 250,
     "name": "Anacaona",
     "ability": {
      "kind": "attack_strength",
@@ -1038,6 +1068,8 @@
    "avatar": "lozen",
    "territory_color": "#3d7f9e",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 840,
     "name": "Lozen",
     "ability": {
      "kind": "attacker_loss",
@@ -1839,6 +1871,8 @@
    "avatar": "tipu",
    "territory_color": "#641e16",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 445,
     "name": "Tipu",
     "ability": {
      "kind": "conquest_speed",
@@ -2090,6 +2124,8 @@
    "avatar": "william",
    "territory_color": "#b87808",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 525,
     "name": "William",
     "ability": {
      "kind": "tower_range",
@@ -2460,6 +2496,8 @@
    "avatar": "hongi_hika",
    "territory_color": "#1a684f",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 780,
     "name": "Hongi Hika",
     "ability": {
      "kind": "resource_bonus",
@@ -2506,6 +2544,8 @@
    "avatar": "salote_iii",
    "territory_color": "#c27d29",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 970,
     "name": "Sālote III",
     "ability": {
      "kind": "alliance_cost",
@@ -7461,6 +7501,8 @@
    "avatar": "makeda",
    "territory_color": "#e3b341",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 475,
     "name": "Makeda",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -7686,6 +7728,8 @@
    "avatar": "durgavati",
    "territory_color": "#a0287a",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 945,
     "name": "Durgavati",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -7709,6 +7753,8 @@
    "avatar": "gi",
    "territory_color": "#c94f7c",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 345,
     "name": "Gi",
     "ability": {
      "kind": "alliance_cost",
@@ -7732,6 +7778,8 @@
    "avatar": "ashoka",
    "territory_color": "#9bb83a",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1360,
     "name": "Ashoka",
     "ability": {
      "kind": "resource_bonus",
@@ -7754,6 +7802,8 @@
    "avatar": "hannibal",
    "territory_color": "#803a7b",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1760,
     "name": "Hannibal",
     "ability": {
      "kind": "conquest_speed",
@@ -7775,6 +7825,8 @@
    "avatar": "bolivar",
    "territory_color": "#c04434",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1640,
     "name": "Simón Bolívar",
     "ability": {
      "kind": "resource_bonus",
@@ -7797,6 +7849,8 @@
    "avatar": "joan",
    "territory_color": "#1ca084",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 3065,
     "name": "Joan",
     "ability": {
      "kind": "attack_strength",
@@ -7820,6 +7874,8 @@
    "avatar": "catherine",
    "territory_color": "#8e44ad",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 2000,
     "name": "Catherine",
     "ability": {
      "kind": "tower_loss",
@@ -7843,6 +7899,8 @@
    "avatar": "isabella_i",
    "territory_color": "#4884c8",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1440,
     "name": "Isabella I",
     "ability": {
      "kind": "city_capture",
@@ -7866,6 +7924,8 @@
    "avatar": "cyrus",
    "territory_color": "#333955",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1480,
     "name": "Cyrus",
     "ability": {
      "kind": "conquest_speed",
@@ -7889,6 +7949,8 @@
    "avatar": "saladin",
    "territory_color": "#27ae60",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1840,
     "name": "Saladin",
     "ability": {
      "kind": "conquest_speed",
@@ -7910,6 +7972,8 @@
    "avatar": "suleiman",
    "territory_color": "#f1c40f",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1880,
     "name": "Suleiman",
     "ability": {
      "kind": "conquest_speed",
@@ -7932,6 +7996,8 @@
    "avatar": "tomoe_gozen",
    "territory_color": "#e84393",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 380,
     "name": "Tomoe Gozen",
     "ability": {
      "kind": "conquest_speed",
@@ -7953,6 +8019,8 @@
    "avatar": "trieu",
    "territory_color": "#00cece",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 935,
     "name": "Triệu",
     "ability": {
      "kind": "attack_strength",
@@ -7976,6 +8044,8 @@
    "avatar": "musa",
    "territory_color": "#6c5ce7",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1520,
     "name": "Musa",
     "ability": {
      "kind": "attacker_loss",
@@ -7999,6 +8069,8 @@
    "avatar": "shaka",
    "territory_color": "#fd79a8",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1240,
     "name": "Shaka",
     "ability": {
      "kind": "alliance_cost",
@@ -8020,6 +8092,8 @@
    "avatar": "nzinga",
    "territory_color": "#55efc4",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 360,
     "name": "Nzinga",
     "ability": {
      "kind": "resource_bonus",
@@ -8042,6 +8116,8 @@
    "avatar": "kamehameha",
    "territory_color": "#fdcb6e",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 450,
     "name": "Kamehameha I",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8063,6 +8139,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Gajah_Mada",
    "avatar": "gajah_mada",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 915,
     "name": "Gajah Mada",
     "ability": {
      "kind": "conquest_speed",
@@ -8084,6 +8162,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Solomon",
    "avatar": "solomon",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 500,
     "name": "Solomon",
     "ability": {
      "kind": "resource_bonus",
@@ -8106,6 +8186,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Said_bin_Sultan",
    "avatar": "sayyid_said",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 1000,
     "name": "Sayyid Said",
     "ability": {
      "kind": "attacker_loss",
@@ -8127,6 +8209,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Lapu-Lapu",
    "avatar": "lapu_lapu",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 365,
     "name": "Lapu-Lapu",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8148,6 +8232,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Constantine_the_Great",
    "avatar": "constantine",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1680,
     "name": "Constantine",
     "ability": {
      "kind": "conquest_speed",
@@ -8169,6 +8255,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Vlad_III_the_Impaler",
    "avatar": "vlad_iii",
    "hero": {
+    "rarity": "legendary",
+    "price_crowns": 2875,
     "name": "Vlad III",
     "ability": {
      "kind": "resource_bonus",
@@ -8191,6 +8279,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Mary_of_Burgundy",
    "avatar": "mary",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 425,
     "name": "Mary",
     "ability": {
      "kind": "alliance_cost",
@@ -8214,6 +8304,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Semiramis",
    "avatar": "semiramis",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 400,
     "name": "Semiramis",
     "ability": {
      "kind": "resource_bonus",
@@ -8236,6 +8328,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Shima_of_Kalingga",
    "avatar": "shima_kalingga",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 600,
     "name": "Shima",
     "ability": {
      "kind": "attack_strength",
@@ -8257,6 +8351,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Tomyris",
    "avatar": "tomyris",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 395,
     "name": "Tomyris",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8278,6 +8374,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Gorgo,_Queen_of_Sparta",
    "avatar": "gorgo",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 340,
     "name": "Gorgo",
     "ability": {
      "kind": "attack_strength",
@@ -8299,6 +8397,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/José_Gervasio_Artigas",
    "avatar": "artigas",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 320,
     "name": "Artigas",
     "ability": {
      "kind": "conquest_speed",
@@ -8320,6 +8420,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Bernardo_O%27Higgins",
    "avatar": "bernardo_ohiggins",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 385,
     "name": "Bernardo O'Higgins",
     "ability": {
      "kind": "alliance_cost",
@@ -8341,6 +8443,8 @@
    "wikipedia": "https://es.wikipedia.org/wiki/Nezahualc%C3%B3yotl",
    "avatar": "nezahualcoyotl",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 290,
     "name": "Nezahualcóyotl",
     "ability": {
      "kind": "resource_bonus",
@@ -8363,6 +8467,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Tlacaelel",
    "avatar": "tlacaelel",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 820,
     "name": "Tlacaelel",
     "ability": {
      "kind": "alliance_cost",
@@ -8384,6 +8490,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Tenamaxtli",
    "avatar": "tenamaxtli",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 695,
     "name": "Tenamaxtli",
     "ability": {
      "kind": "attack_strength",
@@ -8405,6 +8513,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Cosijoeza",
    "avatar": "cosijoeza",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 630,
     "name": "Cosijoeza",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8426,6 +8536,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Mangas_Coloradas",
    "avatar": "mangas_coloradas",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 990,
     "name": "Mangas Coloradas",
     "ability": {
      "kind": "alliance_cost",
@@ -8447,6 +8559,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Tomochichi",
    "avatar": "tomochichi",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 725,
     "name": "Tomochichi",
     "ability": {
      "kind": "alliance_cost",
@@ -8468,6 +8582,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Eight_Deer_Jaguar_Claw",
    "avatar": "eight_deer",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 760,
     "name": "Eight Deer",
     "ability": {
      "kind": "attack_strength",
@@ -8489,6 +8605,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Nemequene",
    "avatar": "nemequene",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 655,
     "name": "Nemequene",
     "ability": {
      "kind": "attacker_loss",
@@ -8510,6 +8628,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Thanadelthur",
    "avatar": "thanadelthur",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 610,
     "name": "Thanadelthur",
     "ability": {
      "kind": "alliance_cost",
@@ -8531,6 +8651,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Artemisia_I_of_Caria",
    "avatar": "artemisia_i",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 370,
     "name": "Artemisia I",
     "ability": {
      "kind": "resource_bonus",
@@ -8553,6 +8675,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Shajar_al-Durr",
    "avatar": "shajar_al_durr",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 325,
     "name": "Shajar al-Durr",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8574,6 +8698,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Ramesses_II",
    "avatar": "ramesses_ii",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1600,
     "name": "Ramesses II",
     "ability": {
      "kind": "resource_bonus",
@@ -8596,6 +8722,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Qin_Liangyu",
    "avatar": "qin_liangyu",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 300,
     "name": "Qin Liangyu",
     "art_slug": "qin_liangyu",
     "ability": {
@@ -8618,6 +8746,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Lobengula",
    "avatar": "lobengula",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 855,
     "name": "Lobengula",
     "ability": {
      "kind": "city_troop_capacity",
@@ -8716,6 +8846,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Shah_Jahan",
    "avatar": "shah_jahan",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 460,
     "name": "Shah Jahan",
     "ability": {
      "kind": "resource_bonus",
@@ -8803,6 +8935,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Xerxes_I",
    "avatar": "xerxes_i",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1400,
     "name": "Xerxes",
     "ability": {
      "kind": "attacker_loss",
@@ -8850,6 +8984,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Marcus_Aurelius",
    "avatar": "marcus_aurelius",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 530,
     "name": "Marcus Aurelius",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8936,6 +9072,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Justinian_II",
    "avatar": "justinian_ii_hero",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1200,
     "name": "Justinian II",
     "legacy_ids": ["justinian_i"],
     "art_slug": "justinian_ii_hero",
@@ -8998,6 +9136,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Totila",
    "avatar": "totila",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 275,
     "name": "Totila",
     "ability": {
      "kind": "attacker_loss",
@@ -9019,6 +9159,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Chilperic_I",
    "avatar": "chilperic_i",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 280,
     "name": "Chilperic I",
     "ability": {
      "kind": "attacker_loss",
@@ -9053,6 +9195,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Lothair_I",
    "avatar": "lothair_i",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 375,
     "name": "Lothair I",
     "ability": {
      "kind": "attacker_loss",
@@ -9074,6 +9218,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Frederick_Barbarossa",
    "avatar": "frederick_barbarossa",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 470,
     "name": "Barbarossa",
     "ability": {
      "kind": "attacker_loss",
@@ -9095,6 +9241,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Charles_V,_Holy_Roman_Emperor",
    "avatar": "charles_v",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1960,
     "name": "Charles V",
     "ability": {
      "kind": "attacker_loss",
@@ -9116,6 +9264,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Wanli_Emperor",
    "avatar": "wanli",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 420,
     "name": "Wanli",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -9138,6 +9288,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Jayaatu_Khan",
    "avatar": "jayaatu_khan",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 270,
     "name": "Jayaatu Khan",
     "ability": {
      "kind": "attacker_loss",
@@ -9159,6 +9311,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Sitting_Bull",
    "avatar": "sitting_bull",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 465,
     "name": "Sitting Bull",
     "art_slug": "sitting_bull",
     "ability": {
@@ -9180,6 +9334,8 @@
    "gender": "female",
    "avatar": "matoaka",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 495,
     "name": "Matoaka",
     "legacy_ids": [],
     "art_slug": "matoaka",
@@ -9203,6 +9359,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Burebista",
    "avatar": "burebista",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 905,
     "name": "Burebista",
     "art_slug": "burebista",
     "ability": {
@@ -9225,6 +9383,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Boles%C5%82aw_II_the_Bold",
    "avatar": "boleslaw_ii",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 865,
     "name": "Bolesław II",
     "art_slug": "boleslaw_ii",
     "ability": {
@@ -9248,6 +9408,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Abd_al-Rahman_ibn_Abd_Allah_al-Ghafiqi",
    "avatar": "al_ghafiqi",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 260,
     "name": "Al-Ghafiqi",
     "art_slug": "al_ghafiqi",
     "ability": {
@@ -9271,6 +9433,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Windradyne",
    "avatar": "wiradjuri",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 705,
     "name": "Windradyne",
     "art_slug": "windradyne",
     "ability": {
@@ -9293,6 +9457,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Yagan",
    "avatar": "yagan",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 810,
     "name": "Yagan",
     "art_slug": "yagan_noongar",
     "ability": {
@@ -9315,6 +9481,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Peter_the_Great",
    "avatar": "peter",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1920,
     "name": "Peter",
     "art_slug": "peter",
     "ability": {
@@ -9336,6 +9504,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Empress_Suiko",
    "avatar": "suiko",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 405,
     "name": "Suiko",
     "art_slug": "suiko",
     "ability": {
@@ -9358,6 +9528,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Nebuchadnezzar_II",
    "avatar": "nebuchadnezzar_ii",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 485,
     "name": "Nebuchadnezzar II",
     "art_slug": "nebuchadnezzar_ii",
     "ability": {
@@ -9378,6 +9550,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/David",
    "avatar": "david",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 520,
     "name": "David",
     "art_slug": "david",
     "ability": {
@@ -9400,6 +9574,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Sarraounia",
    "avatar": "sarraounia_mangou",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 675,
     "name": "Sarraounia Mangou",
     "art_slug": "sarraounia_mangou",
     "ability": {
@@ -9421,6 +9597,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Muhammad_of_Ghor",
    "avatar": "muhammad_ghor",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 350,
     "name": "Muhammad Ghor",
     "art_slug": "muhammad_ghor",
     "ability": {
@@ -9443,6 +9621,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Puyi",
    "avatar": "puyi",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 505,
     "name": "Puyi",
     "art_slug": "puyi",
     "ability": {
@@ -9464,6 +9644,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Pertinax",
    "avatar": "pertinax",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 440,
     "name": "Pertinax",
     "art_slug": "pertinax",
     "ability": {
@@ -9485,6 +9667,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Ewuare",
    "avatar": "ewuare",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 745,
     "name": "Ewuare",
     "art_slug": "ewuare",
     "ability": {
@@ -9507,6 +9691,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Veleda",
    "avatar": "veleda",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 885,
     "name": "Veleda",
     "art_slug": "veleda",
     "ability": {
@@ -9528,6 +9714,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Timur",
    "avatar": "amir_timur",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1720,
     "name": "Amir Timur",
     "art_slug": "amir_timur",
     "ability": {
@@ -9550,6 +9738,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Nandi_(mother_of_Shaka)",
    "avatar": "nandi_zulu",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 830,
     "name": "Nandi",
     "ability": {
      "kind": "resource_bonus",
@@ -9576,6 +9766,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Mawiyya",
    "avatar": "mavia",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 790,
     "name": "Mavia",
     "ability": {
      "kind": "armistice",
@@ -9596,6 +9788,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Khurshidbanu_Natavan",
    "avatar": "natavan",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 685,
     "name": "Natavan",
     "ability": {
      "kind": "city_farm_founding"
@@ -9616,6 +9810,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Tarabai",
    "avatar": "tarabai",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 295,
     "name": "Tarabai",
     "ability": {
      "kind": "counter_levy",
@@ -9637,6 +9833,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Suriyothai",
    "avatar": "suriyothai_siam",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 715,
     "name": "Suriyothai",
     "ability": {
      "kind": "city_intercession",
@@ -9658,6 +9856,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Cartimandua",
    "avatar": "cartimandua_brigantes",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 895,
     "name": "Cartimandua",
     "ability": {
      "kind": "retreat_handover",
@@ -9679,6 +9879,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Thusnelda",
    "avatar": "thusnelda_cherusci",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 305,
     "name": "Thusnelda",
     "ability": {
      "kind": "city_denial"
@@ -9698,6 +9900,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Hatshepsut",
    "avatar": "hatshepsut_egypt",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1320,
     "name": "Hatshepsut",
     "ability": {
      "kind": "punt_gardens"
@@ -9718,6 +9922,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Lakshmibai%2C_Rani_of_Jhansi",
    "avatar": "lakshmibai",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 960,
     "name": "Lakshmibai",
     "ability": {
      "kind": "last_city_relocation"
@@ -9737,6 +9943,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Lady_Xoc",
    "avatar": "kabal_xook",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 665,
     "name": "K’ab’al Xook",
     "ability": {
      "kind": "war_regalia",
@@ -9757,6 +9965,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Mandukhai",
    "avatar": "mandukhai",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 800,
     "name": "Mandukhai Khatun",
     "ability": {
      "kind": "reunification",
@@ -9777,6 +9987,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Nefertiti",
    "avatar": "nefertiti_egypt",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 480,
     "name": "Nefertiti",
     "ability": {
      "kind": "factory_city_upgrade_discount",
@@ -9798,6 +10010,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Spartacus",
    "avatar": "spartacus",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1560,
     "name": "Spartacus",
     "ability": {
      "kind": "factory_raid",
@@ -9818,6 +10032,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Qin_Shi_Huang",
    "avatar": "ying_zheng",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1800,
     "name": "Ying Zheng",
     "ability": {
      "kind": "imperial_standards",
@@ -9840,6 +10056,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Baybars",
    "avatar": "baibars",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 430,
     "name": "Baibars",
     "ability": {
      "kind": "siege_breach"
@@ -9859,6 +10077,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/%C5%A0uppiluliuma_I",
    "avatar": "suppiluliuma",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 255,
     "name": "Suppiluliuma I",
     "ability": {
      "kind": "attacker_loss",
@@ -9880,6 +10100,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Cynethryth",
    "avatar": "cynethryth_mercia",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 735,
     "name": "Cynethryth",
     "ability": {
      "kind": "cookham_exchange"
@@ -9899,6 +10121,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Sibylla_of_Jerusalem",
    "avatar": "sibylla",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 415,
     "name": "Sibylla",
     "ability": {
      "kind": "second_crown"
@@ -9919,6 +10143,8 @@
    "wikipedia": "https://es.wikipedia.org/wiki/Juana_In%C3%A9s_de_la_Cruz",
    "avatar": "sor_juana",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 435,
     "name": "Sor Juana",
     "ability": {
      "kind": "kitchen_philosophy"
@@ -9940,6 +10166,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Khutulun",
    "avatar": "khutulun_qaidu",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 315,
     "name": "Khutulun",
     "ability": {
      "kind": "mounted_capture",
@@ -9960,6 +10188,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Gudit",
    "avatar": "gudit_yodit",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 875,
     "name": "Gudit",
     "ability": {
      "kind": "aksum_rout"
@@ -9979,6 +10209,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Mithridates_VI_Eupator",
    "avatar": "mithridates_vi",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 410,
     "name": "Mithridates VI",
     "ability": {
      "kind": "tigranes_aid",
@@ -9999,6 +10231,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Sargon_of_Akkad",
    "avatar": "sargon",
    "hero": {
+    "rarity": "epic",
+    "price_crowns": 1280,
     "name": "Sargon",
     "ability": {
      "kind": "akkad_garrison"
@@ -10020,6 +10254,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Ka%CA%BBahumanu",
    "avatar": "kaahumanu_hawaii",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 265,
     "name": "Kaʻahumanu",
     "ability": {
      "kind": "shared_feast"
@@ -10039,6 +10275,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Hiawatha",
    "avatar": "hiawatha_haudenosaunee",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 285,
     "name": "Hiawatha",
     "ability": {
      "kind": "great_law_of_peace"
@@ -10058,6 +10296,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Modu_Chanyu",
    "avatar": "modu_chanyu",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 335,
     "name": "Modu Chanyu",
     "ability": {
      "kind": "contested_steppe",
@@ -10078,6 +10318,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Jalal_al-Din_Mangburni",
    "avatar": "jalal_mangburni",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 355,
     "name": "Jalal Mangburni",
     "ability": {
      "kind": "attacker_loss",
@@ -10101,6 +10343,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Naram-Sin_of_Akkad",
    "avatar": "naram_sin",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 310,
     "name": "Naram Sin",
     "ability": {
      "kind": "zagros_ascent",
@@ -10121,6 +10365,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Khosrow_I",
    "avatar": "khosrow_i",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 330,
     "name": "Khosrow I",
     "ability": {
      "kind": "regional_commands",
@@ -10141,6 +10387,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Muhumuza",
    "avatar": "muhumuza",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 620,
     "name": "Muhumuza",
     "ability": {
      "kind": "nyabingi_network",
@@ -10161,6 +10409,8 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Ivan_the_Terrible",
    "avatar": "ivan_iv",
    "hero": {
+    "rarity": "common",
+    "price_crowns": 510,
     "name": "Ivan IV",
     "ability": {
      "kind": "streltsy_muster",
@@ -10183,6 +10433,8 @@
    "wikipedia": "https://www.scielo.org.mx/scielo.php?pid=S0185-39292010000300004&script=sci_arttext",
    "avatar": "erendira",
    "hero": {
+    "rarity": "rare",
+    "price_crowns": 770,
     "name": "Eréndira",
     "ability": {
      "kind": "mounted_defense_capture",

@@ -19,6 +19,7 @@ COMMANDS:
    p, prod              Run production build & deploy (WASM + FreeBSD backend and relay)
    a, android           Build the Android AAB and publish it to Google Play alpha
    poki                 Build the self-contained Poki upload folder (no upload/deploy)
+   crazygames           Build the self-contained CrazyGames upload folder (no upload/deploy)
    jest                 Build the self-contained Jest bundle + dist/jest.zip (no deploy)
    art-preview [profile] Generate art quality/size previews without credentials or publishing
    help, -h, --help     Show this help message
@@ -34,6 +35,7 @@ EXAMPLES:
   ./sow p --server-only # Deploy only the FreeBSD game server
   ./sow p --relay-only  # Upgrade the relay control with matches running
    ./sow poki           # Build dist/poki for local review and Poki Inspector
+   ./sow crazygames     # Build dist/crazygames for private CrazyGames QA
    ./sow jest           # Jest bundle + upload zip (upload via console/MCP, never auto)
    ./sow art-preview ability_icon # Compare distribution quality for all ability icons
   ./sow a              # Android AAB + Play alpha upload (each upload restarts Play review)
@@ -89,6 +91,9 @@ run_dist_process() {
   elif [[ "${log_prefix}" == poki ]]; then
     command -v flock >/dev/null || { echo "flock is required to prevent overlapping Poki package builds" >&2; return 127; }
     exec flock -n "${ROOT}/dist/.poki-build.lock" "${bin}" "$@"
+  elif [[ "${log_prefix}" == crazygames ]]; then
+    command -v flock >/dev/null || { echo "flock is required to prevent overlapping CrazyGames package builds" >&2; return 127; }
+    exec flock -n "${ROOT}/dist/.crazygames-build.lock" "${bin}" "$@"
   fi
   exec "${bin}" "$@"
 }
@@ -236,6 +241,10 @@ case "${CMD}" in
   poki)
     load_dist_env
     run_dist poki "$@"
+    ;;
+  crazygames)
+    load_dist_env
+    run_dist crazygames "$@"
     ;;
   art-preview)
     shift || true

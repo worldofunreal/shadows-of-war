@@ -8,7 +8,43 @@
 
     let sdkInitPromise = null;
     let loadingFinished = false;
+    let sdkReady = false;
+    let entrySource = null;
+    let firstMilestonePending = false;
+    let firstMilestoneMarked = false;
     const progressKey = "sow_player_progress";
+    const ENTRY_SOURCE_TYPES = [
+        "explore",
+        "home",
+        "profile",
+        "chat",
+        "notification",
+        "jest_ad",
+        "external_ad",
+        "referral",
+        "direct",
+        "unknown",
+    ];
+    const SOURCE_ATTRIBUTED_EVENTS = new Set([
+        "boot_start",
+        "tutorial_start",
+        "tutorial_step",
+        "matchmaking_joined",
+        "matchmaking_cancelled",
+        "lobby_joined",
+        "lobby_join_failed",
+        "match_loading_start",
+        "match_exit",
+        "campaign_episode_complete",
+        "match_started_client",
+        "match_ended_client",
+    ]);
+    const FIRST_MILESTONE_EVENTS = new Set([
+        "tutorial_start",
+        "campaign_episode_complete",
+        "match_started_client",
+        "match_ended_client",
+    ]);
 
     // D1-D7 re-engagement sequence (launch checklist: at least one per day
     // once the user is registered). Stable identifiers make re-scheduling
@@ -17,50 +53,50 @@
         {
             id: "sow_reengage_d0",
             days: 0,
-            body: "Battle stations: your first match is ready when you are.",
+            body: "Battle stations: your next strategy match is ready when you are.",
             cta: "Play now",
         },
         {
             id: "sow_reengage_d1",
             days: 1,
-            body: "Your army held the line. Fresh battles are waiting.",
+            body: "Choose another commander and start a fresh battle.",
             cta: "Play now",
         },
         {
             id: "sow_reengage_d2",
             days: 2,
-            body: "Daily reward ready: extra troops for your next match.",
-            cta: "Claim",
+            body: "New strategy battles are ready whenever you are.",
+            cta: "Play now",
         },
         {
             id: "sow_reengage_d3",
             days: 3,
-            body: "Your rivals expanded overnight. Take the territory back.",
-            cta: "Attack",
+            body: "Claim territory in your next Shadows of War match.",
+            cta: "Play now",
         },
         {
             id: "sow_reengage_d4",
             days: 4,
-            body: "New commanders joined the war. Try a different leader.",
+            body: "Try a different commander in your next strategy battle.",
             cta: "Play now",
         },
         {
             id: "sow_reengage_d5",
             days: 5,
-            body: "Your win rate slipped. Warm up with a quick match.",
-            cta: "Quick match",
+            body: "Can you outmaneuver your rivals in the next battle?",
+            cta: "Play now",
         },
         {
             id: "sow_reengage_d6",
             days: 6,
-            body: "A tournament lobby with your name on it just opened.",
-            cta: "Join",
+            body: "Return to the map and fight for more territory.",
+            cta: "Play now",
         },
         {
             id: "sow_reengage_d7",
             days: 7,
-            body: "One week of war. Your empire misses its commander.",
-            cta: "Return",
+            body: "Ready for another battle? Your commanders are waiting.",
+            cta: "Play now",
         },
     ];
 
@@ -79,7 +115,37 @@
     function safeLocalSet(key, value) {
         try {
             window.localStorage.setItem(key, value);
+            return true;
         } catch {}
+        return false;
+    }
+
+    function safeLocalRemove(key) {
+        try {
+            window.localStorage.removeItem(key);
+        } catch {}
+    }
+
+    function progressKeyFor(playerId) {
+        return progressKey + ":jest:" + encodeURIComponent(playerId);
+    }
+
+    function loadPlayerProgress() {
+        const player = currentPlayer();
+        if (!player || typeof player.playerId !== "string" || !player.playerId) {
+            window.SOW_PORTAL_PROGRESS_JSON = null;
+            return;
+        }
+        const key = progressKeyFor(player.playerId);
+        let progress = safeLocalGet(key);
+        if (!progress) {
+            const legacyProgress = safeLocalGet(progressKey);
+            if (legacyProgress && safeLocalSet(key, legacyProgress)) {
+                safeLocalRemove(progressKey);
+                progress = legacyProgress;
+            }
+        }
+        window.SOW_PORTAL_PROGRESS_JSON = progress;
     }
 
     function currentPlayer() {
@@ -112,6 +178,31 @@
         });
     }
 
+    function refreshEntrySource() {
+        const sdk = jestSdk();
+        if (!sdk || typeof sdk.getEntrySource !== "function") return;
+        try {
+            const source = sdk.getEntrySource();
+            entrySource = source && ENTRY_SOURCE_TYPES.includes(source.type) ? source.type : "unknown";
+        } catch {
+            entrySource = "unknown";
+        }
+    }
+
+    function markFirstMilestone() {
+        firstMilestonePending = true;
+        if (firstMilestoneMarked || !sdkReady) return;
+        const sdk = jestSdk();
+        if (!sdk || typeof sdk.markFirstMilestone !== "function") return;
+        try {
+            sdk.markFirstMilestone();
+            firstMilestoneMarked = true;
+            firstMilestonePending = false;
+        } catch (error) {
+            console.warn("Jest first milestone could not be marked:", error);
+        }
+    }
+
     function refreshPortalFlags() {
         window.SOW_RUNTIME = {
             portal_embed: true,
@@ -134,7 +225,7 @@
             return true;
         };
         window.SOW_DISABLE_CHAT = true;
-        window.SOW_PORTAL_PROGRESS_JSON = safeLocalGet(progressKey);
+        window.SOW_PORTAL_PROGRESS_JSON = null;
         syncPlatformIdentity();
     }
 
@@ -145,6 +236,7 @@
                 provider: "jest",
                 displayName: player.username || "Player",
                 externalId: player.playerId,
+                registered: player.registered === true,
                 avatarUrl: player.avatarUrl || null,
                 token: null,
             };
@@ -172,6 +264,7 @@
     window.SOW_refreshPortalFlags = refreshPortalFlags;
     window.SOW_PORTAL_PROGRESS_JSON = null;
     window.SOW_PLATFORM_IDENTITY = null;
+    window.SOW_AUTH_CHANGED = false;
     window.SOW_PENDING_INVITE_LOBBY_ID = null;
     window.SOW_HOST_PRIVATE_PENDING = false;
     window.SOW_PORTAL_MUTE_AUDIO = false;
@@ -200,7 +293,13 @@
     window.SOW_portalHappytime = function () {};
     window.SOW_portalSaveProgress = function (json) {
         window.SOW_PORTAL_PROGRESS_JSON = String(json || "");
-        safeLocalSet(progressKey, window.SOW_PORTAL_PROGRESS_JSON);
+        const player = currentPlayer();
+        if (player && typeof player.playerId === "string" && player.playerId) {
+            safeLocalSet(progressKeyFor(player.playerId), window.SOW_PORTAL_PROGRESS_JSON);
+        }
+    };
+    window.SOW_portalClearAuthChanged = function () {
+        window.SOW_AUTH_CHANGED = false;
     };
 
     // Registration entry point for the menu (settings save-progress button).
@@ -208,8 +307,18 @@
     window.SOW_jestLogin = function () {
         const sdk = jestSdk();
         if (!sdk || typeof sdk.login !== "function") return Promise.resolve();
+        const player = currentPlayer();
+        if (!sdkReady || !player || player.registered !== false) return Promise.resolve();
         const done = function () {
+            const player = currentPlayer();
             syncPlatformIdentity();
+            if (!player || !player.registered) return;
+            window.SOW_AUTH_CHANGED = true;
+            try {
+                if (typeof window.dispatchEvent === "function" && typeof window.Event === "function") {
+                    window.dispatchEvent(new window.Event("sow:platform-identity-changed"));
+                }
+            } catch {}
             scheduleReengagement();
         };
         try {
@@ -236,6 +345,7 @@
                 return sdk.init();
             })
             .then(function () {
+                sdkReady = true;
                 if (sdk.lifecycle) {
                     try {
                         if (typeof sdk.lifecycle.onHide === "function") sdk.lifecycle.onHide(muteGameAudio);
@@ -243,7 +353,10 @@
                     } catch {}
                 }
                 syncPlatformIdentity();
+                loadPlayerProgress();
+                refreshEntrySource();
                 scheduleReengagement();
+                if (firstMilestonePending) markFirstMilestone();
             })
             .catch(function (error) {
                 console.warn("Jest SDK init failed; continuing anonymously:", error);
@@ -266,8 +379,19 @@
         const sdk = jestSdk();
         if (!sdk || typeof sdk.captureEvent !== "function" || !event || typeof event.name !== "string")
             return;
+        const props = Object.assign({}, event.props || {});
+        const completedTutorialStep =
+            event.name === "tutorial_step" && event.props && event.props.action === "complete";
+        if ((SOURCE_ATTRIBUTED_EVENTS.has(event.name) || completedTutorialStep) && entrySource) {
+            props.entry_source = entrySource;
+        }
+        if (completedTutorialStep) {
+            markFirstMilestone();
+        } else if (FIRST_MILESTONE_EVENTS.has(event.name)) {
+            markFirstMilestone();
+        }
         try {
-            sdk.captureEvent(event.name, event.props || undefined);
+            sdk.captureEvent(event.name, Object.keys(props).length ? props : undefined);
         } catch (error) {
             console.warn("Jest analytics event could not be captured:", error);
         }
