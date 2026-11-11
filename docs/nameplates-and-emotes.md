@@ -88,7 +88,7 @@ radial sí muestra el correcto:
    2 s, duplicando hasta 60 s. El retrato reservado sigue oculto durante los
    reintentos. Hay como máximo seis cargas a la vez.
 
-| Imagen | Ruta publicada |
+| Imagen | Ruta publicada (celda de una hoja de `gameplay/atlas/`) |
 | --- | --- |
 | Héroe, Calm (también retrato estático) | `gameplay/avatars/<art_slug>.webp` |
 | Héroe, Happy / Fear / Angry | `gameplay/avatars/expressions/<art_slug>_<happy\|fear\|angry>.webp` |

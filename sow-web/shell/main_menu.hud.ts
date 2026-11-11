@@ -8,7 +8,7 @@ import {
     setAvatarImage,
     setAvatarPortrait,
 } from "./avatar-presentation.ts";
-import { esc } from "./main_menu.core.ts";
+import { abilityIconMarkup, esc } from "./main_menu.core.ts";
 import { renderLocaleSettingRow } from "./main_menu.settings.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
 import type {
@@ -4991,18 +4991,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (/^[a-z][a-z0-9_]*$/.test(values.hero || "")) {
             const hero = leaderById(values.hero);
             const artSlug = hero.art_slug || hero.slug || values.hero;
-            if (typeof window.SOW_abilityIconMarkup === "function") {
-                return window.SOW_abilityIconMarkup(
-                    artSlug,
-                    "sow-hud__notification-ability",
-                    "draggable='false'",
-                );
-            }
-            return (
-                "<img class='sow-hud__notification-ability' src='" +
-                asset("gameplay/icons/abilities/" + artSlug + ".webp") +
-                "' alt='' draggable='false'>"
-            );
+            return abilityIconMarkup(artSlug, "sow-hud__notification-ability", "draggable='false'");
         }
         if (key.indexOf("nuke") >= 0) return hudIcon("nuke", "sow-hud__notification-icon");
         if (key.indexOf("betrayal") >= 0) return statusIcon("traitor", "sow-hud__notification-icon");

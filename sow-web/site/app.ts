@@ -1,3 +1,5 @@
+import { avatarPortraitPath, fillAvatarMarkup, setAvatarImage } from "../shell/avatar-presentation.ts";
+
 (() => {
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -124,21 +126,17 @@
   }
 
   const cardAvatarAnims = new WeakMap<any, any>();
+  const cardAvatarSources = new WeakMap<any, string>();
 
   function setCardAvatar(card, cardIndex, expression) {
     const img = getCardImg(card);
     if (!img) return;
     const slug = leaders[cardIndex]?.artSlug || card?.dataset?.artSlug;
     if (!slug) return;
-    const newSrc =
-      expression === "calm"
-        ? `/assets/gameplay/avatars/${slug}.webp`
-        : `/assets/gameplay/avatars/expressions/${slug}_${expression}.webp`;
-
-    const prevSrc = img.getAttribute("src") || img.src || "";
-    if (prevSrc === newSrc || (prevSrc && prevSrc.endsWith(newSrc))) return;
-
-    img.src = newSrc;
+    const source = "/assets/" + avatarPortraitPath(slug, expression);
+    if (cardAvatarSources.get(img) === source) return;
+    cardAvatarSources.set(img, source);
+    setAvatarImage(img, source);
 
     if (prefersReducedMotion?.matches || typeof img.animate !== "function") return;
 
@@ -303,7 +301,7 @@
     const profile = $("[data-detail-profile]");
     if (profile) profile.href = `${document.documentElement.dataset.sitePrefix || "/"}leaders/${leader.id}/`;
     const name = showText($("[data-detail-name]"), leader, "name");
-    if (abilityIcon) abilityIcon.src = `/assets/gameplay/icons/abilities/${leader.artSlug}.webp`;
+    if (abilityIcon) setAvatarImage(abilityIcon, `/assets/gameplay/icons/abilities/${leader.artSlug}.webp`);
     if (image) {
       image.alt = name;
       if (activeArtSlug !== leader.artSlug) {
@@ -318,7 +316,7 @@
         art.classList.add("is-loading");
         art.classList.remove("is-unavailable");
         portrait.hidden = false;
-        portrait.src = `/assets/gameplay/avatars/${leader.artSlug}.webp`;
+        setAvatarImage(portrait, `/assets/gameplay/avatars/${leader.artSlug}.webp`);
         if (animate && !prefersReducedMotion?.matches && typeof portrait?.animate === "function") {
           try {
             portrait.animate(
@@ -574,6 +572,7 @@
   $$("[data-leader-total]").forEach((element) => {
     element.textContent = String(leaders.length);
   });
+  fillAvatarMarkup(document);
   if (leaders.length) refreshLocale();
   window.addEventListener("sow:locale-change", refreshLocale);
   if (window.SOW_I18N_READY && typeof window.SOW_I18N_READY.then === "function") {

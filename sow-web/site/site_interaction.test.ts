@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { vm } from "../shell/typescript-test-support.ts";
+import { bundleTs, vm } from "../shell/typescript-test-support.ts";
 const shell = path.resolve(__dirname, "../shell");
 const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.ts"), "utf8");
@@ -15,7 +15,7 @@ const leaderExplorerHtml = fs.readFileSync(
 const readme = fs.readFileSync(path.join(shell, "../../README.md"), "utf8");
 const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
 const gameControlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
-const siteApp = fs.readFileSync(path.join(shell, "../../sow-web/site/app.ts"), "utf8");
+const siteApp = bundleTs(path.join(shell, "../../sow-web/site/app.ts"));
 const siteCss = fs.readFileSync(path.join(shell, "../../sow-web/site/styles.css"), "utf8");
 const siteFooterPages = [
   "about",
@@ -824,8 +824,13 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       "assets/shell/leaders/caesar_desktop.webp",
       "assets/shell/leaders/caesar_mobile.webp",
       "assets/gameplay/avatars/caesar.webp",
+      "assets/gameplay/atlas/index.js",
     ])
       await put(path.join(out, asset), "fixture image");
+    await put(
+      path.join(out, "assets/gameplay/atlas/index.json"),
+      JSON.stringify({ sheets: [], cells: { "gameplay/avatars/caesar.webp": [0, 0, 0, 256] } }),
+    );
     const leaders = [
       {
         id: "caesar",
@@ -976,7 +981,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
     catalogs.es.site.leader_caesar_description = effect;
     await put(path.join(out, "locales/es"), JSON.stringify({ strings: catalogs.es }));
     await resetLanding();
-    await rm(path.join(out, "assets/gameplay/avatars/caesar.webp"));
+    await put(path.join(out, "assets/gameplay/atlas/index.json"), JSON.stringify({ sheets: [], cells: {} }));
     await assert.rejects(
       publish(
         out,

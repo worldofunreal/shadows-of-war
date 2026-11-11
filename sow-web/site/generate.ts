@@ -84,6 +84,7 @@ export async function publish(
     "sow-dropdown.js",
     "sow-controls.css",
     "wou-auth.js",
+    "assets/gameplay/atlas/index.js",
   ]) {
     fingerprints.set(
       `/${name}`,
@@ -93,6 +94,9 @@ export async function publish(
         .slice(0, 10),
     );
   }
+  const spriteCells: Record<string, unknown> = JSON.parse(
+    await readFile(join(out, "assets/gameplay/atlas/index.json"), "utf8"),
+  ).cells;
   const localeVersions = Object.fromEntries(
     await Promise.all(
       languages.map(async (l) => [
@@ -240,7 +244,7 @@ export async function publish(
             const artImage = mobileArt
               ? `<img class="leader-directory-art" src="${mobileArt}" alt="" width="900" height="1600" loading="lazy" decoding="async">`
               : "";
-            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}">${artImage}<img class="leader-directory-avatar" src="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-ability">${escape(f.ability)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
+            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}">${artImage}<img class="leader-directory-avatar" data-avatar="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-ability">${escape(f.ability)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
           })
           .join("\n");
         html = indexTemplate
@@ -286,7 +290,11 @@ export async function publish(
       for (const marker of ["<!-- SOW_SITE_HEADER -->", "<!-- SOW_SITE_LOCALE -->"]) {
         if (html.split(marker).length !== 2) throw Error(`Public page ${url} must contain one ${marker}`);
       }
-      html = html.replace("<!-- SOW_SITE_HEADER -->", header).replace("<!-- SOW_SITE_LOCALE -->", bootstrap);
+      const spriteAtlas = `<script src="/assets/gameplay/atlas/index.js?v=${fingerprints.get("/assets/gameplay/atlas/index.js")}"></script>`;
+      html = html
+        .replace("<!-- SOW_SITE_HEADER -->", header)
+        .replace("<!-- SOW_SITE_LOCALE -->", bootstrap)
+        .replace("<!-- SOW_SPRITE_ATLAS -->", spriteAtlas);
       const schemas: any[] = [
         {
           "@type": "WebPage",
@@ -526,6 +534,13 @@ export async function publish(
                 const value = e.getAttribute(attr);
                 if (value) reference(value);
               }
+              const sprite = e.getAttribute("data-avatar");
+              if (sprite) {
+                // Packed portraits and ability icons are cells of a sprite sheet, not files of their own.
+                const target = new URL(sprite, url).pathname;
+                if (!(target.replace(/^\/assets\//, "") in spriteCells))
+                  throw Error(`Broken public reference ${target} (no sprite cell)`);
+              }
               const srcset = e.getAttribute("srcset");
               if (srcset)
                 for (const candidate of srcset.split(",")) reference(candidate.trim().split(/\s+/)[0]);
@@ -536,7 +551,7 @@ export async function publish(
         for (const [selector, total] of Object.entries(required)) {
           if (total !== 1) throw Error(`Public page ${url} must contain one ${selector}; found ${total}`);
         }
-        if (html.includes("<!-- SOW_SITE_") || html.includes("<!-- LEADER_"))
+        if (html.includes("<!-- SOW_SITE_") || html.includes("<!-- SOW_SPRITE_") || html.includes("<!-- LEADER_"))
           throw Error(`Unexpanded page ${url}`);
       }
       const destination = join(out, prefix(code), route, "index.html");

@@ -1,4 +1,5 @@
 import { rankEmblem, rankLabel } from "./main_menu.ranked.ts";
+import { avatarImageAttribute } from "./avatar-presentation.ts";
 import type {
     LocalizedText,
     MenuLeader,
@@ -325,57 +326,12 @@ export function abilityIconMarkup(
 ): string {
     const slug = leaderArtSlug(artSlug);
     if (!/^[a-z0-9_]+$/.test(slug)) return "";
-    const atlas = window.SOW_ABILITY_ICON_ATLAS;
-    const index = atlas && atlas.icons[slug];
-    if (
-        window.SOW_PORTAL === "crazygames" &&
-        atlas &&
-        typeof index === "number" &&
-        Number.isInteger(index) &&
-        atlas.columns > 0 &&
-        atlas.rows > 0 &&
-        index >= 0 &&
-        index < atlas.columns * atlas.rows
-    ) {
-        const column = index % atlas.columns;
-        const row = Math.floor(index / atlas.columns);
-        const x = atlas.columns === 1 ? 0 : (column / (atlas.columns - 1)) * 100;
-        const y = atlas.rows === 1 ? 0 : (row / (atlas.rows - 1)) * 100;
-        const style =
-            "display:block;background-image:url('" +
-            asset(atlas.path) +
-            "');background-size:" +
-            atlas.columns * 100 +
-            "% " +
-            atlas.rows * 100 +
-            "%;background-position:" +
-            x +
-            "% " +
-            y +
-            "%;background-repeat:no-repeat";
-        const preload = trackHeroSelection
-            ? "<img src='" +
-              esc(asset(atlas.path)) +
-              "' alt='' aria-hidden='true' data-hero-skill-icon data-hero-skill-art-slug='" +
-              esc(slug) +
-              "' fetchpriority='high' style='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none'>"
-            : "";
-        return (
-            "<span class='" +
-            esc(className) +
-            " sow-ability-atlas-icon' aria-hidden='true' style='" +
-            esc(style) +
-            "'>" +
-            preload +
-            "</span>"
-        );
-    }
     return (
         "<img class='" +
         esc(className) +
-        "' src='" +
-        esc(asset("gameplay/icons/abilities/" + slug + ".webp")) +
-        "' alt=''" +
+        "' " +
+        avatarImageAttribute(asset("gameplay/icons/abilities/" + slug + ".webp")) +
+        " alt=''" +
         (trackHeroSelection
             ? " data-hero-skill-icon data-hero-skill-art-slug='" + esc(slug) + "' fetchpriority='high'"
             : "") +
@@ -383,8 +339,6 @@ export function abilityIconMarkup(
         ">"
     );
 }
-
-window.SOW_abilityIconMarkup = abilityIconMarkup;
 
 export function leaderArtUrl(slug: string, variant?: string): string {
     return window.SOW_leaderArtUrl(slug, variant);

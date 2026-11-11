@@ -1182,7 +1182,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
     let source = super::source_identity(paths)?;
     let source_version = format!("{version}:{}", source.sha);
     input_fingerprint(
-        "web-v12-art-profiles",
+        "web-v13-sprite-atlas",
         &source_version,
         &[
             &paths.wasm_input,
