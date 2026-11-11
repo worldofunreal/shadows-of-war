@@ -2823,7 +2823,7 @@ async fn handle_campaign_complete(
             let message = error.to_string();
             let status = if message.starts_with("unknown campaign") {
                 StatusCode::BAD_REQUEST
-            } else if message.contains("not published") || message.contains("completed in order") {
+            } else if message.contains("not published") || message.contains("is locked") {
                 StatusCode::CONFLICT
             } else if message.contains("account") || message.contains("Account not found") {
                 StatusCode::NOT_FOUND
