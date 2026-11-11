@@ -1,12 +1,26 @@
 (() => {
   "use strict";
 
-  const POLICY = "2026-10-06";
+  const POLICY = "2026-11-10";
   const CONSENT_KEY = "sow_analytics_consent_v2";
   const SESSION_KEY = "sow_analytics_session_v2";
   const QUEUE_KEY = "sow_analytics_queue_v2";
   const MAX_QUEUE = 200;
   const MAX_BATCH = 100;
+  const MATCH_MODES = ["ranked_1v1", "custom", "campaign", "tutorial", "single_player", "other"];
+  const WAIT_BUCKETS = ["under_5s", "5_15s", "15_60s", "60s_plus", "unknown"];
+  const MATCH_DURATION_BUCKETS = ["under_1m", "1_5m", "5_15m", "15m_plus", "unknown"];
+  const JOIN_FAILURES = [
+    "version_mismatch",
+    "identity_unavailable",
+    "account_required",
+    "invalid_request",
+    "matchmaking_unavailable",
+    "access_denied",
+    "wrong_password",
+    "lobby_full",
+    "lobby_unavailable",
+  ];
   const KNOWN_EVENTS = new Set([
     "landing_visit",
     "shell_loaded",
@@ -26,6 +40,7 @@
     "menu_custom_create_open",
     "menu_leader_confirm",
     "matchmaking_joined",
+    "matchmaking_cancelled",
     "lobby_joined",
     "lobby_join_failed",
     "match_exit",
@@ -34,7 +49,6 @@
     "match_ended_client",
     "tutorial_start",
     "tutorial_step",
-    "tutorial_objective_complete",
     "tutorial_dialog_choice",
     "tutorial_exit_early",
     "campaign_episode_complete",
@@ -198,6 +212,47 @@
     }
     if (name === "boot_route_decision" && ["menu", "intro"].includes(props.route))
       return { route: props.route };
+    if (
+      ["matchmaking_joined", "matchmaking_cancelled", "lobby_joined"].includes(name) &&
+      Object.keys(props).length === 2 &&
+      MATCH_MODES.includes(props.mode) &&
+      WAIT_BUCKETS.includes(props.wait_bucket)
+    ) {
+      return { mode: props.mode, wait_bucket: props.wait_bucket };
+    }
+    if (
+      name === "lobby_join_failed" &&
+      Object.keys(props).length === 3 &&
+      MATCH_MODES.includes(props.mode) &&
+      WAIT_BUCKETS.includes(props.wait_bucket) &&
+      JOIN_FAILURES.includes(props.reason_category)
+    ) {
+      return { mode: props.mode, wait_bucket: props.wait_bucket, reason_category: props.reason_category };
+    }
+    if (
+      name === "match_started_client" &&
+      Object.keys(props).length === 1 &&
+      MATCH_MODES.includes(props.mode)
+    ) {
+      return { mode: props.mode };
+    }
+    if (
+      name === "match_ended_client" &&
+      Object.keys(props).length === 3 &&
+      MATCH_MODES.includes(props.mode) &&
+      ["win", "loss"].includes(props.outcome) &&
+      MATCH_DURATION_BUCKETS.includes(props.duration_bucket)
+    ) {
+      return { mode: props.mode, outcome: props.outcome, duration_bucket: props.duration_bucket };
+    }
+    if (
+      name === "match_exit" &&
+      Object.keys(props).length === 2 &&
+      MATCH_MODES.includes(props.mode) &&
+      MATCH_DURATION_BUCKETS.includes(props.duration_bucket)
+    ) {
+      return { mode: props.mode, duration_bucket: props.duration_bucket };
+    }
     if (
       ["store_buy_tap", "store_checkout_open", "store_purchase_complete"].includes(name) &&
       Object.keys(props).length === 3 &&

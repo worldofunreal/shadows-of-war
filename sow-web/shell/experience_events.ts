@@ -23,6 +23,7 @@
         "menu_custom_create_open",
         "menu_leader_confirm",
         "matchmaking_joined",
+        "matchmaking_cancelled",
         "lobby_joined",
         "lobby_join_failed",
         "match_exit",
@@ -31,7 +32,6 @@
         "match_ended_client",
         "tutorial_start",
         "tutorial_step",
-        "tutorial_objective_complete",
         "tutorial_dialog_choice",
         "tutorial_exit_early",
         "campaign_episode_complete",
@@ -58,13 +58,13 @@
         menu_custom_create_open: ["menu", "custom_create", "open"],
         menu_leader_confirm: ["menu", "leader", "confirm"],
         matchmaking_joined: ["matchmaking", "queue", "complete"],
+        matchmaking_cancelled: ["matchmaking", "queue", "cancel"],
         lobby_joined: ["lobby", "join", "complete"],
         lobby_join_failed: ["lobby", "join", "fail"],
         match_exit: ["match", "round", "exit"],
         match_loading_start: ["match", "loading", "start"],
         match_started_client: ["match", "round", "start"],
         match_ended_client: ["match", "round", "complete"],
-        tutorial_objective_complete: ["tutorial", "objective", "complete"],
         tutorial_dialog_choice: ["tutorial", "dialog", "choice"],
         tutorial_exit_early: ["tutorial", "episode", "exit"],
     };
@@ -96,6 +96,30 @@
     function isOneOf(value: unknown, options: readonly string[]): value is string {
         return typeof value === "string" && options.includes(value);
     }
+
+    const MATCH_MODES = ["ranked_1v1", "custom", "campaign", "tutorial", "single_player", "other"];
+    const WAIT_BUCKETS = ["under_5s", "5_15s", "15_60s", "60s_plus", "unknown"];
+    const MATCH_DURATION_BUCKETS = ["under_1m", "1_5m", "5_15m", "15m_plus", "unknown"];
+    const JOIN_FAILURES = [
+        "version_mismatch",
+        "identity_unavailable",
+        "account_required",
+        "invalid_request",
+        "matchmaking_unavailable",
+        "access_denied",
+        "wrong_password",
+        "lobby_full",
+        "lobby_unavailable",
+    ];
+    const REQUIRED_MATCH_EVENT_PROPS = new Set([
+        "matchmaking_joined",
+        "matchmaking_cancelled",
+        "lobby_joined",
+        "lobby_join_failed",
+        "match_started_client",
+        "match_ended_client",
+        "match_exit",
+    ]);
 
     function exactKeys(value: unknown, keys: string[]): boolean {
         if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -176,6 +200,51 @@
         ) {
             return { route: props.route };
         }
+        if (
+            ["matchmaking_joined", "matchmaking_cancelled", "lobby_joined"].includes(name) &&
+            exactKeys(props, ["mode", "wait_bucket"]) &&
+            isOneOf(props.mode, MATCH_MODES) &&
+            isOneOf(props.wait_bucket, WAIT_BUCKETS)
+        ) {
+            return { mode: props.mode, wait_bucket: props.wait_bucket };
+        }
+        if (
+            name === "lobby_join_failed" &&
+            exactKeys(props, ["mode", "wait_bucket", "reason_category"]) &&
+            isOneOf(props.mode, MATCH_MODES) &&
+            isOneOf(props.wait_bucket, WAIT_BUCKETS) &&
+            isOneOf(props.reason_category, JOIN_FAILURES)
+        ) {
+            return {
+                mode: props.mode,
+                wait_bucket: props.wait_bucket,
+                reason_category: props.reason_category,
+            };
+        }
+        if (
+            name === "match_started_client" &&
+            exactKeys(props, ["mode"]) &&
+            isOneOf(props.mode, MATCH_MODES)
+        ) {
+            return { mode: props.mode };
+        }
+        if (
+            name === "match_ended_client" &&
+            exactKeys(props, ["mode", "outcome", "duration_bucket"]) &&
+            isOneOf(props.mode, MATCH_MODES) &&
+            isOneOf(props.outcome, ["win", "loss"]) &&
+            isOneOf(props.duration_bucket, MATCH_DURATION_BUCKETS)
+        ) {
+            return { mode: props.mode, outcome: props.outcome, duration_bucket: props.duration_bucket };
+        }
+        if (
+            name === "match_exit" &&
+            exactKeys(props, ["mode", "duration_bucket"]) &&
+            isOneOf(props.mode, MATCH_MODES) &&
+            isOneOf(props.duration_bucket, MATCH_DURATION_BUCKETS)
+        ) {
+            return { mode: props.mode, duration_bucket: props.duration_bucket };
+        }
         return null;
     }
 
@@ -202,7 +271,15 @@
                 props = Object.assign({}, props, context);
             }
         }
-        return { name: event.name, props: safeProps(event.name, props) };
+        const safe = safeProps(event.name, props);
+        if (
+            REQUIRED_MATCH_EVENT_PROPS.has(event.name) &&
+            props != null &&
+            safe == null
+        ) {
+            return null;
+        }
+        return { name: event.name, props: safe };
     }
 
     function pokiMeasure(event: { name: string; props: EventProps | null }) {
@@ -240,6 +317,9 @@
             ];
         } else if (event.name === "boot_route_decision" && event.props) {
             mapped = ["boot", "route", String(event.props.route)];
+        }
+        if (event.name === "match_ended_client" && event.props) {
+            mapped = ["match", "round", String(event.props.outcome || "complete")];
         }
         if (mapped && typeof window.SOW_pokiMeasure === "function") {
             window.SOW_pokiMeasure(mapped[0], mapped[1], mapped[2]);

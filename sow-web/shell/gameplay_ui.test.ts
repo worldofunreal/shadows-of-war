@@ -1135,15 +1135,13 @@ test("first Expand waits before camera focus while its hand and objective update
 
     assert.equal(harness.machine.view().step.id, "boudica_first_expansion");
     assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 0);
-    assert.ok(harness.timers.some((timer) => timer.delay === 3250));
+    assert.ok(harness.timers.some((timer) => timer.delay === 0));
     assert.deepEqual(
         [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
         [40, 60],
-        "the hand remains visible on the current map while the camera waits",
+        "the hand remains visible on the current map while the camera timer is queued",
     );
 
-    harness.advanceTimers(3249);
-    assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 0);
     harness.advanceTimers(1);
     const focus = harness.calls.filter((call) => call.type === "focus_world");
     assert.equal(focus.length, 1);
@@ -1174,11 +1172,9 @@ test("first Expand waits before camera focus while its hand and objective update
         "the hand moves to Stonea as soon as the 250-tile objective completes",
     );
     assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 1);
-    harness.advanceTimers(3249);
-    assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 1);
     harness.advanceTimers(1);
     const contactFocus = harness.calls.filter((call) => call.type === "focus_world");
-    assert.equal(contactFocus.length, 2, "a new objective gets its own camera delay");
+    assert.equal(contactFocus.length, 2, "a new objective schedules its own camera focus");
     assert.deepEqual([contactFocus[1].x, contactFocus[1].y], [24.5, 39.5]);
 });
 
@@ -1228,7 +1224,7 @@ test("a visible Expand target cancels its pending camera move", async () => {
     hud.tutorial.expand = { x: 202, y: 412, tile_idx: 4242 };
     harness.update();
     assert.deepEqual([harness.renderContext.anchor.x, harness.renderContext.anchor.y], [202, 412]);
-    harness.advanceTimers(3250);
+    harness.advanceTimers(1);
     assert.equal(
         harness.calls.filter((call) => call.type === "focus_world").length,
         0,
@@ -1239,7 +1235,6 @@ test("a visible Expand target cancels its pending camera move", async () => {
     harness.update();
     assert.equal(harness.machine.view().step.id, "boudica_first_contact");
     assert.deepEqual([harness.renderContext.anchor.x, harness.renderContext.anchor.y], [244, 390]);
-    harness.advanceTimers(3249);
     assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 0);
     harness.advanceTimers(1);
     const focus = harness.calls.filter((call) => call.type === "focus_world");
@@ -1288,21 +1283,18 @@ test("tutorial emotes play before a delayed scene camera shot", async () => {
     });
     await harness.start();
 
-    const emoteIndex = harness.calls.findIndex((call) => call.type === "tutorial_emote");
-    assert.ok(emoteIndex >= 0, "the scene emote is not waiting on the camera");
-    assert.equal(
-        harness.calls.some((call) => call.type === "focus_world"),
-        false,
-    );
-    harness.advanceTimers(3249);
+    assert.equal(harness.machine.view().exchange_phase, "dialogue");
     assert.equal(
         harness.calls.some((call) => call.type === "focus_world"),
         false,
     );
     harness.advanceTimers(1);
-
     const focusIndex = harness.calls.findIndex((call) => call.type === "focus_world");
-    assert.ok(focusIndex > emoteIndex, "the camera starts only after the emote is shown");
+    assert.ok(focusIndex >= 0, "the scene camera shot runs without waiting on an emote");
+    assert.equal(harness.machine.advance(null, harness.machine.view().step.id), true);
+    harness.update();
+    const emoteIndex = harness.calls.findIndex((call) => call.type === "tutorial_emote");
+    assert.ok(emoteIndex > focusIndex, "the trailing emote plays in the background as Home becomes active");
 });
 
 test("Trinovantes aid guides radial opening, Transfer, and the confirmed delivery separately", async () => {

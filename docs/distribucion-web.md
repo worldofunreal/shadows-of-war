@@ -12,7 +12,7 @@ Auditoría del 2 de noviembre de 2026; paquete Poki reconstruido a las 21:12. Lo
 - **Auditoría del empaquetador:** `copy_poki_assets()` copia el árbol runtime y valida inventario y hashes. `package_poki()` arma y valida en un directorio temporal, y solo sustituye `dist/poki` si el bundle pasa todos los verificadores; una falla no deja un paquete parcial con nombre de subida. La ejecución actual ejercitó ese flujo completo.
 - **Poki no publica un máximo numérico total** en sus requisitos revisados. El tamaño por sí solo no demuestra aprobación ni rechazo; falta revisar la subida con Poki Inspector y medir la descarga que presenta esa herramienta. La carpeta, el ZIP y los bytes que el jugador descarga al inicio son mediciones distintas.
 - **CrazyGames:** su tope de paquete es 250 MB y 1,500 archivos; el máximo inicial es 50 MB hasta `Gameplay start` (20 MB para optar a portada móvil). Eso mide transferencia hasta que el juego ya es jugable, no el ZIP que se sube. CrazyGames sirve por su CDN los archivos del Developer Portal. Fuentes: [límites técnicos](https://docs.crazygames.com/requirements/technical/) y [CDN del portal](https://docs.crazygames.com/faq/). El paquete Poki de 1,532 archivos no sirve para inferir si el paquete CrazyGames cumple su límite de 1,500.
-- **Paquete CrazyGames:** el `dist/crazygames` existente (12,389,925 B / 35 archivos) es viejo y no sirve como medida actual. `package_cg()` solo se ejecuta desde `build_web()` en `sow-dist/src/prod.rs`, dentro de `./sow p`; `./sow help` no ofrece un empaquetado CG local sin despliegue. Por eso los ~86 MB / 1,464 archivos de esta guía son una proyección antigua, no un candidato verificado actual.
+- **Paquete CrazyGames:** el `./sow p` del 10 nov. (16:03) dejó `dist/crazygames` en **101,116,147 B, 401 archivos**: líderes 49.0 MB (1600×900 / 900×1600), avatares 17.3 MB en 19 hojas q90, campaña 11.1 MB (WebM + MP4), atlas de habilidades 3.2 MB sin pérdida y WASM plano 9.1 MB. Desde entonces el empaquetador publica líderes a 1280×720 / 720×1280 (`cg_leader_*`), hojas de avatar a q85, atlas de habilidades lossy q75 (`ability_atlas`) y campaña solo MP4; el estimado es ~74 MB. `verify_cg_layout` falla si el paquete pasa de `CG_BUNDLE_BYTE_BUDGET` (85 MB). `package_cg()` solo corre dentro de `./sow p`; falta medir el siguiente.
 - **Subida:** usa `dist/poki`, que contiene `index.html` y pasó el verificador de layout. La configuración de `@poki/cli` está en `sow-dist/poki.json`; ejecuta el uploader desde `sow-dist`, donde `../dist/poki` resuelve al paquete. No subas `dist/`, que además incluye cachés y artefactos de compilación.
 
 `./sow poki` genera el paquete local, sin desplegar ni subir. El catálogo de héroes exige un icono de habilidad por héroe. Para completar el build se registró el icono provisional de Abd como recorte de su propia hoja Calm; está marcado como provisional en `assets/SOURCES.toml` y debe reemplazarse cuando llegue el arte final. CrazyGames también necesita el icono para construir su atlas.
@@ -46,14 +46,14 @@ El WASM sí es una oportunidad de **transferencia**: el `.wasm.br` que ya genera
 | --- | --- |
 | Web propia | `./sow p` publica los assets en el CDN de SOW y la web los pide desde `/assets` y `/maps`. |
 | Poki | `package_poki()` copia los assets runtime y mapas a `dist/poki`; el HTML usa `./assets` y `./maps`. Poki exige assets en el build, así que no se apuntan al CDN de SOW. |
-| CrazyGames | `package_cg()` empaqueta assets runtime, fuentes y mapas; las rutas relativas `./assets` y `./maps` hacen que CrazyGames los sirva por su CDN. Agrupa los iconos de habilidad en un atlas para respetar el límite de archivos. |
+| CrazyGames | `package_cg()` empaqueta assets runtime, fuentes y mapas; las rutas relativas `./assets` y `./maps` hacen que CrazyGames los sirva por su CDN. Agrupa iconos de habilidad y avatares en hojas para respetar el límite de archivos; publica líderes a 1280×720 y campaña solo en MP4. |
 | Jest | `package_jest()` empaqueta assets runtime y mapas en `dist/jest.zip`; sirve como paquete autocontenido de prueba. |
 
 **Estrategia de CDN:** para CrazyGames, sí: subir los assets al portal y dejar que su CDN los entregue ahorra ancho de banda estático de SOW; no reduce los bytes que descarga el jugador. Para Poki, incluirlos en el build es requisito y evita pedirlos a nuestro dominio; la documentación pública revisada no especifica qué CDN interno usa Poki. En ambos portales, los endpoints de API y multiplayer no son assets: siguen apuntando a SOW y requieren la aprobación/integración aplicable del portal. No se debe usar el CDN de SOW como atajo para saltarse la política de assets externos de Poki.
 
-El paquete CrazyGames incluye assets runtime, fuentes y mapas. Esto reduce el egress estático de SOW, no el volumen total que descarga cada jugador. El evento `Gameplay start` debe coincidir con el primer estado jugable. La proyección de 86 MB / 1,464 archivos que aparece abajo es de un artefacto anterior; no prueba los límites del paquete actual ni la descarga inicial. Falta medir el tráfico real hasta ese evento.
+El paquete CrazyGames incluye assets runtime, fuentes y mapas. Esto reduce el egress estático de SOW, no el volumen total que descarga cada jugador. El evento `Gameplay start` debe coincidir con el primer estado jugable. Falta medir el tráfico real hasta ese evento.
 
-La proyección CrazyGames con assets, fuentes y mapas rondaba 85.98 MB y 1,543 archivos con iconos individuales. El atlas de iconos elimina 80 archivos con los 81 iconos actuales y deja un candidato anterior de unos **86 MB y 1,464 archivos**, 36 archivos debajo del tope. Sigue siendo una proyección con HTML/WASM anteriores, no un build final de CrazyGames; refrescarla requiere un comando de empaquetado local o el siguiente `./sow p` autorizado. El preload del loader usa `./assets` servido por CrazyGames; el verificador exige imágenes locales y rechaza URLs `shadowsofwar.io/assets/`. Falta medir el tráfico de red real antes de `Gameplay start`.
+Las caras de la lista de héroes se piden al acercarse a la vista (`watchAvatarMarkup`, `IntersectionObserver`), así que la lista baja solo las hojas visibles. El preload del loader usa `./assets` servido por CrazyGames; el verificador exige imágenes locales y rechaza URLs `shadowsofwar.io/assets/`. Falta medir el tráfico de red real antes de `Gameplay start`.
 
 ## Inventario medido
 
@@ -87,10 +87,9 @@ La proyección CrazyGames con assets, fuentes y mapas rondaba 85.98 MB y 1,543 a
 | ZIP de ese paquete en caché, DEFLATE 9 | — | 83,486,770 B / 79.62 MiB | Medido localmente; exacto para la caché vieja, no para el build actual. |
 | `dist/poki` | 1,532 | 64,959,867 B / 61.95 MiB | Paquete completo fresco; contiene `index.html` y pasó `verify_poki_layout`. |
 | ZIP local DEFLATE 9 de `dist/poki` | 1,532 | 58,024,838 B / 55.34 MiB | Archivo de comparación local; el tamaño exacto que acepte el portal depende del método de subida. |
-| `dist/crazygames` | 35 | 12,389,925 B / 11.82 MiB | Artefacto generado con la configuración anterior; no representa el nuevo empaquetador. |
+| `dist/crazygames` (10 nov., 16:03) | 401 | 101,116,147 B / 96.43 MiB | Antes de los perfiles CG de líderes, atlas lossy y campaña solo MP4. |
 | Candidato Poki (assets transformados + bundle anterior) | 1,531 | 65,327,622 B / 62.30 MiB | Proyección histórica; el build actual la reemplaza. |
 | ZIP Poki DEFLATE 9 del candidato | — | 58,478,962 B / 55.77 MiB | Medición histórica, reemplazada por el ZIP fresco de arriba. |
-| Candidato CrazyGames con atlas y mapas | 1,464 | ~86 MB | Proyección histórica con HTML/WASM anteriores y el icono provisional de Abd; deja 36 archivos de margen, pero no verifica el paquete actual. |
 
 El paquete Poki actual conserva 1,446 archivos de assets: `gameplay` aporta 30,043,478 B, `shell` 14,212,810 B después de recomprimir las escenas de líderes, campaña 5,564,015 B y guías 1,244 B. Suma 49,821,547 B de assets. La carpeta completa incluye 8,597,275 B de WASM, 1,774,548 B de HTML, 2,600,395 B de mapas y los demás archivos, para 64,959,867 B y 1,532 archivos. Su ZIP DEFLATE 9 mide 58,024,838 B. La proyección anterior quedó 367,755 B por encima del build real; queda reemplazada por esta medición.
 
@@ -124,10 +123,10 @@ CrazyGames permite 250 MB totales y 1,500 archivos. Con el SDK, mide el máximo 
 | Publicar mapas binarios con Brotli | 22 mapas: 42,788,971 B `.bin` → 2,536,902 B `.br`; ahorro de 40,252,069 B (38.39 MiB, 94.1%). |
 | Reducir miniaturas de mapas a 256×144 q70 para portal y tarjetas web; el landing usa `preview.webp` a 512×288 | Portal, 22 WebP: 2,340,666 B → 61,990 B; ahorro de 2,278,676 B (2.17 MiB, 97.4%). Web: falta medir el paquete. |
 | No entregar fuentes Noto como ficheros web | 20,493,774 B de materiales fuente → 152,570 B de ficheros de fuente/estilo en el webroot. El MSDF y el TTF árabe van dentro del WASM; la diferencia no debe restarse otra vez del paquete total. |
-| Omitir el WebM duplicado de campaña en Poki | 5,563,674 B menos; quedan MP4, poster y triggers. |
+| Omitir el WebM duplicado de campaña en Poki y CrazyGames | ~5.6 MB menos por portal; quedan MP4, poster y triggers. |
 | Subir assets, fuentes y mapas a CrazyGames para que los sirva desde su CDN | Reduce egreso estático de SOW; no reduce lo que descarga el jugador. |
 | Dejar de publicar las 81 láminas 2×2 de héroes; el runtime usa los recortes | 3,649,900 B (3.48 MiB) y 81 archivos menos según el staging del 2 nov.; falta volver a medir el paquete. |
-| Atlas de habilidades para CrazyGames | 80 archivos menos con los 81 iconos actuales. Ahorro de bytes pequeño. |
+| Atlas de habilidades para CrazyGames | Un archivo en lugar de uno por héroe. Sin pérdida pesaba 3.2 MB; ahora es lossy q75, como los iconos sueltos de Poki. |
 
 ### Ahorro incremental de tamaño del paquete
 
@@ -199,5 +198,5 @@ Los tests siguientes son resultados registrados del trabajo previo; no se reejec
 
 1. Revisar `dist/poki` con Poki Inspector y medir peso/tiempo de carga en el portal. El build local no prueba aprobación de API/multiplayer.
 2. Aceptar visualmente los nameplates, las cuatro expresiones, los avatares del menú radial y la calidad de compresión. El icono de Abd aún es provisional.
-3. Conseguir un empaquetado local/no-deploy de CrazyGames o medirlo en el siguiente `./sow p` autorizado; confirmar mapas/atlas, límite de 1,500 archivos y 250 MB, y ZIP real.
+3. Medir `dist/crazygames` en el siguiente `./sow p` y ajustar `CG_BUNDLE_BYTE_BUDGET` a esa medida más un 10%.
 4. Medir la descarga de red antes de `Gameplay start` en escritorio y móvil sin adelantar ese evento mientras haya pantalla de carga.

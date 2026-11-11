@@ -535,7 +535,14 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
     function cinematicVariants(source: string) {
         const dot = source.lastIndexOf(".");
         const stem = dot > 0 ? source.slice(0, dot) : source;
-        return { stem, poster: stem + ".poster.webp" };
+        const assetPrefix = "/assets/";
+        const resolve = (path: string) =>
+            path.startsWith(assetPrefix) ? options.asset(path.slice(assetPrefix.length)) : path;
+        return {
+            webm: resolve(stem + ".webm"),
+            mp4: resolve(stem + ".mp4"),
+            poster: resolve(stem + ".poster.webp"),
+        };
     }
     function clearCinematicMedia() {
         cinematicMediaArmed = false;
@@ -552,9 +559,10 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
     function attachCinematicMedia(source: string) {
         const variants = cinematicVariants(source);
         if (cinematicMediaArmed && cinematicVideo.getAttribute("poster") === variants.poster) return;
+        // Portal packages ship the MP4 rendition only (sow-dist copy_campaign_mp4_only).
         const candidates = [
-            { src: variants.stem + ".webm", type: 'video/webm; codecs="vp9,opus"' },
-            { src: variants.stem + ".mp4", type: 'video/mp4; codecs="avc1.640028,mp4a.40.2"' },
+            ...(host.SOW_PORTAL ? [] : [{ src: variants.webm, type: 'video/webm; codecs="vp9,opus"' }]),
+            { src: variants.mp4, type: 'video/mp4; codecs="avc1.640028,mp4a.40.2"' },
         ];
         const elements = candidates.map((candidate) => {
             const element = doc.createElement("source");

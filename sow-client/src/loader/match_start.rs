@@ -143,6 +143,11 @@ impl SowApp {
             .as_millis() as u64;
         let leader = campaign.advisor();
         self.ui.tutorial_campaign = campaign;
+        self.portal_match_mode = if campaign == crate::campaign::CampaignId::Boudica {
+            "tutorial"
+        } else {
+            "campaign"
+        };
         crate::campaign::log_plan_for(
             campaign.menu_title(),
             campaign.menu_subtitle(),
@@ -173,6 +178,9 @@ impl SowApp {
     }
 
     pub(crate) fn start_offline_match(&mut self, mut config: GameConfig, tutorial: bool) {
+        if !tutorial {
+            self.portal_match_mode = "single_player";
+        }
         let leader = if tutorial {
             config.player_leader
         } else if self.ui.app.main_menu_state.prefer_random_leader {
@@ -234,10 +242,6 @@ impl SowApp {
                 "tutorial: {} started (map={})",
                 self.ui.tutorial_campaign.episode_id(),
                 config.map_name
-            );
-            crate::store_portals::track_product_event_with(
-                "tutorial_start",
-                &serde_json::json!({ "episode_id": self.ui.tutorial_campaign.episode_id() }),
             );
         }
 

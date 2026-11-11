@@ -416,7 +416,29 @@ impl SowApp {
                     }
                     ServerMessage::JoinFailed(fail) => {
                         self.ui.app.main_menu_state.ranked_matchup = None;
-                        crate::store_portals::track_product_event("lobby_join_failed");
+                        let reason_category = match fail.reason.as_str() {
+                            "VERSION_MISMATCH" => "version_mismatch",
+                            "IDENTITY_OR_LEADER_UNAVAILABLE" => "identity_unavailable",
+                            "RANKED_ACCOUNT_REQUIRED" => "account_required",
+                            "INVALID_RANKED_REQUEST" => "invalid_request",
+                            "RANKED_QUEUE_UNAVAILABLE" | "RANKED_MATCH_PREPARATION_FAILED" => {
+                                "matchmaking_unavailable"
+                            }
+                            "BANNED" => "access_denied",
+                            "Wrong password" => "wrong_password",
+                            "Lobby is full" => "lobby_full",
+                            "Unsupported custom game mode"
+                            | "Cannot host private room with a target lobby" => "invalid_request",
+                            _ => "lobby_unavailable",
+                        };
+                        crate::store_portals::track_product_event_with(
+                            "lobby_join_failed",
+                            &serde_json::json!({
+                                "mode": self.portal_match_mode,
+                                "wait_bucket": crate::store_portals::wait_bucket(self.portal_join_started_at.take()),
+                                "reason_category": reason_category,
+                            }),
+                        );
                         log::warn!("[JOIN] Failed: {}", fail.reason);
                         crate::store_portals::left_room();
                         let version_mismatch = fail.reason == "VERSION_MISMATCH";
@@ -448,10 +470,20 @@ impl SowApp {
                     ServerMessage::JoinAck(ack) => {
                         self.ui.app.main_menu_state.ranked_search_active = false;
                         self.ui.app.main_menu_state.ranked_search_elapsed_secs = 0;
+                        let wait_bucket = crate::store_portals::wait_bucket(
+                            self.portal_join_started_at.take(),
+                        );
+                        let mode = self.portal_match_mode;
                         if self.join_matchmaking {
-                            crate::store_portals::track_product_event("matchmaking_joined");
+                            crate::store_portals::track_product_event_with(
+                                "matchmaking_joined",
+                                &serde_json::json!({ "mode": mode, "wait_bucket": wait_bucket }),
+                            );
                         }
-                        crate::store_portals::track_product_event("lobby_joined");
+                        crate::store_portals::track_product_event_with(
+                            "lobby_joined",
+                            &serde_json::json!({ "mode": mode, "wait_bucket": wait_bucket }),
+                        );
                         log::info!(
                             "[LOBBY] Joined lobby {} as player {} (map: {})",
                             ack.lobby_id,

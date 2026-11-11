@@ -6,6 +6,7 @@ import { vm } from "./typescript-test-support.ts";
 
 const source = fs.readFileSync(path.join(__dirname, "experience_events.ts"), "utf8");
 const jestBridgeSource = fs.readFileSync(path.join(__dirname, "sdk/jest_portals.ts"), "utf8");
+const pokiBridgeSource = fs.readFileSync(path.join(__dirname, "sdk/poki_portals.ts"), "utf8");
 const siteAnalyticsSource = fs.readFileSync(path.join(__dirname, "../site/analytics.ts"), "utf8");
 const backendEventsSource = fs.readFileSync(path.join(__dirname, "../../sow-data/src/events.rs"), "utf8");
 
@@ -227,6 +228,35 @@ test("loading stages and failure outcomes share stable portal mappings", () => {
     ]);
 });
 
+test("match funnel accepts only closed mode, outcome, wait, duration and failure categories", () => {
+    const { window, calls } = createRuntime("poki");
+    window.SOW_trackExperienceEvent({
+        name: "match_ended_client",
+        props: { mode: "ranked_1v1", outcome: "win", duration_bucket: "5_15m" },
+    });
+    window.SOW_trackExperienceEvent({
+        name: "lobby_join_failed",
+        props: {
+            mode: "custom",
+            wait_bucket: "15_60s",
+            reason_category: "wrong_password",
+        },
+    });
+    window.SOW_trackExperienceEvent({
+        name: "match_ended_client",
+        props: {
+            mode: "ranked_1v1",
+            outcome: "win",
+            duration_bucket: "5_15m",
+            player_id: 42,
+        },
+    });
+    assert.deepEqual(calls.poki, [
+        ["match", "round", "win"],
+        ["lobby", "join", "fail"],
+    ]);
+});
+
 test("Jest SDK adapter captures the same event and safely ignores a missing SDK", () => {
     const captured = [];
     const window = {
@@ -249,4 +279,136 @@ test("Jest SDK adapter captures the same event and safely ignores a missing SDK"
 
     window.JestSDK = null;
     assert.doesNotThrow(() => window.SOW_portalCaptureExperienceEvent({ name: "shell_loaded" }));
+});
+
+test("Jest captures only the official entry-source type and marks one first milestone", async () => {
+    const captured = [];
+    let milestones = 0;
+    const window = {
+        JestSDK: {
+            init: () => Promise.resolve(),
+            captureEvent: (name, props) => captured.push([name, props]),
+            getEntrySource: () => ({ type: "jest_ad", campaign: { id: "private", name: "private" } }),
+            markFirstMilestone: () => milestones++,
+        },
+        localStorage: { getItem: () => null, setItem: () => {} },
+    };
+    vm.runInNewContext(jestBridgeSource, { window, console, Promise, Set, Object });
+    await window.SOW_initPortalSdk();
+    window.SOW_portalCaptureExperienceEvent({ name: "match_started_client", props: { mode: "ranked_1v1" } });
+    window.SOW_portalCaptureExperienceEvent({
+        name: "match_ended_client",
+        props: { mode: "ranked_1v1", outcome: "win", duration_bucket: "5_15m" },
+    });
+    window.SOW_portalCaptureExperienceEvent({
+        name: "match_ended_client",
+        props: { mode: "ranked_1v1", outcome: "loss", duration_bucket: "1_5m" },
+    });
+    assert.equal(captured.length, 3);
+    assert.equal(captured[0][1].entry_source, "jest_ad");
+    assert.equal("campaign" in captured[0][1], false);
+    assert.equal(milestones, 1);
+});
+
+test("Jest guest progress is keyed by stable playerId and legacy progress migrates once", async () => {
+    const values = new Map([["sow_player_progress", "legacy-progress"]]);
+    const localStorage = {
+        getItem: (key) => values.get(key) || null,
+        setItem: (key, value) => values.set(key, value),
+        removeItem: (key) => values.delete(key),
+    };
+    const makeWindow = (playerId) => ({
+        JestSDK: {
+            init: () => Promise.resolve(),
+            getPlayer: () => ({ playerId, registered: false }),
+        },
+        localStorage,
+    });
+    const initialize = async (playerId) => {
+        const window = makeWindow(playerId);
+        vm.runInNewContext(jestBridgeSource, { window, console, Promise, Set, Object });
+        await window.SOW_initPortalSdk();
+        return window;
+    };
+
+    const guestA = await initialize("guest/a");
+    assert.equal(guestA.SOW_PORTAL_PROGRESS_JSON, "legacy-progress");
+    guestA.SOW_portalSaveProgress("guest-a-progress");
+    assert.equal(values.get("sow_player_progress:jest:guest%2Fa"), "guest-a-progress");
+    assert.equal(values.has("sow_player_progress"), false);
+
+    const guestB = await initialize("guest-b");
+    assert.equal(guestB.SOW_PORTAL_PROGRESS_JSON, null);
+    guestB.SOW_portalSaveProgress("guest-b-progress");
+    assert.equal(values.get("sow_player_progress:jest:guest-b"), "guest-b-progress");
+    assert.equal((await initialize("guest/a")).SOW_PORTAL_PROGRESS_JSON, "guest-a-progress");
+});
+
+test("Jest never prompts a registered player to log in again", async () => {
+    let loginCalls = 0;
+    let identityChanges = 0;
+    const player = { playerId: "guest", registered: false };
+    const window = {
+        JestSDK: {
+            init: () => Promise.resolve(),
+            getPlayer: () => player,
+            login: () => {
+                loginCalls++;
+                player.playerId = "registered-player";
+                player.registered = true;
+                return Promise.resolve();
+            },
+        },
+        localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+        Event: function (type) {
+            this.type = type;
+        },
+        dispatchEvent: (event) => {
+            if (event.type === "sow:platform-identity-changed") identityChanges++;
+        },
+    };
+    vm.runInNewContext(jestBridgeSource, { window, console, Promise, Set, Object });
+    await window.SOW_initPortalSdk();
+    await window.SOW_jestLogin();
+    await window.SOW_jestLogin();
+    assert.equal(loginCalls, 1);
+    assert.equal(identityChanges, 1);
+    assert.equal(window.SOW_AUTH_CHANGED, true);
+    window.SOW_portalClearAuthChanged();
+    assert.equal(window.SOW_AUTH_CHANGED, false);
+});
+
+test("Jest schedules the recommended same-day and D1-D7 sequence only for registered players", async () => {
+    const scheduled = [];
+    const window = {
+        JestSDK: {
+            init: () => Promise.resolve(),
+            getPlayer: () => ({ registered: true }),
+            notifications: { scheduleNotification: (item) => scheduled.push(item) },
+        },
+        localStorage: { getItem: () => null, setItem: () => {} },
+    };
+    vm.runInNewContext(jestBridgeSource, { window, console, Promise, Set, Object });
+    await window.SOW_initPortalSdk();
+    assert.deepEqual(scheduled.map((item) => item.scheduledInDays), [0, 1, 2, 3, 4, 5, 6, 7]);
+    assert.equal(scheduled.every((item) => item.body.length <= 100), true);
+    assert.equal(scheduled.every((item) => item.ctaText === "Play now"), true);
+    assert.equal(scheduled.some((item) => /daily reward|win rate|tournament/i.test(item.body)), false);
+});
+
+test("Poki suppresses measure calls while a commercial break is active", async () => {
+    let measures = 0;
+    const document = { addEventListener: () => {} };
+    const window = {
+        PokiSDK: { init: () => Promise.resolve(), measure: () => measures++ },
+        localStorage: { getItem: () => null },
+    };
+    vm.runInNewContext(pokiBridgeSource, { window, document, console, Promise, Set, String });
+    await window.SOW_initPortalSdk();
+    window.SOW_adPlaying = true;
+    window.SOW_pokiMeasure("match", "round", "win");
+    assert.equal(measures, 0);
+    window.SOW_adPlaying = false;
+    window.SOW_pokiMeasure("match", "round", "win");
+    assert.equal(measures, 1);
 });

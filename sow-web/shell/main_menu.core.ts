@@ -323,7 +323,7 @@ export function abilityIconMarkup(
     imageAttributes = "",
     trackHeroSelection = false,
 ): string {
-    const slug = String(artSlug || "");
+    const slug = leaderArtSlug(artSlug);
     if (!/^[a-z0-9_]+$/.test(slug)) return "";
     const atlas = window.SOW_ABILITY_ICON_ATLAS;
     const index = atlas && atlas.icons[slug];
@@ -468,7 +468,23 @@ export function leaderById(id: unknown): MenuLeader {
     );
 }
 
-export function leaderArtSlug(leader: MenuLeader | null | undefined): string {
+export function leaderArtSlug(leader: MenuLeader | string | null | undefined): string {
+    if (typeof leader === "string") {
+        const normalize = function (value: unknown) {
+            return String(value || "")
+                .replace(/[^a-z0-9]/gi, "")
+                .toLowerCase();
+        };
+        const wanted = normalize(leader);
+        const leaders: MenuLeader[] =
+            menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+        const found = leaders.find(function (candidate) {
+            return [candidate.id, candidate.slug, candidate.art_slug].some(
+                (value) => normalize(value) === wanted,
+            );
+        });
+        return String((found && (found.art_slug || found.slug)) || leader);
+    }
     return String((leader && (leader.art_slug || leader.slug)) || "");
 }
 

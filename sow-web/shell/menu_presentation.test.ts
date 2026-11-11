@@ -14,6 +14,7 @@ if (leaderArtSlugStart < 0 || leaderArtSlugEnd <= leaderArtSlugStart)
 const leaderArtSlug = vm.runInNewContext(
     coreSource.slice(leaderArtSlugStart, leaderArtSlugEnd + 2).replace(/\bexport\s+/g, "") +
         "\nleaderArtSlug;",
+    { menuUi: { state: { leaders: [] } } },
 );
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf8");
 const settingsSource = fs.readFileSync(path.join(shell, "main_menu.settings.ts"), "utf8");
@@ -1810,9 +1811,9 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
     assert.deepEqual(episodeIds, ["boudica", "six_sky_ep1", "six_sky_ep2", "six_sky_ep3"]);
     const expected = {
         boudica: ["eastanglia", "boudica"],
-        six_sky_ep1: ["northamerica", "lady_six_sky"],
-        six_sky_ep2: ["northamerica", "lady_six_sky"],
-        six_sky_ep3: ["northamerica", "lady_six_sky"],
+        six_sky_ep1: ["northamerica", "six_sky"],
+        six_sky_ep2: ["northamerica", "six_sky"],
+        six_sky_ep3: ["northamerica", "six_sky"],
     };
     const campaignDir = path.join(shell, "../../assets/campaign");
     const cinematicEpisodes = [];
@@ -2738,4 +2739,38 @@ test("main navigation keeps a single outer frame across battle, profile, heroes 
         shellSource.indexOf("export function activeScreenPanel("),
     );
     assert.doesNotMatch(chrome, /shell\.className|screenShellClass/);
+});
+
+test("Jest settings only prompt guests to register", () => {
+    const start = jestSource.indexOf("function renderAccountControl()");
+    const end = jestSource.indexOf("\n}", start);
+    assert.ok(start >= 0 && end > start);
+    const renderAccountControl = vm.runInNewContext(
+        jestSource.slice(start, end + 2) + "\nrenderAccountControl;",
+        {
+            window: {
+                SOW_PLATFORM_IDENTITY: {
+                    provider: "jest",
+                    registered: true,
+                    displayName: "Test player",
+                },
+            },
+            SOW_t: (key) => key,
+            esc: String,
+        },
+    );
+    const registered = renderAccountControl();
+    assert.match(registered, /Test player/);
+    assert.doesNotMatch(registered, /jest_login/);
+
+    const guest = vm.runInNewContext(
+        jestSource.slice(start, end + 2) + "\nrenderAccountControl;",
+        {
+            window: { SOW_PLATFORM_IDENTITY: { provider: "jest", registered: false } },
+            SOW_t: (key) => key,
+            esc: String,
+        },
+    );
+    assert.match(guest(), /menu\.anonymous/);
+    assert.match(guest(), /jest_login/);
 });

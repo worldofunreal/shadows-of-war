@@ -1571,6 +1571,7 @@ impl SowApp {
     }
 
     fn open_transfer(&mut self, target: u16, mode: TransferMode) {
+        self.ui.app.hud_state.market_preview = None;
         self.ui.app.hud_state.show_ask_panel = Some(target);
         self.ui.app.hud_state.transfer_mode = Some(mode);
         self.ui.app.hud_state.transfer_confirm_pending = false;

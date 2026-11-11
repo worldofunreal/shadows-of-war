@@ -126,10 +126,23 @@ export function create(
             !["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation || "")
         );
     }
+    function remainingExchangeIsEmoteOnly(step?: CampaignStep) {
+        return Boolean(
+            exchange &&
+                exchange.phase !== "dialogue" &&
+                (!step || exchange.ownerStepId === step.id) &&
+                !exchange.lines
+                    .slice(exchange.index)
+                    .some((line: CampaignRecord) => line.presentation === "dialogue"),
+        );
+    }
     function enter(key: string) {
         if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
         const currentStep = byId.get(state.id);
-        if (currentStep && backgroundExchangeScene(currentStep)) {
+        if (
+            currentStep &&
+            (backgroundExchangeScene(currentStep) || remainingExchangeIsEmoteOnly(currentStep))
+        ) {
             // Emote-only handoff scenes carry their lines while the next objective becomes active.
         } else if (exchange && exchange.phase !== "dialogue") {
             if (
@@ -662,6 +675,9 @@ export function create(
                           show_title: exchangeLine.show_title,
                           body_key: exchangeLine.body_key || exchangeLine.emote_text_key,
                           presentation: "dialogue",
+                          ...(exchange.reactionInstance === null && step!.camera
+                              ? { camera: step!.camera }
+                              : {}),
                       }
                     : null;
             return {
@@ -939,7 +955,7 @@ export function create(
                 return false;
             const delay = Number.isInteger(exchange.lines[exchange.index].delay_ms)
                 ? exchange.lines[exchange.index].delay_ms
-                : EXCHANGE_GAP_MS;
+                : 0;
             if (delay > 0) {
                 exchange.phase = "gap";
                 exchange.until = readClock() + delay;
@@ -1074,7 +1090,14 @@ export function create(
             )
                 return view();
             // Exchange-only scenes move the hand immediately for emotes and after Continue for dialogue.
-            if (exchangeOnlyScene(step!) && (!exchange || backgroundExchangeScene(step!))) {
+            const stepHasQueuedExchange = exchangeQueue.some(
+                (item) => item.ownerStepId === step!.id && item.reactionInstance === null,
+            );
+            if (
+                exchangeOnlyScene(step!) &&
+                !stepHasQueuedExchange &&
+                (!exchange || backgroundExchangeScene(step!) || remainingExchangeIsEmoteOnly(step!))
+            ) {
                 if (!advance(null, step!.id)) break;
                 continue;
             }

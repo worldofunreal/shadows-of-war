@@ -14,6 +14,9 @@ impl SowApp {
     pub(crate) fn reset_progress_session(&mut self) {
         self.progress_match_recorded = false;
         self.progress_session_defeats = crate::player_progress::SessionDefeats::default();
+        self.portal_match_started_at = None;
+        self.portal_join_started_at = None;
+        self.portal_match_mode = "other";
     }
 
     pub(crate) fn maybe_record_match_progress(
@@ -44,7 +47,17 @@ impl SowApp {
         } else {
             winner_id == my_id
         };
-        crate::store_portals::track_product_event("match_ended_client");
+        let outcome = if won { "win" } else { "loss" };
+        let duration_bucket = crate::store_portals::duration_bucket(self.portal_match_started_at);
+        crate::store_portals::gameplay_stop();
+        crate::store_portals::track_product_event_with(
+            "match_ended_client",
+            &serde_json::json!({
+                "mode": self.portal_match_mode,
+                "outcome": outcome,
+                "duration_bucket": duration_bucket,
+            }),
+        );
         let defeats = self.progress_session_defeats;
         let (kills, deaths, assists) = (me.kills, me.deaths, me.assists);
         let server_owned_tutorial = self.progress_account_id.is_some()

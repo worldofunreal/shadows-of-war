@@ -2196,9 +2196,10 @@ function profileAchievementCard(achievement: ProfileAchievement) {
   }
 
   if (heroSlug) {
+    const heroArtSlug = leaderArtSlug(heroSlug);
     badgeIcon =
       "<img " +
-      avatarImageAttribute(asset("gameplay/avatars/" + heroSlug + ".webp")) +
+      avatarImageAttribute(asset("gameplay/avatars/" + heroArtSlug + ".webp")) +
       " alt='' width='36' height='36' class='sow-profile__ach-hero-avatar' loading='lazy' />";
   } else if (category === "battles") {
     badgeIcon =

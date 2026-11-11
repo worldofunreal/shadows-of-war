@@ -1148,6 +1148,13 @@ fn analytics_subject_id(secret: &str, portal: &str, account_id: &str) -> String 
     hex::encode(mac.finalize().into_bytes())
 }
 
+fn pseudonymize_analytics_event(event: &mut sow_data::events::AnalyticsEvent, secret: &str) {
+    if let Some(account_id) = event.account_id.take() {
+        let portal = event.portal.as_deref().unwrap_or("site");
+        event.subject_id = Some(analytics_subject_id(secret, portal, &account_id));
+    }
+}
+
 fn analytics_subject_ids(state: &AppState, account_id: &str) -> Vec<String> {
     ["site", "poki", "crazygames", "jest", "android"]
         .into_iter()
@@ -2343,6 +2350,48 @@ mod analytics_archive_tests {
     }
 }
 
+#[cfg(test)]
+mod analytics_identity_tests {
+    use super::{analytics_subject_id, pseudonymize_analytics_event};
+    use sow_data::events::{AnalyticsEvent, CONSENT_POLICY_VERSION, SCHEMA_VERSION};
+
+    #[test]
+    fn archived_events_keep_only_the_channel_scoped_account_pseudonym() {
+        let account_id = "0123456789abcdef0123456789abcdef";
+        let mut event = AnalyticsEvent {
+            v: SCHEMA_VERSION,
+            event_id: "00000000-0000-4000-8000-000000000001".to_string(),
+            consented: true,
+            consent_version: CONSENT_POLICY_VERSION.to_string(),
+            name: "boot_start".to_string(),
+            ts_ms: 1_700_000_000_000,
+            session_id: "session-test".to_string(),
+            account_id: Some(account_id.to_string()),
+            subject_id: None,
+            portal: Some("site".to_string()),
+            platform: Some("web".to_string()),
+            device_class: None,
+            build: None,
+            locale: None,
+            props: None,
+        };
+
+        pseudonymize_analytics_event(&mut event, "analytics-test-secret");
+
+        let subject_id = event.subject_id.as_deref().unwrap();
+        assert_eq!(event.account_id, None);
+        assert_eq!(
+            subject_id,
+            analytics_subject_id("analytics-test-secret", "site", account_id)
+        );
+        assert_ne!(
+            subject_id,
+            analytics_subject_id("analytics-test-secret", "poki", account_id)
+        );
+        assert!(!serde_json::to_string(&event).unwrap().contains(account_id));
+    }
+}
+
 /// Liveness probe for the pipeline and service supervisor. It deliberately
 /// performs no profile lookup and emits no authentication warning.
 async fn handle_healthz() -> impl IntoResponse {
@@ -2416,14 +2465,7 @@ async fn handle_event(
         {
             continue;
         }
-        if let Some(account_id) = event.account_id.take() {
-            let portal = event.portal.as_deref().unwrap_or("site");
-            event.subject_id = Some(analytics_subject_id(
-                &state.secret_token,
-                portal,
-                &account_id,
-            ));
-        }
+        pseudonymize_analytics_event(&mut event, &state.secret_token);
         accepted_events.push(event);
     }
     if accepted_events.is_empty() {

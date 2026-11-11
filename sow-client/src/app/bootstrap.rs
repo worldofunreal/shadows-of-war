@@ -355,6 +355,9 @@ impl SowApp {
             profile_last_applied_request: 0,
             join_waiting_for_identity: false,
             join_matchmaking: false,
+            portal_join_started_at: None,
+            portal_match_started_at: None,
+            portal_match_mode: "other",
             progress_match_recorded: false,
             progress_session_defeats: crate::player_progress::SessionDefeats::default(),
             #[cfg(target_arch = "wasm32")]

@@ -71,7 +71,7 @@ test("no shell module writes a packed avatar file straight into an image src", (
     assert.deepEqual(offenders, []);
 });
 
-test("data-avatar images are filled with their cropped cell once inserted", async () => {
+test("data-avatar images are filled with their cropped cell once inserted and visible", async () => {
     const globals = globalThis as unknown as Record<string, unknown>;
     const saved = {
         window: globals.window,
@@ -79,6 +79,7 @@ test("data-avatar images are filled with their cropped cell once inserted", asyn
         Element: globals.Element,
         Image: globals.Image,
         MutationObserver: globals.MutationObserver,
+        IntersectionObserver: globals.IntersectionObserver,
     };
     class FakeElement {
         attributes: Record<string, string>;
@@ -118,13 +119,31 @@ test("data-avatar images are filled with their cropped cell once inserted", asyn
         }
         observe() {}
     };
+    let reveal: (entries: unknown[]) => void = () => undefined;
+    const watched: unknown[] = [];
+    globals.IntersectionObserver = class {
+        constructor(callback: (entries: unknown[]) => void) {
+            reveal = callback;
+        }
+        observe(target: unknown) {
+            watched.push(target);
+        }
+        unobserve(target: unknown) {
+            watched.splice(watched.indexOf(target), 1);
+        }
+    };
     try {
         const source = "/assets/gameplay/avatars/expressions/suppiluliuma_fear.webp";
         assert.equal(avatarImageAttribute(source), "data-avatar='" + source + "'");
         const image = new FakeImage({ "data-avatar": source });
         deliver([{ type: "childList", addedNodes: [image] }]);
         await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.equal(image.src, "", "an inserted avatar waits until it nears the viewport");
+        assert.deepEqual(watched, [image]);
+        reveal([{ isIntersecting: true, target: image }]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
         assert.equal(image.src, "data:image/webp;base64,AAAA");
+        assert.deepEqual(watched, [], "a filled avatar is no longer watched");
         assert.equal((drawn[0][0] as { src: string }).src, "/assets/gameplay/avatars/atlas/heroes-256-0.webp");
         assert.deepEqual(drawn[0].slice(1), [256, 0, 256, 256, 0, 0, 256, 256]);
     } finally {

@@ -10,7 +10,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 pub const SCHEMA_VERSION: u8 = 2;
-pub const CONSENT_POLICY_VERSION: &str = "2026-10-06";
+pub const CONSENT_POLICY_VERSION: &str = "2026-11-10";
 pub const RETENTION_DAYS: u64 = 90;
 pub const MAX_PROPS_BYTES: usize = 2048;
 const MAX_STRING_FIELD: usize = 64;
@@ -36,6 +36,7 @@ pub const EVENT_NAMES: &[&str] = &[
     "menu_custom_create_open",
     "menu_leader_confirm",
     "matchmaking_joined",
+    "matchmaking_cancelled",
     "lobby_joined",
     "lobby_join_failed",
     "match_exit",
@@ -44,7 +45,6 @@ pub const EVENT_NAMES: &[&str] = &[
     "match_ended_client",
     "tutorial_start",
     "tutorial_step",
-    "tutorial_objective_complete",
     "tutorial_dialog_choice",
     "tutorial_exit_early",
     "campaign_episode_complete",
@@ -167,6 +167,42 @@ fn is_uuid(value: &str) -> bool {
         })
 }
 
+fn is_match_mode(value: &str) -> bool {
+    matches!(
+        value,
+        "ranked_1v1" | "custom" | "campaign" | "tutorial" | "single_player" | "other"
+    )
+}
+
+fn is_wait_bucket(value: &str) -> bool {
+    matches!(
+        value,
+        "under_5s" | "5_15s" | "15_60s" | "60s_plus" | "unknown"
+    )
+}
+
+fn is_match_duration_bucket(value: &str) -> bool {
+    matches!(
+        value,
+        "under_1m" | "1_5m" | "5_15m" | "15m_plus" | "unknown"
+    )
+}
+
+fn is_join_failure_category(value: &str) -> bool {
+    matches!(
+        value,
+        "version_mismatch"
+            | "identity_unavailable"
+            | "account_required"
+            | "invalid_request"
+            | "matchmaking_unavailable"
+            | "access_denied"
+            | "wrong_password"
+            | "lobby_full"
+            | "lobby_unavailable"
+    )
+}
+
 fn valid_props(name: &str, props: &serde_json::Value) -> bool {
     let Some(props) = props.as_object() else {
         return false;
@@ -235,6 +271,35 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
             && text("item_id").is_some_and(is_episode_id)
             && matches!(text("currency"), Some("usd" | "gems" | "crowns"));
     }
+    let text = |key| props.get(key).and_then(serde_json::Value::as_str);
+    if matches!(
+        name,
+        "matchmaking_joined" | "matchmaking_cancelled" | "lobby_joined"
+    ) {
+        return props.len() == 2
+            && text("mode").is_some_and(is_match_mode)
+            && text("wait_bucket").is_some_and(is_wait_bucket);
+    }
+    if name == "lobby_join_failed" {
+        return props.len() == 3
+            && text("mode").is_some_and(is_match_mode)
+            && text("wait_bucket").is_some_and(is_wait_bucket)
+            && text("reason_category").is_some_and(is_join_failure_category);
+    }
+    if name == "match_started_client" {
+        return props.len() == 1 && text("mode").is_some_and(is_match_mode);
+    }
+    if name == "match_ended_client" {
+        return props.len() == 3
+            && text("mode").is_some_and(is_match_mode)
+            && matches!(text("outcome"), Some("win" | "loss"))
+            && text("duration_bucket").is_some_and(is_match_duration_bucket);
+    }
+    if name == "match_exit" {
+        return props.len() == 2
+            && text("mode").is_some_and(is_match_mode)
+            && text("duration_bucket").is_some_and(is_match_duration_bucket);
+    }
     if props.len() != 1 {
         return false;
     }
@@ -253,6 +318,29 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
         ("landing_visit", "ref", Some(value)) => is_source_ref(value),
         _ => false,
     }
+}
+
+/// Only bounded, validated labels enter the aggregate match funnel. No event
+/// payload or player/session identifier is retained in the dimension key.
+pub fn match_flow_dimension(event: &AnalyticsEvent) -> Option<String> {
+    let props = event.props.as_ref()?;
+    if !valid_props(&event.name, props) {
+        return None;
+    }
+    let object = props.as_object()?;
+    let mut fields = Vec::new();
+    for key in [
+        "mode",
+        "outcome",
+        "wait_bucket",
+        "duration_bucket",
+        "reason_category",
+    ] {
+        if let Some(value) = object.get(key).and_then(serde_json::Value::as_str) {
+            fields.push(format!("{key}={value}"));
+        }
+    }
+    (!fields.is_empty()).then(|| fields.join("|"))
 }
 
 /// Short lowercase tag from a shared link (`?ref=reddit`), never free text.
@@ -645,6 +733,28 @@ mod tests {
         event.props = Some(serde_json::json!({"stage": "snapshot_available"}));
         assert!(event.validate(NOW_MS).is_ok());
         event.props = Some(serde_json::json!({"stage": "account_name"}));
+        assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+    }
+
+    #[test]
+    fn match_flow_accepts_only_bounded_categories() {
+        let mut event = sample("match_ended_client");
+        event.props = Some(serde_json::json!({
+            "mode": "ranked_1v1",
+            "outcome": "win",
+            "duration_bucket": "5_15m"
+        }));
+        assert!(event.validate(NOW_MS).is_ok());
+        assert_eq!(
+            match_flow_dimension(&event).as_deref(),
+            Some("mode=ranked_1v1|outcome=win|duration_bucket=5_15m")
+        );
+        event.props = Some(serde_json::json!({
+            "mode": "ranked_1v1",
+            "outcome": "win",
+            "duration_bucket": "5_15m",
+            "player_name": "private"
+        }));
         assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
     }
 

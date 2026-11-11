@@ -194,18 +194,39 @@ export function setAvatarImage(image: HTMLImageElement, source: string): void {
 }
 
 let markupWatcher: MutationObserver | null = null;
+let visibilityWatcher: IntersectionObserver | null = null;
 
-/** Fills `data-avatar` images in markup once they are inserted. Installed only when sheets are packed. */
+function fillAvatarImage(image: Element): void {
+    const source = image.getAttribute("data-avatar");
+    if (source) setAvatarImage(image as HTMLImageElement, source);
+}
+
+/**
+ * Fills `data-avatar` images in markup once they are inserted and near the viewport,
+ * so a long list only downloads the sheets it shows. Installed only when sheets are packed.
+ */
 function watchAvatarMarkup(): void {
     if (markupWatcher || typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+    if (typeof IntersectionObserver !== "undefined") {
+        visibilityWatcher = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    if (!entry.isIntersecting) continue;
+                    visibilityWatcher?.unobserve(entry.target);
+                    fillAvatarImage(entry.target);
+                }
+            },
+            { rootMargin: "200px" },
+        );
+    }
     const fill = (node: Node): void => {
         if (!(node instanceof Element)) return;
         const images: Element[] = node.matches("img[data-avatar]")
             ? [node]
             : Array.from(node.querySelectorAll("img[data-avatar]"));
         for (const image of images) {
-            const source = image.getAttribute("data-avatar");
-            if (source) setAvatarImage(image as HTMLImageElement, source);
+            if (visibilityWatcher) visibilityWatcher.observe(image);
+            else fillAvatarImage(image);
         }
     };
     markupWatcher = new MutationObserver((records) => {

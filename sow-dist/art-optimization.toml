@@ -40,15 +40,28 @@ max_bytes = 131072
 recipe_version = 1
 
 # CrazyGames avatar sheets: up to 2048 px square, holding many 192 or 256 px portraits.
+# Same quality as the loose portraits they replace.
 [profiles.avatar_atlas]
 format = "webp"
 max_width = 2048
 max_height = 2048
-quality = 90
+quality = 85
 alpha = "preserve"
 resample = "lanczos"
 lossless = false
 max_bytes = 3145728
+recipe_version = 2
+
+# CrazyGames ability icon atlas: 128 px cells, same quality as the loose ability_icon files.
+[profiles.ability_atlas]
+format = "webp"
+max_width = 2048
+max_height = 2048
+quality = 75
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 1048576
 recipe_version = 1
 
 [profiles.fullbleed_wide]
@@ -71,6 +84,29 @@ alpha = "preserve"
 resample = "lanczos"
 lossless = false
 max_bytes = 400000
+recipe_version = 1
+
+# CrazyGames hero scenes: between the web (1600x900) and Poki (960x540) sizes.
+[profiles.cg_leader_wide]
+format = "webp"
+max_width = 1280
+max_height = 720
+quality = 75
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 300000
+recipe_version = 1
+
+[profiles.cg_leader_tall]
+format = "webp"
+max_width = 720
+max_height = 1280
+quality = 75
+alpha = "preserve"
+resample = "lanczos"
+lossless = false
+max_bytes = 300000
 recipe_version = 1
 
 [profiles.poki_leader_wide]

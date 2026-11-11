@@ -757,7 +757,7 @@ impl ArtPipeline {
     fn validate_profile_set(&self) -> Result<()> {
         for required in [
             "ability_icon", "avatar_portrait_192", "avatar_portrait_256", "avatar_atlas", "fullbleed_wide", "fullbleed_tall",
-            "poki_leader_wide", "poki_leader_tall",
+            "poki_leader_wide", "poki_leader_tall", "cg_leader_wide", "cg_leader_tall", "ability_atlas",
             "site_still_wide", "site_still_tall", "ui_icon_128", "ui_icon_256",
             "unit_icon", "pixel_art", "atlas_lossless", "loader_ui", "app_icon",
             "map_preview", "map_thumbnail", "campaign_poster", "video_poster", "guide_image", "poki_thumbnail",
@@ -938,7 +938,7 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
         return Some("atlas_lossless");
     }
     if path == "gameplay/icons/abilities-atlas.webp" {
-        return Some("atlas_lossless");
+        return Some("ability_atlas");
     }
     if path.starts_with("site/media/") {
         if name == "hero-loop.webp" || name == "gameplay.webp" {
@@ -1026,6 +1026,8 @@ fn collect_art_preview_assets(root: &Path) -> Result<Vec<ArtPreviewAsset>> {
             push_preview_asset(&mut assets, path.to_path_buf(), profile, None);
             let portal_profile = if name.contains("_mobile.") { "poki_leader_tall" } else { "poki_leader_wide" };
             push_preview_asset(&mut assets, path.to_path_buf(), portal_profile, None);
+            let cg_profile = if name.contains("_mobile.") { "cg_leader_tall" } else { "cg_leader_wide" };
+            push_preview_asset(&mut assets, path.to_path_buf(), cg_profile, None);
         } else if relative.starts_with("avatars/heroes/") {
             // These are 2x2 source sheets. The distributor previews their cropped expressions.
         } else if relative.starts_with("avatars/nations/") || relative.starts_with("avatars/tribes/") || relative.starts_with("avatars/campaign/") {
@@ -1730,6 +1732,8 @@ fn poki_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
 
 fn cg_asset_is_excluded(relative: &Path) -> bool {
     relative.starts_with("shell/brand")
+        || (relative.starts_with("campaign")
+            && relative.extension().is_some_and(|extension| extension == "webm"))
         || relative.starts_with("gameplay/avatars")
         || relative.starts_with("gameplay/icons/abilities")
         || (relative.starts_with("site/media")
@@ -1750,6 +1754,10 @@ fn cg_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
     inventory.sort();
     Ok(inventory)
 }
+
+/// CrazyGames package weight budget, well under the 250 MB portal limit. Raise it
+/// only on purpose: every byte here is CDN download for players.
+const CG_BUNDLE_BYTE_BUDGET: u64 = 85_000_000;
 
 /// Largest side of a CrazyGames avatar sheet; a full 2048 sheet decodes to 16 MB.
 const CG_AVATAR_SHEET_PX: u32 = 2048;
@@ -1935,6 +1943,12 @@ fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Res
             None,
         )?;
     }
+    let campaign = packaged.join("campaign");
+    if campaign.is_dir() {
+        fs::remove_dir_all(&campaign)?;
+    }
+    copy_campaign_mp4_only(&source.join("campaign"), &campaign)?;
+    publish_portal_leaders(source, packaged, pipeline, PortalLeaders::CRAZYGAMES)?;
     build_cg_ability_atlas(
         &source.join("gameplay/icons/abilities"),
         &packaged.join("gameplay/icons/abilities-atlas.webp"),
@@ -1983,20 +1997,14 @@ fn build_cg_ability_atlas(source: &Path, destination: &Path, pipeline: &ArtPipel
         icons.insert(slug.clone(), serde_json::Value::from(index));
     }
 
-    let mut encoded = Vec::new();
-    image::ImageEncoder::write_image(
-        image::codecs::webp::WebPEncoder::new_lossless(&mut encoded),
-        atlas.as_raw(),
-        atlas.width(),
-        atlas.height(),
-        image::ExtendedColorType::Rgba8,
-    )?;
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)?;
     }
-    let raw = destination.with_file_name("abilities-atlas-source.webp");
-    fs::write(&raw, encoded)?;
-    pipeline.publish_image(&raw, destination, "atlas_lossless", None, None)?;
+    let raw = destination.with_file_name("abilities-atlas-source.png");
+    atlas
+        .save(&raw)
+        .with_context(|| format!("write ability atlas source {}", raw.display()))?;
+    pipeline.publish_image(&raw, destination, "ability_atlas", None, None)?;
     fs::remove_file(raw)?;
     let sha256 = file_sha256(destination)?;
 
@@ -2061,12 +2069,7 @@ fn verify_cg_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
         {
             continue;
         }
-        if file_sha256(&source.join(&relative))? != file_sha256(&packaged.join(&relative))? {
-            bail!(
-                "CrazyGames runtime asset content mismatch: {}",
-                relative.display()
-            );
-        }
+        verify_portal_asset(source, packaged, &relative, PortalLeaders::CRAZYGAMES)?;
     }
     Ok(())
 }
@@ -2153,38 +2156,7 @@ fn verify_poki_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
         );
     }
     for relative in expected {
-        let source_path = source.join(&relative);
-        let packaged_path = packaged.join(&relative);
-        let is_leader_art = relative.starts_with("shell/leaders")
-            && relative.extension().is_some_and(|extension| extension == "webp");
-        if is_leader_art {
-            let (width, height) = image::image_dimensions(&packaged_path)
-                .with_context(|| format!("read packaged leader art {}", relative.display()))?;
-            let (max_width, max_height) = if relative.to_string_lossy().ends_with("_mobile.webp") {
-                (540, 960)
-            } else {
-                (960, 540)
-            };
-            if width > max_width || height > max_height {
-                bail!(
-                    "Poki leader art {} is {width}x{height}; expected at most {max_width}x{max_height}",
-                    relative.display()
-                );
-            }
-            continue;
-        }
-        if relative.starts_with("campaign")
-            && relative.file_name().is_some_and(|name| {
-                name.to_string_lossy().ends_with(".triggers.json")
-            })
-        {
-            let expected = fs::read_to_string(&source_path)?.replace(".webm\"", ".mp4\"");
-            if fs::read_to_string(&packaged_path)? != expected {
-                bail!("Poki campaign trigger mismatch: {}", relative.display());
-            }
-        } else if file_sha256(&source_path)? != file_sha256(&packaged_path)? {
-            bail!("Poki runtime asset content mismatch: {}", relative.display());
-        }
+        verify_portal_asset(source, packaged, &relative, PortalLeaders::POKI)?;
     }
     Ok(())
 }
@@ -2446,8 +2418,43 @@ fn copy_poki_assets(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
     if campaign.is_dir() {
         fs::remove_dir_all(&campaign)?;
     }
-    copy_campaign_for_poki(&src.join("campaign"), &campaign)?;
+    copy_campaign_mp4_only(&src.join("campaign"), &campaign)?;
+    publish_portal_leaders(src, dst, pipeline, PortalLeaders::POKI)
+}
 
+/// Leader scene sizes a portal package re-encodes `shell/leaders` to.
+#[derive(Clone, Copy)]
+struct PortalLeaders {
+    portal: &'static str,
+    wide_profile: &'static str,
+    tall_profile: &'static str,
+    wide: (u32, u32),
+}
+
+impl PortalLeaders {
+    const POKI: Self = Self {
+        portal: "Poki",
+        wide_profile: "poki_leader_wide",
+        tall_profile: "poki_leader_tall",
+        wide: (960, 540),
+    };
+    const CRAZYGAMES: Self = Self {
+        portal: "CrazyGames",
+        wide_profile: "cg_leader_wide",
+        tall_profile: "cg_leader_tall",
+        wide: (1280, 720),
+    };
+
+    fn max_size(self, relative: &Path) -> (u32, u32) {
+        if relative.to_string_lossy().ends_with("_mobile.webp") {
+            (self.wide.1, self.wide.0)
+        } else {
+            self.wide
+        }
+    }
+}
+
+fn publish_portal_leaders(src: &Path, dst: &Path, pipeline: &ArtPipeline, leaders: PortalLeaders) -> Result<()> {
     for entry in fs::read_dir(src.join("shell/leaders"))? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -2455,9 +2462,9 @@ fn copy_poki_assets(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
             continue;
         }
         let profile = if name.ends_with("_mobile.webp") {
-            "poki_leader_tall"
+            leaders.tall_profile
         } else {
-            "poki_leader_wide"
+            leaders.wide_profile
         };
         pipeline.publish_image(
             &entry.path(),
@@ -2470,17 +2477,52 @@ fn copy_poki_assets(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
     Ok(())
 }
 
-/// Poki players are Chromium/Safari; the MP4 rendition covers both. Shipping
+/// Checks one packaged asset of a portal that re-encodes leader scenes and
+/// ships campaign video as MP4 only; every other file must match its source.
+fn verify_portal_asset(source: &Path, packaged: &Path, relative: &Path, leaders: PortalLeaders) -> Result<()> {
+    let portal = leaders.portal;
+    let source_path = source.join(relative);
+    let packaged_path = packaged.join(relative);
+    if relative.starts_with("shell/leaders")
+        && relative.extension().is_some_and(|extension| extension == "webp")
+    {
+        let (width, height) = image::image_dimensions(&packaged_path)
+            .with_context(|| format!("read packaged leader art {}", relative.display()))?;
+        let (max_width, max_height) = leaders.max_size(relative);
+        if width > max_width || height > max_height {
+            bail!(
+                "{portal} leader art {} is {width}x{height}; expected at most {max_width}x{max_height}",
+                relative.display()
+            );
+        }
+        return Ok(());
+    }
+    if relative.starts_with("campaign")
+        && relative.file_name().is_some_and(|name| {
+            name.to_string_lossy().ends_with(".triggers.json")
+        })
+    {
+        let expected = fs::read_to_string(&source_path)?.replace(".webm\"", ".mp4\"");
+        if fs::read_to_string(&packaged_path)? != expected {
+            bail!("{portal} campaign trigger mismatch: {}", relative.display());
+        }
+    } else if file_sha256(&source_path)? != file_sha256(&packaged_path)? {
+        bail!("{portal} runtime asset content mismatch: {}", relative.display());
+    }
+    Ok(())
+}
+
+/// Portal players are Chromium/Safari; the MP4 rendition covers both. Shipping
 /// only the MP4 halves the campaign payload in the portal package. The
 /// triggers JSON is rewritten to the MP4 stem so no source 404s on boot.
-fn copy_campaign_for_poki(src: &Path, dst: &Path) -> Result<()> {
+fn copy_campaign_mp4_only(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
         let from = entry.path();
         if from.is_dir() {
-            copy_campaign_for_poki(&from, &dst.join(&name))?;
+            copy_campaign_mp4_only(&from, &dst.join(&name))?;
             continue;
         }
         if name.ends_with(".webm") {
@@ -4710,6 +4752,15 @@ fn validate_leader_display_names(
     Ok(())
 }
 
+fn web_equal_value_is_valid_translation(language_code: &str, key: &str) -> bool {
+    web_key_is_intentionally_english(key)
+        // The French adjective "rare" has the same spelling as English here.
+        || (language_code == "fr" && key == "heroes.rarity_rare")
+        // "Trait" is also the correct French label for a hero trait.
+        || (language_code == "fr"
+            && matches!(key, "heroes.command_trait" | "site.command_trait"))
+}
+
 fn collect_equal_web_values(
     path: &str,
     expected: &serde_json::Value,
@@ -4772,7 +4823,7 @@ fn validate_web_catalogs_with_missing(
             collect_equal_web_values("", &english, &catalog, &mut equal_values);
             let intentional = equal_values
                 .iter()
-                .filter(|(key, _)| web_key_is_intentionally_english(key))
+                .filter(|(key, _)| web_equal_value_is_valid_translation(code, key))
                 .count();
             let pending = equal_values.len() - intentional;
             if report_equal_values {
@@ -4785,7 +4836,7 @@ fn validate_web_catalogs_with_missing(
             }
             for (key, value) in equal_values
                 .into_iter()
-                .filter(|(key, _)| !web_key_is_intentionally_english(key))
+                .filter(|(key, _)| !web_equal_value_is_valid_translation(code, key))
             {
                 if allow_missing_translations {
                     eprintln!("i18n warning (local preview): {code}: {key} still equals English");
@@ -5759,13 +5810,22 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         bail!("CrazyGames bundle has {file_count} files; portal limit is 1,500");
     }
     let mut total_bytes = 0u64;
+    let mut folder_bytes = std::collections::BTreeMap::<String, u64>::new();
     for relative in &inventory {
+        let size = fs::metadata(dir.join(relative))?.len();
         total_bytes = total_bytes
-            .checked_add(fs::metadata(dir.join(relative))?.len())
+            .checked_add(size)
             .context("CrazyGames bundle size overflow")?;
+        let folder = relative.components().take(3).collect::<PathBuf>();
+        *folder_bytes.entry(folder.display().to_string()).or_default() += size;
     }
-    if total_bytes > 250_000_000 {
-        bail!("CrazyGames bundle has {total_bytes} bytes; portal limit is 250 MB");
+    if total_bytes > CG_BUNDLE_BYTE_BUDGET {
+        let mut largest = folder_bytes.into_iter().collect::<Vec<_>>();
+        largest.sort_by(|a, b| b.1.cmp(&a.1));
+        largest.truncate(8);
+        bail!(
+            "CrazyGames bundle has {total_bytes} bytes; budget is {CG_BUNDLE_BYTE_BUDGET} (portal limit 250 MB). Largest: {largest:?}"
+        );
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
     if html.contains("https://shadowsofwar.io/assets/") {
@@ -7688,12 +7748,13 @@ fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()
 /// console Versions tab or the Jest MCP upload flow.
 fn cmd_jest(paths: &Paths) -> Result<()> {
     let version = read_version(paths)?;
+    let web = paths.root.join("dist/.sow-state/jest-web");
     println!("==> Building Jest bundle {version}");
     compile_wasm(paths, false)?;
-    package_self(paths, &paths.dist_web, &version, true)?;
-    let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
+    package_self(paths, &web, &version, true)?;
+    let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
     package_jest(
-        &paths.dist_web,
+        &web,
         &paths.dist_jest,
         paths,
         &version,
@@ -7735,6 +7796,18 @@ fn cmd_poki(paths: &Paths) -> Result<()> {
         paths.dist_poki.display(),
         bytes as f64 / 1_048_576.0
     );
+    Ok(())
+}
+
+/// Build a self-contained CrazyGames upload directory without running production deploy.
+fn cmd_crazygames(paths: &Paths) -> Result<()> {
+    let version = read_version(paths)?;
+    let web = paths.root.join("dist/.sow-state/crazygames-web");
+    println!("==> Building CrazyGames bundle {version}");
+    compile_wasm(paths, false)?;
+    package_self(paths, &web, &version, true)?;
+    let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
+    package_cg(&web, &paths.dist_cg, paths, &version, &maps_cache_bust)?;
     Ok(())
 }
 
@@ -8189,10 +8262,11 @@ fn main() -> Result<()> {
         "a" | "android" => prod::execute_android(&paths),
         "jest" => cmd_jest(&paths),
         "poki" => cmd_poki(&paths),
+        "crazygames" => cmd_crazygames(&paths),
         "native" => cmd_native(&paths),
         "local" | "l" | "" => cmd_local(&paths),
         _ => {
-            eprintln!("Usage: ./sow [native|l|p|a|poki|jest|art-preview]");
+            eprintln!("Usage: ./sow [native|l|p|a|poki|crazygames|jest|art-preview]");
             std::process::exit(1);
         }
     }
@@ -8683,7 +8757,7 @@ shortArticle = true
             "{\"map\":\"eastanglia\"}",
         )?;
         let dst = root.path().join("poki");
-        copy_campaign_for_poki(&root.path().join("campaign"), &dst.join("campaign"))?;
+        copy_campaign_mp4_only(&root.path().join("campaign"), &dst.join("campaign"))?;
         assert!(!dst.join("campaign/boudica/intro.720p.abc.webm").exists());
         assert!(dst.join("campaign/boudica/intro.720p.abc.mp4").is_file());
         assert!(

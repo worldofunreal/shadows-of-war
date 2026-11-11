@@ -245,7 +245,7 @@ interface TutorialRuntime {
         return true;
     }
 
-    const TUTORIAL_CAMERA_MOVE_DELAY_MS = 3250;
+    const TUTORIAL_CAMERA_MOVE_DELAY_MS = 0;
 
     function clearTutorialCameraMove(keyPrefix?: string) {
         if (keyPrefix && !runtime.cameraFocusKey?.startsWith(keyPrefix)) return;

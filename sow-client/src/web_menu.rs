@@ -11,6 +11,8 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use serde::Deserialize;
+use sow_core::engine::market::{MarketFailure, MarketFeedback, MarketOutcome};
+use sow_core::protocol::{GameplayIntent, MarketSide};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_time::{Duration, Instant};
@@ -229,6 +231,11 @@ enum WebMenuCommand {
         target_player_id: u16,
     },
     CloseTransfer,
+    PreviewMarket { side: MarketSide, lots: u32 },
+    CloseMarket,
+    MarketTrade { request_id: u32, side: MarketSide, lots: u32, limit_gold: u32 },
+    PlaceMarketOrder { request_id: u32, side: MarketSide, lots: u32, gold_per_lot: u32 },
+    CancelMarketOrder { request_id: u32 },
     SendResources {
         target_player_id: u16,
         gold: f64,
@@ -526,6 +533,9 @@ struct HudPublishKey {
     dev_preview: Option<(u8, u8, bool, bool, bool)>,
     inbox_open: bool,
     transfer_target: Option<u16>,
+    market_available: bool,
+    market_preview: Option<(MarketSide, u32)>,
+    market_send_failed: Option<u32>,
     betrayal_open: bool,
     sync_open: bool,
     inbox_count: usize,
@@ -706,6 +716,11 @@ fn take_commands() -> Vec<WebMenuCommand> {
 
 impl SowApp {
     #[cfg(target_arch = "wasm32")]
+    fn send_market_intent(&mut self, request_id: u32, intent: GameplayIntent) {
+        let sent = market_available(self) && self.send_intent(intent);
+        self.ui.app.hud_state.market_send_failed = (!sent).then_some(request_id);
+    }
+
     pub(crate) fn process_web_menu_commands(&mut self) {
         for command in take_commands() {
             match command {
@@ -1298,6 +1313,7 @@ impl SowApp {
                     });
                 }
                 WebMenuCommand::OpenTransfer { target_player_id } => {
+                    self.ui.app.hud_state.market_preview = None;
                     self.ui.app.hud_state.show_ask_panel = Some(target_player_id);
                     self.ui.app.hud_state.transfer_mode = None;
                     self.ui.app.hud_state.transfer_confirm_pending = false;
@@ -1305,6 +1321,24 @@ impl SowApp {
                 WebMenuCommand::CloseTransfer => {
                     self.ui.app.hud_state.show_ask_panel = None;
                     self.ui.app.hud_state.transfer_confirm_pending = false;
+                }
+                WebMenuCommand::PreviewMarket { side, lots } => {
+                    if market_available(self) {
+                        let hud = &mut self.ui.app.hud_state;
+                        hud.show_ask_panel = None;
+                        hud.transfer_confirm_pending = false;
+                        hud.market_preview = Some((side, lots));
+                    }
+                }
+                WebMenuCommand::CloseMarket => self.ui.app.hud_state.market_preview = None,
+                WebMenuCommand::MarketTrade { request_id, side, lots, limit_gold } => {
+                    self.send_market_intent(request_id, GameplayIntent::MarketTrade { request_id, side, lots, limit_gold });
+                }
+                WebMenuCommand::PlaceMarketOrder { request_id, side, lots, gold_per_lot } => {
+                    self.send_market_intent(request_id, GameplayIntent::PlaceMarketOrder { request_id, side, lots, gold_per_lot });
+                }
+                WebMenuCommand::CancelMarketOrder { request_id } => {
+                    self.send_market_intent(request_id, GameplayIntent::CancelMarketOrder { request_id });
                 }
                 WebMenuCommand::SendResources {
                     target_player_id,
@@ -2122,6 +2156,16 @@ fn hero_ability_feedback(
     Some(feedback)
 }
 
+fn market_available(app: &SowApp) -> bool {
+    !app.net.is_offline
+        && !app.ui.is_spectating
+        && app.ws_on_relay()
+        && app.net.client.as_ref().is_some_and(|client| !client.is_socket_closed())
+        && app.ui.app.hud_state.sync_state.is_none()
+        && app.sim.my_player_id.zip(app.sim.engine.as_ref())
+            .is_some_and(|(id, engine)| engine.market_enabled_for(id))
+}
+
 fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let hud = &app.ui.app.hud_state;
     let tutorial_active = app.ui.tutorial_active && app.net.is_offline;
@@ -2156,6 +2200,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let cold_open = hud.building_placement.is_some()
         || hud.show_alliance_inbox
         || hud.show_ask_panel.is_some()
+        || hud.market_preview.is_some()
         || hud.show_betrayal_warning.is_some()
         || hud.sync_state.is_some()
         || tutorial_active
@@ -2236,6 +2281,9 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         avatar_revision: app.ui.nameplates.avatar_revision,
         inbox_open: hud.show_alliance_inbox,
         transfer_target: hud.show_ask_panel,
+        market_available: market_available(app),
+        market_preview: hud.market_preview,
+        market_send_failed: hud.market_send_failed,
         betrayal_open: hud.show_betrayal_warning.is_some(),
         sync_open: hud.sync_state.is_some(),
         inbox_count,
@@ -4489,6 +4537,21 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         }
     }
     append_player_dialog_payloads(&mut payload, snapshot, hud, my_pid);
+    let market_available = market_available(app);
+    payload["market_available"] = serde_json::json!(market_available);
+    if market_available
+        && let Some((side, lots)) = hud.market_preview
+        && let Some(engine) = app.sim.engine.as_ref()
+    {
+        let mut view = engine.market_view(my_pid, side, lots);
+        if let Some(request_id) = hud.market_send_failed {
+            view.feedback = Some(MarketFeedback {
+                request_id,
+                outcome: MarketOutcome::Rejected { reason: MarketFailure::Unavailable },
+            });
+        }
+        payload["market"] = serde_json::json!(view);
+    }
     if let Some(snapshot) = snapshot {
         for (field, id_field) in [
             ("players", "id"),

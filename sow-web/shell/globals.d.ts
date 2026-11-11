@@ -28,6 +28,7 @@ declare global {
         provider?: string;
         displayName?: string;
         externalId?: string;
+        registered?: boolean;
         avatarUrl?: string | null;
         token?: string | null;
     }

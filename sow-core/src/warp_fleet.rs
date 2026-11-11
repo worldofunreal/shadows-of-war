@@ -630,8 +630,13 @@ pub fn best_shore_spawn_for_transport(
     best.map(|(_, i)| i)
 }
 
-/// Baseline transport speed at 1x game speed.
-pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 9.0;
+/// Effective transport speed in real seconds, independent of the global game-speed multiplier.
+pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 4.7;
+
+#[inline]
+pub fn transport_base_steps_per_tick(tick_rate_ms: f32) -> f64 {
+    TRANSPORT_BASE_SPEED_TILES_PER_SECOND * (f64::from(tick_rate_ms) / 1000.0)
+}
 
 /// Moving fleet over water.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
