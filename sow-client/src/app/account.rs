@@ -217,117 +217,9 @@ impl SowApp {
     /// every owned commander, skin, and unlocked achievement becomes a
     /// claimed card on the player's own account, using the player's WOU-ID
     /// bearer token (guests own nothing server-side by design). One-shot per
-    /// account per session, re-run when the owned set grows (purchases).
-    /// Best-effort: failures log and are retried on the next profile apply.
+    /// Best-effort external sync; no-op in self-contained operation.
     pub(crate) fn sync_wou_collectibles(&mut self) {
-        if self.progress_provider != "wou" {
-            return;
-        }
-        let Some(account_id) = self.progress_account_id.clone() else {
-            return;
-        };
-        let identity = crate::store_portals::load_identity("Player");
-        if identity.provider != "wou" {
-            return;
-        }
-        let Some(session_token) = identity.auth_token.filter(|token| !token.is_empty()) else {
-            return;
-        };
-        // Assets in WOU-ID are keyed by the WOU-ID account id (the JWT
-        // subject), which the portal surfaces as external_id. Prefer it over
-        // the SOW profile account id so the owner lookup can never drift.
-        let owner_id = identity
-            .external_id
-            .filter(|id| !id.is_empty())
-            .unwrap_or_else(|| account_id.clone());
-        let mut desired: Vec<String> = Vec::new();
-        for leader_id in &self.progress.owned_leaders {
-            if let Some(card) = sow_data::commerce::leader_from_id(leader_id)
-                .and_then(sow_core::player::Leader::card_token_id)
-            {
-                desired.push(card.to_string());
-            }
-        }
-        for skin_id in &self.progress.owned_skins {
-            desired.push(sow_data::commerce::skin_card_token_id(skin_id));
-        }
-        for achievement in &self.progress.unlocked_achievements {
-            desired.push(sow_data::rewards::achievement_card_token_id(achievement));
-        }
-        if desired.is_empty() {
-            return;
-        }
-        if self
-            .wou_collectibles_synced
-            .as_ref()
-            .is_some_and(|(synced_account, synced_count)| {
-                synced_account == &account_id && *synced_count >= desired.len()
-            })
-        {
-            return;
-        }
-        self.wou_collectibles_synced = Some((account_id.clone(), desired.len()));
-        const ID_API: &str = "https://id.worldofunreal.com";
-        let mut request = ehttp::Request::get(format!("{ID_API}/api/v1/assets/owner/{owner_id}"));
-        request
-            .headers
-            .insert("Authorization", format!("Bearer {session_token}"));
-        log::info!(
-            "[collectibles] syncing {} owned cards for account={}",
-            desired.len(),
-            account_hint(Some(&account_id))
-        );
-        ehttp::fetch(request, move |result| {
-            let owned: Vec<String> = match result {
-                Ok(response) if response.ok => {
-                    serde_json::from_slice::<Vec<serde_json::Value>>(&response.bytes)
-                        .map(|items| {
-                            items
-                                .iter()
-                                .filter_map(|item| {
-                                    item.get("token")
-                                        .and_then(|token| token.as_str())
-                                        .map(str::to_string)
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default()
-                }
-                Ok(response) => {
-                    log::warn!(
-                        "[collectibles] owner lookup failed HTTP {:?}",
-                        response.status
-                    );
-                    return;
-                }
-                Err(error) => {
-                    log::warn!("[collectibles] owner lookup failed: {error}");
-                    return;
-                }
-            };
-            for token in desired.into_iter().filter(|card| !owned.contains(card)) {
-                let Ok(body) = serde_json::to_vec(&serde_json::json!({ "token": &token })) else {
-                    continue;
-                };
-                let mut claim = ehttp::Request::post(format!("{ID_API}/api/v1/assets/claim"), body);
-                claim
-                    .headers
-                    .insert("Authorization", format!("Bearer {session_token}"));
-                claim.headers.insert("Content-Type", "application/json");
-                ehttp::fetch(claim, move |result| match result {
-                    Ok(response) if response.ok => {
-                        log::info!("[collectibles] claimed {token}")
-                    }
-                    Ok(response) => log::warn!(
-                        "[collectibles] claim {token} failed HTTP {:?}",
-                        response.status
-                    ),
-                    Err(error) => {
-                        log::warn!("[collectibles] claim {token} failed: {error}")
-                    }
-                });
-            }
-        });
+        // Collectibles claiming disabled: Shadows of War is self-contained.
     }
 
     fn track_reward_receipt_sync(&mut self, receipt_id: impl Into<String>) {
@@ -1472,38 +1364,31 @@ impl SowApp {
     }
 
     pub(crate) fn claim_mission_reward(&mut self, mission_id: &str, doubled_by_ad: bool) {
-        let def = sow_data::missions::ONBOARDING_MISSIONS
+        // The server owns crowns, gems and the claimed flag. Nothing is credited here:
+        // the balance changes only when the server's profile arrives, so a rejected
+        // claim leaves no reward behind.
+        let known = sow_data::missions::ONBOARDING_MISSIONS
             .iter()
             .chain(sow_data::missions::DAILY_MISSION_POOL.iter())
-            .find(|m| m.id == mission_id)
-            .copied();
-        if let Some(def) = def {
-            let record = self
-                .progress
-                .missions_progress
-                .entry(mission_id.to_string())
-                .or_default();
-            if !record.claimed {
-                record.id = mission_id.to_string();
-                record.completed = true;
-                record.claimed = true;
-                record.doubled_by_ad = doubled_by_ad;
-                let multiplier = if doubled_by_ad { 2 } else { 1 };
-                let crowns = def.crowns_reward * multiplier;
-                let gems = def.gems_reward * multiplier;
-                self.progress.crowns = self.progress.crowns.saturating_add(crowns);
-                self.progress.gems = self.progress.gems.saturating_add(gems);
-                self.save_local_progress();
-
-                let mut fields = serde_json::Map::new();
-                fields.insert(
-                    "mission_id".into(),
-                    serde_json::Value::String(mission_id.to_string()),
-                );
-                fields.insert("doubled_by_ad".into(), serde_json::Value::Bool(doubled_by_ad));
-                self.post_profile_action("claim mission", "/profile/missions/claim", fields);
-            }
+            .any(|m| m.id == mission_id);
+        let claimed = self
+            .progress
+            .missions_progress
+            .get(mission_id)
+            .is_some_and(|record| record.claimed);
+        if !known || claimed {
+            return;
         }
+        let mut fields = serde_json::Map::new();
+        fields.insert(
+            "mission_id".into(),
+            serde_json::Value::String(mission_id.to_string()),
+        );
+        fields.insert(
+            "doubled_by_ad".into(),
+            serde_json::Value::Bool(doubled_by_ad),
+        );
+        self.post_profile_action("claim mission", "/profile/missions/claim", fields);
     }
 
     pub(crate) fn unlock_skin(&mut self, skin_id: String) {

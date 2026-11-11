@@ -961,6 +961,7 @@ pub struct SowApp {
     /// Dedupe for the nftropoly collectibles sync (WOU-ID): last
     /// (account, desired card count). A larger owned count re-syncs within
     /// the same session (purchases, unlocks).
+    #[allow(dead_code)]
     pub(crate) wou_collectibles_synced: Option<(String, usize)>,
     /// Last requested name, kept until the canonical profile acknowledges it.
     pub pending_display_name: Option<String>,

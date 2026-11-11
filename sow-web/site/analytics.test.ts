@@ -54,10 +54,12 @@ function start({
   search = "",
   gameShell = false,
   choice = null,
+  legacyQueue = null,
 } = {}) {
   const local = storage();
   const session = storage();
   if (choice) local.setItem("sow_analytics_consent_v2", JSON.stringify({ choice, policy: "2026-11-10" }));
+  if (legacyQueue) session.setItem("sow_analytics_queue_v2", JSON.stringify(legacyQueue));
   const fetchCalls = [];
   const domListeners = new Map();
   const windowListeners = new Map();
@@ -177,7 +179,7 @@ test("network retries reuse the same event IDs and clear the queue only after su
   runtime.card.children[3].children[0].click();
   await new Promise((resolve) => setImmediate(resolve));
 
-  const queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  const queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v3"));
   assert.equal(runtime.fetchCalls.length, 1);
   assert.ok(queued.length > 0);
 
@@ -189,11 +191,12 @@ test("network retries reuse the same event IDs and clear the queue only after su
     retryBatch.events.map((event) => event.event_id),
     firstBatch.events.map((event) => event.event_id),
   );
-  assert.equal(runtime.session.getItem("sow_analytics_queue_v2"), "[]");
+  assert.equal(runtime.session.getItem("sow_analytics_queue_v3"), "[]");
 });
 
 test("accepting sends consented events only to the first-party endpoint", () => {
   const runtime = start();
+  runtime.local.setItem("sow_account_id", "0123456789abcdef0123456789abcdef");
   const [accept] = runtime.card.children[3].children;
   accept.click();
 
@@ -203,11 +206,30 @@ test("accepting sends consented events only to the first-party endpoint", () => 
   assert.equal(runtime.fetchCalls[0].url, "/api/event");
   assert.equal(runtime.fetchCalls[0].options.credentials, "omit");
   const batch = JSON.parse(runtime.fetchCalls[0].options.body);
+  assert.equal(batch.events[0].v, 3);
+  assert.equal("account_id" in batch.events[0], false);
+  assert.equal("player_id" in batch.events[0], false);
+  assert.equal("ip_address" in batch.events[0], false);
   assert.equal(batch.events[0].consented, true);
   assert.equal(batch.events[0].consent_version, "2026-11-10");
   assert.equal(batch.events[0].portal, "site");
   assert.equal(batch.events[0].platform, "web");
   assert.equal(batch.events[0].device_class, "mobile");
+});
+
+test("schema 3 discards queued schema 2 events that may contain account IDs", async () => {
+  const runtime = start({
+    choice: "accepted",
+    legacyQueue: [
+      { event_id: "legacy-event", name: "boot_start", account_id: "0123456789abcdef0123456789abcdef" },
+    ],
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(runtime.session.getItem("sow_analytics_queue_v2"), null);
+  assert.ok(runtime.fetchCalls.length >= 1);
+  const sent = runtime.fetchCalls.flatMap((call) => JSON.parse(call.options.body).events);
+  assert.equal(sent.some((event) => event.event_id === "legacy-event"), false);
+  assert.equal(sent.every((event) => !Object.hasOwn(event, "account_id")), true);
 });
 
 test("match funnel stores only the consented closed labels", () => {
@@ -223,7 +245,7 @@ test("match funnel stores only the consented closed labels", () => {
     duration_bucket: "5_15m",
     player_id: 44,
   });
-  const events = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  const events = JSON.parse(runtime.session.getItem("sow_analytics_queue_v3"));
   assert.deepEqual(events[0].props, {
     mode: "ranked_1v1",
     outcome: "win",
@@ -234,12 +256,12 @@ test("match funnel stores only the consented closed labels", () => {
 
 test("landing visit keeps only a short lowercase source tag from the link", () => {
   const tagged = start({ search: "?ref=Reddit", choice: "accepted" });
-  const [visit] = JSON.parse(tagged.session.getItem("sow_analytics_queue_v2"));
+  const [visit] = JSON.parse(tagged.session.getItem("sow_analytics_queue_v3"));
   assert.equal(visit.name, "landing_visit");
   assert.deepEqual(visit.props, { ref: "reddit" });
 
   const unsafe = start({ search: "?ref=me@example.com", choice: "accepted" });
-  assert.equal(JSON.parse(unsafe.session.getItem("sow_analytics_queue_v2"))[0].props, undefined);
+  assert.equal(JSON.parse(unsafe.session.getItem("sow_analytics_queue_v3"))[0].props, undefined);
 });
 
 test("direct game entry does not prompt or create/send analytics without consent", () => {
@@ -273,7 +295,7 @@ test("tutorial step analytics keeps only the bounded shared episode and action f
     step_index: 2,
     action: "complete",
   });
-  const queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  const queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v3"));
   assert.equal(queued.at(-1).name, "tutorial_step");
   assert.deepEqual(queued.at(-1).props, {
     episode_id: "boudica",
@@ -289,7 +311,7 @@ test("tutorial step analytics keeps only the bounded shared episode and action f
     action: "skip",
     player_name: "ignored",
   });
-  const afterUnsafeEvent = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  const afterUnsafeEvent = JSON.parse(runtime.session.getItem("sow_analytics_queue_v3"));
   assert.equal(afterUnsafeEvent.length, queued.length + 1);
   assert.equal(afterUnsafeEvent.at(-1).props, undefined);
 });
@@ -302,7 +324,7 @@ test("tutorial exit analytics keeps a bounded failed-step identity and accepts q
     step_index: 2,
     action: "fail",
   });
-  let queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  let queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v3"));
   assert.deepEqual(queued.at(-1).props, {
     episode_id: "boudica",
     step_id: "claim-wilderness",
@@ -318,7 +340,7 @@ test("tutorial exit analytics keeps a bounded failed-step identity and accepts q
     player_name: "ignored",
   });
   runtime.window.SOW_analyticsTrack("tutorial_exit_early", { episode_id: "boudica" });
-  queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v3"));
   assert.equal(queued.at(-2).props, undefined);
   assert.deepEqual(queued.at(-1).props, { episode_id: "boudica" });
 });

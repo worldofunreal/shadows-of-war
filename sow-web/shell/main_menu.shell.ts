@@ -24,6 +24,7 @@ import {
     leaderDisplayName,
     menuIcon,
     menuUi,
+    portalOffersSignIn,
     portalOffersStore,
     profileHeroImage,
     reconcileLeaderSelection,
@@ -106,6 +107,7 @@ import {
     resetAuthFlow,
     resolvePurchaseModal,
     resumeExternalPurchaseDelivery,
+    surfaceSettingsRenderKey,
     verifyAuthOtp,
 } from "./main_menu.surfaces.ts";
 import {
@@ -140,6 +142,7 @@ let deleteBusy = false;
 let deleteError = "";
 let activeMenuPointerId: number | null = null;
 let isDraggingSettingsSlider = false;
+let lastSettingsKey = "";
 let renderPending = false;
 let renderFlushTimer: number | null = null;
 let disconnectNoticeTimer: number | null = null;
@@ -1166,12 +1169,19 @@ function panelFromMarkup(markup: string): HTMLElement | null {
     return panel instanceof HTMLElement ? panel : null;
 }
 
+function settingsRenderKey(): string {
+    return surfaceSettingsRenderKey(deleteBusy, deleteError);
+}
+
 function syncOverlay(key: string, markup: string) {
     const selector = "[data-menu-overlay='" + key + "']";
     const current = root.querySelector(selector);
     if (!markup) {
         if (current) {
             current.remove();
+            if (key === "settings") {
+                lastSettingsKey = "";
+            }
             if (key === "system-notice") {
                 const restoreFocus = systemNoticeReturnFocus;
                 systemNoticeReturnFocus = null;
@@ -1184,6 +1194,9 @@ function syncOverlay(key: string, markup: string) {
     const next = panelFromMarkup(markup);
     if (!next) return;
     if (!current) {
+        if (key === "settings") {
+            lastSettingsKey = settingsRenderKey();
+        }
         if (key === "system-notice") {
             systemNoticeReturnFocus =
                 document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -1193,18 +1206,48 @@ function syncOverlay(key: string, markup: string) {
         } else {
             root.appendChild(next);
         }
-    } else if (current.outerHTML !== next.outerHTML) {
-        if (key === "settings") {
-            if (isDraggingSettingsSlider) {
-                return;
-            }
-            const activeRange = current.querySelector<HTMLInputElement>(
-                "input[type='range']:active, input[type='range']:focus",
-            );
-            if (activeRange || (activeMenuPointerId !== null && current.contains(document.activeElement))) {
-                return;
-            }
+        return;
+    }
+    if (key === "settings") {
+        const newKey = settingsRenderKey();
+        if (newKey === lastSettingsKey) {
+            return;
         }
+        lastSettingsKey = newKey;
+        const currentModal = current.querySelector(".sow-menu__settings-modal");
+        const nextModal = next.querySelector(".sow-menu__settings-modal");
+        if (currentModal && nextModal) {
+            const currentCanvas = currentModal.querySelector<HTMLCanvasElement>("[data-menu-music-spectrum]");
+            const nextCanvas = nextModal.querySelector<HTMLCanvasElement>("[data-menu-music-spectrum]");
+            if (currentCanvas && nextCanvas) {
+                nextCanvas.replaceWith(currentCanvas);
+            }
+            if (isDraggingSettingsSlider) {
+                const currentSlider = currentModal.querySelector<HTMLInputElement>("input[data-setting='music_volume']");
+                const nextSlider = nextModal.querySelector<HTMLInputElement>("input[data-setting='music_volume']");
+                if (currentSlider && nextSlider) {
+                    nextSlider.replaceWith(currentSlider);
+                }
+            }
+            const activeEl = document.activeElement;
+            const activeCommand =
+                activeEl instanceof HTMLElement && currentModal.contains(activeEl) ? activeEl.dataset.command : null;
+            const activeSetting =
+                activeEl instanceof HTMLElement && currentModal.contains(activeEl) ? activeEl.dataset.setting : null;
+            currentModal.replaceWith(nextModal);
+            if (activeCommand) {
+                const restore = nextModal.querySelector<HTMLElement>("[data-command='" + activeCommand + "']");
+                if (restore) restore.focus({ preventScroll: true });
+            } else if (activeSetting) {
+                const restore = nextModal.querySelector<HTMLElement>("[data-setting='" + activeSetting + "']");
+                if (restore) restore.focus({ preventScroll: true });
+            }
+        } else {
+            current.innerHTML = next.innerHTML;
+        }
+        return;
+    }
+    if (current.outerHTML !== next.outerHTML) {
         current.replaceWith(next);
         if (key === "system-notice") {
             const primary = next.querySelector<HTMLButtonElement>("button");

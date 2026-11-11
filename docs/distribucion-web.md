@@ -178,7 +178,7 @@ El audio del juego (WASM) se silencia durante cada anuncio y cuando el portal lo
 
 **Doblar recompensas.** Al volver de una partida pública verificada, el menú ofrece una sola vez “Continuar” o “Ver video”, con botones del mismo tamaño y un icono de video. Si el anuncio termina, el servidor (`POST /profile/reward-receipts/double`) vuelve a pagar las coronas y gemas de esa partida. Reglas en `sow-data/src/db.rs`: solo partidas con bono verificado, dentro de las 6 h siguientes, una vez por partida y como máximo 5 por día UTC.
 
-**Gemas por partida** (`match_gems` en `sow-data/src/rewards.rs`, solo en Matchmaking y Ranked 1v1 verificados): 3 por jugar al menos 5 min o ganar, 4 si además derrotaste jugadores o imperios. Ganar suma 50 en FFA público y 25 en el resto (Teams, HvN, Ranked 1v1). Coronas por partida: 40 por participar, +100 por ganar, más bonos por bajas, imperios y asistencias.
+**Gemas por partida** (`match_gems` en `sow-data/src/rewards.rs`, solo en Matchmaking y Ranked 1v1 verificados): 1 por jugar al menos 5 min o ganar, 2 si además derrotaste jugadores o imperios. Ganar suma 17 en FFA público y 8 en el resto (Teams, HvN, Ranked 1v1). Coronas por partida: 40 por participar, +100 por ganar, más bonos por bajas, imperios y asistencias.
 
 **Revisión de Poki.** Poki revisa el uso de anuncios en su QA antes de publicar; esta oferta sigue sus reglas publicadas de recompensado (opcional, botón de continuar del mismo tamaño, icono de video, sin pago si el video falla).
 

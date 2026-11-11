@@ -36,16 +36,6 @@ export function renderCommandPanel() {
         "<button class='sow-menu__secondary' type='button' data-command='open_browser'>" +
         esc(SOW_t("menu.lobby_browser")) +
         " <span>→</span></button>" +
-        "<form class='sow-menu__join' data-form='join'>" +
-        "<input name='code' inputmode='numeric' autocomplete='off' placeholder='" +
-        esc(SOW_t("menu.lobby_code")) +
-        "' aria-label='" +
-        esc(SOW_t("menu.lobby_code")) +
-        "'>" +
-        "<button type='submit'>" +
-        esc(SOW_t("menu.join")) +
-        "</button>" +
-        "</form>" +
         "<button class='sow-menu__secondary' type='button' data-command='open_create'>" +
         esc(SOW_t("menu.create_custom_game")) +
         " <span>+</span></button>" +
@@ -364,6 +354,37 @@ export function renderSettings() {
         "</section>" +
         "</div>"
     );
+}
+
+export function surfaceSettingsRenderKey(deleteBusy: boolean, deleteError: string): string {
+    const s = (menuUi.state && menuUi.state.settings) || {};
+    const auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
+    const session = typeof window.SOW_getWouSession === "function" ? window.SOW_getWouSession() : authSession();
+    const accountEmail =
+        session && session.user && (session.user as { email?: string }).email
+            ? String((session.user as { email?: string }).email).trim()
+            : "";
+    return JSON.stringify([
+        s.music_volume == null ? 0.8 : s.music_volume,
+        Boolean(s.free_zoom_out),
+        Boolean(s.show_fps_ping),
+        Boolean(s.show_dev_tools),
+        Boolean(s.show_dev_tools_available),
+        Boolean(menuUi.signOutConfirmOpen),
+        Boolean(menuUi.deleteArmed),
+        deleteBusy,
+        deleteError,
+        auth.linked,
+        auth.pending,
+        auth.platform,
+        auth.provider,
+        auth.canSignOut,
+        auth.linkedProviders,
+        accountEmail,
+        typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "",
+        portalOffersSignIn(),
+        window.SOW_WOU_SESSION_STATUS,
+    ]);
 }
 
 function authApi(path: string) {

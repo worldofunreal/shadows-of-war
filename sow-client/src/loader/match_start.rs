@@ -18,9 +18,9 @@ impl SowApp {
         if self.progress.is_first_game() && self.boot_campaign_pending.is_some() {
             return;
         }
-        crate::store_portals::load_stop();
         if !self.progress.is_first_game() {
             log::info!("Portal boot: returning player -> main menu");
+            crate::store_portals::load_stop();
             crate::store_portals::gameplay_stop();
             crate::store_portals::track_product_event_with(
                 "boot_route_decision",

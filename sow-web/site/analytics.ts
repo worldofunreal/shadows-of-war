@@ -4,7 +4,8 @@
   const POLICY = "2026-11-10";
   const CONSENT_KEY = "sow_analytics_consent_v2";
   const SESSION_KEY = "sow_analytics_session_v2";
-  const QUEUE_KEY = "sow_analytics_queue_v2";
+  const QUEUE_KEY = "sow_analytics_queue_v3";
+  const LEGACY_QUEUE_KEY = "sow_analytics_queue_v2";
   const MAX_QUEUE = 200;
   const MAX_BATCH = 100;
   const MATCH_MODES = ["ranked_1v1", "custom", "campaign", "tutorial", "single_player", "other"];
@@ -321,15 +322,6 @@
     return null;
   }
 
-  function accountId() {
-    try {
-      const value = localStorage.getItem("sow_account_id") || "";
-      return /^[a-f0-9]{32}$/i.test(value) ? value : null;
-    } catch {
-      return null;
-    }
-  }
-
   function deviceClass() {
     const width = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
     return width < 680 ? "mobile" : width < 1100 ? "tablet" : "desktop";
@@ -341,7 +333,7 @@
     const eventId = uuid();
     if (!id || !eventId) return;
     const event = {
-      v: 2,
+      v: 3,
       event_id: eventId,
       consented: true,
       consent_version: POLICY,
@@ -354,8 +346,6 @@
       build: String(window.SOW_BUILD_VERSION || "web").slice(0, 32),
       locale: String(document.documentElement.lang || navigator.language || "en").slice(0, 32),
     };
-    const currentAccount = accountId();
-    if (currentAccount) event.account_id = currentAccount;
     const safeProps = validProps(name, props);
     if (safeProps) event.props = safeProps;
     queue.push(event);
@@ -472,6 +462,10 @@
     console.error("[SOW analytics] translations unavailable", error),
   );
 
+  try {
+    // Schema 2 queued account IDs in session storage; never migrate or resend them.
+    sessionStorage.removeItem(LEGACY_QUEUE_KEY);
+  } catch {}
   consent = readChoice();
   if (consent === "accepted") {
     if (canSend()) {

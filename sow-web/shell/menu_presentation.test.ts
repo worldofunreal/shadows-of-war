@@ -533,6 +533,14 @@ test("settings panel keeps only useful controls and real account state", () => {
     assert.match(hudSource, /data-hud-setting="reduced_motion"/);
 });
 
+test("settings overlay maintains DOM container stability and preserves music spectrum across re-renders", () => {
+    assert.match(shellSource, /function settingsRenderKey\(\)/);
+    assert.match(shellSource, /if \(key === "settings"\) \{/);
+    assert.match(shellSource, /newKey === lastSettingsKey/);
+    assert.match(shellSource, /currentModal\.replaceWith\(nextModal\)/);
+    assert.match(shellSource, /nextCanvas\.replaceWith\(currentCanvas\)/);
+});
+
 test("settings command deck supports desktop 2-column, mobile vertical full-screen, and compact horizontal viewports", () => {
     const settingsCss = menuCss["main_menu.settings.css"];
     assert.match(settingsCss, /\.sow-menu__settings-modal\s*\{[^}]*backdrop-filter:\s*none;/);
@@ -2536,6 +2544,13 @@ test("heroes skill scales its title above its body, and skins live with the rost
     );
     for (const file of ["main_menu.surfaces.ts", "main_menu.poki.ts", "main_menu.jest.ts"]) {
         assert.match(fs.readFileSync(path.join(shell, file), "utf8"), /renderSkinsButton,/, file);
+    }
+    for (const [file, source] of [
+        ["main_menu.poki.ts", pokiSource],
+        ["main_menu.jest.ts", jestSource],
+    ]) {
+        assert.match(source, /<form class='sow-menu__join' data-form='join'>/, file);
+        assert.match(source, /<input name='code' inputmode='numeric'/, file);
     }
     assert.match(
         fs.readFileSync(path.join(shell, "main_menu.portal-stubs.ts"), "utf8"),

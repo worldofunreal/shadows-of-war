@@ -1,19 +1,18 @@
 //! Product analytics event schema, closed taxonomy, and durable JSONL sink.
 //!
 //! Consented first-party events are validated against a closed taxonomy and
-//! appended to one daily file. Account IDs are replaced by channel-scoped
-//! server hashes before reaching this sink.
+//! appended to one daily file. Current events contain only a temporary session
+//! ID; account-linked pseudonyms remain supported only for legacy erasure.
 
 use crate::profile::is_valid_account_id;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-pub const SCHEMA_VERSION: u8 = 2;
+pub const SCHEMA_VERSION: u8 = 3;
 pub const CONSENT_POLICY_VERSION: &str = "2026-11-10";
 pub const RETENTION_DAYS: u64 = 90;
 pub const MAX_PROPS_BYTES: usize = 2048;
-const MAX_STRING_FIELD: usize = 64;
 
 /// Closed taxonomy. Unknown names are rejected at ingest — adding an event
 /// means adding it here first.
@@ -67,8 +66,6 @@ pub struct AnalyticsEvent {
     #[serde(default)]
     pub session_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub account_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject_id: Option<String>,
     #[serde(default)]
     pub portal: Option<String>,
@@ -109,16 +106,8 @@ impl AnalyticsEvent {
         if self.ts_ms < 1_600_000_000_000 || self.ts_ms > now_ms.saturating_add(5 * minute_ms) {
             return Err("timestamp out of range");
         }
-        if self.session_id.is_empty()
-            || self.session_id.len() > MAX_STRING_FIELD
-            || !is_simple_string(&self.session_id)
-        {
+        if !is_uuid(&self.session_id) {
             return Err("invalid session_id");
-        }
-        if let Some(id) = &self.account_id
-            && !is_valid_account_id(id)
-        {
-            return Err("invalid account_id");
         }
         if self.build.as_deref().is_some_and(|value| {
             !value.is_empty()
@@ -635,7 +624,7 @@ mod tests {
         serde_json::from_value(serde_json::json!({
             "v": SCHEMA_VERSION, "event_id": "123e4567-e89b-12d3-a456-426614174000",
             "consented": true, "consent_version": CONSENT_POLICY_VERSION,
-            "name": name, "ts_ms": NOW_MS, "session_id": "abc123",
+            "name": name, "ts_ms": NOW_MS, "session_id": "123e4567-e89b-12d3-a456-426614174000",
             "portal": "site", "platform": "web"
         }))
         .unwrap()
@@ -680,14 +669,14 @@ mod tests {
     }
 
     #[test]
-    fn account_ids_use_the_shared_profile_format() {
+    fn rejects_legacy_player_identity_fields() {
+        let mut payload = serde_json::to_value(sample("boot_start")).unwrap();
+        payload["account_id"] = serde_json::json!("0123456789abcdef0123456789abcdef");
+        assert!(serde_json::from_value::<AnalyticsEvent>(payload).is_err());
+
         let mut event = sample("boot_start");
-        event.account_id = Some("0123456789abcdef0123456789abcdef".to_string());
-        assert!(event.validate(NOW_MS).is_ok());
-        event.account_id = Some("52948534-1c9f-4def-bc8e-80390d3287a6".to_string());
-        assert!(event.validate(NOW_MS).is_ok());
-        event.account_id = Some("guest_0123456789abcdef0123456789abcdef".to_string());
-        assert_eq!(event.validate(NOW_MS), Err("invalid account_id"));
+        event.session_id = "player-44".to_string();
+        assert_eq!(event.validate(NOW_MS), Err("invalid session_id"));
     }
 
     #[test]
@@ -700,8 +689,11 @@ mod tests {
         bad.v = 9;
         assert_eq!(bad.validate(NOW_MS), Err("unsupported schema version"));
         let mut old = sample("boot_start");
-        old.ts_ms = 999_999_999_999;
-        assert_eq!(old.validate(NOW_MS), Err("timestamp out of range"));
+        old.v = 2;
+        assert_eq!(old.validate(NOW_MS), Err("unsupported schema version"));
+        let mut old_timestamp = sample("boot_start");
+        old_timestamp.ts_ms = 999_999_999_999;
+        assert_eq!(old_timestamp.validate(NOW_MS), Err("timestamp out of range"));
     }
 
     #[test]
@@ -885,8 +877,8 @@ mod tests {
     fn sink_erases_events_for_uuid_account_ids() {
         let dir = tempfile::tempdir().unwrap();
         let account_id = "52948534-1c9f-4def-bc8e-80390d3287a6";
-        let mut event = sample("boot_start");
-        event.account_id = Some(account_id.to_string());
+        let mut event = serde_json::to_value(sample("boot_start")).unwrap();
+        event["account_id"] = serde_json::json!(account_id);
         let mut sink = EventSink::new(dir.path()).unwrap();
         sink.append_line(&serde_json::to_string(&event).unwrap())
             .unwrap();

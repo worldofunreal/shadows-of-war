@@ -87,7 +87,7 @@ function cell(row: HTMLTableRowElement, value: unknown, className?: string): voi
 function renderMetrics(funnel: Counts, today: DailyTotals): void {
   const metrics: [string, number | undefined][] = [
     ["Active sessions today", today.active_sessions || 0],
-    ["Consenting accounts today", today.active_accounts || 0],
+    ["Legacy account pseudonyms today", today.active_accounts || 0],
     ["Site visits", funnel.landing_visit || 0],
     ["Game shells loaded", funnel.shell_loaded || 0],
     ["Quick match attempts", funnel.menu_quick_match || 0],

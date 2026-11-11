@@ -517,10 +517,9 @@ impl Cue {
 }
 
 /// Price tier of a hero: sets the band its crown price falls in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Rarity {
-    #[default]
     Common,
     Rare,
     Epic,
@@ -550,10 +549,8 @@ pub struct Hero {
     #[serde(default)]
     pub free: bool,
     /// Price band; see docs/guia-creacion-heroes.md §2.
-    #[serde(default)]
     pub rarity: Rarity,
-    /// Crowns to unlock; gems cost 90% of it. Free heroes carry 0.
-    #[serde(default)]
+    /// Crowns to unlock; gems cost half of it. Free heroes carry 0.
     pub price_crowns: u64,
 }
 

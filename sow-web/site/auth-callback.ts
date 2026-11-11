@@ -130,6 +130,19 @@ function finishSignIn(data: SignInReply, returnTo: string | undefined): void {
       },
     }),
   );
+  if (window.opener && !window.opener.closed) {
+    try {
+      window.opener.postMessage(
+        {
+          type: "sow:oauth-success",
+          session: data,
+        },
+        window.location.origin
+      );
+      window.close();
+      return;
+    } catch {}
+  }
   window.location.replace(safeReturnTo(returnTo));
 }
 

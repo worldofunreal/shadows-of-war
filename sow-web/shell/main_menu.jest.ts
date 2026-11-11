@@ -207,3 +207,15 @@ window.addEventListener("sow:platform-identity-changed", function () {
     const accountDeck = document.querySelector(".sow-menu__settings-account-deck");
     if (accountDeck) accountDeck.innerHTML = renderAccountControl();
 });
+
+export function surfaceSettingsRenderKey(_deleteBusy: boolean, _deleteError: string): string {
+    const s = (menuUi.state && menuUi.state.settings) || {};
+    return JSON.stringify([
+        s.music_volume == null ? 0.8 : s.music_volume,
+        Boolean(s.free_zoom_out),
+        Boolean(s.show_fps_ping),
+        Boolean(s.show_dev_tools),
+        Boolean(s.show_dev_tools_available),
+        typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "",
+    ]);
+}
