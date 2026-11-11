@@ -370,7 +370,8 @@
         }
         const key = String(state.loader_cycle_id || 0) + ":" + slug;
         if (loaderBriefingKey !== key) {
-            const markup = window.SOW_renderHeroBriefing(slug, "loader");
+            // Pass the loader's own leader entry so its art slug resolves without the menu's leader list.
+            const markup = window.SOW_renderHeroBriefing(stateLeader(state) || slug, "loader");
             if (!markup) {
                 box.hidden = true;
                 box.innerHTML = "";

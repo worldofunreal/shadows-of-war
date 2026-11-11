@@ -3,6 +3,11 @@
 use crate::platform_identity::PlatformIdentity;
 
 #[cfg(target_arch = "wasm32")]
+thread_local! {
+    static PORTAL_LOADING_FINISHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
 #[cfg(target_arch = "wasm32")]
@@ -108,7 +113,10 @@ pub fn duration_bucket(started_at: Option<web_time::Instant>) -> &'static str {
 }
 
 pub fn load_stop() {
-    call_window_hook("SOW_portalLoadStop");
+    let already_finished = PORTAL_LOADING_FINISHED.with(|finished| finished.replace(true));
+    if !already_finished {
+        call_window_hook("SOW_portalLoadStop");
+    }
 }
 
 #[cfg(target_arch = "wasm32")]

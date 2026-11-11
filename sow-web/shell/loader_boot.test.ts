@@ -42,6 +42,13 @@ const netMessagesSource = fs.readFileSync(
     path.join(shell, "../../sow-client/src/net/update/messages.rs"),
     "utf8",
 );
+const storePortalSdkSource = fs.readFileSync(path.join(shell, "sdk/store_portals.ts"), "utf8");
+const pokiPortalSdkSource = fs.readFileSync(path.join(shell, "sdk/poki_portals.ts"), "utf8");
+const jestPortalSdkSource = fs.readFileSync(path.join(shell, "sdk/jest_portals.ts"), "utf8");
+const portalStoreRustSource = fs.readFileSync(
+    path.join(shell, "../../sow-client/src/store_portals.rs"),
+    "utf8",
+);
 
 test("first-run tutorial keeps one boot loader and splash art until Rust signals completion", async () => {
     for (const id of ["loader-footer", "loader-ability", "loader-bar-wrap", "loader-bar-fill"]) {
@@ -144,6 +151,35 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.match(bootIntro, /boot_campaign_pending = Some\(campaign\.episode_id\(\)\.to_string\(\)\)/);
     assert.match(bootIntro, /begin_enter_game_loader\(campaign\.advisor\(\)\)/);
     assert.doesNotMatch(bootIntro, /hide_web_loader|splash_state\.done = true|phase = ClientPhase::MainMenu/);
+    assert.doesNotMatch(
+        bootIntro,
+        /store_portals::load_stop/,
+        "first-run portal loading remains active while the tutorial engine initializes",
+    );
+    assert.doesNotMatch(
+        loaderTemplate,
+        /SOW_portalGameLoadingFinished/,
+        "the HTML bootstrap cannot report loading complete at WASM initialization",
+    );
+    assert.match(
+        portalStoreRustSource,
+        /call_window_hook\("SOW_portalLoadStop"\)/,
+        "Rust uses the shared portal loading hook",
+    );
+    assert.match(storePortalSdkSource, /window\.SOW_portalLoadStop = function/);
+    assert.match(pokiPortalSdkSource, /window\.SOW_portalLoadStop = window\.SOW_portalGameLoadingFinished/);
+    assert.match(jestPortalSdkSource, /window\.SOW_portalLoadStop = window\.SOW_portalGameLoadingFinished/);
+    const enterGameReady = engineLoaderSource.indexOf("if ready_to_release {");
+    const snapshotAvailable = engineLoaderSource.indexOf("mark_snapshot_available();");
+    const portalLoadStop = engineLoaderSource.indexOf("crate::store_portals::load_stop();");
+    const gameplayStart = engineLoaderSource.indexOf("crate::store_portals::gameplay_start();");
+    assert.ok(
+        snapshotAvailable >= 0 &&
+            enterGameReady > snapshotAvailable &&
+            portalLoadStop > enterGameReady &&
+            gameplayStart > portalLoadStop,
+        "first-run portal loading completes only after the initial snapshot and before gameplay starts",
+    );
     const tutorialStateUpdate = shellSource.indexOf("window.SOW_tutorial_menu_state_update(menuUi.state)");
     const loaderStateSync = shellSource.indexOf("syncWebLoaderForState(menuUi.state)", tutorialStateUpdate);
     assert.ok(
@@ -704,7 +740,8 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         "normal matches show the shared hero briefing",
     );
     assert.match(document.getElementById("loader-ability").innerHTML, /sow-hero-briefing--loader/);
-    assert.deepEqual(briefingCalls.at(-1), ["boudica", "loader"]);
+    assert.equal(briefingCalls.at(-1)[0].slug, "boudica", "the briefing receives the loader's own Boudica entry");
+    assert.equal(briefingCalls.at(-1)[1], "loader");
     assert.equal(
         normalEntryPicture.children[0],
         boudicaPreload,

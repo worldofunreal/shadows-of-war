@@ -622,10 +622,11 @@ pub fn calculate(input: RewardInput) -> MatchReward {
 // Gem bonus per verified match (owner decision 2026-11): a small amount for
 // playing, more for a win, the most for the hardest win (public FFA). Teams,
 // HvN and Ranked 1v1 wins pay half of an FFA win.
-const GEMS_PLAYED: u64 = 3;
-const GEMS_PLAYED_WITH_DEFEATS: u64 = 4;
-const GEMS_WIN_FFA: u64 = 50;
-const GEMS_WIN_SIDE: u64 = 25;
+// Gems are scarce on purpose: they pay about a third of the 2026-11 amounts.
+const GEMS_PLAYED: u64 = 1;
+const GEMS_PLAYED_WITH_DEFEATS: u64 = 2;
+const GEMS_WIN_FFA: u64 = 17;
+const GEMS_WIN_SIDE: u64 = 8;
 /// A match shorter than this pays no participation gems unless it was won,
 /// so joining and resigning cannot farm them.
 pub const GEMS_MIN_PLAYED_SECONDS: u32 = 300;
@@ -712,15 +713,15 @@ mod tests {
             played_seconds: GEMS_MIN_PLAYED_SECONDS,
             ..Default::default()
         };
-        assert_eq!(match_gems(played), 3);
-        assert_eq!(match_gems(GemInput { players_defeated: 1, ..played }), 4);
-        assert_eq!(match_gems(GemInput { won: true, ..played }), 53);
-        assert_eq!(match_gems(GemInput { won: true, mode: "Teams", ..played }), 28);
+        assert_eq!(match_gems(played), 1);
+        assert_eq!(match_gems(GemInput { players_defeated: 1, ..played }), 2);
+        assert_eq!(match_gems(GemInput { won: true, ..played }), 18);
+        assert_eq!(match_gems(GemInput { won: true, mode: "Teams", ..played }), 9);
         assert_eq!(
             match_gems(GemInput { won: true, mode: "HumansVsNations", ..played }),
-            28
+            9
         );
-        assert_eq!(match_gems(GemInput { won: true, queue: "Ranked1v1", ..played }), 28);
+        assert_eq!(match_gems(GemInput { won: true, queue: "Ranked1v1", ..played }), 9);
         // Join-and-resign and host-controlled lobbies pay nothing.
         assert_eq!(match_gems(GemInput { played_seconds: 60, ..played }), 0);
         assert_eq!(match_gems(GemInput { won: true, queue: "Custom", ..played }), 0);

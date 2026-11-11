@@ -642,9 +642,6 @@
                     throw e;
                 }
             }
-            if (typeof window.SOW_portalGameLoadingFinished === "function") {
-                window.SOW_portalGameLoadingFinished();
-            }
         }
 
         run();

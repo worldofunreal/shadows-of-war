@@ -272,11 +272,7 @@
             }
         }
         const safe = safeProps(event.name, props);
-        if (
-            REQUIRED_MATCH_EVENT_PROPS.has(event.name) &&
-            props != null &&
-            safe == null
-        ) {
+        if (REQUIRED_MATCH_EVENT_PROPS.has(event.name) && safe == null) {
             return null;
         }
         return { name: event.name, props: safe };

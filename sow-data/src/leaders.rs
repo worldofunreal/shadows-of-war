@@ -138,9 +138,10 @@ impl Leader {
         self.hero().price_crowns
     }
 
-    /// Gems to unlock: 90% of the crown price, rounded down.
+    /// Gems to unlock: half the crown price, rounded down, so one gem is worth two crowns.
+    /// The roster test keeps gem prices distinct.
     pub fn price_gems(self) -> u64 {
-        self.price_crowns() * 9 / 10
+        self.price_crowns() / 2
     }
 
     /// Canonical NFTROPOLY/WOU-ID card token; heroes not registered there have none.
@@ -362,20 +363,22 @@ mod tests {
         let mut gems = std::collections::HashSet::new();
         for leader in Leader::all().filter(|leader| !leader.always_free()) {
             let band = match leader.rarity() {
-                Rarity::Common => 250..=530,
-                Rarity::Rare => 600..=1000,
-                Rarity::Epic => 1200..=2000,
-                Rarity::Legendary => 2500..=4000,
+                Rarity::Common => 425..=564,
+                Rarity::Rare => 656..=932,
+                Rarity::Epic => 1116..=1670,
+                Rarity::Legendary => 2038..=2500,
             };
             assert!(band.contains(&leader.price_crowns()), "{} is outside its band", leader.id());
             assert!(crowns.insert(leader.price_crowns()), "duplicate crown price for {}", leader.id());
             assert!(gems.insert(leader.price_gems()), "duplicate gem price for {}", leader.id());
         }
         assert!(Leader::all().filter(|leader| leader.always_free()).all(|leader| leader.price_crowns() == 0));
-        let total = Leader::all().count();
-        let count = |tier: Rarity| Leader::all().filter(|leader| leader.rarity() == tier).count();
-        assert!(count(Rarity::Common) * 100 <= total * 45, "Common is above 45%");
-        assert!(count(Rarity::Legendary) * 100 <= total * 8, "Legendary is above 8%");
+        // The caps govern purchasable heroes; a free hero's rarity only sets its display.
+        let paid: Vec<Leader> = Leader::all().filter(|leader| !leader.always_free()).collect();
+        let total = paid.len();
+        let count = |tier: Rarity| paid.iter().filter(|leader| leader.rarity() == tier).count();
+        assert!(count(Rarity::Common) * 100 <= total * 45, "Common is above 45% of paid heroes");
+        assert!(count(Rarity::Legendary) * 100 <= total * 8, "Legendary is above 8% of paid heroes");
     }
 
     #[test]

@@ -14,7 +14,7 @@
    "avatar": "caesar",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 3440,
+    "price_crowns": 2326,
     "name": "Caesar",
     "ability": {
      "kind": "attacker_loss",
@@ -38,7 +38,7 @@
    "avatar": "cleopatra",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 4000,
+    "price_crowns": 2500,
     "name": "Cleopatra",
     "ability": {
      "kind": "resource_bonus",
@@ -63,7 +63,7 @@
    "avatar": "danish_vikings",
    "hero": {
     "rarity": "common",
-    "price_crowns": 490,
+    "price_crowns": 544,
     "name": "Ragnar",
     "ability": {
      "kind": "conquest_speed",
@@ -87,7 +87,7 @@
    "avatar": "sun_tzu",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 2500,
+    "price_crowns": 2038,
     "name": "Sun Tzu",
     "ability": {
      "kind": "conquest_speed",
@@ -111,7 +111,7 @@
    "avatar": "alexander",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 3625,
+    "price_crowns": 2384,
     "name": "Alexander",
     "ability": {
      "kind": "conquest_speed",
@@ -136,7 +136,7 @@
    "avatar": "borjigin_mongols",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 3250,
+    "price_crowns": 2270,
     "name": "Genghis Khan",
     "ability": {
      "kind": "attack_strength",
@@ -160,7 +160,7 @@
    "avatar": "richard",
    "hero": {
     "rarity": "common",
-    "price_crowns": 515,
+    "price_crowns": 556,
     "name": "Richard",
     "ability": {
      "kind": "resource_bonus",
@@ -187,7 +187,7 @@
    "avatar": "arverni",
    "hero": {
     "rarity": "common",
-    "price_crowns": 455,
+    "price_crowns": 526,
     "name": "Vercingetorix",
     "ability": {
      "kind": "resource_bonus",
@@ -212,7 +212,7 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Boudica",
    "avatar": "iceni",
    "hero": {
-    "rarity": "legendary",
+    "rarity": "common",
     "price_crowns": 0,
     "name": "Boudica",
     "ability": {
@@ -238,7 +238,7 @@
    "avatar": "six_sky",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 640,
+    "price_crowns": 686,
     "name": "Six Sky",
     "ability": {
      "kind": "attack_strength",
@@ -264,7 +264,7 @@
    "avatar": "leonidas",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 2690,
+    "price_crowns": 2096,
     "name": "Leonidas",
     "ability": {
      "kind": "tower_loss",
@@ -289,7 +289,7 @@
    "avatar": "napoleon",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 3815,
+    "price_crowns": 2442,
     "name": "Napoleon",
     "ability": {
      "kind": "conquest_speed",
@@ -458,7 +458,7 @@
    "territory_color": "#c05430",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 980,
+    "price_crowns": 918,
     "name": "Amina",
     "ability": {
      "kind": "city_capture",
@@ -519,7 +519,7 @@
    "territory_color": "#6a4c9c",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 925,
+    "price_crowns": 882,
     "name": "Yaa Asantewaa",
     "ability": {
      "kind": "attack_strength",
@@ -794,7 +794,7 @@
    "territory_color": "#2aa8c4",
    "hero": {
     "rarity": "common",
-    "price_crowns": 250,
+    "price_crowns": 425,
     "name": "Anacaona",
     "ability": {
      "kind": "attack_strength",
@@ -1069,7 +1069,7 @@
    "territory_color": "#3d7f9e",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 840,
+    "price_crowns": 824,
     "name": "Lozen",
     "ability": {
      "kind": "attacker_loss",
@@ -1872,7 +1872,7 @@
    "territory_color": "#641e16",
    "hero": {
     "rarity": "common",
-    "price_crowns": 445,
+    "price_crowns": 520,
     "name": "Tipu",
     "ability": {
      "kind": "conquest_speed",
@@ -2125,7 +2125,7 @@
    "territory_color": "#b87808",
    "hero": {
     "rarity": "common",
-    "price_crowns": 525,
+    "price_crowns": 562,
     "name": "William",
     "ability": {
      "kind": "tower_range",
@@ -2545,7 +2545,7 @@
    "territory_color": "#c27d29",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 970,
+    "price_crowns": 910,
     "name": "Sālote III",
     "ability": {
      "kind": "alliance_cost",
@@ -7502,7 +7502,7 @@
    "territory_color": "#e3b341",
    "hero": {
     "rarity": "common",
-    "price_crowns": 475,
+    "price_crowns": 536,
     "name": "Makeda",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -7729,7 +7729,7 @@
    "territory_color": "#a0287a",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 945,
+    "price_crowns": 896,
     "name": "Durgavati",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -7754,7 +7754,7 @@
    "territory_color": "#c94f7c",
    "hero": {
     "rarity": "common",
-    "price_crowns": 345,
+    "price_crowns": 472,
     "name": "Gi",
     "ability": {
      "kind": "alliance_cost",
@@ -7779,7 +7779,7 @@
    "territory_color": "#9bb83a",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1360,
+    "price_crowns": 1226,
     "name": "Ashoka",
     "ability": {
      "kind": "resource_bonus",
@@ -7803,7 +7803,7 @@
    "territory_color": "#803a7b",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1760,
+    "price_crowns": 1504,
     "name": "Hannibal",
     "ability": {
      "kind": "conquest_speed",
@@ -7826,7 +7826,7 @@
    "territory_color": "#c04434",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1640,
+    "price_crowns": 1420,
     "name": "Simón Bolívar",
     "ability": {
      "kind": "resource_bonus",
@@ -7850,7 +7850,7 @@
    "territory_color": "#1ca084",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 3065,
+    "price_crowns": 2212,
     "name": "Joan",
     "ability": {
      "kind": "attack_strength",
@@ -7875,7 +7875,7 @@
    "territory_color": "#8e44ad",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 2000,
+    "price_crowns": 1670,
     "name": "Catherine",
     "ability": {
      "kind": "tower_loss",
@@ -7900,7 +7900,7 @@
    "territory_color": "#4884c8",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1440,
+    "price_crowns": 1282,
     "name": "Isabella I",
     "ability": {
      "kind": "city_capture",
@@ -7925,7 +7925,7 @@
    "territory_color": "#333955",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1480,
+    "price_crowns": 1310,
     "name": "Cyrus",
     "ability": {
      "kind": "conquest_speed",
@@ -7950,7 +7950,7 @@
    "territory_color": "#27ae60",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1840,
+    "price_crowns": 1560,
     "name": "Saladin",
     "ability": {
      "kind": "conquest_speed",
@@ -7973,7 +7973,7 @@
    "territory_color": "#f1c40f",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1880,
+    "price_crowns": 1586,
     "name": "Suleiman",
     "ability": {
      "kind": "conquest_speed",
@@ -7997,7 +7997,7 @@
    "territory_color": "#e84393",
    "hero": {
     "rarity": "common",
-    "price_crowns": 380,
+    "price_crowns": 490,
     "name": "Tomoe Gozen",
     "ability": {
      "kind": "conquest_speed",
@@ -8020,7 +8020,7 @@
    "territory_color": "#00cece",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 935,
+    "price_crowns": 888,
     "name": "Triệu",
     "ability": {
      "kind": "attack_strength",
@@ -8045,7 +8045,7 @@
    "territory_color": "#6c5ce7",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1520,
+    "price_crowns": 1338,
     "name": "Musa",
     "ability": {
      "kind": "attacker_loss",
@@ -8070,7 +8070,7 @@
    "territory_color": "#fd79a8",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1240,
+    "price_crowns": 1144,
     "name": "Shaka",
     "ability": {
      "kind": "alliance_cost",
@@ -8093,7 +8093,7 @@
    "territory_color": "#55efc4",
    "hero": {
     "rarity": "common",
-    "price_crowns": 360,
+    "price_crowns": 480,
     "name": "Nzinga",
     "ability": {
      "kind": "resource_bonus",
@@ -8117,7 +8117,7 @@
    "territory_color": "#fdcb6e",
    "hero": {
     "rarity": "common",
-    "price_crowns": 450,
+    "price_crowns": 524,
     "name": "Kamehameha I",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8140,7 +8140,7 @@
    "avatar": "gajah_mada",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 915,
+    "price_crowns": 874,
     "name": "Gajah Mada",
     "ability": {
      "kind": "conquest_speed",
@@ -8163,7 +8163,7 @@
    "avatar": "solomon",
    "hero": {
     "rarity": "common",
-    "price_crowns": 500,
+    "price_crowns": 548,
     "name": "Solomon",
     "ability": {
      "kind": "resource_bonus",
@@ -8187,7 +8187,7 @@
    "avatar": "sayyid_said",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 1000,
+    "price_crowns": 932,
     "name": "Sayyid Said",
     "ability": {
      "kind": "attacker_loss",
@@ -8210,7 +8210,7 @@
    "avatar": "lapu_lapu",
    "hero": {
     "rarity": "common",
-    "price_crowns": 365,
+    "price_crowns": 482,
     "name": "Lapu-Lapu",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8233,7 +8233,7 @@
    "avatar": "constantine",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1680,
+    "price_crowns": 1448,
     "name": "Constantine",
     "ability": {
      "kind": "conquest_speed",
@@ -8256,7 +8256,7 @@
    "avatar": "vlad_iii",
    "hero": {
     "rarity": "legendary",
-    "price_crowns": 2875,
+    "price_crowns": 2154,
     "name": "Vlad III",
     "ability": {
      "kind": "resource_bonus",
@@ -8280,7 +8280,7 @@
    "avatar": "mary",
    "hero": {
     "rarity": "common",
-    "price_crowns": 425,
+    "price_crowns": 510,
     "name": "Mary",
     "ability": {
      "kind": "alliance_cost",
@@ -8305,7 +8305,7 @@
    "avatar": "semiramis",
    "hero": {
     "rarity": "common",
-    "price_crowns": 400,
+    "price_crowns": 498,
     "name": "Semiramis",
     "ability": {
      "kind": "resource_bonus",
@@ -8329,7 +8329,7 @@
    "avatar": "shima_kalingga",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 600,
+    "price_crowns": 656,
     "name": "Shima",
     "ability": {
      "kind": "attack_strength",
@@ -8352,7 +8352,7 @@
    "avatar": "tomyris",
    "hero": {
     "rarity": "common",
-    "price_crowns": 395,
+    "price_crowns": 494,
     "name": "Tomyris",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8375,7 +8375,7 @@
    "avatar": "gorgo",
    "hero": {
     "rarity": "common",
-    "price_crowns": 340,
+    "price_crowns": 470,
     "name": "Gorgo",
     "ability": {
      "kind": "attack_strength",
@@ -8398,7 +8398,7 @@
    "avatar": "artigas",
    "hero": {
     "rarity": "common",
-    "price_crowns": 320,
+    "price_crowns": 460,
     "name": "Artigas",
     "ability": {
      "kind": "conquest_speed",
@@ -8421,7 +8421,7 @@
    "avatar": "bernardo_ohiggins",
    "hero": {
     "rarity": "common",
-    "price_crowns": 385,
+    "price_crowns": 492,
     "name": "Bernardo O'Higgins",
     "ability": {
      "kind": "alliance_cost",
@@ -8444,7 +8444,7 @@
    "avatar": "nezahualcoyotl",
    "hero": {
     "rarity": "common",
-    "price_crowns": 290,
+    "price_crowns": 444,
     "name": "Nezahualcóyotl",
     "ability": {
      "kind": "resource_bonus",
@@ -8468,7 +8468,7 @@
    "avatar": "tlacaelel",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 820,
+    "price_crowns": 808,
     "name": "Tlacaelel",
     "ability": {
      "kind": "alliance_cost",
@@ -8491,7 +8491,7 @@
    "avatar": "tenamaxtli",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 695,
+    "price_crowns": 722,
     "name": "Tenamaxtli",
     "ability": {
      "kind": "attack_strength",
@@ -8514,7 +8514,7 @@
    "avatar": "cosijoeza",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 630,
+    "price_crowns": 678,
     "name": "Cosijoeza",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8537,7 +8537,7 @@
    "avatar": "mangas_coloradas",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 990,
+    "price_crowns": 924,
     "name": "Mangas Coloradas",
     "ability": {
      "kind": "alliance_cost",
@@ -8560,7 +8560,7 @@
    "avatar": "tomochichi",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 725,
+    "price_crowns": 744,
     "name": "Tomochichi",
     "ability": {
      "kind": "alliance_cost",
@@ -8583,7 +8583,7 @@
    "avatar": "eight_deer",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 760,
+    "price_crowns": 764,
     "name": "Eight Deer",
     "ability": {
      "kind": "attack_strength",
@@ -8606,7 +8606,7 @@
    "avatar": "nemequene",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 655,
+    "price_crowns": 692,
     "name": "Nemequene",
     "ability": {
      "kind": "attacker_loss",
@@ -8629,7 +8629,7 @@
    "avatar": "thanadelthur",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 610,
+    "price_crowns": 664,
     "name": "Thanadelthur",
     "ability": {
      "kind": "alliance_cost",
@@ -8652,7 +8652,7 @@
    "avatar": "artemisia_i",
    "hero": {
     "rarity": "common",
-    "price_crowns": 370,
+    "price_crowns": 484,
     "name": "Artemisia I",
     "ability": {
      "kind": "resource_bonus",
@@ -8676,7 +8676,7 @@
    "avatar": "shajar_al_durr",
    "hero": {
     "rarity": "common",
-    "price_crowns": 325,
+    "price_crowns": 462,
     "name": "Shajar al-Durr",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -8699,7 +8699,7 @@
    "avatar": "ramesses_ii",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1600,
+    "price_crowns": 1392,
     "name": "Ramesses II",
     "ability": {
      "kind": "resource_bonus",
@@ -8723,7 +8723,7 @@
    "avatar": "qin_liangyu",
    "hero": {
     "rarity": "common",
-    "price_crowns": 300,
+    "price_crowns": 450,
     "name": "Qin Liangyu",
     "art_slug": "qin_liangyu",
     "ability": {
@@ -8747,7 +8747,7 @@
    "avatar": "lobengula",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 855,
+    "price_crowns": 830,
     "name": "Lobengula",
     "ability": {
      "kind": "city_troop_capacity",
@@ -8847,7 +8847,7 @@
    "avatar": "shah_jahan",
    "hero": {
     "rarity": "common",
-    "price_crowns": 460,
+    "price_crowns": 528,
     "name": "Shah Jahan",
     "ability": {
      "kind": "resource_bonus",
@@ -8936,7 +8936,7 @@
    "avatar": "xerxes_i",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1400,
+    "price_crowns": 1254,
     "name": "Xerxes",
     "ability": {
      "kind": "attacker_loss",
@@ -8985,7 +8985,7 @@
    "avatar": "marcus_aurelius",
    "hero": {
     "rarity": "common",
-    "price_crowns": 530,
+    "price_crowns": 564,
     "name": "Marcus Aurelius",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -9073,7 +9073,7 @@
    "avatar": "justinian_ii_hero",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1200,
+    "price_crowns": 1116,
     "name": "Justinian II",
     "legacy_ids": ["justinian_i"],
     "art_slug": "justinian_ii_hero",
@@ -9137,7 +9137,7 @@
    "avatar": "totila",
    "hero": {
     "rarity": "common",
-    "price_crowns": 275,
+    "price_crowns": 436,
     "name": "Totila",
     "ability": {
      "kind": "attacker_loss",
@@ -9160,7 +9160,7 @@
    "avatar": "chilperic_i",
    "hero": {
     "rarity": "common",
-    "price_crowns": 280,
+    "price_crowns": 438,
     "name": "Chilperic I",
     "ability": {
      "kind": "attacker_loss",
@@ -9196,7 +9196,7 @@
    "avatar": "lothair_i",
    "hero": {
     "rarity": "common",
-    "price_crowns": 375,
+    "price_crowns": 488,
     "name": "Lothair I",
     "ability": {
      "kind": "attacker_loss",
@@ -9219,7 +9219,7 @@
    "avatar": "frederick_barbarossa",
    "hero": {
     "rarity": "common",
-    "price_crowns": 470,
+    "price_crowns": 534,
     "name": "Barbarossa",
     "ability": {
      "kind": "attacker_loss",
@@ -9242,7 +9242,7 @@
    "avatar": "charles_v",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1960,
+    "price_crowns": 1642,
     "name": "Charles V",
     "ability": {
      "kind": "attacker_loss",
@@ -9265,7 +9265,7 @@
    "avatar": "wanli",
    "hero": {
     "rarity": "common",
-    "price_crowns": 420,
+    "price_crowns": 508,
     "name": "Wanli",
     "ability": {
      "kind": "enemy_retreat_penalty",
@@ -9289,7 +9289,7 @@
    "avatar": "jayaatu_khan",
    "hero": {
     "rarity": "common",
-    "price_crowns": 270,
+    "price_crowns": 434,
     "name": "Jayaatu Khan",
     "ability": {
      "kind": "attacker_loss",
@@ -9312,7 +9312,7 @@
    "avatar": "sitting_bull",
    "hero": {
     "rarity": "common",
-    "price_crowns": 465,
+    "price_crowns": 530,
     "name": "Sitting Bull",
     "art_slug": "sitting_bull",
     "ability": {
@@ -9335,7 +9335,7 @@
    "avatar": "matoaka",
    "hero": {
     "rarity": "common",
-    "price_crowns": 495,
+    "price_crowns": 546,
     "name": "Matoaka",
     "legacy_ids": [],
     "art_slug": "matoaka",
@@ -9360,7 +9360,7 @@
    "avatar": "burebista",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 905,
+    "price_crowns": 866,
     "name": "Burebista",
     "art_slug": "burebista",
     "ability": {
@@ -9384,7 +9384,7 @@
    "avatar": "boleslaw_ii",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 865,
+    "price_crowns": 838,
     "name": "Bolesław II",
     "art_slug": "boleslaw_ii",
     "ability": {
@@ -9409,7 +9409,7 @@
    "avatar": "al_ghafiqi",
    "hero": {
     "rarity": "common",
-    "price_crowns": 260,
+    "price_crowns": 428,
     "name": "Al-Ghafiqi",
     "art_slug": "al_ghafiqi",
     "ability": {
@@ -9434,7 +9434,7 @@
    "avatar": "wiradjuri",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 705,
+    "price_crowns": 728,
     "name": "Windradyne",
     "art_slug": "windradyne",
     "ability": {
@@ -9458,7 +9458,7 @@
    "avatar": "yagan",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 810,
+    "price_crowns": 802,
     "name": "Yagan",
     "art_slug": "yagan_noongar",
     "ability": {
@@ -9482,7 +9482,7 @@
    "avatar": "peter",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1920,
+    "price_crowns": 1614,
     "name": "Peter",
     "art_slug": "peter",
     "ability": {
@@ -9505,7 +9505,7 @@
    "avatar": "suiko",
    "hero": {
     "rarity": "common",
-    "price_crowns": 405,
+    "price_crowns": 500,
     "name": "Suiko",
     "art_slug": "suiko",
     "ability": {
@@ -9529,7 +9529,7 @@
    "avatar": "nebuchadnezzar_ii",
    "hero": {
     "rarity": "common",
-    "price_crowns": 485,
+    "price_crowns": 542,
     "name": "Nebuchadnezzar II",
     "art_slug": "nebuchadnezzar_ii",
     "ability": {
@@ -9551,7 +9551,7 @@
    "avatar": "david",
    "hero": {
     "rarity": "common",
-    "price_crowns": 520,
+    "price_crowns": 558,
     "name": "David",
     "art_slug": "david",
     "ability": {
@@ -9575,7 +9575,7 @@
    "avatar": "sarraounia_mangou",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 675,
+    "price_crowns": 706,
     "name": "Sarraounia Mangou",
     "art_slug": "sarraounia_mangou",
     "ability": {
@@ -9598,7 +9598,7 @@
    "avatar": "muhammad_ghor",
    "hero": {
     "rarity": "common",
-    "price_crowns": 350,
+    "price_crowns": 474,
     "name": "Muhammad Ghor",
     "art_slug": "muhammad_ghor",
     "ability": {
@@ -9622,7 +9622,7 @@
    "avatar": "puyi",
    "hero": {
     "rarity": "common",
-    "price_crowns": 505,
+    "price_crowns": 552,
     "name": "Puyi",
     "art_slug": "puyi",
     "ability": {
@@ -9645,7 +9645,7 @@
    "avatar": "pertinax",
    "hero": {
     "rarity": "common",
-    "price_crowns": 440,
+    "price_crowns": 518,
     "name": "Pertinax",
     "art_slug": "pertinax",
     "ability": {
@@ -9668,7 +9668,7 @@
    "avatar": "ewuare",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 745,
+    "price_crowns": 758,
     "name": "Ewuare",
     "art_slug": "ewuare",
     "ability": {
@@ -9692,7 +9692,7 @@
    "avatar": "veleda",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 885,
+    "price_crowns": 852,
     "name": "Veleda",
     "art_slug": "veleda",
     "ability": {
@@ -9715,7 +9715,7 @@
    "avatar": "amir_timur",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1720,
+    "price_crowns": 1476,
     "name": "Amir Timur",
     "art_slug": "amir_timur",
     "ability": {
@@ -9739,7 +9739,7 @@
    "avatar": "nandi_zulu",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 830,
+    "price_crowns": 816,
     "name": "Nandi",
     "ability": {
      "kind": "resource_bonus",
@@ -9767,7 +9767,7 @@
    "avatar": "mavia",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 790,
+    "price_crowns": 786,
     "name": "Mavia",
     "ability": {
      "kind": "armistice",
@@ -9789,7 +9789,7 @@
    "avatar": "natavan",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 685,
+    "price_crowns": 714,
     "name": "Natavan",
     "ability": {
      "kind": "city_farm_founding"
@@ -9811,7 +9811,7 @@
    "avatar": "tarabai",
    "hero": {
     "rarity": "common",
-    "price_crowns": 295,
+    "price_crowns": 446,
     "name": "Tarabai",
     "ability": {
      "kind": "counter_levy",
@@ -9834,7 +9834,7 @@
    "avatar": "suriyothai_siam",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 715,
+    "price_crowns": 736,
     "name": "Suriyothai",
     "ability": {
      "kind": "city_intercession",
@@ -9857,7 +9857,7 @@
    "avatar": "cartimandua_brigantes",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 895,
+    "price_crowns": 860,
     "name": "Cartimandua",
     "ability": {
      "kind": "retreat_handover",
@@ -9880,7 +9880,7 @@
    "avatar": "thusnelda_cherusci",
    "hero": {
     "rarity": "common",
-    "price_crowns": 305,
+    "price_crowns": 452,
     "name": "Thusnelda",
     "ability": {
      "kind": "city_denial"
@@ -9901,7 +9901,7 @@
    "avatar": "hatshepsut_egypt",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1320,
+    "price_crowns": 1200,
     "name": "Hatshepsut",
     "ability": {
      "kind": "punt_gardens"
@@ -9923,7 +9923,7 @@
    "avatar": "lakshmibai",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 960,
+    "price_crowns": 902,
     "name": "Lakshmibai",
     "ability": {
      "kind": "last_city_relocation"
@@ -9944,7 +9944,7 @@
    "avatar": "kabal_xook",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 665,
+    "price_crowns": 700,
     "name": "K’ab’al Xook",
     "ability": {
      "kind": "war_regalia",
@@ -9966,7 +9966,7 @@
    "avatar": "mandukhai",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 800,
+    "price_crowns": 794,
     "name": "Mandukhai Khatun",
     "ability": {
      "kind": "reunification",
@@ -9988,7 +9988,7 @@
    "avatar": "nefertiti_egypt",
    "hero": {
     "rarity": "common",
-    "price_crowns": 480,
+    "price_crowns": 538,
     "name": "Nefertiti",
     "ability": {
      "kind": "factory_city_upgrade_discount",
@@ -10011,7 +10011,7 @@
    "avatar": "spartacus",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1560,
+    "price_crowns": 1366,
     "name": "Spartacus",
     "ability": {
      "kind": "factory_raid",
@@ -10033,7 +10033,7 @@
    "avatar": "ying_zheng",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1800,
+    "price_crowns": 1532,
     "name": "Ying Zheng",
     "ability": {
      "kind": "imperial_standards",
@@ -10057,7 +10057,7 @@
    "avatar": "baibars",
    "hero": {
     "rarity": "common",
-    "price_crowns": 430,
+    "price_crowns": 512,
     "name": "Baibars",
     "ability": {
      "kind": "siege_breach"
@@ -10078,7 +10078,7 @@
    "avatar": "suppiluliuma",
    "hero": {
     "rarity": "common",
-    "price_crowns": 255,
+    "price_crowns": 426,
     "name": "Suppiluliuma I",
     "ability": {
      "kind": "attacker_loss",
@@ -10101,7 +10101,7 @@
    "avatar": "cynethryth_mercia",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 735,
+    "price_crowns": 750,
     "name": "Cynethryth",
     "ability": {
      "kind": "cookham_exchange"
@@ -10122,7 +10122,7 @@
    "avatar": "sibylla",
    "hero": {
     "rarity": "common",
-    "price_crowns": 415,
+    "price_crowns": 506,
     "name": "Sibylla",
     "ability": {
      "kind": "second_crown"
@@ -10144,7 +10144,7 @@
    "avatar": "sor_juana",
    "hero": {
     "rarity": "common",
-    "price_crowns": 435,
+    "price_crowns": 516,
     "name": "Sor Juana",
     "ability": {
      "kind": "kitchen_philosophy"
@@ -10167,7 +10167,7 @@
    "avatar": "khutulun_qaidu",
    "hero": {
     "rarity": "common",
-    "price_crowns": 315,
+    "price_crowns": 456,
     "name": "Khutulun",
     "ability": {
      "kind": "mounted_capture",
@@ -10189,7 +10189,7 @@
    "avatar": "gudit_yodit",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 875,
+    "price_crowns": 844,
     "name": "Gudit",
     "ability": {
      "kind": "aksum_rout"
@@ -10210,7 +10210,7 @@
    "avatar": "mithridates_vi",
    "hero": {
     "rarity": "common",
-    "price_crowns": 410,
+    "price_crowns": 502,
     "name": "Mithridates VI",
     "ability": {
      "kind": "tigranes_aid",
@@ -10232,7 +10232,7 @@
    "avatar": "sargon",
    "hero": {
     "rarity": "epic",
-    "price_crowns": 1280,
+    "price_crowns": 1172,
     "name": "Sargon",
     "ability": {
      "kind": "akkad_garrison"
@@ -10255,7 +10255,7 @@
    "avatar": "kaahumanu_hawaii",
    "hero": {
     "rarity": "common",
-    "price_crowns": 265,
+    "price_crowns": 432,
     "name": "Kaʻahumanu",
     "ability": {
      "kind": "shared_feast"
@@ -10276,7 +10276,7 @@
    "avatar": "hiawatha_haudenosaunee",
    "hero": {
     "rarity": "common",
-    "price_crowns": 285,
+    "price_crowns": 442,
     "name": "Hiawatha",
     "ability": {
      "kind": "great_law_of_peace"
@@ -10297,7 +10297,7 @@
    "avatar": "modu_chanyu",
    "hero": {
     "rarity": "common",
-    "price_crowns": 335,
+    "price_crowns": 466,
     "name": "Modu Chanyu",
     "ability": {
      "kind": "contested_steppe",
@@ -10319,7 +10319,7 @@
    "avatar": "jalal_mangburni",
    "hero": {
     "rarity": "common",
-    "price_crowns": 355,
+    "price_crowns": 478,
     "name": "Jalal Mangburni",
     "ability": {
      "kind": "attacker_loss",
@@ -10344,7 +10344,7 @@
    "avatar": "naram_sin",
    "hero": {
     "rarity": "common",
-    "price_crowns": 310,
+    "price_crowns": 454,
     "name": "Naram Sin",
     "ability": {
      "kind": "zagros_ascent",
@@ -10366,7 +10366,7 @@
    "avatar": "khosrow_i",
    "hero": {
     "rarity": "common",
-    "price_crowns": 330,
+    "price_crowns": 464,
     "name": "Khosrow I",
     "ability": {
      "kind": "regional_commands",
@@ -10388,7 +10388,7 @@
    "avatar": "muhumuza",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 620,
+    "price_crowns": 670,
     "name": "Muhumuza",
     "ability": {
      "kind": "nyabingi_network",
@@ -10410,7 +10410,7 @@
    "avatar": "ivan_iv",
    "hero": {
     "rarity": "common",
-    "price_crowns": 510,
+    "price_crowns": 554,
     "name": "Ivan IV",
     "ability": {
      "kind": "streltsy_muster",
@@ -10434,7 +10434,7 @@
    "avatar": "erendira",
    "hero": {
     "rarity": "rare",
-    "price_crowns": 770,
+    "price_crowns": 772,
     "name": "Eréndira",
     "ability": {
      "kind": "mounted_defense_capture",

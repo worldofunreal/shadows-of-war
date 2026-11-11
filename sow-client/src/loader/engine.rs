@@ -439,6 +439,7 @@ impl SowApp {
                             self.ui.app.splash_state.target_phase =
                                 Some(crate::ClientPhase::Playing);
                             self.portal_match_started_at = Some(web_time::Instant::now());
+                            crate::store_portals::load_stop();
                             crate::store_portals::gameplay_start();
                             crate::store_portals::track_product_event_with(
                                 "match_started_client",

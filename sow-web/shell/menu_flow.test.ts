@@ -979,6 +979,8 @@ test("pending WOU recovery does not block profile loading or anonymous join proo
     assert.ok(oauthStart >= 0 && oauthEnd > oauthStart);
     const startOAuth = portalSource.slice(oauthStart, oauthEnd);
     assert.match(startOAuth, /api\/v1\/auth\/oauth\/login/);
+    assert.match(startOAuth, /window\.open\(/);
+    assert.match(portalSource, /"sow:oauth-success"/);
     assert.doesNotMatch(startOAuth, /SOW_ensureWouAnonymousSession|ensureSession\(/);
 
     const acceptStart = portalSource.indexOf("window.SOW_acceptWouSession = function (data)");

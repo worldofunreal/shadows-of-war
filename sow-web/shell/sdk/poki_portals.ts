@@ -131,6 +131,15 @@
         }
     }
 
+    function stopGameplayForInterruption() {
+        if (!gameplayActive) return;
+        gameplayActive = false;
+        if (!sdk || typeof sdk.gameplayStop !== "function") return;
+        try {
+            sdk.gameplayStop();
+        } catch {}
+    }
+
     // Rewarded video. Resolves true only when Poki reports the video played.
     function rewardedBreak() {
         if (breakRunning || window.SOW_adPlaying || !sdk || typeof sdk.rewardedBreak !== "function") {
@@ -177,6 +186,14 @@
             document.addEventListener(type, blockGameInputDuringAd, { capture: true, passive: false });
         });
     }
+
+    document.addEventListener("visibilitychange", function () {
+        if (document.hidden) {
+            stopGameplayForInterruption();
+        } else if (gameplayReady && firstInputSeen) {
+            startGameplay();
+        }
+    });
 
     function refreshPortalFlags() {
         window.SOW_RUNTIME = { portal_embed: true, site_embed: false, crazygames: false, poki: true };

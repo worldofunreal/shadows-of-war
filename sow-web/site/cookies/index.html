@@ -75,16 +75,16 @@
                   "
                 >
                   <li data-i18n="site.cookies_analytics_events">
-                    It counts visits, loading stages, menu actions, tutorial step progress, lobby joins and
-                    match starts, outcomes, durations and explicit exits. It also uses fixed categories for
-                    game mode, queue wait and lobby join failure, plus a broad screen class (mobile, tablet
-                    or desktop). It does not record names, chat, passwords, lobby IDs, purchases, map clicks,
-                    raw failure text or the full user-agent string.
+                    Events count visits, loading, menu and tutorial progress, matchmaking, and match starts,
+                    results and explicit exits. Match details use fixed categories and a broad viewport class.
+                    Event records contain no names, account or player IDs, IP fields, match or lobby IDs,
+                    chat, passwords, purchase details, raw failure text, map clicks or full user-agent string.
                   </li>
                   <li data-i18n="site.cookies_analytics_server">
-                    Accepted events go directly to our first-party endpoint at <code>/api/event</code>. They
-                    do not pass through the game relay. Account IDs, when present, are changed on our server
-                    to a keyed, website-only pseudonym before storage.
+                    After consent, accepted events go only to our first-party endpoint at <code>/api/event</code>.
+                    They do not pass through the game relay and do not include account/player or match/lobby IDs.
+                    Each event carries a temporary random session ID for the current browser session. Request IPs
+                    may appear in separate technical security logs, not in analytics event records.
                   </li>
                 </ul>
               </div>

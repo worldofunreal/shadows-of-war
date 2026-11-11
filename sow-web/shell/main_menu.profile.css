@@ -2905,6 +2905,7 @@
 
 .sow-menu__leader-copy .sow-hero-briefing {
   grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
   text-align: end;
 }
 
@@ -2928,7 +2929,7 @@
 }
 
 .sow-menu__leader-copy .sow-hero-briefing__ability {
-  margin-top: 12px;
+  margin-top: 4px;
 }
 
 .sow-menu__leader-copy .sow-hero-briefing__icon-slot {

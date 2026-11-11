@@ -981,6 +981,12 @@
         window.SOW_WOU_SESSION_STATUS = status === 401 || status === 403
             ? "reauthentication_required"
             : "retrying";
+        if (status === 401 || status === 403) {
+            try {
+                window.localStorage.removeItem("wou_session_token");
+                window.localStorage.removeItem("wou_refresh_token");
+            } catch {}
+        }
         if (window.SOW_WOU_SESSION_STATUS === "retrying" && !(error && error.sessionRetryScheduled)) {
             scheduleWouSessionRetry();
         }
@@ -1275,7 +1281,18 @@
                 encodeURIComponent(provider) +
                 "?" +
                 params.toString();
-            window.location.href = targetUrl;
+            const width = 500;
+            const height = 650;
+            const left = Math.max(0, Math.round((window.screenX || 0) + ((window.outerWidth || 1000) - width) / 2));
+            const top = Math.max(0, Math.round((window.screenY || 0) + ((window.outerHeight || 800) - height) / 2));
+            const popup = window.open(
+                targetUrl,
+                "sow_oauth_popup",
+                `width=${width},height=${height},left=${left},top=${top},status=no,toolbar=no,menubar=no`
+            );
+            if (!popup || popup.closed) {
+                window.location.href = targetUrl;
+            }
             return true;
         } catch (e) {
             console.warn("WOU login redirect failed:", e);
@@ -1354,6 +1371,13 @@
             window.SOW_signOutWou();
         }
     };
+
+    window.addEventListener("message", function (event) {
+        if (event.origin !== window.location.origin) return;
+        if (event.data && event.data.type === "sow:oauth-success" && event.data.session) {
+            window.SOW_acceptWouSession(event.data.session);
+        }
+    });
 
     // Capture a returning WOU SSO login (?session_token&account=) into the
     // same localStorage keys the Rust client reads. Runs at shell boot.

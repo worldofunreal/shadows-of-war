@@ -152,11 +152,14 @@ test("the shared funnel sequence is sent once to each SDK that supports custom e
             props: { episode_id: "boudica", step_id: "opening", step_index: 0, action: "complete" },
         },
         { name: "campaign_episode_complete", props: { episode_id: "boudica" } },
-        { name: "matchmaking_joined" },
-        { name: "lobby_joined" },
+        { name: "matchmaking_joined", props: { mode: "ranked_1v1", wait_bucket: "5_15s" } },
+        { name: "lobby_joined", props: { mode: "ranked_1v1", wait_bucket: "5_15s" } },
         { name: "match_loading_start" },
-        { name: "match_started_client" },
-        { name: "match_ended_client" },
+        { name: "match_started_client", props: { mode: "ranked_1v1" } },
+        {
+            name: "match_ended_client",
+            props: { mode: "ranked_1v1", outcome: "win", duration_bucket: "5_15m" },
+        },
     ];
     for (const portal of [undefined, "poki", "jest"]) {
         const { window, calls } = createRuntime(portal);
@@ -219,7 +222,10 @@ test("loading stages and failure outcomes share stable portal mappings", () => {
     window.SOW_trackExperienceEvent({ name: "load_stage", props: { stage: "relay_connect_start" } });
     window.SOW_trackExperienceEvent({ name: "load_stage", props: { stage: "relay_connect_complete" } });
     window.SOW_trackExperienceEvent({ name: "load_stage", props: { stage: "engine_init_complete" } });
-    window.SOW_trackExperienceEvent({ name: "lobby_join_failed" });
+    window.SOW_trackExperienceEvent({
+        name: "lobby_join_failed",
+        props: { mode: "other", wait_bucket: "unknown", reason_category: "lobby_unavailable" },
+    });
     assert.deepEqual(calls.poki, [
         ["loading", "relay_connect", "start"],
         ["loading", "relay_connect", "complete"],
@@ -255,6 +261,20 @@ test("match funnel accepts only closed mode, outcome, wait, duration and failure
         ["match", "round", "win"],
         ["lobby", "join", "fail"],
     ]);
+});
+
+test("match events require their bounded dimensions and reject identity fields", () => {
+    const { window, calls } = createRuntime("jest");
+    window.SOW_trackExperienceEvent({ name: "match_started_client" });
+    window.SOW_trackExperienceEvent({
+        name: "match_started_client",
+        props: { mode: "ranked_1v1", account_id: "0123456789abcdef0123456789abcdef" },
+    });
+    window.SOW_trackExperienceEvent({
+        name: "match_ended_client",
+        props: { mode: "ranked_1v1", outcome: "win", duration_bucket: "5_15m", player_id: 44 },
+    });
+    assert.equal(calls.jest.length, 0);
 });
 
 test("Jest SDK adapter captures the same event and safely ignores a missing SDK", () => {
@@ -411,4 +431,41 @@ test("Poki suppresses measure calls while a commercial break is active", async (
     window.SOW_adPlaying = false;
     window.SOW_pokiMeasure("match", "round", "win");
     assert.equal(measures, 1);
+});
+
+test("Poki closes and resumes gameplay events when a playable tab is interrupted", async () => {
+    const listeners = new Map();
+    const counts = { starts: 0, stops: 0 };
+    const document = {
+        hidden: false,
+        addEventListener: (type, callback) => {
+            const callbacks = listeners.get(type) || [];
+            callbacks.push(callback);
+            listeners.set(type, callbacks);
+        },
+    };
+    const window = {
+        PokiSDK: {
+            init: () => Promise.resolve(),
+            gameplayStart: () => counts.starts++,
+            gameplayStop: () => counts.stops++,
+        },
+        localStorage: { getItem: () => null },
+    };
+    vm.runInNewContext(pokiBridgeSource, { window, document, console, Promise, Set, String });
+    await window.SOW_initPortalSdk();
+    window.SOW_portalGameplayStart();
+    listeners.get("pointerdown")[0]();
+    assert.equal(counts.starts, 1);
+
+    document.hidden = true;
+    listeners.get("visibilitychange")[0]();
+    assert.equal(counts.stops, 1);
+
+    document.hidden = false;
+    listeners.get("visibilitychange")[0]();
+    assert.equal(counts.starts, 2);
+
+    window.SOW_portalGameplayStop();
+    assert.equal(counts.stops, 2);
 });

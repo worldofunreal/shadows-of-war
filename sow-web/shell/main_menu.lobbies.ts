@@ -381,8 +381,8 @@ export function campaignSagaTitle(sagaId: string): string {
 
 export function campaignEpisodeHeroArt(heroSlug: string) {
     return {
-        band: leaderArtUrl(heroSlug, "desktop"),
-        column: leaderArtUrl(heroSlug, "mobile"),
+        band: leaderArtUrl(leaderArtSlug(heroSlug), "desktop"),
+        column: leaderArtUrl(leaderArtSlug(heroSlug), "mobile"),
     };
 }
 
@@ -393,7 +393,7 @@ export function campaignHeroImage(episodeId?: string | null): string {
         typeof window.matchMedia === "function"
             ? window.matchMedia("(max-width: 900px), (orientation: portrait)").matches
             : window.innerWidth <= 900 || window.innerHeight >= window.innerWidth;
-    return leaderArtUrl(heroSlug, compact ? "desktop" : "mobile");
+    return leaderArtUrl(leaderArtSlug(heroSlug), compact ? "desktop" : "mobile");
 }
 
 export function updateCampaignSelection(episodeId: string): boolean {
@@ -482,7 +482,7 @@ export function updateCampaignSelection(episodeId: string): boolean {
     if (mapLabel) mapLabel.textContent = formatMapName(mapName);
 
     const advisorAvatar = featured.querySelector<HTMLImageElement>(".sow-campaign__advisor-avatar");
-    if (advisorAvatar) setAvatarImage(advisorAvatar, asset("gameplay/avatars/" + heroSlug + ".webp"));
+    if (advisorAvatar) setAvatarImage(advisorAvatar, asset("gameplay/avatars/" + leaderArtSlug(heroSlug) + ".webp"));
     const advisorName = featured.querySelector<HTMLElement>(".sow-campaign__meta-advisor strong");
     if (advisorName) advisorName.textContent = heroName;
 
@@ -521,7 +521,7 @@ function renderCampaignEpisode(
     const mapName = campaignEpisodeMapName(episode.id);
     const mapArt = lobbyThumb({ map_name: mapName });
     const heroSlug = campaignEpisodeHeroSlug(episode.id);
-    const avatar = asset("gameplay/avatars/" + heroSlug + ".webp");
+    const avatar = asset("gameplay/avatars/" + leaderArtSlug(heroSlug) + ".webp");
     const status = completed
         ? SOW_t("lobbies.completed")
         : unlocked
@@ -643,7 +643,7 @@ export function renderCampaign() {
         const mapName = campaignEpisodeMapName(selectedEpisode.id);
         const mapThumb = lobbyThumb({ map_name: mapName });
         const mapDisplayName = formatMapName(mapName);
-        const avatar = asset("gameplay/avatars/" + heroSlug + ".webp");
+        const avatar = asset("gameplay/avatars/" + leaderArtSlug(heroSlug) + ".webp");
         const completed = !!selectedEpisode.completed;
         const unlocked = !!selectedEpisode.unlocked;
         const isNext = unlocked && !completed && selectedEpisode.id === continueId;
@@ -777,7 +777,7 @@ export function renderCampaign() {
                     esc(saga.id) +
                     "'>" +
                     "<img class='sow-campaign__saga-avatar' " +
-                    avatarImageAttribute(asset("gameplay/avatars/" + saga.heroSlug + ".webp")) +
+                    avatarImageAttribute(asset("gameplay/avatars/" + leaderArtSlug(saga.heroSlug) + ".webp")) +
                     " alt='' loading='lazy'>" +
                     "<span class='sow-campaign__saga-name'>" +
                     esc(saga.title) +

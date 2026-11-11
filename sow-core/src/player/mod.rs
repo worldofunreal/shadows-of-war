@@ -55,7 +55,8 @@ pub fn avatar_identity_ref(player: &crate::protocol::PlayerSnapshot) -> AvatarId
 
     match player.player_type {
         PlayerType::Human => AvatarIdentityRef::Portrait {
-            slug: sow_data::commerce::leader_id(player.leader),
+            // Portrait files are named by art slug; a hero's id can differ (tribe_wiradjuri -> windradyne).
+            slug: player.leader.art_slug(),
             leader: Some(player.leader),
         },
         PlayerType::Bot | PlayerType::Nation => AvatarIdentityRef::Fallback,
@@ -580,6 +581,21 @@ mod avatar_identity_tests {
             "Hatshepsut"
         );
         assert_eq!(display_name(7, "", PlayerType::Human), "Player 7");
+    }
+
+    #[test]
+    fn human_portrait_file_uses_the_hero_art_slug() {
+        let wiradjuri = PlayerSnapshot {
+            leader: Leader::of("tribe_wiradjuri"),
+            ..player(6, "Windradyne", PlayerType::Human, None)
+        };
+        assert_eq!(
+            avatar_identity_ref(&wiradjuri),
+            AvatarIdentityRef::Portrait {
+                slug: "windradyne",
+                leader: Some(Leader::of("tribe_wiradjuri")),
+            }
+        );
     }
 
     #[test]
