@@ -64,7 +64,6 @@ declare global {
         SOW_tutorial_pointer_update: (raw: string) => void;
         SOW_t: (key: string, values?: Record<string, unknown>) => string;
         SOW_assetUrl: (url: string) => string;
-        SOW_abilityIconMarkup?: (artSlug: string, className: string, imageAttributes?: string) => string;
         SOW_menu_command: (message: string) => void;
         SOW_trackExperienceEvent: (payload: unknown) => void;
         SOW_isAndroidTwa: () => boolean;
@@ -94,15 +93,8 @@ declare global {
         SOW_ASSET_TS: Record<string, string>;
         SOW_BUILD_TS: string;
         SOW_ASSETS_URL: string;
-        SOW_ABILITY_ICON_ATLAS?: {
-            path: string;
-            cellSize: number;
-            columns: number;
-            rows: number;
-            icons: Record<string, number>;
-        };
-        /** CrazyGames only: avatar portraits packed into sheets; cells are [sheet, x, y, side]. */
-        SOW_AVATAR_ATLAS?: {
+        /** Every distribution: avatars and ability icons packed into sheets; cells are [sheet, x, y, side]. */
+        SOW_SPRITE_ATLAS?: {
             sheets: { path: string; width: number; height: number }[];
             cells: Record<string, [number, number, number, number]>;
         };

@@ -43,12 +43,6 @@ function heroesAvatarUrl(slug: string, expression: HeroesAvatarExpression) {
     return asset(path);
 }
 
-function heroesAvatarMarkupUrl(slug: string, expression: HeroesAvatarExpression) {
-    return window.SOW_PORTAL === "crazygames" && expression !== "calm"
-        ? heroesAvatarUrl(slug, "calm")
-        : heroesAvatarUrl(slug, expression);
-}
-
 function setHeroesFeaturedPlaceholder(featured: HTMLElement, slug: string) {
     const calm = heroesAvatarUrl(slug, "calm");
     if (!avatarAtlasCell(calm)) {
@@ -338,7 +332,7 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const selected = leader.id === activeId;
     const locked = leader.available === false;
     const avatarSlug = leaderArtSlug(leader);
-    const avatarUrl = heroesAvatarMarkupUrl(avatarSlug, selected ? "angry" : "calm");
+    const avatarUrl = heroesAvatarUrl(avatarSlug, selected ? "angry" : "calm");
     const rarity = heroesRarityLabel(leader);
     return (
         "<button class='sow-heroes__card" +

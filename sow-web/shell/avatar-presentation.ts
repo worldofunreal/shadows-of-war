@@ -22,7 +22,7 @@ type AnimationState = {
     outgoingBackground: OutgoingBackground | null;
 };
 
-/** A portrait's square cell inside a CrazyGames avatar sheet. */
+/** A square cell inside a shared sprite sheet. */
 type AvatarCell = {
     sheet: { url: string; width: number; height: number };
     x: number;
@@ -36,11 +36,11 @@ const atlasSources = new WeakMap<HTMLImageElement, string>();
 const imageLoads = new Map<string, Promise<HTMLImageElement>>();
 const MAX_CACHED_AVATAR_IMAGES = 64;
 
-/** The sheet cell behind a portrait URL or path. Null outside CrazyGames, where portraits are plain files. */
+/** The sheet cell behind a sprite URL or path. Null for art that is not packed into a sheet; that art is served as its own file. */
 export function avatarAtlasCell(source: string): AvatarCell | null {
-    const atlas = typeof window !== "undefined" ? window.SOW_AVATAR_ATLAS : undefined;
+    const atlas = typeof window !== "undefined" ? window.SOW_SPRITE_ATLAS : undefined;
     if (!atlas) return null;
-    const match = source.match(/(?:^|\/)(gameplay\/avatars\/[^?#]+\.webp)(?:[?#]|$)/);
+    const match = source.match(/(?:^|\/)(gameplay\/[^?#]+\.webp)(?:[?#]|$)/);
     const cell = match ? atlas.cells[match[1]] : undefined;
     if (!cell) return null;
     const [sheet, x, y, side] = cell;
@@ -241,6 +241,18 @@ function watchAvatarMarkup(): void {
         attributes: true,
         attributeFilter: ["data-avatar"],
     });
+}
+
+/**
+ * Fills the `data-avatar` images already in `root` and watches the ones added later.
+ * Call once `window.SOW_SPRITE_ATLAS` is set, so the page never requests a loose sprite.
+ */
+export function fillAvatarMarkup(root: ParentNode): void {
+    watchAvatarMarkup();
+    for (const image of Array.from(root.querySelectorAll("img[data-avatar]"))) {
+        if (visibilityWatcher) visibilityWatcher.observe(image);
+        else fillAvatarImage(image);
+    }
 }
 
 /** The `src` attribute for an avatar inside an HTML string. Packed cells use `data-avatar`, filled once inserted. */

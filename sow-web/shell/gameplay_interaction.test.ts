@@ -1106,13 +1106,32 @@ test("notification cards render typed avatars, recover failed art, and clear reu
 test("hero ability notices show that hero's ability icon in the seal", () => {
     const start = hud.indexOf("    function notificationIcon(");
     const end = hud.indexOf("    function renderNotificationCard(", start);
-    const notificationIcon = vm.runInNewContext(hud.slice(start, end) + "\nnotificationIcon;", {
-        window: {},
-        asset: (p) => "/assets/" + p,
-        hudIcon: (name) => "<svg data-icon='" + name + "'></svg>",
-        statusIcon: (name) => "<svg data-icon='" + name + "'></svg>",
-        leaderById: (id) => ({ art_slug: id === "lady_six_sky" ? "six_sky" : id }),
-    });
+    const core = fs.readFileSync(path.join(shell, "main_menu.core.ts"), "utf8");
+    const slugStart = core.indexOf("export function leaderArtSlug(");
+    const abilityStart = core.indexOf("export function abilityIconMarkup(");
+    const abilityEnd = core.indexOf("export function leaderArtUrl(", abilityStart);
+    const notificationIcon = vm.runInNewContext(
+        core.slice(slugStart, core.indexOf("\n}", slugStart) + 2).replace(/\bexport\s+/g, "") +
+            core.slice(abilityStart, abilityEnd).replace(/\bexport\s+/g, "") +
+            hud.slice(start, end) +
+            "\nnotificationIcon;",
+        {
+            window: {},
+            asset: (p) => "/assets/" + p,
+            esc: (value) =>
+                String(value)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;"),
+            avatarImageAttribute,
+            menuUi: { state: { leaders: [] } },
+            hudIcon: (name) => "<svg data-icon='" + name + "'></svg>",
+            statusIcon: (name) => "<svg data-icon='" + name + "'></svg>",
+            leaderById: (id) => ({ art_slug: id === "lady_six_sky" ? "six_sky" : id }),
+        },
+    );
     assert.match(
         notificationIcon("hud.elimination", { hero: "lady_six_sky", victim: "Tribe" }),
         /<img class='sow-hud__notification-ability' src='\/assets\/gameplay\/icons\/abilities\/six_sky\.webp'/,

@@ -1355,6 +1355,7 @@ test("one hero briefing renders identity and the named ability without exposing 
         document: { addEventListener() {} },
         SOW_t: (key) => translations[key] || `[${key}]`,
         leaderArtSlug,
+        avatarImageAttribute,
         esc: (value) =>
             String(value)
                 .replace(/&/g, "&amp;")
