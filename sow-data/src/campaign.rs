@@ -1,9 +1,12 @@
+use crate::commerce::owns_leader;
 use crate::leaders::Leader;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CampaignEpisode {
     pub id: &'static str,
     pub prerequisite: Option<&'static str>,
+    /// Catalog id of a hero whose ownership (bought or earned) opens this episode.
+    pub unlock_leader_id: Option<&'static str>,
     /// Catalog id of the hero who narrates the episode.
     pub advisor_id: &'static str,
 }
@@ -26,21 +29,25 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
     CampaignEpisode {
         id: "boudica",
         prerequisite: None,
+        unlock_leader_id: None,
         advisor_id: "boudica",
     },
     CampaignEpisode {
         id: "six_sky_ep1",
         prerequisite: None,
+        unlock_leader_id: Some("lady_six_sky"),
         advisor_id: "lady_six_sky",
     },
     CampaignEpisode {
         id: "six_sky_ep2",
         prerequisite: Some("six_sky_ep1"),
+        unlock_leader_id: None,
         advisor_id: "lady_six_sky",
     },
     CampaignEpisode {
         id: "six_sky_ep3",
         prerequisite: Some("six_sky_ep2"),
+        unlock_leader_id: None,
         advisor_id: "lady_six_sky",
     },
 ];
@@ -51,9 +58,9 @@ pub const CAMPAIGN_SERIES: &[CampaignSeries] = &[CampaignSeries {
     reward_leader_id: "lady_six_sky",
 }];
 
-// Six Sky is not published yet. Keep its episode access and server rewards
-// closed here until the content owner publishes the campaign.
-pub const PUBLISHED_EPISODES: &[&str] = &["boudica"];
+// Episodes are playable only when listed here. Six Sky ep1 also needs the hero
+// (see access_granted).
+pub const PUBLISHED_EPISODES: &[&str] = &["boudica", "six_sky_ep1", "six_sky_ep2", "six_sky_ep3"];
 
 pub fn episode(id: &str) -> Option<&'static CampaignEpisode> {
     CAMPAIGN_EPISODES.iter().find(|episode| episode.id == id)
@@ -63,14 +70,19 @@ pub fn episode_is_published(id: &str) -> bool {
     PUBLISHED_EPISODES.contains(&id)
 }
 
-pub fn prerequisite_satisfied(
+/// Order and hero-ownership gates for an episode. Publishing is checked separately.
+pub fn access_granted(
     id: &str,
     completed_episodes: &std::collections::BTreeSet<String>,
+    owned_leaders: &std::collections::BTreeSet<String>,
 ) -> bool {
     episode(id).is_some_and(|episode| {
         episode
             .prerequisite
             .is_none_or(|required| completed_episodes.contains(required))
+            && episode
+                .unlock_leader_id
+                .is_none_or(|leader| owns_leader(owned_leaders, Leader::of(leader)))
     })
 }
 
@@ -97,7 +109,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn six_sky_unlock_requires_every_episode_and_remains_unpublished() {
+    fn six_sky_unlock_requires_hero_then_every_episode() {
         assert_eq!(
             episode("six_sky_ep2").unwrap().prerequisite,
             Some("six_sky_ep1")
@@ -106,14 +118,17 @@ mod tests {
             episode("six_sky_ep3").unwrap().prerequisite,
             Some("six_sky_ep2")
         );
-        assert!(!episode_is_published("six_sky_ep1"));
-        assert!(!episode_is_published("six_sky_ep2"));
-        assert!(!episode_is_published("six_sky_ep3"));
+        assert!(episode_is_published("six_sky_ep1"));
+        assert!(episode_is_published("six_sky_ep2"));
+        assert!(episode_is_published("six_sky_ep3"));
         assert_eq!(episode("unknown"), None);
         let empty = std::collections::BTreeSet::new();
-        assert!(prerequisite_satisfied("six_sky_ep1", &empty));
-        assert!(!prerequisite_satisfied("six_sky_ep2", &empty));
-        assert!(!prerequisite_satisfied("unknown", &empty));
+        let owned = std::collections::BTreeSet::from(["lady_six_sky".to_string()]);
+        assert!(!access_granted("six_sky_ep1", &empty, &empty));
+        assert!(access_granted("six_sky_ep1", &empty, &owned));
+        assert!(!access_granted("six_sky_ep2", &empty, &owned));
+        assert!(access_granted("boudica", &empty, &empty));
+        assert!(!access_granted("unknown", &empty, &owned));
 
         let mut completed = std::collections::BTreeSet::from(["six_sky_ep1".to_string()]);
         assert_eq!(earned_leader(&completed), None);
@@ -121,6 +136,7 @@ mod tests {
         assert_eq!(earned_leader(&completed), None);
         completed.insert("six_sky_ep3".to_string());
         assert_eq!(earned_leader(&completed), Some(Leader::of("lady_six_sky")));
+        assert!(access_granted("six_sky_ep2", &completed, &empty));
     }
 
     #[test]

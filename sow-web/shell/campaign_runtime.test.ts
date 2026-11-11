@@ -2469,7 +2469,7 @@ test("UI objectives respect step, episode, and total scope", () => {
     assert.equal(completed("total"), true);
 });
 
-test("campaign episode 1 stays locked so only the tutorial can be replayed", () => {
+test("campaign episode availability needs publication and the shared access rule", () => {
     const unlockStart = campaignModule.indexOf("pub fn is_unlocked(");
     const unlock = campaignModule.slice(unlockStart, campaignModule.indexOf("pub fn advisor(", unlockStart));
     assert.ok(unlockStart >= 0, "is_unlocked must exist");
@@ -2480,8 +2480,8 @@ test("campaign episode 1 stays locked so only the tutorial can be replayed", () 
     );
     assert.match(
         unlock,
-        /episode\s*\.\s*prerequisite\s*\.\s*is_none_or\s*\(\s*\|required\|\s*progress\.completed_episodes\.contains\(required\)\s*\)/,
-        "later campaign episodes follow the shared prerequisite metadata",
+        /access_granted\(\s*episode\.id,\s*&progress\.completed_episodes,\s*&progress\.owned_leaders,?\s*\)/,
+        "campaign order and hero ownership follow the shared access rule",
     );
     // A locked episode renders the same disabled card as the rest of the chain.
     // "Saga complete" may only appear when every episode is really finished.

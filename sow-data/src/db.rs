@@ -3869,11 +3869,12 @@ impl PlayerDb {
                     if account.profile.completed_episodes.contains(episode.id) {
                         return;
                     }
-                    if !crate::campaign::prerequisite_satisfied(
+                    if !crate::campaign::access_granted(
                         episode.id,
                         &account.profile.completed_episodes,
+                        &account.profile.owned_leaders,
                     ) {
-                        failure = Some("campaign episodes must be completed in order");
+                        failure = Some("campaign episode is locked");
                         return;
                     }
 

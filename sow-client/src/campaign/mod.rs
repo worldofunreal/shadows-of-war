@@ -99,9 +99,11 @@ impl CampaignId {
             return false;
         };
         sow_data::campaign::episode_is_published(episode.id)
-            && episode
-                .prerequisite
-                .is_none_or(|required| progress.completed_episodes.contains(required))
+            && sow_data::campaign::access_granted(
+                episode.id,
+                &progress.completed_episodes,
+                &progress.owned_leaders,
+            )
     }
 
     pub fn advisor(self) -> Leader {
