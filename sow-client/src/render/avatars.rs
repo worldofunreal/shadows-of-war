@@ -225,24 +225,19 @@ impl AvatarSlots {
         filled: impl Fn(usize) -> bool,
     ) -> Option<usize> {
         let filled_slot = |slot: Option<&usize>| slot.copied().filter(|slot| filled(*slot));
+        let fallback_slot = || filled(AVATAR_FALLBACK_SLOT).then_some(AVATAR_FALLBACK_SLOT);
         match self.owner(identity) {
             Some(Owner::Hero(leader)) => {
                 let expression_slot = self.heroes.get(&(leader, expression));
                 let calm_slot = self.heroes.get(&(leader, AvatarExpression::Calm));
                 filled_slot(expression_slot).or_else(|| filled_slot(calm_slot))
-                    .or_else(|| {
-                        if expression_slot.is_none() && calm_slot.is_none() {
-                            filled(AVATAR_FALLBACK_SLOT).then_some(AVATAR_FALLBACK_SLOT)
-                        } else {
-                            None
-                        }
-                    })
+                    .or_else(fallback_slot)
             }
             Some(Owner::Portrait(slug)) => match self.portraits.get(slug) {
-                Some(slot) => filled(*slot).then_some(*slot),
-                None => filled(AVATAR_FALLBACK_SLOT).then_some(AVATAR_FALLBACK_SLOT),
+                Some(slot) => filled(*slot).then_some(*slot).or_else(fallback_slot),
+                None => fallback_slot(),
             },
-            None => filled(AVATAR_FALLBACK_SLOT).then_some(AVATAR_FALLBACK_SLOT),
+            None => fallback_slot(),
         }
     }
 
@@ -512,8 +507,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn reserved_portraits_stay_hidden_until_loaded_and_heroes_use_calm_when_ready() {
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn reserved_portraits_use_fallback_until_loaded_and_heroes_use_calm_when_ready() {
         let mut avatars = AvatarSlots::new();
         let leader = Leader::of("boudica");
         avatars.add_identity(human(leader));
@@ -528,8 +523,8 @@ mod tests {
         );
         assert_eq!(
             avatars.slot_for(human(leader), AvatarExpression::Fear, only(&[0])),
-            None,
-            "a reserved hero remains hidden until its face or Calm is ready"
+            Some(AVATAR_FALLBACK_SLOT),
+            "a reserved hero uses null.webp until its face or Calm is ready"
         );
         let filled = [AVATAR_FALLBACK_SLOT, calm];
         assert_eq!(
@@ -540,8 +535,8 @@ mod tests {
         assert_eq!(
             avatars.slot_for(bot("some_portrait"), AvatarExpression::Calm, |slot| filled
                 .contains(&slot)),
-            None,
-            "a reserved portrait remains hidden while null.webp is ready"
+            Some(AVATAR_FALLBACK_SLOT),
+            "a reserved portrait uses null.webp until its image is ready"
         );
         let loaded_portrait = [AVATAR_FALLBACK_SLOT, portrait];
         assert_eq!(
@@ -611,7 +606,7 @@ mod tests {
         assert!(avatars.slots.iter().all(|slot| slot.load == Load::Queued));
     }
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn failed_loads_retry_with_growing_delays() {
         let mut avatars = AvatarSlots::new();
         let now = Instant::now();

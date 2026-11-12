@@ -85,6 +85,10 @@ pub struct PlayerProgress {
     pub unlocked_achievements: std::collections::BTreeSet<String>,
     #[serde(default)]
     pub missions_progress: std::collections::BTreeMap<String, sow_data::missions::MissionRecord>,
+    #[serde(default)]
+    pub ranked_matches: u32,
+    #[serde(default)]
+    pub ranked_wins: u32,
 }
 
 fn deserialize_leader<'de, D>(deserializer: D) -> Result<Option<Leader>, D::Error>

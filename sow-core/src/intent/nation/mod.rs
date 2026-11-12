@@ -10,7 +10,7 @@ mod profile;
 mod structures;
 
 use profile::{AiSlot, BotDecision, ai_profile_for, ai_tier};
-use structures::{cheapest_gold_cost, iq_build_interval_base};
+use structures::{cheapest_gold_cost, think_window_ticks};
 
 impl SowEngine {
     fn rebuild_ai_attack_index(&mut self) {
@@ -67,7 +67,7 @@ impl SowEngine {
     ///
     /// - Builds one combined schedule of all AI entities.
     /// - Every scheduled bot acts each tick (no global budget cap).
-    /// - Each bot self-throttles via `iq_build_interval_base` keyed on tier.
+    /// - Each bot self-throttles via `think_window_ticks` keyed on tier.
     /// - Uses `placement_scratch.border_scratch` for zero-allocation border scanning.
     pub fn execute_ai_think(&mut self) {
         if self.state.phase != crate::game::GamePhase::Playing {
@@ -130,26 +130,21 @@ impl SowEngine {
             }
             let reacts_to_attack = p.iq >= 100 && is_under_attack;
 
-            let interval_base = if ranked_ghost {
-                5 + u64::from(180 - p.iq.clamp(60, 180)) / 3
-            } else if reacts_to_attack {
-                if p.iq >= 130 {
-                    5 // Top/smart: react in 0.5s - 1.0s (5 - 10 ticks)
-                } else {
-                    10 // Advanced: react in 1.0s - 2.0s (10 - 20 ticks)
-                }
+            let (min_interval, max_interval) = if ranked_ghost {
+                let base = 5 + u64::from(180 - p.iq.clamp(60, 180)) / 3;
+                (base, base * 2 - 1)
             } else {
-                iq_build_interval_base(tier)
+                think_window_ticks(tier, reacts_to_attack)
             };
 
             let mut sched_rng = WyRand::new(
                 self.state
                     .seed
                     .wrapping_add(bot_id as u64)
-                    .wrapping_add(interval_base),
+                    .wrapping_add(min_interval),
             );
             let interval = sched_rng
-                .next_int(interval_base as i32, (interval_base as i32 * 2).max(1))
+                .next_int(min_interval as i32, max_interval as i32 + 1)
                 .max(1) as u64;
             let offset = sched_rng.next_int(0, interval as i32) as u64;
 

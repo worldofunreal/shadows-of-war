@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 struct CrazyTokenClaims {
     #[serde(rename = "userId")]
     user_id: String,
+    #[serde(rename = "gameId")]
+    game_id: String,
 }
 
 #[derive(Deserialize)]
@@ -110,6 +112,9 @@ async fn decoding_key(kid: Option<&str>, refresh: bool) -> Result<DecodingKey, S
 }
 
 pub async fn verify_user_token(token: &str) -> Result<String, String> {
+    let game_id = std::env::var("SOW_CRAZYGAMES_GAME_ID")
+        .ok().filter(|id| !id.is_empty())
+        .ok_or("CrazyGames game identity is not configured")?;
     let header = jsonwebtoken::decode_header(token)
         .map_err(|e| format!("CrazyGames token header is invalid: {e}"))?;
     let kid = header.kid.as_deref();
@@ -123,10 +128,28 @@ pub async fn verify_user_token(token: &str) -> Result<String, String> {
         result = decode::<CrazyTokenClaims>(token, &decoding_key(kid, true).await?, &validation);
     }
     let token_data = result.map_err(|e| format!("CrazyGames token verification failed: {e}"))?;
-    if token_data.claims.user_id.is_empty() {
-        return Err("CrazyGames token missing userId".into());
-    }
+    validate_game(&token_data.claims, &game_id)?;
     Ok(token_data.claims.user_id)
+}
+
+fn validate_game(claims: &CrazyTokenClaims, expected: &str) -> Result<(), String> {
+    if claims.user_id.is_empty() || expected.is_empty() || claims.game_id != expected {
+        return Err("CrazyGames token does not identify a player in this game".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    #[test]
+    fn a_signed_token_must_belong_to_this_game() {
+        let claims = CrazyTokenClaims { user_id: "player".into(), game_id: "123".into() };
+        assert!(validate_game(&claims, "123").is_ok());
+        assert!(validate_game(&claims, "456").is_err());
+        assert!(validate_game(&claims, "").is_err());
+        assert!(serde_json::from_str::<CrazyTokenClaims>(r#"{"userId":"player"}"#).is_err());
+    }
 }
 
 pub fn iso_8601_timestamp() -> String {

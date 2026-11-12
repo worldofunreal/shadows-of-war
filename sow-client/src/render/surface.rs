@@ -61,10 +61,10 @@ impl SowApp {
                     if let Some(mut old_text) = self.gfx.text_renderer.take() {
                         old_text.destroy(&render_ctx);
                     }
-                    self.gfx.text_renderer = Some(crate::render::gpu::TextRenderer::new(
-                        &render_ctx.context,
-                        format,
-                    ));
+                    // Without its atlases yet, the frame loop creates it once they arrive.
+                    self.gfx.text_renderer = super::text_atlases::get().map(|atlases| {
+                        crate::render::gpu::TextRenderer::new(&render_ctx.context, format, &atlases)
+                    });
                     self.gfx.surface = Some(s);
                     self.gfx.render_ctx = Some(render_ctx);
                     log::info!("Successfully created surface on retry.");

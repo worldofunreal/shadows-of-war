@@ -275,6 +275,7 @@ impl SowApp {
                     self.ui.app.hud_state.push_notification_for_players(
                         crate::ui::UiText::new("hud.ability_notice")
                             .with("hero", hero.clone())
+                            .with("hero_art", owner.leader.art_slug())
                             .with("ability_key", format!("site.leader_{hero}_ability"))
                             .with("description_key", format!("site.leader_{hero}_description")),
                         [Some(owner_id), (my_id != owner_id).then_some(my_id)],

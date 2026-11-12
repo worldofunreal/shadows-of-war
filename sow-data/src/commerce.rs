@@ -10,8 +10,9 @@ pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
 const ROTATION_RESET_OFFSET_SECS: u64 = 40 * 60 * 60;
 /// One-time starter grant for every human account, regardless of identity
 /// provider. Bots never receive it.
-pub const WELCOME_GEMS: u64 = 475;
+pub const WELCOME_GEMS: u64 = 25;
 /// New receipt version intentionally tops up accounts that already have v1.
+/// Keep this id when only the amount changes; a new id would top up every account.
 pub const WELCOME_GRANT_ID: &str = "welcome_gems_v2";
 
 // (product id, gems, price in US cents). Product ids are frozen in Google Play
@@ -499,14 +500,6 @@ pub fn skin_by_id(skin_id: &str) -> Option<SkinOffer> {
     skins().into_iter().find(|skin| skin.id == skin_id)
 }
 
-/// Canonical NFTROPOLY/WOU-ID card token for an owned skin. The public skin
-/// id is the only value persisted in player ownership, so the card id is
-/// derived from it (snake_case -> kebab, `sow-skin-` prefix) and registered
-/// identically on WOU-ID.
-pub fn skin_card_token_id(skin_id: &str) -> String {
-    format!("sow-skin-{}", skin_id.replace('_', "-"))
-}
-
 pub fn skin_style_for_id(skin_id: Option<&str>) -> u8 {
     skin_id
         .and_then(skin_by_id)
@@ -726,7 +719,7 @@ mod tests {
 
     #[test]
     fn welcome_grant_is_fixed() {
-        assert_eq!(WELCOME_GEMS, 475);
+        assert_eq!(WELCOME_GEMS, 25);
     }
 
     #[test]

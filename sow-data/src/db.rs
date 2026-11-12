@@ -440,12 +440,11 @@ fn aggregate_match_flow(rows: &[std::collections::HashMap<String, u64>]) -> Vec<
 /// Generate the initial presentation name only when the client did not send one.
 /// The account ID remains the sole stable identity key.
 fn generated_display_name() -> String {
-    let suffix = std::time::SystemTime::now()
+    let millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis()
-        % 1000;
-    format!("ANON{suffix:03}")
+        .as_millis();
+    crate::animal_alias((millis / 10_000) as usize, (millis % 10_000) as usize)
 }
 
 /// Normalize a player-facing name without making it an identity key.
@@ -695,6 +694,10 @@ pub struct PlayerProfile {
     pub players_defeated: u32,
     pub empires_defeated: u32,
     pub tribes_defeated: u32,
+    #[serde(default)]
+    pub ranked_matches: u32,
+    #[serde(default)]
+    pub ranked_wins: u32,
     pub preferred_leader: Option<String>,
     #[serde(default)]
     pub prefer_random_leader: bool,
@@ -850,6 +853,8 @@ impl Default for PlayerProfile {
             ad_doubles_today: 0,
             missions_progress: std::collections::BTreeMap::new(),
             daily_missions_day: 0,
+            ranked_matches: 0,
+            ranked_wins: 0,
             ranked_bot: None,
         }
     }
@@ -1043,8 +1048,7 @@ impl PlayerProfile {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PlayerAccount {
-    /// The sole stable account identifier. WOU-ID linked accounts use the same
-    /// UUID; anonymous accounts use their existing local identifier.
+    /// The stable game account identifier, preserved across provider migration.
     #[serde(rename = "account_id")]
     pub id: String,
     /// Mutable player-facing name. Never used as an identity key.
@@ -1186,7 +1190,7 @@ impl PlayerDb {
         }
     }
 
-    async fn get_connection(&self) -> Result<redis::aio::MultiplexedConnection, redis::RedisError> {
+    pub(crate) async fn get_connection(&self) -> Result<redis::aio::MultiplexedConnection, redis::RedisError> {
         let connection = self
             .connection
             .get_or_try_init(|| async {
@@ -2652,7 +2656,7 @@ impl PlayerDb {
                 id: crate::commerce::WELCOME_GRANT_ID.to_string(),
                 provider: "system".to_string(),
                 environment: "starter".to_string(),
-                product_id: "sow_welcome_gems_475".to_string(),
+                product_id: format!("sow_welcome_gems_{}", crate::commerce::WELCOME_GEMS),
                 transaction_id: None,
                 status: "granted".to_string(),
                 acquired_at: now,
@@ -3429,9 +3433,24 @@ impl PlayerDb {
             .collect())
     }
 
-    /// Load an existing provider account without creating a new one. This is
-    /// scoped to an environment. New human accounts must arrive through the
-    /// canonical WOU-ID account_id bridge.
+    /// The caller has verified the provider proof. A linking target must come
+    /// from a verified session, never an untrusted account ID in a request.
+    pub async fn resolve_verified_identity(
+        &self,
+        provider: &str,
+        environment: &str,
+        external_id: &str,
+        linking_account: Option<&str>,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        self.resolve_verified_identities(&[LinkedIdentity {
+            provider: provider.to_owned(),
+            environment: environment.to_owned(),
+            external_id: external_id.to_owned(),
+        }], linking_account).await
+    }
+
+    /// Load an existing provider account without creating a new one, scoped
+    /// to its production or debug environment.
     pub async fn get_existing_with_environment(
         &self,
         provider: String,
@@ -3571,8 +3590,7 @@ impl PlayerDb {
     }
 
     /// Get or create the technical bot account for a verified bot identity.
-    /// Human identities never use this path; they require a canonical WOU-ID
-    /// account_id through `get_or_create_for_account_id`.
+    /// Human identities resolve through the verified local identity index.
     pub async fn get_or_create_bot_account(
         &self,
         environment: String,
@@ -4405,14 +4423,17 @@ impl PlayerDb {
         let account = self
             .get_or_create_bot_account("production".into(), format!("ranked:{external_id}"))
             .await?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         let account = self
             .update_account_atomic(&account.id, &[], |account| {
-                if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_none() {
-                    let created_at = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    account.display_name = display_name.clone();
+                if account.kind != AccountKind::Bot {
+                    return;
+                }
+                let mut changed = false;
+                if account.profile.ranked_bot.is_none() {
                     account.profile.ranked_bot = Some(RankedBotProfile {
                         iq,
                         leader: leader.clone(),
@@ -4421,7 +4442,7 @@ impl PlayerDb {
                         manual_changes: actor
                             .map(|actor| {
                                 vec![RankedBotChange {
-                                    changed_at: created_at,
+                                    changed_at: now,
                                     actor: actor.to_string(),
                                     field: "created".to_string(),
                                     old_value: String::new(),
@@ -4433,10 +4454,14 @@ impl PlayerDb {
                             })
                             .unwrap_or_default(),
                     });
-                    account.updated_at = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
+                    changed = true;
+                }
+                if account.display_name != display_name {
+                    account.display_name = display_name.clone();
+                    changed = true;
+                }
+                if changed {
+                    account.updated_at = now;
                 }
             })
             .await?;
@@ -4966,6 +4991,7 @@ impl PlayerDb {
         let def = crate::missions::ONBOARDING_MISSIONS
             .iter()
             .chain(crate::missions::DAILY_MISSION_POOL.iter())
+            .chain(crate::missions::WEEKLY_MISSION_POOL.iter())
             .find(|m| m.id == mission_id)
             .copied()
             .ok_or_else(|| format!("unknown mission: {mission_id}"))?;
@@ -5007,6 +5033,9 @@ impl PlayerDb {
                     east_regional_matches: account.profile.matches_played.max(record.progress),
                     matches_played: account.profile.matches_played.max(record.progress),
                     kills: account.profile.kills.max(record.progress),
+                    ranked_matches: account.profile.ranked_matches.max(record.progress),
+                    ranked_wins: account.profile.ranked_wins.max(record.progress),
+                    empires_defeated: account.profile.empires_defeated.max(record.progress),
                 };
 
                 let view = crate::missions::evaluate_mission_progress(&def, &stats, Some(record));
@@ -6511,6 +6540,12 @@ fn apply_verified_participant_reward_to_account(
         leader_stats.wins = leader_stats.wins.saturating_add(1);
         leader_stats.verified_wins = leader_stats.verified_wins.saturating_add(1);
     }
+    if queue == "Ranked1v1" {
+        account.profile.ranked_matches = account.profile.ranked_matches.saturating_add(1);
+        if participant.won {
+            account.profile.ranked_wins = account.profile.ranked_wins.saturating_add(1);
+        }
+    }
     account
         .profile
         .apply_reward_receipt(&bonus_id, &result.match_id, &leader, bonus, now);
@@ -6694,6 +6729,84 @@ mod tests {
             created_at: 0,
             updated_at: 0,
         }
+    }
+
+    fn is_animal_alias(name: &str) -> bool {
+        crate::ANIMAL_NAMES.iter().any(|animal| {
+            name.strip_prefix(animal).is_some_and(|suffix| {
+                suffix.len() == 4 && suffix.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        })
+    }
+
+    #[tokio::test]
+    async fn ranked_bot_seed_refreshes_name_without_changing_ranked_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let redb = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("ranked-bot-name.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(redb.clone()));
+        let seeded = db
+            .get_or_create_ranked_bot("ranked-iq-100-00", "Wolf4821", "Caesar", 100, None)
+            .await
+            .unwrap();
+        let account_id = seeded.id.clone();
+
+        let existing = db
+            .update_account_atomic(&account_id, &[], |account| {
+                account.display_name = "Ranked Bot IQ 100".into();
+                account.profile.preferred_leader = Some("Caesar".into());
+                account.profile.matches_played = 12;
+                account.profile.wins = 7;
+                let ranked = account.profile.ranked_bot.as_mut().unwrap();
+                ranked.iq = 120;
+                ranked.leader = "Augustus".into();
+                ranked.paused = true;
+                ranked.reserved_match_id = Some("match-in-progress".into());
+                ranked.manual_changes.push(super::RankedBotChange {
+                    changed_at: 123,
+                    actor: "operator".into(),
+                    field: "paused".into(),
+                    old_value: "false".into(),
+                    new_value: "true".into(),
+                });
+            })
+            .await
+            .unwrap();
+        let profile_before = existing.profile;
+
+        let mut rating = crate::profile::initial_ranked_rating(account_id.clone(), 1775.0, 456);
+        rating.games_played = 12;
+        rating.wins = 7;
+        rating.peak_score = 1900;
+        let rating_key = format!(
+            "rating:{account_id}:{}:Ranked1v1:FFA",
+            crate::profile::CURRENT_SEASON_ID
+        );
+        let txn = redb.begin_write().unwrap();
+        txn.open_table(super::SEASON_RATINGS_TABLE)
+            .unwrap()
+            .insert(
+                rating_key.as_str(),
+                serde_json::to_vec(&rating).unwrap().as_slice(),
+            )
+            .unwrap();
+        txn.commit().unwrap();
+
+        let refreshed = db
+            .get_or_create_ranked_bot("ranked-iq-100-00", "Wolf4821", "Caesar", 100, None)
+            .await
+            .unwrap();
+
+        assert_eq!(refreshed.id, account_id);
+        assert_eq!(refreshed.display_name, "Wolf4821");
+        assert_eq!(refreshed.profile, profile_before);
+        let read = redb.begin_read().unwrap();
+        let table = read.open_table(super::SEASON_RATINGS_TABLE).unwrap();
+        let stored_rating: crate::profile::SeasonRating =
+            serde_json::from_slice(table.get(rating_key.as_str()).unwrap().unwrap().value())
+                .unwrap();
+        assert_eq!(stored_rating, rating);
     }
 
     #[test]
@@ -7514,13 +7627,13 @@ mod tests {
             );
         }
         assert!(PlayerDb::apply_welcome_grant(&mut existing, 1).unwrap());
-        assert_eq!(existing.profile.gems, 500);
+        assert_eq!(existing.profile.gems, 50);
         assert!(!PlayerDb::apply_welcome_grant(&mut existing, 2).unwrap());
-        assert_eq!(existing.profile.gems, 500);
+        assert_eq!(existing.profile.gems, 50);
 
         let mut fresh = test_account(AccountKind::Human);
         assert!(PlayerDb::apply_welcome_grant(&mut fresh, 1).unwrap());
-        assert_eq!(fresh.profile.gems, 475);
+        assert_eq!(fresh.profile.gems, 25);
 
         let mut bot = test_account(AccountKind::Bot);
         assert!(!PlayerDb::apply_welcome_grant(&mut bot, 1).unwrap());
@@ -7611,7 +7724,9 @@ mod tests {
             DISPLAY_NAME_MAX_CHARS
         );
         assert!(normalize_display_name("\n\t").is_err());
-        assert!(generated_display_name().starts_with("ANON"));
+        let generated = generated_display_name();
+        assert!(is_animal_alias(&generated));
+        assert!(crate::name_policy::is_allowed(&generated));
     }
 
     #[test]
@@ -8255,9 +8370,9 @@ mod tests {
             .claim_mission_reward(player, "onboarding_1_tutorial", false)
             .await
             .unwrap();
-        // 150 Crowns + 25 Gems added to 100 Crowns + 50 Gems
-        assert_eq!(updated.profile.crowns, 250);
-        assert_eq!(updated.profile.gems, 75);
+        // 50 Crowns + 0 Gems added to 100 Crowns + 50 Gems
+        assert_eq!(updated.profile.crowns, 150);
+        assert_eq!(updated.profile.gems, 50);
         let record = updated
             .profile
             .missions_progress
@@ -8283,10 +8398,10 @@ mod tests {
             .claim_mission_reward(player, "onboarding_2_structures", true)
             .await
             .unwrap();
-        // onboarding_2 gives 200 Crowns, 30 Gems * 2 = 400 Crowns, 60 Gems
-        // 250 + 400 = 650, 75 + 60 = 135
-        assert_eq!(doubled.profile.crowns, 650);
-        assert_eq!(doubled.profile.gems, 135);
+        // onboarding_2 gives 50 Crowns, 0 Gems * 2 = 100 Crowns, 0 Gems
+        // 150 + 100 = 250, 50 + 0 = 50
+        assert_eq!(doubled.profile.crowns, 250);
+        assert_eq!(doubled.profile.gems, 50);
         let rec2 = doubled
             .profile
             .missions_progress

@@ -165,6 +165,8 @@ pub enum Ability {
     RegionalCommands { percent: u32 },
     /// The hero's highland tiles and adjacent allied highlands are harder to capture.
     NyabingiNetwork { percent: u32 },
+    /// With at least three living allies, the hero produces more ordinary gold and troops.
+    TafaifaCouncil { percent: u32 },
 }
 
 /// Who an attack, conquest or retreat is aimed at. `Larger`, `Smaller`, `Richer`,
@@ -303,6 +305,7 @@ impl Ability {
             | Ability::NyabingiNetwork { percent }
             | Ability::FactoryCityUpgradeDiscount { percent }
             | Ability::ImperialStandards { percent }
+            | Ability::TafaifaCouncil { percent }
             | Ability::CounterLevy { percent, .. }
             | Ability::EnemyRetreatPenalty { percent, .. } => percent,
             Ability::CoastalFounding
@@ -397,6 +400,7 @@ impl Ability {
             Ability::ZagrosAscent { .. } => Ability::ZagrosAscent { percent: 0 },
             Ability::RegionalCommands { .. } => Ability::RegionalCommands { percent: 0 },
             Ability::NyabingiNetwork { .. } => Ability::NyabingiNetwork { percent: 0 },
+            Ability::TafaifaCouncil { .. } => Ability::TafaifaCouncil { percent: 0 },
             Ability::TigranesAid { .. } => Ability::TigranesAid { max_troops: 0 },
             Ability::ImperialStandards { .. } => Ability::ImperialStandards { percent: 0 },
             Ability::FactoryRaid { .. } => Ability::FactoryRaid {
@@ -464,7 +468,8 @@ impl Ability {
             | Ability::SharedFeast
             | Ability::GreatLawOfPeace
             | Ability::NyabingiNetwork { .. }
-            | Ability::AllyPatronage { .. } => Cue::Alliance,
+            | Ability::AllyPatronage { .. }
+            | Ability::TafaifaCouncil { .. } => Cue::Alliance,
             Ability::CityTowerUpgrade | Ability::SiegeBreach | Ability::AkkadGarrison => Cue::Tower,
             Ability::CityIntercession { .. }
             | Ability::CityDenial
@@ -542,7 +547,7 @@ pub struct Hero {
     /// Additional tower-range bonus that can coexist with the hero's main ability.
     #[serde(default)]
     pub tower_range_bonus_percent: u32,
-    /// NFTROPOLY/WOU-ID card token, only for heroes registered there.
+    /// Legacy card catalog token, retained as content metadata.
     #[serde(default)]
     pub card: Option<String>,
     /// Always playable without buying it.

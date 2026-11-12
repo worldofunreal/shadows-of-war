@@ -106,17 +106,22 @@ impl SowApp {
                 }
                 UiAction::CenterCamera => {
                     let pid = self.sim.my_player_id.unwrap_or(1);
-                    let has_land = self
+                    let player_anchor = self
                         .sim
                         .current_snapshot
                         .as_ref()
-                        .is_some_and(|snapshot| {
-                            snapshot.players.iter().any(|player| {
+                        .and_then(|snapshot| {
+                            snapshot.players.iter().find(|player| {
                                 player.id == pid && player.tile_count > 0 && player.alive
                             })
-                        });
-                    if has_land
-                        && let Some([world_x, world_y]) = self.ui.nameplates.anchor_for(pid)
+                        })
+                        .map(|player| [player.centroid_x, player.centroid_y]);
+                    if let Some([world_x, world_y]) = self
+                        .ui
+                        .nameplates
+                        .anchor_for(pid)
+                        .filter(|_| player_anchor.is_some())
+                        .or(player_anchor)
                     {
                         self.focus_camera_on_world(world_x, world_y, 10.0);
                     }

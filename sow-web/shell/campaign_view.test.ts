@@ -2471,11 +2471,8 @@ test("player nameplate keeps the active leader portrait and shows the nickname r
     const plateEnd = hud.search(/(?:const|let|var) plateText = formatNameplateTroops/);
     assert.ok(plateStart >= 0 && plateEnd > plateStart);
     const plateUpdate = hud.slice(plateStart, plateEnd);
-    assert.match(plateUpdate, /plateLeader = leaderById\(hud\.player_leader/);
-    assert.match(
-        plateUpdate,
-        /avatarPortraitPath\(\s*plateLeader\.art_slug \|\| plateLeader\.slug,\s*hud\.player_avatar_expression,/,
-    );
+    assert.match(plateUpdate, /plateSlug = hud\.player_art_slug \|\| "null"/);
+    assert.match(plateUpdate, /avatarPortraitPath\(plateSlug, hud\.player_avatar_expression\)/);
     assert.match(plateUpdate, /setAvatarPortrait\(/);
     assert.equal(avatarPortraitPath("boudica", "angry"), "gameplay/avatars/expressions/boudica_angry.webp");
     assert.equal(avatarPortraitPath("boudica", "happy"), "gameplay/avatars/expressions/boudica_happy.webp");

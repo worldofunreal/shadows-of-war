@@ -841,7 +841,7 @@ mod tests {
         let path = saved_root.join("424263.checkpoint");
         assert_eq!(
             bincode::deserialize::<u32>(&std::fs::read(&path).unwrap()[..4]).unwrap(),
-            4
+            CHECKPOINT_FORMAT
         );
         drop(sessions);
         std::fs::write(&path, b"interrupted saved copy").unwrap();

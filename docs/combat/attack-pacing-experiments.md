@@ -1,10 +1,10 @@
 # Experimentos de ritmo de conquista
 
-Actualizado: 2026-11-05
+Actualizado: 2026-11-11
 
 ## Objetivo
 
-Mantener el ritmo global aceptado y hacer que los ataques contra tierra neutral capturen tiles aproximadamente tres veces más rápido. La curva por ocupación global conserva la expansión inicial relativamente contenida y acelera conforme se ocupa el mapa.
+Registrar el ritmo de conquista neutral y probar un ritmo global más lento. El factor neutral de `3×` y su curva de ocupación se conservan; el global baja de `0.26×` a `0.16×` para la prueba actual, lo que también reduce el presupuesto base de PvP y otros sistemas que usan el dial global.
 
 Este documento es el registro de hipótesis, método, resultados y siguientes pasos. Cada corrida nueva debe añadir sus condiciones y resultados aquí para poder retomar el trabajo sin depender del contexto de una sesión.
 
@@ -14,10 +14,10 @@ El dueño del ritmo de conquista es `SowEngine::execute_combat` en [`combat_tile
 
 1. Calcula `effective_troops` con los modificadores de ataque y defensa.
 2. Para neutral, usa un presupuesto base de `2 × tamaño_de_frontera`. Para PvP, multiplica la frontera por un factor basado en la relación entre tropas atacantes y defensoras.
-3. Escala por duración del tick y `global_speed_multiplier` (0.26 en la iteración actual; 0.02 fue la prueba diagnóstica temporal y 0.5 el ritmo anterior).
+3. Escala por duración del tick y `global_speed_multiplier` (`0.16` en la prueba actual; `0.26` fue el valor previo, `0.02` la prueba diagnóstica temporal y `0.5` el ritmo anterior).
 4. Aplica el tope de tiles por ataque. Este tope ya depende de tropas: usa 256 tiles en el ancla de 25.000 tropas, se duplica por cada aumento de 10× y está limitado por un techo de 4.096. Por debajo de 25.000, el tope queda anclado en 256; por tanto, ese tope no distingue el early del mid.
 5. En neutral, cada tile cuesta `clamp(2000 × velocidad_del_terreno / effective_troops, 5, 100)` unidades de presupuesto. La pérdida actual por tile neutral es 1 tropa.
-6. Desde 2026-11-05, solo el presupuesto neutral recibe un factor adicional de `3×` después del tope por tropas. El multiplicador global sigue en `0.26`; PvP sigue en `1.00×`.
+6. Desde 2026-11-05, solo el presupuesto neutral recibe un factor adicional de `3×` después del tope por tropas. El factor se conserva con el global actual de `0.16`; PvP no recibe el factor neutral.
 
 El contador de frontera de producción es hoy `to_conquer.len()`. Esa es la longitud de la cola, que puede contener coordenadas repetidas o tiles que ya no son candidatos válidos. La prueba experimental permite comparar ese contador con la cantidad de coordenadas únicas que todavía pertenecen al defensor, son terreno válido y siguen junto al atacante. La producción conserva la cola para el tamaño de frontera; ahora modula solo los ataques neutrales según la ocupación global, mientras PvP conserva el multiplicador 1.0.
 
@@ -51,7 +51,7 @@ Repetir las tres ocupaciones para cada semilla produjo los mismos conteos finale
 
 ### Comparación del factor neutral de 3×
 
-Simulación determinista en mapa de `100 × 100` con 80% de tierra, agua, dos ataques neutrales simultáneos de 25.000 tropas, cinco ticks y semillas 1–3. Se usa el `global_speed_multiplier=0.26` actual. La línea base aplica la curva previa; la versión acelerada aplica la misma curva por `3×`.
+Simulación determinista en mapa de `100 × 100` con 80% de tierra, agua, dos ataques neutrales simultáneos de 25.000 tropas, cinco ticks y semillas 1–3. Esa corrida usó `global_speed_multiplier=0.26`, que era el valor vigente entonces. La línea base aplica la curva previa; la versión acelerada aplica la misma curva por `3×`.
 
 Con la frontera inicial fija en 48 tiles, la comparación aísla el efecto directo del factor:
 
@@ -67,7 +67,7 @@ Los ratios individuales por semilla estuvieron entre `2,79×` y `3,09×`, por la
 
 El 2026-11-04 se bajó `GameConfig::default().global_speed_multiplier` de 0.5 a 0.02 para hacer visible el efecto del ritmo global: es 25× menos presupuesto por segundo para ataques neutrales y PvP, además de reducir otros sistemas que usan el mismo dial. Las capturas/s de la corrida sintética anterior se midieron con 0.5 y no representan esta configuración.
 
-Tras probar ese bajón en partida, la iteración global actual sube el valor a 0.26, el punto medio aritmético entre 0.02 y 0.5. El usuario considera aceptable el ritmo global actual; el cambio de 2026-11-05 acelera solo la captura neutral. La sensación de juego del nuevo factor todavía requiere validación del usuario.
+Tras probar ese bajón en partida, el global volvió a `0.26`. El 2026-11-11 se reduce a `0.16` como nueva prueba: a condiciones iguales, el presupuesto queda en `61.5%` del de `0.26` (38.5% menos), mientras el factor neutral `3×` permanece igual. Esto también baja PvP y otros sistemas que comparten el ritmo global. Todavía no hay una simulación de capturas por segundo ni aceptación de gameplay con `0.16`; esta iteración se despliega solo al servidor multiplayer. El cliente web publicado conserva su default anterior para tutorial y single player hasta que se publique una build web; multiplayer recibe el valor nuevo desde el servidor.
 
 ## Referencia: OpenFront actual
 

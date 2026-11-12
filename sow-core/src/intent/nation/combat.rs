@@ -40,8 +40,9 @@ fn ghost_attack_rng(seed: u64, ghost_id: u16, attack_id: u64, salt: u64) -> WyRa
 }
 
 pub(super) fn ghost_retaliation_delay_ticks(seed: u64, ghost_id: u16, attack_id: u64) -> u64 {
+    let (min, max) = super::structures::think_window_ticks(AiTier::Ghost, true);
     let mut rng = ghost_attack_rng(seed, ghost_id, attack_id, GHOST_RETALIATION_DELAY_SALT);
-    rng.next_int(3, 13) as u64
+    rng.next_int(min as i32, max as i32 + 1) as u64
 }
 
 pub(super) fn ranked_ghost_retaliation_delay_ticks(

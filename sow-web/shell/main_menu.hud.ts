@@ -25,8 +25,6 @@ import type {
     HudMapMenu,
     HudMapMenuBuilding,
     HudMapMenuItem,
-    HudMarket,
-    HudMarketSide,
     HudNotification,
     HudStateEnvelope,
     HudDevParameter,
@@ -188,6 +186,8 @@ type HudRefs = {
     settings: HTMLElement;
     deployBtn: HTMLElement;
     deployTimer: HTMLElement;
+    deployFill: HTMLElement;
+    deployStatus: HTMLElement;
     buildingsStrip: HTMLElement;
     worldProgressOverlay: HTMLElement;
     worldCelebrationsOverlay: HTMLElement;
@@ -216,18 +216,6 @@ type HudRefs = {
     inboxRenderKey: string;
     transfer: HTMLElement;
     transferTarget: HTMLElement;
-    market: HTMLElement;
-    marketButton: HTMLButtonElement;
-    marketAmount: HTMLInputElement;
-    marketPrice: HTMLInputElement;
-    marketTrade: HTMLButtonElement;
-    marketPost: HTMLButtonElement;
-    marketCancel: HTMLButtonElement;
-    marketStatus: HTMLElement;
-    marketStock: HTMLElement;
-    marketOrder: HTMLElement;
-    marketOrderText: HTMLElement;
-    marketLimitLabel: HTMLElement;
     transferClose: HTMLElement;
     transferReturnFocus: HTMLElement | null;
     transferGold: HTMLInputElement;
@@ -413,111 +401,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return true;
     }
 
-    let marketSide: HudMarketSide = "buy";
-    let marketPriceEdited = false;
-    let marketRequestId = 0;
-    let marketPending: number | null = null;
-    let marketResult: HudMarket["feedback"] = null;
-
-    function marketLots(): number {
-        const size = hudState?.hud?.market?.troops_per_lot;
-        const lots = size ? Number(hudRefs?.marketAmount.value) / size : 0;
-        return Number.isInteger(lots) && lots > 0 && lots <= 0xffffffff ? lots : 0;
-    }
-
-    function requestMarketQuote(): void {
-        send("preview_market", { side: marketSide, lots: marketLots() });
-        if (hudRefs && hudState?.hud) renderMarket(hudState.hud);
-    }
-
-    function sendMarketAction(command: string): void {
-        const refs = hudRefs;
-        const market = hudState?.hud?.market;
-        if (!refs || !market || marketPending !== null) return;
-        const lots = marketLots();
-        const request_id = marketRequestId = ((marketRequestId + 1) >>> 0) || 1;
-        const fields: HudCommandPayload = { request_id };
-        if (command === "market_trade") {
-            if (market.side !== marketSide || market.lots !== lots || market.quote_gold == null) return;
-            Object.assign(fields, { side: marketSide, lots, limit_gold: market.quote_gold });
-        } else if (command === "place_market_order") {
-            const gold_per_lot = Number(refs.marketPrice.value);
-            if (!lots || !Number.isInteger(gold_per_lot) || gold_per_lot <= 0 || gold_per_lot > 0xffffffff / lots) return;
-            Object.assign(fields, { side: marketSide, lots, gold_per_lot });
-        }
-        if (send(command, fields)) {
-            marketPending = request_id;
-            marketResult = null;
-            renderMarket(hudState!.hud!);
-        }
-    }
-
-    function renderMarket(hud: MenuHudPayload): void {
-        const refs = hudRefs;
-        if (!refs?.market) return;
-        const market = hud.market;
-        const wasOpen = !refs.market.classList.contains("hidden");
-        refs.marketButton.hidden = !hud.market_available;
-        refs.marketButton.setAttribute("aria-expanded", String(Boolean(market)));
-        refs.market.classList.toggle("hidden", !market);
-        if (!market) {
-            if (!hud.market_available) {
-                marketPending = null;
-                marketResult = null;
-            }
-            if (wasOpen && refs.market.contains(document.activeElement) && !refs.marketButton.hidden) {
-                restoreHudFocus(refs.marketButton);
-            }
-            return;
-        }
-        const size = market.troops_per_lot;
-        if (wasOpen === false && !refs.marketAmount.value) {
-            refs.marketAmount.value = String(market.lots * size || size);
-        }
-        refs.marketAmount.min = refs.marketAmount.step = String(size);
-        for (const preset of refs.market.querySelectorAll<HTMLButtonElement>("[data-market-lots]")) {
-            const label = (Number(preset.dataset.marketLots) * size).toLocaleString(window.SOW_LOCALE || "en");
-            if (preset.textContent !== label) preset.textContent = label;
-        }
-        if (marketPending !== null && market.feedback?.request_id === marketPending) {
-            marketPending = null;
-            marketResult = market.feedback;
-        }
-        const pending = marketPending !== null;
-        const lots = marketLots();
-        const current = market.side === marketSide && market.lots === lots;
-        const buy = marketSide === "buy";
-        const format = (value: number) => value.toLocaleString(window.SOW_LOCALE || "en");
-        const label = (key: string, values?: Record<string, string>) => SOW_t("hud.market_" + key, values);
-        for (const button of refs.market.querySelectorAll<HTMLButtonElement>("[data-market-side]")) {
-            button.setAttribute("aria-pressed", String(button.dataset.marketSide === marketSide));
-        }
-        refs.marketStock.textContent = market.side === marketSide
-            ? label(buy ? "stock_buy" : "stock_sell", { troops: format(market.available_lots * size) }) : "";
-        const quote = current ? market.quote_gold : null;
-        refs.marketTrade.disabled = pending || quote === null;
-        refs.marketTrade.textContent = quote === null ? label(buy ? "buy" : "sell")
-            : label(buy ? "buy_for" : "sell_for", { troops: format(lots * size), gold: format(quote) });
-        if (!marketPriceEdited && market.side === marketSide) refs.marketPrice.value = String(market.best_price ?? "");
-        const price = Number(refs.marketPrice.value);
-        refs.marketLimitLabel.textContent = label(buy ? "limit_buy" : "limit_sell", { troops: format(size) });
-        refs.marketPost.textContent = label(market.order ? "replace" : "post");
-        refs.marketPost.disabled = pending || !lots || !Number.isInteger(price) || price <= 0 || price > 0xffffffff / lots;
-        refs.marketOrder.hidden = !market.order;
-        refs.marketCancel.disabled = pending;
-        refs.marketOrderText.textContent = market.order ? label(market.order.side === "buy" ? "order_buy" : "order_sell", {
-            troops: format(market.order.lots * size), gold: format(market.order.gold_per_lot), lot: format(size),
-        }) : "";
-        const outcome = marketResult?.outcome;
-        const status = pending ? label("pending") : outcome?.kind === "traded"
-            ? label(outcome.side === "buy" ? "bought" : "sold", { troops: format(outcome.lots * size), gold: format(outcome.gold) })
-            : outcome?.kind === "rejected" ? label(outcome.reason)
-            : outcome ? label(outcome.kind)
-            : current && market.quote_failure ? label(market.quote_failure) : "";
-        if (refs.marketStatus.textContent !== status) refs.marketStatus.textContent = status;
-        if (!wasOpen) restoreHudFocus(document.getElementById("sow-hud-market-close"));
-    }
-
     function updateHudSafeArea() {
         if (!hudRoot || typeof window.getComputedStyle !== "function") return;
         const probe = document.createElement("span");
@@ -558,7 +441,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function setHudPanel(panel: HudPanel) {
         const previous = activeHudPanel;
         const next = previous === panel ? null : panel;
-        if (next && hudState?.hud?.market) send("close_market");
         if (next !== "settings" && hudDropdownOpenKey) {
             hudDropdownOpenKey = null;
             if (hudRefs && hudRoot) syncDropdownScope(hudRoot, null);
@@ -805,7 +687,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         // Question bubble for requests, drawn as a line glyph like the other actions.
         request:
             '<path d="M5 3h14a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-7l-4.5 4v-4H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"/>' +
-            '<path d="M9.5 8.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.4M12 15.2h.01"/>',
+            '<path d="M10 7.8a2 2 0 1 1 3 1.7c-.6.3-1 .7-1 1.4v.4M12 13.9h.01"/>',
         city: '<path d="M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6"/>',
         nuke: '<path d="M12 22V9M9 12l3-3 3 3M12 9l5-5M17 4h4M17 4V1M7 21h10M9 18h6"/>',
         upgrade: '<path d="m12 3 2.2 5.2L20 10l-4.4 3.5L17 19l-5-3-5 3 1.4-5.5L4 10l5.8-1.8L12 3Z"/>',
@@ -996,12 +878,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '-stats">' +
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
             SOW_t("endgame.stat_kills") +
+            '" title="' +
+            SOW_t("endgame.stat_kills") +
             '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
             hudIcon("attack", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
             prefix +
             '-kills">0</b></div>' +
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
+            SOW_t("endgame.stat_assists") +
+            '" title="' +
             SOW_t("endgame.stat_assists") +
             '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
             statusIcon("allied", "sow-hud__inline-icon") +
@@ -1010,6 +896,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '-assists">0</b></div>' +
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
             SOW_t("endgame.stat_max_territory") +
+            '" title="' +
+            SOW_t("endgame.stat_max_territory") +
             '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
             hudIcon("globe", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
@@ -1017,12 +905,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '-max-territory">0</b></div>' +
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
             SOW_t("endgame.stat_gold_received") +
+            '" title="' +
+            SOW_t("endgame.stat_gold_received") +
             '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
             hudIcon("gold", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
             prefix +
             '-gold-received">0</b></div>' +
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
+            SOW_t("endgame.stat_troops_received") +
+            '" title="' +
             SOW_t("endgame.stat_troops_received") +
             '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
             hudIcon("troops", "sow-hud__inline-icon") +
@@ -1053,6 +945,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             refs.troopsReceived.textContent = formatEndgameCompact(stats.troops_received);
     }
 
+    function activateDeferredBuildingAtlases() {
+        if (!hudRoot) return;
+        hudRoot.querySelectorAll<HTMLElement>("[data-sow-building-atlas]").forEach((icon) => {
+            const atlas = icon.dataset.sowBuildingAtlas;
+            if (!atlas) return;
+            icon.style.backgroundImage = 'url("' + atlas + '")';
+            icon.removeAttribute("data-sow-building-atlas");
+        });
+    }
+
     function buildingIcon(kind: string, level?: number, cls?: string): string {
         const name = String(kind || "");
         const art = window.SOW_BUILDING_ART;
@@ -1069,10 +971,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             const backgroundHeight = ((art.atlas_height * 100) / art.cell_size).toFixed(4);
             const positionX = ((sprite.x * 100) / (art.atlas_width - art.cell_size)).toFixed(4);
             const positionY = ((sprite.y * 100) / (art.atlas_height - art.cell_size)).toFixed(4);
+            const atlasUrl = escapeHudText(asset(art.atlas));
+            const ready = window.SOW_INITIAL_LOADER_READY === true;
             const style =
-                "background-image:url(&quot;" +
-                escapeHudText(asset(art.atlas)) +
-                "&quot;);" +
+                (ready ? "background-image:url(&quot;" + atlasUrl + "&quot;);" : "") +
                 "background-size:" +
                 backgroundWidth +
                 "% " +
@@ -1086,7 +988,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             return (
                 '<span class="' +
                 (cls || "sow-hud__building-icon") +
-                ' is-pixel-art" style="' +
+                ' is-pixel-art"' +
+                (ready ? "" : ' data-sow-building-atlas="' + atlasUrl + '"') +
+                ' style="' +
                 style +
                 '" aria-hidden="true"></span>'
             );
@@ -1417,6 +1321,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             settings: requiredHudElement("sow-hud-settings"),
             deployBtn: requiredHudElement("sow-hud-deploy-btn"),
             deployTimer: requiredHudElement("sow-hud-deploy-timer"),
+            deployFill: requiredHudElement("sow-hud-deploy-fill"),
+            deployStatus: requiredHudElement("sow-hud-deploy-status"),
             buildingsStrip: requiredHudElement("sow-hud-buildings-strip"),
             worldProgressOverlay: requiredHudElement("sow-hud-world-progress-overlay"),
             worldCelebrationsOverlay: requiredHudElement("sow-hud-world-celebrations-overlay"),
@@ -1449,18 +1355,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             inboxRenderKey: "",
             transfer: requiredHudElement("sow-hud-transfer"),
             transferTarget: requiredHudElement("sow-hud-transfer-target"),
-            market: requiredHudElement("sow-hud-market"),
-            marketButton: requiredHudButton("sow-hud-market-button"),
-            marketAmount: requiredHudInput("sow-hud-market-amount"),
-            marketPrice: requiredHudInput("sow-hud-market-price"),
-            marketTrade: requiredHudButton("sow-hud-market-trade"),
-            marketPost: requiredHudButton("sow-hud-market-post"),
-            marketCancel: requiredHudButton("sow-hud-market-cancel"),
-            marketStatus: requiredHudElement("sow-hud-market-status"),
-            marketStock: requiredHudElement("sow-hud-market-stock"),
-            marketOrder: requiredHudElement("sow-hud-market-order"),
-            marketOrderText: requiredHudElement("sow-hud-market-order-text"),
-            marketLimitLabel: requiredHudElement("sow-hud-market-limit-label"),
             transferClose: requiredHudElement("sow-hud-transfer-close"),
             transferReturnFocus: null,
             transferGold: requiredHudInput("sow-hud-transfer-gold"),
@@ -1526,43 +1420,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             dockStack: requiredHudElement("sow-hud-dock-stack"),
             mapFeedback: document.createElement("div"),
         };
-    }
-
-    function marketMarkup(): string {
-        const label = (key: string) => esc(SOW_t("hud.market_" + key));
-        return `<aside class="sow-hud__dialog sow-hud__transfer sow-hud__market hidden" id="sow-hud-market" role="dialog" aria-labelledby="sow-hud-market-title">
-            <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon" aria-hidden="true">${hudIcon("transfer", "sow-hud__inline-icon")}</span>
-                <h3 id="sow-hud-market-title">${label("title")}</h3>
-                <button class="sow-hud__close-btn" id="sow-hud-market-close" type="button" data-command="close_market" aria-label="${esc(SOW_t("menu.close"))}">✕</button>
-            </div>
-            <div class="sow-hud__dialog-body">
-                <div class="sow-hud__market-row">
-                    <button type="button" data-command="market_side" data-market-side="buy" aria-pressed="true">${label("buy")}</button>
-                    <button type="button" data-command="market_side" data-market-side="sell" aria-pressed="false">${label("sell")}</button>
-                </div>
-                <p id="sow-hud-market-stock"></p>
-                <label>${hudIcon("troops", "sow-hud__inline-icon")} ${esc(SOW_t("hud.troops"))}
-                    <input id="sow-hud-market-amount" type="number" inputmode="numeric" autocomplete="off">
-                </label>
-                <div class="sow-hud__market-row">
-                    ${[1, 5, 10].map((lots) => `<button class="sow-hud__transfer-preset" type="button" data-command="market_amount" data-market-lots="${lots}"></button>`).join("")}
-                </div>
-                <button class="sow-hud__market-primary" id="sow-hud-market-trade" type="button" data-command="market_trade" disabled></button>
-                <p id="sow-hud-market-status" role="status"></p>
-                <details id="sow-hud-market-details"><summary>${label("leave_order")}</summary>
-                    <label><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="${currencyAsset("gold")}" alt="">
-                        <span id="sow-hud-market-limit-label"></span>
-                        <input id="sow-hud-market-price" type="number" inputmode="numeric" min="1" step="1" autocomplete="off">
-                    </label>
-                    <button id="sow-hud-market-post" type="button" data-command="place_market_order" disabled></button>
-                </details>
-                <section id="sow-hud-market-order" aria-labelledby="sow-hud-market-order-title" hidden>
-                    <strong id="sow-hud-market-order-title">${label("my_order")}</strong>
-                    <p id="sow-hud-market-order-text"></p>
-                    <button id="sow-hud-market-cancel" type="button" data-command="cancel_market_order">${esc(SOW_t("endgame.cancel"))}</button>
-                </section>
-            </div>
-        </aside>`;
     }
 
     function ensureHudDom() {
@@ -1652,8 +1509,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudIcon("troops", "sow-hud__inline-icon") +
             '<b id="sow-hud-nameplate-troop-rate">0/s</b></span>' +
             "  </div></div></div>" +
-            '<button class="sow-hud__market-entry" id="sow-hud-market-button" type="button" data-command="open_market" aria-controls="sow-hud-market" aria-expanded="false" hidden>' +
-            hudIcon("transfer", "sow-hud__inline-icon") + esc(SOW_t("hud.market_button")) + '</button>' +
             '<details class="sow-hud__hero-ability" id="sow-hud-hero-ability" hidden>' +
             '<summary><span id="sow-hud-hero-ability-icon" aria-hidden="true"></span>' +
             '<span id="sow-hud-hero-ability-name"></span>' +
@@ -1828,13 +1683,28 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '<footer class="sow-hud__dock" id="sow-hud-dock">' +
             '  <div class="sow-hud__dock-inner" id="sow-hud-dock-inner">' +
             '    <div class="sow-hud__dock-actions">' +
-            '      <div class="sow-hud__deploy-panel hidden" id="sow-hud-deploy-btn">' +
-            '        <span class="sow-hud__deploy-title">' +
+            '      <div class="sow-hud__deploy-panel hidden" id="sow-hud-deploy-btn" data-spawned="false" data-urgency="normal">' +
+            '        <span class="sow-hud__deploy-badge" aria-hidden="true">' +
+            hudIcon("spawn", "sow-hud__deploy-icon") +
+            "        </span>" +
+            '        <div class="sow-hud__deploy-body">' +
+            '          <div class="sow-hud__deploy-header">' +
+            '            <span class="sow-hud__deploy-title">' +
             SOW_t("hud.choose_spawn") +
             "</span>" +
-            '        <b class="sow-hud__deploy-timer" id="sow-hud-deploy-timer">' +
+            '            <span class="sow-hud__deploy-status" id="sow-hud-deploy-status" hidden>' +
+            SOW_t("hud.ready") +
+            "</span>" +
+            "          </div>" +
+            '          <div class="sow-hud__deploy-track" aria-hidden="true">' +
+            '            <i class="sow-hud__deploy-fill" id="sow-hud-deploy-fill"></i>' +
+            "          </div>" +
+            "        </div>" +
+            '        <div class="sow-hud__deploy-timer-wrap">' +
+            '          <b class="sow-hud__deploy-timer" id="sow-hud-deploy-timer" role="timer" aria-live="off">' +
             SOW_t("hud.ready") +
             "</b>" +
+            "        </div>" +
             "      </div>" +
             '      <div class="sow-hud__buildings-strip" id="sow-hud-buildings-strip">' +
             '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="City" aria-label="' +
@@ -2029,7 +1899,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</span></button>" +
             "</div>" +
             "</aside>" +
-            marketMarkup() +
             '<div class="sow-hud__modal-backdrop sow-hud__betrayal-backdrop hidden" id="sow-hud-betrayal-modal">' +
             '  <section class="sow-hud__dialog sow-hud__betrayal" role="dialog" aria-modal="true" aria-labelledby="sow-hud-betrayal-title" aria-describedby="sow-hud-betrayal-copy">' +
             '    <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon sow-hud__betrayal-mark" aria-hidden="true">' +
@@ -2341,17 +2210,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         hudRoot.addEventListener("input", function (event) {
             const target = event.target;
             if (!(target instanceof Element)) return;
-            if (target === hudRefs?.marketAmount) {
-                marketResult = null;
-                requestMarketQuote();
-                return;
-            }
-            if (target === hudRefs?.marketPrice && hudState?.hud) {
-                marketPriceEdited = true;
-                marketResult = null;
-                renderMarket(hudState.hud);
-                return;
-            }
             const searchInput = target.closest<HTMLInputElement>("#sow-hud-lb-search");
             if (searchInput) {
                 leaderboardFilterQuery = searchInput.value.trim().toLowerCase();
@@ -3274,9 +3132,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     function ringFace(expression: string): HTMLElement {
-        const hud = hudState?.hud;
-        const leader = leaderById(hud?.player_leader || hudState?.selected_leader);
-        const slug = leader?.art_slug || leader?.slug;
+        const slug = hudState?.hud?.player_art_slug;
         const face = document.createElement("span");
         face.className = "sow-hud__ring-face";
         face.innerHTML = hudIcon("emote", "sow-hud__ring-icon");
@@ -4524,19 +4380,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     function leaderboardPlayerAvatar(player: HudLeaderboardPlayer): HudAvatarIdentity {
-        if (player.avatar && typeof player.avatar === "string") {
-            return {
-                kind: "portrait",
-                slug: player.avatar,
-                expression: player.avatar_expression || undefined,
-                transition: player.avatar_transition,
-            };
-        }
-        const leader = leaderById(player.leader);
-        const slug = (leader && (leader.art_slug || leader.slug)) || "null";
         return {
             kind: "portrait",
-            slug: slug,
+            slug: player.avatar_slug || "null",
             expression: player.avatar_expression || undefined,
             transition: player.avatar_transition,
         };
@@ -4987,11 +4833,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     function notificationIcon(key: string, values: Record<string, string>): string {
-        // A notice that names the hero whose ability fired shows that ability's icon.
-        if (/^[a-z][a-z0-9_]*$/.test(values.hero || "")) {
-            const hero = leaderById(values.hero);
-            const artSlug = hero.art_slug || hero.slug || values.hero;
-            return abilityIconMarkup(artSlug, "sow-hud__notification-ability", "draggable='false'");
+        // A notice that names the hero whose ability fired shows that ability's icon, keyed by the hero's art slug.
+        if (values.hero_art) {
+            return abilityIconMarkup(values.hero_art, "sow-hud__notification-ability", "draggable='false'");
         }
         if (key.indexOf("nuke") >= 0) return hudIcon("nuke", "sow-hud__notification-icon");
         if (key.indexOf("betrayal") >= 0) return statusIcon("traitor", "sow-hud__notification-icon");
@@ -5980,7 +5824,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const state = feedback.state;
         if (parts.heroAbilityIcon.dataset.hero !== hero) {
             parts.heroAbilityIcon.dataset.hero = hero;
-            parts.heroAbilityIcon.innerHTML = notificationIcon("hud.ability_notice", { hero });
+            parts.heroAbilityIcon.innerHTML = notificationIcon("hud.ability_notice", {
+                hero,
+                hero_art: hud.player_art_slug || "",
+            });
         }
         parts.heroAbility.dataset.state = state;
         parts.heroAbilityName.textContent = SOW_t("site.leader_" + hero + "_ability", {});
@@ -5998,8 +5845,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function renderHud(forceNotifications = false): void {
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
-            marketPending = null;
-            marketResult = null;
             closeLeaderboard();
             hudRoot.hidden = true;
             if (hudDevLayer) hudDevLayer.hidden = true;
@@ -6056,7 +5901,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         syncCompactHudDensity(hudScreen);
 
         const hud = hudState.hud;
-        renderMarket(hud);
         const settings = hudState.settings || DEFAULT_HUD_SETTINGS;
         const settingsOpen = activeHudPanel === "settings";
         const inboxOpen = activeHudPanel === "inbox";
@@ -6158,13 +6002,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (hudRefs!.nameplate.hidden !== playerPlateHidden)
                 hudRefs!.nameplate.hidden = playerPlateHidden;
             if (!playerPlateHidden) {
-                const plateLeader = leaderById(hud.player_leader || (hudState && hudState.selected_leader));
-                const plateSrc = asset(
-                    avatarPortraitPath(
-                        plateLeader.art_slug || plateLeader.slug,
-                        hud.player_avatar_expression,
-                    ),
-                );
+                const plateSlug = hud.player_art_slug || "null";
+                const plateSrc = asset(avatarPortraitPath(plateSlug, hud.player_avatar_expression));
                 const platePlayerName = String(hud.player_name || "");
                 if (hudRefs!.plateAvatar)
                     setAvatarPortrait(
@@ -6174,7 +6013,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                         Boolean(hudState.settings && hudState.settings.reduced_motion),
                         asset(
                             avatarPortraitPath(
-                                plateLeader.art_slug || plateLeader.slug,
+                                plateSlug,
                                 hud.player_avatar_transition
                                     ? hud.player_avatar_transition.to
                                     : hud.player_avatar_expression,
@@ -6260,10 +6099,54 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         updateArmyAllocation(hud.troops, displayRatio);
 
         // Bottom Dock: Phase Transformation
+        hudRoot.dataset.deploying = String(isDeploying);
         if (hudRefs!.deployBtn) {
-            hudRefs!.deployBtn.style.display = isDeploying ? "flex" : "none";
+            const hasSpawned = Boolean(hud.has_spawned);
+            const spawnDuration =
+                Number.isFinite(hud.spawn_duration_secs) && Number(hud.spawn_duration_secs) > 0
+                    ? Number(hud.spawn_duration_secs)
+                    : 15;
+            const urgency =
+                !isDeploying || spawnSecs > 5
+                    ? "normal"
+                    : spawnSecs <= 3
+                      ? "critical"
+                      : "warning";
+            hudRefs!.deployBtn.hidden = !isDeploying;
+            hudRefs!.deployBtn.classList.toggle("hidden", !isDeploying);
+            hudRefs!.deployBtn.style.display = isDeploying ? "grid" : "none";
+            hudRefs!.deployBtn.dataset.spawned = String(hasSpawned);
+            hudRefs!.deployBtn.dataset.urgency = urgency;
+            if (hasSpawned) {
+                hudRefs!.deployBtn.dataset.command = "center_camera";
+                hudRefs!.deployBtn.setAttribute("role", "button");
+                hudRefs!.deployBtn.setAttribute("tabindex", "0");
+                const centerLabel = SOW_t("hud.center_camera");
+                hudRefs!.deployBtn.setAttribute("aria-label", centerLabel);
+                hudRefs!.deployBtn.title = centerLabel;
+            } else {
+                delete hudRefs!.deployBtn.dataset.command;
+                hudRefs!.deployBtn.removeAttribute("role");
+                hudRefs!.deployBtn.removeAttribute("tabindex");
+                hudRefs!.deployBtn.removeAttribute("aria-label");
+                hudRefs!.deployBtn.title = "";
+            }
+            if (hudRefs!.deployStatus) {
+                hudRefs!.deployStatus.hidden = !hasSpawned;
+            }
             if (isDeploying && hudRefs!.deployTimer) {
-                hudRefs!.deployTimer.textContent = spawnSecs.toFixed(1) + "s";
+                const timerText = spawnSecs.toFixed(1) + "s";
+                if (hudRefs!.deployTimer.textContent !== timerText) {
+                    hudRefs!.deployTimer.textContent = timerText;
+                }
+            }
+            if (hudRefs!.deployFill) {
+                const pct = isDeploying
+                    ? Math.max(0, Math.min(100, (spawnSecs / spawnDuration) * 100)).toFixed(1) + "%"
+                    : "0%";
+                if (hudRefs!.deployFill.style.width !== pct) {
+                    hudRefs!.deployFill.style.width = pct;
+                }
             }
         }
         if (hudRefs!.buildingsStrip) {
@@ -6588,10 +6471,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 hudRefs!.transferHint.hidden = hint === null;
                 if (reseed) {
                     hudRefs!.transfer.dataset.seededTarget = String(transferLive.target_id);
-                    hudRefs!.transferGold.value = String(transferPresetAmount("gold", "25", transferLive, hud));
-                    hudRefs!.transferTroops.value = String(
-                        transferPresetAmount("troops", "25", transferLive, hud),
-                    );
+                    hudRefs!.transferGold.value = "0";
+                    hudRefs!.transferTroops.value = "0";
                 }
                 if (transferWasHidden) {
                     const activeElement = document.activeElement;
@@ -6668,7 +6549,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             if (hudRefs!.surrenderPortrait) {
                 setAvatarImage(
                     hudRefs!.surrenderPortrait,
-                    asset("gameplay/avatars/" + (surrenderLeader.art_slug || surrenderLeader.slug) + ".webp"),
+                    asset("gameplay/avatars/" + (hud.player_art_slug || "null") + ".webp"),
                 );
                 hudRefs!.surrenderPortrait.alt = surrenderLeader.name || SOW_t("hud.leader_avatar");
             }
@@ -6697,7 +6578,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 if (hudRefs!.endgamePortrait) {
                     setAvatarImage(
                         hudRefs!.endgamePortrait,
-                        asset("gameplay/avatars/" + (activeLeader.art_slug || activeLeader.slug) + ".webp"),
+                        asset("gameplay/avatars/" + (hud.player_art_slug || "null") + ".webp"),
                     );
                     hudRefs!.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
                 }
@@ -6741,7 +6622,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 leaderboardOpen ||
                 inboxOpen ||
                 hud.transfer ||
-                hud.market ||
                 betrayalOpen ||
                 surrenderModalOpen ||
                 isOver ||
@@ -6990,35 +6870,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 send("dev_vfx_all", { on: btn.dataset.on === "1" });
             } else if (cmd === "clear_emote") {
                 send("clear_emote");
-            } else if (cmd === "open_market" && hudRefs) {
-                if (hudState?.hud?.market) {
-                    send("close_market");
-                } else {
-                    setHudPanel(null);
-                    marketSide = "buy";
-                    marketPriceEdited = false;
-                    hudRefs.marketAmount.value = "";
-                    hudRefs.marketPrice.value = "";
-                    hudRefs.market.querySelector("details")?.removeAttribute("open");
-                    send("preview_market", { side: marketSide, lots: 1 });
-                }
-            } else if (cmd === "close_market") {
-                send("close_market");
-            } else if (cmd === "market_side" && hudRefs) {
-                const side = btn.dataset.marketSide;
-                if ((side === "buy" || side === "sell") && side !== marketSide) {
-                    marketSide = side;
-                    marketPriceEdited = false;
-                    marketResult = null;
-                    hudRefs.marketPrice.value = "";
-                    requestMarketQuote();
-                }
-            } else if (cmd === "market_amount" && hudRefs && hudState?.hud?.market) {
-                hudRefs.marketAmount.value = String(Number(btn.dataset.marketLots) * hudState.hud.market.troops_per_lot);
-                marketResult = null;
-                requestMarketQuote();
-            } else if (cmd === "market_trade" || cmd === "place_market_order" || cmd === "cancel_market_order") {
-                sendMarketAction(cmd);
             } else if (cmd === "open_transfer") {
                 setHudPanel(null);
                 send("open_transfer", { target_player_id: Number(btn.dataset.playerId) });
@@ -7334,12 +7185,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 send("clear_placement");
                 return;
             }
-            if (event.key === "Escape" && hudState?.hud?.market) {
-                event.preventDefault();
-                event.stopPropagation();
-                send("close_market");
-                return;
-            }
             if (
                 event.key === "Escape" &&
                 hudRefs &&
@@ -7425,16 +7270,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 setRingHot(menu, Number(target.dataset.slot));
         });
 
+    if (window.SOW_INITIAL_LOADER_READY === true) activateDeferredBuildingAtlases();
+    else window.addEventListener("sow:loader-ready", activateDeferredBuildingAtlases, { once: true });
+
     window.addEventListener("sow:locale-change", function () {
         emoteTextKey = "";
         if (!hudState) return;
         const active = document.activeElement;
-        const marketDraft = hudRefs && hudState.hud?.market ? {
-            amount: hudRefs.marketAmount.value,
-            price: hudRefs.marketPrice.value,
-            details: hudRefs.market.querySelector("details")?.open,
-            focus: hudRefs.market.contains(active) ? active?.id : null,
-        } : null;
         const transferDraft =
             hudRefs && hudRefs.transfer && !hudRefs.transfer.classList.contains("hidden")
                 ? {
@@ -7468,14 +7310,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
         renderHud(true);
         const refreshedRefs = hudRefs as HudRefs | null;
-        if (marketDraft && refreshedRefs) {
-            refreshedRefs.marketAmount.value = marketDraft.amount;
-            refreshedRefs.marketPrice.value = marketDraft.price;
-            const details = refreshedRefs.market.querySelector("details");
-            if (details) details.open = Boolean(marketDraft.details);
-            if (hudState.hud) renderMarket(hudState.hud);
-            if (marketDraft.focus) restoreHudFocus(document.getElementById(marketDraft.focus));
-        }
         if (
             transferDraft &&
             refreshedRefs &&

@@ -3,7 +3,7 @@ use super::state::{MenuReturnContext, SowApp};
 use web_time::{Duration, Instant};
 
 const REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(30);
-const EXIT_REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+const EXIT_REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_millis(250);
 
 fn account_hint(account_id: Option<&str>) -> String {
     account_id
@@ -213,14 +213,7 @@ impl SowApp {
         }
     }
 
-    /// Mirror in-game entitlements as NFTROPOLY collectibles in WOU-ID:
-    /// every owned commander, skin, and unlocked achievement becomes a
-    /// claimed card on the player's own account, using the player's WOU-ID
-    /// bearer token (guests own nothing server-side by design). One-shot per
-    /// Best-effort external sync; no-op in self-contained operation.
-    pub(crate) fn sync_wou_collectibles(&mut self) {
-        // Collectibles claiming disabled: Shadows of War is self-contained.
-    }
+
 
     fn track_reward_receipt_sync(&mut self, receipt_id: impl Into<String>) {
         self.pending_reward_receipt_ids.insert(receipt_id.into());
@@ -434,7 +427,7 @@ impl SowApp {
             .external_id
             .clone()
             .filter(|id| !id.is_empty())
-            .filter(|_| matches!(provider.as_str(), "crazygames" | "wou" | "playgames"))
+            .filter(|_| matches!(provider.as_str(), "crazygames" | "sow" | "playgames"))
         else {
             if android_twa {
                 log::info!("[identity] Play Games unavailable; using anonymous Android profile");
@@ -1098,7 +1091,6 @@ impl SowApp {
             self.reward_profile_retry_at =
                 Some(Instant::now() + self.reward_profile_retry_interval());
         }
-        self.sync_wou_collectibles();
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -1370,6 +1362,7 @@ impl SowApp {
         let known = sow_data::missions::ONBOARDING_MISSIONS
             .iter()
             .chain(sow_data::missions::DAILY_MISSION_POOL.iter())
+            .chain(sow_data::missions::WEEKLY_MISSION_POOL.iter())
             .any(|m| m.id == mission_id);
         let claimed = self
             .progress
@@ -1656,7 +1649,7 @@ impl SowApp {
             return;
         };
         let identity = crate::store_portals::load_identity("Player");
-        let use_platform_identity = matches!(identity.provider, "wou" | "crazygames" | "playgames")
+        let use_platform_identity = matches!(identity.provider, "sow" | "crazygames" | "playgames")
             && identity
                 .external_id
                 .as_ref()
@@ -1774,11 +1767,11 @@ pub(crate) mod reward_exit_tests {
     // browser APIs and delayed database response are replaced; no preconfirmed
     // menu state is injected into the return path.
     #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-        let saved, currentProfile, completedProfile, releaseReward, tutorialRequests, sockets, removedExitRouteRequests, resultRequests, resultReady, gameLeaveWrites, prepareResultWriteCount, gameCloseCode, gameErrors, identityRequests, identityJoinWriteCount, wouRefreshCount;
+        let saved, currentProfile, completedProfile, releaseReward, tutorialRequests, sockets, removedExitRouteRequests, resultRequests, resultReady, gameLeaveWrites, prepareResultWriteCount, gameCloseCode, gameErrors, identityRequests, identityJoinWriteCount, identityRefreshCount;
         export function setupTutorialExit(initial, completed) {
             const keys = ['Window', 'window', 'devicePixelRatio', 'localStorage', 'WebSocket', 'fetch',
                 'matchMedia', 'SOW_MAPS_URL', 'SOW_ASSETS_URL', 'SOW_DATABASE_URL', 'SOW_WS_URL', 'SOW_BUILD_VERSION',
-                'SOW_PLATFORM_IDENTITY', 'SOW_WOU_SESSION_STATUS', 'SOW_retryWouProfile'];
+                'SOW_PLATFORM_IDENTITY', 'SOW_IDENTITY_SESSION_STATUS', 'SOW_retryIdentityProfile'];
             saved = keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
             globalThis.Window = class { static [Symbol.hasInstance](value) { return value === globalThis; } };
             globalThis.window = globalThis;
@@ -1804,7 +1797,7 @@ pub(crate) mod reward_exit_tests {
                 SOW_ASSETS_URL: 'https://journey.invalid/assets', SOW_DATABASE_URL: 'https://journey.invalid/api',
                 SOW_WS_URL: 'wss://journey.invalid/ws/' });
             currentProfile = initial; completedProfile = completed; tutorialRequests = 0;
-            identityRequests = []; identityJoinWriteCount = 0; wouRefreshCount = 0;
+            identityRequests = []; identityJoinWriteCount = 0; identityRefreshCount = 0;
             sockets = []; removedExitRouteRequests = 0; resultRequests = 0; resultReady = false; gameLeaveWrites = 0; prepareResultWriteCount = 0; gameCloseCode = 0; gameErrors = 0;
             globalThis.fetch = request => {
                 if (request.url.endsWith('/profile/tutorial-complete')) {
@@ -1838,10 +1831,10 @@ pub(crate) mod reward_exit_tests {
         export function rewardRequestCount() { return tutorialRequests; }
         export function setupIdentityProfile(profile, identity, status, sessionStatus) {
             const accountId = setupTutorialExit(profile, profile);
-            identityRequests = []; identityJoinWriteCount = 0; wouRefreshCount = 0;
+            identityRequests = []; identityJoinWriteCount = 0; identityRefreshCount = 0;
             globalThis.SOW_PLATFORM_IDENTITY = identity ? JSON.parse(identity) : null;
-            globalThis.SOW_WOU_SESSION_STATUS = sessionStatus;
-            globalThis.SOW_retryWouProfile = () => wouRefreshCount++;
+            globalThis.SOW_IDENTITY_SESSION_STATUS = sessionStatus;
+            globalThis.SOW_retryIdentityProfile = () => identityRefreshCount++;
             globalThis.fetch = request => {
                 identityRequests.push({url: request.url ?? String(request), auth: request.headers?.get?.('X-Platform-Auth') ?? null});
                 return Promise.resolve(new Response(profile, {status}));
@@ -1850,7 +1843,7 @@ pub(crate) mod reward_exit_tests {
         }
         export function identityProfileRequests() { return JSON.stringify(identityRequests); }
         export function identityJoinWrites() { return identityJoinWriteCount; }
-        export function wouRefreshCalls() { return wouRefreshCount; }
+        export function identityRefreshCalls() { return identityRefreshCount; }
         export function setupMultiplayerExit(initial, completed) {
             const accountId = setupTutorialExit(initial, completed);
             globalThis.fetch = async request => {
@@ -1947,8 +1940,8 @@ pub(crate) mod reward_exit_tests {
         fn identity_profile_requests() -> String;
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = identityJoinWrites)]
         fn identity_join_writes() -> u32;
-        #[wasm_bindgen::prelude::wasm_bindgen(js_name = wouRefreshCalls)]
-        fn wou_refresh_calls() -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = identityRefreshCalls)]
+        fn identity_refresh_calls() -> u32;
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = setupMultiplayerExit)]
         fn setup_multiplayer_exit(initial: &str, completed: &str) -> String;
         #[wasm_bindgen::prelude::wasm_bindgen(js_name = removedExitRouteRequestCount)]
@@ -2069,7 +2062,7 @@ pub(crate) mod reward_exit_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn pending_wou_recovery_loads_anonymous_profile_without_blocking_boot() {
+    async fn pending_identity_recovery_loads_anonymous_profile_without_blocking_boot() {
         let account_id = "0123456789abcdef0123456789abcdef";
         let profile = serde_json::json!({"account_id":account_id,"display_name":"Guest",
             "profile":PlayerProgress::default()})
@@ -2097,13 +2090,13 @@ pub(crate) mod reward_exit_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn valid_wou_profile_produces_join_auth_proof() {
-        let account_id = "wou-account-123";
-        let profile = serde_json::json!({"account_id":account_id,"display_name":"WOU Player",
+    async fn valid_identity_profile_produces_join_auth_proof() {
+        let account_id = "identity-account-123";
+        let profile = serde_json::json!({"account_id":account_id,"display_name":"IDENTITY Player",
             "profile":PlayerProgress::default()})
         .to_string();
-        let identity = serde_json::json!({"provider":"wou","externalId":account_id,
-            "token":"valid-session","displayName":"WOU Player"})
+        let identity = serde_json::json!({"provider":"sow","externalId":account_id,
+            "token":"valid-session","displayName":"IDENTITY Player"})
         .to_string();
         setup_identity_profile(&profile, &identity, 200, "ready");
         let mut app = crate::app::SowApp::new();
@@ -2118,16 +2111,16 @@ pub(crate) mod reward_exit_tests {
         settle_boot_profile(&mut app).await;
 
         assert_eq!(app.progress_account_id.as_deref(), Some(account_id));
-        assert_eq!(app.progress_provider, "wou");
+        assert_eq!(app.progress_provider, "sow");
         assert!(app.identity_profile_verified);
         assert!(!app.join_waiting_for_identity);
         assert_eq!(identity_join_writes(), 1);
         let Some(sow_core::protocol::ClientMessage::JoinWithAuth { auth, .. }) =
             app.make_join_message(None, false, None, None)
         else {
-            panic!("verified WOU profile must permit a join proof");
+            panic!("verified IDENTITY profile must permit a join proof");
         };
-        assert_eq!(auth.provider, "wou");
+        assert_eq!(auth.provider, "sow");
         assert_eq!(auth.account_id.as_deref(), Some(account_id));
         assert_eq!(auth.token, "valid-session");
         let requests: serde_json::Value =
@@ -2140,9 +2133,9 @@ pub(crate) mod reward_exit_tests {
                 request["url"]
                     .as_str()
                     .unwrap()
-                    .contains("/profile?provider=wou&external_id=wou-account-123")
+                    .contains("/profile?provider=sow&external_id=identity-account-123")
             })
-            .expect("WOU profile endpoint must be requested");
+            .expect("IDENTITY profile endpoint must be requested");
         assert_eq!(request["auth"], "valid-session");
 
         drop(app);
@@ -2152,13 +2145,13 @@ pub(crate) mod reward_exit_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn expired_wou_profile_keeps_local_play_available_and_requests_recovery() {
-        let account_id = "wou-account-123";
-        let profile = serde_json::json!({"account_id":account_id,"display_name":"WOU Player",
+    async fn expired_identity_profile_keeps_local_play_available_and_requests_recovery() {
+        let account_id = "identity-account-123";
+        let profile = serde_json::json!({"account_id":account_id,"display_name":"IDENTITY Player",
             "profile":PlayerProgress::default()})
         .to_string();
-        let identity = serde_json::json!({"provider":"wou","externalId":account_id,
-            "token":"expired-session","displayName":"WOU Player"})
+        let identity = serde_json::json!({"provider":"sow","externalId":account_id,
+            "token":"expired-session","displayName":"IDENTITY Player"})
         .to_string();
         setup_identity_profile(&profile, &identity, 401, "reauthentication_required");
         let mut app = crate::app::SowApp::new();
@@ -2168,7 +2161,7 @@ pub(crate) mod reward_exit_tests {
         assert!(!app.profile_request_in_flight);
         assert!(app.ui.app.main_menu_state.error_message.is_some());
         assert!(app.make_join_message(None, false, None, None).is_none());
-        assert_eq!(wou_refresh_calls(), 1);
+        assert_eq!(identity_refresh_calls(), 1);
         let requests: serde_json::Value =
             serde_json::from_str(&identity_profile_requests()).unwrap();
         let request = requests
@@ -2179,9 +2172,9 @@ pub(crate) mod reward_exit_tests {
                 request["url"]
                     .as_str()
                     .unwrap()
-                    .contains("/profile?provider=wou&external_id=wou-account-123")
+                    .contains("/profile?provider=sow&external_id=identity-account-123")
             })
-            .expect("WOU profile endpoint must be requested");
+            .expect("IDENTITY profile endpoint must be requested");
         assert_eq!(request["auth"], "expired-session");
 
         drop(app);

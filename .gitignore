@@ -8,6 +8,7 @@ resources/.DS_Store
 .env
 .env.bak_*
 .env.local
+.env.ptr
 !sow-dist/.env.example
 sow-dist/deploy/keystores/
 sow-client/signing.local.toml

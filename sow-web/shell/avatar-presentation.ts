@@ -34,7 +34,36 @@ const states = new WeakMap<HTMLImageElement, AnimationState>();
 /** The portrait an image was last asked to show when that portrait is a packed cell. */
 const atlasSources = new WeakMap<HTMLImageElement, string>();
 const imageLoads = new Map<string, Promise<HTMLImageElement>>();
-const MAX_CACHED_AVATAR_IMAGES = 64;
+const MAX_CACHED_AVATAR_IMAGES = 512;
+let initialLoaderHasFinished = false;
+let initialLoaderReady: Promise<void> | null = null;
+
+/** Portrait sheets are optional during the first loader; start them once the tutorial is interactive. */
+function waitForInitialLoader(): Promise<void> {
+    if (typeof window === "undefined" || typeof document === "undefined") return Promise.resolve();
+    if (typeof document.getElementById !== "function" || typeof window.addEventListener !== "function")
+        return Promise.resolve();
+    if (initialLoaderHasFinished) return Promise.resolve();
+    const loader = document.getElementById("web-loader");
+    if (!loader || loader.getAttribute("aria-hidden") === "true") {
+        initialLoaderHasFinished = true;
+        return Promise.resolve();
+    }
+    if (!initialLoaderReady) {
+        initialLoaderReady = new Promise((resolve) => {
+            window.addEventListener(
+                "sow:loader-ready",
+                () => {
+                    initialLoaderHasFinished = true;
+                    initialLoaderReady = null;
+                    resolve();
+                },
+                { once: true },
+            );
+        });
+    }
+    return initialLoaderReady;
+}
 
 /** The sheet cell behind a sprite URL or path. Null for art that is not packed into a sheet; that art is served as its own file. */
 export function avatarAtlasCell(source: string): AvatarCell | null {
@@ -129,15 +158,31 @@ async function cropCell(sheet: HTMLImageElement, cell: AvatarCell): Promise<HTML
 export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
     const cell = avatarAtlasCell(source);
     if (!cell) return loadNetworkImage(source);
-    return cachedImage(source, async () => cropCell(await loadNetworkImage(cell.sheet.url), cell));
+    return cachedImage(source, async () => {
+        await waitForInitialLoader();
+        return cropCell(await loadNetworkImage(cell.sheet.url), cell);
+    });
 }
 
-/** The map atlas half of the shared loader: the radial's decoded image, scaled to one atlas cell off the main thread. */
+/**
+ * The map atlas half of the shared loader: the decoded file, or the decoded sheet's cell, scaled to one
+ * atlas cell off the main thread. A packed cell is cut straight from its sheet, never re-encoded.
+ */
 export async function loadAvatarBitmap(path: string, size: number): Promise<ImageBitmap> {
-    const image = await loadAvatarImage(avatarAssetUrl(path));
-    const side = Math.min(image.naturalWidth, image.naturalHeight);
-    const sx = (image.naturalWidth - side) / 2;
-    const sy = (image.naturalHeight - side) / 2;
+    const source = avatarAssetUrl(path);
+    const cell = avatarAtlasCell(source);
+    let image: HTMLImageElement;
+    let sx: number, sy: number, side: number;
+    if (cell) {
+        await waitForInitialLoader();
+        image = await loadNetworkImage(cell.sheet.url);
+        [sx, sy, side] = [cell.x, cell.y, cell.side];
+    } else {
+        image = await loadNetworkImage(source);
+        side = Math.min(image.naturalWidth, image.naturalHeight);
+        sx = (image.naturalWidth - side) / 2;
+        sy = (image.naturalHeight - side) / 2;
+    }
     const options: ImageBitmapOptions = { premultiplyAlpha: "none", colorSpaceConversion: "none" };
     const bitmap = await createImageBitmap(image, sx, sy, side, side, {
         ...options,
@@ -182,7 +227,8 @@ function setSource(image: HTMLImageElement, source: string, deferLoad = false): 
 export function setAvatarImage(image: HTMLImageElement, source: string): void {
     if (!avatarAtlasCell(source)) {
         atlasSources.delete(image);
-        image.src = source;
+        // Re-assigning the same URL re-requests it when the file is missing, and the HUD re-sets it on every update.
+        if (imageSource(image) !== source) image.src = source;
         return;
     }
     atlasSources.set(image, source);
@@ -191,6 +237,19 @@ export function setAvatarImage(image: HTMLImageElement, source: string): void {
             if (atlasSources.get(image) === source) image.src = portrait.src;
         })
         .catch(() => undefined);
+}
+
+/** Updates a packed portrait without fetching its sheet until the image nears the viewport. */
+export function deferAvatarImage(image: HTMLImageElement, source: string): void {
+    if (!source) return;
+    if (!avatarAtlasCell(source)) {
+        if (imageSource(image) !== source) image.src = source;
+        return;
+    }
+    if (image.getAttribute("data-avatar") !== source) image.setAttribute("data-avatar", source);
+    watchAvatarMarkup();
+    if (visibilityWatcher) visibilityWatcher.observe(image);
+    else fillAvatarImage(image);
 }
 
 let markupWatcher: MutationObserver | null = null;
@@ -216,7 +275,7 @@ function watchAvatarMarkup(): void {
                     fillAvatarImage(entry.target);
                 }
             },
-            { rootMargin: "200px" },
+            { rootMargin: "160px" },
         );
     }
     const fill = (node: Node): void => {

@@ -58,12 +58,12 @@ function storeAuth() {
     if (identity && identity.token) token = identity.token;
     if (!token) {
         try {
-            token = window.localStorage.getItem("wou_session_token");
+            token = window.localStorage.getItem("sow_session_token");
         } catch {}
     }
     if (token) {
         headers["X-Platform-Auth"] = token;
-        headers["X-Platform-Provider"] = identity && identity.provider ? identity.provider : "wou";
+        headers["X-Platform-Provider"] = identity && identity.provider ? identity.provider : "sow";
     }
     return { available: !!creds || !!token, headers: headers, authSecret: creds ? creds.auth_secret : "" };
 }
@@ -613,7 +613,7 @@ export function renderLeaderPurchase(leader: MenuLeader) {
     return leaderActions ? "<div class='sow-heroes__purchase-actions'>" + leaderActions + "</div>" : "";
 }
 
-// Skins are one catalogue for every hero, so their entry sits beside the roster filters, not on a hero card.
+// Entry button to open the global skin picker modal from the featured hero card.
 export function renderSkinsButton() {
     return (
         "<button class='sow-heroes__skins sow-store__buy' type='button' data-command='open_skin_picker'>" +
@@ -964,6 +964,10 @@ export function resolvePurchaseModal() {
         return;
     }
     if (purchaseItemOwned()) {
+        if (menuUi.purchaseModal.type === "leader" && menuUi.purchaseModal.leaderId) {
+            menuUi.tempSelectedLeader = menuUi.purchaseModal.leaderId;
+            menuUi.tempSelectedRandom = false;
+        }
         menuUi.storeCheckoutRequestId = null;
         menuUi.storeCheckoutBusy = false;
         trackStoreEvent(

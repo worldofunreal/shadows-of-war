@@ -486,6 +486,7 @@ pub(super) fn delete_account_rows(txn: &WriteTransaction, account_id: &str) -> R
     }
 
     removed = removed.saturating_add(delete_events_for_account(txn, account_id)?);
+    removed = removed.saturating_add(crate::auth::delete_account_sessions(txn, account_id)?);
     if txn.open_table(PLAYERS_TABLE)?.remove(account_id)?.is_some() {
         removed = removed.saturating_add(1);
     }
@@ -506,7 +507,142 @@ pub(super) fn delete_account_rows(txn: &WriteTransaction, account_id: &str) -> R
     Ok((account.is_some(), removed))
 }
 
+fn assert_supported_identities(accounts: &impl ReadableTable<&'static str, &'static [u8]>) -> Result<()> {
+    for entry in accounts.iter()? {
+        let (_, raw) = entry?;
+        let account = super::parse_account_with_migration(raw.value())?;
+        if account.kind == AccountKind::Human && account.linked_identities.iter()
+            .any(|identity| !crate::auth::supported_provider(&identity.provider)) {
+            return Err("provider identity import is incomplete".into());
+        }
+    }
+    Ok(())
+}
+
 impl PlayerDb {
+    /// Import verified subjects from an operator-owned snapshot. Only game
+    /// accounts that already exist are touched; their progress stays intact.
+    /// All conflicts roll back the whole bundle, including retired indexes.
+    pub fn import_identity_bundle(&self, bundle: &crate::auth::IdentityImport) -> Result<usize> {
+        if bundle.version != 1 || bundle.retired_providers.iter().any(|v| crate::auth::supported_provider(v) || v == "bot") {
+            return Err("invalid identity import schema or retirement list".into());
+        }
+        let database = self.redb_db.as_ref().ok_or("account database unavailable")?;
+        let txn = database.begin_write()?;
+        let marker = format!("identity_import_v1:{}", crate::auth::digest(&serde_json::to_string(bundle)?));
+        if let Some(previous) = txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?.get(marker.as_str())? {
+            return Ok(serde_json::from_slice(previous.value())?);
+        }
+        let mut seen = BTreeSet::new();
+        let mut count = 0;
+        for record in &bundle.accounts {
+            if !crate::profile::is_valid_account_id(&record.account_id) || !seen.insert(&record.account_id) {
+                return Err("invalid or duplicate imported account".into());
+            }
+            let raw = txn.open_table(PLAYERS_TABLE)?.get(record.account_id.as_str())?
+                .map(|value| value.value().to_vec());
+            let Some(raw) = raw else { continue; };
+            // Import provider ownership only. The normal login loader also
+            // migrates historical hero/profile fields; that is a separate operation.
+            let before: PlayerAccount = serde_json::from_slice(&raw)?;
+            if before.kind != AccountKind::Human { return Err("identity import cannot change bots".into()); }
+            let mut account = before.clone();
+            account.linked_identities.retain(|identity| !bundle.retired_providers.contains(&identity.provider));
+            for identity in &record.identities {
+                if !crate::auth::supported_provider(&identity.provider)
+                    || !matches!(identity.environment.as_str(), "production" | "debug")
+                    || identity.external_id.trim().is_empty() {
+                    return Err("invalid imported provider identity".into());
+                }
+                if !account.linked_identities.contains(identity) { account.linked_identities.push(identity.clone()); }
+            }
+            save_account(&txn, Some(&before), &account, false)?;
+            count += 1;
+        }
+        assert_supported_identities(&txn.open_table(PLAYERS_TABLE)?)?;
+        txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?.insert(marker.as_str(), serde_json::to_vec(&count)?.as_slice())?;
+        txn.commit()?;
+        Ok(count)
+    }
+
+    pub fn assert_local_identity_authority(&self) -> Result<()> {
+        let database = self.redb_db.as_ref().ok_or("account database unavailable")?;
+        let read = database.begin_read()?;
+        let accounts = read.open_table(PLAYERS_TABLE)?;
+        assert_supported_identities(&accounts)
+    }
+
+    /// Claim verified provider subjects together, including a verified email.
+    /// The same transaction checks all indexes and writes the account, so a
+    /// conflicting login cannot leave a partial link or replace progression.
+    pub async fn resolve_verified_identities(
+        &self,
+        identities: &[LinkedIdentity],
+        linking_account: Option<&str>,
+    ) -> Result<PlayerAccount> {
+        if identities.is_empty() || identities.iter().any(|identity| {
+            identity.provider.trim().is_empty() || identity.provider == "bot"
+                || identity.environment.trim().is_empty() || identity.external_id.trim().is_empty()
+        }) {
+            return Err("invalid verified human identity".into());
+        }
+        let account = {
+            let database = self.redb_db.as_ref().ok_or("account database unavailable")?;
+            let txn = database.begin_write()?;
+            let mut owners = BTreeSet::new();
+            {
+                let index = txn.open_table(ACCOUNT_IDENTITIES_TABLE)?;
+                for identity in identities {
+                    if let Some(owner) = index.get(identity_key(identity)?.as_slice())? {
+                        owners.insert(owner.value().to_owned());
+                    }
+                }
+            }
+            if owners.len() > 1 {
+                return Err("verified identities belong to different accounts".into());
+            }
+            let id = owners.into_iter().next().or_else(|| linking_account.map(str::to_owned))
+                .unwrap_or_else(|| format!("{:032x}", rand::random::<u128>()));
+            if !crate::profile::is_valid_account_id(&id) {
+                return Err("invalid account id".into());
+            }
+            let exists = txn.open_table(PLAYERS_TABLE)?.get(id.as_str())?.is_some();
+            if !exists && linking_account == Some(id.as_str()) {
+                return Err("linking account does not exist".into());
+            }
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
+            let before = if exists { Some(load_write(&txn, &id, &[])?) } else { None };
+            let mut account = before.clone().unwrap_or_else(|| PlayerAccount {
+                id,
+                display_name: super::generated_display_name(),
+                profile: Default::default(),
+                linked_identities: Vec::new(),
+                kind: AccountKind::Human,
+                auth_secret_hash: None,
+                created_at: now,
+                updated_at: now,
+            });
+            if account.kind != AccountKind::Human {
+                return Err("provider identity belongs to a bot".into());
+            }
+            for identity in identities {
+                if identity.provider == "email" && account.linked_identities.iter().any(|saved| {
+                    saved.provider == "email" && saved.external_id != identity.external_id
+                }) {
+                    return Err("account already has a different verified email".into());
+                }
+                if !account.linked_identities.contains(identity) {
+                    account.linked_identities.push(identity.clone());
+                }
+            }
+            account.updated_at = now;
+            save_account(&txn, before.as_ref(), &account, false)?;
+            txn.commit()?;
+            account
+        };
+        self.ensure_human_onboarding(account).await
+    }
+
     pub(super) async fn update_accounts_atomic<T, F>(
         &self,
         account_ids: Vec<String>,

@@ -12,6 +12,9 @@ pub fn max_match_turns(tick_rate_ms: f32) -> u64 {
 }
 
 pub mod campaign;
+pub mod animal_names;
+#[cfg(feature = "server")]
+pub mod auth;
 pub mod colors;
 pub mod commerce;
 #[cfg(feature = "server")]
@@ -24,6 +27,8 @@ pub mod geo_entities;
 pub mod leaders;
 pub mod missions;
 #[cfg(feature = "server")]
+mod mail;
+#[cfg(feature = "server")]
 pub mod moderation;
 pub mod name_policy;
 pub mod profile;
@@ -34,6 +39,7 @@ pub mod rewards;
 pub mod time_util;
 
 pub use colors::{NamedColor, PREMIUM_COLORS};
+pub use animal_names::{ANIMAL_NAMES, animal_alias};
 pub use commerce::{LeaderResolution, StoreCatalog};
 #[cfg(feature = "server")]
 pub use db::{LinkedIdentity, PlayerAccount, PlayerDb, PlayerProfile};

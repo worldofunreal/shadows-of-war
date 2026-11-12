@@ -4,7 +4,6 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
-use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use sow_core::protocol::AuthProof;
 use std::{
@@ -26,7 +25,6 @@ pub(crate) struct IdentityState {
 struct IdentityInner {
     db_url: String,
     db_secret: String,
-    wou_sow_identity_secret: Option<String>,
     handoffs: Mutex<HashMap<String, PlayGamesHandoff>>,
     rendezvous: Mutex<HashMap<String, PlayGamesRendezvous>>,
     sessions: Mutex<HashMap<String, PlayGamesSession>>,
@@ -123,18 +121,6 @@ struct PlayGamesPlayerResponse {
 }
 
 #[derive(Deserialize)]
-struct CrazyTokenClaims {
-    #[serde(rename = "userId")]
-    user_id: String,
-}
-
-#[derive(Deserialize)]
-struct CrazyPublicKeyResponse {
-    #[serde(rename = "publicKey")]
-    public_key: String,
-}
-
-#[derive(Deserialize)]
 struct DbIdentityResponse {
     account_id: String,
     #[serde(default)]
@@ -172,117 +158,17 @@ struct VerifiedExternalIdentity {
     account_id: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct WouIdentityResponse {
-    account_id: String,
-}
-
 impl IdentityState {
     pub(crate) fn from_env(db_url: String, db_secret: String) -> Self {
         Self {
             inner: Arc::new(IdentityInner {
                 db_url,
                 db_secret,
-                wou_sow_identity_secret: std::env::var("WOU_SOW_IDENTITY_SECRET")
-                    .ok()
-                    .filter(|value| !value.trim().is_empty()),
                 handoffs: Mutex::new(HashMap::new()),
                 rendezvous: Mutex::new(HashMap::new()),
                 sessions: Mutex::new(HashMap::new()),
             }),
         }
-    }
-
-    pub(crate) async fn sync_wou_achievement_cards(&self) -> Result<usize, String> {
-        let Some(secret) = self.inner.wou_sow_identity_secret.as_deref() else {
-            return Ok(0);
-        };
-        let (client, wou_url) = wou_client()?;
-        let catalog_url = format!(
-            "{}/api/v1/assets/collections/sow-achievements/tokens",
-            wou_url.trim_end_matches('/')
-        );
-        let response = client
-            .get(catalog_url)
-            .timeout(Duration::from_secs(8))
-            .send()
-            .await
-            .map_err(|error| format!("WOU-ID achievement catalog lookup failed: {error}"))?;
-        let mut registered = std::collections::HashSet::new();
-        if response.status().is_success() {
-            let tokens = response
-                .json::<Vec<serde_json::Value>>()
-                .await
-                .map_err(|error| format!("WOU-ID achievement catalog was unreadable: {error}"))?;
-            registered.extend(
-                tokens
-                    .iter()
-                    .filter_map(|token| token.get("id").and_then(serde_json::Value::as_str))
-                    .map(str::to_owned),
-            );
-        } else if response.status() != reqwest::StatusCode::NOT_FOUND {
-            return Err(format!(
-                "WOU-ID achievement catalog returned HTTP {}",
-                response.status()
-            ));
-        }
-
-        let tokens: Vec<serde_json::Value> = sow_data::rewards::all_achievements()
-            .iter()
-            .filter_map(|achievement| {
-                let id = sow_data::rewards::achievement_card_token_id(achievement.id);
-                (!registered.contains(&id)).then(|| {
-                    serde_json::json!({
-                        "id": id,
-                        "collection": "sow-achievements",
-                        "metadata": {
-                            "name": achievement.title,
-                            "description": achievement.description,
-                            "image": "/logo.svg",
-                            "attributes": [
-                                { "trait_type": "Game", "value": "Shadows of War" },
-                                { "trait_type": "Type", "value": "Achievement" },
-                                { "trait_type": "Category", "value": achievement.category },
-                                { "trait_type": "Points", "value": achievement.points.to_string() },
-                                { "trait_type": "Target", "value": achievement.target.to_string() }
-                            ],
-                            "collection": "sow-achievements"
-                        },
-                        "max_supply": 100000
-                    })
-                })
-            })
-            .collect();
-        if tokens.is_empty() {
-            return Ok(0);
-        }
-
-        let count = tokens.len();
-        let collection = serde_json::json!({
-            "id": "sow-achievements",
-            "name": "Shadows of War Achievements",
-            "symbol": "SOWACH",
-            "description": "Laurels made permanent: every achievement in Shadows of War leaves a card.",
-            "image": "/logo.svg"
-        });
-        let response = client
-            .post(format!(
-                "{}/api/v1/internal/assets/tokens",
-                wou_url.trim_end_matches('/')
-            ))
-            .bearer_auth(secret)
-            .json(&serde_json::json!({ "collection": collection, "tokens": tokens }))
-            .timeout(Duration::from_secs(30))
-            .send()
-            .await
-            .map_err(|error| format!("WOU-ID achievement catalog sync failed: {error}"))?;
-        if !response.status().is_success() {
-            return Err(format!(
-                "WOU-ID achievement catalog sync returned HTTP {}",
-                response.status()
-            ));
-        }
-        Ok(count)
     }
 
     async fn db_resolve(
@@ -335,141 +221,50 @@ impl IdentityState {
             .map_err(|error| format!("identity database response unreadable: {error}"))
     }
 
+    async fn verify_database_proof(
+        &self, provider: &str, account_id: Option<&str>, token: &str,
+        requested_leader: Option<&str>, random_leader: bool,
+    ) -> Result<DbVerifyResponse, String> {
+        let response = reqwest::Client::new()
+            .post(format!("{}/internal/verify", self.inner.db_url.trim_end_matches('/')))
+            .bearer_auth(&self.inner.db_secret)
+            .json(&serde_json::json!({"provider":provider,"account_id":account_id,"token":token,"requested_leader":requested_leader,"random_leader":random_leader}))
+            .timeout(Duration::from_secs(5)).send().await
+            .map_err(|_| "identity database is temporarily unavailable".to_string())?;
+        if !response.status().is_success() {
+            let category = if response.status().is_server_error() { "identity database returned" } else { "Identity proof rejected:" };
+            return Err(format!("{category} HTTP {}", response.status()));
+        }
+        response.json().await.map_err(|_| "identity database response unreadable".to_string())
+    }
+
     async fn verify_external(
-        &self,
-        provider: &str,
-        external_id: Option<&str>,
-        token: &str,
+        &self, provider: &str, external_id: Option<&str>, token: &str,
     ) -> Result<VerifiedExternalIdentity, String> {
         match provider {
+            "sow" => {
+                let identity = self.verify_database_proof(provider, external_id, token, None, false).await?;
+                Ok(VerifiedExternalIdentity {provider_subject:identity.account_id.clone(),environment:"production".into(),display_name:None,avatar_url:None,account_id:Some(identity.account_id)})
+            }
             "playgames" => {
                 let identity = self.verify_playgames_session(external_id, token)?;
-                let account_id = self
-                    .resolve_wou_identity(
-                        "playgames",
-                        &identity.external_id,
-                        Some(&identity.display_name),
-                    )
-                    .await?;
                 Ok(VerifiedExternalIdentity {
                     provider_subject: identity.external_id,
                     environment: identity.environment,
                     display_name: Some(identity.display_name),
                     avatar_url: identity.avatar_url,
-                    account_id,
-                })
-            }
-            "wou" | "wou_id" | "world_of_unreal" => {
-                let (client, wou_url) = wou_client()?;
-                let response = client
-                    .get(format!(
-                        "{}/api/v1/inventory/me",
-                        wou_url.trim_end_matches('/')
-                    ))
-                    .header("Authorization", format!("Bearer {token}"))
-                    .timeout(Duration::from_secs(3))
-                    .send()
-                    .await
-                    .map_err(|error| format!("WOU-ID service unreachable: {error}"))?;
-                if !response.status().is_success() {
-                    let status = response.status();
-                    if matches!(status, reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN) {
-                        return Err(format!("WOU-ID token rejected: HTTP {status}"));
-                    }
-                    return Err(format!("WOU-ID service unavailable: HTTP {status}"));
-                }
-                let body: serde_json::Value = response
-                    .json()
-                    .await
-                    .map_err(|error| format!("invalid WOU-ID response: {error}"))?;
-                let subject = body
-                    .get("account_id")
-                    .and_then(serde_json::Value::as_str)
-                    .ok_or_else(|| "WOU-ID response missing account_id".to_string())?;
-                Ok(VerifiedExternalIdentity {
-                    provider_subject: subject.to_string(),
-                    environment: "production".to_string(),
-                    display_name: None,
-                    avatar_url: None,
-                    account_id: Some(subject.to_string()),
+                    account_id: Some(identity.account_id),
                 })
             }
             "crazygames" => {
-                let response = reqwest::get("https://sdk.crazygames.com/publicKey.json")
-                    .await
-                    .map_err(|error| format!("CrazyGames public key unavailable: {error}"))?;
-                let key_body: CrazyPublicKeyResponse = response
-                    .json()
-                    .await
-                    .map_err(|error| format!("invalid CrazyGames public key response: {error}"))?;
-                let key = DecodingKey::from_rsa_pem(key_body.public_key.as_bytes())
-                    .map_err(|error| format!("invalid CrazyGames public key: {error}"))?;
-                let mut validation = Validation::new(Algorithm::RS256);
-                validation.validate_exp = true;
-                let claims = decode::<CrazyTokenClaims>(token, &key, &validation)
-                    .map_err(|error| format!("CrazyGames token rejected: {error}"))?
-                    .claims;
-                if claims.user_id.trim().is_empty() {
-                    return Err("CrazyGames token missing userId".to_string());
+                let user_id = sow_data::crazygames::verify_user_token(token).await?;
+                if external_id.is_some_and(|value| !value.is_empty() && value != user_id) {
+                    return Err("CrazyGames player mismatch".into());
                 }
-                if external_id.is_some_and(|value| !value.is_empty() && value != claims.user_id) {
-                    return Err("CrazyGames player mismatch".to_string());
-                }
-                let account_id = self
-                    .resolve_wou_identity("crazygames", &claims.user_id, None)
-                    .await?;
-                Ok(VerifiedExternalIdentity {
-                    provider_subject: claims.user_id,
-                    environment: "production".to_string(),
-                    display_name: None,
-                    avatar_url: None,
-                    account_id,
-                })
+                Ok(VerifiedExternalIdentity {provider_subject:user_id,environment:"production".into(),display_name:None,avatar_url:None,account_id:None})
             }
-            _ => Err(format!("unsupported provider: {provider}")),
+            _ => Err(format!("Unsupported provider: {provider}")),
         }
-    }
-
-    async fn resolve_wou_identity(
-        &self,
-        provider: &str,
-        external_id: &str,
-        display_name: Option<&str>,
-    ) -> Result<Option<String>, String> {
-        let Some(secret) = self.inner.wou_sow_identity_secret.as_deref() else {
-            return Ok(None);
-        };
-        let (client, wou_url) = wou_client()?;
-        let response = client
-            .post(format!(
-                "{}/api/v1/internal/identity/resolve",
-                wou_url.trim_end_matches('/')
-            ))
-            .header("Authorization", format!("Bearer {secret}"))
-            .json(&serde_json::json!({
-                "provider": provider,
-                "external_id": external_id,
-                "display_name": display_name,
-                "context": "shadows_of_war",
-            }))
-            .timeout(Duration::from_secs(5))
-            .send()
-            .await
-            .map_err(|error| format!("WOU-ID identity bridge failed: {error}"))?;
-        if !response.status().is_success() {
-            return Err(format!(
-                "WOU-ID identity bridge returned HTTP {}",
-                response.status()
-            ));
-        }
-        let body = response
-            .json::<WouIdentityResponse>()
-            .await
-            .map_err(|error| format!("WOU-ID identity bridge response unreadable: {error}"))?;
-        if body.account_id.trim().is_empty() {
-            return Err("WOU-ID identity bridge returned an empty account id".to_string());
-        }
-        Ok(Some(body.account_id))
     }
 
     pub(crate) async fn verify_auth_proof(
@@ -479,35 +274,8 @@ impl IdentityState {
         random_leader: bool,
     ) -> Result<VerifiedIdentity, String> {
         let requested = sow_core::commerce::leader_wire_id(requested_leader).to_string();
-        if auth.provider == "anonymous" {
-            let url = format!(
-                "{}/internal/verify",
-                self.inner.db_url.trim_end_matches('/')
-            );
-            let response = reqwest::Client::new()
-                .post(url)
-                .header("Authorization", format!("Bearer {}", self.inner.db_secret))
-                .json(&serde_json::json!({
-                    "provider": "anonymous",
-                    "account_id": auth.account_id,
-                    "token": auth.token,
-                    "requested_leader": requested,
-                    "random_leader": random_leader,
-                }))
-                .timeout(Duration::from_secs(5))
-                .send()
-                .await
-                .map_err(|error| format!("anonymous verification failed: {error}"))?;
-            if !response.status().is_success() {
-                return Err(format!(
-                    "anonymous verification returned HTTP {}",
-                    response.status()
-                ));
-            }
-            let body: DbVerifyResponse = response
-                .json()
-                .await
-                .map_err(|error| format!("anonymous verification response unreadable: {error}"))?;
+        if matches!(auth.provider.as_str(), "anonymous" | "sow") {
+            let body = self.verify_database_proof(&auth.provider, auth.account_id.as_deref(), &auth.token, Some(&requested), random_leader).await?;
             let leader = body
                 .leader
                 .as_deref()
@@ -638,9 +406,6 @@ impl IdentityState {
         } else {
             "production"
         };
-        let account_id = self
-            .resolve_wou_identity("playgames", &player.player_id, Some(&player.display_name))
-            .await?;
         let account = self
             .db_resolve(
                 "playgames",
@@ -649,7 +414,7 @@ impl IdentityState {
                 Some(&player.display_name),
                 player.avatar_url.as_deref(),
                 None,
-                account_id.as_deref(),
+                None,
                 false,
             )
             .await?;
@@ -821,30 +586,6 @@ impl IdentityState {
     }
 }
 
-fn wou_client() -> Result<(reqwest::Client, String), String> {
-    let wou_url =
-        std::env::var("WOU_ID_URL").unwrap_or_else(|_| "https://id.worldofunreal.com".to_string());
-    let mut builder = reqwest::Client::builder();
-    if let Ok(raw_ip) = std::env::var("WOU_ID_RESOLVE_IP") {
-        let parsed_url = reqwest::Url::parse(&wou_url)
-            .map_err(|error| format!("WOU_ID_URL is invalid: {error}"))?;
-        let host = parsed_url
-            .host_str()
-            .ok_or_else(|| "WOU_ID_URL has no valid hostname".to_string())?;
-        let ip = raw_ip
-            .parse()
-            .map_err(|_| "WOU_ID_RESOLVE_IP is not a valid IP address".to_string())?;
-        builder = builder.resolve(
-            host,
-            std::net::SocketAddr::new(ip, parsed_url.port_or_known_default().unwrap_or(443)),
-        );
-    }
-    let client = builder
-        .build()
-        .map_err(|error| format!("WOU-ID client build failed: {error}"))?;
-    Ok((client, wou_url))
-}
-
 fn random_token() -> String {
     let mut bytes = [0_u8; 32];
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut bytes);
@@ -931,17 +672,8 @@ pub(crate) async fn handle_profile(
 }
 
 fn profile_error_status(error: &str) -> StatusCode {
-    if error.starts_with("WOU-ID token rejected") {
-        StatusCode::UNAUTHORIZED
-    } else if error.starts_with("WOU-ID service unavailable")
-        || error.starts_with("WOU-ID service unreachable")
-        || error.starts_with("invalid WOU-ID response")
-        || error.starts_with("identity database")
-    {
-        StatusCode::SERVICE_UNAVAILABLE
-    } else {
-        StatusCode::UNAUTHORIZED
-    }
+    if error.starts_with("identity database") { StatusCode::SERVICE_UNAVAILABLE }
+    else { StatusCode::UNAUTHORIZED }
 }
 
 #[cfg(test)]
@@ -950,8 +682,8 @@ mod tests {
 
     #[test]
     fn profile_auth_and_dependency_errors_have_distinct_statuses() {
-        assert_eq!(profile_error_status("WOU-ID token rejected: HTTP 401"), StatusCode::UNAUTHORIZED);
-        assert_eq!(profile_error_status("WOU-ID service unreachable: timeout"), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(profile_error_status("Identity proof rejected: HTTP 401"), StatusCode::UNAUTHORIZED);
+        assert_eq!(profile_error_status("identity database is temporarily unavailable"), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(profile_error_status("identity database returned HTTP 500"), StatusCode::SERVICE_UNAVAILABLE);
     }
 

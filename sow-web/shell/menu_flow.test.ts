@@ -46,16 +46,16 @@ function extractShellFunction(name, nextName) {
     return shellSource.slice(start, end).replace(/\bexport\s+/g, "");
 }
 
-function createWouRecoveryHarness() {
+function createIdentityRecoveryHarness() {
     const timers = new Map();
     const retryDelays = [];
     let nextTimerId = 0;
     const context = vm.createContext({
         window: {
-            SOW_WOU_SESSION_STATUS: "pending",
+            SOW_IDENTITY_SESSION_STATUS: "pending",
             currentSession: { token: "jwt-1", accountId: "account-1", user: { account_id: "account-1" } },
-            wouAuth: { ensureSession: () => Promise.resolve(null) },
-            SOW_ensureWouAnonymousSession() {
+            sowAuth: { ensureSession: () => Promise.resolve(null) },
+            SOW_ensureIdentityAnonymousSession() {
                 return Promise.resolve(null);
             },
         },
@@ -70,31 +70,31 @@ function createWouRecoveryHarness() {
             timers.delete(id);
         },
     });
-    const retryStart = portalSource.indexOf("function scheduleWouSessionRetry()");
-    const retryEnd = portalSource.indexOf("function saveWouSession(data)", retryStart);
-    const ensureStart = portalSource.indexOf("window.SOW_ensureWouAnonymousSession = function ()");
-    const refreshStart = portalSource.indexOf("window.SOW_refreshWouSession = function ()");
-    const acceptStart = portalSource.indexOf("window.SOW_acceptWouSession = function (data)", refreshStart);
+    const retryStart = portalSource.indexOf("function scheduleIdentitySessionRetry()");
+    const retryEnd = portalSource.indexOf("function saveIdentitySession(data)", retryStart);
+    const ensureStart = portalSource.indexOf("window.SOW_ensureIdentityAnonymousSession = function ()");
+    const refreshStart = portalSource.indexOf("window.SOW_refreshIdentitySession = function ()");
+    const acceptStart = portalSource.indexOf("window.SOW_acceptIdentitySession = function (data)", refreshStart);
     assert.ok(
         retryStart >= 0 && retryEnd > retryStart && ensureStart > retryEnd &&
             refreshStart > ensureStart && acceptStart > refreshStart,
     );
     const harness = [
-        "let wouAnonymousPromise = null;",
-        "let wouRetryTimer = null;",
-        "let wouRetryDelay = 1000;",
-        "let wouRecoveryGeneration = 0;",
-        "let wouProfileRefreshAttempted = false;",
+        "let identityAnonymousPromise = null;",
+        "let identityRetryTimer = null;",
+        "let identityRetryDelay = 1000;",
+        "let identityRecoveryGeneration = 0;",
+        "let identityProfileRefreshAttempted = false;",
         "function isSowIdentityHost() { return true; }",
         "function isAndroidTwa() { return false; }",
         "function isPortalEmbed() { return false; }",
-        "function loadWouSdk() { return Promise.resolve(window.wouAuth); }",
-        "function readWouSession() { return window.currentSession; }",
+        "function loadIdentitySdk() { return Promise.resolve(window.sowAuth); }",
+        "function readIdentitySession() { return window.currentSession; }",
         "function emitAuthStateChange() { window.authEvents = (window.authEvents || 0) + 1; window.SOW_AUTH_CHANGED = true; }",
         portalSource.slice(retryStart, retryEnd),
         portalSource.slice(ensureStart, refreshStart),
         portalSource.slice(refreshStart, acceptStart),
-        "this.__wouFailSession = failWouSession;",
+        "this.__identityFailSession = failIdentitySession;",
     ].join("\n");
     vm.runInContext(harness, context);
     return {
@@ -407,8 +407,14 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         rewardAnimationRunning: false,
         rewardAnimationToken: 0,
         rewardAnimationShown: new Set(),
+        acknowledgedRewardIds: new Set(),
         displayedProgression: null,
         canonicalProgression: null,
+        skipRewardStage: null,
+        holdNextProgression: false,
+        progressionRelease: null,
+        holdNextFlight: false,
+        flightRelease: null,
         activeRewardStage: null,
         rankedStageKey: null,
         root: { hidden: false, querySelector: () => null },
@@ -429,15 +435,16 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         activeProfileEntry: () => context.profileEntry,
         profileDataComplete: () => context.profileDataIsComplete,
         SOW_t: (key) => key,
-        createRewardStage(stages) {
+        createRewardStage(stages, skip) {
             rewardStageSets.push(
                 stages.map((stage) => ({ kind: stage.kind, amount: stage.amount, level: stage.level })),
             );
+            context.skipRewardStage = skip;
             const layer = { classList: { add() {} } };
             context.activeRewardStage = layer;
             return stages.map((stage) => ({ stage, card: { style: {} }, amount: { textContent: "" } }));
         },
-        revealRewardAmounts(_items) {
+        revealRewardAmounts(_items, _token, _shouldStop) {
             if (!holdReveal) return Promise.resolve(true);
             return new Promise((resolve) => {
                 releaseReveal = resolve;
@@ -445,6 +452,15 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         },
         flyRewardCard(item) {
             rewardStageRuns.push({ kind: item.stage.kind, level: item.stage.level });
+            if (context.holdNextFlight) {
+                context.holdNextFlight = false;
+                return new Promise((resolve) => {
+                    context.flightRelease = () => {
+                        context.flightRelease = null;
+                        resolve(false);
+                    };
+                });
+            }
             return Promise.resolve(true);
         },
         pulseRewardCounter(selector, levelUp) {
@@ -459,8 +475,14 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
         },
         removeRewardStage() {
             context.activeRewardStage = null;
+            if (context.flightRelease) context.flightRelease();
         },
         acknowledgeShownReceipts(accountId) {
+            const ids = (context.menuUi.state.reward_receipts || []).filter((receipt) =>
+                context.rewardAnimationShown.has(receipt.id) && !context.acknowledgedRewardIds.has(receipt.id),
+            );
+            if (!ids.length) return;
+            ids.forEach((receipt) => context.acknowledgedRewardIds.add(receipt.id));
             acknowledgements.push(accountId);
         },
         console: {
@@ -493,11 +515,11 @@ function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = 
     };
     const rewardSource = (progressionSource + presentationSource + handoffSource).replace(/\bexport\s+/g, "");
     const animationShim =
-        "function animateProgressionTo(target, duration, token, levelOverride) { var values = Object.assign({}, target); if (levelOverride != null) values.level = levelOverride; rewardFills.push([values.xp, values.level]); writeProgression(values); return Promise.resolve(true); }\n";
+        "function animateProgressionTo(target, duration, token, levelOverride) { var values = Object.assign({}, target); if (levelOverride != null) values.level = levelOverride; rewardFills.push([values.xp, values.level]); if (holdNextProgression) { holdNextProgression = false; return new Promise(function (resolve) { progressionRelease = function () { writeProgression(values); resolve(true); }; }); } writeProgression(values); return Promise.resolve(true); }\n";
     vm.runInNewContext(
         rewardSource +
             animationShim +
-            "this.menuRewardApi = { maybePresentRewards, menuGuideFacts, setState(value) { state = value; menuUi.state = value; }, setRunning(value) { rewardAnimationRunning = value; }, setScreen(value) { screen = value; storeOpen = false; }, getScreen() { return screen; }, holdPresentation, releasePresentation, get phase() { return menuFlow.phase(); }, get shownReceipts() { return Array.from(rewardAnimationShown); }, get pendingReceipts() { return pendingRewardReceipts().map(function (receipt) { return receipt.id; }); }, get progression() { return displayedProgression; }, get facts() { return menuGuideFacts(); }, rewardStageSets, rewardStageRuns, rewardPulses, rewardImpacts, rewardFills, acknowledgements, logs };",
+            "this.menuRewardApi = { maybePresentRewards, menuGuideFacts, setState(value) { state = value; menuUi.state = value; }, setRunning(value) { rewardAnimationRunning = value; }, setScreen(value) { screen = value; storeOpen = false; }, getScreen() { return screen; }, holdPresentation, releasePresentation, skipRewardStage() { if (skipRewardStage) skipRewardStage(); }, holdNextProgression() { holdNextProgression = true; }, releaseProgression() { if (progressionRelease) { var release = progressionRelease; progressionRelease = null; release(); } }, holdNextFlight() { holdNextFlight = true; }, get phase() { return menuFlow.phase(); }, get shownReceipts() { return Array.from(rewardAnimationShown); }, get pendingReceipts() { return pendingRewardReceipts().map(function (receipt) { return receipt.id; }); }, get progression() { return displayedProgression; }, get facts() { return menuGuideFacts(); }, rewardStageSets, rewardStageRuns, rewardPulses, rewardImpacts, rewardFills, acknowledgements, logs };",
         context,
     );
     return context.menuRewardApi;
@@ -830,6 +852,149 @@ test("menu return shows every server receipt level before releasing its guide", 
     );
 });
 
+function headerProgressionRewardState() {
+    const { state, receipt } = confirmedMenuReturn();
+    const reward = { ...receipt, xp: 350, crowns: 25, gems: 8, laurels: 3, level_after: 4 };
+    return {
+        ...state,
+        xp: 350,
+        level: 4,
+        crowns: 25,
+        gems: 8,
+        laurels: 3,
+        reward_receipts: [reward],
+    };
+}
+
+test("skipping reward reveal keeps XP, currency, and level animations in the header", async () => {
+    const guide = makeMenuGuideHarness();
+    const shell = makeMenuShellRewardHarness(guide, headerProgressionRewardState());
+    shell.holdPresentation();
+    shell.maybePresentRewards();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    shell.skipRewardStage();
+    shell.releasePresentation();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(shell.rewardStageRuns, [], "skipping during reveal bypasses every reward card");
+    assert.deepEqual(shell.rewardImpacts, [], "skipped cards do not play their scene effects");
+    assert.deepEqual(
+        shell.rewardPulses.map((pulse) => pulse.selector),
+        [
+            "[data-progression-xp-value]",
+            "[data-progression-crowns-value]",
+            "[data-progression-gems-value]",
+            "[data-progression-level-value]",
+            "[data-progression-level-value]",
+            "[data-progression-level-value]",
+        ],
+    );
+    assert.deepEqual(
+        shell.rewardFills.map(([xp, level]) => [xp, level]),
+        [
+            [100, 1],
+            [100, 1],
+            [100, 1],
+            [200, 2],
+            [300, 3],
+            [350, 4],
+        ],
+    );
+    assert.equal(shell.progression.xp, 350);
+    assert.equal(shell.progression.level, 4);
+    assert.equal(shell.progression.crowns, 25);
+    assert.equal(shell.progression.gems, 8);
+    assert.equal(shell.progression.laurels, 3);
+    assert.deepEqual(Array.from(shell.shownReceipts), ["tutorial"]);
+    assert.deepEqual(shell.acknowledgements, ["account-a"]);
+    assert.equal(shell.phase, "guide");
+});
+
+test("skipping a reward flight cancels the card and continues header animations", async () => {
+    const guide = makeMenuGuideHarness();
+    const shell = makeMenuShellRewardHarness(guide, headerProgressionRewardState());
+    shell.holdNextFlight();
+    shell.maybePresentRewards();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(shell.rewardStageRuns.map((stage) => stage.kind), ["xp"]);
+    shell.skipRewardStage();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(shell.rewardStageRuns.map((stage) => stage.kind), ["xp"]);
+    assert.deepEqual(shell.rewardImpacts, [], "the canceled card does not create an arrival effect");
+    assert.deepEqual(
+        shell.rewardPulses.map((pulse) => pulse.selector),
+        [
+            "[data-progression-xp-value]",
+            "[data-progression-crowns-value]",
+            "[data-progression-gems-value]",
+            "[data-progression-level-value]",
+            "[data-progression-level-value]",
+            "[data-progression-level-value]",
+        ],
+    );
+    assert.equal(shell.progression.xp, 350);
+    assert.equal(shell.progression.level, 4);
+    assert.equal(shell.progression.crowns, 25);
+    assert.equal(shell.progression.gems, 8);
+    assert.equal(shell.progression.laurels, 3);
+    assert.deepEqual(Array.from(shell.shownReceipts), ["tutorial"]);
+    assert.deepEqual(shell.acknowledgements, ["account-a"]);
+    assert.equal(shell.phase, "guide");
+});
+
+test("skipping during a header animation lets it finish and skips later cards", async () => {
+    const guide = makeMenuGuideHarness();
+    const shell = makeMenuShellRewardHarness(guide, headerProgressionRewardState());
+    shell.holdPresentation();
+    shell.holdNextProgression();
+    shell.maybePresentRewards();
+    await new Promise((resolve) => setImmediate(resolve));
+    shell.releasePresentation();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(shell.rewardStageRuns.map((stage) => stage.kind), ["xp"]);
+    assert.deepEqual(shell.rewardFills.map(([xp, level]) => [xp, level]), [[100, 1]]);
+    shell.skipRewardStage();
+    shell.releaseProgression();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(shell.rewardStageRuns.map((stage) => stage.kind), ["xp"]);
+    assert.deepEqual(shell.rewardImpacts.map((impact) => impact.kind), ["xp"]);
+    assert.deepEqual(
+        shell.rewardPulses.map((pulse) => pulse.selector),
+        [
+            "[data-progression-xp-value]",
+            "[data-progression-crowns-value]",
+            "[data-progression-gems-value]",
+            "[data-progression-level-value]",
+            "[data-progression-level-value]",
+            "[data-progression-level-value]",
+        ],
+    );
+    assert.deepEqual(
+        shell.rewardFills.map(([xp, level]) => [xp, level]),
+        [
+            [100, 1],
+            [100, 1],
+            [100, 1],
+            [200, 2],
+            [300, 3],
+            [350, 4],
+        ],
+    );
+    assert.equal(shell.progression.xp, 350);
+    assert.equal(shell.progression.level, 4);
+    assert.equal(shell.progression.crowns, 25);
+    assert.equal(shell.progression.gems, 8);
+    assert.equal(shell.progression.laurels, 3);
+    assert.deepEqual(Array.from(shell.shownReceipts), ["tutorial"]);
+    assert.deepEqual(shell.acknowledgements, ["account-a"]);
+    assert.equal(shell.phase, "guide");
+});
+
 test("requested store return finishes rewards without reviving a retired guide", async () => {
     const { state, receipt } = confirmedMenuReturn();
     state.menu_return.requested_screen = "store";
@@ -933,14 +1098,14 @@ test("queued identity refresh is applied before an older profile response", () =
     assert.ok(failedStart >= 0 && failedEnd > failedStart);
 });
 
-test("pending WOU recovery does not block profile loading or anonymous join proofs", () => {
+test("pending IDENTITY recovery does not block profile loading or anonymous join proofs", () => {
     const proofStart = sessionSource.indexOf("fn make_auth_proof(&self)");
     const proofEnd = sessionSource.indexOf("pub(crate) fn sync_portal_room", proofStart);
     assert.ok(proofStart >= 0 && proofEnd > proofStart);
     const makeAuthProof = sessionSource.slice(proofStart, proofEnd);
-    assert.doesNotMatch(makeAuthProof, /wou_session_pending/);
+    assert.doesNotMatch(makeAuthProof, /identity_session_pending/);
     assert.match(makeAuthProof, /!self\.identity_profile_verified[\s\S]*return None/);
-    assert.match(makeAuthProof, /identity\.provider == "wou"[\s\S]*identity_profile_verified/);
+    assert.match(makeAuthProof, /identity\.provider == "sow"[\s\S]*identity_profile_verified/);
     assert.match(makeAuthProof, /self\.progress_account_id\.as_deref\(\) != identity\.external_id\.as_deref\(\)/);
     assert.match(makeAuthProof, /identity\.auth_token\.clone\(\)\.filter\(\|t\| !t\.is_empty\(\)\)\?/);
     assert.match(makeAuthProof, /provider: "anonymous"\.to_string\(\)/);
@@ -949,14 +1114,14 @@ test("pending WOU recovery does not block profile loading or anonymous join proo
     const profileEnd = accountSource.indexOf("fn fetch_anonymous_progress", profileStart);
     assert.ok(profileStart >= 0 && profileEnd > profileStart);
     const profileFetch = accountSource.slice(profileStart, profileEnd);
-    assert.doesNotMatch(profileFetch, /wou_session_pending/);
+    assert.doesNotMatch(profileFetch, /identity_session_pending/);
     assert.match(profileFetch, /else\s*\{[\s\S]*self\.fetch_anonymous_progress\(\);\s*return;/);
 
     const loadedStart = assetSource.indexOf("DbEvent::ProfileLoaded {");
     const loadedEnd = assetSource.indexOf("DbEvent::DisplayNameSaved", loadedStart);
     assert.ok(loadedStart >= 0 && loadedEnd > loadedStart);
     const loadedProfile = assetSource.slice(loadedStart, loadedEnd);
-    assert.match(loadedProfile, /identity_profile_verified = provider == "wou"/);
+    assert.match(loadedProfile, /identity_profile_verified = provider == "sow"/);
     assert.match(loadedProfile, /apply_cloud_profile\(progress, account_id, display_name, provider\)/);
     assert.match(loadedProfile, /join_waiting_for_identity[\s\S]*make_join_message\([\s\S]*client\.send\(json\)[\s\S]*join_waiting_for_identity = false/);
 
@@ -965,38 +1130,37 @@ test("pending WOU recovery does not block profile loading or anonymous join proo
     assert.ok(ensureStart >= 0 && ensureEnd > ensureStart);
     const ensureSession = authSurfacesSource.slice(ensureStart, ensureEnd);
     assert.match(ensureSession, /return Promise\.resolve\(authSession\(\)\)/);
-    assert.doesNotMatch(ensureSession, /SOW_ensureWouAnonymousSession|\.ensureSession\(/);
+    assert.doesNotMatch(ensureSession, /SOW_ensureIdentityAnonymousSession|\.ensureSession\(/);
 
     const otpStart = authSurfacesSource.indexOf("export function requestAuthOtp()");
     const verifyStart = authSurfacesSource.indexOf("export function verifyAuthOtp()", otpStart);
     assert.ok(otpStart >= 0 && verifyStart > otpStart);
     const requestOtp = authSurfacesSource.slice(otpStart, verifyStart);
     assert.match(requestOtp, /ensureAuthSession\(\)/);
-    assert.match(requestOtp, /\/api\/v1\/auth\/otp\/request/);
+    assert.match(requestOtp, /\/api\/auth\/otp\/request/);
 
-    const oauthStart = portalSource.indexOf("window.SOW_startWouOAuth = async function (provider)");
+    const oauthStart = portalSource.indexOf("window.SOW_startIdentityOAuth = async function (provider)");
     const oauthEnd = portalSource.indexOf("window.SOW_portalShowAuthPrompt", oauthStart);
     assert.ok(oauthStart >= 0 && oauthEnd > oauthStart);
     const startOAuth = portalSource.slice(oauthStart, oauthEnd);
-    assert.match(startOAuth, /api\/v1\/auth\/oauth\/login/);
+    assert.match(startOAuth, /api\/auth\/oauth\/login/);
     assert.match(startOAuth, /window\.open\(/);
     assert.match(portalSource, /"sow:oauth-success"/);
-    assert.doesNotMatch(startOAuth, /SOW_ensureWouAnonymousSession|ensureSession\(/);
+    assert.doesNotMatch(startOAuth, /SOW_ensureIdentityAnonymousSession|ensureSession\(/);
 
-    const acceptStart = portalSource.indexOf("window.SOW_acceptWouSession = function (data)");
-    const signOutStart = portalSource.indexOf("window.SOW_signOutWou = function ()", acceptStart);
+    const acceptStart = portalSource.indexOf("window.SOW_acceptIdentitySession = function (data)");
+    const signOutStart = portalSource.indexOf("window.SOW_signOutIdentity = function ()", acceptStart);
     assert.ok(acceptStart >= 0 && signOutStart > acceptStart);
     const acceptSession = portalSource.slice(acceptStart, signOutStart);
-    assert.match(acceptSession, /saveWouSession\(data\)[\s\S]*wouRecoveryGeneration \+= 1[\s\S]*wouAnonymousPromise = null/);
+    assert.match(acceptSession, /saveIdentitySession\(data\)[\s\S]*identityRecoveryGeneration \+= 1[\s\S]*identityAnonymousPromise = null/);
     assert.match(acceptSession, /window\.confirm/);
-    assert.match(portalSource, /generation !== wouRecoveryGeneration\) return readWouSession\(\)/);
+    assert.match(portalSource, /generation !== identityRecoveryGeneration\) return readIdentitySession\(\)/);
 
-    const captureStart = portalSource.indexOf("function sowCaptureWouReturn()");
-    const captureEnd = portalSource.indexOf("function sowLoadBlocks()", captureStart);
-    assert.ok(captureStart >= 0 && captureEnd > captureStart);
-    const captureReturn = portalSource.slice(captureStart, captureEnd);
-    assert.match(captureReturn, /SOW_acceptWouSession\(/);
-    assert.doesNotMatch(captureReturn, /localStorage\.setItem\("wou_session_token"/);
+    // Sessions enter only through the same-origin callback and canonical
+    // account-switch confirmation, never through credentials in a URL.
+    assert.match(portalSource, /event\.origin !== window\.location\.origin/);
+    assert.match(portalSource, /"sow:oauth-success"[\s\S]*SOW_acceptIdentitySession\(/);
+    assert.doesNotMatch(portalSource, /sowCaptureIdentityReturn|params\.get\("session_token"\)/);
 
     const failedStart = assetSource.indexOf("DbEvent::LoadFailed {");
     const failedEnd = assetSource.indexOf("DbEvent::TutorialCompletionFailed", failedStart);
@@ -1004,22 +1168,22 @@ test("pending WOU recovery does not block profile loading or anonymous join proo
     const failedProfile = assetSource.slice(failedStart, failedEnd);
     assert.doesNotMatch(failedProfile, /panic!/);
     assert.match(failedProfile, /boot_db_settled = true/);
-    assert.match(failedProfile, /provider == "wou" && status == Some\(401\)[\s\S]*refresh_wou_session\(\)/);
-    assert.match(failedProfile, /if provider == "wou"[\s\S]*identity_profile_verified = false/);
+    assert.match(failedProfile, /provider == "sow" && status == Some\(401\)[\s\S]*refresh_identity_session\(\)/);
+    assert.match(failedProfile, /if provider == "sow"[\s\S]*identity_profile_verified = false/);
     assert.match(failedProfile, /keeping local play available/);
     assert.match(failedProfile, /schedule_identity_profile_retry\(\)/);
-    assert.match(portalSource, /wou:session-state-change/);
+    assert.match(portalSource, /identity:session-state-change/);
 });
 
 test("SOW profile recovery handles success, definitive 401, outages, and bounded backoff", async () => {
-    const success = createWouRecoveryHarness();
+    const success = createIdentityRecoveryHarness();
     const stableSession = success.context.window.currentSession;
-    success.context.window.wouAuth.ensureSession = (force) => {
+    success.context.window.sowAuth.ensureSession = (force) => {
         assert.equal(force, true);
         return Promise.resolve({ session_token: "jwt-refreshed" });
     };
-    const recovered = await success.context.window.SOW_refreshWouSession();
-    assert.equal(success.context.window.SOW_WOU_SESSION_STATUS, "ready");
+    const recovered = await success.context.window.SOW_refreshIdentitySession();
+    assert.equal(success.context.window.SOW_IDENTITY_SESSION_STATUS, "ready");
     assert.equal(recovered, stableSession);
     assert.equal(success.context.window.currentSession.accountId, "account-1");
     assert.equal(success.context.window.authEvents, 1);
@@ -1029,78 +1193,78 @@ test("SOW profile recovery handles success, definitive 401, outages, and bounded
         { status: 503, expected: "retrying", retries: 1 },
         { status: undefined, expected: "retrying", retries: 1 },
     ]) {
-        const harness = createWouRecoveryHarness();
+        const harness = createIdentityRecoveryHarness();
         const failure = Object.assign(new Error("identity unavailable"), { status: scenario.status });
-        harness.context.window.wouAuth.ensureSession = () => Promise.reject(failure);
+        harness.context.window.sowAuth.ensureSession = () => Promise.reject(failure);
         await assert.rejects(
-            harness.context.window.SOW_refreshWouSession(),
+            harness.context.window.SOW_refreshIdentitySession(),
             (error) => error === failure,
         );
-        assert.equal(harness.context.window.SOW_WOU_SESSION_STATUS, scenario.expected);
+        assert.equal(harness.context.window.SOW_IDENTITY_SESSION_STATUS, scenario.expected);
         assert.equal(harness.context.window.currentSession.accountId, "account-1");
         assert.equal(harness.retryDelays.length, scenario.retries);
         if (scenario.retries) assert.equal(harness.retryDelays[0], 1_000);
     }
 
-    const backoff = createWouRecoveryHarness();
+    const backoff = createIdentityRecoveryHarness();
     for (const expectedDelay of [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]) {
         const failure = new Error("identity service offline");
-        assert.throws(() => backoff.context.__wouFailSession(failure), (error) => error === failure);
+        assert.throws(() => backoff.context.__identityFailSession(failure), (error) => error === failure);
         assert.equal(backoff.retryDelays.at(-1), expectedDelay);
         backoff.fireNextTimer();
     }
 });
 
-test("SOW preserves an existing WOU account and does not create a guest during an outage", async () => {
-    const harness = createWouRecoveryHarness();
+test("SOW preserves an existing IDENTITY account and does not create a guest during an outage", async () => {
+    const harness = createIdentityRecoveryHarness();
     const savedSession = harness.context.window.currentSession;
     let anonymousStarts = 0;
-    harness.context.window.wouAuth.ensureSession = () =>
+    harness.context.window.sowAuth.ensureSession = () =>
         Promise.reject(Object.assign(new Error("identity unavailable"), { status: 503 }));
-    harness.context.window.wouAuth.startAnonymous = () => {
+    harness.context.window.sowAuth.startAnonymous = () => {
         anonymousStarts += 1;
         return Promise.resolve(null);
     };
 
     await assert.rejects(
-        harness.context.window.SOW_ensureWouAnonymousSession(),
+        harness.context.window.SOW_ensureIdentityAnonymousSession(),
         /identity unavailable/,
     );
 
     assert.equal(anonymousStarts, 0);
     assert.equal(harness.context.window.currentSession, savedSession);
     assert.equal(harness.context.window.currentSession.accountId, "account-1");
-    assert.equal(harness.context.window.SOW_WOU_SESSION_STATUS, "retrying");
+    assert.equal(harness.context.window.SOW_IDENTITY_SESSION_STATUS, "retrying");
     assert.equal(harness.retryDelays[0], 1000);
 });
 
 test("SOW retries a rejected profile once per login and preserves the selected account", async () => {
-    const harness = createWouRecoveryHarness();
+    const harness = createIdentityRecoveryHarness();
     let refreshCalls = 0;
-    harness.context.window.wouAuth.ensureSession = () => {
+    harness.context.window.sowAuth.ensureSession = () => {
         refreshCalls += 1;
         return Promise.resolve({ session_token: "jwt-refreshed" });
     };
 
-    await harness.context.window.SOW_refreshWouSession();
+    await harness.context.window.SOW_refreshIdentitySession();
     await assert.rejects(
-        harness.context.window.SOW_refreshWouSession(),
+        harness.context.window.SOW_refreshIdentitySession(),
         (error) => error.status === 401,
     );
     assert.equal(refreshCalls, 1);
-    assert.equal(harness.context.window.SOW_WOU_SESSION_STATUS, "reauthentication_required");
+    assert.equal(harness.context.window.SOW_IDENTITY_SESSION_STATUS, "reauthentication_required");
     assert.equal(harness.context.window.currentSession.accountId, "account-1");
 
-    harness.context.window.SOW_wouProfileLoadSucceeded();
-    harness.context.window.SOW_WOU_SESSION_STATUS = "ready";
-    await harness.context.window.SOW_refreshWouSession();
+    harness.context.window.SOW_identityProfileLoadSucceeded();
+    harness.context.window.SOW_IDENTITY_SESSION_STATUS = "ready";
+    await harness.context.window.SOW_refreshIdentitySession();
     assert.equal(refreshCalls, 2);
 });
 
 test("SOW takes linked identities from the full account, not the saved card", async () => {
-    const getStart = portalSource.indexOf("window.SOW_getWouSession = function ()");
+    const getStart = portalSource.indexOf("window.SOW_getIdentitySession = function ()");
     const getEnd = portalSource.indexOf("window.SOW_getAuthState = function ()", getStart);
-    const refreshStart = portalSource.indexOf("function refreshWouAccount()");
+    const refreshStart = portalSource.indexOf("function refreshIdentityAccount()");
     const refreshEnd = portalSource.indexOf("function emitAuthStateChange()", refreshStart);
     assert.ok(getStart >= 0 && getEnd > getStart && refreshStart >= 0 && refreshEnd > refreshStart);
     const savedCard = { account_id: "account-1", linked_identities: [] };
@@ -1112,10 +1276,10 @@ test("SOW takes linked identities from the full account, not the saved card", as
     let getMeCalls = 0;
     const context = vm.createContext({
         window: {
-            SOW_WOU_SESSION_STATUS: "ready",
+            SOW_IDENTITY_SESSION_STATUS: "ready",
             SOW_isSowProductionHost: () => true,
             currentSession: { token: "jwt-1", accountId: "account-1", user: savedCard },
-            wouAuth: {
+            sowAuth: {
                 getMe() {
                     getMeCalls += 1;
                     return Promise.resolve(fullAccount);
@@ -1126,35 +1290,35 @@ test("SOW takes linked identities from the full account, not the saved card", as
     });
     vm.runInContext(
         [
-            "let wouAccount = null;",
-            'let wouAccountToken = "";',
-            "function readWouSession() { return Object.assign({}, window.currentSession); }",
+            "let identityAccount = null;",
+            'let identityAccountToken = "";',
+            "function readIdentitySession() { return Object.assign({}, window.currentSession); }",
             "function emitAuthStateChange() { window.authEvents += 1; }",
             portalSource.slice(refreshStart, refreshEnd),
             portalSource.slice(getStart, getEnd),
-            "this.__refreshWouAccount = refreshWouAccount;",
+            "this.__refreshIdentityAccount = refreshIdentityAccount;",
         ].join("\n"),
         context,
     );
 
-    assert.deepEqual(context.window.SOW_getWouSession().user, savedCard);
-    context.__refreshWouAccount();
-    context.__refreshWouAccount();
+    assert.deepEqual(context.window.SOW_getIdentitySession().user, savedCard);
+    context.__refreshIdentityAccount();
+    context.__refreshIdentityAccount();
     assert.equal(getMeCalls, 1);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(context.window.authEvents, 1);
-    assert.deepEqual(context.window.SOW_getWouSession().user, fullAccount);
+    assert.deepEqual(context.window.SOW_getIdentitySession().user, fullAccount);
 
     context.window.currentSession = { token: "jwt-2", accountId: "account-1", user: savedCard };
-    assert.deepEqual(context.window.SOW_getWouSession().user, savedCard);
+    assert.deepEqual(context.window.SOW_getIdentitySession().user, savedCard);
 
-    context.window.SOW_WOU_SESSION_STATUS = "reauthentication_required";
-    assert.equal(context.window.SOW_getWouSession().token, "");
+    context.window.SOW_IDENTITY_SESSION_STATUS = "reauthentication_required";
+    assert.equal(context.window.SOW_getIdentitySession().token, "");
 });
 
-test("SOW account acceptance requires confirmation before changing WOU-ID accounts", () => {
-    const acceptStart = portalSource.indexOf("window.SOW_acceptWouSession = function (data)");
-    const signOutStart = portalSource.indexOf("window.SOW_signOutWou = function ()", acceptStart);
+test("SOW account acceptance requires confirmation before changing SOW identity accounts", () => {
+    const acceptStart = portalSource.indexOf("window.SOW_acceptIdentitySession = function (data)");
+    const signOutStart = portalSource.indexOf("window.SOW_signOutIdentity = function ()", acceptStart);
     assert.ok(acceptStart >= 0 && signOutStart > acceptStart);
     const state = {
         current: { token: "jwt-account-1", accountId: "account-1", user: { account_id: "account-1" } },
@@ -1169,8 +1333,8 @@ test("SOW account acceptance requires confirmation before changing WOU-ID accoun
                 return state.confirm;
             },
         },
-        readWouSession: () => state.current,
-        saveWouSession(data) {
+        readIdentitySession: () => state.current,
+        saveIdentitySession(data) {
             state.saves.push(data);
             state.current = { token: data.session_token, accountId: data.account.account_id, user: data.account };
         },
@@ -1178,20 +1342,20 @@ test("SOW account acceptance requires confirmation before changing WOU-ID accoun
         clearTimeout() {},
     });
     vm.runInContext(
-        "let wouRecoveryGeneration = 0; let wouAnonymousPromise = null; let wouRetryTimer = null; let wouRetryDelay = 1000;\n" +
+        "let identityRecoveryGeneration = 0; let identityAnonymousPromise = null; let identityRetryTimer = null; let identityRetryDelay = 1000;\n" +
             portalSource.slice(acceptStart, signOutStart) +
-            "\nthis.acceptWouSession = window.SOW_acceptWouSession;",
+            "\nthis.acceptIdentitySession = window.SOW_acceptIdentitySession;",
         context,
     );
 
     const nextAccount = { account_id: "account-2" };
-    assert.equal(context.acceptWouSession({ session_token: "jwt-account-2", account: nextAccount }), false);
+    assert.equal(context.acceptIdentitySession({ session_token: "jwt-account-2", account: nextAccount }), false);
     assert.equal(state.current.accountId, "account-1");
     assert.equal(state.saves.length, 0);
     assert.equal(state.confirmCalls, 1);
 
     state.confirm = true;
-    assert.equal(context.acceptWouSession({ session_token: "jwt-account-2", account: nextAccount }), true);
+    assert.equal(context.acceptIdentitySession({ session_token: "jwt-account-2", account: nextAccount }), true);
     assert.equal(state.current.accountId, "account-2");
     assert.equal(state.saves.length, 1);
 });
@@ -1278,6 +1442,36 @@ test("hero roster keeps available heroes first and preserves order after filteri
             .map((leader) => leader.id)
             .join("|"),
         "owned|weekly|permanent|locked-first|locked-last",
+    );
+    context.menuUi.heroesRegionFilter = "all";
+    context.menuUi.heroesSort = "alpha_asc";
+    assert.equal(
+        context
+            .heroesRoster(context.menuUi.state.leaders)
+            .map((leader) => leader.id)
+            .join("|"),
+        "owned|permanent|weekly|locked-first|locked-last|locked-other-region",
+    );
+    leaders.find((l) => l.id === "owned").cost_crowns = 500;
+    leaders.find((l) => l.id === "weekly").cost_crowns = 2000;
+    leaders.find((l) => l.id === "permanent").cost_crowns = 0;
+    context.menuUi.heroesSort = "cost_desc";
+    assert.equal(
+        context
+            .heroesRoster(context.menuUi.state.leaders)
+            .filter((leader) => leader.available !== false)
+            .map((leader) => leader.id)
+            .join("|"),
+        "weekly|owned|permanent",
+    );
+    context.menuUi.heroesSort = "cost_asc";
+    assert.equal(
+        context
+            .heroesRoster(context.menuUi.state.leaders)
+            .filter((leader) => leader.available !== false)
+            .map((leader) => leader.id)
+            .join("|"),
+        "permanent|owned|weekly",
     );
 });
 
@@ -1707,4 +1901,40 @@ test("CrazyGames rewarded offers switch on only after a real ad plays", async ()
     revoked.requestMidgame();
     assert.equal(revoked.window.SOW_portalRewardedAvailable(), false, "adsDisabled turns the offer back off");
     assert.equal(revoked.storage.has("sow_cg_ads_served"), false);
+});
+
+test("CrazyGames gameplay hooks stay paired across repeated starts and stops", () => {
+    const start = portalSource.indexOf("window.SOW_portalGameplayStart = function");
+    const stop = portalSource.indexOf("window.SOW_portalGameplayStop = function", start);
+    const end = portalSource.indexOf("\n    window.SOW_portalLoadStart = function", stop);
+    assert.ok(start >= 0 && stop > start && end > stop, "CrazyGames gameplay hooks are present");
+
+    const events = [];
+    const game = {
+        gameplayStart: () => events.push("start"),
+        gameplayStop: () => events.push("stop"),
+    };
+    const window = { SOW_adPlaying: false };
+    const context = {
+        window,
+        console: { warn() {} },
+        isSiteEmbed: () => false,
+        isOnCrazyGames: () => true,
+        crazyGamesSdkReady: () => true,
+        crazyGameApi: () => game,
+    };
+    vm.runInNewContext(
+        "let cgGameplayActive = false;\n" + portalSource.slice(start, end),
+        context,
+    );
+
+    window.SOW_portalGameplayStop();
+    window.SOW_portalGameplayStart();
+    window.SOW_portalGameplayStart();
+    window.SOW_portalGameplayStop();
+    window.SOW_portalGameplayStop();
+    window.SOW_portalGameplayStart();
+    window.SOW_portalGameplayStop();
+
+    assert.deepEqual(events, ["start", "stop", "start", "stop"]);
 });

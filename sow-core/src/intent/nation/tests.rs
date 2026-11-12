@@ -314,7 +314,7 @@ mod bot_iq_alliance_tests {
     #[test]
     fn ghost_retaliation_delay_and_force_are_seeded_and_bounded() {
         let delay = ghost_retaliation_delay_ticks(42, 7, 91);
-        assert!((3..=12).contains(&delay));
+        assert!((5..=6).contains(&delay));
         assert_eq!(delay, ghost_retaliation_delay_ticks(42, 7, 91));
         let delays: std::collections::BTreeSet<_> = (0..32)
             .map(|seed| ghost_retaliation_delay_ticks(seed, 7, 91))

@@ -720,6 +720,7 @@
             root.style.pointerEvents = "none";
             root.setAttribute("aria-hidden", "true");
             root.setAttribute("aria-busy", "false");
+            window.dispatchEvent(new CustomEvent("sow:boot-mark", { detail: "loader-hidden" }));
             loaderVisible = false;
             finishing = false;
             finishingLoaderCycleId = -1;
@@ -732,6 +733,7 @@
             }
             if (!loaderReadyDispatched) {
                 loaderReadyDispatched = true;
+                window.SOW_INITIAL_LOADER_READY = true;
                 window.dispatchEvent(new Event("sow:loader-ready"));
             }
             window.dispatchEvent(
@@ -822,6 +824,103 @@
         buildDom();
     }
 
+    // Text, building and nameplate-status atlases ship as immutable cached files instead of
+    // inside the engine binary: a deploy re-downloads only the code, and the browser decodes
+    // them off the main thread. The engine copies the bitmaps straight to the GPU.
+    const TEXT_ATLAS_PATHS = {
+        // v3 uses a never-probed public path so a pre-publish 404 cannot poison
+        // the long-lived immutable cache entry.
+        text: "/gameplay/text/msdf-atlas-v3.webp",
+        buildings: "/gameplay/buildings/atlas.webp",
+        badges: "/gameplay/icons/nameplate_status_atlas.webp",
+    };
+    const TEXT_ATLAS_RETRY_MS = 2000;
+    let textAtlasPromise: Promise<void> | null = null;
+    let textAtlasFailedAt = 0;
+    type TextAtlasKey = keyof typeof TEXT_ATLAS_PATHS;
+    const textAtlasPromises: Partial<Record<TextAtlasKey, Promise<ImageBitmap>>> = {};
+
+    function textAtlasUrl(path: string) {
+        const base = String(window.SOW_ASSETS_URL || "").replace(/\/$/, "");
+        const versions = window.SOW_ASSET_TS || {};
+        let version = String(versions["/assets" + path] || window.SOW_BUILD_TS || "");
+        if (version === "__BUILD_TS__") version = "";
+        return base + path + (version ? "?v=" + encodeURIComponent(version) : "");
+    }
+
+    function loadTextAtlas(path: string) {
+        return fetch(textAtlasUrl(path))
+            .then(function (response) {
+                if (!response.ok) throw new Error(path + " returned " + response.status);
+                return response.blob();
+            })
+            .then(function (blob) {
+                // Raw texels: the font atlas holds distances, not colors.
+                return createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+            });
+    }
+
+    function loadTextAtlasOnce(key: TextAtlasKey) {
+        const existing = textAtlasPromises[key];
+        if (existing) return existing;
+        const request = loadTextAtlas(TEXT_ATLAS_PATHS[key]).catch(function (error) {
+            delete textAtlasPromises[key];
+            throw error;
+        });
+        textAtlasPromises[key] = request;
+        return request;
+    }
+
+    function loadTextAtlases() {
+        if (window.SOW_TEXT_ATLASES) return Promise.resolve();
+        if (textAtlasPromise) return textAtlasPromise;
+        if (Date.now() - textAtlasFailedAt < TEXT_ATLAS_RETRY_MS) return Promise.resolve();
+        textAtlasPromise = Promise.all([
+            loadTextAtlasOnce("text"),
+            loadTextAtlasOnce("buildings"),
+            loadTextAtlasOnce("badges"),
+        ])
+            .then(function (bitmaps) {
+                window.SOW_TEXT_ATLASES = { text: bitmaps[0], buildings: bitmaps[1], badges: bitmaps[2] };
+            })
+            .catch(function (error) {
+                console.error("[SOW] text atlases could not be loaded:", error);
+                textAtlasFailedAt = Date.now();
+            })
+            .finally(function () {
+                textAtlasPromise = null;
+            });
+        return textAtlasPromise;
+    }
+    window.SOW_loadTextAtlases = loadTextAtlases;
+
+    // Arabic shaping font: the engine asks for it the first time a name contains Arabic, so
+    // nobody else downloads it. The engine takes the bytes from SOW_ARABIC_FONT.
+    const ARABIC_FONT_PATH = "/gameplay/text/noto-sans-arabic-regular.ttf";
+    let arabicFontPromise: Promise<void> | null = null;
+    let arabicFontFailedAt = 0;
+
+    function loadArabicFont() {
+        if (arabicFontPromise) return arabicFontPromise;
+        if (Date.now() - arabicFontFailedAt < TEXT_ATLAS_RETRY_MS) return Promise.resolve();
+        arabicFontPromise = fetch(textAtlasUrl(ARABIC_FONT_PATH))
+            .then(function (response) {
+                if (!response.ok) throw new Error(ARABIC_FONT_PATH + " returned " + response.status);
+                return response.arrayBuffer();
+            })
+            .then(function (bytes) {
+                window.SOW_ARABIC_FONT = bytes;
+            })
+            .catch(function (error) {
+                console.error("[SOW] Arabic font could not be loaded:", error);
+                arabicFontFailedAt = Date.now();
+            })
+            .finally(function () {
+                arabicFontPromise = null;
+            });
+        return arabicFontPromise;
+    }
+    window.SOW_loadArabicFont = loadArabicFont;
     window.SOW_initWebLoader = initWebLoader;
     window.SOW_refreshWebLoaderText = refreshLoaderText;
     window.SOW_leaderArtUrl = leaderArtUrl;

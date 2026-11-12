@@ -3634,6 +3634,7 @@ name = "sow-data"
 version = "0.2.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "bincode",
  "blake3",
  "env_logger",
@@ -3776,7 +3777,6 @@ dependencies = [
  "futures-util",
  "hex",
  "hmac",
- "jsonwebtoken",
  "log",
  "rand",
  "redis",

@@ -161,45 +161,12 @@ pub async fn blocked_ids(
     Ok(con.smembers(&key).await?)
 }
 
-struct MailConfig {
-    host: String,
-    port: u16,
-    user: String,
-    pass: String,
-    from: String,
-    to: String,
-}
-
-fn mail_config() -> Option<MailConfig> {
-    Some(MailConfig {
-        host: std::env::var("SOW_SMTP_HOST").ok()?,
-        port: std::env::var("SOW_SMTP_PORT")
-            .ok()
-            .and_then(|port| port.parse().ok())
-            .unwrap_or(587),
-        user: std::env::var("SOW_SMTP_USER").ok()?,
-        pass: std::env::var("SOW_SMTP_PASS").ok()?,
-        from: std::env::var("SOW_SMTP_FROM").ok().unwrap_or_else(|| {
-            std::env::var("SOW_SMTP_USER").unwrap_or_else(|_| "noreply@localhost".into())
-        }),
-        // The moderation mailbox. Env-only on purpose: the address must never
-        // reach game clients, and there is no safe default to commit.
-        to: std::env::var("SOW_MODERATION_EMAIL").ok()?,
-    })
-}
-
 /// Best-effort moderation email. Never fails the report: `false` means the
 /// report is stored and logged but no email went out (setup missing or SMTP
 /// error), and the operator picks it up from the report index / logs.
 async fn send_moderation_email(report: &StoredReport) -> bool {
-    use lettre::transport::smtp::authentication::Credentials;
-    use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
-
-    let Some(config) = mail_config() else {
-        log::warn!(
-            "[moderation] report {} stored but no moderation mailbox configured",
-            report.id
-        );
+    let Ok(to) = std::env::var("SOW_MODERATION_EMAIL") else {
+        log::warn!("[moderation] report {} stored without a configured mailbox", report.id);
         return false;
     };
     let body = format!(
@@ -223,64 +190,14 @@ async fn send_moderation_email(report: &StoredReport) -> bool {
         created_at = report.created_at,
         details = report.details.as_deref().unwrap_or("-"),
     );
-    let message = match Message::builder()
-        .from(
-            config
-                .from
-                .parse()
-                .unwrap_or_else(|_| "noreply@localhost".parse().unwrap()),
-        )
-        .to(match config.to.parse() {
-            Ok(mailbox) => mailbox,
-            Err(error) => {
-                log::error!("[moderation] invalid moderation mailbox: {error}");
-                return false;
-            }
-        })
-        .subject(format!(
-            "[SOW report] {} against {}",
-            report.reason, report.reported_account_id
-        ))
-        .body(body)
-    {
-        Ok(message) => message,
-        Err(error) => {
-            log::error!(
-                "[moderation] report {} email build failed: {error}",
-                report.id
-            );
-            return false;
-        }
-    };
-    let transport = if config.port == 465 {
-        AsyncSmtpTransport::<Tokio1Executor>::relay(&config.host)
-    } else {
-        AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&config.host)
-    };
-    let transport = match transport {
-        Ok(transport) => transport
-            .credentials(Credentials::new(config.user, config.pass))
-            .port(config.port)
-            .timeout(Some(std::time::Duration::from_secs(10)))
-            .build(),
-        Err(error) => {
-            log::error!(
-                "[moderation] report {} SMTP setup failed: {error}",
-                report.id
-            );
-            return false;
-        }
-    };
-    match transport.send(message).await {
-        Ok(_) => {
-            log::info!(
-                "[moderation] report {} emailed to moderation mailbox",
-                report.id
-            );
+    let subject = format!("[SOW report] {} against {}", report.reason, report.reported_account_id);
+    match crate::mail::send_message(&to, &subject, body).await {
+        Ok(()) => {
+            log::info!("[moderation] report {} emailed to moderation mailbox", report.id);
             true
         }
         Err(error) => {
-            log::error!("[moderation] report {} email failed: {error}", report.id);
+            log::warn!("[moderation] report {} stored but email failed: {error}", report.id);
             false
         }
     }

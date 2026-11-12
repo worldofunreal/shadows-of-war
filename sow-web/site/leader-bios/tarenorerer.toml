@@ -1,0 +1,52 @@
+[articles.en]
+text = "Tarenorerer was a Tommeginne woman from northern Tasmania. After being abducted and sold to sealers, she learned how firearms worked and returned to her country in 1828. The Australian Dictionary of Biography says she gathered men and women from several Aboriginal bands, trained them to use firearms, and organized resistance to invading settlers. It records her directing attacks in the interval after settlers fired and before they could reload. These details come through colonial accounts, not a first-person record."
+title = "Tarenorerer"
+lang = "en"
+url = "https://adb.anu.edu.au/biography/tarenorerer-13212/text23923"
+intro = [
+  "Tarenorerer was a Tommeginne woman from northern Tasmania. After being abducted and sold to sealers, she learned how firearms worked and returned to her country in 1828. The Australian Dictionary of Biography says she gathered men and women from several Aboriginal bands, trained them to use firearms, and organized resistance to invading settlers.",
+]
+sections = [
+  { title = "Resistance and the written record", paragraphs = [
+      "The biography describes a deliberate tactic: attack after settlers fired and before they could reload. It also records that colonial official George Augustus Robinson pursued her and feared her influence. Her followers also targeted settlers' sheep and cattle, broadening the resistance beyond armed encounters. Robinson's diary and other settler accounts make up much of the surviving written record; their labels and claims about her motives reflect a colonial point of view and should not be repeated as neutral fact.",
+      "Tarenorerer evaded capture for a time, but was eventually detained on islands in Bass Strait. She died of influenza on 5 June 1831. The game ability interprets her documented tactical leadership: it reduces losses when her attacking army faces a player with a larger troop reserve. That is a gameplay representation, not a claim that the sources describe such a troop advantage in a particular battle.",
+    ] },
+]
+shortArticle = false
+sources = [
+  { title = "Vicki maikutena Matson-Green, Tarenorerer (1800–1831), Australian Dictionary of Biography", url = "https://adb.anu.edu.au/biography/tarenorerer-13212/text23923" },
+]
+
+[articles.es]
+text = "Tarenorerer era una mujer tommeginne del norte de Tasmania. Tras ser secuestrada y vendida a unos foqueros, aprendió cómo funcionaban las armas de fuego y regresó a su territorio en 1828. La Australian Dictionary of Biography cuenta que reunió a hombres y mujeres de varias bandas aborígenes, los entrenó en el uso de armas y organizó la resistencia contra los colonos invasores. Registra que dirigía ataques durante el intervalo entre los disparos de los colonos y la recarga. Estos detalles proceden de relatos coloniales, no de un testimonio suyo."
+title = "Tarenorerer"
+lang = "es"
+url = "https://adb.anu.edu.au/biography/tarenorerer-13212/text23923"
+intro = [
+  "Tarenorerer era una mujer tommeginne del norte de Tasmania. Tras ser secuestrada y vendida a unos foqueros, aprendió cómo funcionaban las armas de fuego y regresó a su territorio en 1828. La Australian Dictionary of Biography cuenta que reunió a hombres y mujeres de varias bandas aborígenes, los entrenó en el uso de armas y organizó la resistencia contra los colonos invasores.",
+]
+sections = [
+  { title = "Resistencia y registro escrito", paragraphs = [
+      "La biografía describe una táctica deliberada: atacar después de que los colonos dispararan y antes de que pudieran recargar. También cuenta que el funcionario colonial George Augustus Robinson la persiguió y temía su influencia. Su diario y otros relatos de colonos forman gran parte del registro escrito conservado; sus etiquetas y afirmaciones sobre los motivos de Tarenorerer reflejan una perspectiva colonial y no deben repetirse como hechos neutrales.",
+      "Tarenorerer logró evadir la captura durante un tiempo, pero finalmente fue detenida en islas del estrecho de Bass. Murió de influenza el 5 de junio de 1831. La habilidad del juego interpreta su liderazgo táctico documentado: reduce las pérdidas cuando su ejército atacante se enfrenta a un jugador con una reserva mayor. Es una representación de juego, no una afirmación de que las fuentes describan esa ventaja de tropas en una batalla concreta.",
+    ] },
+]
+shortArticle = false
+sources = [
+  { title = "Vicki maikutena Matson-Green, Tarenorerer (1800–1831), Australian Dictionary of Biography", url = "https://adb.anu.edu.au/biography/tarenorerer-13212/text23923" },
+]
+
+[fallbacks]
+ar = "en"
+de = "en"
+fil = "en"
+fr = "en"
+id = "en"
+it = "en"
+ja = "en"
+ko = "en"
+pt-BR = "en"
+ru = "en"
+tr = "en"
+vi = "en"
+zh-CN = "en"

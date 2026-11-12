@@ -72,6 +72,17 @@ pub fn gold_income_per_second(
             * leader.resource_bonus_multiplier(Source::Territory, Resource::Gold)
 }
 
+/// Multiplier for the ordinary income owned by Nafanua's player. Alliance
+/// income, trade income, and other hero income remain separate from this rate.
+pub fn tafaifa_council_multiplier(leader: Leader, living_allies: usize) -> f64 {
+    match leader.ability() {
+        crate::geo_entities::Ability::TafaifaCouncil { percent } if living_allies >= 3 => {
+            1.0 + f64::from(percent) / 100.0
+        }
+        _ => 1.0,
+    }
+}
+
 /// Extra gold and troops per game second from balanced active districts.
 pub fn imperial_standard_income(
     agg: BuildingAggregate,

@@ -1,6 +1,6 @@
 use crate::context::RenderContext;
 use crate::text::msdf::{FontAtlas, MsdfChar};
-use crate::text::texture::{AvatarAtlasTexture, FontAtlasTexture};
+use crate::text::texture::{AvatarAtlasTexture, FontAtlasTexture, TextAtlasImages};
 use crate::text::types::{
     KIND_ARC, KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_HORN, KIND_ICON,
     KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE,
@@ -16,8 +16,56 @@ pub fn building_sprite_uv(kind: sow_core::game::BuildingKind, level: u8) -> Opti
 pub const MAX_TEXT_GLYPHS: usize = 32_768;
 const RING_AA_MARGIN: f32 = 1.5;
 const CROSS_AA_MARGIN: f32 = 1.0;
+#[cfg(not(target_arch = "wasm32"))]
 const ARABIC_FONT_BYTES: &[u8] =
     include_bytes!("../../../sow-web/site/fonts/noto-sans-arabic-regular.ttf");
+
+/// The web build downloads the Arabic shaping font only after a name needs it; until then
+/// Arabic runs are left out and `arabic_font_wanted` asks the client to fetch it.
+#[cfg(target_arch = "wasm32")]
+static ARABIC_FONT: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new();
+static ARABIC_FONT_WANTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Install the downloaded Arabic font. Returns false if it does not parse or one is installed.
+#[cfg(target_arch = "wasm32")]
+pub fn set_arabic_font(bytes: Vec<u8>) -> bool {
+    if rustybuzz::Face::from_slice(&bytes, 0).is_none() {
+        return false;
+    }
+    ARABIC_FONT.set(Vec::leak(bytes)).is_ok()
+}
+
+/// True once some text needed the Arabic font and it is not installed yet.
+pub fn arabic_font_wanted() -> bool {
+    ARABIC_FONT_WANTED.load(std::sync::atomic::Ordering::Relaxed) && arabic_font_bytes().is_none()
+}
+
+/// Changes when the Arabic font arrives, so callers that cache shaped text re-prepare it.
+pub fn arabic_font_generation() -> u32 {
+    u32::from(arabic_font_bytes().is_some())
+}
+
+fn arabic_font_bytes() -> Option<&'static [u8]> {
+    #[cfg(target_arch = "wasm32")]
+    return ARABIC_FONT.get().copied();
+    #[cfg(not(target_arch = "wasm32"))]
+    return Some(ARABIC_FONT_BYTES);
+}
+
+fn arabic_face() -> Option<&'static rustybuzz::Face<'static>> {
+    static FACE: std::sync::OnceLock<rustybuzz::Face<'static>> = std::sync::OnceLock::new();
+    if let Some(face) = FACE.get() {
+        return Some(face);
+    }
+    let Some(bytes) = arabic_font_bytes() else {
+        ARABIC_FONT_WANTED.store(true, std::sync::atomic::Ordering::Relaxed);
+        return None;
+    };
+    Some(FACE.get_or_init(|| {
+        rustybuzz::Face::from_slice(bytes, 0).expect("Arabic font was validated before install")
+    }))
+}
 
 #[inline]
 fn clamp_arc_progress(progress: f32) -> f32 {
@@ -298,11 +346,9 @@ fn shape_arabic_run(
     emit: &mut dyn FnMut(PreparedTextItem),
     initial_advance: f32,
 ) -> (f32, usize) {
-    static FACE: std::sync::OnceLock<rustybuzz::Face<'static>> = std::sync::OnceLock::new();
-    let face = FACE.get_or_init(|| {
-        rustybuzz::Face::from_slice(ARABIC_FONT_BYTES, 0)
-            .expect("Failed to parse embedded Noto Sans Arabic font")
-    });
+    let Some(face) = arabic_face() else {
+        return (0.0, 0);
+    };
     let mut buffer = rustybuzz::UnicodeBuffer::new();
     buffer.push_str(text);
     buffer.set_direction(if right_to_left {
@@ -493,22 +539,59 @@ pub struct TextRenderer {
 }
 
 impl TextRenderer {
-    pub fn new(context: &gpu::Context, surface_format: gpu::TextureFormat) -> Self {
+    pub fn new(
+        context: &gpu::Context,
+        surface_format: gpu::TextureFormat,
+        atlases: &TextAtlasImages,
+    ) -> Self {
         let font_atlas_desc = FontAtlas::load_static();
-        let font_atlas_tex = FontAtlasTexture::new(context);
+        // The font atlas holds signed distances (linear data); building and status art is sRGB.
+        #[cfg(target_arch = "wasm32")]
+        let (font_atlas_tex, building_atlas_tex, status_atlas_tex) = (
+            FontAtlasTexture::from_image_bitmap(
+                context,
+                &atlases.text,
+                "font_atlas",
+                gpu::TextureFormat::Rgba8Unorm,
+            ),
+            FontAtlasTexture::from_image_bitmap(
+                context,
+                &atlases.buildings,
+                "building_atlas",
+                gpu::TextureFormat::Rgba8UnormSrgb,
+            ),
+            FontAtlasTexture::from_image_bitmap(
+                context,
+                &atlases.badges,
+                "nameplate_status_atlas",
+                gpu::TextureFormat::Rgba8UnormSrgb,
+            ),
+        );
+        #[cfg(not(target_arch = "wasm32"))]
+        let (font_atlas_tex, building_atlas_tex, status_atlas_tex) = {
+            let _: &TextAtlasImages = atlases;
+            (
+                FontAtlasTexture::from_bytes(
+                    context,
+                    crate::FONT_ATLAS_BYTES,
+                    "font_atlas",
+                    gpu::TextureFormat::Rgba8Unorm,
+                ),
+                FontAtlasTexture::from_bytes(
+                    context,
+                    crate::BUILDING_ATLAS_BYTES,
+                    "building_atlas",
+                    gpu::TextureFormat::Rgba8UnormSrgb,
+                ),
+                FontAtlasTexture::from_bytes(
+                    context,
+                    crate::NAMEPLATE_STATUS_ATLAS_BYTES,
+                    "nameplate_status_atlas",
+                    gpu::TextureFormat::Rgba8UnormSrgb,
+                ),
+            )
+        };
         let avatar_atlas = AvatarAtlasTexture::new(context);
-        let building_atlas_tex = FontAtlasTexture::from_bytes(
-            context,
-            crate::BUILDING_ATLAS_BYTES,
-            "building_atlas",
-            gpu::TextureFormat::Rgba8UnormSrgb,
-        );
-        let status_atlas_tex = FontAtlasTexture::from_bytes(
-            context,
-            crate::NAMEPLATE_STATUS_ATLAS_BYTES,
-            "nameplate_status_atlas",
-            gpu::TextureFormat::Rgba8UnormSrgb,
-        );
         let shader_source = crate::shader_params::prepare_shader(
             "TEXT_",
             include_str!("../shaders/text_glow.wgsl"),
@@ -1218,34 +1301,10 @@ impl TextRenderer {
         render_ctx.context.destroy_sampler(self.avatar_sampler);
         render_ctx.context.destroy_sampler(self.building_sampler);
         render_ctx.context.destroy_sampler(self.status_sampler);
-        render_ctx
-            .context
-            .destroy_texture_view(self.font_atlas_tex.view);
-        render_ctx
-            .context
-            .destroy_texture(self.font_atlas_tex.texture);
-        render_ctx
-            .context
-            .destroy_buffer(self.font_atlas_tex.buffer);
+        self.font_atlas_tex.destroy(&render_ctx.context);
         self.avatar_atlas.destroy(&render_ctx.context);
-        render_ctx
-            .context
-            .destroy_texture_view(self.building_atlas_tex.view);
-        render_ctx
-            .context
-            .destroy_texture(self.building_atlas_tex.texture);
-        render_ctx
-            .context
-            .destroy_buffer(self.building_atlas_tex.buffer);
-        render_ctx
-            .context
-            .destroy_texture_view(self.status_atlas_tex.view);
-        render_ctx
-            .context
-            .destroy_texture(self.status_atlas_tex.texture);
-        render_ctx
-            .context
-            .destroy_buffer(self.status_atlas_tex.buffer);
+        self.building_atlas_tex.destroy(&render_ctx.context);
+        self.status_atlas_tex.destroy(&render_ctx.context);
     }
 }
 

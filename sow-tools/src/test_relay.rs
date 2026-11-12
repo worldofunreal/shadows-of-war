@@ -21,6 +21,15 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 
 mod reward_return;
 
+/// Jail and loopback values are spliced into a remote shell command, so only plain tokens pass.
+fn plain_token(value: &str) -> Result<String, String> {
+    if !value.is_empty() && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.')) {
+        Ok(value.to_string())
+    } else {
+        Err(format!("{value:?} is not a plain token"))
+    }
+}
+
 fn parse_websocket_url(value: &str) -> Result<Url, String> {
     let url = Url::parse(value).map_err(|error| format!("invalid WebSocket URL: {error}"))?;
 
@@ -153,6 +162,12 @@ struct Args {
     /// Coordination directory shared with the official release activation.
     #[arg(long, requires = "verify_handover_relay_host")]
     verify_handover_sync_dir: Option<std::path::PathBuf>,
+    /// Jail that runs the relay under test: sow-server for production, ptr-sow-server for PTR.
+    #[arg(long, default_value = "sow-server", value_parser = plain_token)]
+    relay_jail: String,
+    /// Loopback address of that relay: 127.0.0.1 for production, 127.0.0.2 for PTR.
+    #[arg(long, default_value = "127.0.0.1", value_parser = plain_token)]
+    relay_loopback: String,
 }
 
 #[tokio::main]
@@ -182,6 +197,7 @@ async fn main() {
             args.verify_handover_relay_host.as_deref(),
             args.verify_handover_sync_dir.as_deref(),
             args.require_proxied_relay.as_deref(),
+            &reward_return::RelayHome { jail: args.relay_jail, loopback: args.relay_loopback },
         )
         .await;
         return;

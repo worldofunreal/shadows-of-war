@@ -224,8 +224,66 @@ test("renderMissionsModal renders tab switcher and mission list", () => {
     assert.match(html, /sow-missions-modal/);
     assert.match(html, /data-missions-tab='onboarding'/);
     assert.match(html, /data-missions-tab='daily'/);
+    assert.match(html, /data-missions-tab='weekly'/);
     assert.match(html, /missions\.onboarding_tutorial_title/);
     assert.match(html, /sow-missions__claimed-badge/);
+});
+
+test("renderDirectiveCard omits zero-gem reward pill and redundant kicker", () => {
+    menuUi.state = {
+        missions: [
+            {
+                id: "onboarding_2_structures",
+                category: "onboarding",
+                title_key: "missions.onboarding_structures_title",
+                description_key: "missions.onboarding_structures_desc",
+                target: 5,
+                progress: 5,
+                completed: true,
+                claimed: false,
+                crowns_reward: 50,
+                gems_reward: 0,
+                icon: "tower",
+                order: 2,
+            },
+        ],
+    } as unknown as MenuState;
+
+    const html = renderDirectiveCard();
+    assert.match(html, /\+50/);
+    assert.doesNotMatch(html, /\+0/);
+    assert.doesNotMatch(html, /sow-directive__kicker/);
+    assert.match(html, /sow-directive__title-row/);
+    assert.match(html, /sow-directive__desc/);
+});
+
+test("renderMissionsModal renders weekly tab and countdown", () => {
+    menuUi.activeMissionsTab = "weekly";
+    menuUi.state = {
+        missions: [
+            {
+                id: "weekly_ranked_champion",
+                category: "weekly",
+                title_key: "missions.weekly_ranked_champion_title",
+                description_key: "missions.weekly_ranked_champion_desc",
+                target: 3,
+                progress: 1,
+                completed: false,
+                claimed: false,
+                crowns_reward: 150,
+                gems_reward: 5,
+                icon: "crown",
+                order: 30,
+            },
+        ],
+    } as unknown as MenuState;
+
+    const html = renderMissionsModal();
+    assert.match(html, /data-missions-tab='weekly'/);
+    assert.match(html, /missions\.weekly_resets_in/);
+    assert.match(html, /missions\.weekly_ranked_champion_title/);
+    assert.match(html, /\+150/);
+    assert.match(html, /\+5/);
 });
 
 test("claimMission sends doubled_by_ad when video ad watched", async () => {

@@ -40,6 +40,7 @@ struct AnalyticsQuery {
 
 struct AppState {
     db: PlayerDb,
+    auth: sow_data::auth::AuthService,
     secret_token: String,
     relay_settlement_secret: String,
     revenuecat_webhook_secret: Option<String>,
@@ -436,30 +437,8 @@ async fn store_account_for_request(
 
     if let Some(token) = token {
         let account_id = match platform_provider {
-            "" | "wou" | "wou_id" | "world_of_unreal" => {
-                let account_id = resolve_external_id("wou", account_reference, Some(&token))
-                    .await
-                    .map_err(|error| (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })))?;
-                state
-                    .db
-                    .get_or_create_for_account_id(
-                        &account_id,
-                        "wou".to_string(),
-                        "production".to_string(),
-                        account_id.clone(),
-                    )
-                    .await
-                    .map_err(|error| {
-                        error!("WOU identity mapping for store failed: {error}");
-                        (
-                            StatusCode::SERVICE_UNAVAILABLE,
-                            Json(ErrorResponse {
-                                error: "store identity unavailable".to_string(),
-                            }),
-                        )
-                    })?
-                    .id
-            }
+            "" | "sow" => state.auth.verify_token(&token)
+                .map_err(|error| (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })))?,
             "playgames" => {
                 let external_id = state
                     .verify_playgames_session(None, &token)
@@ -490,7 +469,7 @@ async fn store_account_for_request(
             }
             "crazygames" => {
                 let external_id =
-                    resolve_external_id("crazygames", account_reference, Some(&token))
+                    resolve_external_id(state, "crazygames", "", Some(&token))
                         .await
                         .map_err(|error| {
                             (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error }))
@@ -720,13 +699,19 @@ async fn handle_unlock_leader(
         .await
     {
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
-        Err(error) => (
-            StatusCode::CONFLICT,
-            Json(ErrorResponse {
-                error: error.to_string(),
-            }),
-        )
-            .into_response(),
+        Err(error) => {
+            error!(
+                "leader unlock rejected account={} leader={} currency={}: {error}",
+                account_id, payload.leader_id, payload.currency
+            );
+            (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -950,19 +935,6 @@ async fn handle_revenuecat_webhook(
     }
 }
 
-/// Shared ownership-proof gate for self-service account endpoints. The
-/// canonical account ID is a lookup key, not a secret — every mutating call
-/// must also present the one-time ownership secret minted at creation.
-async fn verify_self_service(
-    db: &sow_data::db::PlayerDb,
-    account_id: &str,
-    auth_secret: &str,
-) -> Result<(), String> {
-    db.verify_anonymous_secret(account_id, auth_secret)
-        .await
-        .map(|_| ())
-}
-
 /// POST /profile/anonymous/report — file a conduct report against another
 /// player. Ownership-proofed (reporter secret), rate-limited, and always
 /// activates a block. The moderation mailbox receives the report server-side;
@@ -970,7 +942,8 @@ async fn verify_self_service(
 #[derive(Deserialize)]
 struct ReportPlayerRequest {
     account_id: String,
-    auth_secret: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
     reported_account_id: String,
     #[serde(default)]
     match_id: Option<String>,
@@ -987,11 +960,12 @@ struct ReportPlayerResponse {
 
 async fn handle_report_player(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<ReportPlayerRequest>,
 ) -> impl IntoResponse {
     let account_id = payload.account_id.trim();
-    if let Err(error) = verify_self_service(&state.db, account_id, &payload.auth_secret).await {
-        warn!("[moderation] report rejected auth: {error}");
+    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref()).await.is_err() {
+        warn!("[moderation] report rejected ownership proof");
         return (
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
@@ -1084,7 +1058,8 @@ async fn handle_report_player(
 #[derive(Deserialize)]
 struct BlocksRequest {
     account_id: String,
-    auth_secret: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1094,11 +1069,12 @@ struct BlocksResponse {
 
 async fn handle_blocks(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<BlocksRequest>,
 ) -> impl IntoResponse {
     let account_id = payload.account_id.trim();
-    if let Err(error) = verify_self_service(&state.db, account_id, &payload.auth_secret).await {
-        warn!("[moderation] blocks read rejected auth: {error}");
+    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref()).await.is_err() {
+        warn!("[moderation] blocks read rejected ownership proof");
         return (
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
@@ -1129,7 +1105,8 @@ async fn handle_blocks(
 #[derive(Deserialize)]
 struct SelfDeleteRequest {
     account_id: String,
-    auth_secret: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1166,11 +1143,12 @@ fn erase_legacy_events(state: &AppState, account_id: &str) -> std::io::Result<u6
 
 async fn handle_self_delete(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<SelfDeleteRequest>,
 ) -> impl IntoResponse {
     let account_id = payload.account_id.trim();
-    if let Err(error) = verify_self_service(&state.db, account_id, &payload.auth_secret).await {
-        warn!("[privacy] self-delete rejected auth: {error}");
+    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref()).await.is_err() {
+        warn!("[privacy] self-delete rejected ownership proof");
         return (
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
@@ -1290,7 +1268,12 @@ async fn handle_internal_verify(
             }
             _ => Err("anonymous verification requires account_id and token".to_string()),
         },
-        "wou" | "wou_id" | "world_of_unreal" | "crazygames" | "playgames" => {
+        "sow" => state.auth.verify_token(&payload.token).and_then(|id| {
+            if payload.account_id.as_deref().is_some_and(|requested| requested != id) {
+                Err("account does not match session".into())
+            } else { Ok(id) }
+        }),
+        "crazygames" | "playgames" => {
             Err("external identities must be verified by sow-server".to_string())
         }
         other => Err(format!("unsupported provider: {other}")),
@@ -1405,7 +1388,7 @@ async fn handle_internal_identity_resolve(
             )
             .await
     } else {
-        Err("canonical account_id is required".into())
+        state.db.resolve_verified_identity(provider, environment, external_subject, None).await
     };
     let account = match account_result {
         Ok(account) => account,
@@ -1789,7 +1772,10 @@ async fn main() {
         .build()
         .expect("failed to create replay verification client");
 
+    let auth = sow_data::auth::AuthService::new(player_db.clone(), secret_token.clone())
+        .expect("Failed to initialize first-party sessions");
     let state = Arc::new(AppState {
+        auth,
         db: player_db,
         secret_token,
         relay_settlement_secret,
@@ -1827,6 +1813,9 @@ async fn main() {
         let mut interval = tokio::time::interval(Duration::from_secs(24 * 60 * 60));
         loop {
             interval.tick().await;
+            if let Err(error) = event_retention_state.auth.prune() {
+                error!("identity session cleanup failed: {error}");
+            }
             match event_retention_state.legacy_events.lock() {
                 Ok(events) => {
                     if let Err(error) = events.prune_old() {
@@ -1852,6 +1841,7 @@ async fn main() {
 
     // Define router
     let app = Router::new()
+        .merge(sow_data::auth::router(state.auth.clone()))
         .route("/healthz", get(handle_healthz))
         .route(
             "/event",
@@ -2276,35 +2266,40 @@ mod leaderboard_pagination_tests {
     }
 }
 
-fn is_first_party_analytics_origin(headers: &HeaderMap) -> bool {
-    headers
-        .get(header::ORIGIN)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|origin| {
-            matches!(
-                origin,
-                "https://shadowsofwar.io" | "https://www.shadowsofwar.io"
-            )
-        })
+/// `host` is this deployment's public host (`sow_data::auth::public_host`), so PTR's pages are first-party too.
+fn is_first_party_analytics_origin(headers: &HeaderMap, host: &str) -> bool {
+    let Some(origin) = headers.get(header::ORIGIN).and_then(|value| value.to_str().ok()) else {
+        return false;
+    };
+    origin == format!("https://{host}") || origin == format!("https://www.{host}")
 }
 
 #[cfg(test)]
 mod analytics_origin_tests {
     use super::{HeaderMap, header, is_first_party_analytics_origin};
 
+    fn origin_header(origin: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::ORIGIN, origin.parse().unwrap());
+        headers
+    }
+
     #[test]
-    fn accepts_only_the_two_first_party_web_origins() {
-        for origin in ["https://shadowsofwar.io", "https://www.shadowsofwar.io"] {
-            let mut headers = HeaderMap::new();
-            headers.insert(header::ORIGIN, origin.parse().unwrap());
-            assert!(is_first_party_analytics_origin(&headers));
+    fn accepts_only_the_deployment_host_and_its_www_alias() {
+        let cases = [
+            ("shadowsofwar.io", "https://shadowsofwar.io", true),
+            ("shadowsofwar.io", "https://www.shadowsofwar.io", true),
+            ("shadowsofwar.io", "https://ptr.shadowsofwar.io", false),
+            ("ptr.shadowsofwar.io", "https://ptr.shadowsofwar.io", true),
+            ("ptr.shadowsofwar.io", "https://shadowsofwar.io", false),
+            ("shadowsofwar.io", "https://attacker.example", false),
+            ("shadowsofwar.io", "http://shadowsofwar.io", false),
+            ("shadowsofwar.io", "null", false),
+        ];
+        for (host, origin, accepted) in cases {
+            assert_eq!(is_first_party_analytics_origin(&origin_header(origin), host), accepted, "{origin} on {host}");
         }
-        for origin in ["https://attacker.example", "http://shadowsofwar.io", "null"] {
-            let mut headers = HeaderMap::new();
-            headers.insert(header::ORIGIN, origin.parse().unwrap());
-            assert!(!is_first_party_analytics_origin(&headers));
-        }
-        assert!(!is_first_party_analytics_origin(&HeaderMap::new()));
+        assert!(!is_first_party_analytics_origin(&HeaderMap::new(), "shadowsofwar.io"));
     }
 }
 
@@ -2371,7 +2366,7 @@ async fn handle_event(
     headers: HeaderMap,
     Json(batch): Json<AnalyticsBatch>,
 ) -> impl IntoResponse {
-    if !is_first_party_analytics_origin(&headers) {
+    if !is_first_party_analytics_origin(&headers, &sow_data::auth::public_host()) {
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({ "error": "first-party origin required" })),
@@ -3638,64 +3633,18 @@ fn platform_auth_token(headers: &HeaderMap) -> Option<String> {
 }
 
 async fn resolve_external_id(
+    state: &AppState,
     provider: &str,
     external_id: &str,
     auth_token: Option<&str>,
 ) -> Result<String, String> {
-    if provider == "wou" || provider == "wou_id" || provider == "world_of_unreal" {
-        let Some(token) = auth_token else {
-            return Err("WOU-ID requests require X-Platform-Auth token".into());
-        };
-        let wou_url =
-            std::env::var("WOU_ID_URL").unwrap_or_else(|_| "http://127.0.0.1:25570".into());
-        let client = if let Ok(resolve_ip) = std::env::var("WOU_ID_RESOLVE_IP") {
-            let host = reqwest::Url::parse(&wou_url)
-                .ok()
-                .and_then(|url| url.host_str().map(str::to_owned))
-                .ok_or_else(|| "WOU_ID_URL has no valid hostname".to_string())?;
-            let port = reqwest::Url::parse(&wou_url)
-                .ok()
-                .and_then(|url| url.port_or_known_default())
-                .unwrap_or(443);
-            let address = resolve_ip
-                .parse()
-                .map_err(|_| "WOU_ID_RESOLVE_IP is not a valid IP address".to_string())?;
-            reqwest::Client::builder()
-                .resolve(&host, std::net::SocketAddr::new(address, port))
-                .build()
-                .map_err(|error| format!("WOU-ID client build failed: {error}"))?
-        } else {
-            reqwest::Client::new()
-        };
-        // WOU-ID exposes the authenticated account through this existing
-        // read-only route. It validates the bearer with WOU-ID's own JWT
-        // middleware and returns the canonical account id without sharing the
-        // signing secret with Shadows of War.
-        let res = client
-            .get(format!(
-                "{}/api/v1/inventory/me",
-                wou_url.trim_end_matches('/')
-            ))
-            .header("Authorization", format!("Bearer {token}"))
-            .timeout(std::time::Duration::from_secs(3))
-            .send()
-            .await
-            .map_err(|e| format!("WOU-ID service unreachable: {e}"))?;
-
-        if !res.status().is_success() {
-            return Err(format!("WOU-ID token rejected: HTTP {}", res.status()));
+    if provider == "sow" {
+        let token = auth_token.ok_or("Sign-in requests require X-Platform-Auth")?;
+        let account_id = state.auth.verify_token(token)?;
+        if !external_id.is_empty() && external_id != account_id {
+            return Err("account does not match session".into());
         }
-
-        let resp: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| format!("Invalid WOU-ID JSON response: {e}"))?;
-        let user_id = resp
-            .get("account_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| "WOU-ID response missing account_id".to_string())?;
-
-        return Ok(user_id.to_string());
+        return Ok(account_id);
     }
     if provider == "crazygames" {
         let Some(token) = auth_token else {
@@ -3703,7 +3652,7 @@ async fn resolve_external_id(
         };
         let verified_id = crazygames::verify_user_token(token).await?;
         if !external_id.is_empty() && external_id != verified_id {
-            warn!("CrazyGames external_id mismatch: client={external_id} token={verified_id}");
+            return Err("CrazyGames identity does not match its verified token".into());
         }
         return Ok(verified_id);
     }
@@ -3722,27 +3671,17 @@ async fn resolve_platform_account(
             .map(|identity| identity.external_id)
             .map_err(|error| error.to_string())?
     } else {
-        resolve_external_id(provider, external_id, auth_token).await?
+        resolve_external_id(state, provider, external_id, auth_token).await?
     };
 
-    if provider == "wou" || provider == "wou_id" || provider == "world_of_unreal" {
-        state
-            .db
-            .get_or_create_for_account_id(
-                &resolved_external_id,
-                "wou".to_string(),
-                "production".to_string(),
-                resolved_external_id.clone(),
-            )
-            .await
-            .map_err(|error| error.to_string())
+    if provider == "sow" {
+        state.db.account_by_id(&resolved_external_id).await.map_err(|error| error.to_string())
+    } else if let Some(account) = state.db.get_existing_identity(provider.to_owned(), resolved_external_id.clone())
+        .await.map_err(|error| error.to_string())? {
+        Ok(account)
     } else {
-        state
-            .db
-            .get_existing_identity(provider.to_string(), resolved_external_id)
-            .await
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "canonical account identity is required".to_string())
+        state.db.resolve_verified_identity(provider, "production", &resolved_external_id, None)
+            .await.map_err(|error| error.to_string())
     }
 }
 

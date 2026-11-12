@@ -30,6 +30,7 @@ const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
 const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
 const SPAWN_STICKY_HOLD: Duration = Duration::from_millis(120);
 const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
+const LAND_CACHE_ENTRY_BUDGET: Duration = Duration::from_millis(8);
 const LOD_DOT_RADIUS: f32 = 2.0;
 const LOD_STAR_DIAMETER: f32 = 12.0;
 const EMOTE_BUBBLE_FONT_RATIO: f32 = 0.22;
@@ -702,7 +703,7 @@ impl NameplateSystem {
         let step_started_at = Instant::now();
         let result = self
             .land_cache
-            .step_rebuild(map, tick, Duration::from_millis(2));
+            .step_rebuild(map, tick, LAND_CACHE_ENTRY_BUDGET);
         let step_duration = step_started_at.elapsed();
         self.land_cache_build_cpu += step_duration;
         self.land_cache_build_max_step = self.land_cache_build_max_step.max(step_duration);
@@ -2026,7 +2027,8 @@ fn refresh_nameplate_text_cache(
 }
 
 fn nameplate_metrics_style_key(dev: &DevConfig) -> u32 {
-    nameplate_char_spacing(dev).to_bits()
+    // The Arabic font arrives on demand; its arrival re-prepares names shaped without it.
+    nameplate_char_spacing(dev).to_bits() ^ sow_render::arabic_font_generation()
 }
 
 fn nameplate_char_spacing(dev: &DevConfig) -> f32 {

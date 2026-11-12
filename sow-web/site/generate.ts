@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 
-const origin = "https://shadowsofwar.io";
 const escape = (value: unknown) =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -21,19 +20,26 @@ export async function publish(
     pages: string[];
     englishOnly?: string[];
     localPreview?: boolean;
+    origin: string;
     biographies: { leaders: Record<string, Record<string, any>> };
     mapExplorer: string;
   },
   source = import.meta.dir,
 ) {
   const { leaders, localPreview = false } = input;
+  const origin = input.origin;
+  if (!/^https:\/\/[a-z0-9.-]+$/.test(origin)) throw Error(`Invalid public origin ${origin}`);
+  // The source files name production; each publish rewrites that origin to the one it builds.
+  const publicOrigin = (text: string) => text.replaceAll("https://shadowsofwar.io", origin);
   const bases = input.pages.map((page) => {
     if (!page.endsWith("index.html")) throw Error(`Invalid public template ${page}`);
     return page.slice(0, -"index.html".length);
   });
   const registry = JSON.parse(await read(join(out, "locales/index.json")));
   const biographies = input.biographies.leaders;
-  await writeFile(join(out, "llms.txt"), await read(join(source, "llms.txt")));
+  await writeFile(join(out, "llms.txt"), publicOrigin(await read(join(source, "llms.txt"))));
+  await mkdir(join(out, ".well-known"), { recursive: true });
+  await writeFile(join(out, ".well-known/security.txt"), publicOrigin(await read(join(source, ".well-known/security.txt"))));
   const languages: { code: string; name: string }[] = registry.languages;
   const routes = [...bases, "leaders/", ...leaders.map((h) => `leaders/${h.id}/`)];
   // Long-tail pages that answer English search intent ship unprefixed only; other
@@ -51,8 +57,9 @@ export async function publish(
   // Rust owns the data-driven landing sections, rendered once before this step.
   templates.set("", await read(join(out, "index.html")));
   const sourceGraph = JSON.parse(
-    templates.get("")!.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1] ||
-      '{"@graph":[]}',
+    publicOrigin(
+      templates.get("")!.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1] || '{"@graph":[]}',
+    ),
   )["@graph"];
   const faqKeys: { question: string; answer?: string }[] = [];
   await new HTMLRewriter()
@@ -83,8 +90,7 @@ export async function publish(
     "sow-i18n.js",
     "sow-dropdown.js",
     "sow-controls.css",
-    "wou-auth.js",
-    "assets/gameplay/atlas/index.js",
+    "identity-auth.js",
   ]) {
     fingerprints.set(
       `/${name}`,
@@ -94,9 +100,6 @@ export async function publish(
         .slice(0, 10),
     );
   }
-  const spriteCells: Record<string, unknown> = JSON.parse(
-    await readFile(join(out, "assets/gameplay/atlas/index.json"), "utf8"),
-  ).cells;
   const localeVersions = Object.fromEntries(
     await Promise.all(
       languages.map(async (l) => [
@@ -244,7 +247,7 @@ export async function publish(
             const artImage = mobileArt
               ? `<img class="leader-directory-art" src="${mobileArt}" alt="" width="900" height="1600" loading="lazy" decoding="async">`
               : "";
-            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}">${artImage}<img class="leader-directory-avatar" data-avatar="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-ability">${escape(f.ability)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
+            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}">${artImage}<img class="leader-directory-avatar" src="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-ability">${escape(f.ability)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
           })
           .join("\n");
         html = indexTemplate
@@ -290,11 +293,7 @@ export async function publish(
       for (const marker of ["<!-- SOW_SITE_HEADER -->", "<!-- SOW_SITE_LOCALE -->"]) {
         if (html.split(marker).length !== 2) throw Error(`Public page ${url} must contain one ${marker}`);
       }
-      const spriteAtlas = `<script src="/assets/gameplay/atlas/index.js?v=${fingerprints.get("/assets/gameplay/atlas/index.js")}"></script>`;
-      html = html
-        .replace("<!-- SOW_SITE_HEADER -->", header)
-        .replace("<!-- SOW_SITE_LOCALE -->", bootstrap)
-        .replace("<!-- SOW_SPRITE_ATLAS -->", spriteAtlas);
+      html = html.replace("<!-- SOW_SITE_HEADER -->", header).replace("<!-- SOW_SITE_LOCALE -->", bootstrap);
       const schemas: any[] = [
         {
           "@type": "WebPage",
@@ -533,13 +532,6 @@ export async function publish(
               for (const attr of ["href", "src", "poster"]) {
                 const value = e.getAttribute(attr);
                 if (value) reference(value);
-              }
-              const sprite = e.getAttribute("data-avatar");
-              if (sprite) {
-                // Packed portraits and ability icons are cells of a sprite sheet, not files of their own.
-                const target = new URL(sprite, url).pathname;
-                if (!(target.replace(/^\/assets\//, "") in spriteCells))
-                  throw Error(`Broken public reference ${target} (no sprite cell)`);
               }
               const srcset = e.getAttribute("srcset");
               if (srcset)

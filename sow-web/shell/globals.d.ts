@@ -49,6 +49,11 @@ declare global {
         SOW_getAuthState?: () => SowAuthState;
         SOW_hudIcon: (name: string) => string;
         SOW_loadAvatarBitmap?: (path: string, size: number) => Promise<ImageBitmap>;
+        SOW_loadTextAtlases: () => Promise<void>;
+        SOW_INITIAL_LOADER_READY?: boolean;
+        SOW_loadArabicFont: () => Promise<void>;
+        SOW_ARABIC_FONT?: ArrayBuffer;
+        SOW_TEXT_ATLASES?: { text: ImageBitmap; buildings: ImageBitmap; badges: ImageBitmap };
         SOW_leaderArtUrl: (slug: string, variant?: string) => string;
         SOW_prepareLeaderArt: (slug: string, priority?: string) => Promise<boolean>;
         SOW_menu_flow: { canGuide(): boolean };
@@ -93,7 +98,7 @@ declare global {
         SOW_ASSET_TS: Record<string, string>;
         SOW_BUILD_TS: string;
         SOW_ASSETS_URL: string;
-        /** Every distribution: avatars and ability icons packed into sheets; cells are [sheet, x, y, side]. */
+        /** CrazyGames only: avatars and ability icons packed into sheets; cells are [sheet, x, y, side]. Elsewhere sprites are loose files. */
         SOW_SPRITE_ATLAS?: {
             sheets: { path: string; width: number; height: number }[];
             cells: Record<string, [number, number, number, number]>;

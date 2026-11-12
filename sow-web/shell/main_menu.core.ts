@@ -59,6 +59,7 @@ interface MenuUi {
     browserSearchQuery: string;
     heroesSearchQuery: string;
     heroesRegionFilter: string;
+    heroesSort: string;
     dropdownOpenKey: string | null;
     authModalOpen: boolean;
     authEmail: string;
@@ -115,7 +116,7 @@ interface MenuUi {
     reportSent: boolean;
     deleteArmed: boolean;
     missionsModalOpen: boolean;
-    activeMissionsTab: "onboarding" | "daily";
+    activeMissionsTab: "onboarding" | "daily" | "weekly";
 }
 
 export const menuUi: MenuUi = {
@@ -130,6 +131,7 @@ export const menuUi: MenuUi = {
     browserSearchQuery: "",
     heroesSearchQuery: "",
     heroesRegionFilter: "all",
+    heroesSort: "cost_desc",
     dropdownOpenKey: null,
     authModalOpen: false,
     authEmail: "",

@@ -5,6 +5,7 @@ pub mod world;
 
 mod frame;
 mod surface;
+pub(crate) mod text_atlases;
 pub use sow_render as gpu;
 
 pub(crate) fn dev_text_style(

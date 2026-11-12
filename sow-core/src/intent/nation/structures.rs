@@ -40,21 +40,17 @@ pub(super) fn bot_structure_target_count(
     }
 }
 
-/// Cadence (base ticks between AI actions), keyed on TIER (not IQ).
-///
-/// Tier is the single source of truth (`ai_tier`); keying cadence on IQ
-/// would let two tiers with overlapping bands cross into the wrong cadence.
-///   Ghost  → 5 ticks   (0.5-1.0s after scheduler jitter) — top of chain
-///   Nation → 30 ticks  (3-6s after scheduler jitter)     — mid tier
-///   Tribe  → 100 ticks (10-20s after scheduler jitter)   — slowest, not brainrot
-///
-/// The scheduler adds deterministic seed/id jitter around this base. The ID
-/// changes phase, never the entity's tier or personality.
-pub(super) fn iq_build_interval_base(tier: AiTier) -> u64 {
-    match tier {
-        AiTier::Ghost => 5,
-        AiTier::Nation => 30,
-        AiTier::Tribe => 100,
+/// Decision window per tier, in 100 ms ticks, inclusive (min, max). Each bot
+/// gets one fixed interval inside its window from a seeded roll; `under_attack`
+/// only applies to tiers that react (Nation, Ghost). Ranked rivals keep their
+/// own IQ curve in `execute_ai_think`.
+pub(super) fn think_window_ticks(tier: AiTier, under_attack: bool) -> (u64, u64) {
+    match (tier, under_attack) {
+        (AiTier::Tribe, _) => (80, 120),     // 8–12 s
+        (AiTier::Nation, false) => (40, 80), // 4–8 s
+        (AiTier::Nation, true) => (5, 30),   // 0.5–3 s
+        (AiTier::Ghost, false) => (1, 10),   // 0.1–1 s
+        (AiTier::Ghost, true) => (5, 6),     // 0.45–0.6 s, rounded to the tick
     }
 }
 

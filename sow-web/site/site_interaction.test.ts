@@ -699,7 +699,7 @@ test("landing explorer switches map previews and pauses optional video for visib
 
 test("public publisher delivers localized linked profiles and rejects incomplete output", async () => {
   const { publish } = await import("./generate.ts");
-  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import("node:fs/promises");
+  const { mkdtemp, mkdir, writeFile, readFile, rm, cp } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const temp = await mkdtemp(path.join(tmpdir(), "sow-public-site-"));
   const source = path.join(temp, "source"),
@@ -710,7 +710,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
   };
   try {
     const template =
-      '<html lang="en"><head><!-- SOW_SITE_LOCALE --><title data-i18n="site.title">Home</title><meta name="description" content=""><link rel="canonical" href="https://shadowsofwar.io/"></head><body><!-- SOW_SITE_HEADER --><!-- PAGE_HEADING --><!-- LEADER_CONTENT --><footer><a href="/leaders/">Leaders</a></footer></body></html>';
+      '<html lang="en"><head><!-- SOW_SITE_LOCALE --><title data-i18n="site.title">Home</title><meta name="description" content=""><link rel="canonical" href="https://shadowsofwar.io/"><script type="application/ld+json">{"@graph":[{"@type":"Organization","@id":"https://shadowsofwar.io/#organization","url":"https://shadowsofwar.io/"}]}</script></head><body><!-- SOW_SITE_HEADER --><!-- PAGE_HEADING --><!-- LEADER_CONTENT --><footer><a href="/leaders/">Leaders</a></footer></body></html>';
     const languages = [
       { code: "en", name: "English" },
       { code: "es", name: "Español" },
@@ -765,11 +765,15 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       "sow-i18n.js",
       "sow-dropdown.js",
       "sow-controls.css",
-      "wou-auth.js",
+      "identity-auth.js",
     ])
       await put(path.join(out, name), "/* fixture */");
     await put(path.join(out, "play/index.html"), "game");
-    await put(path.join(source, "llms.txt"), "Game facts");
+    await put(path.join(source, "llms.txt"), "Game facts for https://shadowsofwar.io");
+    await put(
+      path.join(source, ".well-known/security.txt"),
+      "Canonical: https://shadowsofwar.io/.well-known/security.txt\nPolicy: https://shadowsofwar.io/privacy\n",
+    );
     const historyParagraph = "A long sourced history paragraph. ".repeat(65);
     const biographies = {
       leaders: Object.fromEntries(
@@ -824,13 +828,8 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       "assets/shell/leaders/caesar_desktop.webp",
       "assets/shell/leaders/caesar_mobile.webp",
       "assets/gameplay/avatars/caesar.webp",
-      "assets/gameplay/atlas/index.js",
     ])
       await put(path.join(out, asset), "fixture image");
-    await put(
-      path.join(out, "assets/gameplay/atlas/index.json"),
-      JSON.stringify({ sheets: [], cells: { "gameplay/avatars/caesar.webp": [0, 0, 0, 256] } }),
-    );
     const leaders = [
       {
         id: "caesar",
@@ -840,20 +839,22 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         wikipedia: "https://en.wikipedia.org/wiki/Julius_Caesar",
       },
     ];
-    await publish(
-      out,
-      {
-        leaders,
-        biographies,
-        pages: [
-          "index.html",
-          "support/index.html",
-          "privacy/index.html",
-          "cookies/index.html",
-          "terms/index.html",
-        ],
-      },
-      source,
+    const publicInput = {
+      leaders,
+      biographies,
+      origin: "https://shadowsofwar.io",
+      pages: ["index.html", "support/index.html", "privacy/index.html", "cookies/index.html", "terms/index.html"],
+    };
+    const ptrOut = path.join(temp, "ptr-out");
+    await cp(out, ptrOut, { recursive: true });
+    await publish(out, publicInput, source);
+    await publish(ptrOut, { ...publicInput, origin: "https://ptr.shadowsofwar.io" }, source);
+    for (const file of ["index.html", "llms.txt", ".well-known/security.txt", "leaders/caesar/index.html"])
+      assert.doesNotMatch(await readFile(path.join(ptrOut, file), "utf8"), /https:\/\/shadowsofwar\.io/, file);
+    assert.match(await readFile(path.join(ptrOut, "index.html"), "utf8"), /"@id":"https:\/\/ptr\.shadowsofwar\.io\/#organization"/);
+    assert.match(
+      await readFile(path.join(ptrOut, ".well-known/security.txt"), "utf8"),
+      /Canonical: https:\/\/ptr\.shadowsofwar\.io\/\.well-known\/security\.txt/,
     );
     const profile = await readFile(path.join(out, "es/leaders/caesar/index.html"), "utf8");
     assert.match(profile, /<h1>Julio César<\/h1>/);
@@ -903,6 +904,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       {
         leaders,
         biographies: sagaBiographies,
+        origin: "https://shadowsofwar.io",
         pages: [
           "index.html",
           "support/index.html",
@@ -934,6 +936,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         {
           leaders,
           biographies,
+          origin: "https://shadowsofwar.io",
           pages: [
             "index.html",
             "support/index.html",
@@ -966,6 +969,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         {
           leaders,
           biographies,
+          origin: "https://shadowsofwar.io",
           pages: [
             "index.html",
             "support/index.html",
@@ -981,13 +985,14 @@ test("public publisher delivers localized linked profiles and rejects incomplete
     catalogs.es.site.leader_caesar_description = effect;
     await put(path.join(out, "locales/es"), JSON.stringify({ strings: catalogs.es }));
     await resetLanding();
-    await put(path.join(out, "assets/gameplay/atlas/index.json"), JSON.stringify({ sheets: [], cells: {} }));
+    fs.rmSync(path.join(out, "assets/gameplay/avatars/caesar.webp"));
     await assert.rejects(
       publish(
         out,
         {
           leaders,
           biographies,
+          origin: "https://shadowsofwar.io",
           pages: [
             "index.html",
             "support/index.html",
@@ -1000,6 +1005,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
       ),
       /Broken public reference \/assets\/gameplay\/avatars\/caesar.webp/,
     );
+    await put(path.join(out, "assets/gameplay/avatars/caesar.webp"), "fixture image");
     await resetLanding();
     await put(path.join(source, "site-header.html"), "<div>Missing header</div>");
     await assert.rejects(
@@ -1008,6 +1014,7 @@ test("public publisher delivers localized linked profiles and rejects incomplete
         {
           leaders,
           biographies,
+          origin: "https://shadowsofwar.io",
           pages: [
             "index.html",
             "support/index.html",

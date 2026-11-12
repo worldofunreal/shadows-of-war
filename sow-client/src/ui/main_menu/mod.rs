@@ -110,7 +110,7 @@ impl Default for MainMenuState {
             server_address: std::env::var("SOW_WS_URL")
                 .unwrap_or_else(|_| "wss://ws.shadowsofwar.io/ws/".into()),
             lobbies: Vec::new(),
-            player_name: format!("ANON{:03}", ms % 1000),
+            player_name: sow_data::animal_alias((ms / 10_000) as usize, (ms % 10_000) as usize),
             host_private_pending: false,
             in_private_match: false,
             is_lobby_host: false,
@@ -245,6 +245,17 @@ impl MainMenuState {
 mod tests {
     use super::MainMenuState;
     use sow_core::player::Leader;
+
+    #[test]
+    fn default_player_name_uses_a_global_animal_alias() {
+        let name = MainMenuState::default().player_name;
+        let matches = sow_data::ANIMAL_NAMES.iter().any(|animal| {
+            name.strip_prefix(animal).is_some_and(|suffix| {
+                suffix.len() == 4 && suffix.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        });
+        assert!(matches, "unexpected initial player name: {name}");
+    }
 
     #[test]
     fn choosing_random_keeps_the_last_concrete_leader_as_backup() {

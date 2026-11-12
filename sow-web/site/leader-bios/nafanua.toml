@@ -1,0 +1,60 @@
+[articles.en]
+text = "Samoan oral tradition remembers Nafanua as a warrior and political leader whose authority extended beyond battle. The stories describe her as a figure who could make decisions in war and shape chiefly relationships in peace. They are not contemporary records of a dated individual life, so her chronology and the historical meaning of each episode remain uncertain."
+title = "Nafanua"
+lang = "en"
+url = "https://digitalcollections.anu.edu.au/items/6dcbe341-d945-41fc-a9de-a8428b6110fd/full"
+intro = [
+  "Samoan oral tradition remembers Nafanua as a warrior and political leader whose authority extended beyond battle. The stories describe her as a figure who could make decisions in war and shape chiefly relationships in peace. They are not contemporary records of a dated individual life, so her chronology and the historical meaning of each episode remain uncertain.",
+]
+sections = [
+  { title = "Warrior and political actor", paragraphs = [
+      "Accounts collected in a United Nations Pacific human development report describe Nafanua as successful in war and skilled as a peacetime leader. They credit her with organizing a gathering of Samoa's highest chiefly titles and helping unite political lineages. Another Samoan story says that she awarded the four paramount titles, later known as the tafa'ifa, to Salamasina. These accounts place Nafanua in a position of decision making: she leads, judges and allocates authority rather than serving only as a relative of a ruler.",
+      "Kaydee Schmidt's Australian National University thesis studies Nafanua as an aitu whose remembered words and counsel shaped political action through the families and spirit mediums associated with her. The thesis treats her stories as part of Samoan political and religious history, not as a simple, independently verified biography. This distinction matters: oral tradition carries historical meaning, but it does not provide the same kind of dated evidence as a contemporary written record.",
+    ] },
+  { title = "A gameplay interpretation", paragraphs = [
+      "The game's Tafaʻifa Council ability draws on the tradition linking Nafanua with the four paramount titles. When her player has at least three living allies, the player gains 10% more ordinary gold and troop income. The four in the council are Nafanua's player and those three allies. The income bonus is a game design interpretation of a political coalition; it is not a claim that the oral accounts describe a historical income bonus or a mechanically identical alliance system.",
+    ] },
+]
+shortArticle = false
+sources = [
+  { title = "Kaydee Schmidt, The aitu Nafanua and the history of Samoa, Australian National University thesis", url = "https://digitalcollections.anu.edu.au/items/6dcbe341-d945-41fc-a9de-a8428b6110fd/full" },
+  { title = "Nomaia Simi, Leader in war, organizer in peace, Asia-Pacific Human Development Report, UNDP", url = "https://hdr.undp.org/system/files/documents/rhdr-2010-asiapacific.pdf" },
+]
+
+[articles.es]
+text = "La tradición oral samoana recuerda a Nafanua como guerrera y dirigente política, con autoridad más allá del campo de batalla. Los relatos la presentan tomando decisiones en la guerra y moldeando relaciones entre jefaturas durante la paz. No son registros contemporáneos de una vida individual fechada; por eso, su cronología y el sentido histórico de cada episodio siguen siendo inciertos."
+title = "Nafanua"
+lang = "es"
+url = "https://digitalcollections.anu.edu.au/items/6dcbe341-d945-41fc-a9de-a8428b6110fd/full"
+intro = [
+  "La tradición oral samoana recuerda a Nafanua como guerrera y dirigente política, con autoridad más allá del campo de batalla. Los relatos la presentan tomando decisiones en la guerra y moldeando relaciones entre jefaturas durante la paz. No son registros contemporáneos de una vida individual fechada; por eso, su cronología y el sentido histórico de cada episodio siguen siendo inciertos.",
+]
+sections = [
+  { title = "Guerrera y agente política", paragraphs = [
+      "Un informe de desarrollo humano del Pacífico de las Naciones Unidas describe a Nafanua como una figura victoriosa en la guerra y hábil como dirigente en tiempos de paz. Le atribuye la organización de una reunión de los títulos de jefatura más altos de Samoa y un papel en la unión de linajes políticos. Otro relato samoano dice que concedió a Salamasina los cuatro títulos supremos que más tarde se conocieron como tafa'ifa. En estas historias, Nafanua toma decisiones: dirige, juzga y distribuye autoridad; no aparece solo como pariente de quien gobierna.",
+      "La tesis de Kaydee Schmidt en la Universidad Nacional Australiana estudia a Nafanua como un aitu cuyas palabras y consejos recordados influyeron en acciones políticas a través de las familias y médiums espirituales vinculados con ella. La tesis analiza sus relatos como parte de la historia política y religiosa samoana, no como una biografía individual verificada de manera independiente. La tradición oral transmite significado histórico, aunque no ofrece el mismo tipo de evidencia fechada que un registro escrito contemporáneo.",
+    ] },
+  { title = "Interpretación para el juego", paragraphs = [
+      "La habilidad Consejo Tafaʻifa se inspira en la tradición que vincula a Nafanua con los cuatro títulos supremos. Cuando su jugadora tiene al menos tres aliados vivos, obtiene un 10 % más de ingresos ordinarios de oro y tropas. El consejo lo forman la jugadora de Nafanua y esos tres aliados. El aumento de ingresos es una interpretación de diseño sobre una coalición política; no afirma que los relatos describan un bono económico histórico ni un sistema de alianzas idéntico al del juego.",
+    ] },
+]
+shortArticle = false
+sources = [
+  { title = "Kaydee Schmidt, The aitu Nafanua and the history of Samoa, tesis de la Universidad Nacional Australiana", url = "https://digitalcollections.anu.edu.au/items/6dcbe341-d945-41fc-a9de-a8428b6110fd/full" },
+  { title = "Nomaia Simi, Leader in war, organizer in peace, Asia-Pacific Human Development Report, PNUD", url = "https://hdr.undp.org/system/files/documents/rhdr-2010-asiapacific.pdf" },
+]
+
+[fallbacks]
+ar = "en"
+de = "en"
+fil = "en"
+fr = "en"
+id = "en"
+it = "en"
+ja = "en"
+ko = "en"
+pt-BR = "en"
+ru = "en"
+tr = "en"
+vi = "en"
+zh-CN = "en"

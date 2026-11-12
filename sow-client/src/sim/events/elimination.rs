@@ -141,7 +141,7 @@ impl SowApp {
                 .unwrap_or_else(|| format!("Player {player_id}"));
             let mut text = crate::ui::UiText::new("hud.elimination").with("victim", name);
             if let Some(hero) = tribe_ability_hero {
-                text = text.with("hero", sow_core::commerce::leader_id(hero));
+                text = text.with("hero_art", hero.art_slug());
             }
             self.ui.app.hud_state.push_notification_for_players(
                 text,

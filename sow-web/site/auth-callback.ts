@@ -1,3 +1,5 @@
+import "./identity-auth.ts";
+
 // Finishes an OAuth sign-in on /auth/callback: exchanges the provider code for a
 // session, stores it, and sends the player back to the page they started from.
 
@@ -9,6 +11,7 @@ interface OAuthState {
 }
 
 interface OAuthTransaction {
+  accountId?: string;
   provider?: string;
   nonce?: string;
   redirectUri?: string;
@@ -24,6 +27,8 @@ interface Account {
 
 interface SignInReply {
   session_token: string;
+  refresh_token?: string;
+  expires_at?: number;
   account: Account;
 }
 
@@ -87,41 +92,19 @@ function safeReturnTo(raw: string | undefined): string {
 
 function clearOAuthTransaction(): void {
   try {
-    sessionStorage.removeItem("wou_oauth_transaction");
-    sessionStorage.removeItem("wou_oauth_provider");
+    sessionStorage.removeItem("sow_oauth_transaction");
+    sessionStorage.removeItem("sow_oauth_provider");
   } catch {
     // Storage can be blocked; the transaction simply stays until it expires.
   }
 }
 
 function finishSignIn(data: SignInReply, returnTo: string | undefined): void {
-  const oldToken = localStorage.getItem("wou_session_token");
-  const oldUser = localStorage.getItem("wou_user_data");
-  const oldRefreshToken = localStorage.getItem("wou_refresh_token");
-  const oldAccountId = String(readStoredJson<Account>("wou_user_data")?.account_id || "");
   const newAccountId = String(data.account.account_id || data.account.id || "");
-  try {
-    if (oldAccountId && newAccountId && oldAccountId !== newAccountId) {
-      localStorage.removeItem("wou_refresh_token");
-    }
-    localStorage.setItem("wou_session_token", data.session_token);
-    localStorage.setItem("wou_user_data", JSON.stringify(data.account));
-  } catch (err) {
-    try {
-      if (oldToken === null) localStorage.removeItem("wou_session_token");
-      else localStorage.setItem("wou_session_token", oldToken);
-      if (oldUser === null) localStorage.removeItem("wou_user_data");
-      else localStorage.setItem("wou_user_data", oldUser);
-      if (oldRefreshToken === null) localStorage.removeItem("wou_refresh_token");
-      else localStorage.setItem("wou_refresh_token", oldRefreshToken);
-    } catch {
-      // Restoring the previous session failed too; nothing more can be done.
-    }
-    throw err;
-  }
+  window.sowAuth.setSession(data.session_token, {...data.account, account_id:newAccountId}, data.refresh_token, data.expires_at);
   clearOAuthTransaction();
   window.dispatchEvent(
-    new CustomEvent("wou:auth-state-change", {
+    new CustomEvent("identity:auth-state-change", {
       detail: {
         authenticated: true,
         isAuthenticated: true,
@@ -175,7 +158,7 @@ async function completeSignIn(): Promise<void> {
   let provider = stateObj.provider || "";
   if (!provider) {
     try {
-      provider = sessionStorage.getItem("wou_oauth_provider") || "";
+      provider = sessionStorage.getItem("sow_oauth_provider") || "";
     } catch {
       // Storage blocked: fall back to the provider in the URL.
     }
@@ -202,17 +185,24 @@ async function completeSignIn(): Promise<void> {
       "Content-Type": "application/json",
       Accept: "application/json",
     };
-    const sessionToken = localStorage.getItem("wou_session_token");
+    let sessionToken = localStorage.getItem("sow_session_token");
+    if (sessionToken) {
+      try { sessionToken = (await window.sowAuth.ensureSession()).session_token; }
+      catch (error) {
+        if ((error as {status?:number}).status !== 401) throw error;
+        sessionToken = null;
+      }
+    }
     if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
     const response = await fetch(
-      `https://id.worldofunreal.com/api/v1/auth/oauth/callback/${encodeURIComponent(provider)}`,
+      `/api/auth/oauth/callback/${encodeURIComponent(provider)}`,
       {
         method: "POST",
         headers,
         body: JSON.stringify({
           code,
           redirect_uri: callbackUri,
-          account_id: stateObj.accountId || null,
+          account_id: transaction.accountId || null,
           state: stateParam,
           code_verifier: transaction.codeVerifier || null,
           context: "shadows_of_war",
@@ -223,16 +213,16 @@ async function completeSignIn(): Promise<void> {
     if (!response.ok) throw new Error(reply.error || "OAuth authentication exchange failed.");
     if (!reply.session_token || !reply.account)
       throw new Error("Identity service returned an incomplete session.");
-    const data: SignInReply = { session_token: reply.session_token, account: reply.account };
+    const data: SignInReply = { session_token: reply.session_token, refresh_token: reply.refresh_token, expires_at: reply.expires_at, account: reply.account };
     const signedInAccountId = String(data.account.account_id || data.account.id || "");
     if (!signedInAccountId) throw new Error("Identity service returned an account without an ID.");
     let currentAccountId = String(stateObj.accountId || "");
     if (!currentAccountId) {
-      const currentUser = readStoredJson<Account>("wou_user_data");
+      const currentUser = readStoredJson<Account>("sow_user_data");
       currentAccountId = String(currentUser?.account_id || "");
     }
     if (currentAccountId && currentAccountId !== signedInAccountId) {
-      const currentUser = readStoredJson<Account>("wou_user_data");
+      const currentUser = readStoredJson<Account>("sow_user_data");
       const currentName = currentUser?.display_name || currentUser?.username || "your guest account";
       const targetName = data.account.display_name || data.account.username || "this account";
       accountSwitchMessageEl!.textContent = `${targetName} is a different account. Switching will not merge ${currentName}'s progress. Continue?`;
@@ -249,7 +239,7 @@ async function completeSignIn(): Promise<void> {
 
 function readOAuthTransaction(): OAuthTransaction | null {
   try {
-    return JSON.parse(sessionStorage.getItem("wou_oauth_transaction") || "null");
+    return JSON.parse(sessionStorage.getItem("sow_oauth_transaction") || "null");
   } catch {
     return null;
   }

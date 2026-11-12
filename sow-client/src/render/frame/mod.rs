@@ -625,11 +625,15 @@ impl SowApp {
                     );
                     map_drawn = true;
 
-                    if self.gfx.text_renderer.is_none() {
+                    crate::render::text_atlases::poll_arabic_font();
+                    if self.gfx.text_renderer.is_none()
+                        && let Some(atlases) = crate::render::text_atlases::get()
+                    {
                         let surface_format = s.info().format;
                         let tr = crate::render::gpu::TextRenderer::new(
                             &render_ctx.context,
                             surface_format,
+                            &atlases,
                         );
                         tr.init_textures(&mut render_ctx.command_encoder);
                         tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);

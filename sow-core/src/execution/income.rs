@@ -2,8 +2,8 @@ use crate::building::aggregate_buildings_per_player;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
     alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
-    imperial_standard_income, trade_income_per_second, trade_troops_per_second,
-    troop_income_per_second,
+    imperial_standard_income, tafaifa_council_multiplier, trade_income_per_second,
+    trade_troops_per_second, troop_income_per_second,
 };
 use crate::game::GamePhase;
 
@@ -61,6 +61,11 @@ impl SowEngine {
                 self.state.players[idx].player_type == crate::player::PlayerType::Bot;
 
             let leader = self.state.players[idx].leader;
+            let council_multiplier = tafaifa_council_multiplier(
+                leader,
+                crate::execution::hero_effects::living_allies(&self.state, player_id),
+            );
+            let council_active = council_multiplier > 1.0;
             let mut max_tr = config.max_troops_base
                 + max_troops_bonus * config.max_troops_scale
                 + agg.city_levels as f64
@@ -79,7 +84,7 @@ impl SowEngine {
 
             let hero_gold = self.hero_gold_per_second(player_id);
             let (_, standards_troops) = imperial_standard_income(agg, leader, &config);
-            if hero_gold > 0.0 || standards_troops > 0.0 {
+            if hero_gold > 0.0 || standards_troops > 0.0 || council_active {
                 if self.hero_income_active.insert(player_id) {
                     let marker = if matches!(
                         leader.ability(),
@@ -104,6 +109,7 @@ impl SowEngine {
             }
 
             let troop_ps = troop_income_per_second(tiles_owned, agg, leader, &config)
+                * council_multiplier
                 + alliance_troops_per_second(
                     self.state.players[idx].alliances.len(),
                     leader,
@@ -124,6 +130,7 @@ impl SowEngine {
             }
 
             let gold_ps = gold_income_per_second(tiles_owned, agg, leader, &config)
+                * council_multiplier
                 + alliance_gold_per_second(
                     self.state.players[idx].alliances.len(),
                     leader,

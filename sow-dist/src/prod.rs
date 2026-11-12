@@ -9,12 +9,7 @@ mod relay;
 const BUILD_HOST: &str = "freebsd";
 const BUILD_ROOT: &str = "/home/bizkit/shadows-of-war";
 const CONTROL_HOST: &str = "ionos";
-const REMOTE_STAGE: &str = "/home/bizkit/.sow-deploy";
-const REMOTE_RELEASES: &str = "/srv/sow/releases";
-const PUBLIC_ORIGIN: &str = "https://shadowsofwar.io";
 const STRIPE_ENV_KEYS: &str = "^(SOW_STRIPE_[A-Z_]+|SOW_REVENUECAT_STRIPE_API_KEY)=";
-const SERVER_JAIL_IP: &str = "127.0.0.1";
-const DATABASE_JAIL_IP: &str = "127.0.0.1";
 const ANDROID_PROJECT: &str = "sow-dist/deploy/android";
 const ANDROID_BUNDLE: &str = "dist/android/com.shadowsofwar.aab";
 const ANDROID_VERSION_CODE: &str = ".android-version-code";
@@ -33,12 +28,16 @@ impl Config {
             build_host: env_or("SOW_FREEBSD_BUILDER_HOST", BUILD_HOST),
             build_root: env_or("SOW_FREEBSD_BUILDER_ROOT", BUILD_ROOT),
             control_host: env_or("SOW_CONTROL_HOST", CONTROL_HOST),
-            remote_stage: env_or("SOW_REMOTE_STAGE", REMOTE_STAGE),
-            public_origin: env_or("SOW_PUBLIC_ORIGIN", PUBLIC_ORIGIN)
+            remote_stage: env_or("SOW_REMOTE_STAGE", site::current().remote_stage()),
+            public_origin: env_or("SOW_PUBLIC_ORIGIN", &site::current().origin())
                 .trim_end_matches('/')
                 .to_string(),
         }
     }
+}
+
+fn remote_releases() -> String {
+    format!("{}/releases", site::current().release_root())
 }
 
 struct Release {
@@ -122,9 +121,9 @@ impl<'a> RelayAdmissionPause<'a> {
 
 fn verify_no_pending_reward_calculations(config: &Config) -> Result<()> {
     let script = r#"set -eu
-secret=$(sudo awk -F= '$1 == "SOW_DB_SECRET" { sub(/^[^=]*=/, ""); print; exit }' /zroot/jails/sow-database/usr/local/etc/sow/sow.env)
+secret=$(sudo awk -F= '$1 == "SOW_DB_SECRET" { sub(/^[^=]*=/, ""); print; exit }' __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env)
 test -n "$secret"
-printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -fsS --max-time 10 --config - http://127.0.0.1:25585/internal/stats"#;
+printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -fsS --max-time 10 --config - http://__SITE_LOOPBACK__:25585/internal/stats"#;
     let stats: serde_json::Value =
         serde_json::from_str(&output("ssh", &[&config.control_host, script])?)?;
     let pending = stats["rewards"]["pending_calculations"]
@@ -149,7 +148,7 @@ import json, re, subprocess, urllib.request
 def jail(name, *args):
     return subprocess.check_output(["jexec", name, *args], text=True)
 
-listing = jail("sow-server", "/bin/sh", "-c", '''
+listing = jail("__SITE_SERVER_JAIL__", "/bin/sh", "-c", '''
 set -eu
 . /usr/local/etc/sow/sow.env
 root=${SOW_VERIFIER_DIR:-$(dirname "$SOW_MAPS_CATALOG_PATH")/verified}
@@ -159,10 +158,10 @@ done
 ''').splitlines()
 ids = sorted({re.fullmatch(r"([0-9]+)\.checkpoint(?:\.previous)?", name).group(1) for name in listing})
 if ids:
-    secret = jail("sow-database", "/bin/sh", "-c", '. /usr/local/etc/sow/sow.env; printf "%s" "$SOW_DB_SECRET"')
+    secret = jail("__SITE_DATABASE_JAIL__", "/bin/sh", "-c", '. /usr/local/etc/sow/sow.env; printf "%s" "$SOW_DB_SECRET"')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     for match_id in ids:
-        request = urllib.request.Request("http://127.0.0.1:25585/internal/stats?match_id=" + match_id,
+        request = urllib.request.Request("http://__SITE_LOOPBACK__:25585/internal/stats?match_id=" + match_id,
             headers={"Authorization": "Bearer " + secret})
         with opener.open(request, timeout=10) as response:
             proof = json.load(response).get("checkpoint", {})
@@ -188,7 +187,7 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
         bail!("--{}-only cannot bump the public version", only.name());
     }
     let config = Config::load();
-    ensure_shared_identity_secret()?;
+    auth_env_contents()?;
     require_secret("SOW_DB_SECRET")?;
     require_secret("SOW_RELAY_CONTROL_SECRET")?;
     require_secret("SOW_RELAY_SETTLEMENT_SECRET")?;
@@ -207,10 +206,12 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
     require_config("SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID")?;
     require_config("SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID")?;
     require_secret("SOW_PLAY_GAMES_WEB_CLIENT_SECRET")?;
-    require_secret("WOU_SOW_IDENTITY_SECRET")?;
+
     println!("==> 1/8 Preflight");
+    require_fresh_identity_snapshot(&config)?;
     let deployed = relay::Control::deployed(&config)?;
     let migrating = !deployed.is_local();
+    let fresh_site = !has_active_release(&config)?;
     if migrating && (only.is_some() || bump) {
         bail!("use ./sow p to migrate the relay and client together");
     }
@@ -219,15 +220,18 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
     }
     preflight(paths, &config, only.is_some())?;
     let version = version(paths, bump)?;
-    println!("==> Production {version}");
+    println!("==> {} {version}", site::current().label());
     let runtime_inputs = [
         "Cargo.toml",
         "Cargo.lock",
         "sow-core",
         "sow-data",
+        "sow-i18n",
         "sow-net",
         "sow-server",
         "sow-relay",
+        "sow-web/shell",
+        "sow-web/site",
         "assets/geo_entities.json",
         "assets/guides",
         "assets/maps/world/map.bin.br",
@@ -270,7 +274,7 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
 
     ensure_control_clock(&config)?;
     verify_control_runtime_secret(&config)?;
-    if !migrating {
+    if !migrating && !fresh_site {
         relay::ensure_running(&config)?;
     }
 
@@ -287,11 +291,11 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
     if control_certificate_automation_drift(&config)? || maps_catalog_path_drift(&config)? {
         plan.ops = true;
     }
-    if wou_id_config_drift(&config)? || wou_identity_config_drift(&config)?
-        || play_games_config_drift(&config)? || stripe_env_leftover(&config)?
-    {
+    if auth_config_drift(&config)? || play_games_config_drift(&config)? {
         plan.database = true;
+        plan.server = true;
     }
+    if stripe_env_leftover(&config)? { plan.database = true; }
     if let Some(only) = only && (plan.web || plan.maps || plan.database || plan.ops
         || (plan.relay && only == BackendOnly::Server)
         || (plan.server && only == BackendOnly::Relay))
@@ -309,7 +313,7 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
         verify_live_reward_return(paths, &config, None)?;
         retain_releases(&config)?;
         retain_local_builds(paths)?;
-        println!("✅ Production already serves the requested content");
+        println!("✅ {} already serves the requested content", site::current().label());
         return Ok(());
     }
 
@@ -320,8 +324,10 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
     }
     let require_empty = plan.server || plan.database || plan.maps || plan.ops;
     let activate = || {
+        require_fresh_identity_snapshot(&config)?;
         println!("==> 6/8 Activate changed components only");
-        let mut admission = (require_empty || plan.relay)
+        // A first activation has no relay to pause and no matches to drain.
+        let mut admission = (!fresh_site && (require_empty || plan.relay))
             .then(|| RelayAdmissionPause::acquire(&config, &deployed, require_empty))
             .transpose()?;
         if migrating {
@@ -437,7 +443,7 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
     }
     retain_releases(&config)?;
     retain_local_builds(paths)?;
-    println!("✅ Production {} ready as {}", release.version, release.id);
+    println!("✅ {} {} ready as {}", site::current().label(), release.version, release.id);
     Ok(())
 }
 
@@ -472,7 +478,8 @@ fn verify_live_reward_return(
     let database = format!("{}/api", config.public_origin);
     let accounts = paths
         .root
-        .join("dist/.sow-state/reward-audit-accounts.json");
+        .join("dist/.sow-state")
+        .join(site::current().reward_audit_accounts_file());
     let mut args = vec![
         "run",
         "--locked",
@@ -490,6 +497,10 @@ fn verify_live_reward_return(
         &database,
         "--audit-accounts-file",
         accounts.to_str().context("invalid audit accounts path")?,
+        "--relay-jail",
+        site::current().server_jail(),
+        "--relay-loopback",
+        site::current().loopback(),
     ];
     if let Some(sync) = handover_sync {
         args.extend([
@@ -544,6 +555,46 @@ fn require_config(key: &str) -> Result<()> {
         bail!("{key} must not be empty");
     }
     Ok(())
+}
+
+/// Renders `__SITE_*` placeholders in release files that are installed as they are.
+fn render_site_files(dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(dir).with_context(|| format!("read {}", dir.display()))? {
+        let path = entry?.path();
+        if path.is_dir() {
+            render_site_files(&path)?;
+        } else if fs::read(&path)?.windows(7).any(|window| window == b"__SITE_") {
+            let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+            fs::write(&path, site::render(&text)?)?;
+        }
+    }
+    Ok(())
+}
+
+/// Keeps `# sow:production-only` blocks in production's nginx file and drops the markers everywhere.
+fn strip_production_only(text: &str) -> Result<String> {
+    const BEGIN: &str = "# sow:production-only begin";
+    const END: &str = "# sow:production-only end";
+    let production = site::current().is_production();
+    let mut kept = String::new();
+    let mut inside = false;
+    for line in text.lines() {
+        match line.trim() {
+            BEGIN if inside => bail!("nested sow:production-only block"),
+            BEGIN => inside = true,
+            END if !inside => bail!("sow:production-only end without begin"),
+            END => inside = false,
+            _ if inside && !production => {}
+            _ => {
+                kept.push_str(line);
+                kept.push('\n');
+            }
+        }
+    }
+    if inside {
+        bail!("unterminated sow:production-only block");
+    }
+    Ok(kept)
 }
 
 fn env_or(name: &str, default: &str) -> String {
@@ -952,7 +1003,7 @@ fn preflight(paths: &Paths, config: &Config, reuse_web: bool) -> Result<()> {
         "ssh",
         &[
             &config.control_host,
-            "test -d /srv/sow/releases && command -v sudo >/dev/null",
+            "test -d __SITE_RELEASE_ROOT__/releases && command -v sudo >/dev/null",
         ],
         None,
     )
@@ -1126,10 +1177,14 @@ sudo service ntpd onestart >/dev/null"#;
 }
 
 fn verify_control_runtime_secret(config: &Config) -> Result<()> {
+    // Before a site's first activation nothing runs, so there is no running secret to match.
+    if !has_active_release(config)? {
+        return Ok(());
+    }
     let secret = env::var("SOW_RELAY_CONTROL_SECRET")?;
     let expected = format!("{:x}", Sha256::digest(secret.as_bytes()));
     let command = r#"set -eu
-pid=$(sudo jexec sow-server pgrep -xo sow-server)
+pid=$(sudo jexec __SITE_SERVER_JAIL__ pgrep -xo sow-server)
 value=$(sudo procstat -e "$pid" | tr ' ' '\n' | sed -n 's/^SOW_RELAY_CONTROL_SECRET=//p')
 test -n "$value"
 printf %s "$value" | sha256 -q"#;
@@ -1143,34 +1198,41 @@ printf %s "$value" | sha256 -q"#;
 fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
     compile_wasm(paths, true)?;
     let fingerprint = web_fingerprint(paths, version)?;
-    let candidate_root = paths.root.join("dist/.sow-state/prod-web");
+    let state = site::current().state_prefix();
+    let candidate_root = paths.root.join(format!("dist/.sow-state/{state}-web"));
     let web = candidate_root.join("web");
     let poki = candidate_root.join("poki");
-    let cache = paths.root.join("dist/.sow-state/prod-web-package");
+    let cache = paths.root.join(format!("dist/.sow-state/{state}-web-package"));
+    // Portal packages are owner upload artifacts in dist/. Only production builds them.
+    let portals = site::current().builds_portal_packages();
+    let portals_ready = !portals
+        || (paths.dist_cg.join("index.html").is_file()
+            && poki.join("index.html").is_file()
+            && paths.dist_jest.join("index.html").is_file()
+            && verify_cg_layout(&paths.dist_cg).is_ok()
+            && verify_cg_asset_inventory(&web.join("assets"), &paths.dist_cg.join("assets")).is_ok()
+            && verify_portal_map_inventory(&web.join("maps"), &paths.dist_cg.join("maps")).is_ok()
+            && verify_poki_layout(&poki).is_ok()
+            && verify_poki_asset_inventory(&web.join("assets"), &poki.join("assets")).is_ok()
+            && verify_portal_map_inventory(&web.join("maps"), &poki.join("maps")).is_ok()
+            && verify_portal_map_inventory(&web.join("maps"), &paths.dist_jest.join("maps")).is_ok()
+            && verify_jest_layout(&paths.dist_jest).is_ok());
     let cached = fs::read_to_string(&cache).is_ok_and(|value| value.trim() == fingerprint)
         && web.join("play/index.html").is_file()
-        && paths.dist_cg.join("index.html").is_file()
-        && poki.join("index.html").is_file()
-        && paths.dist_jest.join("index.html").is_file()
         && verify_layout(&web).is_ok()
-        && verify_cg_layout(&paths.dist_cg).is_ok()
-        && verify_cg_asset_inventory(&web.join("assets"), &paths.dist_cg.join("assets")).is_ok()
-        && verify_portal_map_inventory(&web.join("maps"), &paths.dist_cg.join("maps")).is_ok()
-        && verify_poki_layout(&poki).is_ok()
-        && verify_poki_asset_inventory(&web.join("assets"), &poki.join("assets")).is_ok()
-        && verify_portal_map_inventory(&web.join("maps"), &poki.join("maps")).is_ok()
-        && verify_portal_map_inventory(&web.join("maps"), &paths.dist_jest.join("maps")).is_ok()
-        && verify_jest_layout(&paths.dist_jest).is_ok();
+        && portals_ready;
     if cached {
-        println!("==> Web package unchanged — reusing production candidate");
+        println!("==> Web package unchanged — reusing candidate");
         return Ok(web);
     }
     package_self(paths, &web, version, true)?;
-    let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
-    package_cg(&web, &paths.dist_cg, paths, version, &maps_cache_bust)?;
-    package_poki(&web, &poki, paths, version, &maps_cache_bust)?;
-    package_jest(&web, &paths.dist_jest, paths, version, &maps_cache_bust)?;
-    write_jest_zip(paths)?;
+    if portals {
+        let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
+        package_cg(&web, &paths.dist_cg, paths, version, &maps_cache_bust)?;
+        package_poki(&web, &poki, paths, version, &maps_cache_bust)?;
+        package_jest(&web, &paths.dist_jest, paths, version, &maps_cache_bust)?;
+        write_jest_zip(paths)?;
+    }
     fs::create_dir_all(cache.parent().context("web cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
     Ok(web)
@@ -1182,7 +1244,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
     let source = super::source_identity(paths)?;
     let source_version = format!("{version}:{}", source.sha);
     input_fingerprint(
-        "web-v13-sprite-atlas",
+        "web-v14-cg-only-sprite-atlas",
         &source_version,
         &[
             &paths.wasm_input,
@@ -1251,7 +1313,7 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
             "--exclude=.git",
             "--exclude=dist",
             "--exclude=target",
-            "--exclude=sow-dist/.env",
+            "--exclude=sow-dist/.env*",
             &source,
             &destination,
         ],
@@ -1344,10 +1406,20 @@ fn input_fingerprint(tag: &str, value: &str, inputs: &[&Path]) -> Result<String>
     Ok(format!("{:x}", hash.finalize()))
 }
 
+/// True once the site has activated a release. Before its first activation there is no
+/// `current` link, nothing runs, and no relay exists to pause or compare against.
+fn has_active_release(config: &Config) -> Result<bool> {
+    let state = output(
+        "ssh",
+        &[&config.control_host, "if [ -L __SITE_RELEASE_ROOT__/current ]; then echo active; else echo none; fi"],
+    )?;
+    Ok(state.trim() == "active")
+}
+
 fn active_release_id(config: &Config) -> Result<String> {
     let current = output(
         "ssh",
-        &[&config.control_host, "readlink /srv/sow/current"],
+        &[&config.control_host, "readlink __SITE_RELEASE_ROOT__/current"],
     )?;
     let current = current
         .trim()
@@ -1382,8 +1454,9 @@ fn assemble_backend_only_release(
     }
     fs::create_dir_all(&work)?;
     let source = format!(
-        "{}:{REMOTE_RELEASES}/{current}/",
-        config.control_host
+        "{}:{}/{current}/",
+        config.control_host,
+        remote_releases()
     );
     let destination = format!("{}/", work.display());
     run(
@@ -1510,14 +1583,19 @@ fn assemble_release(paths: &Paths, web: &Path, binaries: &Path, version: &str) -
         .join("sow-dist/deploy/freebsd/conf.d/shadowsofwar.io.conf");
     let nginx_site = fs::read_to_string(&nginx_source)
         .with_context(|| format!("read nginx template {}", nginx_source.display()))?;
+    let loopback = site::current().loopback();
     let nginx_site = nginx_site
-        .replace("__SOW_DB_LISTEN_HOST__", DATABASE_JAIL_IP)
-        .replace("__SOW_SERVER_LISTEN_HOST__", SERVER_JAIL_IP)
-        .replace("__SOW_MAPS_LISTEN_HOST__", SERVER_JAIL_IP);
+        .replace("__SOW_DB_LISTEN_HOST__", loopback)
+        .replace("__SOW_SERVER_LISTEN_HOST__", loopback)
+        .replace("__SOW_MAPS_LISTEN_HOST__", loopback);
+    let nginx_site = site::render(&strip_production_only(&nginx_site)?)?;
     if nginx_site.contains("__SOW_") {
         bail!("nginx placeholder was not rendered");
     }
-    fs::write(work.join("ops/conf.d/shadowsofwar.io.conf"), nginx_site)?;
+    // conf.d was copied whole, including the production template. Install only this site's file.
+    fs::remove_file(work.join("ops/conf.d/shadowsofwar.io.conf"))?;
+    fs::write(work.join("ops/conf.d").join(site::current().nginx_conf()), nginx_site)?;
+    render_site_files(&work.join("ops"))?;
 
     require_file(&work.join("web/index.html"), "website index")?;
     require_file(&work.join("web/play/index.html"), "game index")?;
@@ -1676,7 +1754,11 @@ fn write_manifest(root: &Path) -> Result<PathBuf> {
 }
 
 fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
-    let remote = output("ssh", &[&config.control_host, "cat /srv/sow/current/COMPONENTS"])?;
+    // A first activation has no active release to compare with, so every component is new.
+    if !has_active_release(config)? {
+        return Ok(ComponentPlan { web: true, maps: true, server: true, database: true, ops: true, relay: true });
+    }
+    let remote = output("ssh", &[&config.control_host, "cat __SITE_RELEASE_ROOT__/current/COMPONENTS"])?;
     let current = parse_components(&remote);
     let local = parse_components(&fs::read_to_string(release.dir.join("COMPONENTS"))?);
     let changed = |component| current.get(component) != local.get(component);
@@ -1689,8 +1771,8 @@ fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
 fn control_certificate_automation_drift(config: &Config) -> Result<bool> {
     let command = r#"if [ "$(sudo sysrc -n -f /etc/periodic.conf.local weekly_certbot_enable 2>/dev/null || true)" = YES ] \
         && [ "$(sudo sysrc -n -f /etc/periodic.conf.local weekly_certbot_deploy_hook 2>/dev/null || true)" = 'service nginx reload' ] \
-        && sudo grep -Fq 'location ^~ /.well-known/acme-challenge/' /usr/local/etc/nginx/conf.d/shadowsofwar.io.conf \
-        && sudo grep -Fq 'root /usr/local/www/letsencrypt;' /usr/local/etc/nginx/conf.d/shadowsofwar.io.conf \
+        && sudo grep -Fq 'location ^~ /.well-known/acme-challenge/' /usr/local/etc/nginx/conf.d/__SITE_NGINX_CONF__ \
+        && sudo grep -Fq 'root /usr/local/www/letsencrypt;' /usr/local/etc/nginx/conf.d/__SITE_NGINX_CONF__ \
         && sudo grep -Fq 'periodic weekly' /etc/crontab \
         && sudo find /usr/local/etc/periodic/weekly -maxdepth 1 -type f -name '500.certbot-*' | grep -q . \
         && [ "$(sudo sysrc -n cron_enable 2>/dev/null || true)" = YES ] \
@@ -1707,16 +1789,16 @@ fn verify_control_certificates(config: &Config) -> Result<()> {
 for cert in \
     /usr/local/etc/letsencrypt/live/ionicswap.com/cert.pem \
     /usr/local/etc/letsencrypt/live/mail.worldofunreal.com/cert.pem \
-    /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem; do
+    /usr/local/etc/letsencrypt/live/__SITE_HOST__/cert.pem; do
     sudo openssl x509 -in "$cert" -noout -checkend 2592000 >/dev/null || {
         echo "certificate is missing or expires within 30 days: $cert" >&2
         exit 1
     }
 done
-sudo openssl x509 -in /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem \
-    -noout -checkhost shadowsofwar.io >/dev/null
-sudo openssl x509 -in /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem \
-    -noout -checkhost ws.shadowsofwar.io >/dev/null"#;
+for name in __SITE_TLS_NAMES__; do
+    sudo openssl x509 -in /usr/local/etc/letsencrypt/live/__SITE_HOST__/cert.pem \
+        -noout -checkhost "$name" >/dev/null
+done"#;
     run("ssh", &[&config.control_host, command], None)
         .context("IONOS certificate validity check failed")?;
     println!("  IONOS certificates valid; renewal is handled by the weekly certbot schedule");
@@ -1725,7 +1807,7 @@ sudo openssl x509 -in /usr/local/etc/letsencrypt/live/shadowsofwar.io/cert.pem \
 
 fn stripe_env_leftover(config: &Config) -> Result<bool> {
     let command = format!(
-        r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
+        r#"for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do
     if sudo test -f "$f" && sudo grep -qE '{STRIPE_ENV_KEYS}' "$f"; then echo "$f"; fi
 done"#
     );
@@ -1740,44 +1822,49 @@ fn maps_catalog_path_drift(config: &Config) -> Result<bool> {
         "ssh",
         &[
             &config.control_host,
-            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f "$f"; then sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{print $2}' "$f"; fi; done"#,
+            r#"for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do if sudo test -f "$f"; then sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{print $2}' "$f"; fi; done"#,
         ],
     )?;
     let values = remote.lines().map(str::trim).collect::<Vec<_>>();
     Ok(values.len() != 3 || values.iter().any(|value| *value != expected))
 }
 
-fn wou_id_config_drift(config: &Config) -> Result<bool> {
-    let expected_url = env_or("WOU_ID_URL", "https://id.worldofunreal.com");
-    let expected_resolve_ip = env_or("WOU_ID_RESOLVE_IP", "104.21.87.220");
-    let remote = output(
-        "ssh",
-        &[
-            &config.control_host,
-            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f "$f"; then sudo awk -F= '$1=="WOU_ID_URL" || $1=="WOU_ID_RESOLVE_IP" {print $1 "=" $2}' "$f"; fi; done"#,
-        ],
-    )?;
-    let actual = remote.lines().map(str::trim).collect::<Vec<_>>();
-    let expected = (0..3)
-        .flat_map(|_| {
-            [
-                format!("WOU_ID_URL={expected_url}"),
-                format!("WOU_ID_RESOLVE_IP={expected_resolve_ip}"),
-            ]
-        })
-        .collect::<Vec<_>>();
-    Ok(actual != expected)
+fn identity_snapshot_is_fresh(snapshot: u64, now: u64) -> bool {
+    snapshot <= now.saturating_add(60) && now.saturating_sub(snapshot) <= 15 * 60
 }
 
-fn wou_identity_config_drift(config: &Config) -> Result<bool> {
-    let remote = output(
-        "ssh",
-        &[
-            &config.control_host,
-            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f "$f"; then sudo awk -F= '$1=="WOU_SOW_IDENTITY_SECRET" && length($2)>0 {print "set"}' "$f"; fi; done"#,
-        ],
-    )?;
-    Ok(remote.lines().map(str::trim).collect::<Vec<_>>() != vec!["set"; 3])
+fn require_fresh_identity_snapshot(config: &Config) -> Result<()> {
+    if !site::current().owns_identity_import() {
+        return Ok(());
+    }
+    // After a successful cutover all accounts are owned locally. Before it,
+    // a stale provider snapshot can strand accounts created during the build.
+    let installed = output("ssh", &[&config.control_host,
+        "if sudo test -f __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env; then echo ready; else echo pending; fi"])?;
+    if installed.trim() == "ready" { return Ok(()); }
+    let path = identity_import_file()?.context("prepare a private identity/session snapshot before the first auth cutover")?;
+    let bundle: serde_json::Value = serde_json::from_slice(&fs::read(path)?)?;
+    let snapshot = bundle["session_handover"]["snapshot_at"].as_u64()
+        .context("identity cutover requires an offline session handover snapshot")?;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
+    if !identity_snapshot_is_fresh(snapshot, now) {
+        bail!("identity cutover snapshot is stale; refresh the private snapshot before retrying ./sow p");
+    }
+    Ok(())
+}
+
+fn auth_config_drift(config: &Config) -> Result<bool> {
+    let expected = hex::encode(Sha256::digest(auth_env_contents()?.as_bytes()));
+    let remote = output("ssh", &[&config.control_host,
+        "sudo test -s __SITE_DATABASE_ROOT__/etc/resolv.conf && sudo test -s __SITE_DATABASE_ROOT__/etc/ssl/cert.pem && sudo sha256 -q __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env 2>/dev/null || true"])?;
+    if remote.trim() != expected { return Ok(true); }
+    if let Some(path) = identity_import_file()? {
+        let expected = hex::encode(Sha256::digest(fs::read(path)?));
+        let remote = output("ssh", &[&config.control_host,
+            "sudo sha256 -q __SITE_DATABASE_ROOT__/usr/local/etc/sow/identity-import.json 2>/dev/null || true"])?;
+        if remote.trim() != expected { return Ok(true); }
+    }
+    Ok(false)
 }
 
 fn play_games_config_drift(config: &Config) -> Result<bool> {
@@ -1803,7 +1890,7 @@ fn play_games_config_drift(config: &Config) -> Result<bool> {
         "ssh",
         &[
             &config.control_host,
-            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f "$f"; then app=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_APP_ID"{print $2}' "$f"); client=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_WEB_CLIENT_ID"{print $2}' "$f"); event=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_MATCH_EVENT_ID"{print $2}' "$f"); first=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID"{print $2}' "$f"); battle=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID"{print $2}' "$f"); victory=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID"{print $2}' "$f"); laurel=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID"{print $2}' "$f"); command=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID"{print $2}' "$f"); commander=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID"{print $2}' "$f"); veteran=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID"{print $2}' "$f"); banner=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID"{print $2}' "$f"); leader=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID"{print $2}' "$f"); leaderboard=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID"{print $2}' "$f"); secret=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_WEB_CLIENT_SECRET" && length($2)>0{print "set"}' "$f"); printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$app" "$client" "$event" "$first" "$battle" "$victory" "$laurel" "$command" "$commander" "$veteran" "$banner" "$leader" "$leaderboard" "$secret"; fi; done"#,
+            r#"for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do if sudo test -f "$f"; then app=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_APP_ID"{print $2}' "$f"); client=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_WEB_CLIENT_ID"{print $2}' "$f"); event=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_MATCH_EVENT_ID"{print $2}' "$f"); first=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID"{print $2}' "$f"); battle=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID"{print $2}' "$f"); victory=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID"{print $2}' "$f"); laurel=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID"{print $2}' "$f"); command=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID"{print $2}' "$f"); commander=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID"{print $2}' "$f"); veteran=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID"{print $2}' "$f"); banner=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID"{print $2}' "$f"); leader=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID"{print $2}' "$f"); leaderboard=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID"{print $2}' "$f"); secret=$(sudo awk -F= '$1=="SOW_PLAY_GAMES_WEB_CLIENT_SECRET" && length($2)>0{print "set"}' "$f"); printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$app" "$client" "$event" "$first" "$battle" "$victory" "$laurel" "$command" "$commander" "$veteran" "$banner" "$leader" "$leaderboard" "$secret"; fi; done"#,
         ],
     )?;
     let mut expected_fields = vec![expected_app_id, expected_client_id, expected_event_id];
@@ -1862,7 +1949,7 @@ fn activate_control_host(
     plan: &ComponentPlan,
 ) -> Result<()> {
     let stage = format!("{}/release", config.remote_stage.trim_end_matches('/'));
-    let target = format!("{REMOTE_RELEASES}/{}", release.id);
+    let target = format!("{}/{}", remote_releases(), release.id);
     let server_restart = plan.server || plan.maps || plan.ops;
     let db_restart = plan.database || plan.ops;
     let nginx_reload = plan.ops;
@@ -1906,26 +1993,28 @@ fn activate_control_host(
     } else {
         None
     };
-    let wou_identity_secret_file = if runtime_env {
-        let secret = env::var("WOU_SOW_IDENTITY_SECRET")?;
-        let path = format!("/tmp/sow-wou-identity-secret-{}", std::process::id());
-        stage_secret(&config.control_host, &secret, &path)?;
+    let auth_env_file = if runtime_env {
+        let path = format!("/tmp/sow-auth-env-{}", std::process::id());
+        stage_secret(&config.control_host, &auth_env_contents()?, &path)?;
         Some(path)
-    } else {
-        None
-    };
-    let relay_host = relay::NAME;
+    } else { None };
+    let identity_import_stage = if runtime_env {
+        identity_import_file()?.map(|source| {
+            let path = format!("/tmp/sow-identity-import-{}", std::process::id());
+            stage_secret(&config.control_host, &fs::read_to_string(source)?, &path)?;
+            Ok::<_, anyhow::Error>(path)
+        }).transpose()?
+    } else { None };
+    let relay_host = relay::name();
     let relay_workers = format!("-:{relay_host}:{}", relay::PORT);
     let relay_worker_count = "1";
     let relay_mgmt_url = format!("https://{relay_host}:{}", relay::PORT);
     let relay_mgmt_scheme = "https";
-    let relay_mgmt_resolve_ip = "127.0.0.1";
+    let relay_mgmt_resolve_ip = "__SITE_LOOPBACK__";
     let maps_root = env_or("SOW_MAPS_ROOT", "/srv/sow/current/maps");
     let maps_catalog_path = env_or("SOW_MAPS_CATALOG_PATH", "/var/db/sow/server/catalog.bin");
     // Uploaded maps live outside the immutable release so a deploy never deletes them.
     let maps_upload_root = env_or("SOW_MAPS_UPLOAD_ROOT", "/var/db/sow/server/maps-uploaded");
-    let wou_id_url = env_or("WOU_ID_URL", "https://id.worldofunreal.com");
-    let wou_id_resolve_ip = env_or("WOU_ID_RESOLVE_IP", "104.21.87.220");
     let play_games_app_id = env::var("SOW_PLAY_GAMES_APP_ID")?;
     let play_games_client_id = env::var("SOW_PLAY_GAMES_WEB_CLIENT_ID")?;
     let play_games_match_event_id = env::var("SOW_PLAY_GAMES_MATCH_EVENT_ID").unwrap_or_default();
@@ -1952,7 +2041,7 @@ fn activate_control_host(
     };
     let env_update_base = if runtime_env {
         format!(
-            "mkdir -p /tmp/sow-env-update; for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_MAPS_ROOT|SOW_MAPS_CATALOG_PATH|SOW_MAPS_UPLOAD_ROOT|SOW_MAPS_RELOAD_TOKEN|SOW_DB_SECRET|SOW_RELAY_CONTROL_SECRET|SOW_RELAY_HOST|SOW_RELAY_WORKERS|SOW_RELAY_WORKER_COUNT|SOW_RELAY_MGMT_URL|SOW_RELAY_MGMT_SCHEME|SOW_RELAY_MGMT_RESOLVE_IP|WOU_ID_URL|WOU_ID_RESOLVE_IP|SOW_PLAY_GAMES_APP_ID|SOW_PLAY_GAMES_WEB_CLIENT_ID|SOW_PLAY_GAMES_MATCH_EVENT_ID|SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID|SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID|SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID|SOW_PLAY_GAMES_WEB_CLIENT_SECRET)=|^[0-9a-fA-F]{{64}}$' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s\\n' SOW_MAPS_ROOT={maps_root} SOW_MAPS_CATALOG_PATH={maps_catalog_path} SOW_MAPS_UPLOAD_ROOT={maps_upload_root} SOW_RELAY_HOST={relay_host} SOW_RELAY_WORKERS={relay_workers} SOW_RELAY_WORKER_COUNT={relay_worker_count} SOW_RELAY_MGMT_URL={relay_mgmt_url} SOW_RELAY_MGMT_SCHEME={relay_mgmt_scheme} SOW_RELAY_MGMT_RESOLVE_IP={relay_mgmt_resolve_ip} WOU_ID_URL={wou_id_url} WOU_ID_RESOLVE_IP={wou_id_resolve_ip} SOW_PLAY_GAMES_APP_ID={play_games_app_id} SOW_PLAY_GAMES_WEB_CLIENT_ID={play_games_client_id} SOW_PLAY_GAMES_MATCH_EVENT_ID={play_games_match_event_id} SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID={play_games_achievement_id} SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID={play_games_battle_hardened_id} SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID={play_games_victory_march_id} SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID={play_games_laurel_hoard_id} SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID={play_games_first_command_id} SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID={play_games_commander_victorious_id} SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID={play_games_veteran_commander_id} SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID={play_games_banner_collector_id} SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID={play_games_leader_path_id} SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID={play_games_leaderboard_id} | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_DB_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {db_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_RELAY_CONTROL_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {control_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_PLAY_GAMES_WEB_CLIENT_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {play_games_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_MAPS_RELOAD_TOKEN=' | sudo tee -a \"$t\" >/dev/null; sudo cat {maps_reload_token} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -rf /tmp/sow-env-update",
+            "mkdir -p /tmp/sow-env-update; for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_MAPS_ROOT|SOW_MAPS_CATALOG_PATH|SOW_MAPS_UPLOAD_ROOT|SOW_MAPS_RELOAD_TOKEN|SOW_DB_SECRET|SOW_RELAY_CONTROL_SECRET|SOW_RELAY_HOST|SOW_RELAY_WORKERS|SOW_RELAY_WORKER_COUNT|SOW_RELAY_MGMT_URL|SOW_RELAY_MGMT_SCHEME|SOW_RELAY_MGMT_RESOLVE_IP|SOW_SERVER_HTTP_URL|SOW_CRAZYGAMES_GAME_ID|WOU_[A-Z_]+|SOW_PLAY_GAMES_APP_ID|SOW_PLAY_GAMES_WEB_CLIENT_ID|SOW_PLAY_GAMES_MATCH_EVENT_ID|SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID|SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID|SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID|SOW_PLAY_GAMES_WEB_CLIENT_SECRET)=|^[0-9a-fA-F]{{64}}$' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s\\n' SOW_MAPS_ROOT={maps_root} SOW_MAPS_CATALOG_PATH={maps_catalog_path} SOW_MAPS_UPLOAD_ROOT={maps_upload_root} SOW_RELAY_HOST={relay_host} SOW_RELAY_WORKERS={relay_workers} SOW_RELAY_WORKER_COUNT={relay_worker_count} SOW_RELAY_MGMT_URL={relay_mgmt_url} SOW_RELAY_MGMT_SCHEME={relay_mgmt_scheme} SOW_RELAY_MGMT_RESOLVE_IP={relay_mgmt_resolve_ip} SOW_SERVER_HTTP_URL={server_http_url} SOW_CRAZYGAMES_GAME_ID={crazygames_game_id} SOW_PLAY_GAMES_APP_ID={play_games_app_id} SOW_PLAY_GAMES_WEB_CLIENT_ID={play_games_client_id} SOW_PLAY_GAMES_MATCH_EVENT_ID={play_games_match_event_id} SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID={play_games_achievement_id} SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID={play_games_battle_hardened_id} SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID={play_games_victory_march_id} SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID={play_games_laurel_hoard_id} SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID={play_games_first_command_id} SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID={play_games_commander_victorious_id} SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID={play_games_veteran_commander_id} SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID={play_games_banner_collector_id} SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID={play_games_leader_path_id} SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID={play_games_leaderboard_id} | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_DB_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {db_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_RELAY_CONTROL_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {control_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_PLAY_GAMES_WEB_CLIENT_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {play_games_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_MAPS_RELOAD_TOKEN=' | sudo tee -a \"$t\" >/dev/null; sudo cat {maps_reload_token} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -rf /tmp/sow-env-update",
             maps_root = shell_quote(&maps_root),
             maps_catalog_path = shell_quote(&maps_catalog_path),
             maps_upload_root = shell_quote(&maps_upload_root),
@@ -1963,8 +2052,8 @@ fn activate_control_host(
             relay_mgmt_url = shell_quote(&relay_mgmt_url),
             relay_mgmt_scheme = shell_quote(&relay_mgmt_scheme),
             relay_mgmt_resolve_ip = shell_quote(&relay_mgmt_resolve_ip),
-            wou_id_url = shell_quote(&wou_id_url),
-            wou_id_resolve_ip = shell_quote(&wou_id_resolve_ip),
+            server_http_url = shell_quote(&site::current().server_http_url()),
+            crazygames_game_id = shell_quote(&env::var("SOW_CRAZYGAMES_GAME_ID").unwrap_or_default()),
             play_games_app_id = shell_quote(&play_games_app_id),
             play_games_client_id = shell_quote(&play_games_client_id),
             play_games_match_event_id = shell_quote(&play_games_match_event_id),
@@ -1985,20 +2074,19 @@ fn activate_control_host(
     } else {
         ":".to_string()
     };
-    let env_update = if runtime_env {
-        format!(
-            "{env_update_base}; for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f \"$f\"; then sudo cp -p \"$f\" \"$f.bak_$(date +%s)\"; fi; t=$(mktemp /tmp/sow-wou-env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v '^WOU_SOW_IDENTITY_SECRET=' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s' 'WOU_SOW_IDENTITY_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {secret_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done",
-            secret_file = shell_quote(wou_identity_secret_file.as_deref().unwrap()),
-        )
-    } else {
-        env_update_base
-    };
+    let env_update = env_update_base;
+    let mut auth_update = if let Some(path) = &auth_env_file {
+        format!("sudo install -o root -g wheel -m 0600 {} __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env", shell_quote(path))
+    } else { ":".to_owned() };
+    if let Some(path) = &identity_import_stage {
+        auth_update.push_str(&format!("\nsudo install -o sowdb -g sow -m 0600 {} __SITE_DATABASE_ROOT__/usr/local/etc/sow/identity-import.json", shell_quote(path)));
+    }
     let settlement_secret_update = if let Some(secret_file) = settlement_secret_file.as_deref() {
         format!(
-            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
+            r#"for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do
     t=$(mktemp /tmp/sow-settlement-env.XXXXXX)
     if sudo test -f "$f"; then sudo grep -v '^SOW_RELAY_SETTLEMENT_SECRET=' "$f" > "$t" || true; else : > "$t"; fi
-    if [ "$f" = /zroot/jails/sow-database/usr/local/etc/sow/sow.env ]; then
+    if [ "$f" = __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env ]; then
         printf '%s' 'SOW_RELAY_SETTLEMENT_SECRET=' >> "$t"
         sudo cat {secret_file} >> "$t"
         printf '\n' >> "$t"
@@ -2013,7 +2101,7 @@ done"#,
     };
     let revenuecat_update = if let Some(secret_file) = revenuecat_webhook_file.as_deref() {
         format!(
-            "for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f \"$f\"; then sudo cp -p \"$f\" \"$f.bak_$(date +%s)\"; fi; t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v '^SOW_REVENUECAT_WEBHOOK_SECRET=' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s' 'SOW_REVENUECAT_WEBHOOK_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {secret_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -f {secret_file}",
+            "for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do if sudo test -f \"$f\"; then sudo cp -p \"$f\" \"$f.bak_$(date +%s)\"; fi; t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v '^SOW_REVENUECAT_WEBHOOK_SECRET=' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s' 'SOW_REVENUECAT_WEBHOOK_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {secret_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -f {secret_file}",
             secret_file = shell_quote(secret_file),
         )
     } else {
@@ -2021,7 +2109,7 @@ done"#,
     };
     let stripe_scrub = if runtime_env {
         format!(
-            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
+            r#"for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do
     if sudo test -f "$f" && sudo grep -qE '{STRIPE_ENV_KEYS}' "$f"; then
         sudo cp -p "$f" "$f.bak_$(date +%s)"
         t=$(mktemp /tmp/sow.env.XXXXXX)
@@ -2040,7 +2128,8 @@ done"#
         settlement_secret_file.as_deref(),
         revenuecat_webhook_file.as_deref(),
         play_games_web_client_secret_file.as_deref(),
-        wou_identity_secret_file.as_deref(),
+        auth_env_file.as_deref(),
+        identity_import_stage.as_deref(),
         maps_reload_token_file.as_deref(),
     ]
     .into_iter()
@@ -2053,7 +2142,7 @@ done"#
         ":".to_string()
     };
     let database_secret_scrub = if runtime_env {
-        r#"db_env=/zroot/jails/sow-database/usr/local/etc/sow/sow.env
+        r#"db_env=__SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env
 if sudo test -f "$db_env"; then
     sudo cp -p "$db_env" "$db_env.bak_$(date +%s)"
     db_tmp=$(mktemp /tmp/sow-db-env.XXXXXX)
@@ -2065,34 +2154,48 @@ fi"#
     } else {
         ":".to_string()
     };
-    let resolver_update = if server_restart {
-        r#"server_resolver=/zroot/jails/sow-server/etc/resolv.conf
-if sudo test -f "$server_resolver"; then
-    sudo cp -p "$server_resolver" "$server_resolver.bak_$(date +%s)"
-fi
-sudo install -o root -g wheel -m 0644 /etc/resolv.conf "$server_resolver""#
-            .to_string()
-    } else {
-        ":".to_string()
-    };
+    let mut resolver_update = String::new();
+    for (root, restart) in [(site::current().server_root(), server_restart), (site::current().database_root(), db_restart)] {
+        if restart {
+            resolver_update.push_str(&format!("sudo install -o root -g wheel -m 0644 /etc/resolv.conf {root}/etc/resolv.conf\n"));
+            resolver_update.push_str(&format!("sudo install -d -m 0755 {root}/etc/ssl\n"));
+            resolver_update.push_str(&format!("sudo install -o root -g wheel -m 0644 /etc/ssl/cert.pem {root}/etc/ssl/cert.pem\n"));
+        }
+    }
+    if resolver_update.is_empty() { resolver_update.push(':'); }
+    let config_files = "__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/identity-import.json __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database";
     let env_backups = if runtime_env {
-        r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
-    if sudo test -f "$f"; then sudo cp -p "$f" "$f.bak_$(date +%s)"; fi
-done"#.to_string()
-    } else {
-        ":".to_string()
-    };
+        format!(r#"backup=$(sudo mktemp -d /tmp/sow-config-backup.XXXXXX)
+for f in {config_files}; do
+    if sudo test -f "$f"; then
+        sudo mkdir -p "$backup$(dirname "$f")"
+        sudo cp -p "$f" "$backup$f"
+    fi
+done
+backup_ready=true"#)
+    } else { ":".to_owned() };
+    let env_restore = if runtime_env {
+        format!(r#"if [ "$backup_ready" = true ]; then
+    for f in {config_files}; do
+        if sudo test -f "$backup$f"; then sudo cp -p "$backup$f" "$f"; else sudo rm -f "$f"; fi
+    done
+fi"#)
+    } else { ":".to_owned() };
     let mut remote = String::from(
         r#"set -eu
-old=$(sudo readlink /srv/sow/current 2>/dev/null || true)
+old=$(sudo readlink __SITE_RELEASE_ROOT__/current 2>/dev/null || true)
 target=__TARGET__
 stage=__STAGE__
+backup=
+backup_ready=false
 rollback() {
+    trap - EXIT
     set +e
-    sudo rm -f /srv/sow/current
-    if [ -n "$old" ]; then sudo ln -s "$old" /srv/sow/current; fi
-    if __DB_RESTART__; then sudo jexec sow-database service sow_database restart || true; fi
-    if __SERVER_RESTART__; then sudo jexec sow-server service sow_server restart || true; fi
+    __ENV_RESTORE__
+    sudo rm -f __SITE_RELEASE_ROOT__/current
+    if [ -n "$old" ]; then sudo ln -s "$old" __SITE_RELEASE_ROOT__/current; fi
+    if __DB_RESTART__; then sudo jexec __SITE_DATABASE_JAIL__ service sow_database restart || true; fi
+    if __SERVER_RESTART__; then sudo jexec __SITE_SERVER_JAIL__ service sow_server restart || true; fi
     __SECRET_CLEANUP__
     exit 78
 }
@@ -2109,9 +2212,10 @@ else
     sudo chmod 0550 "$pending"/bin/*
     sudo mv "$pending" "$target"
 fi
-if __SERVER_RESTART__; then
-    sudo jexec sow-server service sow_server stop || rollback
-    if ! sudo jexec sow-server /bin/sh -s <<'ARCHIVE_SETTLED_STATES'
+# Only a previous release has a running server and verifier checkpoints to retire.
+if __SERVER_RESTART__ && [ -n "$old" ]; then
+    sudo jexec __SITE_SERVER_JAIL__ service sow_server stop || rollback
+    if ! sudo jexec __SITE_SERVER_JAIL__ /bin/sh -s <<'ARCHIVE_SETTLED_STATES'
 set -eu
 . /usr/local/etc/sow/sow.env
 root=${SOW_VERIFIER_DIR:-$(dirname "$SOW_MAPS_CATALOG_PATH")/verified}
@@ -2127,11 +2231,12 @@ ARCHIVE_SETTLED_STATES
         rollback
     fi
 fi
-sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_server" /zroot/jails/sow-server/usr/local/etc/rc.d/sow_server
-sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_database" /zroot/jails/sow-database/usr/local/etc/rc.d/sow_database
-link="/srv/sow/.current.$$"
+__ENV_BACKUPS__
+sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_server" __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server
+sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_database" __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database
+link="__SITE_RELEASE_ROOT__/.current.$$"
 sudo ln -s "releases/__ID__" "$link"
-sudo mv -hf "$link" /srv/sow/current
+sudo mv -hf "$link" __SITE_RELEASE_ROOT__/current
 if __NGINX_RELOAD__; then
     for f in "$target"/ops/conf.d/*; do
         [ -f "$f" ] || continue
@@ -2160,32 +2265,32 @@ if __NGINX_RELOAD__; then
     sudo nginx -t || rollback
     sudo service nginx reload || rollback
 fi
-__ENV_BACKUPS__
 __ENV_UPDATE__
+__AUTH_UPDATE__
 __SETTLEMENT_SECRET_UPDATE__
 __REVENUECAT_UPDATE__
 __STRIPE_SCRUB__
 __DATABASE_SECRET_SCRUB__
 __RESOLVER_UPDATE__
 if __DB_RESTART__; then
-    sudo jexec sow-database service sow_database restart || rollback
+    sudo jexec __SITE_DATABASE_JAIL__ service sow_database restart || rollback
     i=0
-    until curl -fsS --max-time 5 http://127.0.0.1:25585/healthz >/dev/null; do
+    until curl -fsS --max-time 5 http://__SITE_LOOPBACK__:25585/healthz >/dev/null; do
         i=$((i+1))
         if [ "$i" -ge 180 ]; then echo "database healthz did not become ready before server restart" >&2; rollback; fi
         sleep 1
     done
 fi
-if __SERVER_RESTART__; then sudo jexec sow-server service sow_server restart || rollback; fi
-if ! sudo jexec sow-database service sow_database status >/dev/null 2>&1; then rollback; fi
-if ! sudo jexec sow-server service sow_server status >/dev/null 2>&1; then rollback; fi
+if __SERVER_RESTART__; then sudo jexec __SITE_SERVER_JAIL__ service sow_server restart || rollback; fi
+if ! sudo jexec __SITE_DATABASE_JAIL__ service sow_database status >/dev/null 2>&1; then rollback; fi
+if ! sudo jexec __SITE_SERVER_JAIL__ service sow_server status >/dev/null 2>&1; then rollback; fi
 __SECRET_CLEANUP__
 "#,
     );
     let replacements = [
         ("__TARGET__", shell_quote(&target)),
         ("__STAGE__", shell_quote(&stage)),
-        ("__RELEASES__", shell_quote(REMOTE_RELEASES)),
+        ("__RELEASES__", shell_quote(&remote_releases())),
         ("__ID__", release.id.clone()),
         (
             "__DB_RESTART__",
@@ -2212,6 +2317,8 @@ __SECRET_CLEANUP__
             },
         ),
         ("__ENV_UPDATE__", env_update),
+        ("__AUTH_UPDATE__", auth_update),
+        ("__ENV_RESTORE__", env_restore),
         ("__SETTLEMENT_SECRET_UPDATE__", settlement_secret_update),
         ("__ENV_BACKUPS__", env_backups),
         ("__REVENUECAT_UPDATE__", revenuecat_update),
@@ -2221,7 +2328,7 @@ __SECRET_CLEANUP__
         (
             "__SECRET_TRAP__",
             if runtime_env {
-                format!("trap 'rm -f {}' EXIT", secret_files.join(" "))
+                format!("trap 'status=$?; if [ \"$status\" -ne 0 ]; then rollback; fi; rm -f {}' EXIT", secret_files.join(" "))
             } else {
                 ":".to_string()
             },
@@ -2254,22 +2361,23 @@ fn verify_control_host(config: &Config, plan: &ComponentPlan) -> Result<()> {
 fail() {
     echo "CONTROL HEALTHCHECK FAILED: $1" >&2
     echo "--- database.log (tail) ---" >&2
-    sudo tail -80 /var/log/sow/database.log >&2 || true
+    sudo tail -80 __SITE_LOG_DIR__/database.log >&2 || true
     echo "--- server.log (tail) ---" >&2
-    sudo tail -120 /var/log/sow/server.log >&2 || true
+    sudo tail -120 __SITE_LOG_DIR__/server.log >&2 || true
     exit 1
 }
-if ! sudo jexec sow-database service sow_database status; then fail "database service is not running"; fi
-if ! sudo jexec sow-server service sow_server status; then fail "server service is not running"; fi
+if ! sudo jexec __SITE_DATABASE_JAIL__ service sow_database status; then fail "database service is not running"; fi
+if ! sudo jexec __SITE_SERVER_JAIL__ service sow_server status; then fail "server service is not running"; fi
 i=0
-until curl -fsS --max-time 5 http://127.0.0.1:25585/healthz >/dev/null; do
+until curl -fsS --max-time 5 http://__SITE_LOOPBACK__:25585/healthz >/dev/null; do
     i=$((i+1))
     if [ "$i" -ge 180 ]; then fail "database healthz timeout"; fi
     sleep 1
 done
-if ! /usr/local/bin/valkey-cli -h 127.0.0.1 ping | grep -q PONG; then fail "valkey ping failed"; fi
+valkey_url=$(sudo awk -F= '$1=="SOW_VALKEY_URL"{print substr($0,index($0,"=")+1)}' __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env)
+if ! /usr/local/bin/valkey-cli -u "$valkey_url" ping | grep -q PONG; then fail "valkey ping failed"; fi
 j=0
-until sudo sockstat -4l | grep -q '127.0.0.1:25564'; do
+until sudo sockstat -4l | grep -q '__SITE_LOOPBACK__:25564'; do
     j=$((j+1))
     if [ "$j" -ge 180 ]; then fail "server websocket port timeout"; fi
     sleep 1
@@ -2279,7 +2387,7 @@ done
     if plan.server {
         checks.push_str(
             r#"
-bot_line=$(sudo tail -500 /var/log/sow/server.log | grep '\[BOT_POOL\].*installed with' | tail -1 || true)
+bot_line=$(sudo tail -500 __SITE_LOG_DIR__/server.log | grep '\[BOT_POOL\].*installed with' | tail -1 || true)
 echo "  $bot_line"
 if ! printf '%s\n' "$bot_line" | grep -Eq 'installed with [1-9][0-9]* identities'; then
     fail "Ghost bot pool was not installed with identities"
@@ -2301,17 +2409,17 @@ sudo service cron onestatus >/dev/null
 
 fn retain_releases(config: &Config) -> Result<()> {
     let command = r#"set -eu
-current=$(sudo readlink /srv/sow/current)
-live=$(sudo jexec sow-server sh -c 'pids=$(pgrep -x sow-relay || true); if [ -n "$pids" ]; then procstat -b $pids; fi' | awk '{ path=$NF; prefix="/srv/sow/releases/"; suffix="/bin/sow-relay"; if (substr(path,1,length(prefix)) == prefix && substr(path,length(path)-length(suffix)+1) == suffix) print substr(path,1,length(path)-length(suffix)); }')
-saved=$(sudo sh -c 'for dir in /srv/sow/.relay-rollback.*; do if [ -f "$dir/azure" ] || [ -f "$dir/dns.json" ]; then cat "$dir/current"; fi; done')
+current=$(sudo readlink __SITE_RELEASE_ROOT__/current)
+live=$(sudo jexec __SITE_SERVER_JAIL__ sh -c 'pids=$(pgrep -x sow-relay || true); if [ -n "$pids" ]; then procstat -b $pids; fi' | awk '{ path=$NF; prefix="/srv/sow/releases/"; suffix="/bin/sow-relay"; if (substr(path,1,length(prefix)) == prefix && substr(path,length(path)-length(suffix)+1) == suffix) print "__SITE_RELEASE_ROOT__/releases/" substr(path,length(prefix)+1,length(path)-length(prefix)-length(suffix)); }')
+saved=$(sudo sh -c 'for dir in __SITE_RELEASE_ROOT__/.relay-rollback.*; do if [ -f "$dir/azure" ] || [ -f "$dir/dns.json" ]; then cat "$dir/current"; fi; done')
 i=0
-for dir in $(sudo ls -dt /srv/sow/releases/* 2>/dev/null || true); do
+for dir in $(sudo ls -dt __SITE_RELEASE_ROOT__/releases/* 2>/dev/null || true); do
     i=$((i+1))
     [ "$i" -le 5 ] && continue
-    [ "/srv/sow/$current" = "$dir" ] && continue
+    [ "__SITE_RELEASE_ROOT__/$current" = "$dir" ] && continue
     if printf '%s\n' "$live" | grep -Fxq "$dir"; then continue; fi
-    if printf '%s\n' "$saved" | grep -Fxq "${dir#/srv/sow/}"; then continue; fi
-    case "$dir" in /srv/sow/releases/*) sudo rm -rf -- "$dir";; esac
+    if printf '%s\n' "$saved" | grep -Fxq "${dir#__SITE_RELEASE_ROOT__/}"; then continue; fi
+    case "$dir" in __SITE_RELEASE_ROOT__/releases/*) sudo rm -rf -- "$dir";; esac
 done"#;
     run("ssh", &[&config.control_host, command], None).context("release retention failed")
 }
@@ -2441,6 +2549,14 @@ fn verify_public(paths: &Paths, config: &Config, release: &Release) -> Result<()
 mod build_fingerprint_tests {
     use super::freebsd_build_fingerprint;
     use std::fs;
+
+    #[test]
+    fn first_identity_cutover_rejects_stale_or_future_snapshots() {
+        assert!(super::identity_snapshot_is_fresh(10_000,10_000));
+        assert!(super::identity_snapshot_is_fresh(9_100,10_000));
+        assert!(!super::identity_snapshot_is_fresh(9_099,10_000));
+        assert!(!super::identity_snapshot_is_fresh(10_061,10_000));
+    }
 
     #[test]
     fn freebsd_cache_tracks_relay_atlas_and_bundled_world_map() {

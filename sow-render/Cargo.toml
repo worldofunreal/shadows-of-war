@@ -20,7 +20,7 @@ rustybuzz = "0.20"
 unicode-bidi = "0.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { workspace = true, features = ["ImageBitmap"] }
+web-sys = { workspace = true, features = ["ImageBitmap", "console"] }
 
 [dev-dependencies]
 sow-i18n = { workspace = true }

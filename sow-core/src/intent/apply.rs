@@ -968,18 +968,6 @@ impl SowEngine {
                         });
                 }
             }
-            GameplayIntent::MarketTrade { request_id, side, lots, limit_gold } => {
-                let result = self.trade_at_market(stamped.player_id, *side, *lots, *limit_gold);
-                self.record_market_feedback(stamped.player_id, *request_id, result);
-            }
-            GameplayIntent::PlaceMarketOrder { request_id, side, lots, gold_per_lot } => {
-                let result = self.place_market_order(stamped.player_id, *side, *lots, *gold_per_lot);
-                self.record_market_feedback(stamped.player_id, *request_id, result);
-            }
-            GameplayIntent::CancelMarketOrder { request_id } => {
-                let result = self.cancel_market_order(stamped.player_id);
-                self.record_market_feedback(stamped.player_id, *request_id, result);
-            }
             GameplayIntent::RequestResources {
                 target_player,
                 gold,
