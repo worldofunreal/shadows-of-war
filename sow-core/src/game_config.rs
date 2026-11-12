@@ -162,6 +162,161 @@ fn default_true() -> bool {
     true
 }
 
+/// Bot posture as fractions of the bot's troop cap: attack once troops reach
+/// `trigger`, keep `reserve` home against players and `expand` against neutral land.
+/// `refuse_human_chance` is the percent chance to skip a human target.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AiPosture {
+    pub trigger: f64,
+    pub reserve: f64,
+    pub expand: f64,
+    pub refuse_human_chance: i32,
+}
+
+/// Bot timing and posture per tier. Think windows are inclusive `[min, max]`
+/// ticks between decisions; each bot keeps one seeded interval in its window.
+/// Ranked rivals keep their own IQ curve in the AI module.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct AiTuning {
+    pub think_tribe: [u64; 2],
+    pub think_nation: [u64; 2],
+    pub think_nation_attacked: [u64; 2],
+    pub think_ghost: [u64; 2],
+    /// Also the ghost's delay before it strikes back.
+    pub think_ghost_attacked: [u64; 2],
+    pub ghost: AiPosture,
+    pub nation: AiPosture,
+    pub tribe_vanilla: AiPosture,
+    pub tribe_terminator: AiPosture,
+}
+
+impl Default for AiTuning {
+    fn default() -> Self {
+        Self {
+            think_tribe: [80, 120],         // 8–12 s
+            think_nation: [40, 80],         // 4–8 s
+            think_nation_attacked: [5, 30], // 0.5–3 s
+            think_ghost: [1, 10],           // 0.1–1 s
+            think_ghost_attacked: [5, 6],   // 0.5–0.6 s
+            ghost: AiPosture {
+                trigger: 0.40,
+                reserve: 0.30,
+                expand: 0.10,
+                refuse_human_chance: 0,
+            },
+            nation: AiPosture {
+                trigger: 0.45,
+                reserve: 0.20,
+                expand: 0.15,
+                refuse_human_chance: 20,
+            },
+            tribe_vanilla: AiPosture {
+                trigger: 0.75,
+                reserve: 0.50,
+                expand: 0.10,
+                refuse_human_chance: 50,
+            },
+            tribe_terminator: AiPosture {
+                trigger: 0.50,
+                reserve: 0.35,
+                expand: 0.15,
+                refuse_human_chance: 50,
+            },
+        }
+    }
+}
+
+impl AiTuning {
+    /// Longest allowed think window bound: 10 minutes of 100 ms ticks.
+    const MAX_THINK_TICKS: u64 = 6_000;
+
+    fn validate(&self) -> Result<(), String> {
+        let windows = [
+            ("think_tribe", self.think_tribe),
+            ("think_nation", self.think_nation),
+            ("think_nation_attacked", self.think_nation_attacked),
+            ("think_ghost", self.think_ghost),
+            ("think_ghost_attacked", self.think_ghost_attacked),
+        ];
+        for (name, [min, max]) in windows {
+            if min < 1 || min > max || max > Self::MAX_THINK_TICKS {
+                return Err(format!(
+                    "ai.{name} must be [min, max] with 1 <= min <= max <= {}",
+                    Self::MAX_THINK_TICKS
+                ));
+            }
+        }
+        let postures = [
+            ("ghost", self.ghost),
+            ("nation", self.nation),
+            ("tribe_vanilla", self.tribe_vanilla),
+            ("tribe_terminator", self.tribe_terminator),
+        ];
+        for (name, p) in postures {
+            if ![p.trigger, p.reserve, p.expand]
+                .iter()
+                .all(|r| (0.0..=1.0).contains(r))
+                || !(0..=100).contains(&p.refuse_human_chance)
+            {
+                return Err(format!(
+                    "ai.{name}: trigger, reserve and expand must be 0..1 and refuse_human_chance 0..100"
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `GameConfig` keys the server config file may not set: each lobby, the
+/// campaign or the ranked queue owns them.
+const MATCH_OWNED_KEYS: &[&str] = &[
+    "max_players",
+    "bot_count",
+    "nation_count",
+    "bot_difficulty",
+    "seed",
+    "map_name",
+    "map_roster_preset",
+    "game_mode",
+    "map_width",
+    "map_height",
+    "random_spawn",
+    "player_leader",
+    "scripted_spawns",
+    "player_spawn",
+    "player_team",
+    "buildings_unlock_after_defeated",
+    "campaign_support",
+    "campaign_player_color",
+    "tutorial",
+    "ranked_1v1",
+    "ranked_bot_iq",
+];
+
+/// Replace `base` values with `patch` values, recursing into objects. Every
+/// patch key must already exist, so a typo is an error instead of a no-op.
+fn merge_known(
+    base: &mut serde_json::Value,
+    patch: serde_json::Value,
+    path: &str,
+) -> Result<(), String> {
+    match (base, patch) {
+        (serde_json::Value::Object(base), serde_json::Value::Object(patch)) => {
+            for (key, value) in patch {
+                let key_path = format!("{path}{key}");
+                let slot = base
+                    .get_mut(&key)
+                    .ok_or_else(|| format!("unknown key {key_path}"))?;
+                merge_known(slot, value, &format!("{key_path}."))?;
+            }
+        }
+        (base, patch) => *base = patch,
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct GameConfig {
     // ==========================================
@@ -373,6 +528,9 @@ pub struct GameConfig {
     /// Fixed IQ of the server-assigned ranked opponent, if the rival is a bot.
     #[serde(default)]
     pub ranked_bot_iq: Option<u32>,
+    /// Bot timing and posture; the server config file may tune it.
+    #[serde(default)]
+    pub ai: AiTuning,
 }
 
 impl GameConfig {
@@ -394,6 +552,25 @@ impl GameConfig {
     pub fn clamp_bot_counts(&mut self) {
         self.bot_count = self.bot_count.min(Self::max_tribe_bots());
         self.nation_count = self.nation_count.min(Self::max_nation_bots());
+    }
+
+    /// Default rules with a partial JSON object (the server config file) merged
+    /// on top. Unknown keys, lobby-owned keys and out-of-range bot tuning are
+    /// errors, so a bad edit never silently becomes a default.
+    pub fn with_overrides(json: &str) -> Result<Self, String> {
+        let patch: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        let keys = patch.as_object().ok_or("config must be a JSON object")?;
+        if let Some(key) = keys
+            .keys()
+            .find(|key| MATCH_OWNED_KEYS.contains(&key.as_str()))
+        {
+            return Err(format!("{key} is set by each lobby, not the config file"));
+        }
+        let mut value = serde_json::to_value(Self::default()).map_err(|e| e.to_string())?;
+        merge_known(&mut value, patch, "")?;
+        let config: Self = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        config.ai.validate()?;
+        Ok(config)
     }
 
     /// Convert a per-second rate to a per-tick rate, applying the global speed multiplier.
@@ -493,6 +670,7 @@ impl Default for GameConfig {
             tutorial: false,
             ranked_1v1: false,
             ranked_bot_iq: None,
+            ai: AiTuning::default(),
         }
     }
 }
@@ -538,6 +716,32 @@ pub fn max_tiles_cap_for_troops(troops: f64, cfg: &GameConfig) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn config_file_overrides_known_rules_and_rejects_bad_edits() {
+        let config = GameConfig::with_overrides(
+            r#"{"global_speed_multiplier": 0.2, "ai": {"think_tribe": [60, 90], "ghost": {"trigger": 0.5, "reserve": 0.3, "expand": 0.1, "refuse_human_chance": 0}}}"#,
+        )
+        .unwrap();
+        assert_eq!(config.global_speed_multiplier, 0.2);
+        assert_eq!(config.ai.think_tribe, [60, 90]);
+        assert_eq!(config.ai.ghost.trigger, 0.5);
+        assert_eq!(config.ai.think_nation, AiTuning::default().think_nation);
+        assert_eq!(GameConfig::with_overrides("{}").unwrap(), GameConfig::default());
+
+        for bad in [
+            r#"{"global_speed_multiplyer": 0.2}"#,
+            r#"{"ai": {"think_tribes": [1, 2]}}"#,
+            r#"{"bot_count": 600}"#,
+            r#"{"ai": {"think_ghost": [10, 1]}}"#,
+            r#"{"ai": {"think_ghost": [0, 1]}}"#,
+            r#"{"ai": {"nation": {"trigger": 2.0, "reserve": 0.2, "expand": 0.1, "refuse_human_chance": 0}}}"#,
+            r#"{"global_speed_multiplier": "fast"}"#,
+            "[]",
+        ] {
+            assert!(GameConfig::with_overrides(bad).is_err(), "{bad}");
+        }
+    }
+
     use super::*;
 
     /// Poka-yoke: the tutorial firewall defaults **closed**. Every match that does not explicitly

@@ -40,18 +40,21 @@ pub(super) fn bot_structure_target_count(
     }
 }
 
-/// Decision window per tier, in 100 ms ticks, inclusive (min, max). Each bot
-/// gets one fixed interval inside its window from a seeded roll; `under_attack`
-/// only applies to tiers that react (Nation, Ghost). Ranked rivals keep their
-/// own IQ curve in `execute_ai_think`.
-pub(super) fn think_window_ticks(tier: AiTier, under_attack: bool) -> (u64, u64) {
-    match (tier, under_attack) {
-        (AiTier::Tribe, _) => (80, 120),     // 8–12 s
-        (AiTier::Nation, false) => (40, 80), // 4–8 s
-        (AiTier::Nation, true) => (5, 30),   // 0.5–3 s
-        (AiTier::Ghost, false) => (1, 10),   // 0.1–1 s
-        (AiTier::Ghost, true) => (5, 6),     // 0.45–0.6 s, rounded to the tick
-    }
+/// Decision window per tier from the match's tuning, in ticks, inclusive.
+/// `under_attack` only applies to tiers that react (Nation, Ghost).
+pub(super) fn think_window_ticks(
+    ai: &crate::game_config::AiTuning,
+    tier: AiTier,
+    under_attack: bool,
+) -> (u64, u64) {
+    let [min, max] = match (tier, under_attack) {
+        (AiTier::Tribe, _) => ai.think_tribe,
+        (AiTier::Nation, false) => ai.think_nation,
+        (AiTier::Nation, true) => ai.think_nation_attacked,
+        (AiTier::Ghost, false) => ai.think_ghost,
+        (AiTier::Ghost, true) => ai.think_ghost_attacked,
+    };
+    (min, max)
 }
 
 pub(super) fn pick_stack_click_tile(

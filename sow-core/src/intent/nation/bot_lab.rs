@@ -427,7 +427,7 @@ impl S16Scenario {
             "S16 SETUP FAIL: neutral land changed"
         );
         let profile_signature = |tier| {
-            let profile = ai_profile_for(tier, BotDifficulty::Vanilla);
+            let profile = ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla);
             (
                 profile.trigger_ratio,
                 profile.reserve_ratio,
@@ -451,7 +451,8 @@ impl S16Scenario {
             (0.75, 0.50, 0.10, 50, false),
             "S16 SETUP FAIL: Vanilla Tribe profile changed"
         );
-        let window = super::structures::think_window_ticks;
+        let ai = crate::game_config::AiTuning::default();
+        let window = |tier, attacked| super::structures::think_window_ticks(&ai, tier, attacked);
         assert_eq!(window(AiTier::Tribe, false), (80, 120));
         assert_eq!(window(AiTier::Nation, false), (40, 80));
         assert_eq!(window(AiTier::Nation, true), (5, 30));

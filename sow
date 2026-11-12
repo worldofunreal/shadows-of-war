@@ -18,6 +18,7 @@ COMMANDS:
   native                Fast-build and open the native Electron/WASM game
    p, prod              Run production build & deploy (WASM + FreeBSD backend and relay)
    ptr                  Same deploy as p, for ptr.shadowsofwar.io (PTR, same IONOS host)
+   config [ptr]         Edit the server rules (speed, economy, bots) over SSH; new matches use them
    a, android           Build the Android AAB and publish it to Google Play alpha
    poki                 Build the self-contained Poki upload folder (no upload/deploy)
    crazygames           Build the self-contained CrazyGames upload folder (no upload/deploy)
@@ -269,6 +270,14 @@ case "${CMD}" in
   crazygames)
     load_dist_env
     run_dist crazygames "$@"
+    ;;
+  config)
+    # Interactive editor: run the binary directly, not through run_dist's log pipe.
+    shift || true
+    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT}/target}"
+    mkdir -p "${CARGO_TARGET_DIR}"
+    cargo build -p sow-dist
+    exec "${CARGO_TARGET_DIR}/debug/sow" config "$@"
     ;;
   art-preview)
     shift || true

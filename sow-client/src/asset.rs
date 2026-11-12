@@ -113,7 +113,11 @@ impl SowApp {
     }
 
     pub fn update_assets(&mut self) {
-        if self.ui.app.phase == ClientPhase::Playing {
+        // Portraits start loading in the match loader, as soon as its snapshot names the roster,
+        // so the loader can wait for them instead of the deployment phase paying for them.
+        let match_loader = self.ui.app.phase == ClientPhase::Splash
+            && self.ui.app.splash_state.job == crate::ui::loading_screen::SplashJob::EnterGame;
+        if self.ui.app.phase == ClientPhase::Playing || match_loader {
             if let Some(snapshot) = self.sim.current_snapshot.as_ref() {
                 self.gfx.avatars.add_players(snapshot, self.sim.my_player_id);
             }

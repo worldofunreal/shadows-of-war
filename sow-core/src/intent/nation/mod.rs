@@ -108,7 +108,7 @@ impl SowEngine {
             let profile = if ranked_ghost {
                 profile::ranked_ghost_profile(p.iq)
             } else {
-                ai_profile_for(tier, self.state.config.bot_difficulty)
+                ai_profile_for(&self.state.config.ai, tier, self.state.config.bot_difficulty)
             };
 
             // Unified metronomic scheduler for Nations, Tribes, AND ghost
@@ -134,7 +134,7 @@ impl SowEngine {
                 let base = 5 + u64::from(180 - p.iq.clamp(60, 180)) / 3;
                 (base, base * 2 - 1)
             } else {
-                think_window_ticks(tier, reacts_to_attack)
+                think_window_ticks(&self.state.config.ai, tier, reacts_to_attack)
             };
 
             let mut sched_rng = WyRand::new(

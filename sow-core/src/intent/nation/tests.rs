@@ -78,7 +78,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: false,
             ghost_retaliation: None,
-            profile: ai_profile_for(AiTier::Nation, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Nation, BotDifficulty::Vanilla),
         };
         let mut decisions = Vec::new();
         engine.nation_run_combat_for_slot(
@@ -105,7 +105,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack,
             ghost_retaliation: None,
-            profile: ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Tribe, BotDifficulty::Vanilla),
         };
         let mut decisions = Vec::new();
         engine.nation_run_combat_for_slot(
@@ -127,7 +127,7 @@ mod bot_iq_alliance_tests {
     ) -> Vec<crate::intent::nation::profile::BotDecision> {
         let bot_id = 1;
         let iq = engine.state.player(bot_id).unwrap().iq;
-        let mut profile = ai_profile_for(tier, BotDifficulty::Vanilla);
+        let mut profile = ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla);
         profile.refuse_human_chance = 0;
         let slot = AiSlot {
             bot_id,
@@ -313,11 +313,11 @@ mod bot_iq_alliance_tests {
 
     #[test]
     fn ghost_retaliation_delay_and_force_are_seeded_and_bounded() {
-        let delay = ghost_retaliation_delay_ticks(42, 7, 91);
+        let delay = ghost_retaliation_delay_ticks(&crate::game_config::AiTuning::default(), 42, 7, 91);
         assert!((5..=6).contains(&delay));
-        assert_eq!(delay, ghost_retaliation_delay_ticks(42, 7, 91));
+        assert_eq!(delay, ghost_retaliation_delay_ticks(&crate::game_config::AiTuning::default(), 42, 7, 91));
         let delays: std::collections::BTreeSet<_> = (0..32)
-            .map(|seed| ghost_retaliation_delay_ticks(seed, 7, 91))
+            .map(|seed| ghost_retaliation_delay_ticks(&crate::game_config::AiTuning::default(), seed, 7, 91))
             .collect();
         assert!(delays.len() > 1);
 
@@ -488,7 +488,7 @@ mod bot_iq_alliance_tests {
             retreating: false,
         });
 
-        let due_tick = ghost_retaliation_delay_ticks(seed, 1, attack_id);
+        let due_tick = ghost_retaliation_delay_ticks(&crate::game_config::AiTuning::default(), seed, 1, attack_id);
         engine.state.tick = due_tick - 1;
         engine.execute_ai_think();
         assert!(!engine.test_last_ai_intents.iter().any(|intent| matches!(
@@ -534,7 +534,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: true,
             ghost_retaliation: Some(retaliation),
-            profile: ai_profile_for(AiTier::Ghost, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Ghost, BotDifficulty::Vanilla),
         };
         let mut decisions = Vec::new();
 
@@ -626,7 +626,7 @@ mod bot_iq_alliance_tests {
             let mut engine = human_target_engine(seed, tier);
             engine.state.tick = 1_200;
             engine.state.player_mut(1).unwrap().bot_rng = wyrand::WyRand::new(seed);
-            let profile = ai_profile_for(tier, difficulty);
+            let profile = ai_profile_for(&crate::game_config::AiTuning::default(), tier, difficulty);
             let iq = engine.state.player(1).unwrap().iq;
             let slot = AiSlot {
                 bot_id: 1,
@@ -650,19 +650,19 @@ mod bot_iq_alliance_tests {
         }
 
         assert_eq!(
-            ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla).refuse_human_chance,
+            ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Tribe, BotDifficulty::Vanilla).refuse_human_chance,
             50
         );
         assert_eq!(
-            ai_profile_for(AiTier::Nation, BotDifficulty::Vanilla).refuse_human_chance,
+            ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Nation, BotDifficulty::Vanilla).refuse_human_chance,
             20
         );
         assert_eq!(
-            ai_profile_for(AiTier::Ghost, BotDifficulty::Vanilla).refuse_human_chance,
+            ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Ghost, BotDifficulty::Vanilla).refuse_human_chance,
             0
         );
         assert_eq!(
-            ai_profile_for(AiTier::Tribe, BotDifficulty::Terminator).refuse_human_chance,
+            ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Tribe, BotDifficulty::Terminator).refuse_human_chance,
             50
         );
         for (tier, difficulty) in [
@@ -749,7 +749,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: false,
             ghost_retaliation: None,
-            profile: ai_profile_for(AiTier::Nation, BotDifficulty::Terminator),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Nation, BotDifficulty::Terminator),
         };
         let mut decisions = Vec::new();
         engine.nation_run_combat_for_slot(&slot, (1, 150), (5.0, 5.0), &[2], false, &mut decisions);
@@ -886,7 +886,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: false,
             ghost_retaliation: None,
-            profile: ai_profile_for(tier, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla),
         };
         let actor_iq = engine.state.player(1).unwrap().iq;
         let mut decisions = Vec::new();
@@ -940,7 +940,7 @@ mod bot_iq_alliance_tests {
                 do_structures: false,
                 is_under_attack: false,
                 ghost_retaliation: None,
-                profile: ai_profile_for(tier, BotDifficulty::Vanilla),
+                profile: ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla),
             };
             let iq = engine.state.player(1).unwrap().iq;
             let mut decisions = Vec::new();
@@ -979,7 +979,7 @@ mod bot_iq_alliance_tests {
                 do_structures: false,
                 is_under_attack: false,
                 ghost_retaliation: None,
-                profile: ai_profile_for(tier, BotDifficulty::Vanilla),
+                profile: ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla),
             };
             let iq = engine.state.player(1).unwrap().iq;
             let mut decisions = Vec::new();
@@ -1089,7 +1089,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: true,
             ghost_retaliation: retaliation,
-            profile: ai_profile_for(tier, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla),
         };
         let actor_iq = engine.state.player(1).unwrap().iq;
         let mut decisions = Vec::new();
@@ -2732,7 +2732,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: false,
             ghost_retaliation: None,
-            profile: ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Tribe, BotDifficulty::Vanilla),
         };
         let mut decisions = Vec::new();
         engine.nation_run_combat_for_slot(&slot, (1, 85), (5.0, 5.0), &[2], true, &mut decisions);
@@ -2784,7 +2784,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: false,
             ghost_retaliation: None,
-            profile: ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Tribe, BotDifficulty::Vanilla),
         };
         let mut decisions = Vec::new();
         engine.nation_run_combat_for_slot(
@@ -2838,7 +2838,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: false,
             ghost_retaliation: None,
-            profile: ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Tribe, BotDifficulty::Vanilla),
         };
         let mut decisions = Vec::new();
         engine.nation_run_combat_for_slot(&slot, (1, 85), (5.0, 5.0), &[], true, &mut decisions);
@@ -2885,7 +2885,7 @@ mod bot_iq_alliance_tests {
             do_structures: false,
             is_under_attack: false,
             ghost_retaliation: None,
-            profile: ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla),
+            profile: ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Tribe, BotDifficulty::Vanilla),
         };
         let mut decisions = Vec::new();
         engine.nation_run_combat_for_slot(&slot, (1, 85), (5.0, 5.0), &[], true, &mut decisions);
@@ -2912,7 +2912,7 @@ mod bot_iq_alliance_tests {
         engine.campaign_relations.insert(1, CampaignRelation::Enemy);
         engine.campaign_relations.insert(2, CampaignRelation::Enemy);
 
-        let mut profile = ai_profile_for(AiTier::Tribe, BotDifficulty::Terminator);
+        let mut profile = ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Tribe, BotDifficulty::Terminator);
         profile.refuse_human_chance = 0;
         let slot = AiSlot {
             bot_id: 1,

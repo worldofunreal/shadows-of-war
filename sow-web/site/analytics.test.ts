@@ -50,6 +50,7 @@ function element(tag) {
 
 function start({
   fetchImpl = async () => ({ ok: true }),
+  hostname = "shadowsofwar.io",
   pathname = "/",
   search = "",
   gameShell = false,
@@ -85,7 +86,7 @@ function start({
     },
   };
   const window = {
-    location: { hostname: "shadowsofwar.io", pathname, search },
+    location: { hostname, pathname, search },
     addEventListener(name, handler) {
       windowListeners.set(name, handler);
     },
@@ -215,6 +216,19 @@ test("accepting sends consented events only to the first-party endpoint", () => 
   assert.equal(batch.events[0].portal, "site");
   assert.equal(batch.events[0].platform, "web");
   assert.equal(batch.events[0].device_class, "mobile");
+});
+
+test("analytics sends from the production and PTR hosts and nowhere else", () => {
+  for (const [hostname, sent] of [
+    ["shadowsofwar.io", 1],
+    ["ptr.shadowsofwar.io", 1],
+    ["example.com", 0],
+  ]) {
+    const runtime = start({ hostname });
+    const [accept] = runtime.card.children[3].children;
+    accept.click();
+    assert.equal(runtime.fetchCalls.length, sent, hostname);
+  }
 });
 
 test("schema 3 discards queued schema 2 events that may contain account IDs", async () => {

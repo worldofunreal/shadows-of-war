@@ -68,7 +68,7 @@
     );
   };
   const canSend = () =>
-    ["shadowsofwar.io", "www.shadowsofwar.io"].includes(window.location.hostname) &&
+    ["shadowsofwar.io", "www.shadowsofwar.io", "ptr.shadowsofwar.io"].includes(window.location.hostname) &&
     !isAndroidTwa() &&
     !["poki", "crazygames", "jest"].includes(window.SOW_PORTAL);
   if (isAndroidTwa()) {

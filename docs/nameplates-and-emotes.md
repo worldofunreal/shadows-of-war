@@ -76,8 +76,16 @@ radial sí muestra el correcto:
    `AvatarSlots` le reserva celdas, primero al jugador local: cuatro caras
    para un héroe (Calm primero) y una para un bot o retrato de campaña. Un bot
    cuyo avatar coincide con el id de un héroe usa las cuatro caras del héroe.
+   La reserva empieza en el loader de partida, con su primer snapshot, y el
+   loader no se libera hasta que la primera cara de cada jugador (Calm o su
+   única cara) cargó o falló una vez (`first_faces_settled`). Esas caras se
+   piden antes que las demás. Una falla sigue reintentando ya en partida.
+   Así la fase de despliegue empieza con los retratos puestos; en línea, el
+   tiempo de esta espera sale de los 15 s de despliegue, porque el relay
+   cuenta desde que registra la partida.
 3. **Las celdas no se liberan durante la partida.** Quien muere o sale conserva
-   las suyas, para el retrato de muerte y los ataques. Al salir de `Playing`,
+   las suyas, para el retrato de muerte y los ataques. Al salir de `Playing`
+   (o del loader de partida sin entrar),
    `end_match` libera todo, la textura vuelve a una fila y las imágenes que
    lleguen después se descartan.
 4. **El dibujo solo lee.** `AvatarSlots::uv` devuelve la celda si su imagen ya
