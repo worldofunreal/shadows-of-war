@@ -140,6 +140,15 @@ pub fn leader_wire_id(leader: Leader) -> &'static str {
 }
 
 pub fn leader_from_id(value: &str) -> Option<Leader> {
+    find_leader(value, Leader::all())
+}
+
+/// Resolves saved match/profile IDs even when their hero is temporarily hidden.
+pub fn leader_from_any_id(value: &str) -> Option<Leader> {
+    find_leader(value, Leader::all_known())
+}
+
+fn find_leader(value: &str, mut leaders: impl Iterator<Item = Leader>) -> Option<Leader> {
     let normalize = |value: &str| -> String {
         value
             .chars()
@@ -148,7 +157,7 @@ pub fn leader_from_id(value: &str) -> Option<Leader> {
             .collect()
     };
     let normalized = normalize(value);
-    Leader::all().find(|leader| {
+    leaders.find(|leader| {
         [
             leader.id(),
             leader.wire_id(),
@@ -183,11 +192,12 @@ pub fn assigned_leader_for_account(
     free_leaders
         .get((hash as usize) % free_leaders.len().max(1))
         .copied()
-        .unwrap_or_else(|| Leader::of("boudica"))
+        .unwrap_or_else(|| Leader::all().find(|leader| leader.always_free()).unwrap_or_default())
 }
 
 pub fn leader_available(leader: Leader, owned: &BTreeSet<String>, free_leaders: &[Leader]) -> bool {
-    leader.always_free() || owns_leader(owned, leader) || free_leaders.contains(&leader)
+    leader.is_enabled()
+        && (leader.always_free() || owns_leader(owned, leader) || free_leaders.contains(&leader))
 }
 
 pub fn available_leaders(owned: &BTreeSet<String>, free_leaders: &[Leader]) -> Vec<Leader> {
@@ -254,6 +264,39 @@ pub(crate) fn generate_free_rotation<R: rand::Rng + ?Sized>(
         .collect();
     selected.shuffle(rng);
     Some((selected, deferred))
+}
+
+#[cfg(feature = "server")]
+pub(crate) fn repair_free_rotation<R: rand::Rng + ?Sized>(
+    candidates: &[Leader],
+    previous: &[Leader],
+    current: &[Leader],
+    rng: &mut R,
+) -> Option<Vec<Leader>> {
+    use rand::seq::SliceRandom;
+
+    let mut pool = candidates
+        .iter()
+        .copied()
+        .filter(|leader| !leader.always_free() && !previous.contains(leader))
+        .collect::<Vec<_>>();
+    pool.sort_unstable();
+    pool.dedup();
+    pool.shuffle(rng);
+
+    let balanced = find_rotation(&pool, &[], true).is_some();
+    let mut retained = current
+        .iter()
+        .copied()
+        .filter(|leader| pool.contains(leader))
+        .collect::<Vec<_>>();
+    retained.dedup();
+    if let Some(mut rotation) = find_rotation(&pool, &retained, balanced) {
+        rotation.shuffle(rng);
+        return Some(rotation);
+    }
+
+    generate_free_rotation(&pool, previous, &[], rng).map(|(rotation, _)| rotation)
 }
 
 #[cfg(feature = "server")]
@@ -633,7 +676,10 @@ mod tests {
                 .len(),
             available.len()
         );
-        assert!(available.contains(&Leader::of("boudica")));
+        assert_eq!(
+            available.contains(&Leader::of("boudica")),
+            Leader::of("boudica").is_enabled()
+        );
         assert!(available.contains(&Leader::of("napoleon")));
         for leader in Leader::all() {
             if !rotation.contains(&leader)
@@ -650,15 +696,19 @@ mod tests {
         let empty = BTreeSet::new();
         let rotation = legacy_rotation_for_period(7);
         let catalog = catalog_for_profile(&empty, &empty, 0, 0, 7, &rotation);
+        let boudica_leader = Leader::of("boudica");
+        assert!(boudica_leader.always_free());
         let boudica = catalog
             .leaders
             .iter()
-            .find(|leader| leader.id == "boudica")
-            .unwrap();
-        assert!(boudica.permanently_free);
-        assert!(boudica.available);
-        assert_eq!(boudica.cost_crowns, 0);
-        assert_eq!(boudica.cost_gems, 0);
+            .find(|leader| leader.id == "boudica");
+        assert_eq!(boudica.is_some(), boudica_leader.is_enabled());
+        if let Some(boudica) = boudica {
+            assert!(boudica.permanently_free);
+            assert!(boudica.available);
+            assert_eq!(boudica.cost_crowns, 0);
+            assert_eq!(boudica.cost_gems, 0);
+        }
         assert!(!catalog.free_leaders.contains(&"boudica".to_string()));
         assert!(!is_store_product("sow_offer_leader_boudica"));
     }
@@ -782,6 +832,81 @@ mod tests {
             .unwrap();
         assert!(owned_offer.available);
         assert!(owned_offer.owned);
+    }
+
+    #[test]
+    fn public_lookup_hides_disabled_heroes_but_saved_lookup_keeps_them() {
+        for leader in Leader::all_known() {
+            assert_eq!(
+                leader_from_id(leader.id()),
+                leader.is_enabled().then_some(leader),
+                "active lookup mismatch for {leader:?}"
+            );
+            assert_eq!(leader_from_any_id(leader.id()), Some(leader));
+            assert_eq!(
+                serde_json::from_value::<Leader>(serde_json::json!(leader.id())).unwrap(),
+                leader
+            );
+            let owned = BTreeSet::from([leader_id(leader).to_string()]);
+            assert_eq!(
+                leader_available(leader, &owned, &[leader]),
+                leader.is_enabled(),
+                "disabled {leader:?} must remain unavailable even if previously owned"
+            );
+        }
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn rotation_repair_keeps_the_existing_roster_when_one_hero_is_removed() {
+        use rand::{SeedableRng, rngs::StdRng};
+
+        let candidates = Leader::all()
+            .filter(|leader| !leader.always_free())
+            .collect::<Vec<_>>();
+        let mut rng = StdRng::seed_from_u64(73);
+        let (current, _) = generate_free_rotation(&candidates, &[], &[], &mut rng).unwrap();
+        let removed = current[0];
+        let active = candidates
+            .iter()
+            .copied()
+            .filter(|leader| *leader != removed)
+            .collect::<Vec<_>>();
+        let retained = current
+            .iter()
+            .copied()
+            .filter(|leader| *leader != removed)
+            .collect::<Vec<_>>();
+
+        let repaired = repair_free_rotation(&active, &[], &retained, &mut rng).unwrap();
+        assert_eq!(repaired.len(), FREE_ROTATION_SIZE);
+        assert!(!repaired.contains(&removed));
+        assert!(retained.iter().all(|leader| repaired.contains(leader)));
+        assert!(has_all_regions(&repaired));
+        assert!(has_balanced_gender(&repaired));
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn rotation_repair_regenerates_when_preserving_the_rest_breaks_balance() {
+        use rand::{SeedableRng, rngs::StdRng};
+
+        let candidates = Leader::all()
+            .filter(|leader| !leader.always_free())
+            .collect::<Vec<_>>();
+        let retained = candidates
+            .iter()
+            .copied()
+            .filter(|leader| leader.character().gender == Some(Gender::Male))
+            .take(FREE_ROTATION_SIZE - 1)
+            .collect::<Vec<_>>();
+        let mut rng = StdRng::seed_from_u64(74);
+
+        let repaired = repair_free_rotation(&candidates, &[], &retained, &mut rng).unwrap();
+        assert_eq!(repaired.len(), FREE_ROTATION_SIZE);
+        assert!(has_all_regions(&repaired));
+        assert!(has_balanced_gender(&repaired));
+        assert!(!retained.iter().all(|leader| repaired.contains(leader)));
     }
 
     #[cfg(feature = "server")]

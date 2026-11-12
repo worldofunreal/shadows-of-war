@@ -99,7 +99,7 @@ where
     // Saved profiles can outlive heroes removed from the current catalog.
     Ok(value
         .as_deref()
-        .and_then(sow_data::commerce::leader_from_id))
+        .and_then(sow_data::commerce::leader_from_any_id))
 }
 
 fn deserialize_leader_xp<'de, D>(
@@ -111,7 +111,7 @@ where
     let saved = std::collections::BTreeMap::<String, u32>::deserialize(deserializer)?;
     let mut current = std::collections::BTreeMap::new();
     for (saved_name, xp) in saved {
-        let name = sow_data::commerce::leader_from_id(&saved_name)
+        let name = sow_data::commerce::leader_from_any_id(&saved_name)
             .map_or(saved_name, |leader| leader.name().to_owned());
         let total = current.entry(name).or_insert(0u32);
         *total = total.saturating_add(xp);
@@ -129,7 +129,7 @@ where
         Deserialize::deserialize(deserializer)?;
     let mut current = std::collections::BTreeMap::new();
     for (saved_name, stats) in saved {
-        let name = sow_data::commerce::leader_from_id(&saved_name)
+        let name = sow_data::commerce::leader_from_any_id(&saved_name)
             .map_or(saved_name, |leader| leader.name().to_owned());
         let total = current
             .entry(name)

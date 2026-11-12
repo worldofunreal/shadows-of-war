@@ -870,8 +870,13 @@ fn ranked_bot_fields(account: &serde_json::Value) -> Result<(String, String, sow
         .ok_or("ranked bot leader missing")?;
     let iq = bot.get("iq").and_then(serde_json::Value::as_u64)
         .and_then(|iq| u32::try_from(iq).ok()).ok_or("ranked bot IQ missing")?;
-    let leader = sow_data::commerce::leader_from_id(leader_name)
+    let known_leader = sow_data::commerce::leader_from_any_id(leader_name)
         .ok_or("ranked bot leader is not in the catalog")?;
+    let leader = if known_leader.is_enabled() {
+        known_leader
+    } else {
+        sow_core::player::Leader::default()
+    };
     Ok((account_id, name, leader, iq))
 }
 

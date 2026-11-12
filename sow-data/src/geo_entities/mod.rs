@@ -537,6 +537,9 @@ pub struct Hero {
     /// Short name, saved as the key of each player's hero XP. Renamed heroes
     /// must retain a resolvable legacy ID so stored progress can migrate.
     pub name: String,
+    /// Whether this hero can be selected in new games. Omitted means enabled.
+    #[serde(default = "default_hero_enabled")]
+    pub enabled: bool,
     /// IDs accepted from saves created before this hero was renamed.
     #[serde(default)]
     pub legacy_ids: Vec<String>,
@@ -557,6 +560,10 @@ pub struct Hero {
     pub rarity: Rarity,
     /// Crowns to unlock; gems cost half of it. Free heroes carry 0.
     pub price_crowns: u64,
+}
+
+fn default_hero_enabled() -> bool {
+    true
 }
 
 /// One character of the shared catalog (`assets/geo_entities.json`): every

@@ -18,7 +18,7 @@ COMMANDS:
   native                Fast-build and open the native Electron/WASM game
    p, prod              Run production build & deploy (WASM + FreeBSD backend and relay)
    ptr                  Same deploy as p, for ptr.shadowsofwar.io (PTR, same IONOS host)
-   config [ptr]         Edit the server rules (speed, economy, bots) over SSH; new matches use them
+   config p|ptr         Edit sow-dist/config/<site>.json (speed, economy, bots) and install it; new matches use it
    a, android           Build the Android AAB and publish it to Google Play alpha
    poki                 Build the self-contained Poki upload folder (no upload/deploy)
    crazygames           Build the self-contained CrazyGames upload folder (no upload/deploy)

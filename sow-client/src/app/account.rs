@@ -892,7 +892,11 @@ impl SowApp {
         if self.ui.app.main_menu_state.has_explicit_leader_selection() {
             return;
         }
-        if let Some(leader) = self.progress.preferred_leader {
+        if let Some(leader) = self
+            .progress
+            .preferred_leader
+            .filter(|leader| leader.is_enabled())
+        {
             self.ui
                 .app
                 .main_menu_state
@@ -1038,7 +1042,9 @@ impl SowApp {
             self.progress = portal;
         }
         self.progress.preferred_leader = Some(cloud_preferred_leader.unwrap_or_else(|| {
-            sow_core::player::Leader::of("boudica")
+            sow_core::player::Leader::all()
+                .find(|leader| leader.always_free())
+                .unwrap_or_default()
         }));
         if !account_switch {
             self.progress

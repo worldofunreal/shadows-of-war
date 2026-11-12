@@ -151,7 +151,7 @@ impl AvatarSlots {
                     return Some(Owner::Portrait(slug));
                 }
                 // A campaign bot can play as a hero and show all four faces.
-                match Leader::all().find(|leader| leader.id() == slug) {
+                match Leader::all_known().find(|leader| leader.id() == slug) {
                     Some(leader) => Some(Owner::Hero(leader)),
                     None => valid_avatar_id(slug).then_some(Owner::Portrait(slug)),
                 }
@@ -476,7 +476,9 @@ mod tests {
             .into_iter()
             .flat_map(bots)
             .filter_map(|entity| entity.avatar.clone())
-            .filter(|slug| valid_avatar_id(slug) && !Leader::all().any(|leader| leader.id() == slug))
+            .filter(|slug| {
+                valid_avatar_id(slug) && !Leader::all_known().any(|leader| leader.id() == slug)
+            })
             .collect();
         slugs.sort();
         slugs.dedup();

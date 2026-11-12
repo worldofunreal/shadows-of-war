@@ -427,7 +427,11 @@ impl S16Scenario {
             "S16 SETUP FAIL: neutral land changed"
         );
         let profile_signature = |tier| {
-            let profile = ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla);
+            let profile = ai_profile_for(
+                &crate::game_config::AiTuning::default(),
+                tier,
+                BotDifficulty::Vanilla,
+            );
             (
                 profile.trigger_ratio,
                 profile.reserve_ratio,
@@ -1315,7 +1319,7 @@ fn s2_armed_ghost_presses_player_over_neutral() {
 
 // ──────────────────────────────────────────────────────────────────────────
 // S3 — Vanilla tribes do not initiate against connected humans during the
-// opening grace, and neutral expansion never captures player territory.
+// opening grace. The human keeps an exit to prevent territorial annexation.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn s3_vanilla_tribe_passive_but_growing() {
@@ -1328,20 +1332,20 @@ fn s3_vanilla_tribe_passive_but_growing() {
         max_troops: 600.0,
         gold: 0.0,
         x: 3,
-        y: 3,
+        y: 0,
         team: None,
     };
-    let tribe = LabPlayer::tribe(2, 4, 4); // borders the human home
+    let tribe = LabPlayer::tribe(2, 4, 1); // borders the human home on the map edge
     let mut engine = build_lab(10, 10, "FFA", &[human, tribe]);
     if std::env::var("SOW_LAB_VERBOSE").is_ok() {
         eprintln!(
-            "INIT owners(3,3)={} (4,4)={} tiles1={} tiles2={}",
-            engine.state.map.owner_id(3, 3),
-            engine.state.map.owner_id(4, 4),
+            "INIT owners(3,0)={} (4,1)={} tiles1={} tiles2={}",
+            engine.state.map.owner_id(3, 0),
+            engine.state.map.owner_id(4, 1),
             tiles(&engine, 1),
             tiles(&engine, 2)
         );
-        for i in [27usize, 28, 33, 34, 44] {
+        for i in [2usize, 3, 4, 13, 14] {
             eprintln!(
                 "INIT idx{i} owner={}",
                 engine.state.map.owner_id((i as u32) % 10, (i as u32) / 10)
@@ -1356,13 +1360,13 @@ fn s3_vanilla_tribe_passive_but_growing() {
         let p1 = engine.state.player(1).unwrap();
         let p2 = engine.state.player(2).unwrap();
         eprintln!(
-            "S3DBG h_tiles={} t_tiles={} h_alive={} h_troops={} t_troops={} h_owner33={} att_count={}",
+            "S3DBG h_tiles={} t_tiles={} h_alive={} h_troops={} t_troops={} h_owner30={} att_count={}",
             p1.tile_count,
             p2.tile_count,
             p1.alive,
             p1.troops,
             p2.troops,
-            engine.state.map.owner_id(3, 3),
+            engine.state.map.owner_id(3, 0),
             engine.attacks.len()
         );
         for a in &engine.attacks {
@@ -2734,12 +2738,12 @@ fn s16_checkpoint_decision_and_state_reference() {
     // Uses current building footprints; historical footprints are tested below.
     // These checkpoints include Vanilla Tribes' post-grace human-attack policy;
     // the S16 behavior contracts below separately guard progress and survival.
-    // Target planning follows current OpenFront priorities and neutral captures
-    // use the active global occupancy pacing curve.
+    // Uses current AI tuning and occupancy pacing. Neutral frontier closure first
+    // annexes P11 for P21 at tick 10; the preceding ticks match the loss-only trigger.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x1b7e_67c3_46b0_d173),
-        (500, 0x6dc4_f6f8_e5af_9a83),
-        (562, 0x99ac_2cd2_b7a8_6d68),
+        (250, 0xb514_6a91_fd10_2734),
+        (500, 0xdb55_4d58_5ecf_1ab0),
+        (626, 0x0d68_1d5e_5f61_0811),
     ];
     assert_eq!(
         checkpoints,
@@ -2760,12 +2764,13 @@ fn historical_s16_building_rules_keep_recorded_results() {
         s16_building_rules_trace(true),
         "same seed must reproduce historical-building checkpoints"
     );
-    // Historical building rules with the same leader and current pacing curve.
+    // Historical building rules with current AI tuning, pacing and neutral-closure annexation.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x35fa_b2f0_b812_d8c0),
-        (500, 0x55b8_af39_e9a8_9bdb),
-        (750, 0x8e65_79a5_a445_0312),
-        (946, 0x3b4b_b361_0e95_30f2),
+        (250, 0x8879_2372_5d16_dd57),
+        (500, 0x8750_977f_f34a_6d32),
+        (750, 0x49f1_f75f_6fe2_f7ce),
+        (1_000, 0xffd7_204e_599c_b84b),
+        (1_048, 0xf3f7_7fa0_a403_277d),
     ];
     assert_eq!(
         checkpoints, REFERENCE,
@@ -3103,7 +3108,11 @@ fn s19_mixed_ffa_tier_balance() {
                 let s = &mut stats[tier_of(p)];
                 s.0 += 1;
                 s.1 += p.tile_count;
-                s.2 += if p.max_troops > 0.0 { p.troops / p.max_troops } else { 0.0 };
+                s.2 += if p.max_troops > 0.0 {
+                    p.troops / p.max_troops
+                } else {
+                    0.0
+                };
             }
             let fmt = |(alive, tiles, fill): (u32, u32, f64)| {
                 format!(

@@ -36,21 +36,23 @@ impl Config {
     }
 }
 
-/// `./sow config [ptr]`: edit the site's server rules file over SSH. The edit is
-/// checked with the parser the server uses before it is installed; the server
-/// reads it at every lobby creation, so new matches use it without a restart.
-pub(crate) fn edit_server_config() -> Result<()> {
+/// `./sow config p|ptr`: edit the site's server rules in the repo
+/// (`sow-dist/config/<site>.json`), check them with the parser the server uses,
+/// and install them over SSH. The server reads the file at every lobby
+/// creation, so new matches use it without a restart. The repo file is the
+/// source of truth; running the command without edits re-syncs the server.
+pub(crate) fn edit_server_config(root: &Path) -> Result<()> {
     use std::io::Write;
     let config = Config::load();
     let site = site::current();
     let remote = format!("{}/usr/local/etc/sow/config.json", site.server_root());
-    let current = output(
-        "ssh",
-        &[&config.control_host, &format!("sudo cat {remote} 2>/dev/null || echo '{{}}'")],
-    )?;
-    let dir = tempfile::tempdir()?;
-    let local = dir.path().join(format!("{}-config.json", site.state_prefix()));
-    fs::write(&local, format!("{current}\n"))?;
+    let local = root
+        .join("sow-dist/config")
+        .join(format!("{}.json", site.state_prefix()));
+    if !local.exists() {
+        fs::create_dir_all(local.parent().context("config dir")?)?;
+        fs::write(&local, "{}\n")?;
+    }
     let editor = env::var("VISUAL")
         .or_else(|_| env::var("EDITOR"))
         .unwrap_or_else(|_| "vi".into());
@@ -63,16 +65,14 @@ pub(crate) fn edit_server_config() -> Result<()> {
             bail!("editor exited with an error; nothing was installed");
         }
         let text = fs::read_to_string(&local)?;
-        if text.trim() == current.trim() {
-            println!("No changes; {remote} left as it was.");
-            return Ok(());
-        }
         match sow_core::game_config::GameConfig::with_overrides(&text) {
             Ok(_) => break text,
             Err(error) => {
                 eprintln!("❌ {error}");
                 eprint!("Press Enter to fix it, or Ctrl-C to cancel: ");
-                std::io::stdin().read_line(&mut String::new())?;
+                if std::io::stdin().read_line(&mut String::new())? == 0 {
+                    bail!("cancelled; {} has the error and nothing was installed", local.display());
+                }
             }
         }
     };
@@ -93,7 +93,10 @@ pub(crate) fn edit_server_config() -> Result<()> {
     if !install.wait()?.success() {
         bail!("could not install {remote}");
     }
-    println!("✅ {remote} installed; matches created from now on use it.");
+    println!(
+        "✅ {} installed as {remote}; matches created from now on use it.",
+        local.display()
+    );
     Ok(())
 }
 

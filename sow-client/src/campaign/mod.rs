@@ -376,7 +376,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
         {
             return None;
         }
-        let leader = sow_data::commerce::leader_from_id(&e.leader)?;
+        let leader = sow_data::commerce::leader_from_any_id(&e.leader)?;
         let relation = e.relation;
         if e.avatar
             .as_deref()

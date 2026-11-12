@@ -1034,7 +1034,7 @@ impl SowApp {
                 WebMenuCommand::SetLeader { leader_id } => {
                     let value = serde_json::Value::String(leader_id);
                     match serde_json::from_value::<sow_core::player::Leader>(value) {
-                        Ok(leader) => {
+                        Ok(leader) if leader.is_enabled() => {
                             self.ui
                                 .app
                                 .main_menu_state
@@ -1045,6 +1045,7 @@ impl SowApp {
                             self.save_local_progress();
                             self.persist_leader_selection();
                         }
+                        Ok(_) => log::warn!("[WEB MENU] disabled leader selection rejected"),
                         Err(error) => log::warn!("[WEB MENU] invalid leader: {error}"),
                     }
                 }
@@ -4540,7 +4541,7 @@ fn player_avatar_expression(
         .campaign_avatar
         .as_deref()
         .unwrap_or(player.leader.id());
-    (sow_data::commerce::leader_from_id(slug).is_some()
+    (sow_data::commerce::leader_from_any_id(slug).is_some()
         && (player.campaign_avatar.is_some()
             || player.player_type == sow_core::player::PlayerType::Human))
         .then(|| app.ui.nameplates.avatar_presentation(player.id).expression)
