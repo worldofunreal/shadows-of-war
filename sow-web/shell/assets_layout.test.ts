@@ -78,7 +78,7 @@ test("every art slot the game draws has its file", () => {
     );
     const catalog = JSON.parse(fs.readFileSync(path.join(assets, "geo_entities.json"), "utf8")).entities;
     for (const entity of catalog) {
-        if (entity.avatar)
+        if (entity.avatar && (!entity.hero || entity.hero.enabled !== false))
             assert.ok(avatarNames.has(entity.avatar), `${entity.id} needs avatars/*/${entity.avatar}.webp`);
     }
     for (const file of fs
@@ -164,16 +164,26 @@ test("every playable hero is complete: ability, art and texts in every language"
     const catalog = JSON.parse(fs.readFileSync(path.join(assets, "geo_entities.json"), "utf8")).entities;
     const locales = fs.readdirSync(path.join(root, "sow-i18n/strings"));
     const heroes = catalog.filter((entity) => entity.hero);
+    const activeHeroes = heroes.filter((entity) => entity.hero.enabled !== false);
     const artSlug = (entity) => entity.hero.art_slug || entity.id;
-    assert.ok(heroes.length >= 12);
+    assert.ok(activeHeroes.length >= 12);
     const heroAvatarDir = path.join(art, "avatars/heroes");
+    const knownHeroSlugs = new Set(heroes.map(artSlug));
+    const activeHeroSlugs = new Set(activeHeroes.map(artSlug));
+    const heroSheets = fs.readdirSync(heroAvatarDir).sort();
     assert.deepEqual(
-        fs.readdirSync(heroAvatarDir).sort(),
-        heroes.map((hero) => `${artSlug(hero)}.webp`).sort(),
-        "avatars/heroes only contains one spritesheet per playable hero",
+        heroSheets.filter((file) => activeHeroSlugs.has(path.parse(file).name)),
+        activeHeroes.map((hero) => `${artSlug(hero)}.webp`).sort(),
+        "every active hero has exactly one spritesheet",
     );
+    for (const file of heroSheets) {
+        assert.ok(
+            file.endsWith(".webp") && knownHeroSlugs.has(path.parse(file).name),
+            `avatars/heroes/${file} must belong to a catalog hero`,
+        );
+    }
     assert.ok(fs.existsSync(path.join(art, "avatars/random.webp")), "Random keeps its shared avatar");
-    for (const entry of heroes) {
+    for (const entry of activeHeroes) {
         const hero = entry.id;
         const slug = artSlug(entry);
         assert.ok(entry.hero.ability && entry.hero.name, `${hero} needs a catalog name and ability`);

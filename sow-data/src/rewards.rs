@@ -663,7 +663,7 @@ pub fn match_gems(input: GemInput<'_>) -> u64 {
 }
 
 pub fn canonical_leader_name(value: &str) -> Option<String> {
-    crate::commerce::leader_from_id(value).map(|leader| leader.name().to_string())
+    crate::commerce::leader_from_any_id(value).map(|leader| leader.name().to_string())
 }
 
 #[cfg(test)]

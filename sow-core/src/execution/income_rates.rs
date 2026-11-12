@@ -233,8 +233,9 @@ mod tests {
             ..Default::default()
         };
         let troop_rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
+        // Four levels at 275 troops/s, scaled by the current 0.16 game speed.
         assert!(
-            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 286.0).abs()
+            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 176.0).abs()
                 < 1e-10
         );
     }

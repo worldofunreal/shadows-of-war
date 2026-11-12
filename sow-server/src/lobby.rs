@@ -571,6 +571,9 @@ pub fn join_player(
     let database_account_id = opts.database_account_id;
     let host_config = opts.host_config;
     let league_score = opts.league_score;
+    if !leader.is_enabled() {
+        return Err("Selected hero is unavailable".to_string());
+    }
     if host_config.as_ref().is_some_and(|config| {
         !matches!(
             config.game_mode.as_str(),
@@ -578,6 +581,14 @@ pub fn join_player(
         )
     }) {
         return Err("Unsupported custom game mode".to_string());
+    }
+    if host_config.as_ref().is_some_and(|config| {
+        config
+            .scripted_spawns
+            .iter()
+            .any(|spawn| !spawn.leader.is_enabled())
+    }) {
+        return Err("Custom games cannot spawn a disabled hero".to_string());
     }
     let password = opts.password;
     let ip = opts.ip;
@@ -716,7 +727,7 @@ pub fn join_player(
         let p = &mut lobby.players[existing_idx];
         p.tx = client_tx;
         p.clan_tag = clan_tag;
-        if !(random_leader && p.random_leader) {
+        if p.leader.is_enabled() && !(random_leader && p.random_leader) {
             p.leader = leader;
         }
         p.random_leader = random_leader;
@@ -1252,6 +1263,23 @@ pub fn build_lobby_broadcast(games: &[ServerLobby]) -> Vec<LobbyInfo> {
 #[cfg(test)]
 mod name_tests {
     #[test]
+    fn disabled_hero_cannot_join_a_new_lobby() {
+        let Some(disabled) = Leader::all_known().find(|leader| !leader.is_enabled()) else {
+            return;
+        };
+        let mut options = join_options(None, channel_sender());
+        options.leader = disabled;
+        let mut games = Vec::new();
+        let mut next_id = 1;
+
+        assert_eq!(
+            join_player(&mut games, &mut next_id, options).unwrap_err(),
+            "Selected hero is unavailable"
+        );
+        assert!(games.is_empty());
+    }
+
+    #[test]
     fn ranked_pair_uses_the_longer_wait_window_and_oldest_compatible_search() {
         use super::{ranked_human_pair, RankedSearch};
         use std::time::{Duration, Instant};
@@ -1348,7 +1376,7 @@ mod name_tests {
         JoinPlayerOpts {
             name: "Commander".to_string(),
             clan_tag: String::new(),
-            leader: Leader::of("caesar"),
+            leader: Leader::default(),
             random_leader: false,
             skin_style: 0,
             client_tx,
@@ -1795,7 +1823,7 @@ mod name_tests {
             JoinPlayerOpts {
                 name: "Commander".to_string(),
                 clan_tag: String::new(),
-                leader: sow_core::player::Leader::of("caesar"),
+                leader: sow_core::player::Leader::default(),
                 random_leader: false,
                 skin_style: 0,
                 client_tx,

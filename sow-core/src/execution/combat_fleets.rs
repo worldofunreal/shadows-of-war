@@ -1182,7 +1182,7 @@ mod tests {
     use crate::game::{GameEvent, GameState, UnitType};
     use crate::game_config::GameConfig;
     use crate::map::MapTile;
-    use crate::player::Player;
+    use crate::player::{Player, PlayerType};
     use crate::protocol::Team;
     use crate::warp_fleet::WarpFleet;
     use crate::water_components::WaterComponents;
@@ -1791,43 +1791,257 @@ mod tests {
             "same-team",
             "allied",
         ] {
-            let (mut engine, gap, core) = enclosure_fixture(case);
-            // A direct loss by the victim triggers its OpenFront cluster
-            // check; closing the ring through neutral land alone does not.
-            engine.state.map.terrain[5 * 7 + 5] = MapTile::from_byte(0x80);
-            engine.state.set_tile_owner(5, 5, 2);
-            let (_, trigger) = engine.state.set_tile_owner_for_execution(5, 5, 1);
-            let (_, close_gap) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
-            engine.annex_enclosed_components(trigger.into_iter().chain(close_gap).collect());
-            assert_eq!(
-                engine.state.map.owner_id(core.0, core.1),
-                2,
-                "invalid enclosure was annexed: {case}"
-            );
+            for direct_loss in [false, true] {
+                let (mut engine, gap, core) = enclosure_fixture(case);
+                let trigger = if direct_loss {
+                    engine.state.map.terrain[5 * 7 + 5] = MapTile::from_byte(0x80);
+                    engine.state.set_tile_owner(5, 5, 2);
+                    engine.state.set_tile_owner_for_execution(5, 5, 1).1
+                } else {
+                    None
+                };
+                let (_, close_gap) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
+                engine.annex_enclosed_components(trigger.into_iter().chain(close_gap).collect());
+                assert_eq!(
+                    engine.state.map.owner_id(core.0, core.1),
+                    2,
+                    "invalid enclosure was annexed: {case}, direct_loss={direct_loss}"
+                );
+            }
         }
     }
 
     #[test]
-    fn vanilla_neutral_expansion_cannot_annex_but_directed_conquest_can() {
-        let (mut engine, gap, core) = enclosure_fixture("vanilla");
-        engine.state.config.bot_difficulty = crate::game_config::BotDifficulty::Vanilla;
+    fn neutral_land_and_fleet_closures_annex_all_player_types_once() {
+        use crate::game_config::BotDifficulty::{Terminator, Vanilla};
 
-        let (_, neutral_change) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
-        engine.annex_enclosed_components(neutral_change.into_iter().collect());
-        assert_eq!(engine.state.map.owner_id(core.0, core.1), 2);
-
-        // A directed conquest of defender land can close the enclave; its
-        // candidate is processed after the rest of this capture batch.
-        let (mut engine, gap, core) = enclosure_fixture("vanilla");
-        engine.state.config.bot_difficulty = crate::game_config::BotDifficulty::Vanilla;
-        let (_, directed_change) = engine.state.set_tile_owner_for_execution(core.0, core.1, 1);
-        let (_, neutral_change) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
-        engine
-            .annex_enclosed_components(directed_change.into_iter().chain(neutral_change).collect());
-        for y in 2..=3 {
-            for x in 2..=3 {
-                assert_eq!(engine.state.map.owner_id(x, y), 1);
+        for difficulty in [Vanilla, Terminator] {
+            for victim_type in [PlayerType::Human, PlayerType::Nation, PlayerType::Bot] {
+                for by_fleet in [false, true] {
+                    let (mut engine, gap, _) = enclosure_fixture("vanilla");
+                    engine.state.phase = crate::game::GamePhase::Playing;
+                    engine.state.config.bot_difficulty = difficulty;
+                    engine.state.config.global_speed_multiplier = 100.0;
+                    engine.state.player_mut(1).unwrap().gold = 0.0;
+                    engine.state.player_mut(2).unwrap().player_type = victim_type;
+                    if by_fleet {
+                        let tile = gap.1 * engine.state.map.width + gap.0;
+                        engine.add_fleet(WarpFleet::new(
+                            1,
+                            1,
+                            0,
+                            UnitType::TransportShip,
+                            100.0,
+                            (5, tile),
+                            vec![tile],
+                        ));
+                        engine.execute_fleets();
+                    } else {
+                        engine.add_attack(AttackExecution {
+                            landed: false,
+                            id: 1,
+                            owner_id: 1,
+                            target_owner: 0,
+                            created_tick: 0,
+                            troops: 100_000.0,
+                            to_conquer: BinaryHeap::from([PrioritizedTile {
+                                priority: 0,
+                                insert_seq: 0,
+                                x: gap.0,
+                                y: gap.1,
+                            }]),
+                            insert_seq_counter: 1,
+                            rng: wyrand::WyRand::new(2),
+                            retreating: false,
+                        });
+                        engine.execute_combat();
+                    }
+                    for y in 2..=3 {
+                        for x in 2..=3 {
+                            assert_eq!(engine.state.map.owner_id(x, y), 1);
+                        }
+                    }
+                    let victim = engine.state.player(2).unwrap();
+                    assert!(
+                        !victim.alive,
+                        "{difficulty:?}/{victim_type:?}/fleet={by_fleet}"
+                    );
+                    assert_eq!(victim.tile_count, 0);
+                    assert_eq!(victim.deaths, 1);
+                    let captor = engine.state.player(1).unwrap();
+                    assert_eq!(captor.kills, 1);
+                    assert_eq!(
+                        captor.gold,
+                        match victim_type {
+                            PlayerType::Human => 300.0,
+                            PlayerType::Nation => 150.0,
+                            PlayerType::Bot => 50.0,
+                        }
+                    );
+                    assert_eq!(
+                        engine
+                            .state
+                            .events
+                            .iter()
+                            .filter(|event| matches!(event, GameEvent::TileCaptured { .. }))
+                            .count(),
+                        5,
+                    );
+                    assert_eq!(
+                        engine
+                            .state
+                            .events
+                            .iter()
+                            .filter(|event| matches!(
+                                event,
+                                GameEvent::PlayerEliminated { player_id: 2, .. }
+                            ))
+                            .count(),
+                        1,
+                    );
+                }
             }
+        }
+    }
+
+    #[test]
+    fn neutral_closure_only_transfers_the_enclosed_component() {
+        let (mut engine, gap, core) = enclosure_fixture("vanilla");
+        engine.state.map.terrain[5 * 7 + 5] = MapTile::from_byte(0x80);
+        engine.state.set_tile_owner(5, 5, 2);
+        engine.state.map.compute_shorelines();
+        let (_, change) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
+
+        assert!(
+            engine
+                .annex_enclosed_components(change.into_iter().collect())
+                .is_empty()
+        );
+        assert_eq!(engine.state.map.owner_id(core.0, core.1), 1);
+        assert_eq!(engine.state.map.owner_id(5, 5), 2);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 1);
+        assert!(engine.state.player(2).unwrap().alive);
+        assert_eq!(engine.state.player(1).unwrap().kills, 0);
+    }
+
+    #[test]
+    fn neutral_batches_are_deterministic_and_leave_unrelated_owners_alone() {
+        let mut state = GameState::new(2, 15, 15, GameConfig::default());
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2, 65, 4095] {
+            state.register_player(Player::new_human(
+                id,
+                format!("P{id}"),
+                [1.0; 3],
+                &state.config,
+            ));
+        }
+        for (cx, cy, victim) in [(3, 3, 2), (7, 7, 4095), (11, 11, 65)] {
+            for y in cy - 1..=cy + 1 {
+                for x in cx - 1..=cx + 1 {
+                    if victim != 65 && [(cx, cy - 1), (cx - 1, cy)].contains(&(x, y)) {
+                        continue;
+                    }
+                    state.set_tile_owner(x, y, if (x, y) == (cx, cy) { victim } else { 1 });
+                }
+            }
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let mut changes = Vec::new();
+        // Each victim is touched twice. The already sealed, unrelated owner must not be scanned.
+        for (x, y) in [(7, 6), (3, 2), (6, 7), (2, 3)] {
+            changes.extend(engine.state.set_tile_owner_for_execution(x, y, 1).1);
+        }
+        let mut reversed = engine.clone();
+        let mut reverse_changes = changes.clone();
+        reverse_changes.reverse();
+        let eliminated = engine.annex_enclosed_components(changes.clone());
+        assert_eq!(
+            eliminated.iter().map(|entry| entry.0).collect::<Vec<_>>(),
+            vec![2, 4095]
+        );
+        assert_eq!(
+            reversed.annex_enclosed_components(reverse_changes),
+            eliminated
+        );
+        assert_eq!(engine.state.events, reversed.state.events);
+        assert_eq!(
+            engine.state.map.owner_states(),
+            reversed.state.map.owner_states()
+        );
+        assert_eq!(engine.state.map.owner_id(11, 11), 65);
+        assert!(engine.annex_enclosed_components(changes).is_empty());
+        assert_eq!(engine.state.events.len(), 2);
+    }
+
+    #[test]
+    fn neutral_closure_respects_campaign_holds_and_relations() {
+        for protection in ["assault", "watched", "pending", "neutral", "allied"] {
+            let (mut engine, gap, core) = enclosure_fixture("vanilla");
+            match protection {
+                "assault" => {
+                    engine.campaign_assault = Some(crate::engine::CampaignAssaultState {
+                        root_target: 2,
+                        team: Team::Red,
+                        include_allies: true,
+                        preserve_relation: false,
+                        hold_last_tile: true,
+                        capacity_ratio: 2.0,
+                        interval_ticks: 100,
+                        next_tick: 100,
+                        phase_index: 1,
+                        attacker_ids: vec![1],
+                        target_ids: vec![2],
+                        wave_index: 0,
+                        cycle_released_troops: Default::default(),
+                        target_last_dispatched_wave: Default::default(),
+                        focus_targets: Default::default(),
+                        reserve_spawned: false,
+                    });
+                }
+                "watched" => {
+                    engine.campaign_pre_defeat_targets.insert(2);
+                }
+                "pending" => engine.campaign_pre_defeat_pending = Some(2),
+                "neutral" | "allied" => {
+                    engine.campaign_relations.insert(
+                        1,
+                        if protection == "neutral" {
+                            crate::protocol::CampaignRelation::Neutral
+                        } else {
+                            crate::protocol::CampaignRelation::Allied
+                        },
+                    );
+                }
+                _ => unreachable!(),
+            }
+            let (_, change) = engine.state.set_tile_owner_for_execution(gap.0, gap.1, 1);
+            assert!(
+                engine
+                    .annex_enclosed_components(change.into_iter().collect())
+                    .is_empty()
+            );
+            assert_eq!(engine.state.map.owner_id(core.0, core.1), 2, "{protection}");
+            assert_eq!(
+                engine.state.player(2).unwrap().tile_count,
+                4,
+                "{protection}"
+            );
+
+            engine.campaign_assault = None;
+            engine.campaign_pre_defeat_targets.clear();
+            engine.campaign_pre_defeat_pending = None;
+            engine
+                .campaign_relations
+                .insert(1, crate::protocol::CampaignRelation::Enemy);
+            let (_, change) = engine.state.set_tile_owner_for_execution(core.0, core.1, 1);
+            assert_eq!(
+                engine
+                    .annex_enclosed_components(change.into_iter().collect())
+                    .len(),
+                1
+            );
+            assert_eq!(engine.state.player(2).unwrap().tile_count, 0);
         }
     }
 

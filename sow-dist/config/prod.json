@@ -1,0 +1,95 @@
+{
+  "ai": {
+    "ghost": {
+      "expand": 0.1,
+      "refuse_human_chance": 0,
+      "reserve": 0.3,
+      "trigger": 0.4
+    },
+    "nation": {
+      "expand": 0.15,
+      "refuse_human_chance": 20,
+      "reserve": 0.2,
+      "trigger": 0.45
+    },
+    "think_ghost": [
+      1,
+      10
+    ],
+    "think_ghost_attacked": [
+      5,
+      6
+    ],
+    "think_nation": [
+      40,
+      80
+    ],
+    "think_nation_attacked": [
+      5,
+      30
+    ],
+    "think_tribe": [
+      80,
+      120
+    ],
+    "tribe_terminator": {
+      "expand": 0.15,
+      "refuse_human_chance": 50,
+      "reserve": 0.35,
+      "trigger": 0.5
+    },
+    "tribe_vanilla": {
+      "expand": 0.1,
+      "refuse_human_chance": 50,
+      "reserve": 0.5,
+      "trigger": 0.75
+    }
+  },
+  "alliance_gold_income": 0.25,
+  "alliance_troop_income": 0.1,
+  "attack_cost_enemy": 2.0,
+  "attack_cost_neutral": 1.0,
+  "buildings_enabled": true,
+  "city_max_troops": 3300.0,
+  "city_troop_income": 275.0,
+  "cost_city": 200.0,
+  "cost_factory": 175.0,
+  "cost_farm": 125.0,
+  "cost_port": 200.0,
+  "cost_scale_cap_multiplier": 10.0,
+  "cost_tower": 100.0,
+  "elimination_troop_bounty": 1000.0,
+  "factory_gold_income": 1.1428571428571428,
+  "farm_gold_income": 0.1904761904761905,
+  "farm_troop_income": 275.0,
+  "global_speed_multiplier": 0.16,
+  "gold_base_income": 1.0,
+  "hero_city_gold_income": 1.1428571428571428,
+  "hero_factory_troop_income": 275.0,
+  "hero_port_troop_income": 275.0,
+  "map_control_win_percentage": 0.75,
+  "max_tiles_per_tick": 4096.0,
+  "max_tiles_per_tick_at_reference": 256.0,
+  "max_tiles_per_tick_reference_troops": 25000.0,
+  "max_troops_base": 5000.0,
+  "max_troops_scale": 55.0,
+  "momentum_divisor": 1250.0,
+  "nuke_cost": 500.0,
+  "port_gold_income": 0.5714285714285714,
+  "starting_gold": 160.0,
+  "starting_troops": 5000.0,
+  "terrain_multiplier_highland": 1.5,
+  "terrain_multiplier_mountain": 2.5,
+  "territory_gold_amount": 1.0,
+  "territory_gold_tiles": 1024,
+  "territory_troop_amount": 0.75,
+  "territory_troop_tiles": 16,
+  "tick_rate_ms": 100.0,
+  "tower_priority": 120.0,
+  "tower_range": 6.0,
+  "tower_strength": 0.05,
+  "trade_ship_gold_income": 0.5714285714285714,
+  "trade_troop_income": 0.1,
+  "troop_base_income": 175.0,
+  "troop_upkeep_per_1000": 0.0
+}

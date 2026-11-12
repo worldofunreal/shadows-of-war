@@ -513,12 +513,12 @@ fn migrate_legacy_currency(profile: &mut serde_json::Map<String, serde_json::Val
 /// stay intact because they also key historical purchase markers.
 fn migrate_legacy_leader_ids(profile: &mut serde_json::Map<String, serde_json::Value>) {
     let canonical_id = |value: &str| {
-        crate::commerce::leader_from_id(value).map(|leader| crate::commerce::leader_id(leader))
+        crate::commerce::leader_from_any_id(value).map(|leader| crate::commerce::leader_id(leader))
     };
     if let Some(saved) = profile
         .get("preferred_leader")
         .and_then(serde_json::Value::as_str)
-        .and_then(crate::commerce::leader_from_id)
+        .and_then(crate::commerce::leader_from_any_id)
     {
         profile.insert(
             "preferred_leader".to_string(),
@@ -1143,7 +1143,7 @@ fn collect_purchase_markers(
     }
     for leader_id in &account.profile.purchased_leaders {
         markers.insert(format!("{}:leader:{leader_id}", account.id));
-        if let Some(leader) = crate::commerce::leader_from_id(leader_id) {
+        if let Some(leader) = crate::commerce::leader_from_any_id(leader_id) {
             for legacy_id in leader.legacy_ids() {
                 markers.insert(format!("{}:leader:{legacy_id}", account.id));
             }

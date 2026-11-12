@@ -116,9 +116,10 @@ pub(crate) fn free_hero_rotation_for_period(
     current_period: u64,
 ) -> Result<Vec<crate::leaders::Leader>, Box<dyn std::error::Error + Send + Sync>> {
     use crate::commerce::{
-        FREE_ROTATION_SIZE, generate_free_rotation, leader_from_id, leader_id,
-        legacy_rotation_for_period,
+        FREE_ROTATION_SIZE, generate_free_rotation, leader_from_any_id, leader_id,
+        legacy_rotation_for_period, repair_free_rotation,
     };
+
     use crate::leaders::Leader;
     let transaction = db.begin_write()?;
     let mut table = transaction.open_table(HERO_ROTATIONS_TABLE)?;
@@ -153,6 +154,10 @@ pub(crate) fn free_hero_rotation_for_period(
         }
     };
 
+    state
+        .queued
+        .retain(|queued| leader_from_any_id(&queued.id).is_some_and(Leader::is_enabled));
+
     let known_now = Leader::all()
         .map(|leader| leader_id(leader).to_string())
         .collect::<BTreeSet<_>>();
@@ -178,7 +183,10 @@ pub(crate) fn free_hero_rotation_for_period(
             record
                 .leaders
                 .iter()
-                .map(|id| leader_from_id(id).ok_or_else(|| format!("unknown stored hero id: {id}")))
+                .map(|id| {
+                    leader_from_any_id(id)
+                        .ok_or_else(|| format!("unknown stored hero id: {id}"))
+                })
                 .collect::<Result<Vec<_>, _>>()?
         };
         let period = state.latest_period.saturating_add(1);
@@ -194,7 +202,7 @@ pub(crate) fn free_hero_rotation_for_period(
             .queued
             .iter()
             .filter(|queued| queued.eligible_period <= period)
-            .filter_map(|queued| leader_from_id(&queued.id))
+            .filter_map(|queued| leader_from_any_id(&queued.id))
             .collect::<Vec<_>>();
         let (rotation, _) =
             generate_free_rotation(&candidates, &previous, &queued, &mut rand::thread_rng())
@@ -224,12 +232,67 @@ pub(crate) fn free_hero_rotation_for_period(
         record
             .leaders
             .iter()
-            .map(|id| leader_from_id(id).ok_or_else(|| format!("unknown stored hero id: {id}")))
+            .map(|id| leader_from_any_id(id).ok_or_else(|| format!("unknown stored hero id: {id}")))
             .collect::<Result<Vec<_>, _>>()?
     };
-    if rotation.len() != FREE_ROTATION_SIZE {
-        return Err("stored hero rotation does not contain eight heroes".into());
-    }
+
+    let active_rotation = rotation
+        .iter()
+        .copied()
+        .filter(|leader| leader.is_enabled())
+        .collect::<Vec<_>>();
+    let unique_rotation = active_rotation.iter().copied().collect::<HashSet<_>>();
+    let rotation = if active_rotation.len() == FREE_ROTATION_SIZE
+        && unique_rotation.len() == FREE_ROTATION_SIZE
+    {
+        active_rotation
+    } else {
+        let previous = if current_period == 0 {
+            Vec::new()
+        } else {
+            let previous_key = format!("period:{}", current_period - 1);
+            match table.get(previous_key.as_str())? {
+                Some(record) => serde_json::from_slice::<HeroRotationRecord>(record.value())?
+                    .leaders
+                    .iter()
+                    .map(|id| {
+                        leader_from_any_id(id)
+                            .ok_or_else(|| format!("unknown stored hero id: {id}"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                None => Vec::new(),
+            }
+        };
+        let candidates = Leader::all()
+            .filter(|leader| !leader.always_free())
+            .filter(|leader| {
+                !state.queued.iter().any(|queued| {
+                    queued.id == leader_id(*leader) && queued.eligible_period > current_period
+                })
+            })
+            .collect::<Vec<_>>();
+        let repaired = repair_free_rotation(
+            &candidates,
+            &previous,
+            &active_rotation,
+            &mut rand::thread_rng(),
+        )
+        .ok_or("unable to repair the current hero rotation")?;
+        if repaired.len() != FREE_ROTATION_SIZE {
+            return Err("repaired hero rotation does not contain eight heroes".into());
+        }
+        state.queued.retain(|queued| {
+            !repaired.iter().any(|leader| leader_id(*leader) == queued.id)
+        });
+        let record = HeroRotationRecord {
+            leaders: repaired
+                .iter()
+                .map(|leader| leader_id(*leader).to_string())
+                .collect(),
+        };
+        table.insert(current_key.as_str(), serde_json::to_vec(&record)?.as_slice())?;
+        repaired
+    };
     table.insert(
         HERO_ROTATION_STATE_KEY,
         serde_json::to_vec(&state)?.as_slice(),
@@ -243,9 +306,11 @@ pub(crate) fn free_hero_rotation_for_period(
 mod hero_rotation_tests {
     use super::*;
     use crate::commerce::{
-        FREE_ROTATION_SIZE, leader_from_id, leader_id, legacy_rotation_for_period,
+        FREE_ROTATION_SIZE, generate_free_rotation, leader_from_id, leader_id,
+        legacy_rotation_for_period,
     };
     use crate::geo_entities::{Gender, Region};
+    use rand::SeedableRng;
     use std::sync::Arc;
 
     #[test]
@@ -279,6 +344,65 @@ mod hero_rotation_tests {
         assert_eq!(
             free_hero_rotation_for_period(&database, period).unwrap(),
             initial
+        );
+    }
+
+    #[test]
+    fn current_rotation_repairs_a_missing_hero_and_persists_the_replacement() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rotation-repair.redb");
+        let period = 9_050;
+        let database = init_database(&path).unwrap();
+        free_hero_rotation_for_period(&database, period).unwrap();
+        let candidates = crate::leaders::Leader::all()
+            .filter(|leader| !leader.always_free())
+            .collect::<Vec<_>>();
+        let (original, _) = generate_free_rotation(
+            &candidates,
+            &[],
+            &[],
+            &mut rand::rngs::StdRng::seed_from_u64(9050),
+        )
+        .unwrap();
+        let disabled = crate::leaders::Leader::all_known().find(|leader| !leader.is_enabled());
+        let mut persisted = original.clone();
+        if let Some(disabled) = disabled {
+            persisted[0] = disabled;
+        } else {
+            persisted.remove(0);
+        }
+        let retained = original.iter().copied().skip(1).collect::<Vec<_>>();
+
+        let transaction = database.begin_write().unwrap();
+        {
+            let mut table = transaction.open_table(HERO_ROTATIONS_TABLE).unwrap();
+            let key = format!("period:{period}");
+            let record = HeroRotationRecord {
+                leaders: persisted
+                    .iter()
+                    .map(|leader| leader_id(*leader).to_string())
+                    .collect(),
+            };
+            table
+                .insert(key.as_str(), serde_json::to_vec(&record).unwrap().as_slice())
+                .unwrap();
+        }
+        transaction.commit().unwrap();
+
+        let repaired = free_hero_rotation_for_period(&database, period).unwrap();
+        assert_eq!(repaired.len(), FREE_ROTATION_SIZE);
+        assert!(retained.iter().all(|leader| repaired.contains(leader)));
+        assert!(repaired.iter().all(|leader| leader.is_enabled()));
+        assert_eq!(
+            free_hero_rotation_for_period(&database, period).unwrap(),
+            repaired
+        );
+        drop(database);
+
+        let database = init_database(&path).unwrap();
+        assert_eq!(
+            free_hero_rotation_for_period(&database, period).unwrap(),
+            repaired
         );
     }
 

@@ -197,7 +197,7 @@ pub fn validate_menu_guide_progress(
     if progress
         .selected_leader
         .as_deref()
-        .is_some_and(|leader| crate::commerce::leader_from_id(leader).is_none())
+        .is_some_and(|leader| crate::commerce::leader_from_any_id(leader).is_none())
     {
         return Err("unknown selected leader".to_string());
     }

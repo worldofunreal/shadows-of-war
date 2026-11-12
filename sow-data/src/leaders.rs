@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 /// A playable hero, numbered by its position among the catalog's heroes.
 /// The first hero (Caesar) is the default.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Leader(u16);
 
 struct HeroEntry {
@@ -40,17 +40,33 @@ fn heroes() -> &'static [HeroEntry] {
             "the catalog needs between 1 and {} heroes",
             u16::MAX
         );
+        assert!(
+            heroes.iter().any(|entry| {
+                entry
+                    .character
+                    .hero
+                    .as_ref()
+                    .is_some_and(|hero| hero.enabled)
+            }),
+            "the catalog needs at least one enabled hero"
+        );
         heroes
     })
 }
 
 impl Leader {
-    pub fn all() -> impl Iterator<Item = Leader> {
+    /// Every catalog hero, including heroes temporarily hidden from new games.
+    pub fn all_known() -> impl Iterator<Item = Leader> {
         (0..heroes().len()).map(|index| Leader(index as u16))
     }
 
+    /// Heroes that can be selected for new games.
+    pub fn all() -> impl Iterator<Item = Leader> {
+        Self::all_known().filter(|leader| leader.is_enabled())
+    }
+
     pub fn count() -> usize {
-        heroes().len()
+        Self::all().count()
     }
 
     /// Position among the catalog's heroes (stable for a given catalog).
@@ -59,13 +75,13 @@ impl Leader {
     }
 
     pub fn nth(index: usize) -> Option<Leader> {
-        (index < heroes().len()).then_some(Leader(index as u16))
+        Self::all().nth(index)
     }
 
     /// The hero with this catalog id, for ids fixed in code (campaign
     /// advisors, tests). Panics when the catalog lost that hero.
     pub fn of(id: &str) -> Leader {
-        Leader::all()
+        Leader::all_known()
             .find(|leader| leader.id() == id)
             .unwrap_or_else(|| panic!("the catalog has no hero {id:?}"))
     }
@@ -76,6 +92,10 @@ impl Leader {
 
     pub fn character(self) -> &'static GeoEntity {
         self.entry().character
+    }
+
+    pub fn is_enabled(self) -> bool {
+        self.hero().enabled
     }
 
     fn hero(self) -> &'static geo_entities::Hero {
@@ -288,6 +308,14 @@ impl Leader {
     }
 }
 
+impl Default for Leader {
+    fn default() -> Self {
+        Self::all()
+            .next()
+            .expect("the catalog needs at least one enabled hero")
+    }
+}
+
 impl std::fmt::Debug for Leader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.wire_id())
@@ -303,7 +331,7 @@ impl Serialize for Leader {
 impl<'de> Deserialize<'de> for Leader {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = String::deserialize(deserializer)?;
-        crate::commerce::leader_from_id(&value)
+        crate::commerce::leader_from_any_id(&value)
             .ok_or_else(|| serde::de::Error::custom(format!("unknown hero {value:?}")))
     }
 }
@@ -334,15 +362,41 @@ mod tests {
                 serde_json::json!(wire)
             );
         }
-        assert_eq!(Leader::default().id(), "caesar");
+        assert_eq!(Leader::default(), Leader::all().next().unwrap());
+        if Leader::of("caesar").is_enabled() {
+            assert_eq!(Leader::default().id(), "caesar");
+        }
+    }
+
+    #[test]
+    fn hero_enabled_defaults_true_and_accepts_false() {
+        let mut hero = serde_json::to_value(Leader::all_known().next().unwrap().hero()).unwrap();
+        hero.as_object_mut().unwrap().remove("enabled");
+        assert!(serde_json::from_value::<geo_entities::Hero>(hero.clone())
+            .unwrap()
+            .enabled);
+        hero["enabled"] = serde_json::Value::Bool(false);
+        assert!(!serde_json::from_value::<geo_entities::Hero>(hero)
+            .unwrap()
+            .enabled);
+    }
+
+    #[test]
+    fn active_indices_skip_disabled_entries_without_renumbering_catalog_ids() {
+        for (active_index, leader) in Leader::all().enumerate() {
+            assert!(leader.is_enabled());
+            assert_eq!(Leader::nth(active_index), Some(leader));
+            assert_eq!(Leader::all_known().nth(leader.index()), Some(leader));
+        }
+        assert_eq!(Leader::count(), Leader::all().count());
     }
 
     #[test]
     fn legacy_hero_names_resolve_after_renames() {
-        for leader in Leader::all() {
+        for leader in Leader::all_known() {
             for alias in leader.legacy_ids() {
                 assert_eq!(
-                    crate::commerce::leader_from_id(alias),
+                    crate::commerce::leader_from_any_id(alias),
                     Some(leader),
                     "legacy hero alias {alias:?} must resolve to {leader:?}",
                 );
@@ -364,7 +418,9 @@ mod tests {
             assert!(band.contains(&leader.price_crowns()), "{} is outside its band", leader.id());
             assert!(crowns.insert(leader.price_crowns()), "duplicate crown price for {}", leader.id());
         }
-        assert!(Leader::all().filter(|leader| leader.always_free()).all(|leader| leader.price_crowns() == 0));
+        assert!(Leader::all()
+            .filter(|leader| leader.always_free())
+            .all(|leader| leader.price_crowns() == 0));
         // The caps govern purchasable heroes; a free hero's rarity only sets its display.
         let paid: Vec<Leader> = Leader::all().filter(|leader| !leader.always_free()).collect();
         let total = paid.len();
@@ -376,7 +432,7 @@ mod tests {
     #[test]
     fn every_hero_is_complete_in_the_catalog() {
         let mut names = std::collections::HashSet::new();
-        for leader in Leader::all() {
+        for leader in Leader::all_known() {
             assert!(
                 names.insert(leader.name()),
                 "{leader:?} repeats a hero name"

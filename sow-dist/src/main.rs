@@ -1288,6 +1288,9 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
     let hero_art_slugs = sow_core::player::Leader::all()
         .map(sow_core::player::Leader::art_slug)
         .collect::<std::collections::BTreeSet<_>>();
+    let known_hero_art_slugs = sow_core::player::Leader::all_known()
+        .map(sow_core::player::Leader::art_slug)
+        .collect::<std::collections::BTreeSet<_>>();
     let mut avatar_portraits = Vec::new();
     for folder in ["heroes", "nations", "tribes", "campaign"] {
         for file in sorted_files(&art.join("avatars").join(folder))? {
@@ -1303,6 +1306,9 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
                     );
                 }
                 if hero_art_slugs.contains(stem.as_str()) {
+                    continue;
+                }
+                if known_hero_art_slugs.contains(stem.as_str()) {
                     continue;
                 }
                 bail!(
@@ -1407,6 +1413,13 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
                 "unknown hero scene {}: use <avatar>_desktop or <avatar>_mobile",
                 file.display()
             );
+        }
+        let base = stem
+            .strip_suffix("_desktop")
+            .or_else(|| stem.strip_suffix("_mobile"))
+            .unwrap_or_default();
+        if known_hero_art_slugs.contains(base) && !hero_art_slugs.contains(base) {
+            continue;
         }
         publish(&file, &format!("shell/leaders/{stem}.webp"), None)?;
     }
@@ -1541,6 +1554,11 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         produced.insert(destination);
     }
     for file in sorted_files(&art.join(SPRITE_ABILITY_ART))? {
+        if known_hero_art_slugs.contains(file_stem(&file).as_str())
+            && !hero_art_slugs.contains(file_stem(&file).as_str())
+        {
+            continue;
+        }
         let public = format!("gameplay/icons/abilities/{}.webp", file_stem(&file));
         let destination = out.join(&public);
         pipeline.publish_asset(&file, &destination, Path::new(&public), None)?;
@@ -4085,7 +4103,7 @@ fn load_leader_biography(
 fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
     let site = root.join("sow-web/site");
     let biography_directory = site.join("leader-bios");
-    let expected_leaders = sow_core::player::Leader::all()
+    let expected_leaders = sow_core::player::Leader::all_known()
         .map(|leader| leader.id())
         .collect::<std::collections::HashSet<_>>();
     let published_languages = sow_i18n::Language::published_registry()
@@ -8200,14 +8218,14 @@ fn main() -> Result<()> {
         return Ok(());
     }
     if args.first().is_some_and(|arg| arg == "config") {
-        let site = match args.get(1).map(String::as_str) {
-            None => site::Site::Production,
-            Some("ptr") if args.len() == 2 => site::Site::Ptr,
-            _ => bail!("usage: ./sow config [ptr]"),
+        let site = match (args.get(1).map(String::as_str), args.len()) {
+            (Some("p" | "prod"), 2) => site::Site::Production,
+            (Some("ptr"), 2) => site::Site::Ptr,
+            _ => bail!("usage: ./sow config p|ptr"),
         };
         site::select(site)?;
         load_dotenv(&root.join(site.env_file()));
-        return prod::edit_server_config();
+        return prod::edit_server_config(&root);
     }
     let mut cmd = String::new();
     let mut bump = false;

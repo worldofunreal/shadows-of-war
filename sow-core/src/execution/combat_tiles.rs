@@ -1,3 +1,4 @@
+use crate::bitset::DenseBitSet;
 use crate::building::BuildingGrid;
 use crate::diplomacy::is_traitor_active;
 use crate::engine::SowEngine;
@@ -341,21 +342,47 @@ impl SowEngine {
         &mut self,
         changes: Vec<TerritoryChange>,
     ) -> Vec<(u16, u16, u32, u32)> {
-        // OpenFront reruns the owner's cluster check when that owner loses a
-        // tile; a neutral capture by itself does not trigger another player's scan.
-        let mut changed_victims = BTreeSet::new();
+        // Check each affected owner once, in ID order, using the final capture batch.
+        // Neutral captures can close an adjacent owner's last opening without taking its land.
+        let mut changed_victims = DenseBitSet::new();
         for change in changes {
             if change.old_owner != 0 {
-                changed_victims.insert(change.old_owner);
+                changed_victims.insert(u32::from(change.old_owner));
+            } else if change.new_owner != 0 {
+                let captor = self.state.map.owner_id(change.x, change.y);
+                if captor == 0 {
+                    continue;
+                }
+                self.state
+                    .map
+                    .for_each_neighbor4(change.x, change.y, |x, y| {
+                        let owner = self.state.map.owner_id(x, y);
+                        if owner != 0 && owner != captor {
+                            changed_victims.insert(u32::from(owner));
+                        }
+                    });
             }
         }
 
         let mut eliminated = Vec::new();
-        for victim_id in changed_victims {
+        for victim_id in changed_victims.ones().map(|id| id as u16) {
             if !self
                 .state
                 .player(victim_id)
                 .is_some_and(|player| player.alive && player.tile_count > 0)
+            {
+                continue;
+            }
+            // Bulk annexation must not bypass a campaign's scripted final capture.
+            if self
+                .campaign_assault
+                .as_ref()
+                .is_some_and(|assault| assault.hold_last_tile && assault.root_target == victim_id)
+                || Self::pre_defeat_watches(
+                    &self.campaign_pre_defeat_targets,
+                    self.campaign_pre_defeat_pending,
+                    victim_id,
+                )
             {
                 continue;
             }
@@ -368,12 +395,12 @@ impl SowEngine {
             let mut candidates = Vec::new();
             if clusters.len() == 1 {
                 if let Some(captor) = self.surrounded_by_single_enemy(victim_id, &clusters[0]) {
-                    candidates.push((clusters[0].tiles.clone(), captor));
+                    candidates.push((0, captor));
                 }
             } else {
                 let main = &clusters[primary];
                 if let Some(captor) = self.surrounded_by_single_enemy(victim_id, main) {
-                    candidates.push((main.tiles.clone(), captor));
+                    candidates.push((primary, captor));
                 }
                 for (index, cluster) in clusters.iter().enumerate() {
                     if index == primary || !self.secondary_cluster_is_surrounded(victim_id, cluster)
@@ -381,12 +408,13 @@ impl SowEngine {
                         continue;
                     }
                     if let Some(captor) = self.capturing_player(victim_id, cluster) {
-                        candidates.push((cluster.tiles.clone(), captor));
+                        candidates.push((index, captor));
                     }
                 }
             }
 
-            for (cluster, captor_id) in candidates {
+            for (index, captor_id) in candidates {
+                let cluster = &clusters[index].tiles;
                 if captor_id == victim_id
                     || self.annex_players_friendly(captor_id, victim_id)
                     || self
@@ -426,14 +454,9 @@ impl SowEngine {
             return Vec::new();
         }
 
-        let border_tiles: Vec<u32> = player
-            .border_coords(self.state.map.width)
-            .map(|(x, y)| y * self.state.map.width + x)
-            .collect();
-        let border_members: HashSet<u32> = border_tiles.iter().copied().collect();
         let mut seen = HashSet::new();
         let mut clusters = Vec::new();
-        for start in border_tiles {
+        for start in player.border_tiles.ones() {
             if !seen.insert(start) {
                 continue;
             }
@@ -452,7 +475,7 @@ impl SowEngine {
                 let y = tile / self.state.map.width;
                 self.state.map.for_each_neighbor(x, y, |nx, ny| {
                     let neighbor = ny * self.state.map.width + nx;
-                    if border_members.contains(&neighbor) && seen.insert(neighbor) {
+                    if player.border_tiles.contains(neighbor) && seen.insert(neighbor) {
                         min_x = min_x.min(nx);
                         min_y = min_y.min(ny);
                         max_x = max_x.max(nx);
@@ -1408,8 +1431,7 @@ impl SowEngine {
                                 execution.owner_id,
                             );
                         if captured > 0.0
-                            && let Some(defender) =
-                                self.state.player_mut(execution.target_owner)
+                            && let Some(defender) = self.state.player_mut(execution.target_owner)
                         {
                             let before = defender.troops;
                             defender.credit_troops_capped(captured, defender.max_troops);
@@ -1623,7 +1645,7 @@ mod tests {
     };
     use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
-    use crate::game::{BuildingKind, GamePhase, GameState};
+    use crate::game::{BuildingKind, GameEvent, GamePhase, GameState};
     use crate::game_config::{GameConfig, max_tiles_cap_for_troops};
     use crate::geo_entities::Target;
     use crate::map::{MapTile, TerrainType};
@@ -1632,6 +1654,98 @@ mod tests {
     use crate::water_components::WaterComponents;
     use std::collections::{BinaryHeap, HashSet};
     use wyrand::WyRand;
+
+    #[test]
+    #[ignore = "wall-clock benchmark; run in release with --ignored --nocapture --test-threads=1"]
+    fn neutral_annexation_combat_benchmark() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        const WIDTH: u32 = 512;
+        const SAMPLES: usize = 201;
+        for (name, enemy_x, captures) in [
+            ("open-neutral", 256, 256),
+            ("large-open-frontier", 34, 1),
+            ("same-victim-batch", 34, 256),
+        ] {
+            let mut state = GameState::new(
+                7,
+                WIDTH,
+                WIDTH,
+                GameConfig {
+                    tick_rate_ms: 100.0,
+                    global_speed_multiplier: 1.0,
+                    ..Default::default()
+                },
+            );
+            state.phase = GamePhase::Playing;
+            state.map.terrain.fill(MapTile::from_byte(0x80));
+            for id in [1, 2] {
+                let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+                player.leader = crate::player::Leader::of("caesar");
+                state.register_player(player);
+            }
+            for y in 1..WIDTH - 1 {
+                state.set_tile_owner(32, y, 1);
+            }
+            for y in 8..WIDTH - 8 {
+                for x in enemy_x..WIDTH - 8 {
+                    state.set_tile_owner(x, y, 2);
+                }
+            }
+            let mut template = crate::engine::SowEngine::new(state, WaterComponents::default());
+            let border_tiles = template.state.player(2).unwrap().border_tiles.count_ones();
+            template.add_attack(AttackExecution {
+                landed: false,
+                id: 1,
+                owner_id: 1,
+                target_owner: 0,
+                created_tick: 0,
+                troops: 1_000_000.0,
+                to_conquer: (0..captures)
+                    .map(|seq| PrioritizedTile {
+                        priority: i64::MAX,
+                        insert_seq: seq,
+                        x: 33,
+                        y: 128 + seq,
+                    })
+                    .collect(),
+                insert_seq_counter: captures,
+                rng: WyRand::new(7),
+                retreating: false,
+            });
+            // Exclude setup/cloning and keep the capture count identical across rule changes.
+            // Neutral tiles cost five at this troop strength; base budget is two.
+            let mut samples = Vec::with_capacity(SAMPLES);
+            for sample in 0..SAMPLES + 16 {
+                let mut engine = template.clone();
+                let started = Instant::now();
+                engine.execute_combat_using(|_, _| 1, |_, _, _| 2.5 * f64::from(captures));
+                let elapsed = started.elapsed().as_nanos();
+                black_box(&engine);
+                assert_eq!(
+                    engine
+                        .state
+                        .events
+                        .iter()
+                        .filter(|event| matches!(event, GameEvent::TileCaptured { .. }))
+                        .count(),
+                    captures as usize,
+                    "{name}: benchmark workload changed"
+                );
+                assert!(engine.state.player(2).unwrap().alive);
+                if sample >= 16 {
+                    samples.push(elapsed);
+                }
+            }
+            samples.sort_unstable();
+            println!(
+                "neutral annexation {name}: captures={captures} border={border_tiles} median={}ns p95={}ns",
+                samples[SAMPLES / 2],
+                samples[SAMPLES * 95 / 100]
+            );
+        }
+    }
 
     #[test]
     fn occupied_land_share_uses_actual_land_and_handles_missing_land() {
