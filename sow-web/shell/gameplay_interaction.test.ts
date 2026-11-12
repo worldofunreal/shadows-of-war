@@ -1133,10 +1133,10 @@ test("hero ability notices show that hero's ability icon in the seal", () => {
         },
     );
     assert.match(
-        notificationIcon("hud.elimination", { hero: "lady_six_sky", victim: "Tribe" }),
+        notificationIcon("hud.elimination", { hero_art: "six_sky", victim: "Tribe" }),
         /<img class='sow-hud__notification-ability' src='\/assets\/gameplay\/icons\/abilities\/six_sky\.webp'/,
     );
-    assert.doesNotMatch(notificationIcon("hud.elimination", { hero: "x'><script>" }), /<img/);
+    assert.doesNotMatch(notificationIcon("hud.elimination", { hero_art: "x'><script>" }), /<img/);
     assert.doesNotMatch(notificationIcon("hud.elimination", { victim: "Tribe" }), /<img/);
     assert.ok(fs.existsSync(path.join(shell, "../../assets/art/icons/abilities/six_sky.webp")));
     assert.ok(hudCss.includes(".sow-hud__notification-ability"));

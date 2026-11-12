@@ -458,28 +458,6 @@ html[dir="rtl"] #sow-hud-dev-layer {
   min-width: 0;
 }
 
-.sow-hud__nameplate:has(> .sow-hud__market-entry:not([hidden])) {
-  height: calc(var(--sow-player-panel-height) + 35px + 2rem + 3px);
-  grid-auto-rows: 2rem;
-}
-
-#sow-hud .sow-hud__market-entry {
-  grid-column: 1 / -1;
-  grid-row: 5;
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  min-block-size: 2rem;
-  min-height: 2rem;
-  padding: 0.25rem 0.6rem;
-  pointer-events: auto;
-}
-
-#sow-hud .sow-hud__market-entry[hidden] {
-  display: none;
-}
-
 .sow-hud__nameplate-stat {
   display: flex;
   align-items: center;
@@ -1570,38 +1548,246 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 .sow-hud__deploy-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 12px;
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background:
+    linear-gradient(
+      115deg,
+      color-mix(in srgb, var(--sow-gold) 18%, transparent) 0%,
+      color-mix(in srgb, var(--sow-gold) 5%, transparent) 62%,
+      rgb(10 12 16 / 92%) 100%
+    ),
+    var(--sow-tactical-surface-subcard-bg);
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 48%, transparent);
+  border-top-color: color-mix(in srgb, var(--sow-gold-bright) 72%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 10%),
+    0 6px 20px rgb(0 0 0 / 45%);
+  text-align: start;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.sow-hud__deploy-panel.hidden {
+  display: none !important;
+}
+
+.sow-hud__deploy-panel[data-spawned="true"] {
+  cursor: pointer;
+  border-color: color-mix(in srgb, #63c02d 56%, transparent);
+  border-top-color: color-mix(in srgb, #a4ea4a 76%, transparent);
+  background:
+    linear-gradient(
+      115deg,
+      rgb(99 192 45 / 18%) 0%,
+      rgb(99 192 45 / 5%) 62%,
+      rgb(10 12 16 / 92%) 100%
+    ),
+    var(--sow-tactical-surface-subcard-bg);
+}
+
+.sow-hud__deploy-panel[data-urgency="warning"] {
+  border-color: rgb(251 191 36 / 62%);
+  border-top-color: #fde047;
+}
+
+.sow-hud__deploy-panel[data-urgency="critical"] {
+  border-color: rgb(248 113 113 / 74%);
+  border-top-color: #fca5a5;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    0 0 18px rgb(239 68 68 / 28%),
+    0 6px 20px rgb(0 0 0 / 50%);
+}
+
+.sow-hud__deploy-badge {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 46%, transparent);
+  background: linear-gradient(180deg, rgb(245 197 66 / 22%), rgb(245 197 66 / 6%));
+  color: var(--sow-gold-bright);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
+  flex: 0 0 auto;
+}
+
+.sow-hud__deploy-panel[data-spawned="true"] .sow-hud__deploy-badge {
+  border-color: rgb(164 234 74 / 52%);
+  background: linear-gradient(180deg, rgb(99 192 45 / 28%), rgb(36 110 16 / 14%));
+  color: #c4ff66;
+}
+
+.sow-hud__deploy-panel[data-urgency="critical"] .sow-hud__deploy-badge {
+  border-color: rgb(248 113 113 / 64%);
+  background: linear-gradient(180deg, rgb(239 68 68 / 28%), rgb(153 27 27 / 16%));
+  color: #fca5a5;
+}
+
+.sow-hud__deploy-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.sow-hud__deploy-body {
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  width: 100%;
-  min-height: 48px;
-  padding: 6px 16px;
-  border-radius: 5px 5px 11px 4px;
-  background: linear-gradient(
-    110deg,
-    color-mix(in srgb, var(--sow-gold) 13%, transparent),
-    color-mix(in srgb, var(--sow-gold) 4%, transparent)
-  );
-  border: 1px solid color-mix(in srgb, var(--sow-gold) 42%, transparent);
-  box-shadow: inset 0 1px rgb(255 255 255 / 5%);
-  text-align: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sow-hud__deploy-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
 .sow-hud__deploy-title {
-  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+  color: var(--sow-gold-bright);
+}
+
+.sow-hud__deploy-panel[data-spawned="true"] .sow-hud__deploy-title {
+  color: #f5f1e8;
+}
+
+.sow-hud__deploy-status {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgb(164 234 74 / 58%);
+  background: rgb(46 136 21 / 36%);
+  color: #d9ff88;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: var(--sow-gold-bright);
-  text-shadow: none;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.sow-hud__deploy-status[hidden] {
+  display: none !important;
+}
+
+.sow-hud__deploy-track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid var(--sow-tactical-track-accent-border);
+  background: var(--sow-tactical-track-bg);
+  box-shadow: var(--sow-tactical-track-shadow);
+}
+
+.sow-hud__deploy-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sow-fill-construction-gradient);
+  box-shadow: var(--sow-fill-construction-shadow);
+  transition: width 100ms linear;
+}
+
+.sow-hud__deploy-panel[data-spawned="true"] .sow-hud__deploy-fill {
+  background: linear-gradient(90deg, #2e8815 0%, #63c02d 55%, #c4ff66 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 42%),
+    0 0 10px rgb(99 192 45 / 38%);
+}
+
+.sow-hud__deploy-panel[data-urgency="warning"] .sow-hud__deploy-fill {
+  background: linear-gradient(90deg, #d97706 0%, #f59e0b 55%, #fde047 100%);
+}
+
+.sow-hud__deploy-panel[data-urgency="critical"] .sow-hud__deploy-fill {
+  background: linear-gradient(90deg, #b91c1c 0%, #ef4444 55%, #fca5a5 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 45%),
+    0 0 12px rgb(239 68 68 / 55%);
+}
+
+.sow-hud__deploy-timer-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 86px;
+  min-height: 42px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 44%, transparent);
+  background: rgb(7 8 11 / 88%);
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 72%),
+    0 1px 0 rgb(255 255 255 / 7%);
+}
+
+.sow-hud__deploy-panel[data-spawned="true"] .sow-hud__deploy-timer-wrap {
+  border-color: rgb(164 234 74 / 48%);
+}
+
+.sow-hud__deploy-panel[data-urgency="warning"] .sow-hud__deploy-timer-wrap {
+  border-color: rgb(251 191 36 / 70%);
+}
+
+.sow-hud__deploy-panel[data-urgency="critical"] .sow-hud__deploy-timer-wrap {
+  border-color: rgb(248 113 113 / 85%);
+  background: rgb(32 8 10 / 90%);
 }
 
 .sow-hud__deploy-timer {
-  font-family: monospace;
-  font-size: 15px;
-  font-weight: 800;
-  color: #f1f5f9;
-  margin-top: 2px;
+  font-family: var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #fff8e6;
+  margin-top: 0;
+}
+
+.sow-hud__deploy-panel[data-urgency="warning"] .sow-hud__deploy-timer {
+  color: #fde047;
+}
+
+.sow-hud__deploy-panel[data-urgency="critical"] .sow-hud__deploy-timer {
+  color: #fca5a5;
+  animation: sow-deploy-timer-pulse 0.55s ease-in-out infinite alternate;
+}
+
+@keyframes sow-deploy-timer-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sow-hud__deploy-panel[data-urgency="critical"] .sow-hud__deploy-timer {
+    animation: none;
+  }
 }
 
 .sow-hud__currency-icon {
@@ -3082,22 +3268,22 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   width: min(560px, calc(100vw - 24px));
   padding: 24px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--sow-control-accent) 42%, var(--sow-line));
-  border-top-color: var(--sow-control-accent-bright);
-  border-radius: 8px 8px 16px 6px;
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top: 2px solid var(--sow-control-accent-bright);
+  border-radius: var(--sow-tactical-surface-radius);
   background:
-    linear-gradient(115deg, color-mix(in srgb, var(--sow-control-accent) 7%, transparent), transparent 40%),
-    radial-gradient(ellipse at 100% 0%, rgb(221 155 76 / 10%), transparent 46%),
-    var(--sow-panel-card);
+    radial-gradient(ellipse at 50% 0%, rgba(245, 197, 66, 0.12) 0%, transparent 62%),
+    radial-gradient(ellipse at 100% 100%, rgba(222, 133, 129, 0.08) 0%, transparent 54%),
+    linear-gradient(165deg, rgba(22, 26, 33, 0.98) 0%, rgba(10, 12, 16, 0.99) 100%);
   box-shadow:
     var(--sow-tactical-modal-shadow),
-    inset 0 1px 0 rgb(255 255 255 / 7%);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   backdrop-filter: blur(var(--sow-tactical-surface-blur));
 }
 
 .sow-hud__exit-card .sow-hud__endgame-actions {
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 /* Command ring: one fixed six-slot shape for every context and submenu.
@@ -4567,8 +4753,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__exit-card .sow-hud__endgame-hero {
+  align-items: center;
   justify-content: flex-start;
-  gap: 16px;
+  gap: 18px;
 }
 
 .sow-hud__endgame-hero-copy {
@@ -4597,9 +4784,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__exit-card .sow-hud__endgame-portrait-wrap {
-  width: 124px;
-  height: 124px;
+  width: 84px;
+  height: 84px;
   border-radius: 10px;
+  border: 2px solid color-mix(in srgb, var(--sow-gold) 55%, transparent);
+  background: radial-gradient(circle at center, rgba(245, 197, 66, 0.15) 0%, rgba(10, 12, 16, 0.95) 100%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 14px rgba(245, 197, 66, 0.15);
 }
 
 .sow-hud__endgame-card[data-result="defeat"] .sow-hud__endgame-portrait-wrap {
@@ -4631,23 +4821,26 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 #sow-hud .sow-hud__exit-card .sow-hud__endgame-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: #f0aaa0;
-  font-size: clamp(34px, 6vw, 48px);
-  letter-spacing: 0.045em;
-  line-height: 1;
+  gap: 12px;
+  color: var(--sow-gold-bright, #ffe8a3);
+  font-family: var(--font-display, serif);
+  font-size: clamp(24px, 4vw, 30px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
   white-space: nowrap;
   -webkit-text-stroke: 0;
   paint-order: normal;
-  text-shadow: 0 2px 12px rgb(0 0 0 / 36%);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55), 0 0 20px rgba(245, 197, 66, 0.2);
 }
 
 .sow-hud__exit-card .sow-hud__endgame-banner .sow-hud__inline-icon {
-  flex: 0 0 0.88em;
-  width: 0.88em;
-  height: 0.88em;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  color: var(--sow-gold-bright, #ffe8a3);
   vertical-align: 0;
-  filter: drop-shadow(0 2px 5px rgb(0 0 0 / 42%));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
 }
 
 .sow-hud__endgame-card[data-result="defeat"] .sow-hud__endgame-banner {
@@ -4666,18 +4859,17 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 .sow-hud__exit-copy {
   min-height: 0;
   margin: 14px 0 0;
-  overflow: hidden;
-  color: color-mix(in srgb, #dce4e2 84%, var(--sow-muted));
+  padding: 10px 14px;
+  border-radius: var(--sow-tactical-surface-radius-tight, 6px);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  color: var(--sow-control-muted, rgba(235, 231, 220, 0.8));
   font-size: 13px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sow-hud__exit-card .sow-hud__endgame-stats {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  margin: 14px 0 0;
-  border-color: color-mix(in srgb, var(--sow-control-accent) 25%, var(--sow-line));
+  line-height: 1.45;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .sow-hud__endgame-stat {
@@ -4729,6 +4921,109 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stats {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0 0;
+  border-block: none;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 80px;
+  padding: 10px 4px;
+  border-radius: var(--sow-tactical-surface-radius-compact, 8px);
+  background: var(--sow-tactical-surface-subcard-bg);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border-soft);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+  cursor: default;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat:hover {
+  transform: translateY(-2px);
+  border-color: rgba(245, 197, 66, 0.45);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.5),
+    0 0 14px rgba(245, 197, 66, 0.15);
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat + .sow-hud__endgame-stat::before {
+  display: none;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat-icon svg,
+.sow-hud__exit-card .sow-hud__endgame-stat-icon img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Bajas"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Kills"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="kills"] .sow-hud__endgame-stat-icon {
+  color: #f87171;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Asistencias"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Assists"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="assists"] .sow-hud__endgame-stat-icon {
+  color: #38bdf8;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Territorio"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Territory"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="territory"] .sow-hud__endgame-stat-icon {
+  color: #4ade80;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Oro"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Gold"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="gold"] .sow-hud__endgame-stat-icon {
+  color: #facc15;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Tropas"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Troops"] .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="troops"] .sow-hud__endgame-stat-icon {
+  color: #cbd5e1;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-stat b {
+  margin: 0;
+  color: #fff0d2;
+  font-family: var(--font-display, serif);
+  font-size: clamp(17px, 2.2vw, 21px);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 .sow-hud__endgame-store {
@@ -4817,12 +5112,50 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   color: var(--sow-button-primary-text);
 }
 
+.sow-hud__exit-card .sow-hud__endgame-secondary {
+  flex: 1;
+  min-height: 46px;
+  border: 1px solid var(--sow-button-dark-border);
+  border-radius: var(--sow-button-radius, 8px);
+  background: var(--sow-button-dark-bg);
+  box-shadow: var(--sow-button-dark-shadow);
+  color: var(--sow-button-dark-text);
+  font-size: 13px;
+  font-weight: var(--sow-button-weight, 800);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-secondary:hover {
+  border-color: var(--sow-gold);
+  color: var(--sow-gold-bright);
+  background: color-mix(in srgb, var(--sow-gold) 8%, var(--sow-button-dark-bg));
+  transform: translateY(-1px);
+}
+
+.sow-hud__exit-card .sow-hud__endgame-secondary:active {
+  transform: translateY(1px);
+}
+
 .sow-hud__exit-card .sow-hud__endgame-primary {
-  border-radius: 6px;
+  flex: 1;
+  min-height: 46px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: var(--sow-button-radius, 8px);
+  background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
   box-shadow:
-    0 4px 16px rgb(245 158 11 / 20%),
-    inset 0 1px 0 rgb(255 255 255 / 28%);
-  font-size: 12px;
+    0 4px 16px rgba(220, 38, 38, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: var(--sow-button-weight, 800);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   transition:
     filter 140ms ease,
     box-shadow 140ms ease,
@@ -4839,14 +5172,15 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__exit-card .sow-hud__endgame-primary:hover {
+  filter: brightness(1.12);
   box-shadow:
-    0 5px 20px rgb(245 158 11 / 30%),
-    inset 0 1px 0 rgb(255 255 255 / 32%);
+    0 6px 22px rgba(220, 38, 38, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
   transform: translateY(-1px);
 }
 
 .sow-hud__exit-card .sow-hud__endgame-primary:active {
-  filter: brightness(0.96);
+  filter: brightness(0.94);
   transform: translateY(1px);
 }
 
@@ -5176,62 +5510,6 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   );
 }
 
-.sow-hud__market .sow-hud__dialog-body {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.65rem;
-}
-
-.sow-hud__market :is(p, label, summary) {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.sow-hud__market label {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-#sow-hud .sow-hud__market input {
-  flex: 1 1 6rem;
-  min-inline-size: 0;
-  text-align: end;
-}
-
-.sow-hud__market-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-}
-
-.sow-hud__market-row button {
-  flex: 1 1 auto;
-}
-
-#sow-hud .sow-hud__market :is(button[aria-pressed="true"], .sow-hud__market-primary:not(:disabled)) {
-  border-color: var(--sow-gold);
-  color: var(--sow-gold);
-}
-
-.sow-hud__market button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.sow-hud__market :is(details, #sow-hud-market-order) {
-  border-block-start: 1px solid var(--sow-tactical-surface-border);
-  padding-block-start: 0.625rem;
-}
-
-.sow-hud__market :is(details, #sow-hud-market-order) > :not(:first-child) {
-  margin-block-start: 0.5rem;
-}
-
-.sow-hud__market summary {
-  cursor: pointer;
-}
-
 .sow-hud__betrayal-backdrop {
   padding-block: calc(var(--sow-hud-dialog-view-top, 0px) + max(0.5rem, var(--sow-sat)))
     calc(var(--sow-hud-dialog-view-bottom, 0px) + max(0.5rem, var(--sow-sab)));
@@ -5558,8 +5836,6 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   touch-action: manipulation;
 }
 
-.sow-hud__market-entry,
-.sow-hud__market button:not(.sow-hud__close-btn),
 .sow-hud__transfer-actions button,
 .sow-hud__request-actions button {
   display: inline-flex;
@@ -5605,6 +5881,14 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   inline-size: 1.125rem;
   block-size: 1.125rem;
   flex: 0 0 auto;
+}
+
+#sow-hud-transfer .sow-hud__transfer-cta .sow-hud__glyph-ink {
+  display: none;
+}
+
+#sow-hud-transfer .sow-hud__transfer-cta .sow-hud__glyph-face {
+  stroke-width: 2.2;
 }
 
 #sow-hud-transfer .sow-hud__transfer-cta:disabled {
@@ -5861,8 +6145,19 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
   .sow-hud__deploy-panel {
     width: 100%;
-    min-height: 44px;
-    padding: 4px 12px;
+    min-height: 52px;
+    padding: 6px 10px;
+    gap: 10px;
+  }
+
+  .sow-hud__deploy-timer {
+    font-size: 22px;
+  }
+
+  .sow-hud__deploy-timer-wrap {
+    min-width: 76px;
+    min-height: 38px;
+    padding: 4px 10px;
   }
 
   .sow-hud__buildings-strip {
@@ -6030,14 +6325,24 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   }
   .sow-hud__deploy-panel {
     width: 100%;
-    min-height: 44px;
-    padding: 4px 10px;
+    min-height: 50px;
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .sow-hud__deploy-badge {
+    width: 34px;
+    height: 34px;
   }
   .sow-hud__deploy-title {
-    font-size: 11px;
+    font-size: 12px;
   }
   .sow-hud__deploy-timer {
-    font-size: 14px;
+    font-size: 22px;
+  }
+  .sow-hud__deploy-timer-wrap {
+    min-width: 74px;
+    min-height: 36px;
+    padding: 3px 9px;
   }
   .sow-hud__close-btn,
   .sow-hud__row-action {
@@ -6073,23 +6378,43 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   .sow-hud__exit-card .sow-hud__endgame-primary,
   .sow-hud__exit-card .sow-hud__endgame-secondary {
     gap: 4px;
+    min-height: 42px;
     padding-inline: 8px;
-    font-size: 9px;
-    letter-spacing: 0;
+    font-size: 11px;
+    letter-spacing: 0.04em;
     white-space: nowrap;
   }
   .sow-hud__exit-card .sow-hud__endgame-primary {
-    font-size: 11px;
+    font-size: 12px;
   }
   .sow-hud__exit-card .sow-hud__endgame-hero {
     gap: 12px;
   }
   .sow-hud__exit-card .sow-hud__endgame-portrait-wrap {
-    width: 92px;
-    height: 92px;
+    width: 68px;
+    height: 68px;
   }
   .sow-hud__exit-card .sow-hud__exit-copy {
     font-size: 12px;
+    padding: 8px 10px;
+    margin-top: 10px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-stat {
+    min-height: 64px;
+    padding: 6px 2px;
+    gap: 4px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-stat-icon {
+    flex-basis: 26px;
+    width: 26px;
+    height: 26px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-stat-icon :is(svg, img) {
+    width: 16px;
+    height: 16px;
+  }
+  .sow-hud__exit-card .sow-hud__endgame-stat b {
+    font-size: 14px;
   }
   .sow-hud__endgame-hero {
     gap: 12px;
@@ -6272,14 +6597,24 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     height: 28px;
   }
   #sow-hud[data-compact="true"] .sow-hud__deploy-panel {
-    min-height: 38px;
-    padding: 2px 8px;
+    min-height: 48px;
+    padding: 5px 8px;
+    gap: 8px;
+  }
+  #sow-hud[data-compact="true"] .sow-hud__deploy-badge {
+    width: 32px;
+    height: 32px;
   }
   #sow-hud[data-compact="true"] .sow-hud__deploy-title {
-    font-size: 11px;
+    font-size: 12px;
+  }
+  #sow-hud[data-compact="true"] .sow-hud__deploy-timer-wrap {
+    min-width: 72px;
+    min-height: 34px;
+    padding: 2px 8px;
   }
   #sow-hud[data-compact="true"] .sow-hud__deploy-timer {
-    font-size: 13px;
+    font-size: calc(20px / var(--sow-hud-density, 1));
   }
   #sow-hud[data-compact="true"] .sow-hud__operations {
     position: relative;
@@ -6410,14 +6745,24 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     min-height: 46px;
   }
   #sow-hud[data-compact="true"] .sow-hud__deploy-panel {
-    min-height: 38px;
-    padding: 2px 8px;
+    min-height: 48px;
+    padding: 5px 8px;
+    gap: 8px;
+  }
+  #sow-hud[data-compact="true"] .sow-hud__deploy-badge {
+    width: 32px;
+    height: 32px;
   }
   #sow-hud[data-compact="true"] .sow-hud__deploy-title {
-    font-size: 11px;
+    font-size: 12px;
+  }
+  #sow-hud[data-compact="true"] .sow-hud__deploy-timer-wrap {
+    min-width: 72px;
+    min-height: 34px;
+    padding: 2px 8px;
   }
   #sow-hud[data-compact="true"] .sow-hud__deploy-timer {
-    font-size: 13px;
+    font-size: calc(20px / var(--sow-hud-density, 1));
   }
   #sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__left-rail,
   #sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__right-rail,
@@ -6517,7 +6862,6 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail {
   :is(
     .sow-hud__nameplate-copy strong,
     .sow-hud__deploy-title,
-    .sow-hud__deploy-timer,
     .sow-hud__operation-name,
     .sow-hud__operation-troops,
     .sow-hud__notification-copy

@@ -16,7 +16,7 @@ import {
 } from "./main_menu.core.ts";
 import { activeScreenPanel } from "./main_menu.shell.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
-import { avatarAtlasCell, avatarImageAttribute, loadAvatarImage } from "./avatar-presentation.ts";
+import { avatarAtlasCell, avatarImageAttribute, deferAvatarImage, loadAvatarImage } from "./avatar-presentation.ts";
 import type { MenuLeader } from "./main_menu.state.ts";
 import { renderLeaderPurchase, renderSkinsButton } from "./main_menu.surfaces.ts";
 
@@ -129,7 +129,9 @@ function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expressio
             } else {
                 image.addEventListener("load", animateLoadedAvatar, { once: true });
             }
-        }).catch(() => undefined);
+        }).catch(() => {
+            if (heroesAvatarRevisions.get(image) === revision) heroesAvatarSources.delete(image);
+        });
         return;
     }
     if (heroesMotionReduced() || typeof image.animate !== "function") return;
@@ -142,8 +144,15 @@ function setHeroesAvatar(image: HTMLImageElement | null, slug: string, expressio
     }
 }
 
-function setHeroesCardAvatar(card: HTMLElement, expression: HeroesAvatarExpression) {
-    setHeroesAvatar(card.querySelector<HTMLImageElement>("img"), card.dataset.avatarSlug || "", expression);
+function setHeroesCardAvatar(card: HTMLElement, expression: HeroesAvatarExpression, eager = true) {
+    const image = card.querySelector<HTMLImageElement>("img");
+    const slug = card.dataset.avatarSlug || "";
+    if (!image || !slug) return;
+    if (eager) {
+        setHeroesAvatar(image, slug, expression);
+    } else {
+        deferAvatarImage(image, heroesAvatarUrl(slug, expression));
+    }
 }
 
 function heroesAvatarCard(event: Event) {
@@ -418,15 +427,53 @@ function heroesRoster(leaders: MenuLeader[]) {
             menuUi.heroesRegionFilter === "all" || leader.region === menuUi.heroesRegionFilter;
         return matchesQuery && matchesRegion;
     });
-    return filtered
-        .filter(function (leader) {
+
+    function leaderCost(leader: MenuLeader): number {
+        if (typeof leader.cost_crowns === "number") return leader.cost_crowns;
+        if (typeof leader.cost_gems === "number") return leader.cost_gems * 4;
+        return 0;
+    }
+
+    function sortLeaders(list: MenuLeader[], sort: string): MenuLeader[] {
+        const copy = list.slice();
+        if (sort === "cost_desc") {
+            copy.sort(function (a, b) {
+                const diff = leaderCost(b) - leaderCost(a);
+                if (diff !== 0) return diff;
+                return String(leaderDisplayName(a) || "").localeCompare(String(leaderDisplayName(b) || ""));
+            });
+        } else if (sort === "cost_asc") {
+            copy.sort(function (a, b) {
+                const diff = leaderCost(a) - leaderCost(b);
+                if (diff !== 0) return diff;
+                return String(leaderDisplayName(a) || "").localeCompare(String(leaderDisplayName(b) || ""));
+            });
+        } else if (sort === "alpha_asc") {
+            copy.sort(function (a, b) {
+                return String(leaderDisplayName(a) || "").localeCompare(String(leaderDisplayName(b) || ""));
+            });
+        } else if (sort === "alpha_desc") {
+            copy.sort(function (a, b) {
+                return String(leaderDisplayName(b) || "").localeCompare(String(leaderDisplayName(a) || ""));
+            });
+        }
+        return copy;
+    }
+
+    const sort = (menuUi && menuUi.heroesSort) || "default";
+    const active = sortLeaders(
+        filtered.filter(function (leader) {
             return leader.available !== false;
-        })
-        .concat(
-            filtered.filter(function (leader) {
-                return leader.available === false;
-            }),
-        );
+        }),
+        sort,
+    );
+    const locked = sortLeaders(
+        filtered.filter(function (leader) {
+            return leader.available === false;
+        }),
+        sort,
+    );
+    return active.concat(locked);
 }
 
 function renderHeroesRegionDropdown() {
@@ -446,8 +493,31 @@ function renderHeroesRegionDropdown() {
     });
 }
 
+function renderHeroesSortDropdown() {
+    return SOW_renderDropdown({
+        key: "heroes-sort",
+        label: SOW_t("heroes.sort_leaders"),
+        name: "sort",
+        value: menuUi.heroesSort || "cost_desc",
+        className: "sow-heroes__sort",
+        options: [
+            { value: "cost_desc", label: SOW_t("heroes.sort_cost_desc") },
+            { value: "cost_asc", label: SOW_t("heroes.sort_cost_asc") },
+            { value: "alpha_asc", label: SOW_t("heroes.sort_alpha_asc") },
+            { value: "alpha_desc", label: SOW_t("heroes.sort_alpha_desc") },
+        ],
+    });
+}
+
+let lastRenderedAvailableKey: string | null = null;
+
 function renderHeroesRoster(activeId: string, randomSelected: boolean) {
     const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+    lastRenderedAvailableKey = leaders
+        .filter((l) => l.available !== false)
+        .map((l) => l.id)
+        .sort()
+        .join(",");
     const filtered = heroesRoster(leaders);
     const cards =
         renderRandomLeaderCard(randomSelected) +
@@ -558,13 +628,29 @@ export function updateHeroesPreview() {
     }
     const purchase = featured.querySelector("[data-hero-purchase]");
     if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
+    const skinsContainer = featured.querySelector<HTMLElement>("[data-hero-skins]");
+    if (skinsContainer) skinsContainer.innerHTML = randomSelected ? "" : renderSkinsButton();
+    const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+    const currentAvailableKey = leaders
+        .filter((l) => l.available !== false)
+        .map((l) => l.id)
+        .sort()
+        .join(",");
+    if (lastRenderedAvailableKey !== null && lastRenderedAvailableKey !== currentAvailableKey) {
+        refreshHeroesRoster(false);
+    }
     const cards = panel.querySelectorAll<HTMLElement>("[data-command='preview_leader']");
     for (let i = 0; i < cards.length; i++) {
         const cardLeaderId = cards[i].dataset.leaderId;
+        const cardLeader = cardLeaderId ? leaderById(cardLeaderId) : null;
         const selected = cardLeaderId === activeLeader.id;
         cards[i].classList.toggle("is-selected", selected);
+        if (cardLeader) {
+            cards[i].classList.toggle("is-locked", cardLeader.available === false);
+        }
         cards[i].setAttribute("aria-pressed", selected ? "true" : "false");
-        setHeroesCardAvatar(cards[i], selected ? "angry" : "calm");
+        const isHovered = typeof cards[i].matches === "function" && cards[i].matches(":hover");
+        setHeroesCardAvatar(cards[i], selected ? "angry" : isHovered ? "happy" : "calm", selected || isHovered);
     }
     const randomCard = panel.querySelector("[data-command='preview_random_leader']");
     if (randomCard) {
@@ -661,6 +747,12 @@ export function selectDropdown(key: string, value: string) {
         refreshHeroesRoster(true);
         return;
     }
+    if (key === "heroes-sort") {
+        menuUi.heroesSort = value || "cost_desc";
+        syncDropdowns();
+        refreshHeroesRoster(true);
+        return;
+    }
     syncDropdowns();
     input.dispatchEvent(new Event("change", { bubbles: true }));
 }
@@ -701,7 +793,11 @@ export function renderHeroes() {
         "<section class='sow-heroes__featured is-loading" +
         (locked ? " is-locked" : "") +
         (motionReduced ? " is-motion-reduced" : "") +
-        "' aria-labelledby='sow-heroes-selected'><button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" +
+        "' aria-labelledby='sow-heroes-selected'>" +
+        "<div class='sow-heroes__featured-skins' data-hero-skins>" +
+        (activeRandom ? "" : renderSkinsButton()) +
+        "</div>" +
+        "<button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" +
         esc(displayName) +
         "'" +
         (activeRandom ? " hidden" : "") +
@@ -737,7 +833,7 @@ export function renderHeroes() {
         esc(menuUi.heroesSearchQuery) +
         "\" autocomplete='off' spellcheck='false'></label>" +
         renderHeroesRegionDropdown() +
-        renderSkinsButton() +
+        renderHeroesSortDropdown() +
         "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" +
         renderHeroesRoster(activeId, activeRandom) +
         "</div></section>" +

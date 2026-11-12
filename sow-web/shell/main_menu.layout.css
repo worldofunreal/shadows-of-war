@@ -723,10 +723,31 @@
       var(--sow-hero);
   }
 
+  #sow-menu[data-screen="home"] .sow-menu__main {
+    align-items: stretch;
+    height: 100%;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__command {
+    align-self: center;
+  }
+
   #sow-menu[data-screen="home"] .sow-menu__battlefield {
+    display: flex;
+    flex-direction: column;
     justify-content: flex-end;
+    align-items: flex-end;
     align-self: stretch;
     height: 100%;
+    padding-inline-end: clamp(16px, 2.5vw, 36px);
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__leader-copy {
+    pointer-events: none;
+    margin: 0 0 clamp(80px, 12vh, 120px);
+    text-align: end;
   }
 }
 

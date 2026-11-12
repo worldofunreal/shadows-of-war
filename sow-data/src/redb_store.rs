@@ -66,6 +66,7 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
         .is_ok();
     let write_txn = db.begin_write()?;
     write_txn.open_table(PLAYERS_TABLE)?;
+    write_txn.open_table(crate::auth::SESSIONS)?;
     write_txn.open_table(ACCOUNT_EVENTS_TABLE)?;
     write_txn.open_table(ACCOUNT_IDENTITIES_TABLE)?;
     write_txn.open_table(PENDING_ACCOUNT_REWARDS_TABLE)?;

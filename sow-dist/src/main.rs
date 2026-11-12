@@ -13,6 +13,7 @@ use std::{
 };
 
 mod prod;
+mod site;
 
 const WASM_OPT_TAG: &str = "oz-cli-v1";
 const DISTRIBUTION_RASTER_EXTENSIONS: [&str; 16] = [
@@ -40,6 +41,13 @@ const POKI_FORBIDDEN_MARKERS: &[&str] = &[
     "/api/v1/auth/",
     "wou_session_token",
     "wou_user_data",
+    "SOW_ensureIdentityAnonymousSession",
+    "SOW_getIdentitySession",
+    "SOW_startIdentityOAuth",
+    "SOW_signOutIdentity",
+    "/api/auth/",
+    "sow_session_token",
+    "sow_refresh_token",
     "class='sow-menu__signin'",
     "SIGN IN",
     "/store/",
@@ -80,6 +88,8 @@ fn command(cmd: &str) -> Command {
 }
 
 fn run(cmd: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
+    let args = site::render_args(args)?;
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
     println!(
         "+ {cmd} {}",
         args.iter()
@@ -88,7 +98,7 @@ fn run(cmd: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
             .join(" ")
     );
     let mut c = command(cmd);
-    c.args(args)
+    c.args(&args)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     if let Some(d) = cwd {
@@ -101,9 +111,17 @@ fn run(cmd: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
 }
 
 fn output(cmd: &str, args: &[&str]) -> Result<String> {
-    let o = command(cmd).args(args).output()?;
+    let args = site::render_args(args)?;
+    let o = command(cmd).args(&args).output()?;
     if !o.status.success() {
-        bail!("{cmd} failed: {}", String::from_utf8_lossy(&o.stderr));
+        // A remote script run under `set -e` can exit without writing to stderr. Report the
+        // exit status and stdout too, so the failure is never an empty message.
+        bail!(
+            "{cmd} failed ({}): {}{}",
+            o.status,
+            String::from_utf8_lossy(&o.stderr).trim_end(),
+            String::from_utf8_lossy(&o.stdout).trim_end()
+        );
     }
     Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
@@ -934,7 +952,10 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
     if path.starts_with("gameplay/units/") {
         return Some(if ["trade-ship.webp", "transport-ship.webp", "warship.webp"].contains(&name.as_ref()) { "pixel_art" } else { "unit_icon" });
     }
-    if path == "gameplay/buildings/atlas.webp" || path == "gameplay/icons/nameplate_status_atlas.webp" {
+    if path == "gameplay/buildings/atlas.webp"
+        || path == "gameplay/icons/nameplate_status_atlas.webp"
+        || path == "gameplay/text/msdf-atlas-v3.webp"
+    {
         return Some("atlas_lossless");
     }
     if path.starts_with("site/media/") {
@@ -1151,8 +1172,11 @@ const GAMEPLAY_UNIT_ART: [&str; 5] = [
     "atom-bomb.webp",
     "sam-missile.webp",
 ];
+/// Arabic shaping font for nameplates, published beside the text atlas.
+const ARABIC_FONT_PATH: &str = "gameplay/text/noto-sans-arabic-regular.ttf";
 /// Tool output in assets/generated: (file, published path).
-const GENERATED_FILES: [(&str, &str); 3] = [
+const GENERATED_FILES: [(&str, &str); 4] = [
+    ("msdf-atlas.webp", "gameplay/text/msdf-atlas-v3.webp"),
     ("buildings-atlas.webp", "gameplay/buildings/atlas.webp"),
     ("buildings-atlas.json", "gameplay/buildings/atlas.json"),
     (
@@ -1259,8 +1283,6 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
             .find(|path| path.is_file())
     };
 
-    // Loose sprites never reach `out`: they are staged in scratch space and leave only packed into the sprite atlas.
-    let loose = tempfile::tempdir().context("create temporary sprite sources")?;
     // Avatars: ordinary portraits plus one 2×2 source sheet per playable hero.
     let mut avatar_sources = std::collections::BTreeMap::new();
     let hero_art_slugs = sow_core::player::Leader::all()
@@ -1432,7 +1454,7 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
     }
     for (dir, rel_dir) in ART_FOLDERS {
         if dir == SPRITE_ABILITY_ART {
-            continue; // packed into the sprite atlas below
+            continue; // published with the avatars below
         }
         for file in fs::read_dir(art.join(dir))? {
             let file = file?.path();
@@ -1459,6 +1481,12 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         }
         publish(&generated.join(name), rel, None)?;
     }
+    // Shapes Arabic player names; the engine downloads it only when one appears.
+    publish(
+        &root.join("sow-web/site/fonts/noto-sans-arabic-regular.ttf"),
+        ARABIC_FONT_PATH,
+        None,
+    )?;
 
     let media = root.join("assets/site/media");
     for badge in SITE_BADGES {
@@ -1500,18 +1528,24 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         stage_android_icons(root, out, &icon_master, pipeline, &mut produced)?;
     }
 
+    // Avatars and ability icons stay loose files; only the CrazyGames package packs them into sheets.
     for (source, relative, max_side) in avatar_portraits {
         let profile = if max_side <= PORTRAIT_PX { "avatar_portrait_192" } else { "avatar_portrait_256" };
-        pipeline.publish_image(&source, &loose.path().join(&relative), profile, None, None)?;
+        let destination = out.join(&relative);
+        pipeline.publish_image(&source, &destination, profile, None, None)?;
+        produced.insert(destination);
     }
     for (source, relative) in hero_expression_crops {
-        pipeline.publish_image(&source, &loose.path().join(&relative), "avatar_portrait_256", None, None)?;
+        let destination = out.join(&relative);
+        pipeline.publish_image(&source, &destination, "avatar_portrait_256", None, None)?;
+        produced.insert(destination);
     }
     for file in sorted_files(&art.join(SPRITE_ABILITY_ART))? {
         let public = format!("gameplay/icons/abilities/{}.webp", file_stem(&file));
-        pipeline.publish_asset(&file, &loose.path().join(&public), Path::new(&public), None)?;
+        let destination = out.join(&public);
+        pipeline.publish_asset(&file, &destination, Path::new(&public), None)?;
+        produced.insert(destination);
     }
-    pack_sprite_atlas(loose.path(), out, pipeline, &mut produced)?;
     for file in fs::read_dir(&media)?.filter(|_| !pipeline.local_preview) {
         let file = file?.path();
         let name = file.file_name().unwrap_or_default().to_string_lossy();
@@ -1644,11 +1678,16 @@ fn asset_versions(paths: &Paths, locales_dir: &Path) -> Result<serde_json::Value
                 s if s.starts_with("shell/leaders/")
                     || s.starts_with("shell/mobile-nav/")
                     || s.starts_with("gameplay/music/")
-                    || s.starts_with("gameplay/atlas/")
+                    || s.starts_with("gameplay/avatars/")
+                    // Text, building and status atlases the loader fetches for the engine.
+                    || s == "gameplay/text/msdf-atlas-v3.webp"
+                    || s == "gameplay/buildings/atlas.webp"
+                    || s == "gameplay/icons/nameplate_status_atlas.webp"
+                    || s == ARABIC_FONT_PATH
                     || s == "shell/loader/sow-splash-desktop.webp"
                     || s == "shell/loader/sow-splash-mobile.webp"
             );
-            if track && path.extension().is_some_and(|e| e == "webp" || e == "webm") {
+            if track && path.extension().is_some_and(|e| e == "webp" || e == "webm" || e == "ttf") {
                 map.insert(
                     format!("/assets/{rel}"),
                     serde_json::Value::String(file_sha256(&path)?[..8].to_string()),
@@ -1747,6 +1786,7 @@ fn poki_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
 
 fn cg_asset_is_excluded(relative: &Path) -> bool {
     relative.starts_with("shell/brand")
+        || LOOSE_SPRITE_DIRS.iter().any(|dir| relative.starts_with(dir))
         || (relative.starts_with("campaign")
             && relative.extension().is_some_and(|extension| extension == "webm"))
         || (relative.starts_with("site/media")
@@ -1774,9 +1814,9 @@ const CG_BUNDLE_BYTE_BUDGET: u64 = 85_000_000;
 
 /// Largest side of a shared sprite sheet; a full 2048 sheet decodes to 16 MB.
 const SPRITE_SHEET_PX: u32 = 2048;
-/// Published index of the sprite sheets. Every distribution ships it and injects it as `window.SOW_SPRITE_ATLAS`.
+/// Published index of the sprite sheets. Only the CrazyGames package ships it and injects it as `window.SOW_SPRITE_ATLAS`.
 const SPRITE_INDEX_PATH: &str = "gameplay/atlas/index.json";
-/// The same index as a script that sets `window.SOW_SPRITE_ATLAS`; the site loads it before its app script.
+/// The same index as a script that sets `window.SOW_SPRITE_ATLAS`.
 const SPRITE_SCRIPT_PATH: &str = "gameplay/atlas/index.js";
 /// Art folder of the ability icons. They are packed into the sprite sheets with the avatars.
 const SPRITE_ABILITY_ART: &str = "icons/abilities";
@@ -1863,21 +1903,23 @@ fn avatar_region_groups() -> std::collections::BTreeMap<String, String> {
         .collect()
 }
 
-/// Packs every loose avatar and ability icon in `loose` into shared sheets under `gameplay/atlas`
-/// in `out`, and writes the index. Every distribution gets its sprites from here, so no package
-/// ships a loose avatar or ability icon.
-fn pack_sprite_atlas(
-    loose: &Path,
-    out: &Path,
-    pipeline: &ArtPipeline,
-    produced: &mut std::collections::BTreeSet<PathBuf>,
-) -> Result<()> {
+/// Loose sprite folders under `assets/`. Packages other than CrazyGames ship these files as they are.
+const LOOSE_SPRITE_DIRS: [&str; 2] = ["gameplay/avatars", "gameplay/icons/abilities"];
+
+/// Packs the loose avatars and ability icons of a package's `assets` folder into shared sheets under
+/// `gameplay/atlas`, writes the index and removes the loose files. Only CrazyGames needs this, to stay
+/// under its file cap; everywhere else a 256 px file per portrait downloads and decodes far cheaper
+/// than a 2048 px sheet.
+fn pack_sprite_atlas(assets: &Path, pipeline: &ArtPipeline) -> Result<()> {
     let regions = avatar_region_groups();
     let heroes = sow_core::player::Leader::all()
         .map(|leader| leader.art_slug().to_owned())
         .collect::<std::collections::BTreeSet<_>>();
     let mut sprites = Vec::new();
-    for entry in walkdir::WalkDir::new(loose).sort_by_file_name() {
+    let entries = LOOSE_SPRITE_DIRS
+        .iter()
+        .flat_map(|dir| walkdir::WalkDir::new(assets.join(dir)).sort_by_file_name());
+    for entry in entries {
         let entry = entry?;
         if !entry.file_type().is_file() {
             continue;
@@ -1886,7 +1928,7 @@ fn pack_sprite_atlas(
         if file.extension().and_then(|ext| ext.to_str()) != Some("webp") {
             bail!("sprite {} must be a .webp image", file.display());
         }
-        let key = file.strip_prefix(loose)?.to_string_lossy().replace('\\', "/");
+        let key = file.strip_prefix(assets)?.to_string_lossy().replace('\\', "/");
         let stem = file_stem(&file);
         let group = if key.starts_with("gameplay/icons/abilities/") {
             "abilities".to_owned()
@@ -1932,9 +1974,7 @@ fn pack_sprite_atlas(
             .save(&raw)
             .with_context(|| format!("write sprite sheet {}", sheet.path))?;
         let profile = if sheet.group == "abilities" { "ability_atlas" } else { "avatar_atlas" };
-        let destination = out.join(&sheet.path);
-        pipeline.publish_image(&raw, &destination, profile, None, None)?;
-        produced.insert(destination);
+        pipeline.publish_image(&raw, &assets.join(&sheet.path), profile, None, None)?;
         index_sheets.push(serde_json::json!({
             "path": sheet.path,
             "width": sheet.width,
@@ -1942,13 +1982,16 @@ fn pack_sprite_atlas(
         }));
     }
     let index = serde_json::json!({ "sheets": index_sheets, "cells": index_cells });
-    let index_path = out.join(SPRITE_INDEX_PATH);
+    let index_path = assets.join(SPRITE_INDEX_PATH);
     fs::create_dir_all(index_path.parent().context("sprite index has no folder")?)?;
     fs::write(&index_path, serde_json::to_vec(&index)?)?;
-    let script_path = out.join(SPRITE_SCRIPT_PATH);
-    fs::write(&script_path, sprite_atlas_js(&index)?)?;
-    produced.insert(index_path);
-    produced.insert(script_path);
+    fs::write(assets.join(SPRITE_SCRIPT_PATH), sprite_atlas_js(&index)?)?;
+    for dir in LOOSE_SPRITE_DIRS {
+        let path = assets.join(dir);
+        if path.is_dir() {
+            fs::remove_dir_all(path)?;
+        }
+    }
     Ok(())
 }
 
@@ -1959,29 +2002,29 @@ fn read_sprite_index(gameplay: &Path) -> Result<serde_json::Value> {
     serde_json::from_slice(&bytes).with_context(|| format!("parse sprite index {}", path.display()))
 }
 
-/// The sprite index every shell gets as `window.SOW_SPRITE_ATLAS`, so packed sprites load the same way in every distribution.
-fn sprite_atlas_script(paths: &Paths) -> Result<String> {
-    let index = match read_sprite_index(&paths.assets_gameplay) {
-        Ok(index) => index,
-        Err(error) if paths.is_local_preview() => {
-            eprintln!("⚠ Local sprite atlas: {error:#}");
-            serde_json::Value::Null
-        }
-        Err(error) => return Err(error),
-    };
-    sprite_atlas_js(&index)
-}
-
-/// The sprite index as the script every distribution loads, so packed sprites resolve the same way everywhere.
+/// The sprite index as the script the CrazyGames shell loads; without it the shell uses loose files.
 fn sprite_atlas_js(index: &serde_json::Value) -> Result<String> {
     Ok(format!("window.SOW_SPRITE_ATLAS = {};\n", serde_json::to_string(index)?))
 }
 
-/// Checks a shipped sprite atlas: no loose avatar or ability icon is left, every sheet exists at its indexed
-/// size and within the limit, every cell lies inside its sheet, and (for releases) every playable hero has its
-/// four faces and an ability icon.
-fn verify_sprite_atlas(assets: &Path, package: &str, every_hero: bool) -> Result<()> {
-    for loose in ["gameplay/avatars", "gameplay/icons/abilities"] {
+/// Checks a package's sprites. A packed package (CrazyGames) ships only sheets: no loose avatar or ability
+/// icon, every sheet at its indexed size and within the limit, every cell inside its sheet. Every other
+/// package ships only loose files. For releases, every playable hero has its four faces and an ability icon.
+fn verify_sprites(assets: &Path, package: &str, packed: bool, every_hero: bool) -> Result<()> {
+    if !packed {
+        if assets.join("gameplay/atlas").exists() {
+            bail!("{package} ships sprite sheets; only CrazyGames packs avatars and ability icons");
+        }
+        if every_hero {
+            for key in playable_hero_sprites() {
+                if !assets.join(&key).is_file() {
+                    bail!("{package} is missing {key}");
+                }
+            }
+        }
+        return Ok(());
+    }
+    for loose in LOOSE_SPRITE_DIRS {
         if assets.join(loose).exists() {
             bail!("{package} ships loose sprites in {loose}; sprites must come from gameplay/atlas");
         }
@@ -2021,20 +2064,25 @@ fn verify_sprite_atlas(assets: &Path, package: &str, every_hero: bool) -> Result
         }
     }
     if every_hero {
-        for leader in sow_core::player::Leader::all() {
-            for expression in sow_core::emote::AvatarExpression::ALL {
-                let key = sow_core::emote::hero_portrait_path(leader.art_slug(), expression);
-                if !cells.contains_key(&key) {
-                    bail!("{package} sprite atlas is missing {key}");
-                }
-            }
-            let icon = format!("gameplay/icons/abilities/{}.webp", leader.art_slug());
-            if !cells.contains_key(&icon) {
-                bail!("{package} sprite atlas is missing {icon}");
+        for key in playable_hero_sprites() {
+            if !cells.contains_key(&key) {
+                bail!("{package} sprite atlas is missing {key}");
             }
         }
     }
     Ok(())
+}
+
+/// Every face and the ability icon of every playable hero, as paths under `assets/`.
+fn playable_hero_sprites() -> Vec<String> {
+    sow_core::player::Leader::all()
+        .flat_map(|leader| {
+            sow_core::emote::AvatarExpression::ALL
+                .into_iter()
+                .map(move |expression| sow_core::emote::hero_portrait_path(leader.art_slug(), expression))
+                .chain([format!("gameplay/icons/abilities/{}.webp", leader.art_slug())])
+        })
+        .collect()
 }
 
 fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Result<()> {
@@ -2064,12 +2112,18 @@ fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Res
         fs::remove_dir_all(&campaign)?;
     }
     copy_campaign_mp4_only(&source.join("campaign"), &campaign)?;
-    publish_portal_leaders(source, packaged, pipeline, PortalLeaders::CRAZYGAMES)
+    publish_portal_leaders(source, packaged, pipeline, PortalLeaders::CRAZYGAMES)?;
+    // The CrazyGames file cap is the one reason to pack sprites into sheets.
+    pack_sprite_atlas(packaged, pipeline)
 }
 
 fn verify_cg_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
     let expected = cg_asset_inventory(source)?;
-    let actual = asset_file_inventory(packaged)?;
+    // The sprite sheets are made in the package from the loose files; `verify_sprites` checks them.
+    let actual = asset_file_inventory(packaged)?
+        .into_iter()
+        .filter(|relative| !relative.starts_with("gameplay/atlas"))
+        .collect::<Vec<_>>();
     if expected != actual {
         let missing = expected
             .iter()
@@ -2090,10 +2144,6 @@ fn verify_cg_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
         );
     }
     for relative in expected {
-        // Sprite sheets are copied byte-for-byte; the atlas check covers their content.
-        if relative.starts_with("gameplay/atlas") {
-            continue;
-        }
         verify_portal_asset(source, packaged, &relative, PortalLeaders::CRAZYGAMES)?;
     }
     Ok(())
@@ -2136,13 +2186,15 @@ fn verify_poki_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Content hashes of the sprite sheets, keyed by the URL the shell builds for each sheet.
-fn sprite_asset_versions(atlas_root: &Path) -> Result<serde_json::Value> {
+/// Content hashes of the sprite files under `assets/gameplay/<folder>` (sheets or loose avatars),
+/// keyed by the URL the shell builds for each file.
+fn sprite_asset_versions(gameplay: &Path, folder: &str) -> Result<serde_json::Value> {
+    let root = gameplay.join(folder);
     let mut versions = serde_json::Map::new();
-    for relative in atlas_asset_catalog(atlas_root)? {
-        let path = atlas_root.join(&relative);
+    for relative in atlas_asset_catalog(&root)? {
+        let path = root.join(&relative);
         versions.insert(
-            format!("/assets/gameplay/atlas/{relative}"),
+            format!("/assets/gameplay/{folder}/{relative}"),
             serde_json::Value::String(file_sha256(&path)?[..8].to_string()),
         );
     }
@@ -3369,17 +3421,21 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     if !paths.is_local_preview() && tpl.matches(source_slot).count() != 1 {
         bail!("game HTML template must contain one source identity slot");
     }
+    if !paths.is_local_preview() && tpl.matches("__SITE_ORIGIN__").count() == 0 {
+        bail!("game HTML template must use the __SITE_ORIGIN__ placeholder for canonical and og URLs");
+    }
     let source = source_identity(paths)?;
     let source_identity_html = format!(
         "<script>window.SOW_SOURCE_SHA = {}; window.SOW_SOURCE_URL = {};</script>",
         serde_json::to_string(&source.sha)?,
         serde_json::to_string(&source.url)?,
     );
-    // Sprite sheets are copied byte-for-byte into portal packages or served from
-    // the self-hosted asset CDN, so their cache keys remain stable across builds.
-    // Other portal assets can be re-encoded and keep the build-level bust.
-    let asset_versions = if portal {
-        sprite_asset_versions(&paths.assets_gameplay.join("atlas"))?
+    // Sprites keep content-hash cache keys in every package. Other portal assets
+    // can be re-encoded and keep the build-level bust.
+    let asset_versions = if cg {
+        sprite_asset_versions(&out.join("assets/gameplay"), "atlas")?
+    } else if portal {
+        sprite_asset_versions(&paths.assets_gameplay, "avatars")?
     } else {
         asset_versions(paths, &out.join("locales"))?
     };
@@ -3398,6 +3454,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let mut html = tpl
         .replace(source_slot, &source_identity_html)
         .replace("__VERSION__", version)
+        .replace("__SITE_ORIGIN__", &site::current().origin())
         .replace(
             "./__JS_FILE__",
             &if portal {
@@ -3498,22 +3555,21 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             } else {
                 // Production shell declares every endpoint explicitly — the
                 // client resolves strict config only (no fallbacks).
+                let host = site::current().host();
                 if matches!(target, WebTarget::Local | WebTarget::Native) {
-                    concat!(
-                        "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
-                        "window.SOW_MAPS_URL = \"/maps\"; ",
-                        "window.SOW_ASSETS_URL = \"/assets\"; ",
-                        "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\";"
+                    format!(
+                        "window.SOW_WS_URL = \"wss://{host}/ws/\"; \
+                         window.SOW_MAPS_URL = \"/maps\"; \
+                         window.SOW_ASSETS_URL = \"/assets\"; \
+                         window.SOW_DATABASE_URL = \"https://{host}/api\";"
                     )
-                    .to_string()
                 } else {
-                    concat!(
-                        "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
-                        "window.SOW_MAPS_URL = \"https://shadowsofwar.io/maps\"; ",
-                        "window.SOW_ASSETS_URL = \"https://shadowsofwar.io/assets\"; ",
-                        "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\";"
+                    format!(
+                        "window.SOW_WS_URL = \"wss://{host}/ws/\"; \
+                         window.SOW_MAPS_URL = \"https://{host}/maps\"; \
+                         window.SOW_ASSETS_URL = \"https://{host}/assets\"; \
+                         window.SOW_DATABASE_URL = \"https://{host}/api\";"
                     )
-                    .to_string()
                 }
             },
         );
@@ -3527,7 +3583,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 "/* POKI_ANDROID_AUTH_STATE_BEGIN */",
                 "/* POKI_ANDROID_AUTH_STATE_END */",
             ),
-            ("/* POKI_WOU_AUTH_BEGIN */", "/* POKI_WOU_AUTH_END */"),
+            ("/* POKI_IDENTITY_AUTH_BEGIN */", "/* POKI_IDENTITY_AUTH_END */"),
         ] {
             html = strip_marked_section(&html, begin, end)?;
         }
@@ -3601,7 +3657,12 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         "window.SOW_BUILDING_ART = {};\n",
         serde_json::to_string(&building_manifest)?
     );
-    let sprite_atlas_js = sprite_atlas_script(paths)?;
+    // Only CrazyGames packs sprites (see `pack_sprite_atlas`); every other shell loads loose files.
+    let sprite_atlas_js = if cg {
+        sprite_atlas_js(&read_sprite_index(&out.join("assets/gameplay"))?)?
+    } else {
+        String::new()
+    };
     let mut menu_js = format!(
         "{building_manifest_js}{sprite_atlas_js}{}",
         read_menu_bundle(&paths.shell, menu_surface, paths.is_local_preview())?
@@ -3862,7 +3923,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     }).collect::<Vec<_>>();
     let biographies = public_leader_biographies(&paths.root)?;
     let mut metadata = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "localPreview": paths.is_local_preview() }))?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "origin": site::current().origin(), "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "localPreview": paths.is_local_preview() }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,
@@ -5209,10 +5270,6 @@ fn validate_cinematic_media(
 
 fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Result<()> {
     let dir = paths.root.join("assets/campaign");
-    let sprite_cells = read_sprite_index(&paths.assets_gameplay)?["cells"]
-        .as_object()
-        .cloned()
-        .context("sprite index has no cells")?;
     let mut rosters = HashMap::new();
     let mut triggers = HashMap::new();
     for entry in fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
@@ -5280,9 +5337,11 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
                 if avatar.is_empty() {
                     continue;
                 }
+                // Every package ships campaign avatars as loose files; CrazyGames packs the same files into its atlas.
+                let shipped = paths.assets_gameplay.join("avatars").join(format!("{avatar}.webp"));
                 if !avatar.chars().all(|character| {
                     character.is_ascii_alphanumeric() || character == '_' || character == '-'
-                }) || !sprite_cells.contains_key(&format!("gameplay/avatars/{avatar}.webp"))
+                }) || !shipped.is_file()
                 {
                     bail!(
                         "campaign speaker avatar is invalid or missing: {episode_id}.{speaker}: {avatar}"
@@ -5480,7 +5539,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "fonts/work-sans-latin-ext.woff2",
         "fonts/work-sans-italic-latin.woff2",
         "fonts/work-sans-italic-latin-ext.woff2",
-        "wou-auth.js",
+        "identity-auth.js",
         "auth-callback.js",
         "privacy/index.html",
         "terms/index.html",
@@ -5493,6 +5552,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "LICENSE-ASSETS",
         "WASM-THIRD-PARTY-NOTICES.zip",
         "manifest.webmanifest",
+        "assets/gameplay/text/msdf-atlas-v3.webp",
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
         "assets/gameplay/music/shadows-of-war.webm",
@@ -5752,6 +5812,7 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         "fonts/fonts.css",
         "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
+        "assets/gameplay/text/msdf-atlas-v3.webp",
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
         "assets/gameplay/music/shadows-of-war.webm",
@@ -5821,7 +5882,7 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
     verify_cg_local_resources(dir, &html)?;
     verify_ranked_art(dir, "CrazyGames bundle")?;
     verify_gameplay_unit_art(dir, "CrazyGames bundle")?;
-    verify_sprite_atlas(&dir.join("assets"), "CrazyGames bundle", true)?;
+    verify_sprites(&dir.join("assets"), "CrazyGames bundle", true, true)?;
     for needle in [
         "sdk.crazygames.com/crazygames-sdk-v3.js",
         "SOW_trackExperienceEvent",
@@ -5868,6 +5929,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "assets/campaign/boudica.triggers.json",
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
+        "assets/gameplay/text/msdf-atlas-v3.webp",
         "assets/gameplay/icons/battle_icon_cutout.webp",
         "assets/gameplay/icons/nameplate_status_atlas.webp",
         "assets/gameplay/icons/surrender_flag.webp",
@@ -5881,7 +5943,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
             bail!("poki bundle missing {required}");
         }
     }
-    verify_sprite_atlas(&dir.join("assets"), "Poki bundle", true)?;
+    verify_sprites(&dir.join("assets"), "Poki bundle", false, true)?;
     verify_gameplay_unit_art(dir, "Poki bundle")?;
     for forbidden in [
         "admin",
@@ -5916,7 +5978,6 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "window.SOW_MAPS_URL = \"./maps\"",
         "window.SOW_ASSETS_URL = \"./assets\"",
         "window.SOW_BUILDING_ART =",
-        "window.SOW_SPRITE_ATLAS =",
         "gameplay/buildings/atlas.webp",
         "window.SOW_DISABLE_CHAT = true",
         "sdk.init",
@@ -6054,8 +6115,8 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     let assets = out.join("assets");
     copy_dir(&paths.assets_shell, &assets.join("shell"))?;
     copy_dir(
-        &paths.assets_gameplay.join("atlas"),
-        &assets.join("gameplay/atlas"),
+        &paths.assets_gameplay.join("avatars"),
+        &assets.join("gameplay/avatars"),
     )?;
     copy_dir(
         &paths.assets_gameplay.join("skins"),
@@ -6076,6 +6137,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     copy_dir(
         &paths.assets_gameplay.join("buildings"),
         &assets.join("gameplay/buildings"),
+    )?;
+    copy_dir(
+        &paths.assets_gameplay.join("text"),
+        &assets.join("gameplay/text"),
     )?;
     copy_dir(
         &paths.assets_gameplay.join("units"),
@@ -6140,6 +6205,12 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
             target: WebTarget::Local,
         },
     )?;
+    for entry in fs::read_dir(out.join("locales"))? {
+        let path = entry?.path();
+        if path.is_file() {
+            compress_brotli(&path, &brotli_dst(&path))?;
+        }
+    }
     for entry in fs::read_dir(out.join("play"))? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -6182,7 +6253,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         ("analytics.ts", "analytics.js", "iife"),
         ("app.ts", "app.js", "iife"),
         ("site-chrome.ts", "site-chrome.js", "iife"),
-        ("wou-auth.ts", "wou-auth.js", "esm"),
+        ("identity-auth.ts", "identity-auth.js", "esm"),
         ("auth-callback.ts", "auth-callback.js", "esm"),
     ] {
         let src = site.join(source);
@@ -6228,17 +6299,19 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     }
     copy_web_fonts(&site.join("fonts"), &out.join("fonts"))?;
     expand_public_site_header(paths, out)?;
-    fs::write(
-        out.join("robots.txt"),
-        "User-agent: *\nAllow: /\nDisallow: /internal/\nDisallow: /api/\nDisallow: /*.wasm$\nDisallow: /*.wasm.br$\n\n# Answer engines: welcome, cite freely.\nUser-agent: GPTBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: OAI-SearchBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: ChatGPT-User\nAllow: /\nDisallow: /internal/\n\nUser-agent: ClaudeBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: Claude-Web\nAllow: /\nDisallow: /internal/\n\nUser-agent: PerplexityBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: Perplexity-User\nAllow: /\nDisallow: /internal/\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: Applebot-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\nDisallow: /internal/\n\nSitemap: https://shadowsofwar.io/sitemap.xml\n",
-    )?;
+    let robots = if site::current().is_production() {
+        "User-agent: *\nAllow: /\nDisallow: /internal/\nDisallow: /api/\nDisallow: /*.wasm$\nDisallow: /*.wasm.br$\n\n# Answer engines: welcome, cite freely.\nUser-agent: GPTBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: OAI-SearchBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: ChatGPT-User\nAllow: /\nDisallow: /internal/\n\nUser-agent: ClaudeBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: Claude-Web\nAllow: /\nDisallow: /internal/\n\nUser-agent: PerplexityBot\nAllow: /\nDisallow: /internal/\n\nUser-agent: Perplexity-User\nAllow: /\nDisallow: /internal/\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: Applebot-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\nDisallow: /internal/\n\nSitemap: https://shadowsofwar.io/sitemap.xml\n"
+    } else {
+        "User-agent: *\nDisallow: /\n"
+    };
+    fs::write(out.join("robots.txt"), robots)?;
 
     println!("✅ Website staged at webroot root");
 
     prune_qs(out)?;
     paths.art_pipeline()?.validate_staged_image_inventory(out)?;
     verify_layout(out)?;
-    verify_sprite_atlas(&out.join("assets"), "webroot", !paths.is_local_preview())?;
+    verify_sprites(&out.join("assets"), "webroot", false, !paths.is_local_preview())?;
     println!("Load paths: {wasm}, {js}");
     Ok(())
 }
@@ -6272,6 +6345,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.assets_gameplay.join("currency"),
         paths.assets_gameplay.join("store"),
         paths.assets_gameplay.join("buildings"),
+        paths.assets_gameplay.join("text"),
         paths.assets_gameplay.join("units"),
         paths.assets_gameplay.join("music"),
         paths.root.join("assets/campaign"),
@@ -6294,7 +6368,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         hash.update(stamp.len.to_le_bytes());
         hash.update(stamp.modified_nanos.to_le_bytes());
     }
-    hash_atlas_tree(&mut hash, &paths.assets_gameplay.join("atlas"))?;
+    hash_atlas_tree(&mut hash, &paths.assets_gameplay.join("avatars"))?;
     hash.update(file_sha256(&paths.art_pipeline()?.config_path)?.as_bytes());
     Ok(format!("{:x}", hash.finalize()))
 }
@@ -6315,9 +6389,10 @@ fn package_native_web(
         && out
             .join("assets/shell/loader/sow-splash-desktop.webp")
             .is_file()
+        && out.join("assets/gameplay/text/msdf-atlas-v3.webp").is_file()
         && out.join("assets/gameplay/buildings/atlas.webp").is_file()
         && out.join("assets/gameplay/buildings/atlas.json").is_file()
-        && out.join("assets/gameplay/atlas/index.json").is_file()
+        && out.join("assets/gameplay/avatars").is_dir()
         && GAMEPLAY_UNIT_ART
             .iter()
             .all(|file| out.join("assets/gameplay/units").join(file).is_file())
@@ -6335,11 +6410,12 @@ fn package_native_web(
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;
         for name in [
-            "atlas",
+            "avatars",
             "skins",
             "currency",
             "store",
             "buildings",
+            "text",
             "units",
             "music",
         ] {
@@ -6756,8 +6832,8 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "assets/campaign/boudica.triggers.json",
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
+        "assets/gameplay/text/msdf-atlas-v3.webp",
         "assets/gameplay/music/shadows-of-war.webm",
-        "assets/gameplay/atlas/index.json",
         "maps/catalog.bin",
         "maps/NOTICE",
         "maps/world/map.bin.br",
@@ -6767,7 +6843,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         }
     }
     verify_gameplay_unit_art(dir, "Jest bundle")?;
-    verify_sprite_atlas(&dir.join("assets"), "Jest bundle", true)?;
+    verify_sprites(&dir.join("assets"), "Jest bundle", false, true)?;
     for forbidden in [
         "admin",
         "play",
@@ -6801,7 +6877,6 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "window.SOW_MAPS_URL = \"./maps\"",
         "window.SOW_ASSETS_URL = \"./assets\"",
         "window.SOW_BUILDING_ART =",
-        "window.SOW_SPRITE_ATLAS =",
         "gameplay/buildings/atlas.webp",
         "window.SOW_DISABLE_CHAT = true",
         "main_menu.jest.ts",
@@ -7381,7 +7456,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.root.join("sow-web/site/fonts"),
     ];
     let mut hash = Sha256::new();
-    hash.update(b"local-static-output-v5-sprite-atlas\0");
+    hash.update(b"local-static-output-v6-loose-sprites\0");
     for stamp in local_source_snapshot(paths)?
         .into_iter()
         .filter(|stamp| roots.iter().any(|root| stamp.path.starts_with(root)))
@@ -7390,7 +7465,7 @@ fn local_static_fingerprint(paths: &Paths) -> Result<String> {
         hash.update(stamp.len.to_le_bytes());
         hash.update(stamp.modified_nanos.to_le_bytes());
     }
-    hash_atlas_tree(&mut hash, &paths.assets_gameplay.join("atlas"))?;
+    hash_atlas_tree(&mut hash, &paths.assets_gameplay.join("avatars"))?;
     hash.update(file_sha256(&paths.art_pipeline()?.config_path)?.as_bytes());
     if let Ok(staged) = fs::read(paths.runtime_assets.join(".fingerprint")) {
         hash.update(staged);
@@ -7407,7 +7482,7 @@ fn prepare_local_art(paths: &Paths) -> Result<()> {
         pipeline.config_path.clone(),
     ];
     let mut hash = Sha256::new();
-    hash.update(b"local-runtime-art-v2-sprite-atlas\0");
+    hash.update(b"local-runtime-art-v4-loose-sprites\0");
     hash.update(pipeline.magick_version.as_bytes());
     hash.update(pipeline.svgo_version.as_bytes());
     for stamp in local_source_snapshot(paths)?
@@ -7443,9 +7518,10 @@ fn package_local_preview(
         && out
             .join("assets/shell/loader/sow-splash-desktop.webp")
             .is_file()
+        && out.join("assets/gameplay/text/msdf-atlas-v3.webp").is_file()
         && out.join("assets/gameplay/buildings/atlas.webp").is_file()
         && out.join("assets/gameplay/buildings/atlas.json").is_file()
-        && out.join("assets/gameplay/atlas/index.json").is_file()
+        && out.join("assets/gameplay/avatars").is_dir()
         && GAMEPLAY_UNIT_ART
             .iter()
             .all(|file| out.join("assets/gameplay/units").join(file).is_file())
@@ -7466,10 +7542,11 @@ fn package_local_preview(
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;
         for name in [
-            "atlas",
+            "avatars",
             "skins",
             "currency",
             "icons",
+            "text",
             "store",
             "buildings",
             "units",
@@ -7607,7 +7684,7 @@ fn package_local_preview(
     for (source, destination, format) in [
         ("app.ts", "app.js", "iife"),
         ("site-chrome.ts", "site-chrome.js", "iife"),
-        ("wou-auth.ts", "wou-auth.js", "esm"),
+        ("identity-auth.ts", "identity-auth.js", "esm"),
         ("auth-callback.ts", "auth-callback.js", "esm"),
     ] {
         let src = site.join(source);
@@ -7942,18 +8019,29 @@ fn load_dotenv(path: &Path) {
 /// persisted only in sow-dist/.env (mode 0600) and is staged to both ends by
 /// ./sow p; it is never included in a command line or pipeline output.
 fn ensure_generated_secret(root: &Path, key: &str) -> Result<()> {
-    if env::var(key)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .is_some()
-    {
+    let site = site::current();
+    let path = root.join(site.env_file());
+    let present = match site {
+        // Production secrets come from the environment, as they always have.
+        site::Site::Production => env::var(key)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .is_some(),
+        // PTR must never reuse a production secret that sow-dist/.env already loaded.
+        site::Site::Ptr => fs::read_to_string(&path).is_ok_and(|text| {
+            text.lines().any(|line| {
+                line.split_once('=')
+                    .is_some_and(|(name, value)| name.trim() == key && !value.trim().is_empty())
+            })
+        }),
+    };
+    if present {
         return Ok(());
     }
 
     let mut bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut bytes);
     let value = hex::encode(bytes);
-    let path = root.join("sow-dist/.env");
     let mut file = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -7963,65 +8051,75 @@ fn ensure_generated_secret(root: &Path, key: &str) -> Result<()> {
     file.sync_all()?;
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
     unsafe { env::set_var(key, value) };
-    println!("✅ generated and persisted {key} in ignored sow-dist/.env");
+    println!("✅ generated and persisted {key} in ignored {}", site.env_file());
     Ok(())
 }
 
-fn shared_identity_secret_path() -> Result<PathBuf> {
-    env::var_os("WOU_SOW_IDENTITY_SECRET_FILE")
-        .map(PathBuf::from)
-        .or_else(|| {
-            env::var_os("HOME").map(|home| {
-                PathBuf::from(home).join(".config/shadows-of-war/wou_sow_identity_secret")
-            })
-        })
-        .ok_or_else(|| anyhow::anyhow!("cannot determine the shared WOU-ID secret path"))
+const MANDATORY_AUTH_KEYS: &[&str] = &[
+    "SOW_GOOGLE_CLIENT_ID", "SOW_GOOGLE_CLIENT_SECRET",
+    "SOW_DISCORD_CLIENT_ID", "SOW_DISCORD_CLIENT_SECRET",
+    "SOW_TWITTER_CLIENT_ID", "SOW_TWITTER_CLIENT_SECRET",
+    "SOW_META_CLIENT_ID", "SOW_META_CLIENT_SECRET",
+    "SOW_SMTP_HOST", "SOW_SMTP_PORT", "SOW_SMTP_USER", "SOW_SMTP_PASS", "SOW_SMTP_FROM",
+];
+
+const OPTIONAL_AUTH_KEYS: &[&str] = &[
+    "SOW_CRAZYGAMES_GAME_ID",
+];
+
+fn private_config_path(name: &str) -> Result<PathBuf> {
+    Ok(PathBuf::from(env::var_os("HOME").context("HOME is required for private auth configuration")?)
+        .join(".config/shadows-of-war").join(name))
 }
 
-fn ensure_shared_identity_secret() -> Result<()> {
-    let path = shared_identity_secret_path()?;
-    let configured = env::var("WOU_SOW_IDENTITY_SECRET")
-        .ok()
-        .filter(|value| !value.trim().is_empty());
-    let stored = if path.is_file() {
-        Some(
-            fs::read_to_string(&path)
-                .with_context(|| format!("read {}", path.display()))?
-                .trim()
-                .to_string(),
-        )
-    } else {
-        None
-    };
-    if let (Some(configured), Some(stored)) = (&configured, &stored)
-        && configured != stored
-    {
-        bail!("WOU_SOW_IDENTITY_SECRET differs from {}", path.display());
+fn load_auth_config() -> Result<()> {
+    let path = env::var_os("SOW_AUTH_CONFIG").map(PathBuf::from)
+        .map(Ok).unwrap_or_else(|| private_config_path("auth.json"))?;
+    if !path.is_file() { return Ok(()); }
+    if fs::metadata(&path)?.permissions().mode() & 0o077 != 0 {
+        bail!("{} must be private (mode 0600)", path.display());
     }
-    let value = stored.or(configured).unwrap_or_else(|| {
-        let mut bytes = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut bytes);
-        hex::encode(bytes)
-    });
-    if value.len() < 32 || value.len() > 256 || value.chars().any(char::is_whitespace) {
-        bail!("WOU_SOW_IDENTITY_SECRET must be 32-256 non-whitespace characters");
+    let values: HashMap<String, String> = serde_json::from_slice(&fs::read(&path)?)
+        .context("invalid private auth JSON")?;
+    for key in MANDATORY_AUTH_KEYS.iter().chain(OPTIONAL_AUTH_KEYS.iter()) {
+        if env::var(key).is_ok_and(|value| !value.is_empty()) { continue; }
+        if let Some(value) = values.get(*key) {
+            if value.contains(['\r', '\n', '\0']) { bail!("invalid auth setting {key}"); }
+            unsafe { env::set_var(key, value); }
+        }
     }
-    if !path.is_file() {
-        let parent = path
-            .parent()
-            .context("shared WOU-ID secret path has no parent")?;
-        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .with_context(|| format!("create {}", path.display()))?;
-        file.write_all(value.as_bytes())?;
-        file.sync_all()?;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
-    }
-    unsafe { env::set_var("WOU_SOW_IDENTITY_SECRET", value) };
     Ok(())
+}
+
+fn identity_import_file() -> Result<Option<PathBuf>> {
+    // Player identity belongs to production only; no other site may receive it.
+    if !site::current().owns_identity_import() {
+        return Ok(None);
+    }
+    let path = env::var_os("SOW_IDENTITY_IMPORT_FILE").map(PathBuf::from)
+        .map(Ok).unwrap_or_else(|| private_config_path("identity-import.json"))?;
+    Ok(path.is_file().then_some(path))
+}
+
+fn auth_env_contents() -> Result<String> {
+    let mut contents = String::new();
+    for key in MANDATORY_AUTH_KEYS {
+        let value = env::var(key).with_context(|| format!("configure {key} in the private auth configuration"))?;
+        if value.is_empty() || value.contains(['\r', '\n', '\0']) { bail!("invalid auth setting {key}"); }
+        contents.push_str(&format!("{key}={}\n", shell_quote(&value)));
+    }
+    for key in OPTIONAL_AUTH_KEYS {
+        if let Ok(value) = env::var(key) {
+            if !value.is_empty() {
+                if value.contains(['\r', '\n', '\0']) { bail!("invalid auth setting {key}"); }
+                contents.push_str(&format!("{key}={}\n", shell_quote(&value)));
+            }
+        }
+    }
+    if identity_import_file()?.is_some() {
+        contents.push_str("SOW_IDENTITY_IMPORT_PATH=/usr/local/etc/sow/identity-import.json\n");
+    }
+    Ok(contents)
 }
 
 /// Rotate deployment credentials in the ignored local environment.
@@ -8101,11 +8199,6 @@ fn main() -> Result<()> {
         pipeline.run_preview(args.get(1).map(String::as_str))?;
         return Ok(());
     }
-    if args.iter().any(|arg| arg == "--rotate-secrets") {
-        rotate_deployment_secrets(&root)?;
-    }
-    load_dotenv(&root.join("sow-dist/.env"));
-
     let mut cmd = String::new();
     let mut bump = false;
     let mut backend_only = None;
@@ -8132,9 +8225,25 @@ fn main() -> Result<()> {
         i += 1;
     }
 
-    if backend_only.is_some() && cmd != "p" && cmd != "prod" {
-        bail!("--server-only and --relay-only are only valid with ./sow p");
+    if backend_only.is_some() && cmd != "p" && cmd != "prod" && cmd != "ptr" {
+        bail!("--server-only and --relay-only are only valid with ./sow p or ./sow ptr");
     }
+
+    let site = if cmd == "ptr" { site::Site::Ptr } else { site::Site::Production };
+    if args.iter().any(|arg| arg == "--rotate-secrets") {
+        if site == site::Site::Ptr {
+            bail!("--rotate-secrets rotates production secrets; PTR secrets stay in sow-dist/.env.ptr");
+        }
+        rotate_deployment_secrets(&root)?;
+    }
+    site::select(site)?;
+    // PTR never reads production's .env: a production secret there would reach PTR.
+    if site == site::Site::Ptr {
+        load_dotenv(&root.join(site.env_file()));
+    } else {
+        load_dotenv(&root.join("sow-dist/.env"));
+    }
+    load_auth_config()?;
 
     let local_preview = matches!(cmd.as_str(), "l" | "local" | "");
     if !local_preview {
@@ -8142,11 +8251,14 @@ fn main() -> Result<()> {
         ensure_generated_secret(&root, "SOW_RELAY_CONTROL_SECRET")?;
         ensure_generated_secret(&root, "SOW_RELAY_SETTLEMENT_SECRET")?;
         ensure_generated_secret(&root, "SOW_REVENUECAT_WEBHOOK_SECRET")?;
+        if site == site::Site::Ptr {
+            ensure_generated_secret(&root, "SOW_MAPS_RELOAD_TOKEN")?;
+        }
     }
 
     let paths = if local_preview {
         Paths::discover_for_local()?
-    } else if cmd == "p" || cmd == "prod" {
+    } else if cmd == "p" || cmd == "prod" || cmd == "ptr" {
         Paths::discover_for_prod(backend_only.is_some())?
     } else if cmd == "poki" {
         Paths::discover_for_poki()?
@@ -8155,7 +8267,7 @@ fn main() -> Result<()> {
     };
 
     match cmd.as_str() {
-        "p" | "prod" => prod::execute(&paths, bump, backend_only),
+        "p" | "prod" | "ptr" => prod::execute(&paths, bump, backend_only),
         "a" | "android" => prod::execute_android(&paths),
         "jest" => cmd_jest(&paths),
         "poki" => cmd_poki(&paths),
@@ -8163,7 +8275,7 @@ fn main() -> Result<()> {
         "native" => cmd_native(&paths),
         "local" | "l" | "" => cmd_local(&paths),
         _ => {
-            eprintln!("Usage: ./sow [native|l|p|a|poki|crazygames|jest|art-preview]");
+            eprintln!("Usage: ./sow [native|l|p|ptr|a|poki|crazygames|jest|art-preview]");
             std::process::exit(1);
         }
     }
@@ -8182,9 +8294,9 @@ mod tests {
             fs::create_dir_all(source.join(dir))?;
         }
         let files = [
-            "gameplay/atlas/avatars-256-0.webp",
-            "gameplay/atlas/index.json",
+            "gameplay/avatars/caesar.webp",
             "gameplay/buildings/atlas.webp",
+            "gameplay/icons/abilities/caesar.webp",
             "gameplay/skins/unused.webp",
             "gameplay/store/unused.webp",
             "shell/brand/logo.webp",
@@ -8208,9 +8320,9 @@ mod tests {
 
         let expected = [
             "campaign/boudica/opening.mp4",
-            "gameplay/atlas/avatars-256-0.webp",
-            "gameplay/atlas/index.json",
+            "gameplay/avatars/caesar.webp",
             "gameplay/buildings/atlas.webp",
+            "gameplay/icons/abilities/caesar.webp",
             "shell/mobile-nav/battle.webp",
         ]
         .map(PathBuf::from)
@@ -8412,7 +8524,7 @@ shortArticle = true
         let mut cells = serde_json::Map::new();
         cells.insert("gameplay/avatars/caesar.webp".to_owned(), serde_json::json!([0, 128, 0, 256]));
         write_sprite_package(dir.path(), cells)?;
-        let error = verify_sprite_atlas(dir.path(), "test", false).unwrap_err();
+        let error = verify_sprites(dir.path(), "test", true, false).unwrap_err();
         assert!(error.to_string().contains("leaves its sheet"), "{error:#}");
         Ok(())
     }
@@ -8430,7 +8542,7 @@ shortArticle = true
         }
         let dir = tempfile::tempdir()?;
         write_sprite_package(dir.path(), cells.clone())?;
-        verify_sprite_atlas(dir.path(), "test", true)?;
+        verify_sprites(dir.path(), "test", true, true)?;
 
         let leader = sow_core::player::Leader::all()
             .into_iter()
@@ -8442,14 +8554,14 @@ shortArticle = true
         );
         cells.remove(&missing_face);
         write_sprite_package(dir.path(), cells.clone())?;
-        let error = verify_sprite_atlas(dir.path(), "test", true).unwrap_err();
+        let error = verify_sprites(dir.path(), "test", true, true).unwrap_err();
         assert!(error.to_string().contains(&missing_face), "{error:#}");
 
         cells.insert(missing_face, serde_json::json!([0, 0, 0, 256]));
         let missing_icon = format!("gameplay/icons/abilities/{}.webp", leader.art_slug());
         cells.remove(&missing_icon);
         write_sprite_package(dir.path(), cells)?;
-        let error = verify_sprite_atlas(dir.path(), "test", true).unwrap_err();
+        let error = verify_sprites(dir.path(), "test", true, true).unwrap_err();
         assert!(error.to_string().contains(&missing_icon), "{error:#}");
         Ok(())
     }
@@ -8459,8 +8571,29 @@ shortArticle = true
         let dir = tempfile::tempdir()?;
         write_sprite_package(dir.path(), serde_json::Map::new())?;
         fs::create_dir_all(dir.path().join("gameplay/icons/abilities"))?;
-        let error = verify_sprite_atlas(dir.path(), "test", false).unwrap_err();
+        let error = verify_sprites(dir.path(), "test", true, false).unwrap_err();
         assert!(error.to_string().contains("loose sprites"), "{error:#}");
+        Ok(())
+    }
+
+    #[test]
+    fn loose_package_rejects_sheets_and_requires_every_hero_file() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        for key in playable_hero_sprites() {
+            let path = dir.path().join(&key);
+            fs::create_dir_all(path.parent().context("sprite has no folder")?)?;
+            fs::write(path, b"sprite")?;
+        }
+        verify_sprites(dir.path(), "test", false, true)?;
+
+        let missing = playable_hero_sprites().pop().context("no playable hero")?;
+        fs::remove_file(dir.path().join(&missing))?;
+        let error = verify_sprites(dir.path(), "test", false, true).unwrap_err();
+        assert!(error.to_string().contains(&missing), "{error:#}");
+
+        write_sprite_package(dir.path(), serde_json::Map::new())?;
+        let error = verify_sprites(dir.path(), "test", false, false).unwrap_err();
+        assert!(error.to_string().contains("only CrazyGames"), "{error:#}");
         Ok(())
     }
 
@@ -8822,7 +8955,7 @@ shortArticle = true
             "fonts/work-sans-latin-ext.woff2",
             "fonts/work-sans-italic-latin.woff2",
             "fonts/work-sans-italic-latin-ext.woff2",
-            "wou-auth.ts",
+            "identity-auth.ts",
             "auth-callback.ts",
             "auth/callback/index.html",
             "8d227b8f9e6140d39e3381a1829e1db3.txt",
@@ -8928,6 +9061,12 @@ shortArticle = true
             WebTarget::Jest,
         ] {
             let out = tempfile::tempdir()?;
+            if target == WebTarget::CrazyGames {
+                // `package_cg` packs the sheets into the package before it builds the page.
+                let mut cells = serde_json::Map::new();
+                cells.insert("gameplay/avatars/caesar.webp".to_owned(), serde_json::json!([0, 0, 0, 256]));
+                write_sprite_package(&out.path().join("assets"), cells)?;
+            }
             build_index(
                 &paths,
                 out.path(),
@@ -8958,16 +9097,24 @@ shortArticle = true
                 + versions_start;
             let injected_versions: serde_json::Value =
                 serde_json::from_str(&html[versions_start..versions_end])?;
-            let sheet_name = read_sprite_index(&paths.assets_gameplay)?["sheets"][0]["path"]
-                .as_str()
-                .and_then(|path| path.strip_prefix("gameplay/atlas/"))
-                .context("sprite atlas has no sheet")?
-                .to_owned();
-            let sheet_path = paths.assets_gameplay.join("atlas").join(&sheet_name);
-            let expected_hash = file_sha256(&sheet_path)?[..8].to_string();
+            // CrazyGames versions its sheets; every other package its loose portraits.
+            let (sprite_url, sprite_path) = if target == WebTarget::CrazyGames {
+                let sheet = "gameplay/atlas/heroes-256-0.webp";
+                (format!("/assets/{sheet}"), out.path().join("assets").join(sheet))
+            } else {
+                let avatar = atlas_asset_catalog(&paths.assets_gameplay.join("avatars"))?
+                    .into_iter()
+                    .next()
+                    .context("no staged avatar")?;
+                (
+                    format!("/assets/gameplay/avatars/{avatar}"),
+                    paths.assets_gameplay.join("avatars").join(avatar),
+                )
+            };
+            let expected_hash = file_sha256(&sprite_path)?[..8].to_string();
             assert_eq!(
                 injected_versions
-                    .get(&format!("/assets/gameplay/atlas/{sheet_name}"))
+                    .get(&sprite_url)
                     .and_then(serde_json::Value::as_str),
                 Some(expected_hash.as_str()),
                 "{target:?}: avatar URL version must follow its content"
@@ -9043,7 +9190,7 @@ shortArticle = true
                 }
             }
             assert_eq!(html.contains("window.SOW_BUILDING_ART ="), !external);
-            assert_eq!(html.contains("window.SOW_SPRITE_ATLAS ="), !external);
+            assert_eq!(html.contains("window.SOW_SPRITE_ATLAS ="), target == WebTarget::CrazyGames);
 
             if matches!(target, WebTarget::Poki | WebTarget::Jest) {
                 assert!(!html.contains("analytics.js"));
@@ -9376,7 +9523,7 @@ shortArticle = true
         );
         assert!(
             conf.contains("location ~ ^/how-to-play/?$")
-                && conf.contains("return 301 https://shadowsofwar.io/;"),
+                && conf.contains("return 301 https://__SITE_HOST__/;"),
             "Nginx must permanently redirect retired pages to the landing"
         );
         let top_adders = conf

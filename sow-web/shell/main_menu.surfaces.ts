@@ -67,6 +67,13 @@ export function renderFeedback() {
     return error + notice;
 }
 
+// Public site pages. Portal embeds name production; web builds, PTR included, use the host they run on.
+function publicSiteUrl(path: string) {
+    const portal = window.SOW_PORTAL;
+    const production = portal === "crazygames" || portal === "poki" || portal === "jest";
+    return (production ? "https://shadowsofwar.io" : window.location.origin) + path;
+}
+
 function renderSiteLink(path: string, key: string, className?: string) {
     const crazyGames = window.SOW_PORTAL === "crazygames";
     const href = crazyGames ? "https://shadowsofwar.io" + path : path;
@@ -148,11 +155,11 @@ function renderSettingsLinks() {
         "</div>";
     const textLinks =
         "<div class='sow-menu__settings-links-grid'>" +
-        renderSettingsLink("https://shadowsofwar.io/#faq", "site.faq") +
-        renderSettingsLink("https://shadowsofwar.io/support/", "menu.support") +
-        renderSettingsLink("https://shadowsofwar.io/terms/", "menu.terms") +
-        renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy") +
-        renderSettingsLink("https://shadowsofwar.io/cookies/", "menu.cookies") +
+        renderSettingsLink(publicSiteUrl("/#faq"), "site.faq") +
+        renderSettingsLink(publicSiteUrl("/support/"), "menu.support") +
+        renderSettingsLink(publicSiteUrl("/terms/"), "menu.terms") +
+        renderSettingsLink(publicSiteUrl("/privacy/"), "menu.privacy") +
+        renderSettingsLink(publicSiteUrl("/cookies/"), "menu.cookies") +
         renderSettingsLink(licenseUrl, "menu.license", "sow-menu__license-link") +
         androidOssLicenses +
         "</div>";
@@ -188,7 +195,7 @@ export function renderSettings() {
             ? window.SOW_getAuthState()
             : { platform: isAndroidTwa() ? "twa" : "web", linked: false, pending: false };
     const session =
-        typeof window.SOW_getWouSession === "function" ? window.SOW_getWouSession() : authSession();
+        typeof window.SOW_getIdentitySession === "function" ? window.SOW_getIdentitySession() : authSession();
     const accountEmail =
         session && session.user && session.user.email ? String(session.user.email).trim() : "";
     const providers = (auth.linkedProviders || []).map(function (provider) {
@@ -219,7 +226,7 @@ export function renderSettings() {
     const showSignIn =
         portalOffersSignIn() &&
         !auth.pending &&
-        (!auth.linked || window.SOW_WOU_SESSION_STATUS === "reauthentication_required");
+        (!auth.linked || window.SOW_IDENTITY_SESSION_STATUS === "reauthentication_required");
     const signInControl = showSignIn
         ? "<button class='sow-menu__secondary sow-menu__settings-signin' type='button' data-command='sign_in'>" +
           esc(SOW_t("menu.sign_in")) +
@@ -357,19 +364,19 @@ export function renderSettings() {
 }
 
 export function surfaceSettingsRenderKey(deleteBusy: boolean, deleteError: string): string {
-    const s = (menuUi.state && menuUi.state.settings) || {};
+    const s = menuUi.state?.settings;
     const auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
-    const session = typeof window.SOW_getWouSession === "function" ? window.SOW_getWouSession() : authSession();
+    const session = typeof window.SOW_getIdentitySession === "function" ? window.SOW_getIdentitySession() : authSession();
     const accountEmail =
         session && session.user && (session.user as { email?: string }).email
             ? String((session.user as { email?: string }).email).trim()
             : "";
     return JSON.stringify([
-        s.music_volume == null ? 0.8 : s.music_volume,
-        Boolean(s.free_zoom_out),
-        Boolean(s.show_fps_ping),
-        Boolean(s.show_dev_tools),
-        Boolean(s.show_dev_tools_available),
+        s?.music_volume == null ? 0.8 : s?.music_volume,
+        Boolean(s?.free_zoom_out),
+        Boolean(s?.show_fps_ping),
+        Boolean(s?.show_dev_tools),
+        Boolean(s?.show_dev_tools_available),
         Boolean(menuUi.signOutConfirmOpen),
         Boolean(menuUi.deleteArmed),
         deleteBusy,
@@ -383,29 +390,29 @@ export function surfaceSettingsRenderKey(deleteBusy: boolean, deleteError: strin
         accountEmail,
         typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "",
         portalOffersSignIn(),
-        window.SOW_WOU_SESSION_STATUS,
+        window.SOW_IDENTITY_SESSION_STATUS,
     ]);
 }
 
 function authApi(path: string) {
-    return "https://id.worldofunreal.com" + path;
+    return path;
 }
 
-interface WouSession {
+interface IdentitySession {
     token: string;
     accountId: string;
     user: unknown;
 }
 
-function authSession(): WouSession {
-    if (typeof window.SOW_getWouSession === "function") return window.SOW_getWouSession();
+function authSession(): IdentitySession {
+    if (typeof window.SOW_getIdentitySession === "function") return window.SOW_getIdentitySession();
     try {
-        const token = window.localStorage.getItem("wou_session_token") || "";
-        const user = JSON.parse(window.localStorage.getItem("wou_user_data") || "null");
+        const token = window.localStorage.getItem("sow_session_token") || "";
+        const user = JSON.parse(window.localStorage.getItem("sow_user_data") || "null");
         if (
             typeof window.SOW_isSowProductionHost === "function" &&
             window.SOW_isSowProductionHost() &&
-            window.SOW_WOU_SESSION_STATUS !== "ready"
+            window.SOW_IDENTITY_SESSION_STATUS !== "ready"
         ) {
             return { token: "", accountId: "", user: user };
         }
@@ -425,7 +432,7 @@ function authHeaders() {
     return headers;
 }
 
-function ensureAuthSession(): Promise<WouSession> {
+function ensureAuthSession(): Promise<IdentitySession> {
     return Promise.resolve(authSession());
 }
 
@@ -448,7 +455,7 @@ function renderAuthSocial() {
     ]
         .map(function (provider) {
             return (
-                "<button class='sow-auth__provider' type='button' data-command='wou_provider' data-provider='" +
+                "<button class='sow-auth__provider' type='button' data-command='identity_provider' data-provider='" +
                 provider[0] +
                 "'><span class='sow-auth__provider-icon sow-auth__provider-icon--" +
                 provider[0] +
@@ -462,23 +469,23 @@ function renderAuthSocial() {
         .join("");
 }
 
-interface WouLoginData {
+interface IdentityLoginData {
     session_token?: string;
     account?: unknown;
 }
 
-function finishWouLogin(data: WouLoginData) {
+function finishIdentityLogin(data: IdentityLoginData) {
     if (!data || !data.session_token || !data.account) throw new Error(SOW_t("auth.identity_incomplete"));
     let accepted = false;
     try {
-        if (typeof window.SOW_acceptWouSession !== "function") {
-            throw new Error("WOU-ID session handler is unavailable.");
+        if (typeof window.SOW_acceptIdentitySession !== "function") {
+            throw new Error("SOW identity session handler is unavailable.");
         }
-        accepted = window.SOW_acceptWouSession(data);
+        accepted = window.SOW_acceptIdentitySession(data);
     } catch (error) {
         throw new Error(SOW_t("auth.account_save_failed"), { cause: error });
     }
-    if (!accepted) throw new Error("Sign-in canceled. Your current WOU-ID account is unchanged.");
+    if (!accepted) throw new Error("Sign-in canceled. Your current SOW identity account is unchanged.");
     menuUi.authBusy = false;
     menuUi.authModalOpen = false;
     menuUi.authOtpSent = false;
@@ -515,7 +522,7 @@ export function requestAuthOtp() {
     render();
     ensureAuthSession()
         .then(function (session) {
-            return fetch(authApi("/api/v1/auth/otp/request"), {
+            return fetch(authApi("/api/auth/otp/request"), {
                 method: "POST",
                 headers: authHeaders(),
                 body: JSON.stringify({
@@ -555,7 +562,7 @@ export function verifyAuthOtp() {
     render();
     ensureAuthSession()
         .then(function (session) {
-            return fetch(authApi("/api/v1/auth/otp/verify"), {
+            return fetch(authApi("/api/auth/otp/verify"), {
                 method: "POST",
                 headers: authHeaders(),
                 body: JSON.stringify({
@@ -566,7 +573,7 @@ export function verifyAuthOtp() {
                 }),
             }).then(authJson);
         })
-        .then(finishWouLogin)
+        .then(finishIdentityLogin)
         .catch(function (error: unknown) {
             menuUi.authBusy = false;
             menuUi.authError =
@@ -632,7 +639,7 @@ export function renderAuthModal() {
         "'>" +
         "<div class='sow-auth__glow sow-auth__glow--cyan'></div><div class='sow-auth__head'><div class='sow-auth__logos'><img class='sow-auth__game-logo' src='/sow-long.svg' alt='" +
         esc(SOW_t("menu.brand")) +
-        "'><span class='sow-auth__logo-divider' aria-hidden='true'></span><img class='sow-auth__wou-logo' src='https://worldofunreal.com/wouid.svg' alt='WouID'></div><button class='sow-menu__icon-button' type='button' data-command='close_auth' aria-label='" +
+        "'></div><button class='sow-menu__icon-button' type='button' data-command='close_auth' aria-label='" +
         esc(SOW_t("auth.close")) +
         "'>×</button></div>" +
         error +

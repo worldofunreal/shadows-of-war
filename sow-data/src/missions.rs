@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub enum MissionCategory {
     Onboarding,
     Daily,
+    Weekly,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,6 +30,9 @@ pub enum MissionRequirement {
     WinTeamGame { count: u32 },
     PlayMatches { count: u32 },
     EliminateUnits { count: u32 },
+    PlayRankedMatches { count: u32 },
+    WinRankedMatches { count: u32 },
+    DefeatEmpires { count: u32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -79,8 +83,8 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         category: MissionCategory::Onboarding,
         title_key: "missions.onboarding_tutorial_title",
         description_key: "missions.onboarding_tutorial_desc",
-        crowns_reward: 150,
-        gems_reward: 25,
+        crowns_reward: 50,
+        gems_reward: 0,
         target: 1,
         requirement: MissionRequirement::CompleteTutorial,
         icon: "shield",
@@ -91,8 +95,8 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         category: MissionCategory::Onboarding,
         title_key: "missions.onboarding_structures_title",
         description_key: "missions.onboarding_structures_desc",
-        crowns_reward: 200,
-        gems_reward: 30,
+        crowns_reward: 50,
+        gems_reward: 0,
         target: 5,
         requirement: MissionRequirement::BuildStructures { count: 5 },
         icon: "tower",
@@ -103,8 +107,8 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         category: MissionCategory::Onboarding,
         title_key: "missions.onboarding_rotation_title",
         description_key: "missions.onboarding_rotation_desc",
-        crowns_reward: 250,
-        gems_reward: 35,
+        crowns_reward: 75,
+        gems_reward: 2,
         target: 1,
         requirement: MissionRequirement::PlayFreeRotationHero { count: 1 },
         icon: "rotation",
@@ -115,8 +119,8 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         category: MissionCategory::Onboarding,
         title_key: "missions.onboarding_team_title",
         description_key: "missions.onboarding_team_desc",
-        crowns_reward: 300,
-        gems_reward: 40,
+        crowns_reward: 75,
+        gems_reward: 2,
         target: 1,
         requirement: MissionRequirement::PlayTeamGame { count: 1 },
         icon: "team",
@@ -127,8 +131,8 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         category: MissionCategory::Onboarding,
         title_key: "missions.onboarding_regional_title",
         description_key: "missions.onboarding_regional_desc",
-        crowns_reward: 350,
-        gems_reward: 50,
+        crowns_reward: 100,
+        gems_reward: 3,
         target: 2,
         requirement: MissionRequirement::PlayRegionalHero {
             region_group: "west",
@@ -142,8 +146,8 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         category: MissionCategory::Onboarding,
         title_key: "missions.onboarding_team_win_title",
         description_key: "missions.onboarding_team_win_desc",
-        crowns_reward: 500,
-        gems_reward: 75,
+        crowns_reward: 150,
+        gems_reward: 5,
         target: 1,
         requirement: MissionRequirement::WinTeamGame { count: 1 },
         icon: "crown",
@@ -157,8 +161,8 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_play_matches_title",
         description_key: "missions.daily_play_matches_desc",
-        crowns_reward: 100,
-        gems_reward: 3,
+        crowns_reward: 35,
+        gems_reward: 1,
         target: 3,
         requirement: MissionRequirement::PlayMatches { count: 3 },
         icon: "swords",
@@ -169,8 +173,8 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_build_structures_title",
         description_key: "missions.daily_build_structures_desc",
-        crowns_reward: 125,
-        gems_reward: 3,
+        crowns_reward: 35,
+        gems_reward: 1,
         target: 8,
         requirement: MissionRequirement::BuildStructures { count: 8 },
         icon: "tower",
@@ -181,8 +185,8 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_team_game_title",
         description_key: "missions.daily_team_game_desc",
-        crowns_reward: 125,
-        gems_reward: 3,
+        crowns_reward: 35,
+        gems_reward: 1,
         target: 2,
         requirement: MissionRequirement::PlayTeamGame { count: 2 },
         icon: "team",
@@ -193,8 +197,8 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_team_win_title",
         description_key: "missions.daily_team_win_desc",
-        crowns_reward: 175,
-        gems_reward: 5,
+        crowns_reward: 50,
+        gems_reward: 2,
         target: 1,
         requirement: MissionRequirement::WinTeamGame { count: 1 },
         icon: "crown",
@@ -205,8 +209,8 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_west_heroes_title",
         description_key: "missions.daily_west_heroes_desc",
-        crowns_reward: 125,
-        gems_reward: 3,
+        crowns_reward: 35,
+        gems_reward: 1,
         target: 2,
         requirement: MissionRequirement::PlayRegionalHero {
             region_group: "west",
@@ -220,8 +224,8 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_east_heroes_title",
         description_key: "missions.daily_east_heroes_desc",
-        crowns_reward: 125,
-        gems_reward: 3,
+        crowns_reward: 35,
+        gems_reward: 1,
         target: 2,
         requirement: MissionRequirement::PlayRegionalHero {
             region_group: "east",
@@ -235,8 +239,8 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_free_rotation_title",
         description_key: "missions.daily_free_rotation_desc",
-        crowns_reward: 150,
-        gems_reward: 3,
+        crowns_reward: 40,
+        gems_reward: 1,
         target: 2,
         requirement: MissionRequirement::PlayFreeRotationHero { count: 2 },
         icon: "rotation",
@@ -247,12 +251,123 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_eliminate_units_title",
         description_key: "missions.daily_eliminate_units_desc",
-        crowns_reward: 150,
-        gems_reward: 5,
+        crowns_reward: 40,
+        gems_reward: 2,
         target: 50,
         requirement: MissionRequirement::EliminateUnits { count: 50 },
         icon: "crosshair",
         order: 17,
+    },
+    MissionDefinition {
+        id: "daily_ranked_duel",
+        category: MissionCategory::Daily,
+        title_key: "missions.daily_ranked_duel_title",
+        description_key: "missions.daily_ranked_duel_desc",
+        crowns_reward: 45,
+        gems_reward: 2,
+        target: 2,
+        requirement: MissionRequirement::PlayRankedMatches { count: 2 },
+        icon: "swords",
+        order: 18,
+    },
+    MissionDefinition {
+        id: "daily_ranked_victory",
+        category: MissionCategory::Daily,
+        title_key: "missions.daily_ranked_victory_title",
+        description_key: "missions.daily_ranked_victory_desc",
+        crowns_reward: 50,
+        gems_reward: 2,
+        target: 1,
+        requirement: MissionRequirement::WinRankedMatches { count: 1 },
+        icon: "crown",
+        order: 19,
+    },
+    MissionDefinition {
+        id: "daily_defeat_empires",
+        category: MissionCategory::Daily,
+        title_key: "missions.daily_defeat_empires_title",
+        description_key: "missions.daily_defeat_empires_desc",
+        crowns_reward: 40,
+        gems_reward: 1,
+        target: 2,
+        requirement: MissionRequirement::DefeatEmpires { count: 2 },
+        icon: "shield",
+        order: 20,
+    },
+];
+
+pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
+    MissionDefinition {
+        id: "weekly_ranked_champion",
+        category: MissionCategory::Weekly,
+        title_key: "missions.weekly_ranked_champion_title",
+        description_key: "missions.weekly_ranked_champion_desc",
+        crowns_reward: 150,
+        gems_reward: 5,
+        target: 3,
+        requirement: MissionRequirement::WinRankedMatches { count: 3 },
+        icon: "crown",
+        order: 30,
+    },
+    MissionDefinition {
+        id: "weekly_conqueror",
+        category: MissionCategory::Weekly,
+        title_key: "missions.weekly_conqueror_title",
+        description_key: "missions.weekly_conqueror_desc",
+        crowns_reward: 120,
+        gems_reward: 4,
+        target: 5,
+        requirement: MissionRequirement::DefeatEmpires { count: 5 },
+        icon: "swords",
+        order: 31,
+    },
+    MissionDefinition {
+        id: "weekly_grand_architect",
+        category: MissionCategory::Weekly,
+        title_key: "missions.weekly_grand_architect_title",
+        description_key: "missions.weekly_grand_architect_desc",
+        crowns_reward: 120,
+        gems_reward: 3,
+        target: 25,
+        requirement: MissionRequirement::BuildStructures { count: 25 },
+        icon: "tower",
+        order: 32,
+    },
+    MissionDefinition {
+        id: "weekly_veteran_commander",
+        category: MissionCategory::Weekly,
+        title_key: "missions.weekly_veteran_commander_title",
+        description_key: "missions.weekly_veteran_commander_desc",
+        crowns_reward: 100,
+        gems_reward: 3,
+        target: 10,
+        requirement: MissionRequirement::PlayMatches { count: 10 },
+        icon: "shield",
+        order: 33,
+    },
+    MissionDefinition {
+        id: "weekly_blood_and_iron",
+        category: MissionCategory::Weekly,
+        title_key: "missions.weekly_blood_and_iron_title",
+        description_key: "missions.weekly_blood_and_iron_desc",
+        crowns_reward: 120,
+        gems_reward: 4,
+        target: 150,
+        requirement: MissionRequirement::EliminateUnits { count: 150 },
+        icon: "crosshair",
+        order: 34,
+    },
+    MissionDefinition {
+        id: "weekly_free_rotation_master",
+        category: MissionCategory::Weekly,
+        title_key: "missions.weekly_free_rotation_master_title",
+        description_key: "missions.weekly_free_rotation_master_desc",
+        crowns_reward: 100,
+        gems_reward: 3,
+        target: 6,
+        requirement: MissionRequirement::PlayFreeRotationHero { count: 6 },
+        icon: "rotation",
+        order: 35,
     },
 ];
 
@@ -276,6 +391,26 @@ pub fn daily_missions_for_day(epoch_day: u64) -> Vec<MissionDefinition> {
         .collect()
 }
 
+/// Deterministically selects 3 distinct weekly missions for a weekly rotation period.
+pub fn weekly_missions_for_period(rotation_period: u64) -> Vec<MissionDefinition> {
+    let pool_len = WEEKLY_MISSION_POOL.len();
+    if pool_len <= 3 {
+        return WEEKLY_MISSION_POOL.to_vec();
+    }
+    let mut selected_indices = BTreeSet::new();
+    let mut step = 0;
+    while selected_indices.len() < 3 {
+        let hash = (rotation_period.wrapping_mul(1664525) + 1013904223 + step * 9973) as usize;
+        let index = hash % pool_len;
+        selected_indices.insert(index);
+        step += 1;
+    }
+    selected_indices
+        .into_iter()
+        .map(|idx| WEEKLY_MISSION_POOL[idx])
+        .collect()
+}
+
 /// Statistics provided by player profile or session telemetry to evaluate missions.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MissionStats {
@@ -288,6 +423,9 @@ pub struct MissionStats {
     pub east_regional_matches: u32,
     pub matches_played: u32,
     pub kills: u32,
+    pub ranked_matches: u32,
+    pub ranked_wins: u32,
+    pub empires_defeated: u32,
 }
 
 pub fn evaluate_mission_progress(
@@ -336,6 +474,18 @@ pub fn evaluate_mission_progress(
             let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.kills);
             p.min(count)
         }
+        MissionRequirement::PlayRankedMatches { count } => {
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.ranked_matches);
+            p.min(count)
+        }
+        MissionRequirement::WinRankedMatches { count } => {
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.ranked_wins);
+            p.min(count)
+        }
+        MissionRequirement::DefeatEmpires { count } => {
+            let p = saved_progress.map(|r| r.progress).unwrap_or(0).max(stats.empires_defeated);
+            p.min(count)
+        }
     };
 
     let target = def.target;
@@ -348,6 +498,7 @@ pub fn evaluate_mission_progress(
         category: match def.category {
             MissionCategory::Onboarding => "onboarding".to_string(),
             MissionCategory::Daily => "daily".to_string(),
+            MissionCategory::Weekly => "weekly".to_string(),
         },
         title_key: def.title_key.to_string(),
         description_key: def.description_key.to_string(),
@@ -363,7 +514,7 @@ pub fn evaluate_mission_progress(
 }
 
 /// Builds the complete view of missions for a player: all 6 onboarding missions plus
-/// the 3 daily missions for the specified epoch day.
+/// the 3 daily missions for the specified epoch day, and the 3 weekly missions for the current weekly period.
 pub fn build_all_missions_view(
     stats: &MissionStats,
     saved_records: &BTreeMap<String, MissionRecord>,
@@ -379,6 +530,12 @@ pub fn build_all_missions_view(
         let saved = saved_records.get(def.id);
         views.push(evaluate_mission_progress(def, stats, saved));
     }
+    let period = crate::commerce::rotation_period(epoch_day.saturating_mul(86_400));
+    let weekly_defs = weekly_missions_for_period(period);
+    for def in &weekly_defs {
+        let saved = saved_records.get(def.id);
+        views.push(evaluate_mission_progress(def, stats, saved));
+    }
     views
 }
 
@@ -387,7 +544,9 @@ pub fn build_all_missions_view(
 /// 1. First completed-but-unclaimed onboarding mission (reward ready!).
 /// 2. First in-progress onboarding mission.
 /// 3. First completed-but-unclaimed daily mission.
-/// 4. First in-progress daily mission.
+/// 4. First completed-but-unclaimed weekly mission.
+/// 5. First in-progress daily mission.
+/// 6. First in-progress weekly mission.
 pub fn active_command_directive(missions: &[MissionView]) -> Option<MissionView> {
     // 1. Unclaimed onboarding
     if let Some(m) = missions.iter().find(|m| m.category == "onboarding" && m.completed && !m.claimed) {
@@ -401,8 +560,16 @@ pub fn active_command_directive(missions: &[MissionView]) -> Option<MissionView>
     if let Some(m) = missions.iter().find(|m| m.category == "daily" && m.completed && !m.claimed) {
         return Some(m.clone());
     }
-    // 4. Incomplete daily
+    // 4. Unclaimed weekly
+    if let Some(m) = missions.iter().find(|m| m.category == "weekly" && m.completed && !m.claimed) {
+        return Some(m.clone());
+    }
+    // 5. Incomplete daily
     if let Some(m) = missions.iter().find(|m| m.category == "daily" && !m.completed) {
+        return Some(m.clone());
+    }
+    // 6. Incomplete weekly
+    if let Some(m) = missions.iter().find(|m| m.category == "weekly" && !m.completed) {
         return Some(m.clone());
     }
     None
@@ -417,8 +584,8 @@ mod tests {
         assert_eq!(ONBOARDING_MISSIONS.len(), 6);
         let total_crowns: u64 = ONBOARDING_MISSIONS.iter().map(|m| m.crowns_reward).sum();
         let total_gems: u64 = ONBOARDING_MISSIONS.iter().map(|m| m.gems_reward).sum();
-        assert_eq!(total_crowns, 1750);
-        assert_eq!(total_gems, 255);
+        assert_eq!(total_crowns, 500);
+        assert_eq!(total_gems, 12);
     }
 
     #[test]
@@ -465,5 +632,21 @@ mod tests {
         let directive2 = active_command_directive(&views2).expect("has active directive");
         assert_eq!(directive2.id, "onboarding_2_structures");
         assert!(!directive2.completed);
+    }
+
+    #[test]
+    fn weekly_missions_are_deterministic_and_unique() {
+        let period1 = weekly_missions_for_period(10);
+        let period1_again = weekly_missions_for_period(10);
+        assert_eq!(period1, period1_again);
+        assert_eq!(period1.len(), 3);
+        let mut ids = BTreeSet::new();
+        for m in &period1 {
+            assert!(ids.insert(m.id));
+        }
+
+        let views = build_all_missions_view(&MissionStats::default(), &Default::default(), 100);
+        assert_eq!(views.len(), 6 + 3 + 3); // 6 onboarding + 3 daily + 3 weekly
+        assert_eq!(views.iter().filter(|m| m.category == "weekly").count(), 3);
     }
 }

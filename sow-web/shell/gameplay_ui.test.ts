@@ -229,6 +229,9 @@ test("endgame shows the five match stats with exact combat counts and compact to
             textContent: "",
             src: "",
             alt: "",
+            getAttribute(name) {
+                return name === "src" ? this.src || null : null;
+            },
             classList: {
                 toggle(name, enabled) {
                     this[name] = enabled;
@@ -1627,6 +1630,10 @@ test("transfer acknowledgements release the mobile sidebars without leaving a hi
         update(transfer);
         assert.equal(panel.classList.contains("hidden"), false);
         assert.equal(context.hudRoot.dataset.overlayOpen, "true");
+        if (command !== "close_transfer") {
+            click("set_transfer_amount", { resource: "troops", percent: "25" });
+            click("set_transfer_amount", { resource: "gold", percent: "25" });
+        }
         click(command);
         assert.deepEqual(calls, [expected[command]]);
         context.renderHud();
@@ -1666,6 +1673,8 @@ test("transfer acknowledgements release the mobile sidebars without leaving a hi
             "an unconfirmed open cannot hide the rails without a panel",
         );
         update(transfer);
+        click("set_transfer_amount", { resource: "troops", percent: "25" });
+        click("set_transfer_amount", { resource: "gold", percent: "25" });
         click("send_resources");
         update(transfer);
         context.renderHud();
@@ -1774,6 +1783,7 @@ test("flipping one row turns the panel into a trade with one CTA and sends the p
     };
     const own = { troops: 800, gold: 0, max_troops: 1000 };
     update({ transfer: offer, ...own });
+    click("set_transfer_amount", { resource: "troops", percent: "25" });
     const refs = context.hudRefs;
     assert.equal(refs.transferDirGold.textContent, "en:hud.transfer_give");
     assert.equal(refs.transferTrade.hidden, true);
@@ -1847,6 +1857,7 @@ test("a trade with its price at zero falls back to a plain Send", () => {
         mode: "send",
     };
     update({ transfer: offer, troops: 800, gold: 0, max_troops: 1000 });
+    click("set_transfer_amount", { resource: "troops", percent: "25" });
     click("flip_transfer_row", { resource: "gold" });
     context.hudRefs.transferGold.value = "0";
     click("offer_trade");
@@ -1905,6 +1916,7 @@ test("a request locks its button for the cooldown, sends nothing meanwhile, and 
         mode: "request",
     };
     update({ transfer: offer, troops: 100, gold: 0, max_troops: 1000 });
+    click("set_transfer_amount", { resource: "troops", percent: "25" });
     assert.equal(context.hudRefs.transferRequest.disabled, false);
     click("request_resources");
     assert.equal(calls.at(-1).type, "request_resources");
@@ -1952,7 +1964,8 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
     assert.equal(first.transferIdentity.name.textContent, transfer.target_name);
     assert.equal(first.transferIdentity.name.children.length, 0);
     assert.equal(first.transferIdentity.portrait.src, "/assets/gameplay/avatars/caesar.webp");
-    assert.equal(gold.value, "2250000", "a request seeds a quarter of their gold");
+    assert.equal(gold.value, "0", "a request starts at zero");
+    assert.equal(troops.value, "0", "troops start at zero");
     first.transferIdentity.portrait.onerror.call(first.transferIdentity.portrait);
     assert.equal(first.transferIdentity.portrait.src, "/assets/gameplay/avatars/null.webp");
     gold.value = "1234567";
@@ -1989,7 +2002,7 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
     update({ transfer: null });
     assert.equal(doc.activeElement, canvas);
     update({ transfer });
-    assert.equal(context.hudRefs.transferGold.value, "2250000", "reopening the same target starts a fresh draft");
+    assert.equal(context.hudRefs.transferGold.value, "0", "reopening the same target starts a fresh draft at zero");
     update({
         transfer: {
             ...transfer,
@@ -1998,7 +2011,7 @@ test("player dialogs share identities, preserve drafts and focus, and prioritize
             target_avatar: { kind: "portrait", slug: "ndebele" },
         },
     });
-    assert.equal(context.hudRefs.transferGold.value, "2250000", "a new target gets its own seed");
+    assert.equal(context.hudRefs.transferGold.value, "0", "a new target starts with zero");
     assert.equal(context.hudRefs.transferIdentity.portrait.src, "/assets/gameplay/avatars/ndebele.webp");
     assert.equal(context.hudRefs.transferIdentity.emblem.hidden, true);
     update({ transfer: { ...transfer, target_avatar: { kind: "portrait", slug: "boudica" } } });
@@ -2087,4 +2100,75 @@ test("mobile overlays never hide the building dock and story dialogs remain abov
         overlayRules.every((rule) => !rule.includes(".sow-hud__dock")),
         "transient menus and panels cannot hide the persistent building dock",
     );
+});
+
+test("deployment dock shows prominent countdown, progress bar, urgency states, and post-spawn camera focus", () => {
+    const { Element } = makeHudDocument();
+    const deployBtn = new Element("div");
+    const deployTimer = new Element("b");
+    const deployFill = new Element("i");
+    const deployStatus = new Element("span");
+    const hudRoot = new Element("div");
+    const context = vm.createContext({
+        hudRoot,
+        hudRefs: { deployBtn, deployTimer, deployFill, deployStatus },
+        SOW_t: (key) => "en:" + key,
+        hud: null,
+        spawnSecs: null,
+        isDeploying: false,
+    });
+    const renderStart = hud.indexOf("    function renderHud(");
+    const deployStart = hud.indexOf("// Bottom Dock: Phase Transformation", renderStart);
+    const deployEnd = hud.indexOf("if (hudRefs!.buildingsStrip)", deployStart);
+    assert.ok(deployStart > renderStart && deployEnd > deployStart);
+    const script = new vm.Script(
+        "{\nconst spawnSecs = hud.spawn_timer_secs;\n" +
+            "const isDeploying = spawnSecs != null && spawnSecs > 0;\n" +
+            hud.slice(deployStart, deployEnd) +
+            "\n}",
+    );
+    const update = (payload) => {
+        context.hud = payload;
+        script.runInContext(context);
+    };
+
+    update({ spawn_timer_secs: 12, spawn_duration_secs: 15, has_spawned: false });
+    assert.equal(hudRoot.dataset.deploying, "true");
+    assert.equal(deployBtn.hidden, false);
+    assert.equal(deployBtn.style.display, "grid");
+    assert.equal(deployBtn.dataset.spawned, "false");
+    assert.equal(deployBtn.dataset.urgency, "normal");
+    assert.equal(deployBtn.dataset.command, undefined);
+    assert.equal(deployStatus.hidden, true);
+    assert.equal(deployTimer.textContent, "12.0s");
+    assert.equal(deployFill.style.width, "80.0%");
+
+    update({ spawn_timer_secs: 4.5, spawn_duration_secs: 15, has_spawned: true });
+    assert.equal(deployBtn.dataset.spawned, "true");
+    assert.equal(deployBtn.dataset.urgency, "warning");
+    assert.equal(deployBtn.dataset.command, "center_camera");
+    assert.equal(deployBtn.getAttribute("role"), "button");
+    assert.equal(deployBtn.getAttribute("tabindex"), "0");
+    assert.equal(deployStatus.hidden, false);
+    assert.equal(deployTimer.textContent, "4.5s");
+    assert.equal(deployFill.style.width, "30.0%");
+
+    update({ spawn_timer_secs: 2.1, spawn_duration_secs: 15, has_spawned: true });
+    assert.equal(deployBtn.dataset.urgency, "critical");
+    assert.equal(deployTimer.textContent, "2.1s");
+    assert.equal(deployFill.style.width, "14.0%");
+
+    update({ spawn_timer_secs: null, spawn_duration_secs: 15, has_spawned: true });
+    assert.equal(hudRoot.dataset.deploying, "false");
+    assert.equal(deployBtn.hidden, true);
+    assert.equal(deployBtn.style.display, "none");
+    assert.equal(deployFill.style.width, "0%");
+
+    const primaryTextRule = hudCss.match(/#sow-hud\[data-compact="true"\]\s*:is\([^)]+\)\s*\{\s*font-size:\s*var\(--sow-hud-text-primary-size\);/);
+    assert.ok(primaryTextRule, "compact primary text rule exists");
+    assert.ok(
+        !primaryTextRule[0].includes(".sow-hud__deploy-timer"),
+        "deploy timer is not shrunk to 12px primary text size in compact mode",
+    );
+    assert.match(hudCss, /\.sow-hud__deploy-timer\s*\{[\s\S]*?font-size:\s*26px;/);
 });

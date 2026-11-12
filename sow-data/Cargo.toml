@@ -22,11 +22,16 @@ server = [
     "dep:hmac",
     "dep:sha2",
     "dep:hex",
+    "dep:base64",
 ]
 
 [[bin]]
 name = "sow-database"
 path = "src/main.rs"
+required-features = ["server"]
+
+[[example]]
+name = "check_identity_import"
 required-features = ["server"]
 
 [dependencies]
@@ -49,6 +54,7 @@ lettre = { version = "0.11", optional = true, default-features = false, features
 hmac = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
+base64 = { version = "0.22", optional = true }
 
 [dev-dependencies]
 sow-core = { workspace = true }

@@ -27,8 +27,12 @@ start_precmd="${name}_prestart"
 
 sow_server_prestart()
 {
+	set -a
 	. "${sow_server_env_file}"
-	: ${SOW_RELAY_LISTEN_HOST:="127.0.0.1"}
+	set +a
+	: ${SOW_RELAY_LISTEN_HOST:="__SITE_LOOPBACK__"}
+	: ${SOW_PUBLIC_HOST:="__SITE_HOST__"}
+	export SOW_PUBLIC_HOST
 	: ${SOW_RELAY_LOG_DIR:="/var/log/sow"}
 	case "${SOW_RELAY_LOG_DIR}" in
 	/var/log/sow|/var/log/sow/*)

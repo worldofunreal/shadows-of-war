@@ -18,6 +18,8 @@ use std::sync::{
 };
 use std::time::Duration;
 
+const TEST_DATABASE_SECRET: &str = "restart-test-database-identity-key";
+
 struct Process(Child);
 impl Drop for Process {
     fn drop(&mut self) {
@@ -156,7 +158,7 @@ async fn server_owned_turn_progress_survives_restart_and_pays_once() {
                 .env_clear()
                 .env("SOW_DB_PORT", port.to_string())
                 .env("SOW_VALKEY_URL", &redis_url)
-                .env("SOW_DB_SECRET", "restart-test-database")
+                .env("SOW_DB_SECRET", TEST_DATABASE_SECRET)
                 .env("SOW_RELAY_SETTLEMENT_SECRET", "restart-test-relay")
                 .env("SOW_REDB_PATH", directory.path().join("metadata.redb"))
                 .env("SOW_REPLAY_DIR", directory.path().join("replays"))
@@ -194,7 +196,7 @@ async fn server_owned_turn_progress_survives_restart_and_pays_once() {
         }],
         ..Default::default()
     };
-    http.post(format!("{base}/match/start")).bearer_auth("restart-test-database")
+    http.post(format!("{base}/match/start")).bearer_auth(TEST_DATABASE_SECRET)
         .json(&json!({"match_id":"42","player_ids":[account_id],"metadata":{"relay_players":[
             {"player_id":1,"database_account_id":account_id,"leader":"Caesar","is_internal":false}],
             "config":{"tick_rate_ms":100.0},"replay_format":sow_core::protocol::GAMEPLAY_FORMAT_VERSION}}))
@@ -242,7 +244,7 @@ async fn server_owned_turn_progress_survives_restart_and_pays_once() {
     );
     let pending: Value = http
         .get(format!("{base}/internal/stats"))
-        .bearer_auth("restart-test-database")
+        .bearer_auth(TEST_DATABASE_SECRET)
         .send()
         .await
         .unwrap()
@@ -255,7 +257,7 @@ async fn server_owned_turn_progress_survives_restart_and_pays_once() {
     assert_eq!(pending["rewards"]["pending_payments"], 1);
     let checkpoint: Value = http
         .get(format!("{base}/internal/stats?match_id=42"))
-        .bearer_auth("restart-test-database")
+        .bearer_auth(TEST_DATABASE_SECRET)
         .send()
         .await
         .unwrap()
@@ -364,7 +366,7 @@ async fn server_owned_turn_progress_survives_restart_and_pays_once() {
     assert_eq!(recovered["state"], "confirmed");
     let checkpoint: Value = http
         .get(format!("{base}/internal/stats?match_id=42"))
-        .bearer_auth("restart-test-database")
+        .bearer_auth(TEST_DATABASE_SECRET)
         .send()
         .await
         .unwrap()
@@ -391,7 +393,7 @@ async fn server_owned_turn_progress_survives_restart_and_pays_once() {
         }],
         ..Default::default()
     };
-    http.post(format!("{base}/match/start")).bearer_auth("restart-test-database")
+    http.post(format!("{base}/match/start")).bearer_auth(TEST_DATABASE_SECRET)
         .json(&json!({"match_id":"43","player_ids":[account_id],"metadata":{"relay_players":[
             {"player_id":1,"database_account_id":account_id,"leader":"Caesar","is_internal":false}],
             "config":{"tick_rate_ms":100.0},"replay_format":sow_core::protocol::GAMEPLAY_FORMAT_VERSION}}))

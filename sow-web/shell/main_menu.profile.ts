@@ -2165,6 +2165,11 @@ export function resolveProfileAchievements(
   });
 }
 
+/** Achievements without locale strings keep the server's English text. Probing first keeps that fallback out of the missing-translation log. */
+function achievementText(key: string, fallback: string): string {
+  return window.SOW_hasText(key) ? SOW_t(key) : fallback;
+}
+
 function profileAchievementCard(achievement: ProfileAchievement) {
   const category = achievement.category || "commanders";
   const prefix = "profile.achievement_" + achievement.id;
@@ -2174,16 +2179,8 @@ function profileAchievementCard(achievement: ProfileAchievement) {
   const unlocked = !!achievement.unlocked;
   const isMythic = target >= 1000;
 
-  const rawTitle = SOW_t(prefix + "_title");
-  const title =
-    rawTitle !== prefix + "_title"
-      ? rawTitle
-      : achievement.title || achievement.id;
-  const rawDesc = SOW_t(prefix + "_description");
-  const desc =
-    rawDesc !== prefix + "_description"
-      ? rawDesc
-      : achievement.description || "";
+  const title = achievementText(prefix + "_title", achievement.title || achievement.id);
+  const desc = achievementText(prefix + "_description", achievement.description || "");
 
   let badgeIcon = "";
   let heroSlug: string | null = null;

@@ -9,22 +9,22 @@
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://shadowsofwar.io/play/">
+    <meta property="og:url" content="__SITE_ORIGIN__/play/">
     <meta property="og:title" content="Play Shadows of War — MMORTS Strategy Game">
     <meta property="og:description" content="Enter Shadows of War, a match-based MMORTS. Choose a historical leader, expand territory, build your economy, and fight for control of the map.">
-    <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
+    <meta property="og:image" content="__SITE_ORIGIN__/assets/shell/loader/sow-splash-desktop.webp">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://shadowsofwar.io/play/">
+    <meta property="twitter:url" content="__SITE_ORIGIN__/play/">
     <meta property="twitter:title" content="Play Shadows of War — MMORTS Strategy Game">
     <meta property="twitter:description" content="Enter Shadows of War, a match-based MMORTS. Choose a historical leader, expand territory, build your economy, and fight for control of the map.">
-    <meta property="twitter:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
+    <meta property="twitter:image" content="__SITE_ORIGIN__/assets/shell/loader/sow-splash-desktop.webp">
 
     <meta name="application-name" content="Shadows of War">
     <meta property="og:site_name" content="Shadows of War">
     <meta name="theme-color" content="#000000">
-    <link rel="canonical" href="https://shadowsofwar.io/play/">
+    <link rel="canonical" href="__SITE_ORIGIN__/play/">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="./sow.svg" type="image/svg+xml">
     <meta name="sow-media-artwork" content="./icon-192.png">
@@ -546,28 +546,70 @@
         async function run() {
             var isPortal = window.SOW_RUNTIME && window.SOW_RUNTIME.portal_embed === true
                 || window.SOW_isPortalEmbed === true;
+            var bootDiagnostics = new URLSearchParams(window.location.search).get("diag") === "1";
+            function markBoot(name) {
+                if (!bootDiagnostics) return;
+                performance.mark("sow:boot:" + name);
+                console.info("[SOW boot]", name, Math.round(performance.now()) + "ms");
+            }
+            window.addEventListener("sow:boot-mark", function (event) {
+                markBoot(String(event.detail || ""));
+            });
+            markBoot("startup");
 
             if (!window.SOW_has_webgl2()) {
                 window.SOW_show_graphics_error();
                 return;
             }
 
-            const wasmResponsePromise = fetch('./__WASM_FILE__').then(function (response) {
+            // Download and compile the engine, load the glue and restore the
+            // identity session while the locale catalog downloads.
+            markBoot("wasm-fetch-compile-start");
+            const wasmModulePromise = fetch('./__WASM_FILE__').then(function (response) {
                 if (!response.ok) throw new Error("WASM request returned " + response.status);
-                return { response: response };
+                const streaming = typeof WebAssembly.compileStreaming === "function" &&
+                    String(response.headers.get("Content-Type") || "").split(";")[0].trim() === "application/wasm";
+                return streaming
+                    ? WebAssembly.compileStreaming(response.clone()).catch(function () {
+                        return response.arrayBuffer().then(function (bytes) { return WebAssembly.compile(bytes); });
+                    })
+                    : response.arrayBuffer().then(function (bytes) { return WebAssembly.compile(bytes); });
+            }).then(function (module) {
+                markBoot("wasm-compiled");
+                // Optional gameplay atlases start from the renderer after the campaign map
+                // arrives, so they cannot compete with the first match's required assets.
+                return { module: module };
             }).catch(function (error) {
+                markBoot("wasm-compile-failed");
                 return { error: error };
             });
-
-            try {
-                await window.SOW_I18N_READY;
-                if (typeof window.SOW_refreshWebLoaderText === 'function') {
-                    window.SOW_refreshWebLoaderText();
+            markBoot("wasm-glue-import-start");
+            const wasmGluePromise = import('./__JS_FILE__');
+            wasmGluePromise.catch(function () {});
+            const identityReady = (async function () {
+                /* POKI_IDENTITY_AUTH_BEGIN */
+                if (typeof window.SOW_isSowProductionHost === "function" &&
+                    window.SOW_isSowProductionHost() &&
+                    typeof window.SOW_ensureIdentityAnonymousSession === "function") {
+                    try {
+                        await Promise.race([
+                            window.SOW_ensureIdentityAnonymousSession(),
+                            new Promise(function (resolve) { setTimeout(resolve, 5000); }),
+                        ]);
+                    } catch (error) {
+                        // Keep local play available; the SDK retries identity
+                        // recovery and online actions wait until it succeeds.
+                        // 401/403 is a sign-in state (reauthentication_required), not a fault.
+                        const status = Number(error && error.status || 0);
+                        if (status !== 401 && status !== 403) {
+                            console.warn("Identity session recovery is pending:", error);
+                        }
+                    }
                 }
-            } catch (error) {
-                console.error("[SOW i18n] English catalog could not be loaded:", error);
-                return;
-            }
+                /* POKI_IDENTITY_AUTH_END */
+            })().then(function () {
+                markBoot("identity-ready");
+            });
 
             /* POKI_ANDROID_AUTH_STATE_BEGIN */
             // This only restores cached identity state. It never
@@ -585,44 +627,45 @@
             }
             /* POKI_ANDROID_AUTH_STATE_END */
 
-            if (typeof window.SOW_initPortalSdk === "function") {
-                await window.SOW_initPortalSdk();
-            }
-            /* POKI_WOU_AUTH_BEGIN */
-            if (typeof window.SOW_isSowProductionHost === "function" &&
-                window.SOW_isSowProductionHost() &&
-                typeof window.SOW_ensureWouAnonymousSession === "function") {
-                try {
-                    await Promise.race([
-                        window.SOW_ensureWouAnonymousSession(),
-                        new Promise(function (resolve) { setTimeout(resolve, 5000); }),
-                    ]);
-                } catch (error) {
-                    // Keep local play available; the SDK retries identity
-                    // recovery and online actions wait until it succeeds.
-                    // 401/403 is a sign-in state (reauthentication_required), not a fault.
-                    const status = Number(error && error.status || 0);
-                    if (status !== 401 && status !== 403) {
-                        console.warn("WOU-ID session recovery is pending:", error);
-                    }
+            const portalSdkReady = Promise.resolve().then(function () {
+                markBoot("portal-sdk-start");
+                if (typeof window.SOW_initPortalSdk === "function") {
+                    return window.SOW_initPortalSdk();
                 }
+            }).then(function () {
+                markBoot("portal-sdk-ready");
+            });
+            // Attach a handler immediately; the original promise is awaited below,
+            // while i18n can still be settling in parallel.
+            portalSdkReady.catch(function () {});
+
+            try {
+                await window.SOW_I18N_READY;
+                markBoot("i18n-ready");
+                if (typeof window.SOW_refreshWebLoaderText === 'function') {
+                    window.SOW_refreshWebLoaderText();
+                }
+            } catch (error) {
+                console.error("[SOW i18n] English catalog could not be loaded:", error);
+                return;
             }
-            /* POKI_WOU_AUTH_END */
+            await portalSdkReady;
+            await identityReady;
+            markBoot("startup-prerequisites-ready");
             if (typeof window.SOW_portalLoadStart === "function") {
                 window.SOW_portalLoadStart();
             }
+            markBoot("portal-load-start");
 
             <!-- __SOW_SERVICE_WORKER_SLOT__ -->
 
             try {
-                const wasm = await import('./__JS_FILE__');
-                const wasmLoad = await wasmResponsePromise;
+                const wasm = await wasmGluePromise;
+                const wasmLoad = await wasmModulePromise;
                 if (wasmLoad.error) throw wasmLoad.error;
-                // The engine bytes are down; the rest of boot is CPU and one
-                // identity round-trip. Let the menu theme start fetching now
-                // so it never competes with the WASM download.
-                window.dispatchEvent(new Event('sow:wasm-bytes-ready'));
-                await wasm.default({ module_or_path: wasmLoad.response });
+                markBoot("wasm-init-start");
+                await wasm.default({ module_or_path: wasmLoad.module });
+                markBoot("wasm-init-ready");
                 if (typeof wasm.SOW_wake_event_loop === "function") {
                     window.SOW_wake_event_loop = wasm.SOW_wake_event_loop;
                 }

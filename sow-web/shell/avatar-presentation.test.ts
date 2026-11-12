@@ -2,17 +2,32 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { avatarAtlasCell, avatarBackgroundCss, avatarImageAttribute } from "./avatar-presentation.ts";
+import {
+    avatarAtlasCell,
+    avatarBackgroundCss,
+    avatarImageAttribute,
+    deferAvatarImage,
+    loadAvatarBitmap,
+    loadAvatarImage,
+} from "./avatar-presentation.ts";
 
 const atlas = {
     sheets: [
         { path: "gameplay/atlas/heroes-256-0.webp", width: 512, height: 256 },
         { path: "gameplay/atlas/abilities-128-0.webp", width: 128, height: 128 },
+        { path: "gameplay/atlas/africa-192-0.webp", width: 384, height: 192 },
+        { path: "gameplay/atlas/new-256-0.webp", width: 256, height: 256 },
+        { path: "gameplay/atlas/later-256-0.webp", width: 256, height: 256 },
+        { path: "gameplay/atlas/map-256-0.webp", width: 512, height: 256 },
     ],
     cells: {
         "gameplay/avatars/expressions/suppiluliuma_fear.webp": [0, 256, 0, 256],
         "gameplay/avatars/caesar.webp": [0, 0, 0, 256],
         "gameplay/icons/abilities/caesar.webp": [1, 0, 0, 128],
+        "gameplay/avatars/tribe-chief.webp": [2, 0, 0, 192],
+        "gameplay/avatars/later-hero.webp": [4, 0, 0, 256],
+        "gameplay/avatars/new-hero.webp": [3, 0, 0, 256],
+        "gameplay/avatars/map-hero.webp": [5, 256, 0, 256],
     },
 };
 
@@ -36,6 +51,111 @@ test("packed sprites resolve to their sheet cell", () => {
         });
         assert.equal(avatarAtlasCell("gameplay/avatars/unlisted.webp"), null);
     });
+});
+
+test("packed avatar sheets wait for the first loader to finish without blocking game startup", async () => {
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const saved = {
+        window: globals.window,
+        document: globals.document,
+        Image: globals.Image,
+    };
+    const requested: string[] = [];
+    class FakeImage {
+        crossOrigin = "";
+        decoding = "";
+        private source = "";
+        set src(value: string) {
+            this.source = value;
+            requested.push(value);
+        }
+        get src() { return this.source; }
+        decode() { return Promise.resolve(); }
+    }
+    let loaderReady: (() => void) | null = null;
+    let loaderHidden = false;
+    const canvas = {
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage() {} }),
+        toDataURL: () => "data:image/webp;base64,AAAA",
+    };
+    globals.window = {
+        SOW_ASSETS_URL: "/assets",
+        SOW_SPRITE_ATLAS: atlas,
+        addEventListener(name: string, callback: () => void) {
+            if (name === "sow:loader-ready") loaderReady = callback;
+        },
+    };
+    globals.document = {
+        getElementById: (id: string) =>
+            id === "web-loader" ? { getAttribute: () => (loaderHidden ? "true" : "false") } : null,
+        createElement: () => canvas,
+    };
+    globals.Image = FakeImage;
+    try {
+        const pending = loadAvatarImage("/assets/gameplay/avatars/new-hero.webp");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.deepEqual(requested, [], "the optional atlas sheet does not compete with the first tutorial load");
+
+        loaderHidden = true;
+        assert.ok(loaderReady, "the avatar loader waits for the first loader-ready event");
+        loaderReady();
+        const portrait = await pending;
+        assert.equal(portrait.src, "data:image/webp;base64,AAAA");
+        assert.deepEqual(requested.filter((url) => url.includes("/assets/gameplay/atlas/")), [
+            "/assets/gameplay/atlas/new-256-0.webp",
+        ]);
+
+        loaderHidden = false;
+        const inGamePortrait = loadAvatarImage("/assets/gameplay/avatars/later-hero.webp");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.deepEqual(
+            requested.filter((url) => url.includes("/assets/gameplay/atlas/")),
+            ["/assets/gameplay/atlas/new-256-0.webp", "/assets/gameplay/atlas/later-256-0.webp"],
+            "later match loaders do not wait for the one-shot initial loader event",
+        );
+        await inGamePortrait;
+    } finally {
+        Object.assign(globals, saved);
+    }
+});
+
+test("the map atlas cuts a packed cell straight from its decoded sheet, never re-encoding it", async () => {
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const saved = {
+        window: globals.window,
+        document: globals.document,
+        Image: globals.Image,
+        createImageBitmap: globals.createImageBitmap,
+    };
+    class FakeImage {
+        crossOrigin = "";
+        decoding = "";
+        src = "";
+        naturalWidth = 512;
+        naturalHeight = 256;
+        decode() { return Promise.resolve(); }
+    }
+    const cuts: unknown[][] = [];
+    globals.window = { SOW_ASSETS_URL: "/assets", SOW_SPRITE_ATLAS: atlas };
+    globals.document = {
+        createElement: () => {
+            throw new Error("a packed cell must not go through a canvas");
+        },
+    };
+    globals.Image = FakeImage;
+    globals.createImageBitmap = (...args: unknown[]) => {
+        cuts.push(args);
+        return Promise.resolve({ width: 128, height: 128, close() {} });
+    };
+    try {
+        await loadAvatarBitmap("gameplay/avatars/map-hero.webp", 128);
+        assert.equal((cuts[0][0] as FakeImage).src, "/assets/gameplay/atlas/map-256-0.webp");
+        assert.deepEqual(cuts[0].slice(1, 5), [256, 0, 256, 256]);
+    } finally {
+        Object.assign(globals, saved);
+    }
 });
 
 test("ability icons resolve through the same sheet index as portraits", () => {
@@ -112,9 +232,18 @@ test("data-avatar images are filled with their cropped cell once inserted and vi
         getAttribute(name: string) {
             return this.attributes[name] ?? null;
         }
+        setAttribute(name: string, value: string) {
+            this.attributes[name] = value;
+        }
     }
+    const requested: string[] = [];
     class FakeImage extends FakeElement {
-        src = "";
+        private source = "";
+        get src() { return this.source; }
+        set src(value: string) {
+            this.source = value;
+            if (value) requested.push(value);
+        }
         crossOrigin = "";
         decoding = "";
         decode() {
@@ -160,12 +289,41 @@ test("data-avatar images are filled with their cropped cell once inserted and vi
         await new Promise((resolve) => setTimeout(resolve, 0));
         assert.equal(image.src, "", "an inserted avatar waits until it nears the viewport");
         assert.deepEqual(watched, [image]);
+        assert.deepEqual(requested, [], "offscreen markup does not fetch sprite sheets");
         reveal([{ isIntersecting: true, target: image }]);
         await new Promise((resolve) => setTimeout(resolve, 0));
         assert.equal(image.src, "data:image/webp;base64,AAAA");
         assert.deepEqual(watched, [], "a filled avatar is no longer watched");
+        assert.deepEqual(
+            requested.filter((url) => url.includes("/assets/gameplay/atlas/")),
+            ["/assets/gameplay/atlas/heroes-256-0.webp"],
+            "a visible portrait fetches only its own sheet",
+        );
         assert.equal((drawn[0][0] as { src: string }).src, "/assets/gameplay/atlas/heroes-256-0.webp");
         assert.deepEqual(drawn[0].slice(1), [256, 0, 256, 256, 0, 0, 256, 256]);
+
+        const tribeSource = "/assets/gameplay/avatars/tribe-chief.webp";
+        const offscreen = new FakeImage({ "data-avatar": "/assets/gameplay/avatars/caesar.webp" });
+        deferAvatarImage(offscreen, tribeSource);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.equal(offscreen.getAttribute("data-avatar"), tribeSource);
+        assert.equal(offscreen.src, "", "changing an offscreen card does not fetch its new sheet");
+        assert.deepEqual(
+            requested.filter((url) => url.includes("/assets/gameplay/atlas/")),
+            ["/assets/gameplay/atlas/heroes-256-0.webp"],
+        );
+        assert.ok(watched.includes(offscreen), "the changed avatar remains observed until it is visible");
+        reveal([{ isIntersecting: true, target: offscreen }]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.equal(offscreen.src, "data:image/webp;base64,AAAA");
+        assert.deepEqual(
+            requested.filter((url) => url.includes("/assets/gameplay/atlas/")),
+            [
+                "/assets/gameplay/atlas/heroes-256-0.webp",
+                "/assets/gameplay/atlas/africa-192-0.webp",
+            ],
+            "the newly visible card requests only its region sheet",
+        );
     } finally {
         Object.assign(globals, saved);
     }

@@ -10,6 +10,7 @@ const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.ts"), "utf
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.ts"), "utf8");
 const loaderSource = fs.readFileSync(path.join(shell, "loader.ts"), "utf8");
 const loaderTemplate = fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
+const textAtlasSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/text_atlases.rs"), "utf8");
 const tutorialBundle =
     '(function () { if (typeof window === "undefined") return; const providedView = window.SOWCampaignView;\n' +
     bundleTs(path.join(shell, "sow-campaign-view.ts")) +
@@ -36,7 +37,10 @@ const matchStartSource = fs.readFileSync(
     path.join(shell, "../../sow-client/src/loader/match_start.rs"),
     "utf8",
 );
+const campaignIdSource = fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
+const assetSource = fs.readFileSync(path.join(shell, "../../sow-client/src/asset.rs"), "utf8");
 const engineLoaderSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/engine.rs"), "utf8");
+const frameSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/mod.rs"), "utf8");
 const simUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/update.rs"), "utf8");
 const netMessagesSource = fs.readFileSync(
     path.join(shell, "../../sow-client/src/net/update/messages.rs"),
@@ -49,6 +53,64 @@ const portalStoreRustSource = fs.readFileSync(
     path.join(shell, "../../sow-client/src/store_portals.rs"),
     "utf8",
 );
+
+test("web boot overlaps locale, portal SDK and WASM compile before engine init", () => {
+    const wasmStart = loaderTemplate.indexOf('const wasmModulePromise = fetch(');
+    const wasmCompiled = loaderTemplate.indexOf('markBoot("wasm-compiled")');
+    const sdkStart = loaderTemplate.indexOf("const portalSdkReady = Promise.resolve()");
+    const localeWait = loaderTemplate.indexOf("await window.SOW_I18N_READY");
+    const sdkWait = loaderTemplate.indexOf("await portalSdkReady");
+    const identityWait = loaderTemplate.indexOf("await identityReady");
+    const wasmInit = loaderTemplate.indexOf("await wasm.default({ module_or_path: wasmLoad.module })");
+    assert.ok(
+        wasmCompiled > wasmStart && wasmStart >= 0 && sdkStart > wasmStart && localeWait > sdkStart &&
+            sdkWait > localeWait && identityWait > sdkWait && wasmInit > identityWait,
+        "WASM download/compile, glue, SDK, identity and locale overlap before engine init",
+    );
+    assert.doesNotMatch(
+        loaderTemplate,
+        /SOW_loadTextAtlases/,
+        "optional gameplay atlases are not started as a boot prerequisite",
+    );
+});
+
+test("atlas retries retain each in-flight or decoded request so one failed file does not refetch the others", () => {
+    const memoStart = loaderSource.indexOf("function loadTextAtlasOnce");
+    const batchStart = loaderSource.indexOf("function loadTextAtlases", memoStart);
+    const memo = loaderSource.slice(memoStart, batchStart);
+    assert.ok(memoStart >= 0 && batchStart > memoStart);
+    assert.match(memo, /if \(existing\) return existing/);
+    assert.match(memo, /textAtlasPromises\[key\] = request/);
+    assert.match(memo, /delete textAtlasPromises\[key\]/);
+    const batch = loaderSource.slice(batchStart, loaderSource.indexOf("window.SOW_loadTextAtlases", batchStart));
+    assert.match(batch, /loadTextAtlasOnce\("text"\)/);
+    assert.match(batch, /loadTextAtlasOnce\("buildings"\)/);
+    assert.match(batch, /loadTextAtlasOnce\("badges"\)/);
+});
+
+test("text atlases cannot block match startup and the renderer is created when they arrive", () => {
+    const readyFlag = loaderSource.indexOf("window.SOW_INITIAL_LOADER_READY = true");
+    const readyEvent = loaderSource.indexOf('new Event("sow:loader-ready")', readyFlag);
+    const atlasGate = textAtlasSource.indexOf('"SOW_INITIAL_LOADER_READY"');
+    const atlasRequest = textAtlasSource.indexOf('"SOW_loadTextAtlases"', atlasGate);
+    assert.ok(readyFlag >= 0 && readyEvent > readyFlag, "the renderer sees initial loader readiness before the event");
+    assert.ok(atlasGate >= 0 && atlasRequest > atlasGate, "optional atlases wait for the first loader-ready signal");
+    assert.match(
+        engineLoaderSource,
+        /if step == 1 && self\.ui\.app\.splash_state\.frames_drawn > 1 \{/,
+        "the engine init gate depends on its frame, not atlas download completion",
+    );
+    assert.match(
+        engineLoaderSource,
+        /self\.gfx\.text_renderer = text_atlases\.map\(/,
+        "available atlases initialize text rendering without making it required",
+    );
+    assert.match(
+        frameSource,
+        /if self\.gfx\.text_renderer\.is_none\(\)\s*&& let Some\(atlases\) = crate::render::text_atlases::get\(\)/,
+        "the render loop installs the text renderer after its atlases arrive",
+    );
+});
 
 test("first-run tutorial keeps one boot loader and splash art until Rust signals completion", async () => {
     for (const id of ["loader-footer", "loader-ability", "loader-bar-wrap", "loader-bar-fill"]) {
@@ -150,6 +212,28 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.match(bootIntro, /let campaign = crate::campaign::CampaignId::Boudica/);
     assert.match(bootIntro, /boot_campaign_pending = Some\(campaign\.episode_id\(\)\.to_string\(\)\)/);
     assert.match(bootIntro, /begin_enter_game_loader\(campaign\.advisor\(\)\)/);
+    assert.match(bootIntro, /campaign\.map_id\(\)/);
+    assert.match(campaignIdSource, /pub fn map_id\(self\)[\s\S]*?Boudica => "eastanglia"[\s\S]*?"northamerica"/);
+    const loadEpisodeStart = tutorialBundle.indexOf("function loadEpisode(");
+    const loadEpisodeEnd = tutorialBundle.indexOf("\n    function ", loadEpisodeStart + 1);
+    assert.match(
+        tutorialBundle.slice(loadEpisodeStart, loadEpisodeEnd),
+        /Promise\.all\(\[[\s\S]*?campaign\/" \+ episodeId \+ "\.json[\s\S]*?campaign\/" \+ episodeId \+ "\.triggers\.json/,
+        "the browser starts campaign roster and trigger downloads together",
+    );
+    const startMapDownloadStart = assetSource.indexOf("pub(crate) fn start_map_download");
+    const retryMapDownloadStart = assetSource.indexOf("pub(crate) fn retry_map_download", startMapDownloadStart);
+    const startMapDownload = assetSource.slice(startMapDownloadStart, retryMapDownloadStart);
+    assert.match(startMapDownload, /let already_in_flight = .*maps_in_flight\.contains\(&map_key\)/);
+    assert.match(
+        startMapDownload,
+        /if already_in_flight\s*\|\|\s*![\s\S]*?maps_in_flight[\s\S]*?\.insert/,
+    );
+    assert.ok(
+        startMapDownload.indexOf("if !already_in_flight {") <
+            startMapDownload.indexOf("map_download_progress = 0"),
+        "a duplicate request reuses the in-flight map and preserves its progress",
+    );
     assert.doesNotMatch(bootIntro, /hide_web_loader|splash_state\.done = true|phase = ClientPhase::MainMenu/);
     assert.doesNotMatch(
         bootIntro,

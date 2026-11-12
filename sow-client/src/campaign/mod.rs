@@ -45,6 +45,15 @@ impl CampaignId {
         }
     }
 
+    /// Map asset needed to start this episode. Used to overlap first-run map
+    /// download with the browser's campaign roster and trigger requests.
+    pub fn map_id(self) -> &'static str {
+        match self {
+            CampaignId::Boudica => "eastanglia",
+            CampaignId::SixSkyEp1 | CampaignId::SixSkyEp2 | CampaignId::SixSkyEp3 => "northamerica",
+        }
+    }
+
     pub fn menu_title(self) -> &'static str {
         match self {
             CampaignId::Boudica => "Rise of the Iceni",

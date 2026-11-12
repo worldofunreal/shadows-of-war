@@ -958,11 +958,11 @@ pub struct SowApp {
     pub progress_account_id: Option<String>,
     pub profile_account_id: Option<String>,
     pub progress_provider: String,
-    /// Dedupe for the nftropoly collectibles sync (WOU-ID): last
+    /// Dedupe for the nftropoly collectibles sync (SOW identity): last
     /// (account, desired card count). A larger owned count re-syncs within
     /// the same session (purchases, unlocks).
     #[allow(dead_code)]
-    pub(crate) wou_collectibles_synced: Option<(String, usize)>,
+    pub(crate) identity_collectibles_synced: Option<(String, usize)>,
     /// Last requested name, kept until the canonical profile acknowledges it.
     pub pending_display_name: Option<String>,
     pub display_name_save_request_id: Option<u64>,

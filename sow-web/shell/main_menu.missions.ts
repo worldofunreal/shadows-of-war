@@ -8,19 +8,27 @@ export function resolveActiveMissions(state: MenuState | null): MenuMission[] {
 }
 
 export function getActiveDirective(missions: MenuMission[]): MenuMission | null {
-    const onboarding = missions.filter((m) => m.category === "onboarding");
-    for (const m of onboarding) {
-        if (!m.completed || !m.claimed) {
-            return m;
-        }
-    }
-    const daily = missions.filter((m) => m.category === "daily");
-    for (const m of daily) {
-        if (!m.completed || !m.claimed) {
-            return m;
-        }
-    }
-    return onboarding[onboarding.length - 1] || null;
+    // 1. Any ready-to-claim mission across all categories (onboarding, daily, weekly)
+    const unclaimedOnboarding = missions.find((m) => m.category === "onboarding" && m.completed && !m.claimed);
+    if (unclaimedOnboarding) return unclaimedOnboarding;
+    const unclaimedDaily = missions.find((m) => m.category === "daily" && m.completed && !m.claimed);
+    if (unclaimedDaily) return unclaimedDaily;
+    const unclaimedWeekly = missions.find((m) => m.category === "weekly" && m.completed && !m.claimed);
+    if (unclaimedWeekly) return unclaimedWeekly;
+
+    // 2. In-progress onboarding
+    const inProgressOnboarding = missions.find((m) => m.category === "onboarding" && !m.completed);
+    if (inProgressOnboarding) return inProgressOnboarding;
+
+    // 3. In-progress daily
+    const inProgressDaily = missions.find((m) => m.category === "daily" && !m.completed);
+    if (inProgressDaily) return inProgressDaily;
+
+    // 4. In-progress weekly
+    const inProgressWeekly = missions.find((m) => m.category === "weekly" && !m.completed);
+    if (inProgressWeekly) return inProgressWeekly;
+
+    return missions[0] || null;
 }
 
 export function missionIconSvg(icon: string): string {
@@ -113,10 +121,6 @@ export function renderDirectiveCard(): string {
     const pct = Math.min(100, Math.round((Math.min(directive.progress, directive.target) / directive.target) * 100));
     const title = SOW_t(directive.title_key);
     const desc = SOW_t(directive.description_key);
-    const categoryLabel =
-        directive.category === "onboarding"
-            ? SOW_t("missions.tab_onboarding")
-            : SOW_t("missions.tab_daily");
 
     let actionMarkup = "";
     if (readyToClaim) {
@@ -148,6 +152,26 @@ export function renderDirectiveCard(): string {
             "</div>";
     }
 
+    let rewardsHtml = "";
+    if (directive.crowns_reward > 0) {
+        rewardsHtml +=
+            "<span class='sow-directive__reward-pill' title='Coronas'>" +
+            "<img src='" +
+            esc(currencyAsset("crown")) +
+            "' alt='' width='18' height='18'>+" +
+            directive.crowns_reward +
+            "</span>";
+    }
+    if (directive.gems_reward > 0) {
+        rewardsHtml +=
+            "<span class='sow-directive__reward-pill sow-directive__reward-pill--gem' title='Gemas'>" +
+            "<img src='" +
+            esc(currencyAsset("gem")) +
+            "' alt='' width='18' height='18'>+" +
+            directive.gems_reward +
+            "</span>";
+    }
+
     return (
         "<section class='sow-directive-card" +
         (readyToClaim ? " is-ready" : "") +
@@ -155,13 +179,13 @@ export function renderDirectiveCard(): string {
         esc(SOW_t("missions.directive_title")) +
         "'>" +
         "<div class='sow-directive__head'>" +
-        "<div class='sow-directive__badge-group'>" +
+        "<div class='sow-directive__title-row'>" +
         "<span class='sow-directive__icon' aria-hidden='true'>" +
         missionIconSvg(directive.icon) +
         "</span>" +
-        "<span class='sow-directive__kicker'>" +
-        esc(categoryLabel) +
-        "</span>" +
+        "<h3 class='sow-directive__title'>" +
+        esc(title) +
+        "</h3>" +
         "</div>" +
         (readyToClaim
             ? "<span class='sow-directive__ready-badge'>" +
@@ -169,10 +193,6 @@ export function renderDirectiveCard(): string {
               "</span>"
             : "") +
         "</div>" +
-        "<div class='sow-directive__body'>" +
-        "<h3 class='sow-directive__title'>" +
-        esc(title) +
-        "</h3>" +
         "<p class='sow-directive__desc'>" +
         esc(desc) +
         "</p>" +
@@ -190,21 +210,9 @@ export function renderDirectiveCard(): string {
         "</div>" +
         "<div class='sow-directive__footer'>" +
         "<div class='sow-directive__rewards'>" +
-        "<span class='sow-directive__reward-pill' title='Coronas'>" +
-        "<img src='" +
-        esc(currencyAsset("crown")) +
-        "' alt='' width='16' height='16'>+" +
-        directive.crowns_reward +
-        "</span>" +
-        "<span class='sow-directive__reward-pill' title='Gemas'>" +
-        "<img src='" +
-        esc(currencyAsset("gem")) +
-        "' alt='' width='16' height='16'>+" +
-        directive.gems_reward +
-        "</span>" +
+        rewardsHtml +
         "</div>" +
         actionMarkup +
-        "</div>" +
         "</div>" +
         "</section>"
     );
@@ -219,6 +227,22 @@ function formatDailyResetCountdown(): string {
     return `${hoursRemaining}h ${minsRemaining}m`;
 }
 
+function formatWeeklyResetCountdown(): string {
+    const nowSecs = Math.floor(Date.now() / 1000);
+    const offset = 489600;
+    const period = 604800;
+    const currentPeriod = Math.floor((nowSecs + offset) / period);
+    const nextResetSecs = (currentPeriod + 1) * period - offset;
+    const diffSecs = Math.max(0, nextResetSecs - nowSecs);
+    const days = Math.floor(diffSecs / 86400);
+    const hours = Math.floor((diffSecs % 86400) / 3600);
+    const mins = Math.floor((diffSecs % 3600) / 60);
+    if (days > 0) {
+        return `${days}d ${hours}h`;
+    }
+    return `${hours}h ${mins}m`;
+}
+
 export function renderMissionsModal(): string {
     const activeTab = menuUi.activeMissionsTab || "onboarding";
     const missions = resolveActiveMissions(menuUi.state);
@@ -227,11 +251,15 @@ export function renderMissionsModal(): string {
     const onboardingCompleted = onboardingTotal.filter((m) => m.completed || m.claimed).length;
     const dailyTotal = missions.filter((m) => m.category === "daily");
     const dailyCompleted = dailyTotal.filter((m) => m.completed || m.claimed).length;
+    const weeklyTotal = missions.filter((m) => m.category === "weekly");
+    const weeklyCompleted = weeklyTotal.filter((m) => m.completed || m.claimed).length;
 
-    const subtitle =
-        activeTab === "onboarding"
-            ? SOW_t("missions.onboarding_subtitle")
-            : SOW_t("missions.daily_subtitle");
+    let subtitle = SOW_t("missions.onboarding_subtitle");
+    if (activeTab === "daily") {
+        subtitle = SOW_t("missions.daily_subtitle");
+    } else if (activeTab === "weekly") {
+        subtitle = SOW_t("missions.weekly_subtitle");
+    }
 
     const adAvailable = isRewardedAdAvailable();
 
@@ -274,6 +302,26 @@ export function renderMissionsModal(): string {
                     "</span>";
             }
 
+            let itemRewardsHtml = "";
+            if (m.crowns_reward > 0) {
+                itemRewardsHtml +=
+                    "<span class='sow-missions__reward' title='Coronas'>" +
+                    "<img src='" +
+                    esc(currencyAsset("crown")) +
+                    "' alt='' width='18' height='18'>+" +
+                    m.crowns_reward +
+                    "</span>";
+            }
+            if (m.gems_reward > 0) {
+                itemRewardsHtml +=
+                    "<span class='sow-missions__reward sow-missions__reward--gem' title='Gemas'>" +
+                    "<img src='" +
+                    esc(currencyAsset("gem")) +
+                    "' alt='' width='18' height='18'>+" +
+                    m.gems_reward +
+                    "</span>";
+            }
+
             return (
                 "<div class='sow-missions__item" +
                 (m.claimed ? " is-claimed" : "") +
@@ -288,18 +336,7 @@ export function renderMissionsModal(): string {
                 esc(SOW_t(m.title_key)) +
                 "</h4>" +
                 "<div class='sow-missions__item-rewards'>" +
-                "<span class='sow-missions__reward' title='Coronas'>" +
-                "<img src='" +
-                esc(currencyAsset("crown")) +
-                "' alt='' width='16' height='16'>+" +
-                m.crowns_reward +
-                "</span>" +
-                "<span class='sow-missions__reward' title='Gemas'>" +
-                "<img src='" +
-                esc(currencyAsset("gem")) +
-                "' alt='' width='16' height='16'>+" +
-                m.gems_reward +
-                "</span>" +
+                itemRewardsHtml +
                 "</div>" +
                 "</div>" +
                 "<p class='sow-missions__item-desc'>" +
@@ -367,6 +404,18 @@ export function renderMissionsModal(): string {
         dailyTotal.length +
         ")</small>" +
         "</button>" +
+        "<button type='button' role='tab' class='sow-missions__tab" +
+        (activeTab === "weekly" ? " is-active" : "") +
+        "' data-command='switch_missions_tab' data-missions-tab='weekly' aria-selected='" +
+        (activeTab === "weekly" ? "true" : "false") +
+        "'>" +
+        esc(SOW_t("missions.tab_weekly")) +
+        " <small>(" +
+        weeklyCompleted +
+        "/" +
+        weeklyTotal.length +
+        ")</small>" +
+        "</button>" +
         "</div>" +
         "<div class='sow-missions__body'>" +
         "<div class='sow-missions__header-info'>" +
@@ -380,6 +429,16 @@ export function renderMissionsModal(): string {
               esc(SOW_t("missions.daily_resets_in")) +
               ": <strong>" +
               formatDailyResetCountdown() +
+              "</strong></span>" +
+              "</div>"
+            : "") +
+        (activeTab === "weekly"
+            ? "<div class='sow-missions__reset-notice'>" +
+              "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg>" +
+              "<span>" +
+              esc(SOW_t("missions.weekly_resets_in")) +
+              ": <strong>" +
+              formatWeeklyResetCountdown() +
               "</strong></span>" +
               "</div>"
             : "") +

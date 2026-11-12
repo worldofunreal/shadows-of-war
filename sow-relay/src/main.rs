@@ -236,10 +236,18 @@ impl Drop for AdmissionGuard {
 
 fn configured_db_url() -> Result<String, String> {
     let url = std::env::var("SOW_DB_URL").unwrap_or_else(|_| LOCAL_DB_URL.to_string());
-    if url.trim_end_matches('/') != LOCAL_DB_URL {
-        return Err(format!("relay settlement requires {LOCAL_DB_URL}"));
+    let url = url.trim_end_matches('/');
+    // Settlement reads the database only on this host: a loopback address on the database port.
+    let local = url
+        .strip_prefix("http://")
+        .and_then(|authority| authority.rsplit_once(':'))
+        .is_some_and(|(host, port)| {
+            port == "25585" && host.parse::<Ipv4Addr>().is_ok_and(|ip| ip.is_loopback())
+        });
+    if !local {
+        return Err(format!("relay settlement requires a loopback database on port 25585, got {url}"));
     }
-    Ok(LOCAL_DB_URL.to_string())
+    Ok(url.to_string())
 }
 
 fn db_client(db_url: &str) -> Result<reqwest::Client, String> {
@@ -399,6 +407,16 @@ fn current_tls_acceptor() -> Option<TlsAcceptor> {
         }
     }
     state.acceptor.clone()
+}
+
+/// Address the management and match listeners bind to. Each SOW site on this host
+/// has its own loopback address, so both sites keep the same ports.
+fn listen_addr() -> io::Result<Ipv4Addr> {
+    let host = std::env::var("SOW_RELAY_LISTEN_HOST").unwrap_or_else(|_| Ipv4Addr::LOCALHOST.to_string());
+    match host.parse::<Ipv4Addr>() {
+        Ok(ip) if ip.is_loopback() => Ok(ip),
+        _ => Err(io::Error::other(format!("SOW_RELAY_LISTEN_HOST must be a loopback IPv4 address, got {host}"))),
+    }
 }
 
 fn base_mgmt_port() -> u16 {
@@ -745,7 +763,7 @@ async fn run() -> io::Result<()> {
             if current_tls_acceptor().is_none() {
                 return Err(io::Error::other("relay control TLS certificate and key are required"));
             }
-            let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, base_mgmt_port())).await?;
+            let listener = TcpListener::bind((listen_addr()?, base_mgmt_port())).await?;
             info!("[relay] TLS control listening at {}", listener.local_addr()?);
             mgmt_http(listener, supervisor).await
         }
@@ -800,7 +818,7 @@ async fn run_match(
     let id = body.lobby_id;
     let port = body.relay_port;
     let control = supervisor.claim(id)?;
-    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await?;
+    let listener = TcpListener::bind((listen_addr()?, port)).await?;
     let registry: Registry = Arc::new(RwLock::new(HashMap::new()));
     let tick = spawn_lobby(&registry, body).await;
     let control_listener = control.listen()?;

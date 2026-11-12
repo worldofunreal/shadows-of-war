@@ -397,9 +397,9 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
         20,
     );
     const cells = new Set();
-    const load = (art) => (kind, level, cls) =>
+    const load = (art, loaderReady = false) => (kind, level, cls) =>
         vm.runInNewContext(hud.slice(iconStart, iconEnd) + "\nbuildingIcon(...buildingIconArgs);", {
-            window: { SOW_BUILDING_ART: art, SOW_ASSETS_URL: "/assets" },
+            window: { SOW_BUILDING_ART: art, SOW_ASSETS_URL: "/assets", SOW_INITIAL_LOADER_READY: loaderReady },
             asset: (name) => "/assets/" + name,
             escapeHudText: (value) => String(value),
             buildingIconArgs: [kind, level, cls],
@@ -414,6 +414,8 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
             cells.add(cell);
             assert.match(icon, /class="sow-hud__building-icon is-pixel-art"/, kind + level);
             assert.match(icon, /assets\/gameplay\/buildings\/atlas\.webp/);
+            assert.match(icon, /data-sow-building-atlas=/, "the atlas URL waits for initial loader readiness");
+            assert.doesNotMatch(icon, /background-image:url/, "hidden HUD icons do not fetch the atlas early");
             const x = ((sprite.x * 100) / (artManifest.atlas_width - artManifest.cell_size)).toFixed(4);
             const y = ((sprite.y * 100) / (artManifest.atlas_height - artManifest.cell_size)).toFixed(4);
             assert.ok(icon.includes("background-position:" + x + "% " + y + "%"));
@@ -435,6 +437,10 @@ test("building menus use generated pixel-art sprites with white glyph fallback",
         buildingIcon("Port", 1, "sow-hud__inline-icon"),
         /^<span class="sow-hud__inline-icon is-pixel-art"/,
     );
+    const loadedIcon = load(artManifest, true)("Port", 1);
+    assert.match(loadedIcon, /background-image:url\(&quot;\/assets\/gameplay\/buildings\/atlas\.webp/);
+    assert.doesNotMatch(loadedIcon, /data-sow-building-atlas=/);
+    assert.match(hud, /window\.addEventListener\("sow:loader-ready", activateDeferredBuildingAtlases/);
     // Before the manifest arrives the HUD shows the white glyph, never an emoji.
     const glyphSource = (name) => hud.match(new RegExp("\\n        " + name + ": '([^']+)'"))[1];
     const withoutArt = load(undefined);

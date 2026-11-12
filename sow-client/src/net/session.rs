@@ -79,7 +79,7 @@ impl SowApp {
             return None;
         }
         let identity = crate::store_portals::load_identity("Player");
-        if identity.provider == "wou" {
+        if identity.provider == "sow" {
             if !self.identity_profile_verified
                 || self.progress_account_id.as_deref() != identity.external_id.as_deref()
             {
@@ -87,7 +87,7 @@ impl SowApp {
             }
             let token = identity.auth_token.clone().filter(|t| !t.is_empty())?;
             return Some(sow_core::protocol::AuthProof {
-                provider: "wou".to_string(),
+                provider: "sow".to_string(),
                 account_id: identity.external_id.clone(),
                 token,
             });

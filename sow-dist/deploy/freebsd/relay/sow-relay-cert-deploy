@@ -1,10 +1,24 @@
 #!/bin/sh
 set -eu
 
-lineage=/usr/local/etc/letsencrypt/live/shadowsofwar.io
-[ "${RENEWED_LINEAGE:-$lineage}" = "$lineage" ] || exit 0
-root=/zroot/jails/sow-server/usr/local/etc/sow/relay-tls
-gid=$(jexec sow-server id -g sowrelay)
+# certbot runs every deploy hook once per renewed lineage. This hook installs
+# the relay TLS pair of every SOW site on the host and ignores other lineages.
+lineage=${RENEWED_LINEAGE:-/usr/local/etc/letsencrypt/live/shadowsofwar.io}
+case "$lineage" in
+    /usr/local/etc/letsencrypt/live/shadowsofwar.io)
+        host=shadowsofwar.io
+        jail=sow-server
+        ;;
+    /usr/local/etc/letsencrypt/live/ptr.shadowsofwar.io)
+        host=ptr.shadowsofwar.io
+        jail=ptr-sow-server
+        ;;
+    *)
+        exit 0
+        ;;
+esac
+root=/zroot/jails/$jail/usr/local/etc/sow/relay-tls
+gid=$(jexec "$jail" id -g sowrelay)
 install -d -o root -g "$gid" -m 0750 "$root"
 pair=$(mktemp -d "$root/pair.XXXXXX")
 link="$root/.current.$$"
@@ -13,7 +27,7 @@ chgrp "$gid" "$pair"
 chmod 0750 "$pair"
 install -o root -g "$gid" -m 0640 "$lineage/fullchain.pem" "$pair/relay.crt"
 install -o root -g "$gid" -m 0640 "$lineage/privkey.pem" "$pair/relay.key"
-openssl x509 -in "$pair/relay.crt" -noout -checkhost shadowsofwar.io | grep -q 'does match'
+openssl x509 -in "$pair/relay.crt" -noout -checkhost "$host" | grep -q 'does match'
 cert_key=$(openssl x509 -in "$pair/relay.crt" -pubkey -noout)
 test "$cert_key" = "$(openssl pkey -in "$pair/relay.key" -pubout)"
 old=$(readlink "$root/current" || true)

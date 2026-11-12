@@ -11,8 +11,6 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use serde::Deserialize;
-use sow_core::engine::market::{MarketFailure, MarketFeedback, MarketOutcome};
-use sow_core::protocol::{GameplayIntent, MarketSide};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_time::{Duration, Instant};
@@ -231,11 +229,6 @@ enum WebMenuCommand {
         target_player_id: u16,
     },
     CloseTransfer,
-    PreviewMarket { side: MarketSide, lots: u32 },
-    CloseMarket,
-    MarketTrade { request_id: u32, side: MarketSide, lots: u32, limit_gold: u32 },
-    PlaceMarketOrder { request_id: u32, side: MarketSide, lots: u32, gold_per_lot: u32 },
-    CancelMarketOrder { request_id: u32 },
     SendResources {
         target_player_id: u16,
         gold: f64,
@@ -508,6 +501,7 @@ struct HudPublishKey {
     hero_ability: Option<sow_core::execution::hero_effects::AbilityFeedback>,
     attack_ratio: u32,
     spawn_timer_tenths: i32,
+    has_spawned: bool,
     selected_building: Option<crate::ui::hud::state::BuildingPlacement>,
     selected_warship_build: bool,
     selected_warships: Vec<u64>,
@@ -533,9 +527,6 @@ struct HudPublishKey {
     dev_preview: Option<(u8, u8, bool, bool, bool)>,
     inbox_open: bool,
     transfer_target: Option<u16>,
-    market_available: bool,
-    market_preview: Option<(MarketSide, u32)>,
-    market_send_failed: Option<u32>,
     betrayal_open: bool,
     sync_open: bool,
     inbox_count: usize,
@@ -715,12 +706,6 @@ fn take_commands() -> Vec<WebMenuCommand> {
 }
 
 impl SowApp {
-    #[cfg(target_arch = "wasm32")]
-    fn send_market_intent(&mut self, request_id: u32, intent: GameplayIntent) {
-        let sent = market_available(self) && self.send_intent(intent);
-        self.ui.app.hud_state.market_send_failed = (!sent).then_some(request_id);
-    }
-
     pub(crate) fn process_web_menu_commands(&mut self) {
         for command in take_commands() {
             match command {
@@ -1313,7 +1298,6 @@ impl SowApp {
                     });
                 }
                 WebMenuCommand::OpenTransfer { target_player_id } => {
-                    self.ui.app.hud_state.market_preview = None;
                     self.ui.app.hud_state.show_ask_panel = Some(target_player_id);
                     self.ui.app.hud_state.transfer_mode = None;
                     self.ui.app.hud_state.transfer_confirm_pending = false;
@@ -1321,24 +1305,6 @@ impl SowApp {
                 WebMenuCommand::CloseTransfer => {
                     self.ui.app.hud_state.show_ask_panel = None;
                     self.ui.app.hud_state.transfer_confirm_pending = false;
-                }
-                WebMenuCommand::PreviewMarket { side, lots } => {
-                    if market_available(self) {
-                        let hud = &mut self.ui.app.hud_state;
-                        hud.show_ask_panel = None;
-                        hud.transfer_confirm_pending = false;
-                        hud.market_preview = Some((side, lots));
-                    }
-                }
-                WebMenuCommand::CloseMarket => self.ui.app.hud_state.market_preview = None,
-                WebMenuCommand::MarketTrade { request_id, side, lots, limit_gold } => {
-                    self.send_market_intent(request_id, GameplayIntent::MarketTrade { request_id, side, lots, limit_gold });
-                }
-                WebMenuCommand::PlaceMarketOrder { request_id, side, lots, gold_per_lot } => {
-                    self.send_market_intent(request_id, GameplayIntent::PlaceMarketOrder { request_id, side, lots, gold_per_lot });
-                }
-                WebMenuCommand::CancelMarketOrder { request_id } => {
-                    self.send_market_intent(request_id, GameplayIntent::CancelMarketOrder { request_id });
                 }
                 WebMenuCommand::SendResources {
                     target_player_id,
@@ -2156,16 +2122,6 @@ fn hero_ability_feedback(
     Some(feedback)
 }
 
-fn market_available(app: &SowApp) -> bool {
-    !app.net.is_offline
-        && !app.ui.is_spectating
-        && app.ws_on_relay()
-        && app.net.client.as_ref().is_some_and(|client| !client.is_socket_closed())
-        && app.ui.app.hud_state.sync_state.is_none()
-        && app.sim.my_player_id.zip(app.sim.engine.as_ref())
-            .is_some_and(|(id, engine)| engine.market_enabled_for(id))
-}
-
 fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let hud = &app.ui.app.hud_state;
     let tutorial_active = app.ui.tutorial_active && app.net.is_offline;
@@ -2200,7 +2156,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let cold_open = hud.building_placement.is_some()
         || hud.show_alliance_inbox
         || hud.show_ask_panel.is_some()
-        || hud.market_preview.is_some()
         || hud.show_betrayal_warning.is_some()
         || hud.sync_state.is_some()
         || tutorial_active
@@ -2259,6 +2214,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .spawn_timer_secs
             .map(|secs| (secs.max(0.0) * 10.0).round() as i32)
             .unwrap_or(-1),
+        has_spawned: me.is_some_and(|player| player.has_spawned),
         selected_building: hud.building_placement,
         selected_warship_build: hud.selected_warship_build,
         selected_warships: app.input.selected_warships.clone(),
@@ -2281,9 +2237,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         avatar_revision: app.ui.nameplates.avatar_revision,
         inbox_open: hud.show_alliance_inbox,
         transfer_target: hud.show_ask_panel,
-        market_available: market_available(app),
-        market_preview: hud.market_preview,
-        market_send_failed: hud.market_send_failed,
         betrayal_open: hud.show_betrayal_warning.is_some(),
         sync_open: hud.sync_state.is_some(),
         inbox_count,
@@ -3453,6 +3406,7 @@ fn player_json(
         "is_me": player.id == my_pid,
         "leader": leader_id(player.leader),
         "avatar": &player.campaign_avatar,
+        "avatar_slug": player.campaign_avatar.as_deref().filter(|slug| !slug.is_empty()).unwrap_or(player.leader.art_slug()),
                 "team": player.team,
         "active_emote": player.active_emote,
         "disconnected": player.disconnected,
@@ -4414,6 +4368,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "attack_ratio": hud.attack_ratio,
         "operations": operations,
         "spawn_timer_secs": hud.spawn_timer_secs,
+        "spawn_duration_secs": sow_core::game::DEPLOYMENT_PHASE_DURATION_MS / 1000.0,
+        "has_spawned": me.is_some_and(|player| player.has_spawned),
         "selected_building": selected_building,
         "building_placement": placement_payload,
         "building_in_progress": building_in_progress,
@@ -4480,6 +4436,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "cost_gems": skin.cost_gems,
         })).unwrap_or(serde_json::Value::Null),
         "player_leader": me.map(|player| player.leader.id()),
+        "player_art_slug": me.map(|player| player.leader.art_slug()),
         "player_avatar_expression": snapshot
             .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_pid))
             .and_then(|player| player_avatar_expression(player, app)),
@@ -4537,21 +4494,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         }
     }
     append_player_dialog_payloads(&mut payload, snapshot, hud, my_pid);
-    let market_available = market_available(app);
-    payload["market_available"] = serde_json::json!(market_available);
-    if market_available
-        && let Some((side, lots)) = hud.market_preview
-        && let Some(engine) = app.sim.engine.as_ref()
-    {
-        let mut view = engine.market_view(my_pid, side, lots);
-        if let Some(request_id) = hud.market_send_failed {
-            view.feedback = Some(MarketFeedback {
-                request_id,
-                outcome: MarketOutcome::Rejected { reason: MarketFailure::Unavailable },
-            });
-        }
-        payload["market"] = serde_json::json!(view);
-    }
     if let Some(snapshot) = snapshot {
         for (field, id_field) in [
             ("players", "id"),
@@ -5247,6 +5189,9 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         east_regional_matches: progress.matches_played,
         matches_played: progress.matches_played,
         kills: progress.kills,
+        ranked_matches: progress.ranked_matches,
+        ranked_wins: progress.ranked_wins,
+        empires_defeated: progress.empires_defeated,
     };
     let missions = sow_data::missions::build_all_missions_view(
         &mission_stats,

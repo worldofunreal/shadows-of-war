@@ -4,12 +4,83 @@ use blade_graphics as gpu;
 pub struct FontAtlasTexture {
     pub texture: gpu::Texture,
     pub view: gpu::TextureView,
-    pub buffer: gpu::Buffer,
+    /// Staging copy for atlases decoded in Rust; browser-decoded atlases go straight to the texture.
+    buffer: Option<gpu::Buffer>,
     pub width: u32,
     pub height: u32,
 }
 
+/// Text, building and nameplate-status atlases. The web build downloads them as cached files
+/// beside the engine and the browser decodes them; native builds embed the same files.
+#[cfg(target_arch = "wasm32")]
+pub struct TextAtlasImages {
+    pub text: web_sys::ImageBitmap,
+    pub buildings: web_sys::ImageBitmap,
+    pub badges: web_sys::ImageBitmap,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub struct TextAtlasImages;
+
 impl FontAtlasTexture {
+    fn create_texture(
+        context: &gpu::Context,
+        name: &str,
+        format: gpu::TextureFormat,
+        width: u32,
+        height: u32,
+    ) -> (gpu::Texture, gpu::TextureView) {
+        let texture = context.create_texture(gpu::TextureDesc {
+            name: &format!("{}_texture", name),
+            format,
+            size: gpu::Extent {
+                width,
+                height,
+                depth: 1,
+            },
+            dimension: gpu::TextureDimension::D2,
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
+            external: None,
+        });
+        let view = context.create_texture_view(
+            texture,
+            gpu::TextureViewDesc {
+                name: &format!("{}_view", name),
+                format,
+                dimension: gpu::ViewDimension::D2,
+                subresources: &gpu::TextureSubresources::default(),
+            },
+        );
+        (texture, view)
+    }
+
+    /// Copy a browser-decoded atlas straight into a new texture. The bitmap must be decoded with
+    /// `premultiplyAlpha: "none"` and `colorSpaceConversion: "none"` so texels match the file.
+    #[cfg(target_arch = "wasm32")]
+    pub fn from_image_bitmap(
+        context: &gpu::Context,
+        image: &web_sys::ImageBitmap,
+        name: &str,
+        format: gpu::TextureFormat,
+    ) -> Self {
+        let (width, height) = (image.width(), image.height());
+        let (texture, view) = Self::create_texture(context, name, format, width, height);
+        if let Err(error) = context.copy_image_bitmap_to_texture(image, texture.into()) {
+            web_sys::console::error_2(&format!("{name}: atlas upload failed").into(), &error);
+        }
+        Self {
+            texture,
+            view,
+            buffer: None,
+            width,
+            height,
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_bytes(
         context: &gpu::Context,
         image_bytes: &[u8],
@@ -32,57 +103,23 @@ impl FontAtlasTexture {
         let slice = unsafe { std::slice::from_raw_parts_mut(dst, total) };
         slice.copy_from_slice(&img);
         context.sync_buffer(buffer, 0, buffer.size());
-
-        let texture = context.create_texture(gpu::TextureDesc {
-            name: &format!("{}_texture", name),
-            format,
-            size: gpu::Extent {
-                width,
-                height,
-                depth: 1,
-            },
-            dimension: gpu::TextureDimension::D2,
-            array_layer_count: 1,
-            mip_level_count: 1,
-            sample_count: 1,
-            usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
-            external: None,
-        });
-
-        let view = context.create_texture_view(
-            texture,
-            gpu::TextureViewDesc {
-                name: &format!("{}_view", name),
-                format,
-                dimension: gpu::ViewDimension::D2,
-                subresources: &gpu::TextureSubresources::default(),
-            },
-        );
-
+        let (texture, view) = Self::create_texture(context, name, format, width, height);
         Self {
             texture,
             view,
-            buffer,
+            buffer: Some(buffer),
             width,
             height,
         }
     }
 
-    pub fn new(context: &gpu::Context) -> Self {
-        let atlas_bytes = include_bytes!("../../../assets/generated/msdf-atlas.webp");
-        // ponytail: font atlas contains signed distance values (linear data), emoji atlas contains sRGB colors
-        Self::from_bytes(
-            context,
-            atlas_bytes,
-            "font_atlas",
-            gpu::TextureFormat::Rgba8Unorm,
-        )
-    }
-
     pub fn upload(&self, encoder: &mut gpu::CommandEncoder, context: &gpu::Context) {
+        let Some(buffer) = self.buffer else {
+            return;
+        };
         let bytes_per_row = self.width * 4;
-        context.sync_buffer(self.buffer, 0, self.buffer.size());
-        let src: gpu::BufferPiece = self.buffer.into();
+        context.sync_buffer(buffer, 0, buffer.size());
+        let src: gpu::BufferPiece = buffer.into();
         let dst: gpu::TexturePiece = self.texture.into();
         let mut transfer = encoder.transfer("font_atlas_upload");
         transfer.copy_buffer_to_texture(
@@ -95,6 +132,14 @@ impl FontAtlasTexture {
                 depth: 1,
             },
         );
+    }
+
+    pub fn destroy(&self, context: &gpu::Context) {
+        context.destroy_texture_view(self.view);
+        context.destroy_texture(self.texture);
+        if let Some(buffer) = self.buffer {
+            context.destroy_buffer(buffer);
+        }
     }
 }
 

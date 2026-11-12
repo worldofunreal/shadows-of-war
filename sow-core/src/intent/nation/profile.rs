@@ -71,11 +71,13 @@ pub(super) struct BotAiProfile {
 }
 
 impl BotAiProfile {
-    /// Ghost = top élite: attacks at 5% of cap, no reserve fear, never refuses.
+    /// Ghost = top élite: earliest trigger, never refuses, but keeps a real
+    /// home guard. A near-zero reserve left ghosts empty and let any saved-up
+    /// neighbor take them apart (OpenFront AIs keep 30–40% home).
     const GHOST: BotAiProfile = BotAiProfile {
-        trigger_ratio: 0.05,
-        reserve_ratio: 0.02,
-        expand_ratio: 0.02,
+        trigger_ratio: 0.40,
+        reserve_ratio: 0.30,
+        expand_ratio: 0.10,
         refuse_human_chance: 0,
         attacks_players: true,
     };

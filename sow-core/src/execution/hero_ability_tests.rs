@@ -63,6 +63,7 @@ fn measurement(ability: Ability) -> u16 {
         Ability::ZagrosAscent { .. } => 436,
         Ability::RegionalCommands { .. } => 437,
         Ability::NyabingiNetwork { .. } => 438,
+        Ability::TafaifaCouncil { .. } => 439,
         Ability::MountedDefenseCapture { .. } => 441,
         Ability::AttackStrength { against, .. } => 100 + target_index(against),
         Ability::ConquestSpeed { against, .. } => 120 + target_index(against),
@@ -890,6 +891,7 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
             | Ability::ZagrosAscent { .. }
             | Ability::RegionalCommands { .. }
             | Ability::NyabingiNetwork { .. }
+            | Ability::TafaifaCouncil { .. }
             | Ability::CounterLevy { .. }
             | Ability::SharedCitySpoils { .. }
             | Ability::StreltsyMuster { .. }
@@ -1340,6 +1342,147 @@ fn every_hero_has_a_unique_situation() {
         }
         seen.push((situation, hero));
     }
+}
+
+#[test]
+fn tarenorerer_reduces_losses_only_against_a_larger_reserve() {
+    let hero = Leader::of("tarenorerer");
+    assert_eq!(
+        hero.ability(),
+        Ability::AttackerLoss {
+            when: LossWhen::Against(Target::Outnumbering),
+            percent: 25,
+        }
+    );
+
+    let mut comparison = launch_target(hero, Target::Outnumbering);
+    let multiplier = |engine: &SowEngine, target| {
+        targeted_multiplier(&engine.state, 1, target, 1_000.0, |against| {
+            hero.attacker_loss_multiplier(LossWhen::Against(against))
+        })
+    };
+    assert_eq!(multiplier(&comparison, 2), 0.75, "larger reserve qualifies");
+    comparison.state.player_mut(2).unwrap().troops = 1_000.0;
+    assert_eq!(
+        multiplier(&comparison, 2),
+        1.0,
+        "equal troops do not qualify"
+    );
+    comparison.state.player_mut(2).unwrap().troops = 999.0;
+    assert_eq!(
+        multiplier(&comparison, 2),
+        1.0,
+        "fewer troops do not qualify"
+    );
+    assert_eq!(
+        multiplier(&comparison, 0),
+        1.0,
+        "neutral land does not qualify"
+    );
+
+    let (discounted_loss, marks) = cost_per_tile_against(hero, Target::Outnumbering);
+    let (ordinary_loss, control_marks) =
+        cost_per_tile_against(Leader::of("cleopatra"), Target::Outnumbering);
+    assert!(discounted_loss < ordinary_loss);
+    assert!(marks[1] > 0, "the qualifying attack shows its ability mark");
+    assert_eq!(control_marks[1], 0);
+
+    let (neutral_loss, neutral_marks) = cost_per_tile_against(hero, Target::Neutral);
+    let (ordinary_neutral_loss, ordinary_neutral_marks) =
+        cost_per_tile_against(Leader::of("cleopatra"), Target::Neutral);
+    assert!((neutral_loss - ordinary_neutral_loss).abs() < 1e-8);
+    assert_eq!(
+        neutral_marks[1], 0,
+        "neutral conquest shows no Tarenorerer mark"
+    );
+    assert_eq!(ordinary_neutral_marks[1], 0);
+}
+
+#[test]
+fn nafanua_council_boosts_her_income_only_with_three_living_allies() {
+    use super::hero_effects::AbilityState::{Active, Conditional};
+
+    let hero = Leader::of("nafanua");
+    assert_eq!(hero.ability(), Ability::TafaifaCouncil { percent: 10 });
+    assert_eq!(hero.ability().cue(), crate::geo_entities::Cue::Alliance);
+
+    let mut engine = arena(64, 32, hero, Some(Leader::of("cleopatra")));
+    for ally_id in [2, 3] {
+        engine.state.player_mut(1).unwrap().alliances.push(ally_id);
+        engine.state.player_mut(ally_id).unwrap().alliances.push(1);
+    }
+    assert_eq!(
+        crate::execution::hero_effects::living_allies(&engine.state, 1),
+        2
+    );
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+
+    let income_after_reset = |engine: &mut SowEngine| {
+        engine.state.events.clear();
+        let player = engine.state.player_mut(1).unwrap();
+        player.gold = 0.0;
+        player.troops = 0.0;
+        engine.execute_income();
+        let player = engine.state.player(1).unwrap();
+        (player.gold, player.troops, owner_marks(engine)[1])
+    };
+
+    let cfg = engine.state.config.clone();
+    let ordinary_gold = cfg.per_tick(gold_income_per_second(
+        engine.state.player(1).unwrap().tile_count,
+        BuildingAggregate::default(),
+        hero,
+        &cfg,
+    ));
+    let ordinary_troops = cfg.per_tick(troop_income_per_second(
+        engine.state.player(1).unwrap().tile_count,
+        BuildingAggregate::default(),
+        hero,
+        &cfg,
+    ));
+    let (gold_at_two, troops_at_two, marks_at_two) = income_after_reset(&mut engine);
+    assert!((gold_at_two - ordinary_gold).abs() < 1e-8);
+    assert!((troops_at_two - ordinary_troops).abs() < 1e-8);
+    assert_eq!(marks_at_two, 0);
+
+    prepare_tafaifa_allies(&mut engine);
+    assert_eq!(
+        crate::execution::hero_effects::living_allies(&engine.state, 1),
+        3
+    );
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Active);
+    let (gold_at_three, troops_at_three, activation_marks) = income_after_reset(&mut engine);
+    assert!((gold_at_three - ordinary_gold * 1.1).abs() < 1e-8);
+    assert!((troops_at_three - ordinary_troops * 1.1).abs() < 1e-8);
+    assert_eq!(activation_marks, 1, "activation shows the alliance cue");
+
+    let (gold_on_next_tick, troops_on_next_tick, repeated_marks) = income_after_reset(&mut engine);
+    assert!((gold_on_next_tick - ordinary_gold * 1.1).abs() < 1e-8);
+    assert!((troops_on_next_tick - ordinary_troops * 1.1).abs() < 1e-8);
+    assert_eq!(repeated_marks, 0, "continuous income does not spam cues");
+
+    engine.state.player_mut(4).unwrap().alive = false;
+    assert_eq!(
+        crate::execution::hero_effects::living_allies(&engine.state, 1),
+        2
+    );
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
+    let (gold_after_ally_falls, troops_after_ally_falls, deactivation_marks) =
+        income_after_reset(&mut engine);
+    assert!((gold_after_ally_falls - ordinary_gold).abs() < 1e-8);
+    assert!((troops_after_ally_falls - ordinary_troops).abs() < 1e-8);
+    assert_eq!(deactivation_marks, 0);
+
+    engine.state.player_mut(4).unwrap().alive = true;
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Active);
+    let (gold_after_recovery, troops_after_recovery, recovery_marks) =
+        income_after_reset(&mut engine);
+    assert!((gold_after_recovery - ordinary_gold * 1.1).abs() < 1e-8);
+    assert!((troops_after_recovery - ordinary_troops * 1.1).abs() < 1e-8);
+    assert_eq!(
+        recovery_marks, 1,
+        "recovery reactivates and marks the ability"
+    );
 }
 
 #[test]
@@ -2267,6 +2410,22 @@ fn boleslaw_conquest_announces_to_a_foreign_target_only() {
 
 /// Exercise the live completion, ownership, projectile and income paths for the
 /// redesigned situations. Controls use the identical world and another leader.
+fn prepare_tafaifa_allies(engine: &mut SowEngine) {
+    let fourth = Player::new_human(4, "Fourth Ally".into(), [0.8; 3], &engine.state.config);
+    engine.state.register_player(fourth);
+    engine.state.set_tile_owner(63, 62, 4);
+    for ally_id in [2, 3, 4] {
+        let owner = engine.state.player_mut(1).unwrap();
+        if !owner.alliances.contains(&ally_id) {
+            owner.alliances.push(ally_id);
+        }
+        let ally = engine.state.player_mut(ally_id).unwrap();
+        if !ally.alliances.contains(&1) {
+            ally.alliances.push(1);
+        }
+    }
+}
+
 fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
     let mut e = arena(64, 32, leader, Some(Leader::of("cleopatra")));
     let make = |id, owner_id, kind, x: u32, y: u32, level, under| Building {
@@ -4062,10 +4221,12 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             }
             (strength, shown)
         }
-        Ability::AllyPatronage { .. }
+        Ability::TafaifaCouncil { .. }
+        | Ability::AllyPatronage { .. }
         | Ability::SurplusTreasury { .. }
         | Ability::GuildNetwork { .. } => {
             match situation {
+                Ability::TafaifaCouncil { .. } => prepare_tafaifa_allies(&mut e),
                 Ability::AllyPatronage { .. } => {
                     e.state.player_mut(1).unwrap().alliances.push(2);
                     e.state.player_mut(2).unwrap().alliances.push(1);

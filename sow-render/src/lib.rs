@@ -22,6 +22,12 @@ macro_rules! repo_asset_bytes {
     };
 }
 
+// The web build downloads the text, building and status atlases as cached files
+// (see TextAtlasImages); only native builds embed them.
+#[cfg(not(target_arch = "wasm32"))]
+pub static FONT_ATLAS_BYTES: &[u8] = repo_asset_bytes!("generated/msdf-atlas.webp");
+#[cfg(not(target_arch = "wasm32"))]
 pub static BUILDING_ATLAS_BYTES: &[u8] = repo_asset_bytes!("generated/buildings-atlas.webp");
 pub static UNITS_ATLAS_BYTES: &[u8] = repo_asset_bytes!("generated/units-atlas.webp");
+#[cfg(not(target_arch = "wasm32"))]
 pub static NAMEPLATE_STATUS_ATLAS_BYTES: &[u8] = repo_asset_bytes!("generated/badges-atlas.webp");

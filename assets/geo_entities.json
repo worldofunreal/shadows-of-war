@@ -10442,6 +10442,77 @@
     }
    },
    "territory_color": "#9a4c39"
+  },
+  {
+   "id": "tarenorerer",
+   "name": "Tarenorerer",
+   "entity": "Tommeginne",
+   "role": "tribe",
+   "region": "oceania",
+   "lat": -41.145,
+   "lon": 145.25,
+   "gender": "female",
+   "wikipedia": "https://adb.anu.edu.au/biography/tarenorerer-13212/text23923",
+   "avatar": "tarenorerer",
+   "hero": {
+    "rarity": "rare",
+    "price_crowns": 657,
+    "name": "Tarenorerer",
+    "ability": {
+     "kind": "attacker_loss",
+     "when": {
+      "against": "outnumbering"
+     },
+     "percent": 25
+    }
+   },
+   "territory_color": "#87523f"
+  },
+  {
+   "id": "nafanua",
+   "name": "Nafanua",
+   "entity": "Samoa",
+   "role": "nation",
+   "region": "oceania",
+   "lat": -13.512,
+   "lon": -172.8,
+   "gender": "female",
+   "wikipedia": "https://digitalcollections.anu.edu.au/items/6dcbe341-d945-41fc-a9de-a8428b6110fd/full",
+   "avatar": "nafanua",
+   "hero": {
+    "rarity": "legendary",
+    "price_crowns": 2039,
+    "name": "Nafanua",
+    "ability": {
+     "kind": "tafaifa_council",
+     "percent": 10
+    }
+   },
+   "territory_color": "#476f62"
+  },
+  {
+   "id": "fredegunda",
+   "name": "Fredegund",
+   "entity": "Frankish Kingdom",
+   "role": "nation",
+   "region": "europe",
+   "lat": 49.333,
+   "lon": 3.35,
+   "gender": "female",
+   "wikipedia": "https://en.wikipedia.org/wiki/Fredegund",
+   "avatar": "fredegund",
+   "hero": {
+    "rarity": "rare",
+    "price_crowns": 827,
+    "name": "Fredegund",
+    "ability": {
+     "kind": "city_defense",
+     "against": "foreign",
+     "percent": 25
+    },
+    "art_slug": "fredegund"
+   },
+   "territory_color": "#8c4356"
   }
  ]
 }

@@ -17,6 +17,7 @@ COMMANDS:
   l, local              Build WASM + webroot and serve it locally on port 4173
   native                Fast-build and open the native Electron/WASM game
    p, prod              Run production build & deploy (WASM + FreeBSD backend and relay)
+   ptr                  Same deploy as p, for ptr.shadowsofwar.io (PTR, same IONOS host)
    a, android           Build the Android AAB and publish it to Google Play alpha
    poki                 Build the self-contained Poki upload folder (no upload/deploy)
    crazygames           Build the self-contained CrazyGames upload folder (no upload/deploy)
@@ -34,6 +35,7 @@ EXAMPLES:
    ./sow p -v           # Production deploy with public version bump
   ./sow p --server-only # Deploy only the FreeBSD game server
   ./sow p --relay-only  # Upgrade the relay control with matches running
+  ./sow ptr            # Same pipeline as ./sow p, for ptr.shadowsofwar.io
    ./sow poki           # Build dist/poki for local review and Poki Inspector
    ./sow crazygames     # Build dist/crazygames for private CrazyGames QA
    ./sow jest           # Jest bundle + upload zip (upload via console/MCP, never auto)
@@ -88,6 +90,10 @@ run_dist_process() {
   if [[ "${log_prefix}" == production ]]; then
     command -v flock >/dev/null || { echo "flock is required to prevent overlapping production builds" >&2; return 127; }
     exec flock -n "${ROOT}/dist/.production.lock" "${bin}" "$@"
+  elif [[ "${log_prefix}" == ptr ]]; then
+    command -v flock >/dev/null || { echo "flock is required to prevent overlapping PTR and production builds" >&2; return 127; }
+    # PTR shares dist/ and the IONOS host with production: hold the production lock too.
+    exec flock -n "${ROOT}/dist/.production.lock" flock -n "${ROOT}/dist/.ptr.lock" "${bin}" "$@"
   elif [[ "${log_prefix}" == poki ]]; then
     command -v flock >/dev/null || { echo "flock is required to prevent overlapping Poki package builds" >&2; return 127; }
     exec flock -n "${ROOT}/dist/.poki-build.lock" "${bin}" "$@"
@@ -101,7 +107,18 @@ run_dist_process() {
 production_summary() {
   local log_file="$1"
   local status="$2"
-  local stage no_op no_restart release_id diagnostics
+  local site="$3"
+  local label published_text unchanged_text stage no_op no_restart release_id diagnostics
+
+  if [[ "${site}" == ptr ]]; then
+    label=PTR
+    published_text='PTR publicado'
+    unchanged_text='PTR ya estaba actualizado; no hubo reinicios'
+  else
+    label=Production
+    published_text='Producción publicada'
+    unchanged_text='Producción ya estaba actualizada; no hubo reinicios'
+  fi
 
   if [[ ! -r "${log_file}" ]]; then
     printf '⚠ No se pudo leer el registro: %s\n' "${log_file}"
@@ -109,16 +126,16 @@ production_summary() {
   fi
 
   if (( status == 0 )); then
-    no_op="$(awk '/^✅ Production already serves the requested content$/ { found=1 } END { if (found) print "yes" }' "${log_file}" 2>/dev/null || true)"
+    no_op="$(awk -v label="${label}" '$0 == ("✅ " label " already serves the requested content") { found=1 } END { if (found) print "yes" }' "${log_file}" 2>/dev/null || true)"
     no_restart="$(awk '/^  no production component changed; no restart performed$/ { found=1 } END { if (found) print "yes" }' "${log_file}" 2>/dev/null || true)"
-    release_id="$(awk '/^✅ Production .* ready as / { sub(/^✅ Production .* ready as /, ""); value=$0 } END { print value }' "${log_file}" 2>/dev/null || true)"
+    release_id="$(awk -v label="${label}" '$0 ~ ("^✅ " label " .* ready as ") { value=$0; sub(/^.* ready as /, "", value) } END { print value }' "${log_file}" 2>/dev/null || true)"
     if [[ ( "${no_op}" == yes && "${no_restart}" == yes ) || -n "${release_id}" ]]; then
       printf '✅ Pruebas y compilación\n'
       printf '✅ Salud del servidor, relay y verificación pública\n'
       if [[ "${no_op}" == yes && "${no_restart}" == yes ]]; then
-        printf '✅ Producción ya estaba actualizada; no hubo reinicios\n'
+        printf '✅ %s\n' "${unchanged_text}"
       else
-        printf '✅ Producción publicada: %s\n' "${release_id}"
+        printf '✅ %s: %s\n' "${published_text}" "${release_id}"
       fi
     else
       printf '⚠ El proceso terminó con código 0, pero no reconocí el resultado de publicación.\n'
@@ -166,13 +183,14 @@ run_dist() {
   local bin="${CARGO_TARGET_DIR}/debug/sow"
   local log_dir="${ROOT}/dist/logs"
   local log_file="${log_dir}/${log_prefix}-$(date +%Y%m%d-%H%M%S).log"
-  local status
+  local status deploy=false
+  case "${log_prefix}" in production|ptr) deploy=true ;; esac
   mkdir -p "${log_dir}"
   : >"${log_file}"
   chmod 600 "${log_file}"
   set +e
-  if [[ "${log_prefix}" == production ]]; then
-    printf '⏳ ./sow p en curso; registro: %s\n' "${log_file}"
+  if [[ "${deploy}" == true ]]; then
+    printf '⏳ ./sow %s en curso; registro: %s\n' "${CMD}" "${log_file}"
     (run_dist_process "${log_prefix}" "${bin}" "$@") >"${log_file}" 2>&1
     status=$?
   else
@@ -180,8 +198,8 @@ run_dist() {
     status=${PIPESTATUS[0]}
   fi
   set -e
-  if [[ "${log_prefix}" == production ]]; then
-    production_summary "${log_file}" "${status}"
+  if [[ "${deploy}" == true ]]; then
+    production_summary "${log_file}" "${status}" "${log_prefix}"
   else
     echo "SOW log: ${log_file}"
   fi
@@ -222,6 +240,12 @@ case "${CMD}" in
   p|prod)
     load_dist_env
     run_dist production "$@"
+    ;;
+  ptr)
+    # No load_dist_env: PTR must not inherit production's sow-dist/.env (the binary reads .env.ptr).
+    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT}/target}"
+    mkdir -p "${CARGO_TARGET_DIR}"
+    run_dist ptr "$@"
     ;;
   a|android)
     load_dist_env

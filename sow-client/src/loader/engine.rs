@@ -76,8 +76,6 @@ impl SowApp {
         self.sim.relay_reconnect_ticket = None;
         self.ui.app.hud_state.spawn_timer_secs = None;
         self.ui.app.hud_state.sync_state = None;
-        self.ui.app.hud_state.market_preview = None;
-        self.ui.app.hud_state.market_send_failed = None;
         self.ui.app.hud_state.clear_notifications();
         self.ui.app.main_menu_state.wait_timer_secs = 0.0;
         self.ui.app.main_menu_state.cached_map = None;
@@ -325,6 +323,13 @@ impl SowApp {
                 && self.tasks.pending_engine_init_data.is_some()
             {
                 let step = self.ui.app.splash_state.gpu_load_step;
+                // Text atlases are optional here: the frame loop creates the text renderer when
+                // they arrive, so a slow or failed atlas request must not hold up match startup.
+                let text_atlases = if step == 1 {
+                    crate::render::text_atlases::get()
+                } else {
+                    None
+                };
                 if step == 1 && self.ui.app.splash_state.frames_drawn > 1 {
                     // Step 1: Allocate GPU Memory & Send Init Command
                     if let Some((state, water, start_msg)) =
@@ -385,10 +390,13 @@ impl SowApp {
                                 &render_ctx.context,
                                 format,
                             ));
-                            self.gfx.text_renderer = Some(crate::render::gpu::TextRenderer::new(
-                                &render_ctx.context,
-                                format,
-                            ));
+                            self.gfx.text_renderer = text_atlases.map(|atlases| {
+                                crate::render::gpu::TextRenderer::new(
+                                    &render_ctx.context,
+                                    format,
+                                    &atlases,
+                                )
+                            });
                             self.gfx.needs_first_upload = true;
                         }
 

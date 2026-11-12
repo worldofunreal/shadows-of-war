@@ -232,12 +232,6 @@ pub fn newly_unlocked_achievements(
     }
 }
 
-/// Canonical NFTROPOLY/WOU-ID card token for an unlocked achievement. Same
-/// snake_case -> kebab derivation as skins, with a `sow-ach-` prefix.
-pub fn achievement_card_token_id(achievement_id: &str) -> String {
-    format!("sow-ach-{}", achievement_id.replace('_', "-"))
-}
-
 fn leak_str(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
@@ -572,12 +566,12 @@ const XP_PER_EMPIRE: u32 = 8;
 const XP_PER_TRIBE: u32 = 2;
 const XP_PER_ASSIST: u32 = 5;
 
-const CROWNS_PARTICIPATION: u64 = 40;
-const CROWNS_WIN: u64 = 100;
-const CROWNS_PER_KILL: u64 = 2;
-const CROWNS_PER_EMPIRE: u64 = 5;
-const CROWNS_PER_ASSIST: u64 = 2;
-const CROWNS_TUTORIAL: u64 = 100;
+const CROWNS_PARTICIPATION: u64 = 10;
+const CROWNS_WIN: u64 = 30;
+const CROWNS_PER_KILL: u64 = 1;
+const CROWNS_PER_EMPIRE: u64 = 2;
+const CROWNS_PER_ASSIST: u64 = 1;
+const CROWNS_TUTORIAL: u64 = 50;
 
 pub fn calculate(input: RewardInput) -> MatchReward {
     if input.tutorial {
@@ -623,10 +617,10 @@ pub fn calculate(input: RewardInput) -> MatchReward {
 // playing, more for a win, the most for the hardest win (public FFA). Teams,
 // HvN and Ranked 1v1 wins pay half of an FFA win.
 // Gems are scarce on purpose: they pay about a third of the 2026-11 amounts.
-const GEMS_PLAYED: u64 = 1;
-const GEMS_PLAYED_WITH_DEFEATS: u64 = 2;
-const GEMS_WIN_FFA: u64 = 17;
-const GEMS_WIN_SIDE: u64 = 8;
+const GEMS_PLAYED: u64 = 0;
+const GEMS_PLAYED_WITH_DEFEATS: u64 = 0;
+const GEMS_WIN_FFA: u64 = 3;
+const GEMS_WIN_SIDE: u64 = 1;
 /// A match shorter than this pays no participation gems unless it was won,
 /// so joining and resigning cannot farm them.
 pub const GEMS_MIN_PLAYED_SECONDS: u32 = 300;
@@ -688,7 +682,7 @@ mod tests {
         });
         assert_eq!(loss.xp, 30);
         assert_eq!(loss.leader_xp, 30);
-        assert_eq!(loss.crowns, 50);
+        assert_eq!(loss.crowns, 15);
         assert_eq!(loss.laurels, 0);
 
         let win = calculate(RewardInput {
@@ -700,7 +694,7 @@ mod tests {
         });
         assert_eq!(win.xp, 163);
         assert_eq!(win.leader_xp, 163);
-        assert_eq!(win.crowns, 147);
+        assert_eq!(win.crowns, 43);
         assert_eq!(win.laurels, 0);
     }
 
@@ -713,15 +707,15 @@ mod tests {
             played_seconds: GEMS_MIN_PLAYED_SECONDS,
             ..Default::default()
         };
-        assert_eq!(match_gems(played), 1);
-        assert_eq!(match_gems(GemInput { players_defeated: 1, ..played }), 2);
-        assert_eq!(match_gems(GemInput { won: true, ..played }), 18);
-        assert_eq!(match_gems(GemInput { won: true, mode: "Teams", ..played }), 9);
+        assert_eq!(match_gems(played), 0);
+        assert_eq!(match_gems(GemInput { players_defeated: 1, ..played }), 0);
+        assert_eq!(match_gems(GemInput { won: true, ..played }), 3);
+        assert_eq!(match_gems(GemInput { won: true, mode: "Teams", ..played }), 1);
         assert_eq!(
             match_gems(GemInput { won: true, mode: "HumansVsNations", ..played }),
-            9
+            1
         );
-        assert_eq!(match_gems(GemInput { won: true, queue: "Ranked1v1", ..played }), 9);
+        assert_eq!(match_gems(GemInput { won: true, queue: "Ranked1v1", ..played }), 1);
         // Join-and-resign and host-controlled lobbies pay nothing.
         assert_eq!(match_gems(GemInput { played_seconds: 60, ..played }), 0);
         assert_eq!(match_gems(GemInput { won: true, queue: "Custom", ..played }), 0);
@@ -737,7 +731,7 @@ mod tests {
             super::MatchReward {
                 xp: 100,
                 leader_xp: 100,
-                crowns: 100,
+                crowns: 50,
                 laurels: 0,
                 gems: 0,
             }

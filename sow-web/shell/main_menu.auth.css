@@ -1,4 +1,4 @@
-/* Auth domain: WouID email, OTP, and provider access modal. */
+/* Owned account email, OTP, and social sign-in. */
 
 /* Account access: compact, native SOW surface; no embedded provider UI. */
 .sow-auth {
@@ -52,19 +52,7 @@
   object-fit: contain;
 }
 
-.sow-auth__wou-logo {
-  width: auto;
-  max-width: 78px;
-  height: 24px;
-  object-fit: contain;
-  opacity: 0.9;
-}
 
-.sow-auth__logo-divider {
-  width: 1px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.18);
-}
 
 .sow-auth__form-links button {
   border: 0;
@@ -286,9 +274,5 @@
   .sow-auth__game-logo {
     max-width: min(160px, 54vw);
     height: 26px;
-  }
-  .sow-auth__wou-logo {
-    max-width: 66px;
-    height: 21px;
   }
 }

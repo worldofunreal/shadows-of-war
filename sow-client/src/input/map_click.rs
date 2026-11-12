@@ -983,13 +983,8 @@ impl SowApp {
             .terrain
             .get(idx)
             .is_some_and(|terrain| terrain & 0x80 != 0);
-        if !is_land {
-            self.add_click_marker(col, row);
-            return;
-        }
-
         let owner = renderer.owners.get(idx).copied().unwrap_or(0);
-        let (target_col, target_row) = if owner == 0 {
+        let (target_col, target_row) = if is_land && owner == 0 {
             (col, row)
         } else {
             let mut best_tile = None;
@@ -1022,7 +1017,12 @@ impl SowApp {
             }
             let Some(tile) = best_tile else {
                 self.add_click_marker(col, row);
-                self.add_map_feedback(crate::ui::UiText::new("hud.spawn_too_close"));
+                let key = if is_land {
+                    "hud.spawn_too_close"
+                } else {
+                    "hud.build_land"
+                };
+                self.add_map_feedback(crate::ui::UiText::new(key));
                 return;
             };
             tile
@@ -1571,7 +1571,6 @@ impl SowApp {
     }
 
     fn open_transfer(&mut self, target: u16, mode: TransferMode) {
-        self.ui.app.hud_state.market_preview = None;
         self.ui.app.hud_state.show_ask_panel = Some(target);
         self.ui.app.hud_state.transfer_mode = Some(mode);
         self.ui.app.hud_state.transfer_confirm_pending = false;

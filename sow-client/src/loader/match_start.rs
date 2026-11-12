@@ -38,6 +38,10 @@ impl SowApp {
             let campaign = crate::campaign::CampaignId::Boudica;
             self.boot_campaign_pending = Some(campaign.episode_id().to_string());
             self.begin_enter_game_loader(campaign.advisor());
+            let map_id = campaign.map_id();
+            if !self.ui.app.asset_loader.has_map(map_id) {
+                self.start_map_download(map_id.to_string());
+            }
             crate::store_portals::gameplay_stop();
         }
     }
@@ -49,12 +53,7 @@ impl SowApp {
         roster: serde_json::Value,
         match_config: serde_json::Value,
     ) -> Result<(), String> {
-        let expected_map = match campaign {
-            crate::campaign::CampaignId::Boudica => "eastanglia",
-            crate::campaign::CampaignId::SixSkyEp1
-            | crate::campaign::CampaignId::SixSkyEp2
-            | crate::campaign::CampaignId::SixSkyEp3 => "northamerica",
-        };
+        let expected_map = campaign.map_id();
         if roster.get("map").and_then(serde_json::Value::as_str) != Some(expected_map) {
             return Err("Campaign roster references the wrong map.".into());
         }

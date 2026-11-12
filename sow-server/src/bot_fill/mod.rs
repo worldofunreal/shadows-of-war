@@ -39,9 +39,9 @@
 //!
 //! Identities come exclusively from the persistent bot-account pool seeded
 //! at boot (`BotPool`) — real `database_account_id`s and stats accumulation.
-//! A random share may use lobby-only `Anon####` display names; the pool's
-//! stored names and accounts are never changed. If the pool is unavailable,
-//! nothing is injected.
+//! A small random share may use lobby-only animal aliases; the pool's stored
+//! names and accounts are never changed. If the pool is unavailable, nothing
+//! is injected.
 //! ══════════════════════════════════════════════════════════════════════
 
 pub mod names;
@@ -77,17 +77,16 @@ pub struct BotPool {
 
 static BOT_POOL: OnceLock<BotPool> = OnceLock::new();
 
-const ANON_NAME_COUNT: usize = 10_000;
+const ANIMAL_ALIAS_SUFFIX_COUNT: usize = 10_000;
 
-/// Share of a lobby's ghosts shown as `Anon####`, by the ranked league of the
-/// humans in it. Basic leagues are mostly Anon; higher leagues have almost none.
+/// Chance band for generated animal aliases, by the humans' ranked league.
 /// No rated human (`None`) counts as Bronze.
-fn anon_band(league_score: Option<u16>) -> (f32, f32) {
+fn animal_alias_band(league_score: Option<u16>) -> (f32, f32) {
     let (tier, _) = sow_data::profile::tier_for_score(league_score.unwrap_or(0));
     match tier {
-        "Bronze" => (0.50, 0.70),
-        "Silver" => (0.20, 0.35),
-        "Gold" => (0.05, 0.10),
+        "Bronze" => (0.10, 0.20),
+        "Silver" => (0.05, 0.10),
+        "Gold" => (0.0, 0.02),
         _ => (0.0, 0.0),
     }
 }
@@ -105,15 +104,18 @@ fn live_league_score(players: &[PlayerConnection]) -> Option<u16> {
 
 /// Per-ghost draw: each ghost takes its own share from the band, then flips
 /// against that share. Independent per ghost, so no lobby-wide count is fixed.
-fn anon_chance(league_score: Option<u16>, rng: &mut impl Rng) -> bool {
-    let (min, max) = anon_band(league_score);
+fn animal_alias_chance(league_score: Option<u16>, rng: &mut impl Rng) -> bool {
+    let (min, max) = animal_alias_band(league_score);
     rng.r#gen::<f32>() < rng.gen_range(min..=max)
 }
 
-/// A `Anon####` name the lobby does not already show.
-fn fresh_anon_name(taken: &dyn Fn(&str) -> bool, rng: &mut impl Rng) -> String {
+/// An animal alias not already reserved or shown in the lobby.
+fn fresh_animal_name(taken: &dyn Fn(&str) -> bool, rng: &mut impl Rng) -> String {
     loop {
-        let name = format!("Anon{:04}", rng.gen_range(0..ANON_NAME_COUNT));
+        let name = sow_data::animal_alias(
+            rng.gen_range(0..sow_data::ANIMAL_NAMES.len()),
+            rng.gen_range(0..ANIMAL_ALIAS_SUFFIX_COUNT),
+        );
         if !taken(&name) {
             return name;
         }
@@ -299,9 +301,17 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
             .map(|(account_id, display_name, _)| (account_id, display_name))
         {
             // League is read at this ghost's entry, so humans already in the
-            // lobby decide its Anon share, not the lobby's state at first sighting.
-            let name = if anon_chance(live_league_score(&g.players), &mut rng) {
-                fresh_anon_name(&|candidate| g.players.iter().any(|p| p.name == candidate), &mut rng)
+            // lobby decide its animal alias share, not the lobby's state at first sighting.
+            let name = if animal_alias_chance(live_league_score(&g.players), &mut rng) {
+                fresh_animal_name(
+                    &|candidate| {
+                        g.players.iter().any(|p| p.name == candidate)
+                            || g.pending_bots
+                                .iter()
+                                .any(|(_, pending_name, _)| pending_name == candidate)
+                    },
+                    &mut rng,
+                )
             } else {
                 display_name
             };
@@ -384,31 +394,39 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{anon_band, anon_chance, fresh_anon_name};
+    use super::{animal_alias_band, animal_alias_chance, fresh_animal_name};
     use rand::{SeedableRng, rngs::StdRng};
     use std::collections::HashSet;
 
     #[test]
-    fn anon_chance_follows_the_league_band() {
+    fn generated_alias_chance_follows_the_reduced_league_band() {
         let draws = |league: Option<u16>| {
             let mut rng = StdRng::seed_from_u64(7);
-            (0..10_000).filter(|_| anon_chance(league, &mut rng)).count() as f32 / 10_000.0
+            (0..10_000)
+                .filter(|_| animal_alias_chance(league, &mut rng))
+                .count() as f32
+                / 10_000.0
         };
-        assert!((0.55..=0.65).contains(&draws(None)));
-        assert!((0.25..=0.30).contains(&draws(Some(1300))));
-        assert!((0.06..=0.09).contains(&draws(Some(1700))));
+        assert!((0.12..=0.18).contains(&draws(None)));
+        assert!((0.06..=0.09).contains(&draws(Some(1300))));
+        assert!((0.005..=0.015).contains(&draws(Some(1700))));
         assert_eq!(draws(Some(2000)), 0.0);
-        assert_eq!(anon_band(Some(2000)), (0.0, 0.0));
+        assert_eq!(animal_alias_band(Some(2000)), (0.0, 0.0));
     }
 
     #[test]
-    fn fresh_anon_names_avoid_names_already_in_the_lobby() {
+    fn fresh_animal_names_avoid_names_already_in_the_lobby() {
         let mut rng = StdRng::seed_from_u64(11);
-        let taken: HashSet<String> = (0..50).map(|i| format!("Anon{i:04}")).collect();
+        let mut taken: HashSet<String> = (0..50)
+            .map(|suffix| sow_data::animal_alias(0, suffix))
+            .collect();
         for _ in 0..200 {
-            let name = fresh_anon_name(&|candidate| taken.contains(candidate), &mut rng);
+            let name = fresh_animal_name(&|candidate| taken.contains(candidate), &mut rng);
             assert!(!taken.contains(&name));
-            assert!(name.len() == 8 && name[4..].bytes().all(|byte| byte.is_ascii_digit()));
+            let (animal, suffix) = name.split_at(name.len() - 4);
+            assert!(sow_data::ANIMAL_NAMES.contains(&animal));
+            assert!(suffix.bytes().all(|byte| byte.is_ascii_digit()));
+            taken.insert(name);
         }
     }
 }

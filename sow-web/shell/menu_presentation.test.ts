@@ -23,6 +23,68 @@ const dropdownSource = fs.readFileSync(path.join(shell, "sow-dropdown.ts"), "utf
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
 const surfacesSource = fs.readFileSync(path.join(shell, "main_menu.surfaces.ts"), "utf8");
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.ts"), "utf8");
+
+test("hero avatars load from visible cards without preloading every atlas sheet", () => {
+    assert.doesNotMatch(
+        heroesSource + shellSource,
+        /preloadHeroesRoster|preloadAvatarSources|preloadAvatarSheets/,
+        "the menu and hero selector must not eagerly fetch the complete sprite atlas",
+    );
+    assert.match(
+        heroesSource,
+        /avatarImageAttribute\(avatarUrl\)/,
+        "hero cards keep the shared visibility-aware avatar loader",
+    );
+    const previewStart = heroesSource.indexOf("function updateHeroesPreview");
+    const previewEnd = heroesSource.indexOf("function renderHeroInfoModal", previewStart);
+    const preview = heroesSource.slice(previewStart, previewEnd);
+    assert.match(
+        preview,
+        /setHeroesCardAvatar\(cards\[i\],[^;]+selected \|\| isHovered\)/,
+        "only selected or hovered cards load immediately during preview updates",
+    );
+    assert.match(
+        heroesSource,
+        /deferAvatarImage\(image, heroesAvatarUrl\(slug, expression\)\)/,
+        "offscreen card changes stay behind the shared visibility observer",
+    );
+    assert.match(heroesSource, /if \(currentScreen\(\) !== "heroes"\) return false;/);
+});
+
+test("a failed highlighted avatar can retry the same sheet later", async () => {
+    const start = heroesSource.indexOf("function setHeroesAvatar(");
+    const end = heroesSource.indexOf("\nfunction setHeroesCardAvatar", start);
+    assert.ok(start >= 0 && end > start, "the hero avatar loader stays the canonical owner");
+    const requests: string[] = [];
+    const retry = vm.runInNewContext(
+        heroesSource.slice(start, end) + "\nsetHeroesAvatar;",
+        {
+            heroesAvatarUrl: () => "/assets/gameplay/avatars/caesar.webp",
+            avatarAtlasCell: () => ({}),
+            heroesAvatarSources: new WeakMap(),
+            heroesAvatarRevisions: new WeakMap(),
+            heroesAvatarAnimations: new WeakMap(),
+            heroesMotionReduced: () => true,
+            loadAvatarImage: (source: string) => {
+                requests.push(source);
+                return requests.length === 1
+                    ? Promise.reject(new Error("temporary sheet failure"))
+                    : Promise.resolve({ src: "data:image/webp;base64,AAAA" });
+            },
+        },
+    );
+    const image = { src: "", getAttribute: () => null };
+    retry(image, "Caesar", "calm");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    retry(image, "Caesar", "calm");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(requests, [
+        "/assets/gameplay/avatars/caesar.webp",
+        "/assets/gameplay/avatars/caesar.webp",
+    ]);
+    assert.equal(image.src, "data:image/webp;base64,AAAA");
+});
+
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.ts"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.ts"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
@@ -517,7 +579,7 @@ test("settings panel keeps only useful controls and real account state", () => {
         assert.match(body, /settings-account/);
         assert.doesNotMatch(
             body,
-            /system_configuration|menu\.done|master_audio|settings-mute|account-row|WOU-ID|\+1/,
+            /system_configuration|menu\.done|master_audio|settings-mute|account-row|SOW identity|\+1/,
         );
     }
     assert.match(renderSettingsBody(jestSource), /renderSettingsPrivacySection/);
@@ -675,12 +737,12 @@ test("profile stays full-width and account erasure requires settings confirmatio
         serverSource.indexOf("async fn handle_self_delete"),
         serverSource.indexOf("/// /profile/anonymous response"),
     );
-    assert.match(selfDelete, /verify_self_service/);
+    assert.match(selfDelete, /store_account_for_request\(&state, &headers, account_id, payload\.auth_secret\.as_deref\(\)\)/);
     assert.match(selfDelete, /state\.db\.delete_account\(account_id\)/);
     assert.match(selfDelete, /deleted: true/);
 });
 
-test("Opus theme preserves its crossfade and resumes from ordinary trusted clicks", async () => {
+test("Opus theme waits for the boot loader before fetching and preserves playback", async () => {
     const start = shellSource.indexOf("const menuMusic");
     const end = shellSource.indexOf("function renderTopbar()", start);
     assert.ok(start >= 0 && end > start, "shared shell has no menu music lifecycle");
@@ -984,16 +1046,17 @@ test("Opus theme preserves its crossfade and resumes from ordinary trusted click
     const [first, second] = h.audios;
     assert.equal(first.src, "https://cdn.test/assets/gameplay/music/shadows-of-war.webm?v=build-42");
     assert.equal(second.src, first.src, "both decks use Opus");
-    assert.equal(first.preload, "none", "music never competes with the WASM download");
+    assert.equal(first.preload, "none", "music is not browser-preloaded during the tutorial");
     assert.equal(second.preload, "none", "the loop's second deck does not preload a duplicate copy");
-    assert.equal(first.loadCalls, 0, "no theme bytes are requested during the engine download");
+    assert.equal(first.loadCalls, 0, "no theme bytes are requested during the tutorial loader");
     assert.equal(second.loadCalls, 0);
-    h.window.dispatchEvent({ type: "sow:wasm-bytes-ready" });
-    assert.equal(first.loadCalls, 1, "the theme starts fetching once the engine bytes are down");
-    assert.equal(second.loadCalls, 0, "only the active deck buffers early");
+    assert.equal(first.loadCalls, 0, "the active deck does not buffer during the tutorial loader");
+    assert.equal(second.loadCalls, 0, "the inactive deck never buffers early");
     assert.equal(first.playCalls, 0, "music waits until the initial loader finishes");
     h.api.menuMusicSetCinematicActive(true);
     h.window.dispatchEvent({ type: "sow:loader-ready" });
+    assert.equal(first.loadCalls, 1, "the active deck starts fetching after the loader closes");
+    assert.equal(second.loadCalls, 0, "only the active deck buffers after the loader");
     await flushPlay();
     assert.equal(first.paused, true, "an opening tutorial cinematic keeps music silent after the loader");
     assert.equal(first.playCalls, 0, "the theme does not start underneath the cinematic");
@@ -2396,8 +2459,8 @@ test("Settings owns optional sign-in and respects pending, reauthentication, and
     let offersSignIn = true;
     const window = {
         SOW_getAuthState: () => auth,
-        SOW_getWouSession: () => ({ user: { email: "player@example.com" } }),
-        SOW_WOU_SESSION_STATUS: "",
+        SOW_getIdentitySession: () => ({ user: { email: "player@example.com" } }),
+        SOW_IDENTITY_SESSION_STATUS: "",
     };
     const renderSettings = vm.runInNewContext(
         renderSettingsBody(surfacesSource).replace(/export /g, "") + "\nrenderSettings;",
@@ -2424,7 +2487,7 @@ test("Settings owns optional sign-in and respects pending, reauthentication, and
     assert.doesNotMatch(renderSettings(), /data-command='sign_in'/);
     assert.match(renderSettings(), /player@example.com/);
     assert.match(renderSettings(), /data-command='sign_out'/);
-    window.SOW_WOU_SESSION_STATUS = "reauthentication_required";
+    window.SOW_IDENTITY_SESSION_STATUS = "reauthentication_required";
     assert.match(renderSettings(), /data-command='sign_in'/);
     offersSignIn = false;
     assert.doesNotMatch(renderSettings(), /data-command='sign_in'/);
@@ -2492,7 +2555,7 @@ test("reduced motion suppresses counter effects after splitting the header", () 
     );
 });
 
-test("heroes skill scales its title above its body, and skins live with the roster filters", () => {
+test("heroes skill scales its title above its body, skins sit in the featured hero card, and sort joins roster filters", () => {
     assert.match(
         profileCss,
         /\.sow-heroes__featured\s*\{[^}]*--skill-title:\s*calc\(var\(--skill-body\) \* 1\.5\)/,
@@ -2540,8 +2603,13 @@ test("heroes skill scales its title above its body, and skins live with the rost
     );
     assert.match(
         heroesSource,
-        /renderHeroesRegionDropdown\(\) \+\s*renderSkinsButton\(\)/,
-        "skins sit beside the roster filters",
+        /renderHeroesRegionDropdown\(\) \+\s*renderHeroesSortDropdown\(\)/,
+        "sort sits beside region in roster filters",
+    );
+    assert.match(
+        heroesSource,
+        /data-hero-skins>["']\s*\+\s*\(activeRandom \? "" : renderSkinsButton\(\)\)/,
+        "skins button sits inside the hero card",
     );
     for (const file of ["main_menu.surfaces.ts", "main_menu.poki.ts", "main_menu.jest.ts"]) {
         assert.match(fs.readFileSync(path.join(shell, file), "utf8"), /renderSkinsButton,/, file);
@@ -2557,6 +2625,11 @@ test("heroes skill scales its title above its body, and skins live with the rost
         fs.readFileSync(path.join(shell, "main_menu.portal-stubs.ts"), "utf8"),
         /export function renderSkinsButton\(\) \{\s*return "";/,
         "portal builds without the store keep the entry hidden",
+    );
+    assert.match(
+        shellSource,
+        /if \(screen === "heroes" && current && current\.dataset\.screenPanel === "heroes"\) \{\s*updateHeroesPreview\(\);\s*return;\s*\}/,
+        "heroes screen updates in-place to avoid destroying hovered DOM elements and flickering",
     );
 });
 

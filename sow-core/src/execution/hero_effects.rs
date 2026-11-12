@@ -49,6 +49,15 @@ pub(crate) fn allied(state: &crate::game::GameState, a: u16, b: u16) -> bool {
             || a.alliances.contains(&b.id) && b.alliances.contains(&a.id)))
 }
 
+/// Number of living players allied with `owner`, including teammates and mutual pacts.
+pub fn living_allies(state: &GameState, owner: u16) -> usize {
+    state
+        .players
+        .iter()
+        .filter(|player| allied(state, owner, player.id))
+        .count()
+}
+
 /// The land army and the HUD use the same test for a neutral plain on a rival's border.
 pub(crate) fn contested_steppe(state: &GameState, owner: u16, x: u32, y: u32) -> bool {
     if state.map.owner_id(x, y) != 0 || state.map.terrain_type(x, y) != TerrainType::Land {
@@ -602,6 +611,13 @@ impl SowEngine {
                     && p.border_coords(self.state.map.width)
                         .any(|tile| nyabingi_support(&self.state, tile, None).is_some()),
             ),
+            Ability::TafaifaCouncil { .. } => {
+                if living_allies(&self.state, owner) >= 3 {
+                    Active
+                } else {
+                    Conditional
+                }
+            }
             Ability::RegionalCommands { .. } => ready(
                 self.state.config.attack_cost_enemy > 0.0
                     && regional_commands_multiplier(&self.state, &self.attacks, p) > 1.0,

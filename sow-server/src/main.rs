@@ -1350,28 +1350,6 @@ async fn main() {
         std::env::var("SOW_DB_URL").unwrap_or_else(|_| "http://127.0.0.1:25585".to_string());
     let db_secret = std::env::var("SOW_DB_SECRET").expect("SOW_DB_SECRET was validated above");
     let identity_state = identity::IdentityState::from_env(db_url.clone(), db_secret.clone());
-    let catalog_sync = identity_state.clone();
-    tokio::spawn(async move {
-        let mut retry_delay = Duration::from_secs(60);
-        loop {
-            match catalog_sync.sync_wou_achievement_cards().await {
-                Ok(0) => break,
-                Ok(count) => {
-                    log::info!("[WOU_CATALOG] registered {count} missing achievement cards");
-                    break;
-                }
-                Err(error) => {
-                    log::warn!(
-                        "[WOU_CATALOG] achievement catalog sync deferred; retrying in {}s: {error}",
-                        retry_delay.as_secs()
-                    );
-                    tokio::time::sleep(retry_delay).await;
-                    retry_delay = (retry_delay * 2).min(Duration::from_secs(900));
-                }
-            }
-        }
-    });
-
     let redis_url =
         std::env::var("SOW_REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string());
     let redis_client = redis::Client::open(redis_url).expect("Failed to connect to Redis");

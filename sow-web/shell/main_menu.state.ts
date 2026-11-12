@@ -211,7 +211,7 @@ export interface MenuMissionRecord {
 
 export interface MenuMission {
     id: string;
-    category: "onboarding" | "daily";
+    category: "onboarding" | "daily" | "weekly";
     title_key: string;
     description_key: string;
     target: number;
@@ -333,6 +333,8 @@ export interface HudLeaderboardPlayer {
     can_trade?: boolean;
     leader: string;
     avatar: string | null;
+    /** Portrait and ability-icon key: the campaign avatar, else the hero's art slug. */
+    avatar_slug?: string | null;
     avatar_expression?: "happy" | "calm" | "fear" | "angry" | null;
     avatar_transition?: HudAvatarTransition | null;
     manual_emote_active?: boolean;
@@ -549,29 +551,7 @@ export interface HudTutorial {
     pointer?: { x: number; y: number; [key: string]: number | boolean | undefined } | null;
 }
 
-export type HudMarketSide = "buy" | "sell";
-
-export interface HudMarket {
-    side: HudMarketSide;
-    lots: number;
-    troops_per_lot: number;
-    available_lots: number;
-    best_price: number | null;
-    quote_gold: number | null;
-    quote_failure: string | null;
-    order: { side: HudMarketSide; lots: number; gold_per_lot: number } | null;
-    feedback: {
-        request_id: number;
-        outcome:
-            | { kind: "traded"; side: HudMarketSide; lots: number; gold: number }
-            | { kind: "posted" | "cancelled" }
-            | { kind: "rejected"; reason: string };
-    } | null;
-}
-
 export interface MenuHudPayload {
-    market_available?: boolean;
-    market?: HudMarket;
     camera_zoom_state: { current: number; floor: number; ceiling: number };
     gold: number;
     troops: number;
@@ -587,6 +567,8 @@ export interface MenuHudPayload {
     attack_ratio: number;
     operations: HudCombatOperation[];
     spawn_timer_secs: number | null;
+    spawn_duration_secs?: number;
+    has_spawned?: boolean;
     selected_building: string | null;
     building_placement: HudBuildingPlacement | null;
     building_in_progress?: HudBuildingInProgress | null;
@@ -637,6 +619,8 @@ export interface MenuHudPayload {
     winner_name: string;
     featured_skin: { id: string; name: string; asset_path: string; cost_gems: number } | null;
     player_leader: string | null;
+    /** The local hero's art slug (portrait and ability icon files are named by it, not by the hero id). */
+    player_art_slug?: string | null;
     player_avatar_expression?: HudAvatarIdentity["expression"] | null;
     player_avatar_transition?: HudAvatarTransition | null;
     player_name: string;

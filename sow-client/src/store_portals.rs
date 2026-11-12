@@ -208,14 +208,14 @@ pub fn should_fetch_cloud_profile() -> bool {
     true
 }
 
-pub fn refresh_wou_session() {
+pub fn refresh_identity_session() {
     #[cfg(target_arch = "wasm32")]
-    call_window_hook("SOW_retryWouProfile");
+    call_window_hook("SOW_retryIdentityProfile");
 }
 
-pub fn wou_profile_load_succeeded() {
+pub fn identity_profile_load_succeeded() {
     #[cfg(target_arch = "wasm32")]
-    call_window_hook("SOW_wouProfileLoadSucceeded");
+    call_window_hook("SOW_identityProfileLoadSucceeded");
 }
 
 pub fn load_portal_progress() -> Option<crate::player_progress::PlayerProgress> {
@@ -271,7 +271,7 @@ pub fn load_identity(fallback_name: &str) -> PlatformIdentity {
                 let avatar_url = js_string_field(&obj, "avatarUrl");
                 let auth_token = js_string_field(&obj, "token");
                 let provider_static: &'static str = match provider.as_str() {
-                    "wou" | "wou_id" | "world_of_unreal" => "wou",
+                    "sow" => "sow",
                     "crazygames" => "crazygames",
                     "poki" => "poki",
                     "gamecenter" => "gamecenter",
@@ -292,8 +292,8 @@ pub fn load_identity(fallback_name: &str) -> PlatformIdentity {
             }
         }
         if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
-            if let Ok(Some(token)) = storage.get_item("wou_session_token") {
-                if let Ok(Some(user_raw)) = storage.get_item("wou_user_data") {
+            if let Ok(Some(token)) = storage.get_item("sow_session_token") {
+                if let Ok(Some(user_raw)) = storage.get_item("sow_user_data") {
                     if let Ok(user_val) = serde_json::from_str::<serde_json::Value>(&user_raw) {
                         let id = user_val
                             .get("account_id")
@@ -305,7 +305,7 @@ pub fn load_identity(fallback_name: &str) -> PlatformIdentity {
                             .unwrap_or(fallback_name)
                             .to_string();
                         return PlatformIdentity {
-                            provider: "wou",
+                            provider: "sow",
                             display_name: name,
                             external_id: id,
                             avatar_url: None,

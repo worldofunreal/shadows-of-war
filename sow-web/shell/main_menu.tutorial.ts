@@ -706,6 +706,9 @@ interface TutorialRuntime {
                 runtime.resolvedReactions = new Set();
                 makeView();
                 update(runtime.latestHud);
+                if (runtime.bootEpisode === episodeId) {
+                    window.dispatchEvent(new CustomEvent("sow:boot-mark", { detail: "tutorial-ready" }));
+                }
             })
             .catch(function (error) {
                 if (generation === runtime.generation) {

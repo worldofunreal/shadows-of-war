@@ -337,7 +337,7 @@ impl SowApp {
             } else {
                 String::from("local")
             },
-            wou_collectibles_synced: None,
+            identity_collectibles_synced: None,
             pending_display_name,
             display_name_save_request_id: None,
             quick_match_revision: 0,

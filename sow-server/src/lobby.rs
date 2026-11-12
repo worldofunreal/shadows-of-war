@@ -39,7 +39,7 @@ pub struct PlayerConnection {
     pub ranked_rating: Option<f64>,
     pub ranked_search_started_at: Option<tokio::time::Instant>,
     /// Ranked score (`SeasonRating.score`) read at matchmaking join. Sets the
-    /// Anon share of the lobby's ghosts. `None` when unrated or unavailable.
+    /// animal-alias share of the lobby's ghosts. `None` when unrated/unavailable.
     pub league_score: Option<u16>,
 }
 
@@ -93,12 +93,11 @@ pub fn normalize_player_name(input: &str) -> String {
         .take(16)
         .collect();
     if name.is_empty() || !sow_data::name_policy::is_allowed(&name) {
-        let suffix = std::time::SystemTime::now()
+        let millis = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis()
-            % 1000;
-        format!("ANON{suffix:03}")
+            .as_millis();
+        sow_data::animal_alias((millis / 10_000) as usize, (millis % 10_000) as usize)
     } else {
         name
     }
@@ -1344,8 +1343,13 @@ mod name_tests {
             normalize_player_name("0123456789abcdefghi"),
             "0123456789abcdef"
         );
-        assert!(normalize_player_name("\n\t").starts_with("ANON"));
-        assert!(normalize_player_name("Caes\u{200B}ar").starts_with("ANON"));
+        for invalid in ["\n\t", "Caes\u{200B}ar"] {
+            let name = normalize_player_name(invalid);
+            let (animal, suffix) = name.split_at(name.len() - 4);
+            assert!(sow_data::ANIMAL_NAMES.contains(&animal));
+            assert!(suffix.bytes().all(|byte| byte.is_ascii_digit()));
+            assert!(sow_data::name_policy::is_allowed(&name));
+        }
     }
 
     #[test]

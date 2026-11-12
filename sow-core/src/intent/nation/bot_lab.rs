@@ -438,7 +438,7 @@ impl S16Scenario {
         };
         assert_eq!(
             profile_signature(AiTier::Ghost),
-            (0.05, 0.02, 0.02, 0, true),
+            (0.40, 0.30, 0.10, 0, true),
             "S16 SETUP FAIL: Ghost profile changed"
         );
         assert_eq!(
@@ -451,15 +451,12 @@ impl S16Scenario {
             (0.75, 0.50, 0.10, 50, false),
             "S16 SETUP FAIL: Vanilla Tribe profile changed"
         );
-        assert_eq!(super::structures::iq_build_interval_base(AiTier::Ghost), 5);
-        assert_eq!(
-            super::structures::iq_build_interval_base(AiTier::Nation),
-            30
-        );
-        assert_eq!(
-            super::structures::iq_build_interval_base(AiTier::Tribe),
-            100
-        );
+        let window = super::structures::think_window_ticks;
+        assert_eq!(window(AiTier::Tribe, false), (80, 120));
+        assert_eq!(window(AiTier::Nation, false), (40, 80));
+        assert_eq!(window(AiTier::Nation, true), (5, 30));
+        assert_eq!(window(AiTier::Ghost, false), (1, 10));
+        assert_eq!(window(AiTier::Ghost, true), (5, 6));
         assert_eq!(
             self.nation_ids().count(),
             20,
@@ -3057,5 +3054,76 @@ fn s18_world_map_team_spawn_zones() {
         red.1,
         blue.1,
         half
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// S19 — MIXED FFA TIER BALANCE: 15 ghosts, 30 nations, 180 tribes on open land,
+// ghosts and nations with identical starts. Measurement, not a contract:
+// prints per-tier survivors, land and troop fill per seed so tier tuning can
+// be compared before/after. Run with
+// `cargo test -p sow-core --lib s19_ -- --ignored --nocapture`.
+// ──────────────────────────────────────────────────────────────────────────
+#[test]
+#[ignore = "measurement: run explicitly"]
+fn s19_mixed_ffa_tier_balance() {
+    const STEP_SECONDS: f64 = 30.0;
+    const STEPS: u32 = 20;
+    let tier_of = |p: &Player| match ai_tier(p.player_type, p.is_ai_controlled) {
+        Some(AiTier::Ghost) => 0,
+        Some(AiTier::Nation) => 1,
+        _ => 2,
+    };
+    let mut final_alive = [0u32; 3];
+    for seed in [7u64, 11, 23, 42, 99] {
+        let mut specs = Vec::new();
+        for id in 1..=225u16 {
+            let (i, j) = (u32::from(id - 1) % 15, u32::from(id - 1) / 15);
+            let (x, y) = (6 + 13 * i, 6 + 13 * j);
+            specs.push(match id % 15 {
+                0 => LabPlayer {
+                    gold: 50_000.0,
+                    troops: 4_000.0,
+                    max_troops: 6_000.0,
+                    ..LabPlayer::ghost(id, x, y)
+                },
+                5 | 10 => LabPlayer::nation(id, x, y),
+                _ => LabPlayer::tribe(id, x, y),
+            });
+        }
+        let mut engine = build_lab(200, 200, "FFA", &specs);
+        engine.state.seed = seed;
+        let window = (STEP_SECONDS / engine.state.config.per_tick(1.0)).ceil() as u64;
+        let mut stats = [(0u32, 0u32, 0.0f64); 3];
+        for step in 1..=STEPS {
+            run_window(&mut engine, window);
+            stats = [(0, 0, 0.0); 3];
+            for p in engine.state.players.iter().filter(|p| p.alive) {
+                let s = &mut stats[tier_of(p)];
+                s.0 += 1;
+                s.1 += p.tile_count;
+                s.2 += if p.max_troops > 0.0 { p.troops / p.max_troops } else { 0.0 };
+            }
+            let fmt = |(alive, tiles, fill): (u32, u32, f64)| {
+                format!(
+                    "{alive:>2} alive {tiles:>5} tiles {:>3.0}% fill",
+                    100.0 * fill / f64::from(alive.max(1))
+                )
+            };
+            eprintln!(
+                "S19 seed {seed:>2} {:>4}s | ghost {} | nation {} | tribe {}",
+                step * STEP_SECONDS as u32,
+                fmt(stats[0]),
+                fmt(stats[1]),
+                fmt(stats[2])
+            );
+        }
+        for tier in 0..3 {
+            final_alive[tier] += stats[tier].0;
+        }
+    }
+    eprintln!(
+        "S19 TOTAL survivors over 5 seeds: ghost {} · nation {} · tribe {}",
+        final_alive[0], final_alive[1], final_alive[2]
     );
 }

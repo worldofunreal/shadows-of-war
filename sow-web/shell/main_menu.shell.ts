@@ -116,9 +116,8 @@ import {
     setMissionClaimHandler,
     missionIconSvg,
     videoPlayIconSvg,
-    type MenuMission,
 } from "./main_menu.missions.ts";
-import type { MenuRewardReceipt, MenuState, RankedResult } from "./main_menu.state.ts";
+import type { MenuMission, MenuRewardReceipt, MenuState, RankedResult } from "./main_menu.state.ts";
 
 // Shared menu chrome, overlays, lifecycle, events, and state bridge.
 
@@ -857,9 +856,8 @@ function menuMusicSetCinematicActive(active: boolean) {
 
 window.SOW_menu_music_cinematic = menuMusicSetCinematicActive;
 
-// Music bytes wait for their own window: the boot template fires
-// sow:wasm-bytes-ready once the engine download completes, so the theme
-// buffers against CPU/identity work instead of the WASM wire.
+// Music is optional during the initial loader; start its request when that
+// loader closes so it cannot compete with the tutorial's map and scripts.
 function menuMusicBeginLoading() {
     if (menuMusic.fetchRequested || !menuMusic.decks) return;
     if (menuMusicMuted() || menuMusicVolume() <= 0) return;
@@ -905,7 +903,6 @@ function menuMusicUnlockFromClick(event: MouseEvent) {
 
 menuMusicCreatePlayer();
 window.addEventListener("sow:loader-ready", menuMusicStartAtLoaderEnd, { once: true });
-window.addEventListener("sow:wasm-bytes-ready", menuMusicBeginLoading, { once: true });
 document.addEventListener("click", menuMusicUnlockFromClick, true);
 
 // Rewards hold the displayed level until its own presentation finishes. Keep a full
@@ -1315,14 +1312,21 @@ export function activeScreenPanel() {
 function syncScreenPanel(screen: string, screenChanged: boolean) {
     if (!menuUi.state) return;
     const stage = root.querySelector<HTMLElement>("[data-screen-stage]");
-    const next = panelFromMarkup(renderScreenPanel(screen));
-    if (!stage || !next) return;
+    if (!stage) return;
     if (screenChanged) {
+        const next = panelFromMarkup(renderScreenPanel(screen));
+        if (!next) return;
         const settings = menuUi.state.settings;
         sowScreenMotion.show(stage, next, !!settings.reduced_motion);
         return;
     }
     const current = activeScreenPanel();
+    if (screen === "heroes" && current && current.dataset.screenPanel === "heroes") {
+        updateHeroesPreview();
+        return;
+    }
+    const next = panelFromMarkup(renderScreenPanel(screen));
+    if (!next) return;
     if (current) current.replaceWith(next);
     else stage.appendChild(next);
     next.classList.add("is-active");
@@ -1744,11 +1748,22 @@ function createRewardStage(stages: RewardStage[], skip: () => void): RewardItem[
     return items;
 }
 
-function revealRewardAmounts(items: RewardItem[], token: number): Promise<boolean> {
+function revealRewardAmounts(
+    items: RewardItem[],
+    token: number,
+    shouldStop: () => boolean = function () {
+        return false;
+    },
+): Promise<boolean> {
     const start = performance.now();
     return new Promise<boolean>(function (resolve) {
         function frame(now: number) {
-            if (token !== rewardAnimationToken || root.hidden || document.visibilityState !== "visible") {
+            if (
+                token !== rewardAnimationToken ||
+                root.hidden ||
+                document.visibilityState !== "visible" ||
+                shouldStop()
+            ) {
                 resolve(false);
                 return;
             }
@@ -1998,9 +2013,19 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     ].filter(function (stage) {
         return stage.kind === "leader" || stage.amount > 0;
     });
+    let skipRequested = false;
+    let presentationPhase: "revealing" | "flying" | "progressing" | "waiting-leader" | "exiting" | null = null;
+    let currentStageIndex = 0;
+    let leaderTimer: number | null = null;
+    let exitTimer: number | null = null;
 
     function finish(shown: boolean) {
         if (token !== rewardAnimationToken || !menuUi.state || menuUi.state.account_id !== accountId) return;
+        if (leaderTimer !== null) window.clearTimeout(leaderTimer);
+        if (exitTimer !== null) window.clearTimeout(exitTimer);
+        leaderTimer = null;
+        exitTimer = null;
+        presentationPhase = null;
         rewardAnimationToken += 1;
         rewardAnimationRunning = false;
         removeRewardStage();
@@ -2022,10 +2047,88 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             finish(shown);
             return;
         }
+        presentationPhase = "exiting";
         activeRewardStage.classList.add("is-exiting");
-        window.setTimeout(function () {
+        exitTimer = window.setTimeout(function () {
+            exitTimer = null;
             finish(true);
         }, 240);
+    }
+
+    function skipPresentation() {
+        if (skipRequested || token !== rewardAnimationToken) return;
+        skipRequested = true;
+        removeRewardStage();
+        if (presentationPhase === "revealing") {
+            presentationPhase = null;
+            next(0);
+        } else if (presentationPhase === "waiting-leader") {
+            if (leaderTimer !== null) window.clearTimeout(leaderTimer);
+            leaderTimer = null;
+            presentationPhase = null;
+            next(currentStageIndex + 1);
+        } else if (presentationPhase === "exiting") {
+            if (exitTimer !== null) window.clearTimeout(exitTimer);
+            exitTimer = null;
+            presentationPhase = null;
+            finish(true);
+        }
+    }
+
+    function animateStage(index: number, stage: Extract<RewardStage, { selector: string }>) {
+        if (skipRequested && stage.kind === "laurels") {
+            const current = displayedProgression || progressionFromState();
+            writeProgression(Object.assign({}, current, { laurels: target.laurels }));
+            presentationPhase = null;
+            next(index + 1);
+            return;
+        }
+        const current = displayedProgression || progressionFromState();
+        const nextValues = Object.assign({}, current);
+        const oldLevel = nextValues.level;
+        if (stage.kind === "level") {
+            nextValues.level = stage.level;
+        } else {
+            nextValues[stage.kind] = target[stage.kind];
+            nextValues.level = levelStages.length ? oldLevel : Math.floor(nextValues.xp / 100) + 1;
+            // XP fills only the current level; each level card then refills the bar it opens.
+            if (stage.kind === "xp" && levelStages.length)
+                nextValues.xp = Math.min(target.xp, (Math.min(...Array.from(gainedLevels)) - 1) * 100);
+        }
+        presentationPhase = "progressing";
+        if (stage.kind === "level") {
+            // Flash, reset the bar under the flash, then fill the new level up to the next one or the remainder.
+            const combo = levelStages.indexOf(stage);
+            writeProgression(nextValues);
+            pulseRewardCounter(stage.selector, true);
+            if (!skipRequested) playRewardImpact(stage.selector, "level", 1 + 0.3 * combo, stage.level);
+            const refill = Object.assign({}, nextValues, {
+                xp: Math.max(nextValues.xp, Math.min(target.xp, stage.level * 100)),
+            });
+            window.setTimeout(function () {
+                if (token !== rewardAnimationToken) return;
+                animateProgressionTo(
+                    refill,
+                    320 + Math.min(100, refill.xp - nextValues.xp) * 5,
+                    token,
+                    stage.level,
+                ).then(function (shown) {
+                    if (shown) next(index + 1);
+                    else finish(false);
+                });
+            }, 340);
+            return;
+        }
+        const heldLevel = levelStages.length ? oldLevel : null;
+        const duration = stage.kind === "xp" ? 360 + Math.min(100, nextValues.xp - current.xp) * 4.4 : 380;
+        animateProgressionTo(nextValues, duration, token, heldLevel).then(function (shown) {
+            if (!shown) {
+                finish(false);
+                return;
+            }
+            pulseRewardCounter(stage.selector, false);
+            next(index + 1);
+        });
     }
 
     function next(index: number) {
@@ -2042,70 +2145,49 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
                 latest.crowns !== current.crowns ||
                 latest.laurels !== current.laurels ||
                 latest.gems !== current.gems;
-            if (changed) animateProgressionTo(latest, 900, token).then(complete);
+            if (changed) {
+                presentationPhase = "progressing";
+                animateProgressionTo(latest, 900, token).then(complete);
+            }
             else complete(true);
             return;
         }
+        currentStageIndex = index;
         const item = items[index];
         const stage = item.stage;
         if (stage.kind === "leader") {
-            window.setTimeout(function () {
+            if (skipRequested) {
+                next(index + 1);
+                return;
+            }
+            presentationPhase = "waiting-leader";
+            leaderTimer = window.setTimeout(function () {
+                leaderTimer = null;
+                presentationPhase = null;
                 next(index + 1);
             }, 900);
             return;
         }
-        const current = displayedProgression || progressionFromState();
-        const nextValues = Object.assign({}, current);
-        const oldLevel = nextValues.level;
-        if (stage.kind === "level") {
-            nextValues.level = stage.level;
-        } else {
-            nextValues[stage.kind] = target[stage.kind];
-            nextValues.level = levelStages.length ? oldLevel : Math.floor(nextValues.xp / 100) + 1;
-            // XP fills only the current level; each level card then refills the bar it opens.
-            if (stage.kind === "xp" && levelStages.length)
-                nextValues.xp = Math.min(target.xp, (Math.min(...Array.from(gainedLevels)) - 1) * 100);
+        if (skipRequested) {
+            animateStage(index, stage);
+            return;
         }
+        presentationPhase = "flying";
         flyRewardCard({ card: item.card, stage: stage }, token).then(function (arrived) {
             if (!arrived) {
+                if (skipRequested) {
+                    animateStage(index, stage);
+                    return;
+                }
                 finish(false);
                 return;
             }
-            if (stage.kind === "level") {
-                // Flash, reset the bar under the flash, then fill the new level up to the next one or the remainder.
-                const combo = levelStages.indexOf(stage);
-                writeProgression(nextValues);
-                pulseRewardCounter(stage.selector, true);
-                playRewardImpact(stage.selector, "level", 1 + 0.3 * combo, stage.level);
-                const refill = Object.assign({}, nextValues, {
-                    xp: Math.max(nextValues.xp, Math.min(target.xp, stage.level * 100)),
-                });
-                window.setTimeout(function () {
-                    if (token !== rewardAnimationToken) return;
-                    animateProgressionTo(
-                        refill,
-                        320 + Math.min(100, refill.xp - nextValues.xp) * 5,
-                        token,
-                        stage.level,
-                    ).then(function (shown) {
-                        if (shown) next(index + 1);
-                        else finish(false);
-                    });
-                }, 340);
+            if (skipRequested) {
+                animateStage(index, stage);
                 return;
             }
-            playRewardImpact(stage.selector, stage.kind, 1);
-            const heldLevel = levelStages.length ? oldLevel : null;
-            const duration =
-                stage.kind === "xp" ? 360 + Math.min(100, nextValues.xp - current.xp) * 4.4 : 380;
-            animateProgressionTo(nextValues, duration, token, heldLevel).then(function (shown) {
-                if (!shown) {
-                    finish(false);
-                    return;
-                }
-                pulseRewardCounter(stage.selector, false);
-                next(index + 1);
-            });
+            if (stage.kind !== "level") playRewardImpact(stage.selector, stage.kind, 1);
+            animateStage(index, stage);
         });
     }
     if (reducedRewardMotion()) {
@@ -2131,9 +2213,14 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
         return;
     }
     const items = createRewardStage(stages, function () {
-        finish(true);
+        skipPresentation();
     });
-    revealRewardAmounts(items, token).then(function (shown) {
+    presentationPhase = "revealing";
+    revealRewardAmounts(items, token, function () {
+        return skipRequested;
+    }).then(function (shown) {
+        if (skipRequested) return;
+        presentationPhase = null;
         if (shown) next(0);
         else finish(false);
     });
@@ -3063,6 +3150,8 @@ root.addEventListener("click", function (event) {
             menuUi.portalUnlockConfirm = key;
         } else {
             menuUi.portalUnlockConfirm = null;
+            menuUi.tempSelectedLeader = leaderId;
+            menuUi.tempSelectedRandom = false;
             send("unlock_leader", { leader_id: leaderId, currency: currency });
         }
         render();
@@ -3095,11 +3184,16 @@ root.addEventListener("click", function (event) {
         if (!menuUi.purchaseModal || menuUi.purchaseModal.submitted) return;
         menuUi.purchaseModal.submitted = true;
         if (menuUi.purchaseModal.type === "leader") {
-            if (!(menuUi.state && menuUi.state.store_busy))
+            if (!(menuUi.state && menuUi.state.store_busy)) {
+                if (menuUi.purchaseModal.leaderId) {
+                    menuUi.tempSelectedLeader = menuUi.purchaseModal.leaderId;
+                    menuUi.tempSelectedRandom = false;
+                }
                 send("unlock_leader", {
                     leader_id: menuUi.purchaseModal.leaderId,
                     currency: menuUi.purchaseModal.currency,
                 });
+            }
         } else if (menuUi.purchaseModal.type === "skin") {
             if (!(menuUi.state && menuUi.state.store_busy))
                 send("unlock_skin", { skin_id: menuUi.purchaseModal.skinId });
@@ -3197,7 +3291,7 @@ root.addEventListener("click", function (event) {
     }
     if (command === "switch_missions_tab") {
         const tab = target.dataset.missionsTab;
-        if (tab === "onboarding" || tab === "daily") {
+        if (tab === "onboarding" || tab === "daily" || tab === "weekly") {
             menuUi.activeMissionsTab = tab;
             render();
         }
@@ -3246,8 +3340,8 @@ root.addEventListener("click", function (event) {
         requestAuthOtp();
         return;
     }
-    if (command === "wou_provider") {
-        if (typeof window.SOW_startWouOAuth === "function") window.SOW_startWouOAuth(target.dataset.provider);
+    if (command === "identity_provider") {
+        if (typeof window.SOW_startIdentityOAuth === "function") window.SOW_startIdentityOAuth(target.dataset.provider);
         return;
     }
     if (command === "sign_in") {
@@ -3275,7 +3369,7 @@ root.addEventListener("click", function (event) {
     if (command === "confirm_sign_out") {
         menuUi.signOutConfirmOpen = false;
         if (isAndroidTwa()) send("sign_out");
-        else if (typeof window.SOW_signOutWou === "function") window.SOW_signOutWou();
+        else if (typeof window.SOW_signOutIdentity === "function") window.SOW_signOutIdentity();
         return;
     }
     /* POKI_SHARED_AUTH_ACTIONS_END */
@@ -3420,7 +3514,7 @@ export function runMissionRewardCelebration(options: MissionCelebrationOptions) 
     }
     render();
 
-    const stages: RewardStage[] = [];
+    const stages: Extract<RewardStage, {selector:string}>[] = [];
     if (options.crowns > 0) {
         stages.push({
             kind: "crowns",
@@ -3481,6 +3575,8 @@ export function runMissionRewardCelebration(options: MissionCelebrationOptions) 
         const categoryLabel =
             options.category === "onboarding"
                 ? SOW_t("missions.tab_onboarding")
+                : options.category === "weekly"
+                ? SOW_t("missions.tab_weekly")
                 : SOW_t("missions.tab_daily");
         banner.innerHTML =
             "<div class='sow-menu__mission-banner-aura' aria-hidden='true'></div>" +
@@ -3542,7 +3638,7 @@ export function runMissionRewardCelebration(options: MissionCelebrationOptions) 
             return;
         }
         const item = items[index];
-        const stage = item.stage;
+        const stage = stages[index];
         playCelebrationSound("fly");
         flyRewardCard({ card: item.card, stage: stage }, token).then(function (arrived) {
             if (!arrived) {
@@ -3622,10 +3718,10 @@ document.addEventListener("pointercancel", function (event) {
 });
 
 /* POKI_SHARED_AUTH_EVENTS_BEGIN */
-window.addEventListener("wou:auth-state-change", function () {
+window.addEventListener("identity:auth-state-change", function () {
     if (!menuUi.state || root.hidden) return;
     const auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
-    const reauthenticationRequired = window.SOW_WOU_SESSION_STATUS === "reauthentication_required";
+    const reauthenticationRequired = window.SOW_IDENTITY_SESSION_STATUS === "reauthentication_required";
     if (auth.linked && !reauthenticationRequired && menuUi.authModalOpen) {
         menuUi.authModalOpen = false;
         resetAuthFlow();
@@ -3642,7 +3738,7 @@ window.addEventListener("wou:auth-state-change", function () {
     syncProfileDom();
 });
 
-window.addEventListener("wou:auth-error", function (event) {
+window.addEventListener("identity:auth-error", function (event) {
     menuUi.authBusy = false;
     menuUi.authModalOpen = true;
     const detail = event.detail as { message?: unknown } | null;

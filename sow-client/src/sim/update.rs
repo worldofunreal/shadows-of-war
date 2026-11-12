@@ -406,21 +406,29 @@ impl SowApp {
                         player.leader,
                         &self.sim.config,
                     );
+                let council_multiplier =
+                    sow_core::execution::income_rates::tafaifa_council_multiplier(
+                        player.leader,
+                        sow_core::execution::hero_effects::living_allies(&e.state, my_pid),
+                    );
                 self.ui.app.hud_state.troop_rate =
                     (sow_core::execution::income_rates::troop_income_per_second(
                         player.tile_count,
                         agg,
                         player.leader,
                         &self.sim.config,
-                    ) + sow_core::execution::income_rates::alliance_troops_per_second(
-                        player.alliances.len(),
-                        player.leader,
-                        &self.sim.config,
-                    ) + sow_core::execution::income_rates::trade_troops_per_second(
-                        trade_ships,
-                        player.leader,
-                        &self.sim.config,
-                    ) + standards_troops)
+                    ) * council_multiplier
+                        + sow_core::execution::income_rates::alliance_troops_per_second(
+                            player.alliances.len(),
+                            player.leader,
+                            &self.sim.config,
+                        )
+                        + sow_core::execution::income_rates::trade_troops_per_second(
+                            trade_ships,
+                            player.leader,
+                            &self.sim.config,
+                        )
+                        + standards_troops)
                         * self.sim.config.global_speed_multiplier;
                 self.ui.app.hud_state.hero_income_rate =
                     e.hero_gold_per_second(my_pid) * self.sim.config.global_speed_multiplier;
@@ -430,15 +438,18 @@ impl SowApp {
                         agg,
                         player.leader,
                         &self.sim.config,
-                    ) + sow_core::execution::income_rates::alliance_gold_per_second(
-                        player.alliances.len(),
-                        player.leader,
-                        &self.sim.config,
-                    ) + sow_core::execution::income_rates::trade_income_per_second(
-                        trade_ships,
-                        player.leader,
-                        &self.sim.config,
-                    ) + e.hero_gold_per_second(my_pid))
+                    ) * council_multiplier
+                        + sow_core::execution::income_rates::alliance_gold_per_second(
+                            player.alliances.len(),
+                            player.leader,
+                            &self.sim.config,
+                        )
+                        + sow_core::execution::income_rates::trade_income_per_second(
+                            trade_ships,
+                            player.leader,
+                            &self.sim.config,
+                        )
+                        + e.hero_gold_per_second(my_pid))
                         * self.sim.config.global_speed_multiplier;
             }
         }

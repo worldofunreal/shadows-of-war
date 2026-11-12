@@ -1,0 +1,60 @@
+[articles.en]
+title = "Fredegund"
+lang = "en"
+url = "https://ancientlibrary.net/anonymous-liber-historiae-francorum/2/"
+intro = [
+  "Fredegund (d. 597) was queen of Neustria and a political and military leader during the contested succession of her young son, Chlothar II. After Chilperic I was killed in 584, the anonymous Liber Historiae Francorum says Fredegund remained in the kingdom with the child king and Landeric, the palace official chosen by Frankish leaders. Her authority rested on more than her place in the royal family: she acted to secure the succession, gathered commanders and troops, and led the defense of Neustria.",
+]
+sections = [
+  { title = "Regency and the defense of Soissons", paragraphs = [
+      "The Liber Historiae Francorum describes a coalition of Austrasian and Burgundian forces entering the Soissons district. Fredegund gathered Frankish commanders and rewarded her soldiers with gifts. When she learned that the opposing army was larger, the chronicle credits her with proposing a night march: men carried branches to disguise the movement of the force, while bells on the horses made sentries think they heard their own grazing animals. At daybreak, the Franks attacked the sleeping camp. Fredegund and her army then advanced toward Reims before returning to Soissons with captured goods. The episode presents her making a military decision and joining the campaign, not merely appearing beside a king.",
+      "This is a later account, not a contemporary battle report. The Liber Historiae Francorum was completed around 727, more than a century after the events it describes; it calls the place Trucia in the Soissons district, and Droizy is the commonly used modern identification. Its vivid details cannot all be independently confirmed. Modern accounts also warn that medieval chronicles often framed powerful women through hostile moral stories. E. T. Dailey’s study of Chlothar’s disputed succession examines Fredegund’s political work to establish her son’s legitimacy and highlights female agency within Merovingian politics.",
+    ] },
+  { title = "A gameplay interpretation", paragraphs = [
+      "Soissons Relief draws on this account of Fredegund organizing the defense of Soissons. When her side has a city, foreign attackers need 25% more force to capture its city tiles. The number is a game rule, not a historical measurement, and the ability does not claim that the chronicle describes a lasting wall or a quantified defensive advantage.",
+    ] },
+]
+shortArticle = false
+sources = [
+  { title = "Anonymous, Liber Historiae Francorum, chapters 35–36; text based on the Monumenta Germaniae Historica edition", url = "https://ancientlibrary.net/anonymous-liber-historiae-francorum/2/" },
+  { title = "Shelley Puhak, The Medieval Queens Whose Daring, Murderous Reigns Were Quickly Forgotten, Smithsonian Magazine", url = "https://www.smithsonianmag.com/history/medieval-queens-daring-reigns-quickly-forgotten-180979246/" },
+  { title = "E. T. Dailey, Gregory of Tours and the Paternity of Chlothar II: Strategies of Legitimation in the Merovingian Kingdoms, Journal of Late Antiquity 7.1 (2014)", url = "https://doi.org/10.1353/jla.2014.0014" },
+]
+
+[articles.es]
+title = "Fredegunda"
+lang = "es"
+url = "https://ancientlibrary.net/anonymous-liber-historiae-francorum/2/"
+intro = [
+  "Fredegunda (m. 597) fue reina de Neustria y dirigente política y militar durante la disputada sucesión de su hijo pequeño, Clotario II. Tras el asesinato de Chilperico I en 584, el anónimo Liber Historiae Francorum cuenta que Fredegunda permaneció en el reino junto al rey niño y Landerico, el funcionario palatino elegido por los francos. Su autoridad no se limitó a su lugar en la familia real: intervino para asegurar la sucesión, reunió a los mandos y las tropas, y encabezó la defensa de Neustria.",
+]
+sections = [
+  { title = "Regencia y defensa de Soissons", paragraphs = [
+      "El Liber Historiae Francorum describe la entrada de una coalición de fuerzas de Austrasia y Borgoña en el territorio de Soissons. Fredegunda reunió a los mandos francos y recompensó a sus soldados con regalos. Cuando supo que el ejército contrario era más numeroso, la crónica le atribuye la propuesta de avanzar de noche: unos hombres llevaban ramas para disimular el movimiento de la fuerza, mientras que las campanillas atadas a los caballos hicieron que los centinelas creyeran oír a sus propios animales pastando. Al amanecer, los francos atacaron el campamento dormido. Después, Fredegunda y su ejército avanzaron hacia Reims y regresaron a Soissons con botín. El episodio la presenta tomando una decisión militar y participando en la campaña, no solo junto a un rey.",
+      "Este relato es posterior, no un informe contemporáneo de la batalla. El Liber Historiae Francorum se terminó hacia 727, más de un siglo después de los hechos que narra; llama Trucia al lugar en el territorio de Soissons, y Droizy es la identificación moderna más habitual. No todos sus detalles vívidos pueden confirmarse de manera independiente. Estudios modernos también advierten que las crónicas medievales solían enmarcar el poder de las mujeres mediante relatos morales hostiles. El estudio de E. T. Dailey sobre la disputada sucesión de Clotario analiza el trabajo político de Fredegunda para legitimar a su hijo y destaca la agencia femenina en la política merovingia.",
+    ] },
+  { title = "Interpretación para el juego", paragraphs = [
+      "Socorro de Soissons se inspira en este relato de Fredegunda organizando la defensa de Soissons. Cuando su bando tiene una ciudad, los atacantes de otros reinos necesitan 25 % más de fuerza para conquistar sus casillas urbanas. La cifra es una regla del juego, no una medida histórica, y la habilidad no afirma que la crónica describa una muralla permanente ni una ventaja defensiva cuantificada.",
+    ] },
+]
+shortArticle = false
+sources = [
+  { title = "Anónimo, Liber Historiae Francorum, capítulos 35–36; texto basado en la edición de Monumenta Germaniae Historica", url = "https://ancientlibrary.net/anonymous-liber-historiae-francorum/2/" },
+  { title = "Shelley Puhak, The Medieval Queens Whose Daring, Murderous Reigns Were Quickly Forgotten, Smithsonian Magazine", url = "https://www.smithsonianmag.com/history/medieval-queens-daring-reigns-quickly-forgotten-180979246/" },
+  { title = "E. T. Dailey, Gregory of Tours and the Paternity of Chlothar II: Strategies of Legitimation in the Merovingian Kingdoms, Journal of Late Antiquity 7.1 (2014)", url = "https://doi.org/10.1353/jla.2014.0014" },
+]
+
+[fallbacks]
+ar = "en"
+de = "en"
+fil = "en"
+fr = "en"
+id = "en"
+it = "en"
+ja = "en"
+ko = "en"
+pt-BR = "en"
+ru = "en"
+tr = "en"
+vi = "en"
+zh-CN = "en"

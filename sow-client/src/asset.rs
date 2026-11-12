@@ -5,12 +5,15 @@ use crate::app::SowApp;
 impl SowApp {
     pub(crate) fn start_map_download(&mut self, map_name: String) {
         let map_key = crate::ui::asset_loader::AssetLoader::map_key(&map_name);
+        let already_in_flight = self.ui.app.asset_loader.maps_in_flight.contains(&map_key);
         self.ui.app.main_menu_state.downloading_map_name = Some(map_key.clone());
         self.ui.app.main_menu_state.is_downloading_map = true;
-        self.ui.app.main_menu_state.map_download_progress = 0;
-        self.ui.app.main_menu_state.map_download_error = None;
-        self.ui.app.main_menu_state.cached_map = None;
-        self.ui.app.main_menu_state.cached_map_key = None;
+        if !already_in_flight {
+            self.ui.app.main_menu_state.map_download_progress = 0;
+            self.ui.app.main_menu_state.map_download_error = None;
+            self.ui.app.main_menu_state.cached_map = None;
+            self.ui.app.main_menu_state.cached_map_key = None;
+        }
 
         if self.ui.app.main_menu_state.is_waiting
             && let (Some(lobby_id), Some(player_id)) = (self.sim.my_lobby_id, self.sim.my_player_id)
@@ -25,12 +28,13 @@ impl SowApp {
             client.send(message);
         }
 
-        if !self
-            .ui
-            .app
-            .asset_loader
-            .maps_in_flight
-            .insert(map_key.clone())
+        if already_in_flight
+            || !self
+                .ui
+                .app
+                .asset_loader
+                .maps_in_flight
+                .insert(map_key.clone())
         {
             return;
         }
@@ -381,9 +385,9 @@ impl SowApp {
                         account_id.chars().count(),
                         display_name.chars().count()
                     );
-                    self.identity_profile_verified = provider == "wou";
+                    self.identity_profile_verified = provider == "sow";
                     self.apply_cloud_profile(progress, account_id, display_name, provider);
-                    crate::store_portals::wou_profile_load_succeeded();
+                    crate::store_portals::identity_profile_load_succeeded();
                     log::info!(
                         "Successfully synced profile from cloud database: level {} ({} XP)",
                         self.progress.level,
@@ -489,16 +493,16 @@ impl SowApp {
                         continue;
                     }
                     self.profile_request_in_flight = false;
-                    let wou_unauthorized = provider == "wou" && status == Some(401);
-                    if provider == "wou" {
+                    let identity_unauthorized = provider == "sow" && status == Some(401);
+                    if provider == "sow" {
                         self.identity_profile_verified = false;
                     }
-                    if wou_unauthorized {
-                        crate::store_portals::refresh_wou_session();
+                    if identity_unauthorized {
+                        crate::store_portals::refresh_identity_session();
                     }
                     if self.profile_refresh_pending
                         && self.display_name_save_request_id.is_none()
-                        && !wou_unauthorized
+                        && !identity_unauthorized
                     {
                         self.profile_refresh_pending = false;
                         self.fetch_cloud_progress();
@@ -526,7 +530,7 @@ impl SowApp {
                     {
                         self.boot_db_settled = true;
                     }
-                    if !wou_unauthorized
+                    if !identity_unauthorized
                         && status.map_or(true, |code| code == 200 || code == 429 || code >= 500)
                     {
                         self.schedule_identity_profile_retry();
@@ -702,7 +706,6 @@ impl SowApp {
                     }
                     self.progress = progress;
                     self.save_local_progress();
-                    self.sync_wou_collectibles();
                     self.ui.app.main_menu_state.store_busy = false;
                     self.ui.app.main_menu_state.error_message = None;
                     self.profile_action_retry_at = None;
@@ -734,6 +737,18 @@ impl SowApp {
                         self.ui.app.main_menu_state.error_message =
                             Some(crate::ui::UiText::new("store.action_unavailable"));
                         log::error!("[profile] leader selection rejected status=400; not retrying");
+                        continue;
+                    }
+                    if operation == "claim mission" && status == Some(409) {
+                        // The server already recorded this mission as claimed.
+                        // Sync authoritative profile from cloud immediately to clear "Reward Ready!" and update state.
+                        self.ui.app.main_menu_state.store_busy = false;
+                        self.ui.app.main_menu_state.error_message = None;
+                        self.profile_action_retry_at = None;
+                        log::info!(
+                            "[missions] claim mission returned 409 conflict (already claimed); syncing cloud progress"
+                        );
+                        self.fetch_cloud_progress();
                         continue;
                     }
                     if operation == "leader selection"

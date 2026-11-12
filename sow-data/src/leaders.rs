@@ -138,15 +138,9 @@ impl Leader {
         self.hero().price_crowns
     }
 
-    /// Gems to unlock: half the crown price, rounded down, so one gem is worth two crowns.
-    /// The roster test keeps gem prices distinct.
+    /// Gems to unlock: a quarter of the crown price, rounded down (one gem = four crowns).
     pub fn price_gems(self) -> u64 {
-        self.price_crowns() / 2
-    }
-
-    /// Canonical NFTROPOLY/WOU-ID card token; heroes not registered there have none.
-    pub fn card_token_id(self) -> Option<&'static str> {
-        self.hero().card.as_deref()
+        self.price_crowns() / 4
     }
 
     pub fn ability(self) -> Ability {
@@ -360,7 +354,6 @@ mod tests {
     fn hero_prices_follow_their_rarity_band() {
         use crate::geo_entities::Rarity;
         let mut crowns = std::collections::HashSet::new();
-        let mut gems = std::collections::HashSet::new();
         for leader in Leader::all().filter(|leader| !leader.always_free()) {
             let band = match leader.rarity() {
                 Rarity::Common => 425..=564,
@@ -370,7 +363,6 @@ mod tests {
             };
             assert!(band.contains(&leader.price_crowns()), "{} is outside its band", leader.id());
             assert!(crowns.insert(leader.price_crowns()), "duplicate crown price for {}", leader.id());
-            assert!(gems.insert(leader.price_gems()), "duplicate gem price for {}", leader.id());
         }
         assert!(Leader::all().filter(|leader| leader.always_free()).all(|leader| leader.price_crowns() == 0));
         // The caps govern purchasable heroes; a free hero's rarity only sets its display.
