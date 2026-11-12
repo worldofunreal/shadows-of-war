@@ -136,7 +136,7 @@ pub fn ranked_game_config(
         map_name: map.key.clone(),
         map_width: map.width,
         map_height: map.height,
-        ..GameConfig::default()
+        ..server_rules()
     };
     normalize_map_roster(&mut config, Some(map));
     config.clamp_bot_counts();
@@ -224,6 +224,40 @@ pub fn spawn_ranked_lobby(
 
 /// Only the settings exposed by the custom-lobby form cross this boundary.
 /// Combat, rewards, the simulation clock and campaign rules remain server-owned.
+/// Owner-edited rules file, inside the server jail. `./sow config` edits it over SSH.
+const DEFAULT_CONFIG_PATH: &str = "/usr/local/etc/sow/config.json";
+
+/// Rules for a new lobby: `GameConfig` defaults with the server config file on
+/// top. Read at every lobby creation, so an edit applies to the next match
+/// without a restart; running matches keep the rules they started with. A
+/// missing file means defaults; a bad file keeps the last good rules.
+fn server_rules() -> GameConfig {
+    static LAST_GOOD: std::sync::Mutex<Option<GameConfig>> = std::sync::Mutex::new(None);
+    let path = std::env::var("SOW_CONFIG_PATH").unwrap_or_else(|_| DEFAULT_CONFIG_PATH.into());
+    let mut last_good = LAST_GOOD.lock().unwrap_or_else(|poison| poison.into_inner());
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            *last_good = None;
+            return GameConfig::default();
+        }
+        Err(error) => {
+            log::error!("[config] {path}: {error}; keeping the last good rules");
+            return last_good.clone().unwrap_or_default();
+        }
+    };
+    match GameConfig::with_overrides(&text) {
+        Ok(config) => {
+            *last_good = Some(config.clone());
+            config
+        }
+        Err(error) => {
+            log::error!("[config] {path}: {error}; keeping the last good rules");
+            last_good.clone().unwrap_or_default()
+        }
+    }
+}
+
 fn custom_game_config(host: GameConfig) -> GameConfig {
     let mut config = GameConfig {
         map_name: host.map_name,
@@ -236,7 +270,7 @@ fn custom_game_config(host: GameConfig) -> GameConfig {
         nation_count: host.nation_count,
         bot_difficulty: host.bot_difficulty,
         random_spawn: host.random_spawn,
-        ..GameConfig::default()
+        ..server_rules()
     };
     config.clamp_bot_counts();
     config
@@ -264,7 +298,7 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
         (c, entry)
     } else {
         // Matchmaking: draw the next map from the mode's weighted playlist.
-        let mut c = GameConfig::default();
+        let mut c = server_rules();
         let pool = crate::map_catalog::entries();
         let entry = crate::map_playlist::next_map_for_mode(&game_mode, pool)
             .and_then(|key| crate::map_catalog::lookup(&key));

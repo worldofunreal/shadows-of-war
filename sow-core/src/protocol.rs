@@ -12,7 +12,8 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 /// 7: ships are built toward a target tile instead of a named port.
 pub const GAMEPLAY_FORMAT_VERSION: u64 = 7;
 // 10: website authentication uses game-owned opaque sessions.
-pub const LIVE_PROTOCOL_VERSION: u64 = 10;
+// 11: the start message's GameConfig carries bot tuning (`ai`).
+pub const LIVE_PROTOCOL_VERSION: u64 = 11;
 
 pub fn gameplay_build_identity(public_version: &str) -> String {
     format!(

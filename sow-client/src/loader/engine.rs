@@ -7,6 +7,7 @@ use sow_core::protocol::SimCommand;
 fn enter_game_ready_to_release(
     snapshot_ready: bool,
     land_cache_ready: bool,
+    avatars_ready: bool,
     offline: bool,
     connected: bool,
     has_client: bool,
@@ -15,6 +16,7 @@ fn enter_game_ready_to_release(
 ) -> bool {
     snapshot_ready
         && land_cache_ready
+        && avatars_ready
         && (offline || (connected && has_client && on_relay && turn_queue_empty))
 }
 
@@ -426,9 +428,12 @@ impl SowApp {
                         ),
                         _ => false,
                     };
+                    // Every player's first face, so the deployment phase starts with the portraits in place.
+                    let avatars_ready = self.gfx.avatars.first_faces_settled();
                     let ready_to_release = enter_game_ready_to_release(
                         true,
                         land_cache_ready,
+                        avatars_ready,
                         self.net.is_offline,
                         self.ui.app.main_menu_state.is_connected,
                         self.net.client.is_some(),
@@ -466,8 +471,9 @@ impl SowApp {
                         }
                         if self.ui.app.splash_state.frames_drawn.is_multiple_of(120) {
                             log::warn!(
-                                "[LOADER] Waiting for enter-game readiness before releasing loader: land_cache_ready={}, is_connected={}, has_client={}, on_relay={}, queued_turns={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",
+                                "[LOADER] Waiting for enter-game readiness before releasing loader: land_cache_ready={}, avatars_ready={}, is_connected={}, has_client={}, on_relay={}, queued_turns={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",
                                 land_cache_ready,
+                                avatars_ready,
                                 self.ui.app.main_menu_state.is_connected,
                                 self.net.client.is_some(),
                                 self.ws_on_relay(),
@@ -493,23 +499,26 @@ impl SowApp {
 mod tests {
     use super::enter_game_ready_to_release;
 
-    #[test]
-    fn enter_game_release_waits_for_snapshot_and_nameplate_cache() {
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn enter_game_release_waits_for_snapshot_nameplate_cache_and_first_portraits() {
         assert!(!enter_game_ready_to_release(
-            false, true, true, false, false, false, false
+            false, true, true, true, false, false, false, false
         ));
         assert!(!enter_game_ready_to_release(
-            true, false, true, false, false, false, false
+            true, false, true, true, false, false, false, false
+        ));
+        assert!(!enter_game_ready_to_release(
+            true, true, false, true, false, false, false, false
         ));
         assert!(enter_game_ready_to_release(
-            true, true, true, false, false, false, false
+            true, true, true, true, false, false, false, false
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn online_enter_game_release_keeps_all_existing_connection_gates() {
         assert!(enter_game_ready_to_release(
-            true, true, false, true, true, true, true
+            true, true, true, false, true, true, true, true
         ));
         for (connected, has_client, on_relay, turn_queue_empty) in [
             (false, true, true, true),
@@ -518,6 +527,7 @@ mod tests {
             (true, true, true, false),
         ] {
             assert!(!enter_game_ready_to_release(
+                true,
                 true,
                 true,
                 false,

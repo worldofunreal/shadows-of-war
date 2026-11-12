@@ -39,8 +39,13 @@ fn ghost_attack_rng(seed: u64, ghost_id: u16, attack_id: u64, salt: u64) -> WyRa
     WyRand::new(seed ^ ghost_key ^ attack_key ^ salt)
 }
 
-pub(super) fn ghost_retaliation_delay_ticks(seed: u64, ghost_id: u16, attack_id: u64) -> u64 {
-    let (min, max) = super::structures::think_window_ticks(AiTier::Ghost, true);
+pub(super) fn ghost_retaliation_delay_ticks(
+    ai: &crate::game_config::AiTuning,
+    seed: u64,
+    ghost_id: u16,
+    attack_id: u64,
+) -> u64 {
+    let (min, max) = super::structures::think_window_ticks(ai, AiTier::Ghost, true);
     let mut rng = ghost_attack_rng(seed, ghost_id, attack_id, GHOST_RETALIATION_DELAY_SALT);
     rng.next_int(min as i32, max as i32 + 1) as u64
 }
@@ -112,14 +117,8 @@ fn campaign_attacks_players(
 
 impl SowEngine {
     pub(crate) fn naval_target_allowed(&self, attacker_id: u16, target_id: u16) -> bool {
-        let respect_human_attack_grace =
-            !self.state.player(attacker_id).is_some_and(is_real_human);
-        self.ai_target_allowed_with_grace(
-            attacker_id,
-            target_id,
-            None,
-            respect_human_attack_grace,
-        )
+        let respect_human_attack_grace = !self.state.player(attacker_id).is_some_and(is_real_human);
+        self.ai_target_allowed_with_grace(attacker_id, target_id, None, respect_human_attack_grace)
             && !self.players_friendly(attacker_id, target_id)
             && self
                 .state
@@ -261,7 +260,12 @@ impl SowEngine {
                     defender.iq,
                 )
             } else {
-                ghost_retaliation_delay_ticks(self.state.seed, ghost_id, attack.id)
+                ghost_retaliation_delay_ticks(
+                    &self.state.config.ai,
+                    self.state.seed,
+                    ghost_id,
+                    attack.id,
+                )
             };
             let retaliation = GhostRetaliation {
                 attack_id: attack.id,

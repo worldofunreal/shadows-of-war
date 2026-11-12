@@ -1,4 +1,4 @@
-use crate::game_config::BotDifficulty;
+use crate::game_config::{AiTuning, BotDifficulty};
 use crate::player::PlayerType;
 use crate::protocol::GameplayIntent;
 
@@ -70,59 +70,26 @@ pub(super) struct BotAiProfile {
     pub(super) attacks_players: bool,
 }
 
-impl BotAiProfile {
-    /// Ghost = top élite: earliest trigger, never refuses, but keeps a real
-    /// home guard. A near-zero reserve left ghosts empty and let any saved-up
-    /// neighbor take them apart (OpenFront AIs keep 30–40% home).
-    const GHOST: BotAiProfile = BotAiProfile {
-        trigger_ratio: 0.40,
-        reserve_ratio: 0.30,
-        expand_ratio: 0.10,
-        refuse_human_chance: 0,
-        attacks_players: true,
+/// Posture for a tier from the match's tuning. Whether a tier may start
+/// fights with AI players is fixed design: Vanilla tribes only grow and take
+/// delayed shots at humans; Terminator tribes also hunt AI players.
+pub(super) fn ai_profile_for(
+    ai: &AiTuning,
+    tier: AiTier,
+    difficulty: BotDifficulty,
+) -> BotAiProfile {
+    let (posture, attacks_players) = match (tier, difficulty) {
+        (AiTier::Ghost, _) => (ai.ghost, true),
+        (AiTier::Nation, _) => (ai.nation, true),
+        (AiTier::Tribe, BotDifficulty::Vanilla) => (ai.tribe_vanilla, false),
+        (AiTier::Tribe, BotDifficulty::Terminator) => (ai.tribe_terminator, true),
     };
-
-    /// Nation = one smart profile below Ghost and above Tribe.
-    const NATION: BotAiProfile = BotAiProfile {
-        trigger_ratio: 0.45,
-        reserve_ratio: 0.20,
-        expand_ratio: 0.15,
-        refuse_human_chance: 20,
-        attacks_players: true,
-    };
-
-    /// Tribe = passive food and delayed human attacks on `Vanilla`; broader
-    /// player hunting on `Terminator`.
-    fn tribe(difficulty: BotDifficulty) -> BotAiProfile {
-        match difficulty {
-            BotDifficulty::Vanilla => BotAiProfile {
-                trigger_ratio: 0.75, // ignored while attacks_players=false
-                reserve_ratio: 0.50,
-                expand_ratio: 0.10,
-                // Human initiation is separately unlocked by the shared
-                // match grace period; once eligible, Vanilla keeps the same
-                // 50% hesitation as Terminator rather than a permanent veto.
-                refuse_human_chance: 50,
-                attacks_players: false,
-            },
-            BotDifficulty::Terminator => BotAiProfile {
-                trigger_ratio: 0.50,
-                reserve_ratio: 0.35,
-                expand_ratio: 0.15,
-                refuse_human_chance: 50,
-                attacks_players: true,
-            },
-        }
-    }
-}
-
-/// Lookup table by tier. The old `get_bot_ai_profile(bot_id, is_nation)`
-/// is replaced by this single dispatch.
-pub(super) fn ai_profile_for(tier: AiTier, difficulty: BotDifficulty) -> BotAiProfile {
-    match tier {
-        AiTier::Ghost => BotAiProfile::GHOST,
-        AiTier::Nation => BotAiProfile::NATION,
-        AiTier::Tribe => BotAiProfile::tribe(difficulty),
+    BotAiProfile {
+        trigger_ratio: posture.trigger,
+        reserve_ratio: posture.reserve,
+        expand_ratio: posture.expand,
+        refuse_human_chance: posture.refuse_human_chance,
+        attacks_players,
     }
 }
 

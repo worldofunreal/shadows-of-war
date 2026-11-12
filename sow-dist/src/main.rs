@@ -8199,6 +8199,16 @@ fn main() -> Result<()> {
         pipeline.run_preview(args.get(1).map(String::as_str))?;
         return Ok(());
     }
+    if args.first().is_some_and(|arg| arg == "config") {
+        let site = match args.get(1).map(String::as_str) {
+            None => site::Site::Production,
+            Some("ptr") if args.len() == 2 => site::Site::Ptr,
+            _ => bail!("usage: ./sow config [ptr]"),
+        };
+        site::select(site)?;
+        load_dotenv(&root.join(site.env_file()));
+        return prod::edit_server_config();
+    }
     let mut cmd = String::new();
     let mut bump = false;
     let mut backend_only = None;

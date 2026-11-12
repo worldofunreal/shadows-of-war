@@ -35,6 +35,12 @@ impl AvatarPortrait {
             Self::Portrait(slug) => format!("gameplay/avatars/{slug}.webp"),
         }
     }
+
+    /// The face a player shows first: Calm for a hero, the only face otherwise. The match
+    /// loader waits for these; a hero's other three faces load after it.
+    fn is_first_face(&self) -> bool {
+        !matches!(self, Self::Hero(_, expression) if *expression != AvatarExpression::Calm)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -200,6 +206,17 @@ impl AvatarSlots {
         }
     }
 
+    /// Whether every player's first face has loaded or failed once (a failure retries in the
+    /// background and shows the fallback). The match loader releases only after this.
+    pub(crate) fn first_faces_settled(&self) -> bool {
+        self.in_match
+            && self
+                .slots
+                .iter()
+                .filter(|slot| slot.portrait.is_first_face())
+                .all(|slot| slot.load == Load::Loaded || slot.failures > 0)
+    }
+
     /// Release every slot when the match ends; the atlas empties on the next frame.
     pub(crate) fn end_match(&mut self) {
         if !self.in_match {
@@ -342,10 +359,17 @@ impl AvatarSlots {
             .iter()
             .filter(|slot| slot.load == Load::InFlight)
             .count();
-        for (index, slot) in self.slots.iter_mut().enumerate() {
+        // First faces before the other hero faces, so the match loader can release sooner.
+        let first = |index: &usize| self.slots[*index].portrait.is_first_face();
+        let order: Vec<usize> = (0..self.slots.len())
+            .filter(first)
+            .chain((0..self.slots.len()).filter(|index| !first(index)))
+            .collect();
+        for index in order {
             if in_flight >= MAX_LOADS_IN_FLIGHT {
                 break;
             }
+            let slot = &mut self.slots[index];
             let due = match slot.load {
                 Load::Queued => true,
                 Load::RetryAt(at) => now >= at,
@@ -588,6 +612,31 @@ mod tests {
         }
         assert_eq!(avatars.slots.len(), 2 + Leader::count() * 4 + bots.len());
         assert!(avatars.slots.len() <= AVATAR_MAX_SLOTS);
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn the_match_loader_waits_only_for_first_faces_and_a_failure_does_not_hold_it() {
+        let mut avatars = AvatarSlots::new();
+        assert!(!avatars.first_faces_settled(), "no roster yet");
+        let leader = Leader::of("boudica");
+        avatars.add_identity(human(leader));
+        avatars.add_identity(bot("some_portrait"));
+        let first: Vec<usize> = (0..avatars.slots.len())
+            .filter(|&slot| avatars.slots[slot].portrait.is_first_face())
+            .collect();
+        assert_eq!(first.len(), 4, "fallback, gold, the hero's Calm and the bot's portrait");
+        for &slot in &first {
+            avatars.slots[slot].load = Load::Loaded;
+        }
+        assert!(
+            avatars.first_faces_settled(),
+            "the hero's Happy, Fear and Angry still loading do not hold the loader"
+        );
+        let calm = avatars.heroes[&(leader, AvatarExpression::Calm)];
+        avatars.slots[calm].load = Load::Queued;
+        assert!(!avatars.first_faces_settled());
+        avatars.slots[calm].failures = 1;
+        assert!(avatars.first_faces_settled(), "a failed face retries after the loader, showing the fallback");
     }
 
     #[test]
