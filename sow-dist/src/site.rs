@@ -187,6 +187,18 @@ impl Site {
         self == Self::Production
     }
 
+    /// Provider sign-in buttons only work where that provider's console lists this
+    /// site's callback. PTR is not listed, so PTR offers the email code alone.
+    pub(crate) fn social_sign_in(self) -> bool {
+        self == Self::Production
+    }
+
+    /// PTR's mail goes to Stalwart on this host's loopback. The certificate is still
+    /// checked against SOW_SMTP_HOST, so only the connect address changes.
+    pub(crate) fn smtp_connect_host(self) -> Option<&'static str> {
+        (self == Self::Ptr).then_some("127.0.0.1")
+    }
+
     /// Prefix of this site's build cache directories under dist/.sow-state.
     pub(crate) fn state_prefix(self) -> &'static str {
         match self {
@@ -272,6 +284,7 @@ mod tests {
         assert_eq!(production.origin(), "https://shadowsofwar.io");
         assert_eq!(production.map_prefix(), "");
         assert_eq!(production.label(), "Production");
+        assert!(production.social_sign_in());
     }
 
     #[test]
@@ -283,12 +296,19 @@ mod tests {
         assert_ne!(Site::Ptr.env_file(), Site::Production.env_file());
         assert!(!Site::Ptr.owns_identity_import());
         assert!(!Site::Ptr.builds_portal_packages());
+        assert!(!Site::Ptr.social_sign_in());
         assert_eq!(Site::Ptr.label(), "PTR");
         assert_ne!(
             Site::Ptr.reward_audit_accounts_file(),
             Site::Production.reward_audit_accounts_file()
         );
         assert_ne!(Site::Ptr.server_http_url(), Site::Production.server_http_url());
+    }
+
+    #[test]
+    fn smtp_connect_override_is_ptr_only() {
+        assert_eq!(Site::Ptr.smtp_connect_host(), Some("127.0.0.1"));
+        assert_eq!(Site::Production.smtp_connect_host(), None);
     }
 
     #[test]

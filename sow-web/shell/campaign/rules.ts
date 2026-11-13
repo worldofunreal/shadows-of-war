@@ -393,7 +393,6 @@ export const FACTION_FIELDS: readonly string[] = Object.freeze([
     "alliance_group",
     "assault_force",
     "hold_structures_until_contact",
-    "city_requires_gold",
     "accepts_alliance_requests",
 ]);
 export const MENU_GUIDE_OUTCOMES: Record<string, CampaignRecord> = Object.freeze({

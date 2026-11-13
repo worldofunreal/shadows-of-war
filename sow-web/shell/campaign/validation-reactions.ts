@@ -337,10 +337,12 @@ export function validateReactions(context: CampaignValidationContext) {
                 if (!object(choice)) return issue(null, "reactions.choices", "Invalid negotiation choice.");
                 knownFields(
                     choice,
-                    ["id", "label_key", "body_key", "relation", "gold_cost"],
+                    ["id", "label_key", "body_key", "relation", "gold_cost", "exchange"],
                     null,
                     "reactions.choices",
                 );
+                if (own(choice, "exchange"))
+                    checkExchange(null, choice.exchange, "reactions.choices.exchange");
                 if (!id(choice.id) || choiceIds.has(choice.id))
                     issue(null, "reactions.choices.id", "Negotiation choice IDs must be unique.");
                 choiceIds.add(choice.id);

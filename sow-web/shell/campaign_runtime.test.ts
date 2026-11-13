@@ -1123,7 +1123,7 @@ test("Boudica pauses the world for guided actions and the discovery scene", () =
         const reaction = definition.reactions.find((item) => item.id === id);
         assert.equal(reaction.when.type, "contact");
         assert.equal(reaction.when.target, factionId);
-        assert.equal(reaction.after, "boudica_build_city");
+        assert.equal(reaction.after, undefined);
         assert.equal(reaction.pause_game, false);
     }
     assert.equal(step("boudica_city_rebuilt").pause_game, undefined);
@@ -2528,20 +2528,37 @@ test("Snettisham decisions are side events and never replace the Roman objective
     assert.equal(step("boudica_snettisham_accept_wait"), undefined);
 
     for (const choice of ["accept", "refuse"]) {
-        const machine = campaign.create(definition, "boudica_build_city", roster);
+        let now = 0;
+        const machine = campaign.create(definition, "boudica_build_city", roster, () => now);
         const beforeOrder = {
             cities: 0,
-            contact_faction_ids: ["snettisham"],
+            contact_faction_ids: [],
             structure_levels: { city: 0 },
         };
         assert.equal(machine.update(beforeOrder, {}).step.id, "boudica_build_city");
         assert.equal(machine.view().paused, true, "the City order remains paused until placed");
 
-        const ordered = { ...beforeOrder, cities: 1 };
-        const contact = machine.update(ordered, {});
+        const borderContact = { ...beforeOrder, contact_faction_ids: ["snettisham"] };
+        const contact = machine.update(borderContact, {});
         assert.equal(contact.reaction, "contact_snettisham");
-        assert.equal(contact.paused, false, "the border decision does not pause the Roman campaign");
-        assert.equal(machine.advance(choice, contact.step.id), true);
+        assert.equal(contact.state.id, "boudica_build_city", "contact opens before the City order");
+
+        const ordered = { ...borderContact, cities: 1 };
+        const orderConfirmed = machine.update(ordered, {});
+        assert.equal(orderConfirmed.reaction, "contact_snettisham");
+        assert.equal(orderConfirmed.paused, false, "the border decision does not pause construction");
+        assert.equal(machine.advance(choice, orderConfirmed.step.id), true);
+        assert.equal(
+            machine.view().exchange.emote_text_key,
+            choice === "accept"
+                ? "tutorial.campaign_boudica_snettisham_accept_emote"
+                : "tutorial.campaign_boudica_snettisham_refuse_emote",
+            "Snettisham answers with the emote for the selected outcome",
+        );
+        for (let elapsed = 0; elapsed < 4000; elapsed += 100) {
+            now += 100;
+            machine.update(ordered, {});
+        }
 
         const stillBuilding = machine.update(
             { ...ordered, faction_structure_levels: { snettisham: { city: 0 } } },
@@ -2556,7 +2573,7 @@ test("Snettisham decisions are side events and never replace the Roman objective
     }
 });
 
-test("Boudica queues both Iceni contacts after the build order without pausing construction", () => {
+test("Boudica prompts both Iceni contacts on border contact before the City order", () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const campaignDir = path.join(shell, "../../assets/campaign");
     const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
@@ -2566,48 +2583,73 @@ test("Boudica queues both Iceni contacts after the build order without pausing c
     const machine = campaign.create(definition, "boudica_build_city", roster, () => now, {
         onExchangeLine: (line) => spoken.push(line.speaker + ":" + line.emote),
     });
-    const beforeOrder = {
-        cities: 0,
-        contact_faction_ids: ["snettisham", "thetford"],
-        structure_levels: { city: 0 },
-    };
-    const pending = machine.update(beforeOrder, {});
-    assert.equal(pending.step.id, "boudica_build_city");
-    assert.equal(pending.paused, true);
-    assert.equal(pending.reaction, undefined, "contacts wait until the City order is confirmed");
-
-    const ordered = { ...beforeOrder, cities: 1 };
-    const snettisham = machine.update(ordered, {});
-    assert.equal(snettisham.reaction, "contact_snettisham");
-    assert.equal(snettisham.paused, false, "the choice modal leaves the Roman attack running");
-    assert.equal(machine.advance("refuse", snettisham.step.id), true);
-
     const playOut = (facts, ms) => {
         for (let t = 0; t < ms; t += 100) {
             now += 100;
             machine.update(facts, {});
         }
     };
-    const thetford = machine.update(ordered, {});
+    const beforeContact = {
+        cities: 0,
+        contact_faction_ids: [],
+        structure_levels: { city: 0 },
+    };
+    const pending = machine.update(beforeContact, {});
+    assert.equal(pending.step.id, "boudica_build_city");
+    assert.equal(pending.paused, true);
+    assert.equal(pending.reaction, undefined);
+
+    const borderContact = { ...beforeContact, contact_faction_ids: ["snettisham", "thetford"] };
+    const snettisham = machine.update(borderContact, {});
+    assert.equal(snettisham.reaction, "contact_snettisham");
+    assert.equal(snettisham.state.id, "boudica_build_city", "Snettisham opens before the City order");
+    assert.equal(machine.advance("refuse", snettisham.step.id), true);
+    assert.equal(
+        machine.view().exchange.emote_text_key,
+        "tutorial.campaign_boudica_snettisham_refuse_emote",
+        "Snettisham's refusal emote starts after the player answers",
+    );
+    playOut(borderContact, 4000);
+
+    const thetford = machine.update(borderContact, {});
     assert.equal(thetford.reaction, "contact_thetford");
-    assert.equal(thetford.paused, false, "Thetford's choice modal leaves the Roman attack running");
+    assert.equal(thetford.state.id, "boudica_build_city", "Thetford follows Snettisham before the order");
+
+    const ordered = { ...borderContact, cities: 1 };
+    const orderedContact = machine.update(ordered, {});
+    assert.equal(orderedContact.reaction, "contact_thetford");
+    assert.equal(orderedContact.paused, false, "the second choice leaves construction running");
+    assert.equal(orderedContact.state.id, "boudica_city_construction_wait");
 
     const cityFinished = { ...ordered, structure_levels: { city: 1 } };
     const stillNegotiating = machine.update(cityFinished, {});
     assert.equal(stillNegotiating.reaction, "contact_thetford");
     assert.equal(stillNegotiating.paused, false);
     assert.equal(machine.advance("demand", stillNegotiating.step.id), true);
-    assert.equal(machine.view().paused, false, "the reply emote resumes play after the choice closes");
+    assert.equal(
+        machine.view().exchange.emote_text_key,
+        "tutorial.campaign_boudica_thetford_greet_emote",
+        "Thetford's refusal emote starts after the player answers",
+    );
+    assert.equal(machine.view().paused, false, "the reply emote does not pause play");
+
+    const acceptingMachine = campaign.create(definition, "boudica_build_city", roster, () => now);
+    const acceptingContact = acceptingMachine.update(
+        { ...beforeContact, contact_faction_ids: ["thetford"] },
+        {},
+    );
+    assert.equal(acceptingMachine.advance("respect", acceptingContact.step.id), true);
+    assert.equal(
+        acceptingMachine.view().exchange.emote_text_key,
+        "tutorial.campaign_boudica_boudica_thetford_greet_reply_emote",
+        "Boudica's alliance emote starts after the player accepts Thetford",
+    );
 
     playOut(cityFinished, 14000);
     const nextObjective = machine.view();
     assert.equal(nextObjective.step.id, "boudica_outpost_colonia_veterans");
     assert.equal(nextObjective.paused, false, "the next Roman objective is active during the emote handoff");
-    assert.deepEqual(spoken.slice(0, 3), [
-        "thetford:threat",
-        "boudica:greet",
-        "boudica:greet",
-    ]);
+    assert.deepEqual(spoken.slice(0, 2), ["snettisham:threat", "thetford:threat"]);
 
     playOut(cityFinished, 3500);
     assert.equal(machine.view().step.id, "boudica_outpost_colonia_veterans");
@@ -4156,7 +4198,7 @@ test("structure triggers can watch a campaign faction and the faction flag is va
     );
 });
 
-test("Boudica discovers Suetonius through free movement, hover, then Zoom In emotes", () => {
+test("Boudica discovers Suetonius through free movement, hover, then Zoom In without an early emote", () => {
     const definition = JSON.parse(
         fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"),
     );
@@ -4166,11 +4208,15 @@ test("Boudica discovers Suetonius through free movement, hover, then Zoom In emo
         assert.equal(step(id).exchange, undefined, id + " does not provoke before discovery");
     }
     assert.equal(step("boudica_zoom_in").trigger.target, "suetonius_paulinus");
-    assert.equal(step("boudica_zoom_in").exchange[0].speaker, "suetonius_paulinus");
     assert.equal(
-        step("boudica_zoom_in").exchange[0].emote_text_key,
-        "tutorial.campaign_boudica_suetonius_zoom_emote",
-        "the provocation begins when the Zoom In objective appears",
+        step("boudica_zoom_in").exchange,
+        undefined,
+        "Suetonius does not provoke during the Zoom In objective",
+    );
+    assert.equal(
+        step("boudica_found_suetonius").exchange[1].emote_text_key,
+        "tutorial.campaign_boudica_suetonius_sighted_emote",
+        "Suetonius speaks after Boudica finds him",
     );
 });
 

@@ -5,18 +5,12 @@
 use wasm_bindgen::{JsCast, JsValue};
 
 /// The decoded atlases, or `None` while the loader is still fetching them. Asking again while
-/// they are missing (re)starts the download; the loader dedupes and spaces out retries.
+/// they are missing (re)starts the download; the loader dedupes and spaces out retries. The request
+/// does not wait for the first loader to finish: a match can be what keeps that loader open.
 pub(crate) fn get() -> Option<super::gpu::TextAtlasImages> {
     let window: JsValue = web_sys::window()?.into();
     let atlases = js_sys::Reflect::get(&window, &"SOW_TEXT_ATLASES".into()).ok()?;
     if atlases.is_undefined() || atlases.is_null() {
-        let loader_ready = js_sys::Reflect::get(&window, &"SOW_INITIAL_LOADER_READY".into())
-            .ok()
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        if !loader_ready {
-            return None;
-        }
         if let Ok(load) = js_sys::Reflect::get(&window, &"SOW_loadTextAtlases".into())
             && let Some(load) = load.dyn_ref::<js_sys::Function>()
         {

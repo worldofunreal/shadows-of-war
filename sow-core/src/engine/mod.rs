@@ -432,8 +432,6 @@ pub struct SowEngine {
     pub campaign_contact_resolved: std::collections::HashSet<PlayerId>,
     /// Campaign factions that build nothing until their contact response is decided.
     pub campaign_structure_hold_ids: std::collections::HashSet<PlayerId>,
-    /// Campaign factions that must pay for their first city instead of receiving it free.
-    pub campaign_city_requires_gold_ids: std::collections::HashSet<PlayerId>,
     /// Campaign factions that accept every alliance request from the human (scripted, no AI thresholds).
     pub campaign_accepts_alliance_requests_ids: std::collections::HashSet<PlayerId>,
     /// Next campaign-support send tick for each eligible ally.
@@ -553,7 +551,6 @@ impl SowEngine {
             campaign_can_request_alliance: std::collections::HashMap::new(),
             campaign_contact_resolved: std::collections::HashSet::new(),
             campaign_structure_hold_ids: std::collections::HashSet::new(),
-            campaign_city_requires_gold_ids: std::collections::HashSet::new(),
             campaign_accepts_alliance_requests_ids: std::collections::HashSet::new(),
             campaign_support_next_tick: std::collections::HashMap::new(),
             campaign_halted_ids: std::collections::HashSet::new(),
@@ -2140,7 +2137,6 @@ mod tests {
                 campaign_can_attack_player: faction.can_attack_player,
                 campaign_assault_force: faction.assault_force,
                 campaign_hold_structures_until_contact: false,
-                campaign_city_requires_gold: false,
                 campaign_accepts_alliance_requests: faction.accepts_alliance_requests,
             })
             .collect();

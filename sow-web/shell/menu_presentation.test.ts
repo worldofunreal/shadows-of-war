@@ -2631,6 +2631,46 @@ test("heroes skill scales its title above its body, skins sit in the featured he
         /if \(screen === "heroes" && current && current\.dataset\.screenPanel === "heroes"\) \{\s*updateHeroesPreview\(\);\s*return;\s*\}/,
         "heroes screen updates in-place to avoid destroying hovered DOM elements and flickering",
     );
+    assert.match(
+        heroesSource,
+        /sow-heroes__rarity sow-heroes__rarity--/,
+        "hero card assigns rarity class to rarity text",
+    );
+    assert.match(
+        heroesSource,
+        /data-rarity=['"]*\s*\+\s*esc\(leader\.rarity\)/,
+        "hero card attributes rarity to DOM",
+    );
+    assert.match(
+        profileCss,
+        /\.sow-heroes__rarity--common[\s\S]*?\.sow-heroes__rarity--rare[\s\S]*?\.sow-heroes__rarity--epic[\s\S]*?\.sow-heroes__rarity--legendary/,
+        "rarities receive distinct theme colors in roster card copy",
+    );
+    assert.match(
+        profileCss,
+        /\.sow-heroes__rotation\[data-rarity="common"\][\s\S]*?\.sow-heroes__rotation\[data-rarity="rare"\][\s\S]*?\.sow-heroes__rotation\[data-rarity="epic"\][\s\S]*?\.sow-heroes__rotation\[data-rarity="legendary"\]/,
+        "featured hero status pill reflects active rarity color",
+    );
+    assert.match(
+        heroesSource,
+        /icon:\s*HEROES_FILTER_ICON/,
+        "region dropdown triggers with a filter icon",
+    );
+    assert.match(
+        heroesSource,
+        /shortLabel:\s*SOW_t\("heroes\.region_filter"\)/,
+        "region dropdown uses concise shortLabel to avoid truncating in the trigger",
+    );
+    assert.match(
+        heroesSource,
+        /icon:\s*HEROES_SORT_ICON/,
+        "sort dropdown triggers with a sort icon",
+    );
+    assert.match(
+        heroesSource,
+        /sow-heroes__search-icon/,
+        "search input includes decorative search icon",
+    );
 });
 
 test("reward landings light their header plate and escalate above the curtain", () => {

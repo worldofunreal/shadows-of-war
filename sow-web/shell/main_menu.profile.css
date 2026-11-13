@@ -2720,6 +2720,26 @@
   line-height: 1;
 }
 
+.sow-heroes__rotation[data-rarity="common"] {
+  color: #f1f5f9;
+  border-color: rgba(241, 245, 249, 0.35);
+}
+
+.sow-heroes__rotation[data-rarity="rare"] {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.sow-heroes__rotation[data-rarity="epic"] {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, 0.45);
+}
+
+.sow-heroes__rotation[data-rarity="legendary"] {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
 .sow-heroes__rotation[hidden],
 .sow-heroes__perk[hidden] {
   display: none;
@@ -3184,6 +3204,32 @@
   -webkit-line-clamp: 2;
 }
 
+.sow-heroes__card-copy em.sow-heroes__rarity,
+.sow-heroes__card-copy em[data-rarity] {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.sow-heroes__rarity--common,
+.sow-heroes__card-copy em[data-rarity="common"] {
+  color: #f1f5f9;
+}
+
+.sow-heroes__rarity--rare,
+.sow-heroes__card-copy em[data-rarity="rare"] {
+  color: #38bdf8;
+}
+
+.sow-heroes__rarity--epic,
+.sow-heroes__card-copy em[data-rarity="epic"] {
+  color: #c084fc;
+}
+
+.sow-heroes__rarity--legendary,
+.sow-heroes__card-copy em[data-rarity="legendary"] {
+  color: #fbbf24;
+}
+
 @media (min-width: 681px) and (max-width: 900px) and (orientation: landscape) {
   #sow-menu[data-screen="heroes"] .sow-heroes__workspace {
     display: flex;
@@ -3325,13 +3371,45 @@
 }
 
 .sow-heroes__search {
+  position: relative;
   flex: 1 1 auto;
 }
+
+.sow-heroes__search-icon {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 12px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  color: var(--sow-muted);
+  pointer-events: none;
+}
+
+.sow-heroes__search-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .sow-heroes__region,
 .sow-heroes__sort {
   flex: 0 0 148px;
   width: 148px;
   min-width: 148px;
+}
+
+.sow-heroes__region.is-filtered .sow-control-dropdown__trigger {
+  border-color: var(--sow-control-accent);
+  color: var(--sow-gold-bright);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.25);
+}
+
+.sow-heroes__region.is-filtered .sow-control-dropdown__icon {
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__featured-skins {
@@ -3354,7 +3432,7 @@
   width: 100%;
   height: 40px;
   min-height: 40px;
-  padding: 0 11px;
+  padding: 0 11px 0 35px;
   border: 1px solid var(--sow-tactical-track-border);
   border-radius: var(--sow-tactical-track-radius);
   outline: 0;
@@ -3524,8 +3602,25 @@
   .sow-menu__leader-copy .sow-hero-briefing__name {
     font-size: clamp(17px, 3vh, 22px);
   }
+  .sow-menu__leader-copy .sow-hero-briefing__civilization {
+    font-size: 9px;
+  }
   .sow-menu__leader-copy .sow-hero-briefing__ability {
     margin-top: 0;
+    gap: 6px;
+  }
+  .sow-menu__leader-copy .sow-hero-briefing__icon-slot {
+    flex-basis: 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+  }
+  .sow-menu__leader-copy .sow-hero-briefing__ability-name {
+    font-size: 12px;
+    line-height: 1.1;
+  }
+  .sow-menu__leader-copy .sow-hero-briefing__description {
+    display: none;
   }
 }
 

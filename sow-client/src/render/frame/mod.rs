@@ -142,6 +142,22 @@ impl SowApp {
                     mr.upload_terrain(&mut render_ctx.command_encoder);
                 }
 
+                // The avatar atlas lives in the text renderer, and the match loader waits for the first
+                // faces, so the renderer is made as soon as its atlases arrive, during the splash too.
+                if self.gfx.text_renderer.is_none()
+                    && let Some(atlases) = crate::render::text_atlases::get()
+                {
+                    let surface_format = s.info().format;
+                    let tr = crate::render::gpu::TextRenderer::new(
+                        &render_ctx.context,
+                        surface_format,
+                        &atlases,
+                    );
+                    tr.init_textures(&mut render_ctx.command_encoder);
+                    tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
+                    self.gfx.text_renderer = Some(tr);
+                }
+
                 if draw_world {
                     // --- Layer 4: Track and Spawn Detonations ---
                     self.ui.detonation_scratch.clear();
@@ -626,19 +642,6 @@ impl SowApp {
                     map_drawn = true;
 
                     crate::render::text_atlases::poll_arabic_font();
-                    if self.gfx.text_renderer.is_none()
-                        && let Some(atlases) = crate::render::text_atlases::get()
-                    {
-                        let surface_format = s.info().format;
-                        let tr = crate::render::gpu::TextRenderer::new(
-                            &render_ctx.context,
-                            surface_format,
-                            &atlases,
-                        );
-                        tr.init_textures(&mut render_ctx.command_encoder);
-                        tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
-                        self.gfx.text_renderer = Some(tr);
-                    }
 
                     // ── GPU-instanced movers (boats, nukes, SAM) ─────────────
                     if dev.vfx_movers || dev.vfx_mover_trails {

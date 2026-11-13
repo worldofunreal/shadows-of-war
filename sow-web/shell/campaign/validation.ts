@@ -233,12 +233,6 @@ export function validate(
                     "roster.factions.hold_structures_until_contact",
                     "Choose whether this faction waits for your decision before building.",
                 );
-            if (faction.city_requires_gold != null && typeof faction.city_requires_gold !== "boolean")
-                issue(
-                    null,
-                    "roster.factions.city_requires_gold",
-                    "Choose whether this faction pays for its first city.",
-                );
             if (
                 faction.accepts_alliance_requests != null &&
                 typeof faction.accepts_alliance_requests !== "boolean"
@@ -548,7 +542,15 @@ export function validate(
         steps
             .concat(responses)
             .filter(object)
-            .flatMap((value) => [value].concat(Array.isArray(value.exchange) ? value.exchange : []))
+            .flatMap((value) => [
+                value,
+                ...(Array.isArray(value.exchange) ? value.exchange : []),
+                ...(Array.isArray(value.choices)
+                    ? value.choices.flatMap((choice: CampaignRecord) =>
+                          Array.isArray(choice.exchange) ? choice.exchange : [],
+                      )
+                    : []),
+            ])
             .map((value) => value.emote_text_key)
             .filter(Boolean),
     );

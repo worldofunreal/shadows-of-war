@@ -65,7 +65,10 @@ export function syncDropdownScope(
         for (let j = 0; j < options.length; j++) {
             const selected = options[j].dataset.dropdownOptionValue === value;
             options[j].setAttribute("aria-selected", String(selected));
-            if (label && selected) label.textContent = options[j].textContent;
+            if (label && selected) {
+                const shortLabel = options[j].dataset.dropdownOptionShort;
+                label.textContent = shortLabel || options[j].textContent;
+            }
         }
     }
     if (focusTarget) focusTarget.focus();
@@ -93,6 +96,10 @@ export function syncDropdownScope(
         const selected = options.find(function (option) {
             return String(option.value) === value;
         });
+        const displayLabel = selected ? (selected.shortLabel || selected.label) : value;
+        const iconHtml = config.icon
+            ? "<span class='sow-control-dropdown__icon' aria-hidden='true'>" + config.icon + "</span>"
+            : "";
         return (
             "<div class='sow-control-dropdown" +
             (config.className ? " " + escapeHtml(config.className) : "") +
@@ -106,8 +113,11 @@ export function syncDropdownScope(
             "' aria-haspopup='listbox' aria-expanded='false' aria-controls='sow-dropdown-" +
             escapeHtml(key) +
             "'>" +
+            "<span class='sow-control-dropdown__trigger-content'>" +
+            iconHtml +
             "<span data-dropdown-label>" +
-            escapeHtml(selected ? selected.label : value) +
+            escapeHtml(displayLabel) +
+            "</span>" +
             "</span><span class='sow-control-dropdown__chevron' aria-hidden='true'>⌄</span>" +
             "</button>" +
             "<div class='sow-control-dropdown__menu' id='sow-dropdown-" +
@@ -118,12 +128,17 @@ export function syncDropdownScope(
             options
                 .map(function (option) {
                     const isSelected = String(option.value) === value;
+                    const shortAttr = option.shortLabel
+                        ? " data-dropdown-option-short='" + escapeHtml(option.shortLabel) + "'"
+                        : "";
                     return (
                         "<button class='sow-control-dropdown__option' type='button' role='option' data-command='select_dropdown' data-dropdown-key='" +
                         escapeHtml(key) +
                         "' data-dropdown-option-value='" +
                         escapeHtml(option.value) +
-                        "' aria-selected='" +
+                        "'" +
+                        shortAttr +
+                        " aria-selected='" +
                         (isSelected ? "true" : "false") +
                         "'>" +
                         escapeHtml(option.label) +

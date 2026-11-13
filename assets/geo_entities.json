@@ -10455,6 +10455,7 @@
    "wikipedia": "https://adb.anu.edu.au/biography/tarenorerer-13212/text23923",
    "avatar": "tarenorerer",
    "hero": {
+    "enabled": false,
     "rarity": "rare",
     "price_crowns": 657,
     "name": "Tarenorerer",
@@ -10480,6 +10481,7 @@
    "wikipedia": "https://digitalcollections.anu.edu.au/items/6dcbe341-d945-41fc-a9de-a8428b6110fd/full",
    "avatar": "nafanua",
    "hero": {
+    "enabled": false,
     "rarity": "legendary",
     "price_crowns": 2039,
     "name": "Nafanua",
@@ -10502,6 +10504,7 @@
    "wikipedia": "https://en.wikipedia.org/wiki/Fredegund",
    "avatar": "fredegund",
    "hero": {
+    "enabled": false,
     "rarity": "rare",
     "price_crowns": 827,
     "name": "Fredegund",

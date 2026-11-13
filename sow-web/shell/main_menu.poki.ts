@@ -67,9 +67,9 @@ export function renderCommandPanel() {
         "<section class='sow-menu__command'>" +
         "<div class='sow-menu__home-public'>" +
         renderPublicPanel("home") +
+        renderDirectiveCard() +
         "</div>" +
         "<div class='sow-menu__home-actions'>" +
-        renderDirectiveCard() +
         renderQuickMatchButton() +
         "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" +
         esc(SOW_t("menu.campaign")) +

@@ -477,9 +477,6 @@ impl SowEngine {
             if s.campaign_hold_structures_until_contact {
                 self.campaign_structure_hold_ids.insert(bot_id);
             }
-            if s.campaign_city_requires_gold {
-                self.campaign_city_requires_gold_ids.insert(bot_id);
-            }
             if s.campaign_accepts_alliance_requests {
                 self.campaign_accepts_alliance_requests_ids.insert(bot_id);
             }

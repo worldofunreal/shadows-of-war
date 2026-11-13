@@ -3574,19 +3574,22 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 // Production shell declares every endpoint explicitly — the
                 // client resolves strict config only (no fallbacks).
                 let host = site::current().host();
+                let social = site::current().social_sign_in();
                 if matches!(target, WebTarget::Local | WebTarget::Native) {
                     format!(
                         "window.SOW_WS_URL = \"wss://{host}/ws/\"; \
                          window.SOW_MAPS_URL = \"/maps\"; \
                          window.SOW_ASSETS_URL = \"/assets\"; \
-                         window.SOW_DATABASE_URL = \"https://{host}/api\";"
+                         window.SOW_DATABASE_URL = \"https://{host}/api\"; \
+                         window.SOW_SOCIAL_SIGN_IN = {social};"
                     )
                 } else {
                     format!(
                         "window.SOW_WS_URL = \"wss://{host}/ws/\"; \
                          window.SOW_MAPS_URL = \"https://{host}/maps\"; \
                          window.SOW_ASSETS_URL = \"https://{host}/assets\"; \
-                         window.SOW_DATABASE_URL = \"https://{host}/api\";"
+                         window.SOW_DATABASE_URL = \"https://{host}/api\"; \
+                         window.SOW_SOCIAL_SIGN_IN = {social};"
                     )
                 }
             },
@@ -4812,6 +4815,8 @@ fn web_equal_value_is_valid_translation(language_code: &str, key: &str) -> bool 
     web_key_is_intentionally_english(key)
         // The French adjective "rare" has the same spelling as English here.
         || (language_code == "fr" && key == "heroes.rarity_rare")
+        // "Region" is the same German word as the English filter label.
+        || (language_code == "de" && key == "heroes.region_filter")
         // "Trait" is also the correct French label for a hero trait.
         || (language_code == "fr"
             && matches!(key, "heroes.command_trait" | "site.command_trait"))
@@ -8136,6 +8141,9 @@ fn auth_env_contents() -> Result<String> {
     }
     if identity_import_file()?.is_some() {
         contents.push_str("SOW_IDENTITY_IMPORT_PATH=/usr/local/etc/sow/identity-import.json\n");
+    }
+    if let Some(connect_host) = site::current().smtp_connect_host() {
+        contents.push_str(&format!("SOW_SMTP_CONNECT_HOST={connect_host}\n"));
     }
     Ok(contents)
 }

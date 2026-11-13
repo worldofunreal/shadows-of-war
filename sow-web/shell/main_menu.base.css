@@ -1398,6 +1398,13 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   margin-bottom: 12px;
 }
 
+.sow-menu__home-public {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .sow-menu__home-public .sow-menu__public {
   width: 100%;
   min-height: 0;

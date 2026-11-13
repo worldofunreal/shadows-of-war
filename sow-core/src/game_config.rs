@@ -145,8 +145,6 @@ pub struct ScriptedSpawn {
     /// Holds this faction's construction until the player decides its contact response.
     #[serde(default)]
     pub campaign_hold_structures_until_contact: bool,
-    #[serde(default)]
-    pub campaign_city_requires_gold: bool,
     /// Accepts every alliance request from the human without troop, territory or IQ-point checks.
     #[serde(default)]
     pub campaign_accepts_alliance_requests: bool,

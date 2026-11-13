@@ -36,7 +36,6 @@
       "leader": "Boudica",
       "can_attack_player": false,
       "hold_structures_until_contact": true,
-      "city_requires_gold": true,
       "support_interval_seconds": 15,
       "avatar": "snettisham"
     },

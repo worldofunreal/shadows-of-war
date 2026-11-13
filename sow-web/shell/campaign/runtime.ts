@@ -948,7 +948,12 @@ export function create(
             hooks.onReactionComplete(reaction, target);
         startQueuedExchange();
     }
-    function advance(choiceId?: string | null, expectedStepId?: string, allowUnavailable = false) {
+    function advance(
+        choiceId?: string | null,
+        expectedStepId?: string,
+        allowUnavailable = false,
+        allowNonPausingReactionProgress = false,
+    ) {
         if (state.done || externallyPaused) return false;
         if (exchange && exchange.phase === "dialogue") {
             if (exchange.phase !== "dialogue" || expectedStepId !== "exchange-" + exchange.token)
@@ -966,16 +971,23 @@ export function create(
             else endExchange();
             return true;
         }
-        if (activeReaction && (!exchange || exchange.phase === "dialogue")) {
+        if (
+            activeReaction &&
+            (!exchange || exchange.phase === "dialogue") &&
+            !allowNonPausingReactionProgress
+        ) {
             const reaction = activeReaction.reaction;
             if (expectedStepId !== "reaction-" + activeReaction.instanceId) return false;
+            let answer: CampaignRecord | null = null;
             if (reaction.choices && reaction.choices.length) {
-                const answer = reaction.choices.find((option: CampaignRecord) => option.id === choiceId);
+                answer = reaction.choices.find((option: CampaignRecord) => option.id === choiceId) || null;
                 if (!answer) return false;
                 state.reactionChoices[activeReaction.instanceId] = answer.id;
                 state.choices[reaction.id] = answer.id;
             }
-            if (reaction.exchange) beginExchange(reaction.exchange, activeReaction.instanceId);
+            const exchangeLines = Array.isArray(answer?.exchange) ? answer.exchange : reaction.exchange;
+            if (Array.isArray(exchangeLines) && exchangeLines.length)
+                beginExchange(exchangeLines, activeReaction.instanceId);
             else completeReaction();
             return true;
         }
@@ -1103,7 +1115,7 @@ export function create(
             }
             if (!objectiveStep) break;
             if (result!.current < result!.target && !unavailable) break;
-            if (!advance(null, step!.id, true)) break;
+            if (!advance(null, step!.id, true, activeReaction?.reaction.pause_game === false)) break;
         }
         return view();
     }

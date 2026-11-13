@@ -91,10 +91,12 @@ test("atlas retries retain each in-flight or decoded request so one failed file 
 test("text atlases cannot block match startup and the renderer is created when they arrive", () => {
     const readyFlag = loaderSource.indexOf("window.SOW_INITIAL_LOADER_READY = true");
     const readyEvent = loaderSource.indexOf('new Event("sow:loader-ready")', readyFlag);
-    const atlasGate = textAtlasSource.indexOf('"SOW_INITIAL_LOADER_READY"');
-    const atlasRequest = textAtlasSource.indexOf('"SOW_loadTextAtlases"', atlasGate);
+    const atlasRequest = textAtlasSource.indexOf('"SOW_loadTextAtlases"');
     assert.ok(readyFlag >= 0 && readyEvent > readyFlag, "the renderer sees initial loader readiness before the event");
-    assert.ok(atlasGate >= 0 && atlasRequest > atlasGate, "optional atlases wait for the first loader-ready signal");
+    assert.ok(
+        atlasRequest >= 0 && !textAtlasSource.includes('"SOW_INITIAL_LOADER_READY"'),
+        "optional atlases are requested without waiting for the first loader, which a match can keep open",
+    );
     assert.match(
         engineLoaderSource,
         /if step == 1 && self\.ui\.app\.splash_state\.frames_drawn > 1 \{/,
@@ -336,7 +338,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     );
     assert.match(
         preferences,
-        /if let Some\(leader\) = self\.progress\.preferred_leader[\s\S]*?set_selected_leader\(leader, false\)/,
+        /if let Some\(leader\) = self\s*\.progress\s*\.preferred_leader[\s\S]*?set_selected_leader\(leader, false\)/,
         "the saved profile, not the tutorial hero, restores the menu selection",
     );
     const applyCloudProfileStart = accountSource.indexOf("pub(crate) fn apply_cloud_profile(");
@@ -345,7 +347,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const applyCloudProfile = accountSource.slice(applyCloudProfileStart, applyCloudProfileEnd);
     assert.match(
         applyCloudProfile,
-        /cloud_preferred_leader\.unwrap_or_else\([\s\S]*?Leader::of\("boudica"\)/,
+        /cloud_preferred_leader\.unwrap_or_else\([\s\S]*?\.always_free\(\)/,
         "the client fallback uses the permanently free hero instead of recalculating rotation",
     );
     const tutorialCompleteStart = dataDbSource.indexOf("pub async fn complete_tutorial(");

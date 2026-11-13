@@ -343,6 +343,8 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const avatarSlug = leaderArtSlug(leader);
     const avatarUrl = heroesAvatarUrl(avatarSlug, selected ? "angry" : "calm");
     const rarity = heroesRarityLabel(leader);
+    const rarityClass = leader.rarity ? " sow-heroes__rarity sow-heroes__rarity--" + esc(leader.rarity) : "";
+    const rarityAttr = leader.rarity ? " data-rarity='" + esc(leader.rarity) + "'" : "";
     return (
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
@@ -362,7 +364,15 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         "</strong><small>" +
         esc(leaderCivilization(leader)) +
         "</small>" +
-        (rarity ? "<em>" + esc(rarity) + "</em>" : "") +
+        (rarity
+            ? "<em class='" +
+              (rarityClass ? rarityClass.trim() : "sow-heroes__rarity") +
+              "'" +
+              rarityAttr +
+              ">" +
+              esc(rarity) +
+              "</em>"
+            : "") +
         "</span>" +
         "</button>"
     );
@@ -372,7 +382,7 @@ function randomLeaderName() {
     return SOW_t("heroes.random_leader");
 }
 
-function randomLeaderOption() {
+function randomLeaderOption(): MenuLeader {
     return {
         id: "random",
         slug: "random",
@@ -476,15 +486,22 @@ function heroesRoster(leaders: MenuLeader[]) {
     return active.concat(locked);
 }
 
+const HEROES_FILTER_ICON =
+    "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'/></svg>";
+
+const HEROES_SORT_ICON =
+    "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m3 16 4 4 4-4'/><path d='M7 20V4'/><path d='m21 8-4-4-4 4'/><path d='M17 4v16'/></svg>";
+
 function renderHeroesRegionDropdown() {
     return SOW_renderDropdown({
         key: "heroes-region",
         label: SOW_t("heroes.filter_leaders_region"),
         name: "region",
+        icon: HEROES_FILTER_ICON,
         value: menuUi.heroesRegionFilter,
-        className: "sow-heroes__region",
+        className: "sow-heroes__region" + (menuUi.heroesRegionFilter !== "all" ? " is-filtered" : ""),
         options: [
-            { value: "all", label: SOW_t("heroes.all_regions") },
+            { value: "all", label: SOW_t("heroes.all_regions"), shortLabel: SOW_t("heroes.region_filter") },
             { value: "europe", label: SOW_t("heroes.europe") },
             { value: "africa", label: SOW_t("heroes.africa") },
             { value: "asia", label: SOW_t("heroes.asia") },
@@ -498,13 +515,14 @@ function renderHeroesSortDropdown() {
         key: "heroes-sort",
         label: SOW_t("heroes.sort_leaders"),
         name: "sort",
+        icon: HEROES_SORT_ICON,
         value: menuUi.heroesSort || "cost_desc",
         className: "sow-heroes__sort",
         options: [
             { value: "cost_desc", label: SOW_t("heroes.sort_cost_desc") },
             { value: "cost_asc", label: SOW_t("heroes.sort_cost_asc") },
-            { value: "alpha_asc", label: SOW_t("heroes.sort_alpha_asc") },
-            { value: "alpha_desc", label: SOW_t("heroes.sort_alpha_desc") },
+            { value: "alpha_asc", label: SOW_t("heroes.sort_alpha_asc"), shortLabel: "A-Z" },
+            { value: "alpha_desc", label: SOW_t("heroes.sort_alpha_desc"), shortLabel: "Z-A" },
         ],
     });
 }
@@ -625,6 +643,7 @@ export function updateHeroesPreview() {
         if (statusLabelNode) statusLabelNode.textContent = statusLabel;
         else status.textContent = statusLabel;
         status.hidden = !statusLabel;
+        status.dataset.rarity = !randomSelected && activeLeader && activeLeader.rarity ? activeLeader.rarity : "";
     }
     const purchase = featured.querySelector("[data-hero-purchase]");
     if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
@@ -743,6 +762,7 @@ export function selectDropdown(key: string, value: string) {
     menuUi.dropdownOpenKey = null;
     if (key === "heroes-region") {
         menuUi.heroesRegionFilter = value || "all";
+        dropdown.classList.toggle("is-filtered", menuUi.heroesRegionFilter !== "all");
         syncDropdowns();
         refreshHeroesRoster(true);
         return;
@@ -815,7 +835,9 @@ export function renderHeroes() {
         renderHeroesArtLoader(artSlug) +
         "<div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" +
         (!statusLabel ? " hidden" : "") +
-        "><span data-hero-status-label>" +
+        " data-rarity='" +
+        esc((!activeRandom && activeLeader && activeLeader.rarity) || "") +
+        "'><span data-hero-status-label>" +
         esc(statusLabel) +
         "</span></p><div data-hero-briefing>" +
         renderHeroBriefing(activeRandom ? "random" : activeLeader, "selection", "sow-heroes-selected") +
@@ -827,7 +849,7 @@ export function renderHeroes() {
         esc(SOW_t("heroes.leader_list")) +
         "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" +
         esc(SOW_t("heroes.search_leaders")) +
-        "</span><input data-role='heroes-search' type='search' placeholder='" +
+        "</span><span class='sow-heroes__search-icon' aria-hidden='true'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg></span><input data-role='heroes-search' type='search' placeholder='" +
         esc(SOW_t("heroes.search_leader_civilization")) +
         "' value=\"" +
         esc(menuUi.heroesSearchQuery) +

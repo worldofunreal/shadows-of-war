@@ -84,7 +84,6 @@
     },
     {
       "id": "contact_snettisham",
-      "after": "boudica_build_city",
       "when": {
         "type": "contact",
         "target": "snettisham"
@@ -99,20 +98,33 @@
           "label_key": "tutorial.campaign_boudica_neutral_terms_accept",
           "body_key": "tutorial.campaign_boudica_neutral_terms_accept_detail",
           "relation": "allied",
-          "gold_cost": 200
+          "gold_cost": 200,
+          "exchange": [
+            {
+              "speaker": "snettisham",
+              "emote": "celebrate",
+              "emote_text_key": "tutorial.campaign_boudica_snettisham_accept_emote"
+            }
+          ]
         },
         {
           "id": "refuse",
           "label_key": "tutorial.campaign_boudica_neutral_terms_refuse",
           "body_key": "tutorial.campaign_boudica_boudica_snettisham_refuse_detail",
           "relation": "enemy",
-          "gold_cost": 0
+          "gold_cost": 0,
+          "exchange": [
+            {
+              "speaker": "snettisham",
+              "emote": "threat",
+              "emote_text_key": "tutorial.campaign_boudica_snettisham_refuse_emote"
+            }
+          ]
         }
       ]
     },
     {
       "id": "contact_thetford",
-      "after": "boudica_build_city",
       "when": {
         "type": "contact",
         "target": "thetford"
@@ -127,26 +139,28 @@
           "label_key": "tutorial.campaign_boudica_boudica_thetford_respect",
           "body_key": "tutorial.campaign_boudica_boudica_thetford_respect_detail",
           "relation": "allied",
-          "gold_cost": 0
+          "gold_cost": 0,
+          "exchange": [
+            {
+              "speaker": "boudica",
+              "emote": "greet",
+              "emote_text_key": "tutorial.campaign_boudica_boudica_thetford_greet_reply_emote"
+            }
+          ]
         },
         {
           "id": "demand",
           "label_key": "tutorial.campaign_boudica_boudica_thetford_demand",
           "body_key": "tutorial.campaign_boudica_boudica_thetford_demand_detail",
           "relation": "enemy",
-          "gold_cost": 0
-        }
-      ],
-      "exchange": [
-        {
-          "speaker": "thetford",
-          "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_thetford_greet_emote"
-        },
-        {
-          "speaker": "boudica",
-          "emote": "greet",
-          "emote_text_key": "tutorial.campaign_boudica_boudica_thetford_greet_reply_emote"
+          "gold_cost": 0,
+          "exchange": [
+            {
+              "speaker": "thetford",
+              "emote": "threat",
+              "emote_text_key": "tutorial.campaign_boudica_thetford_greet_emote"
+            }
+          ]
         }
       ]
     },
@@ -708,13 +722,6 @@
       "marker": {
         "target": "suetonius_paulinus"
       },
-      "exchange": [
-        {
-          "speaker": "suetonius_paulinus",
-          "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_suetonius_zoom_emote"
-        }
-      ],
       "guide": {
         "kind": "world",
         "target": "player",

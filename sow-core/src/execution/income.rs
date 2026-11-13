@@ -164,93 +164,6 @@ impl SowEngine {
         }
 
         self.update_debt_rebellions(&config);
-
-        let mut tribes_needing_city = Vec::new();
-        for player in self.state.players.iter().filter(|p| {
-            p.alive
-                && self.state.config.buildings_enabled
-                && self.campaign_allows_building(crate::game::BuildingKind::City, 1)
-                && !self.campaign_structures_held(p.id)
-        }) {
-            let has_city = aggs
-                .get(player.id as usize)
-                .is_some_and(|a| a.city_levels > 0);
-            let is_standard_bot = player.player_type == crate::player::PlayerType::Bot;
-            let needs_city = if is_standard_bot {
-                player.cities == 0
-                    && (!self.campaign_city_requires_gold_ids.contains(&player.id)
-                        || player.gold > 0.0)
-            } else {
-                !has_city
-            };
-            if player.player_type == crate::player::PlayerType::Bot
-                && needs_city
-                && player.tile_count >= 150
-                && (self.state.tick + player.id as u64).is_multiple_of(30)
-            {
-                tribes_needing_city.push((
-                    player.id,
-                    player.sum_x,
-                    player.sum_y,
-                    player.tile_count,
-                ));
-            }
-        }
-
-        for (tid, sum_x, sum_y, tile_count) in tribes_needing_city {
-            let cx = (sum_x / tile_count as u64) as u32;
-            let cy = (sum_y / tile_count as u64) as u32;
-            let w = self.state.map.width;
-            let mut found_tile = None;
-            for dy in -5..=5 {
-                for dx in -5..=5 {
-                    let nx = cx as i32 + dx;
-                    let ny = cy as i32 + dy;
-                    if self.state.map.is_valid_coord(nx, ny) {
-                        let (ux, uy) = (nx as u32, ny as u32);
-                        if self.state.map.owner_id(ux, uy) == tid
-                            && self.state.map.terrain[self.state.map.ref_id(ux, uy)].is_land()
-                        {
-                            found_tile = Some(uy * w + ux);
-                            break;
-                        }
-                    }
-                }
-                if found_tile.is_some() {
-                    break;
-                }
-            }
-            if let Some(tile_idx) = found_tile {
-                self.refresh_building_grid();
-                let spawn_ok = crate::building::find_structure_site_near(
-                    &self.state.map,
-                    tid,
-                    tile_idx,
-                    crate::game::BuildingKind::City,
-                    &self.building_grid,
-                    &mut self.placement_scratch,
-                    self.legacy_building_rules,
-                );
-                if let Some(spawn_idx) = spawn_ok {
-                    let building_id = self.state.next_building_id;
-                    self.state.next_building_id =
-                        self.state.next_building_id.wrapping_add(1).max(1);
-
-                    self.add_building(crate::building::Building {
-                        id: building_id,
-                        owner_id: tid,
-                        tile_idx: spawn_idx,
-                        kind: crate::game::BuildingKind::City,
-                        level: 1,
-                        under_construction: false,
-                        ticks_until_complete: 0,
-                    });
-                    if let Some(p) = self.state.player_mut(tid) {
-                        p.cities += 1;
-                    }
-                }
-            }
-        }
     }
 
     fn update_debt_rebellions(&mut self, config: &crate::game_config::GameConfig) {
@@ -539,17 +452,17 @@ mod zero_troop_bot_income_tests {
         );
     }
     #[test]
-    fn gold_gated_campaign_bot_rebuilds_its_city_once_it_has_gold() {
+    fn bot_with_150_tiles_does_not_receive_a_free_city_below_cost() {
         let config = GameConfig::default();
         let mut state = GameState::new(1, 20, 20, config.clone());
         state.phase = GamePhase::Playing;
         let mut player = Player::new_bot(1, "Snettisham".into(), [0.2, 0.5, 1.0], &config);
         player.alive = true;
-        player.tile_count = 200;
+        player.tile_count = 150;
         player.troops = 500.0;
         player.gold = 0.0;
         state.players.push(player);
-        for tile in 0..200 {
+        for tile in 0..150 {
             state.map.set_owner_id(tile % 20, tile / 20, 1);
             let ref_id = state.map.ref_id(tile % 20, tile / 20);
             state.map.terrain[ref_id] = MapTile::from_byte(0b1000_0000);
@@ -557,17 +470,25 @@ mod zero_troop_bot_income_tests {
         state.player_lookup = vec![None, Some(0)];
 
         let mut engine = SowEngine::new(state, WaterComponents::default());
-        engine.campaign_city_requires_gold_ids.insert(1);
         engine.state.tick = 29;
         engine.execute_income();
-        let cities = engine
-            .buildings
-            .iter()
-            .filter(|b| b.owner_id == 1 && b.kind == BuildingKind::City)
-            .count();
-        assert_eq!(
-            cities, 1,
-            "gold-gated bot with tile income must rebuild its city"
+        assert!(engine.state.player(1).unwrap().gold < config.cost_city);
+        assert!(
+            !engine
+                .buildings
+                .iter()
+                .any(|b| { b.owner_id == 1 && b.kind == crate::game::BuildingKind::City })
+        );
+
+        engine.state.player_mut(1).unwrap().gold = config.cost_city - 1.0;
+        engine.state.tick = 59;
+        engine.execute_income();
+        assert!(engine.state.player(1).unwrap().gold < config.cost_city);
+        assert!(
+            !engine
+                .buildings
+                .iter()
+                .any(|b| { b.owner_id == 1 && b.kind == crate::game::BuildingKind::City })
         );
     }
 }
