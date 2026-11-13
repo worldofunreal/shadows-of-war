@@ -146,8 +146,6 @@ pub struct Faction {
     pub assault_force: bool,
     /// Builds nothing until the player's contact response is decided.
     pub hold_structures_until_contact: bool,
-    /// Pays for its first city from its own gold instead of receiving one free.
-    pub city_requires_gold: bool,
     /// Accepts every alliance request from the player without AI thresholds.
     pub accepts_alliance_requests: bool,
 }
@@ -224,7 +222,6 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             campaign_can_attack_player: f.can_attack_player,
             campaign_assault_force: f.assault_force,
             campaign_hold_structures_until_contact: f.hold_structures_until_contact,
-            campaign_city_requires_gold: f.city_requires_gold,
             campaign_accepts_alliance_requests: f.accepts_alliance_requests,
         })
         .collect()
@@ -268,8 +265,6 @@ struct RosterEntry {
     assault_force: bool,
     #[serde(default)]
     hold_structures_until_contact: bool,
-    #[serde(default)]
-    city_requires_gold: bool,
     #[serde(default)]
     accepts_alliance_requests: bool,
 }
@@ -404,7 +399,6 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             can_attack_player: e.can_attack_player,
             assault_force: e.assault_force,
             hold_structures_until_contact: e.hold_structures_until_contact,
-            city_requires_gold: e.city_requires_gold,
             accepts_alliance_requests: e.accepts_alliance_requests,
         });
     }
@@ -476,7 +470,8 @@ mod tests {
         ] {
             let (center, zoom) =
                 tutorial_camera_frame(CampaignId::Boudica, &config, screen.0, screen.1).unwrap();
-            assert_eq!(center, (719.0, 79.5));
+            // Midpoint of the player spawn (719, 88) and the Roman outpost (712, 88) in assets/campaign/boudica.json.
+            assert_eq!(center, (716.0, 88.5));
             assert_eq!(zoom, expected_zoom);
         }
     }

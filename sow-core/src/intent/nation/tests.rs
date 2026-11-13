@@ -1658,7 +1658,7 @@ mod bot_iq_alliance_tests {
         );
     }
 
-    /// Campaign faction on Snettisham's terms: 200 gold received, iq 85, construction held.
+    /// Campaign faction starts with city cost, IQ 85, and construction held until contact.
     fn test_engine_held_campaign_faction() -> SowEngine {
         let w = 48u32;
         let h = 48u32;
@@ -1717,22 +1717,30 @@ mod bot_iq_alliance_tests {
         );
         engine.campaign_contact_resolved.insert(10);
         let mut first_kind = None;
+        let mut city_gold_spent = None;
         for _ in 0..2000 {
+            let gold_before = engine.state.player(10).unwrap().gold;
+            let gold_received_before = engine.state.player(10).unwrap().gold_received;
             run_building_sim_ticks(&mut engine, 1);
-            engine.execute_construction();
             if first_kind.is_none() {
-                first_kind = engine
-                    .buildings
-                    .iter()
-                    .find(|b| b.owner_id == 10)
-                    .map(|b| b.kind);
+                if let Some(building) = engine.buildings.iter().find(|b| b.owner_id == 10).copied() {
+                    first_kind = Some(building.kind);
+                    if building.kind == crate::game::BuildingKind::City {
+                        let player = engine.state.player(10).unwrap();
+                        let credited = player.gold_received - gold_received_before;
+                        city_gold_spent = Some(gold_before + credited - player.gold);
+                        assert!(building.under_construction);
+                    }
+                }
             }
+            engine.execute_construction();
         }
         assert_eq!(
             first_kind,
             Some(crate::game::BuildingKind::City),
             "the first building after the decision is the village (City), not a cheaper structure"
         );
+        assert!((city_gold_spent.unwrap_or_default() - 200.0).abs() < 1e-9);
         assert!(
             engine.buildings.iter().any(|b| b.owner_id == 10
                 && b.kind == crate::game::BuildingKind::City

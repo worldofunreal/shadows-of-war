@@ -80,6 +80,9 @@ radial sí muestra el correcto:
    loader no se libera hasta que la primera cara de cada jugador (Calm o su
    única cara) cargó o falló una vez (`first_faces_settled`). Esas caras se
    piden antes que las demás. Una falla sigue reintentando ya en partida.
+   Las celdas viven en el renderer de texto: el loader de partida pide los
+   atlas de texto y crea ese renderer en cuanto llegan, aunque el primer
+   loader de la página todavía no haya terminado. Sin renderer no carga ninguna cara.
    Así la fase de despliegue empieza con los retratos puestos; en línea, el
    tiempo de esta espera sale de los 15 s de despliegue, porque el relay
    cuenta desde que registra la partida.

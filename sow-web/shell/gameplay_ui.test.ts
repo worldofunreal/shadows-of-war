@@ -254,6 +254,8 @@ test("endgame shows the five match stats with exact combat counts and compact to
             endgameObserve: node(),
         };
         const context = vm.createContext({
+            // HUD boot wiring for deferred building atlases; these endgame slices do not test atlases.
+            activateDeferredBuildingAtlases() {},
             hud: {
                 match_over: true,
                 is_winner: isWinner,
@@ -270,7 +272,7 @@ test("endgame shows the five match stats with exact combat counts and compact to
             },
             hudRefs: refs,
             hudState: { selected_leader: "test" },
-            window: { SOW_PORTAL: "web" },
+            window: { SOW_PORTAL: "web", SOW_INITIAL_LOADER_READY: true },
             SOW_t: (key) => key,
             formatEndgameExact: format.formatEndgameExact,
             formatEndgameCompact: format.formatEndgameCompact,
@@ -450,6 +452,8 @@ function makePlayerDialogsHarness() {
         settingsOpen: false,
         mapMenuOpen: false,
         isOver: false,
+        // HUD boot wiring for deferred building atlases; the panels here do not test atlases.
+        activateDeferredBuildingAtlases() {},
         window: {
             SOW_LOCALE: "en",
             SOW_menu_command: (raw) => calls.push(JSON.parse(raw)),
@@ -652,6 +656,8 @@ test("inbox reuses identities and live buttons, resolves focus, and survives loc
         hudState: { phase: "Playing" },
         emoteTextKey: "",
         hudInitialized: true,
+        // HUD boot wiring for deferred building atlases; the panels here do not test atlases.
+        activateDeferredBuildingAtlases() {},
         window: {
             SOW_LOCALE: "en",
             SOW_menu_command: (raw) => calls.push(JSON.parse(raw)),

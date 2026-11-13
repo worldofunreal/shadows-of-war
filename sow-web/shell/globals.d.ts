@@ -1,6 +1,6 @@
 import type { CampaignApi, CampaignViewApi } from "./campaign/types.ts";
 
-type DropdownOption = { value: string | number; label: string };
+type DropdownOption = { value: string | number; label: string; shortLabel?: string };
 type DropdownConfig = {
     key: string;
     name?: string;
@@ -9,6 +9,7 @@ type DropdownConfig = {
     className?: string;
     label?: string;
     setting?: string;
+    icon?: string;
 };
 
 declare global {

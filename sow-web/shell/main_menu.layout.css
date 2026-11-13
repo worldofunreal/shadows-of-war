@@ -751,6 +751,92 @@
   }
 }
 
+@media (orientation: landscape) and (max-height: 560px) {
+  #sow-menu[data-screen="home"] .sow-menu__main {
+    display: grid;
+    grid-template-columns: minmax(420px, auto) minmax(0, 1fr);
+    gap: clamp(10px, 2vw, 18px);
+    align-items: center;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__command {
+    display: grid;
+    grid-template-columns: minmax(200px, 1.15fr) minmax(180px, 1fr);
+    gap: 8px 10px;
+    padding: 8px 12px;
+    max-height: 100%;
+    overflow: visible;
+    align-self: center;
+    border-radius: var(--sow-tactical-surface-radius, 8px);
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__home-public {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__home-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__quick-match {
+    min-height: 42px;
+    padding-block: 5px;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__quick-match strong {
+    font-size: 13px;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__quick-match small {
+    font-size: 9px;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__secondary {
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 11.5px;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__join {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px;
+    min-height: 32px;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__join input {
+    height: 32px;
+    padding: 3px 8px;
+    font-size: 11.5px;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__join button {
+    height: 32px;
+    padding: 3px 10px;
+    font-size: 11.5px;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__battlefield {
+    padding-bottom: clamp(8px, 2vh, 16px);
+    padding-inline-end: clamp(10px, 1.8vw, 20px);
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__leader-copy {
+    margin: 0;
+    max-width: min(220px, 32vw);
+  }
+}
+
 /* Header height and shell row share one size; content never gets a stretched first row. */
 @media (max-width: 680px), (orientation: portrait) {
   #sow-menu {

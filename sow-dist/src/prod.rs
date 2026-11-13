@@ -513,6 +513,7 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
 
 fn verify_ionos_runtime(config: &Config, release: &Release, plan: &ComponentPlan) -> Result<()> {
     verify_control_host(config, plan)?;
+    verify_map_catalog(config, release)?;
     verify_control_certificates(config)?;
     verify_control_runtime_secret(config)?;
     if !plan.relay {
@@ -2471,6 +2472,69 @@ sudo service cron onestatus >/dev/null
     run("ssh", &[&config.control_host, &checks], None).context("control-host healthcheck failed")
 }
 
+/// The live server must publish every map its release ships. A server that boots with an
+/// empty catalog still answers health checks but aborts every lobby, so the deploy fails here
+/// and the rollback restores the previous release.
+fn verify_map_catalog(config: &Config, release: &Release) -> Result<()> {
+    let expected = release_map_count(release)?;
+    let server_log = format!("{}/server.log", site::current().log_dir());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+    loop {
+        let lines = output(
+            "ssh",
+            &[
+                &config.control_host,
+                &format!("sudo tail -n 5000 {server_log} | grep -E 'SERVER-BOOT|Map catalog: ' || true"),
+            ],
+        )?;
+        match latest_map_catalog_entries(&lines) {
+            Some(count) if count >= expected => {
+                println!("  map catalog: {count} entries (release ships {expected})");
+                return Ok(());
+            }
+            Some(count) => bail!(
+                "server published {count} map catalog entries; release {} ships {expected}",
+                release.id
+            ),
+            None if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_secs(3));
+            }
+            None => bail!("server published no map catalog after its latest boot"),
+        }
+    }
+}
+
+/// Entry count from the newest `Map catalog:` line since the latest `SERVER-BOOT`. `None` when
+/// the current boot has not published a catalog yet, or the publish failed.
+fn latest_map_catalog_entries(log: &str) -> Option<usize> {
+    let mut entries = None;
+    for line in log.lines() {
+        if line.contains("[SERVER-BOOT]") {
+            entries = None;
+        }
+        if let Some((_, report)) = line.split_once("Map catalog: ") {
+            entries = report.split_whitespace().next().and_then(|count| count.parse().ok());
+        }
+    }
+    entries
+}
+
+/// Number of maps the release ships: the `[recipes]` allowlist in its `maps/SOURCES.toml`.
+fn release_map_count(release: &Release) -> Result<usize> {
+    let sources: toml::Value = fs::read_to_string(release.dir.join("maps/SOURCES.toml"))
+        .with_context(|| format!("read map allowlist of release {}", release.id))?
+        .parse()
+        .context("parse release map allowlist")?;
+    let count = sources
+        .get("recipes")
+        .and_then(toml::Value::as_table)
+        .map_or(0, |recipes| recipes.len());
+    if count == 0 {
+        bail!("release {} ships no maps", release.id);
+    }
+    Ok(count)
+}
+
 fn retain_releases(config: &Config) -> Result<()> {
     let command = r#"set -eu
 current=$(sudo readlink __SITE_RELEASE_ROOT__/current)
@@ -2607,6 +2671,23 @@ fn verify_public(paths: &Paths, config: &Config, release: &Release) -> Result<()
     }
     println!("  public origin and assetlinks verified for {}", release.id);
     Ok(())
+}
+
+#[cfg(test)]
+mod map_catalog_gate_tests {
+    use super::latest_map_catalog_entries;
+
+    #[test]
+    fn catalog_gate_reads_only_the_current_boot() {
+        let empty = "[SERVER-BOOT] build=1\n[x INFO] Map catalog: 0 entries → /var/db/c\n";
+        assert_eq!(latest_map_catalog_entries(empty), Some(0));
+        let loaded = "[SERVER-BOOT] build=1\n[x INFO] Map catalog: 15 entries → /var/db/c\n";
+        assert_eq!(latest_map_catalog_entries(loaded), Some(15));
+        let rebooted = "[SERVER-BOOT] build=1\n[x INFO] Map catalog: 15 entries → p\n[SERVER-BOOT] build=2\n";
+        assert_eq!(latest_map_catalog_entries(rebooted), None);
+        let failed = "[SERVER-BOOT] build=2\n[x ERROR] Map catalog: failed to write /var/db/c\n";
+        assert_eq!(latest_map_catalog_entries(failed), None);
+    }
 }
 
 #[cfg(test)]

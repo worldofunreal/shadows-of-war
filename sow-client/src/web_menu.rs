@@ -1982,10 +1982,14 @@ impl SowApp {
                         let screen = (self.input.screen_w, self.input.screen_h);
                         let map = (self.sim.map_w, self.sim.map_h);
                         let (from, to) = ((shot.from_x, shot.from_y), (x, y));
-                        // Light moves only: one glide that eases the zoom by at most a quarter.
+                        // Keep tutorial camera shots subtle and within the normal camera ceiling.
                         let zoom = self.input.camera_zoom;
+                        let zoom_ceiling =
+                            crate::camera_zoom_upper_bound(screen.0, screen.1).max(0.01);
                         let ease = |(center, z): ((f32, f32), f32), lo: f32, hi: f32| {
-                            (center, z.clamp(zoom * lo, zoom * hi))
+                            let min_zoom = (zoom * lo).min(zoom_ceiling);
+                            let max_zoom = (zoom * hi).min(zoom_ceiling).max(min_zoom);
+                            (center, z.clamp(min_zoom, max_zoom))
                         };
                         let key = match shot.kind {
                             CameraShotKind::Reveal => ease(
@@ -2002,7 +2006,7 @@ impl SowApp {
                                     crate::campaign::TUTORIAL_MIN_TILE_CSS,
                                 ),
                                 1.0,
-                                1.25,
+                                1.1,
                             ),
                             CameraShotKind::Link => (to, zoom),
                         };

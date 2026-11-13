@@ -14,8 +14,12 @@ fn slug(name: &str) -> String {
 /// Header and rotation weight for every readable map folder under `root`.
 fn scan_items(root: &Path) -> Vec<(String, MapHeader, u32)> {
     let mut items = Vec::new();
-    let Ok(read_dir) = std::fs::read_dir(root) else {
-        return items;
+    let read_dir = match std::fs::read_dir(root) {
+        Ok(read_dir) => read_dir,
+        Err(error) => {
+            log::error!("map root {} is unreadable: {error}", root.display());
+            return items;
+        }
     };
     for entry in read_dir.flatten() {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -104,6 +108,9 @@ fn publish(maps_root: &Path) -> Result<usize, String> {
     std::fs::write(&catalog_path, &bytes)
         .map_err(|e| format!("failed to write {}: {e}", catalog_path.display()))?;
     log::info!("Map catalog: {count} entries → {}", catalog_path.display());
+    if count == 0 {
+        log::error!("no playable maps under {}; every lobby will abort", maps_root.display());
+    }
     Ok(count)
 }
 

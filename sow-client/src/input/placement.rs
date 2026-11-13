@@ -551,7 +551,7 @@ mod tests {
         assert_eq!(resolve_building_placement_tile(&query), Ok(18));
 
         let mut unowned = owners.clone();
-        unowned[0] = 2;
+        unowned[(map_w + 1) as usize] = 2;
         let invalid_owner = PlacementQuery {
             owners: &unowned,
             ..query
@@ -559,7 +559,7 @@ mod tests {
         assert!(resolve_building_placement_tile(&invalid_owner).is_err());
 
         let mut terrain_with_water = terrain.clone();
-        terrain_with_water[3 * map_w as usize] = 0;
+        terrain_with_water[(map_w + 1) as usize] = 0;
         let invalid_terrain = PlacementQuery {
             terrain: &terrain_with_water,
             ..query
@@ -567,7 +567,7 @@ mod tests {
         assert!(resolve_building_placement_tile(&invalid_terrain).is_err());
 
         let edge = PlacementQuery {
-            click_x: 1,
+            click_x: 0,
             ..query
         };
         assert!(resolve_building_placement_tile(&edge).is_err());
@@ -575,7 +575,7 @@ mod tests {
         let overlapping = [sow_core::protocol::BuildingSnapshot {
             id: 1,
             owner_id: my_id,
-            tile_idx: 2 * map_w + 5,
+            tile_idx: 2 * map_w + 3,
             kind: BuildingKind::Farm,
             level: 1,
             under_construction: false,

@@ -1161,8 +1161,9 @@ mod tests {
             for zoom in [4.0, 8.0, 12.0, 32.0] {
                 assert_eq!(
                     building_footprint_marker_size(kind, zoom, BUILDING_MIN_MARKER_SIZE),
-                    building_marker_size(&building, zoom),
-                    "the preview preserves the actual building's scale at placement zoom"
+                    building_marker_size(&building, zoom)
+                        .map(|size| size.max(BUILDING_MIN_MARKER_SIZE)),
+                    "the preview keeps the building's scale and never drops below the legible minimum"
                 );
             }
             for zoom in [0.25, 1.0, 2.0] {

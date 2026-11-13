@@ -24,9 +24,9 @@ export function renderCommandPanel() {
         "<section class='sow-menu__command'>" +
         "<div class='sow-menu__home-public'>" +
         renderPublicPanel("home") +
+        renderDirectiveCard() +
         "</div>" +
         "<div class='sow-menu__home-actions'>" +
-        renderDirectiveCard() +
         renderQuickMatchButton() +
         "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" +
         esc(SOW_t("menu.campaign")) +
@@ -646,9 +646,10 @@ export function renderAuthModal() {
         notice +
         "<div class='sow-auth__body'>" +
         emailPanel +
-        "<div class='sow-auth__social-list'>" +
-        renderAuthSocial() +
-        "</div></div>" +
+        (window.SOW_SOCIAL_SIGN_IN === false
+            ? ""
+            : "<div class='sow-auth__social-list'>" + renderAuthSocial() + "</div>") +
+        "</div>" +
         renderSiteLink("/terms/", "auth.terms", "sow-auth__terms") +
         "</section></div>"
     );

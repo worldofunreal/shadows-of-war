@@ -957,16 +957,18 @@ mod tests {
             finger_id: FingerId::from_raw(id),
             force: None,
         };
-        app.handle_pointer_button(true, touch(1), 340.0, 260.0, true);
-        app.handle_pointer_move(movement(1), 352.0, 260.0, true);
-        app.handle_pointer_button(false, touch(1), 352.0, 260.0, true);
+        // A touch on the preview grabs it; a touch away from the preview pans the map instead.
+        app.handle_pointer_button(true, touch(1), 300.0, 240.0, true);
+        app.handle_pointer_move(movement(1), 312.0, 240.0, true);
+        app.handle_pointer_button(false, touch(1), 312.0, 240.0, true);
         assert_eq!(
             app.ui.app.hud_state.building_placement.unwrap().tile_idx,
             20 * 64 + 26
         );
         app.handle_pointer_button(true, touch(1), 160.0, 140.0, true);
         app.handle_pointer_button(false, touch(1), 160.0, 140.0, true);
-        let tile = 10 * 64 + 10;
+        // A tap places the preview on the tapped tile: (160, 140) at 12 px per tile is (13, 11).
+        let tile = 11 * 64 + 13;
         assert_eq!(
             app.ui.app.hud_state.building_placement.unwrap().tile_idx,
             tile

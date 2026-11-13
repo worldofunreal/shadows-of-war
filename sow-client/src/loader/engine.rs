@@ -4,6 +4,9 @@ use crate::EngineInitEvent;
 use crate::app::SowApp;
 use sow_core::protocol::SimCommand;
 
+/// Frames spent waiting on the first portraits before the loader reports a stall. A normal wait stays silent.
+const ENTER_GAME_STALL_FRAMES: u32 = 600;
+
 fn enter_game_ready_to_release(
     snapshot_ready: bool,
     land_cache_ready: bool,
@@ -325,8 +328,9 @@ impl SowApp {
                 && self.tasks.pending_engine_init_data.is_some()
             {
                 let step = self.ui.app.splash_state.gpu_load_step;
-                // Text atlases are optional here: the frame loop creates the text renderer when
-                // they arrive, so a slow or failed atlas request must not hold up match startup.
+                // The text renderer holds the avatar atlas that the first-face gate waits on, so a slow
+                // atlas request holds the loader. The frame loop creates the renderer when the atlases
+                // arrive, and a failed request is retried.
                 let text_atlases = if step == 1 {
                     crate::render::text_atlases::get()
                 } else {
@@ -469,9 +473,10 @@ impl SowApp {
                             let inc = ((0.95 - p) * 0.03).clamp(0.001, 0.02);
                             splash_show_loading_progress(&mut self.ui.app.splash_state, p + inc);
                         }
-                        if self.ui.app.splash_state.frames_drawn.is_multiple_of(120) {
+                        // A normal wait for the first portraits stays silent; one warning marks a stall.
+                        if self.ui.app.splash_state.frames_drawn == ENTER_GAME_STALL_FRAMES {
                             log::warn!(
-                                "[LOADER] Waiting for enter-game readiness before releasing loader: land_cache_ready={}, avatars_ready={}, is_connected={}, has_client={}, on_relay={}, queued_turns={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",
+                                "[LOADER] Enter-game readiness still pending after {ENTER_GAME_STALL_FRAMES} frames: land_cache_ready={}, avatars_ready={}, is_connected={}, has_client={}, on_relay={}, queued_turns={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",
                                 land_cache_ready,
                                 avatars_ready,
                                 self.ui.app.main_menu_state.is_connected,
