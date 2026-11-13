@@ -45,7 +45,7 @@ impl WorldHeightmap {
         Err(format!(
             "world heightmap not found. Tried:\n{}\n\
              Set SOW_HEIGHTMAP_PATH, clone MapGenerator at the repo root, or add \
-             assets/heightmaps/world.png (see README).",
+             assets/heightmaps/world.png.",
             tried
                 .iter()
                 .map(|p| format!("  - {}", p.display()))
@@ -108,46 +108,7 @@ pub struct TerrainStats {
     pub mountains: u32,
 }
 
-pub fn terrain_stats_from_packed(map_data: &[u8]) -> TerrainStats {
-    let mut s = TerrainStats::default();
-    for &byte in map_data {
-        let land = (byte & 0b1000_0000) != 0;
-        let mag = byte & 0b0001_1111;
-        if land {
-            s.land += 1;
-            if mag < 10 {
-                s.plains += 1;
-            } else if mag < 20 {
-                s.highlands += 1;
-            } else {
-                s.mountains += 1;
-            }
-        } else {
-            s.water += 1;
-        }
-        if (byte & 0b0100_0000) != 0 {
-            s.shoreline += 1;
-        }
-        if (byte & 0b0010_0000) != 0 {
-            s.ocean += 1;
-        }
-    }
-    s
-}
-
 impl TerrainStats {
-    pub fn log_summary(&self) {
-        log::info!(
-            "Terrain: {} land (plains {}, highlands {}, mountains {}), {} water ({} ocean, {} shoreline tiles)",
-            self.land,
-            self.plains,
-            self.highlands,
-            self.mountains,
-            self.water,
-            self.ocean,
-            self.shoreline
-        );
-    }
 }
 
 #[cfg(test)]

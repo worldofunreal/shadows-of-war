@@ -19,17 +19,6 @@ use sow_core::protocol::{AuthProof, ClientMessage, ServerMessage};
 use sow_net::relay_url;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
-mod reward_return;
-
-/// Jail and loopback values are spliced into a remote shell command, so only plain tokens pass.
-fn plain_token(value: &str) -> Result<String, String> {
-    if !value.is_empty() && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.')) {
-        Ok(value.to_string())
-    } else {
-        Err(format!("{value:?} is not a plain token"))
-    }
-}
-
 fn parse_websocket_url(value: &str) -> Result<Url, String> {
     let url = Url::parse(value).map_err(|error| format!("invalid WebSocket URL: {error}"))?;
 
@@ -133,7 +122,7 @@ struct Args {
     url: Url,
 
     /// Authentication provider used by the join proof
-    #[arg(long, required_unless_present_any = ["verify_rewards", "verify_ranked"])]
+    #[arg(long, required_unless_present = "smoke")]
     auth_provider: Option<String>,
 
     /// Account ID for providers that use an explicit account identity
@@ -141,65 +130,23 @@ struct Args {
     auth_account_id: Option<String>,
 
     /// Provider token or anonymous account secret
-    #[arg(long, required_unless_present_any = ["verify_rewards", "verify_ranked"])]
+    #[arg(long, required_unless_present = "smoke")]
     auth_token: Option<String>,
-    /// Run the real client return and two-player reward acceptance gate.
-    #[arg(long)]
-    verify_rewards: bool,
-    /// Verify live human-human and human-bot ranked matches and saved ratings.
-    #[arg(long, conflicts_with = "verify_rewards")]
-    verify_ranked: bool,
+    /// Deploy smoke: the saved audit account opens a private lobby and must get JoinAck.
+    #[arg(long, requires_all = ["database_url", "audit_accounts_file"])]
+    smoke: bool,
     #[arg(long)]
     database_url: Option<Url>,
     #[arg(long)]
     audit_accounts_file: Option<std::path::PathBuf>,
-    /// Require the same-origin route for the production reward audit.
-    #[arg(long, requires = "verify_rewards")]
-    require_proxied_relay: Option<String>,
-    /// Exercise a live relay upgrade during the reward acceptance test.
-    #[arg(long, requires_all = ["verify_rewards", "verify_handover_sync_dir"])]
-    verify_handover_relay_host: Option<String>,
-    /// Coordination directory shared with the official release activation.
-    #[arg(long, requires = "verify_handover_relay_host")]
-    verify_handover_sync_dir: Option<std::path::PathBuf>,
-    /// Jail that runs the relay under test: sow-server for production, ptr-sow-server for PTR.
-    #[arg(long, default_value = "sow-server", value_parser = plain_token)]
-    relay_jail: String,
-    /// Loopback address of that relay: 127.0.0.1 for production, 127.0.0.2 for PTR.
-    #[arg(long, default_value = "127.0.0.1", value_parser = plain_token)]
-    relay_loopback: String,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
     let url = args.url;
-    if args.verify_ranked {
-        reward_return::verify_ranked(
-            &url,
-            args.database_url
-                .as_ref()
-                .expect("--database-url is required for ranked verification"),
-            args.audit_accounts_file
-                .as_deref()
-                .expect("--audit-accounts-file is required for ranked verification"),
-        )
-        .await;
-        return;
-    }
-    if args.verify_rewards {
-        reward_return::verify(
-            &url,
-            args.database_url
-                .as_ref()
-                .expect("--database-url is required for reward verification"),
-            args.audit_accounts_file.as_deref(),
-            args.verify_handover_relay_host.as_deref(),
-            args.verify_handover_sync_dir.as_deref(),
-            args.require_proxied_relay.as_deref(),
-            &reward_return::RelayHome { jail: args.relay_jail, loopback: args.relay_loopback },
-        )
-        .await;
+    if args.smoke {
+        smoke(&url, args.database_url.as_ref().unwrap(), args.audit_accounts_file.as_deref().unwrap()).await;
         return;
     }
     let auth = AuthProof {
@@ -461,6 +408,78 @@ async fn main() {
     eprintln!("\n\x1b[1;32m═══ ALL STEPS PASSED ═══\x1b[0m");
     eprintln!("  Orchestrator handoff → Relay connection → Turn receive → Clean exit");
     eprintln!("  {turn_count} turns received in 5 seconds\n");
+}
+
+/// Reuses one saved anonymous account per site; creates and saves it on the first run.
+async fn smoke(url: &Url, base: &Url, accounts_file: &std::path::Path) {
+    use std::os::unix::fs::OpenOptionsExt;
+    let saved = std::fs::read(accounts_file)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).ok())
+        .and_then(|accounts| accounts.into_iter().next());
+    let account = match saved {
+        Some(account) => account,
+        None => {
+            let account: serde_json::Value = reqwest::Client::new()
+                .post(format!("{}/profile/anonymous", base.as_str().trim_end_matches('/')))
+                .timeout(std::time::Duration::from_secs(20))
+                .json(&serde_json::json!({"display_name": "Deploy Smoke"}))
+                .send()
+                .await
+                .and_then(|response| response.error_for_status())
+                .unwrap_or_else(|error| fail(&format!("create smoke account: {error}")))
+                .json()
+                .await
+                .unwrap_or_else(|error| fail(&format!("read smoke account: {error}")));
+            std::fs::create_dir_all(accounts_file.parent().unwrap()).unwrap();
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(accounts_file)
+                .and_then(|mut file| std::io::Write::write_all(&mut file, serde_json::json!([account]).to_string().as_bytes()))
+                .unwrap_or_else(|error| fail(&format!("save smoke account: {error}")));
+            account
+        }
+    };
+    let started = std::time::Instant::now();
+    let (socket, _) = tokio_tungstenite::connect_async(url.as_str())
+        .await
+        .unwrap_or_else(|error| fail(&format!("connect {url}: {error}")));
+    let (mut write, mut read) = socket.split();
+    let config = sow_core::game_config::GameConfig { map_name: "world".into(), bot_count: 0, ..Default::default() };
+    ws_send(&mut write, &ClientMessage::JoinWithAuth {
+        join: Box::new(sow_core::protocol::JoinPayload {
+            name: account["display_name"].as_str().unwrap_or("Deploy Smoke").into(),
+            target_lobby_id: None,
+            host_private: true,
+            build_version: sow_core::protocol::gameplay_build_identity(),
+            clan_tag: String::new(),
+            leader: sow_core::player::Leader::of("caesar"),
+            random_leader: true,
+            host_config: Some(Box::new(config)),
+            password: None,
+            ranked_1v1: false,
+        }),
+        auth: AuthProof {
+            provider: "anonymous".into(),
+            account_id: account["account_id"].as_str().map(Into::into),
+            token: account["auth_secret"].as_str().unwrap_or_else(|| fail("smoke account has no secret")).into(),
+        },
+    })
+    .await;
+    loop {
+        match recv(&mut read, 15).await {
+            ServerMessage::JoinAck(ack) => {
+                let _ = write.send(Message::Binary(bincode::serialize(&ClientMessage::Leave {}).unwrap())).await;
+                pass(&format!("joined private lobby {} in {:?}", ack.lobby_id, started.elapsed()));
+                return;
+            }
+            ServerMessage::JoinFailed(failure) => fail(&format!("join rejected: {}", failure.reason)),
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]

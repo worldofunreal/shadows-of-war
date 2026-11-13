@@ -1108,6 +1108,15 @@ export function create(
             if (exchange) {
                 if (
                     activeReaction?.reaction.loop === true &&
+                    exchange.phase !== "dialogue" &&
+                    nextReaction()?.isContact
+                ) {
+                    clearExchangeLine();
+                    endExchange();
+                    continue;
+                }
+                if (
+                    activeReaction?.reaction.loop === true &&
                     exchange.phase !== "speaking" &&
                     loopShouldStop()
                 ) {

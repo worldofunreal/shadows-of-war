@@ -2,11 +2,11 @@
 //! that grow with account history live in keyed event rows, not the hot row.
 use super::{AccountKind, LinkedIdentity, PlayerAccount, PlayerDb};
 use crate::redb_store::{
-    ACCOUNT_EVENTS_TABLE, ACCOUNT_IDENTITIES_TABLE, ACCOUNT_STORE_MIGRATIONS_TABLE,
+    ACCOUNT_EVENTS_TABLE, ACCOUNT_IDENTITIES_TABLE,
     PENDING_ACCOUNT_REWARDS_TABLE, PENDING_CRAZYGAMES_SCORES_TABLE, PLAYERS_TABLE,
     PUBLIC_PROFILES_TABLE, VERIFIED_VICTORY_BOARD_TABLE,
 };
-use redb::{Database, ReadTransaction, ReadableTable, WriteTransaction};
+use redb::{ReadTransaction, ReadableTable, WriteTransaction};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -152,7 +152,7 @@ fn load_base(
     account_id: &str,
 ) -> Result<PlayerAccount> {
     let value = table.get(account_id)?.ok_or("Account not found")?;
-    Ok(crate::db::parse_account_with_migration(value.value())?)
+    Ok(crate::db::parse_account(value.value())?)
 }
 
 fn load_read(txn: &ReadTransaction, account_id: &str, keys: &[&str]) -> Result<PlayerAccount> {
@@ -201,46 +201,6 @@ fn load_write(txn: &WriteTransaction, account_id: &str, keys: &[&str]) -> Result
         }
     }
     Ok(account)
-}
-
-fn migration_marker_keys(
-    db: &Database,
-    start: &str,
-    end: &str,
-    limit: usize,
-) -> Result<Vec<String>> {
-    let read = db.begin_read()?;
-    let migrations = read.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?;
-    Ok(migrations
-        .range(start..end)?
-        .take(limit)
-        .map(|row| row.map(|(key, _)| key.value().to_string()))
-        .collect::<std::result::Result<Vec<_>, _>>()?)
-}
-
-fn remove_migration_marker_keys(db: &Database, keys: &[String]) -> Result<()> {
-    if keys.is_empty() {
-        return Ok(());
-    }
-    let txn = db.begin_write()?;
-    let mut migrations = txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?;
-    for key in keys {
-        migrations.remove(key.as_str())?;
-    }
-    drop(migrations);
-    txn.commit()?;
-    Ok(())
-}
-
-fn cleanup_profile_migration_markers(db: &Database) -> Result<()> {
-    const BATCH: usize = 256;
-    loop {
-        let keys = migration_marker_keys(db, "profile-v1:", "profile-v1;", BATCH)?;
-        if keys.is_empty() {
-            return Ok(());
-        }
-        remove_migration_marker_keys(db, &keys)?;
-    }
 }
 
 fn public_index(account: &PlayerAccount) -> Result<Vec<u8>> {
@@ -454,7 +414,7 @@ pub(super) fn delete_account_rows(txn: &WriteTransaction, account_id: &str) -> R
     let account = txn
         .open_table(PLAYERS_TABLE)?
         .get(account_id)?
-        .map(|value| crate::db::parse_account_with_migration(value.value()))
+        .map(|value| crate::db::parse_account(value.value()))
         .transpose()?;
     let mut removed = 0_u32;
 
@@ -507,70 +467,7 @@ pub(super) fn delete_account_rows(txn: &WriteTransaction, account_id: &str) -> R
     Ok((account.is_some(), removed))
 }
 
-fn assert_supported_identities(accounts: &impl ReadableTable<&'static str, &'static [u8]>) -> Result<()> {
-    for entry in accounts.iter()? {
-        let (_, raw) = entry?;
-        let account = super::parse_account_with_migration(raw.value())?;
-        if account.kind == AccountKind::Human && account.linked_identities.iter()
-            .any(|identity| !crate::auth::supported_provider(&identity.provider)) {
-            return Err("provider identity import is incomplete".into());
-        }
-    }
-    Ok(())
-}
-
 impl PlayerDb {
-    /// Import verified subjects from an operator-owned snapshot. Only game
-    /// accounts that already exist are touched; their progress stays intact.
-    /// All conflicts roll back the whole bundle, including retired indexes.
-    pub fn import_identity_bundle(&self, bundle: &crate::auth::IdentityImport) -> Result<usize> {
-        if bundle.version != 1 || bundle.retired_providers.iter().any(|v| crate::auth::supported_provider(v) || v == "bot") {
-            return Err("invalid identity import schema or retirement list".into());
-        }
-        let database = self.redb_db.as_ref().ok_or("account database unavailable")?;
-        let txn = database.begin_write()?;
-        let marker = format!("identity_import_v1:{}", crate::auth::digest(&serde_json::to_string(bundle)?));
-        if let Some(previous) = txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?.get(marker.as_str())? {
-            return Ok(serde_json::from_slice(previous.value())?);
-        }
-        let mut seen = BTreeSet::new();
-        let mut count = 0;
-        for record in &bundle.accounts {
-            if !crate::profile::is_valid_account_id(&record.account_id) || !seen.insert(&record.account_id) {
-                return Err("invalid or duplicate imported account".into());
-            }
-            let raw = txn.open_table(PLAYERS_TABLE)?.get(record.account_id.as_str())?
-                .map(|value| value.value().to_vec());
-            let Some(raw) = raw else { continue; };
-            // Import provider ownership only. The normal login loader also
-            // migrates historical hero/profile fields; that is a separate operation.
-            let before: PlayerAccount = serde_json::from_slice(&raw)?;
-            if before.kind != AccountKind::Human { return Err("identity import cannot change bots".into()); }
-            let mut account = before.clone();
-            account.linked_identities.retain(|identity| !bundle.retired_providers.contains(&identity.provider));
-            for identity in &record.identities {
-                if !crate::auth::supported_provider(&identity.provider)
-                    || !matches!(identity.environment.as_str(), "production" | "debug")
-                    || identity.external_id.trim().is_empty() {
-                    return Err("invalid imported provider identity".into());
-                }
-                if !account.linked_identities.contains(identity) { account.linked_identities.push(identity.clone()); }
-            }
-            save_account(&txn, Some(&before), &account, false)?;
-            count += 1;
-        }
-        assert_supported_identities(&txn.open_table(PLAYERS_TABLE)?)?;
-        txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?.insert(marker.as_str(), serde_json::to_vec(&count)?.as_slice())?;
-        txn.commit()?;
-        Ok(count)
-    }
-
-    pub fn assert_local_identity_authority(&self) -> Result<()> {
-        let database = self.redb_db.as_ref().ok_or("account database unavailable")?;
-        let read = database.begin_read()?;
-        let accounts = read.open_table(PLAYERS_TABLE)?;
-        assert_supported_identities(&accounts)
-    }
 
     /// Claim verified provider subjects together, including a verified email.
     /// The same transaction checks all indexes and writes the account, so a
@@ -822,30 +719,7 @@ impl PlayerDb {
         let Some(value) = table.get(account_id)? else {
             return Ok(false);
         };
-        Ok(crate::db::parse_account_with_migration(value.value())?.kind == AccountKind::Bot)
-    }
-
-    pub(super) fn count_human_accounts_sync(&self, account_ids: &[String]) -> Result<usize> {
-        let db = self
-            .redb_db
-            .as_ref()
-            .ok_or("account database unavailable")?;
-        let txn = db.begin_read()?;
-        let table = txn.open_table(PLAYERS_TABLE)?;
-        let mut unique = BTreeSet::new();
-        let mut unique_count = 0;
-        for account_id in account_ids {
-            if !unique.insert(account_id.as_str()) {
-                continue;
-            }
-            if let Some(value) = table.get(account_id.as_str())?
-                && crate::db::parse_account_with_migration(value.value())?.kind
-                    == AccountKind::Human
-            {
-                unique_count += 1;
-            }
-        }
-        Ok(unique_count)
+        Ok(crate::db::parse_account(value.value())?.kind == AccountKind::Bot)
     }
 
     pub(super) fn purchase_history_sync(
@@ -913,7 +787,7 @@ impl PlayerDb {
         };
         let mut accounts = Vec::with_capacity(rows.len());
         for (id, bytes) in rows {
-            let mut account = crate::db::parse_account_with_migration(&bytes)?;
+            let mut account = crate::db::parse_account(&bytes)?;
             if account.id != id {
                 return Err("stored account key does not match its account ID".into());
             }
@@ -929,72 +803,6 @@ impl PlayerDb {
         Ok(accounts)
     }
 
-    pub(super) fn account_batch_sync(
-        &self,
-        after: Option<&str>,
-        limit: usize,
-    ) -> Result<Vec<PlayerAccount>> {
-        use std::ops::Bound::{Excluded, Unbounded};
-        let db = self
-            .redb_db
-            .as_ref()
-            .ok_or("account database unavailable")?;
-        let txn = db.begin_read()?;
-        let table = txn.open_table(PLAYERS_TABLE)?;
-        let mut accounts = Vec::with_capacity(limit);
-        let rows = if let Some(after) = after {
-            table
-                .range::<&str>((Excluded(after), Unbounded))?
-                .take(limit)
-                .map(|row| {
-                    row.map(|(key, value)| (key.value().to_string(), value.value().to_vec()))
-                })
-                .collect::<std::result::Result<Vec<_>, _>>()?
-        } else {
-            table
-                .iter()?
-                .take(limit)
-                .map(|row| {
-                    row.map(|(key, value)| (key.value().to_string(), value.value().to_vec()))
-                })
-                .collect::<std::result::Result<Vec<_>, _>>()?
-        };
-        for (id, bytes) in rows {
-            let account = crate::db::parse_account_with_migration(&bytes)?;
-            if account.id != id {
-                return Err("stored account key does not match its account ID".into());
-            }
-            accounts.push(account);
-        }
-        Ok(accounts)
-    }
-
-    pub(super) fn migration_value_sync(&self, key: &str) -> Result<Option<String>> {
-        let db = self
-            .redb_db
-            .as_ref()
-            .ok_or("account database unavailable")?;
-        let txn = db.begin_read()?;
-        let table = txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?;
-        table
-            .get(key)?
-            .map(|value| String::from_utf8(value.value().to_vec()))
-            .transpose()
-            .map_err(Into::into)
-    }
-
-    pub(super) fn set_migration_value_sync(&self, key: &str, value: &[u8]) -> Result<()> {
-        let db = self
-            .redb_db
-            .as_ref()
-            .ok_or("account database unavailable")?;
-        let txn = db.begin_write()?;
-        txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?
-            .insert(key, value)?;
-        txn.commit()?;
-        Ok(())
-    }
-
     pub(super) fn delete_account_sync(&self, account_id: &str) -> Result<(bool, u32)> {
         let db = self
             .redb_db
@@ -1004,83 +812,6 @@ impl PlayerDb {
         let (found, removed) = delete_account_rows(&txn, account_id)?;
         txn.commit()?;
         Ok((found, removed))
-    }
-
-    pub(super) fn migrate_legacy_redb_profiles(&self) -> Result<()> {
-        use std::ops::Bound::{Excluded, Unbounded};
-        const COMPLETE: &str = "schema:account-events-v1";
-        const BATCH: usize = 256;
-        let db = self
-            .redb_db
-            .as_ref()
-            .ok_or("account database unavailable")?;
-        if db
-            .begin_read()?
-            .open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?
-            .get(COMPLETE)?
-            .is_some()
-        {
-            // Completion is committed before marker cleanup. If a previous
-            // process stopped during cleanup, resume it without replaying
-            // already-normalized account rows.
-            cleanup_profile_migration_markers(db)?;
-            return Ok(());
-        }
-        let mut after: Option<String> = None;
-        loop {
-            let read = db.begin_read()?;
-            let table = read.open_table(PLAYERS_TABLE)?;
-            let rows = if let Some(after) = after.as_deref() {
-                table
-                    .range::<&str>((Excluded(after), Unbounded))?
-                    .take(BATCH)
-                    .map(|row| {
-                        row.map(|(key, value)| (key.value().to_string(), value.value().to_vec()))
-                    })
-                    .collect::<std::result::Result<Vec<_>, _>>()?
-            } else {
-                table
-                    .iter()?
-                    .take(BATCH)
-                    .map(|row| {
-                        row.map(|(key, value)| (key.value().to_string(), value.value().to_vec()))
-                    })
-                    .collect::<std::result::Result<Vec<_>, _>>()?
-            };
-            drop(table);
-            drop(read);
-            if rows.is_empty() {
-                break;
-            }
-
-            let txn = db.begin_write()?;
-            let mut migrations = txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?;
-            for (id, bytes) in &rows {
-                let marker = format!("profile-v1:{id}");
-                if migrations.get(marker.as_str())?.is_some() {
-                    continue;
-                }
-                let account = crate::db::parse_account_with_migration(bytes)?;
-                if account.id != *id {
-                    return Err("stored account key does not match its account ID".into());
-                }
-                save_account(&txn, Some(&account), &account, true)?;
-                migrations.insert(marker.as_str(), b"1".as_slice())?;
-            }
-            drop(migrations);
-            after = rows.last().map(|(id, _)| id.clone());
-            txn.commit()?;
-        }
-
-        // Keep per-account markers until every legacy row has been converted.
-        // A crash before this transaction is safe to resume because committed
-        // rows retain their markers in the same transaction as their events.
-        let txn = db.begin_write()?;
-        txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?
-            .insert(COMPLETE, b"1".as_slice())?;
-        txn.commit()?;
-        cleanup_profile_migration_markers(db)?;
-        Ok(())
     }
 
     pub(super) async fn load_account(&self, account_id: &str) -> Result<PlayerAccount> {
@@ -1124,117 +855,3 @@ impl PlayerDb {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const ACCOUNT_ID: &str = "0123456789abcdef0123456789abcdef";
-
-    fn account_with_receipt() -> PlayerAccount {
-        let mut account = PlayerAccount {
-            id: ACCOUNT_ID.to_string(),
-            display_name: "Migration test".to_string(),
-            profile: crate::db::PlayerProfile::default(),
-            linked_identities: Vec::new(),
-            kind: AccountKind::Human,
-            auth_secret_hash: None,
-            created_at: 1,
-            updated_at: 2,
-        };
-        account.profile.reward_receipts.insert(
-            "match-1".to_string(),
-            crate::profile::RewardReceipt {
-                id: "match-1".to_string(),
-                match_id: "match-1".to_string(),
-                created_at: 3,
-                ..Default::default()
-            },
-        );
-        account
-    }
-
-    fn player_db(path: &std::path::Path) -> (PlayerDb, std::sync::Arc<Database>) {
-        let db = std::sync::Arc::new(crate::redb_store::init_database(path).unwrap());
-        let player_db = PlayerDb::new("redis://127.0.0.1/", None, Some(db.clone()));
-        (player_db, db)
-    }
-
-    #[test]
-    fn legacy_profile_migration_resumes_without_replacing_saved_events() {
-        let temp = tempfile::tempdir().unwrap();
-        let (player_db, db) = player_db(&temp.path().join("accounts.redb"));
-        let account = account_with_receipt();
-        {
-            let txn = db.begin_write().unwrap();
-            let bytes = serde_json::to_vec(&account).unwrap();
-            txn.open_table(PLAYERS_TABLE)
-                .unwrap()
-                .insert(ACCOUNT_ID, bytes.as_slice())
-                .unwrap();
-            txn.commit().unwrap();
-        }
-
-        player_db.migrate_legacy_redb_profiles().unwrap();
-        let migrated = player_db
-            .account_with_events_sync(ACCOUNT_ID, &["match-1"])
-            .unwrap();
-        assert!(migrated.profile.reward_receipts.contains_key("match-1"));
-
-        // Model a process that committed conversion but stopped before
-        // cleaning the per-account marker.
-        {
-            let txn = db.begin_write().unwrap();
-            txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)
-                .unwrap()
-                .insert(format!("profile-v1:{ACCOUNT_ID}").as_str(), b"1".as_slice())
-                .unwrap();
-            txn.commit().unwrap();
-        }
-        player_db.migrate_legacy_redb_profiles().unwrap();
-
-        let migrated = player_db
-            .account_with_events_sync(ACCOUNT_ID, &["match-1"])
-            .unwrap();
-        assert!(migrated.profile.reward_receipts.contains_key("match-1"));
-        assert!(
-            db.begin_read()
-                .unwrap()
-                .open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)
-                .unwrap()
-                .get(format!("profile-v1:{ACCOUNT_ID}").as_str())
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn legacy_profile_migration_resumes_after_a_committed_batch() {
-        let temp = tempfile::tempdir().unwrap();
-        let (player_db, db) = player_db(&temp.path().join("accounts.redb"));
-        let account = account_with_receipt();
-        {
-            let txn = db.begin_write().unwrap();
-            save_account(&txn, None, &account, true).unwrap();
-            txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)
-                .unwrap()
-                .insert(format!("profile-v1:{ACCOUNT_ID}").as_str(), b"1".as_slice())
-                .unwrap();
-            txn.commit().unwrap();
-        }
-
-        player_db.migrate_legacy_redb_profiles().unwrap();
-        let migrated = player_db
-            .account_with_events_sync(ACCOUNT_ID, &["match-1"])
-            .unwrap();
-        assert!(migrated.profile.reward_receipts.contains_key("match-1"));
-        assert!(
-            db.begin_read()
-                .unwrap()
-                .open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)
-                .unwrap()
-                .get("schema:account-events-v1")
-                .unwrap()
-                .is_some()
-        );
-    }
-}

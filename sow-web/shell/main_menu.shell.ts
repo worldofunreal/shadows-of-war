@@ -24,7 +24,6 @@ import {
     leaderDisplayName,
     menuIcon,
     menuUi,
-    portalOffersSignIn,
     portalOffersStore,
     profileHeroImage,
     reconcileLeaderSelection,

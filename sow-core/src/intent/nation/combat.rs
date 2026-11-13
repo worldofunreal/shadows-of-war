@@ -214,14 +214,8 @@ impl SowEngine {
         };
         let mut largest_ready: Option<GhostRetaliation> = None;
         let mut largest_waiting: Option<GhostRetaliation> = None;
-        #[cfg(feature = "ai-metrics")]
-        let mut entries_examined = 0;
 
         for &attack_index in inbound_attacks {
-            #[cfg(feature = "ai-metrics")]
-            {
-                entries_examined += 1;
-            }
             let Some(attack) = self.attacks.get(attack_index) else {
                 continue;
             };
@@ -284,9 +278,6 @@ impl SowEngine {
         }
 
         let retaliation = largest_ready.or(largest_waiting);
-        #[cfg(feature = "ai-metrics")]
-        return (retaliation, entries_examined);
-        #[cfg(not(feature = "ai-metrics"))]
         (retaliation, 0)
     }
 
@@ -300,7 +291,6 @@ impl SowEngine {
         if !self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet) {
             return false;
         }
-        #[cfg(not(feature = "ai-metrics"))]
         use crate::warp_fleet::resolve_fleet_route;
 
         if troops < self.state.config.attack_cost_neutral {
@@ -318,22 +308,10 @@ impl SowEngine {
                 return false;
             };
             let border_tiles = &self.state.player(bot_id).unwrap().border_tiles;
-            #[cfg(any(test, feature = "ai-metrics"))]
+            #[cfg(test)]
             {
                 self.bot_work.naval_routes_calculated += 1;
             }
-            #[cfg(feature = "ai-metrics")]
-            let route = crate::warp_fleet::resolve_fleet_route_with_metrics(
-                &self.state.map,
-                &self.water,
-                &mut self.path_scratch,
-                bot_id,
-                (target_id, target_tile),
-                border_tiles,
-                Some(&target.border_tiles),
-                &mut self.bot_work.shoreline_candidates_examined,
-            );
-            #[cfg(not(feature = "ai-metrics"))]
             let route = resolve_fleet_route(
                 &self.state.map,
                 &self.water,
@@ -1402,7 +1380,7 @@ impl SowEngine {
             return false;
         }
 
-        #[cfg(any(test, feature = "ai-metrics"))]
+        #[cfg(test)]
         {
             self.bot_work.naval_border_candidates_examined +=
                 self.bot_naval_shore_sample.len() as u64;
@@ -1540,7 +1518,7 @@ impl SowEngine {
                     (start + examined) % shoreline.len();
                 examined
             };
-            #[cfg(any(test, feature = "ai-metrics"))]
+            #[cfg(test)]
             {
                 self.bot_work.shoreline_candidates_examined += examined as u64;
             }
@@ -1690,7 +1668,7 @@ impl SowEngine {
         let Some((_, _, _, target_tile, target_owner, send)) = chosen else {
             return false;
         };
-        #[cfg(any(test, feature = "ai-metrics"))]
+        #[cfg(test)]
         {
             self.bot_work.naval_routes_calculated += 1;
         }
@@ -1772,10 +1750,6 @@ impl SowEngine {
 
         let mut has_silo = false;
         for b in &self.buildings {
-            #[cfg(feature = "ai-metrics")]
-            {
-                self.bot_work.nuke_buildings_examined += 1;
-            }
             if b.owner_id == bot_id
                 && b.kind == BuildingKind::City
                 && b.active_level() >= BuildingKind::City.max_level()
@@ -1852,14 +1826,8 @@ impl SowEngine {
         // Find best structure to nuke
         let mut best_score = -1.0;
         let mut best_tile = 0;
-        #[cfg(feature = "ai-metrics")]
-        let mut sam_checks = 0u64;
 
         for b in &self.buildings {
-            #[cfg(feature = "ai-metrics")]
-            {
-                self.bot_work.nuke_buildings_examined += 1;
-            }
             if b.owner_id != primary_target || b.under_construction {
                 continue;
             }
@@ -1876,10 +1844,6 @@ impl SowEngine {
 
             // SAM avoidance
             let sam_covered = shielded_cities.iter().any(|&(sam_tile, sam_owner)| {
-                #[cfg(feature = "ai-metrics")]
-                {
-                    sam_checks += 1;
-                }
                 if sam_owner == bot_id || bot_alliances.contains(&sam_owner) {
                     return false;
                 }
@@ -1894,10 +1858,6 @@ impl SowEngine {
             }
 
             // Target dedup
-            #[cfg(feature = "ai-metrics")]
-            {
-                self.bot_work.nuke_history_lookups += 1;
-            }
             if let Some(&count) = self.recent_nuke_targets.get(&(primary_target, b.tile_idx)) {
                 score -= 50_000.0 * count as f64;
             }
@@ -1906,10 +1866,6 @@ impl SowEngine {
                 best_score = score;
                 best_tile = b.tile_idx;
             }
-        }
-        #[cfg(feature = "ai-metrics")]
-        {
-            self.bot_work.nuke_sam_checks += sam_checks;
         }
 
         if best_score > 0.0 {

@@ -33,15 +33,6 @@ impl AssetConfig {
         }
     }
 
-    pub fn map_url(&self, map_key: &str, file: &str) -> String {
-        format!(
-            "{}/{}/{}",
-            self.maps_base.trim_end_matches('/'),
-            map_key,
-            file
-        )
-    }
-
     fn js_global(name: &str) -> Option<String> {
         let window = web_sys::window()?;
         let val = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str(name)).ok()?;

@@ -192,7 +192,6 @@ let profileVictoryLeaderboardRequest: Promise<void> | null = null;
 let profileVictoryLeaderboardCursor = 0;
 let profileVictoryLeaderboardHasMore = false;
 let profileRankedLeaderboard: ProfileRankedLeader[] | null = null;
-let profileRankedLeaderboardLoading = false;
 let profileRankedLeaderboardError = "";
 let profileRankedLeaderboardRequest: Promise<void> | null = null;
 let profileRankedLeaderboardRevision = 0;
@@ -471,7 +470,6 @@ export function loadRankedLeaderboard(retry = false) {
   )
     return;
   const revision = profileRankedLeaderboardRevision;
-  profileRankedLeaderboardLoading = true;
   profileRankedLeaderboardError = "";
   profileRankedLeaderboardRequest = fetch(
     profileApi("/seasons/1/leaderboard?queue=Ranked1v1&mode=FFA&limit=100"),
@@ -493,7 +491,6 @@ export function loadRankedLeaderboard(retry = false) {
     })
     .finally(function () {
       profileRankedLeaderboardRequest = null;
-      profileRankedLeaderboardLoading = false;
       if (
         revision !== profileRankedLeaderboardRevision &&
         menuUi.profileOpen &&

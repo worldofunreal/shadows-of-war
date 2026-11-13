@@ -10,5 +10,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["shell/**/*.ts", "site/auth-callback.ts", "../sow-server/assets/admin_analytics.ts"],
-  "exclude": ["shell/**/*.test.ts", "shell/sdk/**/*.ts", "shell/typescript-test-support.ts", "shell/sw.ts"]
+  "exclude": ["shell/sdk/**/*.ts", "shell/sw.ts"]
 }

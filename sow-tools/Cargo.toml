@@ -10,10 +10,6 @@ name = "test-relay"
 path = "src/test_relay.rs"
 
 [[bin]]
-name = "write-play-catalog"
-path = "src/bin/write_play_catalog.rs"
-
-[[bin]]
 name = "generate-font-atlas"
 path = "src/bin/generate_font_atlas.rs"
 
@@ -31,14 +27,12 @@ image = { workspace = true }
 serde_json = { workspace = true }
 sha2.workspace = true
 toml.workspace = true
-log = { workspace = true }
 tokio = { workspace = true, features = ["net"] }
 reqwest = { workspace = true, features = ["blocking"] }
 bincode.workspace = true
 clap = { workspace = true }
 tokio-tungstenite = { workspace = true, features = ["connect", "native-tls"] }
 futures-util = { workspace = true }
-rand = { workspace = true }
 brotli = { workspace = true }
 ab_glyph = "0.2"
 rustybuzz = "0.20"

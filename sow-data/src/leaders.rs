@@ -345,6 +345,12 @@ pub fn leader_from_any_id(value: &str) -> Option<Leader> {
     find_leader(value, Leader::all_known())
 }
 
+/// Resolves a portrait file slug (`gudit_yodit`) to its hero. Name matching is wrong here:
+/// the nation Gudit's portrait `gudit` is calm-only art, and its name matches the hero.
+pub fn leader_from_art_slug(value: &str) -> Option<Leader> {
+    Leader::all_known().find(|leader| leader.art_slug() == value)
+}
+
 fn find_leader(value: &str, mut leaders: impl Iterator<Item = Leader>) -> Option<Leader> {
     let normalize = |value: &str| -> String {
         value

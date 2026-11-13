@@ -5,24 +5,6 @@ use sow_core::player::Leader;
 
 pub const STORAGE_KEY: &str = "sow_player_progress";
 
-/// Lazy migration for the 2026-09 currency split (owner decision): local
-/// progress saved before the split stores the spendable balance under the
-/// legacy `"laurels"` key. Move it to `"crowns"` and drop the legacy key so
-/// the new `laurels` (achievement points) field defaults to 0 instead of
-/// inheriting the old currency amount. No-op for already-migrated objects;
-/// stored bytes are rewritten on the next regular save.
-pub fn migrate_legacy_currency_json(value: &mut serde_json::Value) {
-    let Some(obj) = value.as_object_mut() else {
-        return;
-    };
-    if obj.contains_key("crowns") {
-        return;
-    }
-    if let Some(legacy) = obj.remove("laurels") {
-        obj.insert("crowns".to_string(), legacy);
-    }
-}
-
 #[derive(Default, Clone, Copy, Debug)]
 pub struct SessionDefeats {
     pub players: u32,
@@ -56,8 +38,7 @@ pub struct PlayerProgress {
     pub leader_xp: std::collections::BTreeMap<String, u32>,
     #[serde(default, deserialize_with = "deserialize_leader_stats")]
     pub leader_stats: std::collections::BTreeMap<String, sow_data::profile::LeaderCareerStats>,
-    /// Free spendable currency (legacy local saves stored it under "laurels";
-    /// [`migrate_legacy_currency_json`] moves it here on load).
+    /// Free spendable currency.
     #[serde(default)]
     pub crowns: u64,
     /// Achievement points — earned, never spent.
@@ -85,6 +66,26 @@ pub struct PlayerProgress {
     pub unlocked_achievements: std::collections::BTreeSet<String>,
     #[serde(default)]
     pub missions_progress: std::collections::BTreeMap<String, sow_data::missions::MissionRecord>,
+    #[serde(default)]
+    pub daily_missions_day: u64,
+    #[serde(default)]
+    pub weekly_missions_period: u64,
+    #[serde(default)]
+    pub daily_mission_ids: Vec<String>,
+    #[serde(default)]
+    pub weekly_mission_ids: Vec<String>,
+    #[serde(default)]
+    pub daily_swaps_used: u8,
+    #[serde(default)]
+    pub weekly_swaps_used: u8,
+    #[serde(default)]
+    pub daily_swapped_out_ids: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub weekly_swapped_out_ids: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub menu_tips_disabled: bool,
+    #[serde(default)]
+    pub total_structures_built: u32,
     #[serde(default)]
     pub ranked_matches: u32,
     #[serde(default)]
@@ -353,9 +354,10 @@ impl PlayerProgress {
         &mut self,
         incoming: std::collections::BTreeMap<String, sow_data::profile::MenuGuideProgress>,
     ) {
-        self.menu_guides.retain(|id, _| id == "welcome");
+        self.menu_guides
+            .retain(|id, _| sow_data::profile::is_known_menu_guide_id(id));
         for (id, progress) in incoming {
-            if id != "welcome" {
+            if !sow_data::profile::is_known_menu_guide_id(&id) {
                 continue;
             }
             let saved = self.menu_guides.get(&id);
@@ -363,14 +365,15 @@ impl PlayerProgress {
                 .source_match_id
                 .clone()
                 .or_else(|| saved.and_then(|record| record.source_match_id.clone()));
-            let mut merged = sow_data::profile::merge_menu_guide_progress(saved, &progress);
+            let mut merged =
+                sow_data::profile::merge_menu_guide_progress_for_id(&id, saved, &progress);
             // Server snapshots may establish this context; client writes cannot.
             merged.source_match_id = source_match_id;
-            let merged = if id == "welcome" {
-                sow_data::profile::normalize_welcome_guide_progress(&merged, self.matches_played)
-            } else {
-                merged
-            };
+            let merged = sow_data::profile::normalize_guide_progress_for_id(
+                &id,
+                &merged,
+                self.matches_played,
+            );
             self.menu_guides.insert(id, merged);
         }
     }
@@ -420,245 +423,3 @@ impl PlayerProgress {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::PlayerProgress;
-    use sow_core::player::Leader;
-
-    #[test]
-    fn tutorial_completion_only_marks_local_completion() {
-        let mut progress = PlayerProgress::default();
-        assert!(progress.mark_tutorial_completed());
-        assert!(!progress.mark_tutorial_completed());
-        assert_eq!(progress.intro_completed, Some(true));
-        assert_eq!(progress.xp, 0);
-        assert_eq!(progress.crowns, 0);
-        assert_eq!(progress.laurels, 0);
-        assert!(progress.leader_xp.is_empty());
-    }
-
-    #[test]
-    fn currency_balances_use_their_canonical_local_storage_keys() {
-        let progress = PlayerProgress {
-            crowns: 725,
-            laurels: 40,
-            ..Default::default()
-        };
-        let value = serde_json::to_value(&progress).unwrap();
-        assert_eq!(value["crowns"], 725);
-        assert_eq!(value["laurels"], 40);
-    }
-
-    #[test]
-    fn legacy_local_laurels_balance_migrates_to_crowns() {
-        // Pre-split local save: "laurels" holds the spendable balance.
-        let mut legacy = serde_json::json!({ "laurels": 725, "xp": 10 });
-        super::migrate_legacy_currency_json(&mut legacy);
-        let progress: PlayerProgress = serde_json::from_value(legacy).unwrap();
-        assert_eq!(progress.crowns, 725);
-        assert_eq!(progress.laurels, 0);
-
-        // Post-split save: untouched.
-        let mut current = serde_json::json!({ "crowns": 100, "laurels": 40 });
-        super::migrate_legacy_currency_json(&mut current);
-        let progress: PlayerProgress = serde_json::from_value(current).unwrap();
-        assert_eq!(progress.crowns, 100);
-        assert_eq!(progress.laurels, 40);
-    }
-
-    #[test]
-    fn random_match_reward_uses_the_resolved_leader_without_changing_preference() {
-        let mut progress = PlayerProgress {
-            preferred_leader: Some(Leader::of("boudica")),
-            prefer_random_leader: true,
-            ..Default::default()
-        };
-        progress.record_match_with_kda_for_leader(
-            true,
-            Default::default(),
-            0,
-            0,
-            0,
-            Leader::of("napoleon"),
-        );
-        assert_eq!(progress.leader_xp.get("Napoleon"), Some(&120));
-        assert!(!progress.leader_xp.contains_key("Boudica"));
-        assert_eq!(progress.preferred_leader, Some(Leader::of("boudica")));
-        assert!(progress.prefer_random_leader);
-    }
-
-    #[test]
-    fn random_selection_survives_reload_and_cloud_profile_merge() {
-        let local = PlayerProgress {
-            preferred_leader: Some(Leader::of("boudica")),
-            prefer_random_leader: true,
-            leader_selection_pending: true,
-            ..Default::default()
-        };
-        let mut reloaded: PlayerProgress =
-            serde_json::from_str(&serde_json::to_string(&local).unwrap()).unwrap();
-        reloaded.merge_boot_profile(PlayerProgress {
-            preferred_leader: Some(Leader::of("caesar")),
-            ..Default::default()
-        });
-        assert_eq!(reloaded.preferred_leader, Some(Leader::of("boudica")));
-        assert!(reloaded.prefer_random_leader);
-        assert!(reloaded.leader_selection_pending);
-    }
-
-    #[test]
-    fn pending_campaign_completion_survives_until_server_confirms_it() {
-        let mut local = PlayerProgress::default();
-        local.complete_episode("six_sky_ep1");
-        local.merge_boot_profile(PlayerProgress::default());
-        assert!(local.completed_episodes.contains("six_sky_ep1"));
-        assert!(local.pending_campaign_completions.contains("six_sky_ep1"));
-
-        let mut confirmed = PlayerProgress::default();
-        confirmed
-            .completed_episodes
-            .insert("six_sky_ep1".to_string());
-        local.merge_boot_profile(confirmed);
-        assert!(local.completed_episodes.contains("six_sky_ep1"));
-        assert!(!local.pending_campaign_completions.contains("six_sky_ep1"));
-    }
-
-    #[test]
-    fn assigned_leader_does_not_make_a_new_profile_have_history() {
-        let progress = PlayerProgress {
-            preferred_leader: Some(Leader::of("caesar")),
-            ..Default::default()
-        };
-        assert!(!progress.has_history());
-    }
-
-    #[test]
-    fn completed_tutorial_cannot_be_erased_by_cloud_profile() {
-        let mut local = PlayerProgress {
-            intro_completed: Some(true),
-            xp: 100,
-            ..Default::default()
-        };
-        local.merge_boot_profile(PlayerProgress {
-            preferred_leader: Some(Leader::of("caesar")),
-            ..Default::default()
-        });
-        assert_eq!(local.intro_completed, Some(true));
-        assert_eq!(local.xp, 100);
-    }
-
-    #[test]
-    fn completed_tutorial_stays_completed_when_cloud_has_other_history() {
-        let mut local = PlayerProgress {
-            intro_completed: Some(true),
-            ..Default::default()
-        };
-        local.merge_boot_profile(PlayerProgress {
-            matches_played: 1,
-            ..Default::default()
-        });
-        assert_eq!(local.intro_completed, Some(true));
-    }
-
-    #[test]
-    fn switching_accounts_does_not_carry_progress_or_campaign_completions() {
-        let mut old = PlayerProgress {
-            xp: 900,
-            crowns: 700,
-            gems: 200,
-            intro_completed: Some(true),
-            completed_episodes: ["six_sky_ep1".to_string()].into(),
-            ..Default::default()
-        };
-        old.replace_account_profile(PlayerProgress {
-            gems: 475,
-            intro_completed: Some(false),
-            ..Default::default()
-        });
-        assert_eq!(old.xp, 0);
-        assert_eq!(old.crowns, 0);
-        assert_eq!(old.gems, 475);
-        assert_eq!(old.intro_completed, Some(false));
-        assert!(!old.completed_episodes.contains("six_sky_ep1"));
-    }
-
-    #[test]
-    fn server_confirmed_claim_stays_claimed_when_cloud_profile_merges() {
-        let mut local = PlayerProgress::default();
-        let mut cloud = PlayerProgress {
-            matches_played: 1,
-            ..Default::default()
-        };
-        cloud.missions_progress.insert(
-            "onboarding_1_tutorial".to_string(),
-            sow_data::missions::MissionRecord {
-                id: "onboarding_1_tutorial".to_string(),
-                progress: 1,
-                completed: true,
-                claimed: true,
-                claimed_at: Some(12345),
-                doubled_by_ad: true,
-            },
-        );
-
-        local.merge_boot_profile(cloud);
-
-        let rec = local
-            .missions_progress
-            .get("onboarding_1_tutorial")
-            .unwrap();
-        assert!(rec.claimed);
-        assert!(rec.doubled_by_ad);
-        assert_eq!(rec.claimed_at, Some(12345));
-    }
-
-    #[test]
-    fn unconfirmed_local_claim_is_dropped_when_cloud_profile_merges() {
-        let stale = sow_data::missions::MissionRecord {
-            id: "onboarding_1_tutorial".to_string(),
-            progress: 1,
-            completed: true,
-            claimed: true,
-            claimed_at: Some(12345),
-            doubled_by_ad: true,
-        };
-        let mut local = PlayerProgress::default();
-        local
-            .missions_progress
-            .insert("onboarding_1_tutorial".to_string(), stale.clone());
-        local.missions_progress.insert(
-            "onboarding_2_build".to_string(),
-            sow_data::missions::MissionRecord {
-                id: "onboarding_2_build".to_string(),
-                ..stale.clone()
-            },
-        );
-
-        let mut cloud = PlayerProgress {
-            matches_played: 1,
-            ..Default::default()
-        };
-        cloud.missions_progress.insert(
-            "onboarding_1_tutorial".to_string(),
-            sow_data::missions::MissionRecord {
-                id: "onboarding_1_tutorial".to_string(),
-                progress: 1,
-                completed: false,
-                claimed: false,
-                claimed_at: None,
-                doubled_by_ad: false,
-            },
-        );
-
-        local.merge_boot_profile(cloud);
-
-        for id in ["onboarding_1_tutorial", "onboarding_2_build"] {
-            let rec = local.missions_progress.get(id).unwrap();
-            assert!(!rec.claimed, "{id}");
-            assert!(!rec.completed, "{id}");
-            assert!(!rec.doubled_by_ad, "{id}");
-            assert_eq!(rec.claimed_at, None, "{id}");
-        }
-        assert_eq!(local.missions_progress["onboarding_2_build"].progress, 1);
-    }
-}

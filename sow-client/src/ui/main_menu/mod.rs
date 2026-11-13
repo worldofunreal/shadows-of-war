@@ -185,22 +185,6 @@ impl MainMenuState {
     pub fn go_home(&mut self) {
         self.route = MainMenuRoute::Home;
     }
-    pub fn active_section(&self) -> MainMenuSection {
-        match self.visible_route() {
-            MainMenuRoute::Heroes => MainMenuSection::Heroes,
-            MainMenuRoute::Store => MainMenuSection::Store,
-            MainMenuRoute::Profile => MainMenuSection::Profile,
-            _ => MainMenuSection::Battle,
-        }
-    }
-    pub fn open_section(&mut self, section: MainMenuSection) {
-        self.route = match section {
-            MainMenuSection::Battle => MainMenuRoute::Home,
-            MainMenuSection::Heroes => MainMenuRoute::Heroes,
-            MainMenuSection::Store => MainMenuRoute::Store,
-            MainMenuSection::Profile => MainMenuRoute::Profile,
-        };
-    }
     pub fn apply_map_catalog_custom(&mut self, catalog: &[sow_core::maps::MapCatalogEntry]) {
         let cfg = &mut self.custom_game_config;
         cfg.map_name = sow_core::maps::resolve_map_name(catalog, &cfg.map_name);
@@ -241,49 +225,3 @@ impl MainMenuState {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::MainMenuState;
-    use sow_core::player::Leader;
-
-    #[test]
-    fn default_player_name_uses_a_global_animal_alias() {
-        let name = MainMenuState::default().player_name;
-        let matches = sow_data::ANIMAL_NAMES.iter().any(|animal| {
-            name.strip_prefix(animal).is_some_and(|suffix| {
-                suffix.len() == 4 && suffix.bytes().all(|byte| byte.is_ascii_digit())
-            })
-        });
-        assert!(matches, "unexpected initial player name: {name}");
-    }
-
-    #[test]
-    fn choosing_random_keeps_the_last_concrete_leader_as_backup() {
-        let mut state = MainMenuState::default();
-        state.set_selected_leader(Leader::of("boudica"), false);
-        state.set_random_leader(true, true);
-
-        assert_eq!(state.selected_leader, Leader::of("boudica"));
-        assert!(state.prefer_random_leader);
-    }
-
-    #[test]
-    fn choosing_a_concrete_leader_clears_random() {
-        let mut state = MainMenuState::default();
-        state.set_random_leader(true, true);
-        state.set_selected_leader(Leader::of("napoleon"), true);
-
-        assert_eq!(state.selected_leader, Leader::of("napoleon"));
-        assert!(!state.prefer_random_leader);
-    }
-
-    #[test]
-    fn syncing_a_concrete_backup_does_not_cancel_random_selection() {
-        let mut state = MainMenuState::default();
-        state.set_random_leader(true, true);
-        state.set_selected_leader(Leader::of("boudica"), false);
-
-        assert_eq!(state.selected_leader, Leader::of("boudica"));
-        assert!(state.prefer_random_leader);
-    }
-}

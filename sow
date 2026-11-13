@@ -88,15 +88,32 @@ run_dist_process() {
   local bin="$2"
   shift 2
 
+  if [[ "${log_prefix}" == production || "${log_prefix}" == ptr ]]; then
+    command -v flock >/dev/null || { echo "flock is required to prevent overlapping deploys" >&2; return 127; }
+    # PTR shares dist/ and the IONOS host with production: both hold the production lock.
+    exec 9>"${ROOT}/dist/.production.lock"
+    flock -n 9 || { echo "another ./sow p or ./sow ptr is running" >&2; return 1; }
+    if [[ "${log_prefix}" == ptr ]]; then
+      exec 8>"${ROOT}/dist/.ptr.lock"
+      flock -n 8 || { echo "another ./sow ptr is running" >&2; return 1; }
+    fi
+    # Deploy a frozen copy of the checkout (uncommitted work included), so agents
+    # editing the checkout cannot change a release while it builds.
+    local src="${ROOT}/dist/.source"
+    mkdir -p "${src}"
+    # Copy by content without source times: a changed file gets the copy time, so cargo never
+    # mistakes an edit older than its last build for an unchanged file.
+    rsync -rlpD --checksum --delete --exclude=/.git --exclude=/target --exclude=/dist "${ROOT}/" "${src}/" || return $?
+    ln -sfn "${ROOT}/dist" "${src}/dist"
+    ln -sfn "${ROOT}/.git" "${src}/.git"
+    ln -sfn "${ROOT}/.version" "${src}/.version"  # ./sow p -v bumps the real checkout
+    export CARGO_TARGET_DIR="${ROOT}/target/deploy-source"
+    cd "${src}"
+    cargo build -p sow-dist || return $?
+    exec "${CARGO_TARGET_DIR}/debug/sow" "$@"
+  fi
   cargo build -p sow-dist || return $?
-  if [[ "${log_prefix}" == production ]]; then
-    command -v flock >/dev/null || { echo "flock is required to prevent overlapping production builds" >&2; return 127; }
-    exec flock -n "${ROOT}/dist/.production.lock" "${bin}" "$@"
-  elif [[ "${log_prefix}" == ptr ]]; then
-    command -v flock >/dev/null || { echo "flock is required to prevent overlapping PTR and production builds" >&2; return 127; }
-    # PTR shares dist/ and the IONOS host with production: hold the production lock too.
-    exec flock -n "${ROOT}/dist/.production.lock" flock -n "${ROOT}/dist/.ptr.lock" "${bin}" "$@"
-  elif [[ "${log_prefix}" == poki ]]; then
+  if [[ "${log_prefix}" == poki ]]; then
     command -v flock >/dev/null || { echo "flock is required to prevent overlapping Poki package builds" >&2; return 127; }
     exec flock -n "${ROOT}/dist/.poki-build.lock" "${bin}" "$@"
   elif [[ "${log_prefix}" == crazygames ]]; then

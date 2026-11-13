@@ -18,7 +18,7 @@ import {
     renderHeroBriefing,
     root,
 } from "./main_menu.core.ts";
-import { activeScreenPanel, render } from "./main_menu.shell.ts";
+import { activeScreenPanel } from "./main_menu.shell.ts";
 import type {
     MenuCampaignEpisode,
     MenuCustomGameConfig,

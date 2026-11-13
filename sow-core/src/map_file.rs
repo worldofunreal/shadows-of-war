@@ -2,11 +2,6 @@
 
 pub const MAP_MAGIC: &[u8; 4] = b"SOWM";
 pub const MAP_VERSION: u16 = 1;
-/// Transitional inline-geo layout (record between spawns and terrain);
-/// still parsed, never written. Current files append the geo record AFTER
-/// the terrain instead, staying version 1 so pre-geo parsers (deployed
-/// servers, cached wasm clients) read them unchanged and ignore the tail.
-pub const MAP_VERSION_INLINE_GEO: u16 = 2;
 
 /// Geo record tags: byte introducing the record.
 const GEO_TAG_NONE: u8 = 0;
@@ -15,10 +10,8 @@ const MAP_ROSTER_TAG: u8 = 2;
 const MAP_ROSTER_VERSION: u16 = 1;
 
 pub const CATALOG_MAGIC: &[u8; 4] = b"SOWC";
-/// v2 adds land/frequency. Roster summaries use a tagged trailing extension,
-/// which v2 readers safely ignore; v3 inline rosters are accepted for transition.
+/// Roster summaries use a tagged trailing extension.
 pub const CATALOG_VERSION: u16 = 2;
-const CATALOG_VERSION_INLINE_ROSTERS: u16 = 3;
 const CATALOG_ROSTER_TAG: u8 = 1;
 const CATALOG_ROSTER_VERSION: u16 = 1;
 
@@ -391,14 +384,12 @@ fn read_roster_record(
 fn parse_map_tail(
     data: &[u8],
     mut off: usize,
-    version: u16,
     width: u32,
     height: u32,
     spawn_count: usize,
-    initial_geo: Option<GeoBounds>,
 ) -> Result<(Option<GeoBounds>, Option<String>, Vec<MapRosterPreset>), MapFileError> {
-    let mut geo_bounds = initial_geo;
-    if version == MAP_VERSION && off < data.len() {
+    let mut geo_bounds = None;
+    if off < data.len() {
         geo_bounds = read_geo_record(data, &mut off)?;
     }
     let (default_roster, rosters) = if off < data.len() {
@@ -541,7 +532,7 @@ pub fn parse_header(data: &[u8]) -> Result<MapHeader, MapFileError> {
     }
     let mut off = 4usize;
     let version = read_u16(data, &mut off).ok_or(MapFileError::TooShort)?;
-    if version != MAP_VERSION && version != MAP_VERSION_INLINE_GEO {
+    if version != MAP_VERSION {
         return Err(MapFileError::UnsupportedVersion(version));
     }
     off += 2; // reserved
@@ -557,10 +548,6 @@ pub fn parse_header(data: &[u8]) -> Result<MapHeader, MapFileError> {
         let _ = read_u32(data, &mut off).ok_or(MapFileError::TooShort)?;
     }
     let mut geo_bounds = None;
-    if version == MAP_VERSION_INLINE_GEO {
-        // Transitional layout: record sits between spawns and terrain.
-        geo_bounds = read_geo_record(data, &mut off)?;
-    }
     let header_bytes = off;
     let mut default_roster = None;
     let mut roster_presets = Vec::new();
@@ -571,11 +558,9 @@ pub fn parse_header(data: &[u8]) -> Result<MapHeader, MapFileError> {
         let (parsed_geo, default, rosters) = parse_map_tail(
             data,
             terrain_end,
-            version,
             width,
             height,
             spawn_count,
-            geo_bounds,
         )?;
         geo_bounds = parsed_geo;
         default_roster = default;
@@ -652,11 +637,9 @@ pub fn parse(data: &[u8]) -> Result<MapFile, MapFileError> {
             let (_, _, rosters) = parse_map_tail(
                 data,
                 terrain_end,
-                u16::from_le_bytes([data[4], data[5]]),
                 header.width,
                 header.height,
                 header.spawn_count,
-                header.geo_bounds,
             )?;
             rosters
         },
@@ -668,9 +651,7 @@ pub fn encode(map: &MapFile) -> Vec<u8> {
     let terrain_len = (map.width as usize) * (map.height as usize);
     debug_assert_eq!(map.terrain.len(), terrain_len);
 
-    // Always version 1: the optional geo record trails the terrain, where
-    // pre-geo parsers never look. Unstamped maps stay byte-identical to the
-    // original format.
+    // The optional geo record and roster trail the terrain.
     let mut out = Vec::with_capacity(32 + map.terrain.len());
     out.extend_from_slice(MAP_MAGIC);
     write_u16(&mut out, MAP_VERSION);
@@ -754,7 +735,7 @@ pub fn parse_catalog(data: &[u8]) -> Result<MapCatalog, MapFileError> {
     }
     let mut off = 4usize;
     let version = read_u16(data, &mut off).ok_or(MapFileError::TooShort)?;
-    if version > CATALOG_VERSION_INLINE_ROSTERS {
+    if version != CATALOG_VERSION {
         return Err(MapFileError::UnsupportedVersion(version));
     }
     off += 2;
@@ -765,28 +746,8 @@ pub fn parse_catalog(data: &[u8]) -> Result<MapCatalog, MapFileError> {
         let display_name = read_string(data, &mut off)?;
         let width = read_u32(data, &mut off).ok_or(MapFileError::TooShort)?;
         let height = read_u32(data, &mut off).ok_or(MapFileError::TooShort)?;
-        let (num_land_tiles, multiplayer_frequency) = if version >= 2 {
-            (
-                read_u32(data, &mut off).ok_or(MapFileError::TooShort)?,
-                read_u32(data, &mut off).ok_or(MapFileError::TooShort)?,
-            )
-        } else {
-            (0, 1)
-        };
-        let (default_roster, roster_presets) = if version >= CATALOG_VERSION_INLINE_ROSTERS {
-            let default = read_string(data, &mut off)?;
-            let count = read_u16(data, &mut off).ok_or(MapFileError::TooShort)? as usize;
-            let mut presets = Vec::with_capacity(count);
-            for _ in 0..count {
-                presets.push(MapRosterMeta {
-                    id: read_string(data, &mut off)?,
-                    name: read_string(data, &mut off)?,
-                });
-            }
-            ((!default.is_empty()).then_some(default), presets)
-        } else {
-            (None, Vec::new())
-        };
+        let num_land_tiles = read_u32(data, &mut off).ok_or(MapFileError::TooShort)?;
+        let multiplayer_frequency = read_u32(data, &mut off).ok_or(MapFileError::TooShort)?;
         entries.push(MapCatalogEntry {
             key,
             display_name,
@@ -794,16 +755,11 @@ pub fn parse_catalog(data: &[u8]) -> Result<MapCatalog, MapFileError> {
             height,
             num_land_tiles,
             multiplayer_frequency,
-            default_roster,
-            roster_presets,
+            default_roster: None,
+            roster_presets: Vec::new(),
         });
     }
     if off < data.len() {
-        if version >= CATALOG_VERSION_INLINE_ROSTERS {
-            return Err(MapFileError::InvalidCatalog(
-                "unexpected bytes after inline roster metadata",
-            ));
-        }
         let tag = read_u8(data, &mut off).ok_or(MapFileError::TooShort)?;
         if tag != CATALOG_ROSTER_TAG {
             return Err(MapFileError::BadCatalogTag(tag));
@@ -949,7 +905,7 @@ mod tests {
             id: "historical".into(),
             name: "Historical".into(),
             entries: vec![MapRosterEntry {
-                entity_id: "nation_hatshepsut".into(),
+                entity_id: "nation_amanitore".into(),
                 role: MapRosterRole::Nation,
                 x: 2,
                 y: 3,
@@ -1028,7 +984,7 @@ mod tests {
         let bounds = GeoBounds::from_degrees(-30.5, 10.25, 60.0, 72.125);
         let map = sample_map(Some(bounds));
         let bytes = encode(&map);
-        // Stays version 1: pre-geo parsers must accept stamped maps.
+        // The reader accepts only version 1.
         assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), 1);
         let parsed = parse(&bytes).unwrap();
         assert_eq!(parsed.geo_bounds, Some(bounds));
@@ -1040,61 +996,6 @@ mod tests {
         let terrain_end = header.header_bytes + map.terrain.len();
         assert_eq!(&bytes[header.header_bytes..terrain_end], &map.terrain[..]);
         assert_eq!(bytes.len(), terrain_end + 17);
-    }
-
-    /// A stamped file must parse under the ORIGINAL v1 rules (what deployed
-    /// servers and cached wasm clients run): version==1, terrain sliced by
-    /// exact length from the spawn-table end, trailing bytes ignored.
-    #[test]
-    fn stamped_file_readable_by_pre_geo_parser() {
-        let map = sample_map(Some(GeoBounds::from_degrees(0.0, 0.0, 10.0, 10.0)));
-        let bytes = encode(&map);
-        // Header prefix only (what a pre-geo parse_header consumed) must be
-        // byte-identical to the unstamped encoding's prefix.
-        let unstamped = encode(&sample_map(None));
-        let header = parse_header(&unstamped).unwrap();
-        assert_eq!(
-            bytes[..header.header_bytes],
-            unstamped[..header.header_bytes]
-        );
-        // Old parse: exact-length terrain slice succeeds.
-        let terrain = bytes
-            .get(header.header_bytes..header.header_bytes + map.terrain.len())
-            .unwrap();
-        assert_eq!(terrain, &map.terrain[..]);
-    }
-
-    /// Transitional inline layout (version 2, record between spawns and
-    /// terrain) is still parsed for files stamped before the format moved
-    /// the record behind the terrain.
-    #[test]
-    fn parses_transitional_inline_geo_layout() {
-        let bounds = GeoBounds::from_degrees(-5.0, 40.0, 25.0, 60.0);
-        let map = sample_map(Some(bounds));
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(MAP_MAGIC);
-        write_u16(&mut bytes, MAP_VERSION_INLINE_GEO);
-        write_u16(&mut bytes, 0);
-        write_u32(&mut bytes, map.width);
-        write_u32(&mut bytes, map.height);
-        write_u32(&mut bytes, map.num_land_tiles);
-        write_string(&mut bytes, &map.display_name);
-        write_u16(&mut bytes, map.spawns.len() as u16);
-        for s in &map.spawns {
-            write_string(&mut bytes, &s.name);
-            write_string(&mut bytes, &s.flag);
-            write_u32(&mut bytes, s.x);
-            write_u32(&mut bytes, s.y);
-        }
-        bytes.push(1); // GEO_TAG_EQUIRECT inline
-        write_i32(&mut bytes, bounds.min_lon_e6);
-        write_i32(&mut bytes, bounds.min_lat_e6);
-        write_i32(&mut bytes, bounds.max_lon_e6);
-        write_i32(&mut bytes, bounds.max_lat_e6);
-        bytes.extend_from_slice(&map.terrain);
-        let parsed = parse(&bytes).unwrap();
-        assert_eq!(parsed.geo_bounds, Some(bounds));
-        assert_eq!(parsed.terrain, map.terrain);
     }
 
     #[test]
@@ -1227,32 +1128,6 @@ mod tests {
                 .as_deref(),
             Some("historical")
         );
-    }
-
-    #[test]
-    fn reads_transitional_inline_v3_roster_catalog() {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(CATALOG_MAGIC);
-        write_u16(&mut bytes, CATALOG_VERSION_INLINE_ROSTERS);
-        write_u16(&mut bytes, 0);
-        write_u32(&mut bytes, 1);
-        write_string(&mut bytes, "world");
-        write_string(&mut bytes, "World");
-        write_u32(&mut bytes, 4);
-        write_u32(&mut bytes, 4);
-        write_u32(&mut bytes, 12);
-        write_u32(&mut bytes, 1);
-        write_string(&mut bytes, "historical");
-        write_u16(&mut bytes, 1);
-        write_string(&mut bytes, "historical");
-        write_string(&mut bytes, "Historical");
-
-        let parsed = parse_catalog(&bytes).unwrap();
-        assert_eq!(
-            parsed.entries[0].default_roster.as_deref(),
-            Some("historical")
-        );
-        assert_eq!(parsed.entries[0].roster_presets[0].name, "Historical");
     }
 
     #[test]

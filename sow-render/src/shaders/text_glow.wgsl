@@ -229,58 +229,6 @@ fn shade_rounded_rect(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(rgb, alpha);
 }
 
-// Anti-aliased curved horn (KIND_HORN) for speech bubble tails and organic indicators.
-fn shade_horn(in: VertexOutput) -> vec4<f32> {
-    let p_norm = vec2<f32>(in.local_uv.x, select(in.local_uv.y, 1.0 - in.local_uv.y, in.face_dilate > 0.5));
-    let quad = in.quad_size;
-    let p = p_norm * quad;
-    let H = max(quad.y, 1e-4);
-    let W = max(quad.x, 1e-4);
-
-    let sweep_ratio = in.content_rect.x;
-    let taper = max(in.content_rect.y, 0.5);
-    let base_half_w = W * 0.5 * clamp(in.content_rect.z, 0.05, 0.95);
-    let tip_r = max(in.content_rect.w * min(W, H), 1.0);
-    let sweep_px = W * sweep_ratio;
-    let base_x = W * 0.5 + sweep_px;
-
-    let u = clamp(p.y / H, 0.0, 1.0);
-    let spine_x = base_x - sweep_px * (u * u);
-    let slope = (-2.0 * sweep_px * u) / H;
-
-    let half_w = max((base_half_w - tip_r) * pow(1.0 - u, taper) + tip_r, tip_r);
-    let dx = abs(p.x - spine_x) - half_w;
-    let dist_flank = dx / sqrt(1.0 + slope * slope);
-
-    let tip_center = vec2<f32>(W * 0.5, H);
-    let dist_tip = length(p - tip_center) - tip_r;
-
-    let dist_flank_or_tip = select(dist_flank, dist_tip, p.y > H);
-    let dist_top = -p.y;
-    let dist = max(dist_flank_or_tip, dist_top);
-
-    let aa = max(fwidth(dist), 1.0);
-    let outer = 1.0 - smoothstep(-aa, aa, dist);
-
-    let border_width = max(in.outline_thickness * globals.shader_params[__TEXT_ROUNDED_STROKE__].x * globals.shader_params[__TEXT_SHAPE_STROKE__].x, 0.0);
-    var inner = 0.0;
-    if (border_width > 0.0) {
-        let dist_inner = max(dist_flank_or_tip + border_width, dist_top);
-        inner = 1.0 - smoothstep(-aa, aa, dist_inner);
-    } else {
-        inner = outer;
-    }
-
-    let edge = max(outer - inner, 0.0);
-    let alpha = in.color.a * inner + in.outline_color.a * edge * globals.shader_params[__TEXT_OPACITY__].x;
-    if (alpha <= 1e-5) {
-        return vec4<f32>(0.0);
-    }
-    let rgb = (in.color.rgb * globals.shader_params[__TEXT_SHAPE_FILL_TINT__].rgb * in.color.a * inner
-        + in.outline_color.rgb * globals.shader_params[__TEXT_SHAPE_STROKE_TINT__].rgb * in.outline_color.a * edge) / alpha;
-    return vec4<f32>(rgb, alpha);
-}
-
 // Anti-aliased filled downward triangle (KIND_TRIANGLE). `local_uv` is the full quad; the
 // triangle occupies its bounding box with a flat top and a point at the bottom.
 fn shade_triangle(in: VertexOutput) -> vec4<f32> {
@@ -371,9 +319,6 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
     }
     if (in.kind > 9.5) {
         return shade_rounded_rect(in);
-    }
-    if (in.kind > 8.5) {
-        return shade_horn(in);
     }
     if (in.kind > 7.5) {
         return shade_arc(in);

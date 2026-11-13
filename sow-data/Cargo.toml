@@ -30,10 +30,6 @@ name = "sow-database"
 path = "src/main.rs"
 required-features = ["server"]
 
-[[example]]
-name = "check_identity_import"
-required-features = ["server"]
-
 [dependencies]
 blake3 = "1"
 serde = { workspace = true, features = ["derive"] }

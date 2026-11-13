@@ -324,10 +324,6 @@ fn for_each_valid_land_structure_index(
         if map.owner_id(x, y) != owner_id {
             continue;
         }
-        #[cfg(feature = "ai-metrics")]
-        {
-            scratch.candidates_examined += 1;
-        }
 
         let footprint = if legacy {
             BuildingFootprint::legacy_at(x, y)
@@ -341,10 +337,6 @@ fn for_each_valid_land_structure_index(
                 && !existing
                     .iter_all_in_range(x, y, LEGACY_CITY_SPACING as u32)
                     .any(|building| {
-                        #[cfg(feature = "ai-metrics")]
-                        {
-                            scratch.building_checks += 1;
-                        }
                         let dx = xi - building.x as i64;
                         let dy = yi - building.y as i64;
                         let min_dist = legacy_minimum_building_spacing(kind, building.kind) as i64;

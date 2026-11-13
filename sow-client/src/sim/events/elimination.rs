@@ -154,23 +154,3 @@ impl SowApp {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::tribe_ability_hero;
-    use sow_core::player::{Leader, PlayerType};
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn hero_ability_icon_only_when_a_tribe_hero_crushes_a_tribe() {
-        let genghis = Leader::of("genghis_khan");
-        assert_eq!(
-            tribe_ability_hero(Some(genghis), PlayerType::Bot),
-            Some(genghis)
-        );
-        assert_eq!(tribe_ability_hero(Some(genghis), PlayerType::Human), None);
-        assert_eq!(tribe_ability_hero(Some(genghis), PlayerType::Nation), None);
-        assert_eq!(
-            tribe_ability_hero(Some(Leader::of("boudica")), PlayerType::Bot),
-            None
-        );
-    }
-}

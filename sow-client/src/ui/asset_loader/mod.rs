@@ -1,5 +1,5 @@
 //! Map downloads and the portal identity picture. Nameplate portraits load in
-//! `render/avatars.rs`; see docs/nameplates-and-emotes.md.
+//! `render/avatars.rs`.
 use std::collections::{HashMap, HashSet};
 
 pub struct AssetLoader {

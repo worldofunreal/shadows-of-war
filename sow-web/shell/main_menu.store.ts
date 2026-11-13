@@ -920,12 +920,23 @@ function renderOfferSection(cadence: "daily" | "weekly") {
 
 function renderStoreHero(offer: MenuLeaderOffer) {
     const leader = leaderById(offer.id);
+    const displayName = leaderDisplayName(leader);
     return (
-        "<article class='sow-store__skin sow-store__hero'><div class='sow-store__skin-art sow-store__skin-art--leader'><img src='" +
+        "<article class='sow-store__skin sow-store__hero'>" +
+        "<button type='button' class='sow-store__skin-art sow-store__skin-art--leader sow-store__hero-inspect' data-command='open_hero_info' data-leader-id='" +
+        esc(offer.id) +
+        "' data-hero-info-tab='biography' aria-label='" +
+        esc(displayName + " — " + SOW_t("heroes.tab_biography")) +
+        "'><img src='" +
         esc(avatarImage(offer.id)) +
-        "' alt='' width='96' height='96' loading='lazy'></div><div class='sow-store__skin-body'><h3>" +
-        esc(leaderDisplayName(leader)) +
-        "</h3><p>" +
+        "' alt='' width='96' height='96' loading='lazy'></button>" +
+        "<div class='sow-store__skin-body'><div class='sow-store__hero-head'><h3>" +
+        esc(displayName) +
+        "</h3><button type='button' class='sow-store__hero-bio-btn' data-command='open_hero_info' data-leader-id='" +
+        esc(offer.id) +
+        "' data-hero-info-tab='biography'>" +
+        esc(SOW_t("heroes.bio_view_dossier")) +
+        "</button></div><p>" +
         esc(leaderCivilization(leader)) +
         "</p><div class='sow-store__buy-row'>" +
         renderLeaderCurrencyButton(offer, "crowns") +

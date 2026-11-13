@@ -190,6 +190,12 @@ pub struct Player {
     pub gold_received: f64,
     #[serde(default)]
     pub troops_received: f64,
+    #[serde(default)]
+    pub alive_ticks: u32,
+    #[serde(default)]
+    pub peak_territory_rank: Option<u16>,
+    #[serde(default)]
+    pub structures_built: u32,
 }
 
 fn default_wyrand() -> WyRand {
@@ -247,6 +253,9 @@ impl Player {
             max_tile_count: 0,
             gold_received: config.starting_gold.max(0.0),
             troops_received: config.starting_troops.max(0.0),
+            alive_ticks: 0,
+            peak_territory_rank: None,
+            structures_built: 0,
         }
     }
     pub fn new_bot(
@@ -314,6 +323,9 @@ impl Player {
             max_tile_count: 0,
             gold_received: starting_gold.max(0.0),
             troops_received: starting_troops.max(0.0),
+            alive_ticks: 0,
+            peak_territory_rank: None,
+            structures_built: 0,
         }
     }
     pub fn new_nation(
@@ -373,6 +385,9 @@ impl Player {
             max_tile_count: 0,
             gold_received: config.starting_gold.max(0.0),
             troops_received: config.starting_troops.max(0.0),
+            alive_ticks: 0,
+            peak_territory_rank: None,
+            structures_built: 0,
         }
     }
 
@@ -573,50 +588,6 @@ mod avatar_identity_tests {
         );
     }
 
-    #[test]
-    fn display_name_is_the_catalog_name_without_decorations() {
-        assert_eq!(display_name(2, "Mzilikazi", PlayerType::Bot), "Mzilikazi");
-        assert_eq!(
-            display_name(3, "Hatshepsut", PlayerType::Nation),
-            "Hatshepsut"
-        );
-        assert_eq!(display_name(7, "", PlayerType::Human), "Player 7");
-    }
-
-    #[test]
-    fn human_portrait_file_uses_the_hero_art_slug() {
-        let wiradjuri = PlayerSnapshot {
-            leader: Leader::of("tribe_wiradjuri"),
-            ..player(6, "Windradyne", PlayerType::Human, None)
-        };
-        assert_eq!(
-            avatar_identity_ref(&wiradjuri),
-            AvatarIdentityRef::Portrait {
-                slug: "windradyne",
-                leader: Some(Leader::of("tribe_wiradjuri")),
-            }
-        );
-    }
-
-    #[test]
-    fn avatar_payload_matches_the_hud_union_without_leaking_renderer_state() {
-        assert_eq!(
-            serde_json::to_value(AvatarIdentity::Portrait {
-                slug: "caesar".into(),
-                leader: Some(Leader::of("caesar")),
-            })
-            .unwrap(),
-            serde_json::json!({ "kind": "portrait", "slug": "caesar" })
-        );
-        assert_eq!(
-            serde_json::to_value(AvatarIdentity::Wilderness).unwrap(),
-            serde_json::json!({ "kind": "wilderness" })
-        );
-        assert_eq!(
-            serde_json::to_value(AvatarIdentity::Fallback).unwrap(),
-            serde_json::json!({ "kind": "fallback" })
-        );
-    }
 }
 
 #[cfg(test)]

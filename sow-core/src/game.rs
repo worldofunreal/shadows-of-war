@@ -63,32 +63,6 @@ impl BuildingKind {
         4
     }
 
-    pub const fn level_name(self, level: u8) -> &'static str {
-        match (self, level) {
-            (Self::City, 1) => "Camp",
-            (Self::City, 2) => "Hamlet",
-            (Self::City, 3) => "Village",
-            (Self::City, 4) => "Town",
-            (Self::Port, 1) => "Dock",
-            (Self::Port, 2) => "Wharf",
-            (Self::Port, 3) => "Harbor",
-            (Self::Port, 4) => "Port",
-            (Self::Factory, 1) => "Workshop",
-            (Self::Factory, 2) => "Manufactory",
-            (Self::Factory, 3) => "Factory",
-            (Self::Factory, 4) => "Industrial Complex",
-            (Self::Tower, 1) => "Watchpost",
-            (Self::Tower, 2) => "Watchtower",
-            (Self::Tower, 3) => "Bastion",
-            (Self::Tower, 4) => "Citadel",
-            (Self::Farm, 1) => "Cultivated Plot",
-            (Self::Farm, 2) => "Farm",
-            (Self::Farm, 3) => "Irrigated Fields",
-            (Self::Farm, 4) => "Plantation",
-            _ => "Unknown",
-        }
-    }
-
     pub fn construction_duration_ticks(self) -> u32 {
         match self {
             BuildingKind::City => 20,
@@ -204,14 +178,6 @@ impl UnitType {
                 cost * (1.0 - f64::from(percent.min(100)) / 100.0)
             }
             _ => cost,
-        }
-    }
-
-    pub fn build_duration_ticks(self) -> u32 {
-        match self {
-            UnitType::TransportShip => 0, // Instant conversion
-            UnitType::TradeShip => 50,
-            UnitType::Warship => 0,
         }
     }
 

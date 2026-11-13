@@ -1169,7 +1169,6 @@ interface TutorialRuntime {
         const faction = (speaker && speaker.faction) || "player";
         const player = hud && campaignPlayer(hud, faction);
         if (!player || !onMap(player) || player.manual_emote_active) return "unavailable";
-        const step = runtime.machine && runtime.machine.view().step;
         // A scheduled camera move does not hold an emote; the camera cue owns its timing.
         if (tutorial!.facts && tutorial!.facts.machinima_active) return "pending";
         if (tutorial!.emote_token === nativeToken) return true;

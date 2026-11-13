@@ -1,51 +1,23 @@
-# Contributing to Shadows of War
+# Contributing
 
-Thank you for your interest in contributing!
-
-For local launch instructions, see the [README](README.md#run-locally).
-
-## Relay builds and upgrades
-
-The production relay runs as the `sow_relay` FreeBSD service in the
-`sow-server` jail. Its HTTPS control endpoint is `127.0.0.1:8083`. Each match
-owns an independent Tokio process and game port until the final turn batch
-is acknowledged by the durable recorder.
-
-`./sow p` publishes the relay alongside the backend. Use `./sow p --relay-only`
-for an independent relay upgrade. The update replaces the control process
-while running matches keep their original executable and connections. The
-production acceptance fixture verifies continuous turns, reconnection,
-new-match ownership, and confirmed rewards across that update.
-
-The initial IONOS cutover requires inbound TCP `25592–26500` in the IONOS
-Cloud Panel firewall policy. The pipeline probes both ends of the range
-before changing the public relay DNS record.
+Run the game with the commands in the [README](README.md#run-locally).
 
 ## Pull requests
 
-- Keep changes focused — one logical change per PR when possible.
-- Update `assets/SOURCES.toml` and `assets/maps/SOURCES.toml` if you add or replace assets.
-- New shipped art (portraits, avatars): default to **CC BY-SA 4.0** per `docs/legal/LICENSE-ASSETS`; verify AI tool ToS before setting `license = "CC-BY-SA-4.0"`.
-- Document OSM-derived maps with `source = "osm"` and attribution in SOURCES.toml.
-- Do not commit secrets, `sow-dist/deploy/keystores/`, `.env` files, or `OpenFrontIO/proprietary/` assets.
+- One logical change per PR.
+- Record new or replaced assets in `assets/SOURCES.toml`, and maps in `assets/maps/SOURCES.toml`. OSM-derived maps use `source = "osm"` with attribution.
+- New shipped art defaults to CC BY-SA 4.0 (`docs/legal/LICENSE-ASSETS`). Check the AI tool's terms before marking generated art that way.
+- Never commit secrets, `.env` files or `sow-dist/deploy/keystores/`.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the
-[GNU Affero General Public License v3.0 only](LICENSE), with the OpenFront
-additional terms included there.
-
-Inbound contributions = outbound under AGPL-3.0-only. No separate CLA is required.
-
-See also “License & derivatives” in the README for obligations that apply to anyone deploying a derivative, including network use under AGPL section 13.
+Contributions are licensed under [AGPL-3.0-only](LICENSE) with the OpenFront additional terms. No CLA.
 
 ## Attribution
 
-- **Player-facing UI:** keep the OpenFront credit and exact source/license links in the main menu.
-- **Marketing HTML:** same footer pattern as `sow-web/site/`; do not add the copyright holder’s personal name.
-- **Legal notices:** update the root `LICENSE`, `docs/legal/NOTICE`, `docs/legal/LICENSE-ASSETS`, or `assets/maps/NOTICE` at its existing source.
-- **Upstream OpenFront:** legal entity is OpenFront Inc. and Contributors (see their LICENSING.md); player UI uses “OpenFront and Contributors”.
+- Keep the OpenFront credit and the source and license links in the main menu.
+- Site pages in `sow-web/site/` use the same footer. Do not add the copyright holder's personal name.
+- Update legal notices where they live: `LICENSE`, `docs/legal/NOTICE`, `docs/legal/LICENSE-ASSETS`, `assets/maps/NOTICE`.
+- Credit upstream as "OpenFront and Contributors".
 
-## Code of conduct
-
-Be respectful and constructive. We want a welcoming community for everyone.
+Be respectful.

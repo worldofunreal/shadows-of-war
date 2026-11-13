@@ -11,7 +11,7 @@ export function validateMenuGuides(definition: CampaignDefinition): CampaignVali
     const errors: CampaignValidationIssue[] = [];
     const issue = (step: CampaignStep | null | undefined, field: string, message: string) =>
         errors.push({ step: step && step.id, field, message });
-    const allowedGuides = ["welcome"];
+    const allowedGuides = ["welcome", "post_match_missions", "daily_ops_unlock", "weekly_ranked_unlock"];
     if (!object(definition) || definition.version !== 1 || definition.episode_id !== "menu") {
         issue(null, "version", "Menu guides must use version 1 and episode_id menu.");
         return { errors, warnings: [] };

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-pub const SCHEMA_VERSION: u8 = 3;
+pub const SCHEMA_VERSION: u8 = 4;
 pub const CONSENT_POLICY_VERSION: &str = "2026-11-10";
 pub const RETENTION_DAYS: u64 = 90;
 pub const MAX_PROPS_BYTES: usize = 2048;
@@ -51,6 +51,9 @@ pub const EVENT_NAMES: &[&str] = &[
     "store_buy_tap",
     "store_checkout_open",
     "store_purchase_complete",
+    "mission_swap",
+    "mission_claim",
+    "menu_guide_action",
 ];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -289,6 +292,26 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
             && text("mode").is_some_and(is_match_mode)
             && text("duration_bucket").is_some_and(is_match_duration_bucket);
     }
+    if name == "mission_swap" {
+        return props.len() == 3
+            && text("mission_id").is_some_and(is_episode_id)
+            && matches!(text("tier"), Some("daily" | "weekly"))
+            && props.get("used_ad").and_then(serde_json::Value::as_bool).is_some();
+    }
+    if name == "mission_claim" {
+        return props.len() == 3
+            && text("mission_id").is_some_and(is_episode_id)
+            && matches!(text("tier"), Some("onboarding" | "daily" | "weekly"))
+            && props.get("doubled").and_then(serde_json::Value::as_bool).is_some();
+    }
+    if name == "menu_guide_action" {
+        return props.len() == 2
+            && text("guide_id").is_some_and(is_episode_id)
+            && matches!(
+                text("status"),
+                Some("completed" | "skipped_step" | "disabled_all")
+            );
+    }
     if props.len() != 1 {
         return false;
     }
@@ -496,17 +519,6 @@ impl EventSink {
                     .get("subject_id")
                     .and_then(serde_json::Value::as_str)
                     .is_some_and(|subject| subject_ids.iter().any(|id| id == subject))
-        })
-    }
-
-    /// Remove rows linked to channel-scoped pseudonymous subjects during
-    /// verified account deletion.
-    pub fn erase_subject_ids(&mut self, subject_ids: &[String]) -> std::io::Result<u64> {
-        self.erase_matching(|event| {
-            event
-                .get("subject_id")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|subject| subject_ids.iter().any(|id| id == subject))
         })
     }
 

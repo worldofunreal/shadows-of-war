@@ -311,8 +311,6 @@ impl SowApp {
                 last_fps_time,
                 current_fps,
                 last_frame_time,
-                last_debug_print: None,
-                turn_queue_peak: 0,
             },
             tasks: TaskState {
                 map_tx,

@@ -152,16 +152,6 @@ pub fn is_portal_embed() -> bool {
     }
 }
 
-pub fn is_poki() -> bool {
-    #[cfg(target_arch = "wasm32")]
-    {
-        get_window_value("SOW_PORTAL")
-            .and_then(|value| value.as_string())
-            .is_some_and(|portal| portal == "poki")
-            || read_runtime_bool("poki").unwrap_or(false)
-    }
-}
-
 pub fn is_jest() -> bool {
     #[cfg(target_arch = "wasm32")]
     {
@@ -190,15 +180,6 @@ pub fn is_android_twa() -> bool {
                 .unwrap_or(false);
         }
         false
-    }
-}
-
-/// Waiting lobby uses a scroll modal on short iframe hosts (CrazyGames + marketing embed).
-pub fn is_lobby_modal_embed() -> bool {
-    #[cfg(target_arch = "wasm32")]
-    {
-        read_runtime_bool("crazygames").unwrap_or(false)
-            || read_runtime_bool("site_embed").unwrap_or(false)
     }
 }
 
@@ -238,9 +219,7 @@ pub fn load_portal_progress() -> Option<crate::player_progress::PlayerProgress> 
                         })
                 }
             })?;
-        let mut value: serde_json::Value = serde_json::from_str(&json).ok()?;
-        crate::player_progress::migrate_legacy_currency_json(&mut value);
-        serde_json::from_value(value).ok()
+        serde_json::from_str(&json).ok()
     }
 }
 
@@ -388,15 +367,6 @@ pub fn poll_auth_changed() -> bool {
         call_window_hook("SOW_portalClearAuthChanged");
     }
     changed
-}
-
-pub fn is_signed_in_crazygames() -> bool {
-    let identity = load_identity("Player");
-    identity.provider == "crazygames"
-        && identity
-            .auth_token
-            .as_ref()
-            .is_some_and(|token| !token.is_empty())
 }
 
 // Leaderboard scores are submitted server-side on match finalize (sow-data

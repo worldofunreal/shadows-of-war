@@ -1,6 +1,7 @@
 import { rankEmblem, rankLabel } from "./main_menu.ranked.ts";
 import { avatarImageAttribute } from "./avatar-presentation.ts";
 import type {
+    HeroBioEntry,
     LocalizedText,
     MenuLeader,
     MenuLobby,
@@ -61,6 +62,8 @@ interface MenuUi {
     browserSearchQuery: string;
     heroesSearchQuery: string;
     heroesRegionFilter: string;
+    heroesRarityFilter: string;
+    heroesPlayableOnly: boolean;
     heroesSort: string;
     dropdownOpenKey: string | null;
     authModalOpen: boolean;
@@ -94,6 +97,11 @@ interface MenuUi {
     storeOpen: boolean;
     skinPickerOpen: boolean;
     heroInfoOpen: boolean;
+    heroInfoTab: "overview" | "biography";
+    heroInfoLeaderId: string | null;
+    heroBioCache: Record<string, Record<string, HeroBioEntry>>;
+    heroBioLocaleLoading: string | null;
+    heroBioError: string | null;
     heroesOpen: boolean;
     campaignOpen: boolean;
     selectedCampaignEpisode: string | null;
@@ -119,6 +127,8 @@ interface MenuUi {
     deleteArmed: boolean;
     missionsModalOpen: boolean;
     activeMissionsTab: "onboarding" | "daily" | "weekly";
+    swapConfirmMissionId: string | null;
+    swapConfirmAd: boolean;
 }
 
 export const menuUi: MenuUi = {
@@ -133,6 +143,8 @@ export const menuUi: MenuUi = {
     browserSearchQuery: "",
     heroesSearchQuery: "",
     heroesRegionFilter: "all",
+    heroesRarityFilter: "all",
+    heroesPlayableOnly: false,
     heroesSort: "alpha_asc",
     dropdownOpenKey: null,
     authModalOpen: false,
@@ -166,6 +178,11 @@ export const menuUi: MenuUi = {
     storeOpen: false,
     skinPickerOpen: false,
     heroInfoOpen: false,
+    heroInfoTab: "overview",
+    heroInfoLeaderId: null,
+    heroBioCache: {},
+    heroBioLocaleLoading: null,
+    heroBioError: null,
     heroesOpen: false,
     campaignOpen: false,
     selectedCampaignEpisode: null,
@@ -190,6 +207,8 @@ export const menuUi: MenuUi = {
     deleteArmed: false,
     missionsModalOpen: false,
     activeMissionsTab: "onboarding",
+    swapConfirmMissionId: null,
+    swapConfirmAd: false,
 };
 
 export const profileCache: Record<string, ProfileCacheEntry> = Object.create(null);
@@ -900,5 +919,13 @@ export function renderKey(): string {
                 }),
             ];
         }),
+        lobbies_count: (state.lobbies || []).length,
+        menu_tips_disabled: Boolean(state.menu_tips_disabled),
+        menu_guides: state.menu_guides,
+        missions: state.missions,
+        missions_progress: state.missions_progress,
+        daily_swaps_used: state.daily_swaps_used,
+        weekly_swaps_used: state.weekly_swaps_used,
+        matches_played: state.profile_stats?.matches_played,
     });
 }

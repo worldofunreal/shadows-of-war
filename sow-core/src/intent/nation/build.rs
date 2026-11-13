@@ -133,13 +133,6 @@ impl SowEngine {
                             let p = state.player_mut(bot_id).unwrap();
                             scratch.border_scratch.clear();
                             scratch.interior_scratch.clear();
-                            #[cfg(feature = "ai-metrics")]
-                            let blocks_examined = p.border_tiles.sample_ones_with_metrics(
-                                p.bot_rng.rand() as u32,
-                                PLACEMENT_ATTEMPTS as usize,
-                                &mut scratch.border_scratch,
-                            );
-                            #[cfg(not(feature = "ai-metrics"))]
                             let blocks_examined = {
                                 p.border_tiles.sample_ones(
                                     p.bot_rng.rand() as u32,
@@ -159,12 +152,6 @@ impl SowEngine {
                             }
                             blocks_examined
                         };
-                        #[cfg(feature = "ai-metrics")]
-                        {
-                            self.bot_work.border_blocks_examined += _blocks_examined;
-                            self.bot_work.border_directory_words_examined +=
-                                _directory_words_examined;
-                        }
                         let target_tile = {
                             let border_candidates =
                                 std::mem::take(&mut self.placement_scratch.border_scratch);

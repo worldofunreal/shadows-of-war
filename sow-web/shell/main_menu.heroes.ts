@@ -14,10 +14,10 @@ import {
     renderShowcaseLoader,
     root,
 } from "./main_menu.core.ts";
-import { activeScreenPanel } from "./main_menu.shell.ts";
+import { activeScreenPanel, render } from "./main_menu.shell.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
 import { avatarAtlasCell, avatarImageAttribute, deferAvatarImage, loadAvatarImage } from "./avatar-presentation.ts";
-import type { MenuLeader } from "./main_menu.state.ts";
+import type { HeroBioEntry, MenuLeader } from "./main_menu.state.ts";
 import { renderLeaderPurchase, renderSkinsButton } from "./main_menu.surfaces.ts";
 
 // Hero selection, filtering, dropdowns, and preview updates.
@@ -325,10 +325,7 @@ function heroesStatusLabel(leader: MenuLeader) {
 // It is not a bug. The owner explicitly asked for desktop = *_mobile.webp
 // and phone = *_desktop.webp.
 //
-// This function is the ONLY owner of the mapping. Guarded by the test
-// "heroes featured art follows the panel shape, not the device name"
-// (menu_flow.test.ts, runs in the ./sow p preflight) and by
-// AGENTS.md -> "Heroes featured art (owner decision — do not flip)".
+// This function is the ONLY owner of the mapping.
 function heroesFeaturedArt(slug: string) {
     const artSlug = leaderArtSlug(leaderById(slug));
     return {
@@ -340,6 +337,7 @@ function heroesFeaturedArt(slug: string) {
 function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const selected = leader.id === activeId;
     const locked = leader.available === false;
+    const freeWeek = isWeeklyFreeRotation(leader);
     const avatarSlug = leaderArtSlug(leader);
     const avatarUrl = heroesAvatarUrl(avatarSlug, selected ? "angry" : "calm");
     const rarity = heroesRarityLabel(leader);
@@ -349,6 +347,7 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
         (locked ? " is-locked" : "") +
+        (freeWeek ? " is-free-week" : "") +
         "' type='button' data-command='preview_leader' data-leader-id='" +
         esc(leader.id) +
         "' data-avatar-slug='" +
@@ -358,7 +357,11 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         "'>" +
         "<span class='sow-heroes__card-art'><img " +
         avatarImageAttribute(avatarUrl) +
-        " alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
+        " alt='' width='68' height='68' loading='lazy' decoding='async'>" +
+        (freeWeek
+            ? "<span class='sow-heroes__free-badge'>" + esc(SOW_t("heroes.free_week_badge")) + "</span>"
+            : "") +
+        "</span>" +
         "<span class='sow-heroes__card-copy'><strong>" +
         esc(leaderDisplayName(leader)) +
         "</strong><small>" +
@@ -397,7 +400,8 @@ function renderRandomLeaderCard(selected: boolean) {
     const matchesSearch =
         !menuUi.heroesSearchQuery.trim() ||
         randomLeaderName().toLowerCase().indexOf(menuUi.heroesSearchQuery.trim().toLowerCase()) !== -1;
-    if (!matchesSearch || menuUi.heroesRegionFilter !== "all") return "";
+    if (!matchesSearch || menuUi.heroesRegionFilter !== "all" || menuUi.heroesRarityFilter !== "all")
+        return "";
     const avatarUrl = asset("gameplay/avatars/random.webp");
     return (
         "<button class='sow-heroes__card" +
@@ -435,7 +439,10 @@ function heroesRoster(leaders: MenuLeader[]) {
                 .indexOf(query) !== -1;
         const matchesRegion =
             menuUi.heroesRegionFilter === "all" || leader.region === menuUi.heroesRegionFilter;
-        return matchesQuery && matchesRegion;
+        const matchesRarity =
+            menuUi.heroesRarityFilter === "all" || leader.rarity === menuUi.heroesRarityFilter;
+        const matchesPlayable = !menuUi.heroesPlayableOnly || leader.available !== false;
+        return matchesQuery && matchesRegion && matchesRarity && matchesPlayable;
     });
 
     function leaderCost(leader: MenuLeader): number {
@@ -444,9 +451,31 @@ function heroesRoster(leaders: MenuLeader[]) {
         return 0;
     }
 
+    function heroMatchesPlayed(leader: MenuLeader): number {
+        if (leader.stats && typeof leader.stats.matches_played === "number") return leader.stats.matches_played;
+        const map = menuUi.state?.profile_stats?.leader_stats;
+        if (map && leader.name && map[leader.name]) return Number(map[leader.name].matches_played || 0);
+        return 0;
+    }
+
+    function heroXp(leader: MenuLeader): number {
+        if (typeof leader.xp === "number") return leader.xp;
+        const map = menuUi.state?.profile_stats?.leader_xp;
+        if (map && typeof map === "object" && leader.name) return Number(map[leader.name] || 0);
+        return 0;
+    }
+
     function sortLeaders(list: MenuLeader[], sort: string): MenuLeader[] {
         const copy = list.slice();
-        if (sort === "cost_desc") {
+        if (sort === "most_played") {
+            copy.sort(function (a, b) {
+                const diffMatches = heroMatchesPlayed(b) - heroMatchesPlayed(a);
+                if (diffMatches !== 0) return diffMatches;
+                const diffXp = heroXp(b) - heroXp(a);
+                if (diffXp !== 0) return diffXp;
+                return String(leaderDisplayName(a) || "").localeCompare(String(leaderDisplayName(b) || ""));
+            });
+        } else if (sort === "cost_desc") {
             copy.sort(function (a, b) {
                 const diff = leaderCost(b) - leaderCost(a);
                 if (diff !== 0) return diff;
@@ -506,6 +535,25 @@ function renderHeroesRegionDropdown() {
             { value: "africa", label: SOW_t("heroes.africa") },
             { value: "asia", label: SOW_t("heroes.asia") },
             { value: "americas", label: SOW_t("heroes.americas") },
+            { value: "oceania", label: SOW_t("heroes.oceania") },
+        ],
+    });
+}
+
+function renderHeroesRarityDropdown() {
+    return SOW_renderDropdown({
+        key: "heroes-rarity",
+        label: SOW_t("heroes.rarity_filter"),
+        name: "rarity",
+        icon: HEROES_FILTER_ICON,
+        value: menuUi.heroesRarityFilter || "all",
+        className: "sow-heroes__rarity-filter" + (menuUi.heroesRarityFilter !== "all" ? " is-filtered" : ""),
+        options: [
+            { value: "all", label: SOW_t("heroes.all_rarities"), shortLabel: SOW_t("heroes.rarity_filter") },
+            { value: "common", label: SOW_t("heroes.rarity_common") },
+            { value: "rare", label: SOW_t("heroes.rarity_rare") },
+            { value: "epic", label: SOW_t("heroes.rarity_epic") },
+            { value: "legendary", label: SOW_t("heroes.rarity_legendary") },
         ],
     });
 }
@@ -519,6 +567,7 @@ function renderHeroesSortDropdown() {
         value: menuUi.heroesSort || "alpha_asc",
         className: "sow-heroes__sort",
         options: [
+            { value: "most_played", label: SOW_t("heroes.sort_most_played") },
             { value: "cost_desc", label: SOW_t("heroes.sort_cost_desc") },
             { value: "cost_asc", label: SOW_t("heroes.sort_cost_asc") },
             { value: "alpha_asc", label: SOW_t("heroes.sort_alpha_asc"), shortLabel: "A-Z" },
@@ -648,7 +697,7 @@ export function updateHeroesPreview() {
     const purchase = featured.querySelector("[data-hero-purchase]");
     if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
     const skinsContainer = featured.querySelector<HTMLElement>("[data-hero-skins]");
-    if (skinsContainer) skinsContainer.innerHTML = randomSelected ? "" : renderSkinsButton();
+    if (skinsContainer) skinsContainer.innerHTML = randomSelected ? "" : renderFeaturedTopControls(activeLeader);
     const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
     const currentAvailableKey = leaders
         .filter((l) => l.available !== false)
@@ -677,9 +726,10 @@ export function updateHeroesPreview() {
         randomCard.classList.toggle("is-selected", selected);
         randomCard.setAttribute("aria-pressed", selected ? "true" : "false");
     }
-    const info = featured.querySelector<HTMLElement>("[data-command='open_hero_info']");
+    const info = featured.querySelector<HTMLElement>(".sow-heroes__info[data-command='open_hero_info']");
     if (info) {
         info.hidden = randomSelected;
+        if (!randomSelected) info.dataset.leaderId = activeLeader.id;
         info.setAttribute(
             "aria-label",
             randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader),
@@ -688,32 +738,325 @@ export function updateHeroesPreview() {
     return true;
 }
 
+const BIO_BOOK_ICON =
+    "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20'/></svg>";
+
+const SUPPORTED_BIO_LOCALES = new Set([
+    "en",
+    "es",
+    "fr",
+    "de",
+    "it",
+    "tr",
+    "zh-cn",
+    "ja",
+    "ko",
+    "ar",
+    "ru",
+    "vi",
+    "id",
+    "fil",
+    "pt-br",
+]);
+
+function normalizeBioLocale(locale: unknown): string {
+    const raw = String(locale || "en")
+        .trim()
+        .toLowerCase()
+        .replace(/_/g, "-");
+    return SUPPORTED_BIO_LOCALES.has(raw) ? raw : "en";
+}
+
+const bioFetches = new Map<string, Promise<void>>();
+
+export function ensureHeroBiosLoaded(localeOverride?: string): Promise<void> {
+    const lang = normalizeBioLocale(
+        localeOverride !== undefined
+            ? localeOverride
+            : typeof window.SOW_getLocale === "function"
+              ? window.SOW_getLocale()
+              : "en",
+    );
+    if (menuUi.heroBioCache[lang]) return Promise.resolve();
+    const pending = bioFetches.get(lang);
+    if (pending) return pending;
+    menuUi.heroBioLocaleLoading = lang;
+    menuUi.heroBioError = null;
+    const req = fetch(asset("gameplay/bios/" + lang + ".json"))
+        .then(function (response) {
+            if (!response.ok) throw new Error("http_" + response.status);
+            return response.json();
+        })
+        .then(function (data) {
+            if (data && typeof data === "object") {
+                menuUi.heroBioCache[lang] = data as Record<string, HeroBioEntry>;
+            }
+            if (menuUi.heroBioLocaleLoading === lang) menuUi.heroBioLocaleLoading = null;
+            bioFetches.delete(lang);
+            render();
+        })
+        .catch(function (err) {
+            bioFetches.delete(lang);
+            if (menuUi.heroBioLocaleLoading === lang) menuUi.heroBioLocaleLoading = null;
+            if (lang !== "en") {
+                return ensureHeroBiosLoaded("en");
+            }
+            menuUi.heroBioError = String(err || "error");
+            render();
+        });
+    bioFetches.set(lang, req);
+    return req;
+}
+
+function renderFeaturedTopControls(leader: MenuLeader) {
+    return (
+        "<button class='sow-heroes__bio-trigger' type='button' data-command='open_hero_info' data-leader-id='" +
+        esc(leader.id) +
+        "' data-hero-info-tab='biography'>" +
+        BIO_BOOK_ICON +
+        "<span>" +
+        esc(SOW_t("heroes.bio_view_dossier")) +
+        "</span></button>" +
+        renderSkinsButton()
+    );
+}
+
+function renderBioSourceList(
+    sources: { title: string; url: string }[] | undefined,
+    isPoki: boolean,
+): string {
+    if (!Array.isArray(sources) || !sources.length) return "";
+    return sources
+        .map(function (source) {
+            const title = esc(source.title || source.url || "");
+            if (isPoki || !source.url) {
+                return "<span class='sow-hero-info__bio-source-text'>" + title + "</span>";
+            }
+            return (
+                "<a href='" +
+                esc(source.url) +
+                "' target='_blank' rel='noopener noreferrer'>" +
+                title +
+                "</a>"
+            );
+        })
+        .join(" · ");
+}
+
+function renderHeroCareerRecord(leader: MenuLeader): string {
+    const profileStats = menuUi.state?.profile_stats;
+    const fallbackMap = profileStats?.leader_stats;
+    const stats =
+        leader.stats || (fallbackMap && leader.name ? fallbackMap[leader.name] : undefined) || {};
+    const xpMap = profileStats?.leader_xp;
+    const xp =
+        typeof leader.xp === "number"
+            ? leader.xp
+            : xpMap && typeof xpMap === "object" && leader.name
+              ? Number(xpMap[leader.name] || 0)
+              : 0;
+    const items = [
+        [SOW_t("heroes.stat_matches"), Number(stats.matches_played || 0)],
+        [SOW_t("heroes.stat_wins"), Number(stats.wins || 0)],
+        [SOW_t("heroes.stat_kills"), Number(stats.kills || 0)],
+        [SOW_t("heroes.stat_deaths"), Number(stats.deaths || 0)],
+        [SOW_t("heroes.stat_xp"), xp],
+    ];
+    return (
+        "<section class='sow-hero-info__career' aria-label='" +
+        esc(SOW_t("heroes.career_record")) +
+        "'><h3>" +
+        esc(SOW_t("heroes.career_record")) +
+        "</h3><div class='sow-hero-info__stats-grid'>" +
+        items
+            .map(function (entry) {
+                return (
+                    "<div class='sow-hero-info__stat'><span>" +
+                    esc(entry[0]) +
+                    "</span><strong>" +
+                    esc(entry[1]) +
+                    "</strong></div>"
+                );
+            })
+            .join("") +
+        "</div></section>"
+    );
+}
+
+function renderHeroBiographyTab(leader: MenuLeader): string {
+    const lang = normalizeBioLocale(
+        typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en",
+    );
+    const bio =
+        (menuUi.heroBioCache[lang] && menuUi.heroBioCache[lang][leader.id]) ||
+        (menuUi.heroBioCache.en && menuUi.heroBioCache.en[leader.id]);
+    if (!bio) {
+        if (menuUi.heroBioLocaleLoading === lang || bioFetches.has(lang)) {
+            return (
+                "<div class='sow-hero-info__bio-status'>" + esc(SOW_t("heroes.bio_loading")) + "</div>"
+            );
+        }
+        if (menuUi.heroBioError) {
+            return (
+                "<div class='sow-hero-info__bio-status is-error'>" +
+                esc(SOW_t("heroes.bio_unavailable")) +
+                "</div>"
+            );
+        }
+        void ensureHeroBiosLoaded(lang);
+        return "<div class='sow-hero-info__bio-status'>" + esc(SOW_t("heroes.bio_loading")) + "</div>";
+    }
+    const isPoki = window.SOW_PORTAL === "poki";
+    const bioLang = bio.lang || lang;
+    let html = "<div class='sow-hero-info__bio' lang='" + esc(bioLang) + "' dir='auto'>";
+    if (bio.isSaga && bio.highlight) {
+        html +=
+            "<section class='sow-hero-info__bio-highlight'><h4>" +
+            esc(bio.highlightLabel || SOW_t("heroes.bio_highlights")) +
+            "</h4><p>" +
+            esc(bio.highlight) +
+            "</p></section>";
+    } else if (Array.isArray(bio.intro) && bio.intro.length) {
+        html +=
+            "<section class='sow-hero-info__bio-intro'>" +
+            bio.intro
+                .map(function (p) {
+                    return "<p>" + esc(p) + "</p>";
+                })
+                .join("") +
+            "</section>";
+    }
+    if (Array.isArray(bio.sections)) {
+        html += bio.sections
+            .map(function (sec) {
+                const body = (sec.paragraphs || [])
+                    .map(function (p) {
+                        return "<p>" + esc(p) + "</p>";
+                    })
+                    .join("");
+                const evidence = sec.evidence
+                    ? "<p class='sow-hero-info__bio-evidence'><strong>" +
+                      esc(bio.evidenceLabel || "") +
+                      "</strong> " +
+                      esc(sec.evidence) +
+                      "</p>"
+                    : "";
+                const chSources =
+                    sec.sources && sec.sources.length
+                        ? "<p class='sow-hero-info__bio-cite'>" +
+                          esc(bio.chapterSourcesLabel || SOW_t("heroes.bio_sources")) +
+                          ": " +
+                          renderBioSourceList(sec.sources, isPoki) +
+                          "</p>"
+                        : "";
+                return (
+                    "<section class='sow-hero-info__bio-chapter'><h4>" +
+                    esc(sec.title) +
+                    "</h4>" +
+                    body +
+                    evidence +
+                    chSources +
+                    "</section>"
+                );
+            })
+            .join("");
+    }
+    if (bio.isSaga && bio.sourceNote) {
+        html += "<p class='sow-hero-info__bio-sources'>" + esc(bio.sourceNote) + "</p>";
+    } else if (bio.sources && bio.sources.length) {
+        html +=
+            "<p class='sow-hero-info__bio-sources'><strong>" +
+            esc(SOW_t("heroes.bio_sources")) +
+            ":</strong> " +
+            renderBioSourceList(bio.sources, isPoki) +
+            "</p>";
+    } else if (bio.url || bio.title) {
+        html +=
+            "<p class='sow-hero-info__bio-sources'><strong>" +
+            esc(SOW_t("heroes.bio_sources")) +
+            ":</strong> " +
+            (isPoki || !bio.url
+                ? "<span class='sow-hero-info__bio-source-text'>" +
+                  esc(bio.title || bio.url || "") +
+                  " (CC BY-SA 4.0)</span>"
+                : "<a href='" +
+                  esc(bio.url) +
+                  "' target='_blank' rel='noopener noreferrer'>" +
+                  esc(bio.title || bio.url) +
+                  "</a> · <a href='https://creativecommons.org/licenses/by-sa/4.0/' target='_blank' rel='noopener noreferrer'>CC BY-SA 4.0</a>") +
+            "</p>";
+    }
+    html += "</div>";
+    return html;
+}
+
 export function renderHeroInfoModal() {
     if (!menuUi.heroInfoOpen) return "";
     if (
-        menuUi.tempSelectedRandom ||
-        (!menuUi.tempSelectedLeader && menuUi.state && menuUi.state.prefer_random_leader)
+        !menuUi.heroInfoLeaderId &&
+        (menuUi.tempSelectedRandom ||
+            (!menuUi.tempSelectedLeader && menuUi.state && menuUi.state.prefer_random_leader))
     )
         return "";
     const activeLeader = leaderById(
-        menuUi.tempSelectedLeader || (menuUi.state && menuUi.state.selected_leader) || "Caesar",
+        menuUi.heroInfoLeaderId ||
+            menuUi.tempSelectedLeader ||
+            (menuUi.state && menuUi.state.selected_leader) ||
+            "Caesar",
     );
     if (!activeLeader) return "";
+    const tab = menuUi.heroInfoTab === "biography" ? "biography" : "overview";
     // The info dialog is one tall portrait card on every device, so it
     // always uses the portrait art. Not part of the panel-shape swap.
     const artUrl = leaderArtUrl(leaderArtSlug(activeLeader), "mobile");
+    const statusLabel = heroesStatusLabel(activeLeader);
     return (
-        "<div class='sow-menu__overlay' data-menu-overlay='hero-info'><section class='sow-menu__modal sow-hero-info' role='dialog' aria-modal='true' aria-label='" +
+        "<div class='sow-menu__overlay' data-menu-overlay='hero-info'><section class='sow-menu__modal sow-hero-info sow-hero-info--dossier' role='dialog' aria-modal='true' aria-label='" +
         esc(leaderDisplayName(activeLeader)) +
         "'>" +
+        "<div class='sow-hero-info__banner'>" +
         "<div class='sow-hero-info__art' style=\"background-image:url('" +
         esc(artUrl) +
-        "')\">" +
-        "<button class='sow-menu__icon-button' type='button' data-command='close_hero_info' aria-label='" +
+        "')\"></div>" +
+        "<button class='sow-menu__icon-button sow-hero-info__close' type='button' data-command='close_hero_info' aria-label='" +
         esc(SOW_t("menu.close")) +
-        "'>×</button></div>" +
-        "<div class='sow-hero-info__foot'>" +
-        renderHeroBriefing(activeLeader, "modal", "sow-hero-info-selected") +
+        "'>×</button>" +
+        "<div class='sow-hero-info__banner-copy'>" +
+        (statusLabel
+            ? "<span class='sow-heroes__rotation' data-rarity='" +
+              esc(activeLeader.rarity || "") +
+              "'>" +
+              esc(statusLabel) +
+              "</span>"
+            : "") +
+        "<h2>" +
+        esc(leaderDisplayName(activeLeader)) +
+        "</h2><p>" +
+        esc(leaderCivilization(activeLeader)) +
+        "</p></div></div>" +
+        "<div class='sow-hero-info__tabs' role='tablist'>" +
+        "<button type='button' role='tab' aria-selected='" +
+        (tab === "overview") +
+        "' class='sow-hero-info__tab" +
+        (tab === "overview" ? " is-active" : "") +
+        "' data-command='switch_hero_info_tab' data-hero-info-tab='overview'>" +
+        esc(SOW_t("heroes.tab_overview")) +
+        "</button>" +
+        "<button type='button' role='tab' aria-selected='" +
+        (tab === "biography") +
+        "' class='sow-hero-info__tab" +
+        (tab === "biography" ? " is-active" : "") +
+        "' data-command='switch_hero_info_tab' data-hero-info-tab='biography'>" +
+        esc(SOW_t("heroes.tab_biography")) +
+        "</button>" +
+        "</div>" +
+        "<div class='sow-hero-info__body'>" +
+        (tab === "biography"
+            ? renderHeroBiographyTab(activeLeader)
+            : "<div class='sow-hero-info__overview'>" +
+              renderHeroBriefing(activeLeader, "modal", "sow-hero-info-selected") +
+              renderHeroCareerRecord(activeLeader) +
+              "</div>") +
         "</div>" +
         "</section></div>"
     );
@@ -767,6 +1110,13 @@ export function selectDropdown(key: string, value: string) {
         refreshHeroesRoster(true);
         return;
     }
+    if (key === "heroes-rarity") {
+        menuUi.heroesRarityFilter = value || "all";
+        dropdown.classList.toggle("is-filtered", menuUi.heroesRarityFilter !== "all");
+        syncDropdowns();
+        refreshHeroesRoster(true);
+        return;
+    }
     if (key === "heroes-sort") {
         menuUi.heroesSort = value || "alpha_asc";
         syncDropdowns();
@@ -804,6 +1154,10 @@ export function renderHeroes() {
     // height='1920' below are correct on purpose.
     const featuredArt = heroesFeaturedArt(activeLeader.slug);
     const displayName = activeRandom ? randomLeaderName() : leaderDisplayName(activeLeader);
+    const allLeaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+    const ownedCount = allLeaders.filter(function (l) {
+        return l.owned === true;
+    }).length;
     const statusLabel = activeRandom ? "" : heroesStatusLabel(activeLeader);
     return (
         "<main class='sow-menu__main sow-menu__main--heroes' data-screen-panel='heroes'><section class='sow-menu__heroes-slot' aria-label='" +
@@ -815,9 +1169,11 @@ export function renderHeroes() {
         (motionReduced ? " is-motion-reduced" : "") +
         "' aria-labelledby='sow-heroes-selected'>" +
         "<div class='sow-heroes__featured-skins' data-hero-skins>" +
-        (activeRandom ? "" : renderSkinsButton()) +
+        (activeRandom ? "" : renderFeaturedTopControls(activeLeader)) +
         "</div>" +
-        "<button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" +
+        "<button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' data-leader-id='" +
+        esc(activeRandom ? "" : activeLeader.id) +
+        "' aria-label='" +
         esc(displayName) +
         "'" +
         (activeRandom ? " hidden" : "") +
@@ -847,7 +1203,17 @@ export function renderHeroes() {
         "</div></div></section>" +
         "<section class='sow-heroes__roster' aria-label='" +
         esc(SOW_t("heroes.leader_list")) +
-        "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" +
+        "'><div class='sow-heroes__section-head'><div class='sow-heroes__roster-meta'>" +
+        "<span class='sow-heroes__owned-badge' data-heroes-owned-count>" +
+        esc(SOW_t("heroes.owned_progress", { owned: ownedCount, total: allLeaders.length })) +
+        "</span>" +
+        "<button type='button' class='sow-heroes__playable-btn" +
+        (menuUi.heroesPlayableOnly ? " is-active" : "") +
+        "' data-command='toggle_heroes_playable' aria-pressed='" +
+        Boolean(menuUi.heroesPlayableOnly) +
+        "'>" +
+        esc(SOW_t("heroes.filter_playable")) +
+        "</button></div><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" +
         esc(SOW_t("heroes.search_leaders")) +
         "</span><span class='sow-heroes__search-icon' aria-hidden='true'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg></span><input data-role='heroes-search' type='search' placeholder='" +
         esc(SOW_t("heroes.search_leader_civilization")) +
@@ -855,6 +1221,7 @@ export function renderHeroes() {
         esc(menuUi.heroesSearchQuery) +
         "\" autocomplete='off' spellcheck='false'></label>" +
         renderHeroesRegionDropdown() +
+        renderHeroesRarityDropdown() +
         renderHeroesSortDropdown() +
         "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" +
         renderHeroesRoster(activeId, activeRandom) +

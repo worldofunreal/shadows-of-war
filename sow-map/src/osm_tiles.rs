@@ -7,7 +7,6 @@ use crossbeam_channel::{Receiver, Sender};
 use image::RgbaImage;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
-use std::time::Duration;
 
 pub const TILE_SIZE: u32 = 256;
 pub const MAX_TILE_ZOOM: u32 = 19;
@@ -95,11 +94,6 @@ impl OsmTileCache {
     pub fn clear(&mut self) {
         self.tiles.clear();
         self.in_flight.clear();
-    }
-
-    pub fn retain_zoom(&mut self, z: u32) {
-        self.tiles.retain(|k, _| k.z == z);
-        self.in_flight.retain(|k| k.z == z);
     }
 
     pub fn drain_messages(&mut self) {
@@ -241,91 +235,6 @@ fn decode_tile_response(bytes: &[u8]) -> Result<RgbaImage, String> {
         .map(|img| img.to_rgba8())
 }
 
-/// Stitch tiles covering a world-px square and crop to it. Blocks until all tiles are ready.
-pub fn fetch_region_blocking(
-    cache: &mut OsmTileCache,
-    zoom: u32,
-    world_x: f64,
-    world_y: f64,
-    world_size: f64,
-) -> Result<RgbaImage, String> {
-    let keys = tiles_covering_rect(
-        world_x,
-        world_y,
-        world_x + world_size,
-        world_y + world_size,
-        zoom,
-    );
-    if keys.len() > MAX_TILES_PER_REGION {
-        return Err(format!(
-            "Selection needs {} tiles (max {MAX_TILES_PER_REGION}); zoom out or shrink the square",
-            keys.len()
-        ));
-    }
-
-    for &key in &keys {
-        cache.request(key);
-    }
-
-    let deadline = std::time::Instant::now() + Duration::from_secs(120);
-    loop {
-        cache.drain_messages();
-        let all_ready = keys
-            .iter()
-            .all(|k| matches!(cache.get(*k), Some(CachedTile::Ready(_))));
-        if all_ready {
-            break;
-        }
-        let any_failed = keys
-            .iter()
-            .any(|k| matches!(cache.get(*k), Some(CachedTile::Failed)));
-        if any_failed {
-            return Err("One or more map tiles failed to download".into());
-        }
-        if std::time::Instant::now() > deadline {
-            return Err("Timed out waiting for map tiles".into());
-        }
-        for key in &keys {
-            if !matches!(cache.get(*key), Some(CachedTile::Ready(_))) {
-                cache.request(*key);
-            }
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-
-    let out_w = world_size.ceil().max(1.0) as u32;
-    let out_h = out_w;
-    let mut stitched = RgbaImage::new(out_w, out_h);
-
-    for key in keys {
-        let CachedTile::Ready(tile) = cache.get(key).cloned().unwrap() else {
-            return Err("missing tile after fetch".into());
-        };
-        let tile_world_x = key.x as f64 * TILE_SIZE as f64;
-        let tile_world_y = key.y as f64 * TILE_SIZE as f64;
-        for py in 0..tile.height() {
-            for px in 0..tile.width() {
-                let wx = tile_world_x + px as f64;
-                let wy = tile_world_y + py as f64;
-                if wx < world_x
-                    || wy < world_y
-                    || wx >= world_x + world_size
-                    || wy >= world_y + world_size
-                {
-                    continue;
-                }
-                let ox = (wx - world_x).floor() as u32;
-                let oy = (wy - world_y).floor() as u32;
-                if ox < out_w && oy < out_h {
-                    stitched.put_pixel(ox, oy, *tile.get_pixel(px, py));
-                }
-            }
-        }
-    }
-
-    Ok(stitched)
-}
-
 fn matches_palette(r: u8, g: u8, b: u8, pr: u8, pg: u8, pb: u8) -> bool {
     (r as i16 - pr as i16).abs() <= COLOR_TOLERANCE
         && (g as i16 - pg as i16).abs() <= COLOR_TOLERANCE
@@ -390,20 +299,6 @@ pub fn classify_osm_to_rgba_with_heightmap(
         }
     }
     out
-}
-
-/// Pick a fetch zoom so the square spans roughly 1024–2048 source pixels.
-pub fn pick_fetch_zoom(target_size: u32, world_size_deg: f64) -> u32 {
-    let target = target_size.max(256) as f64;
-    for z in (3..=18).rev() {
-        let scale = tile_scale(z);
-        let px_per_deg = scale / 360.0;
-        let span_px = world_size_deg * px_per_deg;
-        if span_px >= target * 0.8 && span_px <= target * 2.5 {
-            return z;
-        }
-    }
-    10
 }
 
 #[cfg(test)]

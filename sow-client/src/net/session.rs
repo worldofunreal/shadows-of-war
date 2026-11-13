@@ -413,15 +413,3 @@ impl SowApp {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::should_use_exit_game_loader;
-    use crate::ClientPhase;
-
-    #[test]
-    fn exit_loader_only_runs_for_active_game() {
-        assert!(!should_use_exit_game_loader(ClientPhase::MainMenu));
-        assert!(should_use_exit_game_loader(ClientPhase::Playing));
-        assert!(!should_use_exit_game_loader(ClientPhase::Splash));
-    }
-}

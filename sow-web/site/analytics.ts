@@ -4,8 +4,8 @@
   const POLICY = "2026-11-10";
   const CONSENT_KEY = "sow_analytics_consent_v2";
   const SESSION_KEY = "sow_analytics_session_v2";
-  const QUEUE_KEY = "sow_analytics_queue_v3";
-  const LEGACY_QUEUE_KEY = "sow_analytics_queue_v2";
+  const QUEUE_KEY = "sow_analytics_queue_v4";
+  const LEGACY_QUEUE_KEY = "sow_analytics_queue_v3";
   const MAX_QUEUE = 200;
   const MAX_BATCH = 100;
   const MATCH_MODES = ["ranked_1v1", "custom", "campaign", "tutorial", "single_player", "other"];
@@ -57,6 +57,9 @@
     "store_buy_tap",
     "store_checkout_open",
     "store_purchase_complete",
+    "mission_swap",
+    "mission_claim",
+    "menu_guide_action",
   ]);
   const isGameShell = Boolean(document.getElementById("blade"));
   const isAndroidTwa = () => {
@@ -319,6 +322,35 @@
     ) {
       return { episode_id: props.episode_id };
     }
+    if (
+      name === "mission_swap" &&
+      Object.keys(props).length === 3 &&
+      typeof props.mission_id === "string" &&
+      /^[a-z][a-z0-9_]{0,63}$/.test(props.mission_id) &&
+      ["daily", "weekly"].includes(props.tier) &&
+      typeof props.used_ad === "boolean"
+    ) {
+      return { mission_id: props.mission_id, tier: props.tier, used_ad: props.used_ad };
+    }
+    if (
+      name === "mission_claim" &&
+      Object.keys(props).length === 3 &&
+      typeof props.mission_id === "string" &&
+      /^[a-z][a-z0-9_]{0,63}$/.test(props.mission_id) &&
+      ["onboarding", "daily", "weekly"].includes(props.tier) &&
+      typeof props.doubled === "boolean"
+    ) {
+      return { mission_id: props.mission_id, tier: props.tier, doubled: props.doubled };
+    }
+    if (
+      name === "menu_guide_action" &&
+      Object.keys(props).length === 2 &&
+      typeof props.guide_id === "string" &&
+      /^[a-z][a-z0-9_]{0,63}$/.test(props.guide_id) &&
+      ["completed", "skipped_step", "disabled_all"].includes(props.status)
+    ) {
+      return { guide_id: props.guide_id, status: props.status };
+    }
     return null;
   }
 
@@ -333,7 +365,7 @@
     const eventId = uuid();
     if (!id || !eventId) return;
     const event = {
-      v: 3,
+      v: 4,
       event_id: eventId,
       consented: true,
       consent_version: POLICY,

@@ -151,9 +151,12 @@ struct MenuGuideProgressRequest {
     completed_steps: std::collections::BTreeSet<String>,
     #[serde(default)]
     current_step: Option<String>,
+    #[serde(default)]
     status: sow_data::profile::MenuGuideStatus,
     #[serde(default)]
     selected_leader: Option<String>,
+    #[serde(default)]
+    menu_tips_disabled: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -1767,11 +1770,6 @@ async fn main() {
     player_db
         .ensure_current_season()
         .expect("Failed to initialize current profile season");
-    let migrated = player_db
-        .migrate_welcome_gems_to_existing_humans()
-        .await
-        .expect("Failed to apply starter gem grants to every existing human account");
-    info!("Starter gem grant applied to {migrated} existing human accounts");
 
     let default_analytics_dir = std::path::Path::new(&redb_path)
         .parent()
@@ -1924,6 +1922,7 @@ async fn main() {
             post(handle_menu_guide_progress),
         )
         .route("/profile/missions/claim", post(handle_claim_mission))
+        .route("/profile/missions/swap", post(handle_swap_mission))
         .route("/profile/anonymous/report", post(handle_report_player))
         .route("/profile/anonymous/blocks", post(handle_blocks))
         .route("/profile/anonymous/delete", post(handle_self_delete))
@@ -2856,7 +2855,12 @@ async fn handle_menu_guide_progress(
     };
     match state
         .db
-        .save_menu_guide_progress(&account_id, payload.guide_id.trim(), progress)
+        .save_menu_guide_progress_with_options(
+            &account_id,
+            payload.guide_id.trim(),
+            progress,
+            payload.menu_tips_disabled,
+        )
         .await
     {
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
@@ -2873,6 +2877,54 @@ async fn handle_menu_guide_progress(
             } else {
                 error!("menu guide progress save failed: {message}");
                 StatusCode::SERVICE_UNAVAILABLE
+            };
+            (status, Json(ErrorResponse { error: message })).into_response()
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SwapMissionRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    mission_id: String,
+    #[serde(default)]
+    used_ad: bool,
+}
+
+/// POST /profile/missions/swap — swap one incomplete active Daily/Weekly mission for another playable mission.
+async fn handle_swap_mission(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<SwapMissionRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+
+    match state
+        .db
+        .swap_mission(&account_id, payload.mission_id.trim(), payload.used_ad)
+        .await
+    {
+        Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
+        Err(error) => {
+            let message = error.to_string();
+            let status = if message.starts_with("unknown mission")
+                || message.contains("cannot be swapped")
+            {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::CONFLICT
             };
             (status, Json(ErrorResponse { error: message })).into_response()
         }
