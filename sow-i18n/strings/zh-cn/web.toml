@@ -97,9 +97,6 @@ copy_failed = "复制失败"
 copy_unavailable = "无法复制"
 
 [tutorial]
-skip_cinematic = "跳过过场动画"
-watch_cinematic = "观看过场动画"
-hold_to_skip = "长按以跳过"
 continue = "继续"
 complete = "完成战役"
 retry = "重试"
@@ -894,6 +891,10 @@ change_territory_style = "更改您的区域样式"
 view = "视频"
 checkout = "检查结果"
 loading_checkout = "正在装入检出..."
+daily_offers = "每日特惠"
+weekly_offers = "每周特惠"
+ends_in = "{time} 后结束"
+leader = "领袖"
 
 [hud]
 build_placement = "放置建筑"

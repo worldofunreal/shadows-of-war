@@ -68,8 +68,13 @@ pub enum UiAction {
     UnlockLeader {
         leader_id: String,
         currency: String,
+        offer_id: Option<String>,
     },
-    UnlockSkin(String),
+    UnlockSkin {
+        skin_id: String,
+        currency: String,
+        offer_id: Option<String>,
+    },
     EquipSkin(String),
 }
 

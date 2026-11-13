@@ -1,6 +1,5 @@
 import { rankEmblem, rankLabel, rankTier, renderRankedDuel } from "./main_menu.ranked.ts";
 import { avatarBackgroundCss, avatarImageAttribute, setAvatarImage } from "./avatar-presentation.ts";
-import type { CampaignDefinition } from "./campaign/types.ts";
 import {
     asset,
     avatarImage,
@@ -290,56 +289,6 @@ export function renderHome() {
     );
 }
 
-const campaignCinematicAvailability: Record<string, boolean> = Object.create(null);
-const campaignCinematicDiscovery: Record<string, Promise<void>> = Object.create(null);
-
-function discoverCampaignCinematics(episodes: MenuCampaignEpisode[]) {
-    const pending = (episodes || []).filter(function (episode) {
-        const id = String((episode && episode.id) || "");
-        return (
-            /^[a-z][a-z0-9_]{0,63}$/.test(id) &&
-            !Object.prototype.hasOwnProperty.call(campaignCinematicAvailability, id) &&
-            !campaignCinematicDiscovery[id]
-        );
-    });
-    pending.forEach(function (episode) {
-        const id = String(episode.id);
-        campaignCinematicDiscovery[id] = fetch(asset("campaign/" + id + ".triggers.json"))
-            .then(function (response) {
-                if (!response.ok) throw new Error("Campaign scene unavailable.");
-                return response.json();
-            })
-            .then(function (definition: CampaignDefinition) {
-                const entry = (definition.steps || []).find(function (step) {
-                    return step.id === definition.entry;
-                });
-                const source = entry && entry.video_src;
-                campaignCinematicAvailability[id] = Boolean(
-                    entry &&
-                    entry.type === "scene" &&
-                    entry.presentation === "cinematic" &&
-                    typeof source === "string" &&
-                    source.indexOf("/assets/campaign/" + id + "/") === 0 &&
-                    /\.(?:mp4|webm)$/i.test(source),
-                );
-            })
-            .catch(function () {
-                campaignCinematicAvailability[id] = false;
-            })
-            .then(function () {
-                delete campaignCinematicDiscovery[id];
-            });
-    });
-    if (!pending.length) return;
-    Promise.all(
-        pending.map(function (episode) {
-            return campaignCinematicDiscovery[String(episode.id)];
-        }),
-    ).then(function () {
-        if (menuUi.campaignOpen) render();
-    });
-}
-
 export function campaignEpisodeHeroSlug(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "boudica";
@@ -499,12 +448,6 @@ export function updateCampaignSelection(episodeId: string): boolean {
         playBtn.innerHTML = `<span>${esc(labelText)}</span> <i>${actionIcon}</i>`;
     }
 
-    const watchBtn = featured.querySelector<HTMLButtonElement>(".sow-campaign__action-watch");
-    if (watchBtn) {
-        watchBtn.dataset.episodeId = episode.id;
-        watchBtn.hidden = !campaignCinematicAvailability[episode.id];
-    }
-
     return true;
 }
 
@@ -545,13 +488,6 @@ function renderCampaignEpisode(
         : "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>" +
           esc(SOW_t("lobbies.locked")) +
           "</button>";
-    const watch = campaignCinematicAvailability[episode.id]
-        ? "<button class='sow-menu__secondary sow-campaign__watch' type='button' data-command='watch_campaign_cinematic' data-episode-id='" +
-          esc(episode.id) +
-          "'>" +
-          esc(SOW_t("tutorial.watch_cinematic")) +
-          "</button>"
-        : "";
     return (
         "<article class='sow-campaign__episode" +
         (completed ? " is-complete" : unlocked ? " is-unlocked" : " is-locked") +
@@ -578,7 +514,6 @@ function renderCampaignEpisode(
         "</p>" +
         "<div class='sow-campaign__episode-actions'>" +
         action +
-        watch +
         "</div>" +
         "</div>" +
         "</article>"
@@ -588,7 +523,6 @@ function renderCampaignEpisode(
 export function renderCampaign() {
     const campaign = menuUi.state && menuUi.state.campaign;
     const episodes = campaign && Array.isArray(campaign.episodes) ? campaign.episodes : [];
-    discoverCampaignCinematics(episodes);
     const continueId = (campaign && campaign.continue_episode) || "";
 
     // Determine selected episode
@@ -681,14 +615,6 @@ export function renderCampaign() {
               esc(SOW_t("lobbies.locked")) +
               "</span> <i>" + menuIcon("lock") + "</i></button>";
 
-        const watchAction = campaignCinematicAvailability[selectedEpisode.id]
-            ? "<button class='sow-menu__secondary sow-campaign__action-watch' type='button' data-command='watch_campaign_cinematic' data-episode-id='" +
-              esc(selectedEpisode.id) +
-              "'><span>" +
-              esc(SOW_t("tutorial.watch_cinematic")) +
-              "</span> <i>▶</i></button>"
-            : "";
-
         featuredHtml =
             "<section class='sow-campaign__featured' aria-labelledby='sow-campaign-selected-title'>" +
             "<div class='sow-campaign__hero-backdrop' aria-hidden='true'>" +
@@ -750,7 +676,6 @@ export function renderCampaign() {
             "</div>" +
             "<div class='sow-campaign__featured-actions'>" +
             playAction +
-            watchAction +
             "</div>" +
             "</div>" +
             "</section>";

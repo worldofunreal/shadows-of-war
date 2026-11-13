@@ -214,11 +214,9 @@ impl SowApp {
         self.ui.campaign_session_id = self.ui.campaign_session_id.wrapping_add(1).max(1);
         self.sim.offline_tick_timer = 0.0;
         self.sim.offline_last_update = web_time::Instant::now();
-        self.ui.tutorial_waiting_for_first_attack = tutorial
-            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
-            && !config.scripted_spawns.is_empty();
         self.ui.tutorial_paused_action = None;
-        self.sim.paused = self.ui.tutorial_waiting_for_first_attack;
+        self.ui.tutorial_marker_action = None;
+        self.sim.paused = false;
         self.sim.tutorial_observation.reset();
         // An idle orchestrator socket waits out the offline match for the menu return;
         // relay and lobby sockets close as before.

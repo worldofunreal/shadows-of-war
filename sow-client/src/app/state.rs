@@ -107,6 +107,8 @@ pub struct TutorialObservation {
     pub guide_expand: Option<u32>,
     pub guide_assault: Option<u32>,
     pub guide_target_action: Option<u32>,
+    pub guide_target_attack: Option<u32>,
+    pub guide_target_approach: Option<u32>,
     /// Legal building tiles ranked by nameplate and border clearance for this tutorial tick.
     pub guide_build_site_candidates: Vec<(bool, u32, u32, u32)>,
     pub guide_build_site_kind: Option<sow_core::game::BuildingKind>,
@@ -117,6 +119,7 @@ pub struct TutorialObservation {
 #[serde(rename_all = "snake_case")]
 pub enum TutorialPausedAction {
     ExpandOnceThenResume,
+    AttackOnceThenResume,
     SendResourcesStayPaused,
     RequestAllianceStayPaused,
     BuildUntilStarted,
@@ -607,12 +610,11 @@ pub struct UiState {
     pub campaign_session_id: u32,
     pub tutorial_camera_only: bool,
     pub tutorial_paused_action: Option<TutorialPausedAction>,
-    /// Boudica remains frozen until the player starts the first Roman attack.
-    pub tutorial_waiting_for_first_attack: bool,
     /// Which scripted campaign the running tutorial match belongs to.
     pub tutorial_campaign: crate::campaign::CampaignId,
     /// Player whose avatar the current tutorial step points at; None points to the local player.
     pub tutorial_marker_player_id: Option<u16>,
+    pub tutorial_marker_action: Option<TutorialMarkerAction>,
     /// Entity requesting terms in the open tutorial dialog; its border glows until resolved.
     pub dialog_border_highlight: Option<DialogBorderHighlight>,
     pub show_leaderboard: bool,
@@ -664,6 +666,13 @@ pub struct UiState {
     pub last_player_attack_flash_time: std::collections::HashMap<u16, web_time::Instant>,
     /// Screen vignette alert state.
     pub viewport_alert: Option<ViewportAlertState>,
+}
+
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TutorialMarkerAction {
+    Expand,
+    Attack,
 }
 
 #[derive(Clone, Debug)]

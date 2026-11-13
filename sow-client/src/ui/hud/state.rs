@@ -37,6 +37,8 @@ pub struct BuildingPlacement {
     pub pending: bool,
 }
 
+pub(crate) const DEFAULT_ATTACK_RATIO: f32 = 0.25;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransferMode {
     Send,
@@ -93,7 +95,7 @@ impl Default for HudState {
             troop_rate: 0.0,
             gold_rate: 0.0,
             hero_income_rate: 0.0,
-            attack_ratio: 0.5,
+            attack_ratio: DEFAULT_ATTACK_RATIO,
             spawn_timer_secs: None,
             sync_state: None,
             my_player_id: 0,

@@ -16,7 +16,7 @@ use wasm_bindgen::prelude::*;
 use web_time::{Duration, Instant};
 
 use crate::UiAction;
-use crate::app::{HoverPointer, MapContextMenuView, SowApp};
+use crate::app::{HoverPointer, MapContextMenuView, SowApp, TutorialMarkerAction};
 use crate::campaign::CampaignId;
 
 const LEADERBOARD_LIMIT: usize = 100;
@@ -96,6 +96,8 @@ enum WebMenuCommand {
     SetTutorialMarker {
         #[serde(default)]
         player_id: Option<u16>,
+        #[serde(default)]
+        action: Option<TutorialMarkerAction>,
     },
     SetDialogBorderHighlight {
         #[serde(default)]
@@ -133,9 +135,15 @@ enum WebMenuCommand {
     UnlockLeader {
         leader_id: String,
         currency: String,
+        #[serde(default)]
+        offer_id: Option<String>,
     },
     UnlockSkin {
         skin_id: String,
+        #[serde(default)]
+        currency: String,
+        #[serde(default)]
+        offer_id: Option<String>,
     },
     EquipSkin {
         skin_id: String,
@@ -544,6 +552,7 @@ struct HudPublishKey {
     tutorial_camera_zoom_hundredths: i32,
     tutorial_target_zoom_hundredths: i32,
     tutorial_marker_player_id: Option<u16>,
+    tutorial_marker_action: Option<TutorialMarkerAction>,
     tutorial_emote_token: Option<String>,
     tutorial_target_hovered: bool,
     tutorial_camera_viewport: Option<(u32, u32, u32, u32)>,
@@ -782,6 +791,7 @@ impl SowApp {
                     }
                     crate::store_portals::track_product_event("menu_campaign_start");
                     self.ui.tutorial_marker_player_id = None;
+                    self.ui.tutorial_marker_action = None;
                     self.ui.dialog_border_highlight = None;
                     self.boot_campaign_pending = None;
                     if let Err(error) =
@@ -798,7 +808,7 @@ impl SowApp {
                     paused_action,
                 } => {
                     if self.ui.tutorial_active && self.net.is_offline {
-                        self.sim.paused = paused || self.ui.tutorial_waiting_for_first_attack;
+                        self.sim.paused = paused;
                         self.ui.tutorial_camera_only = paused && camera_only;
                         self.ui.tutorial_paused_action = if paused && !camera_only {
                             paused_action
@@ -925,7 +935,7 @@ impl SowApp {
                         }
                     }
                 }
-                WebMenuCommand::SetTutorialMarker { player_id } => {
+                WebMenuCommand::SetTutorialMarker { player_id, action } => {
                     if self.ui.tutorial_active && self.net.is_offline {
                         self.ui.tutorial_marker_player_id = player_id.filter(|player_id| {
                             self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
@@ -935,6 +945,8 @@ impl SowApp {
                                     .any(|player| player.id == *player_id)
                             })
                         });
+                        self.ui.tutorial_marker_action =
+                            self.ui.tutorial_marker_player_id.and(action);
                     }
                 }
                 WebMenuCommand::SetDialogBorderHighlight { player_id } => {
@@ -1091,14 +1103,24 @@ impl SowApp {
                 WebMenuCommand::UnlockLeader {
                     leader_id,
                     currency,
+                    offer_id,
                 } => {
                     self.process_ui_actions(Some(UiAction::UnlockLeader {
                         leader_id,
                         currency,
+                        offer_id,
                     }));
                 }
-                WebMenuCommand::UnlockSkin { skin_id } => {
-                    self.process_ui_actions(Some(UiAction::UnlockSkin(skin_id)));
+                WebMenuCommand::UnlockSkin {
+                    skin_id,
+                    currency,
+                    offer_id,
+                } => {
+                    self.process_ui_actions(Some(UiAction::UnlockSkin {
+                        skin_id,
+                        currency,
+                        offer_id,
+                    }));
                 }
                 WebMenuCommand::EquipSkin { skin_id } => {
                     self.process_ui_actions(Some(UiAction::EquipSkin(skin_id)));
@@ -2289,6 +2311,11 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         } else {
             None
         },
+        tutorial_marker_action: if tutorial_active {
+            app.ui.tutorial_marker_action
+        } else {
+            None
+        },
         tutorial_emote_token: if tutorial_active {
             app.ui
                 .nameplates
@@ -2464,54 +2491,47 @@ fn tutorial_owner_is_attackable(
     owner != my_pid && !teammate && !allied
 }
 
-fn tutorial_assault_tile(
-    owners: &[u16],
-    terrain: &[u8],
-    map_w: u32,
-    map_h: u32,
-    border_tiles: &sow_core::bitset::DenseBitSet,
-    my_pid: u16,
-    me: &sow_core::protocol::PlayerSnapshot,
-    players: &[sow_core::protocol::PlayerSnapshot],
-) -> Option<u32> {
-    if map_w == 0 || map_w.checked_mul(map_h).is_none() {
-        return None;
-    }
-    let width = i32::try_from(map_w).ok()?;
-    let height = i32::try_from(map_h).ok()?;
-    let (center_x, center_y) = (me.centroid_x as i32, me.centroid_y as i32);
-    let mut best: Option<(i64, u32)> = None;
-    for border_idx in border_tiles.ones() {
-        if border_idx / map_w >= map_h || owners.get(border_idx as usize).copied() != Some(my_pid) {
-            continue;
-        }
-        let (col, row) = ((border_idx % map_w) as i32, (border_idx / map_w) as i32);
-        for (dc, dr) in TUTORIAL_ATTACK_NEIGHBORS {
-            let (next_col, next_row) = (col + dc, row + dr);
-            if next_col < 0 || next_col >= width || next_row < 0 || next_row >= height {
-                continue;
-            }
-            let tile = (next_row as u32 * map_w + next_col as u32) as usize;
-            let Some(owner) = owners.get(tile).copied() else {
-                continue;
-            };
-            if !terrain.get(tile).is_some_and(|value| value & 0x80 != 0)
-                || !tutorial_owner_is_attackable(owner, my_pid, me, players)
-            {
-                continue;
-            }
-            let dx = i64::from(next_col - center_x);
-            let dy = i64::from(next_row - center_y);
-            let distance = dx * dx + dy * dy;
-            if best.is_none_or(|(best_distance, _)| distance < best_distance) {
-                best = Some((distance, tile as u32));
-            }
-        }
-    }
-    best.map(|(_, tile)| tile)
+#[derive(Default)]
+struct TutorialTargetActionTiles {
+    attack: Option<u32>,
+    approach: Option<u32>,
+    general: Option<u32>,
 }
 
-fn tutorial_target_action_tile(
+#[derive(Default)]
+struct TutorialBorderActionTiles {
+    assault: Option<u32>,
+    target: TutorialTargetActionTiles,
+}
+
+fn tutorial_action_target(
+    tiles: &TutorialTargetActionTiles,
+    action: Option<TutorialMarkerAction>,
+    attack_ready: bool,
+    fallback_expand: Option<u32>,
+) -> (Option<u32>, Option<&'static str>) {
+    match action {
+        Some(TutorialMarkerAction::Expand) => {
+            let tile = tiles.approach.or(fallback_expand);
+            (tile, tile.map(|_| "expand"))
+        }
+        Some(TutorialMarkerAction::Attack) if attack_ready => {
+            if let Some(tile) = tiles.attack {
+                (Some(tile), Some("attack"))
+            } else {
+                let tile = tiles.approach.or(fallback_expand);
+                (tile, tile.map(|_| "expand"))
+            }
+        }
+        Some(TutorialMarkerAction::Attack) => {
+            let tile = tiles.approach.or(fallback_expand);
+            (tile, tile.map(|_| "expand"))
+        }
+        None => (tiles.general, None),
+    }
+}
+
+fn tutorial_border_action_tiles(
     owners: &[u16],
     terrain: &[u8],
     map_w: u32,
@@ -2521,21 +2541,26 @@ fn tutorial_target_action_tile(
     target_owner: u16,
     me: &sow_core::protocol::PlayerSnapshot,
     players: &[sow_core::protocol::PlayerSnapshot],
-) -> Option<u32> {
-    let target = players.iter().find(|player| player.id == target_owner)?;
-    let target_is_attackable = tutorial_owner_is_attackable(target_owner, my_pid, me, players);
-    if target_owner == my_pid
-        || !target.alive
-        || target.tile_count == 0
-        || map_w == 0
-        || map_w.checked_mul(map_h).is_none()
-    {
-        return None;
+) -> TutorialBorderActionTiles {
+    if map_w == 0 || map_w.checked_mul(map_h).is_none() {
+        return TutorialBorderActionTiles::default();
     }
-    let width = i32::try_from(map_w).ok()?;
-    let height = i32::try_from(map_h).ok()?;
-    let (goal_x, goal_y) = (target.centroid_x as i32, target.centroid_y as i32);
-    let mut best: Option<(i64, u32)> = None;
+    let (Ok(width), Ok(height)) = (i32::try_from(map_w), i32::try_from(map_h)) else {
+        return TutorialBorderActionTiles::default();
+    };
+    let target = players.iter().find(|player| {
+        player.id == target_owner && player.id != my_pid && player.alive && player.tile_count > 0
+    });
+    let target_is_attackable =
+        target.is_some_and(|_| tutorial_owner_is_attackable(target_owner, my_pid, me, players));
+    let (goal_x, goal_y) = target
+        .map(|target| (target.centroid_x as i32, target.centroid_y as i32))
+        .unwrap_or((0, 0));
+    let (center_x, center_y) = (me.centroid_x as i32, me.centroid_y as i32);
+    let mut assault: Option<(i64, u32)> = None;
+    let mut attack = None;
+    let mut approach: Option<(i64, u32)> = None;
+    let mut general: Option<(i64, u32)> = None;
     for border_idx in border_tiles.ones() {
         if border_idx / map_w >= map_h || owners.get(border_idx as usize).copied() != Some(my_pid) {
             continue;
@@ -2553,82 +2578,58 @@ fn tutorial_target_action_tile(
             if !terrain.get(next).is_some_and(|value| value & 0x80 != 0) {
                 continue;
             }
-            if owner == target.id && target_is_attackable {
-                return Some(next as u32);
+
+            if tutorial_owner_is_attackable(owner, my_pid, me, players) {
+                let dx = i64::from(next_col - center_x);
+                let dy = i64::from(next_row - center_y);
+                let distance = dx * dx + dy * dy;
+                if assault.is_none_or(|(best_distance, _)| distance < best_distance) {
+                    assault = Some((distance, next as u32));
+                }
             }
-            let legal_frontier = if target_is_attackable {
-                tutorial_owner_is_attackable(owner, my_pid, me, players)
-            } else {
-                owner == 0
+
+            let Some(target) = target else {
+                continue;
             };
-            if !legal_frontier {
+            if owner == target.id {
+                if target_is_attackable {
+                    attack.get_or_insert(next as u32);
+                }
                 continue;
             }
+
             let source_dx = i64::from(col - goal_x);
             let source_dy = i64::from(row - goal_y);
             let next_dx = i64::from(next_col - goal_x);
             let next_dy = i64::from(next_row - goal_y);
             let source_distance = source_dx * source_dx + source_dy * source_dy;
             let next_distance = next_dx * next_dx + next_dy * next_dy;
-            if next_distance < source_distance
-                && best.is_none_or(|(best_distance, _)| next_distance < best_distance)
+            if next_distance >= source_distance {
+                continue;
+            }
+            if owner == 0 && approach.is_none_or(|(best_distance, _)| next_distance < best_distance)
             {
-                best = Some((next_distance, next as u32));
+                approach = Some((next_distance, next as u32));
+            }
+            let legal_general = if target_is_attackable {
+                tutorial_owner_is_attackable(owner, my_pid, me, players)
+            } else {
+                owner == 0
+            };
+            if legal_general
+                && general.is_none_or(|(best_distance, _)| next_distance < best_distance)
+            {
+                general = Some((next_distance, next as u32));
             }
         }
     }
-    best.map(|(_, tile)| tile)
-}
-
-impl SowApp {
-    pub(crate) fn tutorial_campaign_attack_owner(&self) -> Option<u16> {
-        if !self.ui.tutorial_active || self.ui.tutorial_campaign != CampaignId::Boudica {
-            return None;
-        }
-        self.sim
-            .engine
-            .as_ref()?
-            .campaign_faction_ids
-            .iter()
-            .find_map(|(&id, faction)| (faction == "roman_outpost").then_some(id))
-    }
-
-    pub(crate) fn tutorial_campaign_attack_tile(&self) -> Option<u32> {
-        if !self.ui.tutorial_active || self.ui.tutorial_campaign != CampaignId::Boudica {
-            return None;
-        }
-        let engine = self.sim.engine.as_ref()?;
-        let renderer = self.gfx.map_renderer.as_ref()?;
-        let snapshot = self.sim.current_snapshot.as_ref()?;
-        let my_pid = self.sim.my_player_id?;
-        let target_owner = if self.ui.tutorial_waiting_for_first_attack {
-            let target_owner = self.tutorial_campaign_attack_owner()?;
-            (engine.campaign_relations.get(&target_owner)
-                == Some(&sow_core::protocol::CampaignRelation::Enemy))
-            .then_some(target_owner)?
-        } else {
-            let target_owner = self.ui.tutorial_marker_player_id?;
-            if engine.campaign_relations.get(&target_owner)
-                != Some(&sow_core::protocol::CampaignRelation::Enemy)
-            {
-                return None;
-            }
-            target_owner
-        };
-        let me = snapshot.players.iter().find(|player| player.id == my_pid)?;
-        let border_tiles = &engine.state.player(my_pid)?.border_tiles;
-        let tile = tutorial_target_action_tile(
-            &renderer.owners,
-            &renderer.terrain,
-            self.sim.map_w,
-            self.sim.map_h,
-            border_tiles,
-            my_pid,
-            target_owner,
-            me,
-            &snapshot.players,
-        )?;
-        (renderer.owners.get(tile as usize).copied() == Some(target_owner)).then_some(tile)
+    TutorialBorderActionTiles {
+        assault: assault.map(|(_, tile)| tile),
+        target: TutorialTargetActionTiles {
+            attack,
+            approach: approach.map(|(_, tile)| tile),
+            general: attack.or_else(|| general.map(|(_, tile)| tile)),
+        },
     }
 }
 
@@ -2811,19 +2812,25 @@ fn tutorial_building_anchors(
 
 /// Tutorial hand anchors, as tile indices cached per snapshot tick.
 /// `expand` is neutral land touching the player's border (where to tap to grow);
-/// `assault` is attackable land touching the player's border;
-/// `target_action` is legal land toward a named faction: neutral land to approach allies,
-/// or neutral/enemy land to approach or attack an enemy; `build_site` prefers visible,
+/// `assault` and named-target candidates share one border pass. `target_action` is legal
+/// land toward a named faction: neutral land to approach allies, or neutral/enemy land to
+/// approach or attack an enemy; `build_site` prefers visible,
 /// buildable land far from both the player's nameplate and its border.
 fn tutorial_guide_tiles(
     app: &mut SowApp,
     snapshot: &sow_core::protocol::SimSnapshot,
     my_pid: u16,
     target_owner: u16,
-) -> (Option<u32>, Option<u32>, Option<u32>, Option<u32>) {
+) -> (
+    Option<u32>,
+    Option<u32>,
+    Option<u32>,
+    Option<u32>,
+    Option<&'static str>,
+) {
     let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
     if map_w == 0 || map_h == 0 {
-        return (None, None, None, None);
+        return (None, None, None, None, None);
     }
     let build_kind = app
         .ui
@@ -2837,7 +2844,7 @@ fn tutorial_guide_tiles(
         .iter()
         .find(|player| player.id == my_pid && player.alive && player.tile_count > 0)
     else {
-        return (None, None, None, None);
+        return (None, None, None, None, None);
     };
     let nameplate_anchor = app
         .ui
@@ -2870,10 +2877,12 @@ fn tutorial_guide_tiles(
             observation.guide_expand = None;
             observation.guide_assault = None;
             observation.guide_target_action = None;
+            observation.guide_target_attack = None;
+            observation.guide_target_approach = None;
             observation.guide_build_site_candidates.clear();
         }
         let Some(renderer) = app.gfx.map_renderer.as_ref() else {
-            return (None, None, None, None);
+            return (None, None, None, None, None);
         };
         let (owners, terrain) = (&renderer.owners, &renderer.terrain);
         let (cx, cy) = (me.centroid_x as i32, me.centroid_y as i32);
@@ -2926,31 +2935,23 @@ fn tutorial_guide_tiles(
             .as_ref()
             .and_then(|engine| engine.state.player(my_pid))
             .map(|player| &player.border_tiles);
-        let assault = border_tiles.and_then(|border_tiles| {
-            tutorial_assault_tile(
-                owners,
-                terrain,
-                map_w,
-                map_h,
-                border_tiles,
-                my_pid,
-                me,
-                &snapshot.players,
-            )
-        });
-        let target_action = border_tiles.and_then(|border_tiles| {
-            tutorial_target_action_tile(
-                owners,
-                terrain,
-                map_w,
-                map_h,
-                border_tiles,
-                my_pid,
-                target_owner,
-                me,
-                &snapshot.players,
-            )
-        });
+        let border_actions = border_tiles
+            .map(|border_tiles| {
+                tutorial_border_action_tiles(
+                    owners,
+                    terrain,
+                    map_w,
+                    map_h,
+                    border_tiles,
+                    my_pid,
+                    target_owner,
+                    me,
+                    &snapshot.players,
+                )
+            })
+            .unwrap_or_default();
+        let assault = border_actions.assault;
+        let target_actions = border_actions.target;
         let radius = 48_i32.min(map_w.min(map_h) as i32);
         let map_area = map_w.checked_mul(map_h).unwrap_or(0);
         let mut build_site_candidates = Vec::new();
@@ -3027,7 +3028,9 @@ fn tutorial_guide_tiles(
         let observation = &mut app.sim.tutorial_observation;
         observation.guide_expand = expand;
         observation.guide_assault = assault;
-        observation.guide_target_action = target_action;
+        observation.guide_target_action = target_actions.general;
+        observation.guide_target_attack = target_actions.attack;
+        observation.guide_target_approach = target_actions.approach;
         observation.guide_build_site_candidates = build_site_candidates;
     }
     let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
@@ -3040,17 +3043,33 @@ fn tutorial_guide_tiles(
                 .is_some_and(|point| tutorial_screen_point_visible(point, viewport_w, viewport_h))
         },
     );
-    let observation = &mut app.sim.tutorial_observation;
+    let hud = &app.ui.app.hud_state;
+    let attack_troops = hud.troops * f64::from(hud.attack_ratio);
+    let attack_ready = attack_troops.is_finite()
+        && attack_troops > 0.0
+        && attack_troops >= app.sim.config.attack_cost_neutral;
+    let observation = &app.sim.tutorial_observation;
+    let (target_action, target_action_mode) = tutorial_action_target(
+        &TutorialTargetActionTiles {
+            attack: observation.guide_target_attack,
+            approach: observation.guide_target_approach,
+            general: observation.guide_target_action,
+        },
+        app.ui.tutorial_marker_action,
+        attack_ready,
+        observation.guide_expand,
+    );
     let expand = if target_owner != my_pid {
-        observation.guide_target_action.or(observation.guide_expand)
+        target_action.or(observation.guide_expand)
     } else {
         observation.guide_expand
     };
     (
         expand,
         observation.guide_assault,
-        observation.guide_target_action,
+        target_action,
         build_site,
+        target_action_mode,
     )
 }
 
@@ -3102,7 +3121,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         });
     };
     let marker_player_id = app.ui.tutorial_marker_player_id.unwrap_or(my_pid);
-    let (expand_tile, assault_tile, target_tile, build_site_tile) =
+    let (expand_tile, assault_tile, target_tile, build_site_tile, target_action_mode) =
         tutorial_guide_tiles(app, &snapshot, my_pid, marker_player_id);
     let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
     let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
@@ -3297,6 +3316,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "expand_target": expand_target,
         "assault": guide_screen(assault_tile),
         "target_action": guide_screen(target_tile),
+        "target_action_mode": target_action_mode,
         "build_site": build_site_screen,
         "upgrade_structure": app
             .building_panel_layout()
@@ -5487,19 +5507,99 @@ mod tests {
         let mut border = sow_core::bitset::DenseBitSet::new();
         border.insert(11);
 
+        let tiles = tutorial_border_action_tiles(
+            &owners,
+            &terrain,
+            5,
+            5,
+            &border,
+            me.id,
+            ally.id,
+            &me,
+            &[me.clone(), ally],
+        );
+        assert_eq!(tiles.target.approach, Some(12));
+        assert_eq!(tiles.target.general, Some(12));
+        assert_eq!(tiles.target.attack, None);
+        assert_eq!(tiles.assault, None);
+    }
+
+    #[test]
+    fn tutorial_target_scan_finds_a_frontier_before_the_enemy_shares_a_border() {
+        let mut me = test_player(1, 1, 500.0);
+        me.centroid_x = 1.0;
+        me.centroid_y = 2.0;
+        let mut enemy = test_player(2, 1, 500.0);
+        enemy.centroid_x = 3.0;
+        enemy.centroid_y = 2.0;
+        let mut owners = vec![0; 35];
+        owners[15] = me.id;
+        owners[17] = enemy.id;
+        let terrain = vec![0x80; 35];
+        let mut border = sow_core::bitset::DenseBitSet::new();
+        border.insert(15);
+
+        let tiles = tutorial_border_action_tiles(
+            &owners,
+            &terrain,
+            7,
+            5,
+            &border,
+            me.id,
+            enemy.id,
+            &me,
+            &[me.clone(), enemy.clone()],
+        );
+        assert_eq!(tiles.target.attack, None);
+        assert_eq!(tiles.target.approach, Some(16));
+        assert_eq!(tiles.assault, None);
+
+        owners[16] = enemy.id;
+        enemy.centroid_x = 2.0;
+        let tiles = tutorial_border_action_tiles(
+            &owners,
+            &terrain,
+            7,
+            5,
+            &border,
+            me.id,
+            enemy.id,
+            &me,
+            &[me.clone(), enemy],
+        );
+        assert_eq!(tiles.target.attack, Some(16));
         assert_eq!(
-            tutorial_target_action_tile(
-                &owners,
-                &terrain,
-                5,
-                5,
-                &border,
-                me.id,
-                ally.id,
-                &me,
-                &[me.clone(), ally],
-            ),
-            Some(12)
+            tiles.assault,
+            Some(16),
+            "the same frontier pass finds an assault tile"
+        );
+    }
+
+    #[test]
+    fn tutorial_attack_target_switches_from_expand_to_attack_only_when_legal() {
+        let tiles = TutorialTargetActionTiles {
+            attack: Some(17),
+            approach: Some(16),
+            general: Some(17),
+        };
+        assert_eq!(
+            tutorial_action_target(&tiles, Some(TutorialMarkerAction::Attack), false, None),
+            (Some(16), Some("expand")),
+            "low troops keep the game live and direct the player toward a legal frontier",
+        );
+        assert_eq!(
+            tutorial_action_target(&tiles, Some(TutorialMarkerAction::Attack), true, None),
+            (Some(17), Some("attack")),
+        );
+        assert_eq!(
+            tutorial_action_target(&tiles, Some(TutorialMarkerAction::Expand), true, None),
+            (Some(16), Some("expand")),
+            "contact guides never prompt for an attack, even with an adjacent enemy",
+        );
+        assert_eq!(
+            tutorial_action_target(&tiles, None, true, None),
+            (Some(17), None),
+            "unrelated target guides keep their current action",
         );
     }
 

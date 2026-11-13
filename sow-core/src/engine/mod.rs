@@ -259,6 +259,16 @@ pub fn initialize_match_engine(
         engine.state.config.nation_count,
         engine.state.config.bot_count,
     );
+    engine.campaign_starting_tile_counts = engine
+        .campaign_faction_ids
+        .keys()
+        .filter_map(|&player_id| {
+            engine
+                .state
+                .player(player_id)
+                .map(|player| (player_id, player.tile_count))
+        })
+        .collect();
     engine
 }
 
@@ -421,6 +431,9 @@ pub struct SowEngine {
     /// Explicit per-faction override for autonomous attacks against the human.
     pub campaign_can_attack_player: std::collections::HashMap<PlayerId, bool>,
     pub campaign_faction_ids: std::collections::HashMap<PlayerId, String>,
+    /// Starting territory per scripted campaign faction, retained across checkpoints.
+    #[serde(default)]
+    pub campaign_starting_tile_counts: std::collections::HashMap<PlayerId, u32>,
     /// Scripted campaign attackers and the live factions they are ordered to pursue.
     pub campaign_assault_targets: std::collections::HashMap<PlayerId, Vec<PlayerId>>,
     /// Factions marked as eligible for a configured campaign assault in their roster.
@@ -544,6 +557,7 @@ impl SowEngine {
             campaign_relations: std::collections::HashMap::new(),
             campaign_can_attack_player: std::collections::HashMap::new(),
             campaign_faction_ids: std::collections::HashMap::new(),
+            campaign_starting_tile_counts: std::collections::HashMap::new(),
             campaign_assault_targets: std::collections::HashMap::new(),
             campaign_assault_force_ids: std::collections::HashSet::new(),
             campaign_assault_troop_caps: std::collections::HashMap::new(),
@@ -685,9 +699,16 @@ impl SowEngine {
         targets.contains(&owner) || pending == Some(owner)
     }
 
-    /// Whether a watched faction is down to its final tile before the last capture.
-    pub(crate) fn pre_defeat_reached(player: &crate::player::Player) -> bool {
-        player.tile_count <= 1
+    /// Whether a watched faction has lost one tile from its starting territory.
+    pub(crate) fn pre_defeat_reached(
+        starting_tile_counts: &std::collections::HashMap<PlayerId, u32>,
+        player_id: PlayerId,
+        player: &crate::player::Player,
+    ) -> bool {
+        let threshold = starting_tile_counts
+            .get(&player_id)
+            .map_or(1, |starting| starting.saturating_sub(1).max(1));
+        player.tile_count <= threshold
     }
 
     /// Lets a waiting final capture resolve when its last line never finishes.

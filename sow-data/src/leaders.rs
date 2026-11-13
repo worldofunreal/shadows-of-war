@@ -410,10 +410,10 @@ mod tests {
         let mut crowns = std::collections::HashSet::new();
         for leader in Leader::all().filter(|leader| !leader.always_free()) {
             let band = match leader.rarity() {
-                Rarity::Common => 425..=564,
-                Rarity::Rare => 656..=932,
-                Rarity::Epic => 1116..=1670,
-                Rarity::Legendary => 2038..=2500,
+                Rarity::Common => 425..=532,
+                Rarity::Rare => 623..=832,
+                Rarity::Epic => 1009..=1420,
+                Rarity::Legendary => 1645..=2000,
             };
             assert!(band.contains(&leader.price_crowns()), "{} is outside its band", leader.id());
             assert!(crowns.insert(leader.price_crowns()), "duplicate crown price for {}", leader.id());
@@ -421,12 +421,15 @@ mod tests {
         assert!(Leader::all()
             .filter(|leader| leader.always_free())
             .all(|leader| leader.price_crowns() == 0));
-        // The caps govern purchasable heroes; a free hero's rarity only sets its display.
+        // The pyramid governs purchasable heroes; a free hero's rarity only sets its display.
         let paid: Vec<Leader> = Leader::all().filter(|leader| !leader.always_free()).collect();
-        let total = paid.len();
         let count = |tier: Rarity| paid.iter().filter(|leader| leader.rarity() == tier).count();
-        assert!(count(Rarity::Common) * 100 <= total * 45, "Common is above 45% of paid heroes");
-        assert!(count(Rarity::Legendary) * 100 <= total * 8, "Legendary is above 8% of paid heroes");
+        let tiers = [Rarity::Common, Rarity::Rare, Rarity::Epic, Rarity::Legendary].map(count);
+        assert!(tiers.windows(2).all(|pair| pair[0] > pair[1]), "rarity counts {tiers:?} are not a pyramid");
+        // Owner exceptions to "the better known, the more common".
+        for id in ["vlad_iii", "justinian_ii_hero"] {
+            assert_eq!(Leader::of(id).rarity(), Rarity::Epic, "{id} must stay Epic");
+        }
     }
 
     #[test]

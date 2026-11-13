@@ -97,9 +97,6 @@ copy_failed = "Копия не справилась"
 copy_unavailable = "КОПИ НЕЗАВИСИМЫЙ"
 
 [tutorial]
-skip_cinematic = "ПРОПУСТИТЬ СЦЕНУ"
-watch_cinematic = "СМОТРЕТЬ СИНЕМАТИКУ"
-hold_to_skip = "УДЕРЖИВАЙТЕ, ЧТОБЫ ПРОПУСТИТЬ"
 continue = "ВСТРЕЧА"
 complete = "ЗАВЕРШИТЬ КАМПАНИЮ"
 retry = "ПОВТОРИТЬ"
@@ -894,6 +891,10 @@ change_territory_style = "Измените свой территориальны
 view = "ВИДЕО"
 checkout = "Щекут"
 loading_checkout = "Загрузка кассы..."
+daily_offers = "Предложения дня"
+weekly_offers = "Предложения недели"
+ends_in = "Закончится через {time}"
+leader = "Лидер"
 
 [hud]
 build_placement = "Разместить здание"

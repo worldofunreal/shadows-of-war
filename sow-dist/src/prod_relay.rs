@@ -261,6 +261,12 @@ printf '%s\n' "$backup"
 backup=$1
 # Refuse to touch anything when the backup archive cannot be read.
 tar -tf "$backup/files.tar" >/dev/null
+# Without a recorded previous release there is nothing to return to. Refuse before touching
+# anything, so the release link and the services running from it keep matching each other.
+if [ ! -s "$backup/current" ]; then
+    echo "rollback: no previous release was recorded; the new release stays active" >&2
+    exit 1
+fi
 failed=
 # Steps wrapped in attempt are recorded, not fatal: the restore keeps going, the database and
 # server still restart, and the final status reports the failure.
@@ -280,29 +286,21 @@ printf '%s\n' "$2" | while IFS= read -r file; do
 done
 attempt "file restore" tar -C / -xpf "$backup/files.tar" --exclude __SITE_RELEASE_REL__/current
 link=__SITE_RELEASE_ROOT__/.rollback.$$
-if [ -s "$backup/current" ]; then
-    ln -s "$(cat "$backup/current")" "$link"
-    mv -hf "$link" __SITE_RELEASE_ROOT__/current
-else
-    rm -f __SITE_RELEASE_ROOT__/current
-fi
+ln -s "$(cat "$backup/current")" "$link"
+mv -hf "$link" __SITE_RELEASE_ROOT__/current
 attempt "nginx configuration test" nginx -t
 attempt "nginx reload" service nginx reload
-# Without a previous release (a first activation) nothing was running before, so the services
-# stay as they are and the next activation restarts them with its own configuration.
-if [ -s "$backup/current" ]; then
-    if [ "$4" = yes ]; then
-        attempt "database restart" jexec __SITE_DATABASE_JAIL__ service sow_database restart
-        i=0
-        until curl -fsS --max-time 3 http://__SITE_LOOPBACK__:25585/healthz >/dev/null; do
-            i=$((i + 1))
-            if [ "$i" -ge 60 ]; then echo "rollback: database healthz did not answer" >&2; failed=1; break; fi
-            sleep 1
-        done
-    fi
-    if [ "$5" = yes ]; then attempt "server restart" jexec __SITE_SERVER_JAIL__ service sow_server restart; fi
-    if [ "$3" = no ] && [ "$6" = yes ]; then attempt "relay restart" jexec __SITE_SERVER_JAIL__ service sow_relay restart; fi
+if [ "$4" = yes ]; then
+    attempt "database restart" jexec __SITE_DATABASE_JAIL__ service sow_database restart
+    i=0
+    until curl -fsS --max-time 3 http://__SITE_LOOPBACK__:25585/healthz >/dev/null; do
+        i=$((i + 1))
+        if [ "$i" -ge 60 ]; then echo "rollback: database healthz did not answer" >&2; failed=1; break; fi
+        sleep 1
+    done
 fi
+if [ "$5" = yes ]; then attempt "server restart" jexec __SITE_SERVER_JAIL__ service sow_server restart; fi
+if [ "$3" = no ] && [ "$6" = yes ]; then attempt "relay restart" jexec __SITE_SERVER_JAIL__ service sow_relay restart; fi
 [ -z "$failed" ]
 "#,
             &[

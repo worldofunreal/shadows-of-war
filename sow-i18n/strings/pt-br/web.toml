@@ -97,9 +97,6 @@ copy_failed = "A COPIA FALHOU"
 copy_unavailable = "CÓPIA INdisponível"
 
 [tutorial]
-skip_cinematic = "PULAR CINEMÁTICA"
-watch_cinematic = "ASSISTIR À CINEMÁTICA"
-hold_to_skip = "SEGURE PARA PULAR"
 continue = "CONTINUAR"
 complete = "CONCLUIR CAMPANHA"
 retry = "TENTAR NOVAMENTE"
@@ -894,6 +891,10 @@ change_territory_style = "Mudar o seu estilo de território"
 view = "CONVISTA"
 checkout = "CONCORRÊNCIA"
 loading_checkout = "A carregar a saída..."
+daily_offers = "Ofertas diárias"
+weekly_offers = "Ofertas semanais"
+ends_in = "Termina em {time}"
+leader = "Líder"
 
 [hud]
 build_placement = "Posicionar construção"

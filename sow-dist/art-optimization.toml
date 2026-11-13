@@ -252,17 +252,6 @@ lossless = false
 max_bytes = 65536
 recipe_version = 1
 
-[profiles.campaign_poster]
-format = "webp"
-max_width = 1280
-max_height = 720
-quality = 80
-alpha = "preserve"
-resample = "lanczos"
-lossless = false
-max_bytes = 131072
-recipe_version = 1
-
 [profiles.video_poster]
 format = "webp"
 max_width = 1600

@@ -97,9 +97,6 @@ copy_failed = "Cảnh sát thất bại."
 copy_unavailable = "KHÔNG CÓ THỂ"
 
 [tutorial]
-skip_cinematic = "Bỏ qua đoạn phim"
-watch_cinematic = "XEM ĐOẠN PHIM"
-hold_to_skip = "NHẤN GIỮ ĐỂ BỎ QUA"
 continue = "(ĐÀN)"
 complete = "HOÀN TẤT CHIẾN DỊCH"
 retry = "THỬ LẠI"
@@ -894,6 +891,10 @@ change_territory_style = "Thay đổi cách rao giảng"
 view = "Xem"
 checkout = "CÂU HỎI"
 loading_checkout = "Đang nạp thanh toán…"
+daily_offers = "Ưu đãi hằng ngày"
+weekly_offers = "Ưu đãi hằng tuần"
+ends_in = "Kết thúc sau {time}"
+leader = "Thủ lĩnh"
 
 [hud]
 build_placement = "Đặt công trình"

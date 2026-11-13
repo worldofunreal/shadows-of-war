@@ -1344,10 +1344,18 @@ impl SowApp {
         }
     }
 
-    pub(crate) fn unlock_leader(&mut self, leader_id: String, currency: String) {
+    pub(crate) fn unlock_leader(
+        &mut self,
+        leader_id: String,
+        currency: String,
+        offer_id: Option<String>,
+    ) {
         let mut fields = serde_json::Map::new();
         fields.insert("leader_id".into(), serde_json::Value::String(leader_id));
         fields.insert("currency".into(), serde_json::Value::String(currency));
+        if let Some(offer_id) = offer_id {
+            fields.insert("offer_id".into(), serde_json::Value::String(offer_id));
+        }
         self.post_profile_action("leader unlock", "/store/leaders/unlock", fields);
     }
 
@@ -1390,9 +1398,18 @@ impl SowApp {
         self.post_profile_action("claim mission", "/profile/missions/claim", fields);
     }
 
-    pub(crate) fn unlock_skin(&mut self, skin_id: String) {
+    pub(crate) fn unlock_skin(
+        &mut self,
+        skin_id: String,
+        currency: String,
+        offer_id: Option<String>,
+    ) {
         let mut fields = serde_json::Map::new();
         fields.insert("skin_id".into(), serde_json::Value::String(skin_id));
+        fields.insert("currency".into(), serde_json::Value::String(currency));
+        if let Some(offer_id) = offer_id {
+            fields.insert("offer_id".into(), serde_json::Value::String(offer_id));
+        }
         self.post_profile_action("skin unlock", "/store/skins/unlock", fields);
     }
 

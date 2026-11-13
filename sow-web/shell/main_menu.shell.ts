@@ -95,6 +95,7 @@ import {
     isAndroidTwa,
     loadStoreCatalog,
     openLeaderPurchase,
+    openOfferPurchase,
     openSkinPurchase,
     renderAuthModal,
     renderMainNav,
@@ -199,7 +200,6 @@ interface MenuMusicState {
     blockedDeck: number | null;
     pendingVolume: number | null;
     crossfade: MenuMusicCrossfade | null;
-    cinematicActive: boolean;
     mediaMetadataSet: boolean;
     fetchRequested: boolean;
     frame: number;
@@ -239,7 +239,6 @@ const menuMusic: MenuMusicState = {
     blockedDeck: null,
     pendingVolume: null,
     crossfade: null,
-    cinematicActive: false,
     mediaMetadataSet: false,
     fetchRequested: false,
     frame: 0,
@@ -303,7 +302,6 @@ function menuMusicSpectrumIsActive(canvas: HTMLCanvasElement | null) {
         !!menuUi.state &&
         menuUi.state.phase === "MainMenu" &&
         !menuMusicLoaderActive(menuUi.state) &&
-        !menuMusic.cinematicActive &&
         document.visibilityState === "visible"
     );
 }
@@ -824,10 +822,6 @@ function syncMenuMusic(nextState: MenuState | null, userGesture: boolean, volume
         menuMusicPausePlayback();
         return;
     }
-    if (menuMusic.cinematicActive) {
-        menuMusicPausePlayback();
-        return;
-    }
     if (menuMusicResetOnMenuReturn(previousState, nextState)) menuMusicReset();
     if (menuMusicMuted() || menuMusicVolume() <= 0) {
         menuMusic.playBlocked = false;
@@ -845,16 +839,6 @@ function syncMenuMusic(nextState: MenuState | null, userGesture: boolean, volume
           : menuMusic.blockedDeck;
     menuMusicPlayDeck(nextDeck, Boolean(userGesture));
 }
-
-function menuMusicSetCinematicActive(active: boolean) {
-    active = Boolean(active);
-    if (menuMusic.cinematicActive === active) return;
-    menuMusic.cinematicActive = active;
-    if (active) menuMusicPausePlayback();
-    else if (menuMusic.state) syncMenuMusic(menuMusic.state, false);
-}
-
-window.SOW_menu_music_cinematic = menuMusicSetCinematicActive;
 
 // Music is optional during the initial loader; start its request when that
 // loader closes so it cannot compete with the tutorial's map and scripts.
@@ -886,7 +870,6 @@ function menuMusicUnlockFromClick(event: MouseEvent) {
         !menuMusic.activated ||
         !menuMusic.state ||
         menuMusicLoaderActive(menuMusic.state) ||
-        menuMusic.cinematicActive ||
         menuMusicMuted() ||
         menuMusicVolume() <= 0
     )
@@ -2722,13 +2705,6 @@ root.addEventListener("click", function (event) {
         }
         return;
     }
-    if (command === "watch_campaign_cinematic") {
-        const cinematicEpisodeId = target.dataset.episodeId;
-        if (cinematicEpisodeId && typeof window.SOW_watchCampaignCinematic === "function") {
-            window.SOW_watchCampaignCinematic(cinematicEpisodeId);
-        }
-        return;
-    }
     if (command === "start_campaign_episode") {
         const episodeId = target.dataset.episodeId;
         if (!episodeId) return;
@@ -3166,7 +3142,12 @@ root.addEventListener("click", function (event) {
     }
     if (command === "open_skin_purchase") {
         const purchaseSkinId = target.dataset.skinId;
-        if (purchaseSkinId) openSkinPurchase(purchaseSkinId);
+        if (purchaseSkinId) openSkinPurchase(purchaseSkinId, target.dataset.currency || "gems");
+        return;
+    }
+    if (command === "open_offer_purchase") {
+        const purchaseOfferId = target.dataset.offerId;
+        if (purchaseOfferId) openOfferPurchase(purchaseOfferId);
         return;
     }
     if (command === "open_skin_picker") {
@@ -3192,11 +3173,16 @@ root.addEventListener("click", function (event) {
                 send("unlock_leader", {
                     leader_id: menuUi.purchaseModal.leaderId,
                     currency: menuUi.purchaseModal.currency,
+                    offer_id: menuUi.purchaseModal.offerId || null,
                 });
             }
         } else if (menuUi.purchaseModal.type === "skin") {
             if (!(menuUi.state && menuUi.state.store_busy))
-                send("unlock_skin", { skin_id: menuUi.purchaseModal.skinId });
+                send("unlock_skin", {
+                    skin_id: menuUi.purchaseModal.skinId,
+                    currency: menuUi.purchaseModal.currency || "gems",
+                    offer_id: menuUi.purchaseModal.offerId || null,
+                });
         }
         render();
         return;

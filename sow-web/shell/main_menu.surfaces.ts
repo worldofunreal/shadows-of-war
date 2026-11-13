@@ -666,6 +666,7 @@ export {
     isAndroidTwa,
     loadStoreCatalog,
     openLeaderPurchase,
+    openOfferPurchase,
     openSkinPurchase,
     renderLeaderPurchase,
     renderPurchaseModal,

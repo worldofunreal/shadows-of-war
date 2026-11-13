@@ -97,9 +97,6 @@ copy_failed = "GAGAL MENYALIN"
 copy_unavailable = "SALIN TIDAK TERSEDIA"
 
 [tutorial]
-skip_cinematic = "Lewati sinematik"
-watch_cinematic = "TONTON SINEMATIK"
-hold_to_skip = "TAHAN UNTUK LEWATI"
 continue = "Lanjutkan"
 complete = "SELESAIKAN KAMPANYE"
 retry = "COBA LAGI"
@@ -894,6 +891,10 @@ change_territory_style = "Ubah gaya wilayah Anda"
 view = "LIHAT"
 checkout = "BAYAR"
 loading_checkout = "Memuat checkout..."
+daily_offers = "Penawaran harian"
+weekly_offers = "Penawaran mingguan"
+ends_in = "Berakhir dalam {time}"
+leader = "Pemimpin"
 
 [hud]
 build_placement = "Tempatkan bangunan"

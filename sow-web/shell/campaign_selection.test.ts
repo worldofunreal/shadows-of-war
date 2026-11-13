@@ -63,7 +63,6 @@ function loadCampaignHarness() {
         "lobbies.campaign_boudica_title": "Rise of the Iceni",
         "lobbies.campaign_boudica_subtitle": "Tutorial · Boudica",
         "leaders.lady_six_sky": "Lady Six Sky",
-        "tutorial.watch_cinematic": "Watch Cinematic",
     };
 
     const mockMenuUi = {

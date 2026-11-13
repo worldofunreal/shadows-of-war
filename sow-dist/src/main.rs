@@ -778,7 +778,7 @@ impl ArtPipeline {
             "poki_leader_wide", "poki_leader_tall", "cg_leader_wide", "cg_leader_tall", "ability_atlas",
             "site_still_wide", "site_still_tall", "ui_icon_128", "ui_icon_256",
             "unit_icon", "pixel_art", "atlas_lossless", "loader_ui", "app_icon",
-            "map_preview", "map_thumbnail", "campaign_poster", "video_poster", "guide_image", "poki_thumbnail",
+            "map_preview", "map_thumbnail", "video_poster", "guide_image", "poki_thumbnail",
         ] {
             self.profile(required)?;
         }
@@ -964,12 +964,12 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
         }
         return Some(if name.contains("-mobile.") || name == "support-six-sky.webp" { "site_still_tall" } else { "site_still_wide" });
     }
+    if path.starts_with("campaign/") && name.ends_with(".poster.webp") {
+        return Some("video_poster");
+    }
     if path.starts_with("maps/") {
         if name == "thumbnail.webp" { return Some("map_thumbnail"); }
         if name == "preview.webp" { return Some("map_preview"); }
-    }
-    if path.starts_with("campaign/") && name.ends_with(".poster.webp") {
-        return Some("campaign_poster");
     }
     if path.starts_with("guides/") {
         return Some("guide_image");
@@ -1090,12 +1090,6 @@ fn collect_art_preview_assets(root: &Path) -> Result<Vec<ArtPreviewAsset>> {
         if entry.file_type().is_file() && entry.file_name() == "thumbnail.webp" {
             push_preview_asset(&mut assets, entry.path().to_path_buf(), "map_thumbnail", None);
             push_preview_asset(&mut assets, entry.path().to_path_buf(), "map_preview", None);
-        }
-    }
-    for entry in walkdir::WalkDir::new(root.join("assets/campaign")).sort_by_file_name() {
-        let entry = entry?;
-        if entry.file_type().is_file() && entry.file_name().to_string_lossy().ends_with(".poster.webp") {
-            push_preview_asset(&mut assets, entry.path().to_path_buf(), "campaign_poster", None);
         }
     }
     for name in ["buildings-atlas.webp", "badges-atlas.webp"] {
@@ -1777,8 +1771,6 @@ fn poki_asset_is_excluded(relative: &Path) -> bool {
         || relative.starts_with("shell/brand")
         || relative.starts_with("site/media")
         || relative == Path::new("shell/mobile-nav/store.webp")
-        || (relative.starts_with("campaign")
-            && relative.extension().is_some_and(|extension| extension == "webm"))
 }
 
 fn asset_file_inventory(root: &Path) -> Result<Vec<PathBuf>> {
@@ -1805,8 +1797,6 @@ fn poki_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
 fn cg_asset_is_excluded(relative: &Path) -> bool {
     relative.starts_with("shell/brand")
         || LOOSE_SPRITE_DIRS.iter().any(|dir| relative.starts_with(dir))
-        || (relative.starts_with("campaign")
-            && relative.extension().is_some_and(|extension| extension == "webm"))
         || (relative.starts_with("site/media")
             && ![
                 "site/media/discord.svg",
@@ -2129,7 +2119,7 @@ fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Res
     if campaign.is_dir() {
         fs::remove_dir_all(&campaign)?;
     }
-    copy_campaign_mp4_only(&source.join("campaign"), &campaign)?;
+    copy_dir(&source.join("campaign"), &campaign)?;
     publish_portal_leaders(source, packaged, pipeline, PortalLeaders::CRAZYGAMES)?;
     // The CrazyGames file cap is the one reason to pack sprites into sheets.
     pack_sprite_atlas(packaged, pipeline)
@@ -2464,7 +2454,7 @@ fn copy_poki_assets(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
     if campaign.is_dir() {
         fs::remove_dir_all(&campaign)?;
     }
-    copy_campaign_mp4_only(&src.join("campaign"), &campaign)?;
+    copy_dir(&src.join("campaign"), &campaign)?;
     publish_portal_leaders(src, dst, pipeline, PortalLeaders::POKI)
 }
 
@@ -2523,8 +2513,7 @@ fn publish_portal_leaders(src: &Path, dst: &Path, pipeline: &ArtPipeline, leader
     Ok(())
 }
 
-/// Checks one packaged asset of a portal that re-encodes leader scenes and
-/// ships campaign video as MP4 only; every other file must match its source.
+/// Checks one packaged asset of a portal that re-encodes leader scenes.
 fn verify_portal_asset(source: &Path, packaged: &Path, relative: &Path, leaders: PortalLeaders) -> Result<()> {
     let portal = leaders.portal;
     let source_path = source.join(relative);
@@ -2543,44 +2532,8 @@ fn verify_portal_asset(source: &Path, packaged: &Path, relative: &Path, leaders:
         }
         return Ok(());
     }
-    if relative.starts_with("campaign")
-        && relative.file_name().is_some_and(|name| {
-            name.to_string_lossy().ends_with(".triggers.json")
-        })
-    {
-        let expected = fs::read_to_string(&source_path)?.replace(".webm\"", ".mp4\"");
-        if fs::read_to_string(&packaged_path)? != expected {
-            bail!("{portal} campaign trigger mismatch: {}", relative.display());
-        }
-    } else if file_sha256(&source_path)? != file_sha256(&packaged_path)? {
+    if file_sha256(&source_path)? != file_sha256(&packaged_path)? {
         bail!("{portal} runtime asset content mismatch: {}", relative.display());
-    }
-    Ok(())
-}
-
-/// Portal players are Chromium/Safari; the MP4 rendition covers both. Shipping
-/// only the MP4 halves the campaign payload in the portal package. The
-/// triggers JSON is rewritten to the MP4 stem so no source 404s on boot.
-fn copy_campaign_mp4_only(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let from = entry.path();
-        if from.is_dir() {
-            copy_campaign_mp4_only(&from, &dst.join(&name))?;
-            continue;
-        }
-        if name.ends_with(".webm") {
-            continue;
-        }
-        let to = dst.join(&name);
-        if name.ends_with(".triggers.json") {
-            let text = fs::read_to_string(&from)?.replace(".webm\"", ".mp4\"");
-            fs::write(&to, text)?;
-        } else {
-            fs::copy(&from, &to)?;
-        }
     }
     Ok(())
 }
@@ -5200,97 +5153,6 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Every cinematic ships a WebM + MP4 pair with a poster under the episode's
-/// own folder, small enough to start instantly and muxed with its index at
-/// the front so the browser plays without fetching the tail of the file.
-fn validate_cinematic_media(
-    dir: &Path,
-    episode_id: &str,
-    definition: &serde_json::Value,
-) -> Result<()> {
-    const MAX_RENDITION_BYTES: u64 = 6 * 1024 * 1024;
-    let Some(steps) = definition
-        .get("steps")
-        .and_then(serde_json::Value::as_array)
-    else {
-        return Ok(());
-    };
-    for step in steps {
-        let video_src = step.get("video_src").and_then(serde_json::Value::as_str);
-        if step.get("presentation").and_then(serde_json::Value::as_str) != Some("cinematic")
-            || video_src.is_none()
-        {
-            continue;
-        }
-        let video_src = video_src.unwrap();
-        let prefix = format!("/assets/campaign/{episode_id}/");
-        let Some(relative) = video_src.strip_prefix(&prefix) else {
-            bail!("campaign cinematic video_src must live under {prefix}: {episode_id}");
-        };
-        let video_path = dir.join(episode_id).join(relative);
-        let stem = video_path
-            .file_stem()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default()
-            .to_string();
-        for extension in ["webm", "mp4"] {
-            let path = video_path.with_file_name(format!("{stem}.{extension}"));
-            if !path.is_file() {
-                bail!(
-                    "campaign cinematic rendition missing for {episode_id}: {}",
-                    path.display()
-                );
-            }
-            let size = fs::metadata(&path)?.len();
-            if size > MAX_RENDITION_BYTES {
-                bail!(
-                    "campaign cinematic rendition is too heavy for instant start ({size} bytes, max {MAX_RENDITION_BYTES}): {}",
-                    path.display()
-                );
-            }
-            let mut head = fs::File::open(&path)?;
-            let mut window = Vec::new();
-            std::io::Read::by_ref(&mut head)
-                .take(1024 * 1024)
-                .read_to_end(&mut window)?;
-            let streamable = match extension {
-                "webm" => window
-                    .windows(4)
-                    .position(|bytes| bytes == [0x1C, 0x53, 0xBB, 0x6B])
-                    .is_some_and(|position| position < 16 * 1024),
-                _ => match (
-                    window.windows(4).position(|bytes| bytes == *b"moov"),
-                    window.windows(4).position(|bytes| bytes == *b"mdat"),
-                ) {
-                    (Some(moov), Some(mdat)) => moov < mdat,
-                    (Some(_), None) => true,
-                    _ => false,
-                },
-            };
-            if !streamable {
-                bail!(
-                    "campaign cinematic must ship its index at the front (-cues_to_front 1 / +faststart) so playback never waits for the whole file: {}",
-                    path.display()
-                );
-            }
-        }
-        let poster = video_path.with_file_name(format!("{stem}.poster.webp"));
-        if !poster.is_file() {
-            bail!(
-                "campaign cinematic poster missing for {episode_id}: {}",
-                poster.display()
-            );
-        }
-        if fs::metadata(&poster)?.len() > 128 * 1024 {
-            bail!(
-                "campaign cinematic poster is too heavy: {}",
-                poster.display()
-            );
-        }
-    }
-    Ok(())
-}
-
 fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Result<()> {
     let dir = paths.root.join("assets/campaign");
     let mut rosters = HashMap::new();
@@ -5372,7 +5234,6 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
                 }
             }
         }
-        validate_cinematic_media(&dir, episode_id, &definition)?;
         episodes.push(serde_json::json!({
             "episode_id": episode_id,
             "definition": definition,
@@ -8339,8 +8200,8 @@ mod tests {
             "shell/mobile-nav/battle.webp",
             "shell/mobile-nav/store.webp",
             "site/media/discord.svg",
-            "campaign/boudica/opening.mp4",
-            "campaign/boudica/opening.webm",
+            "campaign/boudica.json",
+            "campaign/boudica.triggers.json",
         ];
         for relative in files {
             let path = source.join(relative);
@@ -8355,7 +8216,8 @@ mod tests {
         verify_poki_asset_inventory(&source, &packaged)?;
 
         let expected = [
-            "campaign/boudica/opening.mp4",
+            "campaign/boudica.json",
+            "campaign/boudica.triggers.json",
             "gameplay/avatars/caesar.webp",
             "gameplay/buildings/atlas.webp",
             "gameplay/icons/abilities/caesar.webp",
@@ -8730,43 +8592,6 @@ shortArticle = true
         Ok(())
     }
 
-    fn cinematic_definition(video_src: &str) -> serde_json::Value {
-        serde_json::json!({
-            "steps": [{
-                "id": "opening", "type": "scene", "presentation": "cinematic",
-                "video_src": video_src, "title_key": "t", "body_key": "b", "next": "end"
-            }, { "id": "end", "type": "end", "title_key": "t", "body_key": "b" }]
-        })
-    }
-
-    fn write_cinematic_triple(
-        dir: &Path,
-        stem: &str,
-        webm: &[u8],
-        mp4: &[u8],
-        poster: &[u8],
-    ) -> Result<()> {
-        let episode = dir.join("boudica");
-        fs::create_dir_all(&episode)?;
-        fs::write(episode.join(format!("{stem}.webm")), webm)?;
-        fs::write(episode.join(format!("{stem}.mp4")), mp4)?;
-        fs::write(episode.join(format!("{stem}.poster.webp")), poster)?;
-        Ok(())
-    }
-
-    fn streamable_webm() -> Vec<u8> {
-        let mut bytes = vec![0u8; 2048];
-        bytes[120..124].copy_from_slice(&[0x1C, 0x53, 0xBB, 0x6B]);
-        bytes
-    }
-
-    fn streamable_mp4(moov_at: usize, mdat_at: usize) -> Vec<u8> {
-        let mut bytes = vec![0u8; 2048];
-        bytes[moov_at..moov_at + 4].copy_from_slice(b"moov");
-        bytes[mdat_at..mdat_at + 4].copy_from_slice(b"mdat");
-        bytes
-    }
-
     #[test]
     fn asset_version_keys_match_the_urls_the_shell_builds() -> Result<()> {
         let paths = Paths::discover()?;
@@ -8844,43 +8669,6 @@ shortArticle = true
     }
 
     #[test]
-    fn poki_campaign_package_ships_only_the_mp4_and_rewrites_the_source() -> Result<()> {
-        let root = tempfile::tempdir()?;
-        let episode = root.path().join("campaign/boudica");
-        fs::create_dir_all(&episode)?;
-        fs::write(episode.join("intro.720p.abc.webm"), b"webm-bytes")?;
-        fs::write(episode.join("intro.720p.abc.mp4"), b"mp4-bytes")?;
-        fs::write(episode.join("intro.720p.abc.poster.webp"), b"poster")?;
-        fs::write(
-            root.path().join("campaign/boudica.triggers.json"),
-            "{\"steps\":[{\"video_src\":\"/assets/campaign/boudica/intro.720p.abc.webm\"}]}",
-        )?;
-        fs::write(
-            root.path().join("campaign/boudica.json"),
-            "{\"map\":\"eastanglia\"}",
-        )?;
-        let dst = root.path().join("poki");
-        copy_campaign_mp4_only(&root.path().join("campaign"), &dst.join("campaign"))?;
-        assert!(!dst.join("campaign/boudica/intro.720p.abc.webm").exists());
-        assert!(dst.join("campaign/boudica/intro.720p.abc.mp4").is_file());
-        assert!(
-            dst.join("campaign/boudica/intro.720p.abc.poster.webp")
-                .is_file()
-        );
-        let triggers = fs::read_to_string(dst.join("campaign/boudica.triggers.json"))?;
-        assert!(
-            triggers.contains("/assets/campaign/boudica/intro.720p.abc.mp4\""),
-            "portal triggers must point at the shipped MP4: {triggers}"
-        );
-        assert!(!triggers.contains(".webm"));
-        assert!(
-            dst.join("campaign/boudica.json").is_file(),
-            "plain JSON copies verbatim"
-        );
-        Ok(())
-    }
-
-    #[test]
     fn web_leader_packaging_uses_profile_without_mutating_master() -> Result<()> {
         let root = tempfile::tempdir()?;
         let leaders = root.path().join("leaders");
@@ -8910,67 +8698,6 @@ shortArticle = true
             "a corrupt image must fail the build, never ship silently"
         );
         Ok(())
-    }
-
-    #[test]
-    fn campaign_cinematic_media_rejects_missing_siblings_or_poster() -> Result<()> {
-        let out = tempfile::tempdir()?;
-        let dir = out.path().join("campaign");
-        fs::create_dir_all(dir.join("boudica"))?;
-        fs::write(dir.join("boudica/intro.webm"), streamable_webm())?;
-        let definition = cinematic_definition("/assets/campaign/boudica/intro.webm");
-        let error = validate_cinematic_media(&dir, "boudica", &definition)
-            .err()
-            .context("missing MP4 sibling must fail")?;
-        assert!(error.to_string().contains("rendition missing"), "{error}");
-        write_cinematic_triple(
-            &dir,
-            "intro",
-            &streamable_webm(),
-            &streamable_mp4(8, 64),
-            b"x",
-        )?;
-        fs::remove_file(dir.join("boudica/intro.poster.webp"))?;
-        let error = validate_cinematic_media(&dir, "boudica", &definition)
-            .err()
-            .context("missing poster must fail")?;
-        assert!(error.to_string().contains("poster missing"), "{error}");
-        Ok(())
-    }
-
-    #[test]
-    fn campaign_cinematic_media_rejects_unstreamable_or_heavy_files() -> Result<()> {
-        let out = tempfile::tempdir()?;
-        let dir = out.path().join("campaign");
-        write_cinematic_triple(
-            &dir,
-            "intro",
-            &streamable_webm(),
-            &streamable_mp4(64, 8),
-            b"x",
-        )?;
-        let definition = cinematic_definition("/assets/campaign/boudica/intro.webm");
-        let error = validate_cinematic_media(&dir, "boudica", &definition)
-            .err()
-            .context("MP4 with mdat before moov must fail")?;
-        assert!(error.to_string().contains("index at the front"), "{error}");
-        let mut fat = streamable_mp4(8, 64);
-        fat.resize(6 * 1024 * 1024 + 1, 0);
-        fs::write(dir.join("boudica/intro.mp4"), &fat)?;
-        let error = validate_cinematic_media(&dir, "boudica", &definition)
-            .err()
-            .context("over-budget rendition must fail")?;
-        assert!(error.to_string().contains("too heavy"), "{error}");
-        Ok(())
-    }
-
-    #[test]
-    fn campaign_cinematic_media_ignores_steps_without_video() -> Result<()> {
-        let out = tempfile::tempdir()?;
-        let dir = out.path().join("campaign");
-        fs::create_dir_all(&dir)?;
-        let definition = serde_json::json!({ "steps": [{ "id": "talk", "type": "scene", "presentation": "dialogue" }] });
-        validate_cinematic_media(&dir, "boudica", &definition)
     }
 
     #[test]
@@ -9439,7 +9166,7 @@ shortArticle = true
         });
         assert!(validate_web_node("es", &expected, &approved_campaign_copy).is_ok());
         let unapproved_boudica_copy = serde_json::json!({
-            "tutorial": {"campaign_boudica_boudica_council_title": "La deuda de Roma"},
+            "tutorial": {"campaign_boudica_boudica_first_victory_title": "Victoria de los icenos"},
             "lobbies": {}
         });
         assert!(validate_web_node("es", &expected, &unapproved_boudica_copy).is_err());
@@ -9562,7 +9289,11 @@ shortArticle = true
                 && conf.contains("return 301 https://__SITE_HOST__/;"),
             "Nginx must permanently redirect retired pages to the landing"
         );
-        let top_adders = conf
+        let tls_server = conf
+            .split("server_name __SITE_TLS_SERVER_NAMES__;")
+            .nth(1)
+            .context("Nginx config missing the main TLS server")?;
+        let top_adders = tls_server
             .split("\n    location ")
             .skip(1)
             .filter(|block| {

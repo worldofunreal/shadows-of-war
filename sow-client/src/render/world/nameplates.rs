@@ -26,7 +26,6 @@ const NAMEPLATE_WORLD_SCALE: f32 = 0.05;
 const NAMEPLATE_TEXT_COLOR: [f32; 4] = [1.0; 4];
 const NAMEPLATE_MIN_FONT: f32 = 8.0;
 const NAMEPLATE_MAX_FONT: f32 = 32.0;
-const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
 const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
 const SPAWN_STICKY_HOLD: Duration = Duration::from_millis(120);
 const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
@@ -1338,6 +1337,10 @@ pub(super) fn render_nameplates(
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
     let mut full_labels_drawn = 0usize;
+    let bot_hide_zoom =
+        sow_render::shader_params::number_value(&dev.shader_params, "lod.nameplate.bot_hide_zoom");
+    let dot_text_px =
+        sow_render::shader_params::number_value(&dev.shader_params, "lod.nameplate.dot_text_px");
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let fog_hidden = matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. });
@@ -1434,7 +1437,7 @@ pub(super) fn render_nameplates(
             }
         };
 
-        if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !has_human_priority {
+        if zoom_scaled < bot_hide_zoom && !is_me && !has_human_priority {
             frame_plans.push(PreparedNameplate {
                 player_index,
                 has_human_priority,
@@ -1513,7 +1516,7 @@ pub(super) fn render_nameplates(
             dev.vfx_nameplate_names,
             dev.vfx_nameplate_troops,
         );
-        let show_full = (fitted_font_size >= 7.0
+        let show_full = (fitted_font_size >= dot_text_px
             || system
                 .campaign_emote
                 .as_ref()

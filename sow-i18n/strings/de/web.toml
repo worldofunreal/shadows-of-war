@@ -97,9 +97,6 @@ copy_failed = "KOPIEREN FEHLGESCHLAGEN"
 copy_unavailable = "KOPIEREN NICHT VERFÜGBAR"
 
 [tutorial]
-skip_cinematic = "Szene überspringen"
-watch_cinematic = "KINEMATIK ANSEHEN"
-hold_to_skip = "ZUM ÜBERSPRINGEN GEDRÜCKT HALTEN"
 continue = "ANHALT"
 complete = "VOLLSTÄNDIGE BEMERKUNG"
 retry = "RÜCKZEUG"
@@ -894,6 +891,10 @@ change_territory_style = "Territoriumsstil ändern"
 view = "ANZEIGEN"
 checkout = "KASSE"
 loading_checkout = "Kasse wird geladen…"
+daily_offers = "Tagesangebote"
+weekly_offers = "Wochenangebote"
+ends_in = "Endet in {time}"
+leader = "Anführer"
 
 [hud]
 build_placement = "Gebäude platzieren"

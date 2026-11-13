@@ -97,9 +97,6 @@ copy_failed = "복사 실패"
 copy_unavailable = "복사할 수 없음"
 
 [tutorial]
-skip_cinematic = "시네마틱 건너뛰기"
-watch_cinematic = "시네마틱 보기"
-hold_to_skip = "길게 눌러 건너뛰기"
 continue = "계속"
 complete = "캠페인 완료"
 retry = "다시 시도"
@@ -894,6 +891,10 @@ change_territory_style = "당신의 영토 작풍을 바꾸십시오"
 view = "VIEW   VIEW   VIEW"
 checkout = "계정 만들기"
 loading_checkout = "로딩..."
+daily_offers = "일일 특가"
+weekly_offers = "주간 특가"
+ends_in = "{time} 후 종료"
+leader = "지도자"
 
 [hud]
 build_placement = "건물 배치"

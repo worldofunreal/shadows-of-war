@@ -34,6 +34,7 @@ import type {
 } from "./main_menu.state.ts";
 
 type HudPanel = "leaderboard" | "inbox" | "settings" | null;
+const DEFAULT_ATTACK_RATIO = 0.25;
 type HudCommandValue = string | number | boolean | null | number[] | string[];
 type HudCommandPayload = Record<string, HudCommandValue>;
 type HudScreenSize = { width: number; height: number };
@@ -1537,12 +1538,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '<aside class="sow-hud__left-rail" id="sow-hud-left-rail">' +
             '  <div class="sow-hud__rail-card">' +
             '    <div class="sow-hud__slider-vertical-wrap">' +
-            '      <input type="range" min="5" max="100" value="50" step="1" class="sow-hud__range-vertical" id="sow-hud-slider" aria-label="' +
+            '      <input type="range" min="5" max="100" value="' +
+            String(DEFAULT_ATTACK_RATIO * 100) +
+            '" step="1" class="sow-hud__range-vertical" id="sow-hud-slider" aria-label="' +
             SOW_t("hud.map_action_attack") +
             '">' +
             "    </div>" +
             '    <div class="sow-hud__army-allocation">' +
-            '      <strong id="sow-hud-army-ratio" aria-hidden="true">50%</strong>' +
+            '      <strong id="sow-hud-army-ratio" aria-hidden="true">' +
+            String(DEFAULT_ATTACK_RATIO * 100) +
+            '%</strong>' +
             "    </div>" +
             "  </div>" +
             '  <output class="sow-hud__allocation-detail" id="sow-hud-army-allocation" for="sow-hud-slider" aria-hidden="true"></output>' +
@@ -1920,7 +1925,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "  </section>" +
             "</div>" +
             '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-surrender-modal">' +
-            '  <section class="sow-hud__endgame-card sow-hud__exit-card" data-result="defeat" role="dialog" aria-modal="true" aria-labelledby="sow-hud-surrender-banner" aria-describedby="sow-hud-surrender-desc">' +
+            '  <section class="sow-hud__endgame-card sow-hud__exit-card" data-result="exit" role="dialog" aria-modal="true" aria-labelledby="sow-hud-surrender-banner" aria-describedby="sow-hud-surrender-desc">' +
             '    <div class="sow-hud__endgame-hero">' +
             '      <div class="sow-hud__endgame-portrait-wrap">' +
             '        <img class="sow-hud__endgame-portrait" id="sow-hud-surrender-portrait" src="" alt="' +
@@ -5967,7 +5972,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             return Number.isFinite(amount) ? total + Math.max(0, amount) : total;
         }, 0);
         const prod = Math.floor(hud.troop_rate || 0);
-        const currentRatio = Number.isFinite(hud.attack_ratio) ? hud.attack_ratio : 0.5;
+        const currentRatio = Number.isFinite(hud.attack_ratio) ? hud.attack_ratio : DEFAULT_ATTACK_RATIO;
         const spawnSecs = hud.spawn_timer_secs;
         const isDeploying = spawnSecs != null && spawnSecs > 0;
         let hasBuildingItems = false;
@@ -6540,10 +6545,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 hudRefs!.surrenderTitle.textContent = tutorialActive
                     ? SOW_t("endgame.leave_tutorial")
                     : SOW_t("endgame.leave");
-            if (hudRefs!.surrenderDesc)
+            if (hudRefs!.surrenderDesc) {
                 hudRefs!.surrenderDesc.textContent = tutorialActive
-                    ? SOW_t("endgame.tutorial_description")
+                    ? ""
                     : SOW_t("endgame.leave_rewards_saved");
+                hudRefs!.surrenderDesc.classList.toggle("hidden", tutorialActive);
+            }
             if (hudRefs!.surrenderStats) hudRefs!.surrenderStats.classList.toggle("hidden", tutorialActive);
             renderEndgameStats(hudRefs!.surrenderStatValues, hud.player_endgame_stats);
             if (hudRefs!.surrenderPortrait) {

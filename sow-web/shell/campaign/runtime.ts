@@ -110,8 +110,7 @@ export function create(
             !step.title_key &&
             !step.body_key &&
             !step.lines &&
-            !step.video_src &&
-            !["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation || "") &&
+            !["dialogue", "chapter", "celebration"].includes(step.presentation || "") &&
             !step.exchange.some((line: CampaignRecord) => line.presentation === "dialogue")
         );
     }
@@ -122,8 +121,7 @@ export function create(
             !step.title_key &&
             !step.body_key &&
             !step.lines &&
-            !step.video_src &&
-            !["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation || "")
+            !["dialogue", "chapter", "celebration"].includes(step.presentation || "")
         );
     }
     function remainingExchangeIsEmoteOnly(step?: CampaignStep) {
@@ -251,14 +249,15 @@ export function create(
             const reachedZoom =
                 Number.isFinite(Number(facts.camera_zoom)) &&
                 Number(facts.camera_zoom) >= Number(facts.camera_zoom_target);
+            const triggerDistance = Number(trigger.distance || 12);
             const cameraTargetRadius =
                 Number.isFinite(facts.camera_target_radius) && facts.camera_target_radius > 0
                     ? facts.camera_target_radius
-                    : Number(trigger.distance || 12);
+                    : triggerDistance;
             const reachedFaction =
                 !trigger.target ||
                 (Number.isFinite(Number(facts.camera_target_distance)) &&
-                    Number(facts.camera_target_distance) <= cameraTargetRadius);
+                    Number(facts.camera_target_distance) <= Math.min(cameraTargetRadius, triggerDistance));
             current = zoomEvents > 0 && reachedZoom && reachedFaction ? 1 : 0;
             target = 1;
         } else if (trigger.type === "camera_target" && Number.isFinite(trigger.distance)) {
@@ -644,11 +643,40 @@ export function create(
         if (step.pause_game === true || step.type === "choice" || step.type === "end") return true;
         if (step.type !== "scene") return false;
         if (
-            ["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation || "") ||
-            Boolean(step.video_src)
+            ["dialogue", "chapter", "celebration"].includes(step.presentation || "")
         )
             return true;
         return Boolean(step.title_key || step.body_key || step.lines);
+    }
+    function targetedFactionActionStep(step: CampaignStep) {
+        return Boolean(
+            step.guide?.kind === "world" &&
+                ["target_action", "nameplate", "player", "expand"].includes(step.guide.target) &&
+                step.trigger &&
+                ["attack", "contact", "defeated", "eliminated"].includes(step.trigger.type),
+        );
+    }
+    function targetAttackPauseForStep(step: CampaignStep) {
+        if (
+            !targetedFactionActionStep(step) ||
+            step.trigger?.type === "contact" ||
+            facts.target_action_mode !== "attack"
+        )
+            return false;
+        const targets = Array.isArray(step.trigger.targets)
+            ? step.trigger.targets
+            : [step.trigger.target];
+        const target = targets.find(
+            (id: string) =>
+                id &&
+                !(facts.defeated_faction_ids || []).includes(id) &&
+                !(facts.eliminated_faction_ids || []).includes(id),
+        );
+        if (!target) return false;
+        return (
+            Number((facts.attacks_by_faction_id || {})[target] || 0) <=
+            Number((baseline.attacks_by_faction_id || {})[target] || 0)
+        );
     }
     function view() {
         currentTimeMs = readClock();
@@ -656,7 +684,22 @@ export function create(
         const expansionStarted =
             step!.paused_action === "expand_once_then_resume" &&
             Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
-        const stepPaused = pausesForStep(step!) && !expansionStarted;
+        const targetAttackPause = targetAttackPauseForStep(step!);
+        const nonBlockingContactReaction =
+            activeReaction &&
+            ["contact", "first_contact"].includes(activeReaction.reaction.when.type) &&
+            activeReaction.reaction.pause_game !== true;
+        const dynamicAttackPause =
+            targetAttackPause && !nonBlockingContactReaction && activeReaction?.reaction.pause_game !== false;
+        const targetedFactionStep = targetedFactionActionStep(step!);
+        const stepPaused = targetedFactionStep
+            ? step!.trigger?.type !== "contact" && dynamicAttackPause
+            : pausesForStep(step!) && !expansionStarted;
+        const stepPausedAction = stepPaused
+            ? targetAttackPause
+                ? "attack_once_then_resume"
+                : step!.paused_action || null
+            : null;
         if (exchange) {
             const exchangeLine = exchange.lines[exchange.index];
             const paused =
@@ -686,8 +729,7 @@ export function create(
                 line: modalLine || step,
                 progress: progress(),
                 paused,
-                paused_action:
-                    paused && exchange.phase !== "dialogue" ? step!.paused_action || null : null,
+                paused_action: paused && exchange.phase !== "dialogue" ? stepPausedAction : null,
                 done: false,
                 choices: [],
                 state,
@@ -733,7 +775,7 @@ export function create(
                 line: response,
                 progress: progress(),
                 paused: reaction.pause_game === false ? stepPaused : true,
-                paused_action: null,
+                paused_action: reaction.pause_game === false ? stepPausedAction : null,
                 done: false,
                 choices: reaction.choices || [],
                 state,
@@ -755,7 +797,7 @@ export function create(
             line,
             progress: progress(),
             paused,
-            paused_action: paused ? step!.paused_action || null : null,
+            paused_action: stepPausedAction,
             done: state.done,
             choices: step!.choices || [],
             state,

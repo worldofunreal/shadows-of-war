@@ -97,9 +97,6 @@ copy_failed = "KOPYALAMA BAŞARISIZ"
 copy_unavailable = "KOPYALAMA KULLANILAMIYOR"
 
 [tutorial]
-skip_cinematic = "SAHNEYİ ATLA"
-watch_cinematic = "SİNEMATİĞİ İZLE"
-hold_to_skip = "ATLAMAK İÇİN BASILI TUT"
 continue = "DEVAM ET"
 complete = "COMPAIGN"
 retry = "ZERY"
@@ -894,6 +891,10 @@ change_territory_style = "Bölge stilini değiştir"
 view = "GÖR"
 checkout = "ÖDEME"
 loading_checkout = "Ödeme yükleniyor…"
+daily_offers = "Günlük teklifler"
+weekly_offers = "Haftalık teklifler"
+ends_in = "{time} içinde bitiyor"
+leader = "Lider"
 
 [hud]
 build_placement = "Binayı yerleştir"

@@ -709,7 +709,6 @@
               "presentation",
               "show_title",
               "wait_before",
-              "video_src",
             ].forEach(function (key) {
               delete step[key];
             });
@@ -1292,7 +1291,6 @@
         if (step.routes && !keepsFlow) discarded.push("conditional routes");
         if (step.hint_key && !keepsMechanics) discarded.push("player hint");
         if (step.presentation && !["scene", "end"].includes(value)) discarded.push("presentation style");
-        if (step.video_src && value !== "scene") discarded.push("cinematic video path");
         if (step.next && !keepsFlow && value !== "choice") discarded.push("outgoing connection");
         if (divergentChoiceTargets && value !== "choice") discarded.push("branch destinations");
         if (
@@ -1327,16 +1325,12 @@
         if (keepsMechanics && step.pause_game === true) replacement.pause_game = true;
         if (keepsMechanics && step.paused_action) replacement.paused_action = step.paused_action;
         if (["scene", "end"].includes(value) && !exchangeScene)
-          replacement.presentation =
-            value === "end" && step.presentation === "cinematic"
-              ? "chapter"
-              : step.presentation || "dialogue";
+          replacement.presentation = step.presentation || "dialogue";
         if (keepsExchange && step.exchange) replacement.exchange = step.exchange;
         if (keepsFlow && step.unavailable_next) replacement.unavailable_next = step.unavailable_next;
         if (keepsMechanics && step.campaign_accept_alliance_on_enter)
           replacement.campaign_accept_alliance_on_enter = step.campaign_accept_alliance_on_enter;
         if (value === "scene") {
-          if (step.video_src) replacement.video_src = step.video_src;
           if (Array.isArray(step.lines)) replacement.lines = step.lines;
           if (next) replacement.next = next;
           if (Array.isArray(step.routes)) replacement.routes = step.routes;
@@ -1390,9 +1384,7 @@
         selectField(
           "Presentation",
           step.presentation || "dialogue",
-          step.type === "scene"
-            ? ["dialogue", "chapter", "celebration", "cinematic"]
-            : ["dialogue", "chapter", "celebration"],
+          ["dialogue", "chapter", "celebration"],
           function (value) {
             step.presentation = value;
             markDirty();
@@ -1407,30 +1399,6 @@
           markDirty();
         }),
       );
-    if (step.type === "scene" && !step.exchange) {
-      basics.appendChild(
-        inputField(
-          "Local cinematic video",
-          step.video_src || "",
-          function (value) {
-            const source = value.trim();
-            if (source) {
-              step.video_src = source;
-              step.presentation = "cinematic";
-            } else delete step.video_src;
-            markDirty();
-          },
-          { placeholder: "/assets/campaign/" + state.definition.episode_id + "/opening.webm" },
-        ),
-      );
-      basics.appendChild(
-        el(
-          "small",
-          { class: "translation-fallback" },
-          "Optional MP4/WebM; place the file in this episode's assets/campaign folder. The shared preview plays it without autoplay.",
-        ),
-      );
-    }
     basics.appendChild(
       inputField(
         step.type === "objective" || step.type === "guide"
@@ -5115,7 +5083,6 @@
           return translated(key, state.previewLanguage);
         },
         asset: asset,
-        autoPlayCinematic: false,
         roster: function () {
           return state.roster;
         },

@@ -360,21 +360,6 @@
   font-size: 14px;
 }
 
-.sow-campaign__action-watch {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 10px 18px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.sow-campaign__action-watch i {
-  font-style: normal;
-}
-
 /* =====================================================================
    BATTLEFIELD / ROSTER PANEL: Grid of Episodes & Saga Header
    ===================================================================== */
@@ -665,8 +650,7 @@
   padding-top: 8px;
 }
 
-.sow-campaign__episode-actions .sow-campaign__play,
-.sow-campaign__watch {
+.sow-campaign__episode-actions .sow-campaign__play {
   width: fit-content;
   min-width: min(140px, 100%);
   margin: 0;
@@ -743,8 +727,7 @@
     font-size: 11px;
   }
 
-  .sow-campaign__action-play,
-  .sow-campaign__action-watch {
+  .sow-campaign__action-play {
     min-height: 44px;
     width: 100%;
     flex: 1 1 100%;
@@ -799,7 +782,7 @@
     gap: 6px;
   }
 
-  .sow-campaign__episode-actions :is(.sow-campaign__play, .sow-campaign__watch) {
+  .sow-campaign__episode-actions .sow-campaign__play {
     min-height: 38px;
     min-width: min(150px, 100%);
   }
@@ -883,12 +866,6 @@
     font-size: 11px;
   }
 
-  .sow-campaign__action-watch {
-    min-height: 36px;
-    padding: 6px 12px;
-    font-size: 10px;
-  }
-
   .sow-campaign__heading h2 {
     font-size: clamp(16px, 2.8vh, 22px);
   }
@@ -939,7 +916,7 @@
     padding-top: 4px;
   }
 
-  .sow-campaign__episode-actions :is(.sow-campaign__play, .sow-campaign__watch) {
+  .sow-campaign__episode-actions .sow-campaign__play {
     min-height: 32px;
   }
 }

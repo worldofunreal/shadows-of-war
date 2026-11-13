@@ -217,11 +217,16 @@ impl SowApp {
                 UiAction::UnlockLeader {
                     leader_id,
                     currency,
+                    offer_id,
                 } => {
-                    self.unlock_leader(leader_id, currency);
+                    self.unlock_leader(leader_id, currency, offer_id);
                 }
-                UiAction::UnlockSkin(skin_id) => {
-                    self.unlock_skin(skin_id);
+                UiAction::UnlockSkin {
+                    skin_id,
+                    currency,
+                    offer_id,
+                } => {
+                    self.unlock_skin(skin_id, currency, offer_id);
                 }
                 UiAction::EquipSkin(skin_id) => {
                     self.equip_skin(skin_id);
