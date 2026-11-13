@@ -1,5 +1,6 @@
 import { formatCompactNumber } from "./number-format.ts";
 import { avatarBackgroundCss, setAvatarBackground, setAvatarImage } from "./avatar-presentation.ts";
+import { SOWTooltip } from "./sow-tooltip.ts";
 import {
     animateRankResult,
     rankEmblem,
@@ -34,6 +35,7 @@ import {
     stageLeaderSelection,
 } from "./main_menu.core.ts";
 import {
+    ensureHeroBiosLoaded,
     refreshHeroesRoster,
     renderHeroInfoModal,
     renderHeroes,
@@ -111,8 +113,11 @@ import {
     verifyAuthOtp,
 } from "./main_menu.surfaces.ts";
 import {
+    cancelSwapMission,
     claimMission,
+    confirmSwapMission,
     renderMissionsModal,
+    requestSwapMission,
     setMissionClaimHandler,
     missionIconSvg,
     videoPlayIconSvg,
@@ -160,6 +165,7 @@ let rankedResultDismissedKey: string | null = null;
 let rankedStageKey: string | null = null;
 let rankedStageCleanup: (() => void) | null = null;
 let rewardPresentationReady = false;
+let pendingCreateMode: string | null = null;
 const menuFlow = menuFlowApi.create();
 window.SOW_menu_flow = menuFlow;
 interface ProgressionValues {
@@ -912,8 +918,12 @@ function renderTopbar() {
                 kind +
                 "'" +
                 (shop ? " type='button' data-command='main_nav' data-nav-screen='store'" : "") +
-                " title='" +
-                esc(label) +
+                " data-sow-tooltip='" +
+                esc(String(amount)) +
+                "' data-sow-tooltip-title='" +
+                esc(SOW_t(kind === "crowns" ? "store.crowns" : "store.gems")) +
+                "' data-sow-tooltip-tone='" +
+                (kind === "crowns" ? "gold" : "gem") +
                 "' aria-label='" +
                 esc(label) +
                 "'><img class='sow-menu__currency-icon' src='" +
@@ -1323,12 +1333,19 @@ export function render() {
     renderPending = false;
     const screen = currentScreen();
     if (screen !== "heroes") menuUi.skinPickerOpen = false;
-    if (screen !== "heroes") menuUi.heroInfoOpen = false;
+    if (screen !== "heroes" && screen !== "store") {
+        menuUi.heroInfoOpen = false;
+        menuUi.heroInfoLeaderId = null;
+    }
     const screenChanged = menuUi.previousScreen !== screen;
     const sameScreen = !screenChanged;
     if (screenChanged) menuUi.dropdownOpenKey = null;
     if (screen === "create" && menuUi.previousScreen !== "create") {
         menuUi.createDraft = cloneConfig();
+        if (pendingCreateMode) {
+            menuUi.createDraft.game_mode = pendingCreateMode;
+            pendingCreateMode = null;
+        }
         menuUi.createOffline = !!menuUi.state.custom_game_is_sp;
         menuUi.createPrivate = !!menuUi.state.custom_game_is_private;
         menuUi.createPassword = "";
@@ -1513,7 +1530,11 @@ export function writeProgression(values: ProgressionValues) {
         const cell = counter.parentElement;
         const label = SOW_t(kind === "crowns" ? "store.crowns" : "store.gems") + ": " + amount;
         if (cell) {
-            cell.title = label;
+            SOWTooltip.set(cell, {
+                title: SOW_t(kind === "crowns" ? "store.crowns" : "store.gems"),
+                text: String(amount),
+                tone: kind === "crowns" ? "gold" : "gem",
+            });
             cell.setAttribute("aria-label", label);
         }
     }
@@ -2461,7 +2482,18 @@ function maybePresentRewards() {
 }
 
 function menuGuideFacts() {
-    return { screen: currentScreen() };
+    const profileStats = menuUi.state?.profile_stats;
+    return {
+        screen: currentScreen(),
+        missionsOpen: Boolean(menuUi.missionsModalOpen),
+        settingsOpen: Boolean(menuUi.settingsOpen),
+        heroInfoOpen: Boolean(menuUi.heroInfoOpen),
+        authModalOpen: Boolean(menuUi.authModalOpen),
+        skinPickerOpen: Boolean(menuUi.skinPickerOpen),
+        level: Number(menuUi.state?.level || 1),
+        matchesPlayed: Number(profileStats?.matches_played || 0),
+        rankedMatches: Number(profileStats?.ranked_matches || 0),
+    };
 }
 
 function updateDynamic() {
@@ -2508,6 +2540,7 @@ function updateDynamic() {
     const freeZoomInput = root.querySelector<HTMLInputElement>("[data-setting='free_zoom_out']");
     const fpsPingInput = root.querySelector<HTMLInputElement>("[data-setting='show_fps_ping']");
     const devToolsInput = root.querySelector<HTMLInputElement>("[data-setting='show_dev_tools']");
+    const menuTipsInput = root.querySelector<HTMLInputElement>("[data-setting='menu_tips']");
     const musicInteracting =
         isDraggingSettingsSlider ||
         (musicInput &&
@@ -2522,6 +2555,8 @@ function updateDynamic() {
         devToolsInput.checked = Boolean(settings.show_dev_tools);
     if (freeZoomInput && document.activeElement !== freeZoomInput)
         freeZoomInput.checked = Boolean(settings.free_zoom_out);
+    if (menuTipsInput && document.activeElement !== menuTipsInput)
+        menuTipsInput.checked = !menuUi.state.menu_tips_disabled;
     const musicValBadge = root.querySelector<HTMLElement>("[data-val-for='music_vol']");
     if (musicValBadge && musicInput) {
         const pct = Math.round(Number(musicInput.value) * 100);
@@ -2623,6 +2658,7 @@ root.addEventListener("click", function (event) {
     const heroInfoOverlay = clickedElement.closest("[data-menu-overlay='hero-info']");
     if (heroInfoOverlay && clickedElement === heroInfoOverlay) {
         menuUi.heroInfoOpen = false;
+        menuUi.heroInfoLeaderId = null;
         render();
         return;
     }
@@ -2750,6 +2786,8 @@ root.addEventListener("click", function (event) {
             menuUi.heroesOpen = true;
             menuUi.heroesSearchQuery = "";
             menuUi.heroesRegionFilter = "all";
+            menuUi.heroesRarityFilter = "all";
+            menuUi.heroesPlayableOnly = false;
             menuUi.dropdownOpenKey = null;
             const navLeaderSelection = currentLeaderSelection();
             menuUi.tempSelectedLeader = navLeaderSelection.selected_leader;
@@ -3061,12 +3099,36 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "open_hero_info") {
+        const requestedId = target.dataset.leaderId || null;
+        const requestedTab = target.dataset.heroInfoTab === "biography" ? "biography" : "overview";
+        if (requestedId) {
+            menuUi.heroInfoLeaderId = requestedId;
+        } else {
+            const sel = currentLeaderSelection();
+            menuUi.heroInfoLeaderId = menuUi.tempSelectedLeader || (sel && sel.selected_leader) || null;
+        }
+        menuUi.heroInfoTab = requestedTab;
         menuUi.heroInfoOpen = true;
+        void ensureHeroBiosLoaded();
+        render();
+        return;
+    }
+    if (command === "switch_hero_info_tab") {
+        const tab = target.dataset.heroInfoTab === "biography" ? "biography" : "overview";
+        menuUi.heroInfoTab = tab;
+        if (tab === "biography") void ensureHeroBiosLoaded();
         render();
         return;
     }
     if (command === "close_hero_info") {
         menuUi.heroInfoOpen = false;
+        menuUi.heroInfoLeaderId = null;
+        render();
+        return;
+    }
+    if (command === "toggle_heroes_playable") {
+        menuUi.heroesPlayableOnly = !menuUi.heroesPlayableOnly;
+        refreshHeroesRoster(false);
         render();
         return;
     }
@@ -3294,6 +3356,136 @@ root.addEventListener("click", function (event) {
         if (missionId) {
             claimMission(missionId, true);
         }
+        return;
+    }
+    if (command === "request_swap_mission") {
+        const missionId = target.dataset.missionId;
+        if (missionId) {
+            requestSwapMission(missionId, target.dataset.ad === "true");
+        }
+        return;
+    }
+    if (command === "confirm_swap_mission") {
+        const missionId = target.dataset.missionId;
+        if (missionId) {
+            confirmSwapMission(missionId, target.dataset.ad === "true");
+        }
+        return;
+    }
+    if (command === "cancel_swap_mission") {
+        cancelSwapMission();
+        return;
+    }
+    if (command === "mission_action") {
+        const missionId = target.dataset.missionId || "";
+        const actionTarget = target.dataset.actionTarget || "battle";
+        const HERO_REGION_TARGETS: Record<string, string> = {
+            heroes_oceania: "oceania",
+            heroes_europe: "europe",
+            heroes_asia: "asia",
+            heroes_americas: "americas",
+            heroes_africa: "africa",
+        };
+        const HERO_RARITY_TARGETS: Record<string, string> = {
+            heroes_common: "common",
+            heroes_rare: "rare",
+            heroes_epic: "epic",
+            heroes_legendary: "legendary",
+        };
+        const CREATE_MODE_TARGETS: Record<string, string> = {
+            teams: "Teams",
+            hnv: "HumansVsNations",
+            ffa: "FFA",
+        };
+        const closeMissionPanels = function () {
+            menuUi.missionsModalOpen = false;
+            menuUi.profileOpen = false;
+            menuUi.storeOpen = false;
+            menuUi.heroesOpen = false;
+            menuUi.campaignOpen = false;
+            menuUi.settingsOpen = false;
+        };
+        SOWTooltip.hide(true);
+
+        if (missionId === "onboarding_1_tutorial") {
+            closeMissionPanels();
+            menuUi.profileAccountId = null;
+            menuUi.profileMatchDetail = null;
+            menuUi.campaignOpen = true;
+            render();
+            updateHeroBackdrop("campaign");
+            return;
+        }
+        if (actionTarget === "ranked") {
+            closeMissionPanels();
+            flushLeaderPersist();
+            send("quick_match");
+            render();
+            return;
+        }
+        if (actionTarget in CREATE_MODE_TARGETS) {
+            const createMode = CREATE_MODE_TARGETS[actionTarget];
+            const openModeLobby = (menuUi.state?.lobbies || []).find(function (lobby) {
+                return (
+                    lobby.game_mode === createMode &&
+                    !lobby.is_private &&
+                    !lobby.has_password &&
+                    lobby.kind === "Matchmaking" &&
+                    (Number(lobby.num_players) || 0) < (Number(lobby.max_players) || 0)
+                );
+            }) || (menuUi.state?.lobbies || []).find(function (lobby) {
+                return (
+                    lobby.game_mode === createMode &&
+                    lobby.kind === "Custom" &&
+                    !lobby.is_private &&
+                    !lobby.has_password &&
+                    (Number(lobby.num_players) || 0) < (Number(lobby.max_players) || 0)
+                );
+            });
+            closeMissionPanels();
+            flushLeaderPersist();
+            if (openModeLobby) {
+                send("join_lobby", { lobby_id: openModeLobby.id });
+                render();
+            } else if (currentScreen() === "create") {
+                menuUi.createDraft = menuUi.createDraft || cloneConfig();
+                menuUi.createDraft.game_mode = createMode;
+                render();
+            } else {
+                pendingCreateMode = createMode;
+                send("open_create", {});
+                render();
+            }
+            return;
+        }
+        if (
+            actionTarget in HERO_REGION_TARGETS ||
+            actionTarget in HERO_RARITY_TARGETS ||
+            actionTarget === "heroes_free_rotation" ||
+            actionTarget === "heroes_all"
+        ) {
+            closeMissionPanels();
+            menuUi.profileAccountId = null;
+            menuUi.profileMatchDetail = null;
+            menuUi.heroesOpen = true;
+            menuUi.heroesSearchQuery = "";
+            menuUi.heroesRegionFilter = HERO_REGION_TARGETS[actionTarget] || "all";
+            menuUi.heroesRarityFilter = HERO_RARITY_TARGETS[actionTarget] || "all";
+            menuUi.heroesPlayableOnly = actionTarget === "heroes_free_rotation";
+            menuUi.dropdownOpenKey = null;
+            refreshHeroesRoster(true);
+            render();
+            updateHeroBackdrop("heroes");
+            return;
+        }
+        closeMissionPanels();
+        const scr = currentScreen();
+        if (scr === "browser" || scr === "create") {
+            send("close_overlay", {});
+        }
+        flushLeaderPersist();
+        send("join_matchmaking", {});
+        render();
         return;
     }
     if (command === "toggle_settings") {
@@ -3899,6 +4091,7 @@ root.addEventListener("keydown", function (event) {
         event.preventDefault();
         menuUi.skinPickerOpen = false;
         menuUi.heroInfoOpen = false;
+        menuUi.heroInfoLeaderId = null;
         render();
         return;
     }
@@ -4119,6 +4312,25 @@ root.addEventListener("change", function (event) {
         send("set_show_fps_ping", { value: input.checked });
     if (input instanceof HTMLInputElement && input.dataset.setting === "show_dev_tools")
         send("set_show_dev_tools", { value: input.checked });
+    if (input instanceof HTMLInputElement && input.dataset.setting === "menu_tips") {
+        const disabled = !input.checked;
+        if (menuUi.state) menuUi.state.menu_tips_disabled = disabled;
+        const guides = (menuUi.state?.menu_guides || {}) as Record<
+            string,
+            { completed_steps?: unknown[]; current_step?: string | null; status?: string } | undefined
+        >;
+        const welcome = guides.welcome;
+        send("save_menu_guide_progress", {
+            guide_id: "welcome",
+            completed_steps: Array.isArray(welcome?.completed_steps) ? welcome.completed_steps : [],
+            current_step: welcome?.current_step ?? "welcome_heroes",
+            status: welcome?.status || "active",
+            menu_tips_disabled: disabled,
+        });
+        if (!disabled && window.SOW_menu_guide && menuUi.state) {
+            window.SOW_menu_guide.update(menuUi.state, menuGuideFacts());
+        }
+    }
 });
 
 function normalizeCompletedExitState(nextState: MenuState): MenuState {

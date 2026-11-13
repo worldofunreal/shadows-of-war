@@ -353,6 +353,7 @@ impl SowApp {
             profile_last_applied_request: 0,
             join_waiting_for_identity: false,
             join_matchmaking: false,
+            join_public_matchmaking: false,
             portal_join_started_at: None,
             portal_match_started_at: None,
             portal_match_mode: "other",

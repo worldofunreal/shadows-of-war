@@ -920,6 +920,18 @@ impl SowEngine {
         ey: u32,
         by_nuke: bool,
     ) {
+        self.eliminate_player_with_assists(victim_id, conqueror_id, ex, ey, by_nuke, &[]);
+    }
+
+    pub(crate) fn eliminate_player_with_assists(
+        &mut self,
+        victim_id: u16,
+        conqueror_id: u16,
+        ex: u32,
+        ey: u32,
+        by_nuke: bool,
+        active_attackers: &[u16],
+    ) {
         let mut base_reward: u32 = 0;
         let mut is_alive = false;
         if let Some(target_player) = self.state.player(victim_id) {
@@ -968,6 +980,20 @@ impl SowEngine {
                     .map(|c| (p.id, c))
             })
             .collect();
+        for &attacker_id in active_attackers {
+            if attacker_id != victim_id
+                && self
+                    .state
+                    .player(attacker_id)
+                    .is_some_and(|player| player.alive)
+                && !contributors
+                    .iter()
+                    .any(|(contributor_id, _)| *contributor_id == attacker_id)
+            {
+                // Active forces without past captures count only toward reward shares.
+                contributors.push((attacker_id, 1));
+            }
+        }
         contributors.sort_by_key(|(id, _)| *id);
 
         let others: Vec<(u16, u32)> = contributors
@@ -2882,12 +2908,13 @@ mod tests {
         let map =
             crate::map_file::parse(include_bytes!("../../../assets/maps/world/map.bin")).unwrap();
         let bounds = map.geo_bounds.expect("world map has geography");
+        let roster = (GameConfig::max_nation_bots() + GameConfig::max_tribe_bots()) as usize;
         let config = GameConfig {
             map_name: "world".into(),
             map_width: map.width,
             map_height: map.height,
-            nation_count: 200,
-            bot_count: 400,
+            nation_count: GameConfig::max_nation_bots(),
+            bot_count: GameConfig::max_tribe_bots(),
             ..Default::default()
         };
         let engine = initialize_match_engine(
@@ -2900,7 +2927,7 @@ mod tests {
             Vec::new(),
             map.num_land_tiles,
         );
-        assert_eq!(engine.state.players.len(), 600);
+        assert_eq!(engine.state.players.len(), roster);
         let homes: Vec<(f64, f64)> = engine
             .state
             .players
@@ -2928,7 +2955,7 @@ mod tests {
             .iter()
             .map(|player| &player.name)
             .collect();
-        assert_eq!(names.len(), 600, "bots must never repeat a character");
+        assert_eq!(names.len(), roster, "bots must never repeat a character");
     }
 
     #[test]

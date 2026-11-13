@@ -31,6 +31,8 @@ const MAX_ANALYTICS_BATCH_EVENTS: usize = 100;
 #[serde(deny_unknown_fields)]
 struct AnalyticsBatch {
     events: Vec<sow_data::events::AnalyticsEvent>,
+    #[serde(default)]
+    visitor_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1145,6 +1147,14 @@ fn analytics_subject_id(secret: &str, portal: &str, account_id: &str) -> String 
     mac.update(portal.as_bytes());
     mac.update(b"\0");
     mac.update(account_id.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+fn analytics_browser_subject_id(secret: &str, visitor_id: &str) -> String {
+    let mut mac = <hmac::Hmac<sha2::Sha256> as hmac::Mac>::new_from_slice(secret.as_bytes())
+        .expect("HMAC accepts every key length");
+    mac.update(b"sow-product-analytics-browser-v1\0");
+    mac.update(visitor_id.as_bytes());
     hex::encode(mac.finalize().into_bytes())
 }
 
@@ -2378,8 +2388,9 @@ async fn handle_healthz() -> impl IntoResponse {
     (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
 }
 
-/// Public, consent-gated product funnel. It stores only closed, session-scoped
-/// events; account and player identity fields are rejected at deserialization.
+/// Public, consent-gated product funnel. Durable events remain session-scoped;
+/// an optional current-consent browser ID is HMACed for return cohorts only.
+/// Account and player identity fields are rejected at deserialization.
 async fn handle_event(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -2399,6 +2410,27 @@ async fn handle_event(
         )
             .into_response();
     }
+    let browser_subject = match batch.visitor_id.as_deref() {
+        Some(visitor_id)
+            if sow_data::events::is_uuid_v4(visitor_id)
+                && batch.events.iter().all(|event| {
+                    event.consent_version == sow_data::events::CONSENT_POLICY_VERSION
+                }) =>
+        {
+            Some(analytics_browser_subject_id(
+                &state.secret_token,
+                visitor_id,
+            ))
+        }
+        Some(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "invalid browser consent identity" })),
+            )
+                .into_response();
+        }
+        None => None,
+    };
     let now_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -2433,7 +2465,11 @@ async fn handle_event(
                 .into_response();
         }
     };
-    match state.db.record_analytics_batch(&accepted_events).await {
+    match state
+        .db
+        .record_analytics_batch(&accepted_events, browser_subject.as_deref())
+        .await
+    {
         Ok(recorded) => {
             let accepted = recorded.iter().filter(|&&is_new| is_new).count();
             match newly_recorded_analytics_lines(&lines, &recorded) {

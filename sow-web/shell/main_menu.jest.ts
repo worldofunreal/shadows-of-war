@@ -9,13 +9,14 @@ import {
     localizedText,
     menuIcon,
     menuUi,
+    renderLobbyBrowserButton,
     renderQuickMatchButton,
     renderMainNavMarkup,
 } from "./main_menu.core.ts";
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
 import { renderDirectiveCard } from "./main_menu.missions.ts";
 import { renderSettingsPrivacySection } from "./main_menu.shell.ts";
-import { renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
+import { renderAdvisorTipsSettingRow, renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
 
 export {
     abandonExternalPurchaseAttempt,
@@ -79,9 +80,7 @@ export function renderCommandPanel() {
         " " +
         menuIcon("attack") +
         "</button>" +
-        "<button class='sow-menu__secondary' type='button' data-command='open_browser'>" +
-        esc(SOW_t("menu.lobby_browser")) +
-        " <span>→</span></button>" +
+        renderLobbyBrowserButton() +
         "<form class='sow-menu__join' data-form='join'>" +
         "<input name='code' inputmode='numeric' autocomplete='off' placeholder='" +
         esc(SOW_t("menu.lobby_code")) +
@@ -172,6 +171,7 @@ export function renderSettings() {
         volPct +
         "%;' data-setting='music_volume'></label>" +
         renderLocaleSettingRow() +
+        renderAdvisorTipsSettingRow() +
         "</div></section>" +
         "</div>" +
         "<div class='sow-menu__settings-col sow-menu__settings-col--secondary'>" +
@@ -217,6 +217,7 @@ export function surfaceSettingsRenderKey(_deleteBusy: boolean, _deleteError: str
         Boolean(s?.show_fps_ping),
         Boolean(s?.show_dev_tools),
         Boolean(s?.show_dev_tools_available),
+        Boolean(menuUi.state?.menu_tips_disabled),
         typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "",
     ]);
 }

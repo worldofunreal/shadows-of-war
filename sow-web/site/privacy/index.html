@@ -50,7 +50,7 @@
             >
           </h1>
           <p class="guide-lede" data-i18n="site.privacy_updated_v2">
-            Last updated: November 10, 2026 · Controller: World of Unreal · Contact: hello@shadowsofwar.io
+            Last updated: November 13, 2026 · Controller: World of Unreal · Contact: hello@shadowsofwar.io
           </p>
         </div>
       </section>
@@ -146,10 +146,12 @@
                       >Optional first-party analytics on our website and browser game runs only after you allow
                       it. It records a closed set of visit, loading, menu, tutorial, lobby and match events,
                       plus build, language, broad viewport class and an optional short source tag from ?ref=.
-                      Events use a temporary random session ID stored for the current browser session; they do
-                      not contain account/player IDs or match/lobby IDs. Request IPs may appear in separate
-                      technical security logs, not in analytics event records. No names, messages, passwords,
-                      ad IDs, map clicks or full device fingerprint.</span
+                      After consent, a random browser ID is stored in local storage for up to 90 days to measure
+                      D1/D3/D7 returns. It is sent separately from events and converted to a server-side
+                      pseudonym; it is not included in event records. Clearing storage or using another
+                      browser/device starts a separate count. Events contain no account/player IDs or match/lobby
+                      IDs. Request IPs may appear in separate technical security logs. No names, messages,
+                      passwords, ad IDs, map clicks or full device fingerprint.</span
                     >
                   </li>
                   <li>
@@ -230,10 +232,11 @@
                 <h3 data-i18n="site.privacy_cookies_title">Cookies &amp; local storage</h3>
                 <p>
                   <span data-i18n="site.privacy_cookies_body_v2"
-                    >We store your analytics choice in local storage. Only after acceptance do we create a
-                    temporary analytics session ID and retry queue in session storage. Rejecting analytics
-                    does not affect the game. Game settings, account continuity and cached assets use separate
-                    storage needed for those features. Details and controls in our</span
+                    >We store your analytics choice in local storage. Only after acceptance, a random browser ID
+                    remains there for up to 90 days to measure return visits; a temporary analytics session ID
+                    and retry queue use session storage. Rejecting analytics does not affect the game. Game
+                    settings, account continuity and cached assets use separate storage needed for those
+                    features. Details and controls in our</span
                   >
                   <a
                     class="inline-link"

@@ -174,7 +174,7 @@ pub(crate) struct NameplateSystem {
     emote_texts: [String; 4],
     prepared_emotes: [sow_render::text::PreparedText; 4],
     emote_text_style_key: Option<u32>,
-    campaign_emote: Option<CampaignEmoteCue>,
+    campaign_emotes: HashMap<u16, CampaignEmoteCue>,
     safe_area: [f32; 4],
 }
 
@@ -967,48 +967,51 @@ impl NameplateSystem {
         if value.is_empty() || value.chars().count() > 160 || value.chars().any(char::is_control) {
             return false;
         }
-        self.campaign_emote = Some(CampaignEmoteCue {
+        self.campaign_emotes.insert(
             player_id,
-            event_id,
-            token,
-            message: value.to_owned(),
-            prepared: None,
-            visible: false,
-        });
+            CampaignEmoteCue {
+                player_id,
+                event_id,
+                token,
+                message: value.to_owned(),
+                prepared: None,
+                visible: false,
+            },
+        );
         true
     }
 
     pub(crate) fn campaign_emote_matches(&self, token: &str, player_id: u16) -> bool {
-        self.campaign_emote
-            .as_ref()
+        self.campaign_emotes
+            .get(&player_id)
             .is_some_and(|cue| cue.token == token && cue.player_id == player_id)
     }
 
     pub(crate) fn clear_campaign_emote(&mut self, token: Option<&str>, player_id: u16) -> bool {
-        if !self.campaign_emote.as_ref().is_some_and(|cue| {
+        if !self.campaign_emotes.get(&player_id).is_some_and(|cue| {
             cue.player_id == player_id && token.is_none_or(|token| cue.token == token)
         }) {
             return false;
         }
-        self.campaign_emote = None;
+        self.campaign_emotes.remove(&player_id);
         true
     }
 
     pub(crate) fn clear_campaign_emote_token(&mut self, token: &str) -> Option<(u16, u64)> {
-        let cue = self
-            .campaign_emote
-            .as_ref()
-            .filter(|cue| cue.token == token)
-            .map(|cue| (cue.player_id, cue.event_id))?;
-        self.campaign_emote = None;
-        Some(cue)
+        let player_id = self
+            .campaign_emotes
+            .iter()
+            .find_map(|(player_id, cue)| (cue.token == token).then_some(*player_id))?;
+        let cue = self.campaign_emotes.remove(&player_id)?;
+        Some((cue.player_id, cue.event_id))
     }
 
-    pub(crate) fn campaign_emote_ready_token(&self) -> Option<&str> {
-        self.campaign_emote
-            .as_ref()
+    pub(crate) fn campaign_emote_ready_tokens(&self) -> Vec<String> {
+        self.campaign_emotes
+            .values()
             .filter(|cue| cue.visible)
-            .map(|cue| cue.token.as_str())
+            .map(|cue| cue.token.clone())
+            .collect()
     }
 
     pub(crate) fn animate_troop_change(&mut self, player_id: u16, amount: f64, now: Instant) {
@@ -1180,16 +1183,14 @@ impl NameplateSystem {
             self.avatar_presentations = presentations;
             self.avatar_revision = self.avatar_revision.wrapping_add(1);
         }
-        let stale_campaign_cue = self.campaign_emote.as_ref().is_some_and(|cue| {
-            self.emote_visuals.get(&cue.player_id).is_none_or(|visual| {
-                visual.event.event_id != cue.event_id
-                    || !visual.event.scripted
-                    || (!visual.event.pinned && visual.age(now) >= EMOTE_DURATION_SECS)
+        let emote_visuals = &self.emote_visuals;
+        self.campaign_emotes.retain(|player_id, cue| {
+            emote_visuals.get(player_id).is_some_and(|visual| {
+                visual.event.event_id == cue.event_id
+                    && visual.event.scripted
+                    && (visual.event.pinned || visual.age(now) < EMOTE_DURATION_SECS)
             })
         });
-        if stale_campaign_cue {
-            self.campaign_emote = None;
-        }
     }
 
     fn observe_status_badges(
@@ -1230,18 +1231,17 @@ impl NameplateSystem {
 
     fn prepare_campaign_emote_message(&mut self, text: &TextRenderer, dev: &DevConfig) {
         let style_key = nameplate_metrics_style_key(dev);
-        let Some(cue) = self.campaign_emote.as_mut() else {
-            return;
-        };
-        if cue
-            .prepared
-            .as_ref()
-            .is_some_and(|(key, _)| *key == style_key)
-        {
-            return;
+        for cue in self.campaign_emotes.values_mut() {
+            if cue
+                .prepared
+                .as_ref()
+                .is_some_and(|(key, _)| *key == style_key)
+            {
+                continue;
+            }
+            let prepared = text.prepare_string(&cue.message, nameplate_char_spacing(dev), 0.5);
+            cue.prepared = Some((style_key, prepared));
         }
-        let prepared = text.prepare_string(&cue.message, nameplate_char_spacing(dev), 0.5);
-        cue.prepared = Some((style_key, prepared));
     }
 
     fn prepare_emote_texts(&mut self, text: &TextRenderer, dev: &DevConfig) {
@@ -1361,11 +1361,8 @@ pub(super) fn render_nameplates(
             continue;
         }
         let is_me = player.id == my_id;
-        let has_human_priority = player.player_type == PlayerType::Human
-            || system
-                .campaign_emote
-                .as_ref()
-                .is_some_and(|cue| cue.player_id == player.id);
+        let has_human_priority =
+            player.player_type == PlayerType::Human || system.campaign_emotes.contains_key(&player.id);
         let style = NameplateStyle::for_player(player.player_type, player.is_campaign_faction);
         let Some(state) = visuals.get_mut(&player.id) else {
             continue;
@@ -1517,10 +1514,7 @@ pub(super) fn render_nameplates(
             dev.vfx_nameplate_troops,
         );
         let show_full = (fitted_font_size >= dot_text_px
-            || system
-                .campaign_emote
-                .as_ref()
-                .is_some_and(|cue| cue.player_id == player.id))
+            || system.campaign_emotes.contains_key(&player.id))
             && (has_human_priority || full_labels_drawn < 80);
         if !show_full {
             frame_plans.push(PreparedNameplate {
@@ -1593,12 +1587,11 @@ pub(super) fn render_nameplates(
     }
 
     let campaign_message_instances = system
-        .campaign_emote
-        .as_ref()
-        .and_then(|cue| cue.prepared.as_ref())
-        .map_or(0, |(_, prepared)| {
-            prepared.instance_count().saturating_add(5)
-        });
+        .campaign_emotes
+        .values()
+        .filter_map(|cue| cue.prepared.as_ref())
+        .map(|(_, prepared)| prepared.instance_count().saturating_add(5))
+        .sum();
     assign_nameplate_capacity(
         frame_plans,
         text.remaining_instance_capacity()
@@ -1696,16 +1689,16 @@ pub(super) fn render_emote_bubbles(
     my_id: u16,
     reduced_motion: bool,
 ) {
-    let campaign_speaker = system.campaign_emote.as_ref().map(|cue| cue.player_id);
+    let campaign_speakers = system.campaign_emotes.keys().copied().collect::<HashSet<_>>();
     for plan in system
         .frame_plans
         .iter()
-        .filter(|plan| Some(snapshot.players[plan.player_index].id) == campaign_speaker)
+        .filter(|plan| campaign_speakers.contains(&snapshot.players[plan.player_index].id))
         .chain(
             system
                 .frame_plans
                 .iter()
-                .filter(|plan| Some(snapshot.players[plan.player_index].id) != campaign_speaker),
+                .filter(|plan| !campaign_speakers.contains(&snapshot.players[plan.player_index].id)),
         )
     {
         if plan.presentation != NameplatePresentation::Full {
@@ -1728,14 +1721,10 @@ pub(super) fn render_emote_bubbles(
         let motion = emote.motion(age, now, reduced_motion);
         avatar = apply_emote_avatar_motion(avatar, motion);
         avatar = apply_avatar_entry(avatar, full.avatar_entry_age, reduced_motion);
-        let prepared = system
-            .campaign_emote
-            .as_ref()
-            .filter(|cue| {
-                cue.player_id == player.id
-                    && cue.event_id == emote.event.event_id
-                    && emote.event.scripted
-            })
+        let campaign_cue = system.campaign_emotes.get(&player.id).filter(|cue| {
+            cue.event_id == emote.event.event_id && emote.event.scripted
+        });
+        let prepared = campaign_cue
             .and_then(|cue| cue.prepared.as_ref().map(|(_, prepared)| prepared))
             .unwrap_or(&system.prepared_emotes[emote.event.kind as usize]);
         let needed = prepared.instance_count().saturating_add(5);
@@ -1752,9 +1741,8 @@ pub(super) fn render_emote_bubbles(
             system.safe_area,
             sf,
         );
-        if let Some(cue) = system.campaign_emote.as_mut()
+        if let Some(cue) = system.campaign_emotes.get_mut(&player.id)
             && drawn
-            && cue.player_id == player.id
             && cue.event_id == emote.event.event_id
         {
             cue.visible = true;

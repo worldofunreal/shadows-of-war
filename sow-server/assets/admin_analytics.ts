@@ -27,6 +27,8 @@ interface RetentionWindow {
   cohort_cutoff_date?: string | null;
   eligible_accounts?: number;
   returned_accounts?: number;
+  eligible_browsers?: number;
+  returned_browsers?: number;
   rate?: number;
 }
 
@@ -72,7 +74,10 @@ interface AnalyticsReport {
   };
   tutorial_steps?: TutorialStep[];
   match_flow?: MatchFlow[];
-  retention?: { site?: Record<string, RetentionWindow> };
+  retention?: {
+    site?: Record<string, RetentionWindow>;
+    site_browser?: Record<string, RetentionWindow>;
+  };
   mission_churn_by_dimension?: MissionDimensionChurn[];
   mission_churn_by_mission?: MissionItemChurn[];
   menu_guide_summary?: MenuGuideSummaryRow[];
@@ -161,24 +166,30 @@ function renderDimensions(
   );
 }
 
-function renderRetention(windows: Record<string, RetentionWindow>): void {
+function renderRetention(
+  id: string,
+  windows: Record<string, RetentionWindow>,
+  subject: "accounts" | "browsers",
+): void {
   rows(
-    $("retention"),
+    $(id),
     Object.entries(windows),
     (row, [windowName, data]) => {
       const ready = data.status === "ready";
+      const eligible = subject === "browsers" ? data.eligible_browsers : data.eligible_accounts;
+      const returned = subject === "browsers" ? data.returned_browsers : data.returned_accounts;
       cell(row, windowName.toUpperCase());
       cell(
         row,
         data.status === "ready"
           ? "Matured"
           : data.status === "not_matured"
-            ? "Still maturing"
-            : "No eligible accounts",
+            ? "Pending"
+            : `No eligible ${subject}`,
       );
       cell(row, data.cohort_cutoff_date || "—");
-      cell(row, ready ? Number(data.eligible_accounts || 0).toLocaleString() : "—");
-      cell(row, ready ? Number(data.returned_accounts || 0).toLocaleString() : "—");
+      cell(row, ready ? Number(eligible || 0).toLocaleString() : "—");
+      cell(row, ready ? Number(returned || 0).toLocaleString() : "—");
       cell(row, ready ? (100 * Number(data.rate)).toFixed(1) + "%" : "—");
     },
   );
@@ -253,7 +264,8 @@ function renderReport(report: AnalyticsReport): void {
     cell(row, Number(guide.skipped_step || 0).toLocaleString());
     cell(row, Number(guide.disabled_all || 0).toLocaleString());
   });
-  renderRetention(report.retention?.site || {});
+  renderRetention("site-browser-retention", report.retention?.site_browser || {}, "browsers");
+  renderRetention("retention", report.retention?.site || {}, "accounts");
   $("notice").textContent = "Report loaded. Other channels are shown as separate platform sources, not as zero.";
 }
 

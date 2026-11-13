@@ -13,16 +13,24 @@ type Exchange = {
     index: number;
     reactionInstance: string | null;
     ownerStepId: string;
-    phase: "prepare" | "speaking" | "gap" | "dialogue";
+    phase: "dialogue" | "gap";
     token: string | null;
     until: number | null;
-    ackStartedAt: number | null;
-    loopHadVisibleLine?: boolean;
-    remainingGap?: number;
-    stopAfterLine?: boolean;
 };
-type QueuedExchange = Pick<Exchange, "lines" | "reactionInstance" | "ownerStepId">;
 type ActiveReaction = { reaction: CampaignRecord; target: string; instanceId: string };
+type BackgroundEmoteSequence = {
+    faction: string;
+    lines: CampaignRecord[];
+    index: number;
+    ownerStepId: string;
+    token: string | null;
+    phase: "prepare" | "speaking" | "gap";
+    until: number | null;
+    ackStartedAt: number | null;
+    loop: boolean;
+    reaction: ActiveReaction | null;
+    loopHadVisibleLine: boolean;
+};
 type RuntimeState = {
     id: string;
     line: number;
@@ -34,6 +42,13 @@ type RuntimeState = {
     firstContactTarget: string | null;
     done: boolean;
     unlocks: CampaignUnlocks;
+};
+type CampaignCameraCue = {
+    id: string;
+    kind: "step" | "contact";
+    stepId: string;
+    target: string | null;
+    camera: CampaignRecord | null;
 };
 
 const {
@@ -69,6 +84,9 @@ export function create(
             .map((faction) => faction.id),
     );
     const campaignEntry = entry || definition.entry;
+    function emitCameraCue(cue: CampaignCameraCue) {
+        if (typeof hooks?.onCameraCue === "function") hooks.onCameraCue(cue);
+    }
     const state: RuntimeState = {
         id: "",
         line: 0,
@@ -96,24 +114,15 @@ export function create(
     let initialUi: CampaignRecord = {},
         baseline: CampaignRecord = {},
         uiBaseline: CampaignRecord = {},
-        externallyPaused = false;
+        externallyPaused = false,
+        externalPauseStartedAtMs: number | null = null;
     let currentTimeMs = readClock(),
         waitUntilMs: number | null = null,
         reactionTimerStartedAtMs: number | null = null,
         exchange: Exchange | null = null,
-        exchangeQueue: QueuedExchange[] = [],
+        backgroundEmotes = new Map<string, BackgroundEmoteSequence>(),
+        backgroundReactions = new Map<string, ActiveReaction>(),
         exchangeSerial = 0;
-    function backgroundExchangeScene(step: CampaignStep) {
-        return (
-            step.type === "scene" &&
-            Array.isArray(step.exchange) &&
-            !step.title_key &&
-            !step.body_key &&
-            !step.lines &&
-            !["dialogue", "chapter", "celebration"].includes(step.presentation || "") &&
-            !step.exchange.some((line: CampaignRecord) => line.presentation === "dialogue")
-        );
-    }
     function exchangeOnlyScene(step: CampaignStep) {
         return (
             step.type === "scene" &&
@@ -124,35 +133,9 @@ export function create(
             !["dialogue", "chapter", "celebration"].includes(step.presentation || "")
         );
     }
-    function remainingExchangeIsEmoteOnly(step?: CampaignStep) {
-        return Boolean(
-            exchange &&
-                exchange.phase !== "dialogue" &&
-                (!step || exchange.ownerStepId === step.id) &&
-                !exchange.lines
-                    .slice(exchange.index)
-                    .some((line: CampaignRecord) => line.presentation === "dialogue"),
-        );
-    }
     function enter(key: string) {
         if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
-        const currentStep = byId.get(state.id);
-        if (
-            currentStep &&
-            (backgroundExchangeScene(currentStep) || remainingExchangeIsEmoteOnly(currentStep))
-        ) {
-            // Emote-only handoff scenes carry their lines while the next objective becomes active.
-        } else if (exchange && exchange.phase !== "dialogue") {
-            if (
-                activeReaction?.reaction.loop === true &&
-                activeReaction.reaction.during === exchange.ownerStepId &&
-                exchange.ownerStepId !== key
-            ) {
-                exchangeQueue = [];
-                if (exchange.phase === "speaking") exchange.stopAfterLine = true;
-                else endExchange();
-            }
-        } else clearExchange();
+        if (exchange) clearExchange();
         state.id = key;
         state.line = 0;
         state.done = false;
@@ -162,7 +145,16 @@ export function create(
         currentTimeMs = readClock();
         waitUntilMs = byId.get(key)!.wait_before === true ? currentTimeMs + WAIT_MS : null;
         reactionTimerStartedAtMs = currentTimeMs;
-        if (byId.get(key)!.exchange) beginExchange(byId.get(key)!.exchange, null);
+        const step = byId.get(key)!;
+        if (step.camera)
+            emitCameraCue({
+                id: "step:" + key,
+                kind: "step",
+                stepId: key,
+                target: step.camera.to || null,
+                camera: copy(step.camera),
+            });
+        if (step.exchange) beginExchange(step.exchange, null);
     }
     function matches(when: CampaignRecord) {
         if (when.choice) return state.choices[when.choice] === when.equals;
@@ -400,9 +392,9 @@ export function create(
             )
             .map((reaction: CampaignRecord) => reaction.when.target);
     }
-    function loopShouldStop() {
-        if (activeReaction?.reaction.loop !== true) return false;
-        if (activeReaction.reaction.during && activeReaction.reaction.during !== state.id) return true;
+    function loopShouldStop(sequence: BackgroundEmoteSequence) {
+        if (!sequence.loop) return false;
+        if (sequence.reaction?.reaction.during && sequence.reaction.reaction.during !== state.id) return true;
         const step = byId.get(state.id)!;
         const result = ["objective", "guide"].includes(step.type) && step.trigger ? progress() : null;
         if (!result || result.current >= result.target || targetUnavailable(step, result)) return true;
@@ -598,7 +590,11 @@ export function create(
                           ]
                         : [];
                 })
-                .filter((item: CampaignRecord) => !state.reactionsShown.includes(item.instanceId))
+                .filter(
+                    (item: CampaignRecord) =>
+                        !state.reactionsShown.includes(item.instanceId) &&
+                        !backgroundReactions.has(item.instanceId),
+                )
                 .sort(
                     (a: CampaignRecord, b: CampaignRecord) =>
                         a.priority - b.priority ||
@@ -610,33 +606,43 @@ export function create(
         );
     }
     function nextTimerDelayMs() {
-        if (
-            state.done ||
-            (exchange && exchange.phase === "dialogue") ||
-            activeReaction ||
-            reactionTimerStartedAtMs === null
-        )
-            return null;
+        const remaining = [...backgroundEmotes.values()].map((sequence) =>
+            sequence.phase === "prepare"
+                ? 100
+                : Math.max(1, (sequence.until || currentTimeMs) - currentTimeMs),
+        );
         const step = byId.get(state.id)!;
-        if (!step.trigger || !["objective", "guide"].includes(step.type)) return null;
-        const result = progress();
-        if (result.current >= result.target) return null;
-        const remaining = (definition.reactions || [])
-            .filter(
-                (reaction: CampaignRecord) =>
-                    reaction.when.type === "timer" &&
-                    reaction.during === state.id &&
-                    !(reaction.when.repeat_ms == null && state.reactionsShown.includes(reaction.id)),
-            )
-            .map((reaction: CampaignRecord) => {
-                const timer = timerOccurrence(reaction);
-                if (!timer) return null;
-                if (state.reactionsShown.includes(timer.instanceId))
-                    return timer.repeats ? timer.nextDueAt - currentTimeMs : null;
-                if (!timer.ready) return timer.nextDueAt - currentTimeMs;
-                return 1;
-            })
-            .filter((delay: number | null): delay is number => Number.isFinite(delay));
+        const dialogueActive = Boolean(activeReaction || exchange?.phase === "dialogue");
+        if (
+            !state.done &&
+            !dialogueActive &&
+            step.trigger &&
+            ["objective", "guide"].includes(step.type) &&
+            reactionTimerStartedAtMs !== null
+        ) {
+            const result = progress();
+            if (result.current < result.target) {
+                remaining.push(
+                    ...(definition.reactions || [])
+                        .filter(
+                            (reaction: CampaignRecord) =>
+                                reaction.when.type === "timer" &&
+                                reaction.during === state.id &&
+                                !(reaction.when.repeat_ms == null && state.reactionsShown.includes(reaction.id)),
+                        )
+                        .map((reaction: CampaignRecord) => {
+                            const timer = timerOccurrence(reaction);
+                            if (!timer) return null;
+                            if (backgroundReactions.has(timer.instanceId)) return null;
+                            if (state.reactionsShown.includes(timer.instanceId))
+                                return timer.repeats ? timer.nextDueAt - currentTimeMs : null;
+                            if (!timer.ready) return timer.nextDueAt - currentTimeMs;
+                            return 1;
+                        })
+                        .filter((delay: number | null): delay is number => Number.isFinite(delay)),
+                );
+            }
+        }
         return remaining.length ? Math.max(1, Math.min(...remaining)) : null;
     }
     function pausesForStep(step: CampaignStep) {
@@ -702,12 +708,6 @@ export function create(
             : null;
         if (exchange) {
             const exchangeLine = exchange.lines[exchange.index];
-            const paused =
-                exchange.phase === "dialogue" ||
-                (exchange.reactionInstance !== null &&
-                typeof activeReaction?.reaction.pause_game === "boolean"
-                    ? activeReaction.reaction.pause_game || stepPaused
-                    : stepPaused);
             const modalLine: CampaignStep | null =
                 exchange.phase === "dialogue"
                     ? {
@@ -728,17 +728,15 @@ export function create(
                 step: modalLine || step,
                 line: modalLine || step,
                 progress: progress(),
-                paused,
-                paused_action: paused && exchange.phase !== "dialogue" ? stepPausedAction : null,
+                paused: exchange.phase === "dialogue" || Boolean(activeReaction) || stepPaused,
+                paused_action:
+                    exchange.phase === "dialogue" || activeReaction ? null : stepPausedAction,
                 done: false,
                 choices: [],
                 state,
                 unlocks: copy(state.unlocks),
                 waiting: exchange.phase !== "dialogue",
-                wait_remaining_ms:
-                    exchange.phase === "prepare"
-                        ? 100
-                        : Math.max(1, (exchange.until || currentTimeMs) - currentTimeMs),
+                wait_remaining_ms: Math.max(1, (exchange.until || currentTimeMs) - currentTimeMs),
                 exchange: exchangeLine,
                 exchange_phase: exchange.phase,
                 exchange_token: exchange.token,
@@ -810,166 +808,212 @@ export function create(
     }
     function setPaused(paused: boolean) {
         paused = Boolean(paused);
-        if (paused && !externallyPaused && exchange) {
-            if (exchange.phase === "gap") exchange.remainingGap = Math.max(0, exchange.until! - readClock());
-            else if (exchange.phase !== "dialogue") {
-                clearExchangeLine();
-                // Replay only the interrupted line on return; never consume reading time off screen.
-                prepareExchangeLine();
-            }
-        } else if (!paused && externallyPaused && exchange && exchange.phase === "gap") {
-            exchange.until = readClock() + (exchange.remainingGap || 0);
-            delete exchange.remainingGap;
+        const now = readClock();
+        if (paused && !externallyPaused) {
+            externalPauseStartedAtMs = now;
+        } else if (!paused && externallyPaused && externalPauseStartedAtMs !== null) {
+            const elapsed = now - externalPauseStartedAtMs;
+            if (exchange?.phase === "gap" && exchange.until !== null) exchange.until += elapsed;
+            externalPauseStartedAtMs = null;
         }
         externallyPaused = paused;
-    }
-    function clearExchangeLine() {
-        if (
-            exchange &&
-            ["prepare", "speaking"].includes(exchange.phase) &&
-            hooks &&
-            typeof hooks.onExchangeClear === "function"
-        )
-            hooks.onExchangeClear(exchange.lines[exchange.index], exchange.token);
+        currentTimeMs = now;
     }
     function clearExchange() {
-        clearExchangeLine();
         exchange = null;
     }
-    function beginExchange(lines: CampaignRecord[], reactionInstance: string | null) {
-        const next: QueuedExchange = { lines, reactionInstance, ownerStepId: state.id };
-        if (!exchange && reactionInstance === null && activeReaction?.reaction.pause_game === false) {
-            exchangeQueue.push(next);
-            return;
+    function cancelBackgroundEmoteFor(step: CampaignRecord) {
+        if (!step.emote) return;
+        const faction = definition.speakers?.[step.speaker]?.faction || "player";
+        const sequence = backgroundEmotes.get(faction);
+        if (sequence) finishBackgroundSequence(sequence);
+    }
+    function clearBackgroundCue(sequence: BackgroundEmoteSequence) {
+        if (!sequence.token || !["prepare", "speaking"].includes(sequence.phase)) return;
+        const line = sequence.lines[sequence.index];
+        const token = sequence.token;
+        sequence.token = null;
+        if (line && hooks && typeof hooks.onExchangeClear === "function")
+            hooks.onExchangeClear(line, token);
+    }
+    function finishBackgroundSequence(sequence: BackgroundEmoteSequence, clearCue = true) {
+        if (backgroundEmotes.get(sequence.faction) !== sequence) return;
+        if (clearCue) clearBackgroundCue(sequence);
+        backgroundEmotes.delete(sequence.faction);
+        const reaction = sequence.reaction;
+        if (
+            reaction &&
+            ![...backgroundEmotes.values()].some((item) => item.reaction?.instanceId === reaction.instanceId)
+        ) {
+            backgroundReactions.delete(reaction.instanceId);
+            completeReaction(reaction);
         }
-        if (exchange && exchange.phase !== "dialogue") {
-            exchangeQueue.push(next);
-            return;
-        }
-        clearExchange();
-        exchange = {
-            ...next,
-            index: 0,
-            phase: "prepare",
-            token: null,
-            until: null,
-            ackStartedAt: null,
-            loopHadVisibleLine: false,
-        };
-        prepareExchangeLine();
     }
-    function startQueuedExchange() {
-        if (exchange || !exchangeQueue.length) return;
-        exchange = {
-            ...exchangeQueue.shift()!,
-            index: 0,
-            phase: "prepare",
-            token: null,
-            until: null,
-            ackStartedAt: null,
-            loopHadVisibleLine: false,
-        };
-        prepareExchangeLine();
+    function startBackgroundEmotes(
+        lines: CampaignRecord[],
+        ownerStepId: string,
+        reaction: ActiveReaction | null = null,
+    ) {
+        const byFaction = new Map<string, CampaignRecord[]>();
+        lines.forEach((line) => {
+            if (line.presentation === "dialogue") return;
+            const faction = definition.speakers?.[line.speaker]?.faction || "player";
+            const sequence = byFaction.get(faction) || [];
+            sequence.push(line);
+            byFaction.set(faction, sequence);
+        });
+        if (reaction?.reaction.loop === true) backgroundReactions.set(reaction.instanceId, reaction);
+        byFaction.forEach((speakerLines, faction) => {
+            const previous = backgroundEmotes.get(faction);
+            if (previous) finishBackgroundSequence(previous);
+            backgroundEmotes.set(faction, {
+                faction,
+                lines: speakerLines,
+                index: 0,
+                ownerStepId,
+                token: null,
+                phase: "prepare",
+                until: null,
+                ackStartedAt: null,
+                loop: reaction?.reaction.loop === true,
+                reaction: reaction?.reaction.loop === true ? reaction : null,
+                loopHadVisibleLine: false,
+            });
+        });
+        if (reaction && reaction.reaction.loop !== true) completeReaction(reaction);
+        else if (reaction?.reaction.loop === true && !byFaction.size) completeReaction(reaction);
     }
-    function prepareExchangeLine() {
-        const current = exchange!;
-        current.phase = "prepare";
-        current.token = state.id + ":" + ++exchangeSerial + ":" + current.index;
-        current.until = null;
-        current.ackStartedAt = null;
+    function advanceBackgroundSequence(sequence: BackgroundEmoteSequence) {
+        sequence.index++;
+        if (sequence.index < sequence.lines.length) {
+            sequence.phase = "prepare";
+            sequence.token = null;
+            sequence.ackStartedAt = null;
+            sequence.until = null;
+        } else if (sequence.loop && sequence.loopHadVisibleLine && !loopShouldStop(sequence)) {
+            sequence.index = 0;
+            sequence.loopHadVisibleLine = false;
+            sequence.phase = "prepare";
+            sequence.token = null;
+            sequence.ackStartedAt = null;
+            sequence.until = null;
+        } else finishBackgroundSequence(sequence);
     }
-    function updateExchange() {
-        const current = exchange!;
-        if (current.phase === "prepare") {
-            const speaker = definition.speakers && definition.speakers[current.lines[current.index].speaker];
-            if (speaker && (facts.eliminated_faction_ids || []).includes(speaker.faction || "player")) {
-                current.phase = "gap";
-                current.until = readClock() + EXCHANGE_GAP_MS;
-                return false;
+    function updateBackgroundEmotes() {
+        [...backgroundEmotes.values()].forEach((sequence) => {
+            if (backgroundEmotes.get(sequence.faction) !== sequence) return;
+            if (sequence.loop && loopShouldStop(sequence)) {
+                finishBackgroundSequence(sequence);
+                return;
             }
-            const line = current.lines[current.index];
-            if ((line.presentation || "emote") === "dialogue") {
-                current.phase = "dialogue";
-                return false;
-            }
-            const result =
-                hooks && typeof hooks.onExchangeLine === "function"
-                    ? hooks.onExchangeLine(current.lines[current.index], current.token)
-                    : true;
-            // An emote is background noise: a line that cannot show is skipped, never turned into a pause.
-            if (result === "unavailable") {
-                clearExchangeLine();
-                return nextExchangeLine();
-            }
-            if (result === "pending") {
-                if (current.ackStartedAt === null) current.ackStartedAt = currentTimeMs;
-                if (currentTimeMs - current.ackStartedAt >= EXCHANGE_EMOTE_ACK_TIMEOUT_MS) {
-                    clearExchangeLine();
-                    return nextExchangeLine();
+            const line = sequence.lines[sequence.index];
+            if (sequence.phase === "prepare") {
+                if ((facts.eliminated_faction_ids || []).includes(sequence.faction)) {
+                    advanceBackgroundSequence(sequence);
+                    return;
                 }
-                return false;
+                if (sequence.token === null)
+                    sequence.token = sequence.ownerStepId + ":emote:" + ++exchangeSerial + ":" + sequence.index;
+                const result =
+                    hooks && typeof hooks.onExchangeLine === "function"
+                        ? hooks.onExchangeLine(line, sequence.token)
+                        : true;
+                if (result === "unavailable") {
+                    clearBackgroundCue(sequence);
+                    advanceBackgroundSequence(sequence);
+                } else if (result === "pending") {
+                    if (sequence.ackStartedAt === null) sequence.ackStartedAt = currentTimeMs;
+                    if (currentTimeMs - sequence.ackStartedAt >= EXCHANGE_EMOTE_ACK_TIMEOUT_MS) {
+                        clearBackgroundCue(sequence);
+                        advanceBackgroundSequence(sequence);
+                    }
+                } else if (result !== false) {
+                    sequence.loopHadVisibleLine = true;
+                    sequence.phase = "speaking";
+                    sequence.until = currentTimeMs + EXCHANGE_LINE_MS;
+                }
+                return;
             }
-            const shown = result !== false;
-            if (!shown) return false;
-            current.loopHadVisibleLine = true;
-            current.phase = "speaking";
-            current.until = readClock() + EXCHANGE_LINE_MS;
-            return false;
+            if (sequence.until !== null && currentTimeMs < sequence.until) return;
+            if (sequence.phase === "speaking") {
+                clearBackgroundCue(sequence);
+                if (sequence.loop && loopShouldStop(sequence)) {
+                    finishBackgroundSequence(sequence, false);
+                    return;
+                }
+                sequence.phase = "gap";
+                sequence.until = currentTimeMs +
+                    (sequence.loop
+                        ? EXCHANGE_SEQUENCE_GAP_MS
+                        : Number.isInteger(line.delay_ms)
+                          ? line.delay_ms
+                          : EXCHANGE_GAP_MS);
+                return;
+            }
+            advanceBackgroundSequence(sequence);
+        });
+    }
+    function beginExchange(
+        lines: CampaignRecord[],
+        reaction: ActiveReaction | null = null,
+        ownerStepId = state.id,
+    ) {
+        if (!lines.some((line) => line.presentation === "dialogue")) {
+            if (reaction && activeReaction?.instanceId === reaction.instanceId) activeReaction = null;
+            startBackgroundEmotes(lines, ownerStepId, reaction);
+            return;
         }
-        if (current.phase === "dialogue") return false;
-        if (currentTimeMs < current.until!) return false;
-        if (current.phase === "speaking") {
-            clearExchangeLine();
-            if (current.stopAfterLine || loopShouldStop()) {
-                endExchange();
+        if (reaction) activeReaction = reaction;
+        exchange = {
+            lines,
+            index: 0,
+            reactionInstance: reaction?.instanceId || null,
+            ownerStepId,
+            phase: "gap",
+            token: null,
+            until: null,
+        };
+        processExchangeUntilDialogue();
+    }
+    function processExchangeUntilDialogue() {
+        if (!exchange) return false;
+        while (exchange.index < exchange.lines.length) {
+            if (exchange.lines[exchange.index].presentation === "dialogue") {
+                exchange.phase = "dialogue";
+                exchange.token = exchange.ownerStepId + ":dialogue:" + ++exchangeSerial;
+                exchange.until = null;
                 return true;
             }
-            current.phase = "gap";
-            const delay =
-                activeReaction?.reaction.loop === true
-                    ? EXCHANGE_SEQUENCE_GAP_MS
-                    : Number.isInteger(current.lines[current.index].delay_ms)
-                      ? current.lines[current.index].delay_ms
-                      : EXCHANGE_GAP_MS;
-            current.until = currentTimeMs + delay;
-            return false;
+            const start = exchange.index;
+            while (
+                exchange.index < exchange.lines.length &&
+                exchange.lines[exchange.index].presentation !== "dialogue"
+            )
+                exchange.index++;
+            startBackgroundEmotes(exchange.lines.slice(start, exchange.index), exchange.ownerStepId);
         }
-        return nextExchangeLine();
-    }
-    function nextExchangeLine() {
-        const current = exchange!;
-        if (current.stopAfterLine) {
-            endExchange();
-            return true;
-        }
-        current.index++;
-        if (current.index < current.lines.length) prepareExchangeLine();
-        else if (
-            activeReaction?.reaction.loop === true &&
-            current.loopHadVisibleLine &&
-            !loopShouldStop()
-        ) {
-            current.index = 0;
-            current.loopHadVisibleLine = false;
-            prepareExchangeLine();
-        } else endExchange();
-        return true;
+        endExchange();
+        return false;
     }
     function endExchange() {
         const finished = exchange!;
         exchange = null;
         if (finished.ownerStepId === state.id) waitUntilMs = null;
-        reactionTimerStartedAtMs = currentTimeMs = readClock();
-        if (finished.reactionInstance !== null) completeReaction();
-        startQueuedExchange();
+        if (
+            finished.reactionInstance !== null &&
+            activeReaction?.instanceId === finished.reactionInstance
+        )
+            completeReaction(activeReaction);
     }
     function dispose() {
         clearExchange();
-        exchangeQueue = [];
+        backgroundEmotes.forEach((sequence) => clearBackgroundCue(sequence));
+        backgroundEmotes.clear();
+        backgroundReactions.clear();
+        activeReaction = null;
         externallyPaused = true;
     }
-    function completeReaction() {
-        const active = activeReaction!;
+    function completeReaction(active: ActiveReaction) {
         const reaction = active.reaction;
         const target = active.target;
         if (reaction.when.type === "timer" && reaction.when.repeat_ms != null) {
@@ -983,41 +1027,35 @@ export function create(
             !state.contactsResolved.includes(active.target)
         )
             state.contactsResolved.push(active.target);
-        activeReaction = null;
+        if (activeReaction?.instanceId === active.instanceId) activeReaction = null;
+        if (reaction.when.type === "timer") reactionTimerStartedAtMs = currentTimeMs = readClock();
         // A response's emote, like a step's, fires when it completes.
+        cancelBackgroundEmoteFor(reaction);
         if (hooks && typeof hooks.onStepComplete === "function") hooks.onStepComplete(reaction);
         if (hooks && typeof hooks.onReactionComplete === "function")
             hooks.onReactionComplete(reaction, target);
-        startQueuedExchange();
     }
     function advance(
         choiceId?: string | null,
         expectedStepId?: string,
         allowUnavailable = false,
-        allowNonPausingReactionProgress = false,
     ) {
         if (state.done || externallyPaused) return false;
         if (exchange && exchange.phase === "dialogue") {
-            if (exchange.phase !== "dialogue" || expectedStepId !== "exchange-" + exchange.token)
-                return false;
+            if (expectedStepId !== "exchange-" + exchange.token) return false;
             const delay = Number.isInteger(exchange.lines[exchange.index].delay_ms)
                 ? exchange.lines[exchange.index].delay_ms
                 : 0;
+            exchange.index++;
             if (delay > 0) {
                 exchange.phase = "gap";
                 exchange.until = readClock() + delay;
                 return true;
             }
-            exchange.index++;
-            if (exchange.index < exchange.lines.length) prepareExchangeLine();
-            else endExchange();
+            processExchangeUntilDialogue();
             return true;
         }
-        if (
-            activeReaction &&
-            (!exchange || exchange.phase === "dialogue") &&
-            !allowNonPausingReactionProgress
-        ) {
+        if (activeReaction && (!exchange || exchange.phase === "dialogue")) {
             const reaction = activeReaction.reaction;
             if (expectedStepId !== "reaction-" + activeReaction.instanceId) return false;
             let answer: CampaignRecord | null = null;
@@ -1029,8 +1067,8 @@ export function create(
             }
             const exchangeLines = Array.isArray(answer?.exchange) ? answer.exchange : reaction.exchange;
             if (Array.isArray(exchangeLines) && exchangeLines.length)
-                beginExchange(exchangeLines, activeReaction.instanceId);
-            else completeReaction();
+                beginExchange(exchangeLines, activeReaction);
+            else completeReaction(activeReaction);
             return true;
         }
         if (expectedStepId && expectedStepId !== state.id) return false;
@@ -1064,6 +1102,7 @@ export function create(
         if (typeof destination !== "string" || !byId.has(destination)) return false;
         if (!state.completed.includes(step!.id)) state.completed.push(step!.id);
         // A step's emote directive takes effect exactly when the step completes.
+        cancelBackgroundEmoteFor(step!);
         if (hooks && typeof hooks.onStepComplete === "function") hooks.onStepComplete(step);
         enter(destination);
         return true;
@@ -1081,6 +1120,7 @@ export function create(
                 waitUntilMs = byId.get(state.id)!.wait_before === true ? currentTimeMs + WAIT_MS : null;
         }
         if (state.done || externallyPaused) return view();
+        updateBackgroundEmotes();
         while (!state.done) {
             const availableStep = byId.get(state.id);
             const partner =
@@ -1106,26 +1146,11 @@ export function create(
                 continue;
             }
             if (exchange) {
-                if (
-                    activeReaction?.reaction.loop === true &&
-                    exchange.phase !== "dialogue" &&
-                    nextReaction()?.isContact
-                ) {
-                    clearExchangeLine();
-                    endExchange();
-                    continue;
-                }
-                if (
-                    activeReaction?.reaction.loop === true &&
-                    exchange.phase !== "speaking" &&
-                    loopShouldStop()
-                ) {
-                    endExchange();
-                    continue;
-                }
-                const advancedExchange = updateExchange();
-                if (exchange && exchange.phase === "dialogue") return view();
-                if (advancedExchange) continue;
+                if (exchange.phase === "dialogue") return view();
+                if (exchange.until !== null && currentTimeMs < exchange.until) break;
+                if (processExchangeUntilDialogue()) return view();
+                if (exchange) break;
+                continue;
             }
             const step = byId.get(state.id)!;
             const objectiveStep = ["objective", "guide"].includes(step!.type);
@@ -1135,38 +1160,35 @@ export function create(
                 const next = nextReaction();
                 if (next) {
                     if (next.isFirstContact) state.firstContactTarget = next.target;
-                    activeReaction = {
+                    if (["contact", "first_contact"].includes(next.reaction.when.type))
+                        emitCameraCue({
+                            id: "contact:" + next.instanceId,
+                            kind: "contact",
+                            stepId: state.id,
+                            target: next.target,
+                            camera: null,
+                        });
+                    const active: ActiveReaction = {
                         reaction: next.reaction,
                         target: next.target,
                         instanceId: next.instanceId,
                     };
                     if (next.reaction.presentation === "exchange" && next.reaction.exchange) {
-                        beginExchange(next.reaction.exchange, next.instanceId);
+                        beginExchange(next.reaction.exchange, active);
                         continue;
                     }
+                    activeReaction = active;
                 }
             }
-            if (
-                activeReaction &&
-                activeReaction.reaction.pause_game !== false &&
-                (!exchange || exchange.phase === "dialogue")
-            )
-                return view();
-            // Exchange-only scenes move the hand immediately for emotes and after Continue for dialogue.
-            const stepHasQueuedExchange = exchangeQueue.some(
-                (item) => item.ownerStepId === step!.id && item.reactionInstance === null,
-            );
-            if (
-                exchangeOnlyScene(step!) &&
-                !stepHasQueuedExchange &&
-                (!exchange || backgroundExchangeScene(step!) || remainingExchangeIsEmoteOnly(step!))
-            ) {
+            if (activeReaction) return view();
+            // Emote-only scenes hand off immediately; exchanges stop only at a dialogue line.
+            if (exchangeOnlyScene(step!) && !exchange) {
                 if (!advance(null, step!.id)) break;
                 continue;
             }
             if (!objectiveStep) break;
             if (result!.current < result!.target && !unavailable) break;
-            if (!advance(null, step!.id, true, activeReaction?.reaction.pause_game === false)) break;
+            if (!advance(null, step!.id, true)) break;
         }
         return view();
     }
@@ -1215,7 +1237,10 @@ export function create(
             (JSON.stringify(previousExchangeOwner && previousExchangeOwner.exchange) !==
                 JSON.stringify(nextExchangeOwner && nextExchangeOwner.exchange) ||
                 JSON.stringify(definition.speakers) !== JSON.stringify(replacement.speakers));
-        const reactionInstance = activeReaction && activeReaction.instanceId;
+        const reactionForExchange =
+            activeReaction && nextExchangeOwner
+                ? { ...activeReaction, reaction: nextExchangeOwner }
+                : null;
         if (exchangeChanged) clearExchange();
         definition = replacement;
         byId.clear();
@@ -1241,7 +1266,7 @@ export function create(
             else activeReaction = null;
         }
         if (exchangeChanged && nextExchangeOwner && nextExchangeOwner.exchange)
-            beginExchange(nextExchangeOwner.exchange, reactionInstance || null);
+            beginExchange(nextExchangeOwner.exchange, reactionForExchange);
         return true;
     }
     enter(entry || definition.entry);

@@ -10,7 +10,8 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 pub const SCHEMA_VERSION: u8 = 4;
-pub const CONSENT_POLICY_VERSION: &str = "2026-11-10";
+pub const LEGACY_CONSENT_POLICY_VERSION: &str = "2026-11-10";
+pub const CONSENT_POLICY_VERSION: &str = "2026-11-13";
 pub const RETENTION_DAYS: u64 = 90;
 pub const MAX_PROPS_BYTES: usize = 2048;
 
@@ -93,7 +94,10 @@ impl AnalyticsEvent {
         if !is_uuid(&self.event_id) {
             return Err("invalid event_id");
         }
-        if !self.consented || self.consent_version != CONSENT_POLICY_VERSION {
+        if !self.consented
+            || ![LEGACY_CONSENT_POLICY_VERSION, CONSENT_POLICY_VERSION]
+                .contains(&self.consent_version.as_str())
+        {
             return Err("analytics consent is missing or outdated");
         }
         if self.subject_id.is_some() {
@@ -157,6 +161,15 @@ fn is_uuid(value: &str) -> bool {
             8 | 13 | 18 | 23 => byte == b'-',
             _ => byte.is_ascii_hexdigit(),
         })
+}
+
+pub fn is_uuid_v4(value: &str) -> bool {
+    is_uuid(value)
+        && value.as_bytes()[14].to_ascii_lowercase() == b'4'
+        && matches!(
+            value.as_bytes()[19].to_ascii_lowercase(),
+            b'8' | b'9' | b'a' | b'b'
+        )
 }
 
 fn is_match_mode(value: &str) -> bool {

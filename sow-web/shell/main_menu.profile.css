@@ -2859,13 +2859,22 @@
   animation: none;
 }
 
-.sow-heroes__rotation {
-  display: none !important;
+.sow-heroes__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.sow-heroes__rotation,
+.sow-heroes__rarity-tag {
+  display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
   width: fit-content;
-  margin: 0 0 10px;
+  margin: 0;
   padding: 5px 8px;
   border: 1px solid var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-tight);
@@ -2876,28 +2885,31 @@
   font-weight: 900;
   letter-spacing: 0.14em;
   line-height: 1;
+  text-transform: uppercase;
 }
 
-.sow-heroes__rotation[data-rarity="common"] {
+.sow-heroes__rarity-tag[data-rarity="common"] {
   color: #f1f5f9;
   border-color: rgba(241, 245, 249, 0.35);
 }
 
-.sow-heroes__rotation[data-rarity="rare"] {
+.sow-heroes__rarity-tag[data-rarity="rare"] {
   color: #38bdf8;
   border-color: rgba(56, 189, 248, 0.45);
 }
 
-.sow-heroes__rotation[data-rarity="epic"] {
+.sow-heroes__rarity-tag[data-rarity="epic"] {
   color: #c084fc;
   border-color: rgba(192, 132, 252, 0.45);
 }
 
-.sow-heroes__rotation[data-rarity="legendary"] {
+.sow-heroes__rarity-tag[data-rarity="legendary"] {
   color: #fbbf24;
   border-color: rgba(251, 191, 36, 0.5);
 }
 
+.sow-heroes__tags[hidden],
+.sow-heroes__rarity-tag[hidden],
 .sow-heroes__rotation[hidden],
 .sow-heroes__perk[hidden] {
   display: none;
@@ -3791,6 +3803,17 @@
   }
 
   /* Compact featured hero card scaling & button compactness */
+  #sow-menu[data-screen="heroes"] .sow-heroes__tags {
+    margin: 0 0 6px;
+    gap: 5px;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__rotation,
+  #sow-menu[data-screen="heroes"] .sow-heroes__rarity-tag {
+    padding: 4px 7px;
+    font-size: 8.5px;
+  }
+
   #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy .sow-hero-briefing__civilization {
     margin-bottom: 2px;
     font-size: clamp(8px, 1.2vh, 9px);
@@ -3856,7 +3879,7 @@
   /* Widescreen landscape bounds are unified in main_menu.layout.css */
 }
 
-/* Hero roster progress, filters, Free Week pill, Store bio action, & Dossier Codex */
+/* Hero roster progress, filters, Store bio action, & Dossier Codex */
 .sow-heroes__roster-meta {
   display: flex;
   align-items: center;
@@ -3904,29 +3927,6 @@
   background: rgba(245, 166, 35, 0.18);
   border-color: var(--sow-control-accent);
   color: var(--sow-gold-bright);
-}
-
-.sow-heroes__card-art {
-  position: relative;
-}
-
-.sow-heroes__free-badge {
-  position: absolute;
-  inset-inline: 2px;
-  bottom: 2px;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: rgba(16, 128, 72, 0.92);
-  color: #e9fff2;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  text-align: center;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .sow-heroes__bio-trigger {
@@ -4058,10 +4058,9 @@
   gap: 4px;
 }
 
-.sow-hero-info__banner-copy .sow-heroes__rotation {
-  position: static;
+.sow-hero-info__banner-copy .sow-heroes__tags {
   align-self: flex-start;
-  margin-bottom: 2px;
+  margin: 0 0 4px;
 }
 
 .sow-hero-info__banner-copy h2 {

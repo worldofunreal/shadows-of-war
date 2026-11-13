@@ -121,6 +121,51 @@ export function arrowRightIconSvg(): string {
     );
 }
 
+export function lockIconSvg(size = 15): string {
+    return (
+        "<svg width='" +
+        size +
+        "' height='" +
+        size +
+        "' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+        "<rect x='5' y='11' width='14' height='10' rx='2'/>" +
+        "<path d='M8 11V7a4 4 0 0 1 8 0v4'/>" +
+        "</svg>"
+    );
+}
+
+function missionActionTooltipAttrs(actionTarget: string | undefined, missionId?: string): string {
+    if (!actionTarget) return "";
+    if (missionId === "onboarding_1_tutorial") {
+        return (
+            " data-sow-tooltip='" +
+            esc(SOW_t("menu.campaign")) +
+            "' data-sow-tooltip-icon='play' data-sow-tooltip-tone='gold'"
+        );
+    }
+    const labels: Record<string, { text: string; icon: string; tone: string }> = {
+        battle: { text: SOW_t("lobbies.matchmaking"), icon: "play", tone: "gold" },
+        ranked: { text: SOW_t("lobbies.ranked_1v1"), icon: "ranked", tone: "gold" },
+        teams: { text: SOW_t("lobbies.teams_two"), icon: "play", tone: "gold" },
+        hnv: { text: SOW_t("lobbies.humans_vs_nations"), icon: "play", tone: "gold" },
+        ffa: { text: SOW_t("lobbies.free_for_all"), icon: "play", tone: "gold" },
+    };
+    const meta = labels[actionTarget] || {
+        text: SOW_t("menu.heroes"),
+        icon: "info",
+        tone: "gold",
+    };
+    return (
+        " data-sow-tooltip='" +
+        esc(meta.text) +
+        "' data-sow-tooltip-icon='" +
+        meta.icon +
+        "' data-sow-tooltip-tone='" +
+        meta.tone +
+        "'"
+    );
+}
+
 function renderRewardPills(
     crowns: number,
     gems: number,
@@ -201,7 +246,7 @@ export function renderDirectiveCard(): string {
             "</button>" +
             "</div>";
     } else {
-        const showQuickGo = Boolean(directive.action_target && directive.action_target !== "battle");
+        const showQuickGo = Boolean(directive.action_target);
         actionMarkup =
             "<div class='sow-directive__actions'>" +
             (showQuickGo
@@ -209,7 +254,9 @@ export function renderDirectiveCard(): string {
                   esc(directive.action_target) +
                   "' data-mission-id='" +
                   esc(directive.id) +
-                  "'>" +
+                  "'" +
+                  missionActionTooltipAttrs(directive.action_target, directive.id) +
+                  ">" +
                   esc(SOW_t("missions.action_go")) +
                   arrowRightIconSvg() +
                   "</button>"
@@ -377,12 +424,18 @@ export function renderMissionsModal(): string {
                       const lockLabel =
                           m.category === "onboarding"
                               ? SOW_t("missions.locked_prev_step")
-                              : SOW_t("missions.unlock_level_short").replace(
+                              : SOW_t("missions.unlock_at_level").replace(
                                     "{level}",
                                     String(m.unlock_level || 3),
                                 );
                       actionHtml =
-                          "<span class='sow-missions__locked-badge'>" + esc(lockLabel) + "</span>";
+                          "<span class='sow-missions__locked-badge' tabindex='0' role='img' aria-label='" +
+                          esc(lockLabel) +
+                          "' data-sow-tooltip='" +
+                          esc(lockLabel) +
+                          "' data-sow-tooltip-icon='lock' data-sow-tooltip-tone='muted' data-sow-tooltip-placement='start' data-sow-tooltip-tap='true'>" +
+                          lockIconSvg(15) +
+                          "</span>";
                   } else if (m.claimed) {
                       actionHtml =
                           "<span class='sow-missions__claimed-badge'>" +
@@ -413,20 +466,28 @@ export function renderMissionsModal(): string {
                             esc(m.action_target) +
                             "' data-mission-id='" +
                             esc(m.id) +
-                            "'>" +
+                            "'" +
+                            missionActionTooltipAttrs(m.action_target, m.id) +
+                            ">" +
                             esc(SOW_t("missions.action_go")) +
                             arrowRightIconSvg() +
                             "</button>"
                           : "";
                       let swapBtn = "";
                       if (m.swappable) {
+                          const quotaLabel =
+                              totalSwapsLeft > 0
+                                  ? SOW_t("missions.swaps_left", { count: totalSwapsLeft })
+                                  : SOW_t("missions.swap_limit_reached");
                           if (freeSwapsLeft > 0) {
                               swapBtn =
                                   "<button class='sow-missions__btn-swap' type='button' data-command='request_swap_mission' data-mission-id='" +
                                   esc(m.id) +
-                                  "' data-ad='false' title='" +
+                                  "' data-ad='false' data-sow-tooltip='" +
+                                  esc(quotaLabel) +
+                                  "' data-sow-tooltip-title='" +
                                   esc(SOW_t("missions.swap_free")) +
-                                  "'>" +
+                                  "' data-sow-tooltip-icon='swap' data-sow-tooltip-tone='gold'>" +
                                   swapIconSvg() +
                                   "<span>" +
                                   esc(SOW_t("missions.swap_free")) +
@@ -435,9 +496,11 @@ export function renderMissionsModal(): string {
                               swapBtn =
                                   "<button class='sow-missions__btn-swap is-ad' type='button' data-command='request_swap_mission' data-mission-id='" +
                                   esc(m.id) +
-                                  "' data-ad='true' title='" +
+                                  "' data-ad='true' data-sow-tooltip='" +
+                                  esc(quotaLabel) +
+                                  "' data-sow-tooltip-title='" +
                                   esc(SOW_t("missions.swap_ad")) +
-                                  "'>" +
+                                  "' data-sow-tooltip-icon='swap' data-sow-tooltip-tone='gem'>" +
                                   videoPlayIconSvg() +
                                   "<span>" +
                                   esc(SOW_t("missions.swap_ad")) +
@@ -562,32 +625,68 @@ export function renderMissionsModal(): string {
         "' data-command='switch_missions_tab' data-missions-tab='onboarding' aria-selected='" +
         (activeTab === "onboarding" ? "true" : "false") +
         "'>" +
+        "<span>" +
         esc(SOW_t("missions.tab_onboarding")) +
-        " <small>(" +
+        "</span>" +
+        "<span class='sow-missions__tab-badge'>" +
         onboardingCompleted +
         "/" +
         onboardingTotal.length +
-        ")</small>" +
+        "</span>" +
         "</button>" +
         "<button type='button' role='tab' class='sow-missions__tab" +
         (activeTab === "daily" ? " is-active" : "") +
+        (dailyLocked ? " is-locked" : "") +
         "' data-command='switch_missions_tab' data-missions-tab='daily' aria-selected='" +
         (activeTab === "daily" ? "true" : "false") +
-        "'>" +
-        esc(SOW_t("missions.tab_daily")) +
+        "'" +
         (dailyLocked
-            ? " <small>(Lv " + dailyUnlockLevel + ")</small>"
-            : " <small>(" + dailyCompleted + "/" + dailyTotal.length + ")</small>") +
+            ? " data-sow-tooltip='" +
+              esc(SOW_t("missions.unlock_at_level").replace("{level}", String(dailyUnlockLevel))) +
+              "' data-sow-tooltip-icon='lock' data-sow-tooltip-tone='gold' data-sow-tooltip-placement='bottom'"
+            : "") +
+        ">" +
+        "<span>" +
+        esc(SOW_t("missions.tab_daily")) +
+        "</span>" +
+        (dailyLocked
+            ? "<span class='sow-missions__tab-badge is-locked'>" +
+              lockIconSvg(11) +
+              "<span>Lv " +
+              dailyUnlockLevel +
+              "</span></span>"
+            : "<span class='sow-missions__tab-badge'>" +
+              dailyCompleted +
+              "/" +
+              dailyTotal.length +
+              "</span>") +
         "</button>" +
         "<button type='button' role='tab' class='sow-missions__tab" +
         (activeTab === "weekly" ? " is-active" : "") +
+        (weeklyLocked ? " is-locked" : "") +
         "' data-command='switch_missions_tab' data-missions-tab='weekly' aria-selected='" +
         (activeTab === "weekly" ? "true" : "false") +
-        "'>" +
-        esc(SOW_t("missions.tab_weekly")) +
+        "'" +
         (weeklyLocked
-            ? " <small>(Lv " + weeklyUnlockLevel + ")</small>"
-            : " <small>(" + weeklyCompleted + "/" + weeklyTotal.length + ")</small>") +
+            ? " data-sow-tooltip='" +
+              esc(SOW_t("missions.unlock_at_level").replace("{level}", String(weeklyUnlockLevel))) +
+              "' data-sow-tooltip-icon='lock' data-sow-tooltip-tone='gold' data-sow-tooltip-placement='bottom'"
+            : "") +
+        ">" +
+        "<span>" +
+        esc(SOW_t("missions.tab_weekly")) +
+        "</span>" +
+        (weeklyLocked
+            ? "<span class='sow-missions__tab-badge is-locked'>" +
+              lockIconSvg(11) +
+              "<span>Lv " +
+              weeklyUnlockLevel +
+              "</span></span>"
+            : "<span class='sow-missions__tab-badge'>" +
+              weeklyCompleted +
+              "/" +
+              weeklyTotal.length +
+              "</span>") +
         "</button>" +
         "</div>" +
         "<div class='sow-missions__body'>" +

@@ -729,19 +729,19 @@ export function renderCampaign() {
 
     return (
         "<main class='sow-menu__main sow-campaign' data-screen-panel='campaign'>" +
-        "<section class='sow-menu__command sow-campaign__intro'>" +
+        "<header class='sow-campaign__intro'>" +
+        "<button class='sow-menu__secondary sow-campaign__back-btn' type='button' data-command='close_campaign'>← " +
+        esc(SOW_t("lobbies.back")) +
+        "</button>" +
         "<div class='sow-campaign__header-group'>" +
         "<p class='sow-menu__eyebrow'>" +
         esc(SOW_t("lobbies.single_player")) +
         "</p>" +
         "<h1>" +
-        esc(SOW_t("lobbies.campaign_chronicles")).replace("\n", "<br>") +
+        esc(SOW_t("lobbies.campaign_chronicles")).replace("\n", " ") +
         "</h1>" +
         "</div>" +
-        "<button class='sow-menu__secondary' type='button' data-command='close_campaign'>← " +
-        esc(SOW_t("lobbies.back")) +
-        "</button>" +
-        "</section>" +
+        "</header>" +
         "<nav class='sow-campaign__sagas-nav' aria-label='" +
         esc(SOW_t("lobbies.the_saga")) +
         "'><div class='sow-campaign__sagas-rail'>" +
@@ -1169,9 +1169,9 @@ export function renderCreate() {
                           (active ? " is-active" : "") +
                           "' data-command='select_create_map' data-map-key='" +
                           esc(m.key) +
-                          "' title='" +
+                          "' data-sow-tooltip='" +
                           esc(formatMapName(m)) +
-                          "'>" +
+                          "' data-sow-tooltip-tone='gold'>" +
                           "<img src='" +
                           esc(thumb) +
                           "' alt='' loading='lazy' decoding='async'>" +
@@ -1236,9 +1236,9 @@ export function renderCreate() {
           "%'>" +
           "<button class='sow-menu__ghost-mini sow-create__dice-btn' type='button' data-command='randomize_seed' aria-label='" +
           esc(SOW_t("lobbies.randomize_seed")) +
-          "' title='" +
+          "' data-sow-tooltip='" +
           esc(SOW_t("lobbies.randomize_seed")) +
-          "'>" +
+          "' data-sow-tooltip-tone='gold'>" +
           menuIcon("dice") +
           createTacticalIcon("spawn_random") +
           "</button>" +
@@ -1326,9 +1326,9 @@ export function renderCreate() {
         esc(SOW_t("lobbies.online_lobby")) +
         "</span></button>" +
         "</div>" +
-        "<button type='button' class='sow-menu__secondary sow-create__campaign-shortcut' data-command='open_campaign' title='" +
+        "<button type='button' class='sow-menu__secondary sow-create__campaign-shortcut' data-command='open_campaign' data-sow-tooltip='" +
         esc(SOW_t("menu.campaign")) +
-        "'>" +
+        "' data-sow-tooltip-tone='gold'>" +
         createTacticalIcon("campaign") +
         " <span>" +
         esc(SOW_t("menu.campaign")) +

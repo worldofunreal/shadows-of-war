@@ -854,9 +854,9 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
   });
   const rankBadge =
     rankedRating && rankedRating.placements_complete
-      ? "<span class='sow-profile__rank-badge' title='" +
+      ? "<span class='sow-profile__rank-badge' tabindex='0' data-sow-tooltip='" +
         esc(rankLabelText(rankedRating)) +
-        "'>" +
+        "' data-sow-tooltip-icon='ranked' data-sow-tooltip-tone='gold' data-sow-tooltip-tap='true'>" +
         rankEmblem(rankedRating.tier, rankedRating.division) +
         "<b>" +
         esc(rankName(rankedRating.tier, rankedRating.division)) +
@@ -904,9 +904,9 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
     avatarImageAttribute(avatarUrl) +
     " alt='' width='88' height='88'>" +
     "</div>" +
-    "<div class='sow-profile__level' title='" +
-    esc(SOW_t("profile.level_label")) +
-    "'><small>" +
+    "<div class='sow-profile__level' tabindex='0' data-sow-tooltip='" +
+    esc(SOW_t("profile.level_label") + " " + level) +
+    "' data-sow-tooltip-tone='gold' data-sow-tooltip-tap='true'><small>" +
     esc(SOW_t("profile.level_label")) +
     "</small><strong data-profile-level>" +
     esc(level) +

@@ -412,7 +412,7 @@ impl SowApp {
                         let join_msg = self.make_join_message(
                             self.ui.app.main_menu_state.pending_join_lobby_id,
                             self.ui.app.main_menu_state.custom_game_is_private,
-                            (!self.join_matchmaking)
+                            (!self.join_matchmaking && !self.join_public_matchmaking)
                                 .then(|| self.ui.app.main_menu_state.custom_game_config.clone()),
                             Some(self.ui.app.main_menu_state.custom_game_password.clone())
                                 .filter(|password| !password.is_empty()),

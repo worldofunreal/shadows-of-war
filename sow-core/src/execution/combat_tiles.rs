@@ -2,7 +2,7 @@ use crate::bitset::DenseBitSet;
 use crate::building::BuildingGrid;
 use crate::diplomacy::is_traitor_active;
 use crate::engine::SowEngine;
-use crate::execution::{PrioritizedTile, RETREAT_PENALTY_VS_PLAYER};
+use crate::execution::{AttackExecution, PrioritizedTile, RETREAT_PENALTY_VS_PLAYER};
 use crate::game::{GameEvent, GamePhase, GameState, TerritoryChange};
 use crate::game_config::max_tiles_cap_for_troops;
 use crate::geo_entities::{Ability, LossWhen, Side, Source, Target};
@@ -13,10 +13,146 @@ use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 const CAPTURE_COST_VARIATION_SALT: u64 = 0xA076_1D64_78BD_642F;
 const CAPTURE_COST_VARIATION: f64 = 0.10;
 const NEUTRAL_CAPTURE_SPEED_MULTIPLIER: f64 = 3.0;
+const FINISHING_TILES_AT_START: u32 = 8;
+const FINISHING_TILES_AT_THREE_MINUTES: u32 = 12;
+const FINISHING_TILES_MAX: u32 = 24;
+const FINISHING_TILES_MAX_COUNT: usize = FINISHING_TILES_MAX as usize;
+
+#[derive(Clone, Copy)]
+struct FinishingForce {
+    victim_id: u16,
+    owner_id: u16,
+    attack_id: u64,
+    troops: f64,
+    active_contact: bool,
+}
 
 struct BorderCluster {
     tiles: Vec<u32>,
     bounds: [u32; 4],
+}
+
+fn finishing_tile_threshold(tick: u64, tick_rate_ms: f32) -> u32 {
+    let tick_rate_ms = if tick_rate_ms.is_finite() && tick_rate_ms > 0.0 {
+        f64::from(tick_rate_ms)
+    } else {
+        1.0
+    };
+    let elapsed_ms = tick as f64 * tick_rate_ms;
+    if elapsed_ms < 180_000.0 {
+        FINISHING_TILES_AT_START + (4.0 * elapsed_ms / 180_000.0).floor() as u32
+    } else if elapsed_ms < 300_000.0 {
+        FINISHING_TILES_AT_THREE_MINUTES
+            + (12.0 * (elapsed_ms - 180_000.0) / 120_000.0).floor() as u32
+    } else {
+        FINISHING_TILES_MAX
+    }
+}
+
+fn can_finish_attack_pair(
+    state: &GameState,
+    campaign_relations: &std::collections::HashMap<u16, crate::protocol::CampaignRelation>,
+    attacker_id: u16,
+    victim_id: u16,
+) -> bool {
+    if victim_id == 0 || attacker_id == victim_id {
+        return false;
+    }
+    let (Some(attacker), Some(victim)) = (state.player(attacker_id), state.player(victim_id))
+    else {
+        return false;
+    };
+    attacker.alive
+        && victim.alive
+        && !attacker.alliances.contains(&victim_id)
+        && !victim.alliances.contains(&attacker_id)
+        && !(attacker.team.is_some() && attacker.team == victim.team)
+        && campaign_relations
+            .get(&attacker_id)
+            .is_none_or(|relation| *relation == crate::protocol::CampaignRelation::Enemy)
+}
+
+fn has_valid_finishing_contact(
+    state: &GameState,
+    campaign_relations: &std::collections::HashMap<u16, crate::protocol::CampaignRelation>,
+    attack: &AttackExecution,
+    tile: &PrioritizedTile,
+) -> bool {
+    attack.troops.is_finite()
+        && attack.troops > 0.0
+        && !attack.retreating
+        && can_finish_attack_pair(
+            state,
+            campaign_relations,
+            attack.owner_id,
+            attack.target_owner,
+        )
+        && state.map.owner_id(tile.x, tile.y) == attack.target_owner
+        && matches!(
+            state.map.terrain_type(tile.x, tile.y),
+            TerrainType::Land | TerrainType::Highland | TerrainType::Mountain
+        )
+        && state
+            .map
+            .is_adjacent_to_player(tile.x, tile.y, attack.owner_id)
+}
+
+fn finish_protected_by_campaign(
+    victim_id: u16,
+    held_target: Option<u16>,
+    pre_defeat_targets: &std::collections::HashSet<u16>,
+    pre_defeat_pending: Option<u16>,
+) -> bool {
+    held_target == Some(victim_id)
+        || SowEngine::pre_defeat_watches(pre_defeat_targets, pre_defeat_pending, victim_id)
+}
+
+fn finishing_tile_quotas(participants: &[(u16, f64)], tile_count: usize) -> Vec<(u16, usize)> {
+    if participants.is_empty() || tile_count == 0 {
+        return Vec::new();
+    }
+    let max_weight = participants
+        .iter()
+        .map(|(_, weight)| *weight)
+        .fold(0.0_f64, f64::max);
+    if !max_weight.is_finite() || max_weight <= 0.0 {
+        return Vec::new();
+    }
+    let normalized_total: f64 = participants
+        .iter()
+        .map(|(_, weight)| *weight / max_weight)
+        .sum();
+    if !normalized_total.is_finite() || normalized_total <= 0.0 {
+        return Vec::new();
+    }
+
+    let mut quotas: Vec<(u16, usize, f64)> = participants
+        .iter()
+        .map(|&(owner_id, weight)| {
+            let exact = tile_count as f64 * (weight / max_weight) / normalized_total;
+            let quota = exact.floor() as usize;
+            (owner_id, quota, exact - quota as f64)
+        })
+        .collect();
+    let assigned: usize = quotas.iter().map(|(_, quota, _)| *quota).sum();
+    if assigned > tile_count {
+        return Vec::new();
+    }
+    let mut remainder_order: Vec<usize> = (0..quotas.len()).collect();
+    remainder_order.sort_unstable_by(|&first, &second| {
+        quotas[second]
+            .2
+            .total_cmp(&quotas[first].2)
+            .then_with(|| quotas[first].0.cmp(&quotas[second].0))
+    });
+    for index in remainder_order.into_iter().take(tile_count - assigned) {
+        quotas[index].1 += 1;
+    }
+    quotas.sort_unstable_by_key(|(owner_id, _, _)| *owner_id);
+    quotas
+        .into_iter()
+        .map(|(owner_id, quota, _)| (owner_id, quota))
+        .collect()
 }
 
 #[inline]
@@ -342,12 +478,43 @@ impl SowEngine {
         &mut self,
         changes: Vec<TerritoryChange>,
     ) -> Vec<(u16, u16, u32, u32)> {
+        let threshold = finishing_tile_threshold(self.state.tick, self.state.config.tick_rate_ms);
+        let held_target = self
+            .campaign_assault
+            .as_ref()
+            .filter(|assault| assault.hold_last_tile)
+            .map(|assault| assault.root_target);
+        let pre_defeat_targets = self.campaign_pre_defeat_targets.clone();
+        let pre_defeat_pending = self.campaign_pre_defeat_pending;
+        self.annex_enclosed_components_with_finishes(
+            changes,
+            DenseBitSet::new(),
+            Vec::new(),
+            threshold,
+            held_target,
+            &pre_defeat_targets,
+            pre_defeat_pending,
+        )
+    }
+
+    fn annex_enclosed_components_with_finishes(
+        &mut self,
+        changes: Vec<TerritoryChange>,
+        mut finish_candidates: DenseBitSet,
+        triggered_forces: Vec<FinishingForce>,
+        threshold: u32,
+        held_target: Option<u16>,
+        pre_defeat_targets: &std::collections::HashSet<u16>,
+        pre_defeat_pending: Option<u16>,
+    ) -> Vec<(u16, u16, u32, u32)> {
         // Check each affected owner once, in ID order, using the final capture batch.
         // Neutral captures can close an adjacent owner's last opening without taking its land.
         let mut changed_victims = DenseBitSet::new();
         for change in changes {
             if change.old_owner != 0 {
                 changed_victims.insert(u32::from(change.old_owner));
+                // A direct loss may bring an already-attacked owner below its time threshold.
+                finish_candidates.insert(u32::from(change.old_owner));
             } else if change.new_owner != 0 {
                 let captor = self.state.map.owner_id(change.x, change.y);
                 if captor == 0 {
@@ -363,6 +530,15 @@ impl SowEngine {
                     });
             }
         }
+
+        self.finish_attacked_small_entities(
+            &finish_candidates,
+            triggered_forces,
+            threshold,
+            held_target,
+            pre_defeat_targets,
+            pre_defeat_pending,
+        );
 
         let mut eliminated = Vec::new();
         for victim_id in changed_victims.ones().map(|id| id as u16) {
@@ -444,6 +620,319 @@ impl SowEngine {
             }
         }
         eliminated
+    }
+
+    fn finish_attacked_small_entities(
+        &mut self,
+        candidates: &DenseBitSet,
+        mut forces: Vec<FinishingForce>,
+        threshold: u32,
+        held_target: Option<u16>,
+        pre_defeat_targets: &std::collections::HashSet<u16>,
+        pre_defeat_pending: Option<u16>,
+    ) {
+        if candidates.ones().next().is_none() {
+            return;
+        }
+
+        for attack in &mut self.attacks {
+            if !candidates.contains(u32::from(attack.target_owner)) {
+                continue;
+            }
+            if attack.retreating
+                || !attack.troops.is_finite()
+                || attack.troops <= 0.0
+                || !can_finish_attack_pair(
+                    &self.state,
+                    &self.campaign_relations,
+                    attack.owner_id,
+                    attack.target_owner,
+                )
+            {
+                continue;
+            }
+            if !self
+                .state
+                .player(attack.target_owner)
+                .is_some_and(|victim| {
+                    victim.alive
+                        && victim.tile_count > 0
+                        && victim.tile_count <= threshold
+                        && !finish_protected_by_campaign(
+                            attack.target_owner,
+                            held_target,
+                            pre_defeat_targets,
+                            pre_defeat_pending,
+                        )
+                })
+            {
+                continue;
+            }
+            let mut stale_pops = 0;
+            loop {
+                if let Some(tile) = attack.to_conquer.peek()
+                    && has_valid_finishing_contact(
+                        &self.state,
+                        &self.campaign_relations,
+                        attack,
+                        tile,
+                    )
+                {
+                    forces.push(FinishingForce {
+                        victim_id: attack.target_owner,
+                        owner_id: attack.owner_id,
+                        attack_id: attack.id,
+                        troops: attack.troops,
+                        active_contact: true,
+                    });
+                    break;
+                }
+                if attack.to_conquer.pop().is_none() {
+                    break;
+                }
+                stale_pops += 1;
+                if stale_pops > 256 {
+                    break;
+                }
+            }
+        }
+
+        forces.retain(|force| {
+            candidates.contains(u32::from(force.victim_id))
+                && force.troops.is_finite()
+                && force.troops > 0.0
+                && can_finish_attack_pair(
+                    &self.state,
+                    &self.campaign_relations,
+                    force.owner_id,
+                    force.victim_id,
+                )
+        });
+        // Prefer the final active force over its earlier threshold-crossing snapshot.
+        forces.sort_unstable_by_key(|force| {
+            (force.victim_id, force.attack_id, !force.active_contact)
+        });
+        forces.dedup_by_key(|force| (force.victim_id, force.attack_id));
+        forces.sort_unstable_by_key(|force| (force.victim_id, force.owner_id, force.attack_id));
+
+        let mut force_cursor = 0;
+        let mut finished_victims = Vec::new();
+        for victim_id in candidates.ones().map(|id| id as u16) {
+            while force_cursor < forces.len() && forces[force_cursor].victim_id < victim_id {
+                force_cursor += 1;
+            }
+            let start = force_cursor;
+            while force_cursor < forces.len() && forces[force_cursor].victim_id == victim_id {
+                force_cursor += 1;
+            }
+            let end = force_cursor;
+
+            let Some(victim) = self.state.player(victim_id) else {
+                continue;
+            };
+            if !victim.alive
+                || victim.tile_count == 0
+                || victim.tile_count > threshold
+                || finish_protected_by_campaign(
+                    victim_id,
+                    held_target,
+                    pre_defeat_targets,
+                    pre_defeat_pending,
+                )
+            {
+                continue;
+            };
+
+            let mut participants: Vec<(u16, f64)> = Vec::new();
+            for force in &forces[start..end] {
+                if !can_finish_attack_pair(
+                    &self.state,
+                    &self.campaign_relations,
+                    force.owner_id,
+                    victim_id,
+                ) {
+                    continue;
+                }
+                if let Some((owner_id, troops)) = participants.last_mut()
+                    && *owner_id == force.owner_id
+                {
+                    *troops += force.troops;
+                } else {
+                    participants.push((force.owner_id, force.troops));
+                }
+            }
+            if participants.is_empty() {
+                continue;
+            }
+
+            let Some((killer_id, _)) = participants.iter().copied().max_by(|first, second| {
+                first
+                    .1
+                    .total_cmp(&second.1)
+                    .then_with(|| second.0.cmp(&first.0))
+            }) else {
+                continue;
+            };
+            let tile_count = victim.tile_count as usize;
+            let Some(tiles) = self.collect_small_player_tiles(victim_id, tile_count) else {
+                continue;
+            };
+            let quotas = finishing_tile_quotas(&participants, tile_count);
+            let mut tile_owners = Vec::with_capacity(tile_count);
+            for (owner_id, quota) in quotas {
+                tile_owners.extend(std::iter::repeat_n(owner_id, quota));
+            }
+            if tile_owners.len() != tile_count {
+                continue;
+            }
+            let transfers: Vec<(u32, u16)> = tiles.into_iter().zip(tile_owners).collect();
+            let Some(tile) = transfers
+                .iter()
+                .find_map(|(tile, owner)| (*owner == killer_id).then_some(*tile))
+                .or_else(|| transfers.first().map(|(tile, _)| *tile))
+            else {
+                continue;
+            };
+            if !self
+                .state
+                .capture_tiles_for_execution(victim_id, &transfers)
+            {
+                continue;
+            }
+
+            let x = tile % self.state.map.width;
+            let y = tile / self.state.map.width;
+            crate::execution::hero_effects::recruit_conquered_reserves(
+                &mut self.state,
+                killer_id,
+                victim_id,
+                (x, y),
+                None,
+            );
+            let participant_ids: Vec<u16> = participants.iter().map(|(id, _)| *id).collect();
+            self.eliminate_player_with_assists(victim_id, killer_id, x, y, false, &participant_ids);
+            finished_victims.push(victim_id);
+        }
+
+        if !finished_victims.is_empty() {
+            self.retire_finished_combat_forces(&finished_victims);
+        }
+    }
+
+    fn collect_small_player_tiles(
+        &self,
+        player_id: u16,
+        expected_count: usize,
+    ) -> Option<Vec<u32>> {
+        if expected_count == 0
+            || expected_count > FINISHING_TILES_MAX_COUNT
+            || self.state.map.width == 0
+        {
+            return None;
+        }
+        let player = self.state.player(player_id)?;
+        let mut seen = HashSet::with_capacity(expected_count);
+        let mut tiles = Vec::with_capacity(expected_count);
+        let mut cursor = 0;
+        for start in player.border_tiles.ones() {
+            if self
+                .state
+                .map
+                .owner_id(start % self.state.map.width, start / self.state.map.width)
+                != player_id
+                || !seen.insert(start)
+            {
+                continue;
+            }
+            if tiles.len() == expected_count {
+                return None;
+            }
+            tiles.push(start);
+            while cursor < tiles.len() {
+                let tile = tiles[cursor];
+                cursor += 1;
+                self.state.map.for_each_neighbor4(
+                    tile % self.state.map.width,
+                    tile / self.state.map.width,
+                    |x, y| {
+                        let neighbor = y * self.state.map.width + x;
+                        if self.state.map.owner_id(x, y) == player_id
+                            && seen.insert(neighbor)
+                            && tiles.len() < expected_count
+                        {
+                            tiles.push(neighbor);
+                        }
+                    },
+                );
+                if seen.len() > expected_count {
+                    return None;
+                }
+            }
+        }
+        if tiles.len() != expected_count {
+            return None;
+        }
+        tiles.sort_unstable();
+        Some(tiles)
+    }
+
+    fn retire_finished_combat_forces(&mut self, victims: &[u16]) {
+        let mut defeated = DenseBitSet::new();
+        for &victim in victims {
+            defeated.insert(u32::from(victim));
+        }
+
+        let mut attack_removals = Vec::new();
+        for (index, attack) in self.attacks.iter().enumerate() {
+            if defeated.contains(u32::from(attack.owner_id)) {
+                attack_removals.push(index);
+            } else if defeated.contains(u32::from(attack.target_owner)) {
+                if attack.troops.is_finite()
+                    && attack.troops > 0.0
+                    && self
+                        .state
+                        .player(attack.owner_id)
+                        .is_some_and(|player| player.alive)
+                    && let Some(player) = self.state.player_mut(attack.owner_id)
+                {
+                    player.credit_troops_capped(attack.troops, player.max_troops);
+                }
+                attack_removals.push(index);
+            }
+        }
+        let had_attack_removals = !attack_removals.is_empty();
+        for index in attack_removals.into_iter().rev() {
+            self.attacks.swap_remove(index);
+        }
+        if had_attack_removals {
+            self.attacks.sort_unstable_by_key(|attack| attack.id);
+            self.ai_attack_index_dirty = true;
+        }
+
+        let mut fleet_removals = Vec::new();
+        for (index, fleet) in self.fleets.iter().enumerate() {
+            if defeated.contains(u32::from(fleet.owner_id)) {
+                fleet_removals.push(index);
+            } else if fleet.unit_type == crate::game::UnitType::TransportShip
+                && defeated.contains(u32::from(fleet.target_owner))
+            {
+                if fleet.troops.is_finite()
+                    && fleet.troops > 0.0
+                    && self
+                        .state
+                        .player(fleet.owner_id)
+                        .is_some_and(|player| player.alive)
+                    && let Some(player) = self.state.player_mut(fleet.owner_id)
+                {
+                    player.credit_troops_capped(fleet.troops, player.max_troops);
+                }
+                fleet_removals.push(index);
+            }
+        }
+        for index in fleet_removals.into_iter().rev() {
+            self.fleets.swap_remove(index);
+        }
+        self.fleets.sort_unstable_by_key(|fleet| fleet.id);
     }
 
     fn border_clusters(&self, player_id: u16) -> Vec<BorderCluster> {
@@ -774,6 +1263,7 @@ impl SowEngine {
         let map_h = self.state.map.height;
 
         let tick_now = self.state.tick;
+        let finish_threshold = finishing_tile_threshold(tick_now, self.state.config.tick_rate_ms);
         let return_min_ticks = (3_000.0 / self.state.config.tick_rate_ms.max(1.0)).ceil() as u64;
         let return_window_ticks =
             (30_000.0 / self.state.config.tick_rate_ms.max(1.0)).ceil() as u64;
@@ -822,8 +1312,17 @@ impl SowEngine {
         let mut elimination_candidates = Vec::new();
         let mut territory_changes = Vec::new();
         let mut to_remove = Vec::new();
+        let mut finishing_victims = DenseBitSet::new();
+        let mut threshold_crossing_forces = Vec::new();
 
         for i in 0..self.attacks.len() {
+            let owner_id = self.attacks[i].owner_id;
+            let target_owner = self.attacks[i].target_owner;
+            if finishing_victims.contains(u32::from(owner_id))
+                || finishing_victims.contains(u32::from(target_owner))
+            {
+                continue;
+            }
             // Need to borrow state and buildings mutably but not the entire self array
             // Actually, we can borrow state and defense grid and attacks[i] simultaneously
             let retreat = &self.attacks[i];
@@ -1065,6 +1564,7 @@ impl SowEngine {
 
             let mut stale_pops = 0u32;
             let max_stale_pops = 256;
+            let mut finish_eligibility_checked = false;
 
             loop {
                 if held_target == Some(execution.target_owner)
@@ -1087,7 +1587,7 @@ impl SowEngine {
                     to_remove.push(i);
                     break;
                 }
-                if budget <= 0.0 || stale_pops > max_stale_pops {
+                if stale_pops > max_stale_pops {
                     break;
                 }
 
@@ -1149,6 +1649,40 @@ impl SowEngine {
                         execution.to_conquer.push(target_tile);
                         break;
                     }
+                    let committed_force = execution.troops;
+
+                    if !finish_eligibility_checked {
+                        finish_eligibility_checked = true;
+                        let protected = finish_protected_by_campaign(
+                            execution.target_owner,
+                            held_target,
+                            &pre_defeat_targets,
+                            pre_defeat_pending,
+                        );
+                        if !protected
+                            && can_finish_attack_pair(
+                                &self.state,
+                                &self.campaign_relations,
+                                execution.owner_id,
+                                execution.target_owner,
+                            )
+                            && self
+                                .state
+                                .player(execution.target_owner)
+                                .is_some_and(|target| {
+                                    target.tile_count > 0 && target.tile_count <= finish_threshold
+                                })
+                        {
+                            finishing_victims.insert(u32::from(execution.target_owner));
+                            execution.to_conquer.push(target_tile);
+                            break;
+                        }
+                    }
+
+                    if budget <= 0.0 {
+                        execution.to_conquer.push(target_tile);
+                        break;
+                    }
 
                     if defense_strength != 1.0 {
                         self.state.announce_leader_ability_to(
@@ -1181,18 +1715,20 @@ impl SowEngine {
                         &self.state.config,
                     );
 
+                    let mut defender_tile_count = 0;
                     let tile_cost = if execution.target_owner == 0 {
                         let speed_term = base_speed.max(10.0);
                         let raw_cost =
                             ((2000.0 * speed_term) / effective_troops) * capture_cost_factor;
                         raw_cost.clamp(5.0, 100.0)
                     } else {
-                        let defender_troops = self
+                        let (defender_troops, tile_count) = self
                             .state
                             .player(execution.target_owner)
-                            .map(|p| p.troops.max(0.0))
-                            .unwrap_or(1.0)
-                            .max(1.0);
+                            .map(|player| (player.troops.max(0.0), player.tile_count))
+                            .unwrap_or((1.0, 0));
+                        defender_tile_count = tile_count;
+                        let defender_troops = defender_troops.max(1.0);
                         let ratio = defender_troops / (5.0 * effective_troops);
                         let ratio_clamp = ratio.clamp(0.2, 1.5);
                         ratio_clamp * base_speed * defense.capture_multiplier * capture_cost_factor
@@ -1599,6 +2135,32 @@ impl SowEngine {
                         previous_owner: execution.target_owner,
                         troops: execution.troops,
                     });
+
+                    if execution.target_owner != 0
+                        && defender_tile_count == finish_threshold.saturating_add(1)
+                        && !finish_protected_by_campaign(
+                            execution.target_owner,
+                            held_target,
+                            &pre_defeat_targets,
+                            pre_defeat_pending,
+                        )
+                        && can_finish_attack_pair(
+                            &self.state,
+                            &self.campaign_relations,
+                            execution.owner_id,
+                            execution.target_owner,
+                        )
+                    {
+                        finishing_victims.insert(u32::from(execution.target_owner));
+                        threshold_crossing_forces.push(FinishingForce {
+                            victim_id: execution.target_owner,
+                            owner_id: execution.owner_id,
+                            attack_id: execution.id,
+                            troops: committed_force,
+                            active_contact: false,
+                        });
+                        break;
+                    }
                 } else {
                     let refund = execution.troops.max(0.0);
                     if refund > 0.0
@@ -1624,9 +2186,17 @@ impl SowEngine {
         }
 
         elimination_candidates.extend(
-            self.annex_enclosed_components(territory_changes)
-                .into_iter()
-                .map(|(victim, conqueror, x, y)| (victim, conqueror, x, y, None)),
+            self.annex_enclosed_components_with_finishes(
+                territory_changes,
+                finishing_victims,
+                threshold_crossing_forces,
+                finish_threshold,
+                held_target,
+                &pre_defeat_targets,
+                pre_defeat_pending,
+            )
+            .into_iter()
+            .map(|(victim, conqueror, x, y)| (victim, conqueror, x, y, None)),
         );
         for (victim, conqueror, x, y, last_defenders) in elimination_candidates {
             crate::execution::hero_effects::recruit_conquered_reserves(
@@ -1647,8 +2217,8 @@ impl SowEngine {
 mod tests {
     use super::{
         CAPTURE_COST_VARIATION, CAPTURE_COST_VARIATION_SALT, NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
-        attack_pacing_multiplier, neutral_expansion_pacing_multiplier, occupied_land_share,
-        terrain_capture_speed, terrain_loss_multiplier,
+        attack_pacing_multiplier, finishing_tile_threshold, neutral_expansion_pacing_multiplier,
+        occupied_land_share, terrain_capture_speed, terrain_loss_multiplier,
     };
     use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
@@ -1656,11 +2226,459 @@ mod tests {
     use crate::game_config::{GameConfig, max_tiles_cap_for_troops};
     use crate::geo_entities::Target;
     use crate::map::{MapTile, TerrainType};
-    use crate::player::Player;
+    use crate::player::{Player, PlayerType};
     use crate::rng::NextIntExt;
     use crate::water_components::WaterComponents;
     use std::collections::{BinaryHeap, HashSet};
     use wyrand::WyRand;
+
+    fn finishing_fixture(
+        victim_id: u16,
+        victim_tiles: &[(u32, u32)],
+        attacker_tiles: &[(u16, u32, u32)],
+    ) -> crate::engine::SowEngine {
+        let mut config = GameConfig {
+            random_spawn: true,
+            tick_rate_ms: 100.0,
+            global_speed_multiplier: 0.0,
+            ..Default::default()
+        };
+        config.bot_difficulty = crate::game_config::BotDifficulty::Vanilla;
+        let mut state = GameState::new(3, 64, 32, config);
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        let mut player_ids = vec![victim_id];
+        player_ids.extend(attacker_tiles.iter().map(|(id, _, _)| *id));
+        player_ids.sort_unstable();
+        player_ids.dedup();
+        for id in player_ids {
+            let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+            player.troops = 10_000.0;
+            player.max_troops = 20_000.0;
+            state.register_player(player);
+        }
+        for &(owner_id, x, y) in attacker_tiles {
+            state.set_tile_owner(x, y, owner_id);
+        }
+        for &(x, y) in victim_tiles {
+            state.set_tile_owner(x, y, victim_id);
+        }
+        state.map.compute_shorelines();
+        crate::engine::SowEngine::new(state, WaterComponents::default())
+    }
+
+    fn add_test_attack(
+        engine: &mut crate::engine::SowEngine,
+        id: u64,
+        owner_id: u16,
+        target_owner: u16,
+        troops: f64,
+        target_tile: (u32, u32),
+    ) {
+        engine.add_attack(AttackExecution {
+            id,
+            owner_id,
+            target_owner,
+            created_tick: 0,
+            troops,
+            to_conquer: BinaryHeap::from([PrioritizedTile {
+                priority: i64::MAX,
+                insert_seq: id as u32,
+                x: target_tile.0,
+                y: target_tile.1,
+            }]),
+            insert_seq_counter: 1,
+            rng: WyRand::new(id),
+            retreating: false,
+            landed: false,
+        });
+    }
+
+    fn scattered_victim_tiles(count: usize) -> Vec<(u32, u32)> {
+        (0..count)
+            .map(|index| {
+                if index == 0 {
+                    (10, 10)
+                } else {
+                    (20 + index as u32 * 3, 20)
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn finishing_threshold_interpolates_at_simulation_time_boundaries() {
+        for (tick, expected) in [
+            (0, 8),
+            (899, 9),
+            (900, 10),
+            (1_799, 11),
+            (1_800, 12),
+            (2_400, 18),
+            (2_999, 23),
+            (3_000, 24),
+            (10_000, 24),
+        ] {
+            assert_eq!(
+                finishing_tile_threshold(tick, 100.0),
+                expected,
+                "tick={tick}"
+            );
+        }
+        assert_eq!(finishing_tile_threshold(900, 200.0), 12);
+        assert_eq!(finishing_tile_threshold(1_800, 200.0), 24);
+    }
+
+    #[test]
+    fn eight_or_fewer_tiles_finish_under_attack_for_every_entity_type_and_difficulty() {
+        use crate::game_config::BotDifficulty::{Terminator, Vanilla};
+
+        for difficulty in [Vanilla, Terminator] {
+            for player_type in [PlayerType::Human, PlayerType::Nation, PlayerType::Bot] {
+                for tile_count in [7, 8, 9] {
+                    let victim_tiles = scattered_victim_tiles(tile_count);
+                    let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
+                    engine.state.config.bot_difficulty = difficulty;
+                    engine.state.player_mut(2).unwrap().player_type = player_type;
+                    add_test_attack(&mut engine, 1, 1, 2, 500.0, (10, 10));
+
+                    engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+
+                    let victim = engine.state.player(2).unwrap();
+                    assert_eq!(
+                        victim.alive,
+                        tile_count > 8,
+                        "{difficulty:?}/{player_type:?}/{tile_count}"
+                    );
+                    assert_eq!(victim.deaths, u32::from(tile_count <= 8));
+                    if tile_count <= 8 {
+                        assert_eq!(victim.tile_count, 0);
+                        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+                        assert_eq!(
+                            engine
+                                .state
+                                .events
+                                .iter()
+                                .filter(|event| matches!(
+                                    event,
+                                    GameEvent::TileCaptured {
+                                        previous_owner: 2,
+                                        ..
+                                    }
+                                ))
+                                .count(),
+                            tile_count as usize
+                        );
+                    } else {
+                        assert_eq!(victim.tile_count, tile_count as u32);
+                        assert_eq!(engine.state.player(1).unwrap().kills, 0);
+                        assert!(engine.state.events.iter().all(|event| !matches!(
+                            event,
+                            GameEvent::PlayerEliminated { player_id: 2, .. }
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn small_unattacked_owners_and_neutral_expansion_alone_do_not_finish() {
+        let victim_tiles = scattered_victim_tiles(8);
+        let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 8, 10)]);
+        let (_, neutral_capture) = engine.state.set_tile_owner_for_execution(9, 10, 1);
+        engine.annex_enclosed_components(neutral_capture.into_iter().collect());
+        assert!(engine.state.player(2).unwrap().alive);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 8);
+        assert_eq!(engine.state.player(1).unwrap().kills, 0);
+    }
+
+    #[test]
+    fn rising_threshold_finishes_a_target_that_remained_under_attack() {
+        let victim_tiles = scattered_victim_tiles(12);
+        let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
+        engine.state.tick = 1_799;
+        add_test_attack(&mut engine, 1, 1, 2, 500.0, (10, 10));
+
+        engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+        assert!(engine.state.player(2).unwrap().alive);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 12);
+        assert_eq!(engine.attacks.len(), 1);
+
+        engine.state.tick = 1_800;
+        engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+        assert!(!engine.state.player(2).unwrap().alive);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 0);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+    }
+
+    #[test]
+    fn conquest_that_crosses_the_threshold_finishes_in_the_same_batch() {
+        let victim_tiles = scattered_victim_tiles(9);
+        let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
+        engine.state.config.global_speed_multiplier = 1.0;
+        engine.state.player_mut(2).unwrap().troops = 0.0;
+        engine.add_attack(AttackExecution {
+            id: 1,
+            owner_id: 1,
+            target_owner: 2,
+            created_tick: 0,
+            troops: 1_000_000.0,
+            to_conquer: BinaryHeap::from([PrioritizedTile {
+                priority: i64::MAX,
+                insert_seq: 0,
+                x: 10,
+                y: 10,
+            }]),
+            insert_seq_counter: 1,
+            rng: WyRand::new(1),
+            retreating: false,
+            landed: false,
+        });
+
+        engine.execute_combat_using(|_, _| 1, |_, _, _| 100.0);
+
+        assert!(!engine.state.player(2).unwrap().alive);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 0);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+        assert_eq!(engine.state.player(1).unwrap().tile_count, 11);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(
+                    event,
+                    GameEvent::TileCaptured {
+                        previous_owner: 2,
+                        ..
+                    }
+                ))
+                .count(),
+            9
+        );
+    }
+
+    #[test]
+    fn split_is_proportional_and_covers_scattered_coastal_components_once() {
+        let victim_tiles = [
+            (10, 10),
+            (18, 10),
+            (24, 20),
+            (27, 20),
+            (30, 20),
+            (33, 20),
+            (36, 20),
+            (39, 20),
+            (42, 20),
+            (45, 20),
+            (48, 20),
+            (51, 20),
+        ];
+        let attacker_tiles = [(1, 9, 10), (1, 17, 10), (2, 19, 10)];
+        let mut engine = finishing_fixture(3, &victim_tiles, &attacker_tiles);
+        for (index, &(x, y)) in victim_tiles.iter().enumerate() {
+            if index >= 2 && index % 3 == 2 {
+                engine.state.map.terrain[(y * engine.state.map.width + (x - 1)) as usize] =
+                    MapTile::from_byte(0x20);
+            }
+        }
+        engine.state.map.compute_shorelines();
+        assert!(
+            engine.state.map.terrain[(20 * engine.state.map.width + 24) as usize].is_shoreline()
+        );
+        engine.state.tick = 1_800;
+        add_test_attack(&mut engine, 1, 1, 3, 450.0, (10, 10));
+        add_test_attack(&mut engine, 2, 1, 3, 450.0, (18, 10));
+        add_test_attack(&mut engine, 3, 2, 3, 300.0, (18, 10));
+
+        engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+
+        assert!(!engine.state.player(3).unwrap().alive);
+        assert_eq!(engine.state.player(1).unwrap().tile_count, 9);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 3);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+        assert_eq!(engine.state.player(2).unwrap().assists, 1);
+        let captured = engine
+            .state
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                GameEvent::TileCaptured {
+                    new_owner,
+                    previous_owner: 3,
+                    ..
+                } => Some(*new_owner),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(captured.iter().filter(|&&owner| owner == 1).count(), 9);
+        assert_eq!(captured.iter().filter(|&&owner| owner == 2).count(), 3);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::PlayerEliminated { player_id: 3, .. }))
+                .count(),
+            1
+        );
+
+        engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::PlayerEliminated { player_id: 3, .. }))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn zero_tile_quota_attackers_still_receive_assist_rewards() {
+        let victim_tiles = [(10, 10), (14, 10)];
+        let attacker_tiles = [(1, 9, 10), (2, 13, 10), (3, 9, 11), (4, 13, 11)];
+        let mut engine = finishing_fixture(5, &victim_tiles, &attacker_tiles);
+        for (id, tile) in [(1, (10, 10)), (3, (10, 10)), (2, (14, 10)), (4, (14, 10))] {
+            add_test_attack(&mut engine, u64::from(id), id, 5, 100.0, tile);
+        }
+        add_test_attack(&mut engine, 10, 5, 0, 100.0, (15, 10));
+        let abandoned_landing = 25 * engine.state.map.width + 50;
+        engine.add_fleet(crate::warp_fleet::WarpFleet::new(
+            1,
+            5,
+            0,
+            crate::game::UnitType::TransportShip,
+            50.0,
+            (2, abandoned_landing),
+            vec![2, abandoned_landing],
+        ));
+        engine.add_fleet(crate::warp_fleet::WarpFleet::new(
+            2,
+            2,
+            5,
+            crate::game::UnitType::TransportShip,
+            50.0,
+            (3, abandoned_landing),
+            vec![3, abandoned_landing],
+        ));
+        let initial_gold: Vec<f64> = (1..=4)
+            .map(|id| engine.state.player(id).unwrap().gold)
+            .collect();
+
+        engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+
+        assert!(!engine.state.player(5).unwrap().alive);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+        assert_eq!(engine.state.player(1).unwrap().tile_count, 1);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 1);
+        for id in 2..=4 {
+            let player = engine.state.player(id).unwrap();
+            assert_eq!(player.assists, 1, "player {id}");
+            assert_eq!(
+                player.gold - initial_gold[id as usize - 1],
+                50.0,
+                "player {id}"
+            );
+        }
+        assert_eq!(
+            engine.state.player(1).unwrap().gold - initial_gold[0],
+            150.0
+        );
+        assert!(
+            engine
+                .state
+                .players
+                .iter()
+                .all(|player| { player.tile_conquests.get(&5).is_none() })
+        );
+        assert!(engine.attacks.is_empty());
+        assert!(engine.fleets.is_empty());
+        for _ in 0..10 {
+            engine.execute_fleets();
+        }
+        assert_eq!(
+            engine.state.map.owner_id(
+                abandoned_landing % engine.state.map.width,
+                abandoned_landing / engine.state.map.width
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn teams_alliances_campaign_holds_and_non_enemy_relations_block_finishing() {
+        use crate::protocol::{CampaignRelation, Team};
+
+        let victim_tiles = scattered_victim_tiles(8);
+        for protection in [
+            "same_team",
+            "allied",
+            "hold_last_tile",
+            "watched",
+            "pending",
+            "campaign_neutral",
+            "campaign_allied",
+        ] {
+            let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
+            match protection {
+                "same_team" => {
+                    engine.state.player_mut(1).unwrap().team = Some(Team::Blue);
+                    engine.state.player_mut(2).unwrap().team = Some(Team::Blue);
+                }
+                "allied" => engine.state.player_mut(1).unwrap().alliances.push(2),
+                "hold_last_tile" => {
+                    engine.campaign_assault = Some(crate::engine::CampaignAssaultState {
+                        root_target: 2,
+                        team: Team::Red,
+                        include_allies: true,
+                        preserve_relation: false,
+                        hold_last_tile: true,
+                        capacity_ratio: 1.0,
+                        interval_ticks: 100,
+                        next_tick: 100,
+                        phase_index: 0,
+                        attacker_ids: vec![1],
+                        target_ids: vec![2],
+                        wave_index: 0,
+                        cycle_released_troops: Default::default(),
+                        target_last_dispatched_wave: Default::default(),
+                        focus_targets: Default::default(),
+                        reserve_spawned: false,
+                    });
+                }
+                "watched" => {
+                    engine.campaign_pre_defeat_targets.insert(2);
+                }
+                "pending" => engine.campaign_pre_defeat_pending = Some(2),
+                "campaign_neutral" => {
+                    engine
+                        .campaign_relations
+                        .insert(1, CampaignRelation::Neutral);
+                }
+                "campaign_allied" => {
+                    engine
+                        .campaign_relations
+                        .insert(1, CampaignRelation::Allied);
+                }
+                _ => unreachable!(),
+            }
+            add_test_attack(&mut engine, 1, 1, 2, 500.0, (10, 10));
+
+            engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+
+            assert!(engine.state.player(2).unwrap().alive, "{protection}");
+            assert_eq!(
+                engine.state.player(2).unwrap().tile_count,
+                8,
+                "{protection}"
+            );
+            assert_eq!(engine.state.player(1).unwrap().kills, 0, "{protection}");
+        }
+    }
 
     #[test]
     #[ignore = "wall-clock benchmark; run in release with --ignored --nocapture --test-threads=1"]
@@ -1670,10 +2688,11 @@ mod tests {
 
         const WIDTH: u32 = 512;
         const SAMPLES: usize = 201;
-        for (name, enemy_x, captures) in [
-            ("open-neutral", 256, 256),
-            ("large-open-frontier", 34, 1),
-            ("same-victim-batch", 34, 256),
+        for (name, enemy_x, captures, expected_captures, target_owner) in [
+            ("open-neutral", 256, 256, 256, 0),
+            ("large-open-frontier", 34, 1, 1, 0),
+            ("same-victim-batch", 34, 256, 256, 0),
+            ("pvp-open-frontier", 34, 256, 291, 2),
         ] {
             let mut state = GameState::new(
                 7,
@@ -1695,6 +2714,11 @@ mod tests {
             for y in 1..WIDTH - 1 {
                 state.set_tile_owner(32, y, 1);
             }
+            if target_owner == 2 {
+                for y in 1..WIDTH - 1 {
+                    state.set_tile_owner(33, y, 1);
+                }
+            }
             for y in 8..WIDTH - 8 {
                 for x in enemy_x..WIDTH - 8 {
                     state.set_tile_owner(x, y, 2);
@@ -1706,14 +2730,14 @@ mod tests {
                 landed: false,
                 id: 1,
                 owner_id: 1,
-                target_owner: 0,
+                target_owner,
                 created_tick: 0,
                 troops: 1_000_000.0,
                 to_conquer: (0..captures)
                     .map(|seq| PrioritizedTile {
                         priority: i64::MAX,
                         insert_seq: seq,
-                        x: 33,
+                        x: if target_owner == 0 { 33 } else { enemy_x },
                         y: 128 + seq,
                     })
                     .collect(),
@@ -1737,7 +2761,7 @@ mod tests {
                         .iter()
                         .filter(|event| matches!(event, GameEvent::TileCaptured { .. }))
                         .count(),
-                    captures as usize,
+                    expected_captures as usize,
                     "{name}: benchmark workload changed"
                 );
                 assert!(engine.state.player(2).unwrap().alive);
@@ -1747,7 +2771,103 @@ mod tests {
             }
             samples.sort_unstable();
             println!(
-                "neutral annexation {name}: captures={captures} border={border_tiles} median={}ns p95={}ns",
+                "neutral annexation {name}: captures={expected_captures} border={border_tiles} median={}ns p95={}ns",
+                samples[SAMPLES / 2],
+                samples[SAMPLES * 95 / 100]
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "wall-clock benchmark; run in release with --ignored --nocapture --test-threads=1"]
+    fn progressive_finish_combat_benchmark() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        fn build_engine(
+            victims: usize,
+            tiles_per_victim: usize,
+            tick: u64,
+        ) -> crate::engine::SowEngine {
+            let config = GameConfig {
+                random_spawn: true,
+                tick_rate_ms: 100.0,
+                global_speed_multiplier: 0.0,
+                ..Default::default()
+            };
+            let mut state = GameState::new(11, 512, 512, config);
+            state.phase = GamePhase::Playing;
+            state.tick = tick;
+            state.map.terrain.fill(MapTile::from_byte(0x80));
+            let player_count = if victims == 1 {
+                2
+            } else {
+                (victims * 2) as u16
+            };
+            for id in 1..=player_count {
+                state.register_player(Player::new_human(
+                    id,
+                    format!("P{id}"),
+                    [1.0; 3],
+                    &state.config,
+                ));
+            }
+            let mut attacks = Vec::with_capacity(victims);
+            for index in 0..victims {
+                let (attacker_id, victim_id, x, y) = if victims == 1 {
+                    (1, 2, 50, 100)
+                } else {
+                    let x = 8 + (index as u32 % 16) * 30;
+                    let y = 8 + (index as u32 / 16) * 30;
+                    ((index * 2 + 1) as u16, (index * 2 + 2) as u16, x, y)
+                };
+                state.set_tile_owner(x + 1, y, attacker_id);
+                for tile in 0..tiles_per_victim {
+                    state.set_tile_owner(x + 2 + tile as u32 * 2, y, victim_id);
+                }
+                attacks.push((attacker_id, victim_id, x + 2, y));
+            }
+            let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+            for (index, (attacker_id, victim_id, x, y)) in attacks.into_iter().enumerate() {
+                add_test_attack(
+                    &mut engine,
+                    index as u64 + 1,
+                    attacker_id,
+                    victim_id,
+                    1_000.0,
+                    (x, y),
+                );
+            }
+            engine
+        }
+
+        const SAMPLES: usize = 201;
+        for (name, victims, tiles_per_victim, tick) in [
+            ("24-scattered", 1, 24, 3_000),
+            ("simultaneous-64", 64, 8, 0),
+        ] {
+            let template = build_engine(victims, tiles_per_victim, tick);
+            let mut samples = Vec::with_capacity(SAMPLES);
+            for sample in 0..SAMPLES + 16 {
+                let mut engine = template.clone();
+                let started = Instant::now();
+                engine.execute_combat();
+                let elapsed = started.elapsed().as_nanos();
+                black_box(&engine);
+                let defeated = engine
+                    .state
+                    .players
+                    .iter()
+                    .filter(|player| !player.alive && player.id % 2 == 0)
+                    .count();
+                assert_eq!(defeated, victims, "{name}: finish count changed");
+                if sample >= 16 {
+                    samples.push(elapsed);
+                }
+            }
+            samples.sort_unstable();
+            println!(
+                "progressive finish {name}: victims={victims} tiles_per_victim={tiles_per_victim} median={}ns p95={}ns",
                 samples[SAMPLES / 2],
                 samples[SAMPLES * 95 / 100]
             );

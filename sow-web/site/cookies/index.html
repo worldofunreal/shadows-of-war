@@ -50,7 +50,7 @@
             >
           </h1>
           <p class="guide-lede" data-i18n="site.cookies_updated_v2">
-            Last updated: November 10, 2026 · World of Unreal
+            Last updated: November 13, 2026 · World of Unreal
           </p>
         </div>
       </section>
@@ -63,7 +63,9 @@
               <div>
                 <h3 data-i18n="site.cookies_analytics_title">Optional analytics on our website</h3>
                 <p data-i18n="site.analytics_body">
-                  We use site and game activity to improve Shadows of War. It stays off unless you allow it.
+                  Optional analytics stays off unless you allow it. If you do, a random ID is stored in this
+                  browser for up to 90 days to measure return visits; it is not an account ID. Rejecting does
+                  not affect the game.
                 </p>
                 <ul
                   style="
@@ -83,8 +85,10 @@
                   <li data-i18n="site.cookies_analytics_server">
                     After consent, accepted events go only to our first-party endpoint at <code>/api/event</code>.
                     They do not pass through the game relay and do not include account/player or match/lobby IDs.
-                    Each event carries a temporary random session ID for the current browser session. Request IPs
-                    may appear in separate technical security logs, not in analytics event records.
+                    Each event carries a temporary random session ID for the current browser session. A separate
+                    random browser ID stays in local storage for up to 90 days and is sent only to measure returns;
+                    the server derives a pseudonym, and the ID is not included in event records. Request IPs may
+                    appear in separate technical security logs, not in analytics event records.
                   </li>
                 </ul>
               </div>
@@ -95,13 +99,13 @@
               <div>
                 <h3 data-i18n="site.cookies_storage_title">Browser storage and retention</h3>
                 <p data-i18n="site.cookies_storage_body">
-                  We remember your accept/reject choice in local storage. Only after acceptance, a temporary
-                  session ID and a small retry queue use session storage. Analytics also includes the build,
-                  language and a broad screen class (mobile, tablet or desktop), not a full user-agent string.
-                  Event files and memberships expire within 90 days. Verified account deletion removes linked
-                  event rows and account memberships; non-identifying daily totals expire within the same 90
-                  days. Game settings, account continuity, crash recovery and cached assets use separate
-                  storage needed for those features.
+                  We remember your accept/reject choice locally. Only after acceptance, a random browser ID
+                  stays in local storage for up to 90 days; a temporary session ID and small retry queue use
+                  session storage. Analytics includes the build, language and broad screen class, not the full
+                  user-agent. Event files and browser return cohorts expire within 90 days. Verified account
+                  deletion removes older linked event rows and account memberships; browser cohorts are not
+                  linked to accounts. Game settings, account continuity, crash recovery and cached assets use
+                  separate storage needed for those features.
                 </p>
               </div>
             </article>
