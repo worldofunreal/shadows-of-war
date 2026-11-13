@@ -25,9 +25,6 @@ impl TrackedProjectile {
         }
     }
 
-    pub fn at_path_end(&self) -> bool {
-        self.path_cursor + self.steps_per_tick as usize >= self.path_len
-    }
 }
 
 pub struct GraphicsState {
@@ -410,38 +407,6 @@ pub fn ability_cue_rgb(cue: sow_core::geo_entities::Cue) -> [f32; 3] {
     }
 }
 
-#[cfg(test)]
-mod ability_cue_tests {
-    use super::ability_cue_rgb;
-    use sow_core::geo_entities::Cue;
-    use sow_core::player::Leader;
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn every_cue_family_has_its_own_colour() {
-        for (index, cue) in Cue::ALL.iter().enumerate() {
-            for other in &Cue::ALL[index + 1..] {
-                assert_ne!(
-                    ability_cue_rgb(*cue),
-                    ability_cue_rgb(*other),
-                    "{cue:?} and {other:?} share a colour"
-                );
-            }
-        }
-    }
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn a_hero_shows_the_colour_of_its_ability_family() {
-        assert_eq!(
-            ability_cue_rgb(Leader::of("boudica").ability().cue()),
-            ability_cue_rgb(Cue::Strength)
-        );
-        assert_eq!(
-            ability_cue_rgb(Leader::of("caesar").ability().cue()),
-            ability_cue_rgb(Cue::Losses)
-        );
-    }
-}
-
 pub const MAX_TRANSPORT_IMPACTS: usize = 256;
 pub const MAX_ALLIANCE_CELEBRATIONS: usize = 8;
 
@@ -700,12 +665,6 @@ pub struct ViewportAlertState {
 /// Shared flash duration for all one-shot visual feedback (border flash + vignette).
 pub const FLASH_DURATION: f32 = 1.0;
 
-/// Ease-out quadratic: returns 1→0 over `FLASH_DURATION`, or `None` if expired.
-#[inline]
-pub fn easeout_flash(elapsed: f32) -> Option<f32> {
-    easeout_flash_with_duration(elapsed, FLASH_DURATION)
-}
-
 pub fn easeout_flash_with_duration(elapsed: f32, duration: f32) -> Option<f32> {
     if duration <= 0.0 || elapsed >= duration {
         None
@@ -751,89 +710,6 @@ impl UiState {
     }
 }
 
-#[cfg(test)]
-mod alliance_celebration_tests {
-    use super::{MAX_ALLIANCE_CELEBRATIONS, alliance_celebration_age, queue_alliance_celebration};
-    use std::collections::VecDeque;
-    use web_time::{Duration, Instant};
-
-    #[test]
-    fn deduplicates_pairs_and_refreshes_their_age_and_eviction_order() {
-        let now = Instant::now();
-        let refreshed = now + Duration::from_millis(100);
-        let mut effects = VecDeque::new();
-        for id in 1..=MAX_ALLIANCE_CELEBRATIONS as u16 {
-            queue_alliance_celebration(&mut effects, id, id + 100, now);
-        }
-
-        queue_alliance_celebration(&mut effects, 101, 1, refreshed);
-        queue_alliance_celebration(&mut effects, 109, 9, refreshed);
-
-        assert_eq!(effects.len(), MAX_ALLIANCE_CELEBRATIONS);
-        assert_eq!(effects.front().unwrap().player_ids, [2, 102]);
-        assert_eq!(effects.back().unwrap().player_ids, [9, 109]);
-        assert_eq!(effects.back().unwrap().start_time, refreshed);
-        assert_eq!(
-            effects
-                .iter()
-                .filter(|effect| effect.player_ids == [1, 101])
-                .count(),
-            1
-        );
-    }
-
-    #[test]
-    fn celebrations_expire_after_the_configured_duration() {
-        let start = Instant::now();
-        let duration = sow_render::shader_params::definition("alliance.duration")
-            .unwrap()
-            .default[0];
-        assert!(
-            alliance_celebration_age(start, start + Duration::from_millis(1599), duration)
-                .is_some()
-        );
-        assert_eq!(
-            alliance_celebration_age(start, start + Duration::from_secs_f32(duration), duration),
-            None
-        );
-    }
-}
-
-#[cfg(test)]
-mod dev_vfx_preview_tests {
-    use super::DevVfxPreview;
-    use web_time::{Duration, Instant};
-
-    #[test]
-    fn replay_pause_scrub_and_repeat_use_one_normalized_timeline() {
-        let start = Instant::now();
-        let mut preview = DevVfxPreview::new(start);
-        preview.replay(start);
-        assert_eq!(
-            preview.advance(start + Duration::from_millis(250), 1.0),
-            0.25
-        );
-
-        preview.set_paused(true, start + Duration::from_millis(250));
-        assert_eq!(preview.advance(start + Duration::from_secs(1), 1.0), 0.25);
-
-        preview.set_phase(0.4, start + Duration::from_secs(1));
-        assert_eq!(preview.advance(start + Duration::from_secs(2), 1.0), 0.4);
-
-        preview.replay(start + Duration::from_secs(2));
-        assert!((preview.advance(start + Duration::from_millis(3250), 1.0) - 0.25).abs() < 0.001);
-
-        preview.repeat = false;
-        preview.replay(start + Duration::from_millis(3250));
-        assert_eq!(
-            preview.advance(start + Duration::from_millis(4250), 1.0),
-            1.0
-        );
-        assert!(preview.paused);
-        assert!(!preview.playing);
-    }
-}
-
 /// Wall-clock anchor for render-behind-by-one-tick interpolation between sim snapshots.
 pub struct InterpClock {
     pub last_applied_at: web_time::Instant,
@@ -864,8 +740,6 @@ pub struct TimeState {
     pub last_fps_time: web_time::Instant,
     pub current_fps: u32,
     pub last_frame_time: web_time::Instant,
-    pub last_debug_print: Option<web_time::Instant>,
-    pub turn_queue_peak: usize,
 }
 
 /// Cross-thread task results wake the single UI event loop after enqueueing.

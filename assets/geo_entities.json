@@ -301,18 +301,6 @@
    "territory_color": "#2e47ad"
   },
   {
-   "id": "nation_hatshepsut",
-   "name": "Hatshepsut",
-   "entity": "Ancient Egypt",
-   "role": "nation",
-   "region": "africa",
-   "lat": 25.7206,
-   "lon": 32.6103,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Hatshepsut",
-   "avatar": "hatshepsut"
-  },
-  {
    "id": "nation_amanirenas",
    "name": "Amanirenas",
    "entity": "Kingdom of Kush",
@@ -385,18 +373,6 @@
    "avatar": "askia_muhammad_i"
   },
   {
-   "id": "nation_nefertiti",
-   "name": "Nefertiti",
-   "entity": "Ancient Egypt",
-   "role": "nation",
-   "region": "africa",
-   "lat": 25.7206,
-   "lon": 32.6103,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Nefertiti",
-   "avatar": "nefertiti"
-  },
-  {
    "id": "nation_cleopatra_selene_ii",
    "name": "Cleopatra Selene II",
    "entity": "Ancient Mauretania",
@@ -419,18 +395,6 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Menelik_II",
    "avatar": "menelik_ii"
-  },
-  {
-   "id": "nation_nzinga_mbande",
-   "name": "Nzinga of Ndongo and Matamba",
-   "entity": "Ndongo and Matamba",
-   "role": "nation",
-   "region": "africa",
-   "lat": -9.5,
-   "lon": 15.0,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Nzinga_of_Ndongo_and_Matamba",
-   "avatar": "nzinga_mbande"
   },
   {
    "id": "nation_haile_selassie",
@@ -661,18 +625,6 @@
    "avatar": "dingane"
   },
   {
-   "id": "nation_sarraounia_mangou",
-   "name": "Sarraounia",
-   "entity": "Azna / modern Niger",
-   "role": "nation",
-   "region": "africa",
-   "lat": 17,
-   "lon": 10,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Sarraounia",
-   "avatar": "nation_sarraounia_mangou"
-  },
-  {
    "id": "nation_cetshwayo",
    "name": "Cetshwayo",
    "entity": "Zulu Kingdom",
@@ -769,18 +721,6 @@
    "avatar": "taytu_betul"
   },
   {
-   "id": "nation_ewuare_el_grande",
-   "name": "Ewuare",
-   "entity": "Kingdom of Benin",
-   "role": "nation",
-   "region": "africa",
-   "lat": 9,
-   "lon": 8,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Ewuare",
-   "avatar": "ewuare_el_grande"
-  },
-  {
    "id": "anacaona",
    "name": "Anacaona",
    "entity": "Xaragua / Taíno people",
@@ -862,18 +802,6 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Atahualpa",
    "avatar": "atahualpa"
-  },
-  {
-   "id": "nation_lady_k_ab_al_xook",
-   "name": "Lady Xoc",
-   "entity": "Yaxchilán / Maya world",
-   "role": "nation",
-   "region": "americas",
-   "lat": 16.9,
-   "lon": -90.9667,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Lady_Xoc",
-   "avatar": "lady_k_ab_al_xook"
   },
   {
    "id": "nation_pachacutec",
@@ -1391,18 +1319,6 @@
    "avatar": "darius_i"
   },
   {
-   "id": "nation_emperatriz_suiko",
-   "name": "Empress Suiko",
-   "entity": "Japan",
-   "role": "nation",
-   "region": "asia",
-   "lat": 35,
-   "lon": 136,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Empress_Suiko",
-   "avatar": "emperatriz_suiko"
-  },
-  {
    "id": "nation_chandragupta_maurya",
    "name": "Chandragupta Maurya",
    "entity": "Maurya Empire",
@@ -1437,18 +1353,6 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Akbar",
    "avatar": "akbar"
-  },
-  {
-   "id": "nation_khutulun",
-   "name": "Khutulun",
-   "entity": "Chagatai Khanate",
-   "role": "nation",
-   "region": "asia",
-   "lat": 43.9,
-   "lon": 80.3,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Khutulun",
-   "avatar": "khutulun"
   },
   {
    "id": "nation_babur",
@@ -1497,18 +1401,6 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Kanishka",
    "avatar": "kanishka"
-  },
-  {
-   "id": "nation_rani_lakshmibai",
-   "name": "Lakshmibai, Rani of Jhansi",
-   "entity": "Jhansi / India",
-   "role": "nation",
-   "region": "asia",
-   "lat": 25.3189,
-   "lon": 83.0128,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Lakshmibai%2C_Rani_of_Jhansi",
-   "avatar": "rani_lakshmibai"
   },
   {
    "id": "nation_cleopatra_thea",
@@ -1605,30 +1497,6 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Abbakka_Chowta",
    "avatar": "rani_abbakka_chowta"
-  },
-  {
-   "id": "nation_qin_shi_huang",
-   "name": "Qin Shi Huang",
-   "entity": "China",
-   "role": "nation",
-   "region": "asia",
-   "lat": 36.6116,
-   "lon": 114.4894,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Qin_Shi_Huang",
-   "avatar": "qin_shi_huang"
-  },
-  {
-   "id": "nation_tarabai_bhonsle",
-   "name": "Tarabai",
-   "entity": "Maratha Empire",
-   "role": "nation",
-   "region": "asia",
-   "lat": 17.35,
-   "lon": 74.13,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Tarabai",
-   "avatar": "tarabai_bhonsle"
   },
   {
    "id": "nation_sejong_el_grande",
@@ -1799,18 +1667,6 @@
    "avatar": "rajaraja_i"
   },
   {
-   "id": "nation_suriyothai",
-   "name": "Suriyothai",
-   "entity": "Ayutthaya / Thailand",
-   "role": "nation",
-   "region": "asia",
-   "lat": 14.3594,
-   "lon": 100.5761,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Suriyothai",
-   "avatar": "suriyothai"
-  },
-  {
    "id": "nation_ranjit_singh",
    "name": "Ranjit Singh",
    "entity": "Sikh Empire",
@@ -1884,18 +1740,6 @@
    }
   },
   {
-   "id": "nation_mandukhai_khatun",
-   "name": "Mandukhai",
-   "entity": "Mongolia",
-   "role": "nation",
-   "region": "asia",
-   "lat": 46,
-   "lon": 105,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Mandukhai",
-   "avatar": "mandukhai_khatun"
-  },
-  {
    "id": "nation_shivaji",
    "name": "Shivaji",
    "entity": "Maratha Empire",
@@ -1944,18 +1788,6 @@
    "avatar": "nur_jahan"
   },
   {
-   "id": "nation_timur",
-   "name": "Timur",
-   "entity": "Timurid Empire",
-   "role": "nation",
-   "region": "asia",
-   "lat": 39.05,
-   "lon": 66.8333,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Timur",
-   "avatar": "timur"
-  },
-  {
    "id": "nation_emperatriz_viuda_cixi",
    "name": "Empress Dowager Cixi",
    "entity": "China / Qing dynasty",
@@ -1990,18 +1822,6 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Taj_ul-Alam",
    "avatar": "sultanah_safiatuddin"
-  },
-  {
-   "id": "nation_sargon_akkad",
-   "name": "Sargon of Akkad",
-   "entity": "Akkadian Empire",
-   "role": "nation",
-   "region": "asia",
-   "lat": 33.3,
-   "lon": 44.4,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Sargon_of_Akkad",
-   "avatar": "sargon_akkad"
   },
   {
    "id": "nation_blanca_de_castilla",
@@ -2076,18 +1896,6 @@
    "avatar": "carlomagno"
   },
   {
-   "id": "nation_cartimandua",
-   "name": "Cartimandua",
-   "entity": "Brigantes",
-   "role": "nation",
-   "region": "europe",
-   "lat": 54.0,
-   "lon": -1.5,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Cartimandua",
-   "avatar": "cartimandua"
-  },
-  {
    "id": "nation_alfredo_el_grande",
    "name": "Alfred the Great",
    "entity": "Wessex / England",
@@ -2160,18 +1968,6 @@
    "avatar": "maria_teresa_de_austria"
   },
   {
-   "id": "nation_pedro_el_grande",
-   "name": "Peter the Great",
-   "entity": "Russia",
-   "role": "nation",
-   "region": "europe",
-   "lat": 55.7506,
-   "lon": 37.6175,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Peter_the_Great",
-   "avatar": "pedro_el_grande"
-  },
-  {
    "id": "nation_margarita_i_de_dinamarca",
    "name": "Margaret I of Denmark",
    "entity": "Kalmar Union",
@@ -2182,18 +1978,6 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Margaret_I_of_Denmark",
    "avatar": "margarita_i_de_dinamarca"
-  },
-  {
-   "id": "nation_ivan_iv_de_rusia",
-   "name": "Ivan the Terrible",
-   "entity": "Russia",
-   "role": "nation",
-   "region": "europe",
-   "lat": 55.6677,
-   "lon": 37.6666,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Ivan_the_Terrible",
-   "avatar": "ivan_iv_de_rusia"
   },
   {
    "id": "nation_irene_de_atenas",
@@ -2412,30 +2196,6 @@
    "avatar": "canuto_el_grande"
   },
   {
-   "id": "nation_fredegunda",
-   "name": "Fredegund",
-   "entity": "Frankish Kingdom",
-   "role": "nation",
-   "region": "europe",
-   "lat": 49.6481,
-   "lon": 2.57,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Fredegund",
-   "avatar": "fredegunda"
-  },
-  {
-   "id": "nation_cynethryth",
-   "name": "Cynethryth",
-   "entity": "Mercia",
-   "role": "nation",
-   "region": "europe",
-   "lat": 52.63,
-   "lon": -1.69,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Cynethryth",
-   "avatar": "cynethryth"
-  },
-  {
    "id": "nation_grace_o_malley",
    "name": "Grace O'Malley",
    "entity": "Ireland",
@@ -2458,18 +2218,6 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Stephen_the_Great",
    "avatar": "esteban_el_grande_de_moldavia"
-  },
-  {
-   "id": "nation_kaahumanu",
-   "name": "Kaʻahumanu",
-   "entity": "Kingdom of Hawaii",
-   "role": "nation",
-   "region": "oceania",
-   "lat": 20.7702,
-   "lon": -156.2682,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Ka%CA%BBahumanu",
-   "avatar": "kaahumanu"
   },
   {
    "id": "nation_liliuokalani",
@@ -7453,18 +7201,6 @@
    "avatar": "dyah_gitarja"
   },
   {
-   "id": "nation_khurshid_banu_natavan",
-   "name": "Khurshid Banu Natavan",
-   "entity": "Karabakh Khanate",
-   "role": "nation",
-   "region": "asia",
-   "lat": 39.76,
-   "lon": 46.75,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Khurshidbanu_Natavan",
-   "avatar": "khurshid_banu_natavan"
-  },
-  {
    "id": "nation_northern_wei",
    "name": "Northern Wei",
    "entity": "Northern Wei",
@@ -7475,18 +7211,6 @@
    "gender": "male",
    "wikipedia": "https://en.wikipedia.org/wiki/Northern_Wei",
    "avatar": "northern_wei"
-  },
-  {
-   "id": "nation_thusnelda",
-   "name": "Thusnelda",
-   "entity": "Cherusci",
-   "role": "nation",
-   "region": "europe",
-   "lat": 52.0,
-   "lon": 8.6,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Thusnelda",
-   "avatar": "thusnelda"
   },
   {
    "id": "makeda",
@@ -7536,18 +7260,6 @@
    "avatar": "conin"
   },
   {
-   "id": "nation_hiawatha",
-   "name": "Hiawatha",
-   "entity": "Haudenosaunee",
-   "role": "nation",
-   "region": "americas",
-   "lat": 42.9,
-   "lon": -75.9,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Hiawatha",
-   "avatar": "hiawatha"
-  },
-  {
    "id": "nation_senora_de_cao",
    "name": "Señora de Cao",
    "entity": "Moche",
@@ -7570,18 +7282,6 @@
    "gender": "female",
    "wikipedia": "https://en.wikipedia.org/wiki/Esther",
    "avatar": "esther"
-  },
-  {
-   "id": "nation_gudit",
-   "name": "Gudit",
-   "entity": "Kingdom of Aksum",
-   "role": "nation",
-   "region": "africa",
-   "lat": 14.13,
-   "lon": 38.72,
-   "gender": "female",
-   "wikipedia": "https://en.wikipedia.org/wiki/Gudit",
-   "avatar": "gudit"
   },
   {
    "id": "nation_muhammad_ahmad",
@@ -9084,19 +8784,6 @@
     }
    },
    "territory_color": "#9b59b6"
-  },
-  {
-   "id": "justinian_ii",
-   "name": "Justinian II",
-   "entity": "Byzantine Empire",
-   "role": "nation",
-   "region": "europe",
-   "lat": 41.01,
-   "lon": 28.98,
-   "gender": "male",
-   "wikipedia": "https://en.wikipedia.org/wiki/Justinian_II",
-   "avatar": "justinian_ii",
-   "territory_color": "#e87c24"
   },
   {
    "id": "ildibad",

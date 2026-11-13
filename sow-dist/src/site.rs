@@ -135,14 +135,6 @@ impl Site {
         self == Self::Production
     }
 
-    /// The other site on this host.
-    pub(crate) fn peer(self) -> Self {
-        match self {
-            Self::Production => Self::Ptr,
-            Self::Ptr => Self::Production,
-        }
-    }
-
     /// Jail root on the host. Inside a jail the same files appear under /.
     pub(crate) fn server_root(self) -> String {
         format!("/zroot/jails/{}", self.server_jail())
@@ -174,17 +166,6 @@ impl Site {
             Self::Production => "shadowsofwar.io ws.shadowsofwar.io",
             Self::Ptr => "ptr.shadowsofwar.io",
         }
-    }
-
-    /// The identity import (player accounts from production) is never sent to PTR.
-    pub(crate) fn owns_identity_import(self) -> bool {
-        self == Self::Production
-    }
-
-    /// Portal packages (CrazyGames, Poki, Jest) are owner upload artifacts in
-    /// dist/. Only production writes them, so PTR cannot put its origin into them.
-    pub(crate) fn builds_portal_packages(self) -> bool {
-        self == Self::Production
     }
 
     /// Provider sign-in buttons only work where that provider's console lists this
@@ -294,8 +275,6 @@ mod tests {
         assert_ne!(Site::Ptr.database_jail(), Site::Production.database_jail());
         assert_ne!(Site::Ptr.release_root(), Site::Production.release_root());
         assert_ne!(Site::Ptr.env_file(), Site::Production.env_file());
-        assert!(!Site::Ptr.owns_identity_import());
-        assert!(!Site::Ptr.builds_portal_packages());
         assert!(!Site::Ptr.social_sign_in());
         assert_eq!(Site::Ptr.label(), "PTR");
         assert_ne!(
@@ -312,10 +291,8 @@ mod tests {
     }
 
     #[test]
-    fn ptr_nginx_file_loads_after_production_and_sites_are_peers() {
+    fn ptr_nginx_file_loads_after_production() {
         assert!(Site::Production.nginx_conf() < Site::Ptr.nginx_conf());
-        assert_eq!(Site::Ptr.peer(), Site::Production);
-        assert_eq!(Site::Production.peer(), Site::Ptr);
         assert!(!Site::Ptr.is_production());
         assert_ne!(Site::Ptr.map_prefix(), Site::Production.map_prefix());
     }

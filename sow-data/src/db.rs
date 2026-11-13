@@ -10,7 +10,7 @@ use crate::redb_store::{
     PLAYER_MATCH_INDEX_TABLE, PUBLIC_PROFILES_TABLE, RANKED_BOTS_TABLE, SEASON_RATINGS_TABLE,
     SEASONS_TABLE, VERIFIED_VICTORY_BOARD_TABLE,
 };
-use log::{error, info};
+use log::info;
 use redb::{ReadableTable, WriteTransaction};
 use redis::{AsyncCommands, Client};
 use serde::{Deserialize, Serialize};
@@ -437,6 +437,236 @@ fn aggregate_match_flow(rows: &[std::collections::HashMap<String, u64>]) -> Vec<
         .collect()
 }
 
+use crate::missions::account_deal_salt;
+
+fn format_rate_pct(numerator: u64, denominator: u64) -> Option<f64> {
+    (denominator > 0).then(|| numerator as f64 / denominator as f64)
+}
+
+#[derive(Default)]
+struct MissionOpsCounter {
+    axis: String,
+    tag: String,
+    offered: u64,
+    completed: u64,
+    swapped_out_playable: u64,
+    swapped_out_unowned: u64,
+    swapped_out_prog0: u64,
+    swapped_out_mid: u64,
+    swapped_in: u64,
+    claimed_std: u64,
+    claimed_ad_2x: u64,
+}
+
+impl MissionOpsCounter {
+    fn swapped_out_total(&self) -> u64 {
+        self.swapped_out_playable
+            .saturating_add(self.swapped_out_unowned)
+    }
+}
+
+/// Aggregates anonymous Redis `sow:analytics:mission_ops:<date>` hashes into
+/// dimension churn, per-mission churn, and menu-guide action tables.
+pub fn aggregate_mission_ops(rows: &[std::collections::HashMap<String, u64>]) -> serde_json::Value {
+    use std::collections::BTreeMap;
+
+    #[derive(Default)]
+    struct DimCounter {
+        axis: String,
+        tag: String,
+        offered: u64,
+        completed: u64,
+        swapped_out_playable: u64,
+        swapped_out_unowned: u64,
+        swapped_in: u64,
+        claimed: u64,
+    }
+    #[derive(Default)]
+    struct GuideCounter {
+        completed: u64,
+        skipped_step: u64,
+        disabled_all: u64,
+    }
+
+    let mut by_mission: BTreeMap<String, MissionOpsCounter> = BTreeMap::new();
+    let mut by_dim: BTreeMap<String, DimCounter> = BTreeMap::new();
+    let mut by_guide: BTreeMap<String, GuideCounter> = BTreeMap::new();
+
+    for row in rows {
+        for (field, &count) in row {
+            let parts: Vec<&str> = field.split('|').collect();
+            match parts.as_slice() {
+                ["offered", mission_id, axis_tag] => {
+                    let (axis, tag) = axis_tag.split_once(':').unwrap_or((axis_tag, ""));
+                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
+                    entry.axis = axis.to_string();
+                    entry.tag = tag.to_string();
+                    entry.offered = entry.offered.saturating_add(count);
+
+                    let dim = by_dim.entry((*axis_tag).to_string()).or_default();
+                    dim.axis = axis.to_string();
+                    dim.tag = tag.to_string();
+                    dim.offered = dim.offered.saturating_add(count);
+                }
+                ["swap_out", mission_id, axis_tag, play_bucket, prog_bucket] => {
+                    let (axis, tag) = axis_tag.split_once(':').unwrap_or((axis_tag, ""));
+                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
+                    entry.axis = axis.to_string();
+                    entry.tag = tag.to_string();
+                    let dim = by_dim.entry((*axis_tag).to_string()).or_default();
+                    dim.axis = axis.to_string();
+                    dim.tag = tag.to_string();
+                    if *play_bucket == "playable" {
+                        entry.swapped_out_playable = entry.swapped_out_playable.saturating_add(count);
+                        dim.swapped_out_playable = dim.swapped_out_playable.saturating_add(count);
+                    } else {
+                        entry.swapped_out_unowned = entry.swapped_out_unowned.saturating_add(count);
+                        dim.swapped_out_unowned = dim.swapped_out_unowned.saturating_add(count);
+                    }
+                    if *prog_bucket == "prog_mid" {
+                        entry.swapped_out_mid = entry.swapped_out_mid.saturating_add(count);
+                    } else {
+                        entry.swapped_out_prog0 = entry.swapped_out_prog0.saturating_add(count);
+                    }
+                }
+                ["swap_in", mission_id, axis_tag] => {
+                    let (axis, tag) = axis_tag.split_once(':').unwrap_or((axis_tag, ""));
+                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
+                    entry.axis = axis.to_string();
+                    entry.tag = tag.to_string();
+                    entry.swapped_in = entry.swapped_in.saturating_add(count);
+
+                    let dim = by_dim.entry((*axis_tag).to_string()).or_default();
+                    dim.axis = axis.to_string();
+                    dim.tag = tag.to_string();
+                    dim.swapped_in = dim.swapped_in.saturating_add(count);
+                }
+                ["completed", mission_id, axis_tag] => {
+                    let (axis, tag) = axis_tag.split_once(':').unwrap_or((axis_tag, ""));
+                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
+                    entry.axis = axis.to_string();
+                    entry.tag = tag.to_string();
+                    entry.completed = entry.completed.saturating_add(count);
+
+                    let dim = by_dim.entry((*axis_tag).to_string()).or_default();
+                    dim.axis = axis.to_string();
+                    dim.tag = tag.to_string();
+                    dim.completed = dim.completed.saturating_add(count);
+                }
+                ["claimed", mission_id, kind] => {
+                    let def_meta = crate::missions::mission_by_id(mission_id);
+                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
+                    if entry.axis.is_empty()
+                        && let Some(def) = def_meta
+                    {
+                        entry.axis = def.axis.as_str().to_string();
+                        entry.tag = def.tag.to_string();
+                    }
+                    if *kind == "ad_2x" {
+                        entry.claimed_ad_2x = entry.claimed_ad_2x.saturating_add(count);
+                    } else {
+                        entry.claimed_std = entry.claimed_std.saturating_add(count);
+                    }
+                    if let Some(def) = def_meta {
+                        let dim_key = format!("{}:{}", def.axis.as_str(), def.tag);
+                        let dim = by_dim.entry(dim_key).or_default();
+                        dim.axis = def.axis.as_str().to_string();
+                        dim.tag = def.tag.to_string();
+                        dim.claimed = dim.claimed.saturating_add(count);
+                    }
+                }
+                ["guide_action", guide_id, action] => {
+                    let entry = by_guide.entry((*guide_id).to_string()).or_default();
+                    match *action {
+                        "completed" => entry.completed = entry.completed.saturating_add(count),
+                        "skipped_step" => entry.skipped_step = entry.skipped_step.saturating_add(count),
+                        "disabled_all" => entry.disabled_all = entry.disabled_all.saturating_add(count),
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut mission_rows: Vec<(u64, serde_json::Value)> = by_mission
+        .into_iter()
+        .map(|(mission_id, c)| {
+            let swapped_out_total = c.swapped_out_total();
+            let swap_rate = format_rate_pct(swapped_out_total, c.offered);
+            let completion_rate = format_rate_pct(c.completed, c.offered);
+            let sort_score = swap_rate.map(|r| (r * 10_000.0) as u64).unwrap_or(0);
+            (
+                sort_score,
+                serde_json::json!({
+                    "mission_id": mission_id,
+                    "axis": c.axis,
+                    "tag": c.tag,
+                    "offered": c.offered,
+                    "completed": c.completed,
+                    "swapped_out_total": swapped_out_total,
+                    "swapped_out_playable": c.swapped_out_playable,
+                    "swapped_out_unowned": c.swapped_out_unowned,
+                    "swapped_out_prog0": c.swapped_out_prog0,
+                    "swapped_out_mid": c.swapped_out_mid,
+                    "swapped_in": c.swapped_in,
+                    "claimed_std": c.claimed_std,
+                    "claimed_ad_2x": c.claimed_ad_2x,
+                    "swap_rate": swap_rate,
+                    "completion_rate": completion_rate,
+                }),
+            )
+        })
+        .collect();
+    mission_rows.sort_by(|a, b| b.0.cmp(&a.0));
+
+    let mut dim_rows: Vec<(u64, serde_json::Value)> = by_dim
+        .into_iter()
+        .map(|(dimension, d)| {
+            let swapped_out_total = d.swapped_out_playable.saturating_add(d.swapped_out_unowned);
+            let swap_rate = format_rate_pct(swapped_out_total, d.offered);
+            let completion_rate = format_rate_pct(d.completed, d.offered);
+            let sort_score = swap_rate.map(|r| (r * 10_000.0) as u64).unwrap_or(0);
+            (
+                sort_score,
+                serde_json::json!({
+                    "dimension": dimension,
+                    "axis": d.axis,
+                    "tag": d.tag,
+                    "offered": d.offered,
+                    "completed": d.completed,
+                    "swapped_out_total": swapped_out_total,
+                    "swapped_out_playable": d.swapped_out_playable,
+                    "swapped_out_unowned": d.swapped_out_unowned,
+                    "swapped_in": d.swapped_in,
+                    "claimed": d.claimed,
+                    "swap_rate": swap_rate,
+                    "completion_rate": completion_rate,
+                }),
+            )
+        })
+        .collect();
+    dim_rows.sort_by(|a, b| b.0.cmp(&a.0));
+
+    let guide_rows: Vec<serde_json::Value> = by_guide
+        .into_iter()
+        .map(|(guide_id, g)| {
+            serde_json::json!({
+                "guide_id": guide_id,
+                "completed": g.completed,
+                "skipped_step": g.skipped_step,
+                "disabled_all": g.disabled_all,
+            })
+        })
+        .collect();
+
+    serde_json::json!({
+        "mission_churn_by_dimension": dim_rows.into_iter().map(|(_, v)| v).collect::<Vec<_>>(),
+        "mission_churn_by_mission": mission_rows.into_iter().map(|(_, v)| v).collect::<Vec<_>>(),
+        "menu_guide_summary": guide_rows,
+    })
+}
+
 /// Generate the initial presentation name only when the client did not send one.
 /// The account ID remains the sole stable identity key.
 fn generated_display_name() -> String {
@@ -474,195 +704,9 @@ pub struct SessionDefeats {
     pub tribes: u32,
 }
 
-/// Deserialize one stored account, migrating legacy IDs, currency and leader
-/// names at this single chokepoint. Every stored-account parse goes through here.
-pub fn parse_account_with_migration(raw: &[u8]) -> serde_json::Result<PlayerAccount> {
-    let mut value: serde_json::Value = serde_json::from_slice(raw)?;
-    if let Some(account) = value.as_object_mut()
-        && !account.contains_key("account_id")
-        && let Some(id) = account.remove("id")
-    {
-        account.insert("account_id".to_string(), id);
-    }
-    if let Some(profile) = value.get_mut("profile").and_then(|p| p.as_object_mut()) {
-        migrate_legacy_currency(profile);
-        migrate_legacy_leader_ids(profile);
-        migrate_legacy_leader_names(profile);
-        migrate_legacy_ranked_bot_leader(profile);
-    }
-    serde_json::from_value(value)
-}
-
-/// Lazy migration for the 2026-09 currency split (owner decision): profiles
-/// saved before the split store the spendable balance under the legacy
-/// `"laurels"` key. Move it to `"crowns"` and drop the legacy key so the new
-/// `laurels` (achievement points) field deserializes to its default 0 instead
-/// of inheriting the old currency amount. Deterministic, order-independent,
-/// a no-op for already-migrated objects; stored bytes are only rewritten on
-/// the next regular save.
-fn migrate_legacy_currency(profile: &mut serde_json::Map<String, serde_json::Value>) {
-    if profile.contains_key("crowns") {
-        return;
-    }
-    if let Some(legacy) = profile.remove("laurels") {
-        profile.insert("crowns".to_string(), legacy);
-    }
-}
-
-/// Rewrite renamed hero IDs while loading old profiles. Purchased leader IDs
-/// stay intact because they also key historical purchase markers.
-fn migrate_legacy_leader_ids(profile: &mut serde_json::Map<String, serde_json::Value>) {
-    let canonical_id = |value: &str| {
-        crate::commerce::leader_from_any_id(value).map(|leader| crate::commerce::leader_id(leader))
-    };
-    if let Some(saved) = profile
-        .get("preferred_leader")
-        .and_then(serde_json::Value::as_str)
-        .and_then(crate::commerce::leader_from_any_id)
-    {
-        profile.insert(
-            "preferred_leader".to_string(),
-            serde_json::Value::String(crate::commerce::leader_wire_id(saved).to_string()),
-        );
-    }
-    for field in ["owned_leaders", "purchased_leaders"] {
-        if let Some(ids) = profile
-            .get_mut(field)
-            .and_then(serde_json::Value::as_array_mut)
-        {
-            for id in ids {
-                if let Some(canonical) = id.as_str().and_then(canonical_id) {
-                    *id = serde_json::Value::String(canonical.to_string());
-                }
-            }
-        }
-    }
-    if let Some(receipts) = profile
-        .get_mut("reward_receipts")
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        for receipt in receipts.values_mut() {
-            if let Some(ids) = receipt
-                .get_mut("unlocked_leaders")
-                .and_then(serde_json::Value::as_array_mut)
-            {
-                for id in ids {
-                    if let Some(canonical) = id.as_str().and_then(canonical_id) {
-                        *id = serde_json::Value::String(canonical.to_string());
-                    }
-                }
-            }
-        }
-    }
-    if let Some(guides) = profile
-        .get_mut("menu_guides")
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        for guide in guides.values_mut() {
-            if let Some(selected) = guide
-                .get("selected_leader")
-                .and_then(serde_json::Value::as_str)
-                .and_then(canonical_id)
-            {
-                guide["selected_leader"] = serde_json::Value::String(selected.to_string());
-            }
-        }
-    }
-}
-
-/// Move stored name-keyed stats to the current catalog name, merging any
-/// partial migration without losing already recorded progress.
-fn migrate_legacy_leader_names(profile: &mut serde_json::Map<String, serde_json::Value>) {
-    for field in ["leader_xp", "leader_stats"] {
-        let Some(entries) = profile
-            .get_mut(field)
-            .and_then(serde_json::Value::as_object_mut)
-        else {
-            continue;
-        };
-        let old_names = entries.keys().cloned().collect::<Vec<_>>();
-        for old_name in old_names {
-            let Some(new_name) = crate::rewards::canonical_leader_name(&old_name) else {
-                continue;
-            };
-            if new_name == old_name {
-                continue;
-            }
-            let Some(old_value) = entries.remove(&old_name) else {
-                continue;
-            };
-            let Some(current_value) = entries.get_mut(&new_name) else {
-                entries.insert(new_name, old_value);
-                continue;
-            };
-            match field {
-                "leader_xp" => {
-                    let current = current_value
-                        .as_u64()
-                        .and_then(|value| u32::try_from(value).ok())
-                        .unwrap_or_default();
-                    let old = old_value
-                        .as_u64()
-                        .and_then(|value| u32::try_from(value).ok())
-                        .unwrap_or_default();
-                    *current_value = serde_json::Value::from(current.saturating_add(old));
-                }
-                "leader_stats" => {
-                    let Some(current) = current_value.as_object_mut() else {
-                        continue;
-                    };
-                    let Some(old) = old_value.as_object() else {
-                        continue;
-                    };
-                    for stat in [
-                        "matches_played",
-                        "wins",
-                        "verified_wins",
-                        "kills",
-                        "deaths",
-                        "assists",
-                        "xp",
-                    ] {
-                        let total = current
-                            .get(stat)
-                            .and_then(serde_json::Value::as_u64)
-                            .and_then(|value| u32::try_from(value).ok())
-                            .unwrap_or_default()
-                            .saturating_add(
-                                old.get(stat)
-                                    .and_then(serde_json::Value::as_u64)
-                                    .and_then(|value| u32::try_from(value).ok())
-                                    .unwrap_or_default(),
-                            );
-                        current.insert(stat.to_string(), serde_json::Value::from(total));
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
-    }
-}
-
-fn migrate_legacy_ranked_bot_leader(profile: &mut serde_json::Map<String, serde_json::Value>) {
-    let Some(bot) = profile
-        .get_mut("ranked_bot")
-        .and_then(serde_json::Value::as_object_mut)
-    else {
-        return;
-    };
-    let Some(saved_name) = bot
-        .get("leader")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned)
-    else {
-        return;
-    };
-    if let Some(current_name) = crate::rewards::canonical_leader_name(&saved_name) {
-        bot.insert(
-            "leader".to_string(),
-            serde_json::Value::String(current_name),
-        );
-    }
+/// Deserialize one stored account. Every stored-account parse goes through here.
+pub fn parse_account(raw: &[u8]) -> serde_json::Result<PlayerAccount> {
+    serde_json::from_slice(raw)
 }
 
 #[derive(Clone, Debug)]
@@ -713,8 +757,7 @@ pub struct PlayerProfile {
     pub leader_xp: std::collections::BTreeMap<String, u32>,
     #[serde(default)]
     pub leader_stats: std::collections::BTreeMap<String, LeaderCareerStats>,
-    /// Free spendable currency (legacy profiles stored it under "laurels";
-    /// `parse_account_with_migration` moves it here on load).
+    /// Free spendable currency.
     #[serde(default)]
     pub crowns: u64,
     /// Achievement points — earned, never spent.
@@ -768,6 +811,24 @@ pub struct PlayerProfile {
     pub missions_progress: std::collections::BTreeMap<String, crate::missions::MissionRecord>,
     #[serde(default)]
     pub daily_missions_day: u64,
+    #[serde(default)]
+    pub weekly_missions_period: u64,
+    #[serde(default)]
+    pub daily_mission_ids: Vec<String>,
+    #[serde(default)]
+    pub weekly_mission_ids: Vec<String>,
+    #[serde(default)]
+    pub daily_swaps_used: u8,
+    #[serde(default)]
+    pub weekly_swaps_used: u8,
+    #[serde(default)]
+    pub daily_swapped_out_ids: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub weekly_swapped_out_ids: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub menu_tips_disabled: bool,
+    #[serde(default)]
+    pub total_structures_built: u64,
     /// Present only for managed ranked opponents, never for public fillers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ranked_bot: Option<RankedBotProfile>,
@@ -853,6 +914,15 @@ impl Default for PlayerProfile {
             ad_doubles_today: 0,
             missions_progress: std::collections::BTreeMap::new(),
             daily_missions_day: 0,
+            weekly_missions_period: 0,
+            daily_mission_ids: Vec::new(),
+            weekly_mission_ids: Vec::new(),
+            daily_swaps_used: 0,
+            weekly_swaps_used: 0,
+            daily_swapped_out_ids: std::collections::BTreeSet::new(),
+            weekly_swapped_out_ids: std::collections::BTreeSet::new(),
+            menu_tips_disabled: false,
+            total_structures_built: 0,
             ranked_matches: 0,
             ranked_wins: 0,
             ranked_bot: None,
@@ -1233,7 +1303,6 @@ impl PlayerDb {
     /// Establish storage before accepting requests; an unavailable account
     /// authority must never fall back to a stale cache.
     pub async fn warm_connection(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.migrate_legacy_redb_profiles()?;
         self.get_connection().await?;
         Ok(())
     }
@@ -1726,6 +1795,16 @@ impl PlayerDb {
             tutorial_steps_pipe.query_async(&mut con).await?;
         let tutorial_steps = aggregate_tutorial_steps(&tutorial_step_rows);
 
+        let mut mission_ops_pipe = redis::pipe();
+        for date in &tutorial_dates {
+            mission_ops_pipe
+                .cmd("HGETALL")
+                .arg(format!("sow:analytics:mission_ops:{date}"));
+        }
+        let mission_ops_rows: Vec<std::collections::HashMap<String, u64>> =
+            mission_ops_pipe.query_async(&mut con).await?;
+        let mission_ops_summary = aggregate_mission_ops(&mission_ops_rows);
+
         Ok(serde_json::json!({
             "generated_at": today,
             "days": days,
@@ -1747,7 +1826,32 @@ impl PlayerDb {
             "daily": daily_rows,
             "retention": { "site": retention },
             "tutorial_steps": tutorial_steps,
+            "mission_churn_by_dimension": mission_ops_summary["mission_churn_by_dimension"],
+            "mission_churn_by_mission": mission_ops_summary["mission_churn_by_mission"],
+            "menu_guide_summary": mission_ops_summary["menu_guide_summary"],
         }))
+    }
+
+    async fn record_mission_ops(&self, ops: &[String]) {
+        if ops.is_empty() {
+            return;
+        }
+        let Ok(mut con) = self.get_connection().await else {
+            return;
+        };
+        let key = format!("sow:analytics:mission_ops:{}", crate::events::utc_date_string());
+        let mut pipe = redis::pipe();
+        for field in ops {
+            pipe.cmd("HINCRBY").arg(&key).arg(field).arg(1);
+        }
+        pipe.cmd("EXPIRE").arg(&key).arg(ANALYTICS_TTL_SECONDS);
+        let _ = pipe.query_async::<Vec<redis::Value>>(&mut con).await;
+    }
+
+    fn current_rotation_leaders_for_now(&self, now: u64) -> Vec<crate::leaders::Leader> {
+        let period = crate::commerce::rotation_period(now);
+        self.free_hero_rotation_for_period(period)
+            .unwrap_or_else(|_| crate::commerce::legacy_rotation_for_period(period))
     }
 
     /// Crate-internal connection accessor for sibling server modules
@@ -1843,26 +1947,6 @@ impl PlayerDb {
         }
         drop(matches);
         write_match_record_in_transaction(&write_txn, &next)?;
-        write_txn.commit()?;
-        Ok(())
-    }
-
-    pub fn save_season_rating(
-        &self,
-        rating: &SeasonRating,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let Some(db) = &self.redb_db else {
-            return Err("Redb database unavailable".into());
-        };
-        let key = format!(
-            "rating:{}:{}:{}:{}",
-            rating.account_id, rating.season_id, rating.queue, rating.mode
-        );
-        let write_txn = db.begin_write()?;
-        let mut table = write_txn.open_table(SEASON_RATINGS_TABLE)?;
-        let json = serde_json::to_vec(rating)?;
-        table.insert(key.as_str(), json.as_slice())?;
-        drop(table);
         write_txn.commit()?;
         Ok(())
     }
@@ -2511,33 +2595,84 @@ impl PlayerDb {
         &self,
         account: PlayerAccount,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        let saved = account.profile.menu_guides.get("welcome");
-        let normalized = saved.map(|guide| {
-            crate::profile::normalize_welcome_guide_progress(guide, account.profile.matches_played)
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let epoch_day = now / 86_400;
+        let rotation_period = crate::commerce::rotation_period(now);
+        let free_rotation = self.current_rotation_leaders_for_now(now);
+        let effective_level = account.profile.level.max(1);
+        let welcome_saved = account.profile.menu_guides.get("welcome");
+        let welcome_needs_norm = welcome_saved.is_some_and(|guide| {
+            *guide
+                != crate::profile::normalize_welcome_guide_progress(
+                    guide,
+                    account.profile.matches_played,
+                )
         });
-        let enroll = saved.is_none()
+        let tips_on = !account.profile.menu_tips_disabled;
+        let enroll_welcome = tips_on
+            && welcome_saved.is_none()
             && account.profile.matches_played == 0
             && account
                 .profile
                 .reward_receipts
                 .get("tutorial")
                 .is_some_and(|receipt| receipt.presented_at.is_none());
-        if saved == normalized.as_ref() && !enroll {
+        let enroll_post_match = tips_on
+            && account.profile.matches_played >= 1
+            && !account
+                .profile
+                .menu_guides
+                .contains_key("post_match_missions");
+        let enroll_daily = tips_on
+            && effective_level >= crate::missions::DAILY_UNLOCK_LEVEL
+            && !account.profile.menu_guides.contains_key("daily_ops_unlock");
+        let enroll_weekly = tips_on
+            && effective_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
+            && account.profile.ranked_matches == 0
+            && !account
+                .profile
+                .menu_guides
+                .contains_key("weekly_ranked_unlock");
+        let needs_hand_sync = (effective_level >= crate::missions::DAILY_UNLOCK_LEVEL
+            && (account.profile.daily_missions_day != epoch_day
+                || account.profile.daily_mission_ids.len() < 3))
+            || (effective_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
+                && (account.profile.weekly_missions_period != rotation_period
+                    || account.profile.weekly_mission_ids.len() < 3));
+
+        if !welcome_needs_norm
+            && !enroll_welcome
+            && !enroll_post_match
+            && !enroll_daily
+            && !enroll_weekly
+            && !needs_hand_sync
+        {
             return Ok(account);
         }
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+
+        let deal_salt = account_deal_salt(&account.id);
+        let mut ops = Vec::new();
         let account = self
-            .update_account_atomic(&account.id, &["tutorial"], |account| {
+            .update_account_atomic(
+                &account.id,
+                &["tutorial", crate::commerce::WELCOME_GRANT_ID],
+                |account| {
+                ops.clear();
+                let mut mutated = false;
                 if let Some(guide) = account.profile.menu_guides.get_mut("welcome") {
-                    *guide = crate::profile::normalize_welcome_guide_progress(
+                    let normalized = crate::profile::normalize_welcome_guide_progress(
                         guide,
                         account.profile.matches_played,
                     );
-                    account.updated_at = now;
-                } else if account.profile.matches_played == 0
+                    if *guide != normalized {
+                        *guide = normalized;
+                        mutated = true;
+                    }
+                } else if !account.profile.menu_tips_disabled
+                    && account.profile.matches_played == 0
                     && account
                         .profile
                         .reward_receipts
@@ -2548,10 +2683,82 @@ impl PlayerDb {
                         .profile
                         .menu_guides
                         .insert("welcome".to_string(), MenuGuideProgress::default());
+                    mutated = true;
+                }
+
+                if !account.profile.menu_tips_disabled {
+                    let level = account.profile.level.max(1);
+                    if account.profile.matches_played >= 1
+                        && !account
+                            .profile
+                            .menu_guides
+                            .contains_key("post_match_missions")
+                    {
+                        account.profile.menu_guides.insert(
+                            "post_match_missions".to_string(),
+                            crate::profile::default_guide_progress_for_id("post_match_missions"),
+                        );
+                        mutated = true;
+                    }
+                    if level >= crate::missions::DAILY_UNLOCK_LEVEL
+                        && !account.profile.menu_guides.contains_key("daily_ops_unlock")
+                    {
+                        account.profile.menu_guides.insert(
+                            "daily_ops_unlock".to_string(),
+                            crate::profile::default_guide_progress_for_id("daily_ops_unlock"),
+                        );
+                        mutated = true;
+                    }
+                    if level >= crate::missions::WEEKLY_UNLOCK_LEVEL
+                        && account.profile.ranked_matches == 0
+                        && !account
+                            .profile
+                            .menu_guides
+                            .contains_key("weekly_ranked_unlock")
+                    {
+                        account.profile.menu_guides.insert(
+                            "weekly_ranked_unlock".to_string(),
+                            crate::profile::default_guide_progress_for_id("weekly_ranked_unlock"),
+                        );
+                        mutated = true;
+                    }
+                }
+
+                let playability = crate::missions::PlayabilityContext {
+                    owned_leaders: &account.profile.owned_leaders,
+                    free_rotation: &free_rotation,
+                    crowns: account.profile.crowns,
+                    gems: account.profile.gems,
+                };
+                let level = account.profile.level.max(1);
+                let newly_dealt = crate::missions::sync_hands_for_periods(
+                    crate::missions::HandSyncState {
+                        records: &mut account.profile.missions_progress,
+                        daily_day: &mut account.profile.daily_missions_day,
+                        daily_mission_ids: &mut account.profile.daily_mission_ids,
+                        daily_swaps_used: &mut account.profile.daily_swaps_used,
+                        daily_swapped_out_ids: &mut account.profile.daily_swapped_out_ids,
+                        weekly_period: &mut account.profile.weekly_missions_period,
+                        weekly_mission_ids: &mut account.profile.weekly_mission_ids,
+                        weekly_swaps_used: &mut account.profile.weekly_swaps_used,
+                        weekly_swapped_out_ids: &mut account.profile.weekly_swapped_out_ids,
+                    },
+                    epoch_day,
+                    rotation_period,
+                    level,
+                    deal_salt,
+                    Some(&playability),
+                );
+                for def in newly_dealt {
+                    ops.push(format!("offered|{}|{}:{}", def.id, def.axis.as_str(), def.tag));
+                    mutated = true;
+                }
+                if mutated {
                     account.updated_at = now;
                 }
             })
             .await?;
+        self.record_mission_ops(&ops).await;
         Ok(account)
     }
 
@@ -2561,17 +2768,51 @@ impl PlayerDb {
         guide_id: &str,
         progress: MenuGuideProgress,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        crate::profile::validate_menu_guide_progress(guide_id, &progress)?;
+        self.save_menu_guide_progress_with_options(account_id, guide_id, progress, None)
+            .await
+    }
+
+    pub async fn save_menu_guide_progress_with_options(
+        &self,
+        account_id: &str,
+        guide_id: &str,
+        progress: MenuGuideProgress,
+        menu_tips_disabled: Option<bool>,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let is_global_toggle = guide_id == "hide_all" || (guide_id == "settings" && menu_tips_disabled.is_some());
+        if !is_global_toggle {
+            crate::profile::validate_menu_guide_progress(guide_id, &progress)?;
+        }
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
         let mut bot_account = false;
         let mut guide_not_enrolled = false;
+        let mut ops = Vec::new();
         let account = self
             .update_account_atomic(account_id, &[], |account| {
+                ops.clear();
                 if account.kind != AccountKind::Human {
                     bot_account = true;
+                    return;
+                }
+                if let Some(disabled) = menu_tips_disabled {
+                    account.profile.menu_tips_disabled = disabled;
+                    if disabled {
+                        for (id, guide) in account.profile.menu_guides.iter_mut() {
+                            if !guide.status.is_terminal() {
+                                guide.status = crate::profile::MenuGuideStatus::Skipped;
+                                guide.current_step = None;
+                                if is_global_toggle || id == guide_id {
+                                    ops.push(format!("guide_action|{id}|disabled_all"));
+                                }
+                            }
+                        }
+                    }
+                }
+                if is_global_toggle {
+                    account.updated_at = now;
                     return;
                 }
                 let saved = account.profile.menu_guides.get(guide_id);
@@ -2579,15 +2820,25 @@ impl PlayerDb {
                     guide_not_enrolled = true;
                     return;
                 }
-                let merged = crate::profile::merge_menu_guide_progress(saved, &progress);
-                let merged = if guide_id == "welcome" {
-                    crate::profile::normalize_welcome_guide_progress(
-                        &merged,
-                        account.profile.matches_played,
-                    )
-                } else {
-                    merged
-                };
+                let was_terminal = saved.is_some_and(|s| s.status.is_terminal());
+                let merged = crate::profile::merge_menu_guide_progress_for_id(
+                    guide_id, saved, &progress,
+                );
+                let merged = crate::profile::normalize_guide_progress_for_id(
+                    guide_id,
+                    &merged,
+                    account.profile.matches_played,
+                );
+                if !was_terminal && merged.status.is_terminal() {
+                    let action = if menu_tips_disabled == Some(true) {
+                        "disabled_all"
+                    } else if merged.status == crate::profile::MenuGuideStatus::Completed {
+                        "completed"
+                    } else {
+                        "skipped_step"
+                    };
+                    ops.push(format!("guide_action|{guide_id}|{action}"));
+                }
                 account
                     .profile
                     .menu_guides
@@ -2601,6 +2852,7 @@ impl PlayerDb {
         if guide_not_enrolled {
             return Err("menu guide is not enrolled".into());
         }
+        self.record_mission_ops(&ops).await;
         Ok(account)
     }
     async fn ensure_welcome_grant(
@@ -2665,48 +2917,6 @@ impl PlayerDb {
         );
         account.updated_at = now;
         Ok(true)
-    }
-
-    /// Complete the one-time starter grant for accounts that existed before
-    /// per-account onboarding became the normal path. A saved cursor resumes
-    /// safely after a restart; each grant is independently deduplicated.
-    pub async fn migrate_welcome_gems_to_existing_humans(
-        &self,
-    ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
-        const COMPLETE: &str = "migration:welcome-gems-v1";
-        const CURSOR: &str = "migration:welcome-gems-cursor";
-        const BATCH: usize = 256;
-        if self.migration_value_sync(COMPLETE)?.is_some() {
-            return Ok(0);
-        }
-        let mut after = self.migration_value_sync(CURSOR)?;
-        let mut total_migrated = 0_u64;
-        loop {
-            let batch = self.account_batch_sync(after.as_deref(), BATCH)?;
-            if batch.is_empty() {
-                self.set_migration_value_sync(COMPLETE, b"1")?;
-                break;
-            }
-            let mut migrated = 0_u64;
-            for account in &batch {
-                if account.kind == AccountKind::Human {
-                    let updated = self.ensure_welcome_grant(account.clone()).await?;
-                    if updated
-                        .profile
-                        .purchase_history
-                        .contains_key(crate::commerce::WELCOME_GRANT_ID)
-                    {
-                        migrated = migrated.saturating_add(1);
-                    }
-                }
-            }
-            after = batch.last().map(|account| account.id.clone());
-            if let Some(cursor) = after.as_deref() {
-                self.set_migration_value_sync(CURSOR, cursor.as_bytes())?;
-            }
-            total_migrated = total_migrated.saturating_add(migrated);
-        }
-        Ok(total_migrated)
     }
 
     /// Permanently erase the Redb account and its account-owned rows, then
@@ -3026,46 +3236,6 @@ impl PlayerDb {
         Ok(self.is_bot_account_sync(account_id)?)
     }
 
-    pub async fn is_bot_account(&self, account_id: &str) -> bool {
-        match self.is_bot_account_checked(account_id).await {
-            Ok(is_bot) => is_bot,
-            Err(error) => {
-                error!("Bot-pool membership lookup failed for {account_id}: {error}");
-                false
-            }
-        }
-    }
-
-    /// Count non-bot account_ids in a match roster.
-    pub async fn count_human_players(&self, player_ids: &[String]) -> usize {
-        match self.count_human_accounts_sync(player_ids) {
-            Ok(count) => count,
-            Err(error) => {
-                error!("human participant count failed: {error}");
-                0
-            }
-        }
-    }
-
-    /// Read the immutable roster registered before the relay handoff.
-    pub async fn match_participants_with_lobby(
-        &self,
-        match_id: &str,
-        lobby_json: Option<&str>,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(lobby_json) = lobby_json {
-            validate_lobby_match_id(match_id, lobby_json)?;
-        }
-        let players = self
-            .match_start_record(match_id)?
-            .map(|record| record.player_ids)
-            .unwrap_or_default();
-        if players.is_empty() {
-            return Err("trusted match roster unavailable; keeping settlement retryable".into());
-        }
-        Ok(players)
-    }
-
     /// Freeze one human player's receipt at the relay's committed exit turn.
     /// Only the deterministic verifier may add replay-derived rewards later.
     pub async fn note_match_participant_closure(
@@ -3317,11 +3487,12 @@ impl PlayerDb {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+        let free_rotation = self.current_rotation_leaders_for_now(now);
         let bonus_id = format!("verified_bonus:{match_id}");
         let closures = outcomes.to_vec();
         let start_for_write = start.clone();
         let notification_for_write = notification;
-        let (applied, accounts) = self
+        let ((applied, mission_ops), accounts) = self
             .update_accounts_atomic(
                 account_ids,
                 vec![match_id.clone(), bonus_id],
@@ -3329,6 +3500,7 @@ impl PlayerDb {
                     let mut record = load_match_record_in_transaction(txn, &match_id)?
                         .unwrap_or_else(|| provisional_match_record(&start_for_write, now));
                     let mut applied = Vec::with_capacity(closures.len());
+                    let mut mission_ops = Vec::new();
                     for (closure, account) in closures.iter().zip(accounts.iter_mut()) {
                         if account.kind != AccountKind::Human {
                             return Err("invalid verified result: closed participant is not human".into());
@@ -3374,6 +3546,8 @@ impl PlayerDb {
                             &closure.result,
                             participant,
                             Some(turn),
+                            &free_rotation,
+                            &mut mission_ops,
                             now,
                         )
                         .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
@@ -3396,10 +3570,11 @@ impl PlayerDb {
                             crate::profile::MatchWork::Notify { command },
                         )?;
                     }
-                    Ok(applied)
+                    Ok((applied, mission_ops))
                 },
             )
             .await?;
+        self.record_mission_ops(&mission_ops).await;
 
         Ok(outcomes
             .iter()
@@ -5015,11 +5190,7 @@ impl PlayerDb {
         mission_id: &str,
         doubled_by_ad: bool,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        let def = crate::missions::ONBOARDING_MISSIONS
-            .iter()
-            .chain(crate::missions::DAILY_MISSION_POOL.iter())
-            .chain(crate::missions::WEEKLY_MISSION_POOL.iter())
-            .find(|m| m.id == mission_id)
+        let def = crate::missions::mission_by_id(mission_id)
             .copied()
             .ok_or_else(|| format!("unknown mission: {mission_id}"))?;
 
@@ -5027,14 +5198,116 @@ impl PlayerDb {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+        let epoch_day = now / 86_400;
+        let rotation_period = crate::commerce::rotation_period(now);
+        let free_rotation = self.current_rotation_leaders_for_now(now);
+        let deal_salt = account_deal_salt(account_id);
 
         let mut failure: Option<String> = None;
+        let mut ops = Vec::new();
         let account = self
             .update_account_atomic(account_id, &[mission_id], |account| {
+                failure = None;
+                ops.clear();
                 if account.kind != AccountKind::Human {
                     failure = Some("missions are only available for human accounts".to_string());
                     return;
                 }
+
+                let playability = crate::missions::PlayabilityContext {
+                    owned_leaders: &account.profile.owned_leaders,
+                    free_rotation: &free_rotation,
+                    crowns: account.profile.crowns,
+                    gems: account.profile.gems,
+                };
+                let player_level = account.profile.level.max(1);
+                let newly_dealt = crate::missions::sync_hands_for_periods(
+                    crate::missions::HandSyncState {
+                        records: &mut account.profile.missions_progress,
+                        daily_day: &mut account.profile.daily_missions_day,
+                        daily_mission_ids: &mut account.profile.daily_mission_ids,
+                        daily_swaps_used: &mut account.profile.daily_swaps_used,
+                        daily_swapped_out_ids: &mut account.profile.daily_swapped_out_ids,
+                        weekly_period: &mut account.profile.weekly_missions_period,
+                        weekly_mission_ids: &mut account.profile.weekly_mission_ids,
+                        weekly_swaps_used: &mut account.profile.weekly_swaps_used,
+                        weekly_swapped_out_ids: &mut account.profile.weekly_swapped_out_ids,
+                    },
+                    epoch_day,
+                    rotation_period,
+                    player_level,
+                    deal_salt,
+                    Some(&playability),
+                );
+                for offered in newly_dealt {
+                    ops.push(format!(
+                        "offered|{}|{}:{}",
+                        offered.id,
+                        offered.axis.as_str(),
+                        offered.tag
+                    ));
+                }
+
+                let min_level = crate::missions::min_level_for_category(def.category);
+                if player_level < min_level {
+                    failure = Some(format!("mission locked until level {min_level}"));
+                    return;
+                }
+
+                let existing_completed = account
+                    .profile
+                    .missions_progress
+                    .get(mission_id)
+                    .is_some_and(|r| r.completed);
+                match def.category {
+                    crate::missions::MissionCategory::Daily => {
+                        if !account
+                            .profile
+                            .daily_mission_ids
+                            .iter()
+                            .any(|id| id == mission_id)
+                            && !existing_completed
+                        {
+                            failure = Some("mission is not in today's active hand".to_string());
+                            return;
+                        }
+                    }
+                    crate::missions::MissionCategory::Weekly => {
+                        if !account
+                            .profile
+                            .weekly_mission_ids
+                            .iter()
+                            .any(|id| id == mission_id)
+                            && !existing_completed
+                        {
+                            failure = Some("mission is not in this week's active hand".to_string());
+                            return;
+                        }
+                    }
+                    crate::missions::MissionCategory::Onboarding => {
+                        let prev_unclaimed = crate::missions::ONBOARDING_MISSIONS
+                            .iter()
+                            .filter(|m| m.order < def.order)
+                            .any(|m| {
+                                !account
+                                    .profile
+                                    .missions_progress
+                                    .get(m.id)
+                                    .map(|r| r.claimed)
+                                    .unwrap_or(false)
+                            });
+                        if prev_unclaimed {
+                            failure =
+                                Some("previous onboarding mission must be claimed first".to_string());
+                            return;
+                        }
+                    }
+                }
+
+                let tutorial_completed = account.profile.intro_completed
+                    || account.profile.reward_receipts.contains_key("tutorial")
+                    || account.profile.completed_episodes.contains("tutorial");
+
                 let record = account
                     .profile
                     .missions_progress
@@ -5046,23 +5319,9 @@ impl PlayerDb {
                 }
 
                 let stats = crate::missions::MissionStats {
-                    tutorial_completed: account.profile.intro_completed
-                        || account.profile.reward_receipts.contains_key("tutorial")
-                        || account.profile.completed_episodes.contains("tutorial")
-                        || account.profile.matches_played > 0
-                        || record.completed
-                        || record.progress >= 1,
-                    total_structures_built: (account.profile.matches_played * 5).max(record.progress),
-                    free_rotation_matches: account.profile.matches_played.max(record.progress),
-                    team_matches: account.profile.matches_played.max(record.progress),
-                    team_wins: account.profile.wins.max(record.progress),
-                    west_regional_matches: account.profile.matches_played.max(record.progress),
-                    east_regional_matches: account.profile.matches_played.max(record.progress),
-                    matches_played: account.profile.matches_played.max(record.progress),
-                    kills: account.profile.kills.max(record.progress),
-                    ranked_matches: account.profile.ranked_matches.max(record.progress),
-                    ranked_wins: account.profile.ranked_wins.max(record.progress),
-                    empires_defeated: account.profile.empires_defeated.max(record.progress),
+                    player_level,
+                    tutorial_completed,
+                    ..Default::default()
                 };
 
                 let view = crate::missions::evaluate_mission_progress(&def, &stats, Some(record));
@@ -5088,6 +5347,8 @@ impl PlayerDb {
                 record.claimed_at = Some(now);
                 record.doubled_by_ad = doubled_by_ad;
                 account.updated_at = now;
+                let claim_kind = if doubled_by_ad { "ad_2x" } else { "std" };
+                ops.push(format!("claimed|{mission_id}|{claim_kind}"));
             })
             .await?;
 
@@ -5095,6 +5356,188 @@ impl PlayerDb {
             return Err(err.into());
         }
 
+        self.record_mission_ops(&ops).await;
+        Ok(account)
+    }
+
+    pub async fn swap_mission(
+        &self,
+        account_id: &str,
+        mission_id: &str,
+        used_ad: bool,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let old_def = crate::missions::mission_by_id(mission_id)
+            .copied()
+            .ok_or_else(|| format!("unknown mission: {mission_id}"))?;
+        if old_def.category == crate::missions::MissionCategory::Onboarding {
+            return Err("onboarding missions cannot be swapped".into());
+        }
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let epoch_day = now / 86_400;
+        let rotation_period = crate::commerce::rotation_period(now);
+        let free_rotation = self.current_rotation_leaders_for_now(now);
+        let deal_salt = account_deal_salt(account_id);
+
+        let mut failure: Option<String> = None;
+        let mut ops = Vec::new();
+        let account = self
+            .update_account_atomic(account_id, &[], |account| {
+                failure = None;
+                ops.clear();
+                if account.kind != AccountKind::Human {
+                    failure = Some("missions are only available for human accounts".to_string());
+                    return;
+                }
+
+                let player_level = account.profile.level.max(1);
+                let min_level = crate::missions::min_level_for_category(old_def.category);
+                if player_level < min_level {
+                    failure = Some(format!("mission locked until level {min_level}"));
+                    return;
+                }
+
+                let playability = crate::missions::PlayabilityContext {
+                    owned_leaders: &account.profile.owned_leaders,
+                    free_rotation: &free_rotation,
+                    crowns: account.profile.crowns,
+                    gems: account.profile.gems,
+                };
+                crate::missions::sync_hands_for_periods(
+                    crate::missions::HandSyncState {
+                        records: &mut account.profile.missions_progress,
+                        daily_day: &mut account.profile.daily_missions_day,
+                        daily_mission_ids: &mut account.profile.daily_mission_ids,
+                        daily_swaps_used: &mut account.profile.daily_swaps_used,
+                        daily_swapped_out_ids: &mut account.profile.daily_swapped_out_ids,
+                        weekly_period: &mut account.profile.weekly_missions_period,
+                        weekly_mission_ids: &mut account.profile.weekly_mission_ids,
+                        weekly_swaps_used: &mut account.profile.weekly_swaps_used,
+                        weekly_swapped_out_ids: &mut account.profile.weekly_swapped_out_ids,
+                    },
+                    epoch_day,
+                    rotation_period,
+                    player_level,
+                    deal_salt,
+                    Some(&playability),
+                );
+
+                let existing_record = account.profile.missions_progress.get(mission_id).cloned();
+                if existing_record
+                    .as_ref()
+                    .is_some_and(|r| r.completed || r.claimed)
+                {
+                    failure = Some("completed or claimed missions cannot be swapped".to_string());
+                    return;
+                }
+
+                let is_daily = old_def.category == crate::missions::MissionCategory::Daily;
+                let swaps_used = if is_daily {
+                    account.profile.daily_swaps_used
+                } else {
+                    account.profile.weekly_swaps_used
+                };
+                let max_swaps = if used_ad {
+                    crate::missions::MAX_TOTAL_SWAPS_PER_PERIOD
+                } else {
+                    crate::missions::MAX_FREE_SWAPS_PER_PERIOD
+                };
+                if swaps_used >= max_swaps {
+                    failure = Some("no mission swaps remaining for this period".to_string());
+                    return;
+                }
+
+                let (active_ids, swapped_out_ids) = if is_daily {
+                    (
+                        &account.profile.daily_mission_ids,
+                        &account.profile.daily_swapped_out_ids,
+                    )
+                } else {
+                    (
+                        &account.profile.weekly_mission_ids,
+                        &account.profile.weekly_swapped_out_ids,
+                    )
+                };
+                let Some(slot_index) = active_ids.iter().position(|id| id == mission_id) else {
+                    failure = Some("mission is not currently active".to_string());
+                    return;
+                };
+
+                let seed = now ^ deal_salt ^ u64::from(swaps_used);
+                let new_def = match crate::missions::select_swap_replacement(
+                    &old_def,
+                    active_ids,
+                    swapped_out_ids,
+                    seed,
+                    Some(&playability),
+                ) {
+                    Ok(rep) => rep,
+                    Err(err) => {
+                        failure = Some(err.to_string());
+                        return;
+                    }
+                };
+
+                let was_playable =
+                    crate::missions::is_mission_currently_playable(&old_def, Some(&playability));
+                let play_bucket = if was_playable { "playable" } else { "unowned" };
+                let prog_bucket = if existing_record.is_some_and(|r| r.progress > 0) {
+                    "prog_mid"
+                } else {
+                    "prog0"
+                };
+
+                if is_daily {
+                    account.profile.daily_mission_ids[slot_index] = new_def.id.to_string();
+                    account
+                        .profile
+                        .daily_swapped_out_ids
+                        .insert(old_def.id.to_string());
+                    account.profile.daily_swaps_used =
+                        account.profile.daily_swaps_used.saturating_add(1);
+                } else {
+                    account.profile.weekly_mission_ids[slot_index] = new_def.id.to_string();
+                    account
+                        .profile
+                        .weekly_swapped_out_ids
+                        .insert(old_def.id.to_string());
+                    account.profile.weekly_swaps_used =
+                        account.profile.weekly_swaps_used.saturating_add(1);
+                }
+                account.profile.missions_progress.remove(old_def.id);
+                account.updated_at = now;
+
+                ops.push(format!(
+                    "swap_out|{}|{}:{}|{}|{}",
+                    old_def.id,
+                    old_def.axis.as_str(),
+                    old_def.tag,
+                    play_bucket,
+                    prog_bucket
+                ));
+                ops.push(format!(
+                    "swap_in|{}|{}:{}",
+                    new_def.id,
+                    new_def.axis.as_str(),
+                    new_def.tag
+                ));
+                ops.push(format!(
+                    "offered|{}|{}:{}",
+                    new_def.id,
+                    new_def.axis.as_str(),
+                    new_def.tag
+                ));
+            })
+            .await?;
+
+        if let Some(err) = failure {
+            return Err(err.into());
+        }
+
+        self.record_mission_ops(&ops).await;
         Ok(account)
     }
 
@@ -5483,29 +5926,6 @@ impl PlayerDb {
         ))
     }
 
-    pub fn pending_match_progress(
-        &self,
-        match_id: &str,
-    ) -> Result<Vec<u64>, Box<dyn std::error::Error + Send + Sync>> {
-        let db = self.redb_db.as_ref().ok_or("Redb database unavailable")?;
-        let txn = db.begin_read()?;
-        let table = txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
-        let prefix = format!("progress:{match_id}:");
-        let mut pending = Vec::new();
-        for entry in table.range(prefix.as_str()..)? {
-            let (key, value) = entry?;
-            if !key.value().starts_with(&prefix) {
-                break;
-            }
-            if let crate::profile::MatchWork::Progress { sequence, .. } =
-                serde_json::from_slice::<crate::profile::MatchWorkRecord>(value.value())?.work
-            {
-                pending.push(sequence);
-            }
-        }
-        Ok(pending)
-    }
-
     pub fn finish_match_verification(
         &self,
         match_id: &str,
@@ -5531,15 +5951,6 @@ impl PlayerDb {
         drop(starts);
         write_txn.commit()?;
         Ok(())
-    }
-
-    /// Finalize a match from its immutable registration. Relay metadata is
-    /// accepted only as a match-id check, never as a player roster or result.
-    pub async fn finalize_match(
-        &self,
-        match_id: &str,
-    ) -> Result<Vec<PlayGamesMatchOutcome>, Box<dyn std::error::Error + Send + Sync>> {
-        self.finalize_match_with_lobby(match_id, None).await
     }
 
     pub async fn finalize_match_with_lobby(
@@ -5730,7 +6141,8 @@ impl PlayerDb {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        let (include, accounts) = self
+        let free_rotation = self.current_rotation_leaders_for_now(now);
+        let ((include, mission_ops), accounts) = self
             .update_accounts_atomic(
                 account_ids,
                 vec![match_id.clone(), bonus_id],
@@ -5754,6 +6166,7 @@ impl PlayerDb {
                         return Err("invalid verified result: match history roster differs from registration".into());
                     }
                     let mut include = Vec::with_capacity(result_for_write.participants.len());
+                    let mut mission_ops = Vec::new();
                     for (participant, account) in
                         result_for_write.participants.iter().zip(accounts.iter_mut())
                     {
@@ -5797,6 +6210,8 @@ impl PlayerDb {
                                 &result_for_write,
                                 participant,
                                 None,
+                                &free_rotation,
+                                &mut mission_ops,
                                 now,
                             )
                             .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?,
@@ -5834,10 +6249,11 @@ impl PlayerDb {
                             crate::profile::MatchWork::Notify { command },
                         )?;
                     }
-                    Ok(include)
+                    Ok((include, mission_ops))
                 },
             )
             .await?;
+        self.record_mission_ops(&mission_ops).await;
 
         let mut playgames_outcomes = Vec::new();
         let mut mirrored_accounts = Vec::new();
@@ -6448,6 +6864,8 @@ fn apply_verified_participant_reward_to_account(
     result: &VerifiedMatchResult,
     participant: &crate::profile::VerifiedMatchParticipant,
     personal_closure_turn: Option<u64>,
+    free_rotation: &[crate::leaders::Leader],
+    mission_ops: &mut Vec<String>,
     now: u64,
 ) -> Result<bool, String> {
     if account.kind == AccountKind::Bot {
@@ -6580,6 +6998,90 @@ fn apply_verified_participant_reward_to_account(
         receipt.verification_status = Some(ReplayVerificationStatus::Verified);
         receipt.verified_result_sha256 = Some(result_hash);
     }
+
+    account.profile.total_structures_built = account
+        .profile
+        .total_structures_built
+        .saturating_add(u64::from(participant.structures_built));
+
+    let epoch_day = now / 86_400;
+    let rotation_period = crate::commerce::rotation_period(now);
+    let leader_meta = crate::commerce::leader_from_any_id(&leader);
+    let used_free_rotation = leader_meta
+        .map(|l| free_rotation.contains(&l))
+        .unwrap_or(false);
+    let match_mode = if mode.eq_ignore_ascii_case("HumansVsNations")
+        || mode.eq_ignore_ascii_case("Humans vs Nations")
+        || mode.eq_ignore_ascii_case("hnv")
+    {
+        crate::missions::MatchMode::HumansVsNations
+    } else if mode.eq_ignore_ascii_case("Teams")
+        || mode.eq_ignore_ascii_case("Team")
+        || participant.team.is_some()
+    {
+        crate::missions::MatchMode::Teams
+    } else {
+        crate::missions::MatchMode::Ffa
+    };
+    let is_ranked = queue.eq_ignore_ascii_case("Ranked1v1");
+    let player_level = account.profile.level.max(1);
+    let deal_salt = account_deal_salt(&account.id);
+    let playability = crate::missions::PlayabilityContext {
+        owned_leaders: &account.profile.owned_leaders,
+        free_rotation,
+        crowns: account.profile.crowns,
+        gems: account.profile.gems,
+    };
+    let outcome = crate::missions::advance_missions_after_match_with_hands(
+        crate::missions::HandSyncState {
+            records: &mut account.profile.missions_progress,
+            daily_day: &mut account.profile.daily_missions_day,
+            daily_mission_ids: &mut account.profile.daily_mission_ids,
+            daily_swaps_used: &mut account.profile.daily_swaps_used,
+            daily_swapped_out_ids: &mut account.profile.daily_swapped_out_ids,
+            weekly_period: &mut account.profile.weekly_missions_period,
+            weekly_mission_ids: &mut account.profile.weekly_mission_ids,
+            weekly_swaps_used: &mut account.profile.weekly_swaps_used,
+            weekly_swapped_out_ids: &mut account.profile.weekly_swapped_out_ids,
+        },
+        epoch_day,
+        rotation_period,
+        deal_salt,
+        Some(&playability),
+        &crate::missions::MatchMissionContext {
+            player_level,
+            mode: match_mode,
+            is_ranked,
+            used_free_rotation,
+            leader_id: leader_meta.map(|l| l.id()),
+            leader_region: leader_meta.map(|l| l.character().region),
+            leader_rarity: leader_meta.map(|l| l.rarity()),
+            won: participant.won,
+            kills: participant.kills,
+            empires_defeated: participant.empires_defeated,
+            alive_seconds: participant.alive_seconds,
+            peak_territory_rank: participant.peak_territory_rank,
+            total_contenders: result.total_contenders,
+            structures_built: participant.structures_built,
+        },
+    );
+    for offered in outcome.newly_dealt {
+        mission_ops.push(format!(
+            "offered|{}|{}:{}",
+            offered.id,
+            offered.axis.as_str(),
+            offered.tag
+        ));
+    }
+    for done in outcome.newly_completed {
+        mission_ops.push(format!(
+            "completed|{}|{}:{}",
+            done.id,
+            done.axis.as_str(),
+            done.tag
+        ));
+    }
+
     account.updated_at = now;
     Ok(true)
 }
@@ -6596,6 +7098,7 @@ fn verified_participant_result_hash(
         result.winning_team.as_deref(),
         personal_closure_turn,
         participant,
+        result.total_contenders,
     ))
     .map_err(|error| error.to_string())?;
     Ok(hex::encode(sha2::Sha256::digest(bytes)))
@@ -6739,7 +7242,7 @@ mod tests {
     use crate::profile::ReplayVerificationStatus;
     use super::{
         AccountKind, DISPLAY_NAME_MAX_CHARS, LeaderCareerStats, MatchRecord, PlayerAccount,
-        PlayerDb, PlayerProfile, PurchaseRecord, VerifiedReceiptDecision, generated_display_name,
+        PlayerDb, PlayerProfile, VerifiedReceiptDecision, generated_display_name,
         is_valid_account_id, is_valid_gem_grant_request_id, normalize_display_name,
         should_skip_full_match_participant, validate_lobby_match_id, verified_receipt_decision,
         verified_victory_key,
@@ -7635,39 +8138,6 @@ mod tests {
     }
 
     #[test]
-    fn starter_gems_top_up_legacy_accounts_once_and_skip_bots() {
-        let mut existing = test_account(AccountKind::Human);
-        existing.profile.gems = 25;
-        for id in ["welcome_gems_v1", "anonymous_welcome_gems_v1"] {
-            existing.profile.purchase_history.insert(
-                id.to_string(),
-                PurchaseRecord {
-                    id: id.to_string(),
-                    provider: "system".to_string(),
-                    environment: "legacy".to_string(),
-                    product_id: "legacy".to_string(),
-                    transaction_id: None,
-                    status: "granted".to_string(),
-                    acquired_at: 0,
-                    updated_at: 0,
-                },
-            );
-        }
-        assert!(PlayerDb::apply_welcome_grant(&mut existing, 1).unwrap());
-        assert_eq!(existing.profile.gems, 50);
-        assert!(!PlayerDb::apply_welcome_grant(&mut existing, 2).unwrap());
-        assert_eq!(existing.profile.gems, 50);
-
-        let mut fresh = test_account(AccountKind::Human);
-        assert!(PlayerDb::apply_welcome_grant(&mut fresh, 1).unwrap());
-        assert_eq!(fresh.profile.gems, 25);
-
-        let mut bot = test_account(AccountKind::Bot);
-        assert!(!PlayerDb::apply_welcome_grant(&mut bot, 1).unwrap());
-        assert_eq!(bot.profile.gems, 0);
-    }
-
-    #[test]
     fn manual_gem_grants_are_audited_and_idempotent() {
         let request_id = "abcdef0123456789abcdef0123456789";
         assert!(is_valid_gem_grant_request_id(request_id));
@@ -7771,19 +8241,6 @@ mod tests {
         assert_eq!(account.profile.crowns, 0);
         assert_eq!(account.profile.laurels, 0);
         assert!(!account.profile.intro_completed);
-    }
-
-    #[test]
-    fn legacy_account_id_field_migrates_from_id() {
-        let json = r#"{
-            "id":"0123456789abcdef0123456789abcdef",
-            "profile":{"xp":0,"level":1,"wins":0,"matches_played":0,
-              "players_defeated":0,"empires_defeated":0,"tribes_defeated":0,
-              "preferred_leader":null},
-            "linked_identities":[],"created_at":0,"updated_at":0
-        }"#;
-        let account = super::parse_account_with_migration(json.as_bytes()).unwrap();
-        assert_eq!(account.id, "0123456789abcdef0123456789abcdef");
     }
 
     #[test]
@@ -8204,39 +8661,6 @@ mod tests {
     }
 
     #[test]
-    fn legacy_account_laurels_balance_migrates_to_crowns_on_parse() {
-        // Pre-split stored account: profile.laurels holds the spendable balance.
-        let legacy = r#"{
-            "account_id":"0123456789abcdef0123456789abcdef",
-            "profile":{"xp":0,"level":1,"wins":0,"matches_played":0,
-              "players_defeated":0,"empires_defeated":0,"tribes_defeated":0,
-              "preferred_leader":null,"laurels":725},
-            "linked_identities":[],"created_at":0,"updated_at":0
-        }"#;
-        let account = super::parse_account_with_migration(legacy.as_bytes()).unwrap();
-        assert_eq!(
-            account.profile.crowns, 725,
-            "legacy balance must become crowns"
-        );
-        assert_eq!(
-            account.profile.laurels, 0,
-            "points must not inherit the legacy balance"
-        );
-
-        // Post-split account: both balances survive untouched.
-        let current = r#"{
-            "account_id":"0123456789abcdef0123456789abcdef",
-            "profile":{"xp":0,"level":1,"wins":0,"matches_played":0,
-              "players_defeated":0,"empires_defeated":0,"tribes_defeated":0,
-              "preferred_leader":null,"crowns":100,"laurels":40},
-            "linked_identities":[],"created_at":0,"updated_at":0
-        }"#;
-        let account = super::parse_account_with_migration(current.as_bytes()).unwrap();
-        assert_eq!(account.profile.crowns, 100);
-        assert_eq!(account.profile.laurels, 40);
-    }
-
-    #[test]
     fn public_account_projection_does_not_serialize_secret_hash() {
         let json = r#"{
             "account_id":"0123456789abcdef0123456789abcdef",
@@ -8397,8 +8821,8 @@ mod tests {
             .claim_mission_reward(player, "onboarding_1_tutorial", false)
             .await
             .unwrap();
-        // 50 Crowns + 0 Gems added to 100 Crowns + 50 Gems
-        assert_eq!(updated.profile.crowns, 150);
+        // 40 Crowns + 0 Gems added to 100 Crowns + 50 Gems
+        assert_eq!(updated.profile.crowns, 140);
         assert_eq!(updated.profile.gems, 50);
         let record = updated
             .profile
@@ -8414,28 +8838,201 @@ mod tests {
             .await;
         assert!(double_claim_err.is_err());
 
-        // 4. Claiming with doubled_by_ad: true doubles the reward and evaluates from stats
+        // 4. Claiming with doubled_by_ad: true doubles the reward using mission progress
         db.update_account_atomic(player, &[], |acc| {
-            acc.profile.matches_played = 1;
+            acc.profile.missions_progress.insert(
+                "onboarding_2_baptism".to_string(),
+                crate::missions::MissionRecord {
+                    id: "onboarding_2_baptism".to_string(),
+                    progress: 2,
+                    completed: true,
+                    claimed: false,
+                    ..Default::default()
+                },
+            );
         })
         .await
         .unwrap();
 
         let doubled = db
-            .claim_mission_reward(player, "onboarding_2_structures", true)
+            .claim_mission_reward(player, "onboarding_2_baptism", true)
             .await
             .unwrap();
-        // onboarding_2 gives 50 Crowns, 0 Gems * 2 = 100 Crowns, 0 Gems
-        // 150 + 100 = 250, 50 + 0 = 50
-        assert_eq!(doubled.profile.crowns, 250);
+        // onboarding_2_baptism gives 40 Crowns, 0 Gems * 2 = 80 Crowns, 0 Gems
+        // 140 + 80 = 220, 50 + 0 = 50
+        assert_eq!(doubled.profile.crowns, 220);
         assert_eq!(doubled.profile.gems, 50);
         let rec2 = doubled
             .profile
             .missions_progress
-            .get("onboarding_2_structures")
+            .get("onboarding_2_baptism")
             .unwrap();
         assert!(rec2.claimed);
         assert!(rec2.doubled_by_ad);
-        assert_eq!(rec2.progress, 5);
+        assert_eq!(rec2.progress, 2);
+    }
+
+    #[tokio::test]
+    async fn mission_swap_enforces_quotas_playability_and_locks() {
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("mission-swap.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
+        let player = "fedcba9876543210fedcba9876543210";
+        let mut account = test_account(AccountKind::Human);
+        account.id = player.to_string();
+        account.profile.xp = 500; // level 6
+        account.profile.sync_level();
+        db.insert_account_sync(account).unwrap();
+
+        let ensured = db
+            .ensure_human_onboarding(db.load_account(player).await.unwrap())
+            .await
+            .unwrap();
+        assert_eq!(ensured.profile.daily_mission_ids.len(), 3);
+        let first_daily = ensured.profile.daily_mission_ids[0].clone();
+
+        // Onboarding missions cannot be swapped.
+        assert!(
+            db.swap_mission(player, "onboarding_1_tutorial", false)
+                .await
+                .is_err()
+        );
+
+        // Give the mission mid-progress and swap using free quota.
+        db.update_account_atomic(player, &[], |acc| {
+            acc.profile.missions_progress.insert(
+                first_daily.clone(),
+                crate::missions::MissionRecord {
+                    id: first_daily.clone(),
+                    progress: 1,
+                    completed: false,
+                    claimed: false,
+                    ..Default::default()
+                },
+            );
+        })
+        .await
+        .unwrap();
+
+        let after_free_swap = db.swap_mission(player, &first_daily, false).await.unwrap();
+        assert_eq!(after_free_swap.profile.daily_swaps_used, 1);
+        assert!(after_free_swap.profile.daily_swapped_out_ids.contains(&first_daily));
+        assert!(!after_free_swap.profile.daily_mission_ids.contains(&first_daily));
+        assert!(!after_free_swap.profile.missions_progress.contains_key(&first_daily));
+        let second_daily = after_free_swap.profile.daily_mission_ids[0].clone();
+
+        // Second free swap fails because free quota (1/day) is spent.
+        assert!(db.swap_mission(player, &second_daily, false).await.is_err());
+
+        // Ad-backed second swap succeeds without re-dealing first_daily.
+        let after_ad_swap = db.swap_mission(player, &second_daily, true).await.unwrap();
+        assert_eq!(after_ad_swap.profile.daily_swaps_used, 2);
+        assert!(!after_ad_swap.profile.daily_mission_ids.contains(&first_daily));
+        assert!(!after_ad_swap.profile.daily_mission_ids.contains(&second_daily));
+        let third_daily = after_ad_swap.profile.daily_mission_ids[0].clone();
+
+        // Third swap (even with ad) fails because daily cap (2) is exhausted.
+        assert!(db.swap_mission(player, &third_daily, true).await.is_err());
+
+        // Completed weekly mission cannot be swapped even with unused weekly quota.
+        let first_weekly = after_ad_swap.profile.weekly_mission_ids[0].clone();
+        db.update_account_atomic(player, &[], |acc| {
+            acc.profile.missions_progress.insert(
+                first_weekly.clone(),
+                crate::missions::MissionRecord {
+                    id: first_weekly.clone(),
+                    progress: 99,
+                    completed: true,
+                    claimed: false,
+                    ..Default::default()
+                },
+            );
+        })
+        .await
+        .unwrap();
+        assert!(db.swap_mission(player, &first_weekly, false).await.is_err());
+    }
+
+    #[test]
+    fn aggregate_mission_ops_summarizes_churn_and_guide_actions() {
+        let mut day = std::collections::HashMap::new();
+        day.insert("offered|daily_oceania_3|region:oceania".to_string(), 10);
+        day.insert("completed|daily_oceania_3|region:oceania".to_string(), 4);
+        day.insert(
+            "swap_out|daily_oceania_3|region:oceania|playable|prog0".to_string(),
+            2,
+        );
+        day.insert(
+            "swap_out|daily_oceania_3|region:oceania|unowned|prog_mid".to_string(),
+            1,
+        );
+        day.insert("swap_in|daily_team_game|mode:teams".to_string(), 3);
+        day.insert("claimed|daily_oceania_3|ad_2x".to_string(), 2);
+        day.insert("guide_action|welcome|completed".to_string(), 5);
+        day.insert("guide_action|post_match_missions|disabled_all".to_string(), 2);
+
+        let summary = super::aggregate_mission_ops(&[day]);
+        let missions = summary["mission_churn_by_mission"].as_array().unwrap();
+        let oceania = missions
+            .iter()
+            .find(|m| m["mission_id"] == "daily_oceania_3")
+            .unwrap();
+        assert_eq!(oceania["offered"], 10);
+        assert_eq!(oceania["swapped_out_total"], 3);
+        assert_eq!(oceania["swapped_out_playable"], 2);
+        assert_eq!(oceania["swapped_out_unowned"], 1);
+        assert_eq!(oceania["swapped_out_prog0"], 2);
+        assert_eq!(oceania["swapped_out_mid"], 1);
+        assert_eq!(oceania["claimed_ad_2x"], 2);
+
+        let guides = summary["menu_guide_summary"].as_array().unwrap();
+        assert_eq!(guides.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn menu_tips_disabled_suppresses_guide_continuity() {
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("guide-mute.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
+        let player = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let mut account = test_account(AccountKind::Human);
+        account.id = player.to_string();
+        account.profile.matches_played = 1;
+        account.profile.xp = 500;
+        account.profile.sync_level();
+        db.insert_account_sync(account).unwrap();
+
+        // First onboarding check enrolls post_match_missions + daily/weekly guides.
+        let enrolled = db
+            .ensure_human_onboarding(db.load_account(player).await.unwrap())
+            .await
+            .unwrap();
+        assert!(enrolled.profile.menu_guides.contains_key("post_match_missions"));
+        assert!(enrolled.profile.menu_guides.contains_key("daily_ops_unlock"));
+        assert!(enrolled.profile.menu_guides.contains_key("weekly_ranked_unlock"));
+
+        // Muting all tips marks active guides skipped and sets menu_tips_disabled = true.
+        let muted = db
+            .save_menu_guide_progress_with_options(
+                player,
+                "post_match_missions",
+                crate::profile::MenuGuideProgress {
+                    status: crate::profile::MenuGuideStatus::Skipped,
+                    ..Default::default()
+                },
+                Some(true),
+            )
+            .await
+            .unwrap();
+        assert!(muted.profile.menu_tips_disabled);
+        assert!(muted
+            .profile
+            .menu_guides
+            .values()
+            .all(|g| g.status.is_terminal()));
     }
 }

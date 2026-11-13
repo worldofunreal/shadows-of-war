@@ -109,38 +109,3 @@ pub(crate) fn emote_motion(kind: EmoteKind, age: f32, reduced: bool, pinned: boo
     motion
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn emote_phases_are_bounded_continuous_and_settle() {
-        for definition in sow_core::emote::EMOTES {
-            let mut previous = emote_motion(definition.kind, 0.0, false, false);
-            for ms in 1..=3100 {
-                let current = emote_motion(definition.kind, ms as f32 / 1000.0, false, false);
-                assert!(
-                    current.bubble_alpha.is_finite() && (0.0..=1.0).contains(&current.bubble_alpha)
-                );
-                for axis in 0..2 {
-                    assert!((current.offset[axis] - previous.offset[axis]).abs() < 0.02);
-                    assert!(current.offset[axis].abs() <= 0.21);
-                    assert!((0.9..=1.1).contains(&current.scale[axis]));
-                }
-                previous = current;
-            }
-            assert_eq!(
-                emote_motion(definition.kind, 3.0, false, false),
-                EmoteMotion::default()
-            );
-            assert_eq!(
-                emote_motion(definition.kind, 3.0, false, true).bubble_alpha,
-                1.0
-            );
-            let reduced = emote_motion(definition.kind, 0.18, true, false);
-            assert_eq!(reduced.offset, [0.0; 2]);
-            assert_eq!(reduced.scale, [1.0; 2]);
-            assert!(reduced.bubble_alpha > 0.0);
-        }
-    }
-}

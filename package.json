@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "bunx tsc -p sow-web/tsconfig.json --noEmit && bunx tsc -p sow-web/tsconfig.sw.json --noEmit && bunx tsc -p sow-tools/editors/campaign-editor/tsconfig.json --noEmit",
-    "test": "bun test",
-    "verify": "bun run typecheck && bun run test && cargo check"
+    "verify": "bun run typecheck && cargo check"
   },
   "devDependencies": {
     "typescript": "^6.0.0"

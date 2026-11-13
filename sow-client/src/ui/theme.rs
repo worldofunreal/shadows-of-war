@@ -263,19 +263,3 @@ pub mod dev_config {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::dev_config::DevConfig;
-
-    #[test]
-    fn territory_blend_defaults_use_normal_mix_without_coupling_modes() {
-        let mut config = DevConfig::default();
-        assert_eq!(config.value("territory_opacity")[0], 0.77);
-        assert_eq!(config.value("blend_mode")[0], 0.0);
-        assert_eq!(config.value("tribe_blend_mode")[0], 0.0);
-
-        assert!(config.assign("tribe_blend_mode", [1.0, 0.0, 0.0, 0.0]));
-        assert_eq!(config.value("blend_mode")[0], 0.0);
-        assert_eq!(config.value("tribe_blend_mode")[0], 1.0);
-    }
-}

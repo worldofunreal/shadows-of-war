@@ -136,6 +136,66 @@ pub fn normalize_welcome_guide_progress(
     }
 }
 
+pub const KNOWN_MENU_GUIDE_IDS: &[&str] = &[
+    "welcome",
+    "post_match_missions",
+    "daily_ops_unlock",
+    "weekly_ranked_unlock",
+];
+
+pub fn is_known_menu_guide_id(guide_id: &str) -> bool {
+    KNOWN_MENU_GUIDE_IDS.contains(&guide_id)
+}
+
+pub fn guide_steps_for_id(guide_id: &str) -> Option<(&'static str, &'static str)> {
+    match guide_id {
+        "welcome" => Some(("welcome_heroes", "welcome_complete")),
+        "post_match_missions" => Some(("pm_missions", "pm_missions_complete")),
+        "daily_ops_unlock" => Some(("daily_unlocked", "daily_unlocked_complete")),
+        "weekly_ranked_unlock" => Some(("weekly_ranked", "weekly_ranked_complete")),
+        _ => None,
+    }
+}
+
+pub fn default_guide_progress_for_id(guide_id: &str) -> MenuGuideProgress {
+    normalize_guide_progress_for_id(guide_id, &MenuGuideProgress::default(), 0)
+}
+
+pub fn normalize_guide_progress_for_id(
+    guide_id: &str,
+    progress: &MenuGuideProgress,
+    matches_played: u32,
+) -> MenuGuideProgress {
+    if guide_id == "welcome" {
+        return normalize_welcome_guide_progress(progress, matches_played);
+    }
+    let Some((entry_step, end_step)) = guide_steps_for_id(guide_id) else {
+        return progress.clone();
+    };
+    let status = if progress.status.is_terminal() {
+        progress.status
+    } else if progress.completed_steps.contains(entry_step)
+        || progress.completed_steps.contains(end_step)
+    {
+        MenuGuideStatus::Completed
+    } else {
+        MenuGuideStatus::Active
+    };
+    MenuGuideProgress {
+        completed_steps: if status == MenuGuideStatus::Completed {
+            [entry_step.to_string(), end_step.to_string()]
+                .into_iter()
+                .collect()
+        } else {
+            Default::default()
+        },
+        current_step: (status == MenuGuideStatus::Active).then(|| entry_step.to_string()),
+        status,
+        selected_leader: None,
+        source_match_id: progress.source_match_id.clone(),
+    }
+}
+
 pub fn merge_menu_guide_progress(
     saved: Option<&MenuGuideProgress>,
     incoming: &MenuGuideProgress,
@@ -147,6 +207,27 @@ pub fn merge_menu_guide_progress(
         }
     }
     normalize_welcome_guide_progress(incoming, 0)
+}
+
+pub fn merge_menu_guide_progress_for_id(
+    guide_id: &str,
+    saved: Option<&MenuGuideProgress>,
+    incoming: &MenuGuideProgress,
+) -> MenuGuideProgress {
+    if guide_id == "welcome" {
+        return merge_menu_guide_progress(saved, incoming);
+    }
+    let saved_norm = saved.map(|s| normalize_guide_progress_for_id(guide_id, s, 0));
+    if let Some(ref saved) = saved_norm {
+        if saved.status.is_terminal() {
+            return saved.clone();
+        }
+    }
+    let mut merged = normalize_guide_progress_for_id(guide_id, incoming, 0);
+    if merged.source_match_id.is_none() {
+        merged.source_match_id = saved_norm.and_then(|s| s.source_match_id);
+    }
+    merged
 }
 
 pub fn validate_menu_guide_progress(
@@ -541,6 +622,8 @@ pub struct VerifiedMatchResult {
     /// Turn of the server-verified participant closure, when present.
     #[serde(default)]
     pub personal_closure_turn: Option<u64>,
+    #[serde(default)]
+    pub total_contenders: u16,
     pub participants: Vec<VerifiedMatchParticipant>,
 }
 
@@ -557,6 +640,12 @@ pub struct VerifiedMatchParticipant {
     pub players_defeated: u32,
     pub empires_defeated: u32,
     pub tribes_defeated: u32,
+    #[serde(default)]
+    pub alive_seconds: u32,
+    #[serde(default)]
+    pub peak_territory_rank: Option<u16>,
+    #[serde(default)]
+    pub structures_built: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -784,11 +873,6 @@ pub fn win_rate(wins: u32, matches: u32) -> f32 {
 
 pub fn kda(kills: u32, deaths: u32, assists: u32) -> f32 {
     ((kills + assists) as f32 / deaths.max(1) as f32 * 100.0).round() / 100.0
-}
-
-pub fn ladder_score(mu: f64, sigma: f64) -> u16 {
-    let ordinal = mu - 3.0 * sigma;
-    (1500.0 + ordinal * 50.0).round().clamp(800.0, 4000.0) as u16
 }
 
 /// Update one ranked 1v1 rating using the original Glicko formula.

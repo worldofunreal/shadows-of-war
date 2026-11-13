@@ -8,8 +8,6 @@ license = "AGPL-3.0-only"
 [features]
 default = ["std"]
 std = []
-mem_profiler = []
-ai-metrics = []
 
 [dependencies]
 serde = { workspace = true }

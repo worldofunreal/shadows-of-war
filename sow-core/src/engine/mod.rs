@@ -280,10 +280,6 @@ pub struct PlacementScratch {
     pub border_scratch: Vec<u32>,
     pub interior_scratch: Vec<(i32, i32)>,
     pub neighbor_scratch: Vec<u16>,
-    #[cfg(feature = "ai-metrics")]
-    pub candidates_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub building_checks: u64,
 }
 
 impl Default for PlacementScratch {
@@ -295,10 +291,6 @@ impl Default for PlacementScratch {
             border_scratch: Vec::new(),
             interior_scratch: Vec::new(),
             neighbor_scratch: Vec::new(),
-            #[cfg(feature = "ai-metrics")]
-            candidates_examined: 0,
-            #[cfg(feature = "ai-metrics")]
-            building_checks: 0,
         }
     }
 }
@@ -329,36 +321,12 @@ pub type SeaLaneCalcState = (usize, Vec<crate::sea_lane::SeaLane>, Vec<(u64, u32
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct BotWorkCounters {
-    #[cfg(feature = "ai-metrics")]
-    pub border_cells_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub border_blocks_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub border_directory_words_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub neighbor_cells_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub placement_candidates_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub placement_building_checks: u64,
-    #[cfg(any(test, feature = "ai-metrics"))]
+    #[cfg(test)]
     pub naval_routes_calculated: u64,
-    #[cfg(any(test, feature = "ai-metrics"))]
+    #[cfg(test)]
     pub shoreline_candidates_examined: u64,
-    #[cfg(any(test, feature = "ai-metrics"))]
+    #[cfg(test)]
     pub naval_border_candidates_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub attack_entries_scanned_last_update: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub diplomacy_proposals_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub diplomacy_resource_requests_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub nuke_buildings_examined: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub nuke_sam_checks: u64,
-    #[cfg(feature = "ai-metrics")]
-    pub nuke_history_lookups: u64,
 }
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -476,6 +444,8 @@ pub struct SowEngine {
     pub(crate) bot_naval_cursors: Vec<BotNavalCursor>,
     pub(crate) bot_naval_shore_sample: Vec<u32>,
     pub(crate) bot_naval_slots_used: Vec<u32>,
+    #[serde(default)]
+    pub playing_ticks: u32,
     #[serde(skip)]
     pub(crate) bot_work: BotWorkCounters,
     #[cfg(test)]
@@ -585,6 +555,7 @@ impl SowEngine {
             bot_naval_cursors: Vec::new(),
             bot_naval_shore_sample: Vec::with_capacity(256),
             bot_naval_slots_used: Vec::new(),
+            playing_ticks: 0,
             bot_work: BotWorkCounters::default(),
             #[cfg(test)]
             test_last_ai_intents: Vec::new(),
@@ -2707,7 +2678,7 @@ mod tests {
                 id: "historical".into(),
                 name: "Historical".into(),
                 entries: vec![
-                    entry("nation_hatshepsut", Nation, 15),
+                    entry("nation_amanitore", Nation, 15),
                     entry("nation_sundiata_keita", Nation, 45),
                     entry("nation_amanirenas", Nation, 75),
                     entry("tribe_cherusci", Tribe, 115),

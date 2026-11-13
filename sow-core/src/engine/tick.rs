@@ -146,6 +146,9 @@ impl SowEngine {
             return;
         }
 
+        if self.state.phase != crate::game::GamePhase::Playing {
+            return;
+        }
         self.state.events.clear(); // Prevent unbounded memory leak (was growing infinitely on tile capture)
         self.state.tick();
 
@@ -167,6 +170,7 @@ impl SowEngine {
         self.execute_trade_ships();
         self.execute_fleets();
         self.check_winner();
+        self.update_match_telemetry();
 
         let mut expired_alliances = Vec::new();
         for player in &mut self.state.players {
@@ -473,10 +477,74 @@ impl SowEngine {
         self.state.winner = Some(winner_id);
         self.state.winning_team = winning_team;
         self.state.phase = crate::game::GamePhase::GameOver;
+        if let Some(winner) = self.state.player_mut(winner_id)
+            && winner.has_spawned
+        {
+            winner.peak_territory_rank = Some(1);
+        }
         self.state.events.push(crate::game::GameEvent::GameOver {
             winner_id,
             winning_team,
         });
+    }
+
+    fn update_match_telemetry(&mut self) {
+        if self.state.config.tutorial {
+            return;
+        }
+        self.playing_ticks = self.playing_ticks.saturating_add(1);
+        for player in &mut self.state.players {
+            if player.has_spawned
+                && player.alive
+                && player.tile_count > 0
+                && !player.disconnected
+            {
+                player.alive_ticks = player.alive_ticks.saturating_add(1);
+            }
+        }
+        let tps = ((1000.0 / f64::from(self.state.config.tick_rate_ms.max(1.0)))
+            .round() as u32)
+            .max(1);
+        let winner_declared = self.state.winner.is_some();
+        let settling_complete = self.playing_ticks >= 10 * tps;
+        if !winner_declared && (!settling_complete || self.playing_ticks % tps != 0) {
+            return;
+        }
+        let alive_tiles: Vec<(u16, u32)> = self
+            .state
+            .players
+            .iter()
+            .filter(|p| p.has_spawned && p.alive && p.tile_count > 0)
+            .map(|p| (p.id, p.tile_count))
+            .collect();
+        if alive_tiles.len() < 2 {
+            return;
+        }
+        let Some(min_tiles) = alive_tiles.iter().map(|(_, t)| *t).min() else {
+            return;
+        };
+        let Some(max_tiles) = alive_tiles.iter().map(|(_, t)| *t).max() else {
+            return;
+        };
+        if max_tiles <= min_tiles {
+            return;
+        }
+        let top_tie_count = alive_tiles.iter().filter(|(_, t)| *t == max_tiles).count();
+        for player in &mut self.state.players {
+            if !player.has_spawned || !player.alive || player.tile_count == 0 {
+                continue;
+            }
+            let strictly_ahead = alive_tiles
+                .iter()
+                .filter(|(_, tc)| *tc > player.tile_count)
+                .count() as u16;
+            if strictly_ahead == 0 && top_tie_count > 1 && self.state.winner != Some(player.id) {
+                continue;
+            }
+            let rank = 1_u16.saturating_add(strictly_ahead);
+            player.peak_territory_rank =
+                Some(player.peak_territory_rank.map_or(rank, |prev| prev.min(rank)));
+        }
     }
 }
 
@@ -955,16 +1023,61 @@ mod tests {
                         engine.state.winning_team,
                         (!tutorial && game_mode != "FFA").then_some(Team::Red)
                     );
-                    assert_eq!(
-                        engine
-                            .state
-                            .events
-                            .iter()
-                            .any(|event| matches!(event, GameEvent::GameOver { .. })),
-                        !tutorial
-                    );
+        assert_eq!(
+            engine.state.events.iter().any(|event| matches!(event, GameEvent::GameOver { .. })),
+            !tutorial
+        );
                 }
             }
         }
+    }
+
+    #[test]
+    fn match_telemetry_tracks_alive_ticks_peak_rank_with_settling_guard_and_structures() {
+        let config = GameConfig {
+            game_mode: "FFA".into(),
+            tick_rate_ms: 100.0,
+            random_spawn: true,
+            ..Default::default()
+        };
+        let mut state = GameState::new(7, 32, 32, config.clone());
+        state.phase = GamePhase::Playing;
+        state.total_land_tiles = 1000;
+
+        for (id, tiles) in [(1, 30), (2, 30), (3, 10)] {
+            let mut p = Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
+            p.has_spawned = true;
+            p.alive = true;
+            p.tile_count = tiles;
+            state.register_player(p);
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+
+        // Settling period (first 99 ticks < 10s @ 100ms): no peak rank recorded even with spread.
+        for _ in 0..99 {
+            engine.update_match_telemetry();
+        }
+        assert_eq!(engine.state.player(1).unwrap().alive_ticks, 99);
+        assert_eq!(engine.state.player(1).unwrap().peak_territory_rank, None);
+
+        // At tick 100 (10.0s): P1 and P2 are tied at top (30 tiles each), P3 is rank 3 (10 tiles).
+        // Solo-#1 guard blocks awarding rank 1 on a top tie; P3 gets rank 3.
+        engine.update_match_telemetry();
+        assert_eq!(engine.playing_ticks, 100);
+        assert_eq!(engine.state.player(1).unwrap().peak_territory_rank, None);
+        assert_eq!(engine.state.player(2).unwrap().peak_territory_rank, None);
+        assert_eq!(engine.state.player(3).unwrap().peak_territory_rank, Some(3));
+
+        // Break the tie cleanly for P1 -> next 1s sample (tick 110) records peak #1 for P1 and #2 for P2.
+        engine.state.player_mut(1).unwrap().tile_count = 45;
+        engine.state.player_mut(2).unwrap().disconnected = true;
+        for _ in 0..10 {
+            engine.update_match_telemetry();
+        }
+        assert_eq!(engine.state.player(1).unwrap().peak_territory_rank, Some(1));
+        assert_eq!(engine.state.player(2).unwrap().peak_territory_rank, Some(2));
+        // P2 was disconnected for those 10 ticks, so alive_ticks stayed at 100.
+        assert_eq!(engine.state.player(1).unwrap().alive_ticks, 110);
+        assert_eq!(engine.state.player(2).unwrap().alive_ticks, 100);
     }
 }

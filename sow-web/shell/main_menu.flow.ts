@@ -1,5 +1,5 @@
 // Owns the handoff between server settlement, reward presentation and menu guides.
-// See docs/player-journeys.md. Guide definitions cannot release this gate.
+// Guide definitions cannot release this gate.
 
 import type { MenuState } from "./main_menu.state.ts";
 

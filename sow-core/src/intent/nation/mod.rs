@@ -19,10 +19,6 @@ impl SowEngine {
         {
             return;
         }
-        #[cfg(feature = "ai-metrics")]
-        {
-            self.bot_work.attack_entries_scanned_last_update += self.attacks.len() as u64;
-        }
         self.ai_attack_index
             .resize_with(self.state.player_lookup.len(), Vec::new);
         for attacks in &mut self.ai_attack_index {
@@ -40,8 +36,6 @@ impl SowEngine {
         let Some(player) = self.state.player(bot_id) else {
             return (false, 0);
         };
-        #[cfg(feature = "ai-metrics")]
-        let mut entries_examined = 0;
         let under_attack = self
             .ai_attack_index
             .get(bot_id as usize)
@@ -49,17 +43,10 @@ impl SowEngine {
             .unwrap_or(&[])
             .iter()
             .any(|&attack_index| {
-                #[cfg(feature = "ai-metrics")]
-                {
-                    entries_examined += 1;
-                }
                 self.attacks
                     .get(attack_index)
                     .is_some_and(|attack| !player.alliances.contains(&attack.owner_id))
             });
-        #[cfg(feature = "ai-metrics")]
-        return (under_attack, entries_examined);
-        #[cfg(not(feature = "ai-metrics"))]
         (under_attack, 0)
     }
 
@@ -82,14 +69,6 @@ impl SowEngine {
         self.bot_route_cache.clear();
         self.bot_sam_tiles_cache = None;
         self.bot_crown_leader = None;
-        #[cfg(feature = "ai-metrics")]
-        {
-            self.placement_scratch.candidates_examined = 0;
-        }
-        #[cfg(feature = "ai-metrics")]
-        {
-            self.placement_scratch.building_checks = 0;
-        }
         self.rebuild_ai_attack_index();
 
         // ── Build unified schedule ──────────────────────────────────────────
@@ -124,10 +103,6 @@ impl SowEngine {
                     let (under_attack, examined) = self.ai_is_under_attack(bot_id);
                     (under_attack, None, examined)
                 };
-            #[cfg(feature = "ai-metrics")]
-            {
-                self.bot_work.attack_entries_scanned_last_update += _attack_entries_examined;
-            }
             let reacts_to_attack = p.iq >= 100 && is_under_attack;
 
             let (min_interval, max_interval) = if ranked_ghost {
@@ -162,12 +137,6 @@ impl SowEngine {
                 scheduled_attack
             };
 
-            #[cfg(feature = "ai-metrics")]
-            if std::env::var("SOW_AI_DEBUG").is_ok() && bot_id == 1 && tick < 250 {
-                eprintln!(
-                    "SCHED id={bot_id} tick={tick} interval={interval} offset={offset} phase={phase} do_attack={do_attack}"
-                );
-            }
             if !do_attack && !do_structures {
                 continue; // Nothing to do this tick for this entity
             }
@@ -188,41 +157,6 @@ impl SowEngine {
         }
 
         schedule.sort_unstable_by_key(|s| s.bot_id);
-        #[cfg(feature = "ai-metrics")]
-        if std::env::var("SOW_AI_DEBUG").is_ok() {
-            let probes: Vec<(u16, usize)> = self
-                .state
-                .players
-                .iter()
-                .map(|p| (p.id, p.border_tiles.count_ones()))
-                .collect();
-            let mut neutral_probe: Vec<(u16, bool)> = Vec::new();
-            for p in &self.state.players {
-                let mut has = false;
-                let mut border_sample = Vec::new();
-                p.border_tiles.sample_ones(0, 256, &mut border_sample);
-                for raw in border_sample {
-                    let bx = raw % self.state.map.width;
-                    let by = raw / self.state.map.width;
-                    self.state.map.for_each_neighbor(bx, by, |nx, ny| {
-                        if self.state.map.owner_id(nx, ny) == 0
-                            && self.state.map.terrain[self.state.map.ref_id(nx, ny)].is_land()
-                        {
-                            has = true;
-                        }
-                    });
-                }
-                neutral_probe.push((p.id, has));
-            }
-            eprintln!(
-                "AICALL tick={} sched={} ids={:?} borders={:?} neutral={:?}",
-                self.state.tick,
-                schedule.len(),
-                schedule.iter().map(|s| s.bot_id).collect::<Vec<_>>(),
-                probes,
-                neutral_probe
-            );
-        }
         if schedule.is_empty() {
             return;
         }
@@ -328,42 +262,6 @@ impl SowEngine {
             self.placement_scratch.neighbor_scratch = neighbor_players;
         }
 
-        #[cfg(feature = "ai-metrics")]
-        {
-            self.bot_work.placement_candidates_examined +=
-                self.placement_scratch.candidates_examined;
-            self.bot_work.placement_building_checks += self.placement_scratch.building_checks;
-        }
-        #[cfg(feature = "ai-metrics")]
-        {
-            self.placement_scratch.candidates_examined = 0;
-        }
-        #[cfg(feature = "ai-metrics")]
-        {
-            self.placement_scratch.building_checks = 0;
-        }
-        #[cfg(feature = "ai-metrics")]
-        if std::env::var("SOW_AI_DEBUG").is_ok() {
-            eprintln!(
-                "AIWORK tick={} attack_entries={} border_cells={} border_blocks={} border_directory_words={} neighbor_cells={} placement_candidates={} placement_building_checks={} naval_routes={} naval_border_candidates={} shoreline_candidates={} diplomacy_proposals={} diplomacy_resource_requests={} nuke_buildings={} nuke_sam_checks={} nuke_history_lookups={}",
-                self.state.tick,
-                self.bot_work.attack_entries_scanned_last_update,
-                self.bot_work.border_cells_examined,
-                self.bot_work.border_blocks_examined,
-                self.bot_work.border_directory_words_examined,
-                self.bot_work.neighbor_cells_examined,
-                self.bot_work.placement_candidates_examined,
-                self.bot_work.placement_building_checks,
-                self.bot_work.naval_routes_calculated,
-                self.bot_work.naval_border_candidates_examined,
-                self.bot_work.shoreline_candidates_examined,
-                self.bot_work.diplomacy_proposals_examined,
-                self.bot_work.diplomacy_resource_requests_examined,
-                self.bot_work.nuke_buildings_examined,
-                self.bot_work.nuke_sam_checks,
-                self.bot_work.nuke_history_lookups,
-            );
-        }
 
         // ── Apply decisions deterministically ───────────────────────────────
         decisions.sort_by_key(|d| (d.bot_id, d.kind));

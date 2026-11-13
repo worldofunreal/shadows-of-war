@@ -97,11 +97,6 @@ pub(crate) fn clear_menu_return(account_id: &str) {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn clear_legacy_exit_relay_proof(account_id: &str) {
-    clear_storage(&format!("sow_pending_exit_v1:{account_id}"));
-}
-
-#[cfg(target_arch = "wasm32")]
 pub fn load_pending_reward_receipt_ids(account_id: &str) -> std::collections::BTreeSet<String> {
     let Some(key) = pending_reward_receipts_storage_key(account_id) else {
         return Default::default();

@@ -39,6 +39,9 @@
         "store_buy_tap",
         "store_checkout_open",
         "store_purchase_complete",
+        "mission_swap",
+        "mission_claim",
+        "menu_guide_action",
     ]);
     const STORE_ITEM_EVENTS = ["store_buy_tap", "store_checkout_open", "store_purchase_complete"];
     const POKI_EVENTS: Record<string, string[]> = {
@@ -244,6 +247,32 @@
             isOneOf(props.duration_bucket, MATCH_DURATION_BUCKETS)
         ) {
             return { mode: props.mode, duration_bucket: props.duration_bucket };
+        }
+        if (
+            name === "mission_swap" &&
+            exactKeys(props, ["mission_id", "tier", "used_ad"]) &&
+            isId(props.mission_id) &&
+            isOneOf(props.tier, ["daily", "weekly"]) &&
+            typeof props.used_ad === "boolean"
+        ) {
+            return { mission_id: props.mission_id, tier: props.tier, used_ad: props.used_ad };
+        }
+        if (
+            name === "mission_claim" &&
+            exactKeys(props, ["mission_id", "tier", "doubled"]) &&
+            isId(props.mission_id) &&
+            isOneOf(props.tier, ["onboarding", "daily", "weekly"]) &&
+            typeof props.doubled === "boolean"
+        ) {
+            return { mission_id: props.mission_id, tier: props.tier, doubled: props.doubled };
+        }
+        if (
+            name === "menu_guide_action" &&
+            exactKeys(props, ["guide_id", "status"]) &&
+            isId(props.guide_id) &&
+            isOneOf(props.status, ["completed", "skipped_step", "disabled_all"])
+        ) {
+            return { guide_id: props.guide_id, status: props.status };
         }
         return null;
     }

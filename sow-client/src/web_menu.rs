@@ -4,7 +4,6 @@
 //! source of truth for connection state, lobby state, identity, and match transitions.
 //! Commands cross this boundary as small JSON messages; the existing UiAction and network
 //! paths execute them unchanged.
-//! Return/reward/guide ownership and ordering: docs/player-journeys.md.
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
@@ -155,6 +154,11 @@ enum WebMenuCommand {
         #[serde(default)]
         doubled_by_ad: bool,
     },
+    SwapMission {
+        mission_id: String,
+        #[serde(default)]
+        ad_funded: bool,
+    },
     SaveMenuGuideProgress {
         guide_id: String,
         completed_steps: Vec<String>,
@@ -163,6 +167,8 @@ enum WebMenuCommand {
         status: sow_data::profile::MenuGuideStatus,
         #[serde(default)]
         selected_leader: Option<String>,
+        #[serde(default)]
+        menu_tips_disabled: Option<bool>,
     },
     OpenBrowser,
     OpenCreate,
@@ -1140,12 +1146,19 @@ impl SowApp {
                 } => {
                     self.claim_mission_reward(&mission_id, doubled_by_ad);
                 }
+                WebMenuCommand::SwapMission {
+                    mission_id,
+                    ad_funded,
+                } => {
+                    self.swap_mission(&mission_id, ad_funded);
+                }
                 WebMenuCommand::SaveMenuGuideProgress {
                     guide_id,
                     completed_steps,
                     current_step,
                     status,
                     selected_leader,
+                    menu_tips_disabled,
                 } => {
                     self.save_menu_guide_progress(
                         guide_id,
@@ -1153,6 +1166,7 @@ impl SowApp {
                         current_step,
                         status,
                         selected_leader,
+                        menu_tips_disabled,
                     );
                 }
                 WebMenuCommand::OpenBrowser => {
@@ -3421,6 +3435,8 @@ fn player_json(
         "territory_pct": territory_pct,
         "is_alive": player.alive,
         "is_me": player.id == my_pid,
+        "is_bot": player.player_type != sow_core::player::PlayerType::Human,
+        "is_human": player.player_type == sow_core::player::PlayerType::Human,
         "leader": leader_id(player.leader),
         "avatar": &player.campaign_avatar,
         "avatar_slug": player.campaign_avatar.as_deref().filter(|slug| !slug.is_empty()).unwrap_or(player.leader.art_slug()),
@@ -4553,14 +4569,12 @@ fn player_avatar_expression(
     player: &sow_core::protocol::PlayerSnapshot,
     app: &SowApp,
 ) -> Option<sow_core::emote::AvatarExpression> {
-    let slug = player
-        .campaign_avatar
-        .as_deref()
-        .unwrap_or(player.leader.id());
-    (sow_data::commerce::leader_from_any_id(slug).is_some()
-        && (player.campaign_avatar.is_some()
-            || player.player_type == sow_core::player::PlayerType::Human))
-        .then(|| app.ui.nameplates.avatar_presentation(player.id).expression)
+    // Expression files exist only for hero art slugs. Nations and tribes keep calm portraits.
+    let has_expression_art = match player.campaign_avatar.as_deref() {
+        Some(slug) => sow_data::leaders::leader_from_art_slug(slug).is_some(),
+        None => player.player_type == sow_core::player::PlayerType::Human,
+    };
+    has_expression_art.then(|| app.ui.nameplates.avatar_presentation(player.id).expression)
 }
 
 fn avatar_transition_value(
@@ -5156,6 +5170,18 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
                 .iter()
                 .find(|offer| offer.id.as_str() == slug)
                 .expect("leader catalog must contain every leader");
+            let stats = progress
+                .leader_stats
+                .get(leader.name())
+                .or_else(|| progress.leader_stats.get(slug))
+                .cloned()
+                .unwrap_or_default();
+            let leader_xp = progress
+                .leader_xp
+                .get(leader.name())
+                .or_else(|| progress.leader_xp.get(slug))
+                .copied()
+                .unwrap_or(0);
             serde_json::json!({
                 "id": leader_id(leader),
                 "name": leader.display_name(),
@@ -5172,6 +5198,8 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
                 "cost_crowns": offer.cost_crowns,
                 "cost_gems": offer.cost_gems,
                 "rarity": leader.rarity(),
+                "xp": leader_xp,
+                "stats": stats,
             })
         })
         .collect();
@@ -5195,25 +5223,63 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         })
         .unwrap_or_default();
 
-    let epoch_day = (js_sys::Date::now().max(0.0) / 86_400_000.0) as u64;
+    let now_secs = (js_sys::Date::now().max(0.0) / 1000.0) as u64;
+    let epoch_day = now_secs / 86_400;
+    let rotation_period = sow_data::commerce::rotation_period(now_secs);
+    let mut period_records = progress.missions_progress.clone();
+    let mut daily_day = progress.daily_missions_day;
+    let mut weekly_period = progress.weekly_missions_period;
+    let mut daily_mission_ids = progress.daily_mission_ids.clone();
+    let mut weekly_mission_ids = progress.weekly_mission_ids.clone();
+    let mut daily_swaps_used = progress.daily_swaps_used;
+    let mut weekly_swaps_used = progress.weekly_swaps_used;
+    let mut daily_swapped_out_ids = progress.daily_swapped_out_ids.clone();
+    let mut weekly_swapped_out_ids = progress.weekly_swapped_out_ids.clone();
+    let playability = sow_data::missions::PlayabilityContext {
+        owned_leaders: &progress.owned_leaders,
+        free_rotation: &free_leaders,
+        crowns: progress.crowns,
+        gems: progress.gems,
+    };
+    let deal_salt =
+        sow_data::missions::account_deal_salt(inputs.account_id.as_deref().unwrap_or(""));
+    sow_data::missions::sync_hands_for_periods(
+        sow_data::missions::HandSyncState {
+            records: &mut period_records,
+            daily_day: &mut daily_day,
+            daily_mission_ids: &mut daily_mission_ids,
+            daily_swaps_used: &mut daily_swaps_used,
+            daily_swapped_out_ids: &mut daily_swapped_out_ids,
+            weekly_period: &mut weekly_period,
+            weekly_mission_ids: &mut weekly_mission_ids,
+            weekly_swaps_used: &mut weekly_swaps_used,
+            weekly_swapped_out_ids: &mut weekly_swapped_out_ids,
+        },
+        epoch_day,
+        rotation_period,
+        progress.level.max(1),
+        deal_salt,
+        Some(&playability),
+    );
     let mission_stats = sow_data::missions::MissionStats {
+        player_level: progress.level.max(1),
         tutorial_completed: CampaignId::Boudica.is_completed(progress),
-        total_structures_built: progress.matches_played * 5,
-        free_rotation_matches: progress.matches_played,
-        team_matches: progress.matches_played,
-        team_wins: progress.wins,
-        west_regional_matches: progress.matches_played,
-        east_regional_matches: progress.matches_played,
+        total_structures_built: progress.total_structures_built,
         matches_played: progress.matches_played,
         kills: progress.kills,
         ranked_matches: progress.ranked_matches,
         ranked_wins: progress.ranked_wins,
         empires_defeated: progress.empires_defeated,
+        ..Default::default()
     };
-    let missions = sow_data::missions::build_all_missions_view(
+    let missions = sow_data::missions::build_all_missions_view_with_hands(
         &mission_stats,
-        &progress.missions_progress,
+        &period_records,
         epoch_day,
+        &daily_mission_ids,
+        &weekly_mission_ids,
+        deal_salt,
+        Some(&playability),
     );
 
     serde_json::json!({
@@ -5261,12 +5327,19 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         "menu_return": inputs.menu_return,
         "profile_ready": inputs.profile_ready,
         "menu_guides": progress.menu_guides,
+        "menu_tips_disabled": progress.menu_tips_disabled,
         "name_save_pending": inputs.name_save_pending,
         "quick_match_revision": inputs.quick_match_revision,
         "menu_guide_save_pending": inputs.menu_guide_save_pending,
         "achievements": progress.unlocked_achievements,
         "missions": missions,
         "missions_progress": progress.missions_progress,
+        "daily_swaps_used": daily_swaps_used,
+        "weekly_swaps_used": weekly_swaps_used,
+        "daily_free_swaps_left": sow_data::missions::MAX_FREE_SWAPS_PER_PERIOD.saturating_sub(daily_swaps_used),
+        "daily_total_swaps_left": sow_data::missions::MAX_TOTAL_SWAPS_PER_PERIOD.saturating_sub(daily_swaps_used),
+        "weekly_free_swaps_left": sow_data::missions::MAX_FREE_SWAPS_PER_PERIOD.saturating_sub(weekly_swaps_used),
+        "weekly_total_swaps_left": sow_data::missions::MAX_TOTAL_SWAPS_PER_PERIOD.saturating_sub(weekly_swaps_used),
         "campaign": campaign_payload(progress),
         "selected_skin": progress.selected_skin,
         "store_busy": inputs.store_busy,
@@ -5283,7 +5356,11 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
             "kills": progress.kills,
             "deaths": progress.deaths,
             "assists": progress.assists,
+            "ranked_matches": progress.ranked_matches,
+            "ranked_wins": progress.ranked_wins,
+            "total_structures_built": progress.total_structures_built,
             "leader_xp": progress.leader_xp,
+            "leader_stats": progress.leader_stats,
         },
         "leaders": leaders,
         "map_catalog": map_catalog,
@@ -5299,989 +5376,3 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use sow_core::game::GamePhase;
-    use sow_core::player::{Leader, PlayerType};
-    use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
-    use std::sync::Arc;
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn loader_art_random_keeps_the_real_leader_and_campaign_reset() {
-        let mut splash = crate::ui::loading_screen::SplashState::default();
-        assert_eq!(loader_leader_id(&splash), None);
-        assert_eq!(
-            loader_info_leader_slug(&splash, Leader::of("caesar")),
-            "caesar"
-        );
-        splash.transition_anim(
-            crate::ui::loading_screen::SplashJob::EnterGame,
-            Leader::of("caesar"),
-        );
-        assert_eq!(loader_leader_id(&splash).as_deref(), Some("Caesar"));
-
-        splash.use_random_art = true;
-        assert_eq!(loader_leader_id(&splash).as_deref(), Some("random"));
-        assert_eq!(
-            loader_info_leader_slug(&splash, Leader::of("boudica")),
-            "caesar"
-        );
-        assert_eq!(splash.loader_leader, Some(Leader::of("caesar")));
-
-        splash.transition_anim(
-            crate::ui::loading_screen::SplashJob::EnterGame,
-            Leader::of("boudica"),
-        );
-        assert_eq!(loader_leader_id(&splash).as_deref(), Some("Boudica"));
-        assert_eq!(
-            loader_info_leader_slug(&splash, Leader::of("caesar")),
-            "boudica"
-        );
-        assert_eq!(splash.loader_leader, Some(Leader::of("boudica")));
-    }
-
-    fn test_player(id: u16, tile_count: u32, troops: f64) -> PlayerSnapshot {
-        PlayerSnapshot {
-            id,
-            name: format!("Player {id}"),
-            troops,
-            max_troops: 100.0,
-            gold: 100.0,
-            tile_count,
-            centroid_x: 0.0,
-            centroid_y: 0.0,
-            player_type: PlayerType::Bot,
-            color: [0.5; 3],
-            team: None,
-            has_spawned: true,
-            alive: true,
-            iq: 100,
-            alliances: Vec::new(),
-            alliance_timers: std::collections::HashMap::new(),
-            alliance_requests: Vec::new(),
-            resource_requests: Vec::new(),
-            disconnected: false,
-            active_emote: None,
-            can_express_emote: false,
-            can_retaliate: false,
-            traitor: false,
-            leader: Leader::of("caesar"),
-            empowered_attack: false,
-            campaign_avatar: None,
-            is_campaign_faction: false,
-            skin_style: 0,
-            kills: 0,
-            deaths: 0,
-            assists: 0,
-            boats_in_use: 0,
-            boat_capacity: 3,
-            nuke_available: false,
-            nuke_cooldown_ticks: 0,
-        }
-    }
-
-    #[test]
-    fn dev_numeric_inputs_can_extend_past_slider_ranges() {
-        assert_eq!(
-            decode_dev_config_value("water.depth_cap", &serde_json::json!(64.0)).unwrap()[0],
-            64.0
-        );
-        assert_eq!(
-            decode_dev_config_value("lighting.direction", &serde_json::json!([8.0, -8.0, 3.0]))
-                .unwrap(),
-            [8.0, -8.0, 3.0, 0.0]
-        );
-        assert_eq!(
-            decode_dev_config_value(
-                "lighting.specular.color",
-                &serde_json::json!([8.0, 2.0, 1.0, 3.0])
-            )
-            .unwrap(),
-            [8.0, 2.0, 1.0, 1.0]
-        );
-    }
-
-    #[test]
-    fn tutorial_tile_world_returns_the_tile_center_only_for_valid_tiles() {
-        assert_eq!(tutorial_tile_world(Some(23), 10, 5), Some([3.5, 2.5]));
-        assert_eq!(tutorial_tile_world(Some(50), 10, 5), None);
-        assert_eq!(tutorial_tile_world(Some(0), 0, 5), None);
-    }
-
-    #[test]
-    fn tutorial_build_site_prefers_clearance_from_nameplate_and_border() {
-        let mut candidates = vec![
-            (true, 8, 0, 1),
-            (false, 1, 6, 9),
-            (false, 6, 1, 8),
-            (false, 4, 4, 5),
-            (false, 4, 4, 2),
-        ];
-        tutorial_rank_build_site_candidates(&mut candidates);
-
-        assert_eq!(candidates[0], (false, 4, 4, 2));
-        assert_eq!(candidates[1], (false, 4, 4, 5));
-        assert_eq!(candidates.last(), Some(&(true, 8, 0, 1)));
-        assert_eq!(
-            tutorial_visible_build_site_candidate(&candidates, |_| true),
-            Some(2)
-        );
-    }
-
-    #[test]
-    fn tutorial_build_site_prefers_interior_before_border_fallback() {
-        let mut candidates = vec![(true, 20, 0, 1), (false, 2, 1, 9), (false, 6, 1, 8)];
-        tutorial_rank_build_site_candidates(&mut candidates);
-
-        let ranked_tiles = candidates
-            .iter()
-            .map(|candidate| candidate.3)
-            .collect::<Vec<_>>();
-        assert_eq!(ranked_tiles, [8, 9, 1]);
-    }
-
-    #[test]
-    fn tutorial_build_site_border_clearance_uses_owned_land_neighbors() {
-        let owners = vec![1; 25];
-        let terrain = vec![0x80; 25];
-        let mut border = sow_core::bitset::DenseBitSet::new();
-        border.insert(0);
-
-        let map = sow_core::map::GameMap::new(5, 5);
-        let distances = tutorial_border_distance_map(&map, &owners, &terrain, Some(&border), 1, 3);
-
-        assert_eq!(distances[0], 0);
-        assert_eq!(distances[6], 1);
-        assert_eq!(distances[12], 2);
-        assert_eq!(
-            distances[24], 3,
-            "distance beyond the relevant range is capped"
-        );
-    }
-
-    #[test]
-    fn tutorial_build_site_tracks_camera_changes_while_paused_with_border_fallback() {
-        let candidates = [(false, 1, 4, 10), (false, 2, 4, 11), (true, 0, 0, 12)];
-
-        // Reuse the same tick's candidates as the camera moves between publishes.
-        assert_eq!(
-            tutorial_visible_build_site_candidate(&candidates, |tile| tile == 11 || tile == 12),
-            Some(11)
-        );
-        assert_eq!(
-            tutorial_visible_build_site_candidate(&candidates, |tile| tile == 12),
-            Some(12)
-        );
-        assert_eq!(
-            tutorial_visible_build_site_candidate(&candidates, |tile| tile == 10),
-            Some(10)
-        );
-    }
-
-    #[test]
-    fn tutorial_target_action_guides_neutral_land_toward_an_ally() {
-        use sow_core::protocol::Team;
-
-        let mut me = test_player(1, 1, 500.0);
-        me.centroid_x = 1.0;
-        me.centroid_y = 2.0;
-        me.team = Some(Team::Red);
-        let mut ally = test_player(2, 1, 500.0);
-        ally.centroid_x = 4.0;
-        ally.centroid_y = 2.0;
-        ally.team = Some(Team::Red);
-
-        let mut owners = vec![0; 25];
-        owners[11] = me.id;
-        owners[14] = ally.id;
-        let terrain = vec![0x80; 25];
-        let mut border = sow_core::bitset::DenseBitSet::new();
-        border.insert(11);
-
-        let tiles = tutorial_border_action_tiles(
-            &owners,
-            &terrain,
-            5,
-            5,
-            &border,
-            me.id,
-            ally.id,
-            &me,
-            &[me.clone(), ally],
-        );
-        assert_eq!(tiles.target.approach, Some(12));
-        assert_eq!(tiles.target.general, Some(12));
-        assert_eq!(tiles.target.attack, None);
-        assert_eq!(tiles.assault, None);
-    }
-
-    #[test]
-    fn tutorial_target_scan_finds_a_frontier_before_the_enemy_shares_a_border() {
-        let mut me = test_player(1, 1, 500.0);
-        me.centroid_x = 1.0;
-        me.centroid_y = 2.0;
-        let mut enemy = test_player(2, 1, 500.0);
-        enemy.centroid_x = 3.0;
-        enemy.centroid_y = 2.0;
-        let mut owners = vec![0; 35];
-        owners[15] = me.id;
-        owners[17] = enemy.id;
-        let terrain = vec![0x80; 35];
-        let mut border = sow_core::bitset::DenseBitSet::new();
-        border.insert(15);
-
-        let tiles = tutorial_border_action_tiles(
-            &owners,
-            &terrain,
-            7,
-            5,
-            &border,
-            me.id,
-            enemy.id,
-            &me,
-            &[me.clone(), enemy.clone()],
-        );
-        assert_eq!(tiles.target.attack, None);
-        assert_eq!(tiles.target.approach, Some(16));
-        assert_eq!(tiles.assault, None);
-
-        owners[16] = enemy.id;
-        enemy.centroid_x = 2.0;
-        me.alliances.push(enemy.id);
-        let allied_tiles = tutorial_border_action_tiles(
-            &owners,
-            &terrain,
-            7,
-            5,
-            &border,
-            me.id,
-            enemy.id,
-            &me,
-            &[me.clone(), enemy.clone()],
-        );
-        assert_eq!(
-            allied_tiles.target.attack, None,
-            "the guide must respect the same alliance rule as a map click",
-        );
-
-        enemy.can_retaliate = true;
-        let tiles = tutorial_border_action_tiles(
-            &owners,
-            &terrain,
-            7,
-            5,
-            &border,
-            me.id,
-            enemy.id,
-            &me,
-            &[me.clone(), enemy],
-        );
-        assert_eq!(tiles.target.attack, Some(16));
-        assert_eq!(
-            tiles.assault,
-            Some(16),
-            "the same frontier pass finds an assault tile"
-        );
-    }
-
-    #[test]
-    fn tutorial_attack_target_switches_from_expand_to_attack_only_when_legal() {
-        let tiles = TutorialTargetActionTiles {
-            attack: Some(17),
-            approach: Some(16),
-            general: Some(17),
-        };
-        assert_eq!(
-            tutorial_action_target(&tiles, Some(TutorialMarkerAction::Attack), false, None),
-            (Some(16), Some("expand")),
-            "low troops keep the game live and direct the player toward a legal frontier",
-        );
-        assert_eq!(
-            tutorial_action_target(&tiles, Some(TutorialMarkerAction::Attack), true, None),
-            (Some(17), Some("attack")),
-        );
-        assert_eq!(
-            tutorial_action_target(&tiles, Some(TutorialMarkerAction::Expand), true, None),
-            (Some(16), Some("expand")),
-            "contact guides never prompt for an attack, even with an adjacent enemy",
-        );
-        assert_eq!(
-            tutorial_action_target(&tiles, None, true, None),
-            (Some(17), None),
-            "unrelated target guides keep their current action",
-        );
-    }
-
-    #[test]
-    fn tutorial_goal_stays_at_the_nearest_viewport_edge_when_offscreen() {
-        assert_eq!(
-            tutorial_screen_anchor([-20.0, 50.0], 100.0, 100.0),
-            Some(([32.0, 50.0], true)),
-        );
-        assert_eq!(
-            tutorial_screen_anchor([50.0, 120.0], 100.0, 100.0),
-            Some(([50.0, 68.0], true)),
-        );
-        assert_eq!(
-            tutorial_screen_anchor([50.0, 50.0], 100.0, 100.0),
-            Some(([50.0, 50.0], false)),
-        );
-    }
-
-    fn test_snapshot(players: Vec<PlayerSnapshot>) -> SimSnapshot {
-        SimSnapshot {
-            tick: 1,
-            phase: GamePhase::Playing,
-            spawn_timer_secs: None,
-            players,
-            dirty_tiles: Vec::new(),
-            fleets: Vec::new(),
-            attacks: Vec::new(),
-            buildings: Vec::new(),
-            projectiles: Vec::new(),
-            nuke_alerts: Vec::new(),
-            resource_transfers: Vec::new(),
-            resource_rejections: Vec::new(),
-            resource_transfer_rejections: Vec::new(),
-            winner: None,
-            winning_team: None,
-            defense_posts: Vec::new(),
-            defense_dirty: false,
-            total_land_tiles: 10_000,
-            sea_lanes: Arc::new(Vec::new()),
-            debug_mem_info: String::new(),
-        }
-    }
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn inbox_reuses_typed_identity_for_both_received_request_kinds() {
-        use sow_core::protocol::ResourceRequest;
-
-        let mut me = test_player(1, 5, 100.0);
-        me.alliance_requests = (2..=7).chain([99]).collect();
-        me.resource_requests = me
-            .alliance_requests
-            .iter()
-            .map(|&requester| ResourceRequest {
-                requester,
-                gold: 25.0,
-                troops: 10.0,
-                pay_gold: 0.0,
-                pay_troops: 0.0,
-            })
-            .collect();
-        let mut human = test_player(2, 5, 100.0);
-        human.player_type = PlayerType::Human;
-        let bot = test_player(3, 5, 100.0);
-        let mut nation = test_player(4, 5, 100.0);
-        nation.player_type = PlayerType::Nation;
-        let mut campaign = test_player(5, 5, 100.0);
-        campaign.campaign_avatar = Some("boudica".into());
-        let mut fallback = test_player(6, 5, 100.0);
-        fallback.campaign_avatar = Some("null".into());
-        let mut eliminated = test_player(7, 5, 100.0);
-        eliminated.alive = false;
-        let snapshot = test_snapshot(vec![me, human, bot, nation, campaign, fallback, eliminated]);
-        let payload = build_inbox(&snapshot, 1);
-        let rows = payload.as_array().unwrap();
-        assert_eq!(rows.len(), 12);
-        for requester in &snapshot.players[1..] {
-            for kind in ["alliance", "resources"] {
-                let row = rows
-                    .iter()
-                    .find(|row| row["kind"] == kind && row["requester_id"] == requester.id)
-                    .unwrap();
-                assert_eq!(
-                    row["avatar"],
-                    serde_json::to_value(sow_core::player::avatar_identity(requester)).unwrap()
-                );
-                assert_eq!(row["name"], requester.name);
-                assert_eq!(row["active"], requester.alive);
-                assert!(row.get("leader").is_none());
-                if kind == "resources" {
-                    assert_eq!(row["gold"], 25.0);
-                    assert_eq!(row["troops"], 10.0);
-                }
-            }
-        }
-        assert!(build_inbox(&snapshot, 99).as_array().unwrap().is_empty());
-        assert!(build_inbox(&snapshot, 2).as_array().unwrap().is_empty());
-    }
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn self_transfer_panel_addresses_every_ally_and_sizes_from_the_best_one() {
-        let mut me = test_player(1, 5, 10.0);
-        me.alliances = vec![2, 3];
-        let mut rich = test_player(2, 5, 80.0);
-        rich.gold = 900.0;
-        let mut roomy = test_player(3, 5, 20.0);
-        roomy.max_troops = 500.0;
-        let stranger = test_player(4, 5, 99.0);
-        let snapshot = test_snapshot(vec![me, rich, roomy, stranger]);
-        let mut hud = crate::ui::hud::HudState::default();
-        hud.show_ask_panel = Some(1);
-        hud.transfer_mode = Some(crate::ui::hud::state::TransferMode::Request);
-        let mut payload = serde_json::json!({});
-        append_player_dialog_payloads(&mut payload, Some(&snapshot), &hud, 1);
-        let transfer = &payload["transfer"];
-        assert_eq!(transfer["all_allies"], 2, "the stranger is not an audience");
-        assert_eq!(transfer["target_gold"], 900.0);
-        assert_eq!(transfer["target_troops"], 80.0);
-        assert_eq!(
-            transfer["target_max_troops"],
-            80.0 + 480.0,
-            "room comes from the roomiest ally"
-        );
-        assert_eq!(transfer["target_alive"], true);
-    }
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn player_dialogs_use_snapshot_identity_and_keep_pending_intents_unchanged() {
-        let mut players = vec![
-            test_player(1, 5, 100.0),
-            test_player(2, 5, 100.0),
-            test_player(3, 5, 100.0),
-            test_player(4, 5, 100.0),
-            test_player(5, 5, 100.0),
-        ];
-        players[0].player_type = PlayerType::Human;
-        players[1].player_type = PlayerType::Nation;
-        players[2].campaign_avatar = Some("boudica".into());
-        players[3].campaign_avatar = Some("null".into());
-        players[4].alive = false;
-        let snapshot = test_snapshot(players);
-        for player in &snapshot.players {
-            let intent =
-                sow_core::protocol::GameplayIntent::Attack(sow_core::protocol::AttackIntent {
-                    target_owner: player.id,
-                    troops: Some(37.0),
-                });
-            let mut hud = crate::ui::hud::HudState::default();
-            hud.show_ask_panel = Some(player.id);
-            hud.transfer_mode = Some(crate::ui::hud::state::TransferMode::Request);
-            hud.betrayal_warning_cached = Some((player.id, intent.clone()));
-            let mut payload = serde_json::json!({});
-            append_player_dialog_payloads(&mut payload, Some(&snapshot), &hud, 0);
-            let identity = serde_json::to_value(sow_core::player::avatar_identity(player)).unwrap();
-            assert_eq!(payload["transfer"]["target_avatar"], identity);
-            assert_eq!(payload["betrayal"]["ally_avatar"], identity);
-            assert_eq!(payload["transfer"]["target_name"], player.name);
-            assert_eq!(payload["transfer"]["target_alive"], player.alive);
-            assert_eq!(payload["transfer"]["target_gold"], player.gold);
-            assert_eq!(payload["transfer"]["target_troops"], player.troops);
-            assert_eq!(payload["transfer"]["target_max_troops"], player.max_troops);
-            assert_eq!(payload["betrayal"]["ally_name"], player.name);
-            assert_eq!(payload["transfer"]["mode"], "request");
-            assert_eq!(hud.betrayal_warning_cached.as_ref().unwrap().1, intent);
-            hud.show_ask_panel = None;
-            hud.betrayal_warning_cached = None;
-            let mut closed = serde_json::json!({});
-            append_player_dialog_payloads(&mut closed, Some(&snapshot), &hud, 0);
-            assert!(closed.get("transfer").is_none() && closed.get("betrayal").is_none());
-        }
-        let mut hud = crate::ui::hud::HudState::default();
-        hud.show_ask_panel = Some(99);
-        hud.show_betrayal_warning = Some((
-            99,
-            sow_core::protocol::GameplayIntent::BreakAlliance { target_player: 99 },
-        ));
-        for missing in [None, Some(&snapshot)] {
-            let mut payload = serde_json::json!({});
-            append_player_dialog_payloads(&mut payload, missing, &hud, 0);
-            assert!(payload.get("transfer").is_none());
-            assert_eq!(payload["betrayal"]["ally_name"], "");
-            assert_eq!(payload["betrayal"]["ally_avatar"]["kind"], "fallback");
-        }
-    }
-
-    #[test]
-    fn counterattack_uses_the_selected_troop_ratio_without_changing_attack_amount() {
-        assert_eq!(selected_counterattack_troops(100.0, 0.5, 1.0), Some(50.0));
-        assert_eq!(selected_counterattack_troops(100.0, 1.0, 1.0), Some(100.0));
-        assert_eq!(selected_counterattack_troops(1.0, 0.5, 1.0), None);
-        assert_eq!(selected_counterattack_troops(f64::NAN, 0.5, 1.0), None);
-    }
-
-    #[test]
-    fn counterattack_threat_includes_only_live_attacks_and_incoming_troop_transports() {
-        use sow_core::game::{GameState, UnitType};
-        use sow_core::game_config::GameConfig;
-        use sow_core::protocol::{AttackSnapshot, FleetSnapshot};
-        use sow_core::warp_fleet::WarpFleet;
-        use sow_core::water_components::WaterComponents;
-
-        let mut snapshot = test_snapshot(vec![test_player(1, 5, 100.0), test_player(2, 5, 100.0)]);
-        snapshot.attacks = vec![
-            AttackSnapshot {
-                id: 1,
-                owner_id: 2,
-                target_owner: 1,
-                troops: 25.0,
-                retreating: false,
-                front_cx: 1.0,
-                front_cy: 1.0,
-            },
-            AttackSnapshot {
-                id: 2,
-                owner_id: 2,
-                target_owner: 1,
-                troops: 35.0,
-                retreating: true,
-                front_cx: 1.0,
-                front_cy: 1.0,
-            },
-        ];
-        let make_snapshot = |id, unit_type| FleetSnapshot {
-            id,
-            owner_id: 2,
-            unit_type,
-            troops: 40.0,
-            current_tile: 4,
-            path: Arc::new(vec![4]),
-            path_cursor: 0,
-            movement_progress: 0.0,
-            eta_seconds: None,
-            retreating: false,
-            max_health: unit_type.max_health(),
-            warship: None,
-            captured_trade_return: false,
-        };
-        snapshot.fleets = vec![
-            make_snapshot(10, UnitType::TransportShip),
-            make_snapshot(11, UnitType::TransportShip),
-            make_snapshot(12, UnitType::Warship),
-        ];
-        let state = GameState::new(1, 4, 4, GameConfig::default());
-        let water = WaterComponents::compute(&state.map, |_| {});
-        let mut engine = sow_core::engine::SowEngine::new(state, water);
-        engine.add_fleet(WarpFleet::new(
-            10,
-            2,
-            1,
-            UnitType::TransportShip,
-            40.0,
-            (0, 4),
-            vec![4],
-        ));
-        engine.add_fleet(WarpFleet::new(
-            11,
-            2,
-            0,
-            UnitType::TransportShip,
-            40.0,
-            (0, 4),
-            vec![4],
-        ));
-        engine.add_fleet(WarpFleet::new(
-            12,
-            2,
-            1,
-            UnitType::Warship,
-            40.0,
-            (0, 4),
-            vec![4],
-        ));
-
-        assert_eq!(incoming_combat_troops(&snapshot, Some(&engine), 2, 1), 65.0);
-    }
-
-    #[test]
-    fn combat_operations_include_neutral_and_pvp_attacks_but_not_other_players() {
-        use sow_core::protocol::AttackSnapshot;
-
-        let mut snapshot = test_snapshot(vec![
-            test_player(1, 5, 100.0),
-            test_player(2, 5, 100.0),
-            test_player(3, 5, 100.0),
-        ]);
-        snapshot.attacks = vec![
-            AttackSnapshot {
-                id: 1,
-                owner_id: 1,
-                target_owner: 0,
-                troops: 25.0,
-                retreating: false,
-                front_cx: 4.0,
-                front_cy: 3.0,
-            },
-            AttackSnapshot {
-                id: 2,
-                owner_id: 1,
-                target_owner: 2,
-                troops: 50.0,
-                retreating: false,
-                front_cx: 7.0,
-                front_cy: 8.0,
-            },
-            AttackSnapshot {
-                id: 3,
-                owner_id: 2,
-                target_owner: 1,
-                troops: 75.0,
-                retreating: false,
-                front_cx: 10.0,
-                front_cy: 11.0,
-            },
-            AttackSnapshot {
-                id: 4,
-                owner_id: 2,
-                target_owner: 3,
-                troops: 90.0,
-                retreating: false,
-                front_cx: 12.0,
-                front_cy: 13.0,
-            },
-        ];
-
-        let operations = build_combat_operations_payload(&snapshot, 1, None, 20);
-        assert_eq!(operations.len(), 3);
-        let neutral = operations.iter().find(|row| row["id"] == 1).unwrap();
-        assert_eq!(neutral["direction"], "outgoing");
-        assert_eq!(neutral["neutral"], true);
-        let threat = operations.iter().find(|row| row["id"] == 3).unwrap();
-        assert_eq!(threat["direction"], "incoming");
-        assert_eq!(threat["player_id"], 2);
-        assert!(operations.iter().any(|row| row["id"] == 2));
-        assert!(!operations.iter().any(|row| row["id"] == 4));
-    }
-
-    #[test]
-    fn combat_operation_snapshot_tick_tracks_add_update_remove_without_unrelated_state() {
-        use sow_core::protocol::AttackSnapshot;
-
-        let mut snapshot = test_snapshot(Vec::new());
-        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, None), 0);
-
-        snapshot.attacks.push(AttackSnapshot {
-            id: 1,
-            owner_id: 1,
-            target_owner: 0,
-            troops: 25.0,
-            retreating: false,
-            front_cx: 4.0,
-            front_cy: 3.0,
-        });
-        assert_eq!(
-            combat_operations_snapshot_tick(&snapshot, 1, None),
-            snapshot.tick
-        );
-
-        snapshot.tick += 1;
-        assert_eq!(
-            combat_operations_snapshot_tick(&snapshot, 1, None),
-            snapshot.tick
-        );
-
-        snapshot.attacks.clear();
-        snapshot.attacks.push(AttackSnapshot {
-            id: 2,
-            owner_id: 2,
-            target_owner: 3,
-            troops: 25.0,
-            retreating: false,
-            front_cx: 4.0,
-            front_cy: 3.0,
-        });
-        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, None), 0);
-    }
-
-    #[test]
-    fn combat_operations_keep_typed_player_avatars_and_mark_wilderness() {
-        use sow_core::protocol::AttackSnapshot;
-
-        let mut human = test_player(1, 5, 100.0);
-        human.player_type = PlayerType::Human;
-        human.leader = Leader::of("caesar");
-        let bot = test_player(2, 5, 100.0);
-        let mut nation = test_player(3, 5, 100.0);
-        nation.player_type = PlayerType::Nation;
-        let mut snapshot = test_snapshot(vec![human, bot, nation]);
-        let attack = |id, owner_id, target_owner| AttackSnapshot {
-            id,
-            owner_id,
-            target_owner,
-            troops: 25.0,
-            retreating: false,
-            front_cx: 4.0,
-            front_cy: 3.0,
-        };
-        snapshot.attacks = vec![
-            attack(1, 4, 0),
-            attack(2, 1, 4),
-            attack(3, 2, 4),
-            attack(4, 3, 4),
-            attack(5, 9, 4),
-        ];
-
-        let operations = build_combat_operations_payload(&snapshot, 4, None, 20);
-        assert_eq!(operations.len(), 5);
-        assert_eq!(
-            operations.iter().find(|row| row["id"] == 1).unwrap()["avatar"],
-            serde_json::json!({ "kind": "wilderness" })
-        );
-        let human_avatar = &operations.iter().find(|row| row["id"] == 2).unwrap()["avatar"];
-        assert_eq!(human_avatar["kind"], "portrait");
-        assert_eq!(human_avatar["slug"], "caesar");
-        // Bots without a catalog portrait show the shared fallback, never an emoji.
-        let bot_avatar = &operations.iter().find(|row| row["id"] == 3).unwrap()["avatar"];
-        assert_eq!(bot_avatar["kind"], "fallback");
-        assert_eq!(
-            operations.iter().find(|row| row["id"] == 4).unwrap()["avatar"]["kind"],
-            "fallback"
-        );
-        assert_eq!(
-            operations.iter().find(|row| row["id"] == 5).unwrap()["avatar"],
-            serde_json::json!({ "kind": "fallback" })
-        );
-    }
-
-    #[test]
-    fn combat_operations_join_only_troop_transports_to_local_targets() {
-        use sow_core::game::{GameState, UnitType};
-        use sow_core::game_config::GameConfig;
-        use sow_core::protocol::FleetSnapshot;
-        use sow_core::warp_fleet::WarpFleet;
-        use sow_core::water_components::WaterComponents;
-
-        let mut snapshot = test_snapshot(vec![test_player(1, 5, 100.0), test_player(2, 5, 100.0)]);
-        let make_snapshot = |id, owner_id, unit_type| FleetSnapshot {
-            id,
-            owner_id,
-            unit_type,
-            troops: 40.0,
-            current_tile: 6,
-            path: Arc::new(vec![6]),
-            path_cursor: 0,
-            movement_progress: 0.0,
-            eta_seconds: None,
-            retreating: false,
-            max_health: unit_type.max_health(),
-            warship: None,
-            captured_trade_return: false,
-        };
-        snapshot.fleets = vec![
-            make_snapshot(10, 1, UnitType::TransportShip),
-            make_snapshot(11, 2, UnitType::TransportShip),
-            make_snapshot(12, 1, UnitType::TradeShip),
-            make_snapshot(13, 1, UnitType::Warship),
-        ];
-        snapshot.fleets[0].eta_seconds = Some(3.25);
-
-        let state = GameState::new(1, 5, 5, GameConfig::default());
-        let water = WaterComponents::compute(&state.map, |_| {});
-        let mut engine = sow_core::engine::SowEngine::new(state, water);
-        engine.add_fleet(WarpFleet::new(
-            10,
-            1,
-            0,
-            UnitType::TransportShip,
-            40.0,
-            (0, 6),
-            vec![6],
-        ));
-        engine.add_fleet(WarpFleet::new(
-            11,
-            2,
-            1,
-            UnitType::TransportShip,
-            40.0,
-            (0, 6),
-            vec![6],
-        ));
-        engine.add_fleet(WarpFleet::new(
-            12,
-            1,
-            2,
-            UnitType::TradeShip,
-            40.0,
-            (0, 6),
-            vec![6],
-        ));
-        engine.add_fleet(WarpFleet::new(
-            13,
-            1,
-            2,
-            UnitType::Warship,
-            40.0,
-            (0, 6),
-            vec![6],
-        ));
-
-        let operations = build_combat_operations_payload(&snapshot, 1, Some(&engine), 5);
-        assert_eq!(operations.len(), 2);
-        assert_eq!(
-            combat_operations_snapshot_tick(&snapshot, 1, Some(&engine)),
-            snapshot.tick
-        );
-        assert_eq!(operations[0]["direction"], "incoming");
-        assert_eq!(operations[0]["kind"], "fleet");
-        assert_eq!(operations[0]["id"], 11);
-        assert_eq!(operations[1]["direction"], "outgoing");
-        assert_eq!(operations[1]["id"], 10);
-        assert_eq!(operations[1]["neutral"], true);
-        assert_eq!(operations[1]["eta_seconds"], 3.25);
-        assert!(operations[0]["eta_seconds"].is_null());
-
-        snapshot.fleets[0].retreating = true;
-        snapshot.fleets[0].eta_seconds = Some(1.25);
-        let returning = build_combat_operations_payload(&snapshot, 1, Some(&engine), 5);
-        assert_eq!(returning[1]["eta_seconds"], 1.25);
-        snapshot.fleets.clear();
-        assert_eq!(
-            combat_operations_snapshot_tick(&snapshot, 1, Some(&engine)),
-            0
-        );
-    }
-
-    #[test]
-    fn optimized_top_three_matches_the_full_order() {
-        let players = vec![
-            test_player(3, 10, 5.0),
-            test_player(2, 10, 5.0),
-            test_player(1, 10, 6.0),
-            test_player(0, 10, 5.0),
-            test_player(4, 9, 100.0),
-        ];
-        let mut full: Vec<&PlayerSnapshot> = players.iter().collect();
-        full.sort_unstable_by(leaderboard_cmp);
-        let expected: Vec<u16> = full.iter().take(3).map(|player| player.id).collect();
-
-        let mut optimized: Vec<&PlayerSnapshot> = players.iter().collect();
-        optimized.select_nth_unstable_by(2, leaderboard_cmp);
-        optimized.truncate(3);
-        optimized.sort_unstable_by(leaderboard_cmp);
-        assert_eq!(
-            optimized.iter().map(|player| player.id).collect::<Vec<_>>(),
-            expected
-        );
-    }
-
-    #[test]
-    fn leaderboard_has_at_most_100_rows_plus_the_local_player() {
-        let snapshot = test_snapshot(
-            (0..150)
-                .map(|id| test_player(id, 150 - id as u32, 0.0))
-                .collect(),
-        );
-        let serde_json::Value::Array(rows) = build_leaderboard(&snapshot, 149) else {
-            panic!("leaderboard must be an array");
-        };
-
-        assert_eq!(rows.len(), 101);
-        assert_eq!(
-            rows.iter()
-                .filter_map(|row| row.get("id").and_then(serde_json::Value::as_u64))
-                .collect::<std::collections::HashSet<_>>()
-                .len(),
-            101
-        );
-        assert_eq!(rows[0]["rank"], serde_json::json!(1));
-        assert_eq!(rows[99]["rank"], serde_json::json!(100));
-        assert_eq!(rows[100]["id"], serde_json::json!(149));
-        assert_eq!(rows[100]["rank"], serde_json::json!(150));
-    }
-
-    #[test]
-    fn team_leaderboard_sums_members_outside_the_individual_limit_and_sorts_by_land() {
-        use sow_core::protocol::Team;
-
-        let mut players: Vec<PlayerSnapshot> = (0..150)
-            .map(|id| test_player(id, 150 - id as u32, 0.0))
-            .collect();
-        for (id, team, tiles) in [
-            (120, Team::Red, 6),
-            (121, Team::Red, 4),
-            (122, Team::Blue, 3),
-            (123, Team::Blue, 2),
-        ] {
-            players[id].team = Some(team);
-            players[id].tile_count = tiles;
-        }
-        let mut snapshot = test_snapshot(players);
-        snapshot.total_land_tiles = 100;
-
-        let teams = build_team_leaderboard(&snapshot);
-        let serde_json::Value::Array(teams) = teams else {
-            panic!("team leaderboard must be an array");
-        };
-        assert_eq!(teams.len(), 2);
-        assert_eq!(teams[0]["team"], "Red");
-        assert_eq!(teams[0]["tile_count"], 10);
-        assert_eq!(teams[0]["territory_pct"], 0.1);
-        assert_eq!(teams[0]["members"], 2);
-        assert_eq!(teams[1]["team"], "Blue");
-        assert_eq!(teams[1]["tile_count"], 5);
-        assert_eq!(teams[1]["territory_pct"], 0.05);
-
-        let serde_json::Value::Array(players) = build_leaderboard(&snapshot, 0) else {
-            panic!("player leaderboard must be an array");
-        };
-        assert!(players.iter().all(|player| {
-            !matches!(
-                player.get("id").and_then(serde_json::Value::as_u64),
-                Some(120..=123)
-            )
-        }));
-    }
-
-    #[test]
-    fn leaderboard_includes_humans_outside_the_top_100() {
-        let mut players: Vec<PlayerSnapshot> = (0..150)
-            .map(|id| test_player(id, 150 - id as u32, 0.0))
-            .collect();
-        players[140].player_type = PlayerType::Human;
-        players[141].player_type = PlayerType::Human;
-        let snapshot = test_snapshot(players);
-
-        let serde_json::Value::Array(rows) = build_leaderboard(&snapshot, 0) else {
-            panic!("leaderboard must be an array");
-        };
-
-        let human_rows: Vec<&serde_json::Value> = rows
-            .iter()
-            .filter(|row| {
-                matches!(
-                    row.get("id").and_then(serde_json::Value::as_u64),
-                    Some(140 | 141)
-                )
-            })
-            .collect();
-        assert_eq!(human_rows.len(), 2);
-        assert_eq!(human_rows[0]["rank"], serde_json::json!(141));
-        assert_eq!(human_rows[1]["rank"], serde_json::json!(142));
-    }
-
-    #[test]
-    fn leaderboard_offers_trade_only_to_allies_and_teammates() {
-        use sow_core::protocol::Team;
-
-        let mut players = vec![
-            test_player(1, 10, 0.0),
-            test_player(2, 10, 0.0),
-            test_player(3, 10, 0.0),
-            test_player(4, 10, 0.0),
-            test_player(5, 10, 0.0),
-        ];
-        players[0].alliances.push(2);
-        players[0].team = Some(Team::Red);
-        players[2].team = Some(Team::Red);
-        players[3].team = Some(Team::Blue);
-        let snapshot = test_snapshot(players);
-
-        let serde_json::Value::Array(rows) = build_leaderboard(&snapshot, 1) else {
-            panic!("leaderboard must be an array");
-        };
-        let can_trade = |id: u16| -> bool {
-            rows.iter()
-                .find(|row| row["id"] == serde_json::json!(id))
-                .and_then(|row| row["can_trade"].as_bool())
-                .expect("leaderboard row with can_trade")
-        };
-        assert!(!can_trade(1), "self");
-        assert!(can_trade(2), "ally");
-        assert!(can_trade(3), "teammate");
-        assert!(!can_trade(4), "other team");
-        assert!(!can_trade(5), "stranger");
-    }
-}

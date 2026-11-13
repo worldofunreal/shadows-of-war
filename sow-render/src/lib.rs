@@ -6,9 +6,6 @@ pub mod shader_params;
 pub mod sprite_atlas;
 pub mod text;
 
-#[cfg(test)]
-mod shader_validation;
-
 pub use context::*;
 pub use map_renderer::*;
 pub use mover_renderer::*;

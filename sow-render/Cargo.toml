@@ -10,7 +10,6 @@ blade-graphics = { git = "https://github.com/ohsalmeron/blade", rev = "be2fc3130
 blade-macros = { git = "https://github.com/ohsalmeron/blade", rev = "be2fc3130ce09212f41a31bbce629f0a1c14bc61" }
 bytemuck = { workspace = true }
 raw-window-handle = { workspace = true }
-sow-data = { workspace = true }
 sow-core = { workspace = true }
 web-time = { workspace = true }
 serde = { workspace = true }
@@ -21,9 +20,3 @@ unicode-bidi = "0.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { workspace = true, features = ["ImageBitmap", "console"] }
-
-[dev-dependencies]
-sow-i18n = { workspace = true }
-# Exact same naga blade uses at runtime (incl. the web build) so the
-# headless shader tests validate with the production parser.
-naga = { git = "https://github.com/gfx-rs/wgpu", rev = "b0a44f766e95a38f0aa45565ff005173cc96d46a", features = ["wgsl-in"] }

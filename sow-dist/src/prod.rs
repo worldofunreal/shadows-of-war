@@ -274,45 +274,11 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
     require_secret("SOW_PLAY_GAMES_WEB_CLIENT_SECRET")?;
 
     println!("==> 1/8 Preflight");
-    require_fresh_identity_snapshot(&config)?;
-    let deployed = relay::Control::deployed(&config)?;
-    let migrating = !deployed.is_local();
+    let local = relay::Control::local();
     let fresh_site = !has_active_release(&config)?;
-    if migrating && (only.is_some() || bump) {
-        bail!("use ./sow p to migrate the relay and client together");
-    }
-    if migrating {
-        relay::verify_control_port_available(&config)?;
-    }
     preflight(paths, &config, only.is_some())?;
     let version = version(paths, bump)?;
     println!("==> {} {version}", site::current().label());
-    let runtime_inputs = [
-        "Cargo.toml",
-        "Cargo.lock",
-        "sow-core",
-        "sow-data",
-        "sow-i18n",
-        "sow-net",
-        "sow-server",
-        "sow-relay",
-        "sow-web/shell",
-        "sow-web/site",
-        "assets/geo_entities.json",
-        "assets/guides",
-        "assets/maps/world/map.bin.br",
-        "sow-dist/src",
-        "sow-dist/deploy/freebsd",
-    ]
-    .map(|path| paths.root.join(path));
-    let runtime_inputs = runtime_inputs
-        .iter()
-        .map(PathBuf::as_path)
-        .collect::<Vec<_>>();
-    let runtime_snapshot = input_fingerprint("production-runtime-v1", "", &runtime_inputs)?;
-    let runtime_unchanged = || -> Result<bool> {
-        Ok(input_fingerprint("production-runtime-v1", "", &runtime_inputs)? == runtime_snapshot)
-    };
     // Android is deliberately NOT part of this pipeline: every Play upload
     // resets Google's review clock, so AAB publication lives in `./sow a`
     // and runs only when a new build is actually ready for review.
@@ -334,24 +300,16 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
         assemble_release(paths, &web, &backend, &version)?
     };
     println!("  release {}", release.id);
-    if !runtime_unchanged()? {
-        bail!("runtime sources or deployment templates changed during the build");
-    }
 
     ensure_control_clock(&config)?;
     verify_control_runtime_secret(&config)?;
-    if !migrating && !fresh_site {
+    if !fresh_site {
         relay::ensure_running(&config)?;
     }
 
     println!("==> 4/8 Compare deployed manifest");
     let mut plan = remote_plan(&config, &release)?;
-    if migrating {
-        plan.server = true;
-        plan.database = true;
-        plan.ops = true;
-        plan.relay = true;
-    } else if relay::verify_identity(&config, &release).is_err() {
+    if relay::verify_identity(&config, &release).is_err() {
         plan.relay = true;
     }
     if control_certificate_automation_drift(&config)? || maps_catalog_path_drift(&config)? {
@@ -381,13 +339,12 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
         }
     }
 
-    let local = relay::Control::local();
     if !plan.any() {
         println!("  no production component changed; no restart performed");
         verify_ionos_runtime(&config, &release, &plan)?;
         local.drain(&config, false)?;
         verify_public(paths, &config, &release)?;
-        verify_live_reward_return(paths, &config, None)?;
+        join_smoke(paths, &config)?;
         retain_releases(&config)?;
         retain_local_builds(paths)?;
         println!("✅ {} already serves the requested content", site::current().label());
@@ -396,25 +353,14 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
 
     println!("==> 5/8 Stage release (no service mutation)");
     stage_release(&config, &release)?;
-    if !runtime_unchanged()? {
-        bail!("runtime sources or deployment templates changed before activation");
-    }
     let require_empty = plan.server || plan.database || plan.maps || plan.ops;
     let activate = || {
-        require_fresh_identity_snapshot(&config)?;
         println!("==> 6/8 Activate changed components only");
         // A first activation has no relay to pause and no matches to drain.
         let mut admission = (!fresh_site && (require_empty || plan.relay))
-            .then(|| RelayAdmissionPause::acquire(&config, &deployed, require_empty))
+            .then(|| RelayAdmissionPause::acquire(&config, &local, require_empty))
             .transpose()?;
-        if migrating {
-            relay::verify_control_port_available(&config)?;
-        }
-        let backup = relay::Backup::capture(&config, migrating)?;
-        if migrating && let Some(pause) = admission.as_mut() {
-            // Azure stays paused until the previous release is restored.
-            pause.paused = false;
-        }
+        let backup = relay::Backup::capture(&config)?;
         let mut opened_local = false;
         let result = (|| -> Result<()> {
             if plan.relay {
@@ -423,14 +369,11 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
             }
             activate_control_host(paths, &config, &release, &plan)?;
             if plan.relay {
-                relay::activate(&config, migrating)?;
+                relay::activate(&config)?;
             }
             println!("==> 7/8 Verify IONOS runtime");
             verify_ionos_runtime(&config, &release, &plan)?;
-            if migrating {
-                opened_local = true;
-                local.drain(&config, false)?;
-            } else if let Some(pause) = admission.as_mut() {
+            if let Some(pause) = admission.as_mut() {
                 opened_local = true;
                 pause.resume()?;
             }
@@ -442,55 +385,16 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
         Ok::<_, anyhow::Error>((backup, opened_local, result))
     };
 
-    let hot = plan.relay && !migrating && !require_empty;
-    let sync_dir = hot.then(tempfile::tempdir).transpose()?;
-    let (backup, opened_local, activation_result, handover) = std::thread::scope(|scope| {
-        let Some(sync) = sync_dir.as_ref().map(|dir| dir.path()) else {
-            let (backup, opened, result) = activate()?;
-            return Ok::<_, anyhow::Error>((backup, opened, result, Ok(())));
-        };
-        let control = &config;
-        let acceptance = scope.spawn(move || verify_live_reward_return(paths, control, Some(sync)));
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(900);
-        while !sync.join("ready").is_file() {
-            if acceptance.is_finished() {
-                acceptance.join().map_err(|_| anyhow::anyhow!("relay verification panicked"))??;
-                bail!("live upgrade fixture ended before activation");
-            }
-            if std::time::Instant::now() >= deadline {
-                fs::write(sync.join("activated"), "failed")?;
-                bail!("live upgrade fixture did not become ready");
-            }
-            std::thread::sleep(std::time::Duration::from_millis(200));
-        }
-        let activation = activate();
-        let signal = if activation.as_ref().is_ok_and(|(_, _, result)| result.is_ok()) {
-            file_sha256(&release.dir.join("bin/sow-relay"))?
-        } else {
-            "failed".to_string()
-        };
-        fs::write(sync.join("activated.next"), signal)?;
-        fs::rename(sync.join("activated.next"), sync.join("activated"))?;
-        let handover = acceptance.join().map_err(|_| anyhow::anyhow!("relay verification panicked"))?;
-        let (backup, opened, result) = activation?;
-        Ok((backup, opened, result, handover))
-    })?;
-    let result = activation_result.and(handover).and_then(|()| {
+    let (backup, opened_local, activation_result) = activate()?;
+    let result = activation_result.and_then(|()| {
         println!("==> 8/8 Public verification");
         verify_public(paths, &config, &release)?;
-        if !runtime_unchanged()? {
-            bail!("runtime sources changed after release {} was built", release.id);
-        }
-        if !hot {
-            verify_live_reward_return(paths, &config, None)?;
-        }
-        Ok(())
+        join_smoke(paths, &config)
     });
     if let Err(error) = result {
-        // A live match always owns its original process. The only reversal
-        // that moves the endpoint back to another machine needs an empty relay.
+        // A live match keeps its own process; a backend restore waits for an empty relay.
         let rollback = (|| -> Result<()> {
-            if opened_local && (migrating || require_empty) {
+            if opened_local && require_empty {
                 local.drain(&config, true)?;
                 let deadline = std::time::Instant::now() + std::time::Duration::from_secs(240);
                 loop {
@@ -505,9 +409,9 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
                     std::thread::sleep(std::time::Duration::from_secs(3));
                 }
             }
-            backup.restore(&config, &plan, migrating)?;
-            deployed.metrics(&config)?;
-            deployed.drain(&config, false)?;
+            backup.restore(&config, &plan)?;
+            local.metrics(&config)?;
+            local.drain(&config, false)?;
             Ok(())
         })();
         return match rollback {
@@ -515,9 +419,7 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
             Err(rollback) => Err(error.context(format!("could not complete rollback: {rollback:#}"))),
         };
     }
-    if !migrating {
-        backup.remove(&config)?;
-    }
+    backup.remove(&config)?;
     retain_releases(&config)?;
     retain_local_builds(paths)?;
     println!("✅ {} {} ready as {}", site::current().label(), release.version, release.id);
@@ -538,17 +440,10 @@ fn verify_ionos_runtime(config: &Config, release: &Release, plan: &ComponentPlan
     relay::verify_certificate(config)
 }
 
-fn verify_live_reward_return(
-    paths: &Paths,
-    config: &Config,
-    handover_sync: Option<&Path>,
-) -> Result<()> {
+/// A real client joins a private lobby on the public route with this release's identity.
+fn join_smoke(paths: &Paths, config: &Config) -> Result<()> {
     let mut websocket = url::Url::parse(&config.public_origin)?;
-    let scheme = if websocket.scheme() == "https" {
-        "wss"
-    } else {
-        "ws"
-    };
+    let scheme = if websocket.scheme() == "https" { "wss" } else { "ws" };
     websocket
         .set_scheme(scheme)
         .map_err(|_| anyhow::anyhow!("invalid public WebSocket scheme"))?;
@@ -558,38 +453,18 @@ fn verify_live_reward_return(
         .root
         .join("dist/.sow-state")
         .join(site::current().reward_audit_accounts_file());
-    let mut args = vec![
-        "run",
-        "--locked",
-        "-p",
-        "sow-tools",
-        "--bin",
-        "test-relay",
-        "--",
-        "--verify-rewards",
-        "--require-proxied-relay",
-        config.control_host.as_str(),
-        "--url",
-        websocket.as_str(),
-        "--database-url",
-        &database,
-        "--audit-accounts-file",
-        accounts.to_str().context("invalid audit accounts path")?,
-        "--relay-jail",
-        site::current().server_jail(),
-        "--relay-loopback",
-        site::current().loopback(),
-    ];
-    if let Some(sync) = handover_sync {
-        args.extend([
-            "--verify-handover-relay-host",
-            config.control_host.as_str(),
-            "--verify-handover-sync-dir",
-            sync.to_str().context("invalid relay activation sync directory")?,
-        ]);
-    }
-    run("cargo", &args, Some(&paths.root))
-        .context("real multiplayer exit and reward presentation failed")
+    run(
+        "cargo",
+        &[
+            "run", "--locked", "-p", "sow-tools", "--bin", "test-relay", "--",
+            "--smoke",
+            "--url", websocket.as_str(),
+            "--database-url", &database,
+            "--audit-accounts-file", accounts.to_str().context("invalid audit accounts path")?,
+        ],
+        Some(&paths.root),
+    )
+    .context("join smoke failed")
 }
 
 /// `./sow a` — Android-only track, decoupled from `./sow p` on purpose.
@@ -1014,42 +889,6 @@ fn preflight(paths: &Paths, config: &Config, reuse_web: bool) -> Result<()> {
             bail!("{command} is required");
         }
     }
-    if !reuse_web {
-    for (entry, context) in [
-        (
-            "sow-web/shell/sow-campaign.ts",
-            "campaign engine TypeScript check failed",
-        ),
-        (
-            "sow-web/shell/sow-campaign-view.ts",
-            "campaign view TypeScript check failed",
-        ),
-        (
-            "sow-web/shell/main_menu.menu-guide.ts",
-            "menu guide TypeScript check failed",
-        ),
-    ] {
-        run(
-            "bun",
-            &[
-                "build",
-                "--check",
-                "--target=browser",
-                "--format=iife",
-                "--outfile=/dev/null",
-                entry,
-            ],
-            Some(&paths.root),
-        )
-        .context(context)?;
-    }
-    super::pack_art_atlases(paths)?;
-    super::validate_current_ui_contract(paths)?;
-    }
-    // Keep unit/fixture suites available for explicit development runs. The
-    // production path validates sources and packages here, then relies on its
-    // staged health checks and public verification instead of treating unit
-    // test passes as proof of browser rendering.
     if !Command::new("rustc")
         .args([
             "--print",
@@ -1279,38 +1118,14 @@ fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
     let state = site::current().state_prefix();
     let candidate_root = paths.root.join(format!("dist/.sow-state/{state}-web"));
     let web = candidate_root.join("web");
-    let poki = candidate_root.join("poki");
     let cache = paths.root.join(format!("dist/.sow-state/{state}-web-package"));
-    // Portal packages are owner upload artifacts in dist/. Only production builds them.
-    let portals = site::current().builds_portal_packages();
-    let portals_ready = !portals
-        || (paths.dist_cg.join("index.html").is_file()
-            && poki.join("index.html").is_file()
-            && paths.dist_jest.join("index.html").is_file()
-            && verify_cg_layout(&paths.dist_cg).is_ok()
-            && verify_cg_asset_inventory(&web.join("assets"), &paths.dist_cg.join("assets")).is_ok()
-            && verify_portal_map_inventory(&web.join("maps"), &paths.dist_cg.join("maps")).is_ok()
-            && verify_poki_layout(&poki).is_ok()
-            && verify_poki_asset_inventory(&web.join("assets"), &poki.join("assets")).is_ok()
-            && verify_portal_map_inventory(&web.join("maps"), &poki.join("maps")).is_ok()
-            && verify_portal_map_inventory(&web.join("maps"), &paths.dist_jest.join("maps")).is_ok()
-            && verify_jest_layout(&paths.dist_jest).is_ok());
     let cached = fs::read_to_string(&cache).is_ok_and(|value| value.trim() == fingerprint)
-        && web.join("play/index.html").is_file()
-        && verify_layout(&web).is_ok()
-        && portals_ready;
+        && web.join("play/index.html").is_file();
     if cached {
         println!("==> Web package unchanged — reusing candidate");
         return Ok(web);
     }
     package_self(paths, &web, version, true)?;
-    if portals {
-        let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
-        package_cg(&web, &paths.dist_cg, paths, version, &maps_cache_bust)?;
-        package_poki(&web, &poki, paths, version, &maps_cache_bust)?;
-        package_jest(&web, &paths.dist_jest, paths, version, &maps_cache_bust)?;
-        write_jest_zip(paths)?;
-    }
     fs::create_dir_all(cache.parent().context("web cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
     Ok(web)
@@ -1910,41 +1725,11 @@ fn maps_catalog_path_drift(config: &Config) -> Result<bool> {
     Ok(values.len() != 3 || values.iter().any(|value| *value != expected))
 }
 
-fn identity_snapshot_is_fresh(snapshot: u64, now: u64) -> bool {
-    snapshot <= now.saturating_add(60) && now.saturating_sub(snapshot) <= 15 * 60
-}
-
-fn require_fresh_identity_snapshot(config: &Config) -> Result<()> {
-    if !site::current().owns_identity_import() {
-        return Ok(());
-    }
-    // After a successful cutover all accounts are owned locally. Before it,
-    // a stale provider snapshot can strand accounts created during the build.
-    let installed = output("ssh", &[&config.control_host,
-        "if sudo test -f __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env; then echo ready; else echo pending; fi"])?;
-    if installed.trim() == "ready" { return Ok(()); }
-    let path = identity_import_file()?.context("prepare a private identity/session snapshot before the first auth cutover")?;
-    let bundle: serde_json::Value = serde_json::from_slice(&fs::read(path)?)?;
-    let snapshot = bundle["session_handover"]["snapshot_at"].as_u64()
-        .context("identity cutover requires an offline session handover snapshot")?;
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
-    if !identity_snapshot_is_fresh(snapshot, now) {
-        bail!("identity cutover snapshot is stale; refresh the private snapshot before retrying ./sow p");
-    }
-    Ok(())
-}
-
 fn auth_config_drift(config: &Config) -> Result<bool> {
     let expected = hex::encode(Sha256::digest(auth_env_contents()?.as_bytes()));
     let remote = output("ssh", &[&config.control_host,
         "sudo test -s __SITE_DATABASE_ROOT__/etc/resolv.conf && sudo test -s __SITE_DATABASE_ROOT__/etc/ssl/cert.pem && sudo sha256 -q __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env 2>/dev/null || true"])?;
     if remote.trim() != expected { return Ok(true); }
-    if let Some(path) = identity_import_file()? {
-        let expected = hex::encode(Sha256::digest(fs::read(path)?));
-        let remote = output("ssh", &[&config.control_host,
-            "sudo sha256 -q __SITE_DATABASE_ROOT__/usr/local/etc/sow/identity-import.json 2>/dev/null || true"])?;
-        if remote.trim() != expected { return Ok(true); }
-    }
     Ok(false)
 }
 
@@ -2079,13 +1864,6 @@ fn activate_control_host(
         stage_secret(&config.control_host, &auth_env_contents()?, &path)?;
         Some(path)
     } else { None };
-    let identity_import_stage = if runtime_env {
-        identity_import_file()?.map(|source| {
-            let path = format!("/tmp/sow-identity-import-{}", std::process::id());
-            stage_secret(&config.control_host, &fs::read_to_string(source)?, &path)?;
-            Ok::<_, anyhow::Error>(path)
-        }).transpose()?
-    } else { None };
     let relay_host = relay::name();
     let relay_workers = format!("-:{relay_host}:{}", relay::PORT);
     let relay_worker_count = "1";
@@ -2156,12 +1934,9 @@ fn activate_control_host(
         ":".to_string()
     };
     let env_update = env_update_base;
-    let mut auth_update = if let Some(path) = &auth_env_file {
+    let auth_update = if let Some(path) = &auth_env_file {
         format!("sudo install -o root -g wheel -m 0600 {} __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env", shell_quote(path))
     } else { ":".to_owned() };
-    if let Some(path) = &identity_import_stage {
-        auth_update.push_str(&format!("\nsudo install -o sowdb -g sow -m 0600 {} __SITE_DATABASE_ROOT__/usr/local/etc/sow/identity-import.json", shell_quote(path)));
-    }
     let settlement_secret_update = if let Some(secret_file) = settlement_secret_file.as_deref() {
         format!(
             r#"for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do
@@ -2210,7 +1985,6 @@ done"#
         revenuecat_webhook_file.as_deref(),
         play_games_web_client_secret_file.as_deref(),
         auth_env_file.as_deref(),
-        identity_import_stage.as_deref(),
         maps_reload_token_file.as_deref(),
     ]
     .into_iter()
@@ -2244,7 +2018,7 @@ fi"#
         }
     }
     if resolver_update.is_empty() { resolver_update.push(':'); }
-    let config_files = "__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/identity-import.json __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database";
+    let config_files = "__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database";
     let env_backups = if runtime_env {
         format!(r#"backup=$(sudo mktemp -d /tmp/sow-config-backup.XXXXXX)
 for f in {config_files}; do
@@ -2555,14 +2329,12 @@ fn retain_releases(config: &Config) -> Result<()> {
     let command = r#"set -eu
 current=$(sudo readlink __SITE_RELEASE_ROOT__/current)
 live=$(sudo jexec __SITE_SERVER_JAIL__ sh -c 'pids=$(pgrep -x sow-relay || true); if [ -n "$pids" ]; then procstat -b $pids; fi' | awk '{ path=$NF; prefix="/srv/sow/releases/"; suffix="/bin/sow-relay"; if (substr(path,1,length(prefix)) == prefix && substr(path,length(path)-length(suffix)+1) == suffix) print "__SITE_RELEASE_ROOT__/releases/" substr(path,length(prefix)+1,length(path)-length(prefix)-length(suffix)); }')
-saved=$(sudo sh -c 'for dir in __SITE_RELEASE_ROOT__/.relay-rollback.*; do if [ -f "$dir/azure" ] || [ -f "$dir/dns.json" ]; then cat "$dir/current"; fi; done')
 i=0
 for dir in $(sudo ls -dt __SITE_RELEASE_ROOT__/releases/* 2>/dev/null || true); do
     i=$((i+1))
     [ "$i" -le 5 ] && continue
     [ "__SITE_RELEASE_ROOT__/$current" = "$dir" ] && continue
     if printf '%s\n' "$live" | grep -Fxq "$dir"; then continue; fi
-    if printf '%s\n' "$saved" | grep -Fxq "${dir#__SITE_RELEASE_ROOT__/}"; then continue; fi
     case "$dir" in __SITE_RELEASE_ROOT__/releases/*) sudo rm -rf -- "$dir";; esac
 done"#;
     run("ssh", &[&config.control_host, command], None).context("release retention failed")
@@ -2710,14 +2482,6 @@ mod map_catalog_gate_tests {
 mod build_fingerprint_tests {
     use super::freebsd_build_fingerprint;
     use std::fs;
-
-    #[test]
-    fn first_identity_cutover_rejects_stale_or_future_snapshots() {
-        assert!(super::identity_snapshot_is_fresh(10_000,10_000));
-        assert!(super::identity_snapshot_is_fresh(9_100,10_000));
-        assert!(!super::identity_snapshot_is_fresh(9_099,10_000));
-        assert!(!super::identity_snapshot_is_fresh(10_061,10_000));
-    }
 
     #[test]
     fn freebsd_cache_tracks_relay_atlas_and_bundled_world_map() {

@@ -663,6 +663,7 @@ impl SowApp {
                     }
                     if operation == "menu guide progress" {
                         self.progress.merge_menu_guides(progress.menu_guides);
+                        self.progress.menu_tips_disabled = progress.menu_tips_disabled;
                         self.menu_guide_save_pending = false;
                         self.save_local_progress();
                         continue;

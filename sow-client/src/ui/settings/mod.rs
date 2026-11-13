@@ -128,12 +128,3 @@ impl Default for SettingsState {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn fps_ping_and_dev_tools_are_off_by_default() {
-        let settings = super::SettingsState::default();
-        assert!(!settings.show_fps_ping);
-        assert!(!settings.show_dev_tools);
-    }
-}

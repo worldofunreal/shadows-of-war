@@ -1,7 +1,7 @@
 # Asset provenance and ownership for Shadows of War.
 #
 # Original game, brand, and loader art is edited in assets/art; landing stills,
-# captures, and video sources live in assets/site/media. See assets/art/README.md.
+# captures, and video sources live in assets/site/media.
 # assets/generated is written by sow-tools; sow-dist creates distribution copies.
 
 [avatars]

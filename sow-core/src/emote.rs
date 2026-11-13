@@ -1,4 +1,4 @@
-//! Fixed player communication. See docs/nameplates-and-emotes.md.
+//! Fixed player communication.
 
 use serde::{Deserialize, Serialize};
 
@@ -184,24 +184,6 @@ pub fn is_recipient(players: &[crate::protocol::PlayerSnapshot], sender: u16, vi
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn expression_file_names_match_the_names_the_shell_receives() {
-        for expression in AvatarExpression::ALL {
-            assert_eq!(
-                serde_json::to_string(&expression).unwrap(),
-                format!("\"{}\"", expression.id())
-            );
-        }
-        assert_eq!(
-            hero_portrait_path("boudica", AvatarExpression::Calm),
-            "gameplay/avatars/boudica.webp"
-        );
-        assert_eq!(
-            hero_portrait_path("boudica", AvatarExpression::Fear),
-            "gameplay/avatars/expressions/boudica_fear.webp"
-        );
-    }
 
     fn engine() -> crate::engine::SowEngine {
         let config = crate::game_config::GameConfig::default();

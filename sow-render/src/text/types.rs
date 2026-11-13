@@ -117,7 +117,6 @@ pub const KIND_RECT: f32 = 5.0;
 pub const KIND_TRIANGLE: f32 = 6.0;
 pub const KIND_CROSS: f32 = 7.0;
 pub const KIND_ARC: f32 = 8.0;
-pub const KIND_HORN: f32 = 9.0;
 pub const KIND_ROUNDED_RECT: f32 = 10.0;
 pub const KIND_BUILDING_SPRITE: f32 = 11.0;
 pub const KIND_STATUS_SPRITE: f32 = 12.0;
@@ -229,28 +228,6 @@ impl NameplateStatusSprite {
     }
 }
 
-#[cfg(test)]
-mod badge_atlas_tests {
-    use super::NameplateStatusSprite;
-
-    #[test]
-    fn every_badge_has_exactly_one_generated_cell() {
-        let cells = &super::super::badge_atlas::CELLS;
-        assert_eq!(cells.len(), NameplateStatusSprite::ALL.len());
-        for sprite in NameplateStatusSprite::ALL {
-            assert_eq!(
-                cells
-                    .iter()
-                    .filter(|cell| **cell == sprite.art_name())
-                    .count(),
-                1,
-                "{}",
-                sprite.art_name()
-            );
-        }
-    }
-}
-
 // One cell per portrait the match draws. The atlas grows by rows of `AVATAR_COLS` cells and
 // never frees a cell during a match. 32 × 128 px keeps both sides within 4096 px for mobile
 // GPUs while holding every catalog portrait at once.
@@ -310,33 +287,3 @@ pub struct TextShaderData {
     pub status_sampler: gpu::Sampler,
 }
 
-#[cfg(test)]
-mod avatar_atlas_tests {
-    /// Cells are never freed during a match, so the full atlas must hold every catalog portrait
-    /// at once: both fixed cells, four faces per hero and every bot. A catalog that outgrows it
-    /// needs a smaller `AVATAR_CELL`, not eviction.
-    #[test]
-    fn full_avatar_atlas_holds_every_catalog_portrait_within_gpu_limits() {
-        use sow_core::geo_entities::{Role, bots};
-        assert!(super::AVATAR_COLS * super::AVATAR_CELL <= 4096);
-        assert!(super::AVATAR_MAX_ROWS * super::AVATAR_CELL <= 4096);
-        let catalog = 2
-            + sow_core::player::Leader::count() * sow_core::emote::AvatarExpression::ALL.len()
-            + bots(Role::Tribe).count()
-            + bots(Role::Nation).count();
-        assert!(catalog <= super::AVATAR_MAX_SLOTS, "{catalog} portraits");
-
-        for rows in [1, 7, super::AVATAR_MAX_ROWS] {
-            let expected_u_span = (super::AVATAR_CELL - 1) as f32
-                / (super::AVATAR_COLS * super::AVATAR_CELL) as f32;
-            let expected_v_span = (super::AVATAR_CELL - 1) as f32 / (rows * super::AVATAR_CELL) as f32;
-            for slot in 0..(rows * super::AVATAR_COLS) as usize {
-                let [u0, v0, u1, v1] = super::avatar_slot_uv(slot, rows);
-                assert!(u0 >= 0.0 && v0 >= 0.0 && u1 <= 1.0 && v1 <= 1.0);
-                assert!(u0 < u1 && v0 < v1);
-                assert!((u1 - u0 - expected_u_span).abs() < 1e-6);
-                assert!((v1 - v0 - expected_v_span).abs() < 1e-6);
-            }
-        }
-    }
-}

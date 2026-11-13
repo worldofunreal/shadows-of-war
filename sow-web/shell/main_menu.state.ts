@@ -20,6 +20,46 @@ export interface MenuLeader {
     cost_crowns?: number;
     cost_gems?: number;
     rarity?: "common" | "rare" | "epic" | "legendary";
+    xp?: number;
+    stats?: HeroCareerStats;
+}
+
+export interface HeroCareerStats {
+    matches_played?: number;
+    wins?: number;
+    verified_wins?: number;
+    kills?: number;
+    deaths?: number;
+    assists?: number;
+    xp?: number;
+}
+
+export interface HeroBioSource {
+    title: string;
+    url: string;
+}
+
+export interface HeroBioSection {
+    title: string;
+    paragraphs: string[];
+    evidence?: string;
+    sources?: HeroBioSource[];
+}
+
+export interface HeroBioEntry {
+    lang?: string;
+    isSaga?: boolean;
+    shortArticle?: boolean;
+    highlight?: string;
+    highlightLabel?: string;
+    intro?: string[];
+    sections?: HeroBioSection[];
+    sourceNote?: string;
+    evidenceLabel?: string;
+    chapterSourcesLabel?: string;
+    sources?: HeroBioSource[];
+    title?: string;
+    url?: string;
 }
 
 export interface MenuLobby {
@@ -237,6 +277,12 @@ export interface MenuMission {
     gems_reward: number;
     icon: string;
     order: number;
+    locked?: boolean;
+    unlock_level?: number;
+    axis?: string;
+    tag?: string;
+    action_target?: string;
+    swappable?: boolean;
 }
 
 export interface MenuProfileStats {
@@ -248,7 +294,11 @@ export interface MenuProfileStats {
     kills: number;
     deaths: number;
     assists: number;
-    leader_xp: number;
+    ranked_matches?: number;
+    ranked_wins?: number;
+    total_structures_built?: number;
+    leader_xp: number | Record<string, number>;
+    leader_stats?: Record<string, HeroCareerStats>;
 }
 
 export interface MenuState {
@@ -315,8 +365,15 @@ export interface MenuState {
     custom_game_is_private: boolean;
     custom_game_is_sp: boolean;
     settings: MenuSettings;
+    menu_tips_disabled?: boolean;
     missions?: MenuMission[];
     missions_progress?: Record<string, MenuMissionRecord>;
+    daily_swaps_used?: number;
+    weekly_swaps_used?: number;
+    daily_free_swaps_left?: number;
+    daily_total_swaps_left?: number;
+    weekly_free_swaps_left?: number;
+    weekly_total_swaps_left?: number;
 }
 
 export interface HudAvatarIdentity {
@@ -344,6 +401,8 @@ export interface HudLeaderboardPlayer {
     territory_pct: number;
     is_alive: boolean;
     is_me: boolean;
+    is_bot?: boolean;
+    is_human?: boolean;
     /** Allies and teammates only: the server accepts resource moves with this player. */
     can_trade?: boolean;
     leader: string;

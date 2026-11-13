@@ -1,4 +1,5 @@
 import { currencyAsset, esc, menuUi, send } from "./main_menu.core.ts";
+import { render } from "./main_menu.shell.ts";
 import type { MenuMission, MenuState } from "./main_menu.state.ts";
 
 // Missions and Retention Funnel runtime logic and presentation.
@@ -8,27 +9,27 @@ export function resolveActiveMissions(state: MenuState | null): MenuMission[] {
 }
 
 export function getActiveDirective(missions: MenuMission[]): MenuMission | null {
-    // 1. Any ready-to-claim mission across all categories (onboarding, daily, weekly)
-    const unclaimedOnboarding = missions.find((m) => m.category === "onboarding" && m.completed && !m.claimed);
+    // 1. Any ready-to-claim unlocked mission across all categories (onboarding, daily, weekly)
+    const unclaimedOnboarding = missions.find((m) => !m.locked && m.category === "onboarding" && m.completed && !m.claimed);
     if (unclaimedOnboarding) return unclaimedOnboarding;
-    const unclaimedDaily = missions.find((m) => m.category === "daily" && m.completed && !m.claimed);
+    const unclaimedDaily = missions.find((m) => !m.locked && m.category === "daily" && m.completed && !m.claimed);
     if (unclaimedDaily) return unclaimedDaily;
-    const unclaimedWeekly = missions.find((m) => m.category === "weekly" && m.completed && !m.claimed);
+    const unclaimedWeekly = missions.find((m) => !m.locked && m.category === "weekly" && m.completed && !m.claimed);
     if (unclaimedWeekly) return unclaimedWeekly;
 
-    // 2. In-progress onboarding
-    const inProgressOnboarding = missions.find((m) => m.category === "onboarding" && !m.completed);
+    // 2. Unlocked in-progress onboarding
+    const inProgressOnboarding = missions.find((m) => !m.locked && m.category === "onboarding" && !m.completed);
     if (inProgressOnboarding) return inProgressOnboarding;
 
-    // 3. In-progress daily
-    const inProgressDaily = missions.find((m) => m.category === "daily" && !m.completed);
+    // 3. Unlocked in-progress daily
+    const inProgressDaily = missions.find((m) => !m.locked && m.category === "daily" && !m.completed);
     if (inProgressDaily) return inProgressDaily;
 
-    // 4. In-progress weekly
-    const inProgressWeekly = missions.find((m) => m.category === "weekly" && !m.completed);
+    // 4. Unlocked in-progress weekly
+    const inProgressWeekly = missions.find((m) => !m.locked && m.category === "weekly" && !m.completed);
     if (inProgressWeekly) return inProgressWeekly;
 
-    return missions[0] || null;
+    return null;
 }
 
 export function missionIconSvg(icon: string): string {
@@ -104,6 +105,63 @@ export function videoPlayIconSvg(): string {
     );
 }
 
+export function swapIconSvg(): string {
+    return (
+        "<svg class='sow-missions__swap-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+        "<path d='m16 3 4 4-4 4'/><path d='M20 7H4'/><path d='m8 21-4-4 4-4'/><path d='M4 17h16'/>" +
+        "</svg>"
+    );
+}
+
+export function arrowRightIconSvg(): string {
+    return (
+        "<svg class='sow-missions__go-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+        "<path d='M5 12h14'/><path d='m13 6 6 6-6 6'/>" +
+        "</svg>"
+    );
+}
+
+function renderRewardPills(
+    crowns: number,
+    gems: number,
+    baseClass: string,
+    gemClass: string,
+    iconPx: number,
+): string {
+    let html = "";
+    if (crowns > 0) {
+        html +=
+            "<span class='" +
+            baseClass +
+            "'><img src='" +
+            esc(currencyAsset("crown")) +
+            "' alt='' width='" +
+            iconPx +
+            "' height='" +
+            iconPx +
+            "'>+" +
+            crowns +
+            "</span>";
+    }
+    if (gems > 0) {
+        html +=
+            "<span class='" +
+            baseClass +
+            " " +
+            gemClass +
+            "'><img src='" +
+            esc(currencyAsset("gem")) +
+            "' alt='' width='" +
+            iconPx +
+            "' height='" +
+            iconPx +
+            "'>+" +
+            gems +
+            "</span>";
+    }
+    return html;
+}
+
 export function isRewardedAdAvailable(): boolean {
     return (
         typeof window.SOW_portalRewardedAvailable === "function" &&
@@ -143,8 +201,19 @@ export function renderDirectiveCard(): string {
             "</button>" +
             "</div>";
     } else {
+        const showQuickGo = Boolean(directive.action_target && directive.action_target !== "battle");
         actionMarkup =
             "<div class='sow-directive__actions'>" +
+            (showQuickGo
+                ? "<button class='sow-missions__btn-go sow-missions__btn-go--compact' type='button' data-command='mission_action' data-action-target='" +
+                  esc(directive.action_target) +
+                  "' data-mission-id='" +
+                  esc(directive.id) +
+                  "'>" +
+                  esc(SOW_t("missions.action_go")) +
+                  arrowRightIconSvg() +
+                  "</button>"
+                : "") +
             "<button class='sow-directive__btn-view' type='button' data-command='open_missions'>" +
             esc(SOW_t("missions.directive_view_all")) +
             " <span>→</span>" +
@@ -152,25 +221,13 @@ export function renderDirectiveCard(): string {
             "</div>";
     }
 
-    let rewardsHtml = "";
-    if (directive.crowns_reward > 0) {
-        rewardsHtml +=
-            "<span class='sow-directive__reward-pill' title='Coronas'>" +
-            "<img src='" +
-            esc(currencyAsset("crown")) +
-            "' alt='' width='18' height='18'>+" +
-            directive.crowns_reward +
-            "</span>";
-    }
-    if (directive.gems_reward > 0) {
-        rewardsHtml +=
-            "<span class='sow-directive__reward-pill sow-directive__reward-pill--gem' title='Gemas'>" +
-            "<img src='" +
-            esc(currencyAsset("gem")) +
-            "' alt='' width='18' height='18'>+" +
-            directive.gems_reward +
-            "</span>";
-    }
+    const rewardsHtml = renderRewardPills(
+        directive.crowns_reward,
+        directive.gems_reward,
+        "sow-directive__reward-pill",
+        "sow-directive__reward-pill--gem",
+        20,
+    );
 
     return (
         "<section class='sow-directive-card" +
@@ -251,8 +308,12 @@ export function renderMissionsModal(): string {
     const onboardingCompleted = onboardingTotal.filter((m) => m.completed || m.claimed).length;
     const dailyTotal = missions.filter((m) => m.category === "daily");
     const dailyCompleted = dailyTotal.filter((m) => m.completed || m.claimed).length;
+    const dailyLocked = dailyTotal.length > 0 && dailyTotal.every((m) => Boolean(m.locked));
+    const dailyUnlockLevel = dailyTotal[0]?.unlock_level || 3;
     const weeklyTotal = missions.filter((m) => m.category === "weekly");
     const weeklyCompleted = weeklyTotal.filter((m) => m.completed || m.claimed).length;
+    const weeklyLocked = weeklyTotal.length > 0 && weeklyTotal.every((m) => Boolean(m.locked));
+    const weeklyUnlockLevel = weeklyTotal[0]?.unlock_level || 5;
 
     let subtitle = SOW_t("missions.onboarding_subtitle");
     if (activeTab === "daily") {
@@ -262,106 +323,222 @@ export function renderMissionsModal(): string {
     }
 
     const adAvailable = isRewardedAdAvailable();
+    const state = menuUi.state;
+    const isPeriodTab = activeTab === "daily" || activeTab === "weekly";
+    const freeSwapsLeft =
+        activeTab === "daily"
+            ? Math.max(0, Number(state?.daily_free_swaps_left ?? 1 - Number(state?.daily_swaps_used || 0)))
+            : activeTab === "weekly"
+              ? Math.max(
+                    0,
+                    Number(state?.weekly_free_swaps_left ?? 1 - Number(state?.weekly_swaps_used || 0)),
+                )
+              : 0;
+    const totalSwapsLeft =
+        activeTab === "daily"
+            ? Math.max(0, Number(state?.daily_total_swaps_left ?? 2 - Number(state?.daily_swaps_used || 0)))
+            : activeTab === "weekly"
+              ? Math.max(
+                    0,
+                    Number(state?.weekly_total_swaps_left ?? 2 - Number(state?.weekly_swaps_used || 0)),
+                )
+              : 0;
+    const periodLocked =
+        (activeTab === "daily" && dailyLocked) || (activeTab === "weekly" && weeklyLocked);
 
-    const itemsMarkup = currentMissions
-        .map(function (m) {
-            const pct = Math.min(100, Math.round((Math.min(m.progress, m.target) / m.target) * 100));
-            const readyToClaim = m.completed && !m.claimed;
-            let actionHtml = "";
+    const lockBanner =
+        activeTab === "daily" && dailyLocked
+            ? "<div class='sow-missions__locked-banner'>" +
+              esc(SOW_t("missions.unlock_at_level").replace("{level}", String(dailyUnlockLevel))) +
+              "</div>"
+            : activeTab === "weekly" && weeklyLocked
+              ? "<div class='sow-missions__locked-banner'>" +
+                esc(SOW_t("missions.unlock_at_level").replace("{level}", String(weeklyUnlockLevel))) +
+                "</div>"
+              : "";
 
-            if (m.claimed) {
-                actionHtml =
-                    "<span class='sow-missions__claimed-badge'>" +
-                    "✓ " +
-                    esc(SOW_t("missions.claimed")) +
-                    "</span>";
-            } else if (readyToClaim) {
-                actionHtml =
-                    "<div class='sow-missions__item-actions'>" +
-                    (adAvailable
-                        ? "<button class='sow-missions__btn-double' type='button' data-command='claim_mission_double' data-mission-id='" +
+    const items = currentMissions.slice().sort(function (a, b) {
+        return a.order - b.order;
+    });
+
+    const itemsMarkup = !items.length
+        ? "<p class='sow-missions__empty'>" + esc(SOW_t("missions.empty_tab")) + "</p>"
+        : items
+              .map(function (m) {
+                  const isLocked = Boolean(m.locked);
+                  const pct = isLocked
+                      ? 0
+                      : Math.min(100, Math.round((Math.min(m.progress, m.target) / m.target) * 100));
+                  const readyToClaim = !isLocked && m.completed && !m.claimed;
+                  const isConfirmingSwap = menuUi.swapConfirmMissionId === m.id;
+                  let actionHtml = "";
+
+                  if (isLocked) {
+                      const lockLabel =
+                          m.category === "onboarding"
+                              ? SOW_t("missions.locked_prev_step")
+                              : SOW_t("missions.unlock_level_short").replace(
+                                    "{level}",
+                                    String(m.unlock_level || 3),
+                                );
+                      actionHtml =
+                          "<span class='sow-missions__locked-badge'>" + esc(lockLabel) + "</span>";
+                  } else if (m.claimed) {
+                      actionHtml =
+                          "<span class='sow-missions__claimed-badge'>" +
+                          "✓ " +
+                          esc(SOW_t("missions.claimed")) +
+                          "</span>";
+                  } else if (readyToClaim) {
+                      actionHtml =
+                          "<div class='sow-missions__item-actions'>" +
+                          (adAvailable
+                              ? "<button class='sow-missions__btn-double' type='button' data-command='claim_mission_double' data-mission-id='" +
+                                esc(m.id) +
+                                "'>" +
+                                videoPlayIconSvg() +
+                                " " +
+                                esc(SOW_t("missions.claim_doubled")) +
+                                "</button>"
+                              : "") +
+                          "<button class='sow-missions__btn-claim' type='button' data-command='claim_mission' data-mission-id='" +
                           esc(m.id) +
                           "'>" +
-                          videoPlayIconSvg() +
-                          " " +
-                          esc(SOW_t("missions.claim_doubled")) +
-                          "</button>"
-                        : "") +
-                    "<button class='sow-missions__btn-claim' type='button' data-command='claim_mission' data-mission-id='" +
-                    esc(m.id) +
-                    "'>" +
-                    esc(SOW_t("missions.claim")) +
-                    "</button>" +
-                    "</div>";
-            } else {
-                actionHtml =
-                    "<span class='sow-missions__in-progress-badge'>" +
-                    Math.min(m.progress, m.target) +
-                    " / " +
-                    m.target +
-                    "</span>";
-            }
+                          esc(SOW_t("missions.claim")) +
+                          "</button>" +
+                          "</div>";
+                  } else {
+                      const goBtn = m.action_target
+                          ? "<button class='sow-missions__btn-go' type='button' data-command='mission_action' data-action-target='" +
+                            esc(m.action_target) +
+                            "' data-mission-id='" +
+                            esc(m.id) +
+                            "'>" +
+                            esc(SOW_t("missions.action_go")) +
+                            arrowRightIconSvg() +
+                            "</button>"
+                          : "";
+                      let swapBtn = "";
+                      if (m.swappable) {
+                          if (freeSwapsLeft > 0) {
+                              swapBtn =
+                                  "<button class='sow-missions__btn-swap' type='button' data-command='request_swap_mission' data-mission-id='" +
+                                  esc(m.id) +
+                                  "' data-ad='false' title='" +
+                                  esc(SOW_t("missions.swap_free")) +
+                                  "'>" +
+                                  swapIconSvg() +
+                                  "<span>" +
+                                  esc(SOW_t("missions.swap_free")) +
+                                  "</span></button>";
+                          } else if (totalSwapsLeft > 0 && adAvailable) {
+                              swapBtn =
+                                  "<button class='sow-missions__btn-swap is-ad' type='button' data-command='request_swap_mission' data-mission-id='" +
+                                  esc(m.id) +
+                                  "' data-ad='true' title='" +
+                                  esc(SOW_t("missions.swap_ad")) +
+                                  "'>" +
+                                  videoPlayIconSvg() +
+                                  "<span>" +
+                                  esc(SOW_t("missions.swap_ad")) +
+                                  "</span></button>";
+                          }
+                      }
+                      actionHtml =
+                          "<div class='sow-missions__item-actions'>" + swapBtn + goBtn + "</div>";
+                  }
 
-            let itemRewardsHtml = "";
-            if (m.crowns_reward > 0) {
-                itemRewardsHtml +=
-                    "<span class='sow-missions__reward' title='Coronas'>" +
-                    "<img src='" +
-                    esc(currencyAsset("crown")) +
-                    "' alt='' width='18' height='18'>+" +
-                    m.crowns_reward +
-                    "</span>";
-            }
-            if (m.gems_reward > 0) {
-                itemRewardsHtml +=
-                    "<span class='sow-missions__reward sow-missions__reward--gem' title='Gemas'>" +
-                    "<img src='" +
-                    esc(currencyAsset("gem")) +
-                    "' alt='' width='18' height='18'>+" +
-                    m.gems_reward +
-                    "</span>";
-            }
+                  const itemRewardsHtml = renderRewardPills(
+                      m.crowns_reward,
+                      m.gems_reward,
+                      "sow-missions__reward",
+                      "sow-missions__reward--gem",
+                      22,
+                  );
 
-            return (
-                "<div class='sow-missions__item" +
-                (m.claimed ? " is-claimed" : "") +
-                (readyToClaim ? " is-ready" : "") +
-                "'>" +
-                "<div class='sow-missions__item-icon' aria-hidden='true'>" +
-                missionIconSvg(m.icon) +
-                "</div>" +
-                "<div class='sow-missions__item-details'>" +
-                "<div class='sow-missions__item-title-row'>" +
-                "<h4 class='sow-missions__item-title'>" +
-                esc(SOW_t(m.title_key)) +
-                "</h4>" +
-                "<div class='sow-missions__item-rewards'>" +
-                itemRewardsHtml +
-                "</div>" +
-                "</div>" +
-                "<p class='sow-missions__item-desc'>" +
-                esc(SOW_t(m.description_key)) +
-                "</p>" +
-                "<div class='sow-missions__item-progress-row'>" +
-                "<div class='sow-missions__item-bar'>" +
-                "<div class='sow-missions__item-bar-fill' style='width:" +
-                pct +
-                "%;'></div>" +
-                "</div>" +
-                "<span class='sow-missions__item-bar-text'>" +
-                Math.min(m.progress, m.target) +
-                " / " +
-                m.target +
-                "</span>" +
-                "</div>" +
-                "</div>" +
-                "<div class='sow-missions__item-action-col'>" +
-                actionHtml +
-                "</div>" +
-                "</div>"
-            );
-        })
-        .join("");
+                  const swapConfirmHtml = isConfirmingSwap
+                      ? "<div class='sow-missions__swap-confirm' role='alertdialog' aria-label='" +
+                        esc(SOW_t("missions.swap_confirm_title")) +
+                        "'>" +
+                        "<div class='sow-missions__swap-confirm-copy'><strong>" +
+                        esc(SOW_t("missions.swap_confirm_title")) +
+                        "</strong><span>" +
+                        esc(
+                            SOW_t("missions.swap_confirm_body", {
+                                progress: Math.min(m.progress, m.target),
+                                target: m.target,
+                            }),
+                        ) +
+                        "</span></div>" +
+                        "<div class='sow-missions__swap-confirm-actions'>" +
+                        "<button type='button' class='sow-missions__swap-keep' data-command='cancel_swap_mission'>" +
+                        esc(SOW_t("missions.swap_keep")) +
+                        "</button>" +
+                        "<button type='button' class='sow-missions__swap-confirm-btn' data-command='confirm_swap_mission' data-mission-id='" +
+                        esc(m.id) +
+                        "' data-ad='" +
+                        Boolean(menuUi.swapConfirmAd) +
+                        "'>" +
+                        esc(SOW_t("missions.swap_confirm_btn")) +
+                        "</button>" +
+                        "</div></div>"
+                      : "";
+
+                  return (
+                      "<div class='sow-missions__item" +
+                      (isLocked ? " is-locked" : "") +
+                      (m.claimed ? " is-claimed" : "") +
+                      (readyToClaim ? " is-ready" : "") +
+                      "'>" +
+                      "<div class='sow-missions__item-icon' aria-hidden='true'>" +
+                      missionIconSvg(m.icon) +
+                      "</div>" +
+                      "<div class='sow-missions__item-details'>" +
+                      "<div class='sow-missions__item-title-row'>" +
+                      "<h4 class='sow-missions__item-title'>" +
+                      esc(SOW_t(m.title_key)) +
+                      "</h4>" +
+                      "<div class='sow-missions__item-rewards'>" +
+                      itemRewardsHtml +
+                      "</div>" +
+                      "</div>" +
+                      "<p class='sow-missions__item-desc'>" +
+                      esc(SOW_t(m.description_key)) +
+                      "</p>" +
+                      "<div class='sow-missions__item-progress-row'>" +
+                      "<div class='sow-missions__item-bar'>" +
+                      "<div class='sow-missions__item-bar-fill' style='width:" +
+                      pct +
+                      "%;'></div>" +
+                      "</div>" +
+                      "<span class='sow-missions__item-bar-text'>" +
+                      Math.min(m.progress, m.target) +
+                      " / " +
+                      m.target +
+                      "</span>" +
+                      "</div>" +
+                      swapConfirmHtml +
+                      "</div>" +
+                      "<div class='sow-missions__item-action-col'>" +
+                      actionHtml +
+                      "</div>" +
+                      "</div>"
+                  );
+              })
+              .join("");
+
+    const swapQuotaHtml =
+        isPeriodTab && !periodLocked
+            ? "<span class='sow-missions__swap-quota'>" +
+              swapIconSvg() +
+              "<span>" +
+              esc(
+                  totalSwapsLeft > 0
+                      ? SOW_t("missions.swaps_left", { count: totalSwapsLeft })
+                      : SOW_t("missions.swap_limit_reached"),
+              ) +
+              "</span></span>"
+            : "";
 
     return (
         "<div class='sow-menu__overlay sow-missions-backdrop' data-menu-overlay='missions'>" +
@@ -398,11 +575,9 @@ export function renderMissionsModal(): string {
         (activeTab === "daily" ? "true" : "false") +
         "'>" +
         esc(SOW_t("missions.tab_daily")) +
-        " <small>(" +
-        dailyCompleted +
-        "/" +
-        dailyTotal.length +
-        ")</small>" +
+        (dailyLocked
+            ? " <small>(Lv " + dailyUnlockLevel + ")</small>"
+            : " <small>(" + dailyCompleted + "/" + dailyTotal.length + ")</small>") +
         "</button>" +
         "<button type='button' role='tab' class='sow-missions__tab" +
         (activeTab === "weekly" ? " is-active" : "") +
@@ -410,11 +585,9 @@ export function renderMissionsModal(): string {
         (activeTab === "weekly" ? "true" : "false") +
         "'>" +
         esc(SOW_t("missions.tab_weekly")) +
-        " <small>(" +
-        weeklyCompleted +
-        "/" +
-        weeklyTotal.length +
-        ")</small>" +
+        (weeklyLocked
+            ? " <small>(Lv " + weeklyUnlockLevel + ")</small>"
+            : " <small>(" + weeklyCompleted + "/" + weeklyTotal.length + ")</small>") +
         "</button>" +
         "</div>" +
         "<div class='sow-missions__body'>" +
@@ -423,26 +596,31 @@ export function renderMissionsModal(): string {
         esc(subtitle) +
         "</p>" +
         (activeTab === "daily"
-            ? "<div class='sow-missions__reset-notice'>" +
+            ? "<div class='sow-missions__reset-group'>" +
+              swapQuotaHtml +
+              "<div class='sow-missions__reset-notice'>" +
               "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg>" +
               "<span>" +
               esc(SOW_t("missions.daily_resets_in")) +
               ": <strong>" +
               formatDailyResetCountdown() +
               "</strong></span>" +
-              "</div>"
+              "</div></div>"
             : "") +
         (activeTab === "weekly"
-            ? "<div class='sow-missions__reset-notice'>" +
+            ? "<div class='sow-missions__reset-group'>" +
+              swapQuotaHtml +
+              "<div class='sow-missions__reset-notice'>" +
               "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg>" +
               "<span>" +
               esc(SOW_t("missions.weekly_resets_in")) +
               ": <strong>" +
               formatWeeklyResetCountdown() +
               "</strong></span>" +
-              "</div>"
+              "</div></div>"
             : "") +
         "</div>" +
+        lockBanner +
         "<div class='sow-missions__list'>" +
         itemsMarkup +
         "</div>" +
@@ -511,4 +689,64 @@ export function claimMission(missionId: string, doubleWithAd: boolean): void {
     if (mission && missionClaimHandler) {
         missionClaimHandler(mission, false);
     }
+}
+
+function trackMissionSwap(mission: MenuMission | undefined, adFunded: boolean): void {
+    if (typeof window.SOW_trackExperienceEvent !== "function") return;
+    window.SOW_trackExperienceEvent({
+        name: "mission_swap",
+        props: {
+            mission_id: mission?.id || "",
+            category: mission?.category || "",
+            axis: mission?.axis || "",
+            tag: mission?.tag || "",
+            ad_funded: adFunded,
+        },
+    });
+}
+
+function performSwapMission(missionId: string, adFunded: boolean): void {
+    if (!missionId) return;
+    const missions = resolveActiveMissions(menuUi.state);
+    const mission = missions.find((m) => m.id === missionId);
+    if (adFunded && isRewardedAdAvailable()) {
+        window.SOW_portalRewardedBreak!().then(function (watched: boolean) {
+            if (watched) {
+                trackMissionSwap(mission, true);
+                send("swap_mission", { mission_id: missionId, ad_funded: true });
+            }
+        });
+        return;
+    }
+    trackMissionSwap(mission, false);
+    send("swap_mission", { mission_id: missionId, ad_funded: false });
+}
+
+export function requestSwapMission(missionId: string, adFunded: boolean): void {
+    if (!missionId) return;
+    const missions = resolveActiveMissions(menuUi.state);
+    const mission = missions.find((m) => m.id === missionId);
+    if (!mission || !mission.swappable || mission.completed || mission.claimed || mission.locked) return;
+    if (mission.progress > 0) {
+        menuUi.swapConfirmMissionId = missionId;
+        menuUi.swapConfirmAd = adFunded;
+        render();
+        return;
+    }
+    menuUi.swapConfirmMissionId = null;
+    performSwapMission(missionId, adFunded);
+}
+
+export function confirmSwapMission(missionId: string, adFunded: boolean): void {
+    menuUi.swapConfirmMissionId = null;
+    menuUi.swapConfirmAd = false;
+    performSwapMission(missionId, adFunded);
+    render();
+}
+
+export function cancelSwapMission(): void {
+    if (!menuUi.swapConfirmMissionId) return;
+    menuUi.swapConfirmMissionId = null;
+    menuUi.swapConfirmAd = false;
+    render();
 }

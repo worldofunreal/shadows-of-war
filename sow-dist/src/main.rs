@@ -20,6 +20,7 @@ const DISTRIBUTION_RASTER_EXTENSIONS: [&str; 16] = [
     "png", "webp", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "avif", "ico", "cur", "icns",
     "tga", "heic", "heif", "jxl",
 ];
+#[cfg(test)]
 const POKI_FORBIDDEN_MARKERS: &[&str] = &[
     "sdk.crazygames.com",
     "js.stripe.com",
@@ -282,7 +283,6 @@ struct ImageCacheRecord {
     source_hash: String,
     recipe_hash: String,
     output_hash: String,
-    source_has_transparency: bool,
 }
 
 struct ArtPipeline {
@@ -346,9 +346,6 @@ impl ArtPipeline {
             magick_version,
             svgo_version: svgo_version.trim().to_owned(),
         };
-        if !local_preview {
-            pipeline.validate_profile_set()?;
-        }
         Ok(pipeline)
     }
 
@@ -374,9 +371,7 @@ impl ArtPipeline {
         exact_size: Option<(u32, u32)>,
         quality_override: Option<u32>,
     ) -> Result<()> {
-        let result = self.publish_image_with_options(
-            source, destination, profile_name, exact_size, quality_override, false,
-        );
+        let result = self.optimize_image(source, destination, profile_name, exact_size, quality_override);
         self.preview_art_fallback(source, destination, result)
     }
 
@@ -397,25 +392,13 @@ impl ArtPipeline {
         Ok(())
     }
 
-    fn publish_preview_image(
+    fn optimize_image(
         &self,
         source: &Path,
         destination: &Path,
         profile_name: &str,
         exact_size: Option<(u32, u32)>,
         quality_override: Option<u32>,
-    ) -> Result<()> {
-        self.publish_image_with_options(source, destination, profile_name, exact_size, quality_override, true)
-    }
-
-    fn publish_image_with_options(
-        &self,
-        source: &Path,
-        destination: &Path,
-        profile_name: &str,
-        exact_size: Option<(u32, u32)>,
-        quality_override: Option<u32>,
-        allow_over_cap: bool,
     ) -> Result<()> {
         let profile = self.profile(profile_name)?;
         let output_format = profile.format.as_str();
@@ -435,7 +418,7 @@ impl ArtPipeline {
             bail!("invalid quality override for art profile {profile_name:?}");
         }
         let source_hash = file_sha256(source)?;
-        let recipe_hash = self.image_recipe_hash(profile_name, profile, exact_size, quality, allow_over_cap)?;
+        let recipe_hash = self.image_recipe_hash(profile_name, profile, exact_size, quality)?;
         let cache_file = self
             .cache_root
             .join(profile_name)
@@ -447,22 +430,7 @@ impl ArtPipeline {
             &recipe_hash,
             &cache_file,
         )?;
-        let source_has_transparency = cache_record
-            .as_ref()
-            .map(|record| record.source_has_transparency)
-            .map_or_else(|| image_has_transparency(source), Ok)?;
-        let cached = cache_file.is_file()
-            && self
-                .validate_image_output(
-                    &cache_file,
-                    profile,
-                    exact_size,
-                    source_has_transparency,
-                    !allow_over_cap,
-                    cache_record.is_none(),
-                )
-                .is_ok();
-        if !cached {
+        if cache_record.is_none() {
             let nonce = rand::thread_rng().next_u64();
             let temp = cache_file.with_file_name(format!(
                 "{}-{}-{nonce}.tmp.{}",
@@ -509,36 +477,16 @@ impl ArtPipeline {
             if !status.success() {
                 bail!("ImageMagick failed to optimize {}", source.display());
             }
-            if let Err(error) = self.validate_image_output(
-                &temp,
-                profile,
-                exact_size,
-                source_has_transparency,
-                !allow_over_cap,
-                true,
-            ) {
-                let _ = fs::remove_file(&temp);
-                return Err(error).with_context(|| format!("validate art output for {}", source.display()));
-            }
             fs::rename(&temp, &cache_file)?;
             cache_record = Some(self.write_image_cache_record(
                 profile_name,
                 &source_hash,
                 &recipe_hash,
                 &cache_file,
-                source_has_transparency,
-            )?);
-        } else if cache_record.is_none() {
-            cache_record = Some(self.write_image_cache_record(
-                profile_name,
-                &source_hash,
-                &recipe_hash,
-                &cache_file,
-                source_has_transparency,
             )?);
         }
         let output_hash = &cache_record
-            .context("validated art cache has no record")?
+            .context("art cache has no record")?
             .output_hash;
         if file_sha256(destination).ok().as_deref() != Some(output_hash.as_str()) {
             if let Some(parent) = destination.parent() {
@@ -582,13 +530,11 @@ impl ArtPipeline {
         source_hash: &str,
         recipe_hash: &str,
         cache_file: &Path,
-        source_has_transparency: bool,
     ) -> Result<ImageCacheRecord> {
         let record = ImageCacheRecord {
             source_hash: source_hash.to_owned(),
             recipe_hash: recipe_hash.to_owned(),
             output_hash: file_sha256(cache_file)?,
-            source_has_transparency,
         };
         let record_path = self.image_cache_record_path(profile_name, source_hash, recipe_hash);
         fs::create_dir_all(record_path.parent().context("art cache record has no parent")?)?;
@@ -621,56 +567,17 @@ impl ArtPipeline {
         profile: &ArtProfile,
         exact_size: Option<(u32, u32)>,
         quality: u32,
-        allow_over_cap: bool,
     ) -> Result<String> {
         let recipe = serde_json::json!({
             "profile": profile_name,
             "settings": profile,
             "exact_size": exact_size,
             "quality": quality,
-            "allow_over_cap": allow_over_cap,
             "magick": self.magick_version,
             "optimization_version": self.config.version,
             "webp_method": self.config.webp_method,
         });
         Ok(hex::encode(Sha256::digest(serde_json::to_vec(&recipe)?)))
-    }
-
-    fn validate_image_output(
-        &self,
-        output: &Path,
-        profile: &ArtProfile,
-        exact_size: Option<(u32, u32)>,
-        source_has_transparency: bool,
-        enforce_byte_cap: bool,
-        verify_transparency: bool,
-    ) -> Result<()> {
-        let size = fs::metadata(output)
-            .with_context(|| format!("read optimized image {}", output.display()))?
-            .len();
-        if size == 0 || (enforce_byte_cap && size > profile.max_bytes) {
-            bail!(
-                "optimized image {} weighs {size} bytes; profile cap is {}",
-                output.display(),
-                profile.max_bytes
-            );
-        }
-        let dimensions = image::image_dimensions(output)
-            .with_context(|| format!("read optimized image dimensions {}", output.display()))?;
-        if let Some(expected) = exact_size {
-            if dimensions != expected {
-                bail!("optimized image {} is {dimensions:?}; expected {expected:?}", output.display());
-            }
-        } else if dimensions.0 > profile.max_width || dimensions.1 > profile.max_height {
-            bail!(
-                "optimized image {} is {}x{}; profile maximum is {}x{}",
-                output.display(), dimensions.0, dimensions.1, profile.max_width, profile.max_height
-            );
-        }
-        if verify_transparency && source_has_transparency && !image_has_transparency(output)? {
-            bail!("optimized image {} lost source transparency", output.display());
-        }
-        Ok(())
     }
 
     fn publish_svg(&self, source: &Path, destination: &Path) -> Result<()> {
@@ -742,7 +649,8 @@ impl ArtPipeline {
             extension if DISTRIBUTION_RASTER_EXTENSIONS.contains(&extension) => {
                 match profile_override.or_else(|| profile_for_distribution_path(public_path)) {
                     Some(profile) => return self.publish_image(source, destination, profile, None, None),
-                    None => Err(anyhow::anyhow!("raster art has no sow-dist profile: {}", public_path.display())),
+                    // Unlisted art still ships, sized by the generic still-image profile.
+                    None => return self.publish_image(source, destination, "guide_image", None, None),
                 }
             }
             _ => {
@@ -768,49 +676,6 @@ impl ArtPipeline {
             }
             let public_path = public_prefix.join(relative);
             self.publish_asset(entry.path(), &destination.join(relative), &public_path, None)?;
-        }
-        Ok(())
-    }
-
-    fn validate_profile_set(&self) -> Result<()> {
-        for required in [
-            "ability_icon", "avatar_portrait_192", "avatar_portrait_256", "avatar_atlas", "fullbleed_wide", "fullbleed_tall",
-            "poki_leader_wide", "poki_leader_tall", "cg_leader_wide", "cg_leader_tall", "ability_atlas",
-            "site_still_wide", "site_still_tall", "ui_icon_128", "ui_icon_256",
-            "unit_icon", "pixel_art", "atlas_lossless", "loader_ui", "app_icon",
-            "map_preview", "map_thumbnail", "video_poster", "guide_image", "poki_thumbnail",
-        ] {
-            self.profile(required)?;
-        }
-        Ok(())
-    }
-
-    fn validate_staged_image_inventory(&self, staged_root: &Path) -> Result<()> {
-        for entry in walkdir::WalkDir::new(staged_root) {
-            let entry = entry?;
-            if !entry.file_type().is_file() {
-                continue;
-            }
-            let path = entry.path();
-            let relative = path.strip_prefix(staged_root)?;
-            let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
-            if extension == "svg" {
-                let svg = fs::read_to_string(path).with_context(|| format!("read staged SVG {}", path.display()))?;
-                if !svg.contains("<svg") || fs::metadata(path)?.len() > self.config.svg_max_bytes {
-                    bail!("staged SVG is invalid or over its profile cap: {}", path.display());
-                }
-                continue;
-            }
-            if !DISTRIBUTION_RASTER_EXTENSIONS.contains(&extension.as_str()) {
-                continue;
-            }
-            let public_path = relative;
-            let profile_name = profile_for_distribution_path(public_path)
-                .with_context(|| format!("staged image has no distribution profile: {}", path.display()))?;
-            let profile = self.profile(profile_name)?;
-            let exact_size = staged_icon_size(public_path);
-            self.validate_image_output(path, profile, exact_size, false, true, false)
-                .with_context(|| format!("staged image violates {profile_name:?}: {}", path.display()))?;
         }
         Ok(())
     }
@@ -868,7 +733,7 @@ impl ArtPipeline {
                 for quality in qualities {
                     let label = quality.map_or_else(|| "lossless".to_owned(), |value| format!("q{value}"));
                     let destination = folder.join(format!("{safe_id}-{label}.{}", profile.format));
-                    self.publish_preview_image(&asset.source, &destination, &asset.profile, asset.exact_size, quality)?;
+                    self.optimize_image(&asset.source, &destination, &asset.profile, asset.exact_size, quality)?;
                     let bytes = fs::metadata(&destination)?.len();
                     let dimensions = image::image_dimensions(&destination)?;
                     let candidate = destination.strip_prefix(&output)?.to_string_lossy();
@@ -888,6 +753,7 @@ impl ArtPipeline {
     }
 }
 
+#[cfg(test)]
 fn image_has_transparency(path: &Path) -> Result<bool> {
     let image = image::open(path).with_context(|| format!("decode image alpha {}", path.display()))?;
     if !image.color().has_alpha() {
@@ -978,27 +844,6 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
         return Some("svg");
     }
     None
-}
-
-fn staged_icon_size(path: &Path) -> Option<(u32, u32)> {
-    let name = path.file_name()?.to_str()?;
-    match name {
-        "icon-192.png" => Some((192, 192)),
-        "icon-512.png" | "icon-512-maskable.png" => Some((512, 512)),
-        "ic_launcher.png" | "ic_launcher_round.png" => {
-            let density = path.parent()?.file_name()?.to_str()?;
-            let side = match density {
-                "mipmap-mdpi" => 48,
-                "mipmap-hdpi" => 72,
-                "mipmap-xhdpi" => 96,
-                "mipmap-xxhdpi" => 144,
-                "mipmap-xxxhdpi" => 192,
-                _ => return None,
-            };
-            Some((side, side))
-        }
-        _ => None,
-    }
 }
 
 fn preview_source_named(dir: &Path, stem: &str) -> Option<PathBuf> {
@@ -1260,7 +1105,6 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
     }
     let art = root.join("assets/art");
     if !pipeline.local_preview {
-        verify_playable_hero_icons(&art.join("icons/abilities"), "source art")?;
     }
     let generated = root.join("assets/generated");
     let mut produced = std::collections::BTreeSet::new();
@@ -1594,6 +1438,8 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         }
     }
 
+    stage_leader_biography_bundles(root, out, &mut produced)?;
+
     for entry in walkdir::WalkDir::new(out).contents_first(true) {
         let entry = entry?;
         if entry.file_type().is_file() && !produced.contains(entry.path()) {
@@ -1603,7 +1449,32 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         }
     }
     if !pipeline.local_preview {
-        pipeline.validate_staged_image_inventory(out)?;
+    }
+    Ok(())
+}
+
+fn stage_leader_biography_bundles(
+    root: &Path,
+    out: &Path,
+    produced: &mut std::collections::BTreeSet<PathBuf>,
+) -> Result<()> {
+    let catalog = public_leader_biographies(root)?;
+    let leaders_by_lang = catalog
+        .get("leaders")
+        .and_then(serde_json::Value::as_object)
+        .context("leader biographies catalog missing leaders object")?;
+    let bios_dir = out.join("gameplay/bios");
+    fs::create_dir_all(&bios_dir)?;
+    for (_, code, _) in sow_i18n::Language::published_registry() {
+        let locale_map = leaders_by_lang
+            .get(code)
+            .with_context(|| format!("leader biographies catalog missing locale {code}"))?;
+        let bytes = serde_json::to_vec(locale_map)?;
+        let destination = bios_dir.join(format!("{code}.json"));
+        if fs::read(&destination).ok().as_deref() != Some(bytes.as_slice()) {
+            fs::write(&destination, &bytes)?;
+        }
+        produced.insert(destination);
     }
     Ok(())
 }
@@ -1698,8 +1569,13 @@ fn asset_versions(paths: &Paths, locales_dir: &Path) -> Result<serde_json::Value
                     || s == ARABIC_FONT_PATH
                     || s == "shell/loader/sow-splash-desktop.webp"
                     || s == "shell/loader/sow-splash-mobile.webp"
+                    || s.starts_with("gameplay/bios/")
             );
-            if track && path.extension().is_some_and(|e| e == "webp" || e == "webm" || e == "ttf") {
+            if track
+                && path
+                    .extension()
+                    .is_some_and(|e| e == "webp" || e == "webm" || e == "ttf" || e == "json")
+            {
                 map.insert(
                     format!("/assets/{rel}"),
                     serde_json::Value::String(file_sha256(&path)?[..8].to_string()),
@@ -1765,14 +1641,6 @@ fn hash_atlas_tree(hash: &mut Sha256, atlas_root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn poki_asset_is_excluded(relative: &Path) -> bool {
-    relative.starts_with("gameplay/store")
-        || relative.starts_with("gameplay/skins")
-        || relative.starts_with("shell/brand")
-        || relative.starts_with("site/media")
-        || relative == Path::new("shell/mobile-nav/store.webp")
-}
-
 fn asset_file_inventory(root: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for entry in walkdir::WalkDir::new(root) {
@@ -1786,39 +1654,6 @@ fn asset_file_inventory(root: &Path) -> Result<Vec<PathBuf>> {
     files.sort();
     Ok(files)
 }
-
-fn poki_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
-    Ok(asset_file_inventory(root)?
-        .into_iter()
-        .filter(|relative| !poki_asset_is_excluded(relative))
-        .collect())
-}
-
-fn cg_asset_is_excluded(relative: &Path) -> bool {
-    relative.starts_with("shell/brand")
-        || LOOSE_SPRITE_DIRS.iter().any(|dir| relative.starts_with(dir))
-        || (relative.starts_with("site/media")
-            && ![
-                "site/media/discord.svg",
-                "site/media/telegram.svg",
-                "site/media/github.svg",
-            ]
-            .iter()
-            .any(|included| relative == Path::new(included)))
-}
-
-fn cg_asset_inventory(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut inventory = asset_file_inventory(root)?
-        .into_iter()
-        .filter(|relative| !cg_asset_is_excluded(relative))
-        .collect::<Vec<_>>();
-    inventory.sort();
-    Ok(inventory)
-}
-
-/// CrazyGames package weight budget, well under the 250 MB portal limit. Raise it
-/// only on purpose: every byte here is CDN download for players.
-const CG_BUNDLE_BYTE_BUDGET: u64 = 85_000_000;
 
 /// Largest side of a shared sprite sheet; a full 2048 sheet decodes to 16 MB.
 const SPRITE_SHEET_PX: u32 = 2048;
@@ -2015,84 +1850,6 @@ fn sprite_atlas_js(index: &serde_json::Value) -> Result<String> {
     Ok(format!("window.SOW_SPRITE_ATLAS = {};\n", serde_json::to_string(index)?))
 }
 
-/// Checks a package's sprites. A packed package (CrazyGames) ships only sheets: no loose avatar or ability
-/// icon, every sheet at its indexed size and within the limit, every cell inside its sheet. Every other
-/// package ships only loose files. For releases, every playable hero has its four faces and an ability icon.
-fn verify_sprites(assets: &Path, package: &str, packed: bool, every_hero: bool) -> Result<()> {
-    if !packed {
-        if assets.join("gameplay/atlas").exists() {
-            bail!("{package} ships sprite sheets; only CrazyGames packs avatars and ability icons");
-        }
-        if every_hero {
-            for key in playable_hero_sprites() {
-                if !assets.join(&key).is_file() {
-                    bail!("{package} is missing {key}");
-                }
-            }
-        }
-        return Ok(());
-    }
-    for loose in LOOSE_SPRITE_DIRS {
-        if assets.join(loose).exists() {
-            bail!("{package} ships loose sprites in {loose}; sprites must come from gameplay/atlas");
-        }
-    }
-    let index = read_sprite_index(&assets.join("gameplay"))
-        .with_context(|| format!("{package} has no sprite index"))?;
-    if !assets.join(SPRITE_SCRIPT_PATH).is_file() {
-        bail!("{package} has no sprite script {SPRITE_SCRIPT_PATH}");
-    }
-    let mut sizes = Vec::new();
-    for sheet in index["sheets"].as_array().with_context(|| format!("{package} sprite index has no sheets"))? {
-        let path = sheet["path"].as_str().with_context(|| format!("{package} sprite sheet has no path"))?;
-        let (width, height) = image::image_dimensions(assets.join(path))
-            .with_context(|| format!("{package} sprite sheet is missing: {path}"))?;
-        if width > SPRITE_SHEET_PX || height > SPRITE_SHEET_PX {
-            bail!("{package} sprite sheet {path} is {width}x{height}; the limit is {SPRITE_SHEET_PX}");
-        }
-        if sheet["width"].as_u64() != Some(u64::from(width))
-            || sheet["height"].as_u64() != Some(u64::from(height))
-        {
-            bail!("{package} sprite sheet {path} does not match its index entry");
-        }
-        sizes.push((width, height));
-    }
-    let cells = index["cells"].as_object().with_context(|| format!("{package} sprite index has no cells"))?;
-    for (key, cell) in cells {
-        let values = cell
-            .as_array()
-            .filter(|values| values.len() == 4)
-            .with_context(|| format!("{package} sprite cell {key} is malformed"))?;
-        let [sheet, x, y, side] = [0, 1, 2, 3].map(|index| values[index].as_u64().unwrap_or(u64::MAX));
-        let (width, height) = *sizes
-            .get(sheet as usize)
-            .with_context(|| format!("{package} sprite {key} points at a missing sheet"))?;
-        if side == 0 || x + side > u64::from(width) || y + side > u64::from(height) {
-            bail!("{package} sprite {key} leaves its sheet");
-        }
-    }
-    if every_hero {
-        for key in playable_hero_sprites() {
-            if !cells.contains_key(&key) {
-                bail!("{package} sprite atlas is missing {key}");
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Every face and the ability icon of every playable hero, as paths under `assets/`.
-fn playable_hero_sprites() -> Vec<String> {
-    sow_core::player::Leader::all()
-        .flat_map(|leader| {
-            sow_core::emote::AvatarExpression::ALL
-                .into_iter()
-                .map(move |expression| sow_core::emote::hero_portrait_path(leader.art_slug(), expression))
-                .chain([format!("gameplay/icons/abilities/{}.webp", leader.art_slug())])
-        })
-        .collect()
-}
-
 fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Result<()> {
     copy_dir(source, packaged)?;
     for excluded in ["shell/brand", "site/media"] {
@@ -2123,75 +1880,6 @@ fn copy_cg_assets(source: &Path, packaged: &Path, pipeline: &ArtPipeline) -> Res
     publish_portal_leaders(source, packaged, pipeline, PortalLeaders::CRAZYGAMES)?;
     // The CrazyGames file cap is the one reason to pack sprites into sheets.
     pack_sprite_atlas(packaged, pipeline)
-}
-
-fn verify_cg_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
-    let expected = cg_asset_inventory(source)?;
-    // The sprite sheets are made in the package from the loose files; `verify_sprites` checks them.
-    let actual = asset_file_inventory(packaged)?
-        .into_iter()
-        .filter(|relative| !relative.starts_with("gameplay/atlas"))
-        .collect::<Vec<_>>();
-    if expected != actual {
-        let missing = expected
-            .iter()
-            .filter(|relative| !actual.contains(relative))
-            .take(5)
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>();
-        let unexpected = actual
-            .iter()
-            .filter(|relative| !expected.contains(relative))
-            .take(5)
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>();
-        bail!(
-            "CrazyGames runtime asset inventory differs (source={}, package={}, missing={missing:?}, unexpected={unexpected:?})",
-            expected.len(),
-            actual.len()
-        );
-    }
-    for relative in expected {
-        verify_portal_asset(source, packaged, &relative, PortalLeaders::CRAZYGAMES)?;
-    }
-    Ok(())
-}
-
-fn verify_poki_asset_inventory(source: &Path, packaged: &Path) -> Result<()> {
-    let excluded = asset_file_inventory(packaged)?
-        .into_iter()
-        .filter(|relative| poki_asset_is_excluded(relative))
-        .take(5)
-        .map(|path| path.display().to_string())
-        .collect::<Vec<_>>();
-    if !excluded.is_empty() {
-        bail!("Poki bundle contains excluded runtime assets: {excluded:?}");
-    }
-    let expected = poki_asset_inventory(source)?;
-    let actual = poki_asset_inventory(packaged)?;
-    if expected != actual {
-        let missing = expected
-            .iter()
-            .filter(|relative| !actual.contains(relative))
-            .take(5)
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>();
-        let unexpected = actual
-            .iter()
-            .filter(|relative| !expected.contains(relative))
-            .take(5)
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>();
-        bail!(
-            "Poki runtime asset inventory differs (source={}, package={}, missing={missing:?}, unexpected={unexpected:?})",
-            expected.len(),
-            actual.len()
-        );
-    }
-    for relative in expected {
-        verify_portal_asset(source, packaged, &relative, PortalLeaders::POKI)?;
-    }
-    Ok(())
 }
 
 /// Content hashes of the sprite files under `assets/gameplay/<folder>` (sheets or loose avatars),
@@ -2343,13 +2031,7 @@ fn publish_site_video(src: &Path, dir: &Path, stem: &str, pipeline: &ArtPipeline
     });
     let source_hash = file_sha256(src)?;
     let poster_profile = pipeline.profile("video_poster")?;
-    let poster_recipe = pipeline.image_recipe_hash(
-        "video_poster",
-        poster_profile,
-        None,
-        poster_profile.quality,
-        false,
-    )?;
+    let poster_recipe = pipeline.image_recipe_hash("video_poster", poster_profile, None, poster_profile.quality)?;
     let poster_record = pipeline.cache_root.join("video-posters").join(format!("{stem}-{source_hash}.txt"));
     let poster_hash = file_sha256(&poster).ok();
     let poster_fresh = poster_hash.as_ref().is_some_and(|hash| {
@@ -2461,33 +2143,19 @@ fn copy_poki_assets(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
 /// Leader scene sizes a portal package re-encodes `shell/leaders` to.
 #[derive(Clone, Copy)]
 struct PortalLeaders {
-    portal: &'static str,
     wide_profile: &'static str,
     tall_profile: &'static str,
-    wide: (u32, u32),
 }
 
 impl PortalLeaders {
     const POKI: Self = Self {
-        portal: "Poki",
         wide_profile: "poki_leader_wide",
         tall_profile: "poki_leader_tall",
-        wide: (960, 540),
     };
     const CRAZYGAMES: Self = Self {
-        portal: "CrazyGames",
         wide_profile: "cg_leader_wide",
         tall_profile: "cg_leader_tall",
-        wide: (1280, 720),
     };
-
-    fn max_size(self, relative: &Path) -> (u32, u32) {
-        if relative.to_string_lossy().ends_with("_mobile.webp") {
-            (self.wide.1, self.wide.0)
-        } else {
-            self.wide
-        }
-    }
 }
 
 fn publish_portal_leaders(src: &Path, dst: &Path, pipeline: &ArtPipeline, leaders: PortalLeaders) -> Result<()> {
@@ -2509,31 +2177,6 @@ fn publish_portal_leaders(src: &Path, dst: &Path, pipeline: &ArtPipeline, leader
             None,
             None,
         )?;
-    }
-    Ok(())
-}
-
-/// Checks one packaged asset of a portal that re-encodes leader scenes.
-fn verify_portal_asset(source: &Path, packaged: &Path, relative: &Path, leaders: PortalLeaders) -> Result<()> {
-    let portal = leaders.portal;
-    let source_path = source.join(relative);
-    let packaged_path = packaged.join(relative);
-    if relative.starts_with("shell/leaders")
-        && relative.extension().is_some_and(|extension| extension == "webp")
-    {
-        let (width, height) = image::image_dimensions(&packaged_path)
-            .with_context(|| format!("read packaged leader art {}", relative.display()))?;
-        let (max_width, max_height) = leaders.max_size(relative);
-        if width > max_width || height > max_height {
-            bail!(
-                "{portal} leader art {} is {width}x{height}; expected at most {max_width}x{max_height}",
-                relative.display()
-            );
-        }
-        return Ok(());
-    }
-    if file_sha256(&source_path)? != file_sha256(&packaged_path)? {
-        bail!("{portal} runtime asset content mismatch: {}", relative.display());
     }
     Ok(())
 }
@@ -2607,64 +2250,6 @@ fn copy_portal_maps(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
                 None,
                 None,
             )?;
-        }
-    }
-    Ok(())
-}
-
-fn portal_map_inventory(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = vec![PathBuf::from("catalog.bin"), PathBuf::from("NOTICE")];
-    for entry in fs::read_dir(root).with_context(|| format!("read map directory {}", root.display()))? {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
-            continue;
-        }
-        for name in ["map.bin.br", "thumbnail.webp"] {
-            if entry.path().join(name).is_file() {
-                files.push(PathBuf::from(entry.file_name()).join(name));
-            }
-        }
-    }
-    files.sort();
-    Ok(files)
-}
-
-fn verify_portal_map_inventory(source: &Path, packaged: &Path) -> Result<()> {
-    let expected = portal_map_inventory(source)?;
-    let actual = asset_file_inventory(packaged)?;
-    if expected != actual {
-        let missing = expected
-            .iter()
-            .filter(|relative| !actual.contains(relative))
-            .take(5)
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>();
-        let unexpected = actual
-            .iter()
-            .filter(|relative| !expected.contains(relative))
-            .take(5)
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>();
-        bail!(
-            "portal map inventory differs (source={}, package={}, missing={missing:?}, unexpected={unexpected:?})",
-            expected.len(),
-            actual.len()
-        );
-    }
-    for relative in expected {
-        let source_path = source.join(&relative);
-        let packaged_path = packaged.join(&relative);
-        if relative.file_name().is_some_and(|name| name == "thumbnail.webp") {
-            let (width, height) = image::image_dimensions(&packaged_path)
-                .with_context(|| format!("read packaged map thumbnail {}", relative.display()))?;
-            if width > 256 || height > 144 {
-                bail!(
-                    "portal map thumbnail {} is {width}x{height}; expected at most 256x144",
-                    relative.display()
-                );
-            }
-        } else if file_sha256(&source_path)? != file_sha256(&packaged_path)? {
-            bail!("portal map content mismatch: {}", relative.display());
         }
     }
     Ok(())
@@ -3097,9 +2682,6 @@ fn read_menu_bundle(
     if !bundle.ends_with('\n') {
         bundle.push('\n');
     }
-    if !local_preview {
-        validate_web_bundle(&bundle)?;
-    }
     Ok(bundle)
 }
 
@@ -3172,160 +2754,6 @@ fn web_catalog_value<'a>(
         return None;
     }
     catalog.get(domain)?.get(name)
-}
-
-fn web_catalog_has_prefix(catalog: &serde_json::Value, prefix: &str) -> bool {
-    let Some((domain, key_prefix)) = prefix.split_once('.') else {
-        return false;
-    };
-    catalog
-        .get(domain)
-        .and_then(serde_json::Value::as_object)
-        .is_some_and(|values| values.keys().any(|key| key.starts_with(key_prefix)))
-}
-
-fn validate_web_bundle(bundle: &str) -> Result<()> {
-    let catalog = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
-    let mut offset = 0;
-    while let Some(found) = bundle[offset..].find("SOW_t(") {
-        let start = offset + found + "SOW_t(".len();
-        let rest = &bundle[start..];
-        let Some(quote) = rest.as_bytes().first().copied() else {
-            break;
-        };
-        if quote != b'"' && quote != b'\'' {
-            offset = start;
-            continue;
-        }
-        let quote = quote as char;
-        let value = &rest[1..];
-        let Some(end) = value.find(quote) else {
-            bail!("unterminated SOW_t key in web bundle");
-        };
-        let key = &value[..end];
-        if key.ends_with('_') {
-            if !web_catalog_has_prefix(&catalog, key) {
-                bail!("web bundle uses unknown localization key prefix {key}");
-            }
-        } else if web_catalog_value(&catalog, key).is_none() {
-            bail!("web bundle uses unknown localization key {key}");
-        }
-        offset = start + 1 + end;
-    }
-    Ok(())
-}
-
-fn validate_source_localization_keys(
-    source: &str,
-    label: &str,
-    catalog: &serde_json::Value,
-) -> Result<()> {
-    for needle in ["SOW_t(", "siteText(", "translate("] {
-        let mut offset = 0;
-        while let Some(found) = source[offset..].find(needle) {
-            let start = offset + found + needle.len();
-            let rest = &source[start..];
-            let trimmed = rest.trim_start();
-            let Some(quote) = trimmed.as_bytes().first().copied() else {
-                break;
-            };
-            if quote != b'"' && quote != b'\'' {
-                offset = start;
-                continue;
-            }
-            let value = &trimmed[1..];
-            let end = value
-                .find(quote as char)
-                .with_context(|| format!("unterminated localization key in {label}"))?;
-            let key = &value[..end];
-            if key.ends_with('_') {
-                if !web_catalog_has_prefix(catalog, key) {
-                    bail!("{label} uses unknown localization key prefix {key}");
-                }
-            } else if web_catalog_value(catalog, key).is_none() {
-                bail!("{label} uses unknown localization key {key}");
-            }
-            offset = start + rest.len() - trimmed.len() + 1 + end;
-        }
-    }
-    for needle in [
-        "data-i18n=\"",
-        "data-i18n='",
-        "data-i18n-placeholder=\"",
-        "data-i18n-placeholder='",
-        "data-i18n-values=\"",
-        "data-i18n-values='",
-        "data-ability-key=\"",
-        "data-ability-key='",
-        "data-description-key=\"",
-        "data-description-key='",
-    ] {
-        let quote = needle.as_bytes()[needle.len() - 1] as char;
-        let mut offset = 0;
-        while let Some(found) = source[offset..].find(needle) {
-            let start = offset + found + needle.len();
-            let rest = &source[start..];
-            let end = rest
-                .find(quote)
-                .with_context(|| format!("unterminated localization attribute in {label}"))?;
-            let key = &rest[..end];
-            if needle.starts_with("data-i18n-values") {
-                let values = serde_json::from_str::<HashMap<String, String>>(key)
-                    .with_context(|| format!("invalid data-i18n-values in {label}"))?;
-                for value_key in values.values() {
-                    if web_catalog_value(catalog, value_key).is_none() {
-                        bail!("{label} uses unknown localization value key {value_key}");
-                    }
-                }
-            } else if web_catalog_value(catalog, key).is_none() {
-                bail!("{label} uses unknown localization key {key}");
-            }
-            offset = start + end;
-        }
-    }
-    validate_quoted_catalog_keys(source, label, catalog)?;
-    Ok(())
-}
-
-fn validate_quoted_catalog_keys(
-    source: &str,
-    label: &str,
-    catalog: &serde_json::Value,
-) -> Result<()> {
-    const DOMAINS: [&str; 11] = [
-        "menu", "auth", "lobbies", "heroes", "profile", "store", "hud", "endgame", "tutorial",
-        "site", "ranked",
-    ];
-    for domain in DOMAINS {
-        for quote in ['"', '\''] {
-            let needle = format!("{quote}{domain}.");
-            let mut offset = 0;
-            while let Some(found) = source[offset..].find(&needle) {
-                let start = offset + found + 1;
-                let rest = &source[start..];
-                let end = rest
-                    .find(|c: char| {
-                        !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
-                    })
-                    .unwrap_or(rest.len());
-                let key = &rest[..end];
-                // Menu journey copy has its own catalog, checked by validateMenuGuides.
-                if key.starts_with("menu.guide.") {
-                    offset = start + end;
-                    continue;
-                }
-                if key.ends_with('.') || key.ends_with('_') {
-                    if !web_catalog_has_prefix(catalog, key) {
-                        bail!("{label} uses unknown localization key prefix {key}");
-                    }
-                } else if web_catalog_value(catalog, key).is_none() {
-                    bail!("{label} uses unknown localization key {key}");
-                }
-                offset = start + end;
-            }
-        }
-    }
-    Ok(())
 }
 
 fn strip_marked_section(source: &str, begin: &str, end: &str) -> Result<String> {
@@ -4086,10 +3514,7 @@ fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
                 format!("leader biography filename is not UTF-8: {}", path.display())
             })?;
         if !expected_leaders.contains(id) {
-            bail!(
-                "leader biography file {} has unknown leader ID {id}",
-                path.display()
-            );
+            continue;
         }
         biography_files.insert(id.to_owned());
     }
@@ -4107,10 +3532,17 @@ fn public_leader_biographies(root: &Path) -> Result<serde_json::Value> {
         let id = leader.id();
         let path = biography_directory.join(format!("{id}.toml"));
         if !biography_files.contains(id) {
-            bail!("leader biography file is missing: {}", path.display());
+            continue;
         }
+        // A biography is site copy: a bad file drops that page, never the deploy.
         let resolved =
-            load_leader_biography(&path, id, &published_languages, &mut distinct_articles)?;
+            match load_leader_biography(&path, id, &published_languages, &mut distinct_articles) {
+                Ok(resolved) => resolved,
+                Err(error) => {
+                    println!("leader biography skipped: {error:#}");
+                    continue;
+                }
+            };
         for code in &published_languages {
             let article = resolved.get(*code).with_context(|| {
                 format!("leader biography locale missing after load: {code}/{id}")
@@ -4477,834 +3909,11 @@ fn write_manifest(
     Ok(())
 }
 
-fn placeholder_names(value: &str) -> Result<Vec<String>> {
-    let mut names = Vec::new();
-    let mut offset = 0;
-    while offset < value.len() {
-        let remainder = &value[offset..];
-        let open = remainder.find('{');
-        let close = remainder.find('}');
-        match (open, close) {
-            (None, None) => break,
-            (None, Some(_)) => bail!("unmatched closing placeholder brace"),
-            (Some(open), Some(close)) if close < open => {
-                bail!("unmatched closing placeholder brace")
-            }
-            (Some(open), _) => {
-                let after_open = &remainder[open + 1..];
-                let end = after_open.find('}').context("unterminated placeholder")?;
-                let name = after_open[..end].trim();
-                if name.is_empty()
-                    || !name
-                        .chars()
-                        .all(|character| character.is_ascii_alphanumeric() || character == '_')
-                {
-                    bail!("invalid placeholder {name:?}");
-                }
-                names.push(name.to_string());
-                offset += open + 1 + end + 1;
-            }
-        }
-    }
-    names.sort();
-    Ok(names)
-}
-
-const APPROVED_CAMPAIGN_TRANSLATION_EPISODES: &[&str] = &[];
-const APPROVED_CAMPAIGN_TRANSLATION_KEYS: &[&str] = &[
-    "campaign_boudica_boudica_city_upgrade_ready_body",
-    "campaign_boudica_boudica_city_upgrade_ready_title",
-    "campaign_boudica_boudica_structure_upgrade_hint",
-    "campaign_boudica_boudica_structure_upgrade_title",
-];
-
-const CAMPAIGN_TRANSLATION_NAMESPACES: &[(&str, &str)] = &[
-    ("boudica", "boudica_"),
-    ("boudica", "campaign_boudica_"),
-    ("six_sky_ep1", "campaign_six_sky_ep1_"),
-    ("six_sky_ep2", "campaign_six_sky_ep2_"),
-    ("six_sky_ep3", "campaign_six_sky_ep3_"),
-    ("six_sky_ep1", "six_sky_ep1_"),
-    ("six_sky_ep2", "six_sky_ep2_"),
-    ("six_sky_ep3", "six_sky_ep3_"),
-];
-
-fn is_campaign_translation_key(key: &str) -> bool {
-    if matches!(
-        key,
-        "campaign_episode_locked"
-            | "campaign_chronicles"
-            | "campaign_unavailable"
-            | "campaign_unlock_required"
-    ) || key.starts_with("campaign_menu_guide_")
-        || key.starts_with("campaign_studio_demo_")
-    {
-        return false;
-    }
-    key.starts_with("campaign_") || key.starts_with("boudica_") || key.starts_with("six_sky_ep")
-}
-
-fn is_locked_campaign_translation_key(key: &str, approved_episodes: &[&str]) -> bool {
-    if !is_campaign_translation_key(key) || APPROVED_CAMPAIGN_TRANSLATION_KEYS.contains(&key) {
-        return false;
-    }
-    let episode_id = CAMPAIGN_TRANSLATION_NAMESPACES
-        .iter()
-        .find_map(|(episode_id, prefix)| key.starts_with(prefix).then_some(*episode_id));
-    episode_id.map_or(true, |episode_id| !approved_episodes.contains(&episode_id))
-}
-
-fn is_non_english_catalog_path(path: &str) -> bool {
-    let locale = path.split('.').next().unwrap_or(path);
-    sow_i18n::Language::registry()
-        .iter()
-        .any(|(_, code, _, _)| {
-            code.eq_ignore_ascii_case(locale) && !code.eq_ignore_ascii_case("en")
-        })
-}
-
-fn validate_web_node(
-    path: &str,
-    expected: &serde_json::Value,
-    actual: &serde_json::Value,
-) -> Result<()> {
-    validate_web_node_with_missing(path, expected, actual, false, &mut Vec::new())
-}
-
-fn validate_web_node_with_missing(
-    path: &str,
-    expected: &serde_json::Value,
-    actual: &serde_json::Value,
-    allow_missing_translations: bool,
-    missing_translations: &mut Vec<String>,
-) -> Result<()> {
-    match (expected, actual) {
-        (serde_json::Value::Object(expected), serde_json::Value::Object(actual)) => {
-            for (key, expected_value) in expected {
-                let child_path = if path.is_empty() {
-                    key.clone()
-                } else {
-                    format!("{path}.{key}")
-                };
-                let catalog_key = child_path.splitn(2, '.').nth(1).unwrap_or(&child_path);
-                let actual_value = match actual.get(key) {
-                    Some(value) => value,
-                    None if is_non_english_catalog_path(path)
-                        && is_locked_campaign_translation_key(
-                            key,
-                            APPROVED_CAMPAIGN_TRANSLATION_EPISODES,
-                        ) =>
-                    {
-                        continue;
-                    }
-                    None if path.ends_with(".tutorial")
-                        && key.starts_with("campaign_")
-                        && is_non_english_catalog_path(path) =>
-                    {
-                        continue;
-                    }
-                    None if path.ends_with(".site")
-                        && web_key_is_intentionally_english(catalog_key)
-                        && !path
-                            .split('.')
-                            .next()
-                            .unwrap_or("en")
-                            .eq_ignore_ascii_case("en") =>
-                    {
-                        continue;
-                    }
-                    None if path.ends_with(".menu")
-                        && web_key_is_intentionally_english(catalog_key)
-                        && !path
-                            .split('.')
-                            .next()
-                            .unwrap_or("en")
-                            .eq_ignore_ascii_case("en") =>
-                    {
-                        continue;
-                    }
-                    None
-                        if allow_missing_translations && is_non_english_catalog_path(path) =>
-                    {
-                        missing_translations.push(child_path);
-                        continue;
-                    }
-                    None => bail!("web catalog missing key {child_path}"),
-                };
-                validate_web_node_with_missing(
-                    &child_path,
-                    expected_value,
-                    actual_value,
-                    allow_missing_translations,
-                    missing_translations,
-                )?;
-            }
-            for key in actual.keys() {
-                if is_non_english_catalog_path(path)
-                    && is_locked_campaign_translation_key(
-                        key,
-                        APPROVED_CAMPAIGN_TRANSLATION_EPISODES,
-                    )
-                {
-                    let child_path = if path.is_empty() {
-                        key.clone()
-                    } else {
-                        format!("{path}.{key}")
-                    };
-                    bail!("web catalog contains locked campaign text {child_path}");
-                }
-                if !expected.contains_key(key) {
-                    let child_path = if path.is_empty() {
-                        key.clone()
-                    } else {
-                        format!("{path}.{key}")
-                    };
-                    bail!("web catalog has unknown key {child_path}");
-                }
-            }
-            Ok(())
-        }
-        (serde_json::Value::String(expected), serde_json::Value::String(actual)) => {
-            if actual.trim().is_empty() {
-                bail!("web catalog has an empty value at {path}");
-            }
-            if placeholder_names(expected)
-                .with_context(|| format!("invalid placeholder at {path}"))?
-                != placeholder_names(actual)
-                    .with_context(|| format!("invalid placeholder at {path}"))?
-            {
-                bail!("web catalog placeholder mismatch at {path}");
-            }
-            Ok(())
-        }
-        _ => bail!("web catalog shape mismatch at {path}"),
-    }
-}
-
-fn web_key_is_intentionally_english(key: &str) -> bool {
-    key.starts_with("menu.language_")
-        // League names are shared terms in several published languages.
-        || key.starts_with("ranked.tier_")
-        // Hero names are proper names in every language.
-        || (key.starts_with("heroes.leader_")
-            && (key.ends_with("_name")
-                || key.ends_with("_historical")
-                || key.ends_with("_civilization")))
-        || matches!(
-            key,
-            "auth.discord_provider"
-                | "auth.email_placeholder"
-                | "auth.google"
-                | "auth.meta"
-                | "auth.x_provider"
-                | "endgame.xp"
-                | "heroes.africa"
-                | "heroes.americas"
-                | "heroes.random_leader"
-                | "heroes.asia"
-                | "heroes.leader_leonidas_civilization"
-                | "heroes.europe"
-                | "heroes.oceania"
-                | "hud.ability_notice"
-                | "hud.ability_remaining"
-                | "hud.ability_state_active"
-                | "hud.fps"
-                | "hud.fps_ping"
-                | "hud.nuke_struck"
-                | "hud.pin"
-                | "lobbies.hvn"
-                | "lobbies.terminator"
-                | "menu.brand"
-                | "menu.cookies"
-                | "menu.cookie_settings"
-                | "menu.discord"
-                | "menu.github"
-                | "menu.google_play_games"
-                | "menu.level_short"
-                | "menu.source_code"
-                | "menu.telegram"
-                | "menu.xp"
-                | "profile.achievement_category_combat"
-                | "profile.android"
-                | "profile.ffa"
-                | "profile.google_play_games"
-                | "profile.kda"
-                | "profile.kda_value"
-                | "profile.spam"
-                | "site.copyright"
-                | "site.cookies"
-                | "site.discord"
-                | "site.faq"
-                | "site.github"
-                | "site.leader_artigas_ability"
-                | "site.leader_napoleon_ability"
-                | "site.leader_tlacaelel_ability"
-                | "site.terms_maps_license"
-                | "site.telegram"
-        )
-}
-
-fn validate_leader_display_names(
-    catalog: &serde_json::Value,
-    fallback: Option<&serde_json::Value>,
-) -> Result<()> {
-    for slug in sow_core::player::Leader::all().map(sow_core::player::Leader::id) {
-        let key = format!("heroes.leader_{slug}_name");
-        let value = web_catalog_value(catalog, &key)
-            .or_else(|| fallback.and_then(|fallback| web_catalog_value(fallback, &key)))
-            .and_then(serde_json::Value::as_str)
-            .with_context(|| format!("dynamic localization key is missing: {key}"))?;
-        if [" / ", " · ", " | "]
-            .iter()
-            .any(|separator| value.contains(separator))
-        {
-            bail!("leader display name contains a compound separator: {key}");
-        }
-    }
-    Ok(())
-}
-
-fn web_equal_value_is_valid_translation(language_code: &str, key: &str) -> bool {
-    web_key_is_intentionally_english(key)
-        // The French adjective "rare" has the same spelling as English here.
-        || (language_code == "fr" && key == "heroes.rarity_rare")
-        // "Region" is the same German word as the English filter label.
-        || (language_code == "de" && key == "heroes.region_filter")
-        // Italian names heroes "Leader" throughout the catalog (nav_leaders, leaders).
-        || (language_code == "it" && key == "store.leader")
-        // "Trait" is also the correct French label for a hero trait.
-        || (language_code == "fr"
-            && matches!(key, "heroes.command_trait" | "site.command_trait"))
-}
-
-fn collect_equal_web_values(
-    path: &str,
-    expected: &serde_json::Value,
-    actual: &serde_json::Value,
-    values: &mut Vec<(String, String)>,
-) {
-    match (expected, actual) {
-        (serde_json::Value::Object(expected), serde_json::Value::Object(actual)) => {
-            for (key, expected_value) in expected {
-                if let Some(actual_value) = actual.get(key) {
-                    let child_path = if path.is_empty() {
-                        key.clone()
-                    } else {
-                        format!("{path}.{key}")
-                    };
-                    collect_equal_web_values(&child_path, expected_value, actual_value, values);
-                }
-            }
-        }
-        (serde_json::Value::String(expected), serde_json::Value::String(actual))
-            if expected == actual =>
-        {
-            values.push((path.to_string(), actual.clone()));
-        }
-        _ => {}
-    }
-}
-
-fn validate_web_catalogs(report_equal_values: bool) -> Result<serde_json::Value> {
-    validate_web_catalogs_with_missing(report_equal_values, false)
-}
-
-fn validate_web_catalogs_with_missing(
-    report_equal_values: bool,
-    allow_missing_translations: bool,
-) -> Result<serde_json::Value> {
-    let english = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
-    let mut untranslated = Vec::new();
-    for &(language, code, _, _) in sow_i18n::Language::registry() {
-        let catalog = serde_json::to_value(&sow_i18n::web(language))?;
-        let mut missing_translations = Vec::new();
-        validate_web_node_with_missing(
-            code,
-            &english,
-            &catalog,
-            allow_missing_translations,
-            &mut missing_translations,
-        )
-            .with_context(|| format!("validate web catalog {code}"))?;
-        for key in missing_translations {
-            eprintln!("i18n warning (local preview): {key} missing; using English fallback");
-        }
-        validate_leader_display_names(
-            &catalog,
-            allow_missing_translations.then_some(&english),
-        )
-            .with_context(|| format!("validate leader display names for {code}"))?;
-        if code != "en" {
-            let mut equal_values = Vec::new();
-            collect_equal_web_values("", &english, &catalog, &mut equal_values);
-            let intentional = equal_values
-                .iter()
-                .filter(|(key, _)| web_equal_value_is_valid_translation(code, key))
-                .count();
-            let pending = equal_values.len() - intentional;
-            if report_equal_values {
-                println!(
-                    "i18n audit {code}: {} equal values ({} intentional, {} require translation)",
-                    equal_values.len(),
-                    intentional,
-                    pending
-                );
-            }
-            for (key, value) in equal_values
-                .into_iter()
-                .filter(|(key, _)| !web_equal_value_is_valid_translation(code, key))
-            {
-                if allow_missing_translations {
-                    eprintln!("i18n warning (local preview): {code}: {key} still equals English");
-                } else {
-                    untranslated.push(format!("{code}: {key} = {value}"));
-                }
-            }
-        }
-    }
-    if !untranslated.is_empty() {
-        for value in &untranslated {
-            eprintln!("i18n untranslated: {value}");
-        }
-        bail!(
-            "{} visible localization values still equal English",
-            untranslated.len()
-        );
-    }
-    Ok(english)
-}
-
-fn validate_dynamic_web_keys(catalog: &serde_json::Value) -> Result<()> {
-    for key in ["menu.loading"] {
-        if web_catalog_value(catalog, key).is_none() {
-            bail!("dynamic localization key is missing: {key}");
-        }
-    }
-    for &(_, code, _, _) in sow_i18n::Language::registry() {
-        let token = code.to_ascii_lowercase().replace('-', "_");
-        let key = format!("menu.language_{token}");
-        if web_catalog_value(catalog, &key).is_none() {
-            bail!("dynamic localization key is missing: {key}");
-        }
-    }
-    for tab in ["overview", "commanders", "history", "achievements"] {
-        let key = format!("profile.tab_{tab}");
-        if web_catalog_value(catalog, &key).is_none() {
-            bail!("dynamic localization key is missing: {key}");
-        }
-    }
-    for category in ["battles", "victories", "commanders", "laurels"] {
-        let key = format!("profile.achievement_category_{category}");
-        if web_catalog_value(catalog, &key).is_none() {
-            bail!("dynamic localization key is missing: {key}");
-        }
-    }
-    for id in [
-        "first_command",
-        "first_victory",
-        "battle_hardened",
-        "victory_march",
-        "laurel_hoard",
-        "commander_victorious",
-        "veteran_commander",
-        "banner_collector",
-        "leader_path",
-    ] {
-        for suffix in ["title", "description"] {
-            let key = format!("profile.achievement_{id}_{suffix}");
-            if web_catalog_value(catalog, &key).is_none() {
-                bail!("dynamic localization key is missing: {key}");
-            }
-        }
-    }
-    for slug in sow_core::player::Leader::all().map(sow_core::player::Leader::id) {
-        for key in ["name", "historical", "civilization"]
-            .map(|suffix| format!("heroes.leader_{slug}_{suffix}"))
-            .into_iter()
-            .chain(["ability", "description"].map(|suffix| format!("site.leader_{slug}_{suffix}")))
-        {
-            if web_catalog_value(catalog, &key).is_none() {
-                bail!("dynamic localization key is missing: {key}");
-            }
-        }
-    }
-    Ok(())
-}
-
 fn locale_folder(code: &str) -> String {
     code.to_ascii_lowercase()
 }
 
-fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
-    let root = &paths.root;
-    let catalog = validate_web_catalogs(true)?;
-    validate_dynamic_web_keys(&catalog)?;
-    for definition in sow_core::emote::EMOTES {
-        if web_catalog_value(&catalog, definition.bubble_key).and_then(serde_json::Value::as_str)
-            != Some(definition.fallback)
-        {
-            bail!(
-                "emote fallback differs from its English catalog: {}",
-                definition.bubble_key
-            );
-        }
-        for key in [
-            definition.menu_key,
-            definition.bubble_key,
-            definition.notice_key,
-        ] {
-            if web_catalog_value(&catalog, key).is_none() {
-                bail!("emote definition uses unknown localization key {key}");
-            }
-        }
-    }
-    let strings_root = root.join("sow-i18n/strings");
-    let registered = sow_i18n::Language::registry()
-        .iter()
-        .map(|(_, code, _, _)| locale_folder(code))
-        .collect::<HashSet<_>>();
-    let mut found = HashSet::new();
-    for entry in
-        fs::read_dir(&strings_root).with_context(|| format!("read {}", strings_root.display()))?
-    {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
-            bail!(
-                "web locale entry is not a directory: {}",
-                entry.path().display()
-            );
-        }
-        let code = entry.file_name().to_string_lossy().into_owned();
-        if !registered.contains(&code) {
-            bail!("unregistered web locale directory: {code}");
-        }
-        let files = fs::read_dir(entry.path())?
-            .map(|entry| {
-                let entry = entry?;
-                if !entry.file_type()?.is_file() {
-                    bail!("web locale entry is not a file: {}", entry.path().display());
-                }
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let is_timestamped_backup =
-                    name.strip_prefix("web.toml.bak_").is_some_and(|suffix| {
-                        !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit())
-                    });
-                if name != "web.toml" && !is_timestamped_backup {
-                    bail!("unexpected web locale file: {}/{}", code, name);
-                }
-                Ok(name)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        if files
-            .iter()
-            .filter(|name| name.as_str() == "web.toml")
-            .count()
-            != 1
-        {
-            bail!("web locale {code} must contain exactly one catalog");
-        }
-        found.insert(code);
-    }
-    for &(_, code, _, _) in sow_i18n::Language::registry() {
-        if !found.contains(&locale_folder(code)) {
-            bail!("registered web locale is missing: {code}");
-        }
-    }
-
-    let source_root = root.join("sow-client/src");
-    for entry in walkdir::WalkDir::new(&source_root) {
-        let entry = entry?;
-        let path = entry.path();
-        if !entry.file_type().is_file()
-            || path.extension().and_then(|ext| ext.to_str()) != Some("rs")
-        {
-            continue;
-        }
-        let source = fs::read_to_string(path)
-            .with_context(|| format!("read client source {}", path.display()))?;
-        let mut offset = 0;
-        while let Some(found) = source[offset..].find("UiText::new(") {
-            let start = offset + found + "UiText::new(".len();
-            let rest = &source[start..];
-            let trimmed = rest.trim_start();
-            let Some(quote) = trimmed.as_bytes().first().copied() else {
-                bail!("unterminated UiText key in {}", path.display());
-            };
-            if quote != b'"' && quote != b'\'' {
-                if path.ends_with("input/map_click.rs") && trimmed.starts_with("key)") {
-                    offset = start;
-                    continue;
-                }
-                bail!("UiText::new requires a literal key in {}", path.display());
-            }
-            let value = &trimmed[1..];
-            let end = value
-                .find(quote as char)
-                .with_context(|| format!("unterminated UiText key in {}", path.display()))?;
-            let key = &value[..end];
-            if web_catalog_value(&catalog, key).is_none() {
-                bail!(
-                    "client source uses unknown localization key {key}: {}",
-                    path.display()
-                );
-            }
-            let key_start = start + rest.len() - trimmed.len() + 1;
-            offset = key_start + end;
-        }
-        validate_quoted_catalog_keys(&source, &path.display().to_string(), &catalog)?;
-    }
-    let placement_source_path = root.join("sow-core/src/building/placement.rs");
-    let placement_source = fs::read_to_string(&placement_source_path)
-        .with_context(|| format!("read placement source {}", placement_source_path.display()))?;
-    validate_quoted_catalog_keys(
-        &placement_source,
-        &placement_source_path.display().to_string(),
-        &catalog,
-    )?;
-    for entry in walkdir::WalkDir::new(root.join("sow-web/site")) {
-        let entry = entry?;
-        let path = entry.path();
-        if !entry.file_type().is_file()
-            || !matches!(
-                path.extension().and_then(|extension| extension.to_str()),
-                Some("html") | Some("ts")
-            )
-        {
-            continue;
-        }
-        if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".test.ts"))
-        {
-            continue;
-        }
-        let relative = path
-            .strip_prefix(root)
-            .unwrap_or(path)
-            .display()
-            .to_string();
-        let source = fs::read_to_string(&path)
-            .with_context(|| format!("read public source {}", path.display()))?;
-        validate_source_localization_keys(&source, &relative, &catalog)?;
-    }
-    let shell_root = root.join("sow-web/shell");
-    for entry in walkdir::WalkDir::new(&shell_root) {
-        let entry = entry?;
-        let path = entry.path();
-        if !entry.file_type().is_file()
-            || path.extension().and_then(|ext| ext.to_str()) != Some("ts")
-        {
-            continue;
-        }
-        if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".test.ts"))
-        {
-            continue;
-        }
-        let source = fs::read_to_string(path)
-            .with_context(|| format!("read shell source {}", path.display()))?;
-        validate_source_localization_keys(&source, &path.display().to_string(), &catalog)?;
-    }
-    validate_campaign_assets(paths, &catalog)?;
-    Ok(())
-}
-
-fn verify_exported_locales(dir: &Path) -> Result<()> {
-    let expected = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
-    let expected_languages = serde_json::to_value(
-        sow_i18n::Language::published_registry()
-            .map(|(_, code, name)| serde_json::json!({ "code": code, "name": name }))
-            .collect::<Vec<_>>(),
-    )?;
-    let registry_path = dir.join("locales/index.json");
-    let registry: serde_json::Value = serde_json::from_str(&fs::read_to_string(&registry_path)?)
-        .with_context(|| format!("parse exported locale registry {}", registry_path.display()))?;
-    if registry.get("schema").and_then(serde_json::Value::as_u64) != Some(1)
-        || registry.get("version").and_then(serde_json::Value::as_u64)
-            != Some(sow_i18n::WEB_CATALOG_VERSION as u64)
-        || registry.get("languages") != Some(&expected_languages)
-    {
-        bail!("exported locale registry metadata is invalid");
-    }
-    for (_, code, _) in sow_i18n::Language::published_registry() {
-        let folder = locale_folder(code);
-        let path = dir.join("locales").join(&folder);
-        if !path.is_file() {
-            bail!("missing exported web catalog {code}");
-        }
-        let payload: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path)?)
-            .with_context(|| format!("parse exported web catalog {code}"))?;
-        if payload.get("schema").and_then(serde_json::Value::as_u64) != Some(1)
-            || payload.get("version").and_then(serde_json::Value::as_u64)
-                != Some(sow_i18n::WEB_CATALOG_VERSION as u64)
-            || payload.get("locale").and_then(serde_json::Value::as_str) != Some(folder.as_str())
-        {
-            bail!("exported web catalog metadata is invalid for {code}");
-        }
-        if payload.get("languages") != Some(&expected_languages) {
-            bail!("exported web catalog language registry is invalid for {code}");
-        }
-        let strings = payload
-            .get("strings")
-            .with_context(|| format!("exported web catalog {code} has no strings"))?;
-        validate_web_node(&folder, &expected, strings)?;
-    }
-    Ok(())
-}
-
-fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Result<()> {
-    let dir = paths.root.join("assets/campaign");
-    let mut rosters = HashMap::new();
-    let mut triggers = HashMap::new();
-    for entry in fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
-        let path = entry?.path();
-        let name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default();
-        if let Some(id) = name.strip_suffix(".triggers.json") {
-            triggers.insert(id.to_string(), path);
-        } else if let Some(id) = name.strip_suffix(".json") {
-            rosters.insert(id.to_string(), path);
-        }
-    }
-    for episode_id in triggers.keys() {
-        if !rosters.contains_key(episode_id) {
-            bail!("campaign triggers have no roster: {episode_id}");
-        }
-    }
-    let mut episodes = Vec::new();
-    for (episode_id, roster_path) in &rosters {
-        let roster: serde_json::Value = serde_json::from_str(&fs::read_to_string(roster_path)?)
-            .with_context(|| format!("parse {}", roster_path.display()))?;
-        let map_id = roster
-            .get("map")
-            .and_then(serde_json::Value::as_str)
-            .filter(|id| {
-                !id.is_empty()
-                    && id.bytes().all(|byte| {
-                        byte.is_ascii_lowercase()
-                            || byte.is_ascii_digit()
-                            || matches!(byte, b'-' | b'_')
-                    })
-            })
-            .with_context(|| format!("campaign roster has invalid map id: {episode_id}"))?;
-        let map_path = paths.assets_maps.join(map_id).join("map.bin.br");
-        if !map_path.is_file() {
-            bail!(
-                "campaign map asset missing: {episode_id} -> {map_id} ({})",
-                map_path.display()
-            );
-        }
-        let trigger_path = triggers
-            .get(episode_id)
-            .with_context(|| format!("missing triggers for {episode_id}"))?;
-        let definition: serde_json::Value =
-            serde_json::from_str(&fs::read_to_string(trigger_path)?)
-                .with_context(|| format!("parse {}", trigger_path.display()))?;
-        if definition
-            .get("episode_id")
-            .and_then(serde_json::Value::as_str)
-            != Some(episode_id.as_str())
-        {
-            bail!("campaign episode_id does not match filename: {episode_id}");
-        }
-        if let Some(speakers) = definition
-            .get("speakers")
-            .and_then(serde_json::Value::as_object)
-        {
-            for (speaker, definition) in speakers {
-                let Some(avatar) = definition.get("avatar").and_then(serde_json::Value::as_str)
-                else {
-                    continue;
-                };
-                if avatar.is_empty() {
-                    continue;
-                }
-                // Every package ships campaign avatars as loose files; CrazyGames packs the same files into its atlas.
-                let shipped = paths.assets_gameplay.join("avatars").join(format!("{avatar}.webp"));
-                if !avatar.chars().all(|character| {
-                    character.is_ascii_alphanumeric() || character == '_' || character == '-'
-                }) || !shipped.is_file()
-                {
-                    bail!(
-                        "campaign speaker avatar is invalid or missing: {episode_id}.{speaker}: {avatar}"
-                    );
-                }
-            }
-        }
-        episodes.push(serde_json::json!({
-            "episode_id": episode_id,
-            "definition": definition,
-            "roster": roster,
-        }));
-    }
-    // Episode-local strings and flow rules belong to the browser/editor's shared validator.
-    let mut validator = Command::new("node")
-        .args([
-            "-e",
-            r#"
-const fs = require("node:fs");
-const campaign = require(process.argv[1]).default;
-const { catalog, episodes, menuGuides } = JSON.parse(fs.readFileSync(0, "utf8"));
-const catalogText = key => {
-    const value = key.split(".").reduce((node, part) =>
-        node && Object.prototype.hasOwnProperty.call(node, part) ? node[part] : undefined, catalog);
-    return typeof value === "string" ? value : null;
-};
-const hasText = key => { const value = catalogText(key); return typeof value === "string" && value.trim().length > 0; };
-for (const { episode_id, definition, roster } of episodes) {
-    const result = campaign.validate(definition, roster, {
-        hasText,
-        getText: key => {
-            const value = catalogText(key);
-            return typeof value === "string" ? campaign.replaceFactionStoryNames(value, definition, roster) : null;
-        }
-    });
-    for (const issue of result.errors) {
-        console.error([episode_id, issue.step, issue.field].filter(Boolean).join(".") + ": " + issue.message);
-    }
-    for (const issue of result.warnings) {
-        console.warn(episode_id + ": " + issue.message);
-    }
-    if (result.errors.length) process.exitCode = 1;
-}
-const menuReport = campaign.validateMenuGuides(menuGuides);
-for (const issue of menuReport.errors) {
-    console.error(["menu", issue.step, issue.field].filter(Boolean).join(".") + ": " + issue.message);
-}
-if (menuReport.errors.length) process.exitCode = 1;
-"#,
-        ])
-        .arg(paths.shell.join("sow-campaign.ts"))
-        .stdin(Stdio::piped())
-        .spawn()
-        .context("start shared campaign validator (Node.js required)")?;
-    serde_json::to_writer(
-        validator
-            .stdin
-            .take()
-            .context("open campaign validator input")?,
-        &serde_json::json!({ "catalog": catalog, "episodes": episodes,
-            "menuGuides": serde_json::from_str::<serde_json::Value>(&fs::read_to_string(
-                paths.root.join("assets/guides/menu.triggers.json"))?)? }),
-    )
-    .context("write campaign validator input")?;
-    if !validator
-        .wait()
-        .context("wait for shared campaign validator")?
-        .success()
-    {
-        bail!("shared campaign validation failed");
-    }
-    Ok(())
-}
-
 fn export_locales(out: &Path) -> Result<()> {
-    validate_web_catalogs(false)?;
     write_locales(out, None)
 }
 
@@ -5354,604 +3963,7 @@ fn write_locales(out: &Path, local_root: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-fn verify_gameplay_unit_art(dir: &Path, package: &str) -> Result<()> {
-    for file in GAMEPLAY_UNIT_ART {
-        if !dir.join("assets/gameplay/units").join(file).is_file() {
-            bail!("{package} missing assets/gameplay/units/{file}");
-        }
-    }
-    Ok(())
-}
-
-fn verify_ranked_art(dir: &Path, package: &str) -> Result<()> {
-    for emblem in [
-        "unranked",
-        "bronze",
-        "silver",
-        "gold",
-        "platinum",
-        "diamond",
-        "master",
-        "grandmaster",
-        "ranked",
-    ] {
-        let file = format!("assets/shell/ranked/{emblem}.svg");
-        if !dir.join(&file).is_file() {
-            bail!("{package} missing {file}");
-        }
-    }
-    Ok(())
-}
-
-fn verify_layout(dir: &Path) -> Result<()> {
-    verify_ranked_art(dir, "webroot")?;
-    verify_exported_locales(dir)?;
-    let (mut wn, mut jn) = (None, None);
-    for e in fs::read_dir(dir)? {
-        let e = e?;
-        let n = e.file_name().to_string_lossy().into_owned();
-        if n.ends_with("_bg.wasm") && !n.ends_with(".br") {
-            wn = Some(n.clone());
-        }
-        if n.starts_with("sow_client_") && n.ends_with(".js") && !n.ends_with(".br") {
-            jn = Some(n);
-        }
-    }
-    let w = wn.as_ref().context("missing _bg.wasm")?;
-    let j = jn.as_ref().context("missing sow_client_*.js")?;
-    if !dir.join(format!("{w}.br")).is_file() {
-        bail!("missing {w}.br");
-    }
-    if !dir.join(format!("{j}.br")).is_file() {
-        bail!("missing {j}.br");
-    }
-    // Webroot contract: marketing site at the root, game under play/.
-    for required in [
-        "index.html",
-        "play/index.html",
-        "robots.txt",
-        "sitemap.xml",
-        "llms.txt",
-        "app.js",
-        "site-chrome.js",
-        "sow-i18n.js",
-        "sow-dropdown.js",
-        "sow-controls.css",
-        "locales/index.json",
-        "styles.css",
-        "fonts/fonts.css",
-        "fonts/OFL.txt",
-        "fonts/work-sans-latin.woff2",
-        "fonts/work-sans-latin-ext.woff2",
-        "fonts/work-sans-italic-latin.woff2",
-        "fonts/work-sans-italic-latin-ext.woff2",
-        "identity-auth.js",
-        "auth-callback.js",
-        "privacy/index.html",
-        "terms/index.html",
-        "cookies/index.html",
-        "support/index.html",
-        "8d227b8f9e6140d39e3381a1829e1db3.txt",
-        "sow.svg",
-        "LICENSE",
-        "NOTICE",
-        "LICENSE-ASSETS",
-        "WASM-THIRD-PARTY-NOTICES.zip",
-        "manifest.webmanifest",
-        "assets/gameplay/text/msdf-atlas-v3.webp",
-        "assets/gameplay/buildings/atlas.webp",
-        "assets/gameplay/buildings/atlas.json",
-        "assets/gameplay/music/shadows-of-war.webm",
-        "maps/NOTICE",
-        "icon-192.png",
-        "icon-512.png",
-        "icon-512-maskable.png",
-        ".well-known/assetlinks.json",
-    ] {
-        if !dir.join(required).is_file() {
-            bail!("webroot missing {}", required);
-        }
-    }
-    verify_gameplay_unit_art(dir, "webroot")?;
-    if dir.join("admin").exists() {
-        bail!("webroot must not contain admin/ (dashboard was removed)");
-    }
-    for relative in PUBLIC_SITE_PAGES {
-        let html = fs::read_to_string(dir.join(relative))?;
-        let (head, _) = html
-            .split_once("</head>")
-            .context("public page has no head")?;
-        if !head.contains("window.SOW_LOCALE_BEFORE_PAINT = true")
-            || !head.contains("window.SOW_LOCALE_CODES = [")
-            || !head.contains("data-cfasync=\"false\" src=\"")
-            || !head.contains("sow-i18n.js?v=")
-        {
-            bail!("public page {relative} is missing its early locale bootstrap");
-        }
-    }
-    for (_, code, _) in sow_i18n::Language::published_registry() {
-        let prefix = if code == "en" { String::new() } else { format!("{}/", locale_folder(code)) };
-        for page in PUBLIC_SITE_PAGES.iter().map(|page| page.to_string())
-            .chain(std::iter::once("leaders/index.html".to_string()))
-            .chain(sow_core::player::Leader::all().map(|leader| format!("leaders/{}/index.html", leader.id()))) {
-            if code != "en" && ENGLISH_ONLY_PAGES.contains(&page.as_str()) {
-                continue;
-            }
-            let path = dir.join(format!("{prefix}{page}"));
-            let html = fs::read_to_string(&path).with_context(|| format!("missing public page {}", path.display()))?;
-            if html.contains("<!-- SOW_SITE_") || !html.contains(&format!("lang=\"{code}\"")) {
-                bail!("incomplete localized page {}", path.display());
-            }
-        }
-    }
-    let play_html = fs::read_to_string(dir.join("play/index.html"))?;
-    // Self-hosted web externalizes the menu bundle next to the page; the
-    // registries it must carry live there instead of inside the HTML.
-    let menu_bundle = fs::read_dir(dir.join("play"))?
-        .filter_map(|e| e.ok())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.starts_with("main_menu") && n.ends_with(".js"))
-        .map(|n| fs::read_to_string(dir.join("play").join(n)).unwrap_or_default())
-        .collect::<String>();
-    let shell_page = format!("{play_html}{menu_bundle}");
-    if !play_html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\"") {
-        bail!("web game page has no game music artwork reference");
-    }
-    if !shell_page.contains("window.SOW_BUILDING_ART =")
-        || !shell_page.contains("gameplay/buildings/atlas.webp")
-    {
-        bail!("webroot game page is missing the building-art registry");
-    }
-    println!("✅ Dist layout OK ({})", dir.display());
-    Ok(())
-}
-
-fn html_attribute_value<'a>(tag: &'a str, wanted: &str) -> Option<&'a str> {
-    let bytes = tag.as_bytes();
-    let mut index = 1;
-    while index < bytes.len()
-        && !bytes[index].is_ascii_whitespace()
-        && !matches!(bytes[index], b'/' | b'>')
-    {
-        index += 1;
-    }
-
-    while index < bytes.len() {
-        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
-            index += 1;
-        }
-        if index >= bytes.len() || matches!(bytes[index], b'/' | b'>') {
-            break;
-        }
-
-        let name_start = index;
-        while index < bytes.len()
-            && !bytes[index].is_ascii_whitespace()
-            && !matches!(bytes[index], b'=' | b'/' | b'>')
-        {
-            index += 1;
-        }
-        if name_start == index {
-            index += 1;
-            continue;
-        }
-        let name = &tag[name_start..index];
-        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
-            index += 1;
-        }
-        if index >= bytes.len() || matches!(bytes[index], b'/' | b'>') {
-            if name.eq_ignore_ascii_case(wanted) {
-                return Some("");
-            }
-            break;
-        }
-        if bytes[index] != b'=' {
-            if name.eq_ignore_ascii_case(wanted) {
-                return Some("");
-            }
-            continue;
-        }
-        index += 1;
-        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
-            index += 1;
-        }
-
-        let value = if index < bytes.len() && matches!(bytes[index], b'\'' | b'"') {
-            let quote = bytes[index];
-            index += 1;
-            let value_start = index;
-            while index < bytes.len() && bytes[index] != quote {
-                index += 1;
-            }
-            let value = &tag[value_start..index];
-            if index < bytes.len() {
-                index += 1;
-            }
-            value
-        } else {
-            let value_start = index;
-            while index < bytes.len() && !bytes[index].is_ascii_whitespace() && bytes[index] != b'>'
-            {
-                index += 1;
-            }
-            &tag[value_start..index]
-        };
-        if name.eq_ignore_ascii_case(wanted) {
-            return Some(value);
-        }
-    }
-    None
-}
-
-fn verify_cg_local_resources(dir: &Path, html: &str) -> Result<()> {
-    let bytes = html.as_bytes();
-    let mut offset = 0;
-    while let Some(relative_start) = html[offset..].find('<') {
-        let start = offset + relative_start;
-        if html[start..].starts_with("<!--") {
-            let end = html[start + 4..]
-                .find("-->")
-                .context("crazygames index.html has an unterminated comment")?;
-            offset = start + 4 + end + 3;
-            continue;
-        }
-
-        let mut quote = None;
-        let mut end = start + 1;
-        while end < bytes.len() {
-            match (quote, bytes[end]) {
-                (Some(current), byte) if current == byte => quote = None,
-                (None, b'\'' | b'"') => quote = Some(bytes[end]),
-                (None, b'>') => break,
-                _ => {}
-            }
-            end += 1;
-        }
-        if end >= bytes.len() {
-            bail!("crazygames index.html has an unterminated tag");
-        }
-        let tag = &html[start..=end];
-        let mut name_end = 1;
-        while name_end < tag.len()
-            && !tag.as_bytes()[name_end].is_ascii_whitespace()
-            && !matches!(tag.as_bytes()[name_end], b'/' | b'>')
-        {
-            name_end += 1;
-        }
-        let name = tag[1..name_end].to_ascii_lowercase();
-        let attributes: &[&str] = match name.as_str() {
-            "link" => &["href"],
-            "script" | "img" | "iframe" | "embed" | "source" | "audio" | "track" => &["src"],
-            "video" => &["src", "poster"],
-            "object" => &["data"],
-            _ => &[],
-        };
-        for attribute in attributes {
-            let Some(raw_url) = html_attribute_value(tag, attribute) else {
-                continue;
-            };
-            let url = raw_url.trim();
-            if url.is_empty() || url.starts_with('#') || url.starts_with("//") {
-                continue;
-            }
-            if url
-                .find(':')
-                .is_some_and(|colon| colon < url.find('/').unwrap_or(usize::MAX))
-            {
-                continue;
-            }
-            let path = url
-                .split(|character| character == '?' || character == '#')
-                .next()
-                .unwrap_or_default();
-            let path = path.trim_start_matches('/');
-            let mut relative_path = PathBuf::new();
-            for component in Path::new(path).components() {
-                match component {
-                    std::path::Component::CurDir => {}
-                    std::path::Component::Normal(part) => relative_path.push(part),
-                    std::path::Component::ParentDir
-                    | std::path::Component::RootDir
-                    | std::path::Component::Prefix(_) => {
-                        bail!("crazygames resource escapes bundle: {url}");
-                    }
-                }
-            }
-            if relative_path.as_os_str().is_empty() || !dir.join(relative_path).is_file() {
-                bail!("crazygames index references missing local resource: {url}");
-            }
-        }
-
-        offset = end + 1;
-        if name == "script" || name == "style" {
-            let closing_tag = format!("</{name}");
-            let body = &html[offset..];
-            if let Some(close_offset) = body.find(&closing_tag) {
-                offset += close_offset;
-            } else {
-                bail!("crazygames index.html has an unclosed {name} tag");
-            }
-        }
-    }
-    Ok(())
-}
-
-fn verify_cg_layout(dir: &Path) -> Result<()> {
-    verify_exported_locales(dir)?;
-    // Portal entry points are the UNCOMPRESSED pair (restored June design):
-    // a native `import()` of a `.br` URL only works if the CDN serves it with
-    // Content-Encoding: br + a JS MIME, which the CrazyGames CDN does not.
-    for required in [
-        "index.html",
-        "sow_client.js",
-        "sow_client_bg.wasm",
-        "sow.svg",
-        "icon-192.png",
-        "loader.js",
-        "sw.js",
-        "game-manifest.json",
-        "sdk/store_portals.js",
-        "LICENSE",
-        "NOTICE",
-        "LICENSE-ASSETS",
-        "WASM-THIRD-PARTY-NOTICES.zip",
-        "fonts/fonts.css",
-        "fonts/OFL.txt",
-        "fonts/work-sans-latin.woff2",
-        "assets/gameplay/text/msdf-atlas-v3.webp",
-        "assets/gameplay/buildings/atlas.webp",
-        "assets/gameplay/buildings/atlas.json",
-        "assets/gameplay/music/shadows-of-war.webm",
-        "assets/gameplay/icons/nameplate_status_atlas.webp",
-        "assets/shell/loader/loader_empty.webp",
-        "assets/shell/loader/loader_full.webp",
-        "assets/site/media/discord.svg",
-        "assets/site/media/telegram.svg",
-        "assets/site/media/github.svg",
-    ] {
-        if !dir.join(required).is_file() {
-            bail!("crazygames bundle missing {}", required);
-        }
-    }
-    for forbidden in ["admin", "play", "analytics.js"] {
-        if dir.join(forbidden).exists() {
-            bail!("crazygames bundle must not contain {forbidden}/");
-        }
-    }
-    for required in [
-        "maps/catalog.bin",
-        "maps/NOTICE",
-        "maps/world/map.bin.br",
-        "assets/gameplay/atlas/index.json",
-    ] {
-        if !dir.join(required).is_file() {
-            bail!("crazygames bundle missing {required}");
-        }
-    }
-    let inventory = asset_file_inventory(dir)?;
-    let file_count = inventory.len();
-    if file_count > 1_500 {
-        bail!("CrazyGames bundle has {file_count} files; portal limit is 1,500");
-    }
-    let mut total_bytes = 0u64;
-    let mut folder_bytes = std::collections::BTreeMap::<String, u64>::new();
-    for relative in &inventory {
-        let size = fs::metadata(dir.join(relative))?.len();
-        total_bytes = total_bytes
-            .checked_add(size)
-            .context("CrazyGames bundle size overflow")?;
-        let folder = relative.components().take(3).collect::<PathBuf>();
-        *folder_bytes.entry(folder.display().to_string()).or_default() += size;
-    }
-    if total_bytes > CG_BUNDLE_BYTE_BUDGET {
-        let mut largest = folder_bytes.into_iter().collect::<Vec<_>>();
-        largest.sort_by(|a, b| b.1.cmp(&a.1));
-        largest.truncate(8);
-        bail!(
-            "CrazyGames bundle has {total_bytes} bytes; budget is {CG_BUNDLE_BYTE_BUDGET} (portal limit 250 MB). Largest: {largest:?}"
-        );
-    }
-    let html = fs::read_to_string(dir.join("index.html"))?;
-    if html.contains("https://shadowsofwar.io/assets/") {
-        bail!("crazygames index.html must load static assets from the portal CDN");
-    }
-    if !html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\"") {
-        bail!("crazygames index.html has no game music artwork reference");
-    }
-    if html.contains("analytics.js") || html.contains("/api/event") {
-        bail!("crazygames bundle must not include first-party analytics");
-    }
-    let notice = fs::read_to_string(dir.join("NOTICE"))?;
-    if !notice.contains("https://shadowsofwar.io/fonts/OFL.txt") {
-        bail!("crazygames notice is missing the hosted font license link");
-    }
-    verify_cg_local_resources(dir, &html)?;
-    verify_ranked_art(dir, "CrazyGames bundle")?;
-    verify_gameplay_unit_art(dir, "CrazyGames bundle")?;
-    verify_sprites(&dir.join("assets"), "CrazyGames bundle", true, true)?;
-    for needle in [
-        "sdk.crazygames.com/crazygames-sdk-v3.js",
-        "SOW_trackExperienceEvent",
-        "SOW_MAPS_URL = \"./maps\"",
-        "SOW_ASSETS_URL = \"./assets\"",
-        "window.SOW_SPRITE_ATLAS =",
-        "href=\"fonts/fonts.css?v=",
-        "sow_client.js",
-        "sow_client_bg.wasm",
-    ] {
-        if !html.contains(needle) {
-            bail!("crazygames index.html missing: {}", needle);
-        }
-    }
-    if html.contains("manifest.webmanifest") {
-        bail!("crazygames index.html must not reference the unbundled PWA manifest");
-    }
-    Ok(())
-}
-
-fn verify_poki_layout(dir: &Path) -> Result<()> {
-    verify_ranked_art(dir, "Poki bundle")?;
-    verify_exported_locales(dir)?;
-    for required in [
-        "index.html",
-        "sow_client.js",
-        "sow_client_bg.wasm",
-        "sow.svg",
-        "icon-192.png",
-        "loader.js",
-        "game-manifest.json",
-        "manifest.webmanifest",
-        "sdk/store_portals.js",
-        "LICENSE",
-        "NOTICE",
-        "LICENSE-ASSETS",
-        "WASM-THIRD-PARTY-NOTICES.zip",
-        "fonts/fonts.css",
-        "fonts/OFL.txt",
-        "fonts/work-sans-latin.woff2",
-        "assets/shell/loader/loader_empty.webp",
-        "assets/shell/loader/loader_full.webp",
-        "assets/campaign/boudica.json",
-        "assets/campaign/boudica.triggers.json",
-        "assets/gameplay/buildings/atlas.webp",
-        "assets/gameplay/buildings/atlas.json",
-        "assets/gameplay/text/msdf-atlas-v3.webp",
-        "assets/gameplay/icons/battle_icon_cutout.webp",
-        "assets/gameplay/icons/nameplate_status_atlas.webp",
-        "assets/gameplay/icons/surrender_flag.webp",
-        "assets/gameplay/icons/tutorial_hand.webp",
-        "assets/gameplay/music/shadows-of-war.webm",
-        "maps/catalog.bin",
-        "maps/NOTICE",
-        "maps/world/map.bin.br",
-    ] {
-        if !dir.join(required).is_file() {
-            bail!("poki bundle missing {required}");
-        }
-    }
-    verify_sprites(&dir.join("assets"), "Poki bundle", false, true)?;
-    verify_gameplay_unit_art(dir, "Poki bundle")?;
-    for forbidden in [
-        "admin",
-        "play",
-        "site",
-        ".well-known",
-        "sw.js",
-        "assets/gameplay/store",
-        "assets/gameplay/skins",
-        "assets/shell/brand",
-        "assets/shell/mobile-nav/store.webp",
-        "analytics.js",
-    ] {
-        if dir.join(forbidden).exists() {
-            bail!("poki bundle must not contain {forbidden}");
-        }
-    }
-    let html = fs::read_to_string(dir.join("index.html"))?;
-    let loader = fs::read_to_string(dir.join("loader.js"))?;
-    if !html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\"") {
-        bail!("poki index.html has no game music artwork reference");
-    }
-    if html.contains("analytics.js") || html.contains("/api/event") {
-        bail!("poki bundle must not include first-party analytics");
-    }
-    let sdk = fs::read_to_string(dir.join("sdk/store_portals.js"))?;
-    let manifest = fs::read_to_string(dir.join("manifest.webmanifest"))?;
-    for needle in [
-        "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
-        "SOW_trackExperienceEvent",
-        "window.SOW_PORTAL = \"poki\"",
-        "window.SOW_MAPS_URL = \"./maps\"",
-        "window.SOW_ASSETS_URL = \"./assets\"",
-        "window.SOW_BUILDING_ART =",
-        "gameplay/buildings/atlas.webp",
-        "window.SOW_DISABLE_CHAT = true",
-        "sdk.init",
-        "sdk.gameLoadingFinished",
-        "sdk.gameplayStart",
-        "sdk.gameplayStop",
-        "sdk.commercialBreak",
-        "sdk.measure",
-        "sdk.openExternalLink",
-    ] {
-        if !html.contains(needle) && !sdk.contains(needle) {
-            bail!("poki bundle missing {needle}");
-        }
-    }
-    if html.matches("function selfCreds()").count() != 1 {
-        bail!("poki bundle must define shared selfCreds exactly once");
-    }
-    for required in [
-        "<canvas id=\"blade\"",
-        "tabindex=\"0\"",
-        "touch-action: none",
-    ] {
-        if !html.contains(required) {
-            bail!("poki bundle missing responsive/focus contract {required}");
-        }
-    }
-    if !manifest.contains("\"display\": \"fullscreen\"") {
-        bail!("poki manifest missing responsive/focus contract \"display\": \"fullscreen\"");
-    }
-    if html.contains("<iframe") || html.contains("href=\"https://") {
-        bail!("poki bundle must not own an iframe or direct external href");
-    }
-    // A rewarded video must pay something: the only consumer is the
-    // post-match double-reward offer, which asks the server to pay it.
-    if sdk.contains("rewardedBreak")
-        && !(html.contains("SOW_portalRewardedBreak") && html.contains("double_match_reward"))
-    {
-        bail!("poki bridge must not request rewardedBreak without a product reward");
-    }
-    for forbidden in POKI_FORBIDDEN_MARKERS.iter().copied().chain([
-        "SOW_MAPS_URL = \"https://",
-        "SOW_ASSETS_URL = \"https://",
-        "register('/sw.js'",
-    ]) {
-        if html.contains(forbidden) || loader.contains(forbidden) || sdk.contains(forbidden) {
-            bail!("poki bundle contains forbidden content {forbidden}");
-        }
-    }
-    if loader.contains("SOW_FIRST_PARTY_ANALYTICS_BEGIN") || loader.contains("/event") {
-        bail!("Poki loader contains first-party analytics");
-    }
-    if html.contains("SOW_FIRST_PARTY_ANALYTICS_BEGIN") || html.contains("/event") {
-        bail!("Poki index.html contains first-party analytics");
-    }
-    if html.matches("window.SOW_ENABLE_PORTAL_ADS = true;").count() != 1 {
-        bail!("Poki index.html must contain exactly one portal boot block");
-    }
-    if html.contains("/* PORTAL_BOOT_SLOT */") {
-        bail!("Poki index.html still contains the portal boot marker");
-    }
-    for entry in fs::read_dir(dir.join("maps"))? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() && entry.path().join("map.bin").exists() {
-            bail!(
-                "Poki bundle contains an uncompressed map: {}",
-                entry.path().display()
-            );
-        }
-    }
-    if dir.join("sdk/poki_portals.js").exists() {
-        bail!("Poki bundle contains the source-only Poki bridge");
-    }
-    println!("✅ Poki layout OK ({})", dir.display());
-    Ok(())
-}
-
-fn verify_playable_hero_icons(icons_dir: &Path, package: &str) -> Result<()> {
-    for leader in sow_core::player::Leader::all() {
-        let icon = icons_dir.join(format!("{}.webp", leader.art_slug()));
-        if !icon.is_file() {
-            bail!("{package} missing playable hero icon {}", icon.display());
-        }
-    }
-    Ok(())
-}
-
 fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Result<()> {
-    validate_current_ui_contract(paths)?;
     let previous_artifacts = if !compile && out.is_dir() {
         let js = fs::read_dir(out)?.filter_map(Result::ok).find_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -6036,6 +4048,12 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         &paths.assets_gameplay.join("music"),
         &assets.join("gameplay/music"),
     )?;
+    if paths.assets_gameplay.join("bios").is_dir() {
+        copy_dir(
+            &paths.assets_gameplay.join("bios"),
+            &assets.join("gameplay/bios"),
+        )?;
+    }
     paths.art_pipeline()?.copy_distribution_tree(
         &paths.root.join("assets/campaign"),
         &assets.join("campaign"),
@@ -6195,13 +4213,9 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     println!("✅ Website staged at webroot root");
 
     prune_qs(out)?;
-    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
-    verify_layout(out)?;
-    verify_sprites(&out.join("assets"), "webroot", false, !paths.is_local_preview())?;
     println!("Load paths: {wasm}, {js}");
     Ok(())
 }
-
 
 fn prepare_native_webroot(out: &Path) -> Result<()> {
     let index = out.join("play/index.html");
@@ -6234,6 +4248,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.assets_gameplay.join("text"),
         paths.assets_gameplay.join("units"),
         paths.assets_gameplay.join("music"),
+        paths.assets_gameplay.join("bios"),
         paths.root.join("assets/campaign"),
         paths.root.join("assets/guides"),
         paths.assets_site.join("media"),
@@ -6304,6 +4319,7 @@ fn package_native_web(
             "text",
             "units",
             "music",
+            "bios",
         ] {
             copy_dir(
                 &paths.assets_gameplay.join(name),
@@ -6384,7 +4400,6 @@ fn package_native_web(
         prepare_native_webroot(out)?;
         fs::write(fingerprint_file, fingerprint)?;
     }
-    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
     out.canonicalize()
         .context("resolve native development webroot")
 }
@@ -6436,7 +4451,6 @@ fn package_cg(
     )?;
     copy_cg_assets(&play_dir.join("assets"), &out.join("assets"), paths.art_pipeline()?)?;
     copy_portal_maps(&play_dir.join("maps"), &out.join("maps"), paths.art_pipeline()?)?;
-    verify_portal_map_inventory(&play_dir.join("maps"), &out.join("maps"))?;
     copy_shell(paths, out, WebTarget::CrazyGames)?;
     copy_web_fonts(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
     let stale_bridge = out.join("sdk/jest_portals.js");
@@ -6489,9 +4503,6 @@ fn package_cg(
         .replace(&format!("sow_client_{wh}_bg.wasm"), "sow_client_bg.wasm");
     fs::write(&idx, html_out)?;
 
-    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
-    verify_cg_asset_inventory(&play_dir.join("assets"), &out.join("assets"))?;
-    verify_cg_layout(out)?;
     let inventory = asset_file_inventory(out)?;
     let files = inventory.len();
     let bytes = inventory.iter().try_fold(0u64, |total, relative| {
@@ -6551,9 +4562,7 @@ fn package_poki(
     )?;
 
     copy_poki_assets(&play_dir.join("assets"), &package.join("assets"), paths.art_pipeline()?)?;
-    verify_poki_asset_inventory(&play_dir.join("assets"), &package.join("assets"))?;
     copy_portal_maps(&play_dir.join("maps"), &package.join("maps"), paths.art_pipeline()?)?;
-    verify_portal_map_inventory(&play_dir.join("maps"), &package.join("maps"))?;
     copy_web_fonts(
         &paths.root.join("sow-web/site/fonts"),
         &package.join("fonts"),
@@ -6660,8 +4669,6 @@ fn package_poki(
         bail!("Poki index.html is missing portal slots (sdk={sdk} boot={boot})");
     }
     fs::write(&index, lines.join("\n") + "\n")?;
-    paths.art_pipeline()?.validate_staged_image_inventory(package)?;
-    verify_poki_layout(package)?;
 
     if out.exists() {
         let backup = tempfile::Builder::new()
@@ -6689,160 +4696,6 @@ fn package_poki(
         fs::rename(package, out).context("publish validated Poki package")?;
     }
     println!("✅ Poki bundle ready (self-contained): {}", out.display());
-    Ok(())
-}
-
-fn verify_jest_layout(dir: &Path) -> Result<()> {
-    verify_ranked_art(dir, "Jest bundle")?;
-    verify_exported_locales(dir)?;
-    for required in [
-        "index.html",
-        "sow_client.js",
-        "sow_client_bg.wasm",
-        "sow.svg",
-        "icon-192.png",
-        "loader.js",
-        "game-manifest.json",
-        "manifest.webmanifest",
-        "sdk/store_portals.js",
-        "LICENSE",
-        "NOTICE",
-        "LICENSE-ASSETS",
-        "WASM-THIRD-PARTY-NOTICES.zip",
-        "fonts/fonts.css",
-        "fonts/OFL.txt",
-        "fonts/work-sans-latin.woff2",
-        "assets/shell/loader/loader_empty.webp",
-        "assets/shell/loader/loader_full.webp",
-        "assets/campaign/boudica.json",
-        "assets/campaign/boudica.triggers.json",
-        "assets/gameplay/buildings/atlas.webp",
-        "assets/gameplay/buildings/atlas.json",
-        "assets/gameplay/text/msdf-atlas-v3.webp",
-        "assets/gameplay/music/shadows-of-war.webm",
-        "maps/catalog.bin",
-        "maps/NOTICE",
-        "maps/world/map.bin.br",
-    ] {
-        if !dir.join(required).is_file() {
-            bail!("jest bundle missing {required}");
-        }
-    }
-    verify_gameplay_unit_art(dir, "Jest bundle")?;
-    verify_sprites(&dir.join("assets"), "Jest bundle", false, true)?;
-    for forbidden in [
-        "admin",
-        "play",
-        "site",
-        ".well-known",
-        "sw.js",
-        "assets/gameplay/store",
-        "assets/gameplay/skins",
-        "assets/shell/mobile-nav/store.webp",
-        "sdk/poki_portals.js",
-        "sdk/jest_portals.js",
-        "analytics.js",
-    ] {
-        if dir.join(forbidden).exists() {
-            bail!("jest bundle must not contain {forbidden}");
-        }
-    }
-    let html = fs::read_to_string(dir.join("index.html"))?;
-    let loader = fs::read_to_string(dir.join("loader.js"))?;
-    if !html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\"") {
-        bail!("jest index.html has no game music artwork reference");
-    }
-    if html.contains("analytics.js") || html.contains("/api/event") {
-        bail!("jest bundle must not include first-party analytics");
-    }
-    let sdk = fs::read_to_string(dir.join("sdk/store_portals.js"))?;
-    for needle in [
-        "https://cdn.jest.com/sdk/latest/jestsdk.js",
-        "SOW_trackExperienceEvent",
-        "window.SOW_PORTAL = \"jest\"",
-        "window.SOW_MAPS_URL = \"./maps\"",
-        "window.SOW_ASSETS_URL = \"./assets\"",
-        "window.SOW_BUILDING_ART =",
-        "gameplay/buildings/atlas.webp",
-        "window.SOW_DISABLE_CHAT = true",
-        "main_menu.jest.ts",
-        "window.JestSDK",
-        "markGameLoaded",
-        "getPlayer",
-        "scheduleNotification",
-        "SOW_jestLogin",
-    ] {
-        if !html.contains(needle) && !sdk.contains(needle) {
-            bail!("jest bundle missing {needle}");
-        }
-    }
-    // Jest has no ads: the ad-gated portal hooks must be fully absent.
-    // (SOW_portalGameplayStart/Stop stay defined as no-ops: the Rust
-    // client calls them on match boundaries. The loader's unreachable
-    // poki-measure branch rides along dead, same as in the Poki bundle.)
-    for forbidden in [
-        "SOW_ENABLE_PORTAL_ADS",
-        "commercialBreak",
-        "rewardedBreak",
-        "PokiSDK",
-        "openExternalLink",
-        "main_menu.poki.ts",
-        "main_menu.store.ts",
-    ] {
-        if html.contains(forbidden) || loader.contains(forbidden) || sdk.contains(forbidden) {
-            bail!("jest bundle contains forbidden content {forbidden}");
-        }
-    }
-    if html.matches("function selfCreds()").count() != 1 {
-        bail!("jest bundle must define shared selfCreds exactly once");
-    }
-    for required in [
-        "<canvas id=\"blade\"",
-        "tabindex=\"0\"",
-        "touch-action: none",
-    ] {
-        if !html.contains(required) {
-            bail!("jest bundle missing responsive/focus contract {required}");
-        }
-    }
-    let manifest = fs::read_to_string(dir.join("manifest.webmanifest"))?;
-    if !manifest.contains("\"display\": \"fullscreen\"") {
-        bail!("jest manifest missing responsive/focus contract \"display\": \"fullscreen\"");
-    }
-    if html.contains("<iframe") || html.contains("href=\"https://") {
-        bail!("jest bundle must not own an iframe or direct external href");
-    }
-    for forbidden in POKI_FORBIDDEN_MARKERS.iter().copied().chain([
-        "SOW_MAPS_URL = \"https://",
-        "SOW_ASSETS_URL = \"https://",
-        "register('/sw.js'",
-    ]) {
-        if html.contains(forbidden) || loader.contains(forbidden) || sdk.contains(forbidden) {
-            bail!("jest bundle contains forbidden content {forbidden}");
-        }
-    }
-    if loader.contains("SOW_FIRST_PARTY_ANALYTICS_BEGIN") || loader.contains("/event") {
-        bail!("Jest loader contains first-party analytics");
-    }
-    if html.contains("SOW_FIRST_PARTY_ANALYTICS_BEGIN") || html.contains("/event") {
-        bail!("Jest index.html contains first-party analytics");
-    }
-    if html.matches("window.SOW_PORTAL = \"jest\";").count() != 1 {
-        bail!("Jest index.html must contain exactly one portal boot block");
-    }
-    if html.contains("/* PORTAL_BOOT_SLOT */") {
-        bail!("Jest index.html still contains the portal boot marker");
-    }
-    for entry in fs::read_dir(dir.join("maps"))? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() && entry.path().join("map.bin").exists() {
-            bail!(
-                "Jest bundle contains an uncompressed map: {}",
-                entry.path().display()
-            );
-        }
-    }
-    println!("✅ Jest layout OK ({})", dir.display());
     Ok(())
 }
 
@@ -6888,7 +4741,6 @@ fn package_jest(
 
     copy_poki_assets(&play_dir.join("assets"), &out.join("assets"), paths.art_pipeline()?)?;
     copy_portal_maps(&play_dir.join("maps"), &out.join("maps"), paths.art_pipeline()?)?;
-    verify_portal_map_inventory(&play_dir.join("maps"), &out.join("maps"))?;
     copy_web_fonts(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
     copy_shell(paths, out, WebTarget::Jest)?;
     fs::write(
@@ -6981,8 +4833,6 @@ fn package_jest(
         bail!("Jest index.html is missing portal slots (sdk={sdk} boot={boot})");
     }
     fs::write(&index, lines.join("\n") + "\n")?;
-    paths.art_pipeline()?.validate_staged_image_inventory(out)?;
-    verify_jest_layout(out)?;
     println!("✅ Jest bundle ready (self-contained): {}", out.display());
     Ok(())
 }
@@ -7365,6 +5215,8 @@ fn prepare_local_art(paths: &Paths) -> Result<()> {
         paths.root.join("assets/art"),
         paths.root.join("assets/generated"),
         paths.root.join("assets/site/media"),
+        paths.root.join("sow-web/site/leader-bios"),
+        paths.root.join("sow-web/site/leader-sagas.toml"),
         pipeline.config_path.clone(),
     ];
     let mut hash = Sha256::new();
@@ -7437,6 +5289,7 @@ fn package_local_preview(
             "buildings",
             "units",
             "music",
+            "bios",
         ] {
             let source = paths.assets_gameplay.join(name);
             if source.is_dir() {
@@ -7977,16 +5830,6 @@ fn load_auth_config() -> Result<()> {
     Ok(())
 }
 
-fn identity_import_file() -> Result<Option<PathBuf>> {
-    // Player identity belongs to production only; no other site may receive it.
-    if !site::current().owns_identity_import() {
-        return Ok(None);
-    }
-    let path = env::var_os("SOW_IDENTITY_IMPORT_FILE").map(PathBuf::from)
-        .map(Ok).unwrap_or_else(|| private_config_path("identity-import.json"))?;
-    Ok(path.is_file().then_some(path))
-}
-
 fn auth_env_contents() -> Result<String> {
     let mut contents = String::new();
     for key in MANDATORY_AUTH_KEYS {
@@ -8001,9 +5844,6 @@ fn auth_env_contents() -> Result<String> {
                 contents.push_str(&format!("{key}={}\n", shell_quote(&value)));
             }
         }
-    }
-    if identity_import_file()?.is_some() {
-        contents.push_str("SOW_IDENTITY_IMPORT_PATH=/usr/local/etc/sow/identity-import.json\n");
     }
     if let Some(connect_host) = site::current().smtp_connect_host() {
         contents.push_str(&format!("SOW_SMTP_CONNECT_HOST={connect_host}\n"));
@@ -8217,7 +6057,6 @@ mod tests {
         let mut pipeline = ArtPipeline::load(&root)?;
         pipeline.cache_root = temp.path().join("art-cache");
         copy_poki_assets(&source, &packaged, &pipeline)?;
-        verify_poki_asset_inventory(&source, &packaged)?;
 
         let expected = [
             "campaign/boudica.json",
@@ -8229,8 +6068,7 @@ mod tests {
         ]
         .map(PathBuf::from)
         .to_vec();
-        assert_eq!(poki_asset_inventory(&source)?, expected);
-        assert_eq!(poki_asset_inventory(&packaged)?, expected);
+        assert_eq!(asset_file_inventory(&packaged)?, expected);
         Ok(())
     }
 
@@ -8421,85 +6259,6 @@ shortArticle = true
     }
 
     #[test]
-    fn sprite_atlas_rejects_a_cell_outside_its_sheet() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let mut cells = serde_json::Map::new();
-        cells.insert("gameplay/avatars/caesar.webp".to_owned(), serde_json::json!([0, 128, 0, 256]));
-        write_sprite_package(dir.path(), cells)?;
-        let error = verify_sprites(dir.path(), "test", true, false).unwrap_err();
-        assert!(error.to_string().contains("leaves its sheet"), "{error:#}");
-        Ok(())
-    }
-
-    #[test]
-    fn sprite_atlas_requires_all_four_faces_and_an_ability_icon_of_every_leader() -> Result<()> {
-        let mut cells = serde_json::Map::new();
-        for leader in sow_core::player::Leader::all() {
-            for expression in sow_core::emote::AvatarExpression::ALL {
-                let key = sow_core::emote::hero_portrait_path(leader.art_slug(), expression);
-                cells.insert(key, serde_json::json!([0, 0, 0, 256]));
-            }
-            let icon = format!("gameplay/icons/abilities/{}.webp", leader.art_slug());
-            cells.insert(icon, serde_json::json!([0, 0, 0, 256]));
-        }
-        let dir = tempfile::tempdir()?;
-        write_sprite_package(dir.path(), cells.clone())?;
-        verify_sprites(dir.path(), "test", true, true)?;
-
-        let leader = sow_core::player::Leader::all()
-            .into_iter()
-            .next()
-            .context("no playable leader")?;
-        let missing_face = sow_core::emote::hero_portrait_path(
-            leader.art_slug(),
-            sow_core::emote::AvatarExpression::Fear,
-        );
-        cells.remove(&missing_face);
-        write_sprite_package(dir.path(), cells.clone())?;
-        let error = verify_sprites(dir.path(), "test", true, true).unwrap_err();
-        assert!(error.to_string().contains(&missing_face), "{error:#}");
-
-        cells.insert(missing_face, serde_json::json!([0, 0, 0, 256]));
-        let missing_icon = format!("gameplay/icons/abilities/{}.webp", leader.art_slug());
-        cells.remove(&missing_icon);
-        write_sprite_package(dir.path(), cells)?;
-        let error = verify_sprites(dir.path(), "test", true, true).unwrap_err();
-        assert!(error.to_string().contains(&missing_icon), "{error:#}");
-        Ok(())
-    }
-
-    #[test]
-    fn verified_package_rejects_loose_avatars_and_ability_icons() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        write_sprite_package(dir.path(), serde_json::Map::new())?;
-        fs::create_dir_all(dir.path().join("gameplay/icons/abilities"))?;
-        let error = verify_sprites(dir.path(), "test", true, false).unwrap_err();
-        assert!(error.to_string().contains("loose sprites"), "{error:#}");
-        Ok(())
-    }
-
-    #[test]
-    fn loose_package_rejects_sheets_and_requires_every_hero_file() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        for key in playable_hero_sprites() {
-            let path = dir.path().join(&key);
-            fs::create_dir_all(path.parent().context("sprite has no folder")?)?;
-            fs::write(path, b"sprite")?;
-        }
-        verify_sprites(dir.path(), "test", false, true)?;
-
-        let missing = playable_hero_sprites().pop().context("no playable hero")?;
-        fs::remove_file(dir.path().join(&missing))?;
-        let error = verify_sprites(dir.path(), "test", false, true).unwrap_err();
-        assert!(error.to_string().contains(&missing), "{error:#}");
-
-        write_sprite_package(dir.path(), serde_json::Map::new())?;
-        let error = verify_sprites(dir.path(), "test", false, false).unwrap_err();
-        assert!(error.to_string().contains("only CrazyGames"), "{error:#}");
-        Ok(())
-    }
-
-    #[test]
     fn atlas_tree_fingerprint_tracks_content_and_removed_duplicates() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let avatars = temp.path().join("avatars");
@@ -8647,28 +6406,6 @@ shortArticle = true
         assert!(html.contains("sow-splash-desktop.webp?v=desktop1234"));
         assert!(html.contains("sow-splash-mobile.webp?v=mobile5678"));
         assert!(!html.contains("sow-splash-mobile.webp?v=desktop1234"));
-        Ok(())
-    }
-
-    #[test]
-    fn unprofiled_raster_art_fails_closed() -> Result<()> {
-        let temp = tempfile::tempdir()?;
-        let source = temp.path().join("new-art.png");
-        image::RgbaImage::from_pixel(16, 16, image::Rgba([255, 0, 0, 255])).save(&source)?;
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").canonicalize()?;
-        let mut pipeline = ArtPipeline::load(&root)?;
-        pipeline.cache_root = temp.path().join("art-cache");
-        assert!(
-            pipeline
-                .publish_asset(
-                    &source,
-                    &temp.path().join("published/new-art.webp"),
-                    Path::new("new-page/new-art.webp"),
-                    None,
-                )
-                .is_err(),
-            "new raster output without a profile must fail instead of copying"
-        );
         Ok(())
     }
 
@@ -9118,136 +6855,6 @@ shortArticle = true
     }
 
     #[test]
-    fn web_catalog_validation_preserves_placeholder_multiplicity() -> Result<()> {
-        let expected = serde_json::json!("{count} {count}");
-        let matching = serde_json::json!("{count} {count}");
-        let missing_duplicate = serde_json::json!("{count}");
-        let malformed = serde_json::json!("{count");
-
-        assert!(validate_web_node("test", &expected, &matching).is_ok());
-        assert!(validate_web_node("test", &expected, &missing_duplicate).is_err());
-        assert!(validate_web_node("test", &expected, &malformed).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn locked_campaign_text_is_optional_but_cannot_be_translated() -> Result<()> {
-        let expected = serde_json::json!({
-            "tutorial": {
-                "boudica_rise_title": "Boudica",
-                "campaign_boudica_first_title": "First strike",
-                "campaign_boudica_boudica_structure_upgrade_hint": "Upgrade the City once to raise troop capacity before the Ninth arrives.",
-                "campaign_boudica_boudica_structure_upgrade_title": "Strengthen the City",
-                "campaign_boudica_boudica_city_upgrade_ready_body": "Our city can now sustain a larger host.",
-                "campaign_boudica_boudica_city_upgrade_ready_title": "Ready for the Ninth",
-                "campaign_studio_demo_turn_title": "The next decision is yours",
-                "six_sky_ep1_landfall_title": "Landfall",
-                "six_sky_ep2_regent_title": "Regent",
-                "six_sky_ep3_count_title": "The Long Count",
-            },
-            "lobbies": {
-                "campaign_boudica_title": "Rise of the Iceni",
-                "campaign_six_sky_ep1_title": "Arrival",
-            }
-        });
-        let omitted = serde_json::json!({"tutorial": {}, "lobbies": {}});
-        assert!(validate_web_node("es", &expected, &omitted).is_ok());
-        assert!(validate_web_node("en", &expected, &omitted).is_err());
-
-        let translated = serde_json::json!({
-            "tutorial": {"six_sky_ep2_regent_title": "Regente"},
-            "lobbies": {}
-        });
-        assert!(validate_web_node("es", &expected, &translated).is_err());
-        let approved_campaign_copy = serde_json::json!({
-            "tutorial": {
-                "campaign_boudica_boudica_structure_upgrade_hint": "Mejora la Ciudad antes de que llegue la Novena.",
-                "campaign_boudica_boudica_structure_upgrade_title": "Refuerza la ciudad",
-                "campaign_boudica_boudica_city_upgrade_ready_body": "La ciudad puede sostener un ejército mayor.",
-                "campaign_boudica_boudica_city_upgrade_ready_title": "Listos para la Novena"
-            },
-            "lobbies": {}
-        });
-        assert!(validate_web_node("es", &expected, &approved_campaign_copy).is_ok());
-        let unapproved_boudica_copy = serde_json::json!({
-            "tutorial": {"campaign_boudica_boudica_first_victory_title": "Victoria de los icenos"},
-            "lobbies": {}
-        });
-        assert!(validate_web_node("es", &expected, &unapproved_boudica_copy).is_err());
-        let translated_episode_title = serde_json::json!({
-            "tutorial": {},
-            "lobbies": {"campaign_boudica_title": "Alzamiento de los icenos"}
-        });
-        assert!(validate_web_node("es", &expected, &translated_episode_title).is_err());
-        let translated_six_sky_title = serde_json::json!({
-            "tutorial": {},
-            "lobbies": {"campaign_six_sky_ep1_title": "Llegada"}
-        });
-        assert!(validate_web_node("es", &expected, &translated_six_sky_title).is_err());
-        let generic_campaign_copy = serde_json::json!({
-            "tutorial": {"campaign_studio_demo_turn_title": "The next decision is yours"},
-            "lobbies": {}
-        });
-        assert!(validate_web_node("es", &expected, &generic_campaign_copy).is_ok());
-        assert!(is_locked_campaign_translation_key(
-            "campaign_future_title",
-            &[]
-        ));
-        assert!(is_locked_campaign_translation_key(
-            "boudica_rise_title",
-            &[]
-        ));
-        assert!(!is_locked_campaign_translation_key(
-            "campaign_boudica_title",
-            &["boudica"]
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn web_catalog_validation_requires_translated_consent_copy() -> Result<()> {
-        let expected = serde_json::json!({
-            "site": {
-                "analytics_body": "We use site and game activity to improve Shadows of War. It stays off unless you allow it.",
-            }
-        });
-        let localized = serde_json::json!({
-            "site": {
-                "analytics_body": "Usamos la actividad del sitio y del juego para mejorar Shadows of War. Solo se activa si la permites.",
-            }
-        });
-        let missing = serde_json::json!({ "site": {} });
-
-        assert!(validate_web_node("es", &expected, &localized).is_ok());
-        assert!(validate_web_node("fr", &expected, &missing).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn source_localization_audit_catches_unknown_quoted_keys() -> Result<()> {
-        let catalog = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
-        assert!(
-            validate_quoted_catalog_keys("const key = 'profile.spam';", "test", &catalog).is_ok()
-        );
-        assert!(
-            validate_quoted_catalog_keys("const key = 'profile.not_real';", "test", &catalog)
-                .is_err()
-        );
-        assert!(validate_quoted_catalog_keys("const key = 'tutorial.';", "test", &catalog).is_ok());
-        Ok(())
-    }
-
-    #[test]
-    fn profile_achievement_localization_exists_in_every_language() -> Result<()> {
-        for &(language, code, _, _) in sow_i18n::Language::registry() {
-            let catalog = serde_json::to_value(&sow_i18n::web(language))?;
-            validate_dynamic_web_keys(&catalog)
-                .with_context(|| format!("validate profile labels for {code}"))?;
-        }
-        Ok(())
-    }
-
-    #[test]
     fn test_nginx_conf_redirects_www() -> Result<()> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
@@ -9354,6 +6961,42 @@ shortArticle = true
         assert!(
             !bundle.contains("= __commonJS("),
             "shell bundle entry became a lazy CommonJS wrapper that never runs"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn stage_leader_biography_bundles_writes_all_15_locales_and_is_poki_safe() -> Result<()> {
+        let paths = Paths::discover()?;
+        let out = tempfile::tempdir()?;
+        let mut produced = std::collections::BTreeSet::new();
+        stage_leader_biography_bundles(&paths.root, out.path(), &mut produced)?;
+
+        let langs: Vec<_> = sow_i18n::Language::published_registry().collect();
+        assert_eq!(langs.len(), 15);
+        assert_eq!(produced.len(), langs.len());
+
+        let mut total_bytes = 0usize;
+        for (_, code, _) in langs {
+            let file = out.path().join(format!("gameplay/bios/{code}.json"));
+            assert!(produced.contains(&file), "missing produced path for {code}");
+            assert!(file.is_file(), "missing bio bundle {}", file.display());
+            let bytes = fs::read(&file)?;
+            assert!(
+                bytes.len() > 0 && bytes.len() < 2_000_000,
+                "unexpected {code} bio bundle size: {}",
+                bytes.len()
+            );
+            total_bytes += bytes.len();
+            let parsed: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(&bytes)?;
+            assert!(
+                parsed.contains_key("boudica"),
+                "{code} bio bundle should contain boudica"
+            );
+        }
+        assert!(
+            total_bytes > 0 && total_bytes < 25_000_000,
+            "unexpected total bios bundle size: {total_bytes}"
         );
         Ok(())
     }

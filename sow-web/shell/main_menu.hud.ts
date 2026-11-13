@@ -86,6 +86,8 @@ type LeaderboardRow = {
     avatarImg: HTMLImageElement;
     avatarBadge: HTMLElement;
     name: HTMLElement;
+    botBadge?: HTMLElement;
+    duelistBadge?: HTMLElement;
     territory: HTMLElement;
     troops: HTMLElement;
     gpsBtn: HTMLButtonElement;
@@ -206,6 +208,8 @@ type HudRefs = {
     rows: HTMLElement;
     lbSearch: HTMLInputElement;
     lbEmpty: HTMLElement;
+    lbToolbar: HTMLElement;
+    lbTeamWrap: HTMLElement;
     inbox: HTMLElement;
     inboxRows: HTMLElement;
     inboxClose: HTMLElement;
@@ -238,7 +242,6 @@ type HudRefs = {
     betrayalIdentity: PlayerIdentityParts;
     surrender: HTMLElement;
     surrenderTitle: HTMLElement;
-    surrenderDesc: HTMLElement;
     surrenderStats: HTMLElement;
     surrenderStatValues: HudEndgameRefs;
     surrenderPortrait: HTMLImageElement;
@@ -342,6 +345,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const transferRequestReadyAt: Record<number, number> = Object.create(null);
     let leaderboardRenderKey = "";
     let leaderboardFilterQuery = "";
+    let leaderboardTeamFilter: "all" | "Red" | "Blue" = "all";
+    let leaderboardTypeFilter: "all" | "humans" | "bots" = "all";
+    let leaderboardSortMode: "rank" | "troops" | "kills" | "alpha" = "rank";
+    let leaderboardIs1v1 = false;
     let pendingCounterAttacks: Record<string, number> = Object.create(null);
     let lastLeaderboardTeams: HudLeaderboardTeam[] = [];
     let lastLeaderboardPlayersPayload: HudLeaderboardPlayer[] | null = null;
@@ -872,11 +879,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return String(Math.max(0, Math.trunc(Number(value) || 0)));
     }
 
-    function endgameStatsMarkup(prefix: string): string {
-        return (
-            '<div class="sow-hud__endgame-stats" id="sow-hud-' +
-            prefix +
-            '-stats">' +
+    function endgameStatsMarkup(prefix: string, count: number = 5): string {
+        let html = '<div class="sow-hud__endgame-stats" id="sow-hud-' + prefix + '-stats">';
+        html +=
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
             SOW_t("endgame.stat_kills") +
             '" title="' +
@@ -885,7 +890,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudIcon("attack", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
             prefix +
-            '-kills">0</b></div>' +
+            '-kills">0</b></div>';
+        html +=
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
             SOW_t("endgame.stat_assists") +
             '" title="' +
@@ -894,7 +900,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             statusIcon("allied", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
             prefix +
-            '-assists">0</b></div>' +
+            '-assists">0</b></div>';
+        html +=
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
             SOW_t("endgame.stat_max_territory") +
             '" title="' +
@@ -903,27 +910,31 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudIcon("globe", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
             prefix +
-            '-max-territory">0</b></div>' +
-            '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-            SOW_t("endgame.stat_gold_received") +
-            '" title="' +
-            SOW_t("endgame.stat_gold_received") +
-            '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
-            hudIcon("gold", "sow-hud__inline-icon") +
-            '</span><b id="sow-hud-' +
-            prefix +
-            '-gold-received">0</b></div>' +
-            '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-            SOW_t("endgame.stat_troops_received") +
-            '" title="' +
-            SOW_t("endgame.stat_troops_received") +
-            '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
-            hudIcon("troops", "sow-hud__inline-icon") +
-            '</span><b id="sow-hud-' +
-            prefix +
-            '-troops-received">0</b></div>' +
-            "    </div>"
-        );
+            '-max-territory">0</b></div>';
+        if (count >= 5) {
+            html +=
+                '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
+                SOW_t("endgame.stat_gold_received") +
+                '" title="' +
+                SOW_t("endgame.stat_gold_received") +
+                '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+                hudIcon("gold", "sow-hud__inline-icon") +
+                '</span><b id="sow-hud-' +
+                prefix +
+                '-gold-received">0</b></div>';
+            html +=
+                '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
+                SOW_t("endgame.stat_troops_received") +
+                '" title="' +
+                SOW_t("endgame.stat_troops_received") +
+                '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+                hudIcon("troops", "sow-hud__inline-icon") +
+                '</span><b id="sow-hud-' +
+                prefix +
+                '-troops-received">0</b></div>';
+        }
+        html += "    </div>";
+        return html;
     }
 
     function endgameStatRefs(prefix: string): HudEndgameRefs {
@@ -1345,6 +1356,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             rows: requiredHudElement("sow-hud-lb-rows"),
             lbSearch: requiredHudInput("sow-hud-lb-search"),
             lbEmpty: requiredHudElement("sow-hud-lb-empty"),
+            lbToolbar: requiredHudElement("sow-hud-lb-toolbar"),
+            lbTeamWrap: requiredHudElement("sow-hud-lb-team-wrap"),
             inbox: requiredHudElement("sow-hud-inbox"),
             inboxRows: requiredHudElement("sow-hud-inbox-rows"),
             inboxClose: requiredHudElement("sow-hud-inbox-close"),
@@ -1377,7 +1390,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             betrayalIdentity: createPlayerIdentity(),
             surrender: requiredHudElement("sow-hud-surrender-modal"),
             surrenderTitle: requiredHudElement("sow-hud-surrender-title"),
-            surrenderDesc: requiredHudElement("sow-hud-surrender-desc"),
             surrenderStats: requiredHudElement("sow-hud-surrender-stats"),
             surrenderStatValues: endgameStatRefs("surrender"),
             surrenderPortrait: requiredHudImage("sow-hud-surrender-portrait"),
@@ -1421,6 +1433,128 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             dockStack: requiredHudElement("sow-hud-dock-stack"),
             mapFeedback: document.createElement("div"),
         };
+    }
+
+    function compareLeaderboardPlayers(
+        a: HudLeaderboardPlayer,
+        b: HudLeaderboardPlayer,
+        mode: "rank" | "troops" | "kills" | "alpha",
+        is1v1: boolean,
+    ): number {
+        if (is1v1) {
+            const aHuman = !a.is_bot;
+            const bHuman = !b.is_bot;
+            if (aHuman !== bHuman) {
+                return aHuman ? -1 : 1;
+            }
+        }
+        if (mode === "troops") {
+            const diff = (b.troops || 0) - (a.troops || 0);
+            if (diff !== 0) return diff;
+        } else if (mode === "kills") {
+            const diff = (b.kills || 0) - (a.kills || 0);
+            if (diff !== 0) return diff;
+        } else if (mode === "alpha") {
+            const diff = (a.name || "").localeCompare(b.name || "");
+            if (diff !== 0) return diff;
+        } else {
+            const rankA = Number.isFinite(Number(a.rank)) ? Number(a.rank) : 9999;
+            const rankB = Number.isFinite(Number(b.rank)) ? Number(b.rank) : 9999;
+            const diff = rankA - rankB;
+            if (diff !== 0) return diff;
+        }
+        const terrDiff = (b.territory_pct || 0) - (a.territory_pct || 0);
+        if (terrDiff !== 0) return terrDiff;
+        return (b.troops || 0) - (a.troops || 0);
+    }
+
+    function renderLeaderboardToolbar(): string {
+        const teamDropdown = SOW_renderDropdown({
+            key: "lb-team",
+            name: "lb_team",
+            label: SOW_t("hud.filter_team") || "Team",
+            icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/></svg>',
+            value: leaderboardTeamFilter,
+            options: [
+                {
+                    value: "all",
+                    label: SOW_t("hud.filter_all_teams") || "All Teams",
+                    shortLabel: SOW_t("hud.filter_team") || "Team",
+                },
+                {
+                    value: "Red",
+                    label: SOW_t("hud.filter_red_team") || "Red Team",
+                },
+                {
+                    value: "Blue",
+                    label: SOW_t("hud.filter_blue_team") || "Blue Team",
+                },
+            ],
+        });
+
+        const typeDropdown = SOW_renderDropdown({
+            key: "lb-type",
+            name: "lb_type",
+            label: SOW_t("hud.filter_type") || "Players",
+            icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+            value: leaderboardTypeFilter,
+            options: [
+                {
+                    value: "all",
+                    label: SOW_t("hud.filter_all_types") || "All",
+                    shortLabel: SOW_t("hud.filter_type") || "Players",
+                },
+                {
+                    value: "humans",
+                    label: SOW_t("hud.filter_humans") || "Humans",
+                },
+                {
+                    value: "bots",
+                    label: SOW_t("hud.filter_bots") || "Bots",
+                },
+            ],
+        });
+
+        const sortDropdown = SOW_renderDropdown({
+            key: "lb-sort",
+            name: "lb_sort",
+            label: SOW_t("hud.filter_sort") || "Sort",
+            icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>',
+            value: leaderboardSortMode,
+            options: [
+                {
+                    value: "rank",
+                    label: SOW_t("hud.sort_rank") || "Rank",
+                    shortLabel: SOW_t("hud.filter_sort") || "Sort",
+                },
+                {
+                    value: "troops",
+                    label: SOW_t("hud.sort_troops") || "Troops",
+                },
+                {
+                    value: "kills",
+                    label: SOW_t("hud.sort_kills") || "Kills",
+                },
+                {
+                    value: "alpha",
+                    label: SOW_t("hud.sort_alpha") || "A-Z",
+                },
+            ],
+        });
+
+        return (
+            '<div class="sow-hud__leaderboard-toolbar" id="sow-hud-lb-toolbar">' +
+            '  <div class="sow-hud__lb-filter-item sow-hud__lb-filter-team" id="sow-hud-lb-team-wrap" hidden>' +
+            teamDropdown +
+            '  </div>' +
+            '  <div class="sow-hud__lb-filter-item sow-hud__lb-filter-type">' +
+            typeDropdown +
+            '  </div>' +
+            '  <div class="sow-hud__lb-filter-item sow-hud__lb-filter-sort">' +
+            sortDropdown +
+            '  </div>' +
+            '</div>'
+        );
     }
 
     function ensureHudDom() {
@@ -1829,6 +1963,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             SOW_t("hud.close_rankings") +
             '">✕</button>' +
             "  </div>" +
+            renderLeaderboardToolbar() +
             '  <div class="sow-hud__sheet-body sow-hud__leaderboard-rows" id="sow-hud-lb-rows"></div>' +
             '  <p class="sow-hud__leaderboard-empty" id="sow-hud-lb-empty" hidden>' +
             SOW_t("hud.no_rankings_found") +
@@ -1925,7 +2060,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "  </section>" +
             "</div>" +
             '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-surrender-modal">' +
-            '  <section class="sow-hud__endgame-card sow-hud__exit-card" data-result="exit" role="dialog" aria-modal="true" aria-labelledby="sow-hud-surrender-banner" aria-describedby="sow-hud-surrender-desc">' +
+            '  <section class="sow-hud__endgame-card sow-hud__exit-card" data-result="exit" role="dialog" aria-modal="true" aria-labelledby="sow-hud-surrender-banner">' +
             '    <div class="sow-hud__endgame-hero">' +
             '      <div class="sow-hud__endgame-portrait-wrap">' +
             '        <img class="sow-hud__endgame-portrait" id="sow-hud-surrender-portrait" src="" alt="' +
@@ -1940,11 +2075,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</span></h2>" +
             "      </div>" +
             "    </div>" +
-            '    <p class="sow-hud__endgame-desc sow-hud__exit-copy" id="sow-hud-surrender-desc">' +
-            SOW_t("endgame.leave_rewards_saved") +
-            "</p>" +
             "    " +
-            endgameStatsMarkup("surrender") +
+            endgameStatsMarkup("surrender", 3) +
             '    <div class="sow-hud__endgame-actions">' +
             '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">' +
             SOW_t("endgame.cancel") +
@@ -2243,6 +2375,33 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         hudRoot.addEventListener("change", function (event) {
             const target = event.target;
             if (!(target instanceof Element)) return;
+            const lbTeamInput = target.closest<HTMLInputElement>("input[name='lb_team']");
+            if (lbTeamInput) {
+                leaderboardTeamFilter = (lbTeamInput.value as "all" | "Red" | "Blue") || "all";
+                const dropdown = lbTeamInput.closest<HTMLElement>(".sow-control-dropdown");
+                if (dropdown) dropdown.classList.toggle("is-filtered", leaderboardTeamFilter !== "all");
+                applyLeaderboardFilter();
+                return;
+            }
+            const lbTypeInput = target.closest<HTMLInputElement>("input[name='lb_type']");
+            if (lbTypeInput) {
+                leaderboardTypeFilter = (lbTypeInput.value as "all" | "humans" | "bots") || "all";
+                const dropdown = lbTypeInput.closest<HTMLElement>(".sow-control-dropdown");
+                if (dropdown) dropdown.classList.toggle("is-filtered", leaderboardTypeFilter !== "all");
+                applyLeaderboardFilter();
+                return;
+            }
+            const lbSortInput = target.closest<HTMLInputElement>("input[name='lb_sort']");
+            if (lbSortInput) {
+                leaderboardSortMode = (lbSortInput.value as "rank" | "troops" | "kills" | "alpha") || "rank";
+                const dropdown = lbSortInput.closest<HTMLElement>(".sow-control-dropdown");
+                if (dropdown) dropdown.classList.toggle("is-filtered", leaderboardSortMode !== "rank");
+                leaderboardRenderKey = "";
+                if (lastLeaderboardPlayersPayload) {
+                    updateLeaderboard(lastLeaderboardPlayersPayload, lastLeaderboardTeamsPayload || lastLeaderboardTeams);
+                }
+                return;
+            }
             const localeInput = target.closest<HTMLInputElement>("[data-setting='locale']");
             if (localeInput) {
                 if (typeof window.SOW_setLocale === "function") void window.SOW_setLocale(localeInput.value);
@@ -4396,12 +4555,33 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     function updateLeaderboard(players: HudLeaderboardPlayer[], teams: HudLeaderboardTeam[]): void {
         if (!hudRefs || !hudRefs.rows) return;
         lastLeaderboardTeams = teams;
+
+        const hasTeams = (teams && teams.length > 0) || (players || []).some((p) => Boolean(p.team));
+        if (hudRefs.lbTeamWrap) {
+            hudRefs.lbTeamWrap.hidden = !hasTeams;
+            if (!hasTeams && leaderboardTeamFilter !== "all") {
+                leaderboardTeamFilter = "all";
+                const teamInput = hudRefs.lbTeamWrap.querySelector<HTMLInputElement>("input[name='lb_team']");
+                if (teamInput) teamInput.value = "all";
+                const teamDropdown = hudRefs.lbTeamWrap.querySelector<HTMLElement>(".sow-control-dropdown");
+                if (teamDropdown) teamDropdown.classList.remove("is-filtered");
+            }
+        }
+
         const teamPositions = new Map<string, number>();
         teams.forEach(function (team, idx) {
             teamPositions.set(String(team.team), idx);
         });
+
+        const is1v1 = (players || []).filter((p) => !p.is_bot).length === 2;
+        leaderboardIs1v1 = is1v1;
+
+        const sortedPlayers = [...(players || [])].sort((a, b) =>
+            compareLeaderboardPlayers(a, b, leaderboardSortMode, is1v1),
+        );
+
         const playerPositions = new Map<string, number>();
-        (players || []).forEach(function (player, idx) {
+        sortedPlayers.forEach(function (player, idx) {
             playerPositions.set(String(player.id), idx);
         });
         const teamRenderKey = teams
@@ -4409,7 +4589,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 return [idx, team.team, team.tile_count, team.territory_pct, team.members].join("|");
             })
             .join("\u001e");
-        const playerRenderKey = players
+        const playerRenderKey = sortedPlayers
             .map(function (player, idx) {
                 return [
                     idx,
@@ -4417,10 +4597,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     player.rank,
                     player.name,
                     player.troops,
+                    player.kills,
                     player.tile_count,
                     player.territory_pct,
                     player.is_alive,
                     player.is_me,
+                    player.is_bot,
+                    player.team,
                     player.can_trade,
                     player.leader,
                     player.avatar,
@@ -4429,11 +4612,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 ].join("|");
             })
             .join("\u001e");
-        const renderKey = teamRenderKey + "\u001d" + playerRenderKey;
+        const renderKey =
+            leaderboardSortMode +
+            "\u001c" +
+            (is1v1 ? "1v1" : "norm") +
+            "\u001c" +
+            teamRenderKey +
+            "\u001d" +
+            playerRenderKey;
         if (renderKey === leaderboardRenderKey) return;
         leaderboardRenderKey = renderKey;
         leaderboardWork = {
-            players,
+            players: sortedPlayers,
             teams,
             playerPositions,
             teamPositions,
@@ -4449,6 +4639,28 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     function updateLeaderboardCardFilter(card: HTMLElement): void {
         const q = leaderboardFilterQuery;
+        const isTeamSummary = card.classList.contains("sow-hud__team-summary");
+
+        if (leaderboardTeamFilter !== "all") {
+            const cardTeam = card.dataset.team || "";
+            if (cardTeam !== leaderboardTeamFilter) {
+                card.hidden = true;
+                return;
+            }
+        }
+
+        if (!isTeamSummary && leaderboardTypeFilter !== "all") {
+            const isBot = card.dataset.isBot === "true";
+            if (leaderboardTypeFilter === "humans" && isBot) {
+                card.hidden = true;
+                return;
+            }
+            if (leaderboardTypeFilter === "bots" && !isBot) {
+                card.hidden = true;
+                return;
+            }
+        }
+
         const name = (card.querySelector(".sow-hud__player-name")?.textContent || "").toLowerCase();
         const rank = (card.querySelector(".sow-hud__player-rank")?.textContent || "").toLowerCase();
         const matches = !q || name.includes(q) || rank.includes(q);
@@ -4460,7 +4672,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const hasVisibleRows =
             Object.values(leaderboardRows).some((row) => !row.card.hidden) ||
             Object.values(leaderboardTeamRows).some((row) => !row.card.hidden);
-        hudRefs.lbEmpty.hidden = hasVisibleRows || !leaderboardFilterQuery;
+        const isFiltered = Boolean(
+            leaderboardFilterQuery ||
+            leaderboardTeamFilter !== "all" ||
+            leaderboardTypeFilter !== "all",
+        );
+        hudRefs.lbEmpty.hidden = hasVisibleRows || !isFiltered;
     }
 
     function applyLeaderboardFilter(): void {
@@ -4496,6 +4713,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 count: team.members,
             });
             row.territory.textContent = Math.round((team.territory_pct || 0) * 100) + "%";
+            row.card.dataset.team = team.team;
+            row.card.classList.toggle("is-team-red", team.team === "Red");
+            row.card.classList.toggle("is-team-blue", team.team === "Blue");
         }
     }
 
@@ -4508,6 +4728,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const avatarBadge = document.createElement("span");
         const nameWrap = document.createElement("div");
         const name = document.createElement("b");
+        const botBadge = document.createElement("span");
+        botBadge.className = "sow-hud__bot-badge";
+        botBadge.textContent = "BOT";
+        botBadge.hidden = true;
+        const duelistBadge = document.createElement("span");
+        duelistBadge.className = "sow-hud__duelist-badge";
+        duelistBadge.textContent = "1v1";
+        duelistBadge.hidden = true;
         const meta = document.createElement("div");
         const stats = document.createElement("div");
         const territory = document.createElement("span");
@@ -4533,7 +4761,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         avatarWrap.append(avatarImg, avatarBadge);
         nameWrap.className = "sow-hud__player-name-wrap";
         name.className = "sow-hud__player-name";
-        nameWrap.appendChild(name);
+        nameWrap.append(name, botBadge, duelistBadge);
         left.append(rank, avatarWrap, nameWrap);
         meta.className = "sow-hud__player-meta";
         stats.className = "sow-hud__player-stats";
@@ -4565,6 +4793,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             avatarImg,
             avatarBadge,
             name,
+            botBadge,
+            duelistBadge,
             territory,
             troops,
             gpsBtn: gps,
@@ -4580,10 +4810,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             index,
             displayName,
             player.troops,
+            player.kills,
+            leaderboardSortMode,
             player.tile_count,
             player.territory_pct,
             player.is_alive,
             player.is_me,
+            player.is_bot,
+            player.team,
+            leaderboardIs1v1,
             player.can_trade,
             player.leader,
             player.avatar,
@@ -4592,8 +4827,25 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         ].join("|");
         if (row.key === rowKey) return;
         row.key = rowKey;
+
+        const isBot = !!player.is_bot;
+        const isDuelist = leaderboardIs1v1 && !isBot;
+        row.card.dataset.team = player.team || "";
+        row.card.dataset.isBot = String(isBot);
+        row.card.dataset.isHuman = String(!isBot);
         row.card.classList.toggle("is-me", !!player.is_me);
         row.card.classList.toggle("is-dead", !player.is_alive);
+        row.card.classList.toggle("is-bot", isBot);
+        row.card.classList.toggle("is-duelist", isDuelist);
+        if (row.botBadge) row.botBadge.hidden = !isBot;
+        if (row.duelistBadge) row.duelistBadge.hidden = !isDuelist;
+        if (player.team) {
+            row.card.classList.toggle("is-team-red", player.team === "Red");
+            row.card.classList.toggle("is-team-blue", player.team === "Blue");
+        } else {
+            row.card.classList.remove("is-team-red", "is-team-blue");
+        }
+
         const displayRank = Number.isFinite(Number(player.rank)) ? Number(player.rank) : index + 1;
         row.card.classList.toggle("is-top-1", displayRank === 1);
         row.card.classList.toggle("is-top-2", displayRank === 2);
@@ -4602,14 +4854,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         row.name.textContent = displayName;
         renderAvatarIdentity(row.avatarImg, row.avatarBadge, leaderboardPlayerAvatar(player), true);
         row.territory.textContent = Math.round((player.territory_pct || 0) * 100) + "%";
-        row.troops.innerHTML =
-            escapeHudText(
-                player.troops > 1000
-                    ? (player.troops / 1000).toFixed(1) + "k"
-                    : Math.floor(player.troops),
-            ) +
-            " " +
-            hudIcon("troops", "sow-hud__inline-icon");
+        if (leaderboardSortMode === "kills") {
+            row.troops.innerHTML =
+                escapeHudText(String(player.kills || 0)) +
+                " " +
+                hudIcon("attack", "sow-hud__inline-icon");
+        } else {
+            row.troops.innerHTML =
+                escapeHudText(
+                    player.troops > 1000
+                        ? (player.troops / 1000).toFixed(1) + "k"
+                        : Math.floor(player.troops),
+                ) +
+                " " +
+                hudIcon("troops", "sow-hud__inline-icon");
+        }
         row.gpsBtn.dataset.playerId = String(player.id);
         row.transferBtn.dataset.playerId = String(player.id);
         row.transferBtn.hidden = !player.can_trade;
@@ -6545,12 +6804,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 hudRefs!.surrenderTitle.textContent = tutorialActive
                     ? SOW_t("endgame.leave_tutorial")
                     : SOW_t("endgame.leave");
-            if (hudRefs!.surrenderDesc) {
-                hudRefs!.surrenderDesc.textContent = tutorialActive
-                    ? ""
-                    : SOW_t("endgame.leave_rewards_saved");
-                hudRefs!.surrenderDesc.classList.toggle("hidden", tutorialActive);
-            }
             if (hudRefs!.surrenderStats) hudRefs!.surrenderStats.classList.toggle("hidden", tutorialActive);
             renderEndgameStats(hudRefs!.surrenderStatValues, hud.player_endgame_stats);
             if (hudRefs!.surrenderPortrait) {

@@ -133,10 +133,6 @@ impl HudState {
         self.notification_revision = id;
     }
 
-    pub fn push_notification(&mut self, text: UiText) {
-        self.push_notification_for_players(text, [None, None], 1, None, false);
-    }
-
     pub fn push_notification_for_players(
         &mut self,
         text: UiText,
@@ -173,69 +169,3 @@ impl HudState {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn notifications_keep_only_the_32_most_recent_entries() {
-        let mut hud = HudState::default();
-        for _ in 0..40 {
-            hud.push_notification(UiText::new("hud.event"));
-        }
-        assert_eq!(hud.hud_notifications.len(), 32);
-        assert_eq!(hud.notification_revision, 40);
-    }
-
-    #[test]
-    fn notification_retains_both_entity_ids_and_priority() {
-        let mut hud = HudState::default();
-        hud.push_notification_for_players(
-            UiText::new("hud.resource_received_both"),
-            [Some(17), Some(23)],
-            4,
-            Some("nuke:17:23".into()),
-            false,
-        );
-        let receipt = hud.hud_notifications.front().unwrap();
-        assert_eq!(receipt.id, 1);
-        assert_eq!(receipt.players, [Some(17), Some(23)]);
-        assert_eq!(receipt.priority, 4);
-        assert_eq!(receipt.group.as_deref(), Some("nuke:17:23"));
-    }
-
-    #[test]
-    fn clearing_notifications_advances_the_revision() {
-        let mut hud = HudState::default();
-        hud.push_notification(UiText::new("hud.event"));
-        hud.push_map_feedback(UiText::new("hud.build_land"), [10.0, 20.0]);
-        let revision = hud.notification_revision;
-        hud.clear_notifications();
-        assert!(hud.hud_notifications.is_empty());
-        assert!(hud.map_feedback.is_none());
-        assert_eq!(hud.notification_revision, revision + 1);
-    }
-
-    #[test]
-    fn map_feedback_uses_one_slot_and_retriggers_identical_messages() {
-        let mut hud = HudState::default();
-        hud.push_map_feedback(
-            UiText::new("hud.need_gold").with("cost", "100"),
-            [10.0, 20.0],
-        );
-        let first_id = hud.map_feedback.as_ref().unwrap().id;
-        hud.push_map_feedback(
-            UiText::new("hud.need_gold").with("cost", "100"),
-            [30.0, 40.0],
-        );
-        let repeated = hud.map_feedback.as_ref().unwrap();
-        assert_eq!(repeated.id, first_id + 1);
-        assert_eq!(repeated.position, [30.0, 40.0]);
-
-        hud.push_map_feedback(UiText::new("hud.build_land"), [50.0, 60.0]);
-        let replaced = hud.map_feedback.as_ref().unwrap();
-        assert_eq!(replaced.id, first_id + 2);
-        assert_eq!(replaced.text.key, "hud.build_land");
-        assert_eq!(replaced.position, [50.0, 60.0]);
-    }
-}

@@ -86,12 +86,6 @@ pub fn access_granted(
     })
 }
 
-pub fn series_for_episode(id: &str) -> Option<&'static CampaignSeries> {
-    CAMPAIGN_SERIES
-        .iter()
-        .find(|series| series.episodes.contains(&id))
-}
-
 pub fn earned_leader(completed_episodes: &std::collections::BTreeSet<String>) -> Option<Leader> {
     CAMPAIGN_SERIES
         .iter()

@@ -151,6 +151,7 @@ impl SowEngine {
             return;
         }
         player_mut.gold = (player_mut.gold - cost).max(0.0);
+        player_mut.structures_built = player_mut.structures_built.saturating_add(1);
         let id = self.state.next_building_id;
         self.state.next_building_id = self.state.next_building_id.wrapping_add(1).max(1);
         let dur = crate::building::structure_build_duration_ticks(kind);

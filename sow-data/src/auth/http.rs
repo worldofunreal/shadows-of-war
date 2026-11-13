@@ -235,33 +235,6 @@ async fn logout(
     Ok(StatusCode::NO_CONTENT)
 }
 #[derive(Deserialize)]
-struct ImportSession {
-    session_token: Option<String>,
-    refresh_token: Option<String>,
-    import_id: String,
-}
-async fn import_session(
-    State(auth): State<AuthService>,
-    headers: HeaderMap,
-    Json(payload): Json<ImportSession>,
-) -> Result<Json<AuthResponse>> {
-    auth.ip_limit(&headers, "session-import", 60, 60).await?;
-    let (id, tokens) = auth
-        .import_session(
-            payload.session_token.as_deref(),
-            payload.refresh_token.as_deref(),
-            &payload.import_id,
-        )
-        .map_err(|_| {
-            failure(
-                StatusCode::UNAUTHORIZED,
-                "This previous session cannot be migrated; sign in to restore the account",
-            )
-        })?;
-    Ok(Json(auth.response(&id, tokens).await.map_err(unavailable)?))
-}
-
-#[derive(Deserialize)]
 struct OtpRequest {
     email: String,
     account_id: Option<String>,
@@ -554,7 +527,6 @@ pub fn router<S: Clone + Send + Sync + 'static>(auth: AuthService) -> Router<S> 
         .route("/auth/anonymous", post(anonymous))
         .route("/auth/me", get(me))
         .route("/auth/session/refresh", post(refresh))
-        .route("/auth/session/import", post(import_session))
         .route("/auth/logout", post(logout))
         .route("/auth/otp/request", post(request_otp))
         .route("/auth/otp/verify", post(verify_otp))

@@ -9,18 +9,209 @@
         "welcome_heroes",
         "welcome_complete"
       ]
+    },
+    "post_match_missions": {
+      "entry": "pm_missions",
+      "step_ids": [
+        "pm_missions",
+        "pm_missions_complete"
+      ]
+    },
+    "daily_ops_unlock": {
+      "entry": "daily_unlocked",
+      "step_ids": [
+        "daily_unlocked",
+        "daily_unlocked_complete"
+      ]
+    },
+    "weekly_ranked_unlock": {
+      "entry": "weekly_ranked",
+      "step_ids": [
+        "weekly_ranked",
+        "weekly_ranked_complete"
+      ]
     }
   },
   "strings": {
     "en": {
-      "menu.guide.welcome_heroes.title": "Your commanders",
-      "menu.guide.welcome_heroes.hint": "Open Heroes to choose a commander or unlock one with gems.",
-      "menu.guide.skip": "Skip"
+      "menu.guide.welcome_heroes.title": "Meet your commanders",
+      "menu.guide.welcome_heroes.hint": "Open Heroes to read historical bios and pick your leader.",
+      "menu.guide.pm_missions.title": "Missions & swaps",
+      "menu.guide.pm_missions.hint": "Track rewards in Missions — or swap out any objective you dislike.",
+      "menu.guide.daily_unlocked.title": "Daily Ops unlocked",
+      "menu.guide.daily_unlocked.hint": "3 fresh daily missions are live, with 1 free daily swap.",
+      "menu.guide.weekly_ranked.title": "Weekly Ops & Ranked",
+      "menu.guide.weekly_ranked.hint": "Challenge 1v1 Ranked duels or tackle Weekly Ops for bigger rewards.",
+      "menu.guide.skip": "Dismiss",
+      "menu.guide.hide_all": "Hide tips"
     },
     "es": {
       "menu.guide.welcome_heroes.title": "Tus comandantes",
-      "menu.guide.welcome_heroes.hint": "Abre Héroes para elegir un comandante o desbloquear uno con gemas.",
-      "menu.guide.skip": "Skip"
+      "menu.guide.welcome_heroes.hint": "Abre Héroes para ver biografías y elegir comandante.",
+      "menu.guide.pm_missions.title": "Misiones y cambios",
+      "menu.guide.pm_missions.hint": "Revisa tus Misiones o cambia la que no te guste.",
+      "menu.guide.daily_unlocked.title": "Diarias desbloqueadas",
+      "menu.guide.daily_unlocked.hint": "Ya tienes 3 misiones diarias nuevas y 1 cambio gratis al día.",
+      "menu.guide.weekly_ranked.title": "Semanales y Ranked 1v1",
+      "menu.guide.weekly_ranked.hint": "Prueba Ranked 1v1 o completa semanales por mejores premios.",
+      "menu.guide.skip": "Ocultar",
+      "menu.guide.hide_all": "No mostrar más"
+    },
+    "fr": {
+      "menu.guide.welcome_heroes.title": "Vos commandants",
+      "menu.guide.welcome_heroes.hint": "Ouvrez Héros pour lire les biographies et choisir un chef.",
+      "menu.guide.pm_missions.title": "Missions et échanges",
+      "menu.guide.pm_missions.hint": "Suivez vos missions ou remplacez celle qui vous déplaît.",
+      "menu.guide.daily_unlocked.title": "Quotidiennes débloquées",
+      "menu.guide.daily_unlocked.hint": "3 nouvelles missions par jour avec 1 échange gratuit.",
+      "menu.guide.weekly_ranked.title": "Hebdos et Classé 1v1",
+      "menu.guide.weekly_ranked.hint": "Tentez le Classé 1v1 ou visez les grands objectifs hebdos.",
+      "menu.guide.skip": "Fermer",
+      "menu.guide.hide_all": "Masquer les conseils"
+    },
+    "de": {
+      "menu.guide.welcome_heroes.title": "Deine Feldherren",
+      "menu.guide.welcome_heroes.hint": "Öffne Helden für Biografien und deine Anführerwahl.",
+      "menu.guide.pm_missions.title": "Missionen & Tausch",
+      "menu.guide.pm_missions.hint": "Verfolge Ziele oder tausche ungeliebte Missionen aus.",
+      "menu.guide.daily_unlocked.title": "Tagesziele frei",
+      "menu.guide.daily_unlocked.hint": "3 neue Tagesmissionen mit 1 kostenlosen Tausch pro Tag.",
+      "menu.guide.weekly_ranked.title": "Wochenziele & Rangliste",
+      "menu.guide.weekly_ranked.hint": "Spiele 1v1-Rangliste oder sichere große Wochenbelohnungen.",
+      "menu.guide.skip": "Schließen",
+      "menu.guide.hide_all": "Tipps ausblenden"
+    },
+    "it": {
+      "menu.guide.welcome_heroes.title": "I tuoi comandanti",
+      "menu.guide.welcome_heroes.hint": "Apri Eroi per leggere le biografie e scegliere il leader.",
+      "menu.guide.pm_missions.title": "Missioni e cambi",
+      "menu.guide.pm_missions.hint": "Controlla le Missioni o sostituisci quelle che non gradisci.",
+      "menu.guide.daily_unlocked.title": "Giornaliere sbloccate",
+      "menu.guide.daily_unlocked.hint": "3 nuove missioni al giorno con 1 cambio gratuito.",
+      "menu.guide.weekly_ranked.title": "Settimanali e Classificata",
+      "menu.guide.weekly_ranked.hint": "Sfida 1v1 Classificata o punta ai grandi premi settimanali.",
+      "menu.guide.skip": "Chiudi",
+      "menu.guide.hide_all": "Nascondi consigli"
+    },
+    "tr": {
+      "menu.guide.welcome_heroes.title": "Komutanlarını tanı",
+      "menu.guide.welcome_heroes.hint": "Biyografiler ve lider seçimi için Kahramanlar'ı aç.",
+      "menu.guide.pm_missions.title": "Görevler ve değişim",
+      "menu.guide.pm_missions.hint": "Görevleri takip et veya istemediğin hedefi değiştir.",
+      "menu.guide.daily_unlocked.title": "Günlük görevler açıldı",
+      "menu.guide.daily_unlocked.hint": "Günde 1 ücretsiz değişim hakkıyla 3 yeni görev aktif.",
+      "menu.guide.weekly_ranked.title": "Haftalık ve Dereceli",
+      "menu.guide.weekly_ranked.hint": "Daha büyük ödüller için 1v1 Dereceli ya da Haftalık oyna.",
+      "menu.guide.skip": "Kapat",
+      "menu.guide.hide_all": "İpuçlarını gizle"
+    },
+    "zh-cn": {
+      "menu.guide.welcome_heroes.title": "认识你的统帅",
+      "menu.guide.welcome_heroes.hint": "打开英雄页阅读历史传记并挑选统帅。",
+      "menu.guide.pm_missions.title": "任务与更换",
+      "menu.guide.pm_missions.hint": "在任务中心追踪奖励，或更换不喜欢的任务。",
+      "menu.guide.daily_unlocked.title": "日常任务已解锁",
+      "menu.guide.daily_unlocked.hint": "每日 3 个全新目标上线，每天享 1 次免费更换。",
+      "menu.guide.weekly_ranked.title": "周常与排位 1v1",
+      "menu.guide.weekly_ranked.hint": "挑战 1v1 排位赛或冲击高额周常奖励。",
+      "menu.guide.skip": "关闭",
+      "menu.guide.hide_all": "不再提示"
+    },
+    "ja": {
+      "menu.guide.welcome_heroes.title": "指揮官を知ろう",
+      "menu.guide.welcome_heroes.hint": "英雄画面で歴史伝記を読み、指揮官を選べます。",
+      "menu.guide.pm_missions.title": "ミッションと変更",
+      "menu.guide.pm_missions.hint": "報酬を確認するか、苦手な目標を入れ替えられます。",
+      "menu.guide.daily_unlocked.title": "デイリー作戦解放",
+      "menu.guide.daily_unlocked.hint": "毎日3つの新ミッションと1回の無料変更が利用可能。",
+      "menu.guide.weekly_ranked.title": "ウィークリーとランク戦",
+      "menu.guide.weekly_ranked.hint": "1v1ランク戦や週替わり作戦で豪華報酬を狙おう。",
+      "menu.guide.skip": "閉じる",
+      "menu.guide.hide_all": "ヒントを隠す"
+    },
+    "ko": {
+      "menu.guide.welcome_heroes.title": "지휘관 살펴보기",
+      "menu.guide.welcome_heroes.hint": "영웅 메뉴에서 역사 전기를 읽고 지휘관을 선택하세요.",
+      "menu.guide.pm_missions.title": "임무 및 교체",
+      "menu.guide.pm_missions.hint": "임무에서 보상을 확인하거나 원치 않는 목표를 교체하세요.",
+      "menu.guide.daily_unlocked.title": "일일 작전 잠금 해제",
+      "menu.guide.daily_unlocked.hint": "매일 새로운 3개 임무와 1회 무료 교체가 열렸습니다.",
+      "menu.guide.weekly_ranked.title": "주간 작전 및 랭크",
+      "menu.guide.weekly_ranked.hint": "1v1 랭크전에 도전하거나 더 큰 주간 보상을 노려보세요.",
+      "menu.guide.skip": "닫기",
+      "menu.guide.hide_all": "팁 숨기기"
+    },
+    "ar": {
+      "menu.guide.welcome_heroes.title": "تعرّف على قادتك",
+      "menu.guide.welcome_heroes.hint": "افتح الأبطال لقراءة السير التاريخية واختيار قائدك.",
+      "menu.guide.pm_missions.title": "المهام والتبديل",
+      "menu.guide.pm_missions.hint": "تابع مكافآتك في المهام أو بدّل أي هدف لا تفضله.",
+      "menu.guide.daily_unlocked.title": "فُتحت المهام اليومية",
+      "menu.guide.daily_unlocked.hint": "3 مهام يومية جديدة متاحة الآن مع تبديل مجاني يومياً.",
+      "menu.guide.weekly_ranked.title": "الأسبوعية والتصنيف 1v1",
+      "menu.guide.weekly_ranked.hint": "نافس في 1v1 المصنف أو أنجز المهام الأسبوعية لجوائز أكبر.",
+      "menu.guide.skip": "إغلاق",
+      "menu.guide.hide_all": "إخفاء النصائح"
+    },
+    "ru": {
+      "menu.guide.welcome_heroes.title": "Познакомься с героями",
+      "menu.guide.welcome_heroes.hint": "Открой «Герои», чтобы прочесть биографии и выбрать лидера.",
+      "menu.guide.pm_missions.title": "Задания и замена",
+      "menu.guide.pm_missions.hint": "Забирай награды в «Заданиях» или меняй неудобные цели.",
+      "menu.guide.daily_unlocked.title": "Ежедневные открыты",
+      "menu.guide.daily_unlocked.hint": "Доступны 3 ежедневных задания и 1 бесплатная замена.",
+      "menu.guide.weekly_ranked.title": "Неделя и Рейтинг 1v1",
+      "menu.guide.weekly_ranked.hint": "Сражайся в Рейтинге 1v1 или выполняй цели недели.",
+      "menu.guide.skip": "Скрыть",
+      "menu.guide.hide_all": "Убрать подсказки"
+    },
+    "vi": {
+      "menu.guide.welcome_heroes.title": "Gặp gỡ danh tướng",
+      "menu.guide.welcome_heroes.hint": "Mở mục Tướng để đọc tiểu sử lịch sử và chọn chỉ huy.",
+      "menu.guide.pm_missions.title": "Nhiệm vụ & đổi mới",
+      "menu.guide.pm_missions.hint": "Theo dõi phần thưởng hoặc đổi nhiệm vụ bạn không thích.",
+      "menu.guide.daily_unlocked.title": "Đã mở Nhiệm vụ ngày",
+      "menu.guide.daily_unlocked.hint": "Có 3 nhiệm vụ ngày mới kèm 1 lượt đổi miễn phí mỗi ngày.",
+      "menu.guide.weekly_ranked.title": "Nhiệm vụ tuần & Hạng 1v1",
+      "menu.guide.weekly_ranked.hint": "Thử sức Đấu hạng 1v1 hoặc săn thưởng lớn ở mục Tuần.",
+      "menu.guide.skip": "Đóng",
+      "menu.guide.hide_all": "Ẩn gợi ý"
+    },
+    "id": {
+      "menu.guide.welcome_heroes.title": "Kenali komandanmu",
+      "menu.guide.welcome_heroes.hint": "Buka Pahlawan untuk membaca biografi sejarah dan pilih pemimpin.",
+      "menu.guide.pm_missions.title": "Misi & penukaran",
+      "menu.guide.pm_missions.hint": "Cek hadiah di Misi — atau tukar target yang tidak kamu suka.",
+      "menu.guide.daily_unlocked.title": "Misi Harian terbuka",
+      "menu.guide.daily_unlocked.hint": "3 misi harian baru hadir dengan 1 penukaran gratis.",
+      "menu.guide.weekly_ranked.title": "Mingguan & Peringkat 1v1",
+      "menu.guide.weekly_ranked.hint": "Tantang duel 1v1 Peringkat atau kejar hadiah Mingguan.",
+      "menu.guide.skip": "Tutup",
+      "menu.guide.hide_all": "Sembunyikan tips"
+    },
+    "fil": {
+      "menu.guide.welcome_heroes.title": "Kilalanin ang mga pinuno",
+      "menu.guide.welcome_heroes.hint": "Buksan ang mga Bayani para sa talambuhay at pumili ng pinuno.",
+      "menu.guide.pm_missions.title": "Mga Misyon at palit",
+      "menu.guide.pm_missions.hint": "Tingnan ang premyo sa Misyon — o palitan ang ayaw mong layunin.",
+      "menu.guide.daily_unlocked.title": "Bukas na ang Arawan",
+      "menu.guide.daily_unlocked.hint": "May 3 bagong misyon at 1 libreng palit bawat araw.",
+      "menu.guide.weekly_ranked.title": "Lingguhan at Ranked 1v1",
+      "menu.guide.weekly_ranked.hint": "Subukan ang 1v1 Ranked o tapusin ang Lingguhang misyon.",
+      "menu.guide.skip": "Isara",
+      "menu.guide.hide_all": "Itago ang payo"
+    },
+    "pt-br": {
+      "menu.guide.welcome_heroes.title": "Seus comandantes",
+      "menu.guide.welcome_heroes.hint": "Abra Heróis para ler biografias históricas e escolher seu líder.",
+      "menu.guide.pm_missions.title": "Missões e trocas",
+      "menu.guide.pm_missions.hint": "Acompanhe prêmios em Missões ou troque a meta que não gostar.",
+      "menu.guide.daily_unlocked.title": "Diárias liberadas",
+      "menu.guide.daily_unlocked.hint": "3 novas missões diárias ativas com 1 troca grátis.",
+      "menu.guide.weekly_ranked.title": "Semanais e Ranqueado 1v1",
+      "menu.guide.weekly_ranked.hint": "Encare duelos 1v1 ou cumpra metas semanais por prêmios maiores.",
+      "menu.guide.skip": "Dispensar",
+      "menu.guide.hide_all": "Ocultar dicas"
     }
   },
   "steps": [
@@ -44,6 +235,72 @@
     },
     {
       "id": "welcome_complete",
+      "type": "end"
+    },
+    {
+      "id": "pm_missions",
+      "type": "guide",
+      "title_key": "menu.guide.pm_missions.title",
+      "hint_key": "menu.guide.pm_missions.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_missions",
+        "outcome": "missions_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_missions",
+        "gesture": "tap"
+      },
+      "next": "pm_missions_complete"
+    },
+    {
+      "id": "pm_missions_complete",
+      "type": "end"
+    },
+    {
+      "id": "daily_unlocked",
+      "type": "guide",
+      "title_key": "menu.guide.daily_unlocked.title",
+      "hint_key": "menu.guide.daily_unlocked.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_missions",
+        "outcome": "missions_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_missions",
+        "gesture": "tap"
+      },
+      "next": "daily_unlocked_complete"
+    },
+    {
+      "id": "daily_unlocked_complete",
+      "type": "end"
+    },
+    {
+      "id": "weekly_ranked",
+      "type": "guide",
+      "title_key": "menu.guide.weekly_ranked.title",
+      "hint_key": "menu.guide.weekly_ranked.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_ranked",
+        "outcome": "ranked_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_ranked",
+        "gesture": "tap"
+      },
+      "next": "weekly_ranked_complete"
+    },
+    {
+      "id": "weekly_ranked_complete",
       "type": "end"
     }
   ],

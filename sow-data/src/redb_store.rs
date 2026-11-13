@@ -10,8 +10,6 @@ pub const ACCOUNT_IDENTITIES_TABLE: TableDefinition<&[u8], &str> =
     TableDefinition::new("account_identities");
 pub const PENDING_ACCOUNT_REWARDS_TABLE: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("pending_account_rewards");
-pub const ACCOUNT_STORE_MIGRATIONS_TABLE: TableDefinition<&str, &[u8]> =
-    TableDefinition::new("account_store_migrations");
 pub const MATCHES_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("match_records");
 pub const PLAYER_MATCH_INDEX_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("player_match_index");
@@ -70,7 +68,6 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
     write_txn.open_table(ACCOUNT_EVENTS_TABLE)?;
     write_txn.open_table(ACCOUNT_IDENTITIES_TABLE)?;
     write_txn.open_table(PENDING_ACCOUNT_REWARDS_TABLE)?;
-    write_txn.open_table(ACCOUNT_STORE_MIGRATIONS_TABLE)?;
     write_txn.open_table(MATCHES_TABLE)?;
     write_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
     write_txn.open_table(SEASON_RATINGS_TABLE)?;

@@ -736,5 +736,4 @@ pub struct SimSnapshot {
     pub defense_dirty: bool,
     pub total_land_tiles: u32,
     pub sea_lanes: std::sync::Arc<Vec<crate::sea_lane::SeaLane>>,
-    pub debug_mem_info: String,
 }

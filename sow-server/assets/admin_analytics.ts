@@ -30,6 +30,35 @@ interface RetentionWindow {
   rate?: number;
 }
 
+interface MissionDimensionChurn {
+  dimension: string;
+  axis: string;
+  tag: string;
+  offered: number;
+  completed: number;
+  swapped_out_total: number;
+  swap_rate?: number | null;
+  completion_rate?: number | null;
+}
+
+interface MissionItemChurn {
+  mission_id: string;
+  axis: string;
+  tag: string;
+  offered: number;
+  completed: number;
+  swapped_out_total: number;
+  claimed_ad_2x?: number;
+  swap_rate?: number | null;
+}
+
+interface MenuGuideSummaryRow {
+  guide_id: string;
+  completed: number;
+  skipped_step: number;
+  disabled_all: number;
+}
+
 interface AnalyticsReport {
   generated_at?: string;
   daily?: DailyTotals[];
@@ -44,6 +73,9 @@ interface AnalyticsReport {
   tutorial_steps?: TutorialStep[];
   match_flow?: MatchFlow[];
   retention?: { site?: Record<string, RetentionWindow> };
+  mission_churn_by_dimension?: MissionDimensionChurn[];
+  mission_churn_by_mission?: MissionItemChurn[];
+  menu_guide_summary?: MenuGuideSummaryRow[];
 }
 
 interface MatchFlow {
@@ -194,6 +226,32 @@ function renderReport(report: AnalyticsReport): void {
       row,
       step.completion_rate == null ? "—" : (100 * Number(step.completion_rate)).toFixed(1) + "%",
     );
+  });
+  rows($("mission-dimensions"), report.mission_churn_by_dimension || [], (row, dim) => {
+    cell(row, String(dim.dimension || `${dim.axis}:${dim.tag}`));
+    cell(row, Number(dim.offered || 0).toLocaleString());
+    cell(row, Number(dim.swapped_out_total || 0).toLocaleString());
+    cell(row, Number(dim.completed || 0).toLocaleString());
+    cell(row, dim.swap_rate == null ? "—" : (100 * Number(dim.swap_rate)).toFixed(1) + "%");
+    cell(
+      row,
+      dim.completion_rate == null ? "—" : (100 * Number(dim.completion_rate)).toFixed(1) + "%",
+    );
+  });
+  rows($("mission-items"), report.mission_churn_by_mission || [], (row, item) => {
+    cell(row, item.mission_id);
+    cell(row, `${item.axis}:${item.tag}`);
+    cell(row, Number(item.offered || 0).toLocaleString());
+    cell(row, Number(item.swapped_out_total || 0).toLocaleString());
+    cell(row, Number(item.completed || 0).toLocaleString());
+    cell(row, item.swap_rate == null ? "—" : (100 * Number(item.swap_rate)).toFixed(1) + "%");
+    cell(row, Number(item.claimed_ad_2x || 0).toLocaleString());
+  });
+  rows($("menu-guide-summary"), report.menu_guide_summary || [], (row, guide) => {
+    cell(row, guide.guide_id);
+    cell(row, Number(guide.completed || 0).toLocaleString());
+    cell(row, Number(guide.skipped_step || 0).toLocaleString());
+    cell(row, Number(guide.disabled_all || 0).toLocaleString());
   });
   renderRetention(report.retention?.site || {});
   $("notice").textContent = "Report loaded. Other channels are shown as separate platform sources, not as zero.";

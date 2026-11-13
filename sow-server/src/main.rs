@@ -2888,6 +2888,10 @@ fn replay_result(
                 .is_some_and(|value| format!("{value:?}") == team),
             None => winner_player_id == Some(relay_player.player_id),
         };
+        let alive_seconds = ((f64::from(player.alive_ticks) * f64::from(config.tick_rate_ms))
+            / 1000.0)
+            .round()
+            .clamp(0.0, f64::from(u32::MAX)) as u32;
         participants.push(sow_data::profile::VerifiedMatchParticipant {
             player_id: relay_player.player_id,
             account_id,
@@ -2900,9 +2904,20 @@ fn replay_result(
             players_defeated: counts[0],
             empires_defeated: counts[1],
             tribes_defeated: counts[2],
+            alive_seconds,
+            peak_territory_rank: player.peak_territory_rank,
+            structures_built: player.structures_built,
         });
     }
     participants.sort_by_key(|participant| participant.player_id);
+    let total_contenders = engine
+        .state
+        .players
+        .iter()
+        .filter(|player| player.has_spawned || player.alive)
+        .count()
+        .max(participants.len())
+        .min(usize::from(u16::MAX)) as u16;
     let duration_seconds = ((engine.state.tick as f64 * f64::from(config.tick_rate_ms)) / 1000.0)
         .round()
         .clamp(0.0, f64::from(u32::MAX)) as u32;
@@ -2912,6 +2927,7 @@ fn replay_result(
         winner_player_id,
         winning_team,
         personal_closure_turn: closure.map(|(turn, _)| turn),
+        total_contenders,
         participants,
     })
 }

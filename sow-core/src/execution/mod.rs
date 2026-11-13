@@ -125,9 +125,6 @@ pub fn fractional_extra_tiles_milli(max_tiles_f64: f64, roll_milli: u32) -> u32 
 }
 
 impl SowEngine {
-    pub fn execute_tick(&mut self) {
-        self.state.tick();
-    }
 }
 
 pub fn refund_fleet_troops_to_player(game: &mut GameState, owner_id: u16, troops: f64) {

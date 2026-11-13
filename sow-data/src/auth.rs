@@ -7,10 +7,8 @@ use redb::{ReadableTable, TableDefinition, WriteTransaction};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-mod handover;
 mod http;
 mod oauth;
-pub use handover::SessionHandover;
 pub use http::router;
 pub use oauth::public_host;
 
@@ -23,7 +21,6 @@ pub struct AuthService {
     pub(crate) db: PlayerDb,
     pub(crate) secret: String,
     pub(crate) http: reqwest::Client,
-    handover: Option<std::sync::Arc<SessionHandover>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -48,28 +45,6 @@ pub struct AuthResponse {
     pub account: serde_json::Value,
     #[serde(flatten)]
     pub tokens: Tokens,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct IdentityImport {
-    pub version: u32,
-    pub retired_providers: std::collections::BTreeSet<String>,
-    pub accounts: Vec<ImportedAccount>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_handover: Option<SessionHandover>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ImportedAccount {
-    pub account_id: String,
-    pub identities: Vec<crate::db::LinkedIdentity>,
-}
-
-pub(crate) fn supported_provider(provider: &str) -> bool {
-    matches!(
-        provider,
-        "sow" | "google" | "discord" | "twitter" | "meta" | "email" | "crazygames" | "playgames"
-    )
 }
 
 pub(crate) fn now() -> u64 {
@@ -152,7 +127,7 @@ fn write_session_credentials(
         .map_err(storage_error)?
         .get(account_id)
         .map_err(storage_error)?
-        .map(|value| crate::db::parse_account_with_migration(value.value()))
+        .map(|value| crate::db::parse_account(value.value()))
         .transpose()
         .map_err(storage_error)?
         .ok_or("Account does not exist")?;
@@ -210,27 +185,6 @@ impl AuthService {
         if secret.len() < 32 {
             return Err("The identity signing key is not configured".into());
         }
-        let mut handover = None;
-        if let Some(path) = std::env::var_os("SOW_IDENTITY_IMPORT_PATH") {
-            log::info!("[auth] importing identity bundle from {:?}", path);
-            let raw = std::fs::read(&path).map_err(|error| format!("Identity import file {:?} unavailable: {:?}", path, error.kind()))?;
-            let bundle: IdentityImport = serde_json::from_slice(&raw).map_err(|error| format!("Identity import JSON error ({:?}) at {}:{}", error.classify(), error.line(), error.column()))?;
-            if bundle.session_handover.is_none() && db.assert_local_identity_authority().is_err() {
-                return Err(
-                    "Session handover is required before retiring existing player identities"
-                        .into(),
-                );
-            }
-            if let Some(sessions) = &bundle.session_handover {
-                sessions.validate()?;
-            }
-            let count = db.import_identity_bundle(&bundle).map_err(|error| format!("Identity import failed: {error}"))?;
-            handover = bundle.session_handover.map(std::sync::Arc::new);
-            log::info!("[identity] imported provider links for {count} existing game accounts");
-        }
-        log::info!("[auth] asserting local identity authority");
-        db.assert_local_identity_authority()
-            .map_err(|e| format!("Identity import is required before enabling local sign-in: {e}"))?;
         log::info!("[auth] ensuring sessions table");
         let database = db.redb_db.as_ref().ok_or("Account database unavailable")?;
         let txn = database.begin_write().map_err(|e| format!("begin_write failed for sessions table: {e}"))?;
@@ -248,7 +202,6 @@ impl AuthService {
             db,
             secret,
             http,
-            handover,
         })
     }
 
@@ -511,176 +464,5 @@ mod tests {
             1
         );
     }
-    #[tokio::test]
-    async fn identity_import_preserves_accounts_and_rolls_back_incomplete_or_conflicting_bundles() {
-        let (_temp, auth) = service();
-        let original = auth
-            .db
-            .get_or_create_for_account_id(
-                "0123456789abcdef0123456789abcdef",
-                "wou".into(),
-                "production".into(),
-                "legacy-subject".into(),
-            )
-            .await
-            .unwrap();
-        let other = auth
-            .db
-            .get_or_create_for_account_id(
-                "abcdef0123456789abcdef0123456789",
-                "wou".into(),
-                "production".into(),
-                "legacy-other".into(),
-            )
-            .await
-            .unwrap();
-        let mut expected_profile = original.profile.clone();
-        expected_profile.purchase_history.clear();
-        let purchases = auth
-            .db
-            .purchase_history_for_account(&original.id)
-            .await
-            .unwrap();
-        let subject = crate::db::LinkedIdentity {
-            provider: "google".into(),
-            environment: "production".into(),
-            external_id: "verified-subject".into(),
-        };
-        let mut bundle = IdentityImport {
-            version: 1,
-            session_handover: None,
-            retired_providers: ["wou".into()].into_iter().collect(),
-            accounts: vec![ImportedAccount {
-                account_id: original.id.clone(),
-                identities: vec![subject.clone()],
-            }],
-        };
-        assert!(auth.db.import_identity_bundle(&bundle).is_err());
-        assert!(auth.db.assert_local_identity_authority().is_err());
-        assert_eq!(
-            auth.db
-                .account_by_id(&original.id)
-                .await
-                .unwrap()
-                .linked_identities[0]
-                .provider,
-            "wou"
-        );
-        bundle.accounts.push(ImportedAccount {
-            account_id: other.id.clone(),
-            identities: vec![subject.clone()],
-        });
-        assert!(auth.db.import_identity_bundle(&bundle).is_err());
-        bundle.accounts[1].identities.clear();
-        assert_eq!(auth.db.import_identity_bundle(&bundle).unwrap(), 2);
-        assert_eq!(auth.db.import_identity_bundle(&bundle).unwrap(), 2);
-        auth.db.assert_local_identity_authority().unwrap();
-        assert_eq!(
-            auth.db
-                .resolve_verified_identities(&[subject], None)
-                .await
-                .unwrap()
-                .id,
-            original.id
-        );
-        assert_eq!(
-            serde_json::to_value(auth.db.account_by_id(&original.id).await.unwrap().profile)
-                .unwrap(),
-            serde_json::to_value(expected_profile).unwrap()
-        );
-        assert_eq!(
-            serde_json::to_value(
-                auth.db
-                    .purchase_history_for_account(&original.id)
-                    .await
-                    .unwrap()
-            )
-            .unwrap(),
-            serde_json::to_value(purchases).unwrap()
-        );
-    }
 
-    #[tokio::test]
-    async fn offline_session_handover_rejects_scope_revocation_forgery_and_replay() {
-        let (_temp, mut auth) = service();
-        let account = auth
-            .db
-            .get_or_create_anonymous(None, None, None)
-            .await
-            .unwrap();
-        let key = "test-only-previous-signing-key-not-production";
-        let snapshot = now();
-        let token = |context: &str, jti: &str, iat: u64| {
-            jsonwebtoken::encode(&jsonwebtoken::Header::default(),
-            &serde_json::json!({"sub":"previous","context":context,"iat":iat,"exp":now()+3600,"jti":jti}),
-            &jsonwebtoken::EncodingKey::from_secret(key.as_bytes())).unwrap()
-        };
-        let nonce = "1".repeat(64);
-        let previous = token("shadows_of_war", "valid", snapshot);
-        let refresh = "previous-opaque-refresh";
-        let config = SessionHandover {
-            snapshot_at: snapshot,
-            expires_at: snapshot + 30 * 24 * 60 * 60,
-            signing_key: key.into(),
-            accounts: [("previous".into(), account.id.clone())]
-                .into_iter()
-                .collect(),
-            refresh_hashes: [(
-                digest(refresh),
-                handover::ImportedRefresh {
-                    account_id: "previous".into(),
-                    expires_at: snapshot + 3600,
-                },
-            )]
-            .into_iter()
-            .collect(),
-            revoked_ids: ["revoked".into()].into_iter().collect(),
-        };
-        config.validate().unwrap();
-        auth.handover = Some(std::sync::Arc::new(config));
-        assert!(auth.import_session(Some("forged"), None, &nonce).is_err());
-        assert!(
-            auth.import_session(Some(&token("other_game", "valid", snapshot)), None, &nonce)
-                .is_err()
-        );
-        assert!(
-            auth.import_session(
-                Some(&token("shadows_of_war", "revoked", snapshot)),
-                None,
-                &nonce
-            )
-            .is_err()
-        );
-        assert!(
-            auth.import_session(
-                Some(&token("shadows_of_war", "future", snapshot + 1)),
-                None,
-                &nonce
-            )
-            .is_err()
-        );
-        let (id, tokens) = auth
-            .import_session(Some(&previous), Some(refresh), &nonce)
-            .unwrap();
-        assert_eq!(id, account.id);
-        assert_eq!(
-            auth.verify_token(&tokens.session_token).unwrap(),
-            account.id
-        );
-        assert_eq!(
-            auth.import_session(Some(&previous), None, &nonce)
-                .unwrap()
-                .1
-                .refresh_token,
-            tokens.refresh_token
-        );
-        assert!(
-            auth.import_session(Some(&previous), None, &"2".repeat(64))
-                .is_err()
-        );
-        auth.logout(&tokens.refresh_token).unwrap();
-        assert!(auth.import_session(Some(&previous), None, &nonce).is_err());
-        assert!(auth.import_session(None, Some(refresh), &nonce).is_err());
-        assert!(auth.import_session(None, None, &nonce).is_err());
-    }
 }

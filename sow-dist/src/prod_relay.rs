@@ -36,55 +36,6 @@ impl Control {
         }
     }
 
-    pub fn deployed(config: &Config) -> Result<Self> {
-        // A site that has never activated a release has no relay to migrate from.
-        let manifest: serde_json::Value = serde_json::from_str(&output(
-            "ssh",
-            &[
-                &config.control_host,
-                "if [ -e __SITE_RELEASE_ROOT__/current ]; then cat __SITE_RELEASE_ROOT__/current/release.json; else echo null; fi",
-            ],
-        )?)?;
-        if manifest.is_null() || manifest["relay"]["backend"] == "tokio" {
-            return Ok(Self::local());
-        }
-        // The outgoing relay keeps its deployed pins even after its public DNS changes.
-        let settings = output(
-            "ssh",
-            &[
-                &config.control_host,
-                r#"sudo awk -F= '
-$1=="SOW_RELAY_WORKERS" || $1=="SOW_RELAY_MGMT_RESOLVE_IP" {print}
-' __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env"#,
-            ],
-        )?;
-        let settings = parse_components(&settings);
-        let ip = settings
-            .get("SOW_RELAY_MGMT_RESOLVE_IP")
-            .context("installed Azure management pin missing")?
-            .parse()?;
-        let workers = settings
-            .get("SOW_RELAY_WORKERS")
-            .context("installed Azure catalog missing")?
-            .split(',')
-            .map(|entry| {
-                let [_, host, port] = entry.split(':').collect::<Vec<_>>()[..] else {
-                    bail!("invalid installed relay catalog entry");
-                };
-                Ok((host.to_string(), port.parse()?))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        ensure!(
-            ip != local_ip() && !workers.is_empty(),
-            "invalid Azure control route"
-        );
-        Ok(Self { ip, workers })
-    }
-
-    pub fn is_local(&self) -> bool {
-        self.ip == local_ip()
-    }
-
     pub fn request(
         &self,
         config: &Config,
@@ -225,7 +176,7 @@ zroot/jails/__SITE_DATABASE_JAIL__/usr/local/etc/rc.d/sow_database";
 pub(super) struct Backup(String);
 
 impl Backup {
-    pub fn capture(config: &Config, legacy: bool) -> Result<Self> {
+    pub fn capture(config: &Config) -> Result<Self> {
         let location = run_root(
             config,
             r#"
@@ -236,10 +187,9 @@ printf '%s\n' "$1" | while IFS= read -r file; do
 done > "$backup/paths"
 tar -C / -cpf "$backup/files.tar" -T "$backup/paths"
 if [ -L __SITE_RELEASE_ROOT__/current ]; then readlink __SITE_RELEASE_ROOT__/current > "$backup/current"; else : > "$backup/current"; fi
-if [ "$2" = yes ]; then touch "$backup/azure"; fi
 printf '%s\n' "$backup"
 "#,
-            &[BACKUP_PATHS, yes(legacy)],
+            &[BACKUP_PATHS],
         )?;
         ensure!(
             location.starts_with(&format!("{}/.relay-rollback.", site::current().release_root())),
@@ -254,7 +204,7 @@ printf '%s\n' "$backup"
         Ok(())
     }
 
-    pub fn restore(&self, config: &Config, plan: &ComponentPlan, legacy: bool) -> Result<()> {
+    pub fn restore(&self, config: &Config, plan: &ComponentPlan) -> Result<()> {
         run_root(
             config,
             r#"
@@ -275,12 +225,6 @@ attempt() {
     shift
     "$@" || { echo "rollback: $label failed" >&2; failed=1; }
 }
-if [ "$3" = yes ]; then
-    if jexec __SITE_SERVER_JAIL__ service sow_relay onestatus >/dev/null 2>&1; then
-        attempt "relay stop" jexec __SITE_SERVER_JAIL__ service sow_relay stop
-    fi
-    rm -f __SITE_SERVER_ROOT__/var/run/sow-relay/paused
-fi
 printf '%s\n' "$2" | while IFS= read -r file; do
     [ "$file" = __SITE_RELEASE_REL__/current ] || rm -f "/$file"
 done
@@ -290,7 +234,7 @@ ln -s "$(cat "$backup/current")" "$link"
 mv -hf "$link" __SITE_RELEASE_ROOT__/current
 attempt "nginx configuration test" nginx -t
 attempt "nginx reload" service nginx reload
-if [ "$4" = yes ]; then
+if [ "$3" = yes ]; then
     attempt "database restart" jexec __SITE_DATABASE_JAIL__ service sow_database restart
     i=0
     until curl -fsS --max-time 3 http://__SITE_LOOPBACK__:25585/healthz >/dev/null; do
@@ -299,14 +243,13 @@ if [ "$4" = yes ]; then
         sleep 1
     done
 fi
-if [ "$5" = yes ]; then attempt "server restart" jexec __SITE_SERVER_JAIL__ service sow_server restart; fi
-if [ "$3" = no ] && [ "$6" = yes ]; then attempt "relay restart" jexec __SITE_SERVER_JAIL__ service sow_relay restart; fi
+if [ "$4" = yes ]; then attempt "server restart" jexec __SITE_SERVER_JAIL__ service sow_server restart; fi
+if [ "$5" = yes ]; then attempt "relay restart" jexec __SITE_SERVER_JAIL__ service sow_relay restart; fi
 [ -z "$failed" ]
 "#,
             &[
                 &self.0,
                 BACKUP_PATHS,
-                yes(legacy),
                 yes(plan.database || plan.ops),
                 yes(plan.server || plan.maps || plan.ops),
                 yes(plan.relay),
@@ -318,16 +261,6 @@ if [ "$3" = no ] && [ "$6" = yes ]; then attempt "relay restart" jexec __SITE_SE
 
 fn yes(value: bool) -> &'static str {
     if value { "yes" } else { "no" }
-}
-
-pub(super) fn verify_control_port_available(config: &Config) -> Result<()> {
-    // The other site's relay holds its own loopback address; any other listener blocks activation.
-    let peer = format!("{}:{PORT}", site::current().peer().loopback());
-    let command = format!(
-        "sockstat -46l -p {PORT} | awk -v peer='{peer}' 'NR > 1 && $6 != peer {{ print; occupied = 1 }} END {{ exit occupied }}'"
-    );
-    run("ssh", &[&config.control_host, &command], None)
-        .with_context(|| format!("IONOS relay control port {PORT} is already in use"))
 }
 
 pub(super) fn prepare_host(config: &Config) -> Result<()> {
@@ -364,7 +297,7 @@ if ! cmp -s "$lineage/fullchain.pem" "$installed"; then RENEWED_LINEAGE="$lineag
     Ok(())
 }
 
-pub(super) fn activate(config: &Config, initial: bool) -> Result<()> {
+pub(super) fn activate(config: &Config) -> Result<()> {
     let ops = format!(
         "{}/release/relay-ops",
         config.remote_stage.trim_end_matches('/')
@@ -398,17 +331,13 @@ printf '\n' >> "$envfile"
 install -m 0600 "$envfile" "$jail/usr/local/etc/sow/relay.env"
 install -m 0555 "$ops/sow_relay" "$jail/usr/local/etc/rc.d/sow_relay"
 sysrc -f "$jail/etc/rc.conf.d/sow_relay" sow_relay_enable=YES >/dev/null
-if [ "$4" = yes ]; then
-    jexec __SITE_SERVER_JAIL__ install -d -o sowrelay -g sowrelay -m 0700 /var/run/sow-relay
-    jexec __SITE_SERVER_JAIL__ install -o sowrelay -g sowrelay -m 0600 /dev/null /var/run/sow-relay/paused
-fi
 if jexec __SITE_SERVER_JAIL__ service sow_relay onestatus >/dev/null 2>&1; then
     jexec __SITE_SERVER_JAIL__ service sow_relay restart
 else
     jexec __SITE_SERVER_JAIL__ service sow_relay start
 fi
 "#,
-        &[&ops, &control_file, &settlement_file, yes(initial)],
+        &[&ops, &control_file, &settlement_file],
     )
     .context("activate FreeBSD relay control service")?;
     wait_ready(config)

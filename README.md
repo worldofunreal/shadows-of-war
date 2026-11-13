@@ -5,48 +5,36 @@
 <h1 align="center">Shadows of War</h1>
 
 <p align="center">
-  <strong>Command historic leaders in real-time territory wars.</strong><br />
-  Build cities, factories and ports, forge alliances, betray rivals, and redraw the world map in this multiplayer game.
+  Real-time multiplayer strategy. Lead a historic figure, build cities, factories and ports,<br />
+  make and break alliances, and take the map.
 </p>
 
 <p align="center">
-  <a href="https://shadowsofwar.io/play/"><strong>▶ Play now</strong></a>
+  <a href="https://shadowsofwar.io/play/"><strong>Play</strong></a>
   · <a href="https://shadowsofwar.io/">Website</a>
   · <a href="https://discord.gg/4mBM6zJyG">Discord</a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/worldofunreal/shadows-of-war/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="AGPL-3.0-only license" /></a>
-  <img src="https://img.shields.io/badge/client-Rust%20%2B%20WASM-orange" alt="Rust and WebAssembly client" />
-  <img src="https://img.shields.io/badge/interface-TypeScript-3178c6" alt="TypeScript interface" />
-  <img src="https://img.shields.io/badge/rendering-Blade%20GPU-111827" alt="Blade GPU rendering" />
-</p>
-
-## The game
-
-![World map](assets/maps/world/thumbnail.webp)
-
-Shadows of War is a real-time strategy game about taking territory. Choose a historic leader, build
-cities, factories and ports, and make or break alliances in multiplayer. Play the Boudica campaign
-or fight bots in solo matches.
-
-| Europe | Asia | Leaders | Campaign |
+| World | Europe | Julius Caesar | Boudica campaign |
 | --- | --- | --- | --- |
-| ![Europe map](https://shadowsofwar.io/maps/europe/thumbnail.webp) | ![Asia map](https://shadowsofwar.io/maps/asia/thumbnail.webp) | ![Julius Caesar](assets/art/heroes/caesar_desktop.webp) | ![Boudica](assets/art/heroes/boudica_desktop.webp) |
+| ![World map](assets/maps/world/thumbnail.webp) | ![Europe map](https://shadowsofwar.io/maps/europe/thumbnail.webp) | ![Julius Caesar](assets/art/heroes/caesar_desktop.webp) | ![Boudica](assets/art/heroes/boudica_desktop.webp) |
 
 ## Run locally
 
 ```bash
-./sow          # build and open the native Electron/WASM game
-./sow l        # local browser preview at 127.0.0.1:4173
+./sow        # native desktop client (Electron + WASM)
+./sow l      # browser build at http://127.0.0.1:4173
+./sow help   # all commands
 ```
 
-[Contributing](CONTRIBUTING.md)
+Rust for the client, simulation, server and relay; TypeScript for the menu and site; Blade for rendering.
 
-## Credits & licenses
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
+## License
 
 Modified from OpenFrontIO since `2026-05-08`. © OpenFront and Contributors.
 
-Code: [AGPL-3.0-only](LICENSE) with OpenFront's additional terms. OpenFront-derived maps: CC BY-SA
-4.0 ([notice](assets/maps/NOTICE)); other [asset](docs/legal/LICENSE-ASSETS) and
-[third-party notices](docs/legal/NOTICE).
+Code: [AGPL-3.0-only](LICENSE) with OpenFront's additional terms. OpenFront-derived maps: CC BY-SA 4.0
+([notice](assets/maps/NOTICE)). Other assets: [LICENSE-ASSETS](docs/legal/LICENSE-ASSETS). Third-party:
+[NOTICE](docs/legal/NOTICE).

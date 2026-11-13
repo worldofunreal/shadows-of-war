@@ -333,6 +333,8 @@ export const UI_TARGETS: Record<string, string> = {
     campaign_replay: '#sow-menu [data-command="start_campaign_episode"][data-episode-id]',
     menu_lobby: "#sow-menu .sow-menu__home-public [data-lobby-card]",
     menu_heroes: '#sow-menu [data-nav-screen="heroes"]',
+    menu_missions: '#sow-menu [data-command="open_missions"]',
+    menu_ranked: '#sow-menu [data-command="quick_match"]',
     attack_ratio: "#sow-hud-slider",
     hud_center_camera: '#sow-hud [data-command="center_camera"]',
     hud_inbox: '#sow-hud [data-command="toggle_inbox"]',
@@ -397,6 +399,8 @@ export const FACTION_FIELDS: readonly string[] = Object.freeze([
 ]);
 export const MENU_GUIDE_OUTCOMES: Record<string, CampaignRecord> = Object.freeze({
     heroes_ready: Object.freeze({ control: "menu_heroes", kind: "screen", screen: "heroes" }),
+    missions_ready: Object.freeze({ control: "menu_missions", kind: "counter" }),
+    ranked_ready: Object.freeze({ control: "menu_ranked", kind: "counter" }),
 });
 
 export function zoomInputMode(info: CampaignRecord = {}): "pinch" | "trackpad" | "wheel" {

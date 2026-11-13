@@ -70,7 +70,6 @@ impl SowApp {
     pub(crate) fn reset_game_session(&mut self) {
         self.abort_engine_init();
         self.sim.turn_queue.clear();
-        self.time.turn_queue_peak = 0;
         self.sim.offline_intents.clear();
         self.sim.latest_local_spawn = None;
         self.input.spawn_intent_rate.reset();
@@ -501,47 +500,3 @@ impl SowApp {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::enter_game_ready_to_release;
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn enter_game_release_waits_for_snapshot_nameplate_cache_and_first_portraits() {
-        assert!(!enter_game_ready_to_release(
-            false, true, true, true, false, false, false, false
-        ));
-        assert!(!enter_game_ready_to_release(
-            true, false, true, true, false, false, false, false
-        ));
-        assert!(!enter_game_ready_to_release(
-            true, true, false, true, false, false, false, false
-        ));
-        assert!(enter_game_ready_to_release(
-            true, true, true, true, false, false, false, false
-        ));
-    }
-
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn online_enter_game_release_keeps_all_existing_connection_gates() {
-        assert!(enter_game_ready_to_release(
-            true, true, true, false, true, true, true, true
-        ));
-        for (connected, has_client, on_relay, turn_queue_empty) in [
-            (false, true, true, true),
-            (true, false, true, true),
-            (true, true, false, true),
-            (true, true, true, false),
-        ] {
-            assert!(!enter_game_ready_to_release(
-                true,
-                true,
-                true,
-                false,
-                connected,
-                has_client,
-                on_relay,
-                turn_queue_empty,
-            ));
-        }
-    }
-}

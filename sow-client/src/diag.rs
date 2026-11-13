@@ -17,13 +17,9 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 const CAP: usize = 128;
 /// Anomaly threshold: one lockstep tick should cost far below its 100 ms slot.
 const TICK_WARN_US: u64 = 80_000;
-/// Seconds between perf summaries while anomalies keep occurring.
-const SUMMARY_SECS: u64 = 30;
 
 static RING: [AtomicUsize; CAP] = [const { AtomicUsize::new(0) }; CAP];
 static IDX: AtomicUsize = AtomicUsize::new(0);
-static ANOMALIES: AtomicUsize = AtomicUsize::new(0);
-static LAST_SUMMARY_MS: AtomicUsize = AtomicUsize::new(0);
 
 const STARTUP_WINDOW: Duration = Duration::from_secs(2);
 
@@ -240,12 +236,7 @@ pub fn enabled() -> bool {
 pub fn record_tick(duration_us: u64) -> Option<u64> {
     let i = IDX.fetch_add(1, Ordering::Relaxed) % CAP;
     RING[i].store(duration_us as usize, Ordering::Relaxed);
-    if duration_us > TICK_WARN_US {
-        ANOMALIES.fetch_add(1, Ordering::Relaxed);
-        Some(duration_us)
-    } else {
-        None
-    }
+    (duration_us > TICK_WARN_US).then_some(duration_us)
 }
 
 fn snapshot_sorted() -> Vec<u64> {
@@ -268,34 +259,3 @@ pub fn percentiles_recent() -> (u64, u64, u64) {
     (*v.first().unwrap_or(&0), p(0.95), *v.last().unwrap_or(&0))
 }
 
-/// Emits the periodic summary line when anomalies occurred and `SUMMARY_SECS`
-/// elapsed since the last one. `now_ms`: monotonic wall clock in milliseconds.
-pub fn maybe_summary(now_ms: u64) {
-    if ANOMALIES.load(Ordering::Relaxed) == 0 {
-        return;
-    }
-    let last = LAST_SUMMARY_MS.load(Ordering::Relaxed) as u64;
-    if last != 0 && now_ms.saturating_sub(last) < SUMMARY_SECS * 1000 {
-        return;
-    }
-    if LAST_SUMMARY_MS
-        .compare_exchange(
-            last as usize,
-            now_ms as usize,
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        return;
-    }
-    let (p50, p95, max) = percentiles_recent();
-    log::warn!(
-        "[SIM PERF] last {}s: anomalies={} tick_ms p50={} p95={} max={} (budget 100ms)",
-        SUMMARY_SECS,
-        ANOMALIES.load(Ordering::Relaxed),
-        p50 / 1000,
-        p95 / 1000,
-        max / 1000,
-    );
-}

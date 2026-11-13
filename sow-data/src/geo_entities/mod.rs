@@ -556,7 +556,7 @@ pub struct Hero {
     /// Always playable without buying it.
     #[serde(default)]
     pub free: bool,
-    /// Price band; see docs/guia-creacion-heroes.md §2.
+    /// Price band.
     pub rarity: Rarity,
     /// Crowns to unlock; gems cost half of it. Free heroes carry 0.
     pub price_crowns: u64,
@@ -588,7 +588,7 @@ pub struct GeoEntity {
     pub gender: Option<Gender>,
     #[serde(default)]
     pub wikipedia: Option<String>,
-    /// Name of the portrait file in `assets/art/avatars/*/` (see assets/art/README.md).
+    /// Name of the portrait file in `assets/art/avatars/*/`.
     #[serde(default)]
     pub avatar: Option<String>,
     #[serde(default)]

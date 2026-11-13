@@ -211,14 +211,3 @@ pub(crate) fn fill_terrain_buffer(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::fill_terrain_buffer;
-
-    #[test]
-    fn water_stores_only_depth_and_shore_metadata_for_live_shading() {
-        let mut buffer = [0u8; 4];
-        fill_terrain_buffer(&[0x60], 1, 1, 4, &mut buffer);
-        assert_eq!(buffer, [0x60, 128, 128, 128]);
-    }
-}

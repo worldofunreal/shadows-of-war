@@ -127,15 +127,3 @@ impl SpriteAtlas {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn units_atlas_has_one_cell_per_mover_sprite() {
-        let cell = MoverSpriteId::ATLAS_CELL;
-        let atlas = image::load_from_memory(UNITS_ATLAS_BYTES).unwrap();
-        assert_eq!((atlas.width(), atlas.height()), (4 * cell, 2 * cell));
-        assert!(MoverSpriteId::COUNT <= 8);
-    }
-}

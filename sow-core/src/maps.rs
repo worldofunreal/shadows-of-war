@@ -80,18 +80,6 @@ pub fn max_scale_for_bbox(min_lon: f64, min_lat: f64, max_lon: f64, max_lat: f64
     s
 }
 
-/// Clamp requested scale to the mobile-safe pixel budget.
-#[inline]
-pub fn clamp_scale_for_bbox(
-    min_lon: f64,
-    min_lat: f64,
-    max_lon: f64,
-    max_lat: f64,
-    requested: f64,
-) -> f64 {
-    requested.min(max_scale_for_bbox(min_lon, min_lat, max_lon, max_lat))
-}
-
 /// Scale width/height down proportionally until width×height ≤ [`MAX_MAP_PIXELS`].
 pub fn clamp_map_dimensions(width: u32, height: u32) -> (u32, u32) {
     let mut w = align_map_dim(width);
@@ -146,15 +134,6 @@ pub fn catalog_lookup<'a>(
         .find(|e| e.key == key || e.display_name.eq_ignore_ascii_case(name))
 }
 
-#[inline]
-pub fn catalog_entry_at(catalog: &[MapCatalogEntry], index: usize) -> Option<&MapCatalogEntry> {
-    if catalog.is_empty() {
-        None
-    } else {
-        Some(&catalog[index % catalog.len()])
-    }
-}
-
 /// Return normalized catalog key if `name` is in the catalog, else first entry or [`DEFAULT_MAP_KEY`].
 #[inline]
 pub fn resolve_map_name(catalog: &[MapCatalogEntry], name: &str) -> String {
@@ -204,16 +183,6 @@ pub fn read_map_br_from_repo(key: &str) -> Option<Vec<u8>> {
     let path = std::path::Path::new(SERVER_MAPS_ROOT)
         .join(map_key(key))
         .join("map.bin.br");
-    std::fs::read(path).ok()
-}
-
-/// Read `thumbnail.webp` from the server map library when running native from the repo root.
-#[cfg(feature = "std")]
-#[inline]
-pub fn read_thumbnail_webp_from_repo(key: &str) -> Option<Vec<u8>> {
-    let path = std::path::Path::new(SERVER_MAPS_ROOT)
-        .join(map_key(key))
-        .join("thumbnail.webp");
     std::fs::read(path).ok()
 }
 

@@ -3,8 +3,6 @@
 type Account = { account_id: string; display_name?: string; linked_identities?: unknown[]; [key: string]: unknown };
 type AuthResult = { status: string; session_token: string; refresh_token?: string; expires_at?: number; account: Account };
 type AuthFailure = Error & { status?: number };
-// One-time local storage migration; no request goes to the retired identity service.
-const previousKeys = ["wou_session_token", "wou_refresh_token", "wou_user_data"] as const;
 const keys = ["sow_session_token", "sow_refresh_token", "sow_user_data", "sow_session_expires"] as const;
 
 export class SowAuthClient {
@@ -121,17 +119,6 @@ export class SowAuthClient {
             } else if (this.token) {
                 const account = await this.request("me");
                 result = { status: "success", session_token: this.token, account, expires_at: this.expiresAt };
-            } else if (previousKeys.some(key => localStorage.getItem(key))) {
-                let importId=localStorage.getItem("sow_session_import_id");
-                if (!importId) {
-                    importId=Array.from(crypto.getRandomValues(new Uint8Array(32)),byte=>byte.toString(16).padStart(2,"0")).join("");
-                    localStorage.setItem("sow_session_import_id",importId);
-                }
-                result = await this.request("session/import", {
-                    import_id: importId,
-                    session_token: localStorage.getItem(previousKeys[0]),
-                    refresh_token: localStorage.getItem(previousKeys[1]),
-                }, "");
             } else {
                 const error: AuthFailure = new Error("Sign in to restore this account."); error.status = 401; throw error;
             }
@@ -141,7 +128,6 @@ export class SowAuthClient {
                 const error: AuthFailure = new Error("Account changed during refresh."); error.status = 409; throw error;
             }
             this.setSession(result.session_token, result.account, result.refresh_token, result.expires_at);
-            [...previousKeys,"sow_session_import_id"].forEach(key => localStorage.removeItem(key));
             return this.current();
         };
         const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
@@ -158,7 +144,7 @@ export class SowAuthClient {
     }
 
     async startAnonymous(): Promise<AuthResult> {
-        if (this.token || this.refreshToken || previousKeys.some(key => localStorage.getItem(key))) return this.ensureSession();
+        if (this.token || this.refreshToken) return this.ensureSession();
         const generation = this.generation;
         const accountId = localStorage.getItem("sow_account_id");
         const secret = localStorage.getItem("sow_account_secret");
@@ -198,7 +184,7 @@ export class SowAuthClient {
         this.token = ""; this.refreshToken = ""; this.account = null; this.expiresAt = 0;
         if (this.timer) clearTimeout(this.timer);
         this.timer = null;
-        [...keys,...previousKeys,"sow_session_import_id"].forEach(key => { try { localStorage.removeItem(key); } catch {} });
+        keys.forEach(key => { try { localStorage.removeItem(key); } catch {} });
         this.state("reauthentication_required");
         try { await this.request("logout", { refresh_token: refresh }, token); } catch { /* Local sign-out also works offline. */ }
     }
