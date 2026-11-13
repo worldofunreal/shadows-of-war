@@ -160,7 +160,21 @@ export interface MenuSkinOffer {
     name: string;
     owned: boolean;
     cost_gems: number;
+    cost_crowns: number;
     asset_path: string;
+}
+
+// sow-data commerce::StoreOffer: a daily or weekly discount priced by the server.
+export interface MenuStoreOffer {
+    id: string;
+    cadence: "daily" | "weekly";
+    kind: "leader" | "skin";
+    item_id: string;
+    currency: "gems" | "crowns";
+    base_cost: number;
+    cost: number;
+    discount_percent: number;
+    ends_at: number;
 }
 
 export interface MenuGemBundle {
@@ -179,6 +193,7 @@ export interface MenuStore {
     leaders: MenuLeaderOffer[];
     skins: MenuSkinOffer[];
     gem_bundles: MenuGemBundle[];
+    offers?: MenuStoreOffer[];
 }
 
 export interface MenuSettings {

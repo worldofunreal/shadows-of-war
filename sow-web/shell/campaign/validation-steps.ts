@@ -54,7 +54,6 @@ export function validateSteps(context: CampaignValidationContext) {
             "emote_text_key",
             "emote_pinned",
             "presentation",
-            "video_src",
             "lines",
             "marker",
             "next",
@@ -521,8 +520,7 @@ export function validateSteps(context: CampaignValidationContext) {
         if (step.speaker && !own(speakers, step.speaker)) issue(step, "speaker", "Unknown character.");
         if (
             step.presentation &&
-            (!["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation) ||
-                (step.presentation === "cinematic" && step.type !== "scene"))
+            (!["dialogue", "chapter", "celebration"].includes(step.presentation))
         )
             issue(step, "presentation", "Choose a presentation supported by this step.");
         if (
@@ -558,33 +556,6 @@ export function validateSteps(context: CampaignValidationContext) {
             (typeof step.emote_pinned !== "boolean" || !own(step, "emote") || step.emote === "clear")
         )
             issue(step, "emote_pinned", "Pin only a named emote, with true or false.");
-        if (step.video_src != null) {
-            const prefix = "/assets/campaign/" + definition.episode_id + "/";
-            const relative =
-                typeof step.video_src === "string" && step.video_src.startsWith(prefix)
-                    ? step.video_src.slice(prefix.length)
-                    : "";
-            const validPath =
-                step.type === "scene" &&
-                step.presentation === "cinematic" &&
-                relative &&
-                /\.(?:mp4|webm)$/i.test(relative) &&
-                relative
-                    .split("/")
-                    .every(
-                        (part) =>
-                            part &&
-                            part !== "." &&
-                            part !== ".." &&
-                            /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(part),
-                    );
-            if (!validPath)
-                issue(
-                    step,
-                    "video_src",
-                    "Use an MP4 or WebM inside this episode's assets/campaign folder and select Cinematic presentation.",
-                );
-        }
         if (step.lines != null) {
             if (
                 step.type !== "scene" ||

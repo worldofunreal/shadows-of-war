@@ -97,9 +97,6 @@ copy_failed = "فشل النسخ"
 copy_unavailable = "النسخ غير متاح"
 
 [tutorial]
-skip_cinematic = "إغلاق المشهد"
-watch_cinematic = "مشاهدة المشهد السينمائي"
-hold_to_skip = "اضغط مطولًا للتخطي"
 continue = "CONTINU"
 complete = "إكمال الحملة"
 retry = "إعادة المحاولة"
@@ -894,6 +891,10 @@ change_territory_style = "غير أسلوبك"
 view = "عرض"
 checkout = "الدفع"
 loading_checkout = "جارٍ تحميل الدفع…"
+daily_offers = "عروض اليوم"
+weekly_offers = "عروض الأسبوع"
+ends_in = "ينتهي خلال {time}"
+leader = "القائد"
 
 [hud]
 build_placement = "وضع مبنى"

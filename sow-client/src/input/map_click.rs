@@ -242,8 +242,8 @@ impl SowApp {
     }
 
     pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
-        if self.ui.tutorial_waiting_for_first_attack {
-            return self.try_tutorial_campaign_nameplate_attack(x, y);
+        if self.try_tutorial_marker_attack(x, y) {
+            return true;
         }
         if self.ui.tutorial_camera_only
             || self.ui.observing
@@ -261,9 +261,6 @@ impl SowApp {
             .is_some_and(|snapshot| matches!(snapshot.phase, sow_core::game::GamePhase::Playing))
         {
             return false;
-        }
-        if self.try_tutorial_campaign_nameplate_attack(x, y) {
-            return true;
         }
         let Some((col, row)) = self.mouse_to_tile(x, y) else {
             return false;
@@ -284,18 +281,14 @@ impl SowApp {
     }
 
     pub(crate) fn handle_map_click(&mut self, x: f64, y: f64) {
-        if self.ui.tutorial_waiting_for_first_attack {
-            self.try_tutorial_campaign_nameplate_attack(x, y);
+        if self.ui.tutorial_camera_only {
             return;
         }
-        if self.ui.tutorial_camera_only {
+        if self.try_tutorial_marker_attack(x, y) {
             return;
         }
         if self.ui.observing {
             self.clear_placement();
-            return;
-        }
-        if self.try_tutorial_campaign_nameplate_attack(x, y) {
             return;
         }
         // Buttons may hang past the map edge, so they resolve before the tile.
@@ -378,29 +371,38 @@ impl SowApp {
         self.primary_target(tile_idx, x, y);
     }
 
-    fn try_tutorial_campaign_nameplate_attack(&mut self, x: f64, y: f64) -> bool {
+    fn try_tutorial_marker_attack(&mut self, x: f64, y: f64) -> bool {
         if self.ui.tutorial_camera_only
             || self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
             || self.ui.app.hud_state.building_placement.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
             || self.ui.app.hud_state.selected_warship_build
+            || self.ui.tutorial_marker_action != Some(crate::app::TutorialMarkerAction::Attack)
+            || !self.ui.tutorial_active
+            || !self.net.is_offline
             || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
                 matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
             })
         {
             return false;
         }
-        let Some(tile_idx) = self.tutorial_campaign_attack_tile() else {
-            return false;
-        };
-        let Some(target) = self.map_target(tile_idx) else {
+        let Some(target_owner) = self.ui.tutorial_marker_player_id else {
             return false;
         };
         if !self
             .ui
             .nameplates
-            .tutorial_target_contains(target.owner, x, y)
+            .tutorial_target_contains(target_owner, x, y)
+        {
+            return false;
+        }
+        let Some(tile_idx) = self.sim.tutorial_observation.guide_target_attack else {
+            return false;
+        };
+        if !self
+            .map_target(tile_idx)
+            .is_some_and(|target| target.owner == target_owner)
         {
             return false;
         }
@@ -432,7 +434,7 @@ impl SowApp {
     }
 
     pub(crate) fn open_map_context_menu(&mut self, x: f64, y: f64) {
-        if self.ui.tutorial_camera_only || self.ui.tutorial_waiting_for_first_attack {
+        if self.ui.tutorial_camera_only {
             return;
         }
         if self.ui.app.phase != crate::ClientPhase::Playing {
@@ -826,7 +828,7 @@ impl SowApp {
         tile_idx: u32,
         action: MapMenuAction,
     ) {
-        if self.ui.tutorial_camera_only || self.ui.tutorial_waiting_for_first_attack {
+        if self.ui.tutorial_camera_only {
             return;
         }
         let Some(menu) = self.input.map_context_menu else {

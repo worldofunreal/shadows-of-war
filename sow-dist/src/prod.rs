@@ -512,6 +512,10 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
 }
 
 fn verify_ionos_runtime(config: &Config, release: &Release, plan: &ComponentPlan) -> Result<()> {
+    // TEMP rollback rehearsal gate: remove after the run.
+    if std::env::var_os("SOW_ROLLBACK_REHEARSAL").is_some() {
+        bail!("rollback rehearsal: forced failure after activation");
+    }
     verify_control_host(config, plan)?;
     verify_map_catalog(config, release)?;
     verify_control_certificates(config)?;

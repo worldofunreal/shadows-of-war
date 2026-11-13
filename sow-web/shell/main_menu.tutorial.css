@@ -462,83 +462,6 @@
 .sow-story.is-chapter .sow-story__dialog {
   z-index: 2;
 }
-.sow-story.is-cinematic {
-  z-index: 1000;
-}
-.sow-story.is-cinematic .sow-story__cinematic {
-  position: absolute;
-  z-index: 5;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #030608;
-  pointer-events: auto;
-}
-.sow-story__cinematic video {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: #030608;
-}
-.sow-story__cinematic-start {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 50%;
-  translate: -50% -50%;
-  min-width: 180px;
-  min-height: 46px;
-}
-.sow-story__cinematic-start[hidden] {
-  display: none !important;
-}
-.sow-story__cinematic-hold {
-  position: absolute;
-  z-index: 2;
-  inset-block-start: max(16px, var(--story-inset-top));
-  inset-inline-end: max(16px, var(--story-inset-right));
-  display: grid;
-  gap: 5px;
-  min-width: 140px;
-  padding: 8px 10px;
-  border: 1px solid rgb(255 255 255 / 28%);
-  border-radius: 4px;
-  background: var(--sow-tactical-panel-base);
-  color: var(--story-text);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-align: center;
-  text-transform: uppercase;
-  pointer-events: none;
-}
-.sow-story__cinematic-hold i {
-  display: block;
-  height: 3px;
-  overflow: hidden;
-  background: rgb(255 255 255 / 24%);
-}
-.sow-story__cinematic-hold b {
-  display: block;
-  width: 100%;
-  height: 100%;
-  transform: scaleX(0);
-  transform-origin: left center;
-  background: var(--story-accent);
-}
-.sow-story__cinematic.is-holding .sow-story__cinematic-hold b {
-  transform: scaleX(1);
-  transition: transform 1.25s linear;
-}
-.sow-story.is-cinematic .sow-story__shade {
-  background: radial-gradient(ellipse at 50% 35%, rgb(5 10 13 / 16%), rgb(5 10 13 / 88%));
-}
 .sow-story__objective {
   --sow-tutorial-progress-height: 16px;
   --sow-tutorial-progress-label-size: 16px;
@@ -1252,16 +1175,6 @@
     bottom: var(--story-safe-bottom);
     transform: none;
   }
-  .sow-story__cinematic-hold {
-    min-width: 126px;
-    padding: 7px 9px;
-    font-size: 9px;
-  }
-  .sow-story__cinematic-start {
-    min-width: 168px;
-    min-height: 42px;
-    font-size: 11px !important;
-  }
   .sow-story.has-portrait .sow-story__dialog {
     grid-template-columns: clamp(108px, 30cqw, 150px) minmax(0, 1fr);
   }
@@ -1383,7 +1296,7 @@
   font-size: 12px;
 }
 @media (pointer: coarse) {
-  #sow-story[data-compact="true"] :is(.sow-story__choice, .sow-story__continue, .sow-story__cinematic-start) {
+  #sow-story[data-compact="true"] :is(.sow-story__choice, .sow-story__continue) {
     zoom: var(--sow-hud-hit-target-zoom);
     min-inline-size: 44px;
     min-block-size: 44px;
@@ -1391,7 +1304,7 @@
 }
 
 @media (pointer: fine) {
-  #sow-story[data-compact="true"] :is(.sow-story__choice, .sow-story__continue, .sow-story__cinematic-start) {
+  #sow-story[data-compact="true"] :is(.sow-story__choice, .sow-story__continue) {
     zoom: var(--sow-hud-hit-target-zoom);
     min-inline-size: 32px;
     min-block-size: 32px;
@@ -1622,16 +1535,6 @@
     animation: none !important;
     transition: none !important;
   }
-}
-#sow-campaign-cinematic-preview.sow-story--menu-preview {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  pointer-events: auto;
-}
-#sow-campaign-cinematic-preview.sow-story--menu-preview .sow-story__shade {
-  pointer-events: auto;
-  background: rgb(3 6 8 / 88%);
 }
 @media (orientation: landscape) {
   @container (min-width: 641px) {

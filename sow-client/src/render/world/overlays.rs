@@ -9,9 +9,9 @@ use std::collections::HashMap;
 use web_time::{Duration, Instant};
 
 const BUILDING_CULL_FLOOR: f32 = 0.25;
-const BUILDING_FULL_DETAIL_SIZE: f32 = 28.0;
 const BUILDING_MIN_MARKER_SIZE: f32 = 14.0;
-const BUILDING_CLUSTER_TARGET_SIZE: f32 = 40.0;
+/// Short side, in tiles, of the standard building the Dev Tools zoom cutoffs describe.
+const BUILDING_LOD_REFERENCE_SIDE: f32 = 2.0;
 const BUILDING_ZOOM_STEPS_PER_OCTAVE: f32 = 8.0;
 const BUILDING_FOOTPRINT_FILL: f32 = 0.9;
 const BUILDING_UPGRADE_SCALES: [f32; 4] = [1.0, 1.15, 1.3, 1.5];
@@ -121,35 +121,47 @@ pub(crate) fn render_overlays(
 
     if !ui.tutorial_active {
         ui.tutorial_marker_player_id = None;
+        ui.tutorial_marker_action = None;
         ui.dialog_border_highlight = None;
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct BuildingLod {
     band: i16,
     quantized_zoom: f32,
     cluster_cell_size: f32,
+    compact_zoom: f32,
+    cluster_zoom: f32,
 }
 
 impl BuildingLod {
-    fn for_zoom(zoom_scaled: f32) -> Self {
+    /// Cutoffs come from the Dev Tools "Zoom LOD" tab and describe a standard 2×2 building;
+    /// larger footprints keep their detail proportionally longer.
+    fn for_zoom(
+        zoom_scaled: f32,
+        params: &[[f32; 4]; sow_render::shader_params::PARAM_CAPACITY],
+    ) -> Self {
+        let setting = |id| sow_render::shader_params::number_value(params, id);
         let zoom = zoom_scaled.max(BUILDING_CULL_FLOOR);
         let band = (zoom.log2() * BUILDING_ZOOM_STEPS_PER_OCTAVE).floor() as i16;
         let quantized_zoom = 2.0_f32.powf(band as f32 / BUILDING_ZOOM_STEPS_PER_OCTAVE);
         Self {
             band,
             quantized_zoom,
-            cluster_cell_size: (BUILDING_CLUSTER_TARGET_SIZE / quantized_zoom).max(1.0),
+            cluster_cell_size: (setting("lod.building.group_px") / quantized_zoom).max(1.0),
+            compact_zoom: setting("lod.building.compact_zoom"),
+            cluster_zoom: setting("lod.building.cluster_zoom"),
         }
     }
 
     fn detail(self, kind: BuildingKind) -> BuildingDetail {
         let (width, height) = kind.footprint_dimensions();
-        let projected_short_side = width.min(height) as f32 * self.quantized_zoom;
-        if projected_short_side < BUILDING_MIN_MARKER_SIZE {
+        let reference_zoom =
+            width.min(height) as f32 / BUILDING_LOD_REFERENCE_SIDE * self.quantized_zoom;
+        if reference_zoom < self.cluster_zoom {
             BuildingDetail::Cluster
-        } else if projected_short_side < BUILDING_FULL_DETAIL_SIZE {
+        } else if reference_zoom < self.compact_zoom {
             BuildingDetail::Compact
         } else {
             BuildingDetail::Full
@@ -199,7 +211,7 @@ struct BuildingClusterKey {
 pub(crate) struct BuildingRenderCache {
     tick: Option<u64>,
     map_w: u32,
-    lod_band: i16,
+    lod: Option<BuildingLod>,
     player_id: u16,
     tick_rate_ms_bits: u32,
     buildings: Vec<RenderedBuilding>,
@@ -212,13 +224,13 @@ impl BuildingRenderCache {
         &self,
         tick: u64,
         map_w: u32,
-        lod_band: i16,
+        lod: BuildingLod,
         player_id: u16,
         tick_rate_ms_bits: u32,
     ) -> bool {
         self.tick == Some(tick)
             && self.map_w == map_w
-            && self.lod_band == lod_band
+            && self.lod == Some(lod)
             && self.player_id == player_id
             && self.tick_rate_ms_bits == tick_rate_ms_bits
     }
@@ -316,7 +328,7 @@ fn render_buildings(
     if zoom_scaled < BUILDING_CULL_FLOOR {
         return;
     }
-    let lod = BuildingLod::for_zoom(zoom_scaled);
+    let lod = BuildingLod::for_zoom(zoom_scaled, &dev.shader_params);
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let my_id = sim.my_player_id.unwrap_or(0);
@@ -469,7 +481,7 @@ pub(crate) fn building_at_pointer(
         return None;
     }
 
-    let lod = BuildingLod::for_zoom(zoom_scaled);
+    let lod = BuildingLod::for_zoom(zoom_scaled, &DevConfig::get().shader_params);
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let pointer_x = x as f32 / sf;
     let pointer_y = y as f32 / sf;
@@ -604,7 +616,7 @@ pub(crate) fn building_screen_anchor_bottom(
     sf: f32,
 ) -> [f32; 2] {
     let center = world_to_screen(bx, by, input, sf);
-    let zoom_scaled = input.camera_zoom * sf;
+    let zoom_scaled = input.camera_zoom / sf;
     let marker_size = building_footprint_marker_size(kind, zoom_scaled, BUILDING_MIN_MARKER_SIZE);
     let building_size = building_sprite_size(marker_size, sf, level.max(1));
     let bottom_y = center[1] + (building_size[1] * 0.5) / sf + 6.0;
@@ -999,7 +1011,7 @@ fn cached_buildings<'a>(
     let map_w = map_w.max(1);
     let tick_rate_ms_bits = tick_rate_ms.to_bits();
     let cache = &mut ui.building_render_cache;
-    if !cache.matches(snapshot.tick, map_w, lod.band, my_id, tick_rate_ms_bits) {
+    if !cache.matches(snapshot.tick, map_w, lod, my_id, tick_rate_ms_bits) {
         collect_buildings(
             snapshot,
             map_w,
@@ -1017,7 +1029,7 @@ fn cached_buildings<'a>(
         });
         cache.tick = Some(snapshot.tick);
         cache.map_w = map_w;
-        cache.lod_band = lod.band;
+        cache.lod = Some(lod);
         cache.player_id = my_id;
         cache.tick_rate_ms_bits = tick_rate_ms_bits;
     }
@@ -1241,23 +1253,29 @@ mod tests {
 
     #[test]
     fn standard_building_footprint_shares_lod_and_is_stable_inside_a_zoom_band() {
-        let far = BuildingLod::for_zoom(1.0);
+        let params = sow_render::shader_params::shader_defaults();
+        let far = BuildingLod::for_zoom(1.0, &params);
         for kind in BuildingKind::ALL {
             assert_eq!(far.detail(kind), BuildingDetail::Cluster);
         }
-        assert_eq!(far.cluster_cell_size, BUILDING_CLUSTER_TARGET_SIZE);
-        assert_eq!(far.band, BuildingLod::for_zoom(1.05).band);
+        assert_eq!(far.cluster_cell_size, 40.0);
+        assert_eq!(far.band, BuildingLod::for_zoom(1.05, &params).band);
         assert_eq!(
             far.cluster_cell_size,
-            BuildingLod::for_zoom(1.05).cluster_cell_size
+            BuildingLod::for_zoom(1.05, &params).cluster_cell_size
         );
 
-        let mid = BuildingLod::for_zoom(8.0);
+        let mid = BuildingLod::for_zoom(8.0, &params);
         for kind in BuildingKind::ALL {
-            assert_eq!(mid.detail(kind), BuildingDetail::Full);
+            let expected = if kind == BuildingKind::City {
+                BuildingDetail::Full
+            } else {
+                BuildingDetail::Compact
+            };
+            assert_eq!(mid.detail(kind), expected);
         }
 
-        let close = BuildingLod::for_zoom(32.0);
+        let close = BuildingLod::for_zoom(32.0, &params);
         for kind in BuildingKind::ALL {
             assert_eq!(close.detail(kind), BuildingDetail::Full);
         }
@@ -1265,22 +1283,33 @@ mod tests {
 
     #[test]
     fn building_cache_key_changes_with_tick_map_or_zoom_cluster() {
-        let lod = BuildingLod::for_zoom(1.0);
+        let params = sow_render::shader_params::shader_defaults();
+        let lod = BuildingLod::for_zoom(1.0, &params);
         let mut cache = BuildingRenderCache::default();
         cache.tick = Some(4);
         cache.map_w = 800;
-        cache.lod_band = lod.band;
+        cache.lod = Some(lod);
 
         cache.player_id = 7;
         cache.tick_rate_ms_bits = 100.0f32.to_bits();
 
-        assert!(cache.matches(4, 800, lod.band, 7, 100.0f32.to_bits()));
-        assert!(!cache.matches(5, 800, lod.band, 7, 100.0f32.to_bits()));
-        assert!(!cache.matches(4, 801, lod.band, 7, 100.0f32.to_bits()));
+        assert!(cache.matches(4, 800, lod, 7, 100.0f32.to_bits()));
+        assert!(!cache.matches(5, 800, lod, 7, 100.0f32.to_bits()));
+        assert!(!cache.matches(4, 801, lod, 7, 100.0f32.to_bits()));
         assert!(!cache.matches(
             4,
             800,
-            BuildingLod::for_zoom(2.0).band,
+            BuildingLod::for_zoom(2.0, &params),
+            7,
+            100.0f32.to_bits()
+        ));
+        let mut tuned = params;
+        let slot = sow_render::shader_params::shader_slot("lod.building.cluster_zoom").unwrap();
+        tuned[slot][0] = 2.0;
+        assert!(!cache.matches(
+            4,
+            800,
+            BuildingLod::for_zoom(1.0, &tuned),
             7,
             100.0f32.to_bits()
         ));
@@ -1344,7 +1373,7 @@ mod tests {
         collect_buildings(
             &snapshot,
             100,
-            BuildingLod::for_zoom(1.0),
+            BuildingLod::for_zoom(1.0, &sow_render::shader_params::shader_defaults()),
             7,
             100.0,
             &mut buildings,

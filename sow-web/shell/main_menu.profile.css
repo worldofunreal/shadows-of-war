@@ -2252,6 +2252,44 @@
   height: 48px;
 }
 
+.sow-store__skin-art {
+  position: relative;
+}
+
+.sow-store__skin-art--leader {
+  overflow: hidden;
+}
+
+.sow-store__skin-art--leader img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sow-store__discount {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #d6454f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.sow-store__list-price {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.6;
+}
+
+.sow-store__list-price .sow-store__currency-icon {
+  width: 14px;
+  height: 14px;
+}
+
 .sow-store__skin-body,
 .sow-store__bundle > div {
   display: flex;
@@ -2439,10 +2477,11 @@
 
 .sow-heroes__purchase-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: row;
   align-items: center;
   gap: 6px;
-  margin: 12px 0;
+  margin: 10px 0 0;
+  width: 100%;
 }
 
 .sow-heroes__purchase-actions > span {
@@ -2454,7 +2493,8 @@
 }
 
 .sow-heroes__purchase-actions .sow-store__buy {
-  min-width: 54px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .sow-heroes__actions {
@@ -2702,7 +2742,7 @@
 }
 
 .sow-heroes__rotation {
-  display: inline-flex;
+  display: none !important;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
@@ -3571,7 +3611,8 @@
   }
 }
 
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
   #sow-menu[data-screen="heroes"] .sow-heroes__workspace {
     gap: 10px;
   }
@@ -3621,6 +3662,67 @@
   }
   .sow-menu__leader-copy .sow-hero-briefing__description {
     display: none;
+  }
+
+  /* Compact featured hero card scaling & button compactness */
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy .sow-hero-briefing__civilization {
+    margin-bottom: 2px;
+    font-size: clamp(8px, 1.2vh, 9px);
+    letter-spacing: 0.1em;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured .sow-hero-briefing__icon-slot {
+    flex-basis: clamp(34px, 5.5vh, 46px);
+    width: clamp(34px, 5.5vh, 46px);
+    height: clamp(34px, 5.5vh, 46px);
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured .sow-hero-briefing__ability-name {
+    font-size: clamp(12px, 2vh, 15px);
+    line-height: 1.1;
+    margin-bottom: 2px;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured .sow-hero-briefing__description {
+    font-size: clamp(10.5px, 1.5vh, 12px);
+    line-height: 1.35;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: clamp(6px, 1.2vh, 10px) 0 0;
+    width: 100%;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__purchase-actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin: 0;
+    width: 100%;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__purchase-actions .sow-store__buy {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: clamp(30px, 4.5vh, 38px);
+    padding: 4px 6px;
+    font-size: clamp(8px, 1.2vh, 9.5px);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__purchase-actions .sow-store__buy .sow-store__currency-icon {
+    width: 14px;
+    height: 14px;
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__actions .sow-heroes__confirm {
+    width: 100%;
+    min-height: clamp(34px, 4.8vh, 40px);
+    padding: 5px 10px;
+    font-size: clamp(11px, 1.4vh, 12px);
+  }
+  #sow-menu[data-screen="heroes"] .sow-heroes__skins {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 9.5px;
   }
 }
 

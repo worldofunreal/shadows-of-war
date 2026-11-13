@@ -767,7 +767,7 @@ test("campaign studio reads speaker names from shared text keys", () => {
   assert.deepEqual(report.errors, []);
 });
 
-test("campaign studio authors cinematic endings and navigable validation notes", () => {
+test("campaign studio authors chapter endings and navigable validation notes", () => {
   const demo = campaignEditor.slice(
     campaignEditor.indexOf("function demo()"),
     campaignEditor.indexOf("function createMenuGuide()"),

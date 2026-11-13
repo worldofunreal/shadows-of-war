@@ -182,6 +182,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         anchor: CampaignRecord | null,
         machineView: CampaignMachineView,
     ) {
+        const tutorial = (hud && hud.tutorial) || {};
         const context: TutorialRenderContext = {
             anchor: anchor,
             players: (hud && hud.players) || [],
@@ -265,7 +266,15 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                       ? "_mobile_action"
                       : "_desktop_action";
                 const actionKey = stepTextKey(step, actionSuffix);
-                const action = window.SOWCampaign.guideAction(step);
+                const dynamicFactionAction =
+                    step.guide.kind === "world" &&
+                    ["target_action", "nameplate", "player", "expand"].includes(step.guide.target) &&
+                    step.trigger &&
+                    ["attack", "contact", "defeated", "eliminated"].includes(step.trigger.type);
+                const actionMode = ["attack", "expand"].includes(tutorial.target_action_mode)
+                    ? tutorial.target_action_mode
+                    : null;
+                const action = actionMode || window.SOWCampaign.guideAction(step);
                 const fallbackKey =
                     action === "upgrade_progress"
                         ? "tutorial.hand_upgrade_progress"
@@ -275,7 +284,14 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                             (context.zoomMode === "pinch" ? "tap" : "click") +
                             "_" +
                             action;
-                context.gestureLabel = hasText(actionKey) ? tr(actionKey) : tr(fallbackKey);
+                context.gestureLabel =
+                    dynamicFactionAction && !actionMode
+                        ? ""
+                        : dynamicFactionAction
+                          ? tr(fallbackKey)
+                          : hasText(actionKey)
+                            ? tr(actionKey)
+                            : tr(fallbackKey);
             }
             if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "map_menu_open") {
                 context.gestureOverride = context.zoomMode === "pinch" ? "hold" : "tap";
@@ -336,10 +352,30 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         const guide = step.guide;
         const factionAction =
             step.trigger && ["attack", "contact", "alliance", "defeated", "fleet"].includes(triggerType);
+        const dynamicFactionAction =
+            guide.kind === "world" &&
+            ["target_action", "nameplate", "player", "expand"].includes(guide.target) &&
+            step.trigger &&
+            ["attack", "contact", "defeated", "eliminated"].includes(triggerType);
+        if (dynamicFactionAction) {
+            const mode = tutorial.target_action_mode;
+            const targetAction = tutorial.target_action || (mode === "expand" ? tutorial.expand : null);
+            return ["attack", "expand"].includes(mode) &&
+                targetAction &&
+                Number.isFinite(Number(targetAction.x)) &&
+                Number.isFinite(Number(targetAction.y))
+                ? {
+                      x: Number(targetAction.x),
+                      y: Number(targetAction.y),
+                      offscreen: Boolean(targetAction.offscreen),
+                      cameraTracked: true,
+                  }
+                : null;
+        }
         if (
             guide.kind === "world" &&
             factionAction &&
-            ["target_action", "nameplate", "player"].includes(guide.target)
+            ["target_action", "nameplate", "player", "expand"].includes(guide.target)
         ) {
             return targetNameplate(tutorial) || fallbackAnchor(step, tutorial);
         }
@@ -400,26 +436,6 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
             if (cameraTarget) {
                 cameraTarget.cameraTracked = true;
                 return cameraTarget;
-            }
-        }
-        if (
-            guide.kind === "world" &&
-            guide.target === "target_action" &&
-            step.trigger &&
-            step.trigger.type === "defeated"
-        ) {
-            const targetNameplate = tutorial.target_nameplate;
-            if (
-                targetNameplate &&
-                Number.isFinite(Number(targetNameplate.x)) &&
-                Number.isFinite(Number(targetNameplate.y))
-            ) {
-                return {
-                    x: Number(targetNameplate.x),
-                    y: Number(targetNameplate.y),
-                    offscreen: Boolean(targetNameplate.offscreen),
-                    cameraTracked: true,
-                };
             }
         }
         let result;

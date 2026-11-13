@@ -23,31 +23,60 @@ const GEM_BUNDLES: [(&str, u64, u64); 3] = [
     ("sow_gems_2600", 3_000, 999),
 ];
 
-// Original SOW cosmetic catalog. The style id is an internal renderer hint;
-// the public id is the only value persisted in player ownership.
-const SKINS: [(&str, &str, &str, u64, u8); 3] = [
-    (
-        "ember_vein",
-        "Ember Vein",
-        "gameplay/skins/ember_vein.svg",
-        500,
-        1,
-    ),
-    (
-        "storm_grid",
-        "Storm Grid",
-        "gameplay/skins/storm_grid.svg",
-        1_000,
-        2,
-    ),
-    (
-        "royal_lattice",
-        "Royal Lattice",
-        "gameplay/skins/royal_lattice.svg",
-        1_500,
-        3,
-    ),
+// Original SOW cosmetic catalog. The style id is an internal renderer hint
+// (`apply_skin` in map.wgsl); the public id is the only value persisted in
+// player ownership. Every style must be a distinct pattern, not a recolor.
+const SKINS: [(&str, &str, u64, u8); 8] = [
+    ("ember_vein", "Ember Vein", 500, 1),
+    ("storm_grid", "Storm Grid", 1_000, 2),
+    ("royal_lattice", "Royal Lattice", 1_500, 3),
+    ("tidal_crest", "Tidal Crest", 750, 4),
+    ("hex_bastion", "Hex Bastion", 1_000, 5),
+    ("shield_wall", "Shield Wall", 1_250, 6),
+    ("war_banner", "War Banner", 1_250, 7),
+    ("dragon_scale", "Dragon Scale", 2_000, 8),
 ];
+
+/// Crowns per gem, the same exchange `Leader::price_gems` uses.
+pub const CROWNS_PER_GEM: u64 = 4;
+
+const DAY_SECS: u64 = 24 * 60 * 60;
+// Daily offers reset with the weekly rotation's clock: 08:00 UTC.
+const DAY_RESET_OFFSET_SECS: u64 = ROTATION_RESET_OFFSET_SECS % DAY_SECS;
+
+// (kind, currency, discount percent). Gems lead; crowns get their own deals.
+const WEEKLY_OFFER_SLOTS: [(OfferKind, OfferCurrency, u64); 3] = [
+    (OfferKind::Leader, OfferCurrency::Gems, 40),
+    (OfferKind::Skin, OfferCurrency::Gems, 35),
+    (OfferKind::Leader, OfferCurrency::Crowns, 30),
+];
+const DAILY_OFFER_SLOTS: [(OfferKind, OfferCurrency, u64); 4] = [
+    (OfferKind::Leader, OfferCurrency::Gems, 25),
+    (OfferKind::Skin, OfferCurrency::Gems, 25),
+    (OfferKind::Leader, OfferCurrency::Crowns, 20),
+    (OfferKind::Skin, OfferCurrency::Crowns, 20),
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OfferKind {
+    Leader,
+    Skin,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OfferCurrency {
+    Gems,
+    Crowns,
+}
+
+impl OfferCurrency {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Gems => "gems",
+            Self::Crowns => "crowns",
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct LeaderOffer {
@@ -70,6 +99,8 @@ pub struct SkinOffer {
     pub name: String,
     pub asset_path: String,
     pub cost_gems: u64,
+    #[serde(default)]
+    pub cost_crowns: u64,
     pub owned: bool,
     pub style: u8,
 }
@@ -85,6 +116,26 @@ pub struct GemBundle {
     pub bonus_percent: u64,
 }
 
+/// A limited-time discount on one leader or skin in one currency. Offers are a
+/// pure function of the clock, so the server recomputes them to price a buy.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct StoreOffer {
+    /// `{cadence}:{period}:{kind}:{item}:{currency}`; expires with its period.
+    pub id: String,
+    /// "daily" or "weekly".
+    pub cadence: String,
+    /// "leader" or "skin".
+    pub kind: String,
+    pub item_id: String,
+    /// "gems" or "crowns".
+    pub currency: String,
+    pub base_cost: u64,
+    pub cost: u64,
+    pub discount_percent: u64,
+    /// Unix seconds when the offer ends.
+    pub ends_at: u64,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct StoreCatalog {
     pub rotation_period: u64,
@@ -92,6 +143,8 @@ pub struct StoreCatalog {
     pub leaders: Vec<LeaderOffer>,
     pub skins: Vec<SkinOffer>,
     pub gem_bundles: Vec<GemBundle>,
+    #[serde(default)]
+    pub offers: Vec<StoreOffer>,
     pub crowns: u64,
     pub gems: u64,
 }
@@ -104,13 +157,15 @@ pub struct LeaderResolution {
     pub used_fallback: bool,
 }
 
+pub fn unix_now() -> u64 {
+    web_time::SystemTime::now()
+        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
 pub fn current_rotation_period() -> u64 {
-    rotation_period(
-        web_time::SystemTime::now()
-            .duration_since(web_time::SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
-    )
+    rotation_period(unix_now())
 }
 
 pub const fn rotation_period(unix_seconds: u64) -> u64 {
@@ -527,12 +582,13 @@ pub fn is_store_product(product_id: &str) -> bool {
 pub fn skins() -> Vec<SkinOffer> {
     SKINS
         .into_iter()
-        .map(|(id, name, asset_path, cost_gems, style)| SkinOffer {
+        .map(|(id, name, cost_gems, style)| SkinOffer {
             id: id.to_string(),
             leader_id: "all".to_string(),
             name: name.to_string(),
-            asset_path: asset_path.to_string(),
+            asset_path: format!("gameplay/skins/{id}.svg"),
             cost_gems,
+            cost_crowns: cost_gems * CROWNS_PER_GEM,
             owned: false,
             style,
         })
@@ -555,6 +611,136 @@ pub fn skin_style_for_profile(owned_skins: &BTreeSet<String>, selected_skin: Opt
         Some(id) if owned_skins.contains(id) => skin_style_for_id(Some(id)),
         _ => 0,
     }
+}
+
+pub const fn offer_day(unix_seconds: u64) -> u64 {
+    unix_seconds.saturating_add(DAY_RESET_OFFSET_SECS) / DAY_SECS
+}
+
+// SplitMix64: a stable ordering that does not depend on the `rand` crate.
+fn offer_hash(seed: u64, item: &str) -> u64 {
+    let mut value = seed ^ 0x9E37_79B9_7F4A_7C15;
+    for byte in item.bytes() {
+        value = (value ^ u64::from(byte)).wrapping_mul(0x100_0000_01B3);
+    }
+    value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    value ^ (value >> 31)
+}
+
+fn discounted(base: u64, percent: u64, currency: OfferCurrency) -> u64 {
+    let step = match currency {
+        OfferCurrency::Gems => 5,
+        OfferCurrency::Crowns => 25,
+    };
+    let raw = base * (100 - percent) / 100;
+    (raw / step * step).max(1).min(base)
+}
+
+fn offer_items(kind: OfferKind) -> Vec<(String, u64, u64)> {
+    match kind {
+        OfferKind::Leader => Leader::all()
+            .filter(|leader| !leader.always_free() && leader.price_crowns() > 0)
+            .map(|leader| {
+                (
+                    leader_id(leader).to_string(),
+                    leader.price_gems(),
+                    leader.price_crowns(),
+                )
+            })
+            .collect(),
+        OfferKind::Skin => skins()
+            .into_iter()
+            .map(|skin| (skin.id, skin.cost_gems, skin.cost_crowns))
+            .collect(),
+    }
+}
+
+fn push_offers(
+    offers: &mut Vec<StoreOffer>,
+    cadence: &str,
+    period: u64,
+    ends_at: u64,
+    slots: &[(OfferKind, OfferCurrency, u64)],
+) {
+    for (slot, &(kind, currency, percent)) in slots.iter().enumerate() {
+        let kind_id = match kind {
+            OfferKind::Leader => "leader",
+            OfferKind::Skin => "skin",
+        };
+        let seed = offer_hash(period, cadence).wrapping_add(slot as u64);
+        let Some((item_id, gems, crowns)) = offer_items(kind)
+            .into_iter()
+            .filter(|(id, _, _)| {
+                !offers
+                    .iter()
+                    .any(|offer| offer.kind == kind_id && offer.item_id == *id)
+            })
+            .min_by_key(|(id, _, _)| offer_hash(seed, id))
+        else {
+            continue;
+        };
+        let base_cost = match currency {
+            OfferCurrency::Gems => gems,
+            OfferCurrency::Crowns => crowns,
+        };
+        let cost = discounted(base_cost, percent, currency);
+        offers.push(StoreOffer {
+            id: format!("{cadence}:{period}:{kind_id}:{item_id}:{}", currency.id()),
+            cadence: cadence.to_string(),
+            kind: kind_id.to_string(),
+            item_id,
+            currency: currency.id().to_string(),
+            base_cost,
+            discount_percent: (base_cost - cost) * 100 / base_cost.max(1),
+            cost,
+            ends_at,
+        });
+    }
+}
+
+/// Weekly offers (reset with the hero rotation) then daily offers (08:00 UTC).
+/// No item appears twice at the same time.
+pub fn store_offers(unix_seconds: u64) -> Vec<StoreOffer> {
+    let mut offers = Vec::new();
+    let week = rotation_period(unix_seconds);
+    push_offers(
+        &mut offers,
+        "weekly",
+        week,
+        (week + 1) * ROTATION_PERIOD_SECS - ROTATION_RESET_OFFSET_SECS,
+        &WEEKLY_OFFER_SLOTS,
+    );
+    let day = offer_day(unix_seconds);
+    push_offers(
+        &mut offers,
+        "daily",
+        day,
+        (day + 1) * DAY_SECS - DAY_RESET_OFFSET_SECS,
+        &DAILY_OFFER_SLOTS,
+    );
+    offers
+}
+
+/// Price of a purchase. Without an offer it is the list price; with one, the
+/// offer must still be live and match the item and currency exactly.
+pub fn purchase_cost(
+    kind: &str,
+    item_id: &str,
+    currency: &str,
+    list_price: u64,
+    offer_id: Option<&str>,
+    unix_seconds: u64,
+) -> Result<u64, &'static str> {
+    let Some(offer_id) = offer_id.map(str::trim).filter(|id| !id.is_empty()) else {
+        return Ok(list_price);
+    };
+    store_offers(unix_seconds)
+        .into_iter()
+        .find(|offer| offer.id == offer_id)
+        .filter(|offer| offer.kind == kind && offer.item_id == item_id && offer.currency == currency)
+        .map(|offer| offer.cost)
+        .ok_or("offer expired")
 }
 
 pub fn resolve_leader(
@@ -624,6 +810,8 @@ pub fn catalog_for_profile(
         leaders,
         skins,
         gem_bundles: gem_bundles(),
+        // Only the server's /store/catalog fills these (`store_offers`).
+        offers: Vec::new(),
         crowns,
         gems,
     }
@@ -743,7 +931,11 @@ mod tests {
 
     #[test]
     fn skins_are_original_and_have_stable_prices() {
-        assert_eq!(skins().len(), 3);
+        let all = skins();
+        assert_eq!(all.len(), 8);
+        let styles = all.iter().map(|skin| skin.style).collect::<BTreeSet<_>>();
+        assert_eq!(styles, (1..=8).collect(), "each skin owns one distinct pattern");
+        assert!(all.iter().all(|skin| skin.cost_crowns == skin.cost_gems * CROWNS_PER_GEM));
         assert_eq!(
             skin_by_id("ember_vein").map(|skin| skin.cost_gems),
             Some(500)
@@ -764,6 +956,65 @@ mod tests {
         assert_eq!(
             skin_style_for_profile(&BTreeSet::new(), Some("royal_lattice")),
             0
+        );
+    }
+
+    #[test]
+    fn offers_are_unique_discounted_and_mostly_gems() {
+        let now = 1_800_000_000;
+        let offers = store_offers(now);
+        assert_eq!(offers.len(), WEEKLY_OFFER_SLOTS.len() + DAILY_OFFER_SLOTS.len());
+        let items = offers
+            .iter()
+            .map(|offer| (offer.kind.clone(), offer.item_id.clone()))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(items.len(), offers.len(), "no item is on sale twice at once");
+        let gems = offers.iter().filter(|offer| offer.currency == "gems").count();
+        assert!(gems > offers.len() - gems, "gem offers lead");
+        assert!(offers.iter().any(|offer| offer.currency == "crowns"));
+        assert!(offers.iter().any(|offer| offer.kind == "skin"));
+        for offer in &offers {
+            assert!(offer.cost < offer.base_cost && offer.cost > 0, "{offer:?}");
+            assert!(offer.ends_at > now);
+            if offer.kind == "leader" {
+                let leader = leader_from_id(&offer.item_id).unwrap();
+                assert!(!leader.always_free());
+            } else {
+                assert!(skin_by_id(&offer.item_id).is_some());
+            }
+        }
+        let daily_end = offers.iter().find(|o| o.cadence == "daily").unwrap().ends_at;
+        assert_eq!(daily_end % DAY_SECS, DAY_SECS - DAY_RESET_OFFSET_SECS);
+        assert_eq!(daily_end % DAY_SECS, 8 * 60 * 60, "daily offers reset at 08:00 UTC");
+        assert_eq!(store_offers(now), offers, "offers are deterministic");
+        assert_ne!(
+            store_offers(now + DAY_SECS)
+                .iter()
+                .filter(|offer| offer.cadence == "daily")
+                .map(|offer| offer.id.clone())
+                .collect::<Vec<_>>(),
+            offers
+                .iter()
+                .filter(|offer| offer.cadence == "daily")
+                .map(|offer| offer.id.clone())
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn purchase_cost_honors_only_live_matching_offers() {
+        let now = 1_800_000_000;
+        let offer = store_offers(now).into_iter().next().unwrap();
+        let price = |offer_id, at| {
+            purchase_cost(&offer.kind, &offer.item_id, &offer.currency, offer.base_cost, offer_id, at)
+        };
+        assert_eq!(price(None, now), Ok(offer.base_cost));
+        assert_eq!(price(Some(offer.id.as_str()), now), Ok(offer.cost));
+        assert_eq!(price(Some(offer.id.as_str()), offer.ends_at), Err("offer expired"));
+        let other_currency = if offer.currency == "gems" { "crowns" } else { "gems" };
+        assert_eq!(
+            purchase_cost(&offer.kind, &offer.item_id, other_currency, 1, Some(&offer.id), now),
+            Err("offer expired")
         );
     }
 

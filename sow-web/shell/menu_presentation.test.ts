@@ -992,7 +992,7 @@ test("Opus theme waits for the boot loader before fetching and preserves playbac
         };
         vm.runInNewContext(
             shellSource.slice(start, end) +
-                "this.musicApi = { syncMenuMusic, menuMusic, menuMusicFinishLoaderCycle, menuMusicSetCinematicActive, menuMusicSyncSpectrum, menuMusicDrawSpectrum, menuMusicMixes, menuMusicSetVolumes };",
+                "this.musicApi = { syncMenuMusic, menuMusic, menuMusicFinishLoaderCycle, menuMusicSyncSpectrum, menuMusicDrawSpectrum, menuMusicMixes, menuMusicSetVolumes };",
             context,
         );
         return {
@@ -1053,16 +1053,11 @@ test("Opus theme waits for the boot loader before fetching and preserves playbac
     assert.equal(first.loadCalls, 0, "the active deck does not buffer during the tutorial loader");
     assert.equal(second.loadCalls, 0, "the inactive deck never buffers early");
     assert.equal(first.playCalls, 0, "music waits until the initial loader finishes");
-    h.api.menuMusicSetCinematicActive(true);
     h.window.dispatchEvent({ type: "sow:loader-ready" });
     assert.equal(first.loadCalls, 1, "the active deck starts fetching after the loader closes");
     assert.equal(second.loadCalls, 0, "only the active deck buffers after the loader");
     await flushPlay();
-    assert.equal(first.paused, true, "an opening tutorial cinematic keeps music silent after the loader");
-    assert.equal(first.playCalls, 0, "the theme does not start underneath the cinematic");
-    h.api.menuMusicSetCinematicActive(false);
-    await flushPlay();
-    assert.equal(first.paused, false, "the theme starts when the tutorial cinematic ends");
+    assert.equal(first.paused, false, "the theme starts after the loader closes");
     assert.equal(first.playCalls, 1);
     assert.equal(first.volume, 0.8);
     assert.equal(h.mediaMetadata.length, 1, "the existing player publishes metadata when playback starts");
@@ -1077,11 +1072,6 @@ test("Opus theme waits for the boot loader before fetching and preserves playbac
     assert.equal(h.mediaSession.metadata, h.mediaMetadata[0]);
 
     first.currentTime = 55;
-    h.api.menuMusicSetCinematicActive(true);
-    assert.equal(first.paused, true, "a later cinematic pauses the current theme");
-    h.api.menuMusicSetCinematicActive(false);
-    await flushPlay();
-    assert.equal(first.currentTime, 55, "the theme resumes where it paused after a later cinematic");
     h.api.syncMenuMusic(state("Splash", 0.8, false, "Boot", 1), false);
     h.api.syncMenuMusic(state("Playing", 0.8, false, "Boot", 1), false);
     await flushPlay();
@@ -1602,7 +1592,7 @@ test("skill icons stay beside full hero details and out of compact avatar cards"
     );
 
     const homeStart = lobbiesSource.indexOf("function renderHome()");
-    const homeEnd = lobbiesSource.indexOf("const campaignCinematicAvailability", homeStart);
+    const homeEnd = lobbiesSource.indexOf("export function campaignEpisodeHeroSlug", homeStart);
     const home = lobbiesSource.slice(homeStart, homeEnd);
     assert.match(
         home,
@@ -1788,7 +1778,7 @@ test("hero selection stacks the skill below identity and the home briefing stays
         "the map and controls remain inside the normal-flow command panel",
     );
     const homeStart = lobbiesSource.indexOf("function renderHome()");
-    const homeEnd = lobbiesSource.indexOf("const campaignCinematicAvailability", homeStart);
+    const homeEnd = lobbiesSource.indexOf("export function campaignEpisodeHeroSlug", homeStart);
     const home = lobbiesSource.slice(homeStart, homeEnd);
     assert.match(
         home,
@@ -1888,7 +1878,6 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
         six_sky_ep3: ["northamerica", "six_sky"],
     };
     const campaignDir = path.join(shell, "../../assets/campaign");
-    const cinematicEpisodes = [];
     for (const episodeId of episodeIds) {
         const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, episodeId + ".json"), "utf8"));
         const definition = JSON.parse(
@@ -1896,39 +1885,25 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
         );
         assert.equal(definition.episode_id, episodeId);
         const opening = definition.steps.find((step) => step.id === definition.entry);
-        if (opening && opening.video_src) {
-            cinematicEpisodes.push(episodeId);
-            assert.equal(opening.type, "scene", `${episodeId} opening cinematic is a scene`);
-            assert.equal(
-                opening.presentation,
-                "cinematic",
-                `${episodeId} opening cinematic uses the shared cinematic presentation`,
-            );
-            assert.ok(
-                opening.video_src.startsWith(`/assets/campaign/${episodeId}/`),
-                `${episodeId} cinematic stays in its asset folder`,
-            );
-            const mediaPath = path.join(shell, "../..", opening.video_src.replace(/^\/assets\//, "assets/"));
-            assert.ok(fs.existsSync(mediaPath), `${episodeId} video asset exists`);
-            const stem = mediaPath.replace(/\.(webm|mp4)$/i, "");
-            assert.ok(
-                fs.existsSync(stem + ".mp4") && fs.existsSync(stem + ".webm"),
-                `${episodeId} cinematic ships both WebM and MP4 renditions`,
-            );
-            assert.ok(fs.existsSync(stem + ".poster.webp"), `${episodeId} cinematic ships a poster`);
-            assert.ok(
-                fs.statSync(mediaPath).size <= 6 * 1024 * 1024,
-                `${episodeId} cinematic rendition stays under 6 MB`,
-            );
-        }
+        assert.ok(opening, `${episodeId} entry exists`);
+        assert.deepEqual(
+            definition.steps.filter((step) => Object.hasOwn(step, "video_src") || step.presentation === "cinematic"),
+            [],
+            `${episodeId} has no tutorial video steps`,
+        );
         if (episodeId === "boudica") {
-            const ratioOverrides = definition.steps
-                .filter((step) => Object.hasOwn(step, "attack_ratio_on_enter"))
-                .map((step) => ({ id: step.id, ratio: step.attack_ratio_on_enter }));
+            assert.equal(definition.entry, "boudica_attack_roman_outpost");
+            assert.equal(opening.type, "objective");
+            assert.equal(opening.attack_ratio_on_enter, 0.25);
+            const mediaDir = path.join(campaignDir, "boudica");
             assert.deepEqual(
-                ratioOverrides,
-                [{ id: definition.entry, ratio: 0.25 }],
-                "Boudica sets 25% once at entry and never resets the player's allocation",
+                fs.readdirSync(mediaDir).sort(),
+                [
+                    "intro.720p.555d0500.mp4",
+                    "intro.720p.555d0500.poster.webp",
+                    "intro.720p.555d0500.webm",
+                ],
+                "the source video files remain available without appearing in the episode flow",
             );
         }
         assert.equal(roster.map, expected[episodeId][0], episodeId + " card map");
@@ -1970,16 +1945,13 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
             assert.match(faction.color, /^#[0-9a-f]{6}$/i, `${episodeId}/${faction.name}: map color`);
         }
     }
-    assert.deepEqual(cinematicEpisodes, ["boudica"]);
-    const watchFlow = tutorial.slice(
-        tutorial.indexOf("function watchCampaignCinematic("),
-        tutorial.indexOf("function showError(", tutorial.indexOf("function watchCampaignCinematic(")),
-    );
-    assert.match(
-        watchFlow,
-        /SOWCampaign\.create\(\s*data\.definition,\s*data\.definition\.entry,\s*data\.roster,?\s*\)/,
-    );
-    assert.doesNotMatch(watchFlow, /send\("start_campaign_episode"/);
+    const storyViewSource = fs.readFileSync(path.join(shell, "sow-campaign-view.ts"), "utf8");
+    const editorSource = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.ts"), "utf8");
+    assert.doesNotMatch(storyViewSource, /<video|video_src|cinematic/i);
+    assert.doesNotMatch(editorSource, /video_src|cinematic/i);
+    assert.doesNotMatch(lobbiesSource, /discoverCampaignCinematics|watch_campaign_cinematic|\.triggers\.json/);
+    assert.doesNotMatch(tutorial, /watchCampaignCinematic|SOW_watchCampaignCinematic|sow-campaign-cinematic-preview/);
+    assert.doesNotMatch(shellSource, /menuMusicSetCinematicActive|SOW_menu_music_cinematic|watch_campaign_cinematic/);
 });
 
 test("campaign featured stage selects hero art, switches PLAY and REPLAY, and supports multi-viewport responsive layout", () => {

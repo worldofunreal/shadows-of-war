@@ -198,7 +198,7 @@ test("camera practice stays paused through desktop and touch routes", () => {
                 trigger: {
                     type: "zoom_in_complete",
                     target: "suetonius_paulinus",
-                    distance: 8,
+                    distance: 4,
                     scope: "step",
                 },
                 guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_in" },
@@ -387,12 +387,18 @@ test("camera practice stays paused through desktop and touch routes", () => {
         "boudica_zoom_in",
     );
     assert.equal(
-        adaptiveZoom.update({ ...adaptiveZoomStart, zoom_in_events: 1, camera_target_distance: 12 }, {}, 2)
+        adaptiveZoom.update({ ...adaptiveZoomStart, zoom_in_events: 1, camera_target_distance: 5 }, {}, 2)
+            .step.id,
+        "boudica_zoom_in",
+        "the configured threshold caps the wider camera-relative radius",
+    );
+    assert.equal(
+        adaptiveZoom.update({ ...adaptiveZoomStart, zoom_in_events: 1, camera_target_distance: 4 }, {}, 3)
             .step.id,
         "boudica_found_suetonius",
-        "final zoom accepts the same camera-relative distance",
+        "final zoom completes at the four-tile threshold",
     );
-    const inspected = { ...hovered, camera_zoom: zoomClose, zoom_in_events: 1, camera_target_distance: 8 };
+    const inspected = { ...hovered, camera_zoom: zoomClose, zoom_in_events: 1, camera_target_distance: 4 };
     assert.equal(desktop.update(inspected, {}, 4.75).step.id, "boudica_found_suetonius");
     assert.equal(desktop.advance(null, "boudica_found_suetonius"), true);
     assert.equal(desktop.view().step.id, "boudica_camera_home");
@@ -423,658 +429,6 @@ test("camera practice stays paused through desktop and touch routes", () => {
     assert.equal(touch.view().paused, true);
 });
 
-test("campaign cinematic steps reuse the shared editor/game player and validate local media", () => {
-    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
-    const roster = {
-        map: "eastanglia",
-        player_spawn: [10, 10],
-        factions: [
-            {
-                id: "cinematic_target",
-                name: "Target",
-                x: 20,
-                y: 20,
-                starting_troops: 500,
-                relation: "enemy",
-                civ: "Roman Empire",
-                leader: "Caesar",
-            },
-        ],
-    };
-    const definition = {
-        version: 2,
-        episode_id: "cinematic_test",
-        settings: { starting_troops: 1000 },
-        entry: "intro",
-        speakers: {},
-        steps: [
-            {
-                id: "intro",
-                type: "scene",
-                presentation: "cinematic",
-                title_key: "tutorial.intro",
-                body_key: "tutorial.intro_body",
-                next: "reveal",
-            },
-            {
-                id: "reveal",
-                type: "scene",
-                presentation: "cinematic",
-                title_key: "tutorial.reveal",
-                body_key: "tutorial.reveal_body",
-                next: "end",
-            },
-            { id: "end", type: "end", title_key: "tutorial.end" },
-        ],
-    };
-    const intro = definition.steps.find((step) => step.id === "intro");
-
-    const localVideo = JSON.parse(JSON.stringify(definition));
-    localVideo.steps.find((step) => step.id === intro.id).video_src =
-        "/assets/campaign/cinematic_test/opening.webm";
-    assert.deepEqual(
-        campaign.validate(localVideo, roster, { hasText: () => true, hasAvatar: () => true }).errors,
-        [],
-    );
-    for (const source of [
-        "https://example.com/opening.mp4",
-        "/assets/campaign/other/opening.mp4",
-        "/assets/campaign/cinematic_test/../opening.mp4",
-        "/assets/campaign/cinematic_test/opening.mov",
-    ]) {
-        const invalid = JSON.parse(JSON.stringify(localVideo));
-        invalid.steps.find((step) => step.id === intro.id).video_src = source;
-        assert.ok(
-            campaign
-                .validate(invalid, roster, { hasText: () => true, hasAvatar: () => true })
-                .errors.some((issue) => issue.field === "video_src"),
-            source,
-        );
-    }
-});
-
-test("Boudica video completion reveals its dialogue before the attack objective", async () => {
-    const timers = new Map();
-    let timerId = 0;
-    let playCalls = 0;
-    let continued = 0;
-    const cinematicChanges = [];
-    class Element {
-        constructor(ownerDocument, tagName) {
-            this.ownerDocument = ownerDocument;
-            this.tagName = tagName;
-            this.listeners = {};
-            this.queries = new Map();
-            this.children = [];
-            this.attributes = {};
-            this.dataset = {};
-            this.hidden = false;
-            this.textContent = "";
-            this.paused = true;
-            this.muted = false;
-            this.ended = false;
-            this.style = {
-                setProperty() {},
-                removeProperty(name) {
-                    delete this[name];
-                },
-                getPropertyValue() {
-                    return "";
-                },
-            };
-            const classes = new Set();
-            this.classList = {
-                add: (...values) => values.forEach((value) => classes.add(value)),
-                remove: (...values) => values.forEach((value) => classes.delete(value)),
-                toggle: (value, force) =>
-                    force === undefined
-                        ? classes.has(value)
-                            ? classes.delete(value)
-                            : classes.add(value)
-                        : force
-                          ? classes.add(value)
-                          : classes.delete(value),
-                contains: (value) => classes.has(value),
-            };
-            this.clientWidth = 800;
-            this.clientHeight = 600;
-            this.scrollHeight = 20;
-            this.isConnected = true;
-        }
-        addEventListener(type, listener, options) {
-            (this.listeners[type] ||= []).push({ listener, once: Boolean(options && options.once) });
-        }
-        removeEventListener(type, listener) {
-            this.listeners[type] = (this.listeners[type] || []).filter((item) => item.listener !== listener);
-        }
-        dispatch(type, extra = {}) {
-            const event = Object.assign(
-                { type, target: this, timeStamp: 1000, stopPropagation() {}, preventDefault() {} },
-                extra,
-            );
-            const listeners = this.listeners[type] || [];
-            this.listeners[type] = listeners.filter((item) => !item.once);
-            listeners.forEach((item) => item.listener(event));
-        }
-        setAttribute(name, value) {
-            this.attributes[name] = String(value);
-        }
-        getAttribute(name) {
-            return this.attributes[name] || null;
-        }
-        hasAttribute(name) {
-            return Object.hasOwn(this.attributes, name);
-        }
-        removeAttribute(name) {
-            delete this.attributes[name];
-        }
-        querySelector(selector) {
-            if (!this.queries.has(selector))
-                this.queries.set(
-                    selector,
-                    new Element(
-                        this.ownerDocument,
-                        /img$/.test(selector)
-                            ? "img"
-                            : selector === "video"
-                              ? "video"
-                              : ["[data-story-start]", "[data-story-continue]"].includes(selector)
-                                ? "button"
-                                : "div",
-                    ),
-                );
-            return this.queries.get(selector);
-        }
-        querySelectorAll() {
-            return [];
-        }
-        replaceChildren(...children) {
-            this.children = children;
-        }
-        appendChild(child) {
-            this.children.push(child);
-            return child;
-        }
-        contains(child) {
-            return this.children.includes(child) || [...this.queries.values()].includes(child);
-        }
-        closest(selector) {
-            return selector.includes("button") && this.tagName === "button" ? this : null;
-        }
-        getBoundingClientRect() {
-            return { width: 100, height: 40 };
-        }
-        focus() {
-            this.ownerDocument.activeElement = this;
-        }
-        pause() {
-            this.paused = true;
-        }
-        load() {}
-        click() {}
-    }
-    const documentListeners = {};
-    const doc = {
-        hidden: false,
-        documentElement: { dir: "ltr", dataset: { localeScript: "latin" } },
-        defaultView: { matchMedia: () => ({ matches: false }), performance: { now: () => 1 }, navigator: {} },
-        createElement(tagName) {
-            return new Element(this, tagName);
-        },
-        addEventListener(type, listener, capture) {
-            (documentListeners[type] ||= []).push({ listener, capture: Boolean(capture) });
-        },
-        removeEventListener(type, listener) {
-            documentListeners[type] = (documentListeners[type] || []).filter(
-                (item) => item.listener !== listener,
-            );
-        },
-        dispatchClick(target, isTrusted = true) {
-            const event = {
-                target,
-                isTrusted,
-                defaultPrevented: false,
-                preventDefault() {
-                    this.defaultPrevented = true;
-                },
-                stopPropagation() {},
-            };
-            (documentListeners.click || [])
-                .filter((item) => item.capture)
-                .forEach((item) => item.listener(event));
-            return event;
-        },
-    };
-    doc.defaultView.getComputedStyle = () => ({ marginBottom: "0px" });
-    const root = new Element(doc, "div");
-    root.ownerDocument = doc;
-    root.hidden = true;
-    const sandbox = {
-        console,
-        setTimeout(callback, delay) {
-            const id = ++timerId;
-            timers.set(id, { callback, delay });
-            return id;
-        },
-        clearTimeout(id) {
-            timers.delete(id);
-        },
-    };
-    vm.runInNewContext(campaignViewBundle, sandbox, { filename: "sow-campaign-view.ts" });
-    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
-    const definition = JSON.parse(
-        fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"),
-    );
-    const roster = JSON.parse(
-        fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"),
-    );
-    const opening = definition.steps.find((step) => step.id === definition.entry);
-    let machine = campaign.create(definition, definition.entry, roster);
-    const view = sandbox.SOWCampaignView.mount(root, {
-        asset: (value) => "/" + value,
-        translate: (key) => key,
-        roster,
-        onContinue() {
-            continued++;
-            assert.equal(machine.advance(null, machine.view().step.id), true);
-            view.render(machine.view(), {});
-        },
-        onDismiss: null,
-        onCinematicChange(active) {
-            cinematicChanges.push(active);
-        },
-    });
-    const video = root.querySelector(".sow-story__cinematic").querySelector("video");
-    video.play = () => {
-        playCalls++;
-        video.paused = false;
-        return playCalls === 1
-            ? Promise.reject(Object.assign(new Error("gesture required"), { name: "NotAllowedError" }))
-            : Promise.resolve();
-    };
-    view.render(machine.view(), {});
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    const start = root.querySelector("[data-story-start]");
-    const dialog = root.querySelector(".sow-story__dialog");
-    const cinematic = root.querySelector(".sow-story__cinematic");
-    assert.equal(playCalls, 2, "a rejected audible attempt is retried muted so the scene can continue");
-    assert.deepEqual(cinematicChanges, [true], "music is paused as soon as the cinematic is presented");
-    assert.equal(video.muted, true, "only a rejected autoplay falls back to muted video");
-    assert.equal(start.hidden, true, "autoplay recovery never shows a blocking start prompt");
-    assert.equal(dialog.hidden, true, "the cinematic hides the dialogue card while playing");
-    const cinematicClick = doc.dispatchClick(cinematic, false);
-    assert.equal(video.muted, true, "synthetic clicks do not unlock audio");
-    assert.equal(cinematicClick.defaultPrevented, false);
-    const audioClick = doc.dispatchClick(cinematic);
-    assert.equal(video.muted, false, "the first real click enables cinematic audio");
-    assert.equal(audioClick.defaultPrevented, false, "audio recovery does not consume the click");
-    video.dispatch("playing");
-    assert.equal(cinematic.hidden, false, "the fullscreen overlay remains visible during playback");
-    video.paused = true;
-    video.dispatch("pause");
-    assert.equal(start.hidden, true, "a phone pause does not bring the start prompt back");
-    const wakeClick = doc.dispatchClick(cinematic);
-    await Promise.resolve();
-    assert.equal(playCalls, 3, "the next real click resumes a video paused by sleep");
-    assert.equal(video.paused, false);
-    assert.equal(wakeClick.defaultPrevented, false, "resuming after sleep leaves the click intact");
-    video.dispatch("playing");
-    cinematic.dispatch("pointerdown", { pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0 });
-    assert.equal(cinematic.classList.contains("is-holding"), true, "desktop press begins the skip progress");
-    cinematic.dispatch("pointerup", { pointerId: 1, pointerType: "mouse" });
-    assert.equal(cinematic.classList.contains("is-holding"), false, "a short desktop press cancels");
-    assert.equal(
-        [...timers.values()].some((timer) => timer.delay === 1250),
-        false,
-    );
-    assert.equal(continued, 0);
-
-    const continueButton = root.querySelector("[data-story-continue]");
-    continueButton.setAttribute("data-story-continue", "");
-    for (const [width, height] of [
-        [1530, 920],
-        [390, 844],
-    ]) {
-        for (const completion of ["hold", "Escape", "ended", "error"]) {
-            view.render(null, {});
-            root.clientWidth = width;
-            root.clientHeight = height;
-            machine = campaign.create(definition, definition.entry, roster);
-            view.render(machine.view(), {});
-            video.dispatch("playing");
-            const before = continued;
-            cinematic.dispatch("pointerdown", {
-                pointerId: 2,
-                pointerType: width < 960 ? "touch" : "mouse",
-                isPrimary: true,
-                button: 0,
-            });
-            const holdTimer = [...timers.entries()].find(([, timer]) => timer.delay === 1250);
-            assert.ok(holdTimer, "skipping still requires a 1.25-second hold");
-            if (completion === "hold") {
-                timers.delete(holdTimer[0]);
-                holdTimer[1].callback();
-            } else if (completion === "Escape") root.dispatch("keydown", { key: "Escape", repeat: false });
-            else video.dispatch(completion);
-
-            assert.equal(continued, before, `${completion} closes only the video`);
-            assert.equal(machine.view().step.id, definition.entry);
-            assert.equal(cinematic.hidden, true);
-            assert.equal(video.paused, true);
-            assert.equal(cinematicChanges.at(-1), false, "music resumes with the dialogue");
-            assert.equal(
-                dialog.hidden,
-                false,
-                `${completion} reveals Boudica's dialogue at ${width}x${height}`,
-            );
-            assert.equal(root.querySelector(".sow-story__body").textContent, opening.body_key);
-            assert.equal(root.querySelector(".sow-story__footer").hidden, false);
-            assert.equal(cinematic.classList.contains("is-holding"), false);
-            assert.equal(
-                [...timers.values()].some((timer) => timer.delay === 1250),
-                false,
-                "video completion cancels a pending skip",
-            );
-            video.dispatch("playing");
-            assert.equal(dialog.hidden, false, "a late playback event cannot hide the dialogue again");
-
-            root.dispatch("click", { target: continueButton, timeStamp: 2000 + before * 1000 });
-            assert.equal(continued, before + 1);
-            assert.equal(machine.view().step.id, opening.next, "only Continue opens the attack objective");
-            assert.equal(dialog.hidden, true);
-            assert.equal(root.querySelector(".sow-story__objective").hidden, width < 960);
-        }
-    }
-    view.render(null, {});
-    machine = campaign.create(definition, definition.entry, roster);
-    let rejectPlayback;
-    video.play = () => {
-        playCalls++;
-        return new Promise((resolve, reject) => {
-            rejectPlayback = reject;
-        });
-    };
-    view.render(machine.view(), {});
-    root.dispatch("keydown", { key: "Escape", repeat: false });
-    const attempts = playCalls;
-    rejectPlayback(Object.assign(new Error("gesture required"), { name: "NotAllowedError" }));
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    assert.equal(playCalls, attempts, "a late autoplay rejection cannot restart a skipped video");
-    assert.equal(machine.view().step.id, definition.entry);
-    assert.equal(dialog.hidden, false);
-    view.destroy();
-});
-
-test("cinematic resolves media through its asset root and waits for the loader", async () => {
-    const timers = new Map();
-    let timerId = 0;
-    class Element {
-        constructor(ownerDocument, tagName) {
-            this.ownerDocument = ownerDocument;
-            this.tagName = tagName;
-            this.listeners = {};
-            this.queries = new Map();
-            this.children = [];
-            this.attributes = {};
-            this.dataset = {};
-            this.hidden = false;
-            this.textContent = "";
-            this.style = {
-                setProperty() {},
-                removeProperty(name) {
-                    delete this[name];
-                },
-                getPropertyValue() {
-                    return "";
-                },
-            };
-            const classes = new Set();
-            this.classList = {
-                add: (...values) => values.forEach((value) => classes.add(value)),
-                remove: (...values) => values.forEach((value) => classes.delete(value)),
-                toggle: (value, force) =>
-                    force === undefined
-                        ? classes.has(value)
-                            ? classes.delete(value)
-                            : classes.add(value)
-                        : force
-                          ? classes.add(value)
-                          : classes.delete(value),
-                contains: (value) => classes.has(value),
-            };
-            this.clientWidth = 800;
-            this.clientHeight = 600;
-            this.scrollHeight = 20;
-            this.isConnected = true;
-        }
-        addEventListener(type, listener, options) {
-            (this.listeners[type] ||= []).push({ listener, once: Boolean(options && options.once) });
-        }
-        removeEventListener(type, listener) {
-            this.listeners[type] = (this.listeners[type] || []).filter((item) => item.listener !== listener);
-        }
-        dispatch(type, extra = {}) {
-            const event = Object.assign(
-                { type, target: this, timeStamp: 1000, stopPropagation() {}, preventDefault() {} },
-                extra,
-            );
-            const listeners = this.listeners[type] || [];
-            this.listeners[type] = listeners.filter((item) => !item.once);
-            listeners.forEach((item) => item.listener(event));
-        }
-        setAttribute(name, value) {
-            this.attributes[name] = String(value);
-        }
-        getAttribute(name) {
-            return this.attributes[name] || null;
-        }
-        hasAttribute(name) {
-            return Object.hasOwn(this.attributes, name);
-        }
-        removeAttribute(name) {
-            delete this.attributes[name];
-        }
-        querySelector(selector) {
-            if (!this.queries.has(selector))
-                this.queries.set(
-                    selector,
-                    new Element(
-                        this.ownerDocument,
-                        /img$/.test(selector)
-                            ? "img"
-                            : selector === "video"
-                              ? "video"
-                              : selector === "[data-story-start]"
-                                ? "button"
-                                : "div",
-                    ),
-                );
-            return this.queries.get(selector);
-        }
-        querySelectorAll() {
-            return [];
-        }
-        replaceChildren(...children) {
-            this.children = children;
-        }
-        appendChild(child) {
-            this.children.push(child);
-            return child;
-        }
-        contains(child) {
-            return this.children.includes(child) || [...this.queries.values()].includes(child);
-        }
-        closest(selector) {
-            return selector.includes("button") && this.tagName === "button" ? this : null;
-        }
-        getBoundingClientRect() {
-            return { width: 100, height: 40 };
-        }
-        focus() {
-            this.ownerDocument.activeElement = this;
-        }
-        pause() {}
-        load() {}
-        click() {}
-    }
-    const loader = new Element(null, "div");
-    loader.attributes["aria-hidden"] = "true";
-    const viewListeners = {};
-    const doc = {
-        hidden: false,
-        documentElement: { dir: "ltr", dataset: { localeScript: "latin" } },
-        defaultView: {
-            matchMedia: () => ({ matches: false }),
-            performance: { now: () => 1 },
-            navigator: {},
-            addEventListener(type, listener, options) {
-                (viewListeners[type] ||= []).push({ listener, once: Boolean(options && options.once) });
-            },
-            removeEventListener(type, listener) {
-                viewListeners[type] = (viewListeners[type] || []).filter(
-                    (item) => item.listener !== listener,
-                );
-            },
-        },
-        createElement(tagName) {
-            return new Element(this, tagName);
-        },
-        getElementById(id) {
-            return id === "web-loader" ? loader : null;
-        },
-        addEventListener() {},
-        removeEventListener() {},
-    };
-    const dispatchView = (type) => {
-        (viewListeners[type] || []).forEach((item) => item.listener({ type }));
-        viewListeners[type] = (viewListeners[type] || []).filter((item) => !item.once);
-    };
-    const root = new Element(doc, "div");
-    root.ownerDocument = doc;
-    root.hidden = true;
-    const sandbox = {
-        console,
-        setTimeout(callback, delay) {
-            const id = ++timerId;
-            timers.set(id, { callback, delay });
-            return id;
-        },
-        clearTimeout(id) {
-            timers.delete(id);
-        },
-    };
-    vm.runInNewContext(campaignViewBundle, sandbox, { filename: "sow-campaign-view.ts" });
-    const view = sandbox.SOWCampaignView.mount(root, {
-        asset: (value) => "./assets/" + value + "?v=hash1234",
-        translate: (key) => key,
-        roster: { factions: [] },
-        onContinue() {},
-        onDismiss() {},
-        onCinematicChange() {},
-    });
-    const video = root.querySelector(".sow-story__cinematic").querySelector("video");
-    let playCalls = 0;
-    video.play = () => {
-        playCalls++;
-        return Promise.resolve();
-    };
-    const step = {
-        id: "opening",
-        type: "scene",
-        presentation: "cinematic",
-        video_src: "/assets/campaign/boudica/intro.720p.555d0500.webm",
-        title_key: "opening_title",
-        body_key: "opening_body",
-    };
-    const definition = { episode_id: "boudica", speakers: {}, steps: [step] };
-    const machineView = {
-        definition,
-        step,
-        line: step,
-        paused: true,
-        done: false,
-        choices: [],
-        progress: { target: 0, current: 0 },
-        state: { line: 0 },
-    };
-    view.render(machineView, {});
-    await Promise.resolve();
-    assert.equal(playCalls, 1, "a free loader lets the cinematic start at once");
-    assert.equal(video.muted, false, "successful autoplay keeps the existing audible path unchanged");
-    assert.deepEqual(
-        video.children.map((child) => [child.src, child.tagName]),
-        [
-            ["./assets/campaign/boudica/intro.720p.555d0500.webm?v=hash1234", "source"],
-            ["./assets/campaign/boudica/intro.720p.555d0500.mp4?v=hash1234", "source"],
-        ],
-        "WebM first, MP4 as fallback",
-    );
-    assert.equal(
-        video.getAttribute("poster"),
-        "./assets/campaign/boudica/intro.720p.555d0500.poster.webp?v=hash1234",
-        "the poster comes from the same stem",
-    );
-
-    playCalls = 0;
-    loader.attributes["aria-hidden"] = "false";
-    const second = {
-        ...step,
-        id: "opening2",
-        video_src: "/assets/campaign/boudica/intro.720p.555d0500.webm",
-    };
-    const secondView = {
-        ...machineView,
-        step: second,
-        line: second,
-        definition: { ...definition, steps: [second] },
-    };
-    view.render(secondView, {});
-    await Promise.resolve();
-    assert.equal(playCalls, 0, "a visible loader defers the cinematic without downloading bytes");
-    assert.equal(
-        root.querySelector("[data-story-start]").hidden,
-        true,
-        "gameplay loader waits without showing a start prompt",
-    );
-    loader.attributes["aria-hidden"] = "true";
-    dispatchView("sow:loader-cycle-ready");
-    await Promise.resolve();
-    assert.equal(playCalls, 1, "the cinematic starts once the loader is gone");
-    view.destroy();
-
-    const editorRoot = new Element(doc, "div");
-    editorRoot.ownerDocument = doc;
-    editorRoot.hidden = true;
-    const editorView = sandbox.SOWCampaignView.mount(editorRoot, {
-        asset: (value) => "/" + value,
-        translate: (key) => key,
-        autoPlayCinematic: false,
-        roster: { factions: [] },
-        onContinue() {},
-        onDismiss() {},
-        onCinematicChange() {},
-    });
-    editorView.render(machineView, {});
-    const playButton = editorRoot.querySelector("[data-story-start]");
-    const editorVideo = editorRoot.querySelector(".sow-story__cinematic").querySelector("video");
-    let editorPlayCalls = 0;
-    editorVideo.play = () => {
-        editorPlayCalls++;
-        return Promise.resolve();
-    };
-    assert.equal(playButton.hidden, false, "the campaign editor retains its deliberate manual Play action");
-    assert.equal(playButton.textContent, "lobbies.play", "manual Play uses the existing localized label");
-    playButton.setAttribute("data-story-start", "");
-    editorRoot.dispatch("click", { target: playButton, timeStamp: 1000 });
-    await Promise.resolve();
-    assert.equal(editorPlayCalls, 1, "the editor Play action still starts its preview");
-    editorView.destroy();
-});
-
 test("Boudica spoken cards and contact responses require named existing portraits", () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const definitionPath = path.join(shell, "../../assets/campaign/boudica.triggers.json");
@@ -1093,18 +447,42 @@ test("Boudica spoken cards and contact responses require named existing portrait
     assert.equal(definition.require_speaker_portraits, true);
     assert.deepEqual(report(definition).errors, []);
 
-    const inheritedSpeaker = structuredClone(definition);
-    const inheritedScene = inheritedSpeaker.steps.find(
-        (step) => step.id === "boudica_rise_of_the_iceni_intro",
-    );
+    const spokenCard = {
+        version: 2,
+        episode_id: "boudica_portrait_test",
+        settings: definition.settings,
+        speakers: definition.speakers,
+        require_speaker_portraits: true,
+        entry: "opening",
+        steps: [
+            {
+                id: "opening",
+                type: "scene",
+                title_key: "tutorial.campaign_boudica_boudica_first_victory_title",
+                body_key: "tutorial.campaign_boudica_attack_roman_outpost_body",
+                speaker: "boudica",
+                presentation: "dialogue",
+                next: "end",
+            },
+            {
+                id: "end",
+                type: "end",
+                title_key: "tutorial.campaign_boudica_boudica_end_title",
+                body_key: "tutorial.campaign_boudica_boudica_end_body",
+                presentation: "chapter",
+            },
+        ],
+    };
+    const inheritedSpeaker = structuredClone(spokenCard);
+    const inheritedScene = inheritedSpeaker.steps.find((step) => step.id === "opening");
     inheritedScene.lines = [{ title_key: inheritedScene.title_key, body_key: inheritedScene.body_key }];
     assert.deepEqual(report(inheritedSpeaker).errors, [], "conversation lines inherit the scene speaker");
 
-    const missingSpeaker = structuredClone(definition);
-    delete missingSpeaker.steps.find((step) => step.id === "boudica_rise_of_the_iceni_intro").speaker;
+    const missingSpeaker = structuredClone(spokenCard);
+    delete missingSpeaker.steps.find((step) => step.id === "opening").speaker;
     assert.ok(
         report(missingSpeaker).errors.some(
-            (issue) => issue.step === "boudica_rise_of_the_iceni_intro" && issue.field === "speaker",
+            (issue) => issue.step === "opening" && issue.field === "speaker",
         ),
     );
 
@@ -1150,7 +528,7 @@ test("Boudica spoken cards and contact responses require named existing portrait
         ),
     );
     const episodeEmoteMap = structuredClone(definition);
-    episodeEmoteMap.emote_texts = { threat: "tutorial.campaign_boudica_boudica_council_strike" };
+    episodeEmoteMap.emote_texts = { threat: "tutorial.campaign_boudica_roman_outpost_provoke_emote" };
     assert.ok(
         report(episodeEmoteMap).errors.some(
             (issue) => issue.field === "campaign" && issue.message.includes("emote_texts"),
@@ -1158,16 +536,16 @@ test("Boudica spoken cards and contact responses require named existing portrait
         "bubble lines live on their step, not in an episode map",
     );
     const emoteWithoutLine = structuredClone(definition);
-    delete emoteWithoutLine.steps.find((step) => step.id === definition.entry).emote_text_key;
+    delete emoteWithoutLine.steps.find((step) => step.id === "boudica_first_victory").emote_text_key;
     assert.ok(
         report(emoteWithoutLine).errors.some(
-            (issue) => issue.step === definition.entry && issue.field === "emote_text_key",
+            (issue) => issue.step === "boudica_first_victory" && issue.field === "emote_text_key",
         ),
     );
     const lineWithoutEmote = structuredClone(definition);
-    const releaseStep = lineWithoutEmote.steps.find((step) => step.id === definition.entry);
+    const releaseStep = lineWithoutEmote.steps.find((step) => step.id === "boudica_first_victory");
     releaseStep.emote = "clear";
-    releaseStep.emote_text_key = "tutorial.campaign_boudica_boudica_council_strike";
+    releaseStep.emote_text_key = "tutorial.campaign_boudica_roman_outpost_provoke_emote";
     assert.ok(
         report(lineWithoutEmote).errors.some(
             (issue) => issue.step === releaseStep.id && issue.field === "emote_text_key",
@@ -1179,9 +557,11 @@ test("Boudica spoken cards and contact responses require named existing portrait
         report(anonymousEmote).errors.some((issue) => issue.field === "reactions.speaker"),
         "a response names who emotes",
     );
-    const emoteAsDialogue = structuredClone(definition);
-    const dialogueStep = emoteAsDialogue.steps.find((step) => step.type === "scene" && step.body_key);
+    const emoteAsDialogue = structuredClone(spokenCard);
+    const dialogueStep = emoteAsDialogue.steps.find((step) => step.id === "opening");
     dialogueStep.body_key = "tutorial.campaign_boudica_stonea_stand_with_you_emote";
+    dialogueStep.emote = "threat";
+    dialogueStep.emote_text_key = dialogueStep.body_key;
     assert.ok(
         report(emoteAsDialogue).errors.some(
             (issue) => issue.step === dialogueStep.id && issue.field === "body_key",
@@ -1189,20 +569,20 @@ test("Boudica spoken cards and contact responses require named existing portrait
         "an emote line cannot also be a dialogue line",
     );
     const badEmoteKind = structuredClone(definition);
-    badEmoteKind.steps.find((step) => step.id === definition.entry).emote = "furious";
+    badEmoteKind.steps.find((step) => step.id === "boudica_first_victory").emote = "furious";
     assert.ok(
         report(badEmoteKind).errors.some(
-            (issue) => issue.step === definition.entry && issue.field === "emote",
+            (issue) => issue.step === "boudica_first_victory" && issue.field === "emote",
         ),
     );
     const pinnedRelease = structuredClone(definition);
     Object.assign(
-        pinnedRelease.steps.find((step) => step.id === definition.entry),
+        pinnedRelease.steps.find((step) => step.id === "boudica_first_victory"),
         { emote: "clear", emote_pinned: true },
     );
     assert.ok(
         report(pinnedRelease).errors.some(
-            (issue) => issue.step === definition.entry && issue.field === "emote_pinned",
+            (issue) => issue.step === "boudica_first_victory" && issue.field === "emote_pinned",
         ),
     );
     const exchangeOnChoice = structuredClone(definition);
@@ -1432,7 +812,7 @@ test("Boudica spoken cards and contact responses require named existing portrait
     );
     const timerWithInvalidGate = structuredClone(campaignExchange);
     timerWithInvalidGate.reactions.find((reaction) => reaction.id === "colonia_timer_taunt").during =
-        "boudica_rise_of_the_iceni_intro";
+        "boudica_ninth_legion_intro";
     assert.ok(
         report(timerWithInvalidGate).errors.some((issue) => issue.field === "reactions.during"),
         "a scene cannot be used as an active timer objective",
@@ -1513,6 +893,25 @@ test("Boudica spoken cards and contact responses require named existing portrait
     assert.ok(
         report(unrelatedDefeatGate).errors.some((issue) => issue.field === "reactions.during"),
         "a final line only watches its own active defeat objective",
+    );
+});
+
+test("campaign validation rejects removed tutorial video fields and presentations", () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const legacyVideo = structuredClone(definition);
+    const opening = legacyVideo.steps.find((step) => step.id === legacyVideo.entry);
+    opening.presentation = "cinematic";
+    opening.video_src = "/assets/campaign/boudica/intro.webm";
+    const errors = campaign
+        .validate(legacyVideo, roster, { hasText: () => true, hasAvatar: () => true })
+        .errors;
+    assert.ok(errors.some((issue) => issue.field === "presentation"));
+    assert.ok(
+        errors.some((issue) => issue.message === "Unsupported field (no runtime behavior): video_src"),
+        "video fields are rejected as unsupported runtime behavior",
     );
 });
 
@@ -3089,6 +2488,12 @@ test("tutorial camera anchors and paused build guides publish current map coordi
     const payload = webMenu.slice(payloadStart, payloadEnd);
     assert.match(payload, /tutorial_tile_world\(expand_tile, map_w, map_h\)/);
     assert.match(payload, /"expand_target": expand_target/);
+    assert.match(payload, /"target_action_mode": target_action_mode/);
+    assert.equal(
+        (guide.match(/tutorial_border_action_tiles\(/g) || []).length,
+        1,
+        "assault and target guidance share one cached border scan",
+    );
     const uiSource = { matches: () => false, getClientRects: () => [{}] };
     const { anchorFor } = createTutorialGuides({
         window: {
@@ -3105,12 +2510,36 @@ test("tutorial camera anchors and paused build guides publish current map coordi
             JSON.stringify(
                 anchorFor(
                     { guide: { kind: "world", target: "target_action" }, trigger: { type: "attack" } },
-                    { tutorial: { target_nameplate: { x: 12, y: 18, offscreen: true } } },
+                    {
+                        tutorial: {
+                            target_action_mode: "attack",
+                            target_action: { x: 52, y: 38, offscreen: true },
+                            target_nameplate: { x: 12, y: 18, offscreen: true },
+                        },
+                    },
                 ),
             ),
         ),
-        { x: 12, y: 18, offscreen: true, cameraTracked: true },
-        "world faction guides follow the live target nameplate",
+        { x: 52, y: 38, offscreen: true, cameraTracked: true },
+        "a legal attack guide points to the enemy land tile",
+    );
+    assert.deepEqual(
+        JSON.parse(
+            JSON.stringify(
+                anchorFor(
+                    { guide: { kind: "world", target: "nameplate" }, trigger: { type: "contact" } },
+                    {
+                        tutorial: {
+                            target_action_mode: "expand",
+                            target_action: { x: 31, y: 41 },
+                            target_nameplate: { x: 12, y: 18, offscreen: true },
+                        },
+                    },
+                ),
+            ),
+        ),
+        { x: 31, y: 41, offscreen: false, cameraTracked: true },
+        "contact guides point to expansion land instead of asking for a click on the faction",
     );
     assert.deepEqual(
         JSON.parse(JSON.stringify(anchorFor({ guide: { kind: "ui", target: "hud_home" } }, {}))),
@@ -3141,12 +2570,17 @@ test("tutorial camera anchors and paused build guides publish current map coordi
         JSON.parse(
             JSON.stringify(
                 missingControlGuides.anchorFor(stoneaContact, {
-                    tutorial: { player: { x: 50, y: 50 }, target_nameplate: targetAnchor },
+                    tutorial: {
+                        player: { x: 50, y: 50 },
+                        target_action_mode: "expand",
+                        target_action: { x: 66, y: 72, offscreen: false },
+                        target_nameplate: targetAnchor,
+                    },
                 }),
             ),
         ),
-        { x: 790, y: 310, offscreen: true, cameraTracked: true },
-        "after the 250-tile goal, Stonea's nameplate becomes the next hand target",
+        { x: 66, y: 72, offscreen: false, cameraTracked: true },
+        "after the 250-tile goal, the hand guides expansion toward Stonea",
     );
     assert.deepEqual(
         JSON.parse(
@@ -3524,7 +2958,7 @@ test("campaign tap guides use shared action labels and localized fallback", () =
         "upgrade_progress",
     );
 
-    function renderFallbackLabel(mode, step) {
+    function renderFallbackLabel(mode, step, actionMode = null) {
         const { renderContext } = createTutorialGuides({
             document: { documentElement: { dir: "ltr" } },
             window: { SOWCampaign: campaign },
@@ -3534,23 +2968,45 @@ test("campaign tap guides use shared action labels and localized fallback", () =
             hasText: () => false,
             tr: (key) => key,
         });
-        return renderContext(step, { settings: {} }, null, { paused_action: null }).gestureLabel;
+        return renderContext(
+            step,
+            { settings: {}, tutorial: { target_action_mode: actionMode } },
+            null,
+            { paused_action: null },
+        ).gestureLabel;
     }
     for (const { step } of tapSteps) {
         if (step.guide.show_label === false) {
             assert.equal(renderFallbackLabel("wheel", step), undefined, step.id + " opted out of hand text");
             continue;
         }
-        const action = campaign.guideAction(step);
+        const dynamicFactionAction =
+            step.guide.kind === "world" &&
+            ["target_action", "nameplate", "player", "expand"].includes(step.guide.target) &&
+            step.trigger &&
+            ["attack", "contact", "defeated", "eliminated"].includes(step.trigger.type);
+        const actionMode = dynamicFactionAction
+            ? step.trigger.type === "contact"
+                ? "expand"
+                : "attack"
+            : null;
+        const action = dynamicFactionAction ? actionMode : campaign.guideAction(step);
         const expected = (mode) =>
             action === "upgrade_progress"
                 ? "tutorial.hand_upgrade_progress"
                 : action === "interact"
                   ? "tutorial.hand_" + mode
                   : "tutorial.hand_" + mode + "_" + action;
-        assert.equal(renderFallbackLabel("wheel", step), expected("click"), step.id + " desktop label");
-        assert.equal(renderFallbackLabel("pinch", step), expected("tap"), step.id + " mobile label");
+        assert.equal(renderFallbackLabel("wheel", step, actionMode), expected("click"), step.id + " desktop label");
+        assert.equal(renderFallbackLabel("pinch", step, actionMode), expected("tap"), step.id + " mobile label");
     }
+    const contactStep = {
+        id: "contact",
+        trigger: { type: "contact", target: "tribe" },
+        guide: { kind: "world", target: "target_action", gesture: "tap" },
+    };
+    assert.equal(renderFallbackLabel("wheel", contactStep, "expand"), "tutorial.hand_click_expand");
+    assert.equal(renderFallbackLabel("wheel", contactStep), "", "missing map mode never says to click contact");
 });
 
 test("Boudica UI guides spotlight the requested controls and Legion IX attack slider", () => {
@@ -3591,15 +3047,18 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(intro.next, "boudica_select_city_upgrade");
     assert.equal(
         definition.steps.find((step) => step.id === "boudica_city_upgrade_wait").next,
-        "boudica_camulodunum",
+        ratioStepId,
     );
-    assert.equal(definition.steps.find((step) => step.id === "boudica_camulodunum").next, ratioStepId);
+    assert.equal(
+        definition.steps.find((step) => step.id === "boudica_camulodunum").next,
+        strikeDialog.id,
+    );
     assert.equal(
         intro.attack_ratio_on_enter,
         undefined,
         "the Ninth intro preserves the 25% tutorial allocation",
     );
-    assert.equal(ratioStep.next, strikeDialog.id);
+    assert.equal(ratioStep.next, "boudica_camulodunum");
     assert.equal(strikeDialog.type, "scene");
     assert.equal(strikeDialog.speaker, "boudica");
     assert.equal(strikeDialog.next, legionObjective.id);
@@ -3614,13 +3073,21 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(ratioMachine.view().paused, true, "the battlefield stays still while adjusting the slider");
     for (const value of [0.25, 0.5, 0.99])
         assert.equal(ratioMachine.update({ attack_ratio: value }, {}).step.id, ratioStepId);
-    const strikeView = ratioMachine.update({ attack_ratio: 1 }, {});
+    const assaultView = ratioMachine.update({ attack_ratio: 1 }, {});
+    assert.equal(assaultView.state.id, "boudica_camulodunum");
+    assert.equal(assaultView.paused, false, "the Roman city assault follows the troop lesson");
+    const defeatFacts = { attack_ratio: 1, defeated_faction_ids: ["camulodunum"] };
+    let strikeView = ratioMachine.update(defeatFacts, {});
     assert.equal(strikeView.state.id, strikeDialog.id);
     assert.equal(
         strikeDialog.exchange[0].presentation,
         "dialogue",
-        "Boudica's strike dialogue opens immediately without emote dead air",
+        "Boudica's strike dialogue follows the visible Camulodunum exchange",
     );
+    for (let guard = 0; strikeView.exchange_phase !== "dialogue" && guard < 10; guard++) {
+        ratioClock += strikeView.wait_remaining_ms || 1;
+        strikeView = ratioMachine.update(defeatFacts, {});
+    }
     assert.equal(strikeView.waiting, false);
     assert.equal(strikeView.exchange_phase, "dialogue");
     assert.equal(strikeView.paused, true, "the modal pauses while the dialogue is read");

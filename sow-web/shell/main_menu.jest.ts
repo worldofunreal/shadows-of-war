@@ -28,6 +28,7 @@ export {
     isAndroidTwa,
     loadStoreCatalog,
     openLeaderPurchase,
+    openOfferPurchase,
     openSkinPurchase,
     renderAuthModal,
     renderLeaderPurchase,

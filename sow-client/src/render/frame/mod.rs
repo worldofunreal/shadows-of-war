@@ -17,6 +17,18 @@ fn territory_blend_mode(
     }
 }
 
+/// Dev Tools zoom cutoffs are CSS px per tile; the map shader compares device px per tile.
+fn map_shader_params(
+    params: &[[f32; 4]; sow_render::shader_params::PARAM_CAPACITY],
+    sf: f32,
+) -> [[f32; 4]; sow_render::shader_params::PARAM_CAPACITY] {
+    let mut params = *params;
+    if let Some(slot) = sow_render::shader_params::shader_slot("border.tribe_zoom_cutoff") {
+        params[slot][0] *= sf.max(0.01);
+    }
+    params
+}
+
 fn pack_player_territory_color(rgb: [f32; 3], blend_mode: f32) -> u32 {
     // RGB uses the low 24 bits; the free high byte stores this owner's blend mode.
     let packed_rgb = rgb.iter().enumerate().fold(0u32, |packed, (i, channel)| {
@@ -624,7 +636,7 @@ impl SowApp {
                         preview_effect: preview_effect as f32,
                         preview_phase,
                         preview_time,
-                        shader_params: dev.shader_params,
+                        shader_params: map_shader_params(&dev.shader_params, sf),
                     };
                     let colors_struct = crate::render::gpu::PlayerColors {
                         colors: player_colors,

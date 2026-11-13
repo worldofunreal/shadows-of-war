@@ -21,6 +21,7 @@ export interface PurchaseIntent {
     productId?: string;
     leaderId?: string;
     skinId?: string;
+    offerId?: string;
 }
 
 export interface PurchaseModal {
@@ -32,6 +33,7 @@ export interface PurchaseModal {
     leaderId?: string;
     skinId?: string;
     currency?: string;
+    offerId?: string;
     submitted: boolean;
     timedOut?: boolean;
     gemBaseline?: number;
@@ -131,7 +133,7 @@ export const menuUi: MenuUi = {
     browserSearchQuery: "",
     heroesSearchQuery: "",
     heroesRegionFilter: "all",
-    heroesSort: "cost_desc",
+    heroesSort: "alpha_asc",
     dropdownOpenKey: null,
     authModalOpen: false,
     authEmail: "",

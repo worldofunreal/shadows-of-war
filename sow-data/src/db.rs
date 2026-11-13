@@ -4139,22 +4139,28 @@ impl PlayerDb {
         account_id: &str,
         requested_leader: &str,
         currency: &str,
+        offer_id: Option<&str>,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let leader = crate::commerce::leader_from_id(requested_leader).ok_or("unknown leader")?;
         if leader.always_free() {
             return Err("leader is permanently free".into());
         }
         let leader_id = crate::commerce::leader_id(leader).to_string();
-        let (cost, use_gems) = match currency {
+        let (list_price, use_gems) = match currency {
             "gems" => (leader.price_gems(), true),
             "" | "crowns" => (leader.price_crowns(), false),
             "laurels" => return Err("laurels are achievement points, not spendable".into()),
             _ => return Err("invalid leader unlock currency".into()),
         };
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let now = crate::commerce::unix_now();
+        let cost = crate::commerce::purchase_cost(
+            "leader",
+            &leader_id,
+            if use_gems { "gems" } else { "crowns" },
+            list_price,
+            offer_id,
+            now,
+        )?;
         let purchase_id = format!("in_game:leader:{leader_id}");
         let mut failure = None;
         let account = self
@@ -4202,26 +4208,47 @@ impl PlayerDb {
         Ok(account)
     }
 
-    pub async fn unlock_skin_with_gems(
+    pub async fn unlock_skin(
         &self,
         account_id: &str,
         requested_skin: &str,
+        currency: &str,
+        offer_id: Option<&str>,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let skin = crate::commerce::skin_by_id(requested_skin).ok_or("unknown skin")?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let (list_price, use_gems) = match currency {
+            "" | "gems" => (skin.cost_gems, true),
+            "crowns" => (skin.cost_crowns, false),
+            _ => return Err("invalid skin unlock currency".into()),
+        };
+        let now = crate::commerce::unix_now();
+        let cost = crate::commerce::purchase_cost(
+            "skin",
+            &skin.id,
+            if use_gems { "gems" } else { "crowns" },
+            list_price,
+            offer_id,
+            now,
+        )?;
         let purchase_id = format!("in_game:skin:{}", skin.id);
         let mut failure = None;
         let account = self
             .update_account_atomic(account_id, &[&purchase_id], |account| {
+                let balance = if use_gems {
+                    &mut account.profile.gems
+                } else {
+                    &mut account.profile.crowns
+                };
                 if account.profile.owned_skins.contains(&skin.id) {
                     failure = Some("skin already owned");
-                } else if account.profile.gems < skin.cost_gems {
-                    failure = Some("insufficient gems");
+                } else if *balance < cost {
+                    failure = Some(if use_gems {
+                        "insufficient gems"
+                    } else {
+                        "insufficient crowns"
+                    });
                 } else {
-                    account.profile.gems -= skin.cost_gems;
+                    *balance -= cost;
                     account.profile.owned_skins.insert(skin.id.clone());
                     account.profile.purchase_history.insert(
                         purchase_id.clone(),

@@ -323,6 +323,9 @@ struct UnlockLeaderRequest {
     leader_id: String,
     #[serde(default)]
     currency: String,
+    /// Live daily/weekly offer the player confirmed; absent means list price.
+    #[serde(default)]
+    offer_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -331,6 +334,10 @@ struct UnlockSkinRequest {
     #[serde(default)]
     auth_secret: Option<String>,
     skin_id: String,
+    #[serde(default)]
+    currency: String,
+    #[serde(default)]
+    offer_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -399,14 +406,16 @@ async fn handle_store_catalog(
             error!("hero rotation unavailable: {error}");
             StatusCode::SERVICE_UNAVAILABLE
         })?;
-    Ok(Json(sow_data::commerce::catalog_for_profile(
+    let mut catalog = sow_data::commerce::catalog_for_profile(
         &Default::default(),
         &Default::default(),
         0,
         0,
         period,
         &rotation,
-    )))
+    );
+    catalog.offers = sow_data::commerce::store_offers(sow_data::commerce::unix_now());
+    Ok(Json(catalog))
 }
 
 async fn store_account_for_request(
@@ -676,7 +685,8 @@ async fn handle_double_match_reward(
     }
 }
 
-/// POST /store/leaders/unlock — spend authoritative crowns or gems on a leader.
+/// POST /store/leaders/unlock — spend authoritative crowns or gems on a leader,
+/// at list price or at a live offer's price.
 async fn handle_unlock_leader(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -695,7 +705,12 @@ async fn handle_unlock_leader(
     };
     match state
         .db
-        .unlock_leader(&account_id, &payload.leader_id, &payload.currency)
+        .unlock_leader(
+            &account_id,
+            &payload.leader_id,
+            &payload.currency,
+            payload.offer_id.as_deref(),
+        )
         .await
     {
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
@@ -733,7 +748,12 @@ async fn handle_unlock_skin(
     };
     match state
         .db
-        .unlock_skin_with_gems(&account_id, &payload.skin_id)
+        .unlock_skin(
+            &account_id,
+            &payload.skin_id,
+            &payload.currency,
+            payload.offer_id.as_deref(),
+        )
         .await
     {
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),

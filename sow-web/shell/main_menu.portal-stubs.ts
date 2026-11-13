@@ -22,6 +22,7 @@ export function isAndroidTwa() {
 }
 export function loadStoreCatalog() {}
 export function openLeaderPurchase() {}
+export function openOfferPurchase() {}
 export function openSkinPurchase() {}
 function portalUnlockButton(leader: MenuLeader, currency: "crowns" | "gems") {
     const cost = Math.max(0, Number(currency === "gems" ? leader.cost_gems : leader.cost_crowns) || 0);

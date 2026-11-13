@@ -1057,6 +1057,230 @@ pub static PARAMS: &[ParamDef] = &[
         [1.0, 0.78, 0.30],
         "MAP_SKIN_DIAMOND_TINT"
     ),
+    flag!(
+        "territory.skin.wave.enabled",
+        "Waves enabled",
+        "Skin patterns",
+        1.0,
+        "MAP_SKIN_WAVE_ENABLED"
+    ),
+    number!(
+        "territory.skin.wave.scale",
+        "Waves scale",
+        "Skin patterns",
+        0.18,
+        0.0,
+        2.0,
+        0.001,
+        "",
+        "MAP_SKIN_WAVE_SCALE"
+    ),
+    number!(
+        "territory.skin.wave.width",
+        "Waves line width",
+        "Skin patterns",
+        0.07,
+        0.001,
+        0.5,
+        0.001,
+        "",
+        "MAP_SKIN_WAVE_WIDTH"
+    ),
+    number!(
+        "territory.skin.wave.strength",
+        "Waves strength",
+        "Skin patterns",
+        0.32,
+        0.0,
+        1.0,
+        0.01,
+        "",
+        "MAP_SKIN_WAVE_STRENGTH"
+    ),
+    linear_color!(
+        "territory.skin.wave.tint",
+        "Waves tint",
+        "Skin patterns",
+        [0.30, 0.62, 1.0],
+        "MAP_SKIN_WAVE_TINT"
+    ),
+    flag!(
+        "territory.skin.hex.enabled",
+        "Hexes enabled",
+        "Skin patterns",
+        1.0,
+        "MAP_SKIN_HEX_ENABLED"
+    ),
+    number!(
+        "territory.skin.hex.scale",
+        "Hexes scale",
+        "Skin patterns",
+        0.22,
+        0.0,
+        2.0,
+        0.001,
+        "",
+        "MAP_SKIN_HEX_SCALE"
+    ),
+    number!(
+        "territory.skin.hex.width",
+        "Hexes line width",
+        "Skin patterns",
+        0.06,
+        0.001,
+        0.5,
+        0.001,
+        "",
+        "MAP_SKIN_HEX_WIDTH"
+    ),
+    number!(
+        "territory.skin.hex.strength",
+        "Hexes strength",
+        "Skin patterns",
+        0.30,
+        0.0,
+        1.0,
+        0.01,
+        "",
+        "MAP_SKIN_HEX_STRENGTH"
+    ),
+    linear_color!(
+        "territory.skin.hex.tint",
+        "Hexes tint",
+        "Skin patterns",
+        [0.78, 0.56, 1.0],
+        "MAP_SKIN_HEX_TINT"
+    ),
+    flag!(
+        "territory.skin.shield.enabled",
+        "Shields enabled",
+        "Skin patterns",
+        1.0,
+        "MAP_SKIN_SHIELD_ENABLED"
+    ),
+    number!(
+        "territory.skin.shield.scale",
+        "Shields scale",
+        "Skin patterns",
+        0.20,
+        0.0,
+        2.0,
+        0.001,
+        "",
+        "MAP_SKIN_SHIELD_SCALE"
+    ),
+    number!(
+        "territory.skin.shield.width",
+        "Shields radius",
+        "Skin patterns",
+        0.26,
+        0.001,
+        0.5,
+        0.001,
+        "",
+        "MAP_SKIN_SHIELD_WIDTH"
+    ),
+    number!(
+        "territory.skin.shield.strength",
+        "Shields strength",
+        "Skin patterns",
+        0.26,
+        0.0,
+        1.0,
+        0.01,
+        "",
+        "MAP_SKIN_SHIELD_STRENGTH"
+    ),
+    linear_color!(
+        "territory.skin.shield.tint",
+        "Shields tint",
+        "Skin patterns",
+        [0.92, 0.94, 1.0],
+        "MAP_SKIN_SHIELD_TINT"
+    ),
+    flag!(
+        "territory.skin.banner.enabled",
+        "Banner enabled",
+        "Skin patterns",
+        1.0,
+        "MAP_SKIN_BANNER_ENABLED"
+    ),
+    number!(
+        "territory.skin.banner.scale",
+        "Banner scale",
+        "Skin patterns",
+        0.16,
+        0.0,
+        2.0,
+        0.001,
+        "",
+        "MAP_SKIN_BANNER_SCALE"
+    ),
+    number!(
+        "territory.skin.banner.strength",
+        "Banner strength",
+        "Skin patterns",
+        0.30,
+        0.0,
+        1.0,
+        0.01,
+        "",
+        "MAP_SKIN_BANNER_STRENGTH"
+    ),
+    linear_color!(
+        "territory.skin.banner.tint",
+        "Banner tint",
+        "Skin patterns",
+        [1.30, 0.55, 0.55],
+        "MAP_SKIN_BANNER_TINT"
+    ),
+    flag!(
+        "territory.skin.scale.enabled",
+        "Scales enabled",
+        "Skin patterns",
+        1.0,
+        "MAP_SKIN_SCALE_ENABLED"
+    ),
+    number!(
+        "territory.skin.scale.scale",
+        "Scales scale",
+        "Skin patterns",
+        0.24,
+        0.0,
+        2.0,
+        0.001,
+        "",
+        "MAP_SKIN_SCALE_SCALE"
+    ),
+    number!(
+        "territory.skin.scale.width",
+        "Scales line width",
+        "Skin patterns",
+        0.07,
+        0.001,
+        0.5,
+        0.001,
+        "",
+        "MAP_SKIN_SCALE_WIDTH"
+    ),
+    number!(
+        "territory.skin.scale.strength",
+        "Scales strength",
+        "Skin patterns",
+        0.32,
+        0.0,
+        1.0,
+        0.01,
+        "",
+        "MAP_SKIN_SCALE_STRENGTH"
+    ),
+    linear_color!(
+        "territory.skin.scale.tint",
+        "Scales tint",
+        "Skin patterns",
+        [0.32, 0.95, 0.55],
+        "MAP_SKIN_SCALE_TINT"
+    ),
     number!(
         "border.edge_softness",
         "Border edge softness",
@@ -1068,15 +1292,71 @@ pub static PARAMS: &[ParamDef] = &[
         "cells",
         "MAP_BORDER_SOFTNESS"
     ),
+    // Zoom LOD: every zoom here is CSS pixels per tile, so all cutoffs share one scale.
+    number!(
+        "lod.building.compact_zoom",
+        "Buildings drop badges below zoom",
+        "Zoom LOD",
+        14.0,
+        0.5,
+        100.0,
+        0.1,
+        "px/tile",
+        "LOD_BUILDING_COMPACT_ZOOM"
+    ),
+    number!(
+        "lod.building.cluster_zoom",
+        "Buildings group below zoom",
+        "Zoom LOD",
+        7.0,
+        0.5,
+        100.0,
+        0.1,
+        "px/tile",
+        "LOD_BUILDING_CLUSTER_ZOOM"
+    ),
+    number!(
+        "lod.building.group_px",
+        "Building group size",
+        "Zoom LOD",
+        40.0,
+        8.0,
+        200.0,
+        1.0,
+        "screen px",
+        "LOD_BUILDING_GROUP_PX"
+    ),
+    number!(
+        "lod.nameplate.bot_hide_zoom",
+        "Bot names hide below zoom",
+        "Zoom LOD",
+        1.5,
+        0.0,
+        100.0,
+        0.1,
+        "px/tile",
+        "LOD_NAMEPLATE_BOT_HIDE_ZOOM"
+    ),
+    number!(
+        "lod.nameplate.dot_text_px",
+        "Names become dots below text size",
+        "Zoom LOD",
+        7.0,
+        1.0,
+        40.0,
+        0.5,
+        "screen px",
+        "LOD_NAMEPLATE_DOT_TEXT_PX"
+    ),
     number!(
         "border.tribe_zoom_cutoff",
-        "Hide tribe borders below zoom",
-        "Borders",
+        "Tribe borders hide below zoom",
+        "Zoom LOD",
         0.6,
         0.0,
-        4.0,
-        0.01,
-        "×",
+        100.0,
+        0.1,
+        "px/tile",
         "MAP_TRIBE_ZOOM_CUTOFF"
     ),
     linear_color!(
@@ -3064,6 +3344,7 @@ pub const SECTION_GROUPS: &[(&str, &[&str])] = &[
         ],
     ),
     ("Combat", &["Conquest"]),
+    ("Zoom LOD", &["Zoom LOD"]),
     (
         "Effects",
         &["Alliance celebration", "Screen alerts", "Dialog highlight"],
@@ -3125,6 +3406,11 @@ pub const PERF_SWITCHES: &[(&str, &[&str])] = &[
             "territory.skin.stripe.enabled",
             "territory.skin.grid.enabled",
             "territory.skin.diamond.enabled",
+            "territory.skin.wave.enabled",
+            "territory.skin.hex.enabled",
+            "territory.skin.shield.enabled",
+            "territory.skin.banner.enabled",
+            "territory.skin.scale.enabled",
         ],
     ),
     ("Shore", &["water.shore_band_width"]),
@@ -3148,6 +3434,14 @@ pub fn shader_slot(id: &str) -> Option<usize> {
             .filter(|param| param.shader_token.is_some())
             .count(),
     )
+}
+
+/// Live value of a numeric control, or its catalog default when the id has no slot.
+pub fn number_value(values: &[[f32; 4]; PARAM_CAPACITY], id: &str) -> f32 {
+    shader_slot(id)
+        .map(|slot| values[slot][0])
+        .or_else(|| definition(id).map(|param| param.default[0]))
+        .unwrap_or(0.0)
 }
 
 pub fn shader_param_count() -> usize {
@@ -3330,6 +3624,8 @@ mod tests {
         let client_sources = [
             include_str!("../../sow-client/src/render/frame/mod.rs"),
             include_str!("../../sow-client/src/render/world/movers.rs"),
+            include_str!("../../sow-client/src/render/world/overlays.rs"),
+            include_str!("../../sow-client/src/render/world/nameplates.rs"),
         ];
         for param in PARAMS.iter().filter(|param| param.shader_token.is_some()) {
             let token = param.shader_token.unwrap();

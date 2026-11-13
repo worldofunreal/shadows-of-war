@@ -239,9 +239,52 @@ fn apply_skin(base: vec3<f32>, owner_id: u32, world_pos: vec2<f32>) -> vec3<f32>
         let grid_y = smoothstep_safe(0.5 - width, 0.50, abs(fract(world_pos.y * globals.shader_params[__MAP_SKIN_GRID_SCALE__].x) - 0.5));
         return mix(base, globals.shader_params[__MAP_SKIN_GRID_TINT__].rgb, max(grid_x, grid_y) * globals.shader_params[__MAP_SKIN_GRID_STRENGTH__].x);
     } else if style == 3u && globals.shader_params[__MAP_SKIN_DIAMOND_ENABLED__].x > 0.5 {
-        let diamond = abs(fract((world_pos.x - world_pos.y) * globals.shader_params[__MAP_SKIN_DIAMOND_SCALE__].x) - 0.5);
-        let lattice = 1.0 - smoothstep_safe(0.0, globals.shader_params[__MAP_SKIN_DIAMOND_WIDTH__].x, abs(diamond - globals.shader_params[__MAP_SKIN_DIAMOND_OFFSET__].x));
+        // Both diagonals, so the lines close into diamonds (one diagonal alone reads as Ember Vein).
+        let scale = globals.shader_params[__MAP_SKIN_DIAMOND_SCALE__].x;
+        let width = globals.shader_params[__MAP_SKIN_DIAMOND_WIDTH__].x;
+        let offset = globals.shader_params[__MAP_SKIN_DIAMOND_OFFSET__].x;
+        let falling = abs(fract((world_pos.x - world_pos.y) * scale) - 0.5);
+        let rising = abs(fract((world_pos.x + world_pos.y) * scale) - 0.5);
+        let lattice = 1.0 - smoothstep_safe(0.0, width, min(abs(falling - offset), abs(rising - offset)));
         return mix(base, globals.shader_params[__MAP_SKIN_DIAMOND_TINT__].rgb, lattice * globals.shader_params[__MAP_SKIN_DIAMOND_STRENGTH__].x);
+    } else if style == 4u && globals.shader_params[__MAP_SKIN_WAVE_ENABLED__].x > 0.5 {
+        let p = world_pos * globals.shader_params[__MAP_SKIN_WAVE_SCALE__].x;
+        let crest = abs(fract(p.y + 0.22 * sin(p.x * 6.2831853)) - 0.5);
+        let stroke = smoothstep_safe(0.5 - globals.shader_params[__MAP_SKIN_WAVE_WIDTH__].x, 0.5, crest);
+        return mix(base, globals.shader_params[__MAP_SKIN_WAVE_TINT__].rgb, stroke * globals.shader_params[__MAP_SKIN_WAVE_STRENGTH__].x);
+    } else if style == 5u && globals.shader_params[__MAP_SKIN_HEX_ENABLED__].x > 0.5 {
+        let p = world_pos * globals.shader_params[__MAP_SKIN_HEX_SCALE__].x;
+        let cell = vec2<f32>(1.0, 1.7320508);
+        let a = p - cell * floor(p / cell) - cell * 0.5;
+        let shifted = p - cell * 0.5;
+        let b = shifted - cell * floor(shifted / cell) - cell * 0.5;
+        let g = abs(select(b, a, dot(a, a) < dot(b, b)));
+        let hex = max(dot(g, cell * 0.5), g.x);
+        let stroke = smoothstep_safe(0.5 - globals.shader_params[__MAP_SKIN_HEX_WIDTH__].x, 0.5, hex);
+        return mix(base, globals.shader_params[__MAP_SKIN_HEX_TINT__].rgb, stroke * globals.shader_params[__MAP_SKIN_HEX_STRENGTH__].x);
+    } else if style == 6u && globals.shader_params[__MAP_SKIN_SHIELD_ENABLED__].x > 0.5 {
+        // Staggered round shields, rim brighter than the face.
+        let p = world_pos * globals.shader_params[__MAP_SKIN_SHIELD_SCALE__].x;
+        let row = floor(p.y);
+        let g = vec2<f32>(fract(p.x + 0.5 * (row - 2.0 * floor(row * 0.5))) - 0.5, fract(p.y) - 0.5);
+        let radius = globals.shader_params[__MAP_SKIN_SHIELD_WIDTH__].x;
+        let d = length(g);
+        let disc = 1.0 - smoothstep_safe(radius - 0.03, radius, d);
+        let rim = 1.0 - smoothstep_safe(0.0, 0.04, abs(d - radius + 0.04));
+        return mix(base, globals.shader_params[__MAP_SKIN_SHIELD_TINT__].rgb, max(disc * 0.45, rim) * globals.shader_params[__MAP_SKIN_SHIELD_STRENGTH__].x);
+    } else if style == 7u && globals.shader_params[__MAP_SKIN_BANNER_ENABLED__].x > 0.5 {
+        let cell = floor(world_pos * globals.shader_params[__MAP_SKIN_BANNER_SCALE__].x);
+        let checker = abs(cell.x + cell.y - 2.0 * floor((cell.x + cell.y) * 0.5));
+        return mix(base, min(base * globals.shader_params[__MAP_SKIN_BANNER_TINT__].rgb, vec3<f32>(4.0)), checker * globals.shader_params[__MAP_SKIN_BANNER_STRENGTH__].x);
+    } else if style == 8u && globals.shader_params[__MAP_SKIN_SCALE_ENABLED__].x > 0.5 {
+        // Overlapping half-offset arcs: fish/dragon scales.
+        let p = world_pos * globals.shader_params[__MAP_SKIN_SCALE_SCALE__].x;
+        let row = floor(p.y);
+        let g = vec2<f32>(fract(p.x + 0.5 * (row - 2.0 * floor(row * 0.5))) - 0.5, fract(p.y));
+        let d = length(g);
+        let rim = 1.0 - smoothstep_safe(0.0, globals.shader_params[__MAP_SKIN_SCALE_WIDTH__].x, abs(d - 0.5));
+        let shade = clamp(d * 2.0, 0.0, 1.0) * 0.35;
+        return mix(base, globals.shader_params[__MAP_SKIN_SCALE_TINT__].rgb, max(rim, shade) * globals.shader_params[__MAP_SKIN_SCALE_STRENGTH__].x);
     }
     return base;
 }

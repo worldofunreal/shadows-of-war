@@ -111,7 +111,8 @@ impl SowApp {
         self.ui.tutorial_active = false;
         self.ui.tutorial_camera_only = false;
         self.ui.tutorial_paused_action = None;
-        self.ui.tutorial_waiting_for_first_attack = false;
+        self.ui.tutorial_marker_player_id = None;
+        self.ui.tutorial_marker_action = None;
 
         self.dispatch_sim_command(SimCommand::Shutdown);
         self.gfx.needs_first_upload = true;

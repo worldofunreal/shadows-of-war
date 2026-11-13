@@ -97,9 +97,6 @@ copy_failed = "COPIA FALLITA"
 copy_unavailable = "COPIA NON DISPONIBILE"
 
 [tutorial]
-skip_cinematic = "SALTA CINEMATICA"
-watch_cinematic = "GUARDA CINEMATICA"
-hold_to_skip = "TIENI PREMUTO PER SALTARE"
 continue = "CONTINUA"
 complete = "CAMPAGNA COMPLETA"
 retry = "RIPROVA"
@@ -894,6 +891,10 @@ change_territory_style = "Cambia lo stile del tuo territorio"
 view = "VEDI"
 checkout = "PAGAMENTO"
 loading_checkout = "Caricamento del pagamento…"
+daily_offers = "Offerte del giorno"
+weekly_offers = "Offerte della settimana"
+ends_in = "Termina tra {time}"
+leader = "Leader"
 
 [hud]
 build_placement = "Posiziona edificio"

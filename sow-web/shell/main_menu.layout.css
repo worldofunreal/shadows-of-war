@@ -596,7 +596,8 @@
   }
 }
 
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
   #sow-menu .sow-menu__shell {
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 10px;
@@ -669,7 +670,8 @@
   }
 }
 
-@media (min-width: 681px) and (orientation: landscape) and (max-height: 560px) {
+@media (min-width: 681px) and (orientation: landscape) and (max-height: 560px),
+       (min-width: 681px) and (orientation: landscape) and (max-height: 680px) {
   #sow-menu .sow-menu__shell {
     grid-template-rows: var(--sow-menu-header-height) minmax(0, 1fr);
     gap: 8px 12px;
@@ -751,7 +753,8 @@
   }
 }
 
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
   #sow-menu[data-screen="home"] .sow-menu__main {
     display: grid;
     grid-template-columns: minmax(420px, auto) minmax(0, 1fr);
@@ -918,7 +921,8 @@
   }
 }
 
-@media (min-width: 400px) and (orientation: landscape) and (max-height: 560px) {
+@media (min-width: 400px) and (orientation: landscape) and (max-height: 560px),
+       (min-width: 400px) and (orientation: landscape) and (max-height: 680px) {
   #sow-menu {
     --sow-menu-header-height: 52px;
   }

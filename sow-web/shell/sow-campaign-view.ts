@@ -109,7 +109,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
     root.classList.toggle("has-guide-skip", Boolean(options.guideSkipLabel));
     root.innerHTML =
         '<div class="sow-story__shade" hidden></div>' +
-        '<div class="sow-story__cinematic" tabindex="-1" hidden><video playsinline preload="none" fetchpriority="low"></video><button class="sow-story__continue sow-story__cinematic-start" type="button" data-story-start hidden></button><span class="sow-story__cinematic-hold" data-story-hold hidden aria-hidden="true"><span></span><i><b></b></i></span></div>' +
         '<article class="sow-story__dialog" tabindex="-1" hidden>' +
         '<div class="sow-story__main"><div class="sow-story__portrait" hidden><img alt="" draggable="false"><span class="sow-story__portrait-line" aria-hidden="true"></span></div>' +
         '<div class="sow-story__conversation"><header class="sow-story__heading"><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
@@ -146,11 +145,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         footer = find(".sow-story__footer");
     const continueButton = find("[data-story-continue]"),
         lines = find(".sow-story__lines");
-    const cinematic = find(".sow-story__cinematic"),
-        cinematicVideo = cinematic.querySelector<HTMLVideoElement>("video")!;
-    const cinematicStart = find("[data-story-start]"),
-        cinematicHold = find("[data-story-hold]"),
-        cinematicHoldProgress = cinematicHold.querySelector<HTMLElement>("b")!;
     const objective = find(".sow-story__objective"),
         objectiveTitle = objective.querySelector<HTMLHeadingElement>("h3")!,
         hint = objective.querySelector<HTMLParagraphElement>("p")!;
@@ -207,14 +201,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
     }
     const spotlight = find(".sow-story__spotlight");
     const view = doc.defaultView;
-    let cinematicStepKey = "",
-        cinematicStatus = "none",
-        cinematicHoldTimer = 0,
-        cinematicHoldFrame = 0,
-        cinematicPointerId: number | null = null;
-    let cinematicAudioActive = false,
-        cinematicLoaderWait: { target: EventTarget; start: () => void } | null = null,
-        cinematicMediaArmed = false;
     let portraitFrame = 0,
         guideStepId = "",
         guideLastPulseValue = NaN,
@@ -516,306 +502,8 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         gestureLabel.style.transform =
             "translateX(calc(-50% + " + shiftX + "px)) translateY(" + shiftY + "px)";
     }
-    function clearCinematicHold() {
-        if (cinematicHoldTimer) {
-            clearTimeout(cinematicHoldTimer);
-            cinematicHoldTimer = 0;
-        }
-        if (cinematicHoldFrame) {
-            if (view && typeof view.cancelAnimationFrame === "function")
-                view.cancelAnimationFrame(cinematicHoldFrame);
-            else clearTimeout(cinematicHoldFrame);
-        }
-        cinematicHoldFrame = 0;
-        cinematicPointerId = null;
-        cinematic.classList.remove("is-holding");
-        cinematicHoldProgress.style.transition = "none";
-        cinematicHoldProgress.style.transform = "scaleX(0)";
-    }
-    function cinematicVariants(source: string) {
-        const dot = source.lastIndexOf(".");
-        const stem = dot > 0 ? source.slice(0, dot) : source;
-        const assetPrefix = "/assets/";
-        const resolve = (path: string) =>
-            path.startsWith(assetPrefix) ? options.asset(path.slice(assetPrefix.length)) : path;
-        return {
-            webm: resolve(stem + ".webm"),
-            mp4: resolve(stem + ".mp4"),
-            poster: resolve(stem + ".poster.webp"),
-        };
-    }
-    function clearCinematicMedia() {
-        cinematicMediaArmed = false;
-        cinematicVideo.removeAttribute("src");
-        cinematicVideo.removeAttribute("poster");
-        if (typeof cinematicVideo.replaceChildren === "function") cinematicVideo.replaceChildren();
-    }
-    function showCinematicPoster(source: string) {
-        cinematicMediaArmed = false;
-        cinematicVideo.removeAttribute("src");
-        if (typeof cinematicVideo.replaceChildren === "function") cinematicVideo.replaceChildren();
-        cinematicVideo.setAttribute("poster", cinematicVariants(source).poster);
-    }
-    function attachCinematicMedia(source: string) {
-        const variants = cinematicVariants(source);
-        if (cinematicMediaArmed && cinematicVideo.getAttribute("poster") === variants.poster) return;
-        // Portal packages ship the MP4 rendition only (sow-dist copy_campaign_mp4_only).
-        const candidates = [
-            ...(host.SOW_PORTAL ? [] : [{ src: variants.webm, type: 'video/webm; codecs="vp9,opus"' }]),
-            { src: variants.mp4, type: 'video/mp4; codecs="avc1.640028,mp4a.40.2"' },
-        ];
-        const elements = candidates.map((candidate) => {
-            const element = doc.createElement("source");
-            element.src = candidate.src;
-            element.type = candidate.type;
-            return element;
-        });
-        cinematicVideo.removeAttribute("src");
-        cinematicVideo.setAttribute("poster", variants.poster);
-        if (typeof cinematicVideo.replaceChildren === "function") cinematicVideo.replaceChildren(...elements);
-        else elements.forEach((element) => cinematicVideo.appendChild(element));
-        cinematicMediaArmed = true;
-        cinematicVideo.load();
-    }
-    function loaderVisible() {
-        if (typeof doc.getElementById !== "function") return false;
-        const loader = doc.getElementById("web-loader");
-        return Boolean(loader) && loader!.getAttribute("aria-hidden") !== "true";
-    }
-    function clearCinematicLoaderWait() {
-        if (!cinematicLoaderWait) return;
-        const { target, start } = cinematicLoaderWait;
-        cinematicLoaderWait = null;
-        if (typeof target.removeEventListener === "function") {
-            target.removeEventListener("sow:loader-ready", start);
-            target.removeEventListener("sow:loader-cycle-ready", start);
-        }
-    }
-    function setCinematicAudioActive(active: boolean) {
-        if (cinematicAudioActive === active) return;
-        cinematicAudioActive = active;
-        if (typeof options.onCinematicChange === "function") options.onCinematicChange(active);
-    }
-    function stopCinematic() {
-        setCinematicAudioActive(false);
-        clearCinematicHold();
-        clearCinematicLoaderWait();
-        cinematicStepKey = "";
-        cinematicStatus = "none";
-        cinematicVideo.pause();
-        clearCinematicMedia();
-        cinematicVideo.load();
-        cinematic.hidden = true;
-        root.classList.remove("is-cinematic");
-    }
-    function startCinematic(sourceKey: string) {
-        if (
-            !cinematicStepKey ||
-            sourceKey !== cinematicStepKey ||
-            !model ||
-            cinematicStatus === "fallback" ||
-            cinematicStatus === "ended"
-        )
-            return;
-        if (loaderVisible()) {
-            if (!cinematicLoaderWait) {
-                const target = doc.defaultView || doc;
-                const start = () => {
-                    clearCinematicLoaderWait();
-                    if (model && cinematicStepKey && cinematicStatus === "ready")
-                        startCinematic(cinematicStepKey);
-                };
-                cinematicLoaderWait = { target, start };
-                target.addEventListener("sow:loader-ready", start, { once: true });
-                target.addEventListener("sow:loader-cycle-ready", start, { once: true });
-            }
-            cinematicStatus = "ready";
-            syncCinematic(model.step);
-            return;
-        }
-        cinematicStatus = "starting";
-        syncCinematic(model.step);
-        attachCinematicMedia(model.step.video_src);
-        cinematicVideo.muted = false;
-        requestCinematicPlayback(sourceKey);
-    }
-    function requestCinematicPlayback(sourceKey: string) {
-        let playback;
-        try {
-            playback = cinematicVideo.play();
-        } catch (error) {
-            playbackRejected(error as Error, sourceKey);
-            return;
-        }
-        if (playback && typeof playback.catch === "function")
-            playback.catch((error: Error) => playbackRejected(error, sourceKey));
-    }
-    function playbackRejected(error: Error | null | undefined, sourceKey: string) {
-        if (
-            sourceKey !== cinematicStepKey ||
-            !model ||
-            cinematicStatus === "fallback" ||
-            cinematicStatus === "ended"
-        )
-            return;
-        if (error && error.name === "NotAllowedError" && !cinematicVideo.muted) {
-            cinematicVideo.muted = true;
-            cinematicStatus = "starting";
-            syncCinematic(model.step);
-            requestCinematicPlayback(sourceKey);
-        } else if (!error || error.name !== "AbortError") failCinematic();
-    }
-    function recoverCinematicFromClick(event: Event | null) {
-        if (
-            !event ||
-            !event.isTrusted ||
-            !cinematicStepKey ||
-            !model ||
-            cinematicStatus === "fallback" ||
-            cinematicStatus === "ended" ||
-            cinematicStatus === "ready"
-        )
-            return;
-        if (cinematicStatus === "paused" || (cinematicStatus === "starting" && cinematicVideo.paused)) {
-            cinematicVideo.muted = false;
-            cinematicStatus = "starting";
-            syncCinematic(model.step);
-            requestCinematicPlayback(cinematicStepKey);
-        } else if (
-            cinematicVideo.muted &&
-            (cinematicStatus === "playing" || cinematicStatus === "starting")
-        ) {
-            cinematicVideo.muted = false;
-        }
-    }
-    function syncCinematic(step: CampaignStep) {
-        const source = step.type === "scene" && step.presentation === "cinematic" ? step.video_src || "" : "";
-        const nextKey = source ? step.id + "\u0000" + source : "";
-        if (nextKey !== cinematicStepKey) {
-            clearCinematicHold();
-            clearCinematicLoaderWait();
-            cinematicStepKey = nextKey;
-            cinematicStatus = source ? (options.autoPlayCinematic === false ? "ready" : "starting") : "none";
-            cinematicVideo.muted = false;
-            cinematicVideo.pause();
-            if (source) {
-                showCinematicPoster(source);
-            } else {
-                clearCinematicMedia();
-            }
-            cinematicVideo.load();
-            if (source && options.autoPlayCinematic !== false) startCinematic(nextKey);
-        }
-        const active = Boolean(source) && cinematicStatus !== "fallback" && cinematicStatus !== "ended";
-        setCinematicAudioActive(active);
-        cinematic.hidden = !active;
-        cinematicStart.hidden =
-            !active || !(options.autoPlayCinematic === false && cinematicStatus === "ready");
-        cinematicStart.textContent = t("lobbies.play");
-        cinematicStart.setAttribute("aria-label", t("lobbies.play"));
-        cinematicHold.hidden = !active;
-        cinematicHold.querySelector<HTMLSpanElement>("span")!.textContent = t("tutorial.hold_to_skip");
-        root.classList.toggle("is-cinematic", active);
-        root.classList.toggle(
-            "is-chapter",
-            step.presentation === "chapter" || (step.presentation === "cinematic" && !active),
-        );
-        dialog.hidden = !["scene", "choice", "end"].includes(step.type) || active;
-        shade.hidden = !["scene", "choice", "end"].includes(step.type) || active;
-        footer.hidden = step.type === "choice" || step.pause_game === true || active;
-    }
-    function failCinematic() {
-        if (!cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended") return;
-        clearCinematicHold();
-        clearCinematicLoaderWait();
-        const focusVideo =
-            doc.activeElement === cinematic ||
-            doc.activeElement === cinematicVideo ||
-            doc.activeElement === cinematicStart;
-        cinematicStatus = "fallback";
-        cinematicVideo.pause();
-        clearCinematicMedia();
-        cinematicVideo.load();
-        if (model && model.step) {
-            syncCinematic(model.step);
-            if (focusVideo) continueButton.focus({ preventScroll: true });
-        }
-    }
-    cinematicVideo.addEventListener("playing", () => {
-        if (!model || !cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended")
-            return;
-        cinematicStatus = "playing";
-        syncCinematic(model.step);
-        if (doc.activeElement === cinematicStart) cinematic.focus({ preventScroll: true });
-    });
-    cinematicVideo.addEventListener("pause", () => {
-        if (!model || !cinematicStepKey || cinematicStatus !== "playing" || cinematicVideo.ended) return;
-        cinematicStatus = "paused";
-        syncCinematic(model.step);
-    });
-    function finishCinematic() {
-        if (!model || !cinematicStepKey || cinematicStatus === "fallback" || cinematicStatus === "ended")
-            return;
-        clearCinematicHold();
-        clearCinematicLoaderWait();
-        cinematicStatus = "ended";
-        cinematicVideo.pause();
-        syncCinematic(model.step);
-        continueButton.focus({ preventScroll: true });
-    }
-    cinematicVideo.addEventListener("ended", finishCinematic);
-    cinematicVideo.addEventListener("error", failCinematic);
-    function beginCinematicHold(event: PointerEvent) {
-        if (
-            !model ||
-            cinematicStatus !== "playing" ||
-            cinematicPointerId !== null ||
-            event.isPrimary === false ||
-            event.button > 0
-        )
-            return;
-        cinematicPointerId = event.pointerId == null ? 0 : event.pointerId;
-        event.preventDefault();
-        try {
-            if (event.pointerId != null && cinematic.setPointerCapture)
-                cinematic.setPointerCapture(event.pointerId);
-        } catch {}
-        cinematic.classList.add("is-holding");
-        cinematicHoldProgress.style.transition = "none";
-        cinematicHoldProgress.style.transform = "scaleX(0)";
-        const progress = () => {
-            cinematicHoldFrame = 0;
-            if (cinematicPointerId === null) return;
-            cinematicHoldProgress.style.removeProperty("transition");
-            cinematicHoldProgress.style.transform = "scaleX(1)";
-        };
-        if (view && typeof view.requestAnimationFrame === "function")
-            cinematicHoldFrame = view.requestAnimationFrame(progress);
-        else cinematicHoldFrame = setTimeout(progress, 16);
-        cinematicHoldTimer = setTimeout(finishCinematic, 1250);
-    }
-    function endCinematicHold(event: PointerEvent) {
-        if (
-            cinematicPointerId === null ||
-            (event.pointerId != null && event.pointerId !== cinematicPointerId)
-        )
-            return;
-        clearCinematicHold();
-    }
-    function clearHoldWhenHidden() {
-        if (doc.hidden) clearCinematicHold();
-    }
-    cinematic.addEventListener("pointerdown", beginCinematicHold);
-    cinematic.addEventListener("pointerup", endCinematicHold);
-    cinematic.addEventListener("pointercancel", endCinematicHold);
-    cinematic.addEventListener("lostpointercapture", endCinematicHold);
-    doc.addEventListener("visibilitychange", clearHoldWhenHidden);
     function dismissDialog() {
         if (!model) return;
-        if (!cinematic.hidden) {
-            finishCinematic();
-            return;
-        }
         if (model.step.type === "choice" || model.choices.length) {
             triggerNudge();
             return;
@@ -977,13 +665,9 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         const target =
             model.step.type === "choice"
                 ? choices.querySelector<HTMLButtonElement>("button")
-                : !cinematic.hidden
-                  ? cinematicStart.hidden
-                      ? cinematic
-                      : cinematicStart
-                  : model.step.pause_game
-                    ? dialog
-                    : continueButton;
+                : model.step.pause_game
+                  ? dialog
+                  : continueButton;
         (target || dialog).focus({ preventScroll: true });
     }
     function render(next: CampaignMachineView | null, context: CampaignRecord | null = null) {
@@ -1007,7 +691,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             gesture.classList.remove("is-following", "is-camera-following", "is-status", "is-compact");
             clearNudge();
             clearGuideMetric();
-            stopCinematic();
             if (wasModal) releaseFocus();
             wasModal = false;
             return;
@@ -1030,19 +713,20 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         root.dataset.localeScript =
             context.localeScript || doc.documentElement.dataset.localeScript || "latin";
         const modal = ["scene", "choice", "end"].includes(step.type);
+        dialog.hidden = !modal;
+        shade.hidden = !modal;
+        root.classList.toggle("is-chapter", step.presentation === "chapter");
         // Authored titles stay visible unless explicitly hidden; chapter cards keep theirs.
         const showTitle =
             !modal ||
             step.show_title !== false ||
-            step.presentation === "chapter" ||
-            step.presentation === "cinematic";
+            step.presentation === "chapter";
         if (step.guide && step.guide.kind === "ui" && step.guide.target === "attack_ratio")
             root.dataset.guideTarget = "attack_ratio";
         else delete root.dataset.guideTarget;
         root.classList.toggle("is-modal", modal);
         root.classList.toggle("is-celebration", step.presentation === "celebration");
         root.classList.toggle("is-reduced", reducedMotion);
-        syncCinematic(step);
         root.dataset.stepId = step.id;
         root.dataset.stepType = step.type;
         const cameraCue = isCameraCue(step);
@@ -1101,7 +785,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             actor && actor.avatar_transition,
             reducedMotionActive(),
             step.presentation,
-            step.video_src,
             model.choices.map((c: CampaignRecord) => [
                 c.id,
                 t(c.label_key),
@@ -1119,7 +802,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             title.hidden = !copyTitle;
             setText(body, copyBody);
             body.hidden = !copyBody;
-            cinematicVideo.setAttribute("aria-label", copyTitle || speakerName || "Campaign cinematic");
             const portraitSource = (pose: string | null | undefined) => {
                 const avatarPath =
                     pose && pose !== "calm"
@@ -1491,10 +1173,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         lastAction = event.timeStamp;
         if (button.hasAttribute("data-story-choice")) options.onChoice(button.dataset.storyChoice);
         else if (button.hasAttribute("data-story-continue")) options.onContinue();
-        else if (button.hasAttribute("data-story-start")) {
-            const sourceKey = cinematicStepKey;
-            startCinematic(sourceKey);
-        } else if (button.hasAttribute("data-story-focus") && options.onFocus) options.onFocus();
+        else if (button.hasAttribute("data-story-focus") && options.onFocus) options.onFocus();
         else if (button.hasAttribute("data-story-dismiss") || button.hasAttribute("data-story-guide-skip"))
             dismissDialog();
     }
@@ -1522,7 +1201,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             triggerNudge();
             return;
         }
-        // An outside tap acts as Continue, but only where Continue is on screen (not during a cinematic or a pause_game step).
+        // An outside tap acts as Continue only where Continue is on screen.
         if (!dialog.hidden && !footer.hidden) options.onContinue();
     }
     function stop(event: Event) {
@@ -1541,18 +1220,14 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             model.paused &&
             ["scene", "choice", "end"].includes(model.step.type)
         ) {
-            const buttons = !cinematic.hidden
-                ? cinematicStart.hidden
-                    ? []
-                    : [cinematicStart]
-                : Array.from(dialog.querySelectorAll("button") as NodeListOf<HTMLButtonElement>)
-                      .filter((button) => !button.hidden && !button.closest("[hidden]"))
-                      .sort(
-                          (a, b) =>
-                              Number(a.hasAttribute("data-story-dismiss")) -
-                              Number(b.hasAttribute("data-story-dismiss")),
-                      );
-            const index = buttons.indexOf(doc.activeElement as HTMLElement);
+            const buttons = Array.from(dialog.querySelectorAll("button") as NodeListOf<HTMLButtonElement>)
+                .filter((button) => !button.hidden && !button.closest("[hidden]"))
+                .sort(
+                    (a, b) =>
+                        Number(a.hasAttribute("data-story-dismiss")) -
+                        Number(b.hasAttribute("data-story-dismiss")),
+                );
+            const index = buttons.indexOf(doc.activeElement as HTMLButtonElement);
             const next = event.shiftKey
                 ? index <= 0
                     ? buttons.length - 1
@@ -1560,7 +1235,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
                 : (index + 1) % buttons.length;
             event.preventDefault();
             if (buttons.length) buttons[next].focus();
-            else if (!cinematic.hidden) cinematic.focus({ preventScroll: true });
             else dialog.focus({ preventScroll: true });
         } else if (
             (event.key === "Enter" || event.key === " ") &&
@@ -1573,7 +1247,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         }
     }
     root.addEventListener("click", click);
-    doc.addEventListener("click", recoverCinematicFromClick, true);
     doc.addEventListener("click", outsideClick, true);
     ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach((type) =>
         root.addEventListener(type, stop, { passive: true }),
@@ -1588,7 +1261,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             clearHomeGuideAnimation();
             clearNudge();
             clearGuideMetric();
-            stopCinematic();
             destroyed = true;
             portraitRequestId++;
             portraitCache.clear();
@@ -1600,9 +1272,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
                 keys as EventListener,
                 Boolean(options.guideSkipLabel),
             );
-            doc.removeEventListener("click", recoverCinematicFromClick, true);
             doc.removeEventListener("click", outsideClick, true);
-            doc.removeEventListener("visibilitychange", clearHoldWhenHidden);
             ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach((type) =>
                 root.removeEventListener(type, stop),
             );

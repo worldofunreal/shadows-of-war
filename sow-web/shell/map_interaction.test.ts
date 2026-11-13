@@ -789,7 +789,7 @@ test("build mode controls live in the world renderer, not the HTML HUD", () => {
     const clickStart = mapClick.indexOf("pub(crate) fn handle_map_click");
     const clickBody = mapClick.slice(
         clickStart,
-        mapClick.indexOf("fn try_tutorial_campaign_nameplate_attack", clickStart),
+        mapClick.indexOf("fn select_owned_building", clickStart),
     );
     assert.ok(
         clickBody.indexOf("button_at(") < clickBody.indexOf("self.mouse_to_tile(x, y)"),

@@ -33,6 +33,7 @@ impl SowEngine {
             .filter(|assault| assault.hold_last_tile)
             .map(|assault| assault.root_target);
         let pre_defeat_targets = self.campaign_pre_defeat_targets.clone();
+        let pre_defeat_starting_tile_counts = self.campaign_starting_tile_counts.clone();
         let mut pre_defeat_pending = self.campaign_pre_defeat_pending;
         // fleets are sorted on insertion
         let mut to_remove = Vec::new();
@@ -272,7 +273,13 @@ impl SowEngine {
                 && self
                     .state
                     .player(owner_here)
-                    .is_some_and(Self::pre_defeat_reached)
+                    .is_some_and(|player| {
+                        Self::pre_defeat_reached(
+                            &pre_defeat_starting_tile_counts,
+                            owner_here,
+                            player,
+                        )
+                    })
             {
                 if pre_defeat_pending.is_none() {
                     pre_defeat_pending = Some(owner_here);

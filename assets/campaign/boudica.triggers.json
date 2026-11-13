@@ -11,7 +11,7 @@
     "starting_gold": 180,
     "starting_troops": 2000
   },
-  "entry": "boudica_rise_of_the_iceni_intro",
+  "entry": "boudica_attack_roman_outpost",
   "reactions": [
     {
       "id": "contact_stonea",
@@ -142,9 +142,9 @@
           "gold_cost": 0,
           "exchange": [
             {
-              "speaker": "boudica",
+              "speaker": "thetford",
               "emote": "greet",
-              "emote_text_key": "tutorial.campaign_boudica_boudica_thetford_greet_reply_emote"
+              "emote_text_key": "tutorial.campaign_boudica_thetford_respect_emote"
             }
           ]
         },
@@ -158,7 +158,7 @@
             {
               "speaker": "thetford",
               "emote": "threat",
-              "emote_text_key": "tutorial.campaign_boudica_thetford_greet_emote"
+              "emote_text_key": "tutorial.campaign_boudica_thetford_demand_emote"
             }
           ]
         }
@@ -538,24 +538,10 @@
   },
   "steps": [
     {
-      "id": "boudica_rise_of_the_iceni_intro",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_council_title",
-      "show_title": true,
-      "body_key": "tutorial.campaign_boudica_boudica_council_body",
-      "speaker": "boudica",
-      "portrait_expression": "angry",
-      "emote": "threat",
-      "emote_text_key": "tutorial.campaign_boudica_boudica_council_strike",
-      "presentation": "cinematic",
-      "video_src": "/assets/campaign/boudica/intro.720p.555d0500.webm",
-      "attack_ratio_on_enter": 0.25,
-      "next": "boudica_attack_roman_outpost"
-    },
-    {
       "id": "boudica_attack_roman_outpost",
       "type": "objective",
       "pause_game": true,
+      "attack_ratio_on_enter": 0.25,
       "title_key": "tutorial.campaign_boudica_boudica_first_victory_title",
       "hint_key": "tutorial.campaign_boudica_boudica_first_victory_hint",
       "speaker": "boudica",
@@ -715,7 +701,7 @@
       "trigger": {
         "type": "zoom_in_complete",
         "target": "suetonius_paulinus",
-        "distance": 8,
+        "distance": 4,
         "value": 1,
         "scope": "step"
       },
@@ -729,6 +715,13 @@
       },
       "pause_game": true,
       "camera_only": true,
+      "exchange": [
+        {
+          "speaker": "suetonius_paulinus",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_boudica_suetonius_sighted_emote"
+        }
+      ],
       "next": "boudica_found_suetonius"
     },
     {
@@ -748,11 +741,6 @@
           "title_key": "tutorial.campaign_boudica_boudica_found_suetonius_title",
           "show_title": true,
           "body_key": "tutorial.campaign_boudica_boudica_found_suetonius_body"
-        },
-        {
-          "speaker": "suetonius_paulinus",
-          "emote": "threat",
-          "emote_text_key": "tutorial.campaign_boudica_suetonius_sighted_emote"
         }
       ]
     },
@@ -1047,7 +1035,7 @@
         "target": "upgrade_building",
         "gesture": "tap"
       },
-      "next": "boudica_camulodunum"
+      "next": "boudica_ninth_legion_set_attack_ratio"
     },
     {
       "id": "boudica_trinovantes_contact",
@@ -1350,7 +1338,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_ninth_legion_set_attack_ratio",
+      "next": "boudica_ninth_strike",
       "camera": {
         "shot": "approach",
         "to": "camulodunum",
@@ -1552,7 +1540,7 @@
         "gesture": "drag"
       },
       "pause_game": true,
-      "next": "boudica_ninth_strike"
+      "next": "boudica_camulodunum"
     },
     {
       "id": "boudica_ninth_strike",
@@ -1917,10 +1905,6 @@
     }
   ],
   "layout": {
-    "boudica_rise_of_the_iceni_intro": {
-      "x": 70,
-      "y": 70
-    },
     "boudica_first_victory": {
       "x": 70,
       "y": 260

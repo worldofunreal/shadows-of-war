@@ -516,7 +516,7 @@ function renderHeroesSortDropdown() {
         label: SOW_t("heroes.sort_leaders"),
         name: "sort",
         icon: HEROES_SORT_ICON,
-        value: menuUi.heroesSort || "cost_desc",
+        value: menuUi.heroesSort || "alpha_asc",
         className: "sow-heroes__sort",
         options: [
             { value: "cost_desc", label: SOW_t("heroes.sort_cost_desc") },
@@ -768,7 +768,7 @@ export function selectDropdown(key: string, value: string) {
         return;
     }
     if (key === "heroes-sort") {
-        menuUi.heroesSort = value || "cost_desc";
+        menuUi.heroesSort = value || "alpha_asc";
         syncDropdowns();
         refreshHeroesRoster(true);
         return;

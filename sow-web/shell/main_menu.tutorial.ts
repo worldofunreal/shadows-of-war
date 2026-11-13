@@ -99,13 +99,6 @@ interface TutorialRuntime {
     root.id = "sow-story";
     root.hidden = true;
     document.body.appendChild(root);
-    const cinematicPreviewRoot = document.createElement("div");
-    cinematicPreviewRoot.id = "sow-campaign-cinematic-preview";
-    cinematicPreviewRoot.className = "sow-story--menu-preview";
-    cinematicPreviewRoot.hidden = true;
-    document.body.appendChild(cinematicPreviewRoot);
-    let cinematicPreviewView: CampaignView | null = null;
-    let cinematicPreviewGeneration = 0;
 
     const runtime: TutorialRuntime = {
         generation: 0,
@@ -162,6 +155,7 @@ interface TutorialRuntime {
         campaignSessionId: 0,
         emoteSerial: 0,
         markerId: undefined as number | null | undefined,
+        markerAction: undefined as "expand" | "attack" | null | undefined,
         modalOpen: undefined as boolean | undefined,
         cameraReactionTarget: null,
         dialogueResourceKey: null as string | null,
@@ -411,70 +405,6 @@ interface TutorialRuntime {
         return request;
     }
 
-    function closeCampaignCinematic() {
-        cinematicPreviewGeneration++;
-        if (cinematicPreviewView) cinematicPreviewView.destroy();
-        cinematicPreviewView = null;
-        cinematicPreviewRoot.hidden = true;
-        cinematicPreviewRoot.classList.remove("sow-story--menu-preview");
-    }
-
-    function watchCampaignCinematic(episodeId: string) {
-        episodeId = String(episodeId || "");
-        if (!/^[a-z][a-z0-9_]{0,63}$/.test(episodeId)) return;
-        if (cinematicPreviewView) cinematicPreviewView.destroy();
-        cinematicPreviewView = null;
-        const generation = ++cinematicPreviewGeneration;
-        cinematicPreviewRoot.classList.add("sow-story--menu-preview");
-        cinematicPreviewRoot.hidden = true;
-        loadEpisode(episodeId)
-            .then(function (data) {
-                if (generation !== cinematicPreviewGeneration) return;
-                const entry = (data.definition.steps || []).find(function (step) {
-                    return step.id === data.definition.entry;
-                });
-                if (
-                    !entry ||
-                    entry.type !== "scene" ||
-                    entry.presentation !== "cinematic" ||
-                    !entry.video_src
-                ) {
-                    throw new Error("This episode has no opening cinematic.");
-                }
-                const translate = function (key: string) {
-                    const value = typeof window.SOW_t === "function" ? window.SOW_t(key) : "[" + key + "]";
-                    if (!value || value === "[" + key + "]") return key;
-                    return window.SOWCampaign.replaceFactionStoryNames(value, data.definition, data.roster);
-                };
-                cinematicPreviewView = window.SOWCampaignView.mount(cinematicPreviewRoot, {
-                    translate: translate,
-                    asset: asset,
-                    roster: function () {
-                        return data.roster;
-                    },
-                    onContinue: closeCampaignCinematic,
-                    onDismiss: closeCampaignCinematic,
-                });
-                const machine = window.SOWCampaign.create(
-                    data.definition,
-                    data.definition.entry,
-                    data.roster,
-                );
-                cinematicPreviewView.render(machine.view(), {
-                    direction: document.documentElement.dir || "ltr",
-                    localeScript: document.documentElement.dataset.localeScript || "latin",
-                    reducedMotion: Boolean(
-                        window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-                    ),
-                });
-            })
-            .catch(function (error) {
-                if (generation !== cinematicPreviewGeneration) return;
-                console.error("[SOW CAMPAIGN CINEMATIC]", error);
-                closeCampaignCinematic();
-            });
-    }
-
     function showError(
         error: { message?: string } | string | null,
         episodeId: string,
@@ -557,11 +487,6 @@ interface TutorialRuntime {
             onContinue: continueScene,
             onChoice: choose,
             onFocus: focusMarker,
-            onCinematicChange: function (active: boolean) {
-                if (typeof window.SOW_menu_music_cinematic === "function") {
-                    window.SOW_menu_music_cinematic(active);
-                }
-            },
         });
     }
 
@@ -835,6 +760,7 @@ interface TutorialRuntime {
             touch_controls: zoomMode() === "pinch" ? 1 : 0,
             selected_building_kind: selectedBuildingKind,
             attack_ratio: Number(hud.attack_ratio),
+            target_action_mode: tutorial.target_action_mode,
         });
         facts.resources_available = availableGold(hud) >= 1 || Number(facts.troops || 0) >= 1 ? 1 : 0;
         if (
@@ -1057,7 +983,10 @@ interface TutorialRuntime {
         const freeExploration =
             targetStep.camera_only === true ||
             (targetStep.trigger && ["camera_target", "hover"].includes(targetStep.trigger.type));
-        const targetFactionId = freeExploration ? null : markerTargetFor(targetStep);
+        const expansionMode =
+            tutorial.target_action_mode === "expand" ||
+            (targetStep.guide?.kind === "world" && targetStep.guide.target === "expand");
+        const targetFactionId = freeExploration || expansionMode ? null : markerTargetFor(targetStep);
         const cameraTargetKey = targetFactionId
             ? String(runtime.machine.state.id || targetStep.id) + ":" + targetFactionId
             : null;
@@ -1081,9 +1010,7 @@ interface TutorialRuntime {
             }
         }
         if (
-            machineView.step.id === "boudica_first_expansion" &&
-            machineView.step.guide &&
-            machineView.step.guide.target === "expand"
+            expansionMode
         ) {
             const visible = tutorial.expand;
             const target = tutorial.expand_target;
@@ -1134,7 +1061,6 @@ interface TutorialRuntime {
                 campaign_session_id: Number(tutorial.campaign_session_id),
             });
         }
-        syncTutorialPause(machineView);
         let markerId = null;
         const exchangeSpeaker =
             machineView.exchange && runtime.definition!.speakers[machineView.exchange.speaker];
@@ -1146,10 +1072,25 @@ interface TutorialRuntime {
             const marked = campaignPlayer(hud, markerTarget);
             if (marked && Number.isInteger(Number(marked.id))) markerId = Number(marked.id);
         }
-        if (markerId !== runtime.markerId) {
+        const guideTarget = machineView.step.guide;
+        const guideTrigger = machineView.step.trigger;
+        const markerAction =
+            markerId !== null &&
+            machineView.exchange_phase !== "dialogue" &&
+            guideTarget?.kind === "world" &&
+            ["target_action", "nameplate", "player", "expand"].includes(guideTarget.target) &&
+            guideTrigger &&
+            ["attack", "contact", "defeated", "eliminated"].includes(guideTrigger.type)
+                ? guideTrigger.type === "contact"
+                    ? "expand"
+                    : "attack"
+                : null;
+        if (markerId !== runtime.markerId || markerAction !== runtime.markerAction) {
             runtime.markerId = markerId;
-            send("set_tutorial_marker", { player_id: markerId });
+            runtime.markerAction = markerAction;
+            send("set_tutorial_marker", { player_id: markerId, action: markerAction });
         }
+        syncTutorialPause(machineView);
         syncTransferGuide(machineView.step);
         revealGuidedUiTarget(machineView.step);
         if (!runtime.modalOpen) {
@@ -1161,7 +1102,7 @@ interface TutorialRuntime {
                         renderContext(displayView.step, hud, anchorFor(displayView.step, hud), displayView),
                     );
                 } else runtime.view!.render(null);
-                if (machineView.exchange) syncCameraShot(machineView.step, hud);
+                if (machineView.exchange && !expansionMode) syncCameraShot(machineView.step, hud);
                 scheduleCampaignWake(
                     machineView.step.id,
                     Number.isFinite(machineView.timer_remaining_ms)
@@ -1175,7 +1116,7 @@ interface TutorialRuntime {
                     displayView,
                     renderContext(displayView.step, hud, anchorFor(displayView.step, hud), displayView),
                 );
-                syncCameraShot(machineView.step, hud);
+                if (!expansionMode) syncCameraShot(machineView.step, hud);
             }
             if (!machineView.waiting && Number.isFinite(machineView.timer_remaining_ms))
                 scheduleCampaignWake(machineView.step.id, machineView.timer_remaining_ms);
@@ -1226,7 +1167,7 @@ interface TutorialRuntime {
         const player = hud && campaignPlayer(hud, faction);
         if (!player || !onMap(player) || player.manual_emote_active) return "unavailable";
         const step = runtime.machine && runtime.machine.view().step;
-        // A scheduled camera move does not hold an emote; the cinematic still owns its timing.
+        // A scheduled camera move does not hold an emote; the camera cue owns its timing.
         if (tutorial!.facts && tutorial!.facts.machinima_active) return "pending";
         if (tutorial!.emote_token === nativeToken) return true;
         if (runtime.exchangeCue && runtime.exchangeCue.token === token) return "pending";
@@ -1491,7 +1432,6 @@ interface TutorialRuntime {
     window.SOW_startCampaignEpisode = function (episodeId: string) {
         startEpisode(episodeId, false);
     };
-    window.SOW_watchCampaignCinematic = watchCampaignCinematic;
     window.SOW_tutorial_exit_context = tutorialExitContext;
     window.SOW_tutorial_menu_state_update = function (state: CampaignRecord) {
         const phase = state && state.phase;
@@ -1570,6 +1510,7 @@ interface TutorialRuntime {
         runtime.failedEpisode = null;
         runtime.lastUnlockCommand = null;
         runtime.markerId = undefined;
+        runtime.markerAction = undefined;
         if (runtime.view) {
             runtime.view.destroy();
             runtime.view = null;

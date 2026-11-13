@@ -783,6 +783,7 @@ impl SowEngine {
             .filter(|assault| assault.hold_last_tile)
             .map(|assault| assault.root_target);
         let pre_defeat_targets = self.campaign_pre_defeat_targets.clone();
+        let pre_defeat_starting_tile_counts = self.campaign_starting_tile_counts.clone();
         let mut pre_defeat_pending = self.campaign_pre_defeat_pending;
 
         // Rebuild only when buildings changed; each tile then queries nearby cells.
@@ -1127,7 +1128,13 @@ impl SowEngine {
                         && self
                             .state
                             .player(execution.target_owner)
-                            .is_some_and(Self::pre_defeat_reached);
+                            .is_some_and(|player| {
+                                Self::pre_defeat_reached(
+                                    &pre_defeat_starting_tile_counts,
+                                    execution.target_owner,
+                                    player,
+                                )
+                            });
                     if target_reached_pre_defeat
                         && Self::pre_defeat_watches(
                             &pre_defeat_targets,

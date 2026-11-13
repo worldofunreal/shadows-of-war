@@ -112,4 +112,4 @@ notes = "Single canonical map library for the online service and the WASM world-
 [campaign]
 path = "assets/campaign/"
 source = "original"
-notes = "Compile-time campaign data, triggers and cinematic media."
+notes = "Compile-time campaign data and triggers."

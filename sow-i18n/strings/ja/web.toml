@@ -97,9 +97,6 @@ copy_failed = "コピーに失敗しました"
 copy_unavailable = "コピーできません"
 
 [tutorial]
-skip_cinematic = "シネマティックをスキップ"
-watch_cinematic = "シネマティックを見る"
-hold_to_skip = "長押ししてスキップ"
 continue = "コンセプト"
 complete = "キャンペーンを完了"
 retry = "再試行"
@@ -894,6 +891,10 @@ change_territory_style = "領土のスタイルを変更する"
 view = "表示"
 checkout = "チェックアウト"
 loading_checkout = "ロードチェックアウト..."
+daily_offers = "デイリーセール"
+weekly_offers = "ウィークリーセール"
+ends_in = "残り {time}"
+leader = "リーダー"
 
 [hud]
 build_placement = "建物を配置"

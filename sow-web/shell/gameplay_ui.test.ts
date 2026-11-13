@@ -1026,6 +1026,8 @@ test("Roman Outpost emotes keep its guided objective visible on desktop and mobi
                 campaign_session_id: 9,
                 marker_player_id: 2,
                 target_nameplate: { x: 245, y: 315, offscreen: false },
+                target_action_mode: "attack",
+                target_action: { x: 238, y: 320, offscreen: false },
                 facts: {
                     contact_faction_ids: [],
                     defeated_faction_ids: [],
@@ -1063,7 +1065,7 @@ test("Roman Outpost emotes keep its guided objective visible on desktop and mobi
         assert.equal(harness.rendered.step.guide.target, "nameplate");
         assert.deepEqual(
             [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
-            [245, 315],
+            [238, 320],
             `the Outpost hand stays anchored at ${width}x${height}`,
         );
         assert.ok(
@@ -1170,6 +1172,10 @@ test("first Expand waits before camera focus while its hand and objective update
     );
 
     hud.tutorial.target_nameplate = { x: 244, y: 390, offscreen: false };
+    hud.tutorial.target_action_mode = "expand";
+    hud.tutorial.target_action = { x: 205, y: 414, offscreen: false };
+    hud.tutorial.expand = hud.tutorial.target_action;
+    hud.tutorial.expand_target = { x: 31.5, y: 42.5 };
     hud.tutorial.facts.tiles_gained = 250;
     harness.update();
     assert.equal(harness.machine.view().step.id, "boudica_first_contact");
@@ -1177,14 +1183,86 @@ test("first Expand waits before camera focus while its hand and objective update
     assert.equal(harness.rendered.step.id, "boudica_first_contact");
     assert.deepEqual(
         [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
-        [244, 390],
-        "the hand moves to Stonea as soon as the 250-tile objective completes",
+        [205, 414],
+        "the contact objective keeps the hand on expansion land toward Stonea",
     );
     assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 1);
     harness.advanceTimers(1);
     const contactFocus = harness.calls.filter((call) => call.type === "focus_world");
-    assert.equal(contactFocus.length, 2, "a new objective schedules its own camera focus");
-    assert.deepEqual([contactFocus[1].x, contactFocus[1].y], [24.5, 39.5]);
+    assert.equal(contactFocus.length, 1, "expansion mode does not refocus on the faction nameplate");
+});
+
+test("any target-action objective focuses the frontier before it can attack", async () => {
+    const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const hud = {
+        tutorial: {
+            active: true,
+            episode_id: "boudica",
+            campaign_session_id: 14,
+            target_action_mode: "expand",
+            target_action: { x: 20, y: 30, offscreen: true },
+            expand: { x: 20, y: 30, offscreen: true },
+            expand_target: { x: 31.5, y: 42.5 },
+            facts: {
+                contact_faction_ids: [],
+                defeated_faction_ids: [],
+                eliminated_faction_ids: [],
+                pre_defeat_faction_ids: [],
+                attacks_by_faction_id: { roman_outpost: 0 },
+            },
+        },
+        players: [
+            { id: 1, is_me: true, is_alive: true, centroid_x: 10, centroid_y: 12 },
+            {
+                id: 2,
+                campaign_faction_id: "roman_outpost",
+                is_alive: true,
+                centroid_x: 24,
+                centroid_y: 39,
+            },
+        ],
+        settings: {},
+        attack_ratio: 0.25,
+    };
+    const harness = makeCampaignTutorialHarness({
+        campaign,
+        definition,
+        roster,
+        initialStep: "boudica_first_victory",
+        hud,
+        width: 390,
+        height: 844,
+    });
+    await harness.start();
+    assert.equal(harness.machine.view().paused, false, "the target is not attackable until the frontier reaches it");
+    assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 0);
+    harness.advanceTimers(1);
+    const focus = harness.calls.filter((call) => call.type === "focus_world");
+    assert.equal(focus.length, 1);
+    assert.deepEqual([focus[0].x, focus[0].y], [31.5, 42.5]);
+
+    hud.tutorial.target_action_mode = "attack";
+    hud.tutorial.target_action = { x: 250, y: 350, offscreen: false };
+    hud.tutorial.expand = hud.tutorial.target_action;
+    harness.update();
+    assert.equal(harness.machine.view().paused, true, "the legal target attack pauses until it is launched");
+    assert.deepEqual(
+        [harness.renderContext.anchor.x, harness.renderContext.anchor.y],
+        [250, 350],
+        "the hand points at enemy land, not its nameplate",
+    );
+
+    hud.tutorial.facts.attacks_by_faction_id.roman_outpost = 1;
+    harness.update();
+    assert.equal(harness.machine.view().paused, false);
+    assert.equal(
+        harness.machine.view().step.id,
+        "boudica_first_victory",
+        "launching the attack resumes the same live defeat objective",
+    );
 });
 
 test("a visible Expand target cancels its pending camera move", async () => {
@@ -1240,18 +1318,24 @@ test("a visible Expand target cancels its pending camera move", async () => {
         "camera focus is canceled when the suggested tiles become visible",
     );
     hud.tutorial.target_nameplate = { x: 244, y: 390, offscreen: false };
+    hud.tutorial.target_action_mode = "expand";
+    hud.tutorial.target_action = { x: 207, y: 416, offscreen: false };
+    hud.tutorial.expand = hud.tutorial.target_action;
+    hud.tutorial.expand_target = { x: 31.5, y: 42.5 };
     hud.tutorial.facts.tiles_gained = 250;
     harness.update();
     assert.equal(harness.machine.view().step.id, "boudica_first_contact");
-    assert.deepEqual([harness.renderContext.anchor.x, harness.renderContext.anchor.y], [244, 390]);
+    assert.deepEqual([harness.renderContext.anchor.x, harness.renderContext.anchor.y], [207, 416]);
     assert.equal(harness.calls.filter((call) => call.type === "focus_world").length, 0);
     harness.advanceTimers(1);
-    const focus = harness.calls.filter((call) => call.type === "focus_world");
-    assert.equal(focus.length, 1, "only the new objective's destination is focused");
-    assert.deepEqual([focus[0].x, focus[0].y], [24.5, 39.5]);
+    assert.equal(
+        harness.calls.filter((call) => call.type === "focus_world").length,
+        0,
+        "a visible expansion target cancels the camera move on the new objective too",
+    );
 });
 
-test("tutorial emotes play before a delayed scene camera shot", async () => {
+test("Suetonius's sighted emote starts with final zoom and discovery waits for four tiles", async () => {
     const campaign = loadTypeScriptModule(path.join(shell, "sow-campaign.ts"));
     const campaignDir = path.join(shell, "../../assets/campaign");
     const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
@@ -1267,6 +1351,11 @@ test("tutorial emotes play before a delayed scene camera shot", async () => {
                 eliminated_faction_ids: [],
                 pre_defeat_faction_ids: [],
                 tiles_gained: 0,
+                camera_zoom: 0.25,
+                camera_zoom_target: 1,
+                camera_target_distance: 5,
+                camera_target_radius: 12,
+                zoom_in_events: 0,
             },
         },
         players: [
@@ -1285,25 +1374,46 @@ test("tutorial emotes play before a delayed scene camera shot", async () => {
         campaign,
         definition,
         roster,
-        initialStep: "boudica_found_suetonius",
+        initialStep: "boudica_zoom_in",
         hud,
         width: 390,
         height: 844,
     });
     await harness.start();
 
-    assert.equal(harness.machine.view().exchange_phase, "dialogue");
+    let view = harness.machine.view();
+    assert.equal(view.step.id, "boudica_zoom_in");
+    assert.equal(view.exchange.speaker, "suetonius_paulinus");
     assert.equal(
-        harness.calls.some((call) => call.type === "focus_world"),
-        false,
+        view.exchange.emote_text_key,
+        "tutorial.campaign_boudica_suetonius_sighted_emote",
     );
-    harness.advanceTimers(1);
-    const focusIndex = harness.calls.findIndex((call) => call.type === "focus_world");
-    assert.ok(focusIndex >= 0, "the scene camera shot runs without waiting on an emote");
-    assert.equal(harness.machine.advance(null, harness.machine.view().step.id), true);
+    const emote = harness.calls.find((call) => call.type === "tutorial_emote");
+    assert.ok(emote, "Suetonius's line starts when the final zoom objective opens");
+    assert.equal(emote.faction_id, "suetonius_paulinus");
+    assert.equal(emote.message, "Text for tutorial.campaign_boudica_suetonius_sighted_emote");
+
+    hud.tutorial.emote_token = emote.token;
     harness.update();
-    const emoteIndex = harness.calls.findIndex((call) => call.type === "tutorial_emote");
-    assert.ok(emoteIndex > focusIndex, "the trailing emote plays in the background as Home becomes active");
+
+    hud.tutorial.facts.camera_zoom = 1;
+    hud.tutorial.facts.zoom_in_events = 1;
+    harness.update();
+    view = harness.machine.view();
+    assert.equal(view.step.id, "boudica_zoom_in");
+    assert.equal(hud.tutorial.facts.camera_target_distance, 5);
+    assert.equal(
+        harness.calls.filter((call) => call.type === "tutorial_emote").length,
+        1,
+        "the line has already played while the zoom objective remains active",
+    );
+
+    hud.tutorial.facts.camera_target_distance = 4;
+    harness.update();
+    view = harness.machine.view();
+    assert.equal(harness.machine.state.id, "boudica_found_suetonius");
+    assert.equal(view.exchange_phase, "speaking");
+    assert.equal(view.exchange.speaker, "suetonius_paulinus");
 });
 
 test("Trinovantes aid guides radial opening, Transfer, and the confirmed delivery separately", async () => {

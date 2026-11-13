@@ -97,9 +97,6 @@ copy_failed = "MAHAHALAGANG HALAGA"
 copy_unavailable = "MAHIRAP NA NAHIRAPAN"
 
 [tutorial]
-skip_cinematic = "Laktawan ang eksena"
-watch_cinematic = "PANOORIN ANG CINEMATIC"
-hold_to_skip = "PINDUTIN AT HAWAKAN PARA LUMAKTAW"
 continue = "PAGHAHAHANAP"
 complete = "KUMPLETUHIN ANG KAMPANYA"
 retry = "SUBUKAN MULI"
@@ -894,6 +891,10 @@ change_territory_style = "Palitan ang istilo ng inyong teritoryo"
 view = "TINGNAN"
 checkout = "WALANG PAGTUTOK"
 loading_checkout = "Pagkarga ng checkout..."
+daily_offers = "Mga alok ngayong araw"
+weekly_offers = "Mga alok ngayong linggo"
+ends_in = "Matatapos sa {time}"
+leader = "Pinuno"
 
 [hud]
 build_placement = "Ipuwesto ang gusali"

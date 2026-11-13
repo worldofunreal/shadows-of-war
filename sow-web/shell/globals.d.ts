@@ -87,7 +87,6 @@ declare global {
         SOW_portalRewardedBreak?: () => Promise<boolean>;
         SOW_setPortalAudioMuted?: (muted: boolean) => void;
         SOW_analyticsTrack: (name: string, props?: unknown) => void;
-        SOW_menu_music_cinematic: (active: boolean) => void;
         SOW_LOCALE: string;
         SOW_LOCALE_DEFAULT: string;
         SOW_SITE_LOCALE?: string;

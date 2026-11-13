@@ -18,21 +18,9 @@ fn is_emote_intent(intent: &GameplayIntent) -> bool {
     )
 }
 
-fn is_waiting_for_campaign_attack(
-    waiting: bool,
-    campaign: crate::campaign::CampaignId,
-    target_owner: Option<u16>,
-    intent: &sow_core::protocol::GameplayIntent,
-) -> bool {
-    waiting
-        && campaign == crate::campaign::CampaignId::Boudica
-        && target_owner.is_some_and(|target_owner| {
-            matches!(intent, sow_core::protocol::GameplayIntent::Attack(attack) if attack.target_owner == target_owner)
-        })
-}
-
 fn paused_tutorial_intent_allowed(
     action: Option<TutorialPausedAction>,
+    marker_player_id: Option<u16>,
     intent: &GameplayIntent,
 ) -> bool {
     is_tutorial_control_intent(intent)
@@ -40,6 +28,9 @@ fn paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::ExpandOnceThenResume) => {
                 matches!(intent, GameplayIntent::Attack(attack) if attack.target_owner == 0)
             }
+            Some(TutorialPausedAction::AttackOnceThenResume) => marker_player_id.is_some_and(|target| {
+                matches!(intent, GameplayIntent::Attack(attack) if attack.target_owner == target)
+            }),
             Some(TutorialPausedAction::SendResourcesStayPaused) => {
                 matches!(intent, GameplayIntent::SendResources { .. })
             }
@@ -70,6 +61,12 @@ fn paused_tutorial_progress(
         GameplayIntent::Attack(attack) if attack.target_owner == 0 => {
             Some(observation.wilderness_orders_accepted)
         }
+        GameplayIntent::Attack(_) => Some(
+            observation
+                .attacks_by_faction_id
+                .values()
+                .fold(0, |total, count| total.saturating_add(*count)),
+        ),
         GameplayIntent::SendResources { .. } => Some(observation.resource_transfers),
         GameplayIntent::ProposeAlliance { .. } => Some(observation.alliance_requests_submitted),
         GameplayIntent::BuildStructure { kind, .. } => {
@@ -120,20 +117,6 @@ impl SowApp {
             return self.apply_tutorial_emote(intent);
         }
         let tutorial_control = is_tutorial_control_intent(&intent);
-        if self.ui.tutorial_waiting_for_first_attack && !tutorial_control {
-            if !is_waiting_for_campaign_attack(
-                self.ui.tutorial_waiting_for_first_attack,
-                self.ui.tutorial_campaign,
-                self.tutorial_campaign_attack_owner(),
-                &intent,
-            ) {
-                return false;
-            }
-            self.sim.offline_intents.clear();
-            self.ui.tutorial_waiting_for_first_attack = false;
-            self.sim.paused = false;
-            self.sim.offline_tick_timer = 0.0;
-        }
         if self.ui.tutorial_camera_only && !tutorial_control {
             return false;
         }
@@ -144,7 +127,11 @@ impl SowApp {
             return false;
         }
         if paused_tutorial
-            && !paused_tutorial_intent_allowed(self.ui.tutorial_paused_action, &intent)
+            && !paused_tutorial_intent_allowed(
+                self.ui.tutorial_paused_action,
+                self.ui.tutorial_marker_player_id,
+                &intent,
+            )
         {
             return false;
         }
@@ -238,7 +225,13 @@ impl SowApp {
             let after = paused_tutorial_progress(&self.sim.tutorial_observation, &intent);
             let accepted = paused_tutorial_action_accepted(before, after);
             if accepted {
+                let resume_after_attack = self.ui.tutorial_paused_action
+                    == Some(TutorialPausedAction::AttackOnceThenResume);
                 self.ui.tutorial_paused_action = None;
+                if resume_after_attack {
+                    self.sim.paused = false;
+                    self.sim.offline_tick_timer = 0.0;
+                }
             }
             return accepted;
         }
@@ -295,58 +288,12 @@ fn record_attack_launch_notice(
 #[cfg(test)]
 mod tests {
     use super::{
-        is_tutorial_control_intent, is_waiting_for_campaign_attack,
-        paused_tutorial_action_accepted, paused_tutorial_intent_allowed, paused_tutorial_progress,
-        record_attack_launch_notice,
+        is_tutorial_control_intent, paused_tutorial_action_accepted,
+        paused_tutorial_intent_allowed, paused_tutorial_progress, record_attack_launch_notice,
     };
     use crate::app::{TutorialObservation, TutorialPausedAction};
-    use crate::campaign::CampaignId;
     use sow_core::protocol::{AttackIntent, GameplayIntent};
     use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[test]
-    fn only_the_first_boudica_campaign_target_unpauses_the_tutorial() {
-        let attack = GameplayIntent::Attack(AttackIntent {
-            target_owner: 2,
-            troops: Some(100.0),
-        });
-        assert!(is_waiting_for_campaign_attack(
-            true,
-            CampaignId::Boudica,
-            Some(2),
-            &attack
-        ));
-        assert!(!is_waiting_for_campaign_attack(
-            true,
-            CampaignId::SixSkyEp1,
-            Some(2),
-            &attack
-        ));
-        assert!(!is_waiting_for_campaign_attack(
-            false,
-            CampaignId::Boudica,
-            Some(2),
-            &attack
-        ));
-        assert!(!is_waiting_for_campaign_attack(
-            true,
-            CampaignId::Boudica,
-            Some(3),
-            &attack
-        ));
-        assert!(!is_waiting_for_campaign_attack(
-            true,
-            CampaignId::Boudica,
-            None,
-            &attack
-        ));
-        assert!(!is_waiting_for_campaign_attack(
-            true,
-            CampaignId::Boudica,
-            Some(2),
-            &GameplayIntent::Resign
-        ));
-    }
 
     #[wasm_bindgen_test]
     fn paused_tutorial_actions_are_limited_to_the_current_step() {
@@ -372,46 +319,67 @@ mod tests {
 
         assert!(!paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::ExpandOnceThenResume),
+            Some(2),
             &spawn
         ));
         assert!(paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::ExpandOnceThenResume),
+            Some(2),
             &neutral_attack
         ));
         assert!(!paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::ExpandOnceThenResume),
+            Some(2),
+            &faction_attack
+        ));
+        assert!(paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::AttackOnceThenResume),
+            Some(2),
+            &faction_attack
+        ));
+        assert!(!paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::AttackOnceThenResume),
+            Some(3),
+            &faction_attack
+        ));
+        assert!(!paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::AttackOnceThenResume),
+            None,
             &faction_attack
         ));
         assert!(!paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::ExpandOnceThenResume),
+            Some(2),
             &send
         ));
         assert!(paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::SendResourcesStayPaused),
+            Some(2),
             &send
         ));
         assert!(!paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::SendResourcesStayPaused),
+            Some(2),
             &spawn
         ));
         assert!(paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::BuildUntilStarted),
+            Some(2),
             &build
         ));
         assert!(paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::UpgradeUntilStarted),
+            Some(2),
             &upgrade
         ));
         assert!(!paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::BuildUntilStarted),
+            Some(2),
             &upgrade
         ));
-        assert!(!paused_tutorial_intent_allowed(None, &spawn));
-        assert!(!paused_tutorial_intent_allowed(None, &neutral_attack));
-        assert!(paused_tutorial_intent_allowed(
-            None,
-            &GameplayIntent::Resign
-        ));
+        assert!(!paused_tutorial_intent_allowed(None, Some(2), &spawn));
+        assert!(!paused_tutorial_intent_allowed(None, Some(2), &neutral_attack));
+        assert!(paused_tutorial_intent_allowed(None, Some(2), &GameplayIntent::Resign));
     }
 
     #[wasm_bindgen_test]
@@ -421,6 +389,18 @@ mod tests {
         assert!(!paused_tutorial_action_accepted(Some(12), None));
         assert!(!paused_tutorial_action_accepted(None, Some(13)));
         assert!(paused_tutorial_action_accepted(Some(12), Some(13)));
+    }
+
+    #[wasm_bindgen_test]
+    fn paused_tutorial_attack_wait_uses_a_successfully_observed_attack() {
+        let attack = GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(100.0),
+        });
+        let mut observation = TutorialObservation::default();
+        assert_eq!(paused_tutorial_progress(&observation, &attack), Some(0));
+        observation.attacks_by_faction_id.insert("roman".into(), 1);
+        assert_eq!(paused_tutorial_progress(&observation, &attack), Some(1));
     }
 
     #[wasm_bindgen_test]
