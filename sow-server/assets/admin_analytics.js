@@ -55,14 +55,16 @@ function renderDimensions(id, dimensions, columns = DEVICE_EVENTS) {
       cell(row, Number(counts[name] || 0).toLocaleString());
   });
 }
-function renderRetention(windows) {
-  rows($("retention"), Object.entries(windows), (row, [windowName, data]) => {
+function renderRetention(id, windows, subject) {
+  rows($(id), Object.entries(windows), (row, [windowName, data]) => {
     const ready = data.status === "ready";
+    const eligible = subject === "browsers" ? data.eligible_browsers : data.eligible_accounts;
+    const returned = subject === "browsers" ? data.returned_browsers : data.returned_accounts;
     cell(row, windowName.toUpperCase());
-    cell(row, data.status === "ready" ? "Matured" : data.status === "not_matured" ? "Still maturing" : "No eligible accounts");
+    cell(row, data.status === "ready" ? "Matured" : data.status === "not_matured" ? "Pending" : `No eligible ${subject}`);
     cell(row, data.cohort_cutoff_date || "—");
-    cell(row, ready ? Number(data.eligible_accounts || 0).toLocaleString() : "—");
-    cell(row, ready ? Number(data.returned_accounts || 0).toLocaleString() : "—");
+    cell(row, ready ? Number(eligible || 0).toLocaleString() : "—");
+    cell(row, ready ? Number(returned || 0).toLocaleString() : "—");
     cell(row, ready ? (100 * Number(data.rate)).toFixed(1) + "%" : "—");
   });
 }
@@ -125,7 +127,8 @@ function renderReport(report) {
     cell(row, Number(guide.skipped_step || 0).toLocaleString());
     cell(row, Number(guide.disabled_all || 0).toLocaleString());
   });
-  renderRetention(report.retention?.site || {});
+  renderRetention("site-browser-retention", report.retention?.site_browser || {}, "browsers");
+  renderRetention("retention", report.retention?.site || {}, "accounts");
   $("notice").textContent = "Report loaded. Other channels are shown as separate platform sources, not as zero.";
 }
 $("controls").addEventListener("submit", async (event) => {

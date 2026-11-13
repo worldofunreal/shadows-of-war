@@ -1,8 +1,11 @@
 (() => {
   "use strict";
 
-  const POLICY = "2026-11-10";
+  const POLICY = "2026-11-13";
+  const PREVIOUS_POLICY = "2026-11-10";
   const CONSENT_KEY = "sow_analytics_consent_v2";
+  const VISITOR_KEY = "sow_analytics_visitor_v1";
+  const VISITOR_TTL_MS = 90 * 24 * 60 * 60 * 1000;
   const SESSION_KEY = "sow_analytics_session_v2";
   const QUEUE_KEY = "sow_analytics_queue_v4";
   const LEGACY_QUEUE_KEY = "sow_analytics_queue_v3";
@@ -82,6 +85,7 @@
 
   let consent = null;
   let sessionId = null;
+  let visitorId = null;
   let queue = [];
   let panel = null;
   let busy = false;
@@ -108,10 +112,35 @@
   function readChoice() {
     try {
       const saved = JSON.parse(localStorage.getItem(CONSENT_KEY) || "null");
-      return saved && saved.policy === POLICY && ["accepted", "rejected"].includes(saved.choice)
-        ? saved.choice
-        : null;
+      if (!saved || !["accepted", "rejected"].includes(saved.choice)) return null;
+      if (saved.choice === "rejected") return "rejected";
+      return saved.policy === POLICY ? "accepted" : null;
     } catch {
+      return null;
+    }
+  }
+
+  function ensureVisitor() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(VISITOR_KEY) || "null");
+      if (
+        saved &&
+        typeof saved.id === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(saved.id) &&
+        Number(saved.expires_at) > Date.now()
+      ) {
+        visitorId = saved.id;
+        return visitorId;
+      }
+      visitorId = uuid();
+      if (!visitorId) return null;
+      localStorage.setItem(
+        VISITOR_KEY,
+        JSON.stringify({ id: visitorId, expires_at: Date.now() + VISITOR_TTL_MS }),
+      );
+      return visitorId;
+    } catch {
+      visitorId = null;
       return null;
     }
   }
@@ -134,9 +163,16 @@
     try {
       localStorage.setItem(CONSENT_KEY, JSON.stringify({ choice, policy: POLICY }));
     } catch {}
+    applyChoice(choice);
+    closePanel();
+  }
+
+  function applyChoice(choice) {
+    consent = choice;
     if (choice === "accepted") {
       if (canSend()) {
         ensureSession();
+        ensureVisitor();
         restoreQueue();
         startFlushTimer();
       } else {
@@ -147,14 +183,15 @@
     } else {
       stopFlushTimer();
       sessionId = null;
+      visitorId = null;
       queue = [];
       if (controller) controller.abort();
       try {
+        localStorage.removeItem(VISITOR_KEY);
         sessionStorage.removeItem(SESSION_KEY);
         sessionStorage.removeItem(QUEUE_KEY);
       } catch {}
     }
-    closePanel();
   }
 
   function isLandingPage() {
@@ -184,7 +221,14 @@
     try {
       const saved = JSON.parse(sessionStorage.getItem(QUEUE_KEY) || "[]");
       queue = Array.isArray(saved)
-        ? saved.filter((event) => event && typeof event.event_id === "string").slice(-MAX_QUEUE)
+        ? saved
+            .filter(
+              (event) =>
+                event &&
+                typeof event.event_id === "string" &&
+                [POLICY, PREVIOUS_POLICY].includes(event.consent_version),
+            )
+            .slice(-MAX_QUEUE)
         : [];
     } catch {
       queue = [];
@@ -388,15 +432,30 @@
 
   async function flush(keepalive = false) {
     if (busy || !queue.length || consent !== "accepted" || !canSend()) return;
-    const batch = queue.slice(0, MAX_BATCH);
+    const batchPolicy = queue[0].consent_version;
+    const batch = [];
+    for (const event of queue) {
+      if (event.consent_version !== batchPolicy || batch.length >= MAX_BATCH) break;
+      batch.push(event);
+    }
+    if (!batch.length || ![POLICY, PREVIOUS_POLICY].includes(batchPolicy)) {
+      queue = queue.filter((event) => event && [POLICY, PREVIOUS_POLICY].includes(event.consent_version));
+      persistQueue();
+      return;
+    }
     const sentIds = new Set(batch.map((event) => event.event_id));
+    const request: { events: typeof batch; visitor_id?: string } = { events: batch };
+    if (batchPolicy === POLICY) {
+      const id = visitorId || ensureVisitor();
+      if (id) request.visitor_id = id;
+    }
     busy = true;
     controller = new AbortController();
     try {
       const response = await fetch("/api/event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ events: batch }),
+        body: JSON.stringify(request),
         credentials: "omit",
         cache: "no-store",
         keepalive,
@@ -454,7 +513,7 @@
       title.textContent = text("site.analytics_title", "Optional analytics");
       body.textContent = text(
         "site.analytics_body",
-        "We use site and game activity to improve Shadows of War. It stays off unless you allow it.",
+        "Optional analytics stays off unless you allow it. If you do, a random ID is stored in this browser for up to 90 days to measure return visits; it is not an account ID. Rejecting does not affect the game.",
       );
       policyLink.textContent = text("site.analytics_policy", "Cookie details");
       accept.textContent = text("site.analytics_accept", "Allow");
@@ -485,6 +544,19 @@
   });
   window.addEventListener("pagehide", () => {
     void flush(true);
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key === CONSENT_KEY) {
+      const choice = readChoice();
+      if (choice !== consent) {
+        applyChoice(choice);
+        if (choice !== null) closePanel();
+        else if (!isGameShell) openSettings();
+      }
+    } else if (event.key === VISITOR_KEY && consent === "accepted") {
+      visitorId = null;
+      if (event.newValue) ensureVisitor();
+    }
   });
   const refreshLocale = () => {
     if (panel && panel._refreshCopy) panel._refreshCopy();

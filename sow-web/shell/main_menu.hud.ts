@@ -11,6 +11,7 @@ import {
 import { abilityIconMarkup, esc } from "./main_menu.core.ts";
 import { renderLocaleSettingRow } from "./main_menu.settings.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
+import { SOWTooltip } from "./sow-tooltip.ts";
 import type {
     HudAvatarIdentity,
     HudBuildingPlacement,
@@ -883,30 +884,30 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         let html = '<div class="sow-hud__endgame-stats" id="sow-hud-' + prefix + '-stats">';
         html +=
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-            SOW_t("endgame.stat_kills") +
-            '" title="' +
-            SOW_t("endgame.stat_kills") +
-            '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+            esc(SOW_t("endgame.stat_kills")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("endgame.stat_kills")) +
+            '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
             hudIcon("attack", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
             prefix +
             '-kills">0</b></div>';
         html +=
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-            SOW_t("endgame.stat_assists") +
-            '" title="' +
-            SOW_t("endgame.stat_assists") +
-            '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+            esc(SOW_t("endgame.stat_assists")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("endgame.stat_assists")) +
+            '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
             statusIcon("allied", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
             prefix +
             '-assists">0</b></div>';
         html +=
             '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-            SOW_t("endgame.stat_max_territory") +
-            '" title="' +
-            SOW_t("endgame.stat_max_territory") +
-            '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+            esc(SOW_t("endgame.stat_max_territory")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("endgame.stat_max_territory")) +
+            '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
             hudIcon("globe", "sow-hud__inline-icon") +
             '</span><b id="sow-hud-' +
             prefix +
@@ -914,20 +915,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (count >= 5) {
             html +=
                 '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-                SOW_t("endgame.stat_gold_received") +
-                '" title="' +
-                SOW_t("endgame.stat_gold_received") +
-                '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+                esc(SOW_t("endgame.stat_gold_received")) +
+                '" data-sow-tooltip="' +
+                esc(SOW_t("endgame.stat_gold_received")) +
+                '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
                 hudIcon("gold", "sow-hud__inline-icon") +
                 '</span><b id="sow-hud-' +
                 prefix +
                 '-gold-received">0</b></div>';
             html +=
                 '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-                SOW_t("endgame.stat_troops_received") +
-                '" title="' +
-                SOW_t("endgame.stat_troops_received") +
-                '"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+                esc(SOW_t("endgame.stat_troops_received")) +
+                '" data-sow-tooltip="' +
+                esc(SOW_t("endgame.stat_troops_received")) +
+                '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
                 hudIcon("troops", "sow-hud__inline-icon") +
                 '</span><b id="sow-hud-' +
                 prefix +
@@ -1571,38 +1572,38 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             '<header class="sow-hud__topbar">' +
             '  <div class="sow-hud__status-right">' +
             '    <button class="sow-hud__icon-btn sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' +
-            SOW_t("hud.leave") +
-            '" title="' +
-            SOW_t("hud.leave") +
-            '">' +
+            esc(SOW_t("hud.leave")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.leave")) +
+            '" data-sow-tooltip-placement="bottom" data-sow-tooltip-tone="danger">' +
             hudIcon("leave", "sow-hud__action-icon") +
             "</button>" +
             '    <button class="sow-hud__icon-btn" type="button" data-command="toggle_settings" aria-label="' +
-            SOW_t("menu.settings") +
-            '" title="' +
-            SOW_t("menu.settings") +
-            '">' +
+            esc(SOW_t("menu.settings")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("menu.settings")) +
+            '" data-sow-tooltip-placement="bottom">' +
             hudIcon("settings", "sow-hud__action-icon") +
             "</button>" +
             '    <button class="sow-hud__icon-btn sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' +
-            SOW_t("hud.inbox") +
-            '" title="' +
-            SOW_t("hud.inbox") +
-            '">' +
+            esc(SOW_t("hud.inbox")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.inbox")) +
+            '" data-sow-tooltip-placement="bottom">' +
             hudIcon("inbox") +
             '<span class="sow-hud__inbox-badge" id="sow-hud-inbox-count" hidden>0</span></button>' +
             '    <button class="sow-hud__icon-btn" type="button" data-command="toggle_leaderboard" aria-label="' +
-            SOW_t("hud.rankings") +
-            '" title="' +
-            SOW_t("hud.rankings") +
-            '">' +
+            esc(SOW_t("hud.rankings")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.rankings")) +
+            '" data-sow-tooltip-placement="bottom" data-sow-tooltip-tone="gold">' +
             hudIcon("rankings", "sow-hud__action-icon") +
             "</button>" +
             '    <button class="sow-hud__icon-btn hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" hidden aria-label="' +
-            SOW_t("hud.dev_tools") +
-            '" title="' +
-            SOW_t("hud.dev_tools") +
-            '">' +
+            esc(SOW_t("hud.dev_tools")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.dev_tools")) +
+            '" data-sow-tooltip-placement="bottom">' +
             hudIcon("tools", "sow-hud__action-icon") +
             "</button>" +
             '    <div class="sow-hud__diagnostics" id="sow-hud-diagnostics">' +
@@ -1622,24 +1623,24 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             hudIcon("troops", "sow-hud__inline-icon") +
             "</span></div>" +
             '  <div class="sow-hud__nameplate-economy">' +
-            '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--gold" title="' +
-            SOW_t("hud.gold_treasury") +
-            '" aria-label="' +
-            SOW_t("hud.gold_treasury") +
+            '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--gold" data-sow-tooltip="' +
+            esc(SOW_t("hud.gold_treasury")) +
+            '" data-sow-tooltip-tone="gold" aria-label="' +
+            esc(SOW_t("hud.gold_treasury")) +
             '"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' +
             currencyAsset("gold") +
             '" alt="" aria-hidden="true"><b id="sow-hud-nameplate-gold">0</b></span>' +
-            '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--gold-rate" title="' +
-            SOW_t("hud.gold_net_rate") +
-            '" aria-label="' +
-            SOW_t("hud.gold_net_rate") +
+            '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--gold-rate" data-sow-tooltip="' +
+            esc(SOW_t("hud.gold_net_rate")) +
+            '" data-sow-tooltip-tone="gold" aria-label="' +
+            esc(SOW_t("hud.gold_net_rate")) +
             '"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' +
             currencyAsset("gold") +
             '" alt="" aria-hidden="true"><b id="sow-hud-nameplate-gold-rate">0/s</b></span>' +
-            '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--troop-rate" title="' +
-            SOW_t("hud.troop_production_rate") +
+            '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--troop-rate" data-sow-tooltip="' +
+            esc(SOW_t("hud.troop_production_rate")) +
             '" aria-label="' +
-            SOW_t("hud.troop_production_rate") +
+            esc(SOW_t("hud.troop_production_rate")) +
             '">' +
             hudIcon("troops", "sow-hud__inline-icon") +
             '<b id="sow-hud-nameplate-troop-rate">0/s</b></span>' +
@@ -1688,24 +1689,24 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</aside>" +
             '<aside class="sow-hud__right-rail" id="sow-hud-right-rail">' +
             '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_in" aria-label="' +
-            SOW_t("hud.zoom_in") +
-            '" title="' +
-            SOW_t("hud.zoom_in") +
-            '">' +
+            esc(SOW_t("hud.zoom_in")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.zoom_in")) +
+            '" data-sow-tooltip-placement="start">' +
             hudIcon("plus") +
             "</button>" +
             '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_out" aria-label="' +
-            SOW_t("hud.zoom_out") +
-            '" title="' +
-            SOW_t("hud.zoom_out") +
-            '">' +
+            esc(SOW_t("hud.zoom_out")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.zoom_out")) +
+            '" data-sow-tooltip-placement="start">' +
             hudIcon("minus") +
             "</button>" +
             '  <button type="button" class="sow-hud__icon-btn" data-command="center_camera" aria-label="' +
-            SOW_t("hud.center_camera") +
-            '" title="' +
-            SOW_t("hud.center_camera") +
-            '">' +
+            esc(SOW_t("hud.center_camera")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.center_camera")) +
+            '" data-sow-tooltip-placement="start">' +
             hudIcon("home", "sow-hud__action-icon") +
             "</button>" +
             "</aside>" +
@@ -1720,9 +1721,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "      </h3>" +
             "    </div>" +
             '    <button type="button" class="sow-hud__sheet-btn sow-hud__dev-save-btn" data-command="dev_save_settings" aria-label="' +
-            (SOW_t("hud.save_settings") || "Descargar ajustes JSON") +
-            '" title="' +
-            (SOW_t("hud.save_settings") || "Descargar ajustes JSON") +
+            esc(SOW_t("hud.save_settings") || "Descargar ajustes JSON") +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.save_settings") || "Descargar ajustes JSON") +
             '">' +
             DEV_SAVE_ICON +
             "</button>" +
@@ -1897,9 +1898,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             tileLock() +
             "</span>" +
             '        <button type="button" class="sow-hud__building-btn" data-command="select_warship" data-fleet-kind="warship" aria-label="' +
-            SOW_t("hud.map_action_build_warship") +
-            '" title="' +
-            SOW_t("hud.map_action_build_warship") +
+            esc(SOW_t("hud.map_action_build_warship")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.map_action_build_warship")) +
             '">' +
             unitIcon("warship") +
             '<span class="sow-hud__fleet-count" aria-hidden="true">0</span>' +
@@ -1910,9 +1911,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             tileLock() +
             "</button>" +
             '        <button type="button" class="sow-hud__building-btn" data-command="select_nuke" data-fleet-kind="nuke" aria-label="' +
-            SOW_t("hud.map_action_nuke") +
-            '" title="' +
-            SOW_t("hud.map_action_nuke") +
+            esc(SOW_t("hud.map_action_nuke")) +
+            '" data-sow-tooltip="' +
+            esc(SOW_t("hud.map_action_nuke")) +
             '">' +
             unitIcon("atom-bomb") +
             tileCost(true) +
@@ -4774,14 +4775,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         gps.dataset.command = "focus_player";
         gps.dataset.playerId = String(player.id);
         gps.setAttribute("aria-label", SOW_t("hud.center_camera") || "Locate");
-        gps.title = SOW_t("hud.center_camera") || "Locate";
+        SOWTooltip.set(gps, SOW_t("hud.center_camera") || "Locate");
         gps.innerHTML = leaderboardGpsIcon();
         transfer.type = "button";
         transfer.className = "sow-hud__row-action sow-hud__row-action--icon sow-hud__row-action--trade";
         transfer.dataset.command = "open_transfer";
         transfer.dataset.playerId = String(player.id);
         transfer.setAttribute("aria-label", SOW_t("hud.map_action_transfer") || "Trade");
-        transfer.title = SOW_t("hud.map_action_transfer") || "Trade";
+        SOWTooltip.set(transfer, SOW_t("hud.map_action_transfer") || "Trade");
         transfer.innerHTML = leaderboardTradeIcon();
         actions.append(gps, transfer);
         meta.append(stats, actions);
@@ -5597,7 +5598,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             row.accept.textContent = SOW_t(resourceRequest && !trade ? "hud.send" : "hud.accept");
             row.reject.textContent = SOW_t(resourceRequest ? "hud.ignore_request" : "hud.reject");
             row.accept.disabled = request.active === false;
-            row.accept.title = row.accept.disabled ? SOW_t("hud.action_unavailable") : "";
+            SOWTooltip.set(row.accept, row.accept.disabled ? SOW_t("hud.action_unavailable") : null);
             row.element.classList.toggle("is-inactive", row.accept.disabled);
             next[key] = row;
             keys.push(key);
@@ -5877,7 +5878,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         button.className = "sow-hud__operation-action";
         button.dataset.command = command;
         button.setAttribute("aria-label", label);
-        button.title = label;
+        SOWTooltip.set(button, label);
         button.innerHTML =
             command === "scuttle_fleet"
                 ? statusIcon("death", "sow-hud__operation-action-icon")
@@ -6246,9 +6247,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const goldRateText = formatHudRate(goldRate);
         if (hudRefs!.plateGoldRate) {
             hudRefs!.plateGoldRate.classList.toggle("is-hero-active", heroIncome > 0);
-            hudRefs!.plateGoldRate.title = heroIncome > 0
-                ? SOW_t("site.leader_" + hud.player_leader + "_ability", {}) + " · +" + formatHudRate(heroIncome)
-                : SOW_t("hud.gold_net_rate");
+            const rateKey = heroIncome > 0 ? `${hud.player_leader}:${heroIncome.toFixed(1)}` : "base";
+            if (hudRefs!.plateGoldRate.dataset.sowTooltipKey !== rateKey) {
+                hudRefs!.plateGoldRate.dataset.sowTooltipKey = rateKey;
+                SOWTooltip.set(
+                    hudRefs!.plateGoldRate,
+                    heroIncome > 0
+                        ? {
+                              title: SOW_t("hud.gold_net_rate"),
+                              eyebrow: SOW_t("site.leader_" + hud.player_leader + "_ability", {}),
+                              text: "+" + formatHudRate(heroIncome),
+                              tone: "gold",
+                          }
+                        : { text: SOW_t("hud.gold_net_rate"), tone: "gold" },
+                );
+            }
         }
         if (hudRefs!.plateGoldRate && hudRefs!.plateGoldRate.textContent !== goldRateText) {
             hudRefs!.plateGoldRate.textContent = goldRateText;
@@ -6387,13 +6400,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 hudRefs!.deployBtn.setAttribute("tabindex", "0");
                 const centerLabel = SOW_t("hud.center_camera");
                 hudRefs!.deployBtn.setAttribute("aria-label", centerLabel);
-                hudRefs!.deployBtn.title = centerLabel;
+                SOWTooltip.set(hudRefs!.deployBtn, centerLabel);
             } else {
                 delete hudRefs!.deployBtn.dataset.command;
                 hudRefs!.deployBtn.removeAttribute("role");
                 hudRefs!.deployBtn.removeAttribute("tabindex");
                 hudRefs!.deployBtn.removeAttribute("aria-label");
-                hudRefs!.deployBtn.title = "";
+                SOWTooltip.clear(hudRefs!.deployBtn);
             }
             if (hudRefs!.deployStatus) {
                 hudRefs!.deployStatus.hidden = !hasSpawned;
@@ -6443,7 +6456,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                       ? label + " " + costText
                       : label;
                 button.setAttribute("aria-label", accessibleLabel);
-                if (button.title !== accessibleLabel) button.title = accessibleLabel;
+                if (button.dataset.sowTooltipKey !== accessibleLabel) {
+                    button.dataset.sowTooltipKey = accessibleLabel;
+                    SOWTooltip.set(button, {
+                        title: label,
+                        text: reason || costText || undefined,
+                        tone: reason ? "danger" : "gold",
+                    });
+                }
             });
             hasBuildingItems = hudRefs!.buildingButtons.some(function (button) {
                 return !button.hidden;
@@ -6487,7 +6507,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                     : "";
                 if (tradeReason) tradeStatus += " · " + tradeReason;
                 hudRefs!.fleetTrade.setAttribute("aria-label", tradeStatus);
-                hudRefs!.fleetTrade.title = tradeStatus;
+                SOWTooltip.set(hudRefs!.fleetTrade, tradeStatus);
                 hudRefs!.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
                 setCampaignLock(hudRefs!.fleetTrade, fleetUnlocks === null && !tradeUnlocked);
             }
@@ -6500,7 +6520,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 if (countBadge) countBadge.textContent = String(transportCount);
                 const transportLabel = SOW_t("hud.fleet_transport_label") + " · " + transportCount;
                 hudRefs!.fleetTransport.setAttribute("aria-label", transportLabel);
-                hudRefs!.fleetTransport.title = transportLabel;
+                SOWTooltip.set(hudRefs!.fleetTransport, transportLabel);
                 setCampaignLock(hudRefs!.fleetTransport, fleetUnlocks !== null && transportCampaignLocked);
             }
             if (hudRefs!.fleetWarship) {
@@ -6543,7 +6563,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 const warshipLabel = SOW_t("hud.map_action_build_warship") + " · " + warshipCount +
                     (selectedWarships > 0 ? " · " + selectedWarships : "") + " · " + warshipReason;
                 hudRefs!.fleetWarship.setAttribute("aria-label", warshipLabel);
-                hudRefs!.fleetWarship.title = warshipLabel;
+                SOWTooltip.set(hudRefs!.fleetWarship, warshipLabel);
                 setCampaignLock(hudRefs!.fleetWarship, fleetUnlocks === null && warshipDisabled);
                 setTileCost(hudRefs!.fleetWarship, warshipCost);
                 hudRefs!.fleetSelection.hidden = isDeploying || hideWarship || selectedWarships === 0;
@@ -6592,7 +6612,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                             "g";
                 const nukeLabel = SOW_t("hud.map_action_nuke") + " · " + nukeReason;
                 hudRefs!.fleetNuke.setAttribute("aria-label", nukeLabel);
-                hudRefs!.fleetNuke.title = nukeLabel;
+                SOWTooltip.set(hudRefs!.fleetNuke, nukeLabel);
                 setCampaignLock(hudRefs!.fleetNuke, fleetUnlocks === null && nukeDisabled);
                 setTileCost(hudRefs!.fleetNuke, nukeCost);
             }

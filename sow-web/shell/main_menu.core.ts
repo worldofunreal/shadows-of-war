@@ -247,6 +247,32 @@ export function renderQuickMatchButton(): string {
     );
 }
 
+export function openCustomRoomsCount(): number {
+    const lobbies = (menuUi.state && menuUi.state.lobbies) || [];
+    return lobbies.filter(function (lobby) {
+        return lobby.kind === "Custom" && !lobby.is_private;
+    }).length;
+}
+
+export function renderLobbyBrowserButton(): string {
+    const openRooms = openCustomRoomsCount();
+    const badge =
+        openRooms > 0
+            ? "<span class='sow-menu__rooms-badge'>" +
+              esc(SOW_t("menu.open_rooms_count", { count: openRooms })) +
+              "</span>"
+            : "";
+    return (
+        "<button class='sow-menu__secondary sow-menu__browser-btn' type='button' data-command='open_browser'>" +
+        "<span>" +
+        esc(SOW_t("menu.lobby_browser")) +
+        "</span>" +
+        "<span class='sow-menu__secondary-meta'>" +
+        badge +
+        "<span>→</span></span></button>"
+    );
+}
+
 export function localizedText(value: LocalizedText | null | undefined): string {
     if (value && typeof value === "object" && value.key) {
         return SOW_t(value.key, value.values || {});
@@ -920,6 +946,7 @@ export function renderKey(): string {
             ];
         }),
         lobbies_count: (state.lobbies || []).length,
+        open_rooms_count: openCustomRoomsCount(),
         menu_tips_disabled: Boolean(state.menu_tips_disabled),
         menu_guides: state.menu_guides,
         missions: state.missions,

@@ -1,4 +1,5 @@
 import type { CampaignApi, CampaignViewApi } from "./campaign/types.ts";
+import type { SowTooltipSpec } from "./sow-tooltip.ts";
 
 type DropdownOption = { value: string | number; label: string; shortLabel?: string };
 type DropdownConfig = {
@@ -47,6 +48,17 @@ declare global {
         [key: `SOW${string}`]: unknown;
         SOWCampaign: CampaignApi;
         SOWCampaignView: CampaignViewApi;
+        SOWTooltip?: {
+            init: () => void;
+            register: (
+                id: string,
+                resolver: SowTooltipSpec | string | ((anchor: HTMLElement) => SowTooltipSpec | string | null | undefined),
+            ) => void;
+            set: (el: Element | null | undefined, spec: SowTooltipSpec | string | null | undefined) => void;
+            clear: (el: Element | null | undefined) => void;
+            show: (trigger: HTMLElement, explicitSpec?: SowTooltipSpec | string) => void;
+            hide: (immediate?: boolean) => void;
+        };
         SOW_getAuthState?: () => SowAuthState;
         SOW_hudIcon: (name: string) => string;
         SOW_loadAvatarBitmap?: (path: string, size: number) => Promise<ImageBitmap>;

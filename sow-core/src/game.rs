@@ -167,11 +167,7 @@ impl UnitType {
         }
     }
 
-    pub fn gold_cost_with_owned_count_for_leader(
-        self,
-        owned_count: u32,
-        leader: Leader,
-    ) -> f64 {
+    pub fn gold_cost_with_owned_count_for_leader(self, owned_count: u32, leader: Leader) -> f64 {
         let cost = self.gold_cost_with_owned_count(owned_count);
         match (self, leader.ability()) {
             (UnitType::Warship, crate::geo_entities::Ability::WarshipCost { percent }) => {
@@ -632,19 +628,69 @@ impl GameState {
 
         let mut eliminated = Vec::new();
         for tile in component {
-            let x = tile % width;
-            let y = tile / width;
-            self.events.push(GameEvent::TileCaptured {
-                x,
-                y,
-                new_owner: captor_id,
-                previous_owner: victim_id,
-                troops: 0.0,
-            });
-            let (newly_eliminated, _) = self.set_tile_owner_for_execution(x, y, captor_id);
-            eliminated.extend(newly_eliminated);
+            self.capture_tile_for_execution(victim_id, tile, captor_id, 0.0, Some(&mut eliminated));
         }
         eliminated
+    }
+
+    /// Transfers a small, prevalidated set of tiles through the same ownership and event path
+    /// used by enclosed-component captures. The sorted index/owner input is deterministic.
+    pub(crate) fn capture_tiles_for_execution(
+        &mut self,
+        previous_owner: u16,
+        transfers: &[(u32, u16)],
+    ) -> bool {
+        if previous_owner == 0 || self.map.width == 0 || transfers.is_empty() {
+            return false;
+        }
+        for (index, &(tile, new_owner)) in transfers.iter().enumerate() {
+            if tile as usize >= self.map.terrain.len()
+                || new_owner == 0
+                || new_owner == previous_owner
+                || self
+                    .map
+                    .owner_id(tile % self.map.width, tile / self.map.width)
+                    != previous_owner
+                || !self.player(new_owner).is_some_and(|player| player.alive)
+                || transfers[..index].iter().any(|&(other, _)| other == tile)
+            {
+                return false;
+            }
+        }
+        for &(tile, new_owner) in transfers {
+            self.capture_tile_for_execution(previous_owner, tile, new_owner, 0.0, None);
+        }
+        true
+    }
+
+    fn capture_tile_for_execution(
+        &mut self,
+        previous_owner: u16,
+        tile: u32,
+        new_owner: u16,
+        troops: f64,
+        mut eliminated: Option<&mut Vec<(u16, u32, u32)>>,
+    ) -> bool {
+        if self.map.width == 0
+            || tile as usize >= self.map.terrain.len()
+            || self
+                .map
+                .owner_id(tile % self.map.width, tile / self.map.width)
+                != previous_owner
+        {
+            return false;
+        }
+        let x = tile % self.map.width;
+        let y = tile / self.map.width;
+        self.events.push(GameEvent::TileCaptured {
+            x,
+            y,
+            new_owner,
+            previous_owner,
+            troops,
+        });
+        self.set_tile_owner_inner(x, y, new_owner, eliminated.as_deref_mut());
+        true
     }
 
     fn set_tile_owner_inner(

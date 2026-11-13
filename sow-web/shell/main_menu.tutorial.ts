@@ -79,7 +79,8 @@ interface TutorialRuntime {
     guidedScrollStepId: string | null;
     guidedControl: HTMLElement | null;
     guidedAmountControls: HTMLElement[];
-    exchangeCue: TutorialExchangeCue | null;
+    exchangeCues: Map<string, TutorialExchangeCue>;
+    cameraCues: CampaignRecord[];
     lastPreDefeatTargets: string | null;
     campaignSessionId: number;
     emoteSerial: number;
@@ -151,7 +152,8 @@ interface TutorialRuntime {
         guidedScrollStepId: null,
         guidedControl: null,
         guidedAmountControls: [],
-        exchangeCue: null,
+        exchangeCues: new Map(),
+        cameraCues: [],
         lastPreDefeatTargets: null,
         campaignSessionId: 0,
         emoteSerial: 0,
@@ -282,6 +284,33 @@ interface TutorialRuntime {
         }, delayMs);
         runtime.cameraFocusTimer = timer;
         return true;
+    }
+
+    function cameraInputActive(hud: CampaignRecord) {
+        return Boolean(
+            hud.tutorial?.camera?.user_interacting ||
+            hud.building_placement ||
+            hud.map_menu ||
+            hud.transfer,
+        );
+    }
+
+    function focusWorldFields(x: number, y: number) {
+        return {
+            x,
+            y,
+            shot: { kind: "link", from_x: x, from_y: y, seconds: 1.5 },
+        };
+    }
+
+    function scheduleContextCameraMove(
+        key: string,
+        stepId: string,
+        x: number,
+        y: number,
+        isCurrent: () => boolean,
+    ) {
+        return scheduleTutorialCameraMove(key, stepId, focusWorldFields(x, y), isCurrent);
     }
 
     function trackExperience(name: string, props?: CampaignRecord) {
@@ -526,6 +555,8 @@ interface TutorialRuntime {
                 runtime.hoverEvents = 0;
                 runtime.cameraTargetKey = null;
                 runtime.cameraShotStepId = null;
+                runtime.cameraCues = [];
+                runtime.cameraReactionTarget = null;
                 runtime.expandFocusStepId = null;
                 runtime.hoveredEntityId = null;
                 runtime.hoverStepId = null;
@@ -595,6 +626,8 @@ interface TutorialRuntime {
                 runtime.campaignSessionId = Number(runtime.latestHud.tutorial.campaign_session_id) || 0;
                 if (runtime.machine) runtime.machine.dispose();
                 clearTutorialCameraMove();
+                runtime.cameraCues = [];
+                runtime.cameraReactionTarget = null;
                 runtime.machine = window.SOWCampaign.create(
                     data.definition,
                     undefined,
@@ -602,6 +635,13 @@ interface TutorialRuntime {
                     undefined,
                     {
                         onStepComplete: applyStepEmote,
+                        onCameraCue: function (cue: CampaignRecord) {
+                            runtime.cameraCues.push({
+                                ...cue,
+                                generation: runtime.generation,
+                                session: runtime.campaignSessionId,
+                            });
+                        },
                         onExchangeLine: playExchangeLine,
                         onExchangeClear: clearExchangeLine,
                         onReactionComplete: completeCampaignReaction,
@@ -674,6 +714,221 @@ interface TutorialRuntime {
             model.exchange.presentation !== "dialogue" &&
             model.step &&
             ["objective", "guide"].includes(model.step.type),
+        );
+    }
+
+    function resolveTutorialCamera(
+        machineView: CampaignMachineView,
+        hud: CampaignRecord,
+        targetStep: CampaignStep,
+        mainlineTarget: string | null,
+        markerId: number | null,
+        markerAction: "expand" | "attack" | null,
+    ) {
+        const tutorial = hud.tutorial;
+        const stepId = String(runtime.machine!.state.id || targetStep.id);
+        const cues = runtime.cameraCues;
+        runtime.cameraCues = [];
+        const session = Number(tutorial.campaign_session_id) || 0;
+        const currentCues = cues.filter(
+            (cue) => cue.generation === runtime.generation && cue.session === session,
+        );
+        const camera = tutorial.camera || {};
+        const moving = camera.motion_active === true;
+        const inputBusy = cameraInputActive(hud);
+        const dialogueReaction = machineView.reactionData;
+        const exchangeDialogue = machineView.exchange_phase === "dialogue" && machineView.exchange;
+        const line = machineView.line || targetStep;
+        const speaker = runtime.definition?.speakers?.[line.speaker || targetStep.speaker];
+        const sceneDialogue = Boolean(
+            targetStep.type === "scene" &&
+            (targetStep.title_key ||
+                targetStep.body_key ||
+                targetStep.lines ||
+                ["dialogue", "chapter", "celebration"].includes(targetStep.presentation || "")),
+        );
+        const dialogueTarget = dialogueReaction
+            ? machineView.reactionTarget
+            : exchangeDialogue
+              ? speaker?.faction || "player"
+              : sceneDialogue || targetStep.type === "choice"
+                ? speaker?.faction || "player"
+                : null;
+        const dialogueActive = Boolean(
+            dialogueReaction || exchangeDialogue || sceneDialogue || targetStep.type === "choice",
+        );
+        if (dialogueActive) {
+            const dialogueStepCue = currentCues.find(
+                (cue) => cue.kind === "step" && cue.stepId === stepId && cue.camera,
+            );
+            if (targetStep.camera && (dialogueStepCue || runtime.cameraShotStepId === stepId)) {
+                runtime.cameraReactionTarget = stepId + ":camera";
+                if (dialogueStepCue && !inputBusy)
+                    syncCameraShot({ ...targetStep, camera: dialogueStepCue.camera }, hud);
+            } else if (dialogueTarget && runtime.cameraReactionTarget !== stepId + ":" + dialogueTarget) {
+                runtime.cameraReactionTarget = stepId + ":" + dialogueTarget;
+                const anchor = cameraTargetAnchor({ marker: { target: dialogueTarget } }, hud);
+                if (!inputBusy && anchor?.offscreen) {
+                    const player = campaignPlayer(hud, dialogueTarget);
+                    if (onMap(player))
+                        scheduleContextCameraMove(
+                            "dialogue:" + stepId + ":" + dialogueTarget,
+                            stepId,
+                            Number(player.centroid_x) + 0.5,
+                            Number(player.centroid_y) + 0.5,
+                            function () {
+                                const machine = runtime.machine;
+                                const current = machine?.view();
+                                return Boolean(
+                                    current &&
+                                    machine?.state.id === stepId &&
+                                    (dialogueReaction
+                                        ? current.reactionInstance === machineView.reactionInstance &&
+                                          current.reactionTarget === dialogueTarget
+                                        : exchangeDialogue
+                                          ? current.exchange_phase === "dialogue" &&
+                                            current.exchange_token === machineView.exchange_token
+                                          : current.step.id === targetStep.id),
+                                );
+                            },
+                        );
+                }
+            }
+            runtime.cameraTargetKey = mainlineTarget ? stepId + ":" + mainlineTarget : null;
+            runtime.expandFocusStepId = null;
+            return;
+        }
+        runtime.cameraReactionTarget = null;
+        clearTutorialCameraMove("dialogue:");
+
+        const currentStepCue = currentCues.find(
+            (cue) => cue.kind === "step" && cue.stepId === stepId && cue.camera,
+        );
+        if (currentStepCue?.camera) {
+            if (!inputBusy) syncCameraShot({ ...targetStep, camera: currentStepCue.camera }, hud);
+            runtime.cameraTargetKey = mainlineTarget ? stepId + ":" + mainlineTarget : null;
+            runtime.expandFocusStepId = null;
+            return;
+        }
+
+        const passedStepCue = currentCues.find(
+            (cue) => cue.kind === "step" && cue.camera && cue.target === mainlineTarget,
+        );
+        if (passedStepCue?.camera && !inputBusy && !moving && mainlineTarget) {
+            syncCameraShot({ ...targetStep, camera: passedStepCue.camera }, hud);
+            if (runtime.cameraShotStepId === stepId) {
+                runtime.cameraTargetKey = stepId + ":" + mainlineTarget;
+                runtime.expandFocusStepId = null;
+                return;
+            }
+        }
+
+        const currentMarker = mainlineTarget && campaignPlayer(hud, mainlineTarget);
+        const markerIsCurrent = Boolean(
+            markerId !== null &&
+            Number(tutorial.marker_player_id) === markerId &&
+            currentMarker &&
+            Number(currentMarker.id) === markerId,
+        );
+        const expansionAction = Boolean(
+            targetStep.guide?.kind === "world" && targetStep.guide.target === "expand" ||
+            (markerIsCurrent && markerAction === "expand" && tutorial.target_action_mode === "expand"),
+        );
+        if (expansionAction) {
+            const visible = tutorial.expand;
+            const target = tutorial.expand_target;
+            const targetIsVisible = Boolean(
+                visible &&
+                    !visible.offscreen &&
+                    Number.isFinite(Number(visible.x)) &&
+                    Number.isFinite(Number(visible.y)),
+            );
+            if (targetIsVisible) runtime.expandFocusStepId = stepId;
+            else if (
+                runtime.expandFocusStepId !== stepId &&
+                target &&
+                Number.isFinite(Number(target.x)) &&
+                Number.isFinite(Number(target.y))
+            ) {
+                runtime.expandFocusStepId = stepId;
+                if (!inputBusy && !moving)
+                    scheduleContextCameraMove(
+                        "expand:" + stepId,
+                        stepId,
+                        Number(target.x),
+                        Number(target.y),
+                        function () {
+                            const current = runtime.latestHud?.tutorial?.expand;
+                            return Boolean(
+                                runtime.machine?.state.id === stepId &&
+                                current?.offscreen === true,
+                            );
+                        },
+                    );
+            }
+            runtime.cameraTargetKey = mainlineTarget ? stepId + ":" + mainlineTarget : null;
+            return;
+        }
+        runtime.expandFocusStepId = null;
+        clearTutorialCameraMove("expand:");
+
+        const targetKey = mainlineTarget ? stepId + ":" + mainlineTarget : null;
+        if (targetKey !== runtime.cameraTargetKey) {
+            runtime.cameraTargetKey = targetKey;
+            const anchor = mainlineTarget
+                ? cameraTargetAnchor({ marker: { target: mainlineTarget } }, hud)
+                : null;
+            const player = mainlineTarget ? campaignPlayer(hud, mainlineTarget) : null;
+            if (!inputBusy && !moving && anchor?.offscreen && onMap(player))
+                scheduleContextCameraMove(
+                    "marker:" + targetKey,
+                    stepId,
+                    Number(player.centroid_x) + 0.5,
+                    Number(player.centroid_y) + 0.5,
+                    function () {
+                        const current = runtime.machine?.view();
+                        return Boolean(
+                            runtime.machine?.state.id === stepId &&
+                            current &&
+                            !current.reactionData &&
+                            current.exchange_phase !== "dialogue" &&
+                            markerTargetFor(current.step) === mainlineTarget &&
+                            cameraTargetAnchor(
+                                { marker: { target: mainlineTarget } },
+                                runtime.latestHud,
+                            )?.offscreen,
+                        );
+                    },
+                );
+        }
+
+        if (inputBusy || moving || !mainlineTarget) return;
+        const contactCue = currentCues.find(
+            (cue) => cue.kind === "contact" && cue.target === mainlineTarget,
+        );
+        if (!contactCue) return;
+        const anchor = cameraTargetAnchor({ marker: { target: mainlineTarget } }, hud);
+        const player = campaignPlayer(hud, mainlineTarget);
+        if (!anchor?.offscreen || !onMap(player)) return;
+        scheduleContextCameraMove(
+            "contact:" + contactCue.id,
+            stepId,
+            Number(player.centroid_x) + 0.5,
+            Number(player.centroid_y) + 0.5,
+            function () {
+                const current = runtime.machine?.view();
+                return Boolean(
+                    runtime.machine?.state.id === stepId &&
+                    current &&
+                    !current.reactionData &&
+                    current.exchange_phase !== "dialogue" &&
+                    markerTargetFor(current.step) === mainlineTarget &&
+                    cameraTargetAnchor(
+                        { marker: { target: mainlineTarget } },
+                        runtime.latestHud,
+                    )?.offscreen,
+                );
+            },
         );
     }
 
@@ -862,58 +1117,18 @@ interface TutorialRuntime {
         if (machineView.reactionData && machineView.reactionData.outcome) {
             resolveReaction(machineView.reactionData, machineView.reactionTarget, null, hud);
         }
-        if (machineView.reactionData && machineView.reactionTarget !== runtime.cameraReactionTarget) {
+        if (machineView.reactionData) {
             const faction = (hud.players || []).find(function (item: CampaignRecord) {
                 return item && item.campaign_faction_id === machineView.reactionTarget;
             });
-            if (
-                faction &&
-                Number.isFinite(Number(faction.centroid_x)) &&
-                Number.isFinite(Number(faction.centroid_y))
-            ) {
-                const reactionInstance = String(machineView.reactionInstance || "");
-                const preDefeat = machineView.reactionData.when?.type === "pre_defeat";
-                const player = campaignPlayer(hud, "player");
-                const cameraMove: CampaignRecord = {
-                    x: Number(faction.centroid_x) + 0.5,
-                    y: Number(faction.centroid_y) + 0.5,
-                };
-                if (preDefeat && onMap(player)) {
-                    cameraMove.shot = {
-                        kind: "approach",
-                        from_x: Number(player.centroid_x) + 0.5,
-                        from_y: Number(player.centroid_y) + 0.5,
-                        seconds: 1.5,
-                        machinima: true,
-                    };
-                }
-                if (
-                    scheduleTutorialCameraMove(
-                        "reaction:" + reactionInstance + ":" + machineView.reactionTarget,
-                        String(runtime.machine.state.id || machineView.step.id),
-                        cameraMove,
-                        function () {
-                            const activeReaction = runtime.machine && runtime.machine.view();
-                            return Boolean(
-                                activeReaction &&
-                                activeReaction.reactionInstance === machineView.reactionInstance &&
-                                activeReaction.reactionTarget === machineView.reactionTarget,
-                            );
-                        },
-                        preDefeat ? 0 : undefined,
-                    )
-                ) {
-                    runtime.cameraReactionTarget = machineView.reactionTarget;
-                }
+            if (faction) {
                 const highlightId = Number(faction.id);
                 if (Number.isInteger(highlightId) && runtime.reactionHighlightPlayerId !== highlightId) {
                     runtime.reactionHighlightPlayerId = highlightId;
                     send("set_dialog_border_highlight", { player_id: highlightId });
                 }
             }
-        } else if (!machineView.reactionData) {
-            runtime.cameraReactionTarget = null;
-            clearTutorialCameraMove("reaction:");
+        } else {
             if (runtime.reactionHighlightPlayerId !== null) {
                 runtime.reactionHighlightPlayerId = null;
                 send("set_dialog_border_highlight", { player_id: null });
@@ -986,67 +1201,7 @@ interface TutorialRuntime {
         const freeExploration =
             targetStep.camera_only === true ||
             (targetStep.trigger && ["camera_target", "hover"].includes(targetStep.trigger.type));
-        const expansionMode =
-            tutorial.target_action_mode === "expand" ||
-            (targetStep.guide?.kind === "world" && targetStep.guide.target === "expand");
-        const targetFactionId = freeExploration || expansionMode ? null : markerTargetFor(targetStep);
-        const cameraTargetKey = targetFactionId
-            ? String(runtime.machine.state.id || targetStep.id) + ":" + targetFactionId
-            : null;
-        if (cameraTargetKey !== runtime.cameraTargetKey) {
-            runtime.cameraTargetKey = cameraTargetKey;
-            const focusPlayer = campaignPlayer(hud, targetFactionId);
-            if (onMap(focusPlayer)) {
-                scheduleTutorialCameraMove(
-                    "marker:" + cameraTargetKey,
-                    String(runtime.machine.state.id || targetStep.id),
-                    {
-                        x: Number(focusPlayer.centroid_x) + 0.5,
-                        y: Number(focusPlayer.centroid_y) + 0.5,
-                    },
-                    function () {
-                        return onMap(campaignPlayer(runtime.latestHud, targetFactionId));
-                    },
-                );
-            } else {
-                clearTutorialCameraMove("marker:");
-            }
-        }
-        if (
-            expansionMode
-        ) {
-            const visible = tutorial.expand;
-            const target = tutorial.expand_target;
-            const targetIsVisible = Boolean(
-                visible &&
-                !visible.offscreen &&
-                Number.isFinite(Number(visible.x)) &&
-                Number.isFinite(Number(visible.y)),
-            );
-            if (targetIsVisible) {
-                runtime.expandFocusStepId = machineView.step.id;
-                clearTutorialCameraMove("expand:" + machineView.step.id);
-            } else if (
-                runtime.expandFocusStepId !== machineView.step.id &&
-                target &&
-                Number.isFinite(Number(target.x)) &&
-                Number.isFinite(Number(target.y)) &&
-                scheduleTutorialCameraMove(
-                    "expand:" + machineView.step.id,
-                    String(runtime.machine.state.id || machineView.step.id),
-                    { x: Number(target.x), y: Number(target.y) },
-                    function () {
-                        const current = runtime.latestHud?.tutorial?.expand;
-                        return Boolean(!current || current.offscreen === true);
-                    },
-                )
-            ) {
-                runtime.expandFocusStepId = machineView.step.id;
-            }
-        } else {
-            clearTutorialCameraMove("expand:");
-            runtime.expandFocusStepId = null;
-        }
+        const mainlineTarget = freeExploration ? null : markerTargetFor(targetStep);
         const expressions = campaignBaseExpressions(runtime.definition!, tutorial.facts || {});
         const currentView = machineView;
         const line = currentView.line || currentView.step;
@@ -1093,6 +1248,7 @@ interface TutorialRuntime {
             runtime.markerAction = markerAction;
             send("set_tutorial_marker", { player_id: markerId, action: markerAction });
         }
+        resolveTutorialCamera(machineView, hud, targetStep, mainlineTarget, markerId, markerAction);
         syncTutorialPause(machineView);
         syncTransferGuide(machineView.step);
         revealGuidedUiTarget(machineView.step);
@@ -1105,7 +1261,6 @@ interface TutorialRuntime {
                         renderContext(displayView.step, hud, anchorFor(displayView.step, hud), displayView),
                     );
                 } else runtime.view!.render(null);
-                if (machineView.exchange && !expansionMode) syncCameraShot(machineView.step, hud);
                 scheduleCampaignWake(
                     machineView.step.id,
                     Number.isFinite(machineView.timer_remaining_ms)
@@ -1119,7 +1274,6 @@ interface TutorialRuntime {
                     displayView,
                     renderContext(displayView.step, hud, anchorFor(displayView.step, hud), displayView),
                 );
-                if (!expansionMode) syncCameraShot(machineView.step, hud);
             }
             if (!machineView.waiting && Number.isFinite(machineView.timer_remaining_ms))
                 scheduleCampaignWake(machineView.step.id, machineView.timer_remaining_ms);
@@ -1169,42 +1323,45 @@ interface TutorialRuntime {
         const faction = (speaker && speaker.faction) || "player";
         const player = hud && campaignPlayer(hud, faction);
         if (!player || !onMap(player) || player.manual_emote_active) return "unavailable";
-        // A scheduled camera move does not hold an emote; the camera cue owns its timing.
-        if (tutorial!.facts && tutorial!.facts.machinima_active) return "pending";
-        if (tutorial!.emote_token === nativeToken) return true;
-        if (runtime.exchangeCue && runtime.exchangeCue.token === token) return "pending";
-        runtime.exchangeCue = {
+        if ((tutorial!.emote_tokens || []).includes(nativeToken)) return true;
+        const existing = runtime.exchangeCues.get(faction);
+        if (existing && existing.token === token) return "pending";
+        if (existing) clearExchangeLine(existing.line, existing.token);
+        const cue = {
             token: token,
             nativeToken: nativeToken,
             line: line,
             faction: faction,
             session: Number(tutorial!.campaign_session_id),
         };
+        runtime.exchangeCues.set(faction, cue);
         if (
             !send("tutorial_emote", {
                 kind: line.emote,
                 token: nativeToken,
-                campaign_session_id: runtime.exchangeCue!.session,
+                campaign_session_id: cue.session,
                 message: tr(line.emote_text_key),
                 ...(faction !== "player" ? { faction_id: faction } : {}),
             })
         ) {
-            runtime.exchangeCue = null;
+            if (runtime.exchangeCues.get(faction) === cue) runtime.exchangeCues.delete(faction);
             return "unavailable";
         }
         return false;
     }
 
-    function clearExchangeLine(line: CampaignRecord, token: string | number) {
-        const cue = runtime.exchangeCue;
-        if (!cue || cue.token !== token) return;
-        send("tutorial_emote", {
-            kind: null,
-            token: cue.nativeToken,
-            campaign_session_id: cue.session,
-            ...(cue.faction !== "player" ? { faction_id: cue.faction } : {}),
-        });
-        runtime.exchangeCue = null;
+    function clearExchangeLine(_line: CampaignRecord, token: string | number) {
+        for (const [faction, cue] of runtime.exchangeCues) {
+            if (cue.token !== token) continue;
+            send("tutorial_emote", {
+                kind: null,
+                token: cue.nativeToken,
+                campaign_session_id: cue.session,
+                ...(cue.faction !== "player" ? { faction_id: cue.faction } : {}),
+            });
+            runtime.exchangeCues.delete(faction);
+            return;
+        }
     }
 
     function completeCampaignReaction(reaction: CampaignRecord, target: string) {
@@ -1325,6 +1482,7 @@ interface TutorialRuntime {
         runtime.modalOpen = open;
         if (runtime.machine) runtime.machine.setPaused(open || Boolean(document.hidden));
         if (open) {
+            runtime.cameraCues = [];
             clearStepRevealTimer();
             runtime.uiPaused = true;
             runtime.pausedAction = null;
@@ -1367,6 +1525,7 @@ interface TutorialRuntime {
     );
     document.addEventListener("visibilitychange", function () {
         if (!runtime.machine) return;
+        if (document.hidden) runtime.cameraCues = [];
         runtime.machine.setPaused(Boolean(document.hidden) || Boolean(runtime.modalOpen));
         clearStepRevealTimer();
         if (!document.hidden && !runtime.modalOpen && runtime.latestHud) update(runtime.latestHud);
@@ -1453,6 +1612,7 @@ interface TutorialRuntime {
         const hud = state && state.phase === "Playing" ? state.hud : null;
         const tutorial = hud && hud.tutorial;
         if (!tutorial || !tutorial.active) {
+            runtime.cameraCues = [];
             runtime.latestHud = null;
             if (runtime.view) runtime.view.render(null);
             if (runtime.machine && state && state.phase === "MainMenu") reset();
@@ -1482,7 +1642,7 @@ interface TutorialRuntime {
         runtime.roster = null;
         runtime.definition = null;
         runtime.machine = null;
-        runtime.exchangeCue = null;
+        runtime.exchangeCues.clear();
         runtime.lastPreDefeatTargets = null;
         runtime.campaignSessionId = 0;
         runtime.active = false;
@@ -1500,6 +1660,7 @@ interface TutorialRuntime {
         runtime.pausedAction = null;
         runtime.cameraTargetKey = null;
         runtime.cameraShotStepId = null;
+        runtime.cameraCues = [];
         runtime.expandFocusStepId = null;
         runtime.hoverEvents = 0;
         runtime.hoveredEntityId = null;

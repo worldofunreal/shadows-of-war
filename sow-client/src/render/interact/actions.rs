@@ -348,6 +348,10 @@ impl SowApp {
         }
     }
 
+    pub(crate) fn request_public_matchmaking(&mut self) {
+        self.request_join_inner(None, false, None, None, true);
+    }
+
     pub(crate) fn request_join(
         &mut self,
         lobby_id: Option<u64>,
@@ -355,12 +359,27 @@ impl SowApp {
         config: Option<Box<sow_core::game_config::GameConfig>>,
         password: Option<String>,
     ) {
+        self.request_join_inner(lobby_id, is_private, config, password, false);
+    }
+
+    fn request_join_inner(
+        &mut self,
+        lobby_id: Option<u64>,
+        is_private: bool,
+        config: Option<Box<sow_core::game_config::GameConfig>>,
+        password: Option<String>,
+        public_matchmaking: bool,
+    ) {
         self.ui.app.main_menu_state.error_message = None;
         self.ui.app.main_menu_state.notice = None;
-        let matchmaking_join = lobby_id.is_none() && !is_private && config.is_none();
+        let matchmaking_join =
+            !public_matchmaking && lobby_id.is_none() && !is_private && config.is_none();
         self.join_matchmaking = matchmaking_join;
+        self.join_public_matchmaking = public_matchmaking;
         self.portal_match_mode = if matchmaking_join {
             "ranked_1v1"
+        } else if public_matchmaking {
+            "matchmaking"
         } else {
             "custom"
         };
@@ -383,14 +402,14 @@ impl SowApp {
         self.ui.app.main_menu_state.is_lobby_host = if lobby_id.is_some() {
             false
         } else {
-            !self.join_matchmaking
+            !self.join_matchmaking && !self.join_public_matchmaking
         };
         let identity_ready = self.progress_account_id.is_some() || self.net.is_offline;
         self.join_waiting_for_identity = !identity_ready || self.net.client.is_none();
 
         if let Some(c) = self.net.client.as_ref() {
             if identity_ready {
-                let config_opt = (!self.join_matchmaking)
+                let config_opt = (!self.join_matchmaking && !self.join_public_matchmaking)
                     .then(|| self.ui.app.main_menu_state.custom_game_config.clone());
                 let join_msg = self.make_join_message(lobby_id, is_private, config_opt, password);
                 if let Some(join_msg) = join_msg

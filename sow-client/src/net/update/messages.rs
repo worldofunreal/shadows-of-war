@@ -446,6 +446,9 @@ impl SowApp {
                             log::info!("[JOIN] Version mismatch — prompting user to update...");
                             self.ui.update_available = true;
                         }
+                        self.join_matchmaking = false;
+                        self.join_public_matchmaking = false;
+                        self.join_waiting_for_identity = false;
                         let menu = &mut self.ui.app.main_menu_state;
                         menu.is_waiting = false;
                         menu.ranked_search_active = false;
@@ -474,12 +477,13 @@ impl SowApp {
                             self.portal_join_started_at.take(),
                         );
                         let mode = self.portal_match_mode;
-                        if self.join_matchmaking {
+                        if self.join_matchmaking || self.join_public_matchmaking {
                             crate::store_portals::track_product_event_with(
                                 "matchmaking_joined",
                                 &serde_json::json!({ "mode": mode, "wait_bucket": wait_bucket }),
                             );
                         }
+                        self.join_public_matchmaking = false;
                         crate::store_portals::track_product_event_with(
                             "lobby_joined",
                             &serde_json::json!({ "mode": mode, "wait_bucket": wait_bucket }),

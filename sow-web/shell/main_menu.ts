@@ -5,6 +5,7 @@
  */
 import "./sow-i18n.ts";
 import "./sow-dropdown.ts";
+import "./sow-tooltip.ts";
 import "./sow-campaign.ts";
 import "./sow-campaign-view.ts";
 import "./main_menu.core.ts";

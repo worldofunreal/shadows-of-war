@@ -31,6 +31,7 @@ struct CampaignAssaultReinforcement {
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WebMenuCommand {
     QuickMatch,
+    JoinMatchmaking,
     JoinLobby {
         lobby_id: u64,
     },
@@ -549,8 +550,10 @@ struct HudPublishKey {
     tutorial_target_zoom_hundredths: i32,
     tutorial_marker_player_id: Option<u16>,
     tutorial_marker_action: Option<TutorialMarkerAction>,
-    tutorial_emote_token: Option<String>,
+    tutorial_emote_tokens: Vec<String>,
     tutorial_target_hovered: bool,
+    tutorial_camera_motion_active: bool,
+    tutorial_camera_user_interacting: bool,
     tutorial_camera_viewport: Option<(u32, u32, u32, u32)>,
     map_menu_view: Option<MapContextMenuView>,
     map_menu_session: u64,
@@ -719,6 +722,12 @@ impl SowApp {
                     self.request_join(None, false, None, None);
                     if self.join_matchmaking && self.ui.app.main_menu_state.is_waiting {
                         self.quick_match_revision = self.quick_match_revision.wrapping_add(1);
+                    }
+                }
+                WebMenuCommand::JoinMatchmaking => {
+                    if !self.ui.app.main_menu_state.is_waiting {
+                        crate::store_portals::track_product_event("menu_join_attempt");
+                        self.request_public_matchmaking();
                     }
                 }
                 WebMenuCommand::JoinLobby { lobby_id } => {
@@ -2320,19 +2329,26 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         } else {
             None
         },
-        tutorial_emote_token: if tutorial_active {
+        tutorial_emote_tokens: if tutorial_active {
             app.ui
                 .nameplates
-                .campaign_emote_ready_token()
-                .map(str::to_owned)
+                .campaign_emote_ready_tokens()
         } else {
-            None
+            Vec::new()
         },
         tutorial_target_hovered: tutorial_active
             && tutorial_target_under_pointer(
                 app,
                 app.ui.tutorial_marker_player_id.unwrap_or(my_pid),
             ),
+        tutorial_camera_motion_active: tutorial_active
+            && (app.input.camera_shot.is_some() || app.input.camera_focus_target.is_some()),
+        tutorial_camera_user_interacting: tutorial_active
+            && (app.input.is_pointer_gesture_active()
+                || app.input.key_pan_up
+                || app.input.key_pan_down
+                || app.input.key_pan_left
+                || app.input.key_pan_right),
         tutorial_camera_viewport: tutorial_active.then_some((
             app.input.camera_x.to_bits(),
             app.input.camera_y.to_bits(),
@@ -3344,7 +3360,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "nameplate": nameplate_screen,
         "target_nameplate": target_nameplate,
         "marker_player_id": marker_player_id,
-        "emote_token": app.ui.nameplates.campaign_emote_ready_token(),
+        "emote_tokens": app.ui.nameplates.campaign_emote_ready_tokens(),
         "player": player_screen,
         "camera": {
             "x": app.input.camera_x,
@@ -3353,6 +3369,12 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "width": app.input.screen_w,
             "height": app.input.screen_h,
             "scale": sf,
+            "motion_active": app.input.camera_shot.is_some() || app.input.camera_focus_target.is_some(),
+            "user_interacting": app.input.is_pointer_gesture_active()
+                || app.input.key_pan_up
+                || app.input.key_pan_down
+                || app.input.key_pan_left
+                || app.input.key_pan_right,
         },
         "facts": {
             "alliance_request_faction_ids": alliance_request_faction_ids,

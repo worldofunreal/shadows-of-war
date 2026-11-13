@@ -295,16 +295,47 @@ function heroesRarityLabel(leader: MenuLeader) {
     return leader.rarity ? SOW_t("heroes.rarity_" + leader.rarity) : "";
 }
 
-function heroesStatusLabel(leader: MenuLeader) {
-    if (!leader) return "";
-    const rarity = heroesRarityLabel(leader);
-    if (leader.id === "Boudica") return rarity;
-    const status = leader.permanently_free
-        ? SOW_t("heroes.always_free")
-        : isWeeklyFreeRotation(leader)
-          ? SOW_t("heroes.weekly_free_rotation")
-          : "";
-    return [rarity, status].filter(Boolean).join(" · ");
+function heroesStatusLabel(leader: MenuLeader | null) {
+    if (!leader || leader.id === "Boudica") return "";
+    if (leader.permanently_free) return SOW_t("heroes.always_free");
+    if (isWeeklyFreeRotation(leader)) return SOW_t("heroes.weekly_free_rotation");
+    return "";
+}
+
+function renderHeroStatusTags(leader: MenuLeader | null, live: boolean) {
+    const rarityLabel = leader ? heroesRarityLabel(leader) : "";
+    const raritySlug = leader && leader.rarity ? leader.rarity : "";
+    const statusLabel = heroesStatusLabel(leader);
+    const hasAny = Boolean(rarityLabel || statusLabel);
+    if (!live && !hasAny) return "";
+    return (
+        "<div class='sow-heroes__tags'" +
+        (live ? " data-hero-tags" : "") +
+        (!hasAny ? " hidden" : "") +
+        ">" +
+        (live || rarityLabel
+            ? "<span class='sow-heroes__rarity-tag'" +
+              (live ? " data-hero-rarity" : "") +
+              " data-rarity='" +
+              esc(raritySlug) +
+              "'" +
+              (!rarityLabel ? " hidden" : "") +
+              ">" +
+              esc(rarityLabel) +
+              "</span>"
+            : "") +
+        (live || statusLabel
+            ? "<span class='sow-heroes__rotation'" +
+              (live ? " data-hero-status" : "") +
+              (!statusLabel ? " hidden" : "") +
+              "><span" +
+              (live ? " data-hero-status-label" : "") +
+              ">" +
+              esc(statusLabel) +
+              "</span></span>"
+            : "") +
+        "</div>"
+    );
 }
 
 // OWNER DECISION — DO NOT "FIX" THIS MAPPING.
@@ -337,7 +368,6 @@ function heroesFeaturedArt(slug: string) {
 function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const selected = leader.id === activeId;
     const locked = leader.available === false;
-    const freeWeek = isWeeklyFreeRotation(leader);
     const avatarSlug = leaderArtSlug(leader);
     const avatarUrl = heroesAvatarUrl(avatarSlug, selected ? "angry" : "calm");
     const rarity = heroesRarityLabel(leader);
@@ -347,7 +377,6 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
         (locked ? " is-locked" : "") +
-        (freeWeek ? " is-free-week" : "") +
         "' type='button' data-command='preview_leader' data-leader-id='" +
         esc(leader.id) +
         "' data-avatar-slug='" +
@@ -357,11 +386,7 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         "'>" +
         "<span class='sow-heroes__card-art'><img " +
         avatarImageAttribute(avatarUrl) +
-        " alt='' width='68' height='68' loading='lazy' decoding='async'>" +
-        (freeWeek
-            ? "<span class='sow-heroes__free-badge'>" + esc(SOW_t("heroes.free_week_badge")) + "</span>"
-            : "") +
-        "</span>" +
+        " alt='' width='68' height='68' loading='lazy' decoding='async'></span>" +
         "<span class='sow-heroes__card-copy'><strong>" +
         esc(leaderDisplayName(leader)) +
         "</strong><small>" +
@@ -629,6 +654,8 @@ export function updateHeroesPreview() {
     const source = picture && picture.querySelector("source");
     const image = picture && picture.querySelector("img");
     const briefing = featured.querySelector("[data-hero-briefing]");
+    const tags = featured.querySelector<HTMLElement>("[data-hero-tags]");
+    const rarityNode = featured.querySelector<HTMLElement>("[data-hero-rarity]");
     const status = featured.querySelector<HTMLElement>("[data-hero-status]");
     const locked = activeLeader.available === false;
     featured.classList.toggle("is-locked", locked);
@@ -686,14 +713,21 @@ export function updateHeroesPreview() {
             image.dataset.heroLeaderId = randomSelected ? "random" : activeLeader.id;
         }
     }
+    const targetLeader = randomSelected ? null : activeLeader;
+    const rarityLabel = targetLeader ? heroesRarityLabel(targetLeader) : "";
+    const statusLabel = heroesStatusLabel(targetLeader);
+    if (rarityNode) {
+        rarityNode.textContent = rarityLabel;
+        rarityNode.hidden = !rarityLabel;
+        rarityNode.dataset.rarity = targetLeader && targetLeader.rarity ? targetLeader.rarity : "";
+    }
     if (status) {
-        const statusLabel = randomSelected ? "" : heroesStatusLabel(activeLeader);
         const statusLabelNode = status.querySelector("[data-hero-status-label]");
         if (statusLabelNode) statusLabelNode.textContent = statusLabel;
         else status.textContent = statusLabel;
         status.hidden = !statusLabel;
-        status.dataset.rarity = !randomSelected && activeLeader && activeLeader.rarity ? activeLeader.rarity : "";
     }
+    if (tags) tags.hidden = !rarityLabel && !statusLabel;
     const purchase = featured.querySelector("[data-hero-purchase]");
     if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
     const skinsContainer = featured.querySelector<HTMLElement>("[data-hero-skins]");
@@ -1009,7 +1043,6 @@ export function renderHeroInfoModal() {
     // The info dialog is one tall portrait card on every device, so it
     // always uses the portrait art. Not part of the panel-shape swap.
     const artUrl = leaderArtUrl(leaderArtSlug(activeLeader), "mobile");
-    const statusLabel = heroesStatusLabel(activeLeader);
     return (
         "<div class='sow-menu__overlay' data-menu-overlay='hero-info'><section class='sow-menu__modal sow-hero-info sow-hero-info--dossier' role='dialog' aria-modal='true' aria-label='" +
         esc(leaderDisplayName(activeLeader)) +
@@ -1022,13 +1055,7 @@ export function renderHeroInfoModal() {
         esc(SOW_t("menu.close")) +
         "'>×</button>" +
         "<div class='sow-hero-info__banner-copy'>" +
-        (statusLabel
-            ? "<span class='sow-heroes__rotation' data-rarity='" +
-              esc(activeLeader.rarity || "") +
-              "'>" +
-              esc(statusLabel) +
-              "</span>"
-            : "") +
+        renderHeroStatusTags(activeLeader, false) +
         "<h2>" +
         esc(leaderDisplayName(activeLeader)) +
         "</h2><p>" +
@@ -1158,7 +1185,6 @@ export function renderHeroes() {
     const ownedCount = allLeaders.filter(function (l) {
         return l.owned === true;
     }).length;
-    const statusLabel = activeRandom ? "" : heroesStatusLabel(activeLeader);
     return (
         "<main class='sow-menu__main sow-menu__main--heroes' data-screen-panel='heroes'><section class='sow-menu__heroes-slot' aria-label='" +
         esc(SOW_t("menu.heroes")) +
@@ -1189,13 +1215,9 @@ export function renderHeroes() {
         esc(artSlug) +
         "' fetchpriority='high'></picture>" +
         renderHeroesArtLoader(artSlug) +
-        "<div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" +
-        (!statusLabel ? " hidden" : "") +
-        " data-rarity='" +
-        esc((!activeRandom && activeLeader && activeLeader.rarity) || "") +
-        "'><span data-hero-status-label>" +
-        esc(statusLabel) +
-        "</span></p><div data-hero-briefing>" +
+        "<div class='sow-heroes__featured-copy'>" +
+        renderHeroStatusTags(activeRandom ? null : activeLeader, true) +
+        "<div data-hero-briefing>" +
         renderHeroBriefing(activeRandom ? "random" : activeLeader, "selection", "sow-heroes-selected") +
         "</div><div class='sow-heroes__actions'><div data-hero-purchase>" +
         (activeRandom ? "" : renderLeaderPurchase(activeLeader)) +

@@ -9,12 +9,13 @@ import {
     menuIcon,
     menuUi,
     portalOffersSignIn,
+    renderLobbyBrowserButton,
     renderQuickMatchButton,
     renderMainNavMarkup,
 } from "./main_menu.core.ts";
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
 import { render, renderSettingsPrivacySection } from "./main_menu.shell.ts";
-import { renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
+import { renderAdvisorTipsSettingRow, renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
 import { isAndroidTwa } from "./main_menu.store.ts";
 import { renderDirectiveCard } from "./main_menu.missions.ts";
 
@@ -33,9 +34,7 @@ export function renderCommandPanel() {
         " " +
         menuIcon("attack") +
         "</button>" +
-        "<button class='sow-menu__secondary' type='button' data-command='open_browser'>" +
-        esc(SOW_t("menu.lobby_browser")) +
-        " <span>→</span></button>" +
+        renderLobbyBrowserButton() +
         "<button class='sow-menu__secondary' type='button' data-command='open_create'>" +
         esc(SOW_t("menu.create_custom_game")) +
         " <span>+</span></button>" +
@@ -299,6 +298,7 @@ export function renderSettings() {
         "%;' data-setting='music_volume'>" +
         "</label>" +
         renderLocaleSettingRow() +
+        renderAdvisorTipsSettingRow() +
         "<label class='sow-hud__setting-row sow-menu__settings-switch-row'>" +
         "<span class='sow-menu__settings-row-label'>" +
         zoomSvg +
@@ -377,6 +377,7 @@ export function surfaceSettingsRenderKey(deleteBusy: boolean, deleteError: strin
         Boolean(s?.show_fps_ping),
         Boolean(s?.show_dev_tools),
         Boolean(s?.show_dev_tools_available),
+        Boolean(menuUi.state?.menu_tips_disabled),
         Boolean(menuUi.signOutConfirmOpen),
         Boolean(menuUi.deleteArmed),
         deleteBusy,

@@ -237,6 +237,29 @@ if subject ~= '' then
     redis.call('SADD', retention_key, subject); redis.call('EXPIRE', retention_key, ARGV[1])
   end
 end
+local browser_subject = ARGV[11] or ''
+if browser_subject ~= '' then
+  local first_day = redis.call('GET', KEYS[20])
+  if not first_day then
+    first_day = ARGV[2]
+    redis.call('SET', KEYS[20], first_day, 'EX', ARGV[1])
+    local cohort_key = KEYS[21] .. first_day
+    redis.call('SADD', cohort_key, browser_subject); redis.call('EXPIRE', cohort_key, ARGV[1])
+  end
+  local delta = tonumber(ARGV[2]) - tonumber(first_day)
+  if delta == 1 then
+    local retention_key = KEYS[22] .. first_day
+    redis.call('SADD', retention_key, browser_subject); redis.call('EXPIRE', retention_key, ARGV[1])
+  end
+  if delta == 3 then
+    local retention_key = KEYS[23] .. first_day
+    redis.call('SADD', retention_key, browser_subject); redis.call('EXPIRE', retention_key, ARGV[1])
+  end
+  if delta == 7 then
+    local retention_key = KEYS[24] .. first_day
+    redis.call('SADD', retention_key, browser_subject); redis.call('EXPIRE', retention_key, ARGV[1])
+  end
+end
 if (event_name == 'tutorial_step' or event_name == 'tutorial_exit_early') and ARGV[8] ~= '' then
   redis.call('HINCRBY', KEYS[15], ARGV[8], 1)
   redis.call('EXPIRE', KEYS[15], ARGV[1])
@@ -274,6 +297,18 @@ struct RetentionCohort {
 }
 
 fn summarize_retention(today: &str, cohorts: &[RetentionCohort]) -> serde_json::Value {
+    summarize_retention_for(today, cohorts, "accounts")
+}
+
+fn summarize_browser_retention(today: &str, cohorts: &[RetentionCohort]) -> serde_json::Value {
+    summarize_retention_for(today, cohorts, "browsers")
+}
+
+fn summarize_retention_for(
+    today: &str,
+    cohorts: &[RetentionCohort],
+    subject: &str,
+) -> serde_json::Value {
     [1_i64, 3, 7]
         .into_iter()
         .enumerate()
@@ -290,19 +325,24 @@ fn summarize_retention(today: &str, cohorts: &[RetentionCohort]) -> serde_json::
             let status = if matured_cohorts == 0 {
                 "not_matured"
             } else if eligible == 0 {
-                "no_eligible_accounts"
+                "no_eligible"
             } else {
                 "ready"
             };
             let cutoff = crate::events::shift_date(today, -(window + 1));
+            let status = if status == "no_eligible" {
+                format!("no_eligible_{subject}")
+            } else {
+                status.to_string()
+            };
             (
                 format!("d{window}"),
                 serde_json::json!({
                     "status": status,
                     "cohort_cutoff_date": cutoff,
                     "matured_cohorts": matured_cohorts,
-                    "eligible_accounts": eligible,
-                    "returned_accounts": returned,
+                    (format!("eligible_{subject}")): eligible,
+                    (format!("returned_{subject}")): returned,
                     "rate": if eligible == 0 { serde_json::Value::Null } else { serde_json::json!(returned as f64 / eligible as f64) },
                 }),
             )
@@ -1473,6 +1513,7 @@ impl PlayerDb {
     pub async fn record_analytics_batch(
         &self,
         events: &[crate::events::AnalyticsEvent],
+        browser_subject: Option<&str>,
     ) -> Result<Vec<bool>, redis::RedisError> {
         if events.is_empty() {
             return Ok(Vec::new());
@@ -1513,9 +1554,17 @@ impl PlayerDb {
                 .unwrap_or_default();
             let match_flow_dimension =
                 crate::events::match_flow_dimension(event).unwrap_or_default();
+            let browser_subject = if event.consent_version == crate::events::CONSENT_POLICY_VERSION
+                && browser_subject.is_some()
+                && event.ts_ms / 86_400_000 == day_number as u64
+            {
+                browser_subject.unwrap_or_default()
+            } else {
+                ""
+            };
             pipe.cmd("EVAL")
                 .arg(RECORD_ANALYTICS_EVENT)
-                .arg(19)
+                .arg(24)
                 .arg(format!(
                     "sow:analytics:event_id:{portal}:{}",
                     event.event_id
@@ -1547,6 +1596,13 @@ impl PlayerDb {
                 .arg(format!("sow:analytics:refs:{portal}:{date}"))
                 .arg(format!("sow:analytics:by_ref:{portal}:{date}"))
                 .arg(format!("sow:analytics:match_flow:{portal}:{date}"))
+                .arg(format!(
+                    "sow:analytics:browser:first_seen:v1:{portal}:{browser_subject}"
+                ))
+                .arg(format!("sow:analytics:browser:cohort:v1:{portal}:"))
+                .arg(format!("sow:analytics:browser:retention:v1:{portal}:d1:"))
+                .arg(format!("sow:analytics:browser:retention:v1:{portal}:d3:"))
+                .arg(format!("sow:analytics:browser:retention:v1:{portal}:d7:"))
                 .arg(ANALYTICS_TTL_SECONDS)
                 .arg(day_number)
                 .arg(&event.session_id)
@@ -1556,7 +1612,8 @@ impl PlayerDb {
                 .arg(&event.name)
                 .arg(tutorial_step)
                 .arg(source_ref)
-                .arg(match_flow_dimension);
+                .arg(match_flow_dimension)
+                .arg(browser_subject);
         }
         let outcomes: Vec<i64> = pipe.query_async(&mut con).await?;
         outcomes
@@ -1785,6 +1842,55 @@ impl PlayerDb {
         }
         let retention = summarize_retention(&today, &retention_cohorts);
 
+        let mut browser_retention_pipe = redis::pipe();
+        let mut browser_cohort_offsets = Vec::new();
+        let mut browser_retention_index = 0;
+        for offset in 1..days {
+            let cohort_day = today_day - offset;
+            let base = browser_retention_index;
+            browser_retention_pipe.cmd("SCARD").arg(format!(
+                "sow:analytics:browser:cohort:v1:{portal}:{cohort_day}"
+            ));
+            browser_retention_index += 1;
+            for window in [1, 3, 7] {
+                if offset > window {
+                    browser_retention_pipe.cmd("SCARD").arg(format!(
+                        "sow:analytics:browser:retention:v1:{portal}:d{window}:{cohort_day}"
+                    ));
+                    browser_retention_index += 1;
+                }
+            }
+            browser_cohort_offsets.push((offset, base));
+        }
+        let browser_retention_values: Vec<Option<u64>> =
+            browser_retention_pipe.query_async(&mut con).await?;
+        let mut browser_retention_cohorts = Vec::with_capacity(browser_cohort_offsets.len());
+        for (offset, base) in browser_cohort_offsets {
+            let eligible = browser_retention_values
+                .get(base)
+                .copied()
+                .flatten()
+                .unwrap_or(0);
+            let mut index = base + 1;
+            let mut returned = [0_u64; 3];
+            for (slot, window) in [1_i64, 3, 7].into_iter().enumerate() {
+                if offset > window {
+                    returned[slot] = browser_retention_values
+                        .get(index)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(0);
+                    index += 1;
+                }
+            }
+            browser_retention_cohorts.push(RetentionCohort {
+                offset,
+                eligible,
+                returned,
+            });
+        }
+        let browser_retention = summarize_browser_retention(&today, &browser_retention_cohorts);
+
         let mut tutorial_steps_pipe = redis::pipe();
         for date in &tutorial_dates {
             tutorial_steps_pipe
@@ -1824,7 +1930,7 @@ impl PlayerDb {
             },
             "match_flow": match_flow,
             "daily": daily_rows,
-            "retention": { "site": retention },
+            "retention": { "site": retention, "site_browser": browser_retention },
             "tutorial_steps": tutorial_steps,
             "mission_churn_by_dimension": mission_ops_summary["mission_churn_by_dimension"],
             "mission_churn_by_mission": mission_ops_summary["mission_churn_by_mission"],

@@ -869,6 +869,8 @@ pub struct SowApp {
     pub join_waiting_for_identity: bool,
     /// A queued join with no target/config enters the server matchmaking pool.
     pub join_matchmaking: bool,
+    /// A queued join targeting a public rotating matchmaking lobby (non-ranked).
+    pub join_public_matchmaking: bool,
     /// Coarse, consented funnel timing only; never sent to the match server.
     pub portal_join_started_at: Option<web_time::Instant>,
     pub portal_match_started_at: Option<web_time::Instant>,

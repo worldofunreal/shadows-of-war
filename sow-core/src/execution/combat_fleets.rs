@@ -270,16 +270,9 @@ impl SowEngine {
 
             if owner_here != fleet.owner_id
                 && Self::pre_defeat_watches(&pre_defeat_targets, pre_defeat_pending, owner_here)
-                && self
-                    .state
-                    .player(owner_here)
-                    .is_some_and(|player| {
-                        Self::pre_defeat_reached(
-                            &pre_defeat_starting_tile_counts,
-                            owner_here,
-                            player,
-                        )
-                    })
+                && self.state.player(owner_here).is_some_and(|player| {
+                    Self::pre_defeat_reached(&pre_defeat_starting_tile_counts, owner_here, player)
+                })
             {
                 if pre_defeat_pending.is_none() {
                     pre_defeat_pending = Some(owner_here);
@@ -1347,6 +1340,121 @@ mod tests {
         finish_invasion(&mut engine);
         assert!(engine.attacks.is_empty());
         assert_eq!(engine.state.player(1).unwrap().troops, 9_750.0);
+    }
+
+    #[test]
+    fn naval_landing_can_finish_and_share_the_force_only_once() {
+        let width = 64;
+        let landing = 10 * width + 10;
+        let mut state = GameState::new(
+            5,
+            width,
+            32,
+            GameConfig {
+                random_spawn: true,
+                tick_rate_ms: 100.0,
+                global_speed_multiplier: 0.0,
+                ..Default::default()
+            },
+        );
+        state.phase = crate::game::GamePhase::Playing;
+        state.tick = 1_800;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in 1..=4 {
+            let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+            player.max_troops = 20_000.0;
+            state.register_player(player);
+        }
+        state.player_mut(4).unwrap().troops = 0.0;
+        for (x, y, owner) in [
+            (9, 10, 1),
+            (19, 10, 3),
+            (29, 10, 4),
+            (10, 10, 2),
+            (11, 10, 2),
+            (18, 10, 2),
+        ] {
+            state.set_tile_owner(x, y, owner);
+        }
+        for index in 0..10 {
+            state.set_tile_owner(24 + index * 3, 20, 2);
+        }
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        for (id, owner_id, troops, target_tile) in
+            [(10, 1, 300.0, (11, 10)), (11, 3, 300.0, (18, 10))]
+        {
+            engine.add_attack(AttackExecution {
+                id,
+                owner_id,
+                target_owner: 2,
+                created_tick: 0,
+                troops,
+                to_conquer: BinaryHeap::from([PrioritizedTile {
+                    priority: 0,
+                    insert_seq: 0,
+                    x: target_tile.0,
+                    y: target_tile.1,
+                }]),
+                insert_seq_counter: 1,
+                rng: wyrand::WyRand::new(id),
+                retreating: false,
+                landed: false,
+            });
+        }
+        engine.add_fleet(WarpFleet::new(
+            1,
+            1,
+            2,
+            UnitType::TransportShip,
+            600.0,
+            (3, landing),
+            vec![landing],
+        ));
+        engine.add_fleet(WarpFleet::new(
+            2,
+            4,
+            2,
+            UnitType::TransportShip,
+            50.0,
+            (4, landing),
+            vec![4, landing],
+        ));
+
+        engine.execute_fleets();
+
+        assert!(!engine.state.player(2).unwrap().alive);
+        assert_eq!(engine.state.player(1).unwrap().tile_count, 11);
+        assert_eq!(engine.state.player(3).unwrap().tile_count, 4);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+        assert_eq!(engine.state.player(3).unwrap().assists, 1);
+        assert_eq!(engine.state.player(4).unwrap().troops, 50.0);
+        assert!(engine.attacks.is_empty());
+        assert!(engine.fleets.is_empty());
+        let captures = engine
+            .state
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                GameEvent::TileCaptured {
+                    new_owner,
+                    previous_owner: 2,
+                    ..
+                } => Some(*new_owner),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(captures.iter().filter(|&&owner| owner == 1).count(), 10);
+        assert_eq!(captures.iter().filter(|&&owner| owner == 3).count(), 3);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::PlayerEliminated { player_id: 2, .. }))
+                .count(),
+            1
+        );
     }
 
     #[test]
