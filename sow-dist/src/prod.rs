@@ -133,6 +133,8 @@ struct ComponentPlan {
     database: bool,
     ops: bool,
     relay: bool,
+    /// The multiplayer identity changed; never a restart on its own.
+    client: bool,
 }
 
 impl ComponentPlan {
@@ -246,7 +248,7 @@ impl Drop for RelayAdmissionPause<'_> {
     }
 }
 
-pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> Result<()> {
+pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, client_update: bool) -> Result<()> {
     if let Some(only) = only && bump {
         bail!("--{}-only cannot bump the public version", only.name());
     }
@@ -367,6 +369,17 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
         bail!("{}-only deployment refused: another component needs activation ({plan:?})", only.name());
     }
     println!("  plan: {plan:?}");
+    if plan.client {
+        let note = format!(
+            "this release changes the multiplayer identity to {}: players on Poki, CrazyGames, Jest and Android cannot join until their store publishes the new build",
+            sow_core::protocol::gameplay_build_identity()
+        );
+        if !site::current().is_production() {
+            println!("⚠️  {note}");
+        } else if !client_update {
+            bail!("{note}. Run ./sow p --client-update to deploy it anyway");
+        }
+    }
 
     let local = relay::Control::local();
     if !plan.any() {
@@ -512,10 +525,6 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>) -> R
 }
 
 fn verify_ionos_runtime(config: &Config, release: &Release, plan: &ComponentPlan) -> Result<()> {
-    // TEMP rollback rehearsal gate: remove after the run.
-    if std::env::var_os("SOW_ROLLBACK_REHEARSAL").is_some() {
-        bail!("rollback rehearsal: forced failure after activation");
-    }
     verify_control_host(config, plan)?;
     verify_map_catalog(config, release)?;
     verify_control_certificates(config)?;
@@ -1568,7 +1577,8 @@ fn assemble_backend_only_release(
             Some(manifest)
         }
     };
-    let component_names = ["web", "maps", "server", "database", "ops", "relay"];
+    components.insert("client".into(), sow_core::protocol::gameplay_build_identity());
+    let component_names = ["web", "maps", "server", "database", "ops", "relay", "client"];
     let component_text = component_names
         .iter()
         .map(|name| {
@@ -1699,6 +1709,7 @@ fn assemble_release(paths: &Paths, web: &Path, binaries: &Path, version: &str) -
         ("database", file_sha256(&work.join("bin/sow-database"))?),
         ("ops", component_hash(&work.join("ops"))?),
         ("relay", relay_component),
+        ("client", sow_core::protocol::gameplay_build_identity()),
     ];
     let component_text = components
         .iter()
@@ -1825,7 +1836,7 @@ fn write_manifest(root: &Path) -> Result<PathBuf> {
 fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
     // A first activation has no active release to compare with, so every component is new.
     if !has_active_release(config)? {
-        return Ok(ComponentPlan { web: true, maps: true, server: true, database: true, ops: true, relay: true });
+        return Ok(ComponentPlan { web: true, maps: true, server: true, database: true, ops: true, relay: true, client: false });
     }
     let remote = output("ssh", &[&config.control_host, "cat __SITE_RELEASE_ROOT__/current/COMPONENTS"])?;
     let current = parse_components(&remote);
@@ -1834,6 +1845,7 @@ fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
     Ok(ComponentPlan {
         web: changed("web"), maps: changed("maps"), server: changed("server"),
         database: changed("database"), ops: changed("ops"), relay: changed("relay"),
+        client: changed("client"),
     })
 }
 
@@ -2488,7 +2500,7 @@ fn verify_map_catalog(config: &Config, release: &Release) -> Result<()> {
             "ssh",
             &[
                 &config.control_host,
-                &format!("sudo tail -n 5000 {server_log} | grep -E 'SERVER-BOOT|Map catalog: ' || true"),
+                &format!("sudo grep -E 'SERVER-BOOT|Map catalog: ' {server_log} | tail -n 200 || true"),
             ],
         )?;
         match latest_map_catalog_entries(&lines) {

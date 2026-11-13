@@ -3,6 +3,16 @@ use crate::ui::hud::state::TransferMode;
 use serde::Deserialize;
 
 pub(crate) const TOUCH_HOLD_MS: u128 = 300;
+pub(crate) const LAND_BORDER_NEIGHBORS: [(i32, i32); 8] = [
+    (1, 0),
+    (-1, 0),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (-1, -1),
+    (1, 1),
+    (-1, 1),
+];
 const MAP_CLICK_MAX_DISTANCE_SQ: f64 = 400.0;
 /// Drag and tap snap the preview to a legal foundation within this many tiles.
 const PLACEMENT_SNAP_RADIUS: i32 = 6;
@@ -14,7 +24,7 @@ enum FleetRouteCheck {
     Path,
 }
 
-fn attack_troops_meet_minimum(troops: f64, minimum: f64) -> bool {
+pub(crate) fn attack_troops_meet_minimum(troops: f64, minimum: f64) -> bool {
     troops.is_finite() && minimum.is_finite() && troops >= minimum
 }
 
@@ -2134,24 +2144,13 @@ fn shares_land_border(
     }
     let width = map_w as i32;
     let height = map_h as i32;
-    let neighbors = [
-        (1, 0),
-        (-1, 0),
-        (0, -1),
-        (0, 1),
-        (1, -1),
-        (-1, -1),
-        (1, 1),
-        (-1, 1),
-    ];
-
     for raw_idx in border_tiles.ones() {
         if raw_idx / map_w >= map_h || owners.get(raw_idx as usize).copied() != Some(my_id) {
             continue;
         }
         let col = (raw_idx % map_w) as i32;
         let row = (raw_idx / map_w) as i32;
-        for (dc, dr) in neighbors {
+        for (dc, dr) in LAND_BORDER_NEIGHBORS {
             let neighbor_col = col + dc;
             let neighbor_row = row + dr;
             if neighbor_col < 0

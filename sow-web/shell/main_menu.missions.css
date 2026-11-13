@@ -560,8 +560,9 @@
 
 /* Responsive Layout Adaptations for Directive Card and Missions Modal */
 
-/* Horizontal Compact (Landscape on small height / mobile landscape <= 560px) */
-@media (orientation: landscape) and (max-height: 560px) {
+/* Horizontal Compact (Landscape on small height / mobile landscape <= 680px) */
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
     .sow-directive-card {
         padding: 5px 8px;
         gap: 3px;
@@ -1087,7 +1088,8 @@
     }
 }
 
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
     .sow-menu__reward-stage--mission {
         padding: 14px 20px 10px;
     }

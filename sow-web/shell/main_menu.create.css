@@ -1176,9 +1176,10 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   RESPONSIVE DESIGN: MOBILE COMPACT HORIZONTAL (LANDSCAPE <= 560px)
+   RESPONSIVE DESIGN: MOBILE COMPACT HORIZONTAL (LANDSCAPE <= 680px)
    ───────────────────────────────────────────────────────────── */
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
   #sow-menu[data-screen="create"] .sow-menu__main--custom {
     gap: 6px;
   }
@@ -1298,9 +1299,10 @@
   }
 
   #sow-menu[data-screen="create"] .sow-create__actions button {
-    min-height: 36px;
-    height: 36px;
-    font-size: 11px;
+    min-height: clamp(32px, 4.8vh, 38px);
+    height: auto;
+    padding: 5px 12px;
+    font-size: clamp(10px, 1.6vh, 12px);
   }
 }
 

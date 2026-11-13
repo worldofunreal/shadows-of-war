@@ -359,6 +359,8 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
             ["attack", "contact", "defeated", "eliminated"].includes(triggerType);
         if (dynamicFactionAction) {
             const mode = tutorial.target_action_mode;
+            const targetEntity = mode === "attack" ? targetNameplate(tutorial) : null;
+            if (targetEntity) return targetEntity;
             const targetAction = tutorial.target_action || (mode === "expand" ? tutorial.expand : null);
             return ["attack", "expand"].includes(mode) &&
                 targetAction &&

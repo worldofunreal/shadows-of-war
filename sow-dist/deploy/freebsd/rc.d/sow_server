@@ -42,10 +42,7 @@ sow_server_prestart()
 		return 1
 		;;
 	esac
-	if [ -r "${sow_server_release}/VERSION" ]; then
-		SOW_BUILD_VERSION="$(tr -d '\r\n' < "${sow_server_release}/VERSION")"
-	fi
-	export RUST_LOG SOW_BUILD_VERSION SOW_VALKEY_URL SOW_REDIS_URL
+	export RUST_LOG SOW_VALKEY_URL SOW_REDIS_URL
 	export SOW_DB_URL SOW_DB_SECRET SOW_WS_LISTEN SOW_MAPS_HTTP_LISTEN
 	export SOW_SERVER_MAX_CONNECTIONS
 	export SOW_MAPS_ROOT SOW_MAPS_CATALOG_PATH SOW_RELAY_BIN

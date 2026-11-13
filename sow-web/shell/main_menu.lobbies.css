@@ -402,9 +402,10 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   RESPONSIVE DESIGN: MOBILE COMPACT HORIZONTAL (LANDSCAPE <= 560px)
+   RESPONSIVE DESIGN: MOBILE COMPACT HORIZONTAL (LANDSCAPE <= 680px)
    ───────────────────────────────────────────────────────────── */
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
   #sow-menu[data-screen="browser"] .sow-menu__main {
     gap: 6px;
   }

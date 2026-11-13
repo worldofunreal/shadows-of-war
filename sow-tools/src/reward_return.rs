@@ -31,16 +31,14 @@ async fn join(
     url: &Url,
     account: &Value,
     target: Option<u64>,
-    version: &str,
 ) -> (Writer, Reader, sow_core::protocol::ServerJoinAckMessage) {
-    join_with_match_setup(url, account, target, version, 2, false).await
+    join_with_match_setup(url, account, target, 2, false).await
 }
 
 async fn join_with_match_setup(
     url: &Url,
     account: &Value,
     target: Option<u64>,
-    version: &str,
     nation_count: u32,
     random_spawn: bool,
 ) -> (Writer, Reader, sow_core::protocol::ServerJoinAckMessage) {
@@ -58,7 +56,7 @@ async fn join_with_match_setup(
             name: account["display_name"].as_str().unwrap().into(),
             target_lobby_id: target,
             host_private: target.is_none(),
-            build_version: sow_core::protocol::gameplay_build_identity(version),
+            build_version: sow_core::protocol::gameplay_build_identity(),
             clan_tag: String::new(),
             leader: sow_core::player::Leader::of("caesar"),
             random_leader: true,
@@ -243,7 +241,7 @@ sudo jexec {jail} sha256 -q "$exe"
     Some(json!({"pid":pid,"sha256":sha}))
 }
 
-async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version: &str,
+async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client,
     host: &str, home: &RelayHome, sync: &std::path::Path, accounts: &[Value], old_port: u16,
     first_write: &mut Writer, first_read: &mut Reader, second_write: &mut Writer, second_read: &mut Reader)
 {
@@ -316,9 +314,9 @@ async fn verify_handover(url: &Url, base: &Url, http: &reqwest::Client, version:
         ws_send(first_write, &ClientMessage::Ping { client_time:probes[0] }).await;
         ws_send(second_write, &ClientMessage::Ping { client_time:probes[1] }).await;
         let (mut host_write, mut host_read, host_join) =
-            join_with_match_setup(url, &accounts[0], None, version, 0, true).await;
+            join_with_match_setup(url, &accounts[0], None, 0, true).await;
         let (mut peer_write, mut peer_read, peer_join) =
-            join(url, &accounts[1], Some(host_join.lobby_id), version).await;
+            join(url, &accounts[1], Some(host_join.lobby_id)).await;
         let id = host_join.lobby_id;
         for (write, player_id) in [(&mut host_write, host_join.player_id), (&mut peer_write, peer_join.player_id)] {
             ws_send(write, &ClientMessage::MapDownloadProgress { lobby_id:id, player_id, progress:100 }).await;
@@ -472,12 +470,12 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     }
     let version = std::fs::read_to_string(".version").unwrap();
     let (mut first_write, mut first_read, first_join) =
-        join(url, &first, None, version.trim()).await;
+        join(url, &first, None).await;
     let match_id = first_join.lobby_id;
     let (mut second_write, mut second_read, second_join) =
-        join(url, &second, Some(match_id), version.trim()).await;
+        join(url, &second, Some(match_id)).await;
     let (mut third_write, mut third_read, third_join) =
-        join(url, &third, Some(match_id), version.trim()).await;
+        join(url, &third, Some(match_id)).await;
     for (write, id) in [
         (&mut first_write, first_join.player_id),
         (&mut second_write, second_join.player_id),
@@ -723,7 +721,7 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
         }
     }
     if let Some(host) = handover_host {
-        verify_handover(url, base, &http, version.trim(), host, home,
+        verify_handover(url, base, &http, host, home,
             handover_sync.expect("relay activation sync directory missing"), &handover_accounts,
             first_start.relay_port.unwrap(), &mut other_write, &mut other_read,
             &mut survivor_write, &mut survivor_read).await;
@@ -944,12 +942,12 @@ pub(super) async fn verify(url: &Url, base: &Url, accounts_file: Option<&std::pa
     // players leave through the relay, and verify the remaining player gets
     // the server-detected GameOver without requesting an exit.
     let (mut finish_host_write, mut finish_host_read, finish_host_join) =
-        join_with_match_setup(url, &first, None, version.trim(), 0, true).await;
+        join_with_match_setup(url, &first, None, 0, true).await;
     let finish_match_id = finish_host_join.lobby_id;
     let (mut finish_second_write, mut finish_second_read, finish_second_join) =
-        join(url, &second, Some(finish_match_id), version.trim()).await;
+        join(url, &second, Some(finish_match_id)).await;
     let (mut finish_third_write, mut finish_third_read, finish_third_join) =
-        join(url, &third, Some(finish_match_id), version.trim()).await;
+        join(url, &third, Some(finish_match_id)).await;
     for (write, id) in [
         (&mut finish_host_write, finish_host_join.player_id),
         (&mut finish_second_write, finish_second_join.player_id),
@@ -1089,7 +1087,7 @@ struct LiveRankedSession {
     start: sow_core::protocol::ServerStartMessage,
 }
 
-async fn queue_ranked(url: &Url, account: &Value, version: &str) -> (Writer, Reader, tokio::time::Instant) {
+async fn queue_ranked(url: &Url, account: &Value) -> (Writer, Reader, tokio::time::Instant) {
     let (socket, _) = tokio_tungstenite::connect_async(url.as_str())
         .await
         .unwrap_or_else(|error| fail(&format!("ranked queue connection failed: {error}")));
@@ -1102,7 +1100,7 @@ async fn queue_ranked(url: &Url, account: &Value, version: &str) -> (Writer, Rea
                 name: account["display_name"].as_str().unwrap().into(),
                 target_lobby_id: None,
                 host_private: false,
-                build_version: sow_core::protocol::gameplay_build_identity(version),
+                build_version: sow_core::protocol::gameplay_build_identity(),
                 clan_tag: String::new(),
                 leader: sow_core::player::Leader::of("caesar"),
                 random_leader: true,
@@ -1306,7 +1304,6 @@ pub(super) async fn verify_ranked(url: &Url, base: &Url, accounts_file: &std::pa
     let accounts: Vec<Value> = serde_json::from_slice(&std::fs::read(accounts_file).unwrap()).unwrap();
     assert!(accounts.len() >= 5, "ranked acceptance requires the five persistent audit accounts");
     let audit_accounts = &accounts[..5];
-    let version = std::fs::read_to_string(".version").unwrap();
 
     // Audit identities accumulate MMR across runs; pick the closest live pair.
     let (rating0, rating1, rating2, rating3, rating4) = tokio::join!(
@@ -1328,8 +1325,8 @@ pub(super) async fn verify_ranked(url: &Url, base: &Url, accounts_file: &std::pa
         "audit accounts have no human pair within the ranked search window");
     let first_name = first["display_name"].as_str().unwrap();
     let second_name = second["display_name"].as_str().unwrap();
-    let (first_write, mut first_read, _) = queue_ranked(url, first, version.trim()).await;
-    let (second_write, mut second_read, _) = queue_ranked(url, second, version.trim()).await;
+    let (first_write, mut first_read, _) = queue_ranked(url, first).await;
+    let (second_write, mut second_read, _) = queue_ranked(url, second).await;
     let ((first_ack, _), (second_ack, _)) = tokio::join!(
         ranked_ack(&mut first_read),
         ranked_ack(&mut second_read),
@@ -1402,7 +1399,7 @@ pub(super) async fn verify_ranked(url: &Url, base: &Url, accounts_file: &std::pa
         .map(|(index, _)| index).unwrap();
     let bot_account = &audit_accounts[bot_index];
     let bot_rating = bot_ratings[bot_index];
-    let (bot_queue_write, mut bot_queue_read, queued_at) = queue_ranked(url, bot_account, version.trim()).await;
+    let (bot_queue_write, mut bot_queue_read, queued_at) = queue_ranked(url, bot_account).await;
     let (bot_ack, reported_wait) = ranked_ack(&mut bot_queue_read).await;
     let bot_candidate_count = bot_ack.lobby_info.players.iter()
         .filter(|player| player.download_progress == 100)

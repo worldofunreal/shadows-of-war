@@ -1911,11 +1911,12 @@
 }
 
 /* ==========================================================================
-   Responsive: Mobile Compact Horizontal (Landscape, <=560px height)
+   Responsive: Mobile Compact Horizontal (Landscape, <=680px height)
    ========================================================================== */
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
   #sow-menu[data-screen="profile"] .sow-profile__heading {
-    min-height: 120px;
+    min-height: 112px;
   }
 
   #sow-menu[data-screen="profile"] .sow-profile__cover-nav {
@@ -1951,23 +1952,60 @@
     font-size: clamp(17px, 3vh, 22px);
   }
 
+  #sow-menu[data-screen="profile"] .sow-profile__tabs {
+    gap: 4px;
+    padding: 6px 0;
+  }
+
+  #sow-menu[data-screen="profile"] .sow-profile__tab {
+    min-height: 34px;
+    padding: 6px 10px;
+    font-size: clamp(10px, 1.4vh, 11.5px);
+  }
+
   #sow-menu[data-screen="profile"] .sow-profile__stats {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   #sow-menu[data-screen="profile"] .sow-profile__stats > div {
-    min-height: 52px;
-    padding: 6px 4px;
+    min-height: 48px;
+    padding: 5px 4px;
   }
 
   #sow-menu[data-screen="profile"] .sow-profile__overview {
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 10px;
   }
 
   #sow-menu[data-screen="profile"] .sow-profile__match {
-    padding: 8px 10px;
+    padding: 7px 10px;
     gap: 8px;
+  }
+
+  #sow-menu[data-screen="profile"] .sow-ranked__overview {
+    padding: 12px 14px;
+  }
+
+  #sow-menu[data-screen="profile"] .sow-ranked__hero {
+    gap: 14px;
+  }
+
+  #sow-menu[data-screen="profile"] .sow-ranked__summary h2 {
+    font-size: clamp(18px, 3vh, 24px);
+  }
+
+  #sow-menu[data-screen="profile"] .sow-ranked__leagues {
+    padding-top: 12px;
+    margin-top: 12px;
+    gap: 4px;
+  }
+
+  #sow-menu[data-screen="profile"] .sow-ranked__leagues .sow-ranked__emblem {
+    width: min(100%, 48px);
+  }
+
+  #sow-menu[data-screen="profile"] .sow-profile__ranked-row {
+    min-height: 56px;
   }
 }
 
@@ -2532,6 +2570,86 @@
   .sow-store__skin-grid,
   .sow-store__bundle-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
+  #sow-menu[data-screen="store"] .sow-store__heading {
+    padding: 4px 4px 10px;
+    gap: 12px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__heading h1 {
+    font-size: clamp(20px, 3.2vh, 28px);
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__heading p:last-child {
+    margin-top: 3px;
+    font-size: 11px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__balances span {
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__balances b,
+  #sow-menu[data-screen="store"] .sow-store__balances strong {
+    font-size: 13px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__balances .sow-store__currency-icon {
+    width: 17px;
+    height: 17px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__section {
+    margin-top: 12px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__section-head {
+    margin-bottom: 6px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__section-head h2 {
+    font-size: 13px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__skin-grid,
+  #sow-menu[data-screen="store"] .sow-store__bundle-grid {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__skin,
+  #sow-menu[data-screen="store"] .sow-store__bundle {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__skin-art,
+  #sow-menu[data-screen="store"] .sow-store__bundle-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__skin-art img {
+    width: 36px;
+    height: 36px;
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__buy {
+    min-height: clamp(32px, 4.6vh, 38px);
+    padding: 4px 8px;
+    font-size: clamp(8.5px, 1.3vh, 10px);
+  }
+
+  #sow-menu[data-screen="store"] .sow-store__buy .sow-store__currency-icon {
+    width: 15px;
+    height: 15px;
   }
 }
 

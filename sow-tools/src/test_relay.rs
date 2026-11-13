@@ -232,7 +232,7 @@ async fn main() {
             name: "TestBot".to_string(),
             target_lobby_id: None,
             host_private: false,
-            build_version: sow_core::protocol::gameplay_build_identity(&version),
+            build_version: sow_core::protocol::gameplay_build_identity(),
             clan_tag: "".to_string(),
             leader: sow_core::player::Leader::of("caesar"),
             random_leader: false,

@@ -21,16 +21,6 @@ use crate::campaign::CampaignId;
 
 const LEADERBOARD_LIMIT: usize = 100;
 const TUTORIAL_MAX_ZOOM: f32 = 10.0;
-const TUTORIAL_ATTACK_NEIGHBORS: [(i32, i32); 8] = [
-    (1, 0),
-    (-1, 0),
-    (0, -1),
-    (0, 1),
-    (1, -1),
-    (-1, -1),
-    (1, 1),
-    (-1, 1),
-];
 
 #[derive(Debug, Deserialize)]
 struct CampaignAssaultReinforcement {
@@ -2487,7 +2477,7 @@ fn tutorial_owner_is_attackable(
         return false;
     };
     let teammate = me.team.is_some() && me.team == other.team;
-    let allied = me.alliances.contains(&owner);
+    let allied = me.alliances.contains(&owner) && !other.can_retaliate;
     owner != my_pid && !teammate && !allied
 }
 
@@ -2566,7 +2556,7 @@ fn tutorial_border_action_tiles(
             continue;
         }
         let (col, row) = ((border_idx % map_w) as i32, (border_idx / map_w) as i32);
-        for (dc, dr) in TUTORIAL_ATTACK_NEIGHBORS {
+        for (dc, dr) in crate::input::map_click::LAND_BORDER_NEIGHBORS {
             let (next_col, next_row) = (col + dc, row + dr);
             if next_col < 0 || next_col >= width || next_row < 0 || next_row >= height {
                 continue;
@@ -3045,9 +3035,11 @@ fn tutorial_guide_tiles(
     );
     let hud = &app.ui.app.hud_state;
     let attack_troops = hud.troops * f64::from(hud.attack_ratio);
-    let attack_ready = attack_troops.is_finite()
-        && attack_troops > 0.0
-        && attack_troops >= app.sim.config.attack_cost_neutral;
+    let attack_ready = attack_troops > 0.0
+        && crate::input::map_click::attack_troops_meet_minimum(
+            attack_troops,
+            app.sim.config.attack_cost_neutral,
+        );
     let observation = &app.sim.tutorial_observation;
     let (target_action, target_action_mode) = tutorial_action_target(
         &TutorialTargetActionTiles {
@@ -5556,6 +5548,24 @@ mod tests {
 
         owners[16] = enemy.id;
         enemy.centroid_x = 2.0;
+        me.alliances.push(enemy.id);
+        let allied_tiles = tutorial_border_action_tiles(
+            &owners,
+            &terrain,
+            7,
+            5,
+            &border,
+            me.id,
+            enemy.id,
+            &me,
+            &[me.clone(), enemy.clone()],
+        );
+        assert_eq!(
+            allied_tiles.target.attack, None,
+            "the guide must respect the same alliance rule as a map click",
+        );
+
+        enemy.can_retaliate = true;
         let tiles = tutorial_border_action_tiles(
             &owners,
             &terrain,

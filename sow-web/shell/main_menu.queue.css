@@ -526,7 +526,7 @@
 
 @media (max-width: 680px),
   (orientation: portrait),
-  (max-width: 900px) and (max-height: 560px) and (orientation: landscape) {
+  (max-width: 900px) and (max-height: 680px) and (orientation: landscape) {
   #sow-menu[data-screen="queue"] .sow-menu__roster-row {
     gap: 8px;
     padding: 8px 12px;
@@ -621,7 +621,7 @@
   .sow-ranked__player--empty { display: flex; flex-direction: row; justify-content: start; }
   .sow-ranked__vs { font-size: 15px; }
 }
-@media (max-height: 550px) and (orientation: landscape) {
+@media (max-height: 680px) and (orientation: landscape) {
   .sow-ranked__duel-heading { margin-bottom: 8px; }
   .sow-ranked__duel-heading h2 { margin: 4px 0; font-size: 23px; }
   .sow-ranked__player { min-height: 135px; padding: 12px; gap: 6px; }

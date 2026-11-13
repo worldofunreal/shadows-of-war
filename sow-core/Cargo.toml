@@ -23,6 +23,7 @@ serde_json = { workspace = true }
 
 [build-dependencies]
 blake3 = "1"
+serde_json = { workspace = true }
 
 [dev-dependencies]
 bincode = { workspace = true }
