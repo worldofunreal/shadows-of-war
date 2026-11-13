@@ -1,4 +1,3 @@
-// TEMP rollback rehearsal marker: revert after the run.
 //! Local TLS control service and independent Tokio relay processes for live matches.
 
 mod progress;

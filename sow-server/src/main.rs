@@ -2121,10 +2121,7 @@ async fn main() {
                                         match msg {
                                             sow_core::protocol::ClientMessage::JoinWithAuth { join, auth } => {
                                                 let payload = *join;
-                                                let server_version = std::env::var("SOW_BUILD_VERSION")
-                                                    .unwrap_or_else(|_| std::fs::read_to_string(".version").unwrap_or_default().trim().to_string());
-
-                                                let server_version = sow_core::protocol::gameplay_build_identity(&server_version);
+                                                let server_version = sow_core::protocol::gameplay_build_identity();
                                                 if payload.build_version != server_version {
                                                     log::warn!("Client version mismatch: expected {}, got {}", server_version, payload.build_version);
                                                     let fail = sow_core::protocol::ServerJoinFailedMessage { reason: "VERSION_MISMATCH".to_string() };

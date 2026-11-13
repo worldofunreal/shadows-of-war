@@ -331,9 +331,43 @@ impl Serialize for Leader {
 impl<'de> Deserialize<'de> for Leader {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = String::deserialize(deserializer)?;
-        crate::commerce::leader_from_any_id(&value)
+        leader_from_any_id(&value)
             .ok_or_else(|| serde::de::Error::custom(format!("unknown hero {value:?}")))
     }
+}
+
+pub fn leader_from_id(value: &str) -> Option<Leader> {
+    find_leader(value, Leader::all())
+}
+
+/// Resolves saved match/profile IDs even when their hero is temporarily hidden.
+pub fn leader_from_any_id(value: &str) -> Option<Leader> {
+    find_leader(value, Leader::all_known())
+}
+
+fn find_leader(value: &str, mut leaders: impl Iterator<Item = Leader>) -> Option<Leader> {
+    let normalize = |value: &str| -> String {
+        value
+            .chars()
+            .filter(|character| character.is_ascii_alphanumeric())
+            .map(|character| character.to_ascii_lowercase())
+            .collect()
+    };
+    let normalized = normalize(value);
+    leaders.find(|leader| {
+        [
+            leader.id(),
+            leader.wire_id(),
+            leader.name(),
+            leader.display_name(),
+        ]
+        .into_iter()
+        .any(|candidate| normalize(candidate) == normalized)
+            || leader
+                .legacy_ids()
+                .iter()
+                .any(|candidate| normalize(candidate) == normalized)
+    })
 }
 
 #[cfg(test)]

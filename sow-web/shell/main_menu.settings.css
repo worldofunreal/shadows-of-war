@@ -824,9 +824,9 @@
 
 /* ─────────────────────────────────────────────────────────────
    9. HORIZONTAL COMPACT — MOBILE LANDSCAPE & EMBEDDED PORTALS
-      (Poki / CrazyGames reduced height <= 640px or landscape <= 960px)
+      (Poki / CrazyGames reduced height <= 680px or landscape <= 960px)
    ───────────────────────────────────────────────────────────── */
-@media (orientation: landscape) and (max-height: 640px), (orientation: landscape) and (max-width: 960px) {
+@media (orientation: landscape) and (max-height: 640px), (orientation: landscape) and (max-width: 960px), (orientation: landscape) and (max-height: 680px) {
   #sow-menu .sow-menu__overlay[data-menu-overlay="settings"] {
     padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
       max(6px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));

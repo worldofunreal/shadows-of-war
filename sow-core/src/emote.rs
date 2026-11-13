@@ -322,12 +322,11 @@ mod tests {
 
     #[test]
     fn live_wire_identity_and_message_audience_are_explicit() {
-        let current = crate::protocol::gameplay_build_identity("0.1.3");
+        let current = crate::protocol::gameplay_build_identity();
         assert_eq!(
             current,
-            format!("0.1.3/turns-7/net-11/rules-{}", crate::SIMULATION_RULES_ID)
+            format!("turns-7/net-11/rules-{}", crate::SIMULATION_RULES_ID)
         );
-        assert_ne!(current, "0.1.3");
         let mut engine = engine();
         let config = engine.state.config.clone();
         for id in 2..=4 {

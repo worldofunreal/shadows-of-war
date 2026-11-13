@@ -279,8 +279,9 @@ struct RosterFile {
     factions: Vec<RosterEntry>,
 }
 
-/// Narrowest tutorial opening, in CSS pixels per tile. Smaller tiles push nameplates into LOD dots.
+/// Minimum tutorial approach size, in CSS pixels per tile, to keep focused nameplates readable.
 pub(crate) const TUTORIAL_MIN_TILE_CSS: f32 = 48.0;
+const TUTORIAL_OPENING_MAX_TILE_CSS: f32 = 30.0;
 
 pub(crate) fn tutorial_camera_frame(
     campaign: CampaignId,
@@ -296,12 +297,23 @@ pub(crate) fn tutorial_camera_frame(
         .scripted_spawns
         .iter()
         .find(|spawn| spawn.campaign_faction_id.as_deref() == Some("roman_outpost"))?;
-    Some(camera_frame(
+    let (center, zoom) = camera_frame(
         (player_x as f32 + 0.5, player_y as f32 + 0.5),
         (target.x as f32 + 0.5, target.y as f32 + 0.5),
         (screen_w, screen_h),
         (config.map_width, config.map_height),
-        TUTORIAL_MIN_TILE_CSS,
+        0.0,
+    );
+    let dpr = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    let min_zoom = crate::camera_zoom_lower_bound(
+        screen_w,
+        screen_h,
+        config.map_width,
+        config.map_height,
+    );
+    Some((
+        center,
+        zoom.min(TUTORIAL_OPENING_MAX_TILE_CSS * dpr).max(min_zoom),
     ))
 }
 
@@ -446,7 +458,7 @@ fn valid_campaign_group_id(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        CampaignId, TUTORIAL_MIN_TILE_CSS, parse_roster, to_scripted, tutorial_camera_frame,
+        CampaignId, parse_roster, to_scripted, tutorial_camera_frame,
     };
     use sow_core::game_config::GameConfig;
     use sow_core::protocol::{CampaignRelation, Team};
@@ -464,9 +476,9 @@ mod tests {
         };
 
         for (screen, expected_zoom) in [
-            ((1440.0, 900.0), 100.0),
-            ((390.0, 844.0), TUTORIAL_MIN_TILE_CSS),
-            ((844.0, 390.0), 390.0 / 7.0),
+            ((1440.0, 900.0), 30.0),
+            ((390.0, 844.0), 390.0 / 14.0),
+            ((844.0, 390.0), 30.0),
         ] {
             let (center, zoom) =
                 tutorial_camera_frame(CampaignId::Boudica, &config, screen.0, screen.1).unwrap();

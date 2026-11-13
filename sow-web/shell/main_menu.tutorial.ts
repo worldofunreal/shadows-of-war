@@ -85,6 +85,7 @@ interface TutorialRuntime {
     emoteSerial: number;
     lastAvatarExpressions?: string;
     markerId: number | null | undefined;
+    markerAction: "expand" | "attack" | null | undefined;
     modalOpen: boolean | undefined;
     cameraReactionTarget: string | null | undefined;
     dialogueResourceKey: string | null;
@@ -530,6 +531,7 @@ interface TutorialRuntime {
                 runtime.hoverStepId = null;
                 runtime.hoverStepRecorded = false;
                 runtime.markerId = undefined;
+                runtime.markerAction = undefined;
                 runtime.completionSent = false;
                 runtime.analyticsStepId = null;
                 runtime.analyticsStartedStepIds = new Set();
@@ -623,6 +625,7 @@ interface TutorialRuntime {
                 runtime.hoverStepId = null;
                 runtime.hoverStepRecorded = false;
                 runtime.markerId = undefined;
+                runtime.markerAction = undefined;
                 runtime.completionSent = false;
                 runtime.analyticsStepId = null;
                 runtime.analyticsStartedStepIds = new Set();

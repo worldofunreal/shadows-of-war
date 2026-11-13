@@ -4770,6 +4770,8 @@ fn web_equal_value_is_valid_translation(language_code: &str, key: &str) -> bool 
         || (language_code == "fr" && key == "heroes.rarity_rare")
         // "Region" is the same German word as the English filter label.
         || (language_code == "de" && key == "heroes.region_filter")
+        // Italian names heroes "Leader" throughout the catalog (nav_leaders, leaders).
+        || (language_code == "it" && key == "store.leader")
         // "Trait" is also the correct French label for a hero trait.
         || (language_code == "fr"
             && matches!(key, "heroes.command_trait" | "site.command_trait"))
@@ -8098,12 +8100,14 @@ fn main() -> Result<()> {
     }
     let mut cmd = String::new();
     let mut bump = false;
+    let mut client_update = false;
     let mut backend_only = None;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "-v" | "--version" => bump = true,
+            "--client-update" => client_update = true,
             flag @ ("--server-only" | "--relay-only") => {
                 let selected = if flag == "--server-only" {
                     prod::BackendOnly::Server
@@ -8164,7 +8168,7 @@ fn main() -> Result<()> {
     };
 
     match cmd.as_str() {
-        "p" | "prod" | "ptr" => prod::execute(&paths, bump, backend_only),
+        "p" | "prod" | "ptr" => prod::execute(&paths, bump, backend_only, client_update),
         "a" | "android" => prod::execute_android(&paths),
         "jest" => cmd_jest(&paths),
         "poki" => cmd_poki(&paths),

@@ -34,6 +34,7 @@ EXAMPLES:
   SOW_NATIVE_RELEASE=1 ./sow  # Compare with optimized WASM in Electron, without an installer
    ./sow p              # Production build and deploy to IONOS
    ./sow p -v           # Production deploy with public version bump
+  ./sow p --client-update # Allow a release that locks out store/portal clients until they update
   ./sow p --server-only # Deploy only the FreeBSD game server
   ./sow p --relay-only  # Upgrade the relay control with matches running
   ./sow ptr            # Same pipeline as ./sow p, for ptr.shadowsofwar.io

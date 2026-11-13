@@ -83,19 +83,7 @@ pub(crate) const fn rgb(r: u8, g: u8, b: u8) -> [f32; 4] {
 }
 
 pub(crate) fn get_build_version() -> String {
-    if let Some(window) = web_sys::window() {
-        if let Ok(val) = js_sys::Reflect::get(
-            &window,
-            &wasm_bindgen::JsValue::from_str("SOW_BUILD_VERSION"),
-        ) {
-            if let Some(s) = val.as_string() {
-                if s != "__BUILD_TS__" {
-                    return sow_core::protocol::gameplay_build_identity(&s);
-                }
-            }
-        }
-    }
-    sow_core::protocol::gameplay_build_identity("unknown")
+    sow_core::protocol::gameplay_build_identity()
 }
 
 mod anonymous_identity;

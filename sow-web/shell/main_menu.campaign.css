@@ -791,7 +791,8 @@
 /* =====================================================================
    RESPONSIVE DESIGN: MOBILE COMPACT HORIZONTAL (Point #3)
    ===================================================================== */
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px),
+       (orientation: landscape) and (max-height: 680px) {
   .sow-campaign {
     gap: 6px;
   }
@@ -848,7 +849,8 @@
   }
 
   .sow-campaign__featured-subtitle {
-    font-size: 10px;
+    font-size: clamp(9.5px, 1.5vh, 11.5px);
+    line-height: 1.35;
   }
 
   .sow-campaign__featured-meta {
@@ -861,9 +863,9 @@
   }
 
   .sow-campaign__action-play {
-    min-height: 36px;
-    padding: 6px 14px;
-    font-size: 11px;
+    min-height: clamp(32px, 4.8vh, 38px);
+    padding: 5px 14px;
+    font-size: clamp(10px, 1.6vh, 12px);
   }
 
   .sow-campaign__heading h2 {

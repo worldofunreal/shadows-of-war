@@ -2494,6 +2494,14 @@ test("tutorial camera anchors and paused build guides publish current map coordi
         1,
         "assault and target guidance share one cached border scan",
     );
+    const borderStart = webMenu.indexOf("fn tutorial_border_action_tiles(");
+    const borderEnd = webMenu.indexOf("\nfn tutorial_screen_point_visible(", borderStart);
+    const borderActions = webMenu.slice(borderStart, borderEnd);
+    assert.equal(
+        (borderActions.match(/for border_idx in border_tiles\.ones\(\)/g) || []).length,
+        1,
+        "assault, approach, and direct-attack candidates come from one border iteration",
+    );
     const uiSource = { matches: () => false, getClientRects: () => [{}] };
     const { anchorFor } = createTutorialGuides({
         window: {
@@ -2520,8 +2528,8 @@ test("tutorial camera anchors and paused build guides publish current map coordi
                 ),
             ),
         ),
-        { x: 52, y: 38, offscreen: true, cameraTracked: true },
-        "a legal attack guide points to the enemy land tile",
+        { x: 12, y: 18, offscreen: true, cameraTracked: true },
+        "a legal attack guide points to the target faction",
     );
     assert.deepEqual(
         JSON.parse(

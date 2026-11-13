@@ -15,9 +15,11 @@ pub const GAMEPLAY_FORMAT_VERSION: u64 = 7;
 // 11: the start message's GameConfig carries bot tuning (`ai`).
 pub const LIVE_PROTOCOL_VERSION: u64 = 11;
 
-pub fn gameplay_build_identity(public_version: &str) -> String {
+/// What two builds must share to play together. The public version is left out on
+/// purpose: a server, price or menu release must not lock out store and portal clients.
+pub fn gameplay_build_identity() -> String {
     format!(
-        "{public_version}/turns-{GAMEPLAY_FORMAT_VERSION}/net-{LIVE_PROTOCOL_VERSION}/rules-{}",
+        "turns-{GAMEPLAY_FORMAT_VERSION}/net-{LIVE_PROTOCOL_VERSION}/rules-{}",
         crate::SIMULATION_RULES_ID
     )
 }

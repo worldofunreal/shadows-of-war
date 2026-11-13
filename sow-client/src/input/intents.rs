@@ -121,7 +121,9 @@ impl SowApp {
             return false;
         }
         let paused_tutorial = self.ui.tutorial_active && self.net.is_offline && self.sim.paused;
-        if paused_tutorial && self.ui.tutorial_paused_action == Some(TutorialPausedAction::RequestAllianceStayPaused)
+        if paused_tutorial
+            && self.ui.tutorial_paused_action
+                == Some(TutorialPausedAction::RequestAllianceStayPaused)
             && matches!(&intent, GameplayIntent::ProposeAlliance { target_player } if Some(*target_player) != self.ui.tutorial_marker_player_id)
         {
             return false;
@@ -378,8 +380,16 @@ mod tests {
             &upgrade
         ));
         assert!(!paused_tutorial_intent_allowed(None, Some(2), &spawn));
-        assert!(!paused_tutorial_intent_allowed(None, Some(2), &neutral_attack));
-        assert!(paused_tutorial_intent_allowed(None, Some(2), &GameplayIntent::Resign));
+        assert!(!paused_tutorial_intent_allowed(
+            None,
+            Some(2),
+            &neutral_attack
+        ));
+        assert!(paused_tutorial_intent_allowed(
+            None,
+            Some(2),
+            &GameplayIntent::Resign
+        ));
     }
 
     #[wasm_bindgen_test]
@@ -450,7 +460,7 @@ mod tests {
                 "diplomacy must bypass camera and first-action restrictions"
             );
             assert!(
-                paused_tutorial_intent_allowed(None, &intent),
+                paused_tutorial_intent_allowed(None, None, &intent),
                 "dialogue pauses must permit their own diplomatic outcome"
             );
             engine.apply_intents(&[StampedIntent {
