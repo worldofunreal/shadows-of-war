@@ -349,15 +349,15 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__nameplate-bar .sow-hud__nameplate-pending {
   z-index: 1;
-  background:
-    var(--sow-fill-pending-wash),
-    var(--sow-nameplate-troop-fill);
+  background: var(--sow-fill-pending-wash), var(--sow-nameplate-troop-fill);
   border-radius: 0;
   border-start-end-radius: 6px;
   border-end-end-radius: 6px;
   border-inline-start: 1px solid rgb(255 255 255 / 72%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 42%);
-  transition: inset-inline-start 0.15s ease, width 0.15s ease;
+  transition:
+    inset-inline-start 0.15s ease,
+    width 0.15s ease;
 }
 
 .sow-hud__nameplate-bar > span {
@@ -671,7 +671,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__left-rail.is-adjusting .sow-hud__rail-card {
   border-color: rgba(255, 255, 255, 0.18);
   border-top-color: var(--sow-gold-bright);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 16px rgba(110, 215, 60, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.75),
+    0 0 16px rgba(110, 215, 60, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .sow-hud__slider-vertical-wrap {
@@ -692,11 +695,24 @@ html[dir="rtl"] #sow-hud-dev-layer {
   width: 4px;
   background: linear-gradient(
     to top,
-    rgba(255, 255, 255, 0.15) 0, rgba(255, 255, 255, 0.15) 1px, transparent 1px,
-    transparent 24%, rgba(255, 255, 255, 0.25) 24%, rgba(255, 255, 255, 0.25) calc(24% + 1px), transparent calc(24% + 1px),
-    transparent 49%, rgba(182, 240, 106, 0.55) 49%, rgba(182, 240, 106, 0.55) calc(49% + 1px), transparent calc(49% + 1px),
-    transparent 74%, rgba(255, 255, 255, 0.25) 74%, rgba(255, 255, 255, 0.25) calc(74% + 1px), transparent calc(74% + 1px),
-    transparent calc(100% - 1px), rgba(255, 255, 255, 0.15) calc(100% - 1px), rgba(255, 255, 255, 0.15) 100%
+    rgba(255, 255, 255, 0.15) 0,
+    rgba(255, 255, 255, 0.15) 1px,
+    transparent 1px,
+    transparent 24%,
+    rgba(255, 255, 255, 0.25) 24%,
+    rgba(255, 255, 255, 0.25) calc(24% + 1px),
+    transparent calc(24% + 1px),
+    transparent 49%,
+    rgba(182, 240, 106, 0.55) 49%,
+    rgba(182, 240, 106, 0.55) calc(49% + 1px),
+    transparent calc(49% + 1px),
+    transparent 74%,
+    rgba(255, 255, 255, 0.25) 74%,
+    rgba(255, 255, 255, 0.25) calc(74% + 1px),
+    transparent calc(74% + 1px),
+    transparent calc(100% - 1px),
+    rgba(255, 255, 255, 0.15) calc(100% - 1px),
+    rgba(255, 255, 255, 0.15) 100%
   );
   pointer-events: none;
 }
@@ -720,29 +736,37 @@ html[dir="rtl"] #sow-hud-dev-layer {
   width: var(--sow-range-track-width);
   border-radius: var(--sow-tactical-track-radius);
   background:
-    var(--sow-fill-army-gradient) center bottom / 100% var(--sow-ratio, 50%) no-repeat,
+    var(--sow-fill-army-gradient) center bottom / 100% var(--sow-ratio, 50%)
+      no-repeat,
     var(--sow-tactical-track-bg);
   border: 1px solid var(--sow-tactical-track-border);
   box-shadow: var(--sow-tactical-track-shadow);
   margin: 0 auto;
-  transition: box-shadow 0.2s ease, filter 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
 }
 
 .sow-hud__range-vertical::-moz-range-track {
   width: var(--sow-range-track-width);
   border-radius: var(--sow-tactical-track-radius);
   background:
-    var(--sow-fill-army-gradient) center bottom / 100% var(--sow-ratio, 50%) no-repeat,
+    var(--sow-fill-army-gradient) center bottom / 100% var(--sow-ratio, 50%)
+      no-repeat,
     var(--sow-tactical-track-bg);
   border: 1px solid var(--sow-tactical-track-border);
   box-shadow: var(--sow-tactical-track-shadow);
-  transition: box-shadow 0.2s ease, filter 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
 }
 
-.sow-hud__left-rail.is-adjusting .sow-hud__range-vertical::-webkit-slider-runnable-track,
+.sow-hud__left-rail.is-adjusting
+  .sow-hud__range-vertical::-webkit-slider-runnable-track,
 .sow-hud__range-vertical:active::-webkit-slider-runnable-track {
   background:
-    var(--sow-fill-army-active-gradient) center bottom / 100% var(--sow-ratio, 50%) no-repeat,
+    var(--sow-fill-army-active-gradient) center bottom / 100%
+      var(--sow-ratio, 50%) no-repeat,
     var(--sow-tactical-track-bg);
   box-shadow:
     var(--sow-tactical-track-shadow),
@@ -755,7 +779,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__left-rail.is-adjusting .sow-hud__range-vertical::-moz-range-track,
 .sow-hud__range-vertical:active::-moz-range-track {
   background:
-    var(--sow-fill-army-active-gradient) center bottom / 100% var(--sow-ratio, 50%) no-repeat,
+    var(--sow-fill-army-active-gradient) center bottom / 100%
+      var(--sow-ratio, 50%) no-repeat,
     var(--sow-tactical-track-bg);
   box-shadow:
     var(--sow-tactical-track-shadow),
@@ -780,7 +805,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
     0 0 10px rgba(255, 213, 79, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 -1px 0 rgba(0, 0, 0, 0.6);
-  margin-left: calc((var(--sow-range-track-width) - var(--sow-range-thumb-size)) / 2);
+  margin-left: calc(
+    (var(--sow-range-track-width) - var(--sow-range-thumb-size)) / 2
+  );
   cursor: pointer;
   transition:
     transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -854,7 +881,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
   background: var(--sow-tactical-surface-compact-bg);
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border-soft);
-  border-inline-start-color: color-mix(in srgb, var(--sow-gold) 34%, transparent);
+  border-inline-start-color: color-mix(
+    in srgb,
+    var(--sow-gold) 34%,
+    transparent
+  );
   color: #dedfd9;
   font-size: 18px;
   display: grid;
@@ -1034,7 +1065,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
   position: absolute;
   z-index: 49;
   left: 50%;
-  bottom: var(--sow-hud-layout-operations-bottom, calc(max(14px, var(--sow-sab)) + var(--sow-dock-reserve)));
+  bottom: var(
+    --sow-hud-layout-operations-bottom,
+    calc(max(14px, var(--sow-sab)) + var(--sow-dock-reserve))
+  );
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -1061,7 +1095,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--sow-gold) 58%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--sow-gold) 58%, transparent)
+    transparent;
 }
 .sow-hud__operation {
   display: grid;
@@ -1192,7 +1227,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
   width: 17px;
   height: 17px;
 }
-.sow-hud__operation.is-incoming .sow-hud__operation-action[data-command="counter_attack"] {
+.sow-hud__operation.is-incoming
+  .sow-hud__operation-action[data-command="counter_attack"] {
   border-color: rgb(222 133 129 / 42%);
   color: #f0aaa5;
 }
@@ -1234,7 +1270,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 .sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"]),
-.sow-hud__building-btn:focus-visible:not(:disabled):not([aria-disabled="true"]) {
+.sow-hud__building-btn:focus-visible:not(:disabled):not(
+    [aria-disabled="true"]
+  ) {
   border-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
   background: color-mix(in srgb, var(--sow-gold) 7%, transparent);
   color: var(--sow-gold-bright);
@@ -1248,7 +1286,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border-color: color-mix(in srgb, var(--sow-gold) 66%, white 8%);
   background: color-mix(in srgb, var(--sow-gold) 12%, transparent);
   color: var(--sow-gold-bright);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sow-gold) 9%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--sow-gold) 9%, transparent);
 }
 
 .sow-hud__building-btn:disabled,
@@ -1339,7 +1378,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border: 1px solid color-mix(in srgb, var(--sow-gold) 48%, transparent);
   border-inline-start: 3px solid var(--sow-gold-bright);
   border-radius: var(--sow-tactical-surface-radius-compact);
-  background: linear-gradient(100deg, color-mix(in srgb, var(--sow-gold) 13%, var(--sow-panel-card)), var(--sow-panel-card));
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--sow-gold) 13%, var(--sow-panel-card)),
+    var(--sow-panel-card)
+  );
   box-shadow: var(--sow-tactical-surface-highlight);
 }
 .sow-hud__fleet-selection[hidden] {
@@ -1419,7 +1462,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
   min-height: 26px;
   position: relative;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: radial-gradient(ellipse 44px 14px at 50% 0%, rgba(182, 240, 106, 0.2) 0%, transparent 100%);
+  background: radial-gradient(
+    ellipse 44px 14px at 50% 0%,
+    rgba(182, 240, 106, 0.2) 0%,
+    transparent 100%
+  );
 }
 
 .sow-hud__army-allocation::before {
@@ -1437,7 +1484,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
   font: 800 14px/1 var(--sow-ui-font);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em;
-  text-shadow: 0 0 12px rgba(255, 213, 79, 0.4), 0 1px 2px rgba(0, 0, 0, 0.9);
+  text-shadow:
+    0 0 12px rgba(255, 213, 79, 0.4),
+    0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .sow-hud__allocation-detail {
@@ -1556,7 +1605,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
   height: 38px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--sow-gold) 46%, transparent);
-  background: linear-gradient(180deg, rgb(245 197 66 / 22%), rgb(245 197 66 / 6%));
+  background: linear-gradient(
+    180deg,
+    rgb(245 197 66 / 22%),
+    rgb(245 197 66 / 6%)
+  );
   color: var(--sow-gold-bright);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
   flex: 0 0 auto;
@@ -1564,13 +1617,21 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__deploy-panel[data-spawned="true"] .sow-hud__deploy-badge {
   border-color: rgb(164 234 74 / 52%);
-  background: linear-gradient(180deg, rgb(99 192 45 / 28%), rgb(36 110 16 / 14%));
+  background: linear-gradient(
+    180deg,
+    rgb(99 192 45 / 28%),
+    rgb(36 110 16 / 14%)
+  );
   color: #c4ff66;
 }
 
 .sow-hud__deploy-panel[data-urgency="critical"] .sow-hud__deploy-badge {
   border-color: rgb(248 113 113 / 64%);
-  background: linear-gradient(180deg, rgb(239 68 68 / 28%), rgb(153 27 27 / 16%));
+  background: linear-gradient(
+    180deg,
+    rgb(239 68 68 / 28%),
+    rgb(153 27 27 / 16%)
+  );
   color: #fca5a5;
 }
 
@@ -1898,7 +1959,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
   background: transparent;
 }
 .sow-hud__sheet input[type="range"]::-webkit-slider-runnable-track,
-#sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-runnable-track {
+#sow-menu
+  .sow-menu__settings-controls
+  input[type="range"]::-webkit-slider-runnable-track {
   height: 12px;
   border: 1px solid var(--sow-tactical-track-border);
   border-radius: var(--sow-tactical-track-radius);
@@ -1906,7 +1969,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
   box-shadow: var(--sow-tactical-track-shadow);
 }
 .sow-hud__sheet input[type="range"]::-webkit-slider-thumb,
-#sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-thumb {
+#sow-menu
+  .sow-menu__settings-controls
+  input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 32px;
   height: 32px;
@@ -1981,15 +2046,25 @@ html[dir="rtl"] .sow-hud__switch:checked::after {
 .sow-hud__setting-row + .sow-hud__setting-row {
   border-top: 1px solid rgb(255 255 255 / 8%);
 }
-.sow-hud__setting-row--slider {
-  flex-wrap: wrap;
-  row-gap: 0;
-  padding-top: 8px;
+.sow-hud__settings-section {
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
-.sow-hud__setting-row--slider input[type="range"] {
-  flex: 1 1 100%;
+.sow-hud__setting-row--slider,
+.sow-hud__setting-card--slider {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding-block: 10px;
 }
-.sow-hud__setting-card--slider input[type="range"]::-webkit-slider-runnable-track {
+.sow-hud__setting-row--slider input[type="range"],
+.sow-hud__setting-card--slider input[type="range"] {
+  width: 100%;
+  flex: 0 0 auto;
+}
+.sow-hud__setting-card--slider
+  input[type="range"]::-webkit-slider-runnable-track {
   background:
     var(--sow-fill-construction-gradient) 0 0 /
       var(--sow-slider-fill, var(--sow-music-fill, 80%)) 100% no-repeat,
@@ -2049,7 +2124,10 @@ html[dir="rtl"] .sow-hud__switch:checked::after {
   color: #fff;
   font: 500 13px/1 var(--sow-ui-font, sans-serif);
   outline: none;
-  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
   box-sizing: border-box;
 }
 html[dir="rtl"] .sow-hud__leaderboard-search {
@@ -2115,13 +2193,17 @@ html[dir="rtl"] .sow-hud__leaderboard-search {
   background: rgb(255 255 255 / 4%);
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 8px;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 .sow-hud__leaderboard-toolbar .sow-control-dropdown__trigger:hover {
   background: rgb(255 255 255 / 8%);
   border-color: rgb(255 255 255 / 22%);
 }
-.sow-hud__leaderboard-toolbar .sow-control-dropdown.is-filtered .sow-control-dropdown__trigger {
+.sow-hud__leaderboard-toolbar
+  .sow-control-dropdown.is-filtered
+  .sow-control-dropdown__trigger {
   border-color: color-mix(in srgb, var(--sow-gold) 65%, transparent);
   background: color-mix(in srgb, var(--sow-gold) 10%, transparent);
   color: var(--sow-gold-bright);
@@ -2281,11 +2363,19 @@ html[dir="rtl"] .sow-hud__leaderboard-search {
 }
 .sow-hud__team-summary.is-team-red {
   border-left: 4px solid #ff4757;
-  background: linear-gradient(90deg, rgba(255, 71, 87, 0.16) 0%, rgba(255, 71, 87, 0.03) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 71, 87, 0.16) 0%,
+    rgba(255, 71, 87, 0.03) 100%
+  );
 }
 .sow-hud__team-summary.is-team-blue {
   border-left: 4px solid #1e90ff;
-  background: linear-gradient(90deg, rgba(30, 144, 255, 0.16) 0%, rgba(30, 144, 255, 0.03) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(30, 144, 255, 0.16) 0%,
+    rgba(30, 144, 255, 0.03) 100%
+  );
 }
 .sow-hud__player-card.is-team-red:not(.sow-hud__team-summary) {
   border-left: 3px solid #ff4757;
@@ -2297,7 +2387,11 @@ html[dir="rtl"] .sow-hud__leaderboard-search {
 /* 1v1 Duelists Pin & Highlights */
 .sow-hud__player-card.is-duelist {
   border-color: color-mix(in srgb, var(--sow-gold) 60%, transparent);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--sow-gold) 15%, transparent) 0%, rgba(255, 255, 255, 0.03) 100%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--sow-gold) 15%, transparent) 0%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
   box-shadow: 0 0 14px color-mix(in srgb, var(--sow-gold) 18%, transparent);
 }
 .sow-hud__duelist-badge {
@@ -2464,7 +2558,9 @@ html[dir="rtl"] .sow-hud__bot-badge {
 /* Dev Tools */
 .sow-hud__dev-sidebar {
   background: #141c23;
-  box-shadow: 0 16px 40px rgb(0 0 0 / 75%), 0 0 0 1px rgb(255 255 255 / 8%);
+  box-shadow:
+    0 16px 40px rgb(0 0 0 / 75%),
+    0 0 0 1px rgb(255 255 255 / 8%);
   z-index: 130;
   overscroll-behavior: contain;
 }
@@ -2529,7 +2625,10 @@ html[dir="rtl"] .sow-hud__bot-badge {
   background: transparent;
   color: var(--sow-muted);
   cursor: pointer;
-  transition: transform 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 .sow-hud__dev-save-btn svg {
   width: 14px;
@@ -2667,7 +2766,9 @@ html[dir="rtl"] .sow-hud__bot-badge {
   font-weight: 600;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.12s, background-color 0.12s;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s;
 }
 .sow-hud__dev-category-select:hover {
   border-color: rgb(255 255 255 / 24%);
@@ -2765,7 +2866,9 @@ html[dir="rtl"] .sow-hud__bot-badge {
   color: #fff;
   font-size: 11px;
   font-family: inherit;
-  transition: border-color 0.1s, box-shadow 0.1s;
+  transition:
+    border-color 0.1s,
+    box-shadow 0.1s;
 }
 .sow-hud__dev-search:focus {
   border-color: var(--sow-gold);
@@ -3012,7 +3115,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   opacity: 0;
   pointer-events: none;
   cursor: pointer;
-  transition: opacity 0.1s, background-color 0.1s, border-color 0.1s;
+  transition:
+    opacity 0.1s,
+    background-color 0.1s,
+    border-color 0.1s;
 }
 .sow-hud__dev-reset svg {
   width: 12px;
@@ -3069,7 +3175,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s,
+    border-color 0.1s;
 }
 .sow-hud__dev-slide button:hover {
   background: rgb(255 255 255 / 12%);
@@ -3102,7 +3211,9 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   background: var(--sow-gold);
   box-shadow: 0 1px 3px rgb(0 0 0 / 60%);
   cursor: pointer;
-  transition: transform 0.1s, background-color 0.1s;
+  transition:
+    transform 0.1s,
+    background-color 0.1s;
 }
 .sow-hud__dev-sidebar input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
@@ -3200,7 +3311,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   background: color-mix(in srgb, var(--sow-gold) 20%, #141c23);
   color: #fff;
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sow-gold) 50%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--sow-gold) 50%, transparent);
 }
 .sow-hud__dev-seg label:hover span {
   border-color: rgb(255 255 255 / 20%);
@@ -3323,7 +3435,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   gap: 0;
   margin: 18px 0 12px;
   padding: 0;
-  border-block: 1px solid color-mix(in srgb, var(--sow-gold) 18%, var(--sow-line));
+  border-block: 1px solid
+    color-mix(in srgb, var(--sow-gold) 18%, var(--sow-line));
 }
 
 .sow-hud__endgame-card {
@@ -3349,9 +3462,21 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   border-top: 2px solid var(--sow-control-accent-bright);
   border-radius: var(--sow-tactical-surface-radius);
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(245, 197, 66, 0.12) 0%, transparent 62%),
-    radial-gradient(ellipse at 100% 100%, rgba(222, 133, 129, 0.08) 0%, transparent 54%),
-    linear-gradient(165deg, rgba(22, 26, 33, 0.98) 0%, rgba(10, 12, 16, 0.99) 100%);
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(245, 197, 66, 0.12) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      ellipse at 100% 100%,
+      rgba(222, 133, 129, 0.08) 0%,
+      transparent 54%
+    ),
+    linear-gradient(
+      165deg,
+      rgba(22, 26, 33, 0.98) 0%,
+      rgba(10, 12, 16, 0.99) 100%
+    );
   box-shadow:
     var(--sow-tactical-modal-shadow),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -3690,7 +3815,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   text-transform: uppercase;
 }
 
-.sow-hud__ring-hub[data-alliance-display="fixed"] .sow-hud__ring-hub-status strong {
+.sow-hud__ring-hub[data-alliance-display="fixed"]
+  .sow-hud__ring-hub-status
+  strong {
   font-size: clamp(8px, 2.6vw, 12px);
   line-height: 1.05;
 }
@@ -3782,7 +3909,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   height: 2px;
   background: color-mix(in srgb, var(--sow-gold) 70%, transparent);
   transform-origin: 0 50%;
-  transform: rotate(var(--tether-angle, 0rad)) translateX(calc(var(--ring-size) / 2));
+  transform: rotate(var(--tether-angle, 0rad))
+    translateX(calc(var(--ring-size) / 2));
   pointer-events: none;
 }
 
@@ -3915,7 +4043,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   height: 34px;
   border: 1px solid rgba(240, 169, 43, 0.32);
   border-radius: 8px;
-  background: radial-gradient(circle at 50% 35%, rgba(240, 169, 43, 0.22), rgba(8, 12, 15, 0.85));
+  background: radial-gradient(
+    circle at 50% 35%,
+    rgba(240, 169, 43, 0.22),
+    rgba(8, 12, 15, 0.85)
+  );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
@@ -4012,7 +4144,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
 .sow-hud__building-stat-pill.is-gain {
   border-color: rgba(65, 201, 126, 0.36);
-  background: linear-gradient(180deg, rgba(65, 201, 126, 0.14), rgba(10, 18, 15, 0.78));
+  background: linear-gradient(
+    180deg,
+    rgba(65, 201, 126, 0.14),
+    rgba(10, 18, 15, 0.78)
+  );
   color: #98f7be;
 }
 
@@ -4065,7 +4201,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
 .sow-hud__building-upgrade-btn.is-locked {
   border-color: rgba(255, 255, 255, 0.14);
-  background: linear-gradient(180deg, rgba(52, 60, 66, 0.92) 0%, rgba(33, 39, 44, 0.96) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(52, 60, 66, 0.92) 0%,
+    rgba(33, 39, 44, 0.96) 100%
+  );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   color: #b7b1a6;
 }
@@ -4482,13 +4622,21 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__placement-action-btn.is-confirm {
-  background: linear-gradient(180deg, rgba(34, 197, 94, 0.35) 0%, rgba(21, 128, 61, 0.45) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(34, 197, 94, 0.35) 0%,
+    rgba(21, 128, 61, 0.45) 100%
+  );
   border-color: rgba(74, 222, 128, 0.55);
   color: #86efac;
 }
 
 .sow-hud__placement-action-btn.is-confirm:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(34, 197, 94, 0.5) 0%, rgba(21, 128, 61, 0.6) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(34, 197, 94, 0.5) 0%,
+    rgba(21, 128, 61, 0.6) 100%
+  );
   border-color: rgba(74, 222, 128, 0.85);
   color: #fff;
 }
@@ -4542,7 +4690,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
-  box-shadow: var(--sow-tactical-surface-compact-shadow), 0 0 8px rgb(218 165 32 / 25%);
+  box-shadow:
+    var(--sow-tactical-surface-compact-shadow),
+    0 0 8px rgb(218 165 32 / 25%);
   backdrop-filter: blur(4px);
   pointer-events: none;
   will-change: transform, left, top;
@@ -4597,7 +4747,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
   animation: sow-shimmer 1.8s infinite linear;
 }
 
@@ -4686,7 +4841,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   box-shadow:
     0 0 8px #ffcf5c,
     0 0 14px #ffa726;
-  animation: sow-celebration-sparkle 850ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  animation: sow-celebration-sparkle 850ms cubic-bezier(0.2, 0.8, 0.3, 1)
+    forwards;
   animation-delay: var(--delay, 0ms);
 }
 
@@ -4718,7 +4874,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   box-shadow:
     0 0 14px rgba(255, 215, 0, 0.6),
     0 4px 10px rgba(0, 0, 0, 0.8);
-  animation: sow-celebration-badge 1100ms cubic-bezier(0.2, 0.85, 0.35, 1.2) forwards;
+  animation: sow-celebration-badge 1100ms cubic-bezier(0.2, 0.85, 0.35, 1.2)
+    forwards;
   white-space: nowrap;
 }
 
@@ -4867,13 +5024,23 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   height: 84px;
   border-radius: 10px;
   border: 2px solid color-mix(in srgb, var(--sow-gold) 60%, transparent);
-  background: radial-gradient(circle at center, rgba(245, 197, 66, 0.15) 0%, rgba(10, 12, 16, 0.95) 100%);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 14px rgba(245, 197, 66, 0.15);
+  background: radial-gradient(
+    circle at center,
+    rgba(245, 197, 66, 0.15) 0%,
+    rgba(10, 12, 16, 0.95) 100%
+  );
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.6),
+    0 0 14px rgba(245, 197, 66, 0.15);
 }
 
 .sow-hud__endgame-card[data-result="defeat"] .sow-hud__endgame-portrait-wrap {
   border-color: rgba(248, 113, 113, 0.45);
-  background: radial-gradient(circle at center, rgba(248, 113, 113, 0.2) 0%, rgba(10, 12, 16, 0.9) 100%);
+  background: radial-gradient(
+    circle at center,
+    rgba(248, 113, 113, 0.2) 0%,
+    rgba(10, 12, 16, 0.9) 100%
+  );
   box-shadow:
     0 10px 30px rgba(0, 0, 0, 0.7),
     0 0 20px rgba(248, 113, 113, 0.2);
@@ -4910,7 +5077,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   white-space: nowrap;
   -webkit-text-stroke: 0;
   paint-order: normal;
-  text-shadow: 0 3px 16px rgba(0, 0, 0, 0.7), 0 0 24px rgba(245, 197, 66, 0.25);
+  text-shadow:
+    0 3px 16px rgba(0, 0, 0, 0.7),
+    0 0 24px rgba(245, 197, 66, 0.25);
 }
 
 .sow-hud__exit-card .sow-hud__endgame-banner .sow-hud__inline-icon {
@@ -5006,7 +5175,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   min-height: 108px;
   padding: 16px 8px;
   border-radius: var(--sow-tactical-surface-radius-compact, 10px);
-  background: linear-gradient(180deg, rgba(28, 34, 44, 0.7) 0%, rgba(14, 17, 23, 0.85) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(28, 34, 44, 0.7) 0%,
+    rgba(14, 17, 23, 0.85) 100%
+  );
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-top: 2px solid rgba(245, 197, 66, 0.45);
   box-shadow:
@@ -5063,27 +5236,53 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   line-height: 1;
   white-space: nowrap;
   letter-spacing: -0.01em;
-  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.85), 0 0 16px rgba(245, 197, 66, 0.15);
+  text-shadow:
+    0 3px 12px rgba(0, 0, 0, 0.85),
+    0 0 16px rgba(245, 197, 66, 0.15);
 }
 
-.sow-hud__exit-card .sow-hud__endgame-stat:nth-child(1) .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Bajas"] .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Kills"] .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="kills"] .sow-hud__endgame-stat-icon {
+.sow-hud__exit-card
+  .sow-hud__endgame-stat:nth-child(1)
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="Bajas"]
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="Kills"]
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="kills"]
+  .sow-hud__endgame-stat-icon {
   color: #f87171;
 }
 
-.sow-hud__exit-card .sow-hud__endgame-stat:nth-child(2) .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Asistencias"] .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Assists"] .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="assists"] .sow-hud__endgame-stat-icon {
+.sow-hud__exit-card
+  .sow-hud__endgame-stat:nth-child(2)
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="Asistencias"]
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="Assists"]
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="assists"]
+  .sow-hud__endgame-stat-icon {
   color: #38bdf8;
 }
 
-.sow-hud__exit-card .sow-hud__endgame-stat:nth-child(3) .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Territorio"] .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="Territory"] .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card .sow-hud__endgame-stat[aria-label*="territory"] .sow-hud__endgame-stat-icon {
+.sow-hud__exit-card
+  .sow-hud__endgame-stat:nth-child(3)
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="Territorio"]
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="Territory"]
+  .sow-hud__endgame-stat-icon,
+.sow-hud__exit-card
+  .sow-hud__endgame-stat[aria-label*="territory"]
+  .sow-hud__endgame-stat-icon {
   color: #4ade80;
 }
 
@@ -5286,7 +5485,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     top: var(--sow-hud-notifications-top, var(--sow-hud-top-edge));
     left: auto;
     right: auto;
-    inset-inline-start: var(--sow-hud-notifications-inline-start, max(16px, var(--sow-sal)));
+    inset-inline-start: var(
+      --sow-hud-notifications-inline-start,
+      max(16px, var(--sow-sal))
+    );
     transform: none;
   }
   .sow-hud__notifications.is-reanchoring {
@@ -5350,7 +5552,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   gap: 10px;
   min-height: 66px;
   padding: 9px 14px 9px 10px;
-  animation: sow-notification-arrive 260ms cubic-bezier(0.18, 0.75, 0.26, 1) both;
+  animation: sow-notification-arrive 260ms cubic-bezier(0.18, 0.75, 0.26, 1)
+    both;
 }
 
 .sow-hud__notification[hidden] {
@@ -5371,14 +5574,22 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 .sow-hud__notification--support {
   border-color: var(--sow-tactical-surface-accent-border);
   background:
-    linear-gradient(112deg, color-mix(in srgb, var(--sow-gold) 15%, transparent), transparent 70%),
+    linear-gradient(
+      112deg,
+      color-mix(in srgb, var(--sow-gold) 15%, transparent),
+      transparent 70%
+    ),
     var(--sow-panel-card);
 }
 
 .sow-hud__notification--urgent {
   border-color: rgb(246 116 104 / 78%);
   background:
-    linear-gradient(112deg, color-mix(in srgb, var(--sow-red) 20%, transparent), transparent 72%),
+    linear-gradient(
+      112deg,
+      color-mix(in srgb, var(--sow-red) 20%, transparent),
+      transparent 72%
+    ),
     var(--sow-panel-card);
   box-shadow:
     0 12px 34px rgb(0 0 0 / 48%),
@@ -5549,7 +5760,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   flex-direction: column;
   inline-size: min(28rem, 100%);
   max-block-size: calc(
-    var(--sow-hud-dialog-view-height, 100dvh) - max(0.5rem, var(--sow-sat)) - max(0.5rem, var(--sow-sab))
+    var(--sow-hud-dialog-view-height, 100dvh) - max(0.5rem, var(--sow-sat)) -
+      max(0.5rem, var(--sow-sab))
   );
   overflow: hidden;
   padding: 0;
@@ -5560,19 +5772,29 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 .sow-hud__transfer {
   position: absolute;
   top: calc(var(--sow-hud-dialog-view-top, 0px) + var(--sow-hud-top-edge));
-  inset-inline-end: calc(var(--sow-hud-right-edge) + var(--sow-hud-toolbar-side-offset));
+  inset-inline-end: calc(
+    var(--sow-hud-right-edge) + var(--sow-hud-toolbar-side-offset)
+  );
   inline-size: min(
     28rem,
-    calc(100% - var(--sow-hud-right-edge) - var(--sow-hud-toolbar-side-offset) - max(0.5rem, var(--sow-sal)))
+    calc(
+      100% - var(--sow-hud-right-edge) - var(--sow-hud-toolbar-side-offset) -
+        max(0.5rem, var(--sow-sal))
+    )
   );
   max-block-size: min(
     36rem,
-    calc(var(--sow-hud-dialog-view-height, 100dvh) - var(--sow-hud-top-edge) - max(0.5rem, var(--sow-sab)))
+    calc(
+      var(--sow-hud-dialog-view-height, 100dvh) - var(--sow-hud-top-edge) -
+        max(0.5rem, var(--sow-sab))
+    )
   );
 }
 
 .sow-hud__betrayal-backdrop {
-  padding-block: calc(var(--sow-hud-dialog-view-top, 0px) + max(0.5rem, var(--sow-sat)))
+  padding-block: calc(
+      var(--sow-hud-dialog-view-top, 0px) + max(0.5rem, var(--sow-sat))
+    )
     calc(var(--sow-hud-dialog-view-bottom, 0px) + max(0.5rem, var(--sow-sab)));
   padding-inline: max(0.5rem, var(--sow-sal)) max(0.5rem, var(--sow-sar));
 }
@@ -5668,7 +5890,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   min-height: 54px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--sow-line);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--sow-gold) 8%, transparent), transparent 72%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--sow-gold) 8%, transparent),
+    transparent 72%
+  );
 }
 
 .sow-hud__transfer-header h3 {
@@ -5729,7 +5955,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   font-weight: 750;
 }
 
-.sow-hud__transfer-stock-item :is(.sow-hud__inline-icon, .sow-hud__currency-icon) {
+.sow-hud__transfer-stock-item
+  :is(.sow-hud__inline-icon, .sow-hud__currency-icon) {
   inline-size: 1.25rem;
   block-size: 1.25rem;
   flex: 0 0 auto;
@@ -6058,24 +6285,33 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 #sow-hud[data-compact="true"] .sow-hud__dialog {
-  inline-size: min(36rem, calc(100% - max(0.5rem, var(--sow-sal)) - max(0.5rem, var(--sow-sar))));
+  inline-size: min(
+    36rem,
+    calc(100% - max(0.5rem, var(--sow-sal)) - max(0.5rem, var(--sow-sar)))
+  );
   max-block-size: calc(
-    var(--sow-hud-dialog-view-height, 100dvh) - var(--sow-hud-dialog-top-reserve) -
-      max(0.5rem, var(--sow-sab))
+    var(--sow-hud-dialog-view-height, 100dvh) -
+      var(--sow-hud-dialog-top-reserve) - max(0.5rem, var(--sow-sab))
   );
 }
 
 #sow-hud[data-compact="true"] .sow-hud__transfer {
-  top: calc(var(--sow-hud-dialog-view-top, 0px) + var(--sow-hud-dialog-top-reserve));
+  top: calc(
+    var(--sow-hud-dialog-view-top, 0px) + var(--sow-hud-dialog-top-reserve)
+  );
   inset-inline-end: max(0.5rem, var(--sow-sar));
 }
 
 #sow-hud[data-compact="true"] .sow-hud__betrayal-backdrop {
   align-items: flex-start;
-  padding-block-start: calc(var(--sow-hud-dialog-view-top, 0px) + var(--sow-hud-dialog-top-reserve));
+  padding-block-start: calc(
+    var(--sow-hud-dialog-view-top, 0px) + var(--sow-hud-dialog-top-reserve)
+  );
 }
 
-#sow-hud[data-compact="true"] .sow-hud__dialog :is(.sow-hud__transfer-header, .sow-hud__transfer-actions) {
+#sow-hud[data-compact="true"]
+  .sow-hud__dialog
+  :is(.sow-hud__transfer-header, .sow-hud__transfer-actions) {
   padding: 0.625rem 0.75rem;
 }
 #sow-hud[data-compact="true"] .sow-hud__dialog-body {
@@ -6096,14 +6332,17 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     max-block-size: min(
       75dvh,
       calc(
-        var(--sow-hud-dialog-view-height, 100dvh) - max(0.5rem, var(--sow-sat)) - max(0.5rem, var(--sow-sab))
+        var(--sow-hud-dialog-view-height, 100dvh) -
+          max(0.5rem, var(--sow-sat)) - max(0.5rem, var(--sow-sab))
       )
     );
     border-radius: 0.875rem 0.875rem 0.375rem 0.375rem;
   }
   .sow-hud__transfer {
     top: auto;
-    bottom: calc(var(--sow-hud-dialog-view-bottom, 0px) + max(0.5rem, var(--sow-sab)));
+    bottom: calc(
+      var(--sow-hud-dialog-view-bottom, 0px) + max(0.5rem, var(--sow-sab))
+    );
     inset-inline: max(0.5rem, var(--sow-sal)) max(0.5rem, var(--sow-sar));
     inline-size: auto;
     z-index: 120;
@@ -6412,8 +6651,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   }
   .sow-hud__endgame-backdrop {
     align-items: flex-end;
-    padding: max(8px, var(--sow-sat)) max(8px, var(--sow-sar)) max(8px, var(--sow-sab))
-      max(8px, var(--sow-sal));
+    padding: max(8px, var(--sow-sat)) max(8px, var(--sow-sar))
+      max(8px, var(--sow-sab)) max(8px, var(--sow-sal));
   }
   .sow-hud__endgame-card {
     display: flex;
@@ -6427,7 +6666,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   .sow-hud__exit-card {
     width: min(560px, 100%);
     min-height: 0;
-    max-height: min(calc(100dvh - var(--sow-sat) - var(--sow-sab) - 16px), 60svh);
+    max-height: min(
+      calc(100dvh - var(--sow-sat) - var(--sow-sab) - 16px),
+      60svh
+    );
     padding: 18px;
     display: flex;
     flex-direction: column;
@@ -6550,7 +6792,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     height: 44px;
   }
   #sow-hud[data-compact="true"] .sow-hud__nameplate {
-    width: min(272px, calc(100vw - max(8px, var(--sow-sal)) - max(8px, var(--sow-sar)) - 64px));
+    width: min(
+      272px,
+      calc(100vw - max(8px, var(--sow-sal)) - max(8px, var(--sow-sar)) - 64px)
+    );
     padding: 5px 7px;
     grid-template-columns: 46px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) 18px 24px;
@@ -6615,7 +6860,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     position: relative;
     align-self: center;
     inset: auto;
-    width: min(520px, calc(100vw - max(8px, var(--sow-sal)) - max(8px, var(--sow-sar)) - 204px));
+    width: min(
+      520px,
+      calc(100vw - max(8px, var(--sow-sal)) - max(8px, var(--sow-sar)) - 204px)
+    );
     max-width: none;
     transform: none;
   }
@@ -6631,7 +6879,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     overflow-x: auto;
     overscroll-behavior-inline: contain;
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--sow-gold) 45%, transparent) transparent;
+    scrollbar-color: color-mix(in srgb, var(--sow-gold) 45%, transparent)
+      transparent;
     -webkit-overflow-scrolling: touch;
   }
   #sow-hud[data-compact="true"] .sow-hud__buildings-strip,
@@ -6648,7 +6897,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     flex-basis: 52px;
     min-height: 54px;
   }
-  #sow-hud[data-compact="true"] .sow-hud__building-btn[data-fleet-kind] .sow-hud__building-icon {
+  #sow-hud[data-compact="true"]
+    .sow-hud__building-btn[data-fleet-kind]
+    .sow-hud__building-icon {
     width: 24px;
     height: 24px;
   }
@@ -6685,7 +6936,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     inset: auto;
     left: auto;
     bottom: auto;
-    width: min(320px, calc(100vw - max(8px, var(--sow-sal)) - 280px - max(8px, var(--sow-sar))));
+    width: min(
+      320px,
+      calc(100vw - max(8px, var(--sow-sal)) - 280px - max(8px, var(--sow-sar)))
+    );
     max-height: var(--sow-hud-layout-operations-max-height, 20dvh);
     min-height: 0;
     padding: 4px;
@@ -6715,10 +6969,16 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     inset-inline-start: auto;
     inset-inline-end: max(8px, var(--sow-sar));
     bottom: auto;
-    width: min(320px, calc(100vw - max(8px, var(--sow-sal)) - 280px - max(8px, var(--sow-sar))));
+    width: min(
+      320px,
+      calc(100vw - max(8px, var(--sow-sal)) - 280px - max(8px, var(--sow-sar)))
+    );
     max-height: max(
       0px,
-      calc(var(--sow-hud-layout-bottom-edge, calc(100dvh - 92px)) - var(--sow-hud-layout-top-reserve, 72px))
+      calc(
+        var(--sow-hud-layout-bottom-edge, calc(100dvh - 92px)) -
+          var(--sow-hud-layout-top-reserve, 72px)
+      )
     );
     overflow: auto;
     transform: none;
@@ -6743,7 +7003,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     pointer-events: auto;
   }
   #sow-hud[data-compact="true"] .sow-hud__notifications {
-    top: var(--sow-hud-notifications-top, var(--sow-hud-layout-top-reserve, 72px));
+    top: var(
+      --sow-hud-notifications-top,
+      var(--sow-hud-layout-top-reserve, 72px)
+    );
   }
   #sow-hud[data-compact="true"] .sow-hud__notifications.is-positioned {
     left: auto;
@@ -6751,10 +7014,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     inset-inline-start: var(--sow-hud-notifications-inline-start);
     inset-inline-end: auto;
   }
-  #sow-hud[data-compact="true"][data-notifications-visible="true"] .sow-hud__hover-card {
+  #sow-hud[data-compact="true"][data-notifications-visible="true"]
+    .sow-hud__hover-card {
     display: none;
   }
-  #sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__notifications {
+  #sow-hud[data-compact="true"][data-overlay-open="true"]
+    .sow-hud__notifications {
     z-index: 69;
   }
   #sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__left-rail,
@@ -6800,7 +7065,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     gap: 3px;
   }
   #sow-hud[data-compact="true"] .sow-hud__operations {
-    bottom: var(--sow-hud-layout-operations-bottom, calc(max(4px, var(--sow-sab)) + var(--sow-dock-reserve)));
+    bottom: var(
+      --sow-hud-layout-operations-bottom,
+      calc(max(4px, var(--sow-sab)) + var(--sow-dock-reserve))
+    );
     max-height: var(--sow-hud-layout-operations-max-height, 20dvh);
     padding: 4px;
   }
@@ -6932,7 +7200,8 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail {
   font-size: var(--sow-hud-text-primary-size);
 }
 
-#sow-hud[data-compact="true"] :is(.sow-hud__operation-details, .sow-hud__hover-stats) {
+#sow-hud[data-compact="true"]
+  :is(.sow-hud__operation-details, .sow-hud__hover-stats) {
   font-size: var(--sow-hud-text-secondary-size);
 }
 
