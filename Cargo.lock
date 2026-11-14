@@ -3743,7 +3743,6 @@ dependencies = [
  "hmac",
  "log",
  "rand",
- "redis",
  "reqwest",
  "serde",
  "serde_json",

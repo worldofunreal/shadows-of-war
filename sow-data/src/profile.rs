@@ -1271,3 +1271,16 @@ mod tests {
         assert_eq!(receipt.personal_closure_turn, None);
     }
 }
+
+/// Rewarded-video grants per UTC day. Match doubles, mission doubles and
+/// ad-funded swaps share this budget: portals give the server no proof that a
+/// video played, so this cap is what bounds a forged call.
+pub const AD_DOUBLES_PER_DAY: u32 = 5;
+
+/// Grants the account can still spend on `now`'s UTC day. A new day resets the count.
+pub fn ad_grants_left(ad_double_day: u64, ad_doubles_today: u32, now: u64) -> u32 {
+    if ad_double_day != now / 86_400 {
+        return AD_DOUBLES_PER_DAY;
+    }
+    AD_DOUBLES_PER_DAY.saturating_sub(ad_doubles_today)
+}

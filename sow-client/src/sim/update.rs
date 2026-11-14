@@ -408,8 +408,9 @@ impl SowApp {
                         )
                         + standards_troops)
                         * self.sim.config.global_speed_multiplier;
+                let hero_gold_ps = e.hero_gold_per_second(my_pid);
                 self.ui.app.hud_state.hero_income_rate =
-                    e.hero_gold_per_second(my_pid) * self.sim.config.global_speed_multiplier;
+                    hero_gold_ps * self.sim.config.global_speed_multiplier;
                 self.ui.app.hud_state.gold_rate =
                     (sow_core::execution::income_rates::gold_income_per_second(
                         player.tile_count,
@@ -427,7 +428,7 @@ impl SowApp {
                             player.leader,
                             &self.sim.config,
                         )
-                        + e.hero_gold_per_second(my_pid))
+                        + hero_gold_ps)
                         * self.sim.config.global_speed_multiplier;
             }
         }

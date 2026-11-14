@@ -303,6 +303,11 @@ export function create(
             const baselineCounts =
                 (reference.resource_transfers_by_recipient_faction_id || {})[trigger.recipient] || {};
             current = Number(currentCounts[resources] || 0) - Number(baselineCounts[resources] || 0);
+        } else if (trigger.type === "resource_request" && (trigger.target || trigger.recipient)) {
+            const targetFaction = String(trigger.target || trigger.recipient);
+            current =
+                Number((facts.resource_requests_by_target_faction_id || {})[targetFaction] || 0) -
+                Number((reference.resource_requests_by_target_faction_id || {})[targetFaction] || 0);
         } else if (trigger.type === "structure_level") {
             const kind = String(trigger.kind || "").toLowerCase();
             // A faction-scoped trigger counts that campaign faction's buildings instead of the player's.

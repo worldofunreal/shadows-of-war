@@ -1073,15 +1073,18 @@ impl SowApp {
         ) && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
         {
             placement.tile_idx = tile;
-            let footprint = sow_core::building::BuildingFootprint::at(
-                placement.kind,
-                tile % engine.state.map.width,
-                tile / engine.state.map.width,
-            );
-            let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
-            let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
-            self.input.camera_focus_target = Some((cx, cy));
-            self.input.camera_focus_waiting_for_input_release = false;
+            if crate::web_canvas::has_mobile_pointer() {
+                let footprint = sow_core::building::BuildingFootprint::at(
+                    placement.kind,
+                    tile % engine.state.map.width,
+                    tile / engine.state.map.width,
+                );
+                let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
+                let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
+                self.input.touch_pan_residual = (0.0, 0.0);
+                self.input.camera_focus_target = Some((cx, cy));
+                self.input.camera_focus_waiting_for_input_release = false;
+            }
         }
     }
 
@@ -1137,15 +1140,18 @@ impl SowApp {
             && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
         {
             placement.tile_idx = tile;
-            let footprint = sow_core::building::BuildingFootprint::at(
-                placement.kind,
-                tile % map.width,
-                tile / map.width,
-            );
-            let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
-            let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
-            self.input.camera_focus_target = Some((cx, cy));
-            self.input.camera_focus_waiting_for_input_release = false;
+            if crate::web_canvas::has_mobile_pointer() {
+                let footprint = sow_core::building::BuildingFootprint::at(
+                    placement.kind,
+                    tile % map.width,
+                    tile / map.width,
+                );
+                let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
+                let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
+                self.input.touch_pan_residual = (0.0, 0.0);
+                self.input.camera_focus_target = Some((cx, cy));
+                self.input.camera_focus_waiting_for_input_release = false;
+            }
         }
     }
 
@@ -1158,6 +1164,8 @@ impl SowApp {
         }
         self.input.building_drag_offset = None;
         self.input.camera_focus_target = None;
+        self.input.touch_pan_residual = (0.0, 0.0);
+        self.input.target_zoom = self.input.camera_zoom;
         self.ui
             .app
             .hud_state
@@ -1819,6 +1827,11 @@ impl SowApp {
         {
             return;
         }
+        if self.ui.app.hud_state.building_placement.is_some() {
+            self.input.camera_focus_target = None;
+            self.input.touch_pan_residual = (0.0, 0.0);
+            self.input.target_zoom = self.input.camera_zoom;
+        }
         self.ui.app.hud_state.building_placement = None;
         self.ui.app.hud_state.selected_warship_build = false;
         self.ui.app.hud_state.selected_nuke_kind = None;
@@ -1888,7 +1901,7 @@ impl SowApp {
         let radius = (self.input.screen_w.max(self.input.screen_h) * 0.5 / zoom).ceil() as i32;
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let tutorial_site = if self.ui.tutorial_active
-            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
+            && self.ui.tutorial_campaign.is_boudica()
             && kind == sow_core::game::BuildingKind::City
         {
             self.sim
@@ -1947,22 +1960,29 @@ impl SowApp {
         self.ui.app.hud_state.selected_warship_build = false;
         self.ui.app.hud_state.selected_nuke_kind = None;
         self.input.building_drag_offset = None;
-        self.close_map_context_menu();
-        let sf = crate::web_canvas::device_pixel_ratio() as f32;
-        self.input.target_zoom =
-            self.input
-                .target_zoom
-                .max(14.0 * sf)
-                .min(crate::camera_zoom_upper_bound(
-                    self.input.screen_w,
-                    self.input.screen_h,
-                ));
-        let map_w = self.sim.map_w.max(1);
-        let footprint = sow_core::building::BuildingFootprint::at(kind, tile % map_w, tile / map_w);
-        let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
-        let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
-        self.input.camera_focus_target = Some((cx, cy));
+        self.input.touch_pan_residual = (0.0, 0.0);
+        self.input.camera_focus_target = None;
         self.input.camera_focus_waiting_for_input_release = false;
+        self.close_map_context_menu();
+        if crate::web_canvas::has_mobile_pointer() {
+            let sf = crate::web_canvas::device_pixel_ratio() as f32;
+            self.input.target_zoom =
+                self.input
+                    .target_zoom
+                    .max(14.0 * sf)
+                    .min(crate::camera_zoom_upper_bound(
+                        self.input.screen_w,
+                        self.input.screen_h,
+                    ));
+            let map_w = self.sim.map_w.max(1);
+            let footprint =
+                sow_core::building::BuildingFootprint::at(kind, tile % map_w, tile / map_w);
+            let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
+            let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
+            self.input.camera_focus_target = Some((cx, cy));
+        } else {
+            self.input.target_zoom = self.input.camera_zoom;
+        }
     }
 
     pub(crate) fn select_warship_build_mode(&mut self) {
@@ -2033,6 +2053,9 @@ impl SowApp {
                 .with("available", player.gold.floor().to_string()));
             return;
         }
+        if self.ui.app.hud_state.building_placement.is_some() {
+            self.clear_placement();
+        }
         self.ui.app.hud_state.selected_warship_build =
             !self.ui.app.hud_state.selected_warship_build;
         self.ui.app.hud_state.building_placement = None;
@@ -2083,6 +2106,9 @@ impl SowApp {
         if !available {
             self.add_action_feedback("Nuke unavailable here.".to_string());
             return;
+        }
+        if self.ui.app.hud_state.building_placement.is_some() {
+            self.clear_placement();
         }
         let selected = &mut self.ui.app.hud_state.selected_nuke_kind;
         *selected = (*selected != Some(kind)).then_some(kind);

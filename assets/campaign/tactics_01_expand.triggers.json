@@ -1,0 +1,211 @@
+{
+  "version": 2,
+  "episode_id": "tactics_01_expand",
+  "text_namespace": "tutorial.campaign_tactics_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 1400,
+    "starting_gold": 160
+  },
+  "entry": "t1_intro_expand",
+  "speakers": {
+    "sun_tzu": {
+      "name_key": "tutorial.campaign_tactics_sun_tzu",
+      "avatar": "sun_tzu",
+      "base_expression": {
+        "expression": "calm",
+        "after_expression": "happy",
+        "until": {
+          "type": "defeated",
+          "target": "red_branch_fort"
+        }
+      }
+    },
+    "irish_bandits": {
+      "name_key": "tutorial.campaign_tactics_01_raiders_name",
+      "faction": "irish_bandits"
+    },
+    "red_branch_fort": {
+      "name_key": "tutorial.campaign_tactics_01_fort_name",
+      "faction": "red_branch_fort"
+    }
+  },
+  "steps": [
+    {
+      "id": "t1_intro_expand",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_01_expand_title",
+      "body_key": "tutorial.campaign_tactics_01_expand_body",
+      "hint_key": "tutorial.campaign_tactics_01_expand_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "expand_once_then_resume",
+      "unlocks": {
+        "buildings": {
+          "Tower": 1,
+          "City": 1
+        }
+      },
+      "camera": {
+        "shot": "approach",
+        "to": "player",
+        "seconds": 1
+      },
+      "trigger": {
+        "type": "territory",
+        "value": 16,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "irish_bandits"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "expand",
+        "gesture": "tap"
+      },
+      "next": "t1_attack_bandits"
+    },
+    {
+      "id": "t1_attack_bandits",
+      "type": "objective",
+      "attack_ratio_on_enter": 0.5,
+      "title_key": "tutorial.campaign_tactics_01_bandits_title",
+      "body_key": "tutorial.campaign_tactics_01_bandits_body",
+      "hint_key": "tutorial.campaign_tactics_01_bandits_hint",
+      "speaker": "sun_tzu",
+      "camera": {
+        "shot": "threat",
+        "to": "irish_bandits",
+        "seconds": 1
+      },
+      "exchange": [
+        {
+          "speaker": "irish_bandits",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_01_raiders_taunt_emote",
+          "delay_ms": 0
+        }
+      ],
+      "trigger": {
+        "type": "defeated",
+        "target": "irish_bandits",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "irish_bandits"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "t1_warlord"
+    },
+    {
+      "id": "t1_warlord",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_01_warlord_title",
+      "body_key": "tutorial.campaign_tactics_01_warlord_body",
+      "hint_key": "tutorial.campaign_tactics_01_warlord_hint",
+      "speaker": "sun_tzu",
+      "camera": {
+        "shot": "approach",
+        "to": "red_branch_fort",
+        "seconds": 1
+      },
+      "exchange": [
+        {
+          "speaker": "red_branch_fort",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_01_fort_taunt_emote",
+          "delay_ms": 0
+        }
+      ],
+      "trigger": {
+        "type": "defeated",
+        "target": "red_branch_fort",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "red_branch_fort"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "nameplate",
+        "gesture": "tap"
+      },
+      "next": "t1_victory"
+    },
+    {
+      "id": "t1_victory",
+      "type": "end",
+      "title_key": "tutorial.campaign_tactics_01_victory_title",
+      "body_key": "tutorial.campaign_tactics_01_victory_body",
+      "speaker": "sun_tzu",
+      "presentation": "chapter"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "t1_raiders_tease",
+      "when": {
+        "type": "timer",
+        "after_ms": 6000
+      },
+      "during": "t1_attack_bandits",
+      "presentation": "exchange",
+      "loop": true,
+      "exchange": [
+        {
+          "speaker": "irish_bandits",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_01_raiders_tease_1"
+        },
+        {
+          "speaker": "irish_bandits",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_01_raiders_tease_2"
+        }
+      ]
+    },
+    {
+      "id": "t1_raiders_panic",
+      "when": {
+        "type": "pre_defeat",
+        "target": "irish_bandits"
+      },
+      "during": "t1_attack_bandits",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "irish_bandits",
+          "emote": "help",
+          "emote_text_key": "tutorial.campaign_tactics_01_raiders_panic_emote"
+        }
+      ]
+    },
+    {
+      "id": "t1_fort_tease",
+      "when": {
+        "type": "timer",
+        "after_ms": 8000
+      },
+      "during": "t1_warlord",
+      "presentation": "exchange",
+      "loop": true,
+      "exchange": [
+        {
+          "speaker": "red_branch_fort",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_01_fort_tease_1"
+        },
+        {
+          "speaker": "red_branch_fort",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_01_fort_tease_2"
+        }
+      ]
+    }
+  ]
+}

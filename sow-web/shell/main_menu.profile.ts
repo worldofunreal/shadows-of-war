@@ -5,6 +5,26 @@ import {
   rankOverview,
   rankedPointsBreakdownMarkup,
 } from "./main_menu.ranked.ts";
+import {
+  WOW_PILLAR_ORDER,
+  WOW_SUBCATEGORIES,
+  enrichAchievementsList,
+  getFullAchievementsCatalog,
+  matchesAchievementFilters,
+  renderAchievementCard,
+  renderAchievementChainCard,
+  renderHeroMasteryProfileCard,
+  resolveProfileAchievements,
+  sortAchievementsList,
+  summarizeEnrichedHeroAchievements,
+  tText,
+  wowCategoryTitle,
+  wowSubcategoryTitle,
+  type EnrichedAchievement,
+  type ProfileAchievement,
+  type WowCategoryId,
+  type WowConcretePillar,
+} from "./main_menu.achievements.ts";
 import { avatarImageAttribute, setAvatarImage } from "./avatar-presentation.ts";
 import {
   asset,
@@ -29,10 +49,14 @@ import {
   reportBusy,
 } from "./main_menu.shell.ts";
 import type {
+  MenuLeader,
   MenuState,
   RankedLadder,
   RankedPointsBreakdown,
 } from "./main_menu.state.ts";
+
+export { getFullAchievementsCatalog, resolveProfileAchievements };
+export type { ProfileAchievement };
 
 // Profile data, rendering, history, and match details.
 
@@ -84,17 +108,6 @@ interface ProfileLeader {
   wins: number;
   win_rate: number;
   xp: number;
-}
-
-interface ProfileAchievement {
-  id: string;
-  category: string;
-  title?: string;
-  description?: string;
-  points: number;
-  progress: number;
-  target: number;
-  unlocked: boolean;
 }
 
 export interface ProfileMatch {
@@ -615,6 +628,9 @@ export function openProfile(id: string | null, isNavigation = false) {
   menuUi.profileOpen = true;
   menuUi.profileAccountId = targetId;
   menuUi.profileTab = "overview";
+  if (!menuUi.state || menuUi.state.account_id !== targetId) {
+    menuUi.profileAchievementPlayableOnly = false;
+  }
   menuUi.profileSnapshotLoading = false;
   menuUi.profileHistoryLoading = false;
   menuUi.profileDetailLoading = false;
@@ -998,1309 +1014,611 @@ function profileStatsRibbonMarkup(data: ProfileData | null) {
   );
 }
 
-function achievementCategoryTitle(category: string): string {
-  if (category === "battles")
-    return SOW_t("profile.achievement_category_battles");
-  if (category === "victories")
-    return SOW_t("profile.achievement_category_victories");
-  if (category === "commanders")
-    return SOW_t("profile.achievement_category_commanders");
-  if (category === "laurels")
-    return SOW_t("profile.achievement_category_laurels");
-  if (category === "combat") {
-    const t = SOW_t("profile.achievement_category_combat");
-    return t !== "profile.achievement_category_combat" ? t : "Combate";
+function achHeroEntrySlugMap(): Map<string, MenuLeader> {
+  const map = new Map<string, MenuLeader>();
+  const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+  for (const leader of leaders) {
+    if (!leader) continue;
+    if (leader.slug) map.set(String(leader.slug).toLowerCase(), leader);
+    if (leader.id) map.set(String(leader.id).toLowerCase(), leader);
   }
-  if (category === "campaign") {
-    const t = SOW_t("profile.achievement_category_campaign");
-    return t !== "profile.achievement_category_campaign" ? t : "Campaña";
-  }
-  return category;
+  return map;
 }
 
-const ALL_HEROES: { slug: string; name: string }[] = [
-  { slug: "caesar", name: "Caesar" },
-  { slug: "cleopatra", name: "Cleopatra" },
-  { slug: "ragnar", name: "Ragnar" },
-  { slug: "sun_tzu", name: "Sun Tzu" },
-  { slug: "alexander", name: "Alexander" },
-  { slug: "genghis_khan", name: "Genghis Khan" },
-  { slug: "richard_the_lionheart", name: "Richard the Lionheart" },
-  { slug: "vercingetorix", name: "Vercingetorix" },
-  { slug: "boudica", name: "Boudica" },
-  { slug: "lady_six_sky", name: "Lady Six Sky" },
-  { slug: "leonidas", name: "Leonidas" },
-  { slug: "napoleon", name: "Napoleon" },
-  { slug: "amina_de_zazzau", name: "Amina of Zazzau" },
-  { slug: "yaa_asantewaa", name: "Yaa Asantewaa" },
-  { slug: "anacaona", name: "Anacaona" },
-  { slug: "lozen", name: "Lozen" },
-  { slug: "tipu_sultan", name: "Tipu Sultan" },
-  { slug: "william_the_conqueror", name: "William the Conqueror" },
-  { slug: "hongi_hika", name: "Hongi Hika" },
-  { slug: "salote_tupou_iii", name: "Sālote Tupou III" },
-  { slug: "makeda", name: "Makeda" },
-  { slug: "rani_durgavati", name: "Rani Durgavati" },
-  { slug: "empress_gi", name: "Empress Gi" },
-  { slug: "ashoka", name: "Ashoka" },
-  { slug: "hannibal", name: "Hannibal" },
-  { slug: "bolivar", name: "Simón Bolívar" },
-  { slug: "joan_of_arc", name: "Joan of Arc" },
-  { slug: "catherine_the_great", name: "Catherine the Great" },
-  { slug: "isabella_of_castile", name: "Isabella I of Castile" },
-  { slug: "cyrus_the_great", name: "Cyrus the Great" },
-  { slug: "saladin", name: "Saladin" },
-  { slug: "suleiman", name: "Suleiman the Magnificent" },
-  { slug: "tomoe_gozen", name: "Tomoe Gozen" },
-  { slug: "trieu_thi_trinh", name: "Lady Triệu" },
-  { slug: "musa_i", name: "Mansa Musa" },
-  { slug: "shaka", name: "Shaka" },
-  { slug: "nzinga", name: "Nzinga" },
-  { slug: "kamehameha", name: "Kamehameha I" },
-  { slug: "gajah_mada", name: "Gajah Mada" },
-  { slug: "solomon", name: "Solomon" },
-  { slug: "sayyid_said", name: "Sayyid Said" },
-  { slug: "lapu_lapu", name: "Lapu-Lapu" },
-  { slug: "constantine", name: "Constantine" },
-  { slug: "vlad_iii", name: "Vlad III" },
-  { slug: "mary_of_burgundy", name: "Mary of Burgundy" },
-  { slug: "semiramis", name: "Semiramis" },
-  { slug: "shima_kalingga", name: "Shima" },
-  { slug: "tomyris", name: "Tomyris" },
-  { slug: "gorgo", name: "Gorgo" },
-  { slug: "artigas", name: "Artigas" },
-  { slug: "bernardo_ohiggins", name: "Bernardo O'Higgins" },
-  { slug: "nezahualcoyotl", name: "Nezahualcóyotl" },
-  { slug: "tlacaelel", name: "Tlacaelel" },
-  { slug: "tenamaxtli", name: "Tenamaxtli" },
-  { slug: "cosijoeza", name: "Cosijoeza" },
-  { slug: "mangas_coloradas", name: "Mangas Coloradas" },
-  { slug: "tomochichi", name: "Tomochichi" },
-  { slug: "eight_deer", name: "Eight Deer" },
-  { slug: "nemequene", name: "Nemequene" },
-  { slug: "thanadelthur", name: "Thanadelthur" },
-  { slug: "artemisia_i", name: "Artemisia I" },
-  { slug: "shajar_al_durr", name: "Shajar al-Durr" },
-  { slug: "ramesses_ii", name: "Ramesses II" },
-  { slug: "qin_liangyu", name: "Qin Liangyu" },
-  { slug: "lobengula", name: "Lobengula" },
-  { slug: "shah_jahan", name: "Shah Jahan" },
-  { slug: "xerxes_i", name: "Xerxes" },
-  { slug: "marcus_aurelius", name: "Marcus Aurelius" },
-  { slug: "justinian_ii_hero", name: "Justinian II" },
-  { slug: "totila", name: "Totila" },
-  { slug: "chilperic_i", name: "Chilperic I" },
-  { slug: "lothair_i", name: "Lothair I" },
-  { slug: "frederick_barbarossa", name: "Barbarossa" },
-  { slug: "charles_v", name: "Charles V" },
-  { slug: "wanli", name: "Wanli" },
-  { slug: "jayaatu_khan", name: "Jayaatu Khan" },
-  { slug: "sitting_bull", name: "Sitting Bull" },
-  { slug: "matoaka", name: "Matoaka" },
-  { slug: "burebista", name: "Burebista" },
-  { slug: "boleslaw_ii", name: "Bolesław II" },
-  { slug: "abd_al_rahman_al_ghafiqi", name: "Abd al-Rahman al-Ghafiqi" },
-  { slug: "tribe_wiradjuri", name: "Windradyne" },
-  { slug: "nation_yagan", name: "Yagan" },
-  { slug: "peter_the_great", name: "Peter the Great" },
-  { slug: "empress_suiko", name: "Empress Suiko" },
-  { slug: "nebuchadnezzar_ii", name: "Nebuchadnezzar II" },
-  { slug: "king_david", name: "King David" },
-  { slug: "sarraounia_mangou", name: "Sarraounia Mangou" },
-  { slug: "muhammad_of_ghor", name: "Muhammad of Ghor" },
-  { slug: "puyi", name: "Puyi" },
-  { slug: "pertinax", name: "Pertinax" },
-  { slug: "ewuare", name: "Ewuare the Great" },
-  { slug: "veleda", name: "Veleda" },
-];
-
-const MASTERY_TIERS: [number, number, string][] = [
-  [3, 15, "Vanguard"],
-  [10, 30, "Centurion"],
-  [25, 50, "Veteran"],
-  [50, 75, "Champion"],
-  [100, 100, "Warlord"],
-  [250, 200, "Warmaster"],
-  [500, 350, "Juggernaut"],
-  [1000, 1000, "Ascendant"],
-];
-
-const WIN_TIERS: [number, number, string][] = [
-  [1, 25, "Victor"],
-  [5, 50, "Triumph"],
-  [25, 100, "Conqueror"],
-  [100, 200, "Overlord"],
-  [500, 500, "Imperator"],
-  [1000, 1000, "Sovereign"],
-];
-
-function getSpecialHeroMasteryTitle(
-  slug: string,
-  target: number,
-): string | null {
-  const specials: Record<string, Record<number, string>> = {
-    boudica: {
-      3: "Wildfire",
-      10: "Fury",
-      25: "Iceni",
-      50: "Uprising",
-      100: "Vengeance",
-      250: "War Queen",
-      500: "Blood Mother",
-      1000: "Nemesis",
-    },
-    caesar: {
-      3: "Tribune",
-      10: "Centurion",
-      25: "Legatus",
-      50: "Rubicon",
-      100: "Imperium",
-      250: "Dictator",
-      500: "Colossus",
-      1000: "Veni Vidi Vici",
-    },
-    lady_six_sky: {
-      3: "Eclipse",
-      10: "Sun Priest",
-      25: "Starlight",
-      50: "Wikal",
-      100: "Cosmos",
-      250: "Serpent",
-      500: "Sky Empress",
-      1000: "Ascension",
-    },
-    alexander: {
-      3: "Phaistos",
-      10: "Phalanx",
-      25: "Gordian",
-      50: "Issus",
-      100: "Alexandria",
-      250: "Hegemon",
-      500: "Amun",
-      1000: "World's End",
-    },
-    genghis_khan: {
-      3: "Rider",
-      10: "Steppe Wolf",
-      25: "Karakorum",
-      50: "Golden Horde",
-      100: "Tengri",
-      250: "Great Khan",
-      500: "Earth Shaker",
-      1000: "Scourge of God",
-    },
-    leonidas: {
-      3: "Spartiate",
-      10: "Shield Wall",
-      25: "Molon Labe",
-      50: "Hot Gates",
-      100: "Thermopylae",
-      250: "Lion of Sparta",
-      500: "Immortal Bane",
-      1000: "Last Stand",
-    },
-    sun_tzu: {
-      3: "Strategist",
-      10: "The Art of War",
-      25: "Subtle Dragon",
-      50: "Silent Wind",
-      100: "Formless",
-      250: "Grand Tactician",
-      500: "Supreme Art",
-      1000: "Master of War",
-    },
-    cleopatra: {
-      3: "Nile Lotus",
-      10: "Pharaoh's Grace",
-      25: "Alexandrine",
-      50: "Siren of Kings",
-      100: "Ptolemaic Throne",
-      250: "Queen of Kings",
-      500: "Isis Reborn",
-      1000: "Eternal Nile",
-    },
-    hannibal: {
-      3: "Barca",
-      10: "Alpine March",
-      25: "Cannae",
-      50: "Double Envelopment",
-      100: "Rome's Terror",
-      250: "Carthaginian Lion",
-      500: "Ad Portas",
-      1000: "Thunderbolt",
-    },
-    napoleon: {
-      3: "Corsican",
-      10: "Artillery Officer",
-      25: "Austerlitz",
-      50: "Sun of Austerlitz",
-      100: "Grande Armée",
-      250: "First Consul",
-      500: "Emperor of France",
-      1000: "Eagle of Destiny",
-    },
-  };
-  return (specials[slug] && specials[slug][target]) || null;
-}
-
-let catalogCache: ProfileAchievement[] | null = null;
-
-export function getFullAchievementsCatalog(): ProfileAchievement[] {
-  if (catalogCache) return catalogCache;
-  const list: ProfileAchievement[] = [
-    // 9 Canonical Google Play / Core achievements
-    {
-      id: "first_command",
-      category: "battles",
-      title: "First Command",
-      description: "Complete your first match.",
-      points: 10,
-      target: 1,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "first_victory",
-      category: "victories",
-      title: "First Victory",
-      description: "Win a verified match.",
-      points: 25,
-      target: 1,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "battle_hardened",
-      category: "battles",
-      title: "Battle Hardened",
-      description: "Complete 10 matches.",
-      points: 25,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "victory_march",
-      category: "victories",
-      title: "Victory March",
-      description: "Win 10 verified matches.",
-      points: 50,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "laurel_hoard",
-      category: "laurels",
-      title: "Laurel Hoard",
-      description: "Earn 100 achievement points.",
-      points: 50,
-      target: 100,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "commander_victorious",
-      category: "victories",
-      title: "Commander Victorious",
-      description: "Win with a commander.",
-      points: 25,
-      target: 1,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "veteran_commander",
-      category: "commanders",
-      title: "Veteran Commander",
-      description: "Complete 10 matches with commanders.",
-      points: 50,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "banner_collector",
-      category: "commanders",
-      title: "Banner Collector",
-      description: "Command three different leaders.",
-      points: 50,
-      target: 3,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "leader_path",
-      category: "commanders",
-      title: "Leader Path",
-      description: "Earn 1,000 leader experience.",
-      points: 100,
-      target: 1000,
-      unlocked: false,
-      progress: 0,
-    },
-
-    // Tiered Battles Matrix
-    {
-      id: "battles_3",
-      category: "battles",
-      title: "Vanguard",
-      description: "Complete 3 matches.",
-      points: 15,
-      target: 3,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "battles_25",
-      category: "battles",
-      title: "Ironclad",
-      description: "Complete 25 matches.",
-      points: 50,
-      target: 25,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "battles_50",
-      category: "battles",
-      title: "Centurion",
-      description: "Complete 50 matches.",
-      points: 75,
-      target: 50,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "battles_100",
-      category: "battles",
-      title: "Warlord",
-      description: "Complete 100 matches.",
-      points: 100,
-      target: 100,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "battles_250",
-      category: "battles",
-      title: "Warmaster",
-      description: "Complete 250 matches.",
-      points: 200,
-      target: 250,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "battles_500",
-      category: "battles",
-      title: "Juggernaut",
-      description: "Complete 500 matches.",
-      points: 350,
-      target: 500,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "battles_1000",
-      category: "battles",
-      title: "Oblivion",
-      description: "Complete 1,000 matches.",
-      points: 1000,
-      target: 1000,
-      unlocked: false,
-      progress: 0,
-    },
-
-    // Tiered Victories Matrix
-    {
-      id: "victories_3",
-      category: "victories",
-      title: "Blood Oath",
-      description: "Win 3 verified matches.",
-      points: 30,
-      target: 3,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "victories_25",
-      category: "victories",
-      title: "Triumph",
-      description: "Win 25 verified matches.",
-      points: 75,
-      target: 25,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "victories_50",
-      category: "victories",
-      title: "Conqueror",
-      description: "Win 50 verified matches.",
-      points: 100,
-      target: 50,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "victories_100",
-      category: "victories",
-      title: "Overlord",
-      description: "Win 100 verified matches.",
-      points: 150,
-      target: 100,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "victories_250",
-      category: "victories",
-      title: "Dominion",
-      description: "Win 250 verified matches.",
-      points: 250,
-      target: 250,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "victories_500",
-      category: "victories",
-      title: "Imperator",
-      description: "Win 500 verified matches.",
-      points: 500,
-      target: 500,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "victories_1000",
-      category: "victories",
-      title: "Sovereign",
-      description: "Win 1,000 verified matches.",
-      points: 1000,
-      target: 1000,
-      unlocked: false,
-      progress: 0,
-    },
-
-    // Combat Supremacy
-    {
-      id: "kills_10",
-      category: "combat",
-      title: "First Blood",
-      description: "Defeat 10 enemy units.",
-      points: 20,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "kills_25",
-      category: "combat",
-      title: "Skirmisher",
-      description: "Defeat 25 enemy units.",
-      points: 35,
-      target: 25,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "kills_50",
-      category: "combat",
-      title: "Reaper",
-      description: "Defeat 50 enemy units.",
-      points: 50,
-      target: 50,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "kills_100",
-      category: "combat",
-      title: "Slayer",
-      description: "Defeat 100 enemy units.",
-      points: 75,
-      target: 100,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "kills_250",
-      category: "combat",
-      title: "Executioner",
-      description: "Defeat 250 enemy units.",
-      points: 150,
-      target: 250,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "kills_500",
-      category: "combat",
-      title: "Warbringer",
-      description: "Defeat 500 enemy units.",
-      points: 250,
-      target: 500,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "kills_1000",
-      category: "combat",
-      title: "Death Incarnate",
-      description: "Defeat 1,000 enemy units.",
-      points: 500,
-      target: 1000,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "kills_2500",
-      category: "combat",
-      title: "Doom of Empires",
-      description: "Defeat 2,500 enemy units.",
-      points: 750,
-      target: 2500,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "kills_5000",
-      category: "combat",
-      title: "Lord of the Grave",
-      description: "Defeat 5,000 enemy units.",
-      points: 1000,
-      target: 5000,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "assists_10",
-      category: "combat",
-      title: "Wingman",
-      description: "Record 10 combat assists.",
-      points: 15,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "assists_50",
-      category: "combat",
-      title: "Vanguard Shield",
-      description: "Record 50 combat assists.",
-      points: 50,
-      target: 50,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "assists_250",
-      category: "combat",
-      title: "Tactical Hand",
-      description: "Record 250 combat assists.",
-      points: 150,
-      target: 250,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "assists_1000",
-      category: "combat",
-      title: "Master of Cohorts",
-      description: "Record 1,000 combat assists.",
-      points: 500,
-      target: 1000,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "players_5",
-      category: "combat",
-      title: "Duelist Initiate",
-      description: "Eliminate 5 rival commanders.",
-      points: 15,
-      target: 5,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "players_10",
-      category: "combat",
-      title: "Duelist",
-      description: "Eliminate 10 rival commanders.",
-      points: 30,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "players_25",
-      category: "combat",
-      title: "Champion Slayer",
-      description: "Eliminate 25 rival commanders.",
-      points: 50,
-      target: 25,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "players_50",
-      category: "combat",
-      title: "Crown Breaker",
-      description: "Eliminate 50 rival commanders.",
-      points: 100,
-      target: 50,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "players_100",
-      category: "combat",
-      title: "Sovereign Hunter",
-      description: "Eliminate 100 rival commanders.",
-      points: 200,
-      target: 100,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "players_250",
-      category: "combat",
-      title: "Kingmaker",
-      description: "Eliminate 250 rival commanders.",
-      points: 500,
-      target: 250,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "empires_5",
-      category: "combat",
-      title: "Border Raider",
-      description: "Overthrow 5 rival empires.",
-      points: 25,
-      target: 5,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "empires_10",
-      category: "combat",
-      title: "Empire Slayer",
-      description: "Overthrow 10 rival empires.",
-      points: 50,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "empires_25",
-      category: "combat",
-      title: "Dynasty Fall",
-      description: "Overthrow 25 rival empires.",
-      points: 100,
-      target: 25,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "empires_50",
-      category: "combat",
-      title: "World Breaker",
-      description: "Overthrow 50 rival empires.",
-      points: 250,
-      target: 50,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "empires_100",
-      category: "combat",
-      title: "Scourge of Realms",
-      description: "Overthrow 100 rival empires.",
-      points: 500,
-      target: 100,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "tribes_10",
-      category: "combat",
-      title: "Chieftain Bane",
-      description: "Subjugate 10 native tribes.",
-      points: 25,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "tribes_25",
-      category: "combat",
-      title: "Subjugator",
-      description: "Subjugate 25 native tribes.",
-      points: 50,
-      target: 25,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "tribes_50",
-      category: "combat",
-      title: "Steppe Dominator",
-      description: "Subjugate 50 native tribes.",
-      points: 100,
-      target: 50,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "tribes_100",
-      category: "combat",
-      title: "Overlord of the Wild",
-      description: "Subjugate 100 native tribes.",
-      points: 250,
-      target: 100,
-      unlocked: false,
-      progress: 0,
-    },
-
-    // Campaign Chronicles
-    {
-      id: "campaign_1",
-      category: "campaign",
-      title: "Pathfinder",
-      description: "Complete 1 campaign episode.",
-      points: 25,
-      target: 1,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "campaign_3",
-      category: "campaign",
-      title: "Trailblazer",
-      description: "Complete 3 campaign episodes.",
-      points: 35,
-      target: 3,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "campaign_5",
-      category: "campaign",
-      title: "Saga Victor",
-      description: "Complete 5 campaign episodes.",
-      points: 50,
-      target: 5,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "campaign_10",
-      category: "campaign",
-      title: "Epic Historian",
-      description: "Complete 10 campaign episodes.",
-      points: 75,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "campaign_15",
-      category: "campaign",
-      title: "Chronicles of War",
-      description: "Complete 15 campaign episodes.",
-      points: 100,
-      target: 15,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "campaign_25",
-      category: "campaign",
-      title: "Grand Campaigner",
-      description: "Complete 25 campaign episodes.",
-      points: 150,
-      target: 25,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "campaign_40",
-      category: "campaign",
-      title: "Master of History",
-      description: "Complete 40 campaign episodes.",
-      points: 250,
-      target: 40,
-      unlocked: false,
-      progress: 0,
-    },
-
-    // Laurels & Prestige
-    {
-      id: "laurels_250",
-      category: "laurels",
-      title: "Gilded Crown",
-      description: "Earn 250 achievement points.",
-      points: 50,
-      target: 250,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "laurels_500",
-      category: "laurels",
-      title: "Imperial Grace",
-      description: "Earn 500 achievement points.",
-      points: 100,
-      target: 500,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "laurels_1000",
-      category: "laurels",
-      title: "Vault of Glory",
-      description: "Earn 1,000 achievement points.",
-      points: 200,
-      target: 1000,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "laurels_2500",
-      category: "laurels",
-      title: "Golden Emperor",
-      description: "Earn 2,500 achievement points.",
-      points: 500,
-      target: 2500,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "laurels_5000",
-      category: "laurels",
-      title: "Immortal Renown",
-      description: "Earn 5,000 achievement points.",
-      points: 1000,
-      target: 5000,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "laurels_10000",
-      category: "laurels",
-      title: "Demigod of War",
-      description: "Earn 10,000 achievement points.",
-      points: 2500,
-      target: 10000,
-      unlocked: false,
-      progress: 0,
-    },
-
-    // Hero Roster Milestones
-    {
-      id: "roster_1",
-      category: "commanders",
-      title: "First Recruit",
-      description: "Command or own 1 hero.",
-      points: 25,
-      target: 1,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "roster_3",
-      category: "commanders",
-      title: "Cohort",
-      description: "Command or own 3 heroes.",
-      points: 50,
-      target: 3,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "roster_5",
-      category: "commanders",
-      title: "Council of War",
-      description: "Command or own 5 heroes.",
-      points: 75,
-      target: 5,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "roster_10",
-      category: "commanders",
-      title: "Grand Legion",
-      description: "Command or own 10 heroes.",
-      points: 100,
-      target: 10,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "roster_25",
-      category: "commanders",
-      title: "High Command",
-      description: "Command or own 25 heroes.",
-      points: 200,
-      target: 25,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "roster_50",
-      category: "commanders",
-      title: "Army of Legends",
-      description: "Command or own 50 heroes.",
-      points: 350,
-      target: 50,
-      unlocked: false,
-      progress: 0,
-    },
-    {
-      id: "roster_80",
-      category: "commanders",
-      title: "Pantheon of War",
-      description: "Command or own 80 heroes.",
-      points: 1000,
-      target: 80,
-      unlocked: false,
-      progress: 0,
-    },
-  ];
-
-  for (const hero of ALL_HEROES) {
-    const slug = hero.slug;
-    const name = hero.name;
-
-    // 1. Recruit
-    list.push({
-      id: "recruit_" + slug,
-      category: "commanders",
-      title: "Recruit " + name,
-      description: "Unlock or recruit " + name + " into your vanguard.",
-      points: 25,
-      target: 1,
-      unlocked: false,
-      progress: 0,
-    });
-
-    // 2. Mastery (3 to 1000)
-    for (const [target, points, tierTitle] of MASTERY_TIERS) {
-      const special = getSpecialHeroMasteryTitle(slug, target);
-      const title = special || name + " " + tierTitle;
-      list.push({
-        id: slug + "_mastery_" + target,
-        category: "commanders",
-        title: title,
-        description: "Command " + name + " in " + target + " battles.",
-        points: points,
-        target: target,
-        unlocked: false,
-        progress: 0,
-      });
-    }
-
-    // 3. Wins (1 to 1000)
-    for (const [target, points, tierTitle] of WIN_TIERS) {
-      list.push({
-        id: slug + "_wins_" + target,
-        category: "victories",
-        title: name + " " + tierTitle,
-        description: "Win " + target + " battles commanding " + name + ".",
-        points: points,
-        target: target,
-        unlocked: false,
-        progress: 0,
-      });
-    }
-  }
-
-  catalogCache = list;
-  return list;
-}
-
-export function resolveProfileAchievements(
-  data: ProfileData,
-): ProfileAchievement[] {
-  if (data.achievements && data.achievements.length >= 1000) {
-    return data.achievements;
-  }
-  const catalog = getFullAchievementsCatalog();
-  const serverMap = new Map<string, ProfileAchievement>();
-  if (Array.isArray(data.achievements)) {
-    for (const ach of data.achievements) {
-      if (ach && ach.id) {
-        serverMap.set(ach.id, ach);
-      }
-    }
-  }
-
-  const matches = Math.max(0, Number(data.matches_played) || 0);
-  const wins = Math.max(0, Number(data.wins) || 0);
-  const kills = Math.max(0, Number(data.kills) || 0);
-  const assists = Math.max(0, Number(data.assists) || 0);
-  const playersDefeated = Math.max(0, Number(data.players_defeated) || 0);
-  const empiresDefeated = Math.max(0, Number(data.empires_defeated) || 0);
-  const tribesDefeated = Math.max(0, Number(data.tribes_defeated) || 0);
-  const laurels = Math.max(0, Number(data.laurels) || 0);
-
-  const leadersList = Array.isArray(data.leaders) ? data.leaders : [];
-  const leaderMatchesMap = new Map<string, number>();
-  const leaderWinsMap = new Map<string, number>();
-  const ownedSet = new Set<string>();
-
-  for (const l of leadersList) {
-    if (l && l.leader) {
-      const slug = String(l.leader).toLowerCase().trim();
-      const m = Math.max(0, Number(l.matches_played) || 0);
-      const w = Math.max(0, Number(l.wins) || 0);
-      leaderMatchesMap.set(slug, m);
-      leaderWinsMap.set(slug, w);
-      if (m > 0 || w > 0 || (Number(l.xp) || 0) > 0) {
-        ownedSet.add(slug);
-      }
-    }
-  }
-
+function normalizeWowCategory(raw: string | undefined): WowCategoryId {
   if (
-    menuUi.state &&
-    menuUi.state.account_id === data.account_id &&
-    Array.isArray(menuUi.state.leaders)
+    raw === "summary" ||
+    raw === "general" ||
+    raw === "pvp_combat" ||
+    raw === "pve_campaign" ||
+    raw === "heroes_mastery" ||
+    raw === "prestige" ||
+    raw === "all"
   ) {
-    for (const l of menuUi.state.leaders) {
-      if (l && l.slug && (l.owned || l.permanently_free)) {
-        ownedSet.add(l.slug.toLowerCase().trim());
-      }
-    }
+    return raw;
   }
-
-  const ownedCount = Math.max(ownedSet.size, leadersList.length);
-  const totalLeaderXp = leadersList.reduce(
-    (acc, l) => acc + (Number(l.xp) || 0),
-    0,
-  );
-
-  return catalog.map(function (def) {
-    const srv = serverMap.get(def.id);
-    let progress = 0;
-    const target = def.target;
-
-    if (def.id === "first_command") {
-      progress = matches >= 1 ? 1 : 0;
-    } else if (def.id === "first_victory") {
-      progress = wins >= 1 ? 1 : 0;
-    } else if (def.id === "battle_hardened") {
-      progress = Math.min(10, matches);
-    } else if (def.id === "victory_march") {
-      progress = Math.min(10, wins);
-    } else if (def.id === "commander_victorious") {
-      progress = wins >= 1 ? 1 : 0;
-    } else if (def.id === "veteran_commander") {
-      progress = Math.min(10, matches);
-    } else if (def.id === "banner_collector") {
-      progress = Math.min(3, ownedCount);
-    } else if (def.id === "leader_path") {
-      progress = Math.min(1000, totalLeaderXp);
-    } else if (def.id === "laurel_hoard") {
-      progress = Math.min(100, laurels);
-    } else if (def.id.startsWith("battles_")) {
-      progress = Math.min(target, matches);
-    } else if (def.id.startsWith("victories_")) {
-      progress = Math.min(target, wins);
-    } else if (def.id.startsWith("kills_")) {
-      progress = Math.min(target, kills);
-    } else if (def.id.startsWith("assists_")) {
-      progress = Math.min(target, assists);
-    } else if (def.id.startsWith("players_")) {
-      progress = Math.min(target, playersDefeated);
-    } else if (def.id.startsWith("empires_")) {
-      progress = Math.min(target, empiresDefeated);
-    } else if (def.id.startsWith("tribes_")) {
-      progress = Math.min(target, tribesDefeated);
-    } else if (def.id.startsWith("campaign_")) {
-      progress = srv ? Number(srv.progress) || 0 : 0;
-    } else if (def.id.startsWith("laurels_")) {
-      progress = Math.min(target, laurels);
-    } else if (def.id.startsWith("roster_")) {
-      progress = Math.min(target, ownedCount);
-    } else if (def.id.startsWith("recruit_")) {
-      const heroSlug = def.id.slice(8);
-      progress = ownedSet.has(heroSlug) ? 1 : 0;
-    } else if (def.id.includes("_mastery_")) {
-      const parts = def.id.split("_mastery_");
-      const heroSlug = parts[0];
-      progress = Math.min(target, leaderMatchesMap.get(heroSlug) || 0);
-    } else if (def.id.includes("_wins_")) {
-      const parts = def.id.split("_wins_");
-      const heroSlug = parts[0];
-      progress = Math.min(target, leaderWinsMap.get(heroSlug) || 0);
-    } else {
-      progress = srv ? Number(srv.progress) || 0 : 0;
-    }
-
-    if (srv && Number(srv.progress) > progress) {
-      progress = Number(srv.progress);
-    }
-
-    const unlocked = !!(srv && srv.unlocked) || progress >= target;
-
-    return {
-      id: def.id,
-      category: def.category,
-      title: def.title,
-      description: def.description,
-      points: def.points,
-      target: def.target,
-      progress: Math.min(target, progress),
-      unlocked: unlocked,
-    };
-  });
+  if (raw === "battles" || raw === "victories") return "general";
+  if (raw === "combat") return "pvp_combat";
+  if (raw === "campaign") return "pve_campaign";
+  if (raw === "commanders") return "heroes_mastery";
+  if (raw === "laurels") return "prestige";
+  return "summary";
 }
 
-/** Achievements without locale strings keep the server's English text. Probing first keeps that fallback out of the missing-translation log. */
-function achievementText(key: string, fallback: string): string {
-  return window.SOW_hasText(key) ? SOW_t(key) : fallback;
+function matchesWowScope(
+  ach: EnrichedAchievement,
+  category: WowCategoryId,
+  subcategory: string,
+): boolean {
+  if (category === "all" || category === "summary") return true;
+  if (ach.wowCategory !== category) return false;
+  if (!subcategory || subcategory === "all") return true;
+  if (subcategory.startsWith("region:")) {
+    return ach.heroRegion === subcategory.slice(7);
+  }
+  if (subcategory.startsWith("kind:")) {
+    return ach.heroKind === subcategory.slice(5);
+  }
+  return ach.wowSubcategory === subcategory;
 }
 
-function profileAchievementCard(achievement: ProfileAchievement) {
-  const category = achievement.category || "commanders";
-  const prefix = "profile.achievement_" + achievement.id;
-  const progress = Math.max(0, Number(achievement.progress) || 0);
-  const target = Math.max(1, Number(achievement.target) || 1);
-  const percent = Math.min(100, Math.round((progress / target) * 100));
-  const unlocked = !!achievement.unlocked;
-  const isMythic = target >= 1000;
-
-  const title = achievementText(prefix + "_title", achievement.title || achievement.id);
-  const desc = achievementText(prefix + "_description", achievement.description || "");
-
-  let badgeIcon = "";
-  let heroSlug: string | null = null;
-  if (achievement.id.startsWith("recruit_")) {
-    heroSlug = achievement.id.slice(8);
-  } else if (achievement.id.includes("_mastery_")) {
-    heroSlug = achievement.id.split("_mastery_")[0];
-  } else if (achievement.id.includes("_wins_")) {
-    heroSlug = achievement.id.split("_wins_")[0];
+function achPillarCounts(
+  enriched: EnrichedAchievement[],
+  pillar: WowCategoryId,
+  isOwnProfile: boolean,
+  playableOnly: boolean,
+) {
+  let total = 0;
+  let unlocked = 0;
+  let earnedLaurels = 0;
+  for (const a of enriched) {
+    if (pillar !== "all" && pillar !== "summary" && a.wowCategory !== pillar) continue;
+    if (playableOnly && isOwnProfile && a.heroSlug && !a.heroPlayable) continue;
+    total += 1;
+    if (a.unlocked) {
+      unlocked += 1;
+      earnedLaurels += a.points;
+    }
   }
+  const percent = total > 0 ? Math.round((unlocked / total) * 100) : 0;
+  return { total, unlocked, percent, earnedLaurels };
+}
 
-  if (heroSlug) {
-    const heroArtSlug = leaderArtSlug(heroSlug);
-    badgeIcon =
-      "<img " +
-      avatarImageAttribute(asset("gameplay/avatars/" + heroArtSlug + ".webp")) +
-      " alt='' width='36' height='36' class='sow-profile__ach-hero-avatar' loading='lazy' />";
-  } else if (category === "battles") {
-    badgeIcon =
-      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
-      "<path d='M6.92 5L5 6.92l4.95 4.95-1.41 1.41L5 9.75 3.59 11.16l4.24 4.24 1.41-1.41-3.53-3.54 1.41-1.41 4.95 4.95L13.99 12 6.92 5zm11.75 1.58L17.25 5 12.3 9.95l1.41 1.41 3.54-3.53 1.41 1.41-4.95 4.95 1.92 1.92 7.07-7.07-4.23-4.24-1.41 1.41 3.53 3.53-1.41 1.41zM3 19.5L4.5 21l3.5-3.5-1.5-1.5L3 19.5zm16.5 0l-3.5-3.5-1.5 1.5 3.5 3.5 1.5-1.5z'/>" +
-      "</svg>";
-  } else if (category === "victories") {
-    badgeIcon =
-      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
-      "<path d='M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94A5.01 5.01 0 0011 15.9V19H7v2h10v-2h-4v-3.1a5.01 5.01 0 003.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z'/>" +
-      "</svg>";
-  } else if (category === "combat") {
-    badgeIcon =
-      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
-      "<path d='M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'/>" +
-      "</svg>";
-  } else if (category === "campaign") {
-    badgeIcon =
-      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
-      "<path d='M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z'/>" +
-      "</svg>";
-  } else if (category === "laurels") {
-    badgeIcon =
-      "<img src='" +
-      esc(currencyAsset("laurel")) +
-      "' alt='' width='28' height='28' class='sow-profile__ach-laurel-badge' />";
-  } else {
-    badgeIcon =
-      "<svg class='sow-profile__ach-icon' viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>" +
-      "<path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/>" +
-      "</svg>";
+function achSubCounts(
+  enriched: EnrichedAchievement[],
+  pillar: WowConcretePillar,
+  subcategory: string,
+  isOwnProfile: boolean,
+  playableOnly: boolean,
+) {
+  let total = 0;
+  let unlocked = 0;
+  for (const a of enriched) {
+    if (!matchesWowScope(a, pillar, subcategory)) continue;
+    if (playableOnly && isOwnProfile && a.heroSlug && !a.heroPlayable) continue;
+    total += 1;
+    if (a.unlocked) unlocked += 1;
   }
+  return { total, unlocked };
+}
 
-  return {
-    category: category,
-    markup:
-      "<article class='sow-profile__achievement" +
-      (unlocked ? " is-unlocked" : " is-locked") +
-      (isMythic ? " is-mythic" : "") +
+function renderAchRailMarkup(
+  enriched: EnrichedAchievement[],
+  activeCategory: WowCategoryId,
+  activeSubcategory: string,
+  isOwnProfile: boolean,
+  playableOnly: boolean,
+): string {
+  const railCategories: WowCategoryId[] = [
+    "summary",
+    ...WOW_PILLAR_ORDER,
+    "all",
+  ];
+  return railCategories
+    .map(function (cat) {
+      const counts = achPillarCounts(enriched, cat, isOwnProfile, playableOnly);
+      const isActive = activeCategory === cat;
+      const isConcrete = cat !== "summary" && cat !== "all";
+      const subItems =
+        isActive && isConcrete
+          ? "<div class='sow-profile__ach-rail-subs'>" +
+            WOW_SUBCATEGORIES[cat]
+              .map(function (sub) {
+                const subC = achSubCounts(enriched, cat, sub, isOwnProfile, playableOnly);
+                if (sub !== "all" && subC.total === 0) return "";
+                const subActive = activeSubcategory === sub;
+                return (
+                  "<button type='button' class='sow-profile__ach-rail-sub" +
+                  (subActive ? " is-active" : "") +
+                  "' data-command='profile_achievement_subcategory' data-achievement-subcategory='" +
+                  esc(sub) +
+                  "'><span>" +
+                  esc(wowSubcategoryTitle(sub)) +
+                  "</span><b>" +
+                  esc(subC.unlocked + "/" + subC.total) +
+                  "</b></button>"
+                );
+              })
+              .join("") +
+            "</div>"
+          : "";
+      return (
+        "<div class='sow-profile__ach-rail-group" +
+        (isActive ? " is-active" : "") +
+        "'>" +
+        "<button type='button' class='sow-profile__ach-rail-btn" +
+        (isActive ? " is-active" : "") +
+        "' data-command='profile_achievement_filter' data-achievement-filter='" +
+        esc(cat) +
+        "'>" +
+        "<div class='sow-profile__ach-rail-top'>" +
+        "<span>" +
+        esc(wowCategoryTitle(cat)) +
+        "</span>" +
+        "<b>" +
+        esc(counts.unlocked + "/" + counts.total) +
+        "</b>" +
+        "</div>" +
+        "<div class='sow-profile__ach-rail-bar'><i style='width:" +
+        esc(counts.percent) +
+        "%'></i></div>" +
+        "</button>" +
+        subItems +
+        "</div>"
+      );
+    })
+    .join("");
+}
+
+function renderAchSubbarMarkup(
+  enriched: EnrichedAchievement[],
+  activeCategory: WowCategoryId,
+  activeSubcategory: string,
+  isOwnProfile: boolean,
+  playableOnly: boolean,
+): string {
+  if (activeCategory === "summary" || activeCategory === "all") return "";
+  const subs = WOW_SUBCATEGORIES[activeCategory] || [];
+  if (subs.length <= 2) return "";
+  return subs
+    .map(function (sub) {
+      const subC = achSubCounts(enriched, activeCategory, sub, isOwnProfile, playableOnly);
+      if (sub !== "all" && subC.total === 0) return "";
+      const isActive = activeSubcategory === sub;
+      return (
+        "<button type='button' class='sow-profile__ach-subchip" +
+        (isActive ? " is-active" : "") +
+        "' data-command='profile_achievement_subcategory' data-achievement-subcategory='" +
+        esc(sub) +
+        "'><span>" +
+        esc(wowSubcategoryTitle(sub)) +
+        "</span><b>" +
+        esc(subC.unlocked + "/" + subC.total) +
+        "</b></button>"
+      );
+    })
+    .join("");
+}
+
+function renderAchSummaryView(
+  enriched: EnrichedAchievement[],
+  isOwnProfile: boolean,
+): string {
+  const pillarCards = WOW_PILLAR_ORDER.map(function (pillar) {
+    const stats = achPillarCounts(enriched, pillar, isOwnProfile, false);
+    return (
+      "<button type='button' class='sow-profile__ach-pillar-card' data-command='profile_achievement_filter' data-achievement-filter='" +
+      esc(pillar) +
       "'>" +
-      "<div class='sow-profile__achievement-header'>" +
-      "<div class='sow-profile__achievement-badge-frame" +
-      (unlocked ? " is-unlocked" : "") +
-      (isMythic ? " is-mythic" : "") +
-      "'>" +
-      badgeIcon +
-      (unlocked
-        ? "<span class='sow-profile__achievement-check' aria-hidden='true'>✓</span>"
-        : "") +
-      "</div>" +
-      "<div class='sow-profile__achievement-info'>" +
-      "<div class='sow-profile__achievement-top-row'>" +
-      "<div class='sow-profile__achievement-title-wrap'>" +
+      "<div class='sow-profile__ach-pillar-head'>" +
       "<strong>" +
-      esc(title) +
+      esc(wowCategoryTitle(pillar)) +
       "</strong>" +
-      (isMythic
-        ? "<span class='sow-profile__achievement-mythic-pill'>MYTHIC</span>"
-        : "") +
-      "</div>" +
-      "<span class='sow-profile__achievement-reward-pill" +
-      (isMythic ? " is-mythic" : "") +
-      "'>" +
-      "<img src='" +
-      esc(currencyAsset("laurel")) +
-      "' alt='' width='14' height='14' />" +
-      "<span>+" +
-      esc(achievement.points) +
-      "</span>" +
-      "</span>" +
-      "</div>" +
       "<span>" +
-      esc(desc) +
-      "</span>" +
+      esc(stats.percent) +
+      "%</span>" +
       "</div>" +
-      "</div>" +
-      "<div class='sow-profile__achievement-progress-wrap'>" +
-      "<div class='sow-profile__achievement-track" +
-      (isMythic ? " is-mythic" : "") +
-      "' role='progressbar' aria-valuenow='" +
-      esc(progress) +
-      "' aria-valuemax='" +
-      esc(target) +
-      "'>" +
-      "<i style='width: " +
-      esc(percent) +
-      "%'></i>" +
-      "</div>" +
-      "<div class='sow-profile__achievement-meta'>" +
-      "<span class='sow-profile__achievement-status" +
-      (unlocked ? " is-done" : "") +
-      "'>" +
-      (unlocked ? "COMPLETADO" : percent + "%") +
+      "<div class='sow-profile__achievement-track'><i style='width:" +
+      esc(stats.percent) +
+      "%'></i></div>" +
+      "<div class='sow-profile__ach-pillar-foot'>" +
+      "<span>" +
+      esc(stats.unlocked + " / " + stats.total) +
       "</span>" +
       "<b>" +
-      esc(progress) +
-      "/" +
-      esc(target) +
-      " · " +
-      esc(achievement.points) +
-      " " +
-      esc(SOW_t("profile.laurels")) +
+      esc(stats.earnedLaurels + " " + tText("profile.laurels", "Laurels")) +
       "</b>" +
       "</div>" +
+      "</button>"
+    );
+  }).join("");
+
+  const almostLocked = enriched
+    .filter(function (a) {
+      if (a.unlocked) return false;
+      if (a.progress > 0) return true;
+      if (!isOwnProfile) return false;
+      // If brand new player with 0 progress anywhere, suggest quick general/hero starters
+      return !a.heroSlug || a.heroPlayable;
+    })
+    .sort(function (a, b) {
+      const aHas = a.progress > 0 ? 1 : 0;
+      const bHas = b.progress > 0 ? 1 : 0;
+      if (aHas !== bHas) return bHas - aHas;
+      if (b.percent !== a.percent) return b.percent - a.percent;
+      const aGlobal = a.heroSlug ? 1 : 0;
+      const bGlobal = b.heroSlug ? 1 : 0;
+      if (aGlobal !== bGlobal) return aGlobal - bGlobal;
+      return a.target - b.target;
+    })
+    .slice(0, 6);
+
+  const highlights = enriched
+    .filter((a) => a.unlocked)
+    .sort(function (a, b) {
+      if (b.points !== a.points) return b.points - a.points;
+      return b.target - a.target;
+    })
+    .slice(0, 6);
+
+  return (
+    "<section class='sow-profile__ach-summary-section'>" +
+    "<h3 class='sow-profile__ach-subhead'>" +
+    esc(tText("profile.ach_summary_pillars", "Progress by Pillar")) +
+    "</h3>" +
+    "<div class='sow-profile__ach-summary-grid'>" +
+    pillarCards +
+    "</div>" +
+    "</section>" +
+    "<section class='sow-profile__ach-summary-section'>" +
+    "<h3 class='sow-profile__ach-subhead'>" +
+    esc(tText("profile.ach_summary_almost", "Close to Unlocking")) +
+    "</h3>" +
+    (almostLocked.length
+      ? "<div class='sow-profile__achievement-grid'>" +
+        almostLocked
+          .map((a) =>
+            renderAchievementCard(a, { tagText: wowCategoryTitle(a.wowCategory) }),
+          )
+          .join("") +
+        "</div>"
+      : "<p class='sow-profile__empty'>" +
+        esc(
+          tText(
+            "profile.ach_summary_almost_empty",
+            "Play matches or command heroes to start tracking nearby milestones.",
+          ),
+        ) +
+        "</p>") +
+    "</section>" +
+    "<section class='sow-profile__ach-summary-section'>" +
+    "<h3 class='sow-profile__ach-subhead'>" +
+    esc(tText("profile.ach_summary_highlights", "Earned Highlights")) +
+    "</h3>" +
+    (highlights.length
+      ? "<div class='sow-profile__achievement-grid'>" +
+        highlights
+          .map((a) =>
+            renderAchievementCard(a, { tagText: wowCategoryTitle(a.wowCategory) }),
+          )
+          .join("") +
+        "</div>"
+      : "<p class='sow-profile__empty'>" +
+        esc(
+          tText(
+            "profile.ach_summary_highlights_empty",
+            "Complete your first milestone to showcase it here.",
+          ),
+        ) +
+        "</p>") +
+    "</section>"
+  );
+}
+
+let achFlatLimit = 90;
+
+export function resetAchievementFlatLimit() {
+  achFlatLimit = 90;
+}
+
+export function bumpAchievementFlatLimit() {
+  achFlatLimit += 90;
+}
+
+function renderAchResultsMarkup(
+  enriched: EnrichedAchievement[],
+  isOwnProfile: boolean,
+): string {
+  const activeCategory = normalizeWowCategory(menuUi.profileAchievementFilter);
+  const activeSub = menuUi.profileAchievementSubcategory || "all";
+  const statusFilter = menuUi.profileAchievementStatus || "all";
+  const tierFilter = menuUi.profileAchievementTier || "all";
+  const sortBy = menuUi.profileAchievementSort || "smart";
+  const playableOnly = Boolean(menuUi.profileAchievementPlayableOnly) && isOwnProfile;
+  const viewMode = menuUi.profileAchievementViewMode === "grid" ? "grid" : "chains";
+  const searchQuery = (menuUi.profileAchievementSearch || "").trim();
+
+  const hasToolbarFilters =
+    Boolean(searchQuery) ||
+    statusFilter !== "all" ||
+    tierFilter !== "all" ||
+    playableOnly;
+
+  if (activeCategory === "summary" && !hasToolbarFilters) {
+    return renderAchSummaryView(enriched, isOwnProfile);
+  }
+
+  const scopeCategory: WowCategoryId =
+    activeCategory === "summary" && hasToolbarFilters ? "all" : activeCategory;
+
+  const scoped = enriched.filter(function (ach) {
+    if (!matchesWowScope(ach, scopeCategory, activeSub)) return false;
+    return matchesAchievementFilters(ach, {
+      search: searchQuery,
+      status: statusFilter,
+      tier: tierFilter,
+      playableOnly,
+      isOwnProfile,
+    });
+  });
+
+  const searchBanner =
+    searchQuery && scopeCategory === "all"
+      ? "<div class='sow-profile__ach-search-banner'>" +
+        "<span>" +
+        esc(
+          tText("profile.ach_searching_global", "Searching entire codex ({count} results)", {
+            count: scoped.length,
+          }),
+        ) +
+        "</span>" +
+        "<button type='button' class='sow-profile__ach-clear-btn' data-command='profile_achievement_clear'>" +
+        esc(tText("profile.ach_clear_filters", "Clear filters")) +
+        "</button>" +
+        "</div>"
+      : "";
+
+  if (!scoped.length) {
+    const globalMatches =
+      scopeCategory !== "all" && hasToolbarFilters
+        ? enriched.filter((a) =>
+            matchesAchievementFilters(a, {
+              search: searchQuery,
+              status: statusFilter,
+              tier: tierFilter,
+              playableOnly,
+              isOwnProfile,
+            }),
+          ).length
+        : 0;
+    return (
+      searchBanner +
+      "<div class='sow-profile__ach-empty-box'>" +
+      "<p class='sow-profile__empty'>" +
+      esc(
+        tText(
+          "profile.ach_empty_filtered",
+          "No achievements match your current search or filters.",
+        ),
+      ) +
+      "</p>" +
+      "<div class='sow-profile__ach-empty-actions'>" +
+      (globalMatches > 0
+        ? "<button type='button' class='sow-profile__ach-clear-btn is-primary' data-command='profile_achievement_filter' data-achievement-filter='all'>" +
+          esc(wowCategoryTitle("all") + " (" + globalMatches + ")") +
+          "</button>"
+        : "") +
+      (hasToolbarFilters
+        ? "<button type='button' class='sow-profile__ach-clear-btn' data-command='profile_achievement_clear'>" +
+          esc(tText("profile.ach_clear_filters", "Clear filters")) +
+          "</button>"
+        : "") +
       "</div>" +
-      "</article>",
-  };
+      "</div>"
+    );
+  }
+
+  // Hero Mastery grouped cards in Chains mode (1 card per hero instead of 15 separate cards)
+  if (
+    scopeCategory === "heroes_mastery" &&
+    viewMode === "chains" &&
+    statusFilter === "all" &&
+    tierFilter === "all" &&
+    !searchQuery &&
+    (activeSub === "all" || activeSub.startsWith("region:"))
+  ) {
+    const byHero = new Map<string, EnrichedAchievement[]>();
+    for (const a of scoped) {
+      if (!a.heroSlug) continue;
+      let list = byHero.get(a.heroSlug);
+      if (!list) {
+        list = [];
+        byHero.set(a.heroSlug, list);
+      }
+      list.push(a);
+    }
+    const leaderLookup = achHeroEntrySlugMap();
+    const summaries = Array.from(byHero.entries()).map(function ([slug, list]) {
+      const leader = leaderLookup.get(slug) || leaderById(slug);
+      return summarizeEnrichedHeroAchievements(
+        slug,
+        leader && leader.id !== "random" ? leader : null,
+        slug,
+        list,
+      );
+    });
+    summaries.sort(function (a, b) {
+      if (sortBy === "alpha_asc") return a.name.localeCompare(b.name);
+      if (sortBy === "points_desc") {
+        if (b.earnedLaurels !== a.earnedLaurels) return b.earnedLaurels - a.earnedLaurels;
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === "closest") {
+        if (b.nextPercent !== a.nextPercent) return b.nextPercent - a.nextPercent;
+        return b.unlockedCount - a.unlockedCount;
+      }
+      // "smart": active/played/unlocked heroes first, then playable, then % & alpha
+      const aProg = a.unlockedCount > 0 || a.matchesPlayed > 0 ? 1 : 0;
+      const bProg = b.unlockedCount > 0 || b.matchesPlayed > 0 ? 1 : 0;
+      if (aProg !== bProg) return bProg - aProg;
+      if (b.unlockedCount !== a.unlockedCount) return b.unlockedCount - a.unlockedCount;
+      if (isOwnProfile && a.playable !== b.playable) return a.playable ? -1 : 1;
+      if (b.nextPercent !== a.nextPercent) return b.nextPercent - a.nextPercent;
+      return a.name.localeCompare(b.name);
+    });
+
+    const visibleHeroes = summaries.slice(0, achFlatLimit);
+    const loadMoreHeroes =
+      summaries.length > visibleHeroes.length
+        ? "<div class='sow-profile__ach-loadmore-wrap'><button type='button' class='sow-profile__load-more' data-command='profile_achievement_show_more'>" +
+          esc(tText("profile.view_all", "View all") + " (" + visibleHeroes.length + "/" + summaries.length + ")") +
+          "</button></div>"
+        : "";
+    return (
+      "<div class='sow-profile__ach-hero-grid'>" +
+      visibleHeroes.map((s) => renderHeroMasteryProfileCard(s, isOwnProfile)).join("") +
+      "</div>" +
+      loadMoreHeroes
+    );
+  }
+
+  // Chain / Ladder mode inside categories when status/tier filters aren't narrowing to individual tiers
+  if (
+    viewMode === "chains" &&
+    statusFilter === "all" &&
+    tierFilter === "all" &&
+    !searchQuery &&
+    activeSub !== "kind:recruit" &&
+    scopeCategory !== "all"
+  ) {
+    const singles: EnrichedAchievement[] = [];
+    const chainMap = new Map<string, EnrichedAchievement[]>();
+    for (const a of scoped) {
+      if (a.chainKey) {
+        let arr = chainMap.get(a.chainKey);
+        if (!arr) {
+          arr = [];
+          chainMap.set(a.chainKey, arr);
+        }
+        arr.push(a);
+      } else {
+        singles.push(a);
+      }
+    }
+    const chainEntries = Array.from(chainMap.entries());
+    // Order active/unlocked chains before untouched ones
+    chainEntries.sort(function ([kA, aList], [kB, bList]) {
+      if (sortBy === "alpha_asc") return kA.localeCompare(kB);
+      const aProgress = aList.some((i) => i.unlocked || i.progress > 0) ? 1 : 0;
+      const bProgress = bList.some((i) => i.unlocked || i.progress > 0) ? 1 : 0;
+      if (aProgress !== bProgress) return bProgress - aProgress;
+      return aList.length - bList.length;
+    });
+
+    const limitedChains = chainEntries.slice(0, achFlatLimit);
+    const cardsHtml =
+      limitedChains
+        .map(([key, items]) =>
+          renderAchievementChainCard(
+            key,
+            items,
+            menuUi.profileAchievementSelectedTiers[key] || null,
+          ),
+        )
+        .join("") +
+      sortAchievementsList(singles, sortBy)
+        .map((a) => renderAchievementCard(a))
+        .join("");
+
+    const loadMoreChains =
+      chainEntries.length > limitedChains.length
+        ? "<div class='sow-profile__ach-loadmore-wrap'><button type='button' class='sow-profile__load-more' data-command='profile_achievement_show_more'>" +
+          esc(tText("profile.view_all", "View all") + " (" + limitedChains.length + "/" + chainEntries.length + ")") +
+          "</button></div>"
+        : "";
+    return (
+      "<div class='sow-profile__achievement-grid'>" + cardsHtml + "</div>" + loadMoreChains
+    );
+  }
+
+  // Flat / Filtered individual achievement cards
+  const sorted = sortAchievementsList(scoped, sortBy);
+  const visible = sorted.slice(0, achFlatLimit);
+  const moreBtn =
+    sorted.length > visible.length
+      ? "<div class='sow-profile__ach-loadmore-wrap'><button type='button' class='sow-profile__load-more' data-command='profile_achievement_show_more'>" +
+        esc(tText("profile.view_all", "View all") + " (" + visible.length + "/" + sorted.length + ")") +
+        "</button></div>"
+      : "";
+
+  return (
+    searchBanner +
+    "<div class='sow-profile__achievement-grid'>" +
+    visible
+      .map((a) =>
+        renderAchievementCard(a, {
+          tagText: scopeCategory === "all" ? wowCategoryTitle(a.wowCategory) : undefined,
+        }),
+      )
+      .join("") +
+    "</div>" +
+    moreBtn
+  );
+}
+
+export function refreshProfileAchievements() {
+  if (!menuUi.profileOpen || currentScreen() !== "profile") return;
+  if (menuUi.profileTab !== "achievements") return;
+  const data = menuUi.profileData;
+  if (!data || !profileDataComplete()) return;
+  const panel = activeScreenPanel();
+  if (!panel) return;
+
+  const isOwnProfile = Boolean(menuUi.state && data.account_id === menuUi.state.account_id);
+  const raw = resolveProfileAchievements(data);
+  const enriched = enrichAchievementsList(raw, isOwnProfile);
+  const activeCategory = normalizeWowCategory(menuUi.profileAchievementFilter);
+  const activeSub = menuUi.profileAchievementSubcategory || "all";
+  const playableOnly = Boolean(menuUi.profileAchievementPlayableOnly) && isOwnProfile;
+
+  const rail = panel.querySelector("[data-ach-rail]");
+  if (rail) {
+    rail.innerHTML = renderAchRailMarkup(
+      enriched,
+      activeCategory,
+      activeSub,
+      isOwnProfile,
+      playableOnly,
+    );
+  }
+  const subbar = panel.querySelector("[data-ach-subbar]");
+  if (subbar) {
+    const html = renderAchSubbarMarkup(
+      enriched,
+      activeCategory,
+      activeSub,
+      isOwnProfile,
+      playableOnly,
+    );
+    subbar.innerHTML = html;
+    (subbar as HTMLElement).hidden = !html;
+  }
+  const playableBtn = panel.querySelector<HTMLButtonElement>("[data-command='profile_achievement_toggle_playable']");
+  if (playableBtn) {
+    playableBtn.classList.toggle("is-active", playableOnly);
+    playableBtn.setAttribute("aria-pressed", String(playableOnly));
+  }
+  const modeBtns = panel.querySelectorAll<HTMLElement>("[data-command='profile_achievement_view_mode']");
+  const viewMode = menuUi.profileAchievementViewMode === "grid" ? "grid" : "chains";
+  for (let i = 0; i < modeBtns.length; i++) {
+    const active = modeBtns[i].dataset.viewMode === viewMode;
+    modeBtns[i].classList.toggle("is-active", active);
+    modeBtns[i].setAttribute("aria-pressed", String(active));
+  }
+  const results = panel.querySelector("[data-ach-results]");
+  if (results) {
+    results.innerHTML = renderAchResultsMarkup(enriched, isOwnProfile);
+  }
 }
 
 function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
@@ -2310,13 +1628,12 @@ function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
       esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
       "</p>"
     );
-  const allAchievements = resolveProfileAchievements(data);
-  const unlockedCount = allAchievements.filter(function (a) {
-    return !!a.unlocked;
-  }).length;
-  const totalCount = allAchievements.length;
-  const percent =
-    totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
+  const isOwnProfile = Boolean(menuUi.state && data.account_id === menuUi.state.account_id);
+  const rawAchievements = resolveProfileAchievements(data);
+  const enriched = enrichAchievementsList(rawAchievements, isOwnProfile);
+  const unlockedCount = enriched.filter((a) => a.unlocked).length;
+  const totalCount = enriched.length;
+  const percent = totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
   const laurels = profileStat(data.laurels);
 
   const summaryDossier =
@@ -2359,142 +1676,147 @@ function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
     "</div>" +
     "</div>";
 
-  const allCategories = [
-    "battles",
-    "victories",
-    "commanders",
-    "combat",
-    "campaign",
-    "laurels",
-  ];
-  const grouped: Record<string, string[]> = {};
-  const categoryTotals: Record<string, number> = {};
-  allCategories.forEach(function (cat) {
-    grouped[cat] = [];
-    categoryTotals[cat] = 0;
+  const activeCategory = normalizeWowCategory(menuUi.profileAchievementFilter);
+  const activeSub = menuUi.profileAchievementSubcategory || "all";
+  const statusFilter = menuUi.profileAchievementStatus || "all";
+  const tierFilter = menuUi.profileAchievementTier || "all";
+  const sortBy = menuUi.profileAchievementSort || "smart";
+  const playableOnly = Boolean(menuUi.profileAchievementPlayableOnly) && isOwnProfile;
+  const viewMode = menuUi.profileAchievementViewMode === "grid" ? "grid" : "chains";
+
+  const categoryOptions = (
+    ["summary", ...WOW_PILLAR_ORDER, "all"] as WowCategoryId[]
+  ).map(function (cat) {
+    const c = achPillarCounts(enriched, cat, isOwnProfile, playableOnly);
+    return {
+      value: cat,
+      label: wowCategoryTitle(cat) + " (" + c.unlocked + "/" + c.total + ")",
+      shortLabel: wowCategoryTitle(cat),
+    };
   });
 
-  allAchievements.forEach(function (achievement) {
-    const cat = grouped[achievement.category]
-      ? achievement.category
-      : "commanders";
-    categoryTotals[cat] = (categoryTotals[cat] || 0) + 1;
+  const compactCategoryDropdown = SOW_renderDropdown({
+    key: "ach-category",
+    label: tText("profile.ach_categories_label", "Achievement categories"),
+    name: "ach_category",
+    value: activeCategory,
+    className: "sow-profile__ach-mobile-cat",
+    options: categoryOptions,
   });
 
-  const searchQuery = (menuUi.profileAchievementSearch || "")
-    .trim()
-    .toLowerCase();
-  const filteredAchievements = searchQuery
-    ? allAchievements.filter(function (a) {
-        return (
-          (a.title || "").toLowerCase().includes(searchQuery) ||
-          (a.description || "").toLowerCase().includes(searchQuery) ||
-          a.id.toLowerCase().includes(searchQuery)
-        );
-      })
-    : allAchievements;
-
-  filteredAchievements.forEach(function (achievement) {
-    const card = profileAchievementCard(achievement);
-    const cat = grouped[card.category] ? card.category : "commanders";
-    grouped[cat].push(card.markup);
+  const statusDropdown = SOW_renderDropdown({
+    key: "ach-status",
+    label: tText("profile.ach_filter_status", "Filter by progress"),
+    name: "ach_status",
+    value: statusFilter,
+    className: "sow-profile__ach-dd" + (statusFilter !== "all" ? " is-filtered" : ""),
+    options: [
+      { value: "all", label: tText("profile.ach_status_all", "All States") },
+      { value: "in_progress", label: tText("profile.ach_status_in_progress", "In Progress") },
+      { value: "unlocked", label: tText("profile.ach_status_unlocked", "Completed") },
+      { value: "locked", label: tText("profile.ach_status_locked", "Not Started") },
+    ],
   });
 
-  const activeFilter = menuUi.profileAchievementFilter || "all";
-  const filterTabs = [
-    { id: "all", label: "Todos", count: totalCount },
-    {
-      id: "battles",
-      label: achievementCategoryTitle("battles"),
-      count: categoryTotals.battles || 0,
-    },
-    {
-      id: "victories",
-      label: achievementCategoryTitle("victories"),
-      count: categoryTotals.victories || 0,
-    },
-    {
-      id: "commanders",
-      label: achievementCategoryTitle("commanders"),
-      count: categoryTotals.commanders || 0,
-    },
-    {
-      id: "combat",
-      label: achievementCategoryTitle("combat"),
-      count: categoryTotals.combat || 0,
-    },
-    {
-      id: "campaign",
-      label: achievementCategoryTitle("campaign"),
-      count: categoryTotals.campaign || 0,
-    },
-    {
-      id: "laurels",
-      label: achievementCategoryTitle("laurels"),
-      count: categoryTotals.laurels || 0,
-    },
-  ];
+  const tierDropdown = SOW_renderDropdown({
+    key: "ach-tier",
+    label: tText("profile.ach_filter_tier", "Filter by tier"),
+    name: "ach_tier",
+    value: tierFilter,
+    className: "sow-profile__ach-dd" + (tierFilter !== "all" ? " is-filtered" : ""),
+    options: [
+      { value: "all", label: tText("profile.ach_tier_all", "All Tiers") },
+      { value: "mythic", label: tText("profile.ach_tier_mythic", "Mythic (200+)") },
+      { value: "elite", label: tText("profile.ach_tier_elite", "Elite (50–199)") },
+      { value: "standard", label: tText("profile.ach_tier_standard", "Standard (<50)") },
+    ],
+  });
 
-  const searchBox =
+  const sortDropdown = SOW_renderDropdown({
+    key: "ach-sort",
+    label: tText("profile.ach_sort_label", "Sort achievements"),
+    name: "ach_sort",
+    value: sortBy,
+    className: "sow-profile__ach-dd",
+    options: [
+      { value: "smart", label: tText("profile.ach_sort_smart", "Smart Order") },
+      { value: "closest", label: tText("profile.ach_sort_closest", "Closest (%)") },
+      { value: "points_desc", label: tText("profile.ach_sort_points", "Highest Laurels") },
+      { value: "alpha_asc", label: tText("profile.ach_sort_alpha", "A-Z") },
+    ],
+  });
+
+  const subbarHtml = renderAchSubbarMarkup(
+    enriched,
+    activeCategory,
+    activeSub,
+    isOwnProfile,
+    playableOnly,
+  );
+
+  const toolbar =
+    "<div class='sow-profile__ach-toolbar' data-ach-toolbar>" +
     "<div class='sow-profile__ach-search-wrap'>" +
+    "<span class='sow-profile__ach-search-icon' aria-hidden='true'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg></span>" +
     "<input type='search' class='sow-profile__ach-search-input' placeholder='" +
-    esc(SOW_t("heroes.search_leaders")) +
-    "...' value='" +
+    esc(tText("profile.search_achievements", "Search achievements, heroes, or regions…")) +
+    "' value='" +
     esc(menuUi.profileAchievementSearch || "") +
-    "' data-role='achievements-search' />" +
+    "' data-role='achievements-search' autocomplete='off' spellcheck='false' />" +
+    "</div>" +
+    "<div class='sow-profile__ach-controls'>" +
+    compactCategoryDropdown +
+    statusDropdown +
+    tierDropdown +
+    sortDropdown +
+    (isOwnProfile
+      ? "<button type='button' class='sow-heroes__playable-btn sow-profile__ach-playable" +
+        (playableOnly ? " is-active" : "") +
+        "' data-command='profile_achievement_toggle_playable' aria-pressed='" +
+        String(playableOnly) +
+        "'>" +
+        esc(tText("profile.ach_playable_only", "Owned / Playable")) +
+        "</button>"
+      : "") +
+    "<div class='sow-profile__ach-view-toggle' role='group'>" +
+    "<button type='button' class='sow-profile__ach-view-btn" +
+    (viewMode === "chains" ? " is-active" : "") +
+    "' data-command='profile_achievement_view_mode' data-view-mode='chains' aria-pressed='" +
+    String(viewMode === "chains") +
+    "'>" +
+    esc(tText("profile.ach_view_chains", "Chains")) +
+    "</button>" +
+    "<button type='button' class='sow-profile__ach-view-btn" +
+    (viewMode === "grid" ? " is-active" : "") +
+    "' data-command='profile_achievement_view_mode' data-view-mode='grid' aria-pressed='" +
+    String(viewMode === "grid") +
+    "'>" +
+    esc(tText("profile.ach_view_cards", "All Cards")) +
+    "</button>" +
+    "</div>" +
+    "</div>" +
     "</div>";
-
-  const filterChips =
-    "<nav class='sow-profile__ach-filter-bar' aria-label='Categorías de Logros'>" +
-    filterTabs
-      .filter(function (tab) {
-        return tab.id === "all" || tab.count > 0;
-      })
-      .map(function (tab) {
-        const isActive = activeFilter === tab.id;
-        return (
-          "<button type='button' class='sow-profile__ach-filter-chip" +
-          (isActive ? " is-active" : "") +
-          "' data-command='profile_achievement_filter' data-achievement-filter='" +
-          esc(tab.id) +
-          "'>" +
-          "<span>" +
-          esc(tab.label) +
-          "</span>" +
-          "<b class='sow-profile__ach-filter-count'>" +
-          esc(tab.count) +
-          "</b>" +
-          "</button>"
-        );
-      })
-      .join("") +
-    "</nav>";
-
-  const categoriesToRender =
-    activeFilter === "all" ? allCategories : [activeFilter];
-
-  const groups = categoriesToRender
-    .map(function (category) {
-      const cards = grouped[category] || [];
-      if (!cards.length) return "";
-      return (
-        "<section class='sow-profile__achievement-group'><h3>" +
-        esc(achievementCategoryTitle(category)) +
-        "</h3><div class='sow-profile__achievement-grid'>" +
-        cards.join("") +
-        "</div></section>"
-      );
-    })
-    .join("");
 
   return (
     summaryDossier +
-    searchBox +
-    filterChips +
-    (groups ||
-      "<p class='sow-profile__empty'>" +
-        esc(SOW_t("profile.achievements")) +
-        "</p>")
+    "<div class='sow-profile__ach-layout'>" +
+    "<aside class='sow-profile__ach-rail' data-ach-rail aria-label='" +
+    esc(tText("profile.ach_categories_label", "Achievement categories")) +
+    "'>" +
+    renderAchRailMarkup(enriched, activeCategory, activeSub, isOwnProfile, playableOnly) +
+    "</aside>" +
+    "<div class='sow-profile__ach-main'>" +
+    toolbar +
+    "<div class='sow-profile__ach-subbar' data-ach-subbar" +
+    (subbarHtml ? "" : " hidden") +
+    ">" +
+    subbarHtml +
+    "</div>" +
+    "<div class='sow-profile__ach-results' data-ach-results aria-live='polite'>" +
+    renderAchResultsMarkup(enriched, isOwnProfile) +
+    "</div>" +
+    "</div>" +
+    "</div>"
   );
 }
 

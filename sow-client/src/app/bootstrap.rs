@@ -41,7 +41,7 @@ impl SowApp {
         sow_audio::set_master_volume(if app.settings_state.mute_all {
             0.0
         } else {
-            1.0
+            app.settings_state.sfx_volume
         });
         crate::map_cache::hydrate_asset_maps(&mut app.asset_loader.maps);
 
@@ -223,6 +223,7 @@ impl SowApp {
                 active_touches,
                 map_pointer_start,
                 last_pinch_state,
+                touch_pan_residual: (0.0, 0.0),
                 map_context_menu,
                 map_context_menu_session,
                 last_right_press,
@@ -252,7 +253,7 @@ impl SowApp {
                 campaign_session_id: 0,
                 tutorial_camera_only: false,
                 tutorial_paused_action: None,
-                tutorial_campaign: crate::campaign::CampaignId::Boudica,
+                tutorial_campaign: crate::campaign::CampaignId::intro(),
                 tutorial_marker_player_id: None,
                 tutorial_marker_action: None,
                 dialog_border_highlight: None,
@@ -288,6 +289,7 @@ impl SowApp {
                 attack_badge_active_ids: std::collections::HashSet::new(),
                 nameplates: crate::render::world::nameplates::NameplateSystem::default(),
                 building_render_cache: crate::render::world::BuildingRenderCache::default(),
+                railway_render_state: crate::render::world::RailwayRenderState::default(),
                 building_placement_cache: crate::input::placement::BuildingPlacementCache::default(
                 ),
                 building_levels_seen: std::collections::HashMap::new(),

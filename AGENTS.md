@@ -11,6 +11,16 @@ Workspace rules: `../AGENTS.md`. This file holds only what is specific to this g
 - `sow-dist` and the test suites are deletion-only: a new check, stage or test needs the owner's approval first.
 - Android publishing (`./sow a`) is owner-run only and refuses a dirty tree. `./sow p` does not authorize Play uploads.
 
+## Focus and delegation
+
+- The primary agent spends its work on the user's current product goal and its hardest necessary engineering decisions. Do not start or continue secondary work that does not materially advance that goal; drop it.
+- Delegate necessary repetitive execution, such as running established checks, collecting their output, and monitoring an already-authorized build or deployment, to one subagent with a bounded task and clear result. Do not delegate product decisions, root-cause analysis, the core fix, or final review.
+- The primary agent owns the diagnosis, design, core implementation, review and integration, safe recovery, and final verification. Delegation never transfers responsibility to the user or a subagent.
+- Preserve the current branch and all concurrent work. Do not create branches, parallel systems, or extra infrastructure for convenience.
+- Do not repeat a successful check without a code, input, or environment change that makes the result relevant again. Do not present a checklist or audit as completion when the requested behavior remains unfinished.
+- When a command fails, inspect its actual failure, correct the underlying cause, and retry through the owning workflow. Keep progressing through independent work; ask the user only for a product decision or external authority that cannot be inferred or recovered safely.
+- Report completion cleanly and digestibly: behavior changed, player-facing effect, next options, and a brief pass confirmation without dumping raw test logs or crate-by-crate counts unless something failed. Distinguish measured outcomes from expected retention impact.
+
 ## Game invariants
 
 - Match return order: server confirmation, rewards, each gained level, then guidance.

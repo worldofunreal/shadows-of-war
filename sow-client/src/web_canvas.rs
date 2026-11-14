@@ -15,6 +15,8 @@ thread_local! {
     // Window measurements cross the wasm/JS boundary. They only change on a viewport event,
     // never as part of a render frame, so keep one cached sample for the hot path.
     static VIEWPORT_CACHE: std::cell::Cell<Option<BrowserViewport>> = const { std::cell::Cell::new(None) };
+    static MOBILE_POINTER: Option<web_sys::MediaQueryList> = web_sys::window()
+        .and_then(|window| window.match_media("(hover: none) and (pointer: coarse)").ok().flatten());
 }
 
 fn read_browser_viewport() -> BrowserViewport {
@@ -86,6 +88,10 @@ pub fn physical_viewport_size() -> (u32, u32) {
 
 pub fn device_pixel_ratio() -> f64 {
     browser_viewport().device_pixel_ratio
+}
+
+pub fn has_mobile_pointer() -> bool {
+    MOBILE_POINTER.with(|query| query.as_ref().is_some_and(|query| query.matches()))
 }
 
 /// Set `#blade` backing-store pixels before Blade reconfigures the WebGL surface.

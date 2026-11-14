@@ -1667,7 +1667,9 @@
         });
     };
 
-    window.SOW_portalGameplayStop = function () {
+    // A CrazyGames midgame ad belongs between levels or stages, so only a match that
+    // ended on its own requests one. Leaving early never does.
+    window.SOW_portalGameplayStop = function (reason?: string) {
         if (!cgGameplayActive) {
             return;
         }
@@ -1681,7 +1683,9 @@
                     game.pause();
                 }
             }
-            requestCrazyGamesMidgameAd();
+            if (reason === "match_ended") {
+                requestCrazyGamesMidgameAd();
+            }
         }
     };
 

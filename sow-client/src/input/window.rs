@@ -412,6 +412,7 @@ impl SowApp {
                                 (x as f32 - controls.center[0]) / self.input.camera_zoom,
                                 (y as f32 - controls.center[1]) / self.input.camera_zoom,
                             ));
+                            self.input.touch_pan_residual = (0.0, 0.0);
                             self.input.dragging = false;
                         }
                     }
@@ -505,6 +506,9 @@ impl SowApp {
         } else {
             1.0
         };
+        let smooth_touch_pan = is_touch
+            && self.ui.app.hud_state.building_placement.is_some()
+            && crate::web_canvas::has_mobile_pointer();
         // A code-directed camera move owns the view: drags and pinches start nothing until it lands.
         let machinima = self.machinima_camera_active();
         if machinima {
@@ -525,8 +529,17 @@ impl SowApp {
             let cx = (x1 + x2) * 0.5;
             let cy = (y1 + y2) * 0.5;
             if let Some((last_distance, last_x, last_y)) = self.input.last_pinch_state {
-                self.input.camera_x += (cx - last_x) as f32 * touch_pan_scale;
-                self.input.camera_y += (cy - last_y) as f32 * touch_pan_scale;
+                let dx = (cx - last_x) as f32 * touch_pan_scale;
+                let dy = (cy - last_y) as f32 * touch_pan_scale;
+                if smooth_touch_pan {
+                    self.input.touch_pan_residual.0 += dx;
+                    self.input.touch_pan_residual.1 += dy;
+                    self.input.camera_focus_target = None;
+                    self.input.target_zoom = self.input.camera_zoom;
+                } else {
+                    self.input.camera_x += dx;
+                    self.input.camera_y += dy;
+                }
                 self.process_camera_zoom(
                     1.0 + ((distance - last_distance) as f32 * 0.005),
                     cx as f32,
@@ -558,9 +571,18 @@ impl SowApp {
                     self.input.tutorial_camera_drag_recorded = true;
                 }
                 self.close_map_context_menu();
-                self.input.camera_x += (x - self.input.last_mouse_x) as f32 * touch_pan_scale;
-                self.input.camera_y += (y - self.input.last_mouse_y) as f32 * touch_pan_scale;
-                self.clamp_camera_to_map();
+                let dx = (x - self.input.last_mouse_x) as f32 * touch_pan_scale;
+                let dy = (y - self.input.last_mouse_y) as f32 * touch_pan_scale;
+                if smooth_touch_pan {
+                    self.input.touch_pan_residual.0 += dx;
+                    self.input.touch_pan_residual.1 += dy;
+                    self.input.camera_focus_target = None;
+                    self.input.target_zoom = self.input.camera_zoom;
+                } else {
+                    self.input.camera_x += dx;
+                    self.input.camera_y += dy;
+                    self.clamp_camera_to_map();
+                }
             }
         } else if matches!(source, winit::event::PointerSource::Mouse)
             && self.input.dragging
@@ -618,6 +640,7 @@ impl SowApp {
         self.input.dragging = false;
         self.input.active_touches.clear();
         self.input.last_pinch_state = None;
+        self.input.touch_pan_residual = (0.0, 0.0);
         self.sync_hover_pointer(HoverPointer::None, None);
     }
 

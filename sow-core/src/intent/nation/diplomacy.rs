@@ -211,8 +211,15 @@ impl SowEngine {
                     continue;
                 }
 
+                let campaign_auto_accept = !req.is_trade()
+                    && (self.campaign_accepts_alliance_requests_ids.contains(&bot_id)
+                        || (self.state.config.tutorial
+                            && self.campaign_relations.get(&bot_id)
+                                == Some(&crate::protocol::CampaignRelation::Allied)));
                 // A trade the bot cannot settle now is declined instead of retried forever.
-                let accept = if req.is_trade() && !self.trade_settles(req) {
+                let accept = if campaign_auto_accept {
+                    true
+                } else if req.is_trade() && !self.trade_settles(req) {
                     false
                 } else if bot_iq >= 130 {
                     if let (Some(p_me), Some(p_req)) =
@@ -234,7 +241,15 @@ impl SowEngine {
 
                 if accept {
                     let current_points = self.state.player(bot_id).unwrap().iq_points;
-                    if current_points >= send_cost {
+                    if campaign_auto_accept {
+                        decisions.push(BotDecision {
+                            bot_id,
+                            kind: BotDecisionKind::Build,
+                            intent: GameplayIntent::AcceptResourceRequest {
+                                target_player: requester,
+                            },
+                        });
+                    } else if current_points >= send_cost {
                         if let Some(p_me) = self.state.player_mut(bot_id) {
                             p_me.iq_points -= send_cost;
                         }

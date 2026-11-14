@@ -35,7 +35,7 @@ impl SowApp {
                 &serde_json::json!({ "route": "intro" }),
             );
             self.ui.app.main_menu_state.host_private_pending = false;
-            let campaign = crate::campaign::CampaignId::Boudica;
+            let campaign = crate::campaign::CampaignId::intro();
             self.boot_campaign_pending = Some(campaign.episode_id().to_string());
             self.begin_enter_game_loader(campaign.advisor());
             let map_id = campaign.map_id();
@@ -61,12 +61,7 @@ impl SowApp {
             .map_err(|_| "Campaign roster could not be read.".to_string())?;
         let (factions, player_spawn, player_color) = crate::campaign::parse_roster(&roster_text)
             .ok_or_else(|| "Campaign roster is invalid.".to_string())?;
-        let (map_width, map_height) = match campaign {
-            crate::campaign::CampaignId::Boudica => (896, 504),
-            crate::campaign::CampaignId::SixSkyEp1
-            | crate::campaign::CampaignId::SixSkyEp2
-            | crate::campaign::CampaignId::SixSkyEp3 => (1000, 516),
-        };
+        let (map_width, map_height) = campaign.map_dimensions();
         if player_spawn.0 >= map_width
             || player_spawn.1 >= map_height
             || factions
@@ -142,7 +137,7 @@ impl SowApp {
             .as_millis() as u64;
         let leader = campaign.advisor();
         self.ui.tutorial_campaign = campaign;
-        self.portal_match_mode = if campaign == crate::campaign::CampaignId::Boudica {
+        self.portal_match_mode = if campaign.is_server_owned_tutorial() {
             "tutorial"
         } else {
             "campaign"

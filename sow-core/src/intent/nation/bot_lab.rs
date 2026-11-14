@@ -1430,6 +1430,11 @@ fn s4_nation_defends_when_struck() {
         LabPlayer::nation(2, 4, 4),
     ];
     let mut engine = build_lab(10, 10, "FFA", &attacker_specs);
+    for y in 2..=6 {
+        for x in 4..=8 {
+            engine.state.set_tile_owner(x, y, 2);
+        }
+    }
     engine
         .campaign_relations
         .insert(2, crate::protocol::CampaignRelation::Enemy);
@@ -2738,12 +2743,12 @@ fn s16_checkpoint_decision_and_state_reference() {
     // Uses current building footprints; historical footprints are tested below.
     // These checkpoints include Vanilla Tribes' post-grace human-attack policy;
     // the S16 behavior contracts below separately guard progress and survival.
-    // Uses current AI tuning and occupancy pacing. Neutral frontier closure first
-    // annexes P11 for P21 at tick 10; the preceding ticks match the loss-only trigger.
+    // Uses current AI tuning, occupancy pacing, and the linear 8-to-36 finish
+    // threshold, which first remates a 9-tile target at tick 112 in this trace.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xb514_6a91_fd10_2734),
-        (500, 0xdb55_4d58_5ecf_1ab0),
-        (626, 0x0d68_1d5e_5f61_0811),
+        (250, 0x4a52_2133_8938_6eff),
+        (500, 0x272c_59f4_e2a8_e56e),
+        (607, 0x59c8_5afd_450a_d1b0),
     ];
     assert_eq!(
         checkpoints,
@@ -2764,13 +2769,18 @@ fn historical_s16_building_rules_keep_recorded_results() {
         s16_building_rules_trace(true),
         "same seed must reproduce historical-building checkpoints"
     );
-    // Historical building rules with current AI tuning, pacing and neutral-closure annexation.
+    // Historical buildings with current AI tuning and the linear 8-to-36 finish
+    // threshold: the first 9-tile finishes are P33 and P53 at tick 108.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x8879_2372_5d16_dd57),
-        (500, 0x8750_977f_f34a_6d32),
-        (750, 0x49f1_f75f_6fe2_f7ce),
-        (1_000, 0xffd7_204e_599c_b84b),
-        (1_048, 0xf3f7_7fa0_a403_277d),
+        (250, 0x7aef_ad3d_bbae_2817),
+        (500, 0x85c8_1f26_3161_cbb5),
+        (750, 0xbbda_44c9_fdf9_3966),
+        (1000, 0xef61_dcb6_d770_557a),
+        (1250, 0xc7b5_f697_0380_781a),
+        (1500, 0xfb9e_03de_a955_eaf9),
+        (1750, 0x7124_9085_5870_6d73),
+        (2000, 0x1896_76f9_3fef_5046),
+        (2102, 0xf55f_c3aa_c8e6_379a),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

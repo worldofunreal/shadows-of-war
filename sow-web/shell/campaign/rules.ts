@@ -49,6 +49,7 @@ export const METRICS: Record<string, string> = {
     port_upgrade: "port_upgrades",
     port_level: "port_levels",
     resource_transfer: "resource_transfers",
+    resource_request: "resource_requests",
     alliance: "alliances_formed",
     support: "ally_support_deliveries",
     alliance_request: "alliance_requests_submitted",
@@ -348,17 +349,21 @@ export const UI_TARGETS: Record<string, string> = {
     dock_nuke: '#sow-hud [data-command="select_nuke"]',
     transfer_gold: "#sow-hud-transfer-gold",
     transfer_troops: "#sow-hud-transfer-troops",
+    transfer_dir_troops: "#sow-hud-transfer-dir-troops",
+    transfer_dir_gold: "#sow-hud-transfer-dir-gold",
     transfer_send: '#sow-hud-transfer [data-command="send_resources"]',
     transfer_request: '#sow-hud-transfer [data-command="request_resources"]',
     map_menu_open: "#sow-hud-map-menu",
     map_spawn: '#sow-hud [data-map-action="spawn"]',
     map_attack: '#sow-hud [data-map-action="attack"]',
     map_transfer: '#sow-hud [data-map-action="send"]',
+    map_request: '#sow-hud [data-map-action="request"]',
     map_fleet: '#sow-hud [data-map-action="fleet"]',
     map_alliance: '#sow-hud [data-map-action="alliance"]',
     map_build: '#sow-hud [data-map-group="build"]',
     map_nuke: '#sow-hud [data-map-action="nuke"]',
     map_build_city: '#sow-hud [data-map-action="build_city"]',
+    map_build_farm: '#sow-hud [data-map-action="build_farm"]',
     map_build_factory: '#sow-hud [data-map-action="build_factory"]',
     map_build_port: '#sow-hud [data-map-action="build_port"]',
     map_build_tower: '#sow-hud [data-map-action="build_tower"]',
@@ -421,15 +426,21 @@ export function guideAction(step: CampaignStep): string | null {
     if (trigger.type === "building_selected") return "select";
     if (trigger.type === "structure_upgrade") return "upgrade";
     if (trigger.type === "resource_transfer") return "send";
+    if (trigger.type === "resource_request") return "request";
     if (trigger.type === "alliance_request") return "select";
     if (["territory", "attack", "kills", "defeated", "eliminated"].includes(trigger.type)) {
         return trigger.type === "territory" ? "expand" : "attack";
     }
     if (["contact", "alliance"].includes(trigger.type)) return target === "expand" ? "expand" : "contact";
-    if (["city", "factory", "tower"].includes(trigger.type)) return "build";
+    if (["city", "farm", "factory", "port", "tower"].includes(trigger.type)) return "build";
     if (trigger.type === "ui") {
-        if (trigger.action === "map_transfer" || target === "transfer_send")
-            return target === "transfer_send" ? "send" : "select";
+        if (
+            trigger.action === "map_transfer" ||
+            trigger.action === "map_request" ||
+            target === "transfer_send" ||
+            target === "transfer_request"
+        )
+            return target === "transfer_send" ? "send" : target === "transfer_request" ? "request" : "select";
         if (target === "hud_center_camera") return "home";
         if (target === "menu_lobby") return "return";
         if (/^dock_/.test(target || "")) return "build";

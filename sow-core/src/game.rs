@@ -271,6 +271,11 @@ pub enum GameEvent {
         outer_radius: u32,
         owner_id: u16,
     },
+    ResourceRequestSubmitted {
+        proposer_id: u16,
+        target_id: u16,
+        is_trade: bool,
+    },
     ResourceTransferred {
         sender_id: u16,
         receiver_id: u16,

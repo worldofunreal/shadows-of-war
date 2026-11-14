@@ -120,6 +120,12 @@ export interface MenuCustomGameConfig {
     map_width: number;
     map_height: number;
     random_spawn: boolean;
+    global_speed_multiplier: number;
+}
+
+export interface MenuGameSpeedPreset {
+    key: string;
+    value: number;
 }
 
 export interface MenuRewardReceipt {
@@ -239,6 +245,7 @@ export interface MenuStore {
 export interface MenuSettings {
     mute_all: boolean;
     music_volume: number;
+    sfx_volume: number;
     reduced_motion: boolean;
     free_zoom_out: boolean;
     show_fps_ping: boolean;
@@ -261,7 +268,6 @@ export interface MenuMissionRecord {
     completed: boolean;
     claimed: boolean;
     claimed_at?: number | null;
-    doubled_by_ad?: boolean;
 }
 
 export interface MenuMission {
@@ -361,6 +367,7 @@ export interface MenuState {
     leaders: MenuLeader[];
     map_catalog: MenuMap[];
     custom_game_config: MenuCustomGameConfig;
+    game_speed_presets: MenuGameSpeedPreset[];
     bot_limits: { tribes: number; nations: number };
     custom_game_is_private: boolean;
     custom_game_is_sp: boolean;
@@ -371,6 +378,7 @@ export interface MenuState {
     daily_swaps_used?: number;
     weekly_swaps_used?: number;
     daily_free_swaps_left?: number;
+    ad_grants_left?: number;
     daily_total_swaps_left?: number;
     weekly_free_swaps_left?: number;
     weekly_total_swaps_left?: number;
@@ -633,11 +641,6 @@ export interface MenuHudPayload {
     troop_rate: number;
     gold_rate: number;
     hero_income_rate?: number;
-    hero_ability?: {
-        state: "ready" | "conditional" | "active" | "triggered" | "spent" | "unavailable";
-        remaining_seconds: number | null;
-        restriction: "campaign_only" | "buildings_disabled" | "defeated" | null;
-    } | null;
     attack_ratio: number;
     operations: HudCombatOperation[];
     spawn_timer_secs: number | null;

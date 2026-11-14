@@ -207,11 +207,18 @@ function renderRewardPills(
     return html;
 }
 
+// Ad grants left today, as the server counts them. Zero hides every rewarded
+// offer, so no video plays that the server would then refuse.
+export function adGrantsLeft(): number {
+    return Number(menuUi.state?.ad_grants_left) || 0;
+}
+
 export function isRewardedAdAvailable(): boolean {
     return (
         typeof window.SOW_portalRewardedAvailable === "function" &&
         window.SOW_portalRewardedAvailable() === true &&
-        typeof window.SOW_portalRewardedBreak === "function"
+        typeof window.SOW_portalRewardedBreak === "function" &&
+        adGrantsLeft() > 0
     );
 }
 
@@ -246,24 +253,11 @@ export function renderDirectiveCard(): string {
             "</button>" +
             "</div>";
     } else {
-        const showQuickGo = Boolean(directive.action_target);
         actionMarkup =
             "<div class='sow-directive__actions'>" +
-            (showQuickGo
-                ? "<button class='sow-missions__btn-go sow-missions__btn-go--compact' type='button' data-command='mission_action' data-action-target='" +
-                  esc(directive.action_target) +
-                  "' data-mission-id='" +
-                  esc(directive.id) +
-                  "'" +
-                  missionActionTooltipAttrs(directive.action_target, directive.id) +
-                  ">" +
-                  esc(SOW_t("missions.action_go")) +
-                  arrowRightIconSvg() +
-                  "</button>"
-                : "") +
             "<button class='sow-directive__btn-view' type='button' data-command='open_missions'>" +
             esc(SOW_t("missions.directive_view_all")) +
-            " <span>→</span>" +
+            arrowRightIconSvg() +
             "</button>" +
             "</div>";
     }
@@ -279,7 +273,7 @@ export function renderDirectiveCard(): string {
     return (
         "<section class='sow-directive-card" +
         (readyToClaim ? " is-ready" : "") +
-        "' aria-label='" +
+        "' data-command='open_missions' role='button' tabindex='0' aria-label='" +
         esc(SOW_t("missions.directive_title")) +
         "'>" +
         "<div class='sow-directive__head'>" +
@@ -333,7 +327,7 @@ function formatDailyResetCountdown(): string {
 
 function formatWeeklyResetCountdown(): string {
     const nowSecs = Math.floor(Date.now() / 1000);
-    const offset = 489600;
+    const offset = 144000; // server ROTATION_RESET_OFFSET_SECS: rotations reset Tuesday 08:00 UTC
     const period = 604800;
     const currentPeriod = Math.floor((nowSecs + offset) / period);
     const nextResetSecs = (currentPeriod + 1) * period - offset;
@@ -796,10 +790,8 @@ function trackMissionSwap(mission: MenuMission | undefined, adFunded: boolean): 
         name: "mission_swap",
         props: {
             mission_id: mission?.id || "",
-            category: mission?.category || "",
-            axis: mission?.axis || "",
-            tag: mission?.tag || "",
-            ad_funded: adFunded,
+            tier: mission?.category || "",
+            used_ad: adFunded,
         },
     });
 }

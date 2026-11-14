@@ -176,24 +176,24 @@ mod tests {
     }
 
     #[test]
-    fn territory_generates_one_gold_per_second_per_1024_tiles() {
+    fn territory_generates_four_gold_per_second_per_1024_tiles() {
         let cfg = default_cfg();
         let agg = BuildingAggregate::default();
         assert_eq!(
             gold_income_per_second(128, agg, Leader::of("caesar"), &cfg),
-            cfg.gold_base_income + 0.125
+            cfg.gold_base_income + 0.5
         );
         assert_eq!(
             gold_income_per_second(1_024, agg, Leader::of("caesar"), &cfg),
-            cfg.gold_base_income + 1.0
+            cfg.gold_base_income + 4.0
         );
         assert_eq!(
             gold_income_per_second(10_240, agg, Leader::of("caesar"), &cfg),
-            cfg.gold_base_income + 10.0
+            cfg.gold_base_income + 40.0
         );
         assert_eq!(
             troop_income_per_second(400, agg, Leader::of("caesar"), &cfg),
-            cfg.troop_base_income + 400.0 / 16.0 * 0.75
+            cfg.troop_base_income + 400.0 / 16.0 * 3.0
         );
     }
 
@@ -205,15 +205,19 @@ mod tests {
             cfg.per_tick(per_second) * ticks_per_second * 60.0 / cfg.global_speed_multiplier
         };
 
-        assert!((gold_per_game_minute(cfg.gold_base_income) - 60.0).abs() < 1e-9);
-        assert!((gold_per_game_minute(cfg.factory_gold_income) - 60.0 * (8.0 / 7.0)).abs() < 1e-9);
-        assert_eq!(cfg.troop_base_income, 175.0);
-        assert_eq!(cfg.city_troop_income, 275.0);
-        assert_eq!(cfg.farm_troop_income, 275.0);
-        assert_eq!(cfg.hero_factory_troop_income, 275.0);
-        assert_eq!(cfg.hero_port_troop_income, 275.0);
-        assert_eq!(cfg.city_max_troops, 3_300.0);
-        assert_eq!(cfg.territory_troop_amount, 0.75);
+        assert!((gold_per_game_minute(cfg.gold_base_income) - 600.0).abs() < 1e-9);
+        assert!(
+            (gold_per_game_minute(cfg.factory_gold_income) - 60.0 * (32.0 / 7.0)).abs()
+                < 1e-9
+        );
+        assert_eq!(cfg.global_speed_multiplier, 0.10);
+        assert_eq!(cfg.troop_base_income, 1_600.0);
+        assert_eq!(cfg.city_troop_income, 600.0);
+        assert_eq!(cfg.farm_troop_income, 600.0);
+        assert_eq!(cfg.hero_factory_troop_income, 600.0);
+        assert_eq!(cfg.hero_port_troop_income, 600.0);
+        assert_eq!(cfg.city_max_troops, 3_630.0);
+        assert_eq!(cfg.territory_troop_amount, 3.0);
         assert_eq!(cfg.max_troops_base, 5_000.0);
         assert_eq!(cfg.max_troops_scale, 55.0);
         assert_eq!(cfg.territory_troop_tiles, 16);
@@ -233,9 +237,9 @@ mod tests {
             ..Default::default()
         };
         let troop_rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
-        // Four levels at 275 troops/s, scaled by the current 0.16 game speed.
+        // Four levels at 600 troops/s, scaled by the 0.10 Normal speed.
         assert!(
-            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 176.0).abs()
+            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 240.0).abs()
                 < 1e-10
         );
     }
@@ -244,7 +248,7 @@ mod tests {
     fn trade_income_uses_game_seconds() {
         let cfg = default_cfg();
         assert!(
-            (trade_income_per_second(2, Leader::of("caesar"), &cfg) * 21.0 - 24.0).abs() < 1e-12
+            (trade_income_per_second(2, Leader::of("caesar"), &cfg) * 21.0 - 96.0).abs() < 1e-12
         );
     }
 
@@ -284,12 +288,13 @@ mod tests {
             crate::geo_entities::Resource::Troops,
         );
         assert!(
-            (troop_rate - (175.0 + cfg.farm_troop_income * 2.0 * farm_troop_bonus)).abs() < 1e-12
+            (troop_rate - (1_600.0 + cfg.farm_troop_income * 2.0 * farm_troop_bonus)).abs()
+                < 1e-12
         );
-        assert!((gold_rate - (1.0 + 4.75 * (4.0 + 12.0) / 21.0)).abs() < 1e-12);
+        assert!((gold_rate - (10.0 + 4.75 * (16.0 + 48.0) / 21.0)).abs() < 1e-12);
 
         let ragnar_gold = gold_income_per_second(0, agg, Leader::of("cleopatra"), &cfg);
-        assert!((ragnar_gold - (1.0 + 4.75 * (4.0 + 18.0) / 21.0)).abs() < 1e-12);
+        assert!((ragnar_gold - (10.0 + 4.75 * (16.0 + 72.0) / 21.0)).abs() < 1e-12);
     }
 
     #[test]

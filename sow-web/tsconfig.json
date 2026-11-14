@@ -9,6 +9,6 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["shell/**/*.ts", "site/auth-callback.ts", "../sow-server/assets/admin_analytics.ts"],
+  "include": ["shell/**/*.ts", "site/auth-callback.ts"],
   "exclude": ["shell/sdk/**/*.ts", "shell/sw.ts"]
 }

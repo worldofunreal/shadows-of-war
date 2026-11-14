@@ -78,6 +78,7 @@ declare global {
         SOW_BUILDING_ART: SowBuildingArt;
         SOW_BLOCKED_IDS?: string[];
         SOW_onStateUpdate: (state: unknown) => void;
+        SOW_diagnostics_update: (fps: number | null, ping: number | null) => void;
         SOW_hover_card_update: (raw: string) => void;
         SOW_tutorial_pointer_update: (raw: string) => void;
         SOW_t: (key: string, values?: Record<string, unknown>) => string;
@@ -86,7 +87,12 @@ declare global {
         SOW_trackExperienceEvent: (payload: unknown) => void;
         SOW_isAndroidTwa: () => boolean;
         SOW_hasText: (key: string) => boolean;
-        SOW_renderHeroBriefing: (leaderOrSlug: unknown, surface?: string, headingId?: string) => string;
+        SOW_renderHeroBriefing: (
+            leaderOrSlug: unknown,
+            surface?: string,
+            headingId?: string,
+            tagsMarkup?: string,
+        ) => string;
         SOW_getLocale: () => string;
         SOW_getLocaleLabel: (locale: string) => string;
         SOW_getSupportedLocales: () => string[];

@@ -183,8 +183,6 @@ pub struct MissionRecord {
     #[serde(default)]
     pub claimed_at: Option<u64>,
     #[serde(default)]
-    pub doubled_by_ad: bool,
-    #[serde(default)]
     pub seen_keys: BTreeSet<String>,
 }
 
@@ -1651,60 +1649,6 @@ pub fn build_all_missions_view(
     build_all_missions_view_with_hands(stats, saved_records, epoch_day, &[], &[], 0, None)
 }
 
-/// Identifies the single active directive that should be featured on the command console.
-/// Priority (skipping locked missions):
-/// 1. First completed-but-unclaimed onboarding mission (reward ready!).
-/// 2. First unlocked in-progress onboarding mission.
-/// 3. First unlocked completed-but-unclaimed daily mission.
-/// 4. First unlocked completed-but-unclaimed weekly mission.
-/// 5. First unlocked in-progress daily mission.
-/// 6. First unlocked in-progress weekly mission.
-pub fn active_command_directive(missions: &[MissionView]) -> Option<MissionView> {
-    // 1. Unclaimed onboarding
-    if let Some(m) = missions
-        .iter()
-        .find(|m| !m.locked && m.category == "onboarding" && m.completed && !m.claimed)
-    {
-        return Some(m.clone());
-    }
-    // 2. Incomplete onboarding
-    if let Some(m) = missions
-        .iter()
-        .find(|m| !m.locked && m.category == "onboarding" && !m.completed)
-    {
-        return Some(m.clone());
-    }
-    // 3. Unclaimed daily
-    if let Some(m) = missions
-        .iter()
-        .find(|m| !m.locked && m.category == "daily" && m.completed && !m.claimed)
-    {
-        return Some(m.clone());
-    }
-    // 4. Unclaimed weekly
-    if let Some(m) = missions
-        .iter()
-        .find(|m| !m.locked && m.category == "weekly" && m.completed && !m.claimed)
-    {
-        return Some(m.clone());
-    }
-    // 5. Incomplete daily
-    if let Some(m) = missions
-        .iter()
-        .find(|m| !m.locked && m.category == "daily" && !m.completed)
-    {
-        return Some(m.clone());
-    }
-    // 6. Incomplete weekly
-    if let Some(m) = missions
-        .iter()
-        .find(|m| !m.locked && m.category == "weekly" && !m.completed)
-    {
-        return Some(m.clone());
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1788,17 +1732,19 @@ mod tests {
     }
 
     #[test]
-    fn directive_prioritizes_rewards_then_sequential_onboarding() {
+    fn onboarding_unlocks_in_sequence() {
         let stats = MissionStats {
             player_level: 1,
             tutorial_completed: true,
             ..Default::default()
         };
         let views = build_all_missions_view(&stats, &Default::default(), 100);
-        let directive = active_command_directive(&views).expect("has active directive");
-        assert_eq!(directive.id, "onboarding_1_tutorial");
-        assert!(directive.completed);
-        assert!(!directive.claimed);
+        let first = views
+            .iter()
+            .find(|m| m.id == "onboarding_1_tutorial")
+            .unwrap();
+        assert!(first.completed);
+        assert!(!first.claimed);
         assert!(views.iter().find(|m| m.id == "onboarding_2_baptism").unwrap().locked);
         assert!(views.iter().filter(|m| m.category == "daily").all(|m| m.locked));
         assert!(views.iter().filter(|m| m.category == "weekly").all(|m| m.locked));
@@ -1815,10 +1761,12 @@ mod tests {
             },
         );
         let views2 = build_all_missions_view(&stats, &saved, 100);
-        let directive2 = active_command_directive(&views2).expect("has active directive");
-        assert_eq!(directive2.id, "onboarding_2_baptism");
-        assert!(!directive2.completed);
-        assert!(!directive2.locked);
+        let second = views2
+            .iter()
+            .find(|m| m.id == "onboarding_2_baptism")
+            .unwrap();
+        assert!(!second.completed);
+        assert!(!second.locked);
         assert!(views2.iter().find(|m| m.id == "onboarding_3_rotation_hero").unwrap().locked);
     }
 

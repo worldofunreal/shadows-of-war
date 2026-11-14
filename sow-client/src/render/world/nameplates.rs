@@ -171,6 +171,14 @@ pub(crate) struct NameplateSystem {
     next_avatar_transition_id: u64,
     avatar_presentations: HashMap<u16, AvatarPresentation>,
     pub(crate) avatar_revision: u64,
+    scratch_combatants: HashSet<u16>,
+    scratch_incoming_targets: HashSet<u16>,
+    scratch_committed_troops: HashMap<u16, f64>,
+    scratch_incoming_force_at_start: HashMap<u16, f64>,
+    scratch_fear_under_attack_players: HashSet<u16>,
+    scratch_avatar_bases: HashMap<u16, AvatarExpression>,
+    scratch_alive_ids: HashSet<u16>,
+    scratch_presentations: HashMap<u16, AvatarPresentation>,
     emote_texts: [String; 4],
     prepared_emotes: [sow_render::text::PreparedText; 4],
     emote_text_style_key: Option<u32>,
@@ -745,13 +753,16 @@ impl NameplateSystem {
         snapshot: &SimSnapshot,
         now: Instant,
         reduced_motion: bool,
-    ) {
+    ) -> bool {
         if self.avatar_base_tick == Some(snapshot.tick) && !self.campaign_base_expressions_dirty {
-            return;
+            return false;
         }
-        let mut combatants = HashSet::new();
-        let mut incoming_attack_targets = HashSet::new();
-        let mut committed_troops = HashMap::<u16, f64>::new();
+        let mut combatants = std::mem::take(&mut self.scratch_combatants);
+        let mut incoming_attack_targets = std::mem::take(&mut self.scratch_incoming_targets);
+        let mut committed_troops = std::mem::take(&mut self.scratch_committed_troops);
+        combatants.clear();
+        incoming_attack_targets.clear();
+        committed_troops.clear();
         for attack in &snapshot.attacks {
             if attack.owner_id != 0 && attack.troops.is_finite() && attack.troops > 0.0 {
                 *committed_troops.entry(attack.owner_id).or_default() += attack.troops;
@@ -768,8 +779,11 @@ impl NameplateSystem {
                 incoming_attack_targets.insert(attack.target_owner);
             }
         }
-        let mut incoming_force_at_start = HashMap::new();
-        let mut fear_under_attack_players = HashSet::new();
+        let mut incoming_force_at_start = std::mem::take(&mut self.scratch_incoming_force_at_start);
+        let mut fear_under_attack_players =
+            std::mem::take(&mut self.scratch_fear_under_attack_players);
+        incoming_force_at_start.clear();
+        fear_under_attack_players.clear();
         for player in snapshot.players.iter().filter(|player| player.alive) {
             if !incoming_attack_targets.contains(&player.id) {
                 continue;
@@ -801,7 +815,8 @@ impl NameplateSystem {
             }
         }
 
-        let mut avatar_bases = HashMap::with_capacity(snapshot.players.len());
+        let mut avatar_bases = std::mem::take(&mut self.scratch_avatar_bases);
+        avatar_bases.clear();
         for player in &snapshot.players {
             let expression = self
                 .campaign_base_expressions
@@ -821,11 +836,21 @@ impl NameplateSystem {
             }
             avatar_bases.insert(player.id, expression);
         }
-        self.avatar_bases = avatar_bases;
-        self.incoming_force_at_start = incoming_force_at_start;
-        self.fear_under_attack_players = fear_under_attack_players;
+        std::mem::swap(&mut self.avatar_bases, &mut avatar_bases);
+        std::mem::swap(&mut self.incoming_force_at_start, &mut incoming_force_at_start);
+        std::mem::swap(
+            &mut self.fear_under_attack_players,
+            &mut fear_under_attack_players,
+        );
+        self.scratch_combatants = combatants;
+        self.scratch_incoming_targets = incoming_attack_targets;
+        self.scratch_committed_troops = committed_troops;
+        self.scratch_incoming_force_at_start = incoming_force_at_start;
+        self.scratch_fear_under_attack_players = fear_under_attack_players;
+        self.scratch_avatar_bases = avatar_bases;
         self.avatar_base_tick = Some(snapshot.tick);
         self.campaign_base_expressions_dirty = false;
+        true
     }
 
     pub(crate) fn set_campaign_base_expressions(
@@ -892,17 +917,28 @@ impl NameplateSystem {
         self.next_avatar_transition_id = self.next_avatar_transition_id.wrapping_add(1);
     }
 
-    fn advance_avatar_transitions(&mut self, snapshot: &SimSnapshot, now: Instant, reduced_motion: bool) {
+    fn advance_avatar_transitions(
+        &mut self,
+        snapshot: &SimSnapshot,
+        now: Instant,
+        reduced_motion: bool,
+    ) -> bool {
+        if self.avatar_transitions.is_empty() {
+            return false;
+        }
         if reduced_motion {
             self.avatar_transitions.clear();
-            return;
+            return true;
         }
-        let alive: HashSet<_> = snapshot
-            .players
-            .iter()
-            .filter(|player| player.alive)
-            .map(|player| player.id)
-            .collect();
+        let mut alive = std::mem::take(&mut self.scratch_alive_ids);
+        alive.clear();
+        alive.extend(
+            snapshot
+                .players
+                .iter()
+                .filter(|player| player.alive)
+                .map(|player| player.id),
+        );
         self.avatar_transitions.retain(|player_id, transition| {
             if !alive.contains(player_id) {
                 return false;
@@ -920,6 +956,8 @@ impl NameplateSystem {
                 AvatarTransitionStage::Enter => false,
             }
         });
+        self.scratch_alive_ids = alive;
+        true
     }
 
     pub(crate) fn manual_emote_active(
@@ -1064,133 +1102,148 @@ impl NameplateSystem {
         tick_secs: f32,
         now: Instant,
         reduced: bool,
+        bases_updated: bool,
+        transitions_touched: bool,
     ) {
+        if self.emote_tick == Some(snapshot.tick)
+            && !bases_updated
+            && !transitions_touched
+            && self.emote_visuals.is_empty()
+            && self.campaign_emotes.is_empty()
+            && !self.avatar_presentations.is_empty()
+        {
+            return;
+        }
         if self.emote_tick.is_some_and(|tick| snapshot.tick < tick) {
             self.emote_visuals.clear();
         }
+        let same_tick = self.emote_tick == Some(snapshot.tick);
         self.emote_tick = Some(snapshot.tick);
-        for player in &snapshot.players {
-            if !player.alive {
-                self.emote_visuals.remove(&player.id);
-                continue;
-            }
-            let old = self.emote_visuals.get(&player.id).copied();
-            let idle = self
-                .avatar_bases
-                .get(&player.id)
-                .copied()
-                .unwrap_or(AvatarExpression::Calm);
-            if let Some(event) = player.active_emote {
-                if old.is_some_and(|old| {
-                    old.event.event_id == event.event_id
-                        && old.event.kind == event.kind
-                        && old.event.pinned == event.pinned
-                        && old.event.scripted == event.scripted
-                        && old.event.started_tick == event.started_tick
-                        && old.release_at.is_none()
-                }) {
+        if !same_tick || !self.emote_visuals.is_empty() {
+            for player in &snapshot.players {
+                if !player.alive {
+                    self.emote_visuals.remove(&player.id);
                     continue;
                 }
-                let raw_age = event.age_seconds(snapshot.tick, tick_secs * 1000.0);
-                let (from_motion, previous) = old
-                    .map(|old| {
-                        let age = old.age(now);
-                        let (from, to, blend) = old.expressions(age, now, idle);
-                        (
-                            old.motion(age, now, reduced),
-                            if blend < 0.5 { from } else { to },
-                        )
-                    })
-                    .unwrap_or((EmoteMotion::default(), idle));
-                self.emote_visuals.insert(
-                    player.id,
-                    AvatarEmote {
-                        event,
-                        previous,
-                        from_motion,
-                        observed_at: now,
-                        observed_age: if event.scripted || raw_age <= tick_secs * 2.0 {
-                            0.0
-                        } else {
-                            raw_age
-                        },
-                        release_at: None,
-                        suppress_bubble: event.pinned && old.is_none() && raw_age > tick_secs * 2.0,
-                    },
-                );
-            } else if let Some(mut old) = old {
-                if let Some(released) = old.release_at {
-                    if now.duration_since(released).as_secs_f32() >= 0.15 {
-                        self.emote_visuals.remove(&player.id);
-                    }
-                } else if old.event.expired(snapshot.tick, tick_secs * 1000.0) {
-                    // Finish the existing return fade; expiry must not restart it.
-                    if old.age(now) >= EMOTE_DURATION_SECS {
-                        self.emote_visuals.remove(&player.id);
-                    }
-                } else {
-                    let age = old.age(now);
-                    let (from, to, blend) = old.expressions(age, now, idle);
-                    old.previous = if blend < 0.5 { from } else { to };
-                    old.from_motion = old.motion(age, now, reduced);
-                    old.release_at = Some(now);
-                    self.emote_visuals.insert(player.id, old);
-                }
-            }
-        }
-        let presentations = snapshot
-            .players
-            .iter()
-            .map(|player| {
+                let old = self.emote_visuals.get(&player.id).copied();
                 let idle = self
                     .avatar_bases
                     .get(&player.id)
                     .copied()
                     .unwrap_or(AvatarExpression::Calm);
-                let emote = self.emote_visuals.get(&player.id).copied();
-                let (expression, manual) = emote.map_or((idle, false), |visual| {
-                    let age = visual.age(now);
-                    let (from, to, mix) = visual.expressions(age, now, idle);
-                    (
-                        if mix < 0.5 { from } else { to },
-                        !visual.event.scripted
-                            && visual.release_at.is_none()
-                            && (visual.event.pinned || age < EMOTE_DURATION_SECS),
-                    )
-                });
-                let transition = if emote.is_none() {
-                    self.avatar_transitions.get(&player.id).map(|transition| {
-                        transition.presentation()
-                    })
-                } else {
-                    None
-                };
-                let expression = transition.map_or(expression, |transition| match transition.stage {
-                    AvatarTransitionStage::Exit => transition.from,
-                    AvatarTransitionStage::Enter => transition.to,
-                });
+                if let Some(event) = player.active_emote {
+                    if old.is_some_and(|old| {
+                        old.event.event_id == event.event_id
+                            && old.event.kind == event.kind
+                            && old.event.pinned == event.pinned
+                            && old.event.scripted == event.scripted
+                            && old.event.started_tick == event.started_tick
+                            && old.release_at.is_none()
+                    }) {
+                        continue;
+                    }
+                    let raw_age = event.age_seconds(snapshot.tick, tick_secs * 1000.0);
+                    let (from_motion, previous) = old
+                        .map(|old| {
+                            let age = old.age(now);
+                            let (from, to, blend) = old.expressions(age, now, idle);
+                            (
+                                old.motion(age, now, reduced),
+                                if blend < 0.5 { from } else { to },
+                            )
+                        })
+                        .unwrap_or((EmoteMotion::default(), idle));
+                    self.emote_visuals.insert(
+                        player.id,
+                        AvatarEmote {
+                            event,
+                            previous,
+                            from_motion,
+                            observed_at: now,
+                            observed_age: if event.scripted || raw_age <= tick_secs * 2.0 {
+                                0.0
+                            } else {
+                                raw_age
+                            },
+                            release_at: None,
+                            suppress_bubble: event.pinned && old.is_none() && raw_age > tick_secs * 2.0,
+                        },
+                    );
+                } else if let Some(mut old) = old {
+                    if let Some(released) = old.release_at {
+                        if now.duration_since(released).as_secs_f32() >= 0.15 {
+                            self.emote_visuals.remove(&player.id);
+                        }
+                    } else if old.event.expired(snapshot.tick, tick_secs * 1000.0) {
+                        // Finish the existing return fade; expiry must not restart it.
+                        if old.age(now) >= EMOTE_DURATION_SECS {
+                            self.emote_visuals.remove(&player.id);
+                        }
+                    } else {
+                        let age = old.age(now);
+                        let (from, to, blend) = old.expressions(age, now, idle);
+                        old.previous = if blend < 0.5 { from } else { to };
+                        old.from_motion = old.motion(age, now, reduced);
+                        old.release_at = Some(now);
+                        self.emote_visuals.insert(player.id, old);
+                    }
+                }
+            }
+        }
+        let mut presentations = std::mem::take(&mut self.scratch_presentations);
+        presentations.clear();
+        for player in &snapshot.players {
+            let idle = self
+                .avatar_bases
+                .get(&player.id)
+                .copied()
+                .unwrap_or(AvatarExpression::Calm);
+            let emote = self.emote_visuals.get(&player.id).copied();
+            let (expression, manual) = emote.map_or((idle, false), |visual| {
+                let age = visual.age(now);
+                let (from, to, mix) = visual.expressions(age, now, idle);
                 (
-                    player.id,
-                    AvatarPresentation {
-                        expression,
-                        manual_emote_active: manual,
-                        transition,
-                    },
+                    if mix < 0.5 { from } else { to },
+                    !visual.event.scripted
+                        && visual.release_at.is_none()
+                        && (visual.event.pinned || age < EMOTE_DURATION_SECS),
                 )
-            })
-            .collect();
+            });
+            let transition = if emote.is_none() {
+                self.avatar_transitions.get(&player.id).map(|transition| {
+                    transition.presentation()
+                })
+            } else {
+                None
+            };
+            let expression = transition.map_or(expression, |transition| match transition.stage {
+                AvatarTransitionStage::Exit => transition.from,
+                AvatarTransitionStage::Enter => transition.to,
+            });
+            presentations.insert(
+                player.id,
+                AvatarPresentation {
+                    expression,
+                    manual_emote_active: manual,
+                    transition,
+                },
+            );
+        }
         if self.avatar_presentations != presentations {
-            self.avatar_presentations = presentations;
+            std::mem::swap(&mut self.avatar_presentations, &mut presentations);
             self.avatar_revision = self.avatar_revision.wrapping_add(1);
         }
-        let emote_visuals = &self.emote_visuals;
-        self.campaign_emotes.retain(|player_id, cue| {
-            emote_visuals.get(player_id).is_some_and(|visual| {
-                visual.event.event_id == cue.event_id
-                    && visual.event.scripted
-                    && (visual.event.pinned || visual.age(now) < EMOTE_DURATION_SECS)
-            })
-        });
+        self.scratch_presentations = presentations;
+        if !self.campaign_emotes.is_empty() {
+            let emote_visuals = &self.emote_visuals;
+            self.campaign_emotes.retain(|player_id, cue| {
+                emote_visuals.get(player_id).is_some_and(|visual| {
+                    visual.event.event_id == cue.event_id
+                        && visual.event.scripted
+                        && (visual.event.pinned || visual.age(now) < EMOTE_DURATION_SECS)
+                })
+            });
+        }
     }
 
     fn observe_status_badges(
@@ -1310,16 +1363,18 @@ pub(super) fn render_nameplates(
     {
         system.badge_animations.clear();
     }
-    if !tutorial_active {
+    if !tutorial_active && !system.campaign_base_expressions.is_empty() {
         system.set_campaign_base_expressions(HashMap::new());
     }
-    system.observe_avatar_bases(snapshot, now, reduced_motion);
-    system.advance_avatar_transitions(snapshot, now, reduced_motion);
+    let bases_updated = system.observe_avatar_bases(snapshot, now, reduced_motion);
+    let transitions_touched = system.advance_avatar_transitions(snapshot, now, reduced_motion);
     system.observe_emotes(
         snapshot,
         (sim.config.tick_rate_ms / 1000.0).max(0.001),
         now,
         reduced_motion,
+        bases_updated,
+        transitions_touched,
     );
     system.prepare_emote_texts(text, dev);
     system.prepare_campaign_emote_message(text, dev);

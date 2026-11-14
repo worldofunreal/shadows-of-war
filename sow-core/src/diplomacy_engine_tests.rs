@@ -37,7 +37,7 @@ mod alliance_lifecycle_tests {
     }
 
     #[test]
-    fn share_assault_sends_trinovantes_whole_army_at_camulodunum() {
+    fn share_assault_finishes_small_enemy_and_refunds_surviving_force() {
         use crate::protocol::{CampaignRelation, Team};
 
         let mut engine = campaign_contact_engine(0.0, false);
@@ -57,7 +57,9 @@ mod alliance_lifecycle_tests {
         engine.state.register_player(trinovantes);
         engine.state.map.set_owner_id(0, 0, 3);
         engine.campaign_faction_ids.insert(3, "trinovantes".into());
-        engine.campaign_relations.insert(3, CampaignRelation::Allied);
+        engine
+            .campaign_relations
+            .insert(3, CampaignRelation::Allied);
 
         let mut camulodunum = Player::new_bot(4, "Camulodunum".into(), [0.8, 0.2, 0.2], &config);
         camulodunum.team = Some(Team::Red);
@@ -79,10 +81,12 @@ mod alliance_lifecycle_tests {
         }
         let remaining = engine.state.player(3).unwrap().troops;
         assert!(
-            remaining < 50.0,
-            "Trinovantes kept {remaining} of 1000 troops"
+            remaining >= 900.0,
+            "Trinovantes lost the surviving assault force: {remaining}"
         );
-        assert!(engine.state.player(4).unwrap().troops < 100.0);
+        assert!(!engine.state.player(4).unwrap().alive);
+        assert_eq!(engine.state.player(4).unwrap().troops, 0.0);
+        assert_eq!(engine.state.player(3).unwrap().kills, 1);
     }
 
     #[test]
@@ -118,7 +122,9 @@ mod alliance_lifecycle_tests {
     #[test]
     fn campaign_contact_choice_pays_atomically_and_updates_the_relationship() {
         let mut engine = campaign_contact_engine(250.0, true);
-        engine.campaign_faction_ids.insert(2, "venta_icenorum".into());
+        engine
+            .campaign_faction_ids
+            .insert(2, "venta_icenorum".into());
         let authored_color = [0.25, 0.45, 0.65];
         engine.state.player_mut(2).unwrap().color = authored_color;
         let neutral = engine

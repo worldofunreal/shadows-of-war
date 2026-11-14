@@ -8,117 +8,100 @@ use sow_core::protocol::{CampaignRelation, Team};
 /// Which scripted campaign the running tutorial match belongs to. Boudica is
 /// the first-run teaching intro; the Six Sky episodes are the retention chain
 /// that follows it.
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
-pub enum CampaignId {
-    #[default]
-    Boudica,
-    SixSkyEp1,
-    SixSkyEp2,
-    SixSkyEp3,
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CampaignId(&'static sow_data::campaign::CampaignEpisode);
+
+impl Default for CampaignId {
+    fn default() -> Self {
+        Self::intro()
+    }
 }
 
 impl CampaignId {
-    pub const ALL: [CampaignId; 4] = [
-        CampaignId::Boudica,
-        CampaignId::SixSkyEp1,
-        CampaignId::SixSkyEp2,
-        CampaignId::SixSkyEp3,
-    ];
+    pub fn intro() -> Self {
+        Self::from_episode_id(sow_data::campaign::INTRO_EPISODE_ID)
+            .expect("intro campaign episode must exist in catalog")
+    }
+
+    pub fn is_boudica(self) -> bool {
+        self.0.id == "boudica"
+    }
+
+    pub fn all() -> impl Iterator<Item = CampaignId> {
+        sow_data::campaign::CAMPAIGN_EPISODES.iter().map(Self)
+    }
 
     /// Stable id for campaign progress and analytics events.
     pub fn episode_id(self) -> &'static str {
-        match self {
-            CampaignId::Boudica => "boudica",
-            CampaignId::SixSkyEp1 => "six_sky_ep1",
-            CampaignId::SixSkyEp2 => "six_sky_ep2",
-            CampaignId::SixSkyEp3 => "six_sky_ep3",
-        }
+        self.0.id
     }
 
     pub fn from_episode_id(id: &str) -> Option<Self> {
-        match id {
-            "boudica" => Some(CampaignId::Boudica),
-            "six_sky_ep1" => Some(CampaignId::SixSkyEp1),
-            "six_sky_ep2" => Some(CampaignId::SixSkyEp2),
-            "six_sky_ep3" => Some(CampaignId::SixSkyEp3),
-            _ => None,
-        }
+        sow_data::campaign::episode(id).map(Self)
     }
 
     /// Map asset needed to start this episode. Used to overlap first-run map
     /// download with the browser's campaign roster and trigger requests.
     pub fn map_id(self) -> &'static str {
-        match self {
-            CampaignId::Boudica => "eastanglia",
-            CampaignId::SixSkyEp1 | CampaignId::SixSkyEp2 | CampaignId::SixSkyEp3 => "northamerica",
-        }
+        self.0.map_id
+    }
+
+    pub fn map_dimensions(self) -> (u32, u32) {
+        (self.0.map_width, self.0.map_height)
     }
 
     pub fn menu_title(self) -> &'static str {
-        match self {
-            CampaignId::Boudica => "Rise of the Iceni",
-            CampaignId::SixSkyEp1 => "Arrival",
-            CampaignId::SixSkyEp2 => "Regent's Fire",
-            CampaignId::SixSkyEp3 => "Moon Goddess",
-        }
+        self.0.title
     }
 
     pub fn menu_subtitle(self) -> &'static str {
-        match self {
-            CampaignId::Boudica => "Tutorial · Boudica",
-            CampaignId::SixSkyEp1 => "Lady Six Sky · 682 CE",
-            CampaignId::SixSkyEp2 => "Lady Six Sky · 693 CE",
-            CampaignId::SixSkyEp3 => "Lady Six Sky · 726–741 CE",
-        }
+        self.0.subtitle
     }
 
     pub fn menu_title_text(self) -> crate::ui::UiText {
-        match self {
-            CampaignId::Boudica => crate::ui::UiText::new("lobbies.campaign_boudica_title"),
-            CampaignId::SixSkyEp1 => crate::ui::UiText::new("lobbies.campaign_six_sky_ep1_title"),
-            CampaignId::SixSkyEp2 => crate::ui::UiText::new("lobbies.campaign_six_sky_ep2_title"),
-            CampaignId::SixSkyEp3 => crate::ui::UiText::new("lobbies.campaign_six_sky_ep3_title"),
-        }
+        crate::ui::UiText::new(self.0.title_key)
     }
 
     pub fn menu_subtitle_text(self) -> crate::ui::UiText {
-        match self {
-            CampaignId::Boudica => crate::ui::UiText::new("lobbies.campaign_boudica_subtitle"),
-            CampaignId::SixSkyEp1 => {
-                crate::ui::UiText::new("lobbies.campaign_six_sky_ep1_subtitle")
-            }
-            CampaignId::SixSkyEp2 => {
-                crate::ui::UiText::new("lobbies.campaign_six_sky_ep2_subtitle")
-            }
-            CampaignId::SixSkyEp3 => {
-                crate::ui::UiText::new("lobbies.campaign_six_sky_ep3_subtitle")
-            }
-        }
+        crate::ui::UiText::new(self.0.subtitle_key)
+    }
+
+    pub fn is_intro_tutorial(self) -> bool {
+        self.0.marks_intro_completed
+    }
+
+    pub fn is_server_owned_tutorial(self) -> bool {
+        self.0.server_owned_tutorial
+    }
+
+    pub fn intro_completed(progress: &crate::player_progress::PlayerProgress) -> bool {
+        progress.intro_completed.unwrap_or(false)
+            || progress
+                .completed_episodes
+                .contains(sow_data::campaign::INTRO_EPISODE_ID)
+            || progress.completed_episodes.contains("boudica")
     }
 
     pub fn is_completed(self, progress: &crate::player_progress::PlayerProgress) -> bool {
-        match self {
-            CampaignId::Boudica => progress.intro_completed.unwrap_or(false),
-            _ => progress.completed_episodes.contains(self.episode_id()),
+        if self.0.server_owned_tutorial {
+            progress.intro_completed.unwrap_or(false)
+                || progress.completed_episodes.contains(self.0.id)
+        } else {
+            progress.completed_episodes.contains(self.0.id)
         }
     }
 
     pub fn is_unlocked(self, progress: &crate::player_progress::PlayerProgress) -> bool {
-        let Some(episode) = sow_data::campaign::episode(self.episode_id()) else {
-            return false;
-        };
-        sow_data::campaign::episode_is_published(episode.id)
+        sow_data::campaign::episode_is_published(self.0.id)
             && sow_data::campaign::access_granted(
-                episode.id,
+                self.0.id,
                 &progress.completed_episodes,
                 &progress.owned_leaders,
             )
     }
 
     pub fn advisor(self) -> Leader {
-        sow_data::campaign::episode(self.episode_id())
-            .expect("every campaign has an episode entry")
-            .advisor()
+        self.0.advisor()
     }
 }
 
@@ -289,7 +272,7 @@ pub(crate) fn tutorial_camera_frame(
     screen_w: f32,
     screen_h: f32,
 ) -> Option<((f32, f32), f32)> {
-    if !config.tutorial || campaign != CampaignId::Boudica {
+    if !config.tutorial || !campaign.is_boudica() {
         return None;
     }
     let (player_x, player_y) = config.player_spawn?;

@@ -11,6 +11,7 @@ impl SowEngine {
             return;
         }
         let w = self.state.map.width;
+        let finish_threshold = self.current_finish_threshold();
 
         if self.building_aggregates_dirty {
             let max_pid = self
@@ -39,11 +40,20 @@ impl SowEngine {
         let mut to_remove = Vec::new();
         let mut elimination_candidates = Vec::new();
         let mut territory_changes = Vec::new();
+        let mut finish_candidates = crate::bitset::DenseBitSet::new();
+        let mut finishing_victims = crate::bitset::DenseBitSet::new();
         let tick_rate_ms = self.state.config.tick_rate_ms;
         let transport_base_steps_per_tick =
             crate::warp_fleet::transport_base_steps_per_tick(tick_rate_ms);
 
         for i in 0..self.fleets.len() {
+            let owner_id = self.fleets[i].owner_id;
+            let target_owner = self.fleets[i].target_owner;
+            if finishing_victims.contains(u32::from(owner_id))
+                || finishing_victims.contains(u32::from(target_owner))
+            {
+                continue;
+            }
             let fleet = &mut self.fleets[i];
 
             if fleet.troops <= 0.0 {
@@ -347,6 +357,18 @@ impl SowEngine {
                 f_landed,
                 ly * w + lx,
             );
+            if f_target != 0 {
+                finish_candidates.insert(u32::from(f_target));
+                if self.has_valid_finishing_contact_for(
+                    f_target,
+                    finish_threshold,
+                    held_target,
+                    &pre_defeat_targets,
+                    pre_defeat_pending,
+                ) {
+                    finishing_victims.insert(u32::from(f_target));
+                }
+            }
             to_remove.push(i);
         }
 
@@ -360,7 +382,9 @@ impl SowEngine {
             self.fleets.sort_unstable_by_key(|f| f.id);
         }
 
-        elimination_candidates.extend(self.annex_enclosed_components(territory_changes));
+        elimination_candidates.extend(
+            self.annex_enclosed_components_with_candidates(territory_changes, finish_candidates),
+        );
         for (victim, conqueror, x, y) in elimination_candidates {
             crate::execution::hero_effects::recruit_conquered_reserves(
                 &mut self.state,
@@ -1255,15 +1279,27 @@ mod tests {
                     GameEvent::TileCaptured { x: 12, y: 2, previous_owner, .. }
                     if *previous_owner == new_owner
                 )));
-                assert_eq!(engine.attacks.len(), 1);
-                let attack = &engine.attacks[0];
-                assert_eq!(attack.target_owner, original_target);
-                assert_eq!(attack.troops, 1_000.0);
-                assert_eq!(attack.to_conquer.len(), 1);
-                assert_eq!(
-                    attack.to_conquer.peek().map(|tile| (tile.x, tile.y)),
-                    Some((13, 2))
+                assert!(
+                    engine
+                        .attacks
+                        .iter()
+                        .all(|attack| attack.target_owner == original_target)
                 );
+                if original_target == 0 {
+                    assert_eq!(engine.attacks.len(), 1);
+                    let attack = &engine.attacks[0];
+                    assert_eq!(attack.troops, 1_000.0);
+                    assert_eq!(attack.to_conquer.len(), 1);
+                    assert_eq!(
+                        attack.to_conquer.peek().map(|tile| (tile.x, tile.y)),
+                        Some((13, 2))
+                    );
+                } else {
+                    assert!(engine.attacks.is_empty());
+                    assert!(!engine.state.player(3).unwrap().alive);
+                    assert_eq!(engine.state.player(3).unwrap().tile_count, 0);
+                }
+                assert!(engine.state.player(new_owner).unwrap().alive);
                 assert_eq!(engine.state.map.owner_id(landing % 20, landing / 20), 1);
                 for _ in 0..200 {
                     engine.state.tick += 1;
@@ -1271,7 +1307,13 @@ mod tests {
                 }
                 assert_eq!(engine.state.map.owner_id(12, 3), 2);
                 assert_eq!(engine.state.map.owner_id(13, 3), 2);
-                assert_eq!(engine.state.map.owner_id(2, 2), original_target);
+                assert_eq!(
+                    engine.state.map.owner_id(2, 2),
+                    if original_target == 0 { 0 } else { 1 }
+                );
+                if original_target == 3 {
+                    assert!(!engine.state.player(3).unwrap().alive);
+                }
             }
         }
     }
@@ -1313,6 +1355,10 @@ mod tests {
     #[test]
     fn new_landing_stays_separate_from_an_existing_land_attack() {
         let (mut engine, _) = invasion_in_transit(3);
+        for x in 10..17 {
+            engine.state.map.terrain[(5 * 20 + x) as usize] = MapTile::from_byte(0x80);
+            engine.state.set_tile_owner(x, 5, 3);
+        }
         engine.apply_intents(&[crate::protocol::StampedIntent {
             player_id: 1,
             intent: crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
@@ -1458,6 +1504,92 @@ mod tests {
     }
 
     #[test]
+    fn naval_landing_on_neutral_shore_can_finish_adjacent_small_enemy() {
+        let width = 64;
+        let landing = 10 * width + 10;
+        let mut state = GameState::new(
+            5,
+            width,
+            32,
+            GameConfig {
+                random_spawn: true,
+                tick_rate_ms: 100.0,
+                global_speed_multiplier: 0.0,
+                ..Default::default()
+            },
+        );
+        state.phase = crate::game::GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in 1..=2 {
+            let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+            player.troops = 1_000.0;
+            player.max_troops = 20_000.0;
+            state.register_player(player);
+        }
+        state.set_tile_owner(9, 10, 1);
+        for (x, y) in [
+            (11, 10),
+            (20, 20),
+            (22, 20),
+            (24, 20),
+            (26, 20),
+            (28, 20),
+            (30, 20),
+            (32, 20),
+        ] {
+            state.set_tile_owner(x, y, 2);
+        }
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.add_fleet(WarpFleet::new(
+            1,
+            1,
+            2,
+            UnitType::TransportShip,
+            600.0,
+            (3, landing),
+            vec![landing],
+        ));
+        engine.add_fleet(WarpFleet::new(
+            2,
+            1,
+            2,
+            UnitType::TransportShip,
+            50.0,
+            (4, landing),
+            vec![landing],
+        ));
+
+        engine.execute_fleets();
+
+        assert_eq!(engine.state.map.owner_id(10, 10), 1);
+        assert!(!engine.state.player(2).unwrap().alive);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 0);
+        assert_eq!(engine.state.player(1).unwrap().tile_count, 10);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
+        assert!(engine.attacks.is_empty());
+        assert!(engine.fleets.is_empty());
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::TransportShipLanded { owner_id: 1, .. }))
+                .count(),
+            1
+        );
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::PlayerEliminated { player_id: 2, .. }))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
     fn explicit_campaign_assault_preserves_its_friendly_target_exception() {
         let (mut engine, _) = invasion_in_transit(3);
         engine.state.player_mut(3).unwrap().alliances.push(1);
@@ -1509,8 +1641,10 @@ mod tests {
                 state.set_tile_owner(x, y, owner);
             }
             if has_other_tile {
-                state.map.terrain[14] = MapTile::from_byte(0xC0);
-                state.set_tile_owner(4, 2, 2);
+                for (x, y) in (0..5).map(|x| (x, 0)).chain((0..4).map(|x| (x, 2))) {
+                    state.map.terrain[(y * 5 + x) as usize] = MapTile::from_byte(0xC0);
+                    state.set_tile_owner(x, y, 2);
+                }
             }
             let mut engine = SowEngine::new(state, WaterComponents::default());
             // The route is already at its final shore tile; exercise the real landing path.
@@ -1682,7 +1816,7 @@ mod tests {
                 assert_eq!(
                     defeats,
                     if eliminated {
-                        vec![(2, 1, 2, 2)]
+                        vec![if by_fleet { (2, 1, 2, 2) } else { (2, 1, 2, 1) }]
                     } else {
                         vec![]
                     },

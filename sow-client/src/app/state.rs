@@ -87,9 +87,11 @@ pub struct TutorialObservation {
     pub port_upgrades: u64,
     pub port_levels: u64,
     pub resource_transfers: u64,
+    pub resource_requests: u64,
     pub alliance_requests_submitted: u64,
     pub resource_transfers_by_recipient_faction_id:
         std::collections::BTreeMap<String, ResourceTransferCounts>,
+    pub resource_requests_by_target_faction_id: std::collections::BTreeMap<String, u64>,
     pub seen_alliances: std::collections::HashSet<u16>,
     pub seen_alliance_faction_ids: std::collections::HashSet<String>,
     pub alliances_formed: u64,
@@ -118,6 +120,7 @@ pub enum TutorialPausedAction {
     ExpandOnceThenResume,
     AttackOnceThenResume,
     SendResourcesStayPaused,
+    RequestResourcesStayPaused,
     RequestAllianceStayPaused,
     BuildUntilStarted,
     UpgradeUntilStarted,
@@ -269,6 +272,8 @@ pub struct InputState {
     pub active_touches: std::collections::HashMap<u64, (f64, f64)>,
     pub map_pointer_start: Option<MapPointerStart>,
     pub last_pinch_state: Option<(f64, f64, f64)>,
+    /// Touch pan distance still owed to the camera during building placement.
+    pub touch_pan_residual: (f32, f32),
     pub map_context_menu: Option<MapContextMenu>,
     pub map_context_menu_session: u64,
     /// Time of the last accepted right press; a repeat inside the lockout is ignored.
@@ -617,6 +622,7 @@ pub struct UiState {
     pub attack_badge_active_ids: std::collections::HashSet<u64>,
     pub(crate) nameplates: crate::render::world::nameplates::NameplateSystem,
     pub(crate) building_render_cache: crate::render::world::BuildingRenderCache,
+    pub(crate) railway_render_state: crate::render::world::RailwayRenderState,
     pub(crate) building_placement_cache: crate::input::placement::BuildingPlacementCache,
     pub building_levels_seen: std::collections::HashMap<u32, u8>,
     pub building_upgrade_flashes: std::collections::HashMap<u32, web_time::Instant>,

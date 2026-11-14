@@ -16,7 +16,12 @@ import {
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
 import { renderDirectiveCard } from "./main_menu.missions.ts";
 import { renderSettingsPrivacySection } from "./main_menu.shell.ts";
-import { renderAdvisorTipsSettingRow, renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
+import {
+    renderAdvisorTipsSettingRow,
+    renderLocaleSettingRow,
+    renderMusicSpectrum,
+    renderSfxVolumeSettingRow,
+} from "./main_menu.settings.ts";
 
 export {
     abandonExternalPurchaseAttempt,
@@ -167,9 +172,12 @@ export function renderSettings() {
         renderMusicSpectrum() +
         "<input type='range' name='music_volume' min='0' max='1' step='0.01' value='" +
         esc(vol) +
-        "' style='--sow-music-fill: " +
+        "' style='--sow-slider-fill: " +
+        volPct +
+        "%; --sow-music-fill: " +
         volPct +
         "%;' data-setting='music_volume'></label>" +
+        renderSfxVolumeSettingRow() +
         renderLocaleSettingRow() +
         renderAdvisorTipsSettingRow() +
         "</div></section>" +
@@ -213,6 +221,7 @@ export function surfaceSettingsRenderKey(_deleteBusy: boolean, _deleteError: str
     const s = menuUi.state?.settings;
     return JSON.stringify([
         s?.music_volume == null ? 0.8 : s?.music_volume,
+        s?.sfx_volume == null ? 0.8 : s?.sfx_volume,
         Boolean(s?.free_zoom_out),
         Boolean(s?.show_fps_ping),
         Boolean(s?.show_dev_tools),

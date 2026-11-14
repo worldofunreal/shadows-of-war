@@ -64,6 +64,17 @@ pub(crate) fn render_overlays(
     let dev = DevConfig::get();
     let zoom_scaled = input.camera_zoom / sf;
 
+    super::railways::render(
+        text,
+        snapshot,
+        sim,
+        ui,
+        input,
+        &dev,
+        sf,
+        zoom_scaled,
+        now,
+    );
     render_building_selection_focus(text, sim, input, sf);
     if dev.vfx_world_buildings {
         render_buildings(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, now);

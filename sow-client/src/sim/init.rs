@@ -45,6 +45,7 @@ impl SowApp {
         let snap = new_engine.build_snapshot();
         let phase = snap.phase.clone();
         self.sim.current_snapshot = Some(snap);
+        self.ui.railway_render_state.reset();
         self.sim.latest_local_spawn = None;
         self.input.spawn_intent_rate.reset();
         self.ui.building_placement_cache = Default::default();

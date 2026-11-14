@@ -4680,11 +4680,11 @@ fn redesigned_income_stops_when_its_condition_ends_and_matches_the_hud_rate() {
     e.state.player_mut(1).unwrap().leader = Leader::of("ewuare");
     e.add_building(redesigned_building(1, 1, BuildingKind::City, 10, 10, 1));
     e.add_building(redesigned_building(2, 1, BuildingKind::Factory, 15, 10, 2));
-    assert_eq!(e.hero_gold_per_second(1), 2.0);
+    assert_eq!(e.hero_gold_per_second(1), 8.0);
     e.add_building(redesigned_building(3, 1, BuildingKind::City, 10, 15, 1));
     assert_eq!(
         e.hero_gold_per_second(1),
-        2.0,
+        8.0,
         "the same factory is counted only once"
     );
     e.buildings[0].owner_id = 2;

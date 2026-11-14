@@ -114,6 +114,7 @@ impl SowApp {
         self.input.camera_focus_target = None;
         self.input.camera_focus_waiting_for_input_release = false;
         self.input.tutorial_camera_focus = false;
+        self.input.touch_pan_residual = (0.0, 0.0);
         self.input.target_zoom = zoom;
         self.input.camera_shot = Some(crate::app::CameraShot {
             keys: std::iter::once(current).chain(keys).collect(),
@@ -170,6 +171,33 @@ impl SowApp {
                 return;
             }
         }
+        if self.ui.app.hud_state.building_placement.is_some() {
+            let (remaining_x, remaining_y) = self.input.touch_pan_residual;
+            if remaining_x.abs() > 0.01 || remaining_y.abs() > 0.01 {
+                let amount = (1.0 - f32::exp(-8.0 * dt)).clamp(0.0, 1.0);
+                let (step_x, step_y) = (remaining_x * amount, remaining_y * amount);
+                let (before_x, before_y) = (self.input.camera_x, self.input.camera_y);
+                self.input.camera_x += step_x;
+                self.input.camera_y += step_y;
+                self.clamp_camera_to_map();
+                self.input.touch_pan_residual = (
+                    if (self.input.camera_x - before_x - step_x).abs() > 0.01 {
+                        0.0
+                    } else {
+                        remaining_x - step_x
+                    },
+                    if (self.input.camera_y - before_y - step_y).abs() > 0.01 {
+                        0.0
+                    } else {
+                        remaining_y - step_y
+                    },
+                );
+            } else {
+                self.input.touch_pan_residual = (0.0, 0.0);
+            }
+        } else {
+            self.input.touch_pan_residual = (0.0, 0.0);
+        }
         let pointer_gesture_active = self.input.is_pointer_gesture_active();
         let is_building_drag = self.input.building_drag_offset.is_some();
         if pointer_gesture_active
@@ -185,8 +213,10 @@ impl SowApp {
             self.input.camera_focus_waiting_for_input_release = false;
             let rate = if self.input.tutorial_camera_focus {
                 2.0
-            } else if self.ui.app.hud_state.building_placement.is_some() {
-                5.5
+            } else if self.ui.app.hud_state.building_placement.is_some()
+                && crate::web_canvas::has_mobile_pointer()
+            {
+                3.5
             } else {
                 12.0
             };
@@ -298,6 +328,7 @@ impl SowApp {
         crate::web_menu::publish_tutorial_camera_anchor_frame(self);
         if self.ui.app.phase == ClientPhase::Playing {
             crate::web_menu::publish_state(self);
+            crate::web_menu::publish_diagnostics(self);
             crate::web_menu::publish_hover_card(self);
             crate::web_menu::publish_tutorial_pointer(self);
         }

@@ -72,6 +72,7 @@ import {
 import { sowScreenMotion } from "./main_menu.motion.ts";
 import {
     activeProfileEntry,
+    bumpAchievementFlatLimit,
     invalidateProfileCache,
     loadMoreProfileHistory,
     loadProfile,
@@ -80,8 +81,10 @@ import {
     openProfile,
     popProfileNav,
     profileApi,
+    refreshProfileAchievements,
     renderProfile,
     renderProfileDetail,
+    resetAchievementFlatLimit,
     syncProfileDom,
     syncProfilePreload,
 } from "./main_menu.profile.ts";
@@ -116,6 +119,7 @@ import {
     cancelSwapMission,
     claimMission,
     confirmSwapMission,
+    isRewardedAdAvailable,
     renderMissionsModal,
     requestSwapMission,
     setMissionClaimHandler,
@@ -1212,10 +1216,16 @@ function syncOverlay(key: string, markup: string) {
                 nextCanvas.replaceWith(currentCanvas);
             }
             if (isDraggingSettingsSlider) {
-                const currentSlider = currentModal.querySelector<HTMLInputElement>("input[data-setting='music_volume']");
-                const nextSlider = nextModal.querySelector<HTMLInputElement>("input[data-setting='music_volume']");
-                if (currentSlider && nextSlider) {
-                    nextSlider.replaceWith(currentSlider);
+                for (const setting of ["music_volume", "sfx_volume"]) {
+                    const currentSlider = currentModal.querySelector<HTMLInputElement>(
+                        "input[data-setting='" + setting + "']",
+                    );
+                    const nextSlider = nextModal.querySelector<HTMLInputElement>(
+                        "input[data-setting='" + setting + "']",
+                    );
+                    if (currentSlider && nextSlider) {
+                        nextSlider.replaceWith(currentSlider);
+                    }
                 }
             }
             const activeEl = document.activeElement;
@@ -2358,13 +2368,7 @@ const rewardDoubleOffered = new Set<string>();
 // placement (Poki and CrazyGames rules); portals without rewarded video,
 // such as Jest, report it unavailable and never show the offer.
 function offerRewardDouble(receipts: MenuRewardReceipt[], accountId: string | null): boolean {
-    if (
-        !accountId ||
-        typeof window.SOW_portalRewardedAvailable !== "function" ||
-        typeof window.SOW_portalRewardedBreak !== "function" ||
-        !window.SOW_portalRewardedAvailable()
-    )
-        return false;
+    if (!accountId || !isRewardedAdAvailable()) return false;
     const bonus = receipts
         .filter(function (receipt) {
             return typeof receipt.id === "string" && receipt.id.indexOf(VERIFIED_BONUS_PREFIX) === 0;
@@ -2537,18 +2541,32 @@ function updateDynamic() {
     const panel = activeScreenPanel() || root;
     const settings = menuUi.state.settings;
     const musicInput = root.querySelector<HTMLInputElement>("[data-setting='music_volume']");
+    const sfxInput = root.querySelector<HTMLInputElement>("[data-setting='sfx_volume']");
     const freeZoomInput = root.querySelector<HTMLInputElement>("[data-setting='free_zoom_out']");
     const fpsPingInput = root.querySelector<HTMLInputElement>("[data-setting='show_fps_ping']");
     const devToolsInput = root.querySelector<HTMLInputElement>("[data-setting='show_dev_tools']");
     const menuTipsInput = root.querySelector<HTMLInputElement>("[data-setting='menu_tips']");
-    const musicInteracting =
-        isDraggingSettingsSlider ||
-        (musicInput &&
-            (document.activeElement === musicInput ||
-                musicInput.matches(":active") ||
-                activeMenuPointerId !== null));
-    if (musicInput && !musicInteracting)
-        musicInput.value = String(settings.music_volume == null ? 0.8 : settings.music_volume);
+    for (const [sliderInput, rawVal, badgeKey] of [
+        [musicInput, settings.music_volume, "music_vol"],
+        [sfxInput, settings.sfx_volume, "sfx_vol"],
+    ] as const) {
+        const interacting =
+            isDraggingSettingsSlider ||
+            (sliderInput &&
+                (document.activeElement === sliderInput ||
+                    sliderInput.matches(":active") ||
+                    activeMenuPointerId !== null));
+        if (sliderInput && !interacting) {
+            sliderInput.value = String(rawVal == null ? 0.8 : rawVal);
+        }
+        const badge = root.querySelector<HTMLElement>("[data-val-for='" + badgeKey + "']");
+        if (badge && sliderInput) {
+            const pct = Math.round(Number(sliderInput.value) * 100);
+            badge.textContent = pct + "%";
+            sliderInput.style.setProperty("--sow-slider-fill", pct + "%");
+            sliderInput.style.setProperty("--sow-music-fill", pct + "%");
+        }
+    }
     if (fpsPingInput && document.activeElement !== fpsPingInput)
         fpsPingInput.checked = settings.show_fps_ping === true;
     if (devToolsInput && document.activeElement !== devToolsInput)
@@ -2557,12 +2575,6 @@ function updateDynamic() {
         freeZoomInput.checked = Boolean(settings.free_zoom_out);
     if (menuTipsInput && document.activeElement !== menuTipsInput)
         menuTipsInput.checked = !menuUi.state.menu_tips_disabled;
-    const musicValBadge = root.querySelector<HTMLElement>("[data-val-for='music_vol']");
-    if (musicValBadge && musicInput) {
-        const pct = Math.round(Number(musicInput.value) * 100);
-        musicValBadge.textContent = pct + "%";
-        musicInput.style.setProperty("--sow-music-fill", pct + "%");
-    }
     const timer = panel.querySelector<HTMLElement>("[data-live-countdown]");
     const lobby = joinedLobby();
     if (timer && lobby)
@@ -2885,8 +2897,58 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "profile_achievement_filter") {
-        menuUi.profileAchievementFilter = target.dataset.achievementFilter || "all";
+        const nextCat = target.dataset.achievementFilter || "summary";
+        menuUi.profileAchievementFilter = nextCat;
+        menuUi.profileAchievementSubcategory = "all";
+        resetAchievementFlatLimit();
+        const catInput = root.querySelector<HTMLInputElement>(
+            "[data-control-dropdown][data-dropdown-key='ach-category'] [data-dropdown-input]",
+        );
+        if (catInput) {
+            catInput.value = nextCat;
+            syncDropdowns();
+        }
+        refreshProfileAchievements();
+        return;
+    }
+    if (command === "profile_achievement_subcategory") {
+        menuUi.profileAchievementSubcategory = target.dataset.achievementSubcategory || "all";
+        resetAchievementFlatLimit();
+        refreshProfileAchievements();
+        return;
+    }
+    if (command === "profile_achievement_toggle_playable") {
+        menuUi.profileAchievementPlayableOnly = !menuUi.profileAchievementPlayableOnly;
+        resetAchievementFlatLimit();
+        refreshProfileAchievements();
+        return;
+    }
+    if (command === "profile_achievement_view_mode") {
+        menuUi.profileAchievementViewMode = target.dataset.viewMode === "grid" ? "grid" : "chains";
+        resetAchievementFlatLimit();
+        refreshProfileAchievements();
+        return;
+    }
+    if (command === "profile_achievement_show_more") {
+        bumpAchievementFlatLimit();
+        refreshProfileAchievements();
+        return;
+    }
+    if (command === "profile_achievement_clear") {
+        menuUi.profileAchievementSearch = "";
+        menuUi.profileAchievementStatus = "all";
+        menuUi.profileAchievementTier = "all";
+        menuUi.profileAchievementPlayableOnly = false;
+        resetAchievementFlatLimit();
         render();
+        return;
+    }
+    if (command === "select_chain_tier") {
+        const chainKey = target.dataset.chainKey;
+        const tierId = target.dataset.tierId;
+        if (!chainKey || !tierId) return;
+        menuUi.profileAchievementSelectedTiers[chainKey] = tierId;
+        refreshProfileAchievements();
         return;
     }
     if (command === "open_play_games") {
@@ -3100,12 +3162,21 @@ root.addEventListener("click", function (event) {
     }
     if (command === "open_hero_info") {
         const requestedId = target.dataset.leaderId || null;
-        const requestedTab = target.dataset.heroInfoTab === "biography" ? "biography" : "overview";
+        const rawTab = target.dataset.heroInfoTab;
+        const requestedTab =
+            rawTab === "biography" || rawTab === "achievements" || rawTab === "overview"
+                ? rawTab
+                : "overview";
+        const prevLeaderId = menuUi.heroInfoLeaderId;
         if (requestedId) {
             menuUi.heroInfoLeaderId = requestedId;
         } else {
             const sel = currentLeaderSelection();
             menuUi.heroInfoLeaderId = menuUi.tempSelectedLeader || (sel && sel.selected_leader) || null;
+        }
+        if (menuUi.heroInfoLeaderId !== prevLeaderId) {
+            menuUi.heroInfoAchCategory = "all";
+            menuUi.heroInfoAchStatus = "all";
         }
         menuUi.heroInfoTab = requestedTab;
         menuUi.heroInfoOpen = true;
@@ -3114,9 +3185,34 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "switch_hero_info_tab") {
-        const tab = target.dataset.heroInfoTab === "biography" ? "biography" : "overview";
+        const rawTab = target.dataset.heroInfoTab;
+        const tab =
+            rawTab === "biography" || rawTab === "achievements" || rawTab === "overview"
+                ? rawTab
+                : "overview";
         menuUi.heroInfoTab = tab;
         if (tab === "biography") void ensureHeroBiosLoaded();
+        render();
+        return;
+    }
+    if (command === "hero_info_ach_category") {
+        const cat = target.dataset.heroAchCategory;
+        menuUi.heroInfoAchCategory =
+            cat === "recruit" || cat === "mastery" || cat === "victories" ? cat : "all";
+        render();
+        return;
+    }
+    if (command === "hero_info_ach_status") {
+        const status = target.dataset.heroAchStatus;
+        menuUi.heroInfoAchStatus =
+            status === "in_progress" || status === "unlocked" || status === "locked" ? status : "all";
+        render();
+        return;
+    }
+    if (command === "hero_info_ach_sort") {
+        const sort = target.dataset.heroAchSort;
+        menuUi.heroInfoAchSort =
+            sort === "closest" || sort === "points" ? sort : "tier";
         render();
         return;
     }
@@ -3128,6 +3224,9 @@ root.addEventListener("click", function (event) {
     }
     if (command === "toggle_heroes_playable") {
         menuUi.heroesPlayableOnly = !menuUi.heroesPlayableOnly;
+        if (menuUi.heroesPlayableOnly && menuUi.heroesStatusFilter === "locked") {
+            menuUi.heroesStatusFilter = "all";
+        }
         refreshHeroesRoster(false);
         render();
         return;
@@ -3598,9 +3697,18 @@ root.addEventListener("click", function (event) {
     send(command, payload);
 });
 
+function effectiveUiSfxVolume(): number {
+    const settings = menuUi.state?.settings;
+    if (settings?.mute_all || window.SOW_adPlaying || window.SOW_PORTAL_MUTE_AUDIO) return 0;
+    const raw = settings?.sfx_volume == null ? 0.8 : Number(settings.sfx_volume);
+    return Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0.8;
+}
+
 function playCelebrationSound(kind: "fanfare" | "fly" | "impact") {
     try {
         if (typeof window === "undefined") return;
+        const sfxVol = effectiveUiSfxVolume();
+        if (sfxVol <= 0) return;
         const AudioCtx = window.AudioContext;
         if (typeof AudioCtx !== "function") return;
         if (!menuMusic.audioContext) {
@@ -3612,6 +3720,9 @@ function playCelebrationSound(kind: "fanfare" | "fly" | "impact") {
             void ctx.resume();
         }
         const now = ctx.currentTime;
+        const masterGain = ctx.createGain();
+        masterGain.gain.setValueAtTime(sfxVol, now);
+        masterGain.connect(ctx.destination);
         if (kind === "fanfare") {
             const subOsc = ctx.createOscillator();
             const subGain = ctx.createGain();
@@ -3621,7 +3732,7 @@ function playCelebrationSound(kind: "fanfare" | "fly" | "impact") {
             subGain.gain.setValueAtTime(0.35, now);
             subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
             subOsc.connect(subGain);
-            subGain.connect(ctx.destination);
+            subGain.connect(masterGain);
             subOsc.start(now);
             subOsc.stop(now + 0.4);
 
@@ -3635,7 +3746,7 @@ function playCelebrationSound(kind: "fanfare" | "fly" | "impact") {
                 gain.gain.exponentialRampToValueAtTime(0.18, now + idx * 0.08 + 0.02);
                 gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.55);
                 osc.connect(gain);
-                gain.connect(ctx.destination);
+                gain.connect(masterGain);
                 osc.start(now + idx * 0.08);
                 osc.stop(now + idx * 0.08 + 0.58);
             });
@@ -3648,7 +3759,7 @@ function playCelebrationSound(kind: "fanfare" | "fly" | "impact") {
             gain.gain.setValueAtTime(0.08, now);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(masterGain);
             osc.start(now);
             osc.stop(now + 0.42);
         } else if (kind === "impact") {
@@ -3660,7 +3771,7 @@ function playCelebrationSound(kind: "fanfare" | "fly" | "impact") {
             gain.gain.setValueAtTime(0.18, now);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(masterGain);
             osc.start(now);
             osc.stop(now + 0.28);
         }
@@ -3862,7 +3973,11 @@ setMissionClaimHandler(function (mission: MenuMission, doubled: boolean) {
 
 document.addEventListener("pointerdown", function (event) {
     const target = event.target instanceof Element ? event.target : null;
-    if (target instanceof HTMLInputElement && target.type === "range" && target.dataset.setting === "music_volume") {
+    if (
+        target instanceof HTMLInputElement &&
+        target.type === "range" &&
+        (target.dataset.setting === "music_volume" || target.dataset.setting === "sfx_volume")
+    ) {
         isDraggingSettingsSlider = true;
     }
     const interactive =
@@ -4234,7 +4349,8 @@ root.addEventListener("input", function (event) {
     }
     if (input.dataset.role === "achievements-search") {
         menuUi.profileAchievementSearch = input.value;
-        render();
+        resetAchievementFlatLimit();
+        refreshProfileAchievements();
     }
     const createForm = input.closest("form[data-form='create']");
     if (createForm instanceof HTMLFormElement) {
@@ -4260,18 +4376,24 @@ root.addEventListener("input", function (event) {
             }
         }
     }
-    if (input.dataset.setting === "music_volume") {
+    if (input.dataset.setting === "music_volume" || input.dataset.setting === "sfx_volume") {
+        const setting = input.dataset.setting;
         const val = Number(input.value);
         const pct = Math.round(val * 100);
+        input.style.setProperty("--sow-slider-fill", pct + "%");
         input.style.setProperty("--sow-music-fill", pct + "%");
-        const musicValBadge = root.querySelector<HTMLElement>("[data-val-for='music_vol']");
-        if (musicValBadge) musicValBadge.textContent = pct + "%";
+        const valBadge = root.querySelector<HTMLElement>(
+            "[data-val-for='" + (setting === "sfx_volume" ? "sfx_vol" : "music_vol") + "']",
+        );
+        if (valBadge) valBadge.textContent = pct + "%";
         if (menuUi.state) {
             if (!menuUi.state.settings) menuUi.state.settings = {} as any;
-            menuUi.state.settings.music_volume = val;
+            menuUi.state.settings[setting] = val;
         }
-        if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true, val);
-        menuMusicSyncSpectrum();
+        if (setting === "music_volume") {
+            if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true, val);
+            menuMusicSyncSpectrum();
+        }
     }
     if (input.name === "password" && input.closest("form[data-form='password']")) {
         menuUi.passwordDraft = input.value;
@@ -4286,6 +4408,16 @@ root.addEventListener("change", function (event) {
         if (name && name !== menuUi.state!.player_name) send("save_display_name", { name: name });
         return;
     }
+    if (
+        input.name === "ach_category" ||
+        input.name === "ach_status" ||
+        input.name === "ach_tier" ||
+        input.name === "ach_sort"
+    ) {
+        resetAchievementFlatLimit();
+        refreshProfileAchievements();
+        return;
+    }
     const createForm = input.closest("form[data-form='create']");
     if (createForm instanceof HTMLFormElement) {
         syncCreateDraft(createForm);
@@ -4297,14 +4429,15 @@ root.addEventListener("change", function (event) {
         return;
     }
     if (!input.dataset.setting) return;
-    if (input.dataset.setting === "music_volume") {
+    if (input.dataset.setting === "music_volume" || input.dataset.setting === "sfx_volume") {
+        const setting = input.dataset.setting;
         isDraggingSettingsSlider = false;
         const val = Number(input.value);
         if (menuUi.state) {
             if (!menuUi.state.settings) menuUi.state.settings = {} as any;
-            menuUi.state.settings.music_volume = val;
+            menuUi.state.settings[setting] = val;
         }
-        send("set_music_volume", { value: val });
+        send(setting === "sfx_volume" ? "set_sfx_volume" : "set_music_volume", { value: val });
     }
     if (input instanceof HTMLInputElement && input.dataset.setting === "free_zoom_out")
         send("set_free_zoom_out", { value: input.checked });
