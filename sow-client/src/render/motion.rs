@@ -109,3 +109,128 @@ pub(crate) fn emote_motion(kind: EmoteKind, age: f32, reduced: bool, pinned: boo
     motion
 }
 
+const MAX_SHAKE_CSS_PX: f32 = 9.0;
+const MAX_ACTIVE_SHAKES: usize = 8;
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ShakeImpulse {
+    pub start_time: web_time::Instant,
+    pub duration: f32,
+    pub amplitude_css: f32,
+    pub dir: [f32; 2],
+    pub agitation: f32,
+    pub seed: f32,
+}
+
+#[derive(Default)]
+pub(crate) struct CameraShakeState {
+    impulses: Vec<ShakeImpulse>,
+    next_seed: f32,
+}
+
+impl CameraShakeState {
+    pub(crate) fn push(
+        &mut self,
+        now: web_time::Instant,
+        amplitude_css: f32,
+        duration: f32,
+        dir: [f32; 2],
+        agitation: f32,
+    ) {
+        if !amplitude_css.is_finite()
+            || !duration.is_finite()
+            || amplitude_css <= 0.05
+            || duration <= 0.01
+        {
+            return;
+        }
+        if self.impulses.len() >= MAX_ACTIVE_SHAKES {
+            self.impulses.remove(0);
+        }
+        self.next_seed = (self.next_seed + 1.618_034) % 100.0;
+        let len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
+        let norm_dir = if len > 0.001 {
+            [dir[0] / len, dir[1] / len]
+        } else {
+            [0.0, 0.0]
+        };
+        self.impulses.push(ShakeImpulse {
+            start_time: now,
+            duration,
+            amplitude_css: amplitude_css.min(MAX_SHAKE_CSS_PX),
+            dir: norm_dir,
+            agitation: agitation.clamp(0.0, 1.0),
+            seed: self.next_seed,
+        });
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.impulses.clear();
+    }
+
+    /// Returns render offset in physical pixels `[dx, dy]`.
+    pub(crate) fn sample_physical(
+        &mut self,
+        now: web_time::Instant,
+        sf: f32,
+        reduced_motion: bool,
+    ) -> [f32; 2] {
+        if reduced_motion {
+            self.impulses.clear();
+            return [0.0, 0.0];
+        }
+        let mut total_x = 0.0f32;
+        let mut total_y = 0.0f32;
+        self.impulses.retain(|imp| {
+            let elapsed = now.duration_since(imp.start_time).as_secs_f32();
+            if elapsed < 0.0 || elapsed >= imp.duration {
+                return false;
+            }
+            let p = (elapsed / imp.duration).clamp(0.0, 1.0);
+            // Fast attack, cubic settle so nothing lingers.
+            let env = (1.0 - p).powi(3) * (elapsed / 0.018).clamp(0.0, 1.0);
+            let spring_wave = (p * std::f32::consts::PI * 2.5).sin();
+            let dir_x = imp.dir[0] * spring_wave * (1.0 - imp.agitation * 0.45);
+            let dir_y = imp.dir[1] * spring_wave * (1.0 - imp.agitation * 0.45);
+            let tremor_x = (elapsed * 43.0 + imp.seed * 7.1).sin() * 0.65
+                + (elapsed * 67.0 + imp.seed * 3.7).cos() * 0.35;
+            let tremor_y = (elapsed * 47.0 + imp.seed * 5.3).cos() * 0.65
+                + (elapsed * 71.0 + imp.seed * 9.2).sin() * 0.35;
+            let x = (dir_x + tremor_x * imp.agitation) * imp.amplitude_css * env;
+            let y = (dir_y + tremor_y * imp.agitation) * imp.amplitude_css * env;
+            total_x += x;
+            total_y += y;
+            true
+        });
+
+        let mag = (total_x * total_x + total_y * total_y).sqrt();
+        if mag > MAX_SHAKE_CSS_PX {
+            let scale = MAX_SHAKE_CSS_PX / mag;
+            total_x *= scale;
+            total_y *= scale;
+        }
+        let sf = sf.max(0.01);
+        [total_x * sf, total_y * sf]
+    }
+}
+
+/// Spatial falloff factor (0.0..=1.0) based on world distance from viewport center and zoom.
+pub(crate) fn viewport_impact_factor(
+    wx: f32,
+    wy: f32,
+    input: &crate::app::InputState,
+) -> f32 {
+    let zoom = input.camera_zoom.max(0.001);
+    let world_center_x = (input.screen_w * 0.5 - input.camera_x) / zoom;
+    let world_center_y = (input.screen_h * 0.5 - input.camera_y) / zoom;
+    let dx = wx - world_center_x;
+    let dy = wy - world_center_y;
+    let dist = (dx * dx + dy * dy).sqrt();
+    let half_w = input.screen_w / (2.0 * zoom);
+    let half_h = input.screen_h / (2.0 * zoom);
+    let max_dist = (half_w * half_w + half_h * half_h).sqrt() * 1.5;
+    let dist_factor = (1.0 - dist / max_dist.max(1.0)).clamp(0.0, 1.0);
+    let zoom_factor = ((zoom - 1.0) / 9.0).clamp(0.25, 1.0);
+    dist_factor.sqrt() * zoom_factor
+}
+

@@ -60,8 +60,20 @@ pub fn play_combat_sound(
     native::play_combat_sound(kind, troops, seed, spatial);
 }
 
-pub fn play_under_attack_sound(spatial: SpatialSoundParams) {
-    native::play_under_attack_sound(spatial);
+pub fn play_attack_order_sound(
+    commitment: f32,
+    against_enemy: bool,
+    spatial: SpatialSoundParams,
+) {
+    native::play_attack_order_sound(commitment, against_enemy, spatial);
+}
+
+pub fn play_attack_stalled_sound(severity: f32, spatial: SpatialSoundParams) {
+    native::play_attack_stalled_sound(severity, spatial);
+}
+
+pub fn play_under_attack_sound(severity: f32, spatial: SpatialSoundParams) {
+    native::play_under_attack_sound(severity, spatial);
 }
 
 pub fn play_building_placement_sound(kind: BuildingSoundKind, spatial: SpatialSoundParams) {

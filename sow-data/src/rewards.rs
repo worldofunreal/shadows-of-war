@@ -553,6 +553,39 @@ pub fn all_achievements() -> &'static [AchievementDefinition] {
     })
 }
 
+/// XP required to advance from `level` to `level + 1`.
+/// Starts at 100 XP (Lv 1 -> 2), reaches ~205 XP at Lv 10, and grows by ~120-140 XP every 10 levels.
+pub fn xp_for_level(level: u32) -> u32 {
+    if level <= 1 {
+        return 100;
+    }
+    let raw = 100.0 + 11.0 * ((level - 1) as f64).powf(1.05);
+    ((raw / 5.0).round() as u32) * 5
+}
+
+/// Cumulative XP required to reach `level` (level 1 requires 0 XP).
+pub fn total_xp_for_level(level: u32) -> u32 {
+    let mut total: u32 = 0;
+    for l in 1..level {
+        total = total.saturating_add(xp_for_level(l));
+    }
+    total
+}
+
+/// Player level for a given cumulative `xp`.
+pub fn level_from_xp(xp: u32) -> u32 {
+    let mut level: u32 = 1;
+    let mut remaining = xp;
+    loop {
+        let req = xp_for_level(level);
+        if remaining < req {
+            return level;
+        }
+        remaining -= req;
+        level = level.saturating_add(1);
+    }
+}
+
 const XP_MATCH: u32 = 20;
 const XP_WIN: u32 = 100;
 const XP_PER_PLAYER: u32 = 15;
@@ -745,5 +778,28 @@ mod tests {
         assert_eq!(unlocked.iter().map(|item| item.points).sum::<u64>(), 10);
         let already_unlocked = ["first_command".to_string()].into_iter().collect();
         assert!(newly_unlocked_achievements(&totals, &already_unlocked).is_empty());
+    }
+
+    #[test]
+    fn progressive_level_curve_matches_milestones() {
+        use super::{level_from_xp, total_xp_for_level, xp_for_level};
+        assert_eq!(xp_for_level(1), 100);
+        assert_eq!(xp_for_level(2), 110);
+        assert_eq!(xp_for_level(10), 210);
+        assert_eq!(xp_for_level(20), 340);
+        assert_eq!(xp_for_level(50), 755);
+        assert_eq!(xp_for_level(100), 1470);
+
+        assert_eq!(total_xp_for_level(1), 0);
+        assert_eq!(total_xp_for_level(2), 100);
+        assert_eq!(total_xp_for_level(3), 210);
+        assert_eq!(total_xp_for_level(5), 470);
+
+        assert_eq!(level_from_xp(0), 1);
+        assert_eq!(level_from_xp(99), 1);
+        assert_eq!(level_from_xp(100), 2);
+        assert_eq!(level_from_xp(209), 2);
+        assert_eq!(level_from_xp(210), 3);
+        assert_eq!(level_from_xp(470), 5);
     }
 }

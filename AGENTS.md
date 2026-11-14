@@ -8,6 +8,8 @@ Workspace rules: `../AGENTS.md`. This file holds only what is specific to this g
 - A run builds from a snapshot of the working tree taken at start (`dist/.source`), uncommitted changes included. Edits made during the run ship in the next one. `release.json` records HEAD as `git`, plus `dirty` and `dirty_files`. Run from the checkout that holds the code to ship; a worktree behind it ships older code.
 - Check for an active run before starting one. Never stop, duplicate or overlap it.
 - A deploy is done only when the pipeline's own stage 8 public verification passes.
+- A live match is never a generic reason to stop work, ask the owner to wait, or kill a relay. Each match runs in an isolated child process and survives a relay-control restart. Relay-only deployment should pause new admissions and continue existing matches.
+- Server/rules releases have a separate compatibility requirement: each match records its `simulation_rules_id`, and a server built for a different ID cannot verify that match's replay/rewards. Do not misstate this as the relay dying, and do not remove the drain while it is the only protection. The target fix is version-aware replay verification that keeps the matching immutable server verifier available until its matches settle, so backend releases also proceed during live matches without losing rewards. Do not ask the owner to wait; continue with that compatibility fix when this limitation blocks a requested release.
 - `sow-dist` and the test suites are deletion-only: a new check, stage or test needs the owner's approval first.
 - Android publishing (`./sow a`) is owner-run only and refuses a dirty tree. `./sow p` does not authorize Play uploads.
 

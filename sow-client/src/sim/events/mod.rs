@@ -232,6 +232,22 @@ impl SowApp {
                         (u32::from(owner_id) << 16) ^ tile,
                         self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5),
                     );
+                    if sunk {
+                        let factor = crate::render::motion::viewport_impact_factor(
+                            x as f32 + 0.5,
+                            y as f32 + 0.5,
+                            &self.input,
+                        );
+                        if factor > 0.05 {
+                            self.ui.camera_shake.push(
+                                now_instant,
+                                1.8 * factor,
+                                0.20,
+                                [0.0, 1.0],
+                                0.15,
+                            );
+                        }
+                    }
                 }
                 sow_core::game::GameEvent::AbilityTriggered {
                     owner_id,

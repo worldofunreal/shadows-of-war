@@ -130,6 +130,17 @@ impl SowApp {
                 Some(ctx) => ctx,
                 None => return,
             };
+            let shake_offset = if draw_world {
+                self.ui.camera_shake.sample_physical(
+                    now,
+                    sf,
+                    self.ui.app.settings_state.reduced_motion,
+                )
+            } else {
+                [0.0, 0.0]
+            };
+            self.input.camera_x += shake_offset[0];
+            self.input.camera_y += shake_offset[1];
 
             if let Some(sp) = self.gfx.prev_sync_point.take() {
                 let wait_started_at = crate::diag::startup_perf_timer();
@@ -209,7 +220,7 @@ impl SowApp {
                         }
                     }
 
-                    // Nuke impact sound
+                    // Nuke impact sound & camera shake
                     let current_time = web_time::Instant::now();
                     for &(dx, dy, kind) in &self.ui.detonation_scratch {
                         if let sow_core::game::ProjectileKind::Nuke { level } = kind {
@@ -218,6 +229,25 @@ impl SowApp {
                                 level,
                                 spatial_audio.params(dx + 0.5, dy + 0.5),
                             );
+                            let factor = crate::render::motion::viewport_impact_factor(
+                                dx + 0.5,
+                                dy + 0.5,
+                                &self.input,
+                            );
+                            if factor > 0.05 {
+                                let base_amp = match level {
+                                    1 => 3.5,
+                                    2 => 5.5,
+                                    _ => 8.0,
+                                };
+                                self.ui.camera_shake.push(
+                                    current_time,
+                                    base_amp * factor,
+                                    0.38 + f32::from(level) * 0.07,
+                                    [0.0, 0.0],
+                                    0.85,
+                                );
+                            }
                         }
                     }
 
@@ -814,7 +844,7 @@ impl SowApp {
             self.gfx.render_ctx = Some(render_ctx);
 
             let ui_render_started_at = crate::diag::startup_perf_timer();
-            self.render_frame_ui_and_present(sf, frame, dt);
+            self.render_frame_ui_and_present(sf, frame, dt, shake_offset);
             if let Some(started_at) = ui_render_started_at {
                 crate::diag::record_startup_perf(
                     crate::diag::StartupMetric::UiRender,

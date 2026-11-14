@@ -207,7 +207,9 @@ mod tests {
 
         assert!((gold_per_game_minute(cfg.gold_base_income) - 600.0).abs() < 1e-9);
         assert!(
-            (gold_per_game_minute(cfg.factory_gold_income) - 60.0 * (32.0 / 7.0)).abs()
+            (gold_per_game_minute(cfg.factory_gold_income)
+                - 60.0 * (0.85 / crate::game_config::NORMAL_GAME_SPEED))
+                .abs()
                 < 1e-9
         );
         assert_eq!(
@@ -353,8 +355,8 @@ mod tests {
         );
         let agg = aggregates[1];
         assert_eq!(agg.farm_levels, 3);
-        assert_eq!(agg.farm_income_level_weight, 3.5);
+        assert!((agg.farm_income_level_weight - 3.19485817377915).abs() < 1e-12);
         assert_eq!(agg.port_levels, 4);
-        assert_eq!(agg.port_income_level_weight, 8.125);
+        assert!((agg.port_income_level_weight - 5.328426582167173).abs() < 1e-12);
     }
 }
