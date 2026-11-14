@@ -1,0 +1,58 @@
+{
+  "_comment": "Art of War Level 2 — United Front (Baja Sur on bajacalifornia, 848x1000).",
+  "map": "bajacalifornia",
+  "player_spawn": [608, 678],
+  "player_color": "#f08c28",
+  "factions": [
+    {
+      "id": "la_paz_guild",
+      "name": "La Paz Guild",
+      "x": 598,
+      "y": 650,
+      "starting_troops": 7000,
+      "relation": "neutral",
+      "can_request_alliance": true,
+      "accepts_alliance_requests": true,
+      "support_interval_seconds": 12,
+      "color": "#3aa675",
+      "iq": 110,
+      "civ": "Merchant League",
+      "leader": "Musa",
+      "avatar": "musa",
+      "can_attack_player": false
+    },
+    {
+      "id": "cape_raiders",
+      "name": "Cape Raiders",
+      "x": 616,
+      "y": 694,
+      "starting_troops": 1800,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d9534f",
+      "iq": 80,
+      "civ": "Corsairs",
+      "leader": "Caesar",
+      "avatar": "colonia_veterans",
+      "can_attack_player": false,
+      "gold_loot_override": 140
+    },
+    {
+      "id": "cabo_tyrant",
+      "name": "Cabo Tyrant",
+      "x": 622,
+      "y": 712,
+      "starting_troops": 4500,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#9b2226",
+      "iq": 100,
+      "civ": "Empire",
+      "leader": "Alexander",
+      "avatar": "alexander",
+      "can_attack_player": false
+    }
+  ]
+}

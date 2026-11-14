@@ -1,5 +1,6 @@
 pub struct SettingsState {
     pub music_volume: f32,
+    pub sfx_volume: f32,
     pub mute_all: bool,
     pub reduced_motion: bool,
     reduced_motion_is_explicit: bool,
@@ -11,6 +12,8 @@ pub struct SettingsState {
 impl SettingsState {
     #[cfg(target_arch = "wasm32")]
     const MUSIC_VOLUME_KEY: &'static str = "sow_settings_v1_music_volume";
+    #[cfg(target_arch = "wasm32")]
+    const SFX_VOLUME_KEY: &'static str = "sow_settings_v1_sfx_volume";
     #[cfg(target_arch = "wasm32")]
     const MUTE_ALL_KEY: &'static str = "sow_settings_v1_mute_all";
     #[cfg(target_arch = "wasm32")]
@@ -36,6 +39,14 @@ impl SettingsState {
                     .filter(|value| value.is_finite())
                     .map(|value| value.clamp(0.0, 1.0))
                     .unwrap_or(settings.music_volume);
+                settings.sfx_volume = storage
+                    .get_item(Self::SFX_VOLUME_KEY)
+                    .ok()
+                    .flatten()
+                    .and_then(|value| value.parse::<f32>().ok())
+                    .filter(|value| value.is_finite())
+                    .map(|value| value.clamp(0.0, 1.0))
+                    .unwrap_or(settings.sfx_volume);
                 settings.mute_all = storage
                     .get_item(Self::MUTE_ALL_KEY)
                     .ok()
@@ -92,6 +103,7 @@ impl SettingsState {
         {
             for (key, value) in [
                 (Self::MUSIC_VOLUME_KEY, self.music_volume.to_string()),
+                (Self::SFX_VOLUME_KEY, self.sfx_volume.to_string()),
                 (Self::MUTE_ALL_KEY, self.mute_all.to_string()),
                 (Self::FREE_ZOOM_OUT_KEY, self.free_zoom_out.to_string()),
                 (Self::SHOW_FPS_PING_KEY, self.show_fps_ping.to_string()),
@@ -118,6 +130,7 @@ impl Default for SettingsState {
     fn default() -> Self {
         Self {
             music_volume: 0.8,
+            sfx_volume: 0.8,
             mute_all: false,
             reduced_motion: false,
             reduced_motion_is_explicit: false,

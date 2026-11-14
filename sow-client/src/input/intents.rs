@@ -34,6 +34,9 @@ fn paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::SendResourcesStayPaused) => {
                 matches!(intent, GameplayIntent::SendResources { .. })
             }
+            Some(TutorialPausedAction::RequestResourcesStayPaused) => {
+                matches!(intent, GameplayIntent::RequestResources { .. })
+            }
             Some(TutorialPausedAction::RequestAllianceStayPaused) => {
                 matches!(intent, GameplayIntent::ProposeAlliance { .. })
             }
@@ -41,7 +44,9 @@ fn paused_tutorial_intent_allowed(
                 GameplayIntent::BuildStructure { kind, .. } => matches!(
                     *kind,
                     sow_core::game::BuildingKind::City
+                        | sow_core::game::BuildingKind::Farm
                         | sow_core::game::BuildingKind::Factory
+                        | sow_core::game::BuildingKind::Port
                         | sow_core::game::BuildingKind::Tower
                 ),
                 _ => false,
@@ -68,11 +73,14 @@ fn paused_tutorial_progress(
                 .fold(0, |total, count| total.saturating_add(*count)),
         ),
         GameplayIntent::SendResources { .. } => Some(observation.resource_transfers),
+        GameplayIntent::RequestResources { .. } => Some(observation.resource_requests),
         GameplayIntent::ProposeAlliance { .. } => Some(observation.alliance_requests_submitted),
         GameplayIntent::BuildStructure { kind, .. } => {
             let key = match *kind {
                 sow_core::game::BuildingKind::City => "cities",
+                sow_core::game::BuildingKind::Farm => "farms",
                 sow_core::game::BuildingKind::Factory => "factories",
+                sow_core::game::BuildingKind::Port => "ports",
                 sow_core::game::BuildingKind::Tower => "towers",
                 _ => return None,
             };

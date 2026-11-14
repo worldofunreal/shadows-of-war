@@ -1,0 +1,276 @@
+{
+  "version": 2,
+  "episode_id": "tactics_03_farm_vs_city",
+  "text_namespace": "tutorial.campaign_tactics_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 1100,
+    "starting_gold": 360
+  },
+  "entry": "t3_intro_farm",
+  "speakers": {
+    "sun_tzu": {
+      "name_key": "tutorial.campaign_tactics_sun_tzu",
+      "avatar": "sun_tzu",
+      "base_expression": {
+        "expression": "calm",
+        "after_expression": "happy",
+        "until": {
+          "type": "defeated",
+          "target": "iron_bastion"
+        }
+      }
+    },
+    "iron_bastion": {
+      "name_key": "tutorial.campaign_tactics_03_bastion_name",
+      "faction": "iron_bastion"
+    }
+  },
+  "steps": [
+    {
+      "id": "t3_intro_farm",
+      "type": "scene",
+      "title_key": "tutorial.campaign_tactics_03_intro_farm_title",
+      "body_key": "tutorial.campaign_tactics_03_intro_farm_body",
+      "speaker": "sun_tzu",
+      "presentation": "dialogue",
+      "unlocks": {
+        "buildings": {
+          "Farm": 2,
+          "Tower": 1
+        }
+      },
+      "camera": {
+        "shot": "approach",
+        "to": "player",
+        "seconds": 1
+      },
+      "next": "t3_choose_farm"
+    },
+    {
+      "id": "t3_choose_farm",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_03_choose_farm_title",
+      "hint_key": "tutorial.campaign_tactics_03_choose_farm_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "trigger": {
+        "type": "ui",
+        "action": "dock_farm",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_farm",
+        "gesture": "tap"
+      },
+      "next": "t3_build_farm"
+    },
+    {
+      "id": "t3_build_farm",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_build_farm_title",
+      "hint_key": "tutorial.campaign_tactics_03_build_farm_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "build_until_started",
+      "trigger": {
+        "type": "farm",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "next": "t3_wait_farm"
+    },
+    {
+      "id": "t3_wait_farm",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_build_farm_title",
+      "hint_key": "tutorial.campaign_tactics_03_wait_farm_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "Farm",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "next": "t3_beat_raiders"
+    },
+    {
+      "id": "t3_beat_raiders",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_raiders_title",
+      "body_key": "tutorial.campaign_tactics_03_raiders_body",
+      "hint_key": "tutorial.campaign_tactics_03_raiders_hint",
+      "speaker": "sun_tzu",
+      "camera": {
+        "shot": "threat",
+        "to": "bristol_raiders",
+        "seconds": 1
+      },
+      "trigger": {
+        "type": "defeated",
+        "target": "bristol_raiders",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "bristol_raiders"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "t3_intro_city"
+    },
+    {
+      "id": "t3_intro_city",
+      "type": "scene",
+      "camera": {
+        "shot": "threat",
+        "to": "iron_bastion",
+        "seconds": 1
+      },
+      "exchange": [
+        {
+          "speaker": "iron_bastion",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_03_bastion_taunt_emote",
+          "delay_ms": 0
+        },
+        {
+          "speaker": "sun_tzu",
+          "presentation": "dialogue",
+          "title_key": "tutorial.campaign_tactics_03_intro_city_title",
+          "show_title": true,
+          "body_key": "tutorial.campaign_tactics_03_intro_city_body"
+        }
+      ],
+      "next": "t3_choose_city"
+    },
+    {
+      "id": "t3_choose_city",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_03_choose_city_title",
+      "hint_key": "tutorial.campaign_tactics_03_choose_city_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "unlocks": {
+        "buildings": {
+          "Farm": 2,
+          "City": 2,
+          "Tower": 1
+        }
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_city",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_city",
+        "gesture": "tap"
+      },
+      "next": "t3_build_city"
+    },
+    {
+      "id": "t3_build_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_build_city_title",
+      "hint_key": "tutorial.campaign_tactics_03_build_city_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "build_until_started",
+      "trigger": {
+        "type": "city",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "next": "t3_crush_bastion"
+    },
+    {
+      "id": "t3_crush_bastion",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_crush_bastion_title",
+      "body_key": "tutorial.campaign_tactics_03_crush_bastion_body",
+      "hint_key": "tutorial.campaign_tactics_03_crush_bastion_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "defeated",
+        "target": "iron_bastion",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "iron_bastion"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "t3_victory"
+    },
+    {
+      "id": "t3_victory",
+      "type": "end",
+      "title_key": "tutorial.campaign_tactics_03_victory_title",
+      "body_key": "tutorial.campaign_tactics_03_victory_body",
+      "speaker": "sun_tzu",
+      "presentation": "chapter"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "t3_bastion_tease",
+      "when": {
+        "type": "timer",
+        "after_ms": 9000
+      },
+      "during": "t3_crush_bastion",
+      "presentation": "exchange",
+      "loop": true,
+      "exchange": [
+        {
+          "speaker": "iron_bastion",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_03_bastion_tease_1"
+        }
+      ]
+    },
+    {
+      "id": "t3_bastion_panic",
+      "when": {
+        "type": "pre_defeat",
+        "target": "iron_bastion"
+      },
+      "during": "t3_crush_bastion",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "iron_bastion",
+          "emote": "help",
+          "emote_text_key": "tutorial.campaign_tactics_03_bastion_panic_emote"
+        }
+      ]
+    }
+  ]
+}

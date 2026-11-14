@@ -1,3 +1,4 @@
+pub use crate::profile::AD_DOUBLES_PER_DAY;
 use crate::profile::{
     LeaderCareerStats, MatchRecord, MatchStartRecord, MenuGuideProgress, PublicLeaderSummary,
     PublicLeaderboardEntry, PublicMatchDetail, PublicMatchParticipant, PublicMatchSummary,
@@ -289,426 +290,8 @@ end
 return 1
 "#;
 
-#[derive(Clone, Copy, Debug)]
-struct RetentionCohort {
-    offset: i64,
-    eligible: u64,
-    returned: [u64; 3],
-}
-
-fn summarize_retention(today: &str, cohorts: &[RetentionCohort]) -> serde_json::Value {
-    summarize_retention_for(today, cohorts, "accounts")
-}
-
-fn summarize_browser_retention(today: &str, cohorts: &[RetentionCohort]) -> serde_json::Value {
-    summarize_retention_for(today, cohorts, "browsers")
-}
-
-fn summarize_retention_for(
-    today: &str,
-    cohorts: &[RetentionCohort],
-    subject: &str,
-) -> serde_json::Value {
-    [1_i64, 3, 7]
-        .into_iter()
-        .enumerate()
-        .map(|(slot, window)| {
-            let matured = cohorts.iter().filter(|cohort| cohort.offset > window);
-            let mut matured_cohorts = 0_u64;
-            let mut eligible = 0_u64;
-            let mut returned = 0_u64;
-            for cohort in matured {
-                matured_cohorts = matured_cohorts.saturating_add(1);
-                eligible = eligible.saturating_add(cohort.eligible);
-                returned = returned.saturating_add(cohort.returned[slot]);
-            }
-            let status = if matured_cohorts == 0 {
-                "not_matured"
-            } else if eligible == 0 {
-                "no_eligible"
-            } else {
-                "ready"
-            };
-            let cutoff = crate::events::shift_date(today, -(window + 1));
-            let status = if status == "no_eligible" {
-                format!("no_eligible_{subject}")
-            } else {
-                status.to_string()
-            };
-            (
-                format!("d{window}"),
-                serde_json::json!({
-                    "status": status,
-                    "cohort_cutoff_date": cutoff,
-                    "matured_cohorts": matured_cohorts,
-                    (format!("eligible_{subject}")): eligible,
-                    (format!("returned_{subject}")): returned,
-                    "rate": if eligible == 0 { serde_json::Value::Null } else { serde_json::json!(returned as f64 / eligible as f64) },
-                }),
-            )
-        })
-        .collect::<serde_json::Map<_, _>>()
-        .into()
-}
-
-fn aggregate_tutorial_steps(
-    rows: &[std::collections::HashMap<String, u64>],
-) -> Vec<serde_json::Value> {
-    let mut totals = std::collections::BTreeMap::<(String, u64, String), [u64; 3]>::new();
-    for row in rows {
-        for (field, count) in row {
-            let mut parts = field.split('|');
-            let (Some(episode), Some(step), Some(index), Some(action), None) = (
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-                parts.next(),
-            ) else {
-                continue;
-            };
-            let Ok(index) = index.parse::<u64>() else {
-                continue;
-            };
-            let Some(slot) = (match action {
-                "start" => Some(0),
-                "complete" => Some(1),
-                "fail" => Some(2),
-                _ => None,
-            }) else {
-                continue;
-            };
-            let value = totals
-                .entry((episode.to_string(), index, step.to_string()))
-                .or_default();
-            value[slot] = value[slot].saturating_add(*count);
-        }
-    }
-    totals
-        .into_iter()
-        .map(|((episode_id, step_index, step_id), counts)| {
-            serde_json::json!({
-                "episode_id": episode_id,
-                "step_id": step_id,
-                "step_index": step_index,
-                "started": counts[0],
-                "completed": counts[1],
-                "exited": counts[2],
-                "completion_rate": if counts[0] == 0 { serde_json::Value::Null } else { serde_json::json!(counts[1] as f64 / counts[0] as f64) },
-            })
-        })
-        .collect()
-}
-
-fn aggregate_match_flow(rows: &[std::collections::HashMap<String, u64>]) -> Vec<serde_json::Value> {
-    use std::collections::BTreeMap;
-
-    let allowed_events = [
-        "matchmaking_joined",
-        "matchmaking_cancelled",
-        "lobby_joined",
-        "lobby_join_failed",
-        "match_started_client",
-        "match_ended_client",
-        "match_exit",
-    ];
-    let allowed_keys = [
-        "mode",
-        "outcome",
-        "wait_bucket",
-        "duration_bucket",
-        "reason_category",
-    ];
-    let mut totals = BTreeMap::<String, u64>::new();
-    for row in rows {
-        for (field, count) in row {
-            let Some((event, dimensions)) = field.split_once('|') else {
-                continue;
-            };
-            if !allowed_events.contains(&event) {
-                continue;
-            }
-            let mut pairs = Vec::new();
-            for dimension in dimensions.split('|') {
-                let Some((key, value)) = dimension.split_once('=') else {
-                    pairs.clear();
-                    break;
-                };
-                if !allowed_keys.contains(&key)
-                    || value.is_empty()
-                    || !value.bytes().all(|byte| {
-                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'
-                    })
-                {
-                    pairs.clear();
-                    break;
-                }
-                pairs.push((key, value));
-            }
-            if !pairs.iter().any(|(key, _)| *key == "mode") {
-                continue;
-            }
-            let canonical = pairs
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect::<Vec<_>>()
-                .join("|");
-            let key = format!("{event}|{canonical}");
-            let total = totals.entry(key).or_default();
-            *total = total.saturating_add(*count);
-        }
-    }
-
-    totals
-        .into_iter()
-        .map(|(key, count)| {
-            let mut parts = key.split('|');
-            let event = parts.next().unwrap_or_default();
-            let mut row = serde_json::Map::new();
-            row.insert("event".into(), serde_json::Value::String(event.into()));
-            row.insert("count".into(), serde_json::json!(count));
-            for dimension in parts {
-                if let Some((key, value)) = dimension.split_once('=') {
-                    row.insert(key.into(), serde_json::Value::String(value.into()));
-                }
-            }
-            serde_json::Value::Object(row)
-        })
-        .collect()
-}
-
 use crate::missions::account_deal_salt;
 
-fn format_rate_pct(numerator: u64, denominator: u64) -> Option<f64> {
-    (denominator > 0).then(|| numerator as f64 / denominator as f64)
-}
-
-#[derive(Default)]
-struct MissionOpsCounter {
-    axis: String,
-    tag: String,
-    offered: u64,
-    completed: u64,
-    swapped_out_playable: u64,
-    swapped_out_unowned: u64,
-    swapped_out_prog0: u64,
-    swapped_out_mid: u64,
-    swapped_in: u64,
-    claimed_std: u64,
-    claimed_ad_2x: u64,
-}
-
-impl MissionOpsCounter {
-    fn swapped_out_total(&self) -> u64 {
-        self.swapped_out_playable
-            .saturating_add(self.swapped_out_unowned)
-    }
-}
-
-/// Aggregates anonymous Redis `sow:analytics:mission_ops:<date>` hashes into
-/// dimension churn, per-mission churn, and menu-guide action tables.
-pub fn aggregate_mission_ops(rows: &[std::collections::HashMap<String, u64>]) -> serde_json::Value {
-    use std::collections::BTreeMap;
-
-    #[derive(Default)]
-    struct DimCounter {
-        axis: String,
-        tag: String,
-        offered: u64,
-        completed: u64,
-        swapped_out_playable: u64,
-        swapped_out_unowned: u64,
-        swapped_in: u64,
-        claimed: u64,
-    }
-    #[derive(Default)]
-    struct GuideCounter {
-        completed: u64,
-        skipped_step: u64,
-        disabled_all: u64,
-    }
-
-    let mut by_mission: BTreeMap<String, MissionOpsCounter> = BTreeMap::new();
-    let mut by_dim: BTreeMap<String, DimCounter> = BTreeMap::new();
-    let mut by_guide: BTreeMap<String, GuideCounter> = BTreeMap::new();
-
-    for row in rows {
-        for (field, &count) in row {
-            let parts: Vec<&str> = field.split('|').collect();
-            match parts.as_slice() {
-                ["offered", mission_id, axis_tag] => {
-                    let (axis, tag) = axis_tag.split_once(':').unwrap_or((axis_tag, ""));
-                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
-                    entry.axis = axis.to_string();
-                    entry.tag = tag.to_string();
-                    entry.offered = entry.offered.saturating_add(count);
-
-                    let dim = by_dim.entry((*axis_tag).to_string()).or_default();
-                    dim.axis = axis.to_string();
-                    dim.tag = tag.to_string();
-                    dim.offered = dim.offered.saturating_add(count);
-                }
-                ["swap_out", mission_id, axis_tag, play_bucket, prog_bucket] => {
-                    let (axis, tag) = axis_tag.split_once(':').unwrap_or((axis_tag, ""));
-                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
-                    entry.axis = axis.to_string();
-                    entry.tag = tag.to_string();
-                    let dim = by_dim.entry((*axis_tag).to_string()).or_default();
-                    dim.axis = axis.to_string();
-                    dim.tag = tag.to_string();
-                    if *play_bucket == "playable" {
-                        entry.swapped_out_playable = entry.swapped_out_playable.saturating_add(count);
-                        dim.swapped_out_playable = dim.swapped_out_playable.saturating_add(count);
-                    } else {
-                        entry.swapped_out_unowned = entry.swapped_out_unowned.saturating_add(count);
-                        dim.swapped_out_unowned = dim.swapped_out_unowned.saturating_add(count);
-                    }
-                    if *prog_bucket == "prog_mid" {
-                        entry.swapped_out_mid = entry.swapped_out_mid.saturating_add(count);
-                    } else {
-                        entry.swapped_out_prog0 = entry.swapped_out_prog0.saturating_add(count);
-                    }
-                }
-                ["swap_in", mission_id, axis_tag] => {
-                    let (axis, tag) = axis_tag.split_once(':').unwrap_or((axis_tag, ""));
-                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
-                    entry.axis = axis.to_string();
-                    entry.tag = tag.to_string();
-                    entry.swapped_in = entry.swapped_in.saturating_add(count);
-
-                    let dim = by_dim.entry((*axis_tag).to_string()).or_default();
-                    dim.axis = axis.to_string();
-                    dim.tag = tag.to_string();
-                    dim.swapped_in = dim.swapped_in.saturating_add(count);
-                }
-                ["completed", mission_id, axis_tag] => {
-                    let (axis, tag) = axis_tag.split_once(':').unwrap_or((axis_tag, ""));
-                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
-                    entry.axis = axis.to_string();
-                    entry.tag = tag.to_string();
-                    entry.completed = entry.completed.saturating_add(count);
-
-                    let dim = by_dim.entry((*axis_tag).to_string()).or_default();
-                    dim.axis = axis.to_string();
-                    dim.tag = tag.to_string();
-                    dim.completed = dim.completed.saturating_add(count);
-                }
-                ["claimed", mission_id, kind] => {
-                    let def_meta = crate::missions::mission_by_id(mission_id);
-                    let entry = by_mission.entry((*mission_id).to_string()).or_default();
-                    if entry.axis.is_empty()
-                        && let Some(def) = def_meta
-                    {
-                        entry.axis = def.axis.as_str().to_string();
-                        entry.tag = def.tag.to_string();
-                    }
-                    if *kind == "ad_2x" {
-                        entry.claimed_ad_2x = entry.claimed_ad_2x.saturating_add(count);
-                    } else {
-                        entry.claimed_std = entry.claimed_std.saturating_add(count);
-                    }
-                    if let Some(def) = def_meta {
-                        let dim_key = format!("{}:{}", def.axis.as_str(), def.tag);
-                        let dim = by_dim.entry(dim_key).or_default();
-                        dim.axis = def.axis.as_str().to_string();
-                        dim.tag = def.tag.to_string();
-                        dim.claimed = dim.claimed.saturating_add(count);
-                    }
-                }
-                ["guide_action", guide_id, action] => {
-                    let entry = by_guide.entry((*guide_id).to_string()).or_default();
-                    match *action {
-                        "completed" => entry.completed = entry.completed.saturating_add(count),
-                        "skipped_step" => entry.skipped_step = entry.skipped_step.saturating_add(count),
-                        "disabled_all" => entry.disabled_all = entry.disabled_all.saturating_add(count),
-                        _ => {}
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    let mut mission_rows: Vec<(u64, serde_json::Value)> = by_mission
-        .into_iter()
-        .map(|(mission_id, c)| {
-            let swapped_out_total = c.swapped_out_total();
-            let swap_rate = format_rate_pct(swapped_out_total, c.offered);
-            let completion_rate = format_rate_pct(c.completed, c.offered);
-            let sort_score = swap_rate.map(|r| (r * 10_000.0) as u64).unwrap_or(0);
-            (
-                sort_score,
-                serde_json::json!({
-                    "mission_id": mission_id,
-                    "axis": c.axis,
-                    "tag": c.tag,
-                    "offered": c.offered,
-                    "completed": c.completed,
-                    "swapped_out_total": swapped_out_total,
-                    "swapped_out_playable": c.swapped_out_playable,
-                    "swapped_out_unowned": c.swapped_out_unowned,
-                    "swapped_out_prog0": c.swapped_out_prog0,
-                    "swapped_out_mid": c.swapped_out_mid,
-                    "swapped_in": c.swapped_in,
-                    "claimed_std": c.claimed_std,
-                    "claimed_ad_2x": c.claimed_ad_2x,
-                    "swap_rate": swap_rate,
-                    "completion_rate": completion_rate,
-                }),
-            )
-        })
-        .collect();
-    mission_rows.sort_by(|a, b| b.0.cmp(&a.0));
-
-    let mut dim_rows: Vec<(u64, serde_json::Value)> = by_dim
-        .into_iter()
-        .map(|(dimension, d)| {
-            let swapped_out_total = d.swapped_out_playable.saturating_add(d.swapped_out_unowned);
-            let swap_rate = format_rate_pct(swapped_out_total, d.offered);
-            let completion_rate = format_rate_pct(d.completed, d.offered);
-            let sort_score = swap_rate.map(|r| (r * 10_000.0) as u64).unwrap_or(0);
-            (
-                sort_score,
-                serde_json::json!({
-                    "dimension": dimension,
-                    "axis": d.axis,
-                    "tag": d.tag,
-                    "offered": d.offered,
-                    "completed": d.completed,
-                    "swapped_out_total": swapped_out_total,
-                    "swapped_out_playable": d.swapped_out_playable,
-                    "swapped_out_unowned": d.swapped_out_unowned,
-                    "swapped_in": d.swapped_in,
-                    "claimed": d.claimed,
-                    "swap_rate": swap_rate,
-                    "completion_rate": completion_rate,
-                }),
-            )
-        })
-        .collect();
-    dim_rows.sort_by(|a, b| b.0.cmp(&a.0));
-
-    let guide_rows: Vec<serde_json::Value> = by_guide
-        .into_iter()
-        .map(|(guide_id, g)| {
-            serde_json::json!({
-                "guide_id": guide_id,
-                "completed": g.completed,
-                "skipped_step": g.skipped_step,
-                "disabled_all": g.disabled_all,
-            })
-        })
-        .collect();
-
-    serde_json::json!({
-        "mission_churn_by_dimension": dim_rows.into_iter().map(|(_, v)| v).collect::<Vec<_>>(),
-        "mission_churn_by_mission": mission_rows.into_iter().map(|(_, v)| v).collect::<Vec<_>>(),
-        "menu_guide_summary": guide_rows,
-    })
-}
-
-/// Generate the initial presentation name only when the client did not send one.
-/// The account ID remains the sole stable identity key.
 fn generated_display_name() -> String {
     let millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1681,261 +1264,6 @@ impl PlayerDb {
             }
         }
         Ok(removed)
-    }
-
-    /// Private operator snapshot; only the owned website has first-party
-    /// ingestion enabled. Other sources are explicitly marked unavailable.
-    pub async fn analytics_summary(
-        &self,
-        requested_days: u32,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-        let days = requested_days.clamp(1, 90) as i64;
-        let today_day = crate::events::utc_day_number();
-        let today = crate::events::shift_date("1970-01-01", today_day).ok_or("invalid UTC date")?;
-        let portal = "site";
-        let mut con = self.get_connection().await?;
-        let mut pipe = redis::pipe();
-        let mut daily = Vec::new();
-        let mut value_index = 0;
-        for offset in 0..days {
-            let date = crate::events::shift_date(&today, -offset).ok_or("invalid UTC date")?;
-            let prefix = format!("{portal}:{date}");
-            let start = value_index;
-            pipe.cmd("SCARD")
-                .arg(format!("sow:analytics:sessions:{prefix}"))
-                .cmd("SCARD")
-                .arg(format!("sow:analytics:active_accounts:{prefix}"));
-            value_index += 2;
-            for name in crate::events::EVENT_NAMES {
-                pipe.cmd("GET")
-                    .arg(format!("sow:analytics:event:{prefix}:{name}"));
-                pipe.cmd("SCARD")
-                    .arg(format!("sow:analytics:event_sessions:{prefix}:{name}"));
-                value_index += 2;
-            }
-            daily.push((date, start));
-        }
-        let values: Vec<Option<u64>> = pipe.query_async(&mut con).await?;
-        let mut daily_rows = Vec::with_capacity(days as usize);
-        let tutorial_dates = daily
-            .iter()
-            .map(|(date, _)| date.clone())
-            .collect::<Vec<_>>();
-        let mut funnel = serde_json::Map::new();
-        let mut funnel_sessions = serde_json::Map::new();
-        let mut dimensions_pipe = redis::pipe();
-        for (date, _) in &daily {
-            dimensions_pipe
-                .cmd("HGETALL")
-                .arg(format!("sow:analytics:by_build:{portal}:{date}"))
-                .cmd("HGETALL")
-                .arg(format!("sow:analytics:by_device:{portal}:{date}"))
-                .cmd("HGETALL")
-                .arg(format!("sow:analytics:by_ref:{portal}:{date}"))
-                .cmd("HGETALL")
-                .arg(format!("sow:analytics:match_flow:{portal}:{date}"));
-        }
-        let dimensions: Vec<std::collections::HashMap<String, u64>> =
-            dimensions_pipe.query_async(&mut con).await?;
-        let mut by_build =
-            std::collections::HashMap::<String, std::collections::HashMap<String, u64>>::new();
-        let mut by_device =
-            std::collections::HashMap::<String, std::collections::HashMap<String, u64>>::new();
-        let mut by_ref =
-            std::collections::HashMap::<String, std::collections::HashMap<String, u64>>::new();
-        let mut match_flow_rows = Vec::new();
-        for (index, dimension_rows) in dimensions.iter().enumerate() {
-            if index % 4 == 3 {
-                match_flow_rows.push(dimension_rows.clone());
-                continue;
-            }
-            for (field, count) in dimension_rows {
-                let Some((dimension, event)) = field.split_once('|') else {
-                    continue;
-                };
-                let target = match index % 4 {
-                    0 => &mut by_build,
-                    1 => &mut by_device,
-                    _ => &mut by_ref,
-                };
-                let total = target
-                    .entry(dimension.to_string())
-                    .or_default()
-                    .entry(event.to_string())
-                    .or_default();
-                *total = total.saturating_add(*count);
-            }
-        }
-        let match_flow = aggregate_match_flow(&match_flow_rows);
-        for (date, start) in daily {
-            let mut events = serde_json::Map::new();
-            let mut event_sessions = serde_json::Map::new();
-            for (index, name) in crate::events::EVENT_NAMES.iter().enumerate() {
-                let count = values
-                    .get(start + 2 + index * 2)
-                    .copied()
-                    .flatten()
-                    .unwrap_or(0);
-                let sessions = values
-                    .get(start + 3 + index * 2)
-                    .copied()
-                    .flatten()
-                    .unwrap_or(0);
-                events.insert((*name).to_string(), serde_json::json!(count));
-                event_sessions.insert((*name).to_string(), serde_json::json!(sessions));
-                let total = funnel
-                    .entry((*name).to_string())
-                    .or_insert_with(|| serde_json::json!(0_u64));
-                *total = serde_json::json!(total.as_u64().unwrap_or(0).saturating_add(count));
-                let session_total = funnel_sessions
-                    .entry((*name).to_string())
-                    .or_insert_with(|| serde_json::json!(0_u64));
-                *session_total =
-                    serde_json::json!(session_total.as_u64().unwrap_or(0).saturating_add(sessions));
-            }
-            daily_rows.push(serde_json::json!({
-                "date": date,
-                "active_sessions": values.get(start).copied().flatten().unwrap_or(0),
-                "active_accounts": values.get(start + 1).copied().flatten().unwrap_or(0),
-                "events": events,
-                "event_sessions": event_sessions,
-            }));
-        }
-
-        let mut retention_pipe = redis::pipe();
-        let mut cohort_offsets = Vec::new();
-        let mut retention_index = 0;
-        for offset in 1..days {
-            let cohort_day = today_day - offset;
-            let base = retention_index;
-            retention_pipe
-                .cmd("SCARD")
-                .arg(format!("sow:analytics:cohort:v2:{portal}:{cohort_day}"));
-            retention_index += 1;
-            for window in [1, 3, 7] {
-                if offset > window {
-                    retention_pipe.cmd("SCARD").arg(format!(
-                        "sow:analytics:retention:v2:{portal}:d{window}:{cohort_day}"
-                    ));
-                    retention_index += 1;
-                }
-            }
-            cohort_offsets.push((offset, base));
-        }
-        let retention_values: Vec<Option<u64>> = retention_pipe.query_async(&mut con).await?;
-        let mut retention_cohorts = Vec::with_capacity(cohort_offsets.len());
-        for (offset, base) in cohort_offsets {
-            let eligible = retention_values.get(base).copied().flatten().unwrap_or(0);
-            let mut index = base + 1;
-            let mut returned = [0_u64; 3];
-            for (slot, window) in [1_i64, 3, 7].into_iter().enumerate() {
-                if offset > window {
-                    returned[slot] = retention_values.get(index).copied().flatten().unwrap_or(0);
-                    index += 1;
-                }
-            }
-            retention_cohorts.push(RetentionCohort {
-                offset,
-                eligible,
-                returned,
-            });
-        }
-        let retention = summarize_retention(&today, &retention_cohorts);
-
-        let mut browser_retention_pipe = redis::pipe();
-        let mut browser_cohort_offsets = Vec::new();
-        let mut browser_retention_index = 0;
-        for offset in 1..days {
-            let cohort_day = today_day - offset;
-            let base = browser_retention_index;
-            browser_retention_pipe.cmd("SCARD").arg(format!(
-                "sow:analytics:browser:cohort:v1:{portal}:{cohort_day}"
-            ));
-            browser_retention_index += 1;
-            for window in [1, 3, 7] {
-                if offset > window {
-                    browser_retention_pipe.cmd("SCARD").arg(format!(
-                        "sow:analytics:browser:retention:v1:{portal}:d{window}:{cohort_day}"
-                    ));
-                    browser_retention_index += 1;
-                }
-            }
-            browser_cohort_offsets.push((offset, base));
-        }
-        let browser_retention_values: Vec<Option<u64>> =
-            browser_retention_pipe.query_async(&mut con).await?;
-        let mut browser_retention_cohorts = Vec::with_capacity(browser_cohort_offsets.len());
-        for (offset, base) in browser_cohort_offsets {
-            let eligible = browser_retention_values
-                .get(base)
-                .copied()
-                .flatten()
-                .unwrap_or(0);
-            let mut index = base + 1;
-            let mut returned = [0_u64; 3];
-            for (slot, window) in [1_i64, 3, 7].into_iter().enumerate() {
-                if offset > window {
-                    returned[slot] = browser_retention_values
-                        .get(index)
-                        .copied()
-                        .flatten()
-                        .unwrap_or(0);
-                    index += 1;
-                }
-            }
-            browser_retention_cohorts.push(RetentionCohort {
-                offset,
-                eligible,
-                returned,
-            });
-        }
-        let browser_retention = summarize_browser_retention(&today, &browser_retention_cohorts);
-
-        let mut tutorial_steps_pipe = redis::pipe();
-        for date in &tutorial_dates {
-            tutorial_steps_pipe
-                .cmd("HGETALL")
-                .arg(format!("sow:analytics:tutorial_steps:{portal}:{date}"));
-        }
-        let tutorial_step_rows: Vec<std::collections::HashMap<String, u64>> =
-            tutorial_steps_pipe.query_async(&mut con).await?;
-        let tutorial_steps = aggregate_tutorial_steps(&tutorial_step_rows);
-
-        let mut mission_ops_pipe = redis::pipe();
-        for date in &tutorial_dates {
-            mission_ops_pipe
-                .cmd("HGETALL")
-                .arg(format!("sow:analytics:mission_ops:{date}"));
-        }
-        let mission_ops_rows: Vec<std::collections::HashMap<String, u64>> =
-            mission_ops_pipe.query_async(&mut con).await?;
-        let mission_ops_summary = aggregate_mission_ops(&mission_ops_rows);
-
-        Ok(serde_json::json!({
-            "generated_at": today,
-            "days": days,
-            "sources": {
-                "site": { "status": "connected", "source": "first-party endpoint" },
-                "poki": { "status": "platform-only", "source": "Poki developer dashboard" },
-                "crazygames": { "status": "platform-only", "source": "CrazyGames dashboard" },
-                "jest": { "status": "platform-only", "source": "Jest dashboard" },
-                "android": { "status": "disabled-pending-disclosure", "source": "Google Play Console" },
-            },
-            "funnel": funnel,
-            "funnel_sessions": funnel_sessions,
-            "dimensions": {
-                "build": by_build,
-                "device_class": by_device,
-                "source": by_ref,
-            },
-            "match_flow": match_flow,
-            "daily": daily_rows,
-            "retention": { "site": retention, "site_browser": browser_retention },
-            "tutorial_steps": tutorial_steps,
-            "mission_churn_by_dimension": mission_ops_summary["mission_churn_by_dimension"],
-            "mission_churn_by_mission": mission_ops_summary["mission_churn_by_mission"],
-            "menu_guide_summary": mission_ops_summary["menu_guide_summary"],
-        }))
     }
 
     async fn record_mission_ops(&self, ops: &[String]) {
@@ -4181,12 +3509,16 @@ impl PlayerDb {
                         .profile
                         .completed_episodes
                         .insert(episode.id.to_string());
+                    if episode.marks_intro_completed {
+                        account.profile.intro_completed = true;
+                    }
                     let reward = crate::rewards::calculate(crate::rewards::RewardInput {
                         tutorial: true,
                         ..Default::default()
                     });
                     let receipt_id = format!("campaign:{}", episode.id);
-                    let unlocked_leader = crate::campaign::earned_leader(
+                    let unlocked_leader = crate::campaign::earned_leader_for_episode(
+                        episode.id,
                         &account.profile.completed_episodes,
                     )
                     .filter(|leader| {
@@ -5439,7 +4771,19 @@ impl PlayerDb {
                     return;
                 }
 
-                let multiplier: u64 = if doubled_by_ad { 2 } else { 1 };
+                let multiplier: u64 = if doubled_by_ad {
+                    if let Err(message) = spend_ad_grant(
+                        &mut account.profile.ad_double_day,
+                        &mut account.profile.ad_doubles_today,
+                        now,
+                    ) {
+                        failure = Some(message.to_string());
+                        return;
+                    }
+                    2
+                } else {
+                    1
+                };
                 let crowns = def.crowns_reward.saturating_mul(multiplier);
                 let gems = def.gems_reward.saturating_mul(multiplier);
 
@@ -5451,7 +4795,6 @@ impl PlayerDb {
                 record.completed = true;
                 record.claimed = true;
                 record.claimed_at = Some(now);
-                record.doubled_by_ad = doubled_by_ad;
                 account.updated_at = now;
                 let claim_kind = if doubled_by_ad { "ad_2x" } else { "std" };
                 ops.push(format!("claimed|{mission_id}|{claim_kind}"));
@@ -5596,6 +4939,17 @@ impl PlayerDb {
                     "prog0"
                 };
 
+                // An ad-funded swap past the free allowance spends one ad grant.
+                if used_ad && swaps_used >= crate::missions::MAX_FREE_SWAPS_PER_PERIOD {
+                    if let Err(message) = spend_ad_grant(
+                        &mut account.profile.ad_double_day,
+                        &mut account.profile.ad_doubles_today,
+                        now,
+                    ) {
+                        failure = Some(message.to_string());
+                        return;
+                    }
+                }
                 if is_daily {
                     account.profile.daily_mission_ids[slot_index] = new_def.id.to_string();
                     account
@@ -6742,10 +6096,28 @@ fn provisional_match_record(start: &MatchStartRecord, now: u64) -> MatchRecord {
 }
 
 pub const AD_DOUBLE_RECEIPT_PREFIX: &str = "ad_double:";
-pub const AD_DOUBLES_PER_DAY: u32 = 5;
 /// Only a match settled this recently can be doubled, so old history cannot
 /// be cashed in later.
 const AD_DOUBLE_WINDOW_SECS: u64 = 6 * 60 * 60;
+
+/// Spends one ad grant from the daily budget that match doubles, mission doubles
+/// and ad-funded swaps share. Call it only after every other check has passed.
+fn spend_ad_grant(
+    ad_double_day: &mut u64,
+    ad_doubles_today: &mut u32,
+    now: u64,
+) -> Result<(), &'static str> {
+    if crate::profile::ad_grants_left(*ad_double_day, *ad_doubles_today, now) == 0 {
+        return Err("daily ad rewards used");
+    }
+    let day = now / 86_400;
+    if *ad_double_day != day {
+        *ad_double_day = day;
+        *ad_doubles_today = 0;
+    }
+    *ad_doubles_today += 1;
+    Ok(())
+}
 
 fn double_match_reward_in_profile(
     profile: &mut PlayerProfile,
@@ -6771,15 +6143,11 @@ fn double_match_reward_in_profile(
         .ok_or("match participation receipt is missing")?;
     let crowns = participation.crowns.saturating_add(bonus.crowns);
     let gems = participation.gems.saturating_add(bonus.gems);
-    let day = now / 86_400;
-    if profile.ad_double_day != day {
-        profile.ad_double_day = day;
-        profile.ad_doubles_today = 0;
-    }
-    if profile.ad_doubles_today >= AD_DOUBLES_PER_DAY {
-        return Err("daily reward doubles used");
-    }
-    profile.ad_doubles_today += 1;
+    spend_ad_grant(
+        &mut profile.ad_double_day,
+        &mut profile.ad_doubles_today,
+        now,
+    )?;
     profile.crowns = profile.crowns.saturating_add(crowns);
     profile.gems = profile.gems.saturating_add(gems);
     profile.reward_receipts.insert(
@@ -8476,7 +7844,7 @@ mod tests {
             assert_eq!(double(&mut profile, &id), Ok(()));
         }
         seed(&mut profile, "capped", true, now - 60);
-        assert_eq!(double(&mut profile, "capped"), Err("daily reward doubles used"));
+        assert_eq!(double(&mut profile, "capped"), Err("daily ad rewards used"));
         assert_eq!(profile.crowns, 147 * u64::from(AD_DOUBLES_PER_DAY));
     }
 
@@ -8792,108 +8160,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn retention_uses_only_fully_elapsed_return_days() {
-        let report = super::summarize_retention(
-            "2026-10-08",
-            &[
-                super::RetentionCohort {
-                    offset: 1,
-                    eligible: 5,
-                    returned: [5, 5, 5],
-                },
-                super::RetentionCohort {
-                    offset: 2,
-                    eligible: 10,
-                    returned: [4, 0, 0],
-                },
-                super::RetentionCohort {
-                    offset: 4,
-                    eligible: 20,
-                    returned: [10, 8, 0],
-                },
-                super::RetentionCohort {
-                    offset: 8,
-                    eligible: 30,
-                    returned: [20, 15, 10],
-                },
-            ],
-        );
-        assert_eq!(report["d1"]["eligible_accounts"], 60);
-        assert_eq!(report["d1"]["returned_accounts"], 34);
-        assert_eq!(report["d1"]["cohort_cutoff_date"], "2026-10-06");
-        assert_eq!(report["d1"]["status"], "ready");
-        assert_eq!(report["d3"]["eligible_accounts"], 50);
-        assert_eq!(report["d3"]["returned_accounts"], 23);
-        assert_eq!(report["d7"]["eligible_accounts"], 30);
-        assert_eq!(report["d7"]["returned_accounts"], 10);
-    }
-
-    #[test]
-    fn immature_retention_is_not_reported_as_zero_percent() {
-        let report = super::summarize_retention(
-            "2026-10-08",
-            &[super::RetentionCohort {
-                offset: 1,
-                eligible: 5,
-                returned: [0; 3],
-            }],
-        );
-        assert_eq!(report["d1"]["status"], "not_matured");
-        assert!(report["d1"]["rate"].is_null());
-    }
-
-    #[test]
-    fn tutorial_step_counts_include_explicit_exit_without_inflating_completion() {
-        let rows = vec![
-            std::collections::HashMap::from([
-                ("boudica|claim_wilderness|2|start".to_string(), 8),
-                ("boudica|claim_wilderness|2|complete".to_string(), 5),
-                ("boudica|claim_wilderness|2|fail".to_string(), 2),
-            ]),
-            std::collections::HashMap::from([
-                ("boudica|claim_wilderness|2|start".to_string(), 2),
-                ("boudica|claim_wilderness|2|complete".to_string(), 1),
-                ("boudica|claim_wilderness|2|fail".to_string(), 1),
-                ("invalid|field".to_string(), 100),
-            ]),
-        ];
-        let rows = super::aggregate_tutorial_steps(&rows);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["started"], 10);
-        assert_eq!(rows[0]["completed"], 6);
-        assert_eq!(rows[0]["exited"], 3);
-        assert_eq!(rows[0]["completion_rate"], 0.6);
-    }
-
-    #[test]
-    fn match_flow_counts_merge_only_valid_closed_dimension_keys() {
-        let rows = vec![
-            std::collections::HashMap::from([
-                (
-                    "match_ended_client|mode=ranked_1v1|outcome=win|duration_bucket=5_15m"
-                        .to_string(),
-                    2,
-                ),
-                ("match_ended_client|player_name=private".to_string(), 100),
-            ]),
-            std::collections::HashMap::from([
-                (
-                    "match_ended_client|mode=ranked_1v1|outcome=win|duration_bucket=5_15m"
-                        .to_string(),
-                    3,
-                ),
-                ("unknown_event|mode=ranked_1v1".to_string(), 100),
-            ]),
-        ];
-        let rows = super::aggregate_match_flow(&rows);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["event"], "match_ended_client");
-        assert_eq!(rows[0]["mode"], "ranked_1v1");
-        assert_eq!(rows[0]["outcome"], "win");
-        assert_eq!(rows[0]["count"], 5);
-    }
-
     #[tokio::test]
     async fn mission_claim_is_server_authoritative_prevents_double_claims_and_credits_balances() {
         let temp = tempfile::tempdir().unwrap();
@@ -8936,7 +8202,6 @@ mod tests {
             .get("onboarding_1_tutorial")
             .unwrap();
         assert!(record.claimed);
-        assert!(!record.doubled_by_ad);
 
         // 3. Attempting double claim fails
         let double_claim_err = db
@@ -8974,7 +8239,6 @@ mod tests {
             .get("onboarding_2_baptism")
             .unwrap();
         assert!(rec2.claimed);
-        assert!(rec2.doubled_by_ad);
         assert_eq!(rec2.progress, 2);
     }
 
@@ -9059,42 +8323,6 @@ mod tests {
         .await
         .unwrap();
         assert!(db.swap_mission(player, &first_weekly, false).await.is_err());
-    }
-
-    #[test]
-    fn aggregate_mission_ops_summarizes_churn_and_guide_actions() {
-        let mut day = std::collections::HashMap::new();
-        day.insert("offered|daily_oceania_3|region:oceania".to_string(), 10);
-        day.insert("completed|daily_oceania_3|region:oceania".to_string(), 4);
-        day.insert(
-            "swap_out|daily_oceania_3|region:oceania|playable|prog0".to_string(),
-            2,
-        );
-        day.insert(
-            "swap_out|daily_oceania_3|region:oceania|unowned|prog_mid".to_string(),
-            1,
-        );
-        day.insert("swap_in|daily_team_game|mode:teams".to_string(), 3);
-        day.insert("claimed|daily_oceania_3|ad_2x".to_string(), 2);
-        day.insert("guide_action|welcome|completed".to_string(), 5);
-        day.insert("guide_action|post_match_missions|disabled_all".to_string(), 2);
-
-        let summary = super::aggregate_mission_ops(&[day]);
-        let missions = summary["mission_churn_by_mission"].as_array().unwrap();
-        let oceania = missions
-            .iter()
-            .find(|m| m["mission_id"] == "daily_oceania_3")
-            .unwrap();
-        assert_eq!(oceania["offered"], 10);
-        assert_eq!(oceania["swapped_out_total"], 3);
-        assert_eq!(oceania["swapped_out_playable"], 2);
-        assert_eq!(oceania["swapped_out_unowned"], 1);
-        assert_eq!(oceania["swapped_out_prog0"], 2);
-        assert_eq!(oceania["swapped_out_mid"], 1);
-        assert_eq!(oceania["claimed_ad_2x"], 2);
-
-        let guides = summary["menu_guide_summary"].as_array().unwrap();
-        assert_eq!(guides.len(), 2);
     }
 
     #[tokio::test]

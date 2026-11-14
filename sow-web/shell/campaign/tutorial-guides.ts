@@ -496,7 +496,11 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                 result = { x: Number(point.x), y: Number(point.y) };
             }
         } else {
-            if (guide.target === "map_transfer" && step.marker && !targetMapMenuOpen(step, hud)) {
+            if (
+                (guide.target === "map_transfer" || guide.target === "map_request") &&
+                step.marker &&
+                !targetMapMenuOpen(step, hud)
+            ) {
                 return fallbackAnchor(step, tutorial);
             }
             const source = window.SOWCampaignView.resolveUiTarget(
@@ -507,12 +511,14 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
             );
             if (!source || source.matches(":disabled") || source.getClientRects().length === 0)
                 return fallbackAnchor(step, tutorial);
+            const isTransferSpotlight =
+                guide.target === "transfer_send" || guide.target === "transfer_request";
             const spotlightPanel =
-                step.id === "boudica_transfer_send" && source.closest
+                isTransferSpotlight && source.closest
                     ? (source.closest("#sow-hud-transfer") as HTMLElement | null)
                     : null;
             if (
-                step.id === "boudica_transfer_send" &&
+                isTransferSpotlight &&
                 (!spotlightPanel || spotlightPanel.getClientRects().length === 0)
             )
                 return fallbackAnchor(step, tutorial);
@@ -595,12 +601,18 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
     }
 
     function syncTransferGuide(step: CampaignStep | null) {
-        const highlightAmounts = Boolean(
-            step && step.guide && step.guide.kind === "ui" && step.guide.target === "transfer_send",
-        );
         const guideTarget = step && step.guide && step.guide.kind === "ui" ? step.guide.target : null;
-        const target =
-            ["transfer_troops", "transfer_gold", "transfer_send"].includes(guideTarget) &&
+        const isSendOrRequest =
+            guideTarget === "transfer_send" || guideTarget === "transfer_request";
+        let target =
+            [
+                "transfer_troops",
+                "transfer_gold",
+                "transfer_dir_troops",
+                "transfer_dir_gold",
+                "transfer_send",
+                "transfer_request",
+            ].includes(guideTarget) &&
             window.SOWCampaignView &&
             typeof window.SOWCampaignView.resolveUiTarget === "function"
                 ? window.SOWCampaignView.resolveUiTarget(
@@ -611,11 +623,20 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                 : null;
         let amountControls: HTMLElement[] = [];
         if (
-            highlightAmounts &&
+            isSendOrRequest &&
             window.SOWCampaignView &&
             typeof window.SOWCampaignView.resolveUiTarget === "function"
         ) {
-            amountControls = ["transfer_troops", "transfer_gold"]
+            const extraTargets =
+                target && target.hidden
+                    ? [
+                          "transfer_troops",
+                          "transfer_gold",
+                          "transfer_dir_troops",
+                          "transfer_dir_gold",
+                      ]
+                    : ["transfer_troops", "transfer_gold"];
+            amountControls = extraTargets
                 .map(function (key) {
                     return window.SOWCampaignView.resolveUiTarget(
                         key,
@@ -624,6 +645,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
                     );
                 })
                 .filter((input): input is HTMLElement => input !== null);
+            if (target && target.hidden) target = null;
         }
         runtime.guidedAmountControls.forEach(function (input) {
             if (!amountControls.includes(input)) input.classList.remove("sow-tutorial-guide-target");
@@ -709,7 +731,7 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         }
         if (
             step.trigger &&
-            ["attack", "contact", "alliance", "defeated", "fleet", "resource_transfer"].includes(
+            ["attack", "contact", "alliance", "defeated", "fleet", "resource_transfer", "resource_request"].includes(
                 step.trigger.type,
             )
         ) {

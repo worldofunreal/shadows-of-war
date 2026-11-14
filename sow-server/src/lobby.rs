@@ -57,7 +57,6 @@ pub struct ServerLobby {
     pub seed: u64,
     pub config: GameConfig,
     pub game_mode: String,
-    pub relay_port: Option<u16>,
     /// Only set for Custom lobbies — the player_id of whoever created the lobby.
     pub host_player_id: Option<u16>,
     pub password: Option<String>,
@@ -178,7 +177,6 @@ pub fn spawn_ranked_lobby(
         seed: 0,
         config,
         game_mode: "FFA".into(),
-        relay_port: None,
         host_player_id: None,
         password: None,
         host_name: String::new(),
@@ -270,6 +268,7 @@ fn custom_game_config(host: GameConfig) -> GameConfig {
         nation_count: host.nation_count,
         bot_difficulty: host.bot_difficulty,
         random_spawn: host.random_spawn,
+        global_speed_multiplier: host.global_speed_multiplier,
         ..server_rules()
     };
     config.clamp_bot_counts();
@@ -346,7 +345,6 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
         seed: 0,
         config,
         game_mode: game_mode.to_string(),
-        relay_port: None,
         host_player_id: None,
         password,
         host_name,
@@ -573,6 +571,11 @@ pub fn join_player(
     let league_score = opts.league_score;
     if !leader.is_enabled() {
         return Err("Selected hero is unavailable".to_string());
+    }
+    if host_config.as_ref().is_some_and(|config| {
+        !sow_core::game_config::is_supported_game_speed(config.global_speed_multiplier)
+    }) {
+        return Err("Unsupported custom game speed".to_string());
     }
     if host_config.as_ref().is_some_and(|config| {
         !matches!(
@@ -1325,6 +1328,10 @@ mod name_tests {
                 .unwrap();
             assert!(expected.contains(&config.map_name.as_str()));
             assert!(config.ranked_1v1);
+            assert_eq!(
+                config.global_speed_multiplier,
+                server_rules().global_speed_multiplier
+            );
             assert_eq!(config.max_players, 2);
             assert_eq!(config.nation_count, 0);
             assert_eq!(config.bot_count, map.num_land_tiles.div_ceil(600));
@@ -1336,7 +1343,7 @@ mod name_tests {
         JoinPlayerOpts, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby, SpawnLobbyOpts,
         build_lobby_broadcast, ensure_queue_depth, join_player, kick_player, master_tick,
         normalize_map_roster, normalize_player_name, resolve_join_target, set_player_team,
-        spawn_waiting_lobby,
+        server_rules, spawn_waiting_lobby,
     };
     use sow_core::game_config::GameConfig;
     use sow_core::player::Leader;
@@ -1359,7 +1366,6 @@ mod name_tests {
                 ..Default::default()
             },
             game_mode: mode.to_string(),
-            relay_port: None,
             host_player_id: None,
             password: None,
             host_name: String::new(),
@@ -1481,6 +1487,9 @@ mod name_tests {
                 .iter()
                 .all(|lobby| (12..=256).contains(&lobby.config.max_players))
         );
+        assert!(games.iter().all(|lobby| {
+            lobby.config.global_speed_multiplier == server_rules().global_speed_multiplier
+        }));
         assert_eq!(games[1].config.max_players % 2, 0);
     }
 
@@ -1493,7 +1502,7 @@ mod name_tests {
             tutorial: true,
             tick_rate_ms: 1.0,
             map_control_win_percentage: 0.0,
-            global_speed_multiplier: 1000.0,
+            global_speed_multiplier: 0.24,
             cost_city: 0.0,
             ..Default::default()
         };
@@ -1523,9 +1532,27 @@ mod name_tests {
         );
         assert_eq!(
             games[0].config.global_speed_multiplier,
-            rules.global_speed_multiplier
+            0.24
         );
         assert_eq!(games[0].config.cost_city, rules.cost_city);
+    }
+
+    #[test]
+    fn custom_lobby_rejects_unsupported_speed_values() {
+        let mut options = join_options(None, channel_sender());
+        options.host_private = true;
+        options.host_config = Some(Box::new(GameConfig {
+            global_speed_multiplier: 0.15,
+            ..Default::default()
+        }));
+        let mut games = Vec::new();
+        let mut next_id = 1;
+
+        assert_eq!(
+            join_player(&mut games, &mut next_id, options).unwrap_err(),
+            "Unsupported custom game speed"
+        );
+        assert!(games.is_empty());
     }
 
     #[test]

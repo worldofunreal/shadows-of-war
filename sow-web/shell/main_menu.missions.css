@@ -15,7 +15,18 @@
     margin: 0;
     box-sizing: border-box;
     width: 100%;
+    cursor: pointer;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sow-directive-card:hover {
+    border-color: rgba(251, 146, 60, 0.45);
+    box-shadow: 0 0 14px rgba(249, 115, 22, 0.14), var(--sow-tactical-card-shadow);
+}
+
+.sow-directive-card:focus-visible {
+    outline: 2px solid #f59e0b;
+    outline-offset: 2px;
 }
 
 .sow-directive-card.is-ready {
@@ -196,15 +207,25 @@
 }
 
 .sow-directive__btn-view {
-    background: var(--sow-button-dark-bg);
-    color: var(--sow-button-dark-text);
-    border-color: var(--sow-button-dark-border);
-    box-shadow: var(--sow-button-dark-shadow);
+    background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+    color: #1a0d02;
+    border-color: rgba(251, 146, 60, 0.55);
+    padding: 5px 11px;
+    box-shadow: 0 2px 10px rgba(234, 88, 12, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.sow-directive__btn-view svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2.5;
+    flex-shrink: 0;
 }
 
 .sow-directive__btn-view:hover {
-    border-color: var(--sow-tactical-surface-accent-border);
-    filter: brightness(1.1);
+    border-color: rgba(253, 186, 116, 0.85);
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(234, 88, 12, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .sow-directive__btn-claim {

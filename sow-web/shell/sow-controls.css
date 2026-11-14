@@ -697,7 +697,7 @@ html[dir="rtl"] .sow-analytics-consent--game {
 
 /* ==========================================================================
    Stylized Tactical Game Tooltip Portal (.sow-tooltip)
-   Uses canonical --sow-tactical-* obsidian-gold surface tokens.
+   Uses canonical --sow-tactical-* tactical surface tokens.
    ========================================================================== */
 .sow-tooltip {
   --sow-tooltip-border: var(--sow-tactical-surface-accent-border-soft, rgba(245, 197, 66, 0.36));
@@ -1037,3 +1037,4 @@ html[dir="rtl"] .sow-analytics-consent--game {
     transform: none !important;
   }
 }
+

@@ -410,6 +410,78 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     legacy_bool!("vfx_mover_trails", "Mover trails", "Movers", true),
     legacy_bool!("vfx_click_markers", "Click markers", "World text", true),
+    legacy_bool!("vfx_railways", "Railway tracks", "Railways", true),
+    legacy_bool!("vfx_trains", "Moving trains", "Railways", true),
+    legacy_number!(
+        "railway_min_zoom",
+        "Minimum zoom",
+        "Railways",
+        0.3,
+        0.1,
+        2.0,
+        0.05,
+        "×"
+    ),
+    legacy_number!(
+        "railway_link_distance",
+        "Maximum building link",
+        "Railways",
+        36.0,
+        4.0,
+        150.0,
+        1.0,
+        "tiles"
+    ),
+    legacy_number!(
+        "railway_track_width",
+        "Track width",
+        "Railways",
+        2.0,
+        0.5,
+        6.0,
+        0.1,
+        "px"
+    ),
+    legacy_number!(
+        "railway_opacity",
+        "Track opacity",
+        "Railways",
+        0.7,
+        0.0,
+        1.0,
+        0.05,
+        ""
+    ),
+    legacy_number!(
+        "train_max_count",
+        "Maximum trains",
+        "Railways",
+        16.0,
+        0.0,
+        60.0,
+        1.0,
+        "trains"
+    ),
+    legacy_number!(
+        "train_speed",
+        "Train speed",
+        "Railways",
+        4.5,
+        0.0,
+        24.0,
+        0.5,
+        "tiles/s"
+    ),
+    legacy_number!(
+        "train_size",
+        "Train size",
+        "Railways",
+        10.0,
+        3.0,
+        24.0,
+        1.0,
+        "px"
+    ),
     legacy_bool!(
         "vfx_attack_badges",
         "Attack troop badges",
@@ -3332,6 +3404,7 @@ pub const SECTION_GROUPS: &[(&str, &[&str])] = &[
             "Lighting",
             "Fog of war",
             "Screen atmosphere",
+            "Railways",
         ],
     ),
     (
@@ -3386,6 +3459,8 @@ pub const PERF_SWITCHES: &[(&str, &[&str])] = &[
             "vfx_world_buildings",
             "vfx_attack_badges",
             "vfx_click_markers",
+            "vfx_railways",
+            "vfx_trains",
         ],
     ),
     (

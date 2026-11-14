@@ -1,0 +1,299 @@
+{
+  "version": 2,
+  "episode_id": "tactics_04_factory_gold",
+  "text_namespace": "tutorial.campaign_tactics_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 1400,
+    "starting_gold": 360,
+    "campaign_support": {
+      "after_defeated": "river_raiders",
+      "share_percent": 40
+    }
+  },
+  "entry": "t4_choose_factory",
+  "speakers": {
+    "sun_tzu": {
+      "name_key": "tutorial.campaign_tactics_sun_tzu",
+      "avatar": "sun_tzu",
+      "base_expression": {
+        "expression": "calm",
+        "after_expression": "happy",
+        "until": {
+          "type": "defeated",
+          "target": "golden_syndicate"
+        }
+      }
+    },
+    "sambas_traders": {
+      "name_key": "tutorial.campaign_tactics_04_traders_name",
+      "faction": "sambas_traders"
+    },
+    "golden_syndicate": {
+      "name_key": "tutorial.campaign_tactics_04_syndicate_name",
+      "faction": "golden_syndicate"
+    }
+  },
+  "steps": [
+    {
+      "id": "t4_choose_factory",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_04_choose_factory_title",
+      "body_key": "tutorial.campaign_tactics_04_choose_factory_body",
+      "hint_key": "tutorial.campaign_tactics_04_choose_factory_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "unlocks": {
+        "buildings": {
+          "Factory": 4,
+          "Tower": 1
+        }
+      },
+      "camera": {
+        "shot": "approach",
+        "to": "player",
+        "seconds": 1
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_factory",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_factory",
+        "gesture": "tap"
+      },
+      "next": "t4_build_factory"
+    },
+    {
+      "id": "t4_build_factory",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_04_build_factory_title",
+      "hint_key": "tutorial.campaign_tactics_04_build_factory_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "build_until_started",
+      "trigger": {
+        "type": "factory",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "next": "t4_wait_factory"
+    },
+    {
+      "id": "t4_wait_factory",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_04_build_factory_title",
+      "hint_key": "tutorial.campaign_tactics_04_wait_factory_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "Factory",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "next": "t4_select_factory"
+    },
+    {
+      "id": "t4_select_factory",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_04_select_factory_title",
+      "body_key": "tutorial.campaign_tactics_04_select_factory_body",
+      "hint_key": "tutorial.campaign_tactics_04_select_factory_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "trigger": {
+        "type": "building_selected",
+        "kind": "Factory",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
+      "next": "t4_upgrade_lv2"
+    },
+    {
+      "id": "t4_upgrade_lv2",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_04_upgrade_factory_title",
+      "hint_key": "tutorial.campaign_tactics_04_upgrade_factory_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "upgrade_until_started",
+      "unlocks": {
+        "buildings": {
+          "Factory": 4,
+          "City": 2,
+          "Farm": 2,
+          "Tower": 2
+        }
+      },
+      "trigger": {
+        "type": "structure_upgrade",
+        "kind": "Factory",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_structure",
+        "gesture": "tap"
+      },
+      "next": "t4_upgrade_lv3"
+    },
+    {
+      "id": "t4_upgrade_lv3",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_04_level3_title",
+      "body_key": "tutorial.campaign_tactics_04_level3_body",
+      "hint_key": "tutorial.campaign_tactics_04_level3_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "Factory",
+        "value": 3,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "river_raiders"
+      },
+      "next": "t4_crush_syndicate"
+    },
+    {
+      "id": "t4_crush_syndicate",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_04_crush_syndicate_title",
+      "body_key": "tutorial.campaign_tactics_04_crush_syndicate_body",
+      "hint_key": "tutorial.campaign_tactics_04_crush_syndicate_hint",
+      "speaker": "sun_tzu",
+      "camera": {
+        "shot": "threat",
+        "to": "golden_syndicate",
+        "seconds": 1
+      },
+      "exchange": [
+        {
+          "speaker": "golden_syndicate",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_04_syndicate_taunt_emote",
+          "delay_ms": 0
+        }
+      ],
+      "trigger": {
+        "type": "defeated",
+        "target": "golden_syndicate",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "golden_syndicate"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "t4_victory"
+    },
+    {
+      "id": "t4_victory",
+      "type": "end",
+      "title_key": "tutorial.campaign_tactics_04_victory_title",
+      "body_key": "tutorial.campaign_tactics_04_victory_body",
+      "speaker": "sun_tzu",
+      "presentation": "chapter"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "t4_sambas_merc_offer",
+      "when": {
+        "type": "contact",
+        "target": "sambas_traders"
+      },
+      "speaker": "sambas_traders",
+      "title_key": "tutorial.campaign_tactics_04_traders_offer_title",
+      "show_title": true,
+      "body_key": "tutorial.campaign_tactics_04_traders_offer_body",
+      "pause_game": true,
+      "choices": [
+        {
+          "id": "hire",
+          "label_key": "tutorial.campaign_tactics_04_traders_hire",
+          "body_key": "tutorial.campaign_tactics_04_traders_hire_detail",
+          "relation": "allied",
+          "gold_cost": 220,
+          "exchange": [
+            {
+              "speaker": "sambas_traders",
+              "emote": "celebrate",
+              "emote_text_key": "tutorial.campaign_tactics_04_traders_hired_emote"
+            }
+          ]
+        },
+        {
+          "id": "decline",
+          "label_key": "tutorial.campaign_tactics_04_traders_decline",
+          "body_key": "tutorial.campaign_tactics_04_traders_decline_detail",
+          "relation": "neutral",
+          "exchange": [
+            {
+              "speaker": "sambas_traders",
+              "emote": "greet",
+              "emote_text_key": "tutorial.campaign_tactics_04_traders_snub_emote"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "t4_syndicate_tease",
+      "when": {
+        "type": "timer",
+        "after_ms": 9000
+      },
+      "during": "t4_crush_syndicate",
+      "presentation": "exchange",
+      "loop": true,
+      "exchange": [
+        {
+          "speaker": "golden_syndicate",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_04_syndicate_tease_1"
+        }
+      ]
+    },
+    {
+      "id": "t4_syndicate_panic",
+      "when": {
+        "type": "pre_defeat",
+        "target": "golden_syndicate"
+      },
+      "during": "t4_crush_syndicate",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "golden_syndicate",
+          "emote": "help",
+          "emote_text_key": "tutorial.campaign_tactics_04_syndicate_panic_emote"
+        }
+      ]
+    }
+  ]
+}

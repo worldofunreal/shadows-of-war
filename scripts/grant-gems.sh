@@ -2,9 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ -f "$ROOT/sow-dist/.env" ]]; then
+env_file="${SOW_GRANT_ENV_FILE:-$ROOT/sow-dist/.env}"
+if [[ -f "$env_file" ]]; then
     set -a
-    source "$ROOT/sow-dist/.env"
+    source "$env_file"
     set +a
 fi
 

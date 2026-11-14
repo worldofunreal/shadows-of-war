@@ -417,8 +417,16 @@ impl SowEngine {
         // One pending request per pair; a new one replaces it.
         self.resource_requests_proposed
             .retain(|r| !(r.proposer == proposer && r.target == target));
+        let is_trade = request.is_trade();
         self.resource_requests_proposed.push(request);
         self.mark_resource_request_cooldown(proposer, target);
+        self.state
+            .events
+            .push(crate::game::GameEvent::ResourceRequestSubmitted {
+                proposer_id: proposer,
+                target_id: target,
+                is_trade,
+            });
     }
 
     /// Whether both sides of a trade can pay in full right now.
@@ -1027,6 +1035,14 @@ impl SowEngine {
                     {
                         prop_player.credit_gold(actual_g);
                         prop_player.credit_troops(actual_t);
+                        self.state
+                            .events
+                            .push(crate::game::GameEvent::ResourceTransferred {
+                                sender_id: acceptor,
+                                receiver_id: target,
+                                gold: actual_g,
+                                troops: actual_t,
+                            });
                     }
                 }
             }

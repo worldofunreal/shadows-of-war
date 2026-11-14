@@ -17,6 +17,13 @@ import {
 import { activeScreenPanel, render } from "./main_menu.shell.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
 import { avatarAtlasCell, avatarImageAttribute, deferAvatarImage, loadAvatarImage } from "./avatar-presentation.ts";
+import {
+    computeHeroAchievementSummary,
+    renderHeroDossierAchievementsTab,
+    renderHeroSelectionAchievementStrip,
+    tText,
+    type HeroAchievementSummary,
+} from "./main_menu.achievements.ts";
 import type { HeroBioEntry, MenuLeader } from "./main_menu.state.ts";
 import { renderLeaderPurchase, renderSkinsButton } from "./main_menu.surfaces.ts";
 
@@ -373,6 +380,39 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
     const rarity = heroesRarityLabel(leader);
     const rarityClass = leader.rarity ? " sow-heroes__rarity sow-heroes__rarity--" + esc(leader.rarity) : "";
     const rarityAttr = leader.rarity ? " data-rarity='" + esc(leader.rarity) + "'" : "";
+    const weeklyFree = !leader.permanently_free && leader.id !== "Boudica" && isWeeklyFreeRotation(leader);
+    const achSummary = computeHeroAchievementSummary(leader);
+    const achBadge =
+        achSummary.unlockedCount > 0 || achSummary.matchesPlayed > 0
+            ? "<span class='sow-heroes__card-ach" +
+              (achSummary.unlockedCount === achSummary.totalCount ? " is-complete" : "") +
+              "' title='" +
+              esc(tText("heroes.achievements_progress", "{unlocked}/{total} Achievements", {
+                  unlocked: achSummary.unlockedCount,
+                  total: achSummary.totalCount,
+              })) +
+              "'>★ " +
+              esc(achSummary.unlockedCount + "/" + achSummary.totalCount) +
+              "</span>"
+            : "";
+    const meta =
+        (rarity
+            ? "<em class='" +
+              (rarityClass ? rarityClass.trim() : "sow-heroes__rarity") +
+              "'" +
+              rarityAttr +
+              ">" +
+              esc(rarity) +
+              "</em>"
+            : "") +
+        (weeklyFree ? "<span class='sow-heroes__card-free'>" + esc(SOW_t("heroes.free_week_badge")) + "</span>" : "") +
+        achBadge;
+    const progressLine =
+        achSummary.percent > 0
+            ? "<span class='sow-heroes__card-ach-bar' aria-hidden='true'><i style='width:" +
+              esc(achSummary.percent) +
+              "%'></i></span>"
+            : "";
     return (
         "<button class='sow-heroes__card" +
         (selected ? " is-selected" : "") +
@@ -392,16 +432,9 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
         "</strong><small>" +
         esc(leaderCivilization(leader)) +
         "</small>" +
-        (rarity
-            ? "<em class='" +
-              (rarityClass ? rarityClass.trim() : "sow-heroes__rarity") +
-              "'" +
-              rarityAttr +
-              ">" +
-              esc(rarity) +
-              "</em>"
-            : "") +
+        (meta ? "<span class='sow-heroes__card-meta'>" + meta + "</span>" : "") +
         "</span>" +
+        progressLine +
         "</button>"
     );
 }
@@ -425,7 +458,12 @@ function renderRandomLeaderCard(selected: boolean) {
     const matchesSearch =
         !menuUi.heroesSearchQuery.trim() ||
         randomLeaderName().toLowerCase().indexOf(menuUi.heroesSearchQuery.trim().toLowerCase()) !== -1;
-    if (!matchesSearch || menuUi.heroesRegionFilter !== "all" || menuUi.heroesRarityFilter !== "all")
+    if (
+        !matchesSearch ||
+        menuUi.heroesRegionFilter !== "all" ||
+        menuUi.heroesRarityFilter !== "all" ||
+        menuUi.heroesStatusFilter !== "all"
+    )
         return "";
     const avatarUrl = asset("gameplay/avatars/random.webp");
     return (
@@ -447,6 +485,18 @@ function renderRandomLeaderCard(selected: boolean) {
 
 function heroesRoster(leaders: MenuLeader[]) {
     const query = menuUi.heroesSearchQuery.trim().toLowerCase();
+    const statusFilter = menuUi.heroesStatusFilter || "all";
+    const summaryCache = new Map<string, HeroAchievementSummary>();
+    const summaryFor = (leader: MenuLeader): HeroAchievementSummary => {
+        const key = String(leader.slug || leader.id);
+        let entry = summaryCache.get(key);
+        if (!entry) {
+            entry = computeHeroAchievementSummary(leader);
+            summaryCache.set(key, entry);
+        }
+        return entry;
+    };
+
     const filtered = leaders.filter(function (leader) {
         const matchesQuery =
             !query ||
@@ -467,7 +517,22 @@ function heroesRoster(leaders: MenuLeader[]) {
         const matchesRarity =
             menuUi.heroesRarityFilter === "all" || leader.rarity === menuUi.heroesRarityFilter;
         const matchesPlayable = !menuUi.heroesPlayableOnly || leader.available !== false;
-        return matchesQuery && matchesRegion && matchesRarity && matchesPlayable;
+        let matchesStatus = true;
+        if (statusFilter !== "all") {
+            const sum = summaryFor(leader);
+            if (statusFilter === "owned") {
+                matchesStatus = sum.ownershipStatus === "owned" || sum.ownershipStatus === "starter";
+            } else if (statusFilter === "weekly_free") {
+                matchesStatus = sum.ownershipStatus === "weekly_free";
+            } else if (statusFilter === "locked") {
+                matchesStatus = leader.available === false;
+            } else if (statusFilter === "in_progress") {
+                matchesStatus = sum.unlockedCount > 0 || sum.matchesPlayed > 0;
+            } else if (statusFilter === "almost_milestone") {
+                matchesStatus = sum.unlockedCount < sum.totalCount && sum.nextPercent >= 25;
+            }
+        }
+        return matchesQuery && matchesRegion && matchesRarity && matchesPlayable && matchesStatus;
     });
 
     function leaderCost(leader: MenuLeader): number {
@@ -492,7 +557,18 @@ function heroesRoster(leaders: MenuLeader[]) {
 
     function sortLeaders(list: MenuLeader[], sort: string): MenuLeader[] {
         const copy = list.slice();
-        if (sort === "most_played") {
+        if (sort === "achievements_desc") {
+            copy.sort(function (a, b) {
+                const sa = summaryFor(a);
+                const sb = summaryFor(b);
+                if (sb.percent !== sa.percent) return sb.percent - sa.percent;
+                if (sb.unlockedCount !== sa.unlockedCount) return sb.unlockedCount - sa.unlockedCount;
+                if (sb.nextPercent !== sa.nextPercent) return sb.nextPercent - sa.nextPercent;
+                const diffMatches = sa.matchesPlayed !== sb.matchesPlayed ? sb.matchesPlayed - sa.matchesPlayed : 0;
+                if (diffMatches !== 0) return diffMatches;
+                return String(leaderDisplayName(a) || "").localeCompare(String(leaderDisplayName(b) || ""));
+            });
+        } else if (sort === "most_played") {
             copy.sort(function (a, b) {
                 const diffMatches = heroMatchesPlayed(b) - heroMatchesPlayed(a);
                 if (diffMatches !== 0) return diffMatches;
@@ -583,6 +659,26 @@ function renderHeroesRarityDropdown() {
     });
 }
 
+function renderHeroesStatusDropdown() {
+    const val = menuUi.heroesStatusFilter || "all";
+    return SOW_renderDropdown({
+        key: "heroes-status",
+        label: tText("heroes.filter_status", "Filter by status"),
+        name: "status",
+        icon: HEROES_FILTER_ICON,
+        value: val,
+        className: "sow-heroes__status-filter" + (val !== "all" ? " is-filtered" : ""),
+        options: [
+            { value: "all", label: tText("heroes.all_statuses", "All status"), shortLabel: tText("heroes.status_filter", "Status") },
+            { value: "owned", label: tText("heroes.status_owned", "Owned") },
+            { value: "weekly_free", label: tText("heroes.status_weekly_free", "Weekly Free") },
+            { value: "locked", label: tText("heroes.status_locked", "Locked") },
+            { value: "in_progress", label: tText("heroes.status_with_progress", "With progress") },
+            { value: "almost_milestone", label: tText("heroes.status_almost_milestone", "Near milestone") },
+        ],
+    });
+}
+
 function renderHeroesSortDropdown() {
     return SOW_renderDropdown({
         key: "heroes-sort",
@@ -592,6 +688,7 @@ function renderHeroesSortDropdown() {
         value: menuUi.heroesSort || "alpha_asc",
         className: "sow-heroes__sort",
         options: [
+            { value: "achievements_desc", label: tText("heroes.sort_achievements_desc", "Achievements (%)") },
             { value: "most_played", label: SOW_t("heroes.sort_most_played") },
             { value: "cost_desc", label: SOW_t("heroes.sort_cost_desc") },
             { value: "cost_asc", label: SOW_t("heroes.sort_cost_asc") },
@@ -654,9 +751,6 @@ export function updateHeroesPreview() {
     const source = picture && picture.querySelector("source");
     const image = picture && picture.querySelector("img");
     const briefing = featured.querySelector("[data-hero-briefing]");
-    const tags = featured.querySelector<HTMLElement>("[data-hero-tags]");
-    const rarityNode = featured.querySelector<HTMLElement>("[data-hero-rarity]");
-    const status = featured.querySelector<HTMLElement>("[data-hero-status]");
     const locked = activeLeader.available === false;
     featured.classList.toggle("is-locked", locked);
     featured.classList.toggle("is-motion-reduced", heroesMotionReduced());
@@ -665,11 +759,13 @@ export function updateHeroesPreview() {
     // Panel-shape mapping — see heroesFeaturedArt(). Do not invert it.
     const featuredArt = heroesFeaturedArt(activeLeader.slug);
     const artSlug = leaderArtSlug(activeLeader);
+    const targetLeader = randomSelected ? null : activeLeader;
     if (briefing)
         briefing.innerHTML = renderHeroBriefing(
             randomSelected ? "random" : activeLeader,
             "selection",
             "sow-heroes-selected",
+            renderHeroStatusTags(targetLeader, true),
         );
     if (image) {
         image.alt = randomSelected ? randomLeaderName() : leaderDisplayName(activeLeader);
@@ -713,7 +809,9 @@ export function updateHeroesPreview() {
             image.dataset.heroLeaderId = randomSelected ? "random" : activeLeader.id;
         }
     }
-    const targetLeader = randomSelected ? null : activeLeader;
+    const tags = featured.querySelector<HTMLElement>("[data-hero-tags]");
+    const rarityNode = featured.querySelector<HTMLElement>("[data-hero-rarity]");
+    const status = featured.querySelector<HTMLElement>("[data-hero-status]");
     const rarityLabel = targetLeader ? heroesRarityLabel(targetLeader) : "";
     const statusLabel = heroesStatusLabel(targetLeader);
     if (rarityNode) {
@@ -728,10 +826,15 @@ export function updateHeroesPreview() {
         status.hidden = !statusLabel;
     }
     if (tags) tags.hidden = !rarityLabel && !statusLabel;
+    const achStrip = featured.querySelector<HTMLElement>("[data-hero-achievement-strip]");
+    if (achStrip) {
+        achStrip.innerHTML = randomSelected ? "" : renderHeroSelectionAchievementStrip(activeLeader);
+        achStrip.hidden = randomSelected;
+    }
     const purchase = featured.querySelector("[data-hero-purchase]");
     if (purchase) purchase.innerHTML = randomSelected ? "" : renderLeaderPurchase(activeLeader);
     const skinsContainer = featured.querySelector<HTMLElement>("[data-hero-skins]");
-    if (skinsContainer) skinsContainer.innerHTML = randomSelected ? "" : renderFeaturedTopControls(activeLeader);
+    if (skinsContainer) skinsContainer.innerHTML = randomSelected ? "" : renderFeaturedTopControls();
     const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
     const currentAvailableKey = leaders
         .filter((l) => l.available !== false)
@@ -772,33 +875,34 @@ export function updateHeroesPreview() {
     return true;
 }
 
-const BIO_BOOK_ICON =
-    "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20'/></svg>";
-
-const SUPPORTED_BIO_LOCALES = new Set([
-    "en",
-    "es",
-    "fr",
-    "de",
-    "it",
-    "tr",
-    "zh-cn",
-    "ja",
-    "ko",
-    "ar",
-    "ru",
-    "vi",
-    "id",
-    "fil",
-    "pt-br",
-]);
+// Bundles are published as gameplay/bios/<code>.json under the registry codes
+// (pt-BR, zh-CN), so the lookup returns those exact codes.
+const SUPPORTED_BIO_LOCALES = new Map(
+    [
+        "en",
+        "es",
+        "fr",
+        "de",
+        "it",
+        "tr",
+        "zh-CN",
+        "ja",
+        "ko",
+        "ar",
+        "ru",
+        "vi",
+        "id",
+        "fil",
+        "pt-BR",
+    ].map((code) => [code.toLowerCase(), code] as const),
+);
 
 function normalizeBioLocale(locale: unknown): string {
     const raw = String(locale || "en")
         .trim()
         .toLowerCase()
         .replace(/_/g, "-");
-    return SUPPORTED_BIO_LOCALES.has(raw) ? raw : "en";
+    return SUPPORTED_BIO_LOCALES.get(raw) || "en";
 }
 
 const bioFetches = new Map<string, Promise<void>>();
@@ -842,17 +946,8 @@ export function ensureHeroBiosLoaded(localeOverride?: string): Promise<void> {
     return req;
 }
 
-function renderFeaturedTopControls(leader: MenuLeader) {
-    return (
-        "<button class='sow-heroes__bio-trigger' type='button' data-command='open_hero_info' data-leader-id='" +
-        esc(leader.id) +
-        "' data-hero-info-tab='biography'>" +
-        BIO_BOOK_ICON +
-        "<span>" +
-        esc(SOW_t("heroes.bio_view_dossier")) +
-        "</span></button>" +
-        renderSkinsButton()
-    );
+function renderFeaturedTopControls() {
+    return renderSkinsButton();
 }
 
 function renderBioSourceList(
@@ -878,24 +973,26 @@ function renderBioSourceList(
 }
 
 function renderHeroCareerRecord(leader: MenuLeader): string {
-    const profileStats = menuUi.state?.profile_stats;
-    const fallbackMap = profileStats?.leader_stats;
-    const stats =
-        leader.stats || (fallbackMap && leader.name ? fallbackMap[leader.name] : undefined) || {};
-    const xpMap = profileStats?.leader_xp;
-    const xp =
-        typeof leader.xp === "number"
-            ? leader.xp
-            : xpMap && typeof xpMap === "object" && leader.name
-              ? Number(xpMap[leader.name] || 0)
-              : 0;
+    const summary = computeHeroAchievementSummary(leader);
+    const matches = summary.matchesPlayed;
+    const wins = summary.wins;
+    const winRate = matches > 0 ? Math.round((wins / matches) * 100) + "%" : "0%";
     const items = [
-        [SOW_t("heroes.stat_matches"), Number(stats.matches_played || 0)],
-        [SOW_t("heroes.stat_wins"), Number(stats.wins || 0)],
-        [SOW_t("heroes.stat_kills"), Number(stats.kills || 0)],
-        [SOW_t("heroes.stat_deaths"), Number(stats.deaths || 0)],
-        [SOW_t("heroes.stat_xp"), xp],
+        [SOW_t("heroes.stat_matches"), matches],
+        [SOW_t("heroes.stat_wins"), wins],
+        [tText("heroes.stat_win_rate", "Win Rate"), winRate],
+        [SOW_t("heroes.stat_kills"), summary.kills],
+        [SOW_t("heroes.stat_deaths"), summary.deaths],
+        [SOW_t("heroes.stat_xp"), summary.xp],
     ];
+    const next = summary.nextAchievement;
+    const nextLabel = next
+        ? next.localizedTitle + " (" + next.progress + "/" + next.target + " · +" + next.points + ")"
+        : tText("heroes.all_hero_achievements_done", "All {total} hero achievements completed!", {
+              total: summary.totalCount,
+          });
+    const nextPct = next ? next.percent : 100;
+
     return (
         "<section class='sow-hero-info__career' aria-label='" +
         esc(SOW_t("heroes.career_record")) +
@@ -913,7 +1010,32 @@ function renderHeroCareerRecord(leader: MenuLeader): string {
                 );
             })
             .join("") +
-        "</div></section>"
+        "</div>" +
+        "<div class='sow-hero-info__ach-preview'>" +
+        "<div class='sow-hero-info__ach-preview-top'>" +
+        "<div>" +
+        "<span class='sow-hero-info__ach-preview-kicker'>" +
+        esc(tText("heroes.hero_achievements", "Hero Achievements")) +
+        " · " +
+        esc(summary.unlockedCount + "/" + summary.totalCount) +
+        "</span>" +
+        "<strong>" +
+        esc(nextLabel) +
+        "</strong>" +
+        "</div>" +
+        "<button type='button' class='sow-hero-info__ach-jump' data-command='switch_hero_info_tab' data-hero-info-tab='achievements'>" +
+        esc(
+            tText("heroes.view_hero_achievements", "View all {total} achievements", {
+                total: summary.totalCount,
+            }),
+        ) +
+        "</button>" +
+        "</div>" +
+        "<div class='sow-profile__achievement-track'><i style='width:" +
+        esc(nextPct) +
+        "%'></i></div>" +
+        "</div>" +
+        "</section>"
     );
 }
 
@@ -921,16 +1043,19 @@ function renderHeroBiographyTab(leader: MenuLeader): string {
     const lang = normalizeBioLocale(
         typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en",
     );
+    // Bundles are keyed by catalog id (`slug`, catherine_the_great); `id` is the
+    // wire id (CatherineTheGreat) that messages and profiles use.
     const bio =
-        (menuUi.heroBioCache[lang] && menuUi.heroBioCache[lang][leader.id]) ||
-        (menuUi.heroBioCache.en && menuUi.heroBioCache.en[leader.id]);
+        (menuUi.heroBioCache[lang] && menuUi.heroBioCache[lang][leader.slug]) ||
+        (menuUi.heroBioCache.en && menuUi.heroBioCache.en[leader.slug]);
     if (!bio) {
         if (menuUi.heroBioLocaleLoading === lang || bioFetches.has(lang)) {
             return (
                 "<div class='sow-hero-info__bio-status'>" + esc(SOW_t("heroes.bio_loading")) + "</div>"
             );
         }
-        if (menuUi.heroBioError) {
+        // A bundle that already loaded has no entry to wait for.
+        if (menuUi.heroBioError || menuUi.heroBioCache[lang]) {
             return (
                 "<div class='sow-hero-info__bio-status is-error'>" +
                 esc(SOW_t("heroes.bio_unavailable")) +
@@ -1039,7 +1164,11 @@ export function renderHeroInfoModal() {
             "Caesar",
     );
     if (!activeLeader) return "";
-    const tab = menuUi.heroInfoTab === "biography" ? "biography" : "overview";
+    const tab =
+        menuUi.heroInfoTab === "biography" || menuUi.heroInfoTab === "achievements"
+            ? menuUi.heroInfoTab
+            : "overview";
+    const achSummary = computeHeroAchievementSummary(activeLeader);
     // The info dialog is one tall portrait card on every device, so it
     // always uses the portrait art. Not part of the panel-shape swap.
     const artUrl = leaderArtUrl(leaderArtSlug(activeLeader), "mobile");
@@ -1076,14 +1205,30 @@ export function renderHeroInfoModal() {
         "' data-command='switch_hero_info_tab' data-hero-info-tab='biography'>" +
         esc(SOW_t("heroes.tab_biography")) +
         "</button>" +
+        "<button type='button' role='tab' aria-selected='" +
+        (tab === "achievements") +
+        "' class='sow-hero-info__tab" +
+        (tab === "achievements" ? " is-active" : "") +
+        "' data-command='switch_hero_info_tab' data-hero-info-tab='achievements'>" +
+        esc(tText("heroes.tab_achievements", "Achievements")) +
+        "<b class='sow-hero-info__tab-count'>" +
+        esc(achSummary.unlockedCount + "/" + achSummary.totalCount) +
+        "</b>" +
+        "</button>" +
         "</div>" +
         "<div class='sow-hero-info__body'>" +
         (tab === "biography"
             ? renderHeroBiographyTab(activeLeader)
-            : "<div class='sow-hero-info__overview'>" +
-              renderHeroBriefing(activeLeader, "modal", "sow-hero-info-selected") +
-              renderHeroCareerRecord(activeLeader) +
-              "</div>") +
+            : tab === "achievements"
+              ? renderHeroDossierAchievementsTab(activeLeader, {
+                    category: menuUi.heroInfoAchCategory,
+                    status: menuUi.heroInfoAchStatus,
+                    sort: menuUi.heroInfoAchSort,
+                })
+              : "<div class='sow-hero-info__overview'>" +
+                renderHeroBriefing(activeLeader, "modal", "sow-hero-info-selected") +
+                renderHeroCareerRecord(activeLeader) +
+                "</div>") +
         "</div>" +
         "</section></div>"
     );
@@ -1144,10 +1289,52 @@ export function selectDropdown(key: string, value: string) {
         refreshHeroesRoster(true);
         return;
     }
+    if (key === "heroes-status") {
+        menuUi.heroesStatusFilter = value || "all";
+        if (menuUi.heroesStatusFilter === "locked" && menuUi.heroesPlayableOnly) {
+            menuUi.heroesPlayableOnly = false;
+            const playableBtn = panel?.querySelector<HTMLElement>("[data-command='toggle_heroes_playable']");
+            if (playableBtn) {
+                playableBtn.classList.remove("is-active");
+                playableBtn.setAttribute("aria-pressed", "false");
+            }
+        }
+        dropdown.classList.toggle("is-filtered", menuUi.heroesStatusFilter !== "all");
+        syncDropdowns();
+        refreshHeroesRoster(true);
+        return;
+    }
     if (key === "heroes-sort") {
         menuUi.heroesSort = value || "alpha_asc";
         syncDropdowns();
         refreshHeroesRoster(true);
+        return;
+    }
+    if (key === "ach-category") {
+        menuUi.profileAchievementFilter = value || "summary";
+        menuUi.profileAchievementSubcategory = "all";
+        syncDropdowns();
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+    }
+    if (key === "ach-status") {
+        menuUi.profileAchievementStatus = value || "all";
+        dropdown.classList.toggle("is-filtered", menuUi.profileAchievementStatus !== "all");
+        syncDropdowns();
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+    }
+    if (key === "ach-tier") {
+        menuUi.profileAchievementTier = value || "all";
+        dropdown.classList.toggle("is-filtered", menuUi.profileAchievementTier !== "all");
+        syncDropdowns();
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+    }
+    if (key === "ach-sort") {
+        menuUi.profileAchievementSort = value || "smart";
+        syncDropdowns();
+        input.dispatchEvent(new Event("change", { bubbles: true }));
         return;
     }
     syncDropdowns();
@@ -1195,7 +1382,7 @@ export function renderHeroes() {
         (motionReduced ? " is-motion-reduced" : "") +
         "' aria-labelledby='sow-heroes-selected'>" +
         "<div class='sow-heroes__featured-skins' data-hero-skins>" +
-        (activeRandom ? "" : renderFeaturedTopControls(activeLeader)) +
+        (activeRandom ? "" : renderFeaturedTopControls()) +
         "</div>" +
         "<button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' data-leader-id='" +
         esc(activeRandom ? "" : activeLeader.id) +
@@ -1216,9 +1403,17 @@ export function renderHeroes() {
         "' fetchpriority='high'></picture>" +
         renderHeroesArtLoader(artSlug) +
         "<div class='sow-heroes__featured-copy'>" +
-        renderHeroStatusTags(activeRandom ? null : activeLeader, true) +
         "<div data-hero-briefing>" +
-        renderHeroBriefing(activeRandom ? "random" : activeLeader, "selection", "sow-heroes-selected") +
+        renderHeroBriefing(
+            activeRandom ? "random" : activeLeader,
+            "selection",
+            "sow-heroes-selected",
+            renderHeroStatusTags(activeRandom ? null : activeLeader, true),
+        ) +
+        "</div><div data-hero-achievement-strip" +
+        (activeRandom ? " hidden" : "") +
+        ">" +
+        (activeRandom ? "" : renderHeroSelectionAchievementStrip(activeLeader)) +
         "</div><div class='sow-heroes__actions'><div data-hero-purchase>" +
         (activeRandom ? "" : renderLeaderPurchase(activeLeader)) +
         "</div>" +
@@ -1244,6 +1439,7 @@ export function renderHeroes() {
         "\" autocomplete='off' spellcheck='false'></label>" +
         renderHeroesRegionDropdown() +
         renderHeroesRarityDropdown() +
+        renderHeroesStatusDropdown() +
         renderHeroesSortDropdown() +
         "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" +
         renderHeroesRoster(activeId, activeRandom) +

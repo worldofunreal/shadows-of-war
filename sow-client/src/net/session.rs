@@ -242,7 +242,7 @@ impl SowApp {
             && was_offline
             && !was_spectating
             && self.ui.tutorial_active
-            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica)
+            && self.ui.tutorial_campaign.is_server_owned_tutorial())
             .then(|| "tutorial".to_string());
         // Every active tutorial exit joins the same one-time server reward and
         // welcome handoff, including the HUD's Leave tutorial button.

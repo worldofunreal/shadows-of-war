@@ -122,12 +122,18 @@ export function validate(
         rosterFactions = new Set<string>();
     if (roster) {
         knownFields(roster, ["_comment", "map", "player_spawn", "player_color", "factions"], null, "roster");
+        const EPISODE_MAPS: Record<string, [string, number, number]> = {
+            tactics_01_expand: ["europe", 1000, 576],
+            tactics_02_ask_ally: ["bajacalifornia", 848, 1000],
+            tactics_03_farm_vs_city: ["europe", 1000, 576],
+            tactics_04_factory_gold: ["southeastasia", 1000, 592],
+            boudica: ["eastanglia", 896, 504],
+        };
         const expectedMap =
-            definition.episode_id === "boudica"
-                ? ["eastanglia", 896, 504]
-                : /^six_sky_ep[123]$/.test(definition.episode_id)
-                  ? ["northamerica", 1000, 516]
-                  : null;
+            EPISODE_MAPS[definition.episode_id] ??
+            (/^six_sky_ep[123]$/.test(definition.episode_id)
+                ? ["northamerica", 1000, 516]
+                : null);
         if (
             !object(roster) ||
             typeof roster.map !== "string" ||

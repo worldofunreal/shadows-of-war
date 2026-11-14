@@ -3,19 +3,22 @@
 use crate::building::{Building, BuildingGrid};
 use crate::diplomacy::ALLIANCE_DURATION_TICKS;
 use crate::engine::SowEngine;
-use crate::execution::{AttackExecution, RETREAT_PENALTY_VS_PLAYER};
+use crate::execution::AttackExecution;
+#[cfg(test)]
+use crate::execution::RETREAT_PENALTY_VS_PLAYER;
 use crate::game::{BuildingKind, GameEvent, GameState, UnitType};
 use crate::geo_entities::Ability;
 use crate::map::TerrainType;
 use crate::player::Player;
+#[cfg(test)]
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 const RELOCATION_RADIUS: u32 = 24;
 const FEAST_MIN_GIFT: f64 = 500.0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AbilityState {
     Ready,
     Conditional,
@@ -25,17 +28,18 @@ pub enum AbilityState {
     Unavailable,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AbilityRestriction {
     CampaignOnly,
     BuildingsDisabled,
     Defeated,
 }
 
-/// Local HUD feedback, derived from the same state that executes the effect.
-/// `Ready` means armed for its automatic trigger, never a manual cast button.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+/// Test oracle only: ability state derived from the same state that executes the effect.
+/// Not compiled into the game; it must never feed the HUD.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AbilityFeedback {
     pub state: AbilityState,
     pub remaining_seconds: Option<u32>,
@@ -105,7 +109,7 @@ pub(crate) fn regional_commands_multiplier(
     if !defender.alive || percent == 0 {
         return 1.0;
     }
-    let mut invaders = attacks.iter().filter(|a| {
+    let is_candidate = |a: &AttackExecution| {
         a.target_owner == defender.id
             && a.owner_id != defender.id
             && !a.retreating
@@ -114,6 +118,28 @@ pub(crate) fn regional_commands_multiplier(
             && a.troops >= state.config.attack_cost_neutral
             && state.player(a.owner_id).is_some_and(|p| p.alive)
             && !allied(state, defender.id, a.owner_id)
+    };
+    // Avoid scanning `to_conquer` borders unless at least two distinct living
+    // non-allied attackers target this defender.
+    let mut first_candidate_owner: Option<u16> = None;
+    let mut has_two_candidate_owners = false;
+    for a in attacks {
+        if is_candidate(a) {
+            match first_candidate_owner {
+                None => first_candidate_owner = Some(a.owner_id),
+                Some(first) if a.owner_id != first => {
+                    has_two_candidate_owners = true;
+                    break;
+                }
+                _ => {}
+            }
+        }
+    }
+    if !has_two_candidate_owners {
+        return 1.0;
+    }
+    let mut invaders = attacks.iter().filter(|a| {
+        is_candidate(a)
             && a.to_conquer.iter().any(|t| {
                 state.map.owner_id(t.x, t.y) == defender.id
                     && state.map.is_adjacent_to_player(t.x, t.y, a.owner_id)
@@ -434,6 +460,7 @@ fn nearby(a: u32, b: u32, width: u32, radius: u32) -> bool {
 }
 
 impl SowEngine {
+    #[cfg(test)]
     pub fn hero_ability_feedback(&self, owner: u16) -> Option<AbilityFeedback> {
         use crate::geo_entities::{District, LossWhen, Resource, Side, Source};
         use AbilityState::*;
@@ -1154,6 +1181,7 @@ impl SowEngine {
             .map(|(i, _)| i)
     }
 
+    #[cfg(test)]
     fn placement_grid(&self) -> Cow<'_, BuildingGrid> {
         if self.building_grid.dirty {
             let mut grid = BuildingGrid::default();
@@ -1261,6 +1289,7 @@ impl SowEngine {
             .map(|city| (city, max_troops))
     }
 
+    #[cfg(test)]
     fn retreat_has_room_for_aid(&self, player: &Player, attack: &AttackExecution) -> bool {
         let (penalty, softening) = retreat_loss_multipliers(&self.state, attack);
         let back = attack.troops * (1.0 - RETREAT_PENALTY_VS_PLAYER * penalty * softening);
@@ -1916,6 +1945,12 @@ impl SowEngine {
     pub(crate) fn hero_coastal_foundings(&mut self) {
         if !self.state.config.buildings_enabled
             || !self.campaign_allows_building(BuildingKind::Port, 1)
+            || self.state.events.is_empty()
+            || !self.state.players.iter().any(|p| {
+                p.alive
+                    && p.leader.ability() == Ability::CoastalFounding
+                    && !self.hero_claims.contains(&(p.id, 0, 0))
+            })
         {
             return;
         }
@@ -2075,16 +2110,44 @@ impl SowEngine {
                 super::income_rates::imperial_standard_income(agg, player.leader, cfg).0
             }
             Ability::GuildNetwork { gold_per_second } => {
-                // ponytail: scan this ruler's factories and cities; index active
-                // city owners in BuildingGrid if dense guild networks need it.
-                let cities: Vec<_> = self
-                    .buildings
-                    .iter()
-                    .filter(|b| {
-                        b.owner_id == owner && b.kind == BuildingKind::City && b.active_level() > 0
-                    })
-                    .map(|b| b.tile_idx)
-                    .collect();
+                if !self.building_aggregates_dirty {
+                    let agg = self
+                        .building_aggregates
+                        .get(owner as usize)
+                        .copied()
+                        .unwrap_or_default();
+                    if agg.city_levels == 0 || agg.factory_levels == 0 {
+                        return 0.0;
+                    }
+                }
+                // Keep normal city lists on the stack to avoid per-tick Vec allocs.
+                let mut stack_cities = [0u32; 32];
+                let mut stack_len = 0usize;
+                let mut spill_cities = Vec::new();
+                for b in &self.buildings {
+                    if b.owner_id == owner
+                        && b.kind == BuildingKind::City
+                        && b.active_level() > 0
+                    {
+                        if spill_cities.is_empty() && stack_len < stack_cities.len() {
+                            stack_cities[stack_len] = b.tile_idx;
+                            stack_len += 1;
+                        } else {
+                            if spill_cities.is_empty() {
+                                spill_cities.extend_from_slice(&stack_cities[..stack_len]);
+                            }
+                            spill_cities.push(b.tile_idx);
+                        }
+                    }
+                }
+                let cities: &[u32] = if spill_cities.is_empty() {
+                    &stack_cities[..stack_len]
+                } else {
+                    &spill_cities
+                };
+                if cities.is_empty() {
+                    return 0.0;
+                }
                 let levels: u32 = self
                     .buildings
                     .iter()

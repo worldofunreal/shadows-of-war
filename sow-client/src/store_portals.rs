@@ -77,6 +77,12 @@ pub fn gameplay_stop() {
     call_window_hook("SOW_portalGameplayStop");
 }
 
+/// Stop after a match ended on its own. Only this stop may request a CrazyGames
+/// midgame ad; leaving early uses plain `gameplay_stop`.
+pub fn gameplay_stop_match_ended() {
+    call_window_hook_str("SOW_portalGameplayStop", "match_ended");
+}
+
 pub fn track_product_event(name: &str) {
     track_product_event_with(name, &serde_json::Value::Null);
 }

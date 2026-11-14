@@ -1033,7 +1033,7 @@ interface TutorialRuntime {
             const mapActionComplete =
                 mapAction === "map_menu_open"
                     ? targetMapMenuOpen(currentStep, hud)
-                    : mapAction === "map_transfer" &&
+                    : (mapAction === "map_transfer" || mapAction === "map_request") &&
                       transferTarget &&
                       hud.transfer &&
                       Number(hud.transfer.target_id) === Number(transferTarget.id);
@@ -1550,7 +1550,7 @@ interface TutorialRuntime {
             // Targeted map actions count only after the HUD confirms the destination.
             if (
                 key === "map_menu_open" ||
-                (key === "map_transfer" &&
+                ((key === "map_transfer" || key === "map_request") &&
                     currentStep &&
                     currentStep.marker &&
                     currentStep.trigger &&

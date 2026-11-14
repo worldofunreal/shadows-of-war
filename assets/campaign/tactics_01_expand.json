@@ -1,0 +1,41 @@
+{
+  "_comment": "Art of War Level 1 — Take the Shore (Ireland on europe, 1000x576).",
+  "map": "europe",
+  "player_spawn": [222, 266],
+  "player_color": "#f08c28",
+  "factions": [
+    {
+      "id": "irish_bandits",
+      "name": "Bog Raiders",
+      "x": 238,
+      "y": 256,
+      "starting_troops": 600,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d9534f",
+      "iq": 70,
+      "civ": "Wilderness",
+      "leader": "Ragnar",
+      "avatar": "irish_raiders_1",
+      "can_attack_player": false,
+      "gold_loot_override": 150
+    },
+    {
+      "id": "red_branch_fort",
+      "name": "Iron Pale",
+      "x": 246,
+      "y": 240,
+      "starting_troops": 1900,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#a83232",
+      "iq": 90,
+      "civ": "Kingdom",
+      "leader": "William",
+      "avatar": "william",
+      "can_attack_player": false
+    }
+  ]
+}

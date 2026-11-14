@@ -136,6 +136,7 @@ export function validateFlow(context: CampaignValidationContext) {
                 "defeated",
                 "fleet",
                 "resource_transfer",
+                "resource_request",
                 "camera_target",
                 "hover",
                 "zoom_in_complete",

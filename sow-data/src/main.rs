@@ -35,11 +35,6 @@ struct AnalyticsBatch {
     visitor_id: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct AnalyticsQuery {
-    days: Option<u32>,
-}
-
 struct AppState {
     db: PlayerDb,
     auth: sow_data::auth::AuthService,
@@ -1875,7 +1870,6 @@ async fn main() {
             "/event",
             post(handle_event).layer(DefaultBodyLimit::max(MAX_ANALYTICS_REQUEST_BYTES)),
         )
-        .route("/internal/analytics", get(handle_internal_analytics))
         .route("/internal/match-id-seed", get(handle_match_id_seed))
         .route("/profile", get(handle_get_profile))
         .route("/auth/playgames/exchange", post(handle_playgames_exchange))
@@ -2503,36 +2497,6 @@ async fn handle_event(
             (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(serde_json::json!({ "error": "analytics temporarily unavailable" })),
-            )
-                .into_response()
-        }
-    }
-}
-
-/// GET /internal/analytics — operator-only funnel and retention snapshot.
-async fn handle_internal_analytics(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-    Query(query): Query<AnalyticsQuery>,
-) -> impl IntoResponse {
-    if !verify_internal_auth(&headers, &state.secret_token) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Unauthorized".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    match state.db.analytics_summary(query.days.unwrap_or(30)).await {
-        Ok(summary) => (StatusCode::OK, Json(summary)).into_response(),
-        Err(error) => {
-            error!("analytics summary failed: {error}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "analytics unavailable".to_string(),
-                }),
             )
                 .into_response()
         }

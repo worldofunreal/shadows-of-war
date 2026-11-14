@@ -767,7 +767,7 @@ mod tests {
     }
 
     #[test]
-    fn structure_build_cost_base_and_cap() {
+    fn structure_build_cost_uses_a_log_curve_below_the_late_game_cap() {
         let cfg = crate::game_config::GameConfig::default();
         let city_base = cfg.cost_city;
         let cap = city_base * cfg.cost_scale_cap_multiplier;
@@ -780,16 +780,16 @@ mod tests {
         assert!(at_24 < cap);
         assert!(at_24 > city_base);
 
+        let mut previous = at_24;
         for count in [25, 50, 100] {
-            assert_eq!(
-                structure_build_cost_gold(BuildingKind::City, count, &cfg),
-                cap
-            );
+            let cost = structure_build_cost_gold(BuildingKind::City, count, &cfg);
+            assert!(cost > previous && cost < cap);
+            previous = cost;
         }
     }
 
     #[test]
-    fn structure_build_cost_cap_per_kind() {
+    fn structure_build_cost_curve_is_shared_by_each_kind() {
         let cfg = crate::game_config::GameConfig::default();
         let cases = [
             (BuildingKind::City, cfg.cost_city),
@@ -799,9 +799,11 @@ mod tests {
         ];
         for (kind, base) in cases {
             assert_eq!(structure_build_cost_gold(kind, 0, &cfg), base);
-            assert_eq!(
-                structure_build_cost_gold(kind, 100, &cfg),
-                base * cfg.cost_scale_cap_multiplier
+            let expected = base * (1.0 + 0.1 * 101.0_f64.log2());
+            let actual = structure_build_cost_gold(kind, 100, &cfg);
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "{kind:?}: expected {expected}, got {actual}"
             );
         }
     }

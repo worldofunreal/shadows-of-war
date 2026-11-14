@@ -103,6 +103,7 @@ impl SowApp {
         self.ui.attack_badge_active_ids.clear();
         self.ui.nameplates.reset();
         self.ui.building_render_cache = Default::default();
+        self.ui.railway_render_state.reset();
         self.ui.leaderboard_top_three = [None; 3];
         self.ui.leaderboard_refresh_at = None;
         self.ui.leaderboard_publish_pending = false;

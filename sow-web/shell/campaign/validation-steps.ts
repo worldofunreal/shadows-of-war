@@ -432,11 +432,13 @@ export function validateSteps(context: CampaignValidationContext) {
                     nextTrigger?.type === "alliance_request");
             const transferLesson =
                 triggerType === "resource_transfer" ||
-                (triggerType === "ui" && step.trigger.action === "map_transfer") ||
+                triggerType === "resource_request" ||
+                (triggerType === "ui" &&
+                    (step.trigger.action === "map_transfer" || step.trigger.action === "map_request")) ||
                 (triggerType === "ui" &&
                     step.trigger.action === "map_menu_open" &&
                     nextTrigger?.type === "ui" &&
-                    nextTrigger.action === "map_transfer");
+                    (nextTrigger.action === "map_transfer" || nextTrigger.action === "map_request"));
             const attackRatioLesson = triggerType === "ui" && step.trigger.action === "attack_ratio";
             const attackLesson =
                 triggerType === "attack" &&
@@ -476,8 +478,10 @@ export function validateSteps(context: CampaignValidationContext) {
                     step.guide.target === "expand";
             } else if (step.paused_action === "send_resources_stay_paused") {
                 compatible = triggerType === "resource_transfer";
+            } else if (step.paused_action === "request_resources_stay_paused") {
+                compatible = triggerType === "resource_request";
             } else if (step.paused_action === "build_until_started") {
-                compatible = ["city", "factory", "tower"].includes(triggerType);
+                compatible = ["city", "factory", "farm", "port", "tower"].includes(triggerType);
             } else if (step.paused_action === "upgrade_until_started") {
                 compatible = triggerType === "structure_upgrade";
             }
@@ -874,7 +878,7 @@ export function validateSteps(context: CampaignValidationContext) {
                     )
                         issue(step, "trigger.resources", "Choose gold, troops, or both.");
                 }
-                if (["contact", "defeated", "alliance", "resource_transfer"].includes(trigger.type)) {
+                if (["contact", "defeated", "alliance", "resource_transfer", "resource_request"].includes(trigger.type)) {
                     const factionTarget = trigger.target || trigger.recipient;
                     if (trigger.recipient != null && trigger.type !== "resource_transfer")
                         issue(step, "trigger.recipient", "Only resource transfers have a recipient.");

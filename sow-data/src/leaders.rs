@@ -160,7 +160,7 @@ impl Leader {
 
     /// Gems to unlock: a quarter of the crown price, rounded down (one gem = four crowns).
     pub fn price_gems(self) -> u64 {
-        self.price_crowns() / 4
+        self.price_crowns() / crate::commerce::CROWNS_PER_GEM
     }
 
     pub fn ability(self) -> Ability {

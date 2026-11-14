@@ -446,6 +446,9 @@ pub struct SowEngine {
     pub(crate) bot_naval_slots_used: Vec<u32>,
     #[serde(default)]
     pub playing_ticks: u32,
+    /// Derived from the simulation clock and shared by combat phases within one tick.
+    #[serde(skip)]
+    pub(crate) finish_threshold_cache: Option<(u64, u32, u32)>,
     #[serde(skip)]
     pub(crate) bot_work: BotWorkCounters,
     #[cfg(test)]
@@ -556,6 +559,7 @@ impl SowEngine {
             bot_naval_shore_sample: Vec::with_capacity(256),
             bot_naval_slots_used: Vec::new(),
             playing_ticks: 0,
+            finish_threshold_cache: None,
             bot_work: BotWorkCounters::default(),
             #[cfg(test)]
             test_last_ai_intents: Vec::new(),

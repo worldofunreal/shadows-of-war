@@ -9360,7 +9360,7 @@
     "art_slug": "ewuare",
     "ability": {
      "kind": "guild_network",
-     "gold_per_second": 1
+     "gold_per_second": 4
     },
     "legacy_ids": ["Ewuare the Great"]
    },

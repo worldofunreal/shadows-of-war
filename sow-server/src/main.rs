@@ -1355,16 +1355,6 @@ async fn main() {
         std::env::var("SOW_DB_URL").unwrap_or_else(|_| "http://127.0.0.1:25585".to_string());
     let db_secret = std::env::var("SOW_DB_SECRET").expect("SOW_DB_SECRET was validated above");
     let identity_state = identity::IdentityState::from_env(db_url.clone(), db_secret.clone());
-    let redis_url =
-        std::env::var("SOW_REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string());
-    let redis_client = redis::Client::open(redis_url).expect("Failed to connect to Redis");
-    // Establish one connection at boot as a hard dependency check.
-    let redis_connection = redis_client
-        .get_connection()
-        .expect("Failed to get Redis connection");
-    drop(redis_connection);
-    log::info!("Redis connected");
-
     // Resolve (or lazily create) the persistent bot-account pool before any
     // lobby can be promoted. Idempotent — the seed endpoint get-or-creates
     // each account, so a restart reuses the same identities and their
@@ -1931,9 +1921,8 @@ async fn main() {
         HANDSHAKE_TIMEOUT_SECS
     );
 
-    // HTTP Static File Server for maps and Admin Dashboard
+    // HTTP server for maps and local editor tooling.
     let games_for_axum = Arc::clone(&games_state);
-    let redis_client_for_axum = redis_client.clone();
     let identity_state_http = identity_state.clone();
     let db_url_http = db_url.clone();
     let db_secret_http = db_secret.clone();
@@ -1947,7 +1936,6 @@ async fn main() {
         let root = maps_root.clone();
         let state = AppState {
             games: games_for_axum,
-            redis_client: redis_client_for_axum,
             identity: identity_state_http,
             maps_root: root.clone(),
             db_url: db_url_http,
@@ -2001,14 +1989,10 @@ async fn main() {
                 axum::routing::get(identity::handle_playgames_poll),
             )
             .route("/profile", axum::routing::get(identity::handle_profile))
-            .route("/admin/api/status", axum::routing::get(admin_status))
-            .route("/admin/api/analytics", axum::routing::get(admin_analytics))
             .route(
                 "/admin/api/reload-maps",
                 axum::routing::post(admin_reload_maps),
             )
-            .route("/admin/analytics", axum::routing::get(admin_analytics_page))
-            .route("/admin/analytics.js", axum::routing::get(admin_analytics_script))
             .with_state(state);
 
         // Built-in maps first, then uploaded maps (a file missing from the release is looked up there).
@@ -2022,7 +2006,7 @@ async fn main() {
         let http_addr =
             std::env::var("SOW_MAPS_HTTP_LISTEN").unwrap_or_else(|_| "127.0.0.1:25566".to_string());
         log::info!(
-            "SOW-SERVER HTTP serving maps and admin on http://{}",
+            "SOW-SERVER HTTP serving maps and local tools on http://{}",
             http_addr
         );
         let listener = tokio::net::TcpListener::bind(&http_addr).await.unwrap();
@@ -2404,7 +2388,6 @@ async fn main() {
 #[derive(Clone)]
 struct AppState {
     games: Arc<Mutex<Vec<lobby::ServerLobby>>>,
-    redis_client: redis::Client,
     identity: identity::IdentityState,
     maps_root: PathBuf,
     db_url: String,
@@ -2963,125 +2946,6 @@ fn verified_winner_identity(
     (winner, None)
 }
 
-async fn admin_status(
-    axum::extract::State(state): axum::extract::State<AppState>,
-    headers: axum::http::HeaderMap,
-) -> axum::response::Response {
-    // The status payload discloses player IPs and account ids — it is
-    // localhost tooling only and requires the deployment bearer secret.
-    let secret = std::env::var("SOW_DB_SECRET").unwrap_or_default();
-    if !admin_request_authorized(&headers, &secret) {
-        log::warn!("[ADMIN] unauthorized /admin/api/status request");
-        return axum::response::IntoResponse::into_response((
-            axum::http::StatusCode::UNAUTHORIZED,
-            axum::response::Json(serde_json::json!({"error": "Unauthorized"})),
-        ));
-    }
-
-    let games = state.games.lock().await;
-    let mut lobbies = Vec::new();
-    for lobby in &*games {
-        let mut players = Vec::new();
-        for p in &lobby.players {
-            players.push(serde_json::json!({
-                "player_id": p.player_id,
-                "name": p.name,
-                "clan_tag": p.clan_tag,
-                "civilization": p.leader.civilization(),
-                "leader": format!("{:?}", p.leader),
-                "download_progress": p.download_progress,
-                "ip": p.ip,
-                "database_account_id": p.database_account_id,
-            }));
-        }
-        lobbies.push(serde_json::json!({
-            "id": lobby.id,
-            "kind": format!("{:?}", lobby.kind),
-            "is_private": lobby.is_private,
-            "phase": format!("{:?}", lobby.phase),
-            "countdown_secs": lobby.countdown_secs,
-            "relay_port": lobby.relay_port,
-            "players": players,
-            "map_name": lobby.config.map_name,
-            "game_mode": lobby.game_mode,
-        }));
-    }
-    drop(games);
-
-    // Query valkey INFO
-    let valkey_info = tokio::task::spawn_blocking({
-        let client = state.redis_client.clone();
-        move || -> serde_json::Value {
-            let mut conn = match client.get_connection() {
-                Ok(c) => c,
-                Err(_) => return serde_json::json!({"error": "cannot connect"}),
-            };
-            match redis::cmd("INFO").query::<String>(&mut conn) {
-                Ok(info) => {
-                    let mut result = serde_json::Map::new();
-                    for line in info.lines() {
-                        if line.contains(':') && !line.starts_with('#') {
-                            let parts: Vec<&str> = line.splitn(2, ':').collect();
-                            let key = parts[0].trim();
-                            let val = parts[1].trim();
-                            if [
-                                "used_memory_human",
-                                "used_memory_peak_human",
-                                "connected_clients",
-                                "blocked_clients",
-                                "keyspace_hits",
-                                "keyspace_misses",
-                                "uptime_in_seconds",
-                                "instantaneous_ops_per_sec",
-                                "instantaneous_input_kbps",
-                                "instantaneous_output_kbps",
-                                "total_connections_received",
-                                "total_commands_processed",
-                                "expired_keys",
-                                "evicted_keys",
-                            ]
-                            .contains(&key)
-                            {
-                                result.insert(
-                                    key.to_string(),
-                                    serde_json::Value::String(val.to_string()),
-                                );
-                            }
-                        }
-                    }
-                    serde_json::Value::Object(result)
-                }
-                Err(_) => serde_json::json!({"error": "info failed"}),
-            }
-        }
-    })
-    .await
-    .unwrap_or(serde_json::json!({"error": "task failed"}));
-
-    // Query sow-database stats
-    let db_base =
-        std::env::var("SOW_DB_URL").unwrap_or_else(|_| "http://127.0.0.1:25585".to_string());
-    let db_stats_url = format!("{}/internal/stats", db_base.trim_end_matches('/'));
-    let db_stats = match reqwest::Client::new()
-        .get(&db_stats_url)
-        .header("Authorization", format!("Bearer {secret}"))
-        .send()
-        .await
-    {
-        Ok(r) => r
-            .json::<serde_json::Value>()
-            .await
-            .unwrap_or(serde_json::json!({"error": "db unreachable"})),
-        Err(_) => serde_json::json!({"error": "db unreachable"}),
-    };
-
-    axum::response::IntoResponse::into_response(axum::response::Json(serde_json::json!({
-        "lobbies": lobbies,
-        "valkey": valkey_info,
-        "database": db_stats,
-    })))
-}
-
 /// Re-reads the map folders after the editor uploads one. Needs its own token
 /// (`SOW_MAPS_RELOAD_TOKEN`); with no token configured the route always refuses.
 async fn admin_reload_maps(headers: axum::http::HeaderMap) -> axum::response::Response {
@@ -3111,89 +2975,6 @@ fn admin_request_authorized(headers: &axum::http::HeaderMap, secret: &str) -> bo
         .and_then(|value| value.strip_prefix("Bearer "))
         .map(str::trim);
     !secret.is_empty() && presented == Some(secret)
-}
-
-async fn admin_analytics_page() -> axum::response::Response {
-    axum::response::Response::builder()
-        .status(axum::http::StatusCode::OK)
-        .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .header(axum::http::header::CACHE_CONTROL, "no-store")
-        .body(axum::body::Body::from(include_str!(
-            "../assets/admin_analytics.html"
-        )))
-        .expect("valid analytics dashboard response")
-}
-
-async fn admin_analytics_script() -> axum::response::Response {
-    axum::response::Response::builder()
-        .status(axum::http::StatusCode::OK)
-        .header(
-            axum::http::header::CONTENT_TYPE,
-            "text/javascript; charset=utf-8",
-        )
-        .header(axum::http::header::CACHE_CONTROL, "no-store")
-        .body(axum::body::Body::from(include_str!(
-            "../assets/admin_analytics.js"
-        )))
-        .expect("valid analytics dashboard script response")
-}
-
-async fn admin_analytics(
-    axum::extract::State(state): axum::extract::State<AppState>,
-    headers: axum::http::HeaderMap,
-    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
-) -> axum::response::Response {
-    if !admin_request_authorized(&headers, &state.db_secret) {
-        return axum::response::IntoResponse::into_response((
-            axum::http::StatusCode::UNAUTHORIZED,
-            axum::Json(serde_json::json!({ "error": "Unauthorized" })),
-        ));
-    }
-    let days = query
-        .get("days")
-        .and_then(|value| value.parse::<u32>().ok())
-        .unwrap_or(30)
-        .clamp(1, 90);
-    let url = format!(
-        "{}/internal/analytics?days={days}",
-        state.db_url.trim_end_matches('/')
-    );
-    let response = match state
-        .replay_http
-        .get(url)
-        .bearer_auth(&state.db_secret)
-        .send()
-        .await
-    {
-        Ok(response) if response.status().is_success() => response,
-        Ok(response) => {
-            log::warn!(
-                "[ADMIN] analytics source returned HTTP {}",
-                response.status()
-            );
-            return axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::Json(serde_json::json!({ "error": "Analytics unavailable" })),
-            ));
-        }
-        Err(error) => {
-            log::error!("[ADMIN] analytics source request failed: {error}");
-            return axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                axum::Json(serde_json::json!({ "error": "Analytics unavailable" })),
-            ));
-        }
-    };
-    match response.json::<serde_json::Value>().await {
-        Ok(summary) => axum::response::IntoResponse::into_response(axum::Json(summary)),
-        Err(error) => {
-            log::error!("[ADMIN] analytics response was invalid JSON: {error}");
-            axum::response::IntoResponse::into_response((
-                axum::http::StatusCode::BAD_GATEWAY,
-                axum::Json(serde_json::json!({ "error": "Analytics unavailable" })),
-            ))
-        }
-    }
 }
 
 async fn lobbies_json_handler(
@@ -3298,7 +3079,6 @@ mod relay_worker_tests {
                 ..Default::default()
             },
             game_mode: "FFA".into(),
-            relay_port: None,
             host_player_id: None,
             password: None,
             host_name: String::new(),

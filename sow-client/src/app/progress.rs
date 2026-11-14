@@ -49,7 +49,7 @@ impl SowApp {
         };
         let outcome = if won { "win" } else { "loss" };
         let duration_bucket = crate::store_portals::duration_bucket(self.portal_match_started_at);
-        crate::store_portals::gameplay_stop();
+        crate::store_portals::gameplay_stop_match_ended();
         crate::store_portals::track_product_event_with(
             "match_ended_client",
             &serde_json::json!({
@@ -63,7 +63,7 @@ impl SowApp {
         let server_owned_tutorial = self.progress_account_id.is_some()
             && self.net.is_offline
             && self.sim.config.tutorial
-            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica;
+            && self.ui.tutorial_campaign.is_server_owned_tutorial();
         let server_owned_match =
             self.progress_account_id.is_some() && (!self.net.is_offline || server_owned_tutorial);
         // The relay/database own online results; the database owns the one-time

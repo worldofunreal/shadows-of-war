@@ -50,7 +50,9 @@ fn take_resource_transfer_events(events: &mut Vec<GameEvent>) -> Vec<GameEvent> 
     events.retain(|event| {
         if matches!(
             event,
-            GameEvent::ResourceTransferred { .. } | GameEvent::ResourceTransferRejected { .. }
+            GameEvent::ResourceRequestSubmitted { .. }
+            | GameEvent::ResourceTransferred { .. }
+            | GameEvent::ResourceTransferRejected { .. }
         ) {
             transfer_events.push(event.clone());
             false
@@ -265,6 +267,24 @@ impl TutorialObservation {
             if matches!(event, GameEvent::AllianceRequestLifecycle { proposer_id, status: sow_core::game::AllianceRequestStatus::Submitted, .. } if *proposer_id == my_id) {
                 self.alliance_requests_submitted = self.alliance_requests_submitted.saturating_add(1);
             }
+            if let GameEvent::ResourceRequestSubmitted {
+                proposer_id,
+                target_id,
+                is_trade: false,
+            } = event
+                && *proposer_id == my_id
+            {
+                self.resource_requests = self.resource_requests.saturating_add(1);
+                if let Some(target) = engine.state.player(*target_id)
+                    && let Some(faction_id) = engine.campaign_faction_ids.get(&target.id)
+                {
+                    let count = self
+                        .resource_requests_by_target_faction_id
+                        .entry(faction_id.clone())
+                        .or_insert(0);
+                    *count = count.saturating_add(1);
+                }
+            }
             if let GameEvent::ResourceTransferred {
                 sender_id,
                 receiver_id,
@@ -455,6 +475,7 @@ impl SowApp {
         self.sim.current_snapshot = Some(snap);
         // Paused actions replace the snapshot without advancing its tick.
         self.ui.building_render_cache = Default::default();
+        self.ui.railway_render_state.invalidate_snapshot();
         self.sim.last_synced_cost_tick = None;
         self.sync_hud_player_state();
         self.sync_building_costs();

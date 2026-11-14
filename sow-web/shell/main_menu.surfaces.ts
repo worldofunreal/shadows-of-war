@@ -15,7 +15,12 @@ import {
 } from "./main_menu.core.ts";
 import { renderPublicPanel } from "./main_menu.lobbies.ts";
 import { render, renderSettingsPrivacySection } from "./main_menu.shell.ts";
-import { renderAdvisorTipsSettingRow, renderLocaleSettingRow, renderMusicSpectrum } from "./main_menu.settings.ts";
+import {
+    renderAdvisorTipsSettingRow,
+    renderLocaleSettingRow,
+    renderMusicSpectrum,
+    renderSfxVolumeSettingRow,
+} from "./main_menu.settings.ts";
 import { isAndroidTwa } from "./main_menu.store.ts";
 import { renderDirectiveCard } from "./main_menu.missions.ts";
 
@@ -293,10 +298,13 @@ export function renderSettings() {
         renderMusicSpectrum() +
         "<input type='range' name='music_volume' min='0' max='1' step='0.01' value='" +
         esc(vol) +
-        "' style='--sow-music-fill: " +
+        "' style='--sow-slider-fill: " +
+        volPct +
+        "%; --sow-music-fill: " +
         volPct +
         "%;' data-setting='music_volume'>" +
         "</label>" +
+        renderSfxVolumeSettingRow() +
         renderLocaleSettingRow() +
         renderAdvisorTipsSettingRow() +
         "<label class='sow-hud__setting-row sow-menu__settings-switch-row'>" +
@@ -373,6 +381,7 @@ export function surfaceSettingsRenderKey(deleteBusy: boolean, deleteError: strin
             : "";
     return JSON.stringify([
         s?.music_volume == null ? 0.8 : s?.music_volume,
+        s?.sfx_volume == null ? 0.8 : s?.sfx_volume,
         Boolean(s?.free_zoom_out),
         Boolean(s?.show_fps_ping),
         Boolean(s?.show_dev_tools),

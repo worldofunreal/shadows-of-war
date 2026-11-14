@@ -1,6 +1,8 @@
 use super::core::Building;
 use crate::game::BuildingKind;
 
+const COST_MULTIPLIER_PER_DOUBLING: f64 = 1.1;
+
 /// Total effective building count (sum of levels) owned by `owner` of exact `kind`.
 /// A stacked level-3 building counts as 3 for cost scaling.
 pub fn count_kind(buildings: &[Building], owner_id: u16, kind: BuildingKind) -> u32 {
@@ -11,7 +13,7 @@ pub fn count_kind(buildings: &[Building], owner_id: u16, kind: BuildingKind) -> 
         .sum()
 }
 
-/// Gold price for a new structure.
+/// Gold price for a new structure, adding 10% of base cost per doubling of (owned levels + 1).
 #[inline]
 pub fn structure_build_cost_gold(
     kind: BuildingKind,
@@ -26,7 +28,9 @@ pub fn structure_build_cost_gold(
         BuildingKind::Farm => cfg.cost_farm,
     };
     let cap_mult = cfg.cost_scale_cap_multiplier.max(1.0);
-    let scaled = base_cost * 1.1f64.powi(count as i32);
+    let count_factor = 1.0
+        + (COST_MULTIPLIER_PER_DOUBLING - 1.0) * (f64::from(count) + 1.0).log2();
+    let scaled = base_cost * count_factor;
     scaled.min(base_cost * cap_mult)
 }
 
@@ -182,9 +186,10 @@ mod tests {
                 let placement = structure_build_cost_gold(kind, previous_owned_levels, &cfg);
                 let upgrade =
                     structure_upgrade_cost_gold(kind, target_level, previous_owned_levels, &cfg);
-                assert!(
-                    (placement / base - 1.1_f64.powi(previous_owned_levels as i32)).abs() < 1e-12
-                );
+                let expected_multiplier = 1.0
+                    + (COST_MULTIPLIER_PER_DOUBLING - 1.0)
+                        * (f64::from(previous_owned_levels) + 1.0).log2();
+                assert!((placement / base - expected_multiplier).abs() < 1e-12);
                 assert_eq!(upgrade, placement * 0.75);
             }
         }

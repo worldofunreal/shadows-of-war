@@ -17,7 +17,7 @@ fn default_max_tiles_per_tick_at_reference() -> f64 {
 }
 
 fn default_troop_base_income() -> f64 {
-    175.0
+    1_600.0
 }
 
 fn default_cost_scale_cap_multiplier() -> f64 {
@@ -29,13 +29,13 @@ fn default_troop_upkeep_per_1000() -> f64 {
 }
 
 fn default_trade_ship_gold_income() -> f64 {
-    12.0 / 21.0
+    48.0 / 21.0
 }
 fn default_territory_gold_amount() -> f64 {
-    1.0
+    4.0
 }
 fn default_territory_troop_amount() -> f64 {
-    0.75
+    3.0
 }
 
 fn default_territory_troop_tiles() -> u32 {
@@ -47,36 +47,53 @@ fn default_territory_gold_tiles() -> u32 {
 }
 
 fn default_city_troop_income() -> f64 {
-    275.0
+    600.0
 }
 
 fn default_farm_troop_income() -> f64 {
-    275.0
+    600.0
 }
 
 fn default_farm_gold_income() -> f64 {
-    4.0 / 21.0
+    16.0 / 21.0
 }
 
 fn default_port_gold_income() -> f64 {
-    12.0 / 21.0
+    48.0 / 21.0
 }
 
 /// Same rate as one Factory level.
 fn default_hero_city_gold_income() -> f64 {
-    8.0 / 7.0
+    32.0 / 7.0
 }
 
 fn default_alliance_gold_income() -> f64 {
-    0.25
+    1.0
 }
 
 fn default_alliance_troop_income() -> f64 {
-    0.1
+    0.4
 }
 
 fn default_trade_troop_income() -> f64 {
-    0.1
+    0.4
+}
+
+pub const NORMAL_GAME_SPEED: f64 = 0.10;
+pub const GAME_SPEED_PRESETS: [(&str, f64); 6] = [
+    ("slowest", 0.04),
+    ("slow", 0.08),
+    ("normal", NORMAL_GAME_SPEED),
+    ("fast", 0.16),
+    ("fastest", 0.24),
+    ("turbo", 0.36),
+];
+
+pub fn is_supported_game_speed(speed: f64) -> bool {
+    speed.is_finite()
+        && GAME_SPEED_PRESETS
+            .iter()
+            .any(|(_, preset)| (speed - preset).abs() < 1e-9)
 }
 
 fn default_elimination_troop_bounty() -> f64 {
@@ -602,7 +619,7 @@ impl Default for GameConfig {
 
             // Core Simulation Pacing
             tick_rate_ms: 100.0, // Server clock ticks every 100ms (10 ticks per second)
-            global_speed_multiplier: 0.16, // Pace test: 38.5% below the previous 0.26 setting.
+            global_speed_multiplier: NORMAL_GAME_SPEED,
 
             // Combat & Expansion Mechanics
             attack_cost_enemy: 2.0,
@@ -618,7 +635,7 @@ impl Default for GameConfig {
             // Economy & Income Rates
             starting_troops: 5000.0,
             starting_gold: 160.0,
-            gold_base_income: 1.0,
+            gold_base_income: 10.0,
             territory_gold_amount: default_territory_gold_amount(),
             territory_gold_tiles: default_territory_gold_tiles(),
             troop_base_income: default_troop_base_income(),
@@ -630,15 +647,14 @@ impl Default for GameConfig {
             territory_troop_tiles: default_territory_troop_tiles(),
 
             // Buildings (stacking)
-            city_max_troops: 3_300.0,
+            city_max_troops: 3_630.0,
             city_troop_income: default_city_troop_income(),
             farm_troop_income: default_farm_troop_income(),
             farm_gold_income: default_farm_gold_income(),
             tower_range: 6.0,
             tower_priority: 120.0,
             tower_strength: 0.05,
-            // About 15 gold/minute at the standard 0.22x game speed.
-            factory_gold_income: 8.0 / 7.0,
+            factory_gold_income: 32.0 / 7.0,
             port_gold_income: default_port_gold_income(),
             hero_city_gold_income: default_hero_city_gold_income(),
             hero_factory_troop_income: default_city_troop_income(),
@@ -725,6 +741,21 @@ mod tests {
         assert_eq!(config.ai.ghost.trigger, 0.5);
         assert_eq!(config.ai.think_nation, AiTuning::default().think_nation);
         assert_eq!(GameConfig::with_overrides("{}").unwrap(), GameConfig::default());
+
+        assert_eq!(NORMAL_GAME_SPEED, 0.10);
+        assert_eq!(
+            GAME_SPEED_PRESETS,
+            [
+                ("slowest", 0.04),
+                ("slow", 0.08),
+                ("normal", 0.10),
+                ("fast", 0.16),
+                ("fastest", 0.24),
+                ("turbo", 0.36),
+            ]
+        );
+        assert!(GAME_SPEED_PRESETS.iter().all(|(_, speed)| is_supported_game_speed(*speed)));
+        assert!(!is_supported_game_speed(0.2));
 
         for bad in [
             r#"{"global_speed_multiplyer": 0.2}"#,

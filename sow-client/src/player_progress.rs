@@ -75,6 +75,10 @@ pub struct PlayerProgress {
     #[serde(default)]
     pub weekly_mission_ids: Vec<String>,
     #[serde(default)]
+    pub ad_double_day: u64,
+    #[serde(default)]
+    pub ad_doubles_today: u32,
+    #[serde(default)]
     pub daily_swaps_used: u8,
     #[serde(default)]
     pub weekly_swaps_used: u8,
@@ -338,7 +342,6 @@ impl PlayerProgress {
                             completed: false,
                             claimed: false,
                             claimed_at: None,
-                            doubled_by_ad: false,
                             ..local_record
                         },
                     );

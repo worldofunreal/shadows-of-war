@@ -1,0 +1,41 @@
+{
+  "_comment": "Art of War Level 3 — Grain or Citadel? (Great Britain on europe, 1000x576).",
+  "map": "europe",
+  "player_spawn": [337, 264],
+  "player_color": "#f08c28",
+  "factions": [
+    {
+      "id": "bristol_raiders",
+      "name": "Severn Raiders",
+      "x": 305,
+      "y": 268,
+      "starting_troops": 1400,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d97724",
+      "iq": 80,
+      "civ": "Raiders",
+      "leader": "Ragnar",
+      "avatar": "ragnar",
+      "can_attack_player": false,
+      "gold_loot_override": 140
+    },
+    {
+      "id": "iron_bastion",
+      "name": "Iron Bastion",
+      "x": 319,
+      "y": 242,
+      "starting_troops": 4500,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#a83232",
+      "iq": 100,
+      "civ": "Citadel",
+      "leader": "Richard",
+      "avatar": "richard",
+      "can_attack_player": false
+    }
+  ]
+}

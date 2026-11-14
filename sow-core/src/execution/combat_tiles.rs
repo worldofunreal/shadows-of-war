@@ -14,8 +14,7 @@ const CAPTURE_COST_VARIATION_SALT: u64 = 0xA076_1D64_78BD_642F;
 const CAPTURE_COST_VARIATION: f64 = 0.10;
 const NEUTRAL_CAPTURE_SPEED_MULTIPLIER: f64 = 3.0;
 const FINISHING_TILES_AT_START: u32 = 8;
-const FINISHING_TILES_AT_THREE_MINUTES: u32 = 12;
-const FINISHING_TILES_MAX: u32 = 24;
+const FINISHING_TILES_MAX: u32 = 36;
 const FINISHING_TILES_MAX_COUNT: usize = FINISHING_TILES_MAX as usize;
 
 #[derive(Clone, Copy)]
@@ -39,22 +38,15 @@ fn finishing_tile_threshold(tick: u64, tick_rate_ms: f32) -> u32 {
         1.0
     };
     let elapsed_ms = tick as f64 * tick_rate_ms;
-    if elapsed_ms < 180_000.0 {
-        FINISHING_TILES_AT_START + (4.0 * elapsed_ms / 180_000.0).floor() as u32
-    } else if elapsed_ms < 300_000.0 {
-        FINISHING_TILES_AT_THREE_MINUTES
-            + (12.0 * (elapsed_ms - 180_000.0) / 120_000.0).floor() as u32
-    } else {
+    if elapsed_ms >= 300_000.0 {
         FINISHING_TILES_MAX
+    } else {
+        let increase = FINISHING_TILES_MAX - FINISHING_TILES_AT_START;
+        FINISHING_TILES_AT_START + (f64::from(increase) * elapsed_ms / 300_000.0).floor() as u32
     }
 }
 
-fn can_finish_attack_pair(
-    state: &GameState,
-    campaign_relations: &std::collections::HashMap<u16, crate::protocol::CampaignRelation>,
-    attacker_id: u16,
-    victim_id: u16,
-) -> bool {
+fn can_finish_attack_pair(state: &GameState, attacker_id: u16, victim_id: u16) -> bool {
     if victim_id == 0 || attacker_id == victim_id {
         return false;
     }
@@ -67,26 +59,17 @@ fn can_finish_attack_pair(
         && !attacker.alliances.contains(&victim_id)
         && !victim.alliances.contains(&attacker_id)
         && !(attacker.team.is_some() && attacker.team == victim.team)
-        && campaign_relations
-            .get(&attacker_id)
-            .is_none_or(|relation| *relation == crate::protocol::CampaignRelation::Enemy)
 }
 
 fn has_valid_finishing_contact(
     state: &GameState,
-    campaign_relations: &std::collections::HashMap<u16, crate::protocol::CampaignRelation>,
     attack: &AttackExecution,
     tile: &PrioritizedTile,
 ) -> bool {
     attack.troops.is_finite()
         && attack.troops > 0.0
         && !attack.retreating
-        && can_finish_attack_pair(
-            state,
-            campaign_relations,
-            attack.owner_id,
-            attack.target_owner,
-        )
+        && can_finish_attack_pair(state, attack.owner_id, attack.target_owner)
         && state.map.owner_id(tile.x, tile.y) == attack.target_owner
         && matches!(
             state.map.terrain_type(tile.x, tile.y),
@@ -97,7 +80,7 @@ fn has_valid_finishing_contact(
             .is_adjacent_to_player(tile.x, tile.y, attack.owner_id)
 }
 
-fn finish_protected_by_campaign(
+pub(crate) fn finish_protected_by_campaign(
     victim_id: u16,
     held_target: Option<u16>,
     pre_defeat_targets: &std::collections::HashSet<u16>,
@@ -474,11 +457,62 @@ fn city_capture_multiplier(
 
 // Attack execution tick (territory expansion and combat resolution)
 impl SowEngine {
+    pub(crate) fn current_finish_threshold(&mut self) -> u32 {
+        let tick = self.state.tick;
+        let tick_rate_bits = self.state.config.tick_rate_ms.to_bits();
+        if let Some((cached_tick, cached_tick_rate_bits, threshold)) = self.finish_threshold_cache
+            && cached_tick == tick
+            && cached_tick_rate_bits == tick_rate_bits
+        {
+            return threshold;
+        }
+
+        let threshold = finishing_tile_threshold(tick, self.state.config.tick_rate_ms);
+        self.finish_threshold_cache = Some((tick, tick_rate_bits, threshold));
+        threshold
+    }
+
+    pub(crate) fn has_valid_finishing_contact_for(
+        &self,
+        victim_id: u16,
+        threshold: u32,
+        held_target: Option<u16>,
+        pre_defeat_targets: &std::collections::HashSet<u16>,
+        pre_defeat_pending: Option<u16>,
+    ) -> bool {
+        self.state.player(victim_id).is_some_and(|victim| {
+            victim.alive
+                && victim.tile_count > 0
+                && victim.tile_count <= threshold
+                && !finish_protected_by_campaign(
+                    victim_id,
+                    held_target,
+                    pre_defeat_targets,
+                    pre_defeat_pending,
+                )
+                && self.attacks.iter().any(|attack| {
+                    attack.target_owner == victim_id
+                        && attack
+                            .to_conquer
+                            .iter()
+                            .any(|tile| has_valid_finishing_contact(&self.state, attack, tile))
+                })
+        })
+    }
+
     pub(crate) fn annex_enclosed_components(
         &mut self,
         changes: Vec<TerritoryChange>,
     ) -> Vec<(u16, u16, u32, u32)> {
-        let threshold = finishing_tile_threshold(self.state.tick, self.state.config.tick_rate_ms);
+        self.annex_enclosed_components_with_candidates(changes, DenseBitSet::new())
+    }
+
+    pub(crate) fn annex_enclosed_components_with_candidates(
+        &mut self,
+        changes: Vec<TerritoryChange>,
+        finish_candidates: DenseBitSet,
+    ) -> Vec<(u16, u16, u32, u32)> {
+        let threshold = self.current_finish_threshold();
         let held_target = self
             .campaign_assault
             .as_ref()
@@ -488,7 +522,7 @@ impl SowEngine {
         let pre_defeat_pending = self.campaign_pre_defeat_pending;
         self.annex_enclosed_components_with_finishes(
             changes,
-            DenseBitSet::new(),
+            finish_candidates,
             Vec::new(),
             threshold,
             held_target,
@@ -526,6 +560,7 @@ impl SowEngine {
                         let owner = self.state.map.owner_id(x, y);
                         if owner != 0 && owner != captor {
                             changed_victims.insert(u32::from(owner));
+                            finish_candidates.insert(u32::from(owner));
                         }
                     });
             }
@@ -631,23 +666,34 @@ impl SowEngine {
         pre_defeat_targets: &std::collections::HashSet<u16>,
         pre_defeat_pending: Option<u16>,
     ) {
-        if candidates.ones().next().is_none() {
+        let mut eligible_candidates = DenseBitSet::new();
+        for victim_id in candidates.ones().map(|id| id as u16) {
+            if self.state.player(victim_id).is_some_and(|victim| {
+                victim.alive
+                    && victim.tile_count > 0
+                    && victim.tile_count <= threshold
+                    && !finish_protected_by_campaign(
+                        victim_id,
+                        held_target,
+                        pre_defeat_targets,
+                        pre_defeat_pending,
+                    )
+            }) {
+                eligible_candidates.insert(u32::from(victim_id));
+            }
+        }
+        if eligible_candidates.ones().next().is_none() {
             return;
         }
 
-        for attack in &mut self.attacks {
-            if !candidates.contains(u32::from(attack.target_owner)) {
+        for attack in &self.attacks {
+            if !eligible_candidates.contains(u32::from(attack.target_owner)) {
                 continue;
             }
             if attack.retreating
                 || !attack.troops.is_finite()
                 || attack.troops <= 0.0
-                || !can_finish_attack_pair(
-                    &self.state,
-                    &self.campaign_relations,
-                    attack.owner_id,
-                    attack.target_owner,
-                )
+                || !can_finish_attack_pair(&self.state, attack.owner_id, attack.target_owner)
             {
                 continue;
             }
@@ -668,45 +714,26 @@ impl SowEngine {
             {
                 continue;
             }
-            let mut stale_pops = 0;
-            loop {
-                if let Some(tile) = attack.to_conquer.peek()
-                    && has_valid_finishing_contact(
-                        &self.state,
-                        &self.campaign_relations,
-                        attack,
-                        tile,
-                    )
-                {
-                    forces.push(FinishingForce {
-                        victim_id: attack.target_owner,
-                        owner_id: attack.owner_id,
-                        attack_id: attack.id,
-                        troops: attack.troops,
-                        active_contact: true,
-                    });
-                    break;
-                }
-                if attack.to_conquer.pop().is_none() {
-                    break;
-                }
-                stale_pops += 1;
-                if stale_pops > 256 {
-                    break;
-                }
+            if attack
+                .to_conquer
+                .iter()
+                .any(|tile| has_valid_finishing_contact(&self.state, attack, tile))
+            {
+                forces.push(FinishingForce {
+                    victim_id: attack.target_owner,
+                    owner_id: attack.owner_id,
+                    attack_id: attack.id,
+                    troops: attack.troops,
+                    active_contact: true,
+                });
             }
         }
 
         forces.retain(|force| {
-            candidates.contains(u32::from(force.victim_id))
+            eligible_candidates.contains(u32::from(force.victim_id))
                 && force.troops.is_finite()
                 && force.troops > 0.0
-                && can_finish_attack_pair(
-                    &self.state,
-                    &self.campaign_relations,
-                    force.owner_id,
-                    force.victim_id,
-                )
+                && can_finish_attack_pair(&self.state, force.owner_id, force.victim_id)
         });
         // Prefer the final active force over its earlier threshold-crossing snapshot.
         forces.sort_unstable_by_key(|force| {
@@ -716,8 +743,8 @@ impl SowEngine {
         forces.sort_unstable_by_key(|force| (force.victim_id, force.owner_id, force.attack_id));
 
         let mut force_cursor = 0;
-        let mut finished_victims = Vec::new();
-        for victim_id in candidates.ones().map(|id| id as u16) {
+        let mut pending_eliminations = Vec::new();
+        for victim_id in eligible_candidates.ones().map(|id| id as u16) {
             while force_cursor < forces.len() && forces[force_cursor].victim_id < victim_id {
                 force_cursor += 1;
             }
@@ -730,27 +757,10 @@ impl SowEngine {
             let Some(victim) = self.state.player(victim_id) else {
                 continue;
             };
-            if !victim.alive
-                || victim.tile_count == 0
-                || victim.tile_count > threshold
-                || finish_protected_by_campaign(
-                    victim_id,
-                    held_target,
-                    pre_defeat_targets,
-                    pre_defeat_pending,
-                )
-            {
-                continue;
-            };
 
             let mut participants: Vec<(u16, f64)> = Vec::new();
             for force in &forces[start..end] {
-                if !can_finish_attack_pair(
-                    &self.state,
-                    &self.campaign_relations,
-                    force.owner_id,
-                    victim_id,
-                ) {
+                if !can_finish_attack_pair(&self.state, force.owner_id, victim_id) {
                     continue;
                 }
                 if let Some((owner_id, troops)) = participants.last_mut()
@@ -800,22 +810,38 @@ impl SowEngine {
                 continue;
             }
 
-            let x = tile % self.state.map.width;
-            let y = tile / self.state.map.width;
-            crate::execution::hero_effects::recruit_conquered_reserves(
-                &mut self.state,
-                killer_id,
-                victim_id,
-                (x, y),
-                None,
-            );
             let participant_ids: Vec<u16> = participants.iter().map(|(id, _)| *id).collect();
-            self.eliminate_player_with_assists(victim_id, killer_id, x, y, false, &participant_ids);
-            finished_victims.push(victim_id);
+            pending_eliminations.push((victim_id, killer_id, tile, participant_ids));
         }
 
-        if !finished_victims.is_empty() {
+        if !pending_eliminations.is_empty() {
+            let finished_victims: Vec<u16> = pending_eliminations
+                .iter()
+                .map(|(victim, _, _, _)| *victim)
+                .collect();
             self.retire_finished_combat_forces(&finished_victims);
+            for (victim_id, killer_id, tile, participants) in pending_eliminations {
+                let x = tile % self.state.map.width;
+                let y = tile / self.state.map.width;
+                crate::execution::hero_effects::recruit_conquered_reserves(
+                    &mut self.state,
+                    killer_id,
+                    victim_id,
+                    (x, y),
+                    None,
+                );
+                if let Some(victim) = self.state.player_mut(victim_id) {
+                    victim.troops = 0.0;
+                }
+                self.eliminate_player_with_assists(
+                    victim_id,
+                    killer_id,
+                    x,
+                    y,
+                    false,
+                    &participants,
+                );
+            }
         }
     }
 
@@ -1263,7 +1289,7 @@ impl SowEngine {
         let map_h = self.state.map.height;
 
         let tick_now = self.state.tick;
-        let finish_threshold = finishing_tile_threshold(tick_now, self.state.config.tick_rate_ms);
+        let finish_threshold = self.current_finish_threshold();
         let return_min_ticks = (3_000.0 / self.state.config.tick_rate_ms.max(1.0)).ceil() as u64;
         let return_window_ticks =
             (30_000.0 / self.state.config.tick_rate_ms.max(1.0)).ceil() as u64;
@@ -1323,6 +1349,32 @@ impl SowEngine {
             {
                 continue;
             }
+            let finish_now = target_owner != 0
+                && self.state.player(target_owner).is_some_and(|target| {
+                    target.alive && target.tile_count > 0 && target.tile_count <= finish_threshold
+                })
+                && !finish_protected_by_campaign(
+                    target_owner,
+                    held_target,
+                    &pre_defeat_targets,
+                    pre_defeat_pending,
+                )
+                && can_finish_attack_pair(&self.state, owner_id, target_owner)
+                && self.attacks[i]
+                    .to_conquer
+                    .iter()
+                    .any(|tile| has_valid_finishing_contact(&self.state, &self.attacks[i], tile));
+            if finish_now {
+                finishing_victims.insert(u32::from(target_owner));
+                threshold_crossing_forces.push(FinishingForce {
+                    victim_id: target_owner,
+                    owner_id,
+                    attack_id: self.attacks[i].id,
+                    troops: self.attacks[i].troops,
+                    active_contact: true,
+                });
+                continue;
+            }
             // Need to borrow state and buildings mutably but not the entire self array
             // Actually, we can borrow state and defense grid and attacks[i] simultaneously
             let retreat = &self.attacks[i];
@@ -1341,9 +1393,17 @@ impl SowEngine {
             } else {
                 None
             };
-            let pact_loss = self.state.player(retreat.owner_id).map_or(1.0, |owner| {
-                owner.leader.attacker_loss_multiplier(LossWhen::JointFront)
-            });
+            let pact_loss = if !retreat.retreating
+                && retreat.target_owner != 0
+                && !retreat.to_conquer.is_empty()
+                && self.attacks.len() >= 2
+            {
+                self.state.player(retreat.owner_id).map_or(1.0, |owner| {
+                    owner.leader.attacker_loss_multiplier(LossWhen::JointFront)
+                })
+            } else {
+                1.0
+            };
             let pact_allies = if pact_loss < 1.0 {
                 crate::execution::hero_effects::joint_front_allies(
                     &self.state,
@@ -1564,7 +1624,6 @@ impl SowEngine {
 
             let mut stale_pops = 0u32;
             let max_stale_pops = 256;
-            let mut finish_eligibility_checked = false;
 
             loop {
                 if held_target == Some(execution.target_owner)
@@ -1650,34 +1709,6 @@ impl SowEngine {
                         break;
                     }
                     let committed_force = execution.troops;
-
-                    if !finish_eligibility_checked {
-                        finish_eligibility_checked = true;
-                        let protected = finish_protected_by_campaign(
-                            execution.target_owner,
-                            held_target,
-                            &pre_defeat_targets,
-                            pre_defeat_pending,
-                        );
-                        if !protected
-                            && can_finish_attack_pair(
-                                &self.state,
-                                &self.campaign_relations,
-                                execution.owner_id,
-                                execution.target_owner,
-                            )
-                            && self
-                                .state
-                                .player(execution.target_owner)
-                                .is_some_and(|target| {
-                                    target.tile_count > 0 && target.tile_count <= finish_threshold
-                                })
-                        {
-                            finishing_victims.insert(u32::from(execution.target_owner));
-                            execution.to_conquer.push(target_tile);
-                            break;
-                        }
-                    }
 
                     if budget <= 0.0 {
                         execution.to_conquer.push(target_tile);
@@ -2146,7 +2177,6 @@ impl SowEngine {
                         )
                         && can_finish_attack_pair(
                             &self.state,
-                            &self.campaign_relations,
                             execution.owner_id,
                             execution.target_owner,
                         )
@@ -2162,6 +2192,11 @@ impl SowEngine {
                         break;
                     }
                 } else {
+                    // Preserve an exhausted force until the next tick when this tick's
+                    // budget was fully spent. The next pass performs the ordinary refund.
+                    if budget <= 0.0 {
+                        break;
+                    }
                     let refund = execution.troops.max(0.0);
                     if refund > 0.0
                         && refund.is_finite()
@@ -2310,14 +2345,15 @@ mod tests {
     fn finishing_threshold_interpolates_at_simulation_time_boundaries() {
         for (tick, expected) in [
             (0, 8),
-            (899, 9),
-            (900, 10),
-            (1_799, 11),
-            (1_800, 12),
-            (2_400, 18),
-            (2_999, 23),
-            (3_000, 24),
-            (10_000, 24),
+            (107, 8),
+            (108, 9),
+            (600, 13),
+            (1_200, 19),
+            (1_800, 24),
+            (2_400, 30),
+            (2_999, 35),
+            (3_000, 36),
+            (10_000, 36),
         ] {
             assert_eq!(
                 finishing_tile_threshold(tick, 100.0),
@@ -2325,8 +2361,25 @@ mod tests {
                 "tick={tick}"
             );
         }
-        assert_eq!(finishing_tile_threshold(900, 200.0), 12);
-        assert_eq!(finishing_tile_threshold(1_800, 200.0), 24);
+        assert_eq!(finishing_tile_threshold(900, 200.0), 24);
+        assert_eq!(finishing_tile_threshold(1_500, 200.0), 36);
+    }
+
+    #[test]
+    fn finishing_threshold_is_cached_per_simulation_tick() {
+        let mut engine = finishing_fixture(2, &[(10, 10)], &[(1, 9, 10)]);
+
+        assert_eq!(engine.current_finish_threshold(), 8);
+        let first_tick_cache = engine.finish_threshold_cache;
+        assert_eq!(engine.current_finish_threshold(), 8);
+        assert_eq!(engine.finish_threshold_cache, first_tick_cache);
+
+        engine.state.tick = 1_800;
+        assert_eq!(engine.current_finish_threshold(), 24);
+        let new_tick_cache = engine.finish_threshold_cache;
+        engine.state.config.tick_rate_ms = 200.0;
+        assert_eq!(engine.current_finish_threshold(), 36);
+        assert_ne!(engine.finish_threshold_cache, new_tick_cache);
     }
 
     #[test]
@@ -2397,7 +2450,7 @@ mod tests {
     fn rising_threshold_finishes_a_target_that_remained_under_attack() {
         let victim_tiles = scattered_victim_tiles(12);
         let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
-        engine.state.tick = 1_799;
+        engine.state.tick = 428;
         add_test_attack(&mut engine, 1, 1, 2, 500.0, (10, 10));
 
         engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
@@ -2405,11 +2458,36 @@ mod tests {
         assert_eq!(engine.state.player(2).unwrap().tile_count, 12);
         assert_eq!(engine.attacks.len(), 1);
 
-        engine.state.tick = 1_800;
+        engine.state.tick = 429;
         engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
         assert!(!engine.state.player(2).unwrap().alive);
         assert_eq!(engine.state.player(2).unwrap().tile_count, 0);
         assert_eq!(engine.state.player(1).unwrap().kills, 1);
+    }
+
+    #[test]
+    fn five_minute_threshold_finishes_thirty_six_tiles_but_not_thirty_seven() {
+        for tile_count in [35, 36, 37] {
+            let victim_tiles = std::iter::once((10, 10))
+                .chain(
+                    (0..tile_count - 1)
+                        .map(|index| (20 + (index % 20) as u32 * 2, 10 + (index / 20) as u32 * 2)),
+                )
+                .collect::<Vec<_>>();
+            let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
+            engine.state.tick = 3_000;
+            add_test_attack(&mut engine, 1, 1, 2, 500.0, (10, 10));
+
+            engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+
+            let finished = tile_count <= 36;
+            assert_eq!(engine.state.player(2).unwrap().alive, !finished);
+            assert_eq!(
+                engine.state.player(2).unwrap().tile_count,
+                if finished { 0 } else { tile_count as u32 }
+            );
+            assert_eq!(engine.state.player(1).unwrap().kills, u32::from(finished));
+        }
     }
 
     #[test]
@@ -2441,7 +2519,7 @@ mod tests {
         assert!(!engine.state.player(2).unwrap().alive);
         assert_eq!(engine.state.player(2).unwrap().tile_count, 0);
         assert_eq!(engine.state.player(1).unwrap().kills, 1);
-        assert_eq!(engine.state.player(1).unwrap().tile_count, 11);
+        assert_eq!(engine.state.player(1).unwrap().tile_count, 10);
         assert_eq!(
             engine
                 .state
@@ -2495,8 +2573,8 @@ mod tests {
         engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
 
         assert!(!engine.state.player(3).unwrap().alive);
-        assert_eq!(engine.state.player(1).unwrap().tile_count, 9);
-        assert_eq!(engine.state.player(2).unwrap().tile_count, 3);
+        assert_eq!(engine.state.player(1).unwrap().tile_count, 11);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 4);
         assert_eq!(engine.state.player(1).unwrap().kills, 1);
         assert_eq!(engine.state.player(2).unwrap().assists, 1);
         let captured = engine
@@ -2573,8 +2651,8 @@ mod tests {
 
         assert!(!engine.state.player(5).unwrap().alive);
         assert_eq!(engine.state.player(1).unwrap().kills, 1);
-        assert_eq!(engine.state.player(1).unwrap().tile_count, 1);
-        assert_eq!(engine.state.player(2).unwrap().tile_count, 1);
+        assert_eq!(engine.state.player(1).unwrap().tile_count, 2);
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 2);
         for id in 2..=4 {
             let player = engine.state.player(id).unwrap();
             assert_eq!(player.assists, 1, "player {id}");
@@ -2610,8 +2688,8 @@ mod tests {
     }
 
     #[test]
-    fn teams_alliances_campaign_holds_and_non_enemy_relations_block_finishing() {
-        use crate::protocol::{CampaignRelation, Team};
+    fn teams_alliances_and_campaign_holds_block_finishing() {
+        use crate::protocol::Team;
 
         let victim_tiles = scattered_victim_tiles(8);
         for protection in [
@@ -2620,8 +2698,6 @@ mod tests {
             "hold_last_tile",
             "watched",
             "pending",
-            "campaign_neutral",
-            "campaign_allied",
         ] {
             let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
             match protection {
@@ -2654,16 +2730,6 @@ mod tests {
                     engine.campaign_pre_defeat_targets.insert(2);
                 }
                 "pending" => engine.campaign_pre_defeat_pending = Some(2),
-                "campaign_neutral" => {
-                    engine
-                        .campaign_relations
-                        .insert(1, CampaignRelation::Neutral);
-                }
-                "campaign_allied" => {
-                    engine
-                        .campaign_relations
-                        .insert(1, CampaignRelation::Allied);
-                }
                 _ => unreachable!(),
             }
             add_test_attack(&mut engine, 1, 1, 2, 500.0, (10, 10));
@@ -2678,6 +2744,21 @@ mod tests {
             );
             assert_eq!(engine.state.player(1).unwrap().kills, 0, "{protection}");
         }
+    }
+
+    #[test]
+    fn already_valid_campaign_attack_can_finish_an_enemy() {
+        let victim_tiles = scattered_victim_tiles(8);
+        let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
+        engine
+            .campaign_relations
+            .insert(1, crate::protocol::CampaignRelation::Allied);
+        add_test_attack(&mut engine, 1, 1, 2, 500.0, (10, 10));
+
+        engine.execute_combat_using(|_, _| 1, |_, _, _| 1.0);
+
+        assert!(!engine.state.player(2).unwrap().alive);
+        assert_eq!(engine.state.player(1).unwrap().kills, 1);
     }
 
     #[test]
@@ -2842,9 +2923,11 @@ mod tests {
         }
 
         const SAMPLES: usize = 201;
-        for (name, victims, tiles_per_victim, tick) in [
-            ("24-scattered", 1, 24, 3_000),
-            ("simultaneous-64", 64, 8, 0),
+        for (name, victims, tiles_per_victim, tick, expected_defeated) in [
+            ("no-finish-64", 64, 9, 0, 0),
+            ("24-scattered", 1, 24, 3_000, 1),
+            ("36-scattered", 1, 36, 3_000, 1),
+            ("simultaneous-64", 64, 8, 0, 64),
         ] {
             let template = build_engine(victims, tiles_per_victim, tick);
             let mut samples = Vec::with_capacity(SAMPLES);
@@ -2860,7 +2943,7 @@ mod tests {
                     .iter()
                     .filter(|player| !player.alive && player.id % 2 == 0)
                     .count();
-                assert_eq!(defeated, victims, "{name}: finish count changed");
+                assert_eq!(defeated, expected_defeated, "{name}: finish count changed");
                 if sample >= 16 {
                     samples.push(elapsed);
                 }
@@ -3054,14 +3137,29 @@ mod tests {
         neutral_capture_speed_multiplier: f64,
         fixed_frontier: bool,
     ) -> (f64, Vec<u32>) {
-        const TICKS: u64 = 5;
+        multi_neutral_attack_capture_rate_for_ticks(
+            seed,
+            initial_occupied_share,
+            neutral_capture_speed_multiplier,
+            fixed_frontier,
+            5,
+        )
+    }
+
+    fn multi_neutral_attack_capture_rate_for_ticks(
+        seed: u64,
+        initial_occupied_share: f64,
+        neutral_capture_speed_multiplier: f64,
+        fixed_frontier: bool,
+        ticks: u64,
+    ) -> (f64, Vec<u32>) {
         let mut engine = multi_neutral_attack_engine(seed, initial_occupied_share);
         let initial_frontier_size = engine
             .attacks
             .first()
             .map_or(1, |attack| attack.to_conquer.len());
         let mut captures = 0u64;
-        for tick in 0..TICKS {
+        for tick in 0..ticks {
             engine.state.tick = tick;
             engine.state.events.clear();
             let neutral_pacing =
@@ -3089,7 +3187,7 @@ mod tests {
                 .filter(|event| matches!(event, crate::game::GameEvent::TileCaptured { .. }))
                 .count() as u64;
         }
-        let duration_seconds = TICKS as f64 * f64::from(engine.state.config.tick_rate_ms) / 1000.0;
+        let duration_seconds = ticks as f64 * f64::from(engine.state.config.tick_rate_ms) / 1000.0;
         let final_tiles = engine
             .state
             .players
@@ -3189,12 +3287,21 @@ mod tests {
     fn neutral_capture_speedup_approaches_three_times_at_occupancy_anchors() {
         for seed in 1..=3 {
             for occupied_share in [0.10, 0.50, 0.90] {
-                let baseline = multi_neutral_attack_capture_rate(seed, occupied_share, 1.0, true);
-                let accelerated = multi_neutral_attack_capture_rate(
+                // Ten ticks average integer capture rounding while staying
+                // before the fixed frontier saturates.
+                let baseline = multi_neutral_attack_capture_rate_for_ticks(
+                    seed,
+                    occupied_share,
+                    1.0,
+                    true,
+                    10,
+                );
+                let accelerated = multi_neutral_attack_capture_rate_for_ticks(
                     seed,
                     occupied_share,
                     NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
                     true,
+                    10,
                 );
                 let ratio = accelerated.0 / baseline.0;
                 println!(
@@ -3210,11 +3317,12 @@ mod tests {
                 );
                 assert_eq!(
                     accelerated,
-                    multi_neutral_attack_capture_rate(
+                    multi_neutral_attack_capture_rate_for_ticks(
                         seed,
                         occupied_share,
                         NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
                         true,
+                        10,
                     )
                 );
             }
@@ -3720,7 +3828,19 @@ mod tests {
                 &state.config,
             ));
         }
-        for (x, y, owner) in [(2, 3, 1), (3, 3, 2), (4, 3, 2)] {
+        for (x, y, owner) in [
+            (2, 3, 1),
+            (3, 3, 2),
+            (4, 3, 2),
+            (5, 3, 2),
+            (6, 3, 2),
+            (4, 4, 2),
+            (5, 4, 2),
+            (6, 4, 2),
+            (4, 5, 2),
+            (5, 5, 2),
+            (6, 5, 2),
+        ] {
             state.set_tile_owner(x, y, owner);
         }
         state.player_mut(1).unwrap().troops = 10_000.0;

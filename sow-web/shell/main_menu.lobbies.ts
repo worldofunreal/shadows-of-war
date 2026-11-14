@@ -292,6 +292,7 @@ export function renderHome() {
 export function campaignEpisodeHeroSlug(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "boudica";
+    if (id.startsWith("tactics_")) return "sun_tzu";
     if (id.startsWith("six_sky")) return "lady_six_sky";
     const prefixMatch = id.match(/^([a-z0-9_]+)_(?:ep\d+|\d+)$/);
     const candidate = prefixMatch ? prefixMatch[1] : id;
@@ -305,6 +306,9 @@ export function campaignEpisodeHeroSlug(episodeId: string): string {
 export function campaignEpisodeMapName(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "eastanglia";
+    if (id === "tactics_01_expand" || id === "tactics_03_farm_vs_city") return "europe";
+    if (id === "tactics_02_ask_ally") return "bajacalifornia";
+    if (id === "tactics_04_factory_gold") return "southeastasia";
     if (id.startsWith("six_sky")) return "northamerica";
     return "world";
 }
@@ -312,6 +316,7 @@ export function campaignEpisodeMapName(episodeId: string): string {
 export function campaignEpisodeSagaId(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "boudica";
+    if (id.startsWith("tactics_")) return "art_of_war";
     if (id.startsWith("six_sky")) return "six_sky";
     const prefixMatch = id.match(/^([a-z0-9_]+)_(?:ep\d+|\d+)$/);
     return prefixMatch ? prefixMatch[1] : id;
@@ -320,6 +325,7 @@ export function campaignEpisodeSagaId(episodeId: string): string {
 export function campaignSagaTitle(sagaId: string): string {
     if (sagaId === "all") return SOW_t("lobbies.the_saga") || "The Saga";
     if (sagaId === "boudica") return SOW_t("lobbies.campaign_boudica_title") || "Rise of the Iceni";
+    if (sagaId === "art_of_war") return SOW_t("lobbies.campaign_art_of_war_title") || "Art of War";
     if (sagaId === "six_sky") {
         return leaderDisplayName(leaderById("lady_six_sky")) || "Lady Six Sky";
     }
@@ -336,7 +342,7 @@ export function campaignEpisodeHeroArt(heroSlug: string) {
 }
 
 export function campaignHeroImage(episodeId?: string | null): string {
-    const id = episodeId || menuUi.selectedCampaignEpisode || "boudica";
+    const id = episodeId || menuUi.selectedCampaignEpisode || "tactics_01_expand";
     const heroSlug = campaignEpisodeHeroSlug(id);
     const compact =
         typeof window.matchMedia === "function"
@@ -965,7 +971,8 @@ export function syncCreateDraft(form: HTMLFormElement) {
             field.name === "bot_count" ||
             field.name === "nation_count" ||
             field.name === "max_players" ||
-            field.name === "seed"
+            field.name === "seed" ||
+            field.name === "global_speed_multiplier"
         ) {
             draft[field.name] = Number(field.value);
         } else if (field.name === "map_name") {
@@ -1213,6 +1220,27 @@ export function renderCreate() {
           "</label>"
         : "";
 
+    const speedPresets = Array.isArray(menuUi.state!.game_speed_presets)
+        ? menuUi.state!.game_speed_presets
+        : [];
+    const speedValue = Number(config.global_speed_multiplier) || 0.10;
+    const speedControl =
+        "<label class='sow-menu__form-field sow-create__map-select'>" +
+        "<span class='sow-create__field-chip'><span>" +
+        esc(SOW_t("lobbies.game_speed")) +
+        "</span></span>" +
+        SOW_renderDropdown({
+            key: "create-game-speed",
+            name: "global_speed_multiplier",
+            value: speedValue,
+            label: SOW_t("lobbies.game_speed"),
+            options: speedPresets.map((preset) => ({
+                value: preset.value,
+                label: SOW_t("lobbies.speed_" + preset.key),
+            })),
+        }) +
+        "</label>";
+
     const seedVal = Number(config.seed) || 42;
     const seedPct = sliderFillPercent(seedVal, 1, 9999);
 
@@ -1437,6 +1465,7 @@ export function renderCreate() {
         "</div>" +
         "</div>" +
         spControls +
+        speedControl +
         "</section>" +
         "<section class='sow-menu__custom-card sow-create__forces-card'>" +
         "<div class='sow-menu__slider-field sow-create__force-row'>" +

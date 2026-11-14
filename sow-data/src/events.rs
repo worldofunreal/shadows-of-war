@@ -53,7 +53,6 @@ pub const EVENT_NAMES: &[&str] = &[
     "store_checkout_open",
     "store_purchase_complete",
     "mission_swap",
-    "mission_claim",
     "menu_guide_action",
 ];
 
@@ -310,12 +309,6 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
             && text("mission_id").is_some_and(is_episode_id)
             && matches!(text("tier"), Some("daily" | "weekly"))
             && props.get("used_ad").and_then(serde_json::Value::as_bool).is_some();
-    }
-    if name == "mission_claim" {
-        return props.len() == 3
-            && text("mission_id").is_some_and(is_episode_id)
-            && matches!(text("tier"), Some("onboarding" | "daily" | "weekly"))
-            && props.get("doubled").and_then(serde_json::Value::as_bool).is_some();
     }
     if name == "menu_guide_action" {
         return props.len() == 2

@@ -63,6 +63,7 @@ interface MenuUi {
     heroesSearchQuery: string;
     heroesRegionFilter: string;
     heroesRarityFilter: string;
+    heroesStatusFilter: string;
     heroesPlayableOnly: boolean;
     heroesSort: string;
     dropdownOpenKey: string | null;
@@ -79,7 +80,14 @@ interface MenuUi {
     profileAccountId: string | null;
     profileTab: string;
     profileAchievementFilter: string;
+    profileAchievementSubcategory: string;
+    profileAchievementStatus: string;
+    profileAchievementTier: string;
+    profileAchievementSort: string;
+    profileAchievementPlayableOnly: boolean;
+    profileAchievementViewMode: "chains" | "grid";
     profileAchievementSearch: string;
+    profileAchievementSelectedTiers: Record<string, string>;
     profileData: ProfileData | null;
     rankedRating: ProfileRating | null;
     rankedLadder: RankedLadder | null;
@@ -97,8 +105,11 @@ interface MenuUi {
     storeOpen: boolean;
     skinPickerOpen: boolean;
     heroInfoOpen: boolean;
-    heroInfoTab: "overview" | "biography";
+    heroInfoTab: "overview" | "biography" | "achievements";
     heroInfoLeaderId: string | null;
+    heroInfoAchCategory: "all" | "recruit" | "mastery" | "victories";
+    heroInfoAchStatus: "all" | "in_progress" | "unlocked" | "locked";
+    heroInfoAchSort: "tier" | "closest" | "points";
     heroBioCache: Record<string, Record<string, HeroBioEntry>>;
     heroBioLocaleLoading: string | null;
     heroBioError: string | null;
@@ -144,6 +155,7 @@ export const menuUi: MenuUi = {
     heroesSearchQuery: "",
     heroesRegionFilter: "all",
     heroesRarityFilter: "all",
+    heroesStatusFilter: "all",
     heroesPlayableOnly: false,
     heroesSort: "alpha_asc",
     dropdownOpenKey: null,
@@ -159,8 +171,15 @@ export const menuUi: MenuUi = {
     profileOpen: false,
     profileAccountId: null,
     profileTab: "overview",
-    profileAchievementFilter: "all",
+    profileAchievementFilter: "summary",
+    profileAchievementSubcategory: "all",
+    profileAchievementStatus: "all",
+    profileAchievementTier: "all",
+    profileAchievementSort: "smart",
+    profileAchievementPlayableOnly: false,
+    profileAchievementViewMode: "chains",
     profileAchievementSearch: "",
+    profileAchievementSelectedTiers: Object.create(null),
     profileData: null,
     rankedRating: null,
     rankedLadder: null,
@@ -180,6 +199,9 @@ export const menuUi: MenuUi = {
     heroInfoOpen: false,
     heroInfoTab: "overview",
     heroInfoLeaderId: null,
+    heroInfoAchCategory: "all",
+    heroInfoAchStatus: "all",
+    heroInfoAchSort: "tier",
     heroBioCache: {},
     heroBioLocaleLoading: null,
     heroBioError: null,
@@ -569,7 +591,12 @@ function heroBriefingText(key: string | null | undefined): string {
     return value && value !== key && value !== "[" + key + "]" ? value : "";
 }
 
-export function renderHeroBriefing(leaderOrSlug: unknown, surface?: string, headingId?: string): string {
+export function renderHeroBriefing(
+    leaderOrSlug: unknown,
+    surface?: string,
+    headingId?: string,
+    tagsMarkup?: string,
+): string {
     const leader = heroBriefingLeader(leaderOrSlug);
     if (!leader) return "";
     const slug = leader.slug || "";
@@ -591,12 +618,18 @@ export function renderHeroBriefing(leaderOrSlug: unknown, surface?: string, head
     const surfaceName =
         ["home", "selection", "modal", "loader"].indexOf(surface || "") !== -1 ? surface : "default";
     const id = /^[a-z][a-z0-9_-]*$/.test(String(headingId || "")) ? " id='" + headingId + "'" : "";
-    const identity =
-        (civilization
-            ? "<small class='sow-heroes__civilization sow-hero-briefing__civilization'>" +
-              esc(civilization) +
-              "</small>"
-            : "") + (name ? "<h2" + id + " class='sow-hero-briefing__name'>" + esc(name) + "</h2>" : "");
+    const headerRow =
+        civilization || tagsMarkup
+            ? "<div class='sow-hero-briefing__identity-head'>" +
+              (civilization
+                  ? "<small class='sow-heroes__civilization sow-hero-briefing__civilization'>" +
+                    esc(civilization) +
+                    "</small>"
+                  : "") +
+              (tagsMarkup || "") +
+              "</div>"
+            : "";
+    const identity = headerRow + (name ? "<h2" + id + " class='sow-hero-briefing__name'>" + esc(name) + "</h2>" : "");
     let ability = "";
     if (random) {
         if (description)

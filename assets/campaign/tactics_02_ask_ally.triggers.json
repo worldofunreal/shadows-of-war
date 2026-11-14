@@ -1,0 +1,285 @@
+{
+  "version": 2,
+  "episode_id": "tactics_02_ask_ally",
+  "text_namespace": "tutorial.campaign_tactics_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 1100,
+    "starting_gold": 180,
+    "campaign_support": {
+      "after_defeated": "cape_raiders",
+      "share_percent": 50
+    }
+  },
+  "entry": "t2_open_ally_menu",
+  "speakers": {
+    "sun_tzu": {
+      "name_key": "tutorial.campaign_tactics_sun_tzu",
+      "avatar": "sun_tzu",
+      "base_expression": {
+        "expression": "calm",
+        "after_expression": "happy",
+        "until": {
+          "type": "defeated",
+          "target": "cabo_tyrant"
+        }
+      }
+    },
+    "la_paz_guild": {
+      "name_key": "tutorial.campaign_tactics_02_guild_name",
+      "faction": "la_paz_guild"
+    },
+    "cabo_tyrant": {
+      "name_key": "tutorial.campaign_tactics_02_tyrant_name",
+      "faction": "cabo_tyrant"
+    }
+  },
+  "steps": [
+    {
+      "id": "t2_open_ally_menu",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_02_open_ally_title",
+      "body_key": "tutorial.campaign_tactics_02_open_ally_body",
+      "hint_key": "tutorial.campaign_tactics_02_open_ally_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "unlocks": {
+        "buildings": {
+          "Tower": 1,
+          "City": 1
+        }
+      },
+      "camera": {
+        "shot": "link",
+        "from": "player",
+        "to": "la_paz_guild",
+        "seconds": 1
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "map_menu_open",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "la_paz_guild"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "nameplate",
+        "gesture": "tap"
+      },
+      "next": "t2_form_alliance"
+    },
+    {
+      "id": "t2_form_alliance",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_02_form_ally_title",
+      "body_key": "tutorial.campaign_tactics_02_form_ally_body",
+      "hint_key": "tutorial.campaign_tactics_02_form_ally_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "request_alliance_stay_paused",
+      "trigger": {
+        "type": "alliance_request",
+        "target": "la_paz_guild",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "la_paz_guild"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_alliance",
+        "gesture": "tap"
+      },
+      "next": "t2_ally_confirmed",
+      "unavailable_next": "t2_crush_south"
+    },
+    {
+      "id": "t2_ally_confirmed",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_02_form_ally_title",
+      "hint_key": "tutorial.campaign_tactics_02_wait_ally_hint",
+      "speaker": "sun_tzu",
+      "campaign_accept_alliance_on_enter": {
+        "faction_id": "la_paz_guild"
+      },
+      "trigger": {
+        "type": "alliance",
+        "target": "la_paz_guild",
+        "value": 1,
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "la_paz_guild"
+      },
+      "next": "t2_open_request_menu"
+    },
+    {
+      "id": "t2_open_request_menu",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_02_open_request_menu_title",
+      "body_key": "tutorial.campaign_tactics_02_open_request_menu_body",
+      "hint_key": "tutorial.campaign_tactics_02_open_request_menu_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "exchange": [
+        {
+          "speaker": "la_paz_guild",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_tactics_02_guild_greet_emote",
+          "delay_ms": 0
+        }
+      ],
+      "trigger": {
+        "type": "ui",
+        "action": "map_menu_open",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "la_paz_guild"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "nameplate",
+        "gesture": "tap"
+      },
+      "next": "t2_open_request_panel"
+    },
+    {
+      "id": "t2_open_request_panel",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_02_open_request_panel_title",
+      "hint_key": "tutorial.campaign_tactics_02_open_request_panel_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "trigger": {
+        "type": "ui",
+        "action": "map_request",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "la_paz_guild"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_request",
+        "gesture": "tap"
+      },
+      "next": "t2_send_request",
+      "unavailable_next": "t2_crush_south"
+    },
+    {
+      "id": "t2_send_request",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_02_send_request_title",
+      "body_key": "tutorial.campaign_tactics_02_send_request_body",
+      "hint_key": "tutorial.campaign_tactics_02_send_request_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "request_resources_stay_paused",
+      "trigger": {
+        "type": "resource_request",
+        "target": "la_paz_guild",
+        "value": 1,
+        "scope": "episode"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "transfer_request",
+        "gesture": "tap"
+      },
+      "next": "t2_crush_south",
+      "unavailable_next": "t2_crush_south"
+    },
+    {
+      "id": "t2_crush_south",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_02_crush_south_title",
+      "body_key": "tutorial.campaign_tactics_02_crush_south_body",
+      "hint_key": "tutorial.campaign_tactics_02_crush_south_hint",
+      "speaker": "sun_tzu",
+      "camera": {
+        "shot": "threat",
+        "to": "cabo_tyrant",
+        "seconds": 1
+      },
+      "exchange": [
+        {
+          "speaker": "la_paz_guild",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_tactics_02_guild_aid_emote",
+          "delay_ms": 0
+        },
+        {
+          "speaker": "sun_tzu",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_tactics_02_sun_tzu_aid_emote"
+        }
+      ],
+      "trigger": {
+        "type": "defeated",
+        "target": "cabo_tyrant",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "cabo_tyrant"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "t2_victory"
+    },
+    {
+      "id": "t2_victory",
+      "type": "end",
+      "title_key": "tutorial.campaign_tactics_02_victory_title",
+      "body_key": "tutorial.campaign_tactics_02_victory_body",
+      "speaker": "sun_tzu",
+      "presentation": "chapter"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "t2_tyrant_tease",
+      "when": {
+        "type": "timer",
+        "after_ms": 9000
+      },
+      "during": "t2_crush_south",
+      "presentation": "exchange",
+      "loop": true,
+      "exchange": [
+        {
+          "speaker": "cabo_tyrant",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_02_tyrant_tease_1"
+        },
+        {
+          "speaker": "cabo_tyrant",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_tactics_02_tyrant_tease_2"
+        }
+      ]
+    },
+    {
+      "id": "t2_tyrant_panic",
+      "when": {
+        "type": "pre_defeat",
+        "target": "cabo_tyrant"
+      },
+      "during": "t2_crush_south",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "cabo_tyrant",
+          "emote": "help",
+          "emote_text_key": "tutorial.campaign_tactics_02_tyrant_panic_emote"
+        }
+      ]
+    }
+  ]
+}

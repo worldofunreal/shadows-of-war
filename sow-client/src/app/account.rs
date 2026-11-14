@@ -1414,7 +1414,7 @@ impl SowApp {
             "mission_id".into(),
             serde_json::Value::String(mission_id.to_string()),
         );
-        fields.insert("ad_funded".into(), serde_json::Value::Bool(ad_funded));
+        fields.insert("used_ad".into(), serde_json::Value::Bool(ad_funded));
         self.post_profile_action("swap mission", "/profile/missions/swap", fields);
     }
 

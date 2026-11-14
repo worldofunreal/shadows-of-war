@@ -1,0 +1,58 @@
+{
+  "_comment": "Art of War Level 4 — Compound Gold (Borneo on southeastasia, 1000x592).",
+  "map": "southeastasia",
+  "player_spawn": [318, 438],
+  "player_color": "#f08c28",
+  "factions": [
+    {
+      "id": "sambas_traders",
+      "name": "Sambas Guild",
+      "x": 340,
+      "y": 412,
+      "starting_troops": 3000,
+      "relation": "neutral",
+      "can_request_alliance": true,
+      "accepts_alliance_requests": false,
+      "support_interval_seconds": 15,
+      "color": "#3aa675",
+      "iq": 110,
+      "civ": "Merchant Guild",
+      "leader": "Gajah Mada",
+      "avatar": "gajah_mada",
+      "can_attack_player": false
+    },
+    {
+      "id": "river_raiders",
+      "name": "River Tollgate",
+      "x": 360,
+      "y": 444,
+      "starting_troops": 800,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d9534f",
+      "iq": 75,
+      "civ": "Corsairs",
+      "leader": "Caesar",
+      "avatar": "colonia_veterans",
+      "can_attack_player": false,
+      "gold_loot_override": 360
+    },
+    {
+      "id": "golden_syndicate",
+      "name": "Golden Syndicate",
+      "x": 378,
+      "y": 416,
+      "starting_troops": 4000,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d49b27",
+      "iq": 100,
+      "civ": "Syndicate",
+      "leader": "Catherine",
+      "avatar": "catherine",
+      "can_attack_player": false
+    }
+  ]
+}

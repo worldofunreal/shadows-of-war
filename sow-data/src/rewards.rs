@@ -553,12 +553,6 @@ pub fn all_achievements() -> &'static [AchievementDefinition] {
     })
 }
 
-pub fn achievements() -> &'static [AchievementDefinition] {
-    all_achievements()
-}
-
-pub const ACHIEVEMENTS: &[AchievementDefinition] = &[];
-
 const XP_MATCH: u32 = 20;
 const XP_WIN: u32 = 100;
 const XP_PER_PLAYER: u32 = 15;
