@@ -1654,8 +1654,9 @@ impl SowApp {
                     {
                         if self.ui.show_dev_sidebar {
                             let now = Instant::now();
-                            let config = crate::theme::dev_config::DevConfig::get();
-                            let duration = self.ui.dev_vfx_preview.duration(&config);
+                            let duration = crate::theme::dev_config::DevConfig::with(|config| {
+                                self.ui.dev_vfx_preview.duration(config)
+                            });
                             self.ui.dev_vfx_preview.advance(now, duration);
                             if let Some(target) = target {
                                 self.ui.dev_vfx_preview.set_target(target, now);
@@ -2470,8 +2471,7 @@ fn dev_config_key(app: &SowApp) -> (bool, Vec<u32>) {
     if !app.ui.show_dev_sidebar {
         return (false, Vec::new());
     }
-    let config = crate::theme::dev_config::DevConfig::get();
-    (true, config.fingerprint())
+    (true, crate::theme::dev_config::DevConfig::with(|config| config.fingerprint()))
 }
 
 #[cfg(not(any(feature = "dev", debug_assertions)))]
@@ -2487,61 +2487,62 @@ fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
     });
     if open {
         use sow_render::shader_params::{self, ParamKind};
-        let config = crate::theme::dev_config::DevConfig::get();
-        let defaults = crate::theme::dev_config::DevConfig::default();
-        let mut values = serde_json::Map::new();
-        let schema = shader_params::PARAMS
-            .iter()
-            .map(|param| {
-                let value = config.value(param.id);
-                values.insert(param.id.to_owned(), setting_value(param.kind, value));
-                serde_json::json!({
-                    "id": param.id,
-                    "label": param.label,
-                    "section": param.section,
-                    "kind": match param.kind {
-                        ParamKind::Number => "number",
-                        ParamKind::Bool => "bool",
-                        ParamKind::Color => "color",
-                        ParamKind::Vector => "vector",
-                        ParamKind::Select => "select",
-                    },
-                    "unit": param.unit,
-                    "alpha": param.alpha,
-                    "min": param.min,
-                    "max": param.max,
-                    "step": param.step,
-                    "default": setting_value(param.kind, defaults.value(param.id)),
-                    "options": param.options.iter().map(|option| serde_json::json!({
-                        "label": option.label,
-                        "value": option.value,
-                    })).collect::<Vec<_>>(),
+        crate::theme::dev_config::DevConfig::with(|config| {
+            let defaults = crate::theme::dev_config::DevConfig::default();
+            let mut values = serde_json::Map::new();
+            let schema = shader_params::PARAMS
+                .iter()
+                .map(|param| {
+                    let value = config.value(param.id);
+                    values.insert(param.id.to_owned(), setting_value(param.kind, value));
+                    serde_json::json!({
+                        "id": param.id,
+                        "label": param.label,
+                        "section": param.section,
+                        "kind": match param.kind {
+                            ParamKind::Number => "number",
+                            ParamKind::Bool => "bool",
+                            ParamKind::Color => "color",
+                            ParamKind::Vector => "vector",
+                            ParamKind::Select => "select",
+                        },
+                        "unit": param.unit,
+                        "alpha": param.alpha,
+                        "min": param.min,
+                        "max": param.max,
+                        "step": param.step,
+                        "default": setting_value(param.kind, defaults.value(param.id)),
+                        "options": param.options.iter().map(|option| serde_json::json!({
+                            "label": option.label,
+                            "value": option.value,
+                        })).collect::<Vec<_>>(),
+                    })
                 })
-            })
-            .collect::<Vec<_>>();
-        payload["config"] = serde_json::Value::Object(values);
-        payload["schema"] = serde_json::Value::Array(schema);
-        payload["groups"] = shader_params::SECTION_GROUPS
-            .iter()
-            .map(|(name, sections)| {
-                serde_json::json!({
-                    "name": name,
-                    "sections": sections.iter().map(|section| serde_json::json!({
-                        "name": section,
-                        "preview": shader_params::SECTION_PREVIEWS
-                            .iter()
-                            .find(|(owner, _)| owner == section)
-                            .map(|(_, target)| *target),
-                    })).collect::<Vec<_>>(),
+                .collect::<Vec<_>>();
+            payload["config"] = serde_json::Value::Object(values);
+            payload["schema"] = serde_json::Value::Array(schema);
+            payload["groups"] = shader_params::SECTION_GROUPS
+                .iter()
+                .map(|(name, sections)| {
+                    serde_json::json!({
+                        "name": name,
+                        "sections": sections.iter().map(|section| serde_json::json!({
+                            "name": section,
+                            "preview": shader_params::SECTION_PREVIEWS
+                                .iter()
+                                .find(|(owner, _)| owner == section)
+                                .map(|(_, target)| *target),
+                        })).collect::<Vec<_>>(),
+                    })
                 })
-            })
-            .collect::<Vec<_>>()
-            .into();
-        payload["perf"] = shader_params::PERF_SWITCHES
-            .iter()
-            .map(|(name, _)| serde_json::json!({ "name": name, "state": config.switch_group_state(name) }))
-            .collect::<Vec<_>>()
-            .into();
+                .collect::<Vec<_>>()
+                .into();
+            payload["perf"] = shader_params::PERF_SWITCHES
+                .iter()
+                .map(|(name, _)| serde_json::json!({ "name": name, "state": config.switch_group_state(name) }))
+                .collect::<Vec<_>>()
+                .into();
+        });
         let preview = &app.ui.dev_vfx_preview;
         payload["preview"] = serde_json::json!({
             "target": preview.target,

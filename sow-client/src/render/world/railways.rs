@@ -384,18 +384,18 @@ pub(crate) fn render(
     let screen_h = input.screen_h;
     let camera = [input.camera_x, input.camera_y];
     for segment in &state.segments {
+        let a = world_screen(segment.a, camera, input.camera_zoom);
+        let corner = world_screen(segment.corner, camera, input.camera_zoom);
+        let b = world_screen(segment.b, camera, input.camera_zoom);
+        if !route_in_view(a, corner, b, screen_w, screen_h, line_width * 2.0) {
+            continue;
+        }
         if dev.fog_of_war
             && !segment
                 .path_tiles
                 .iter()
                 .all(|&tile| sim.fog_visible.contains(tile))
         {
-            continue;
-        }
-        let a = world_screen(segment.a, camera, input.camera_zoom);
-        let corner = world_screen(segment.corner, camera, input.camera_zoom);
-        let b = world_screen(segment.b, camera, input.camera_zoom);
-        if !route_in_view(a, corner, b, screen_w, screen_h, line_width * 2.0) {
             continue;
         }
         draw_track_leg(text, a, corner, line_width, opacity);

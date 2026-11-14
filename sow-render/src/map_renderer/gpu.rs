@@ -33,6 +33,7 @@ pub struct MapRenderer {
     pub vision_fade: Vec<u8>,
     fade_active: Vec<u32>,
     is_fading: Vec<bool>,
+    last_visible_blocks: Vec<u64>,
     pub terrain_bytes_per_row: u32,
     pub owner_bytes_per_row: u32,
     pub chunk_h: u32,
@@ -206,7 +207,7 @@ impl MapRenderer {
             fragment: Some(shader.at(fragment_entry)),
             color_targets: &[gpu::ColorTargetState {
                 format: surface_format,
-                blend: Some(gpu::BlendState::ALPHA_BLENDING),
+                blend: None,
                 write_mask: gpu::ColorWrites::default(),
             }],
             multisample_state: gpu::MultisampleState::default(),
@@ -232,6 +233,7 @@ impl MapRenderer {
             vision_fade: vec![0; total],
             fade_active: Vec::new(),
             is_fading: vec![false; total],
+            last_visible_blocks: Vec::new(),
             terrain_bytes_per_row,
             owner_bytes_per_row,
             chunk_h,
@@ -352,38 +354,70 @@ impl MapRenderer {
         // 1. Reset chunk tracking
         self.dirty_chunks.fill(false);
 
-        // 2. Update vision fade targets based on current visibility (only when visibility changes)
+        // 2. Update vision fade targets based on visibility:
+        //    - Init or FoW toggle runs a full pass and uploads the full owner texture.
+        //    - Normal frames diff `visible.blocks` against `last_visible_blocks` via XOR.
         let mut any_fade_changed = false;
-        if force_full_upload {
-            for tile_idx in 0..total as u32 {
-                let is_vis = visible.contains(tile_idx);
-                let current_fade = self.vision_fade[tile_idx as usize];
+        let full_vis_upload =
+            force_full_upload || self.last_visible_blocks.len() != visible.blocks.len();
+        {
+            let owners = &self.owners;
+            let conquest_flash = &self.conquest_flash;
+            let vision_fade = &mut self.vision_fade;
+            let is_fading = &mut self.is_fading;
+            let fade_active = &mut self.fade_active;
+            let dirty_chunks = &mut self.dirty_chunks;
+            let mut apply_vis_tile = |tile_idx: u32, is_vis: bool| {
+                let i = tile_idx as usize;
+                let current_fade = vision_fade[i];
                 if is_vis {
                     if current_fade < 255 {
-                        self.vision_fade[tile_idx as usize] = 255;
-                        self.is_fading[tile_idx as usize] = false;
-                        pack(
-                            slice,
-                            &self.owners,
-                            &self.conquest_flash,
-                            255,
-                            tile_idx,
-                            has_water[tile_idx as usize],
-                        );
+                        vision_fade[i] = 255;
+                        is_fading[i] = false;
+                        pack(slice, owners, conquest_flash, 255, tile_idx, has_water[i]);
                         let y = tile_idx / width;
-                        self.dirty_chunks[(y / chunk_h) as usize] = true;
+                        dirty_chunks[(y / chunk_h) as usize] = true;
                         any_fade_changed = true;
                     }
-                } else {
-                    if current_fade > 0 && !self.is_fading[tile_idx as usize] {
-                        self.is_fading[tile_idx as usize] = true;
-                        self.fade_active.push(tile_idx);
+                } else if current_fade > 0 && !is_fading[i] {
+                    is_fading[i] = true;
+                    fade_active.push(tile_idx);
+                }
+            };
+
+            if full_vis_upload {
+                for tile_idx in 0..total as u32 {
+                    apply_vis_tile(tile_idx, visible.contains(tile_idx));
+                }
+                self.last_visible_blocks.resize(visible.blocks.len(), 0);
+                self.last_visible_blocks.copy_from_slice(&visible.blocks);
+            } else {
+                for (block_idx, (&new_word, old_word)) in visible
+                    .blocks
+                    .iter()
+                    .zip(self.last_visible_blocks.iter_mut())
+                    .enumerate()
+                {
+                    let mut diff = new_word ^ *old_word;
+                    if diff == 0 {
+                        continue;
+                    }
+                    *old_word = new_word;
+                    let base_tile = (block_idx as u32) * 64;
+                    while diff != 0 {
+                        let bit = diff.trailing_zeros();
+                        diff &= diff - 1;
+                        let tile_idx = base_tile + bit;
+                        if tile_idx >= total as u32 {
+                            break;
+                        }
+                        apply_vis_tile(tile_idx, ((new_word >> bit) & 1) != 0);
                     }
                 }
             }
         }
 
-        if force_full_upload {
+        if full_vis_upload {
             for tile_idx in 0..total as u32 {
                 let fade = self.vision_fade[tile_idx as usize];
                 pack(

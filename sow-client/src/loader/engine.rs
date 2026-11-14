@@ -74,6 +74,9 @@ impl SowApp {
         self.sim.latest_local_spawn = None;
         self.input.spawn_intent_rate.reset();
         self.sim.last_synced_cost_tick = None;
+        self.sim.last_synced_hud_key = None;
+        self.sim.fog_dirty = true;
+        self.gfx.player_palette_cache = None;
         self.sim.my_lobby_id = None;
         self.sim.my_player_id = None;
         self.sim.relay_ticket = None;
@@ -318,7 +321,7 @@ impl SowApp {
                                 self.ui.app.splash_state.frames_drawn = 0;
                                 self.ui.app.splash_state.gpu_load_step = 1;
                                 self.tasks.pending_engine_init_data =
-                                    Some((*state, water, *start_msg));
+                                    Some((*state, Some(water), *start_msg));
                             }
                         }
                     }
@@ -347,7 +350,7 @@ impl SowApp {
 
                         self.sim.current_snapshot = None; // MANDATORY: Clear old snapshot so Step 3 waits for the new one!
 
-                        self.dispatch_sim_command(SimCommand::Init {
+                        self.handle_sim_init(crate::sim::init::SimInitOpts {
                             config: Box::new(start_msg.config.clone()),
                             seed: start_msg.seed,
                             map_bytes: map_bytes.clone(),
@@ -358,6 +361,7 @@ impl SowApp {
                             geo_bounds: state.geo_bounds,
                             map_rosters: state.map_rosters.clone(),
                             num_land_tiles: state.total_land_tiles,
+                            precomputed_water: water,
                         });
 
                         // POKA-YOKE — the single match-init chokepoint that EVERY match (offline,
@@ -379,6 +383,7 @@ impl SowApp {
                         self.sim.map_h = start_msg.config.map_height;
                         self.sim.fog_explored = sow_core::bitset::DenseBitSet::new();
                         self.sim.fog_visible = sow_core::bitset::DenseBitSet::new();
+                        self.sim.fog_dirty = true;
                         self.sim.force_fog_upload = true;
                         self.release_client_game_gpu();
                         if let Some(render_ctx) = self.gfx.render_ctx.as_mut()
@@ -414,7 +419,7 @@ impl SowApp {
                         splash_show_loading_progress(&mut self.ui.app.splash_state, 0.70);
 
                         // Re-insert pending data so we stay in this block until Step 4
-                        self.tasks.pending_engine_init_data = Some((state, water, start_msg));
+                        self.tasks.pending_engine_init_data = Some((state, None, start_msg));
                     }
                 } else if step == 2 && !self.gfx.needs_first_upload {
                     // Step 2 Finished: GPU Texture is uploaded!

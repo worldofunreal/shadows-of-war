@@ -344,13 +344,15 @@ impl SowApp {
         };
         if let Some(text) = &mut self.gfx.text_renderer {
             let text_draw_started_at = crate::diag::startup_perf_timer();
-            text.draw(
-                &mut render_ctx.command_encoder,
-                frame.texture_view(),
-                [self.input.screen_w, self.input.screen_h],
-                &crate::theme::dev_config::DevConfig::get().shader_params,
-                &render_ctx.context,
-            );
+            crate::theme::dev_config::DevConfig::with(|dev| {
+                text.draw(
+                    &mut render_ctx.command_encoder,
+                    frame.texture_view(),
+                    [self.input.screen_w, self.input.screen_h],
+                    &dev.shader_params,
+                    &render_ctx.context,
+                );
+            });
             if let Some(started_at) = text_draw_started_at {
                 crate::diag::record_startup_perf(
                     crate::diag::StartupMetric::TextDraw,

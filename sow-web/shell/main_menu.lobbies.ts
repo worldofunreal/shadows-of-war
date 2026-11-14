@@ -1223,7 +1223,9 @@ export function renderCreate() {
     const speedPresets = Array.isArray(menuUi.state!.game_speed_presets)
         ? menuUi.state!.game_speed_presets
         : [];
-    const speedValue = Number(config.global_speed_multiplier) || 0.10;
+    const speedValue =
+        Number(config.global_speed_multiplier) ||
+        Number(speedPresets.find((preset) => preset.key === "normal")?.value);
     const speedControl =
         "<label class='sow-menu__form-field sow-create__map-select'>" +
         "<span class='sow-create__field-chip'><span>" +

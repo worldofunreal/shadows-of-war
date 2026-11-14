@@ -204,6 +204,31 @@ pub fn initialize_match_engine(
     fallback_rosters: Vec<crate::map_file::MapRosterPreset>,
     fallback_land_tiles: u32,
 ) -> SowEngine {
+    initialize_match_engine_with_water(
+        config,
+        seed,
+        map_bytes,
+        players,
+        fallback_spawns,
+        fallback_geo_bounds,
+        fallback_rosters,
+        fallback_land_tiles,
+        None,
+    )
+}
+
+/// Same as [`initialize_match_engine`], reusing precomputed water components when provided.
+pub fn initialize_match_engine_with_water(
+    config: crate::game_config::GameConfig,
+    seed: u64,
+    map_bytes: &[u8],
+    players: Vec<crate::protocol::PlayerInfo>,
+    fallback_spawns: Vec<crate::map_file::MapSpawn>,
+    fallback_geo_bounds: Option<crate::map_file::GeoBounds>,
+    fallback_rosters: Vec<crate::map_file::MapRosterPreset>,
+    fallback_land_tiles: u32,
+    precomputed_water: Option<WaterComponents>,
+) -> SowEngine {
     let mut state = GameState::new(seed, config.map_width, config.map_height, config);
     state.map_spawns = fallback_spawns;
     state.geo_bounds = fallback_geo_bounds;
@@ -239,7 +264,7 @@ pub fn initialize_match_engine(
         }
     }
 
-    let water = WaterComponents::compute(&state.map, |_| {});
+    let water = precomputed_water.unwrap_or_else(|| WaterComponents::compute(&state.map, |_| {}));
     let mut engine = SowEngine::new(state, water);
     for player in players {
         if player.player_type == crate::player::PlayerType::Human {

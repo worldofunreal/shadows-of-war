@@ -79,15 +79,9 @@ fn default_trade_troop_income() -> f64 {
     0.4
 }
 
-pub const NORMAL_GAME_SPEED: f64 = 0.10;
-pub const GAME_SPEED_PRESETS: [(&str, f64); 6] = [
-    ("slowest", 0.04),
-    ("slow", 0.08),
-    ("normal", NORMAL_GAME_SPEED),
-    ("fast", 0.16),
-    ("fastest", 0.24),
-    ("turbo", 0.36),
-];
+// Generated from sow-dist/config/game-speed.json so the WASM client and server
+// share one normal speed and one ordered preset list.
+include!(concat!(env!("OUT_DIR"), "/game_speed.rs"));
 
 pub fn is_supported_game_speed(speed: f64) -> bool {
     speed.is_finite()
@@ -375,9 +369,9 @@ pub struct GameConfig {
     /// Determines how fast the server ticks. 250ms = 4 ticks per second.
     /// Increasing this slows down everything mechanically, including attack animations.
     pub tick_rate_ms: f32,
-    /// Master speed dial for the entire game (1.0 = normal).
-    /// Scales all per-second rates (expansion, income, IQ) proportionally via `per_tick()`.
-    /// Example: 0.5 = half speed, 2.0 = double speed.
+    /// Effective match speed. Normal and preset values come from
+    /// `sow-dist/config/game-speed.json`; site-specific server rules cannot
+    /// override Normal. Custom lobbies may select one of the shared presets.
     pub global_speed_multiplier: f64,
 
     // ==========================================
@@ -742,19 +736,26 @@ mod tests {
         assert_eq!(config.ai.think_nation, AiTuning::default().think_nation);
         assert_eq!(GameConfig::with_overrides("{}").unwrap(), GameConfig::default());
 
-        assert_eq!(NORMAL_GAME_SPEED, 0.10);
-        assert_eq!(
-            GAME_SPEED_PRESETS,
-            [
-                ("slowest", 0.04),
-                ("slow", 0.08),
-                ("normal", 0.10),
-                ("fast", 0.16),
-                ("fastest", 0.24),
-                ("turbo", 0.36),
-            ]
+        assert_eq!(NORMAL_GAME_SPEED, 0.18);
+        let expected = [
+            ("slowest", 0.072),
+            ("slow", 0.144),
+            ("normal", 0.18),
+            ("fast", 0.288),
+            ("fastest", 0.432),
+            ("turbo", 0.648),
+        ];
+        for ((key, speed), (expected_key, expected_speed)) in
+            GAME_SPEED_PRESETS.into_iter().zip(expected)
+        {
+            assert_eq!(key, expected_key);
+            assert!((speed - expected_speed).abs() < 1e-12);
+        }
+        assert!(
+            GAME_SPEED_PRESETS
+                .iter()
+                .all(|(_, speed)| is_supported_game_speed(*speed))
         );
-        assert!(GAME_SPEED_PRESETS.iter().all(|(_, speed)| is_supported_game_speed(*speed)));
         assert!(!is_supported_game_speed(0.2));
 
         for bad in [

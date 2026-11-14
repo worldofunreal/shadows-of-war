@@ -52,15 +52,28 @@ pub(crate) fn compute_visibility(
         return visibility_changed;
     }
 
-    // Reset current visibility
-    *fog_visible = sow_core::bitset::DenseBitSet::new();
+    // Reset current visibility in-place without reallocating backing buffers.
+    let total_tiles = (map_w * map_h) as usize;
+    let total_blocks = (total_tiles + 63) / 64;
+    fog_visible.reset_zeroed(total_blocks);
 
     let territory_radius = 4;
     let building_radius = 8;
     let fleet_radius = 6;
 
-    // Helper closure to check if owner is player or ally/teammate (optimized with lookup table)
-    let mut ally_or_self = vec![false; 65536];
+    thread_local! {
+        static ALLY_OR_SELF_CACHE: std::cell::RefCell<Vec<bool>> = const { std::cell::RefCell::new(Vec::new()) };
+        static TEMP_OWNERS_CACHE: std::cell::RefCell<Vec<u16>> = const { std::cell::RefCell::new(Vec::new()) };
+        static PLAYER_TILE_COUNTS_CACHE: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    // Helper lookup table for owner/ally/teammate membership (buffer reused across calls).
+    let mut ally_or_self = ALLY_OR_SELF_CACHE.with(|cache| {
+        let mut v = cache.borrow_mut();
+        v.resize(65536, false);
+        v.fill(false);
+        std::mem::take(&mut *v)
+    });
     let my_player = snap.players.iter().find(|p| p.id == my_id);
     for p in &snap.players {
         let pid = p.id;
@@ -110,14 +123,8 @@ pub(crate) fn compute_visibility(
         }
     };
 
-    thread_local! {
-        static TEMP_OWNERS_CACHE: std::cell::RefCell<Vec<u16>> = const { std::cell::RefCell::new(Vec::new()) };
-        static PLAYER_TILE_COUNTS_CACHE: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
-    }
-
     // Pre-apply snapshot's dirty tiles to a temporary copy of owners to ensure
     // we calculate vision for newly claimed/spawned tiles immediately.
-    let total_tiles = (map_w * map_h) as usize;
     let mut temp_owners = TEMP_OWNERS_CACHE.with(|cache| {
         let mut v = cache.borrow_mut();
         v.clear();
@@ -215,6 +222,9 @@ pub(crate) fn compute_visibility(
     fog_explored.rebuild_index();
 
     // Restore cached vectors to the thread-local storage
+    ALLY_OR_SELF_CACHE.with(|cache| {
+        *cache.borrow_mut() = ally_or_self;
+    });
     TEMP_OWNERS_CACHE.with(|cache| {
         *cache.borrow_mut() = temp_owners;
     });

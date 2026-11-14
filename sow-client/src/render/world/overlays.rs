@@ -61,64 +61,65 @@ pub(crate) fn render_overlays(
         return;
     };
     let sf = sf.max(0.01);
-    let dev = DevConfig::get();
     let zoom_scaled = input.camera_zoom / sf;
-
-    super::railways::render(
-        text,
-        snapshot,
-        sim,
-        ui,
-        input,
-        &dev,
-        sf,
-        zoom_scaled,
-        now,
-    );
-    render_building_selection_focus(text, sim, input, sf);
-    if dev.vfx_world_buildings {
-        render_buildings(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, now);
-    }
-    render_building_placement_preview(text, sim, ui, input, sf, placement_can_confirm);
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
     let leaderboard_top_three = ui.leaderboard_top_three;
-    let nameplate_render_started_at = crate::diag::startup_perf_timer();
-    super::nameplates::render_nameplates(
-        text,
-        snapshot,
-        sim,
-        &mut ui.nameplates,
-        input,
-        &dev,
-        avatars,
-        sf,
-        zoom_scaled,
-        now,
-        my_id,
-        leaderboard_top_three,
-        ui.tutorial_active
-            .then_some(ui.tutorial_marker_player_id)
-            .flatten(),
-        ui.tutorial_active,
-        ui.app.settings_state.reduced_motion,
-    );
-    if let Some(started_at) = nameplate_render_started_at {
-        crate::diag::record_startup_perf(
-            crate::diag::StartupMetric::NameplateRender,
-            started_at,
+
+    DevConfig::with(|dev| {
+        super::railways::render(
+            text,
+            snapshot,
+            sim,
+            ui,
+            input,
+            dev,
+            sf,
+            zoom_scaled,
+            now,
         );
-    }
-    feedback::render(
-        text,
-        snapshot,
-        sim,
-        ui,
-        input,
-        &dev,
-        avatars,
-        sf,
-        now,
-    );
+        render_building_selection_focus(text, sim, input, sf);
+        if dev.vfx_world_buildings {
+            render_buildings(text, snapshot, sim, ui, input, dev, sf, zoom_scaled, now);
+        }
+        render_building_placement_preview(text, sim, ui, input, sf, placement_can_confirm);
+        let nameplate_render_started_at = crate::diag::startup_perf_timer();
+        super::nameplates::render_nameplates(
+            text,
+            snapshot,
+            sim,
+            &mut ui.nameplates,
+            input,
+            dev,
+            avatars,
+            sf,
+            zoom_scaled,
+            now,
+            my_id,
+            leaderboard_top_three,
+            ui.tutorial_active
+                .then_some(ui.tutorial_marker_player_id)
+                .flatten(),
+            ui.tutorial_active,
+            ui.app.settings_state.reduced_motion,
+        );
+        if let Some(started_at) = nameplate_render_started_at {
+            crate::diag::record_startup_perf(
+                crate::diag::StartupMetric::NameplateRender,
+                started_at,
+            );
+        }
+        feedback::render(
+            text,
+            snapshot,
+            sim,
+            ui,
+            input,
+            dev,
+            avatars,
+            sf,
+            now,
+        );
+    });
     super::nameplates::render_emote_bubbles(
         text,
         snapshot,
@@ -492,7 +493,7 @@ pub(crate) fn building_at_pointer(
         return None;
     }
 
-    let lod = BuildingLod::for_zoom(zoom_scaled, &DevConfig::get().shader_params);
+    let lod = DevConfig::with(|dev| BuildingLod::for_zoom(zoom_scaled, &dev.shader_params));
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let pointer_x = x as f32 / sf;
     let pointer_y = y as f32 / sf;

@@ -477,6 +477,9 @@ impl SowApp {
         self.ui.building_render_cache = Default::default();
         self.ui.railway_render_state.invalidate_snapshot();
         self.sim.last_synced_cost_tick = None;
+        self.sim.last_synced_hud_key = None;
+        self.sim.fog_dirty = true;
+        self.gfx.player_palette_cache = None;
         self.sync_hud_player_state();
         self.sync_building_costs();
         if let Some(accepted) = placement_result {
@@ -597,40 +600,14 @@ impl SowApp {
             self.sim.latest_local_spawn = Some((snap.tick, x, y));
         }
         self.sim.current_snapshot = Some(snap);
+        self.sim.last_synced_hud_key = None;
+        self.gfx.player_palette_cache = None;
         if let Some(accepted) = placement_result {
             self.finish_building_confirmation(accepted);
         }
 
-        // Recompute Fog of War visibility
-        if let Some(ref snap_ref) = self.sim.current_snapshot {
-            let owners = self
-                .gfx
-                .map_renderer
-                .as_ref()
-                .map(|mr| mr.owners.as_slice())
-                .unwrap_or(&[]);
-            self.sim
-                .fog_explored
-                .blocks
-                .resize((self.sim.map_w * self.sim.map_h + 63) as usize / 64, 0);
-            self.sim
-                .fog_visible
-                .blocks
-                .resize((self.sim.map_w * self.sim.map_h + 63) as usize / 64, 0);
-            let dev = crate::theme::dev_config::DevConfig::get();
-            let visibility_changed = crate::sim::visibility::compute_visibility(
-                (self.sim.map_w, self.sim.map_h),
-                my_id,
-                owners,
-                snap_ref,
-                &mut self.sim.fog_explored,
-                &mut self.sim.fog_visible,
-                dev.fog_of_war,
-            );
-            if visibility_changed {
-                self.sim.force_fog_upload = true;
-            }
-        }
+        // Recompute Fog of War once before rendering instead of per catchup tick.
+        self.sim.fog_dirty = true;
 
         self.time.interp.stamp_applied(web_time::Instant::now());
     }

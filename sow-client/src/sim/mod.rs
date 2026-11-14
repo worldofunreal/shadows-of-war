@@ -1,8 +1,8 @@
 mod dispatch;
 mod events;
-mod init;
+pub(crate) mod init;
 mod shutdown;
 mod snapshot_fx;
 mod turn;
 mod update;
-mod visibility;
+pub(crate) mod visibility;

@@ -26,6 +26,19 @@ fn map_shader_params(
     if let Some(slot) = sow_render::shader_params::shader_slot("border.tribe_zoom_cutoff") {
         params[slot][0] *= sf.max(0.01);
     }
+    if let Some(slot) = sow_render::shader_params::shader_slot("lighting.direction") {
+        let dir = params[slot];
+        let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
+        if len > 0.0001 {
+            params[slot][0] = dir[0] / len;
+            params[slot][1] = dir[1] / len;
+            params[slot][2] = dir[2] / len;
+        } else {
+            params[slot][0] = 0.0;
+            params[slot][1] = 0.0;
+            params[slot][2] = 1.0;
+        }
+    }
     params
 }
 
@@ -138,20 +151,22 @@ impl SowApp {
                 None
             };
             let mut map_drawn = false;
-            if let Some(ref mut mr) = self.gfx.map_renderer {
+            if self.gfx.map_renderer.is_some() {
                 // Upload map state on first frame or after each tick (runs during splash for loader step 2).
                 if self.gfx.needs_first_upload {
-                    render_ctx.command_encoder.init_texture(mr.terrain_texture);
-                    render_ctx.command_encoder.init_texture(mr.owner_texture);
-                    if let Some(ref tr) = self.gfx.text_renderer {
-                        tr.init_textures(&mut render_ctx.command_encoder);
-                        tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
+                    if let Some(ref mr) = self.gfx.map_renderer {
+                        render_ctx.command_encoder.init_texture(mr.terrain_texture);
+                        render_ctx.command_encoder.init_texture(mr.owner_texture);
+                        if let Some(ref tr) = self.gfx.text_renderer {
+                            tr.init_textures(&mut render_ctx.command_encoder);
+                            tr.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
+                        }
+                        if let Some(ref mover) = self.gfx.mover_renderer {
+                            mover.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
+                        }
+                        self.gfx.needs_first_upload = false;
+                        mr.upload_terrain(&mut render_ctx.command_encoder);
                     }
-                    if let Some(ref mover) = self.gfx.mover_renderer {
-                        mover.upload_atlas(&mut render_ctx.command_encoder, &render_ctx.context);
-                    }
-                    self.gfx.needs_first_upload = false;
-                    mr.upload_terrain(&mut render_ctx.command_encoder);
                 }
 
                 // The avatar atlas lives in the text renderer, and the match loader waits for the first
@@ -254,7 +269,7 @@ impl SowApp {
                         }
                     }
 
-                    let dev = crate::theme::dev_config::DevConfig::get();
+                    crate::theme::dev_config::DevConfig::with(|dev| {
                     let border_thickness = dev.thickness;
                     let border_darkness = dev.darkness;
                     let shore_thickness = dev.shore_thickness;
@@ -264,7 +279,7 @@ impl SowApp {
                     let tribe_blend_mode = dev.tribe_blend_mode;
                     let conquest_duration = dev.conquest_duration;
                     let current_time = web_time::Instant::now();
-                    let preview_duration = self.ui.dev_vfx_preview.duration(&dev);
+                    let preview_duration = self.ui.dev_vfx_preview.duration(dev);
                     let preview_phase = self
                         .ui
                         .dev_vfx_preview
@@ -299,12 +314,6 @@ impl SowApp {
                             .map(|player| (player.id, player.centroid_x, player.centroid_y))
                     });
 
-                    let dirty = self
-                        .sim
-                        .current_snapshot
-                        .as_ref()
-                        .map(|s| s.dirty_tiles.as_slice())
-                        .unwrap_or(&[]);
                     let my_id = self.sim.my_player_id.unwrap_or(0);
                     thread_local! {
                         static LAST_FOG_OF_WAR_TOGGLE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
@@ -323,17 +332,42 @@ impl SowApp {
                     if toggle_changed {
                         force_fog_upload = true;
                     }
+                    if self.sim.fog_dirty || toggle_changed {
+                        if let (Some(snap_ref), Some(mr_ref)) =
+                            (self.sim.current_snapshot.as_ref(), self.gfx.map_renderer.as_ref())
+                        {
+                            crate::sim::visibility::compute_visibility(
+                                (self.sim.map_w, self.sim.map_h),
+                                my_id,
+                                mr_ref.owners.as_slice(),
+                                snap_ref,
+                                &mut self.sim.fog_explored,
+                                &mut self.sim.fog_visible,
+                                dev.fog_of_war,
+                            );
+                            self.sim.fog_dirty = false;
+                        }
+                    }
+
+                    let dirty = self
+                        .sim
+                        .current_snapshot
+                        .as_ref()
+                        .map(|s| s.dirty_tiles.as_slice())
+                        .unwrap_or(&[]);
 
                     let map_update_started_at = crate::diag::startup_perf_timer();
-                    mr.update(
-                        &mut render_ctx.command_encoder,
-                        &render_ctx.context,
-                        dirty,
-                        conquest_duration,
-                        my_id,
-                        &self.sim.fog_visible,
-                        force_fog_upload,
-                    );
+                    if let Some(ref mut mr) = self.gfx.map_renderer {
+                        mr.update(
+                            &mut render_ctx.command_encoder,
+                            &render_ctx.context,
+                            dirty,
+                            conquest_duration,
+                            my_id,
+                            &self.sim.fog_visible,
+                            force_fog_upload,
+                        );
+                    }
                     if let Some(started_at) = map_update_started_at {
                         crate::diag::record_startup_perf(
                             crate::diag::StartupMetric::MapUpdate,
@@ -344,39 +378,76 @@ impl SowApp {
                         snap.dirty_tiles.clear();
                     }
 
-                    let default_player_color = pack_player_territory_color([0.5; 3], blend_mode);
-                    let mut player_colors =
-                        [[default_player_color; 4]; crate::render::gpu::PLAYER_COLOR_SLOTS / 4];
-                    let mut player_skin_styles = [[0.0f32; 4]; 256];
-                    if let Some(snap) = &self.sim.current_snapshot {
-                        for p in &snap.players {
-                            if (p.id as usize) < crate::render::gpu::PLAYER_COLOR_SLOTS {
-                                let rgb = sow_core::player::player_territory_rgb(
-                                    p.player_type,
-                                    p.team,
-                                    p.color,
-                                    p.is_campaign_faction,
-                                );
-                                let owner_blend_mode = territory_blend_mode(
-                                    p.player_type,
-                                    p.is_campaign_faction,
-                                    blend_mode,
-                                    tribe_blend_mode,
-                                );
-                                let packed = pack_player_territory_color(rgb, owner_blend_mode);
-                                let id = p.id as usize;
-                                player_colors[id / 4][id % 4] = packed;
-                            }
-                            if (p.id as usize) < player_skin_styles.len() {
-                                player_skin_styles[p.id as usize] = tile_effect_styles(
-                                    p.skin_style,
-                                    p.leader,
-                                    p.empowered_attack,
-                                    my_id != 0 && p.id == my_id,
-                                );
+                    let (snap_tick, player_count) = self
+                        .sim
+                        .current_snapshot
+                        .as_ref()
+                        .map(|s| (s.tick, s.players.len()))
+                        .unwrap_or((u64::MAX, 0));
+                    let palette_key = crate::app::PlayerPaletteCacheKey {
+                        tick: snap_tick,
+                        blend_mode_bits: blend_mode.to_bits(),
+                        tribe_blend_mode_bits: tribe_blend_mode.to_bits(),
+                        my_player_id: my_id,
+                        player_count,
+                    };
+                    let cache_hit = self
+                        .gfx
+                        .player_palette_cache
+                        .as_ref()
+                        .is_some_and(|c| c.key == palette_key);
+                    if !cache_hit {
+                        let default_player_color = pack_player_territory_color([0.5; 3], blend_mode);
+                        let mut colors = Box::new(crate::render::gpu::PlayerColors {
+                            colors: [[default_player_color; 4];
+                                crate::render::gpu::PLAYER_COLOR_SLOTS / 4],
+                        });
+                        let mut skin_styles = Box::new(crate::render::gpu::PlayerSkinStyles {
+                            styles: [[0.0f32; 4]; 256],
+                        });
+                        if let Some(snap) = &self.sim.current_snapshot {
+                            for p in &snap.players {
+                                if (p.id as usize) < crate::render::gpu::PLAYER_COLOR_SLOTS {
+                                    let rgb = sow_core::player::player_territory_rgb(
+                                        p.player_type,
+                                        p.team,
+                                        p.color,
+                                        p.is_campaign_faction,
+                                    );
+                                    let owner_blend_mode = territory_blend_mode(
+                                        p.player_type,
+                                        p.is_campaign_faction,
+                                        blend_mode,
+                                        tribe_blend_mode,
+                                    );
+                                    let packed =
+                                        pack_player_territory_color(rgb, owner_blend_mode);
+                                    let id = p.id as usize;
+                                    colors.colors[id / 4][id % 4] = packed;
+                                }
+                                if (p.id as usize) < skin_styles.styles.len() {
+                                    skin_styles.styles[p.id as usize] = tile_effect_styles(
+                                        p.skin_style,
+                                        p.leader,
+                                        p.empowered_attack,
+                                        my_id != 0 && p.id == my_id,
+                                    );
+                                }
                             }
                         }
+                        self.gfx.player_palette_cache = Some(crate::app::PlayerPaletteCache {
+                            key: palette_key,
+                            colors,
+                            skin_styles,
+                        });
                     }
+                    let palette_cache = self
+                        .gfx
+                        .player_palette_cache
+                        .as_ref()
+                        .expect("player_palette_cache populated");
+                    let colors_struct = *palette_cache.colors;
+                    let skin_styles_struct = *palette_cache.skin_styles;
 
                     let mut alliance_celebration_slots = [[0.0f32; 4]; 18];
                     let snapshot = self.sim.current_snapshot.as_ref();
@@ -638,20 +709,16 @@ impl SowApp {
                         preview_time,
                         shader_params: map_shader_params(&dev.shader_params, sf),
                     };
-                    let colors_struct = crate::render::gpu::PlayerColors {
-                        colors: player_colors,
-                    };
-                    let skin_styles_struct = crate::render::gpu::PlayerSkinStyles {
-                        styles: player_skin_styles,
-                    };
-                    mr.draw(
-                        &mut render_ctx.command_encoder,
-                        frame.texture_view(),
-                        globals,
-                        colors_struct,
-                        skin_styles_struct,
-                    );
-                    map_drawn = true;
+                    if let Some(mr) = self.gfx.map_renderer.as_ref() {
+                        mr.draw(
+                            &mut render_ctx.command_encoder,
+                            frame.texture_view(),
+                            globals,
+                            colors_struct,
+                            skin_styles_struct,
+                        );
+                        map_drawn = true;
+                    }
 
                     crate::render::text_atlases::poll_arabic_font();
 
@@ -714,6 +781,7 @@ impl SowApp {
                             );
                         }
                     }
+                    });
                 }
             }
 

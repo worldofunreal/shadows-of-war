@@ -3306,6 +3306,26 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const clamp = (value: number, min: number, max: number) =>
       Math.min(Math.max(value, min), Math.max(min, max));
 
+    // Batch DOM reads before writing arrow styles to avoid forced synchronous reflow
+    const panel = hudRefs && hudRefs.placementPanel;
+    const width = panel ? panel.offsetWidth || 230 : 230;
+    const height = panel ? panel.offsetHeight || 96 : 96;
+    const halfW = width * 0.5;
+    const halfH = height * 0.5;
+
+    let bottomLimit = viewTop + vh - 96;
+    if (
+      hudRefs &&
+      hudRefs.dock &&
+      !hudRefs.dock.hidden &&
+      typeof hudRefs.dock.getBoundingClientRect === "function"
+    ) {
+      const dockRect = hudRefs.dock.getBoundingClientRect();
+      if (dockRect && dockRect.height > 0 && dockRect.top > viewTop) {
+        bottomLimit = Math.min(bottomLimit, dockRect.top - 10);
+      }
+    }
+
     // Position 4 arrows around the building footprint
     const arrows = placement.arrows;
     const refs = hudRefs && hudRefs.placementArrows;
@@ -3329,25 +3349,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     // Position the action card directly below the down arrow
-    const panel = hudRefs && hudRefs.placementPanel;
     if (!panel) return;
-    const width = panel.offsetWidth || 230;
-    const height = panel.offsetHeight || 96;
-    const halfW = width * 0.5;
-    const halfH = height * 0.5;
-
-    let bottomLimit = viewTop + vh - 96;
-    if (
-      hudRefs &&
-      hudRefs.dock &&
-      !hudRefs.dock.hidden &&
-      typeof hudRefs.dock.getBoundingClientRect === "function"
-    ) {
-      const dockRect = hudRefs.dock.getBoundingClientRect();
-      if (dockRect && dockRect.height > 0 && dockRect.top > viewTop) {
-        bottomLimit = Math.min(bottomLimit, dockRect.top - 10);
-      }
-    }
 
     const downArrowY = arrows ? arrows.down[1] : anchorY + 48;
     const upArrowY = arrows ? arrows.up[1] : anchorY - 48;
@@ -3498,11 +3500,23 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         activeProgressBars.set(item.tile_idx, bar);
       }
 
-      bar.style.display = item.visible === false ? "none" : "flex";
-      bar.style.left = item.screen_x.toFixed(1) + "px";
-      bar.style.top = item.screen_y.toFixed(1) + "px";
-
-      patchBuildingProgressBar(bar, item.remaining_seconds, item.progress);
+      const visible = item.visible !== false;
+      const nextDisplay = visible ? "flex" : "none";
+      if (bar.style.display !== nextDisplay) {
+        bar.style.display = nextDisplay;
+      }
+      if (visible) {
+        const nextTransform =
+          "translate3d(" +
+          item.screen_x.toFixed(1) +
+          "px, " +
+          item.screen_y.toFixed(1) +
+          "px, 0) translate(-50%, 0)";
+        if (bar.style.transform !== nextTransform) {
+          bar.style.transform = nextTransform;
+        }
+        patchBuildingProgressBar(bar, item.remaining_seconds, item.progress);
+      }
     }
 
     for (const [tile, el] of activeProgressBars.entries()) {
@@ -6191,24 +6205,34 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           hudRefs.topbar.getBoundingClientRect().bottom + 8,
         );
     }
+    const setPropIfChanged = function (property: string, value: string): void {
+      if (hudRoot.style.getPropertyValue(property) !== value) {
+        hudRoot.style.setProperty(property, value);
+      }
+    };
+    const removePropIfPresent = function (property: string): void {
+      if (hudRoot.style.getPropertyValue(property)) {
+        hudRoot.style.removeProperty(property);
+      }
+    };
     if (operationAnchorTop < window.innerHeight) {
-      hudRoot.style.setProperty(
+      setPropIfChanged(
         "--sow-hud-layout-operations-bottom",
         Math.ceil(window.innerHeight - operationAnchorTop + 2) + "px",
       );
     } else {
-      hudRoot.style.removeProperty("--sow-hud-layout-operations-bottom");
+      removePropIfPresent("--sow-hud-layout-operations-bottom");
     }
     if (!compact) {
       ["--sow-hud-layout-top-reserve", "--sow-hud-layout-bottom-edge"].forEach(
         function (property) {
-          hudRoot.style.removeProperty(property);
+          removePropIfPresent(property);
         },
       );
       syncDefaultDockReserve();
       return;
     }
-    hudRoot.style.setProperty(
+    setPropIfChanged(
       "--sow-hud-layout-top-reserve",
       Math.ceil(top + 8) + "px",
     );
@@ -6232,8 +6256,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const stackHeight = Math.max(0, Math.ceil(stackBottom - stackTop));
     const dockReserve =
       stackHeight > 0 ? stackHeight + Math.max(8, safeBottom) + 8 : 0;
-    hudRoot.style.setProperty("--sow-dock-reserve", dockReserve + "px");
-    hudRoot.style.setProperty(
+    setPropIfChanged("--sow-dock-reserve", dockReserve + "px");
+    setPropIfChanged(
       "--sow-hud-layout-bottom-edge",
       Math.floor(stackTop - 8) + "px",
     );
@@ -7188,58 +7212,70 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       hudRefs!.devBtn.hidden = !showDevTools;
     }
     if (hudDevLayer) hudDevLayer.hidden = !showDevTools && !devSidebarOpen;
-    if (devTools.schema && hudRefs!.devSidebar) renderDevControls(devTools);
-    const devConfig = devTools.config || {};
-    if (hudRefs!.devSidebar) {
-      hudRefs!.devSidebar
-        .querySelectorAll<HTMLInputElement>("[data-dev]")
-        .forEach(function (input) {
-          if (document.activeElement === input) return;
-          const field = input.dataset.dev;
-          if (!field) return;
-          const value = devConfig[field];
-          if (value == null) return;
-          const control = input.closest<HTMLElement>("[data-dev-control]");
-          if (!control) return;
-          const decimals = Number(control.dataset.devDecimals) || 0;
-          if (control.dataset.devKind === "bool")
-            input.checked = Boolean(value);
-          else if (input.type === "radio")
-            input.checked = Number(input.value) === Number(value);
-          else if (
-            control.dataset.devKind === "color" ||
-            control.dataset.devKind === "vector"
-          ) {
-            if (
-              input.hasAttribute("data-dev-channel") &&
-              Array.isArray(value)
+    if (showDevTools && !devOverridesRestored) {
+      restoreDevOverridesIfNeeded({
+        open: devTools.open === true,
+        config: devTools.config,
+        schema: devTools.schema || [],
+        groups: devTools.groups || [],
+        perf: devTools.perf,
+        preview: devTools.preview,
+      });
+    }
+    if (devSidebarOpen) {
+      if (devTools.schema && hudRefs!.devSidebar) renderDevControls(devTools);
+      const devConfig = devTools.config || {};
+      if (hudRefs!.devSidebar) {
+        hudRefs!.devSidebar
+          .querySelectorAll<HTMLInputElement>("[data-dev]")
+          .forEach(function (input) {
+            if (document.activeElement === input) return;
+            const field = input.dataset.dev;
+            if (!field) return;
+            const value = devConfig[field];
+            if (value == null) return;
+            const control = input.closest<HTMLElement>("[data-dev-control]");
+            if (!control) return;
+            const decimals = Number(control.dataset.devDecimals) || 0;
+            if (control.dataset.devKind === "bool")
+              input.checked = Boolean(value);
+            else if (input.type === "radio")
+              input.checked = Number(input.value) === Number(value);
+            else if (
+              control.dataset.devKind === "color" ||
+              control.dataset.devKind === "vector"
             ) {
-              const part = value[Number(input.dataset.devChannel)];
-              if (part === undefined) return;
+              if (
+                input.hasAttribute("data-dev-channel") &&
+                Array.isArray(value)
+              ) {
+                const part = value[Number(input.dataset.devChannel)];
+                if (part === undefined) return;
+                input.value =
+                  input.type === "range"
+                    ? String(part)
+                    : devFormat(part, decimals);
+                devReadout(input, decimals);
+              }
+            } else {
+              const numericValue =
+                typeof value === "number" ? value : Number(value);
               input.value =
                 input.type === "range"
-                  ? String(part)
-                  : devFormat(part, decimals);
-              devReadout(input, decimals);
+                  ? String(numericValue)
+                  : devFormat(numericValue, decimals);
             }
-          } else {
-            const numericValue =
-              typeof value === "number" ? value : Number(value);
-            input.value =
-              input.type === "range"
-                ? String(numericValue)
-                : devFormat(numericValue, decimals);
-          }
-        });
-      hudRefs!.devSidebar
-        .querySelectorAll<HTMLInputElement>("[data-dev-picker]")
-        .forEach(function (picker) {
-          const field = picker.dataset.devPicker;
-          if (!field) return;
-          const value = devConfig[field];
-          if (Array.isArray(value) && document.activeElement !== picker)
-            picker.value = devColorHex(value, picker.dataset.devLinear === "1");
-        });
+          });
+        hudRefs!.devSidebar
+          .querySelectorAll<HTMLInputElement>("[data-dev-picker]")
+          .forEach(function (picker) {
+            const field = picker.dataset.devPicker;
+            if (!field) return;
+            const value = devConfig[field];
+            if (Array.isArray(value) && document.activeElement !== picker)
+              picker.value = devColorHex(value, picker.dataset.devLinear === "1");
+          });
+      }
     }
     const gold = Math.floor(hud.gold || 0);
     const goldRate = Number(hud.gold_rate) || 0;
@@ -8678,14 +8714,22 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
   }
 
+  let lastParsedRaw = "";
+  let lastParsedEnvelope: HudStateEnvelope | null = null;
   window.SOW_onStateUpdate = function (raw) {
     if (typeof raw !== "string") return;
     let parsed: HudStateEnvelope;
-    try {
-      parsed = JSON.parse(raw) as HudStateEnvelope;
-    } catch (error) {
-      console.warn("[WEB STATE] invalid state:", error);
-      return;
+    if (raw === lastParsedRaw && lastParsedEnvelope !== null) {
+      parsed = lastParsedEnvelope;
+    } else {
+      try {
+        parsed = JSON.parse(raw) as HudStateEnvelope;
+      } catch (error) {
+        console.warn("[WEB STATE] invalid state:", error);
+        return;
+      }
+      lastParsedRaw = raw;
+      lastParsedEnvelope = parsed;
     }
     if (typeof window.SOW_menu_state_update === "function") {
       window.SOW_menu_state_update(raw, parsed);

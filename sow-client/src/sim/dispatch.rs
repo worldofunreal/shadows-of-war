@@ -21,6 +21,7 @@ impl SowApp {
                 geo_bounds,
                 map_rosters,
                 num_land_tiles,
+                precomputed_water: None,
             }),
             sow_core::protocol::SimCommand::Turn(turn) => self.handle_sim_turn(turn),
             sow_core::protocol::SimCommand::Shutdown => self.handle_sim_shutdown(),
