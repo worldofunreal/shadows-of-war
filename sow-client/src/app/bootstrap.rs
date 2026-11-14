@@ -307,6 +307,7 @@ impl SowApp {
                 border_flash_intensities: std::collections::HashMap::new(),
                 last_player_attack_flash_time: std::collections::HashMap::new(),
                 viewport_alert: None,
+                camera_shake: crate::render::motion::CameraShakeState::default(),
             },
             sfx: crate::app::sfx::SfxDirector::default(),
             time: TimeState {

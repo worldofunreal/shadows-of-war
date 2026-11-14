@@ -282,6 +282,7 @@ impl SowApp {
         sf: f32,
         frame: blade_graphics::Frame,
         dt: f32,
+        shake_offset: [f32; 2],
     ) {
         self.ui.app.splash_state.frames_drawn =
             self.ui.app.splash_state.frames_drawn.saturating_add(1);
@@ -324,6 +325,8 @@ impl SowApp {
                 }
             }
         }
+        self.input.camera_x -= shake_offset[0];
+        self.input.camera_y -= shake_offset[1];
         let menu_publish_started_at = crate::diag::startup_perf_timer();
         crate::web_menu::publish_tutorial_camera_anchor_frame(self);
         if self.ui.app.phase == ClientPhase::Playing {

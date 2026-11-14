@@ -262,10 +262,29 @@ impl SowApp {
             }
             // Count unique attackers targeting us in the new snapshot
             let unique_attackers = new_attackers.len();
-            let under_attack_spatial = snap
+            let my_troops = snap
+                .players
+                .iter()
+                .find(|p| p.id == my_id)
+                .map_or(100.0, |p| p.troops.max(100.0)) as f32;
+            let total_incoming_troops: f32 = snap
                 .attacks
                 .iter()
-                .find(|attack| attack.target_owner == my_id && attack.troops > 0.0)
+                .filter(|attack| attack.target_owner == my_id && attack.troops > 0.0)
+                .map(|attack| attack.troops as f32)
+                .sum();
+            let under_attack_severity = if unique_attackers > 0 {
+                ((total_incoming_troops / my_troops) * 0.7
+                    + (unique_attackers.saturating_sub(1) as f32) * 0.25)
+                    .clamp(0.15, 1.0)
+            } else {
+                0.0
+            };
+            let first_incoming = snap
+                .attacks
+                .iter()
+                .find(|attack| attack.target_owner == my_id && attack.troops > 0.0);
+            let under_attack_spatial = first_incoming
                 .map(|attack| self.spatial_sound_params(attack.front_cx, attack.front_cy));
 
             if unique_attackers > 0 {
@@ -287,6 +306,24 @@ impl SowApp {
                         });
                     self.ui.last_player_attack_flash_time.insert(my_id, now);
                 }
+                if being_attacked_triggered
+                    && under_attack_severity >= 0.35
+                    && let Some(attack) = first_incoming
+                {
+                    let my_pos = snap
+                        .players
+                        .iter()
+                        .find(|p| p.id == my_id)
+                        .map_or([0.0, 0.0], |p| [p.centroid_x, p.centroid_y]);
+                    let dir = [my_pos[0] - attack.front_cx, my_pos[1] - attack.front_cy];
+                    self.ui.camera_shake.push(
+                        now,
+                        1.4 + 3.2 * under_attack_severity,
+                        0.18 + 0.12 * under_attack_severity,
+                        dir,
+                        (under_attack_severity - 0.3).clamp(0.0, 0.85),
+                    );
+                }
             } else {
                 self.ui.last_player_attack_flash_time.remove(&my_id);
             }
@@ -299,8 +336,57 @@ impl SowApp {
                 now,
                 unique_attackers > 0,
                 under_attack_sound_triggered,
+                under_attack_severity,
                 under_attack_spatial,
             );
+
+            // Detect major local attacks that stalled / stopped cold against a living enemy.
+            if my_id != 0 {
+                for old_attack in &existing.attacks {
+                    if old_attack.owner_id != my_id
+                        || old_attack.target_owner == 0
+                        || old_attack.retreating
+                        || old_attack.troops < 500.0_f64.max((my_troops as f64) * 0.15)
+                    {
+                        continue;
+                    }
+                    let still_active = snap
+                        .attacks
+                        .iter()
+                        .any(|a| a.id == old_attack.id && a.troops > 0.0);
+                    let target_alive = snap
+                        .players
+                        .iter()
+                        .any(|p| p.id == old_attack.target_owner && p.alive);
+                    if !still_active && target_alive {
+                        let severity = ((old_attack.troops as f32) / my_troops).clamp(0.2, 1.0);
+                        let my_pos = snap
+                            .players
+                            .iter()
+                            .find(|p| p.id == my_id)
+                            .map_or([old_attack.front_cx, old_attack.front_cy], |p| {
+                                [p.centroid_x, p.centroid_y]
+                            });
+                        let recoil = [
+                            my_pos[0] - old_attack.front_cx,
+                            my_pos[1] - old_attack.front_cy,
+                        ];
+                        self.ui.camera_shake.push(
+                            now,
+                            1.4 + 1.4 * severity,
+                            0.18,
+                            recoil,
+                            0.15,
+                        );
+                        self.sfx.play_attack_stalled(
+                            now,
+                            severity,
+                            self.spatial_sound_params(old_attack.front_cx, old_attack.front_cy),
+                        );
+                        break;
+                    }
+                }
+            }
 
             // Play completion feedback for local structures.
             for b_new in &snap.buildings {

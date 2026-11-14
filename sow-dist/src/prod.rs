@@ -361,6 +361,11 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
 
     println!("==> 5/8 Stage release (no service mutation)");
     stage_release(&config, &release)?;
+    // Match relays are independent child processes and survive relay-control restarts.
+    // This broader drain protects backend replay settlement: each match pins its
+    // simulation_rules_id, so a replacement verifier cannot process another version.
+    // Keep relay-only deploys nonblocking; remove this backend drain only after
+    // version-aware routing keeps each old immutable verifier alive through settlement.
     let require_empty = plan.server || plan.database || plan.maps || plan.ops;
     let activate = || {
         println!("==> 6/8 Activate changed components only");

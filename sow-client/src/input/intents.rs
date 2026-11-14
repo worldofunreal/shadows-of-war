@@ -206,6 +206,30 @@ impl SowApp {
                         start_time: now,
                         attacker_count: 1,
                     });
+                let commitment = self.ui.app.hud_state.attack_ratio.clamp(0.05, 1.0);
+                let against_enemy = attack.target_owner != 0;
+                let wx = (self.input.last_mouse_x as f32 - self.input.camera_x)
+                    / self.input.camera_zoom.max(0.001);
+                let wy = (self.input.last_mouse_y as f32 - self.input.camera_y)
+                    / self.input.camera_zoom.max(0.001);
+                self.sfx.play_attack_order(
+                    now,
+                    commitment,
+                    against_enemy,
+                    self.spatial_sound_params(wx, wy),
+                );
+                if against_enemy || commitment >= 0.5 {
+                    let zoom = self.input.camera_zoom.max(0.001);
+                    let cx = (self.input.screen_w * 0.5 - self.input.camera_x) / zoom;
+                    let cy = (self.input.screen_h * 0.5 - self.input.camera_y) / zoom;
+                    self.ui.camera_shake.push(
+                        now,
+                        0.6 + 1.4 * commitment,
+                        0.15,
+                        [wx - cx, wy - cy],
+                        0.0,
+                    );
+                }
                 record_attack_launch_notice(
                     &mut self.ui.attack_launch_notices,
                     &intent,

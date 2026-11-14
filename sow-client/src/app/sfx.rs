@@ -5,6 +5,8 @@ use sow_core::game::GamePhase;
 use web_time::{Duration, Instant};
 
 const DEPLOY_GAP: Duration = Duration::from_millis(180);
+const ATTACK_ORDER_GAP: Duration = Duration::from_millis(140);
+const ATTACK_STALLED_GAP: Duration = Duration::from_millis(600);
 const PLACEMENT_GAP: Duration = Duration::from_millis(250);
 const ORDINARY_GAP: Duration = Duration::from_millis(160);
 const COMPLETION_GAP: Duration = Duration::from_millis(500);
@@ -26,6 +28,8 @@ pub(crate) struct SfxDirector {
     server_playing: bool,
     last_ordinary: Option<Instant>,
     last_deploy: Option<Instant>,
+    last_attack_order: Option<Instant>,
+    last_attack_stalled: Option<Instant>,
     last_placement: Option<Instant>,
     last_completion: Option<Instant>,
     last_under_attack: Option<Instant>,
@@ -82,6 +86,37 @@ impl SfxDirector {
         }
         self.last_ordinary = Some(now);
         sow_audio::play_deploy_sound(spatial);
+    }
+
+    pub(crate) fn play_attack_order(
+        &mut self,
+        now: Instant,
+        commitment: f32,
+        against_enemy: bool,
+        spatial: SpatialSoundParams,
+    ) {
+        if !self.ordinary_allowed(now)
+            || !Self::open_gap(&mut self.last_attack_order, now, ATTACK_ORDER_GAP)
+        {
+            return;
+        }
+        self.last_ordinary = Some(now);
+        sow_audio::play_attack_order_sound(commitment, against_enemy, spatial);
+    }
+
+    pub(crate) fn play_attack_stalled(
+        &mut self,
+        now: Instant,
+        severity: f32,
+        spatial: SpatialSoundParams,
+    ) {
+        if !self.ordinary_allowed(now)
+            || !Self::open_gap(&mut self.last_attack_stalled, now, ATTACK_STALLED_GAP)
+        {
+            return;
+        }
+        self.last_ordinary = Some(now);
+        sow_audio::play_attack_stalled_sound(severity, spatial);
     }
 
     pub(crate) fn play_placement(
@@ -153,6 +188,7 @@ impl SfxDirector {
         now: Instant,
         active: bool,
         newly_relevant: bool,
+        severity: f32,
         spatial: Option<SpatialSoundParams>,
     ) {
         if !active {
@@ -171,7 +207,7 @@ impl SfxDirector {
             return;
         }
         self.mark_critical(now);
-        sow_audio::play_under_attack_sound(spatial);
+        sow_audio::play_under_attack_sound(severity, spatial);
     }
 
     pub(crate) fn queue_elimination(

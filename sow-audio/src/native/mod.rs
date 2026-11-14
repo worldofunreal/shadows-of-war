@@ -9,7 +9,10 @@ mod sfx;
 mod tone;
 
 pub use building::play_building_placement_sound;
-pub use combat::{play_deploy_sound, play_under_attack_sound};
+pub use combat::{
+    play_attack_order_sound, play_attack_stalled_sound, play_deploy_sound,
+    play_under_attack_sound,
+};
 pub use death::play_death_sound;
 pub use engine::{set_host_muted, set_master_volume};
 #[cfg(feature = "preview")]

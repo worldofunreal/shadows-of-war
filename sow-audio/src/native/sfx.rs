@@ -300,8 +300,13 @@ pub fn play_nuke_launch_sound(spatial: SpatialSoundParams) {
 
 pub fn play_nuke_impact_sound(level: u8, spatial: SpatialSoundParams) {
     let event = Event::NuclearImpact(level);
+    let gain = match level {
+        1 => 0.18,
+        2 => 0.23,
+        _ => 0.28,
+    };
     queue_spatial(
-        SfxSource::new(event, event.seed(), 0.18),
+        SfxSource::new(event, event.seed(), gain),
         spatial,
         SoundPriority::Foreground,
     );

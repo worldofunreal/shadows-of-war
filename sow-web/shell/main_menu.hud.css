@@ -2408,6 +2408,10 @@ html[dir="rtl"] .sow-hud__leaderboard-search {
   flex-shrink: 0;
   margin-left: 6px;
 }
+.sow-hud__duelist-badge[hidden],
+.sow-hud__bot-badge[hidden] {
+  display: none;
+}
 html[dir="rtl"] .sow-hud__duelist-badge {
   margin-left: 0;
   margin-right: 6px;

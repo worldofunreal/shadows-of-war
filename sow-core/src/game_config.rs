@@ -62,7 +62,11 @@ fn default_port_gold_income() -> f64 {
     48.0 / 21.0
 }
 
-/// Same rate as one Factory level.
+fn default_factory_gold_income() -> f64 {
+    0.85 / NORMAL_GAME_SPEED
+}
+
+/// Hero-specific gold earned per game second per weighted City level.
 fn default_hero_city_gold_income() -> f64 {
     32.0 / 7.0
 }
@@ -648,7 +652,7 @@ impl Default for GameConfig {
             tower_range: 6.0,
             tower_priority: 120.0,
             tower_strength: 0.05,
-            factory_gold_income: 32.0 / 7.0,
+            factory_gold_income: default_factory_gold_income(),
             port_gold_income: default_port_gold_income(),
             hero_city_gold_income: default_hero_city_gold_income(),
             hero_factory_troop_income: default_city_troop_income(),

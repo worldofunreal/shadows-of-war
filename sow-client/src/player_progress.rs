@@ -386,7 +386,7 @@ impl PlayerProgress {
     }
 
     pub fn sync_level(&mut self) {
-        self.level = 1 + self.xp / 100;
+        self.level = sow_data::rewards::level_from_xp(self.xp);
     }
 
     pub fn add_xp(&mut self, amount: u32) {

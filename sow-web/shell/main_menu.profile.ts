@@ -25,6 +25,7 @@ import {
   type WowCategoryId,
   type WowConcretePillar,
 } from "./main_menu.achievements.ts";
+import { levelFromXp } from "./main_menu.shell.ts";
 import { avatarImageAttribute, setAvatarImage } from "./avatar-presentation.ts";
 import {
   asset,
@@ -677,7 +678,7 @@ function profileLeaderCard(leader: ProfileLeader) {
   const summary = leader || {};
   const leaderInfo = leaderById(summary.leader);
   const winRate = Math.round((summary.win_rate || 0) * 100);
-  const level = 1 + Math.floor((summary.xp || 0) / 100);
+  const level = levelFromXp(summary.xp || 0);
   return (
     "<article class='sow-profile__leader'>" +
     "<div class='sow-profile__leader-avatar-frame'>" +

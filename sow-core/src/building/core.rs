@@ -64,6 +64,14 @@ pub fn tower_range_for_level(
     (f64::from(range) * range_multiplier).round() as i32
 }
 
+const GOLD_INCOME_LEVEL_GROWTH: f64 = 1.1948581737791502;
+
+fn gold_income_level_weight(level: u8) -> f64 {
+    (0..level)
+        .map(|n| GOLD_INCOME_LEVEL_GROWTH.powi(i32::from(n)))
+        .sum()
+}
+
 pub fn income_level_weight(level: u8) -> f64 {
     (0..level).map(|n| 1.5_f64.powi(i32::from(n))).sum()
 }
@@ -157,17 +165,17 @@ pub fn aggregate_buildings_per_player(
             }
             BuildingKind::Factory => {
                 a.factory_levels += active_lvl as u32;
-                a.factory_income_level_weight += income_level_weight(active_lvl);
+                a.factory_income_level_weight += gold_income_level_weight(active_lvl);
                 a.ready_factory_count += 1;
             }
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
-                a.port_income_level_weight += income_level_weight(active_lvl);
+                a.port_income_level_weight += gold_income_level_weight(active_lvl);
                 a.has_completed_port = true;
             }
             BuildingKind::Farm => {
                 a.farm_levels += active_lvl as u32;
-                a.farm_income_level_weight += income_level_weight(active_lvl);
+                a.farm_income_level_weight += gold_income_level_weight(active_lvl);
             }
         }
     }

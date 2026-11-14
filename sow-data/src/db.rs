@@ -555,7 +555,7 @@ impl Default for PlayerProfile {
 
 impl PlayerProfile {
     pub fn sync_level(&mut self) {
-        self.level = 1 + self.xp / 100;
+        self.level = crate::rewards::level_from_xp(self.xp);
     }
 
     pub fn add_xp(&mut self, amount: u32) {
@@ -8252,7 +8252,7 @@ mod tests {
         let player = "fedcba9876543210fedcba9876543210";
         let mut account = test_account(AccountKind::Human);
         account.id = player.to_string();
-        account.profile.xp = 500; // level 6
+        account.profile.xp = 500; // level 5
         account.profile.sync_level();
         db.insert_account_sync(account).unwrap();
 

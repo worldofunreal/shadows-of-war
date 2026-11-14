@@ -897,17 +897,43 @@ menuMusicCreatePlayer();
 window.addEventListener("sow:loader-ready", menuMusicStartAtLoaderEnd, { once: true });
 document.addEventListener("click", menuMusicUnlockFromClick, true);
 
+export function xpForLevel(level: number): number {
+    if (level <= 1) return 100;
+    return Math.round((100 + 11 * Math.pow(level - 1, 1.05)) / 5) * 5;
+}
+
+export function totalXpForLevel(level: number): number {
+    let total = 0;
+    for (let l = 1; l < level; l++) total += xpForLevel(l);
+    return total;
+}
+
+export function levelFromXp(xp: number): number {
+    let level = 1;
+    let remaining = Math.max(0, Math.floor(xp));
+    while (true) {
+        const req = xpForLevel(level);
+        if (remaining < req) return level;
+        remaining -= req;
+        level += 1;
+    }
+}
+
 // Rewards hold the displayed level until its own presentation finishes. Keep a full
 // bar for that level instead of wrapping the new XP underneath the previous level.
 function headerXp(xp: number, level: number) {
-    return Math.min(100, Math.max(0, Math.floor(xp) - (Math.max(1, level) - 1) * 100));
+    const safeLevel = Math.max(1, level);
+    const required = xpForLevel(safeLevel);
+    const current = Math.min(required, Math.max(0, Math.floor(xp) - totalXpForLevel(safeLevel)));
+    const pct = required > 0 ? Math.min(100, Math.max(0, (current / required) * 100)) : 0;
+    return { current, required, pct };
 }
 
 // Nameplate (avatar, editable name, level and XP bar) on the start side; balances and settings on the end side.
 function renderTopbar() {
     const name = menuUi.state!.player_name || SOW_t("menu.anonymous");
     const xp = Math.max(0, Number(menuUi.state!.xp) || 0);
-    const level = Math.max(1, Number(menuUi.state!.level) || Math.floor(xp / 100) + 1);
+    const level = Math.max(1, Number(menuUi.state!.level) || levelFromXp(xp));
     const levelXp = headerXp(xp, level);
     const shop = portalOffersStore();
     const balances = (["crowns", "gems"] as const)
@@ -964,12 +990,14 @@ function renderTopbar() {
         esc(SOW_t("menu.open_profile")) +
         "' aria-describedby='sow-menu-account-xp'><span class='sow-menu__xp-track' role='progressbar' aria-label='" +
         esc(SOW_t("menu.xp")) +
-        "' aria-valuemin='0' aria-valuemax='100' aria-valuenow='" +
-        levelXp +
+        "' aria-valuemin='0' aria-valuemax='" +
+        levelXp.required +
+        "' aria-valuenow='" +
+        levelXp.current +
         "'><i data-progression-xp-fill style='width:" +
-        levelXp +
+        levelXp.pct +
         "%'></i><span class='sow-menu__xp-value' id='sow-menu-account-xp'><b data-progression-xp-value>" +
-        esc(levelXp + "/100") +
+        esc(levelXp.current + "/" + levelXp.required) +
         "</b><small>" +
         esc(SOW_t("menu.xp")) +
         "</small></span></span></button></div>" +
@@ -1462,7 +1490,7 @@ export function progressionFromState(): ProgressionValues {
     const xp = Math.max(0, Number(menuUi.state && menuUi.state.xp) || 0);
     return {
         xp: xp,
-        level: Math.max(1, Number(menuUi.state && menuUi.state.level) || Math.floor(xp / 100) + 1),
+        level: Math.max(1, Number(menuUi.state && menuUi.state.level) || levelFromXp(xp)),
         crowns: Math.max(0, Number(menuUi.state && menuUi.state.crowns) || 0),
         laurels: Math.max(0, Number(menuUi.state && menuUi.state.laurels) || 0),
         gems: Math.max(0, Number(menuUi.state && menuUi.state.gems) || 0),
@@ -1505,7 +1533,7 @@ export function writeProgression(values: ProgressionValues) {
     if (!values) return;
     displayedProgression = {
         xp: Math.max(0, Number(values.xp) || 0),
-        level: Math.max(1, Number(values.level) || Math.floor((Number(values.xp) || 0) / 100) + 1),
+        level: Math.max(1, Number(values.level) || levelFromXp(Number(values.xp) || 0)),
         crowns: Math.max(0, Number(values.crowns) || 0),
         laurels: Math.max(0, Number(values.laurels) || 0),
         gems: Math.max(0, Number(values.gems) || 0),
@@ -1525,10 +1553,11 @@ export function writeProgression(values: ProgressionValues) {
         );
     }
     const levelXp = headerXp(displayedProgression.xp, displayedProgression.level);
-    if (xpValue) xpValue.textContent = levelXp + "/100";
+    if (xpValue) xpValue.textContent = levelXp.current + "/" + levelXp.required;
     if (xpFill) {
-        xpFill.style.width = levelXp + "%";
-        xpFill.parentElement?.setAttribute("aria-valuenow", String(levelXp));
+        xpFill.style.width = levelXp.pct + "%";
+        xpFill.parentElement?.setAttribute("aria-valuemax", String(levelXp.required));
+        xpFill.parentElement?.setAttribute("aria-valuenow", String(levelXp.current));
     }
     for (const [kind, counter] of [
         ["crowns", crownsValue],
@@ -1571,7 +1600,7 @@ function ensureProgressionDisplay() {
         canonical.crowns = Math.max(0, canonical.crowns - totals.crowns);
         canonical.laurels = Math.max(0, canonical.laurels - totals.laurels);
         canonical.gems = Math.max(0, canonical.gems - totals.gems);
-        canonical.level = Math.floor(canonical.xp / 100) + 1;
+        canonical.level = levelFromXp(canonical.xp);
     }
     writeProgression(canonical);
 }
@@ -1617,7 +1646,7 @@ export function animateProgressionTo(
             const currentXp = from.xp + (target.xp - from.xp) * eased;
             writeProgression({
                 xp: currentXp,
-                level: levelOverride == null ? Math.floor(currentXp / 100) + 1 : levelOverride,
+                level: levelOverride == null ? levelFromXp(currentXp) : levelOverride,
                 crowns: from.crowns + (target.crowns - from.crowns) * eased,
                 laurels: from.laurels + (target.laurels - from.laurels) * eased,
                 gems: from.gems + (target.gems - from.gems) * eased,
@@ -2103,10 +2132,10 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             nextValues.level = stage.level;
         } else {
             nextValues[stage.kind] = target[stage.kind];
-            nextValues.level = levelStages.length ? oldLevel : Math.floor(nextValues.xp / 100) + 1;
+            nextValues.level = levelStages.length ? oldLevel : levelFromXp(nextValues.xp);
             // XP fills only the current level; each level card then refills the bar it opens.
             if (stage.kind === "xp" && levelStages.length)
-                nextValues.xp = Math.min(target.xp, (Math.min(...Array.from(gainedLevels)) - 1) * 100);
+                nextValues.xp = Math.min(target.xp, totalXpForLevel(Math.min(...Array.from(gainedLevels))));
         }
         presentationPhase = "progressing";
         if (stage.kind === "level") {
@@ -2116,13 +2145,15 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             pulseRewardCounter(stage.selector, true);
             if (!skipRequested) playRewardImpact(stage.selector, "level", 1 + 0.3 * combo, stage.level);
             const refill = Object.assign({}, nextValues, {
-                xp: Math.max(nextValues.xp, Math.min(target.xp, stage.level * 100)),
+                xp: Math.max(nextValues.xp, Math.min(target.xp, totalXpForLevel(stage.level + 1))),
             });
+            const req = xpForLevel(stage.level);
+            const fillPct = req > 0 ? Math.min(100, ((refill.xp - nextValues.xp) / req) * 100) : 0;
             window.setTimeout(function () {
                 if (token !== rewardAnimationToken) return;
                 animateProgressionTo(
                     refill,
-                    320 + Math.min(100, refill.xp - nextValues.xp) * 5,
+                    320 + fillPct * 5,
                     token,
                     stage.level,
                 ).then(function (shown) {
@@ -2133,7 +2164,9 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             return;
         }
         const heldLevel = levelStages.length ? oldLevel : null;
-        const duration = stage.kind === "xp" ? 360 + Math.min(100, nextValues.xp - current.xp) * 4.4 : 380;
+        const req = xpForLevel(heldLevel ?? current.level);
+        const fillPct = req > 0 ? Math.min(100, ((nextValues.xp - current.xp) / req) * 100) : 0;
+        const duration = stage.kind === "xp" ? 360 + fillPct * 4.4 : 380;
         animateProgressionTo(nextValues, duration, token, heldLevel).then(function (shown) {
             if (!shown) {
                 finish(false);
