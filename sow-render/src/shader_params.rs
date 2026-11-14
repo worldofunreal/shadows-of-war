@@ -3387,8 +3387,29 @@ pub static PARAMS: &[ParamDef] = &[
     ),
 ];
 
+fn param_index() -> &'static std::collections::HashMap<&'static str, (&'static ParamDef, Option<usize>)> {
+    static INDEX: std::sync::OnceLock<
+        std::collections::HashMap<&'static str, (&'static ParamDef, Option<usize>)>,
+    > = std::sync::OnceLock::new();
+    INDEX.get_or_init(|| {
+        let mut map = std::collections::HashMap::with_capacity(PARAMS.len());
+        let mut slot = 0usize;
+        for param in PARAMS {
+            let assigned_slot = if param.shader_token.is_some() {
+                let s = slot;
+                slot += 1;
+                Some(s)
+            } else {
+                None
+            };
+            map.insert(param.id, (param, assigned_slot));
+        }
+        map
+    })
+}
+
 pub fn definition(id: &str) -> Option<&'static ParamDef> {
-    PARAMS.iter().find(|param| param.id == id)
+    param_index().get(id).map(|&(param, _)| param)
 }
 
 /// Dev Tools tabs in display order. Every `PARAMS` section belongs to exactly one group.
@@ -3501,21 +3522,14 @@ pub const PERF_SWITCHES: &[(&str, &[&str])] = &[
 ];
 
 pub fn shader_slot(id: &str) -> Option<usize> {
-    let target = definition(id)?.shader_token?;
-    Some(
-        PARAMS
-            .iter()
-            .take_while(|param| param.shader_token != Some(target))
-            .filter(|param| param.shader_token.is_some())
-            .count(),
-    )
+    param_index().get(id).and_then(|&(_, slot)| slot)
 }
 
 /// Live value of a numeric control, or its catalog default when the id has no slot.
 pub fn number_value(values: &[[f32; 4]; PARAM_CAPACITY], id: &str) -> f32 {
-    shader_slot(id)
-        .map(|slot| values[slot][0])
-        .or_else(|| definition(id).map(|param| param.default[0]))
+    param_index()
+        .get(id)
+        .map(|&(param, slot)| slot.map_or(param.default[0], |s| values[s][0]))
         .unwrap_or(0.0)
 }
 

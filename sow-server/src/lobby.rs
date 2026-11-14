@@ -225,6 +225,13 @@ pub fn spawn_ranked_lobby(
 /// Owner-edited rules file, inside the server jail. `./sow config` edits it over SSH.
 const DEFAULT_CONFIG_PATH: &str = "/usr/local/etc/sow/config.json";
 
+fn enforce_shared_game_speed(mut config: GameConfig) -> GameConfig {
+    // The shared speed JSON is compiled into GameConfig defaults. Per-site
+    // runtime configs may tune other rules, but cannot create PTR/prod drift.
+    config.global_speed_multiplier = sow_core::game_config::NORMAL_GAME_SPEED;
+    config
+}
+
 /// Rules for a new lobby: `GameConfig` defaults with the server config file on
 /// top. Read at every lobby creation, so an edit applies to the next match
 /// without a restart; running matches keep the rules they started with. A
@@ -246,6 +253,7 @@ fn server_rules() -> GameConfig {
     };
     match GameConfig::with_overrides(&text) {
         Ok(config) => {
+            let config = enforce_shared_game_speed(config);
             *last_good = Some(config.clone());
             config
         }
@@ -1312,6 +1320,18 @@ mod name_tests {
     }
 
     #[test]
+    fn per_site_rules_cannot_override_shared_game_speed() {
+        let site_rules = GameConfig {
+            global_speed_multiplier: 0.5,
+            ..GameConfig::default()
+        };
+        assert_eq!(
+            super::enforce_shared_game_speed(site_rules).global_speed_multiplier,
+            sow_core::game_config::NORMAL_GAME_SPEED
+        );
+    }
+
+    #[test]
     fn ranked_map_pool_keeps_four_private_duel_configs_separate_from_public_rotation() {
         use super::ranked_game_config;
         use rand::{SeedableRng, rngs::StdRng};
@@ -1330,7 +1350,7 @@ mod name_tests {
             assert!(config.ranked_1v1);
             assert_eq!(
                 config.global_speed_multiplier,
-                server_rules().global_speed_multiplier
+                sow_core::game_config::NORMAL_GAME_SPEED
             );
             assert_eq!(config.max_players, 2);
             assert_eq!(config.nation_count, 0);
@@ -1343,7 +1363,7 @@ mod name_tests {
         JoinPlayerOpts, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby, SpawnLobbyOpts,
         build_lobby_broadcast, ensure_queue_depth, join_player, kick_player, master_tick,
         normalize_map_roster, normalize_player_name, resolve_join_target, set_player_team,
-        server_rules, spawn_waiting_lobby,
+        spawn_waiting_lobby,
     };
     use sow_core::game_config::GameConfig;
     use sow_core::player::Leader;
@@ -1488,7 +1508,7 @@ mod name_tests {
                 .all(|lobby| (12..=256).contains(&lobby.config.max_players))
         );
         assert!(games.iter().all(|lobby| {
-            lobby.config.global_speed_multiplier == server_rules().global_speed_multiplier
+            lobby.config.global_speed_multiplier == sow_core::game_config::NORMAL_GAME_SPEED
         }));
         assert_eq!(games[1].config.max_players % 2, 0);
     }
@@ -1502,7 +1522,7 @@ mod name_tests {
             tutorial: true,
             tick_rate_ms: 1.0,
             map_control_win_percentage: 0.0,
-            global_speed_multiplier: 0.24,
+            global_speed_multiplier: 0.288,
             cost_city: 0.0,
             ..Default::default()
         };
@@ -1532,7 +1552,7 @@ mod name_tests {
         );
         assert_eq!(
             games[0].config.global_speed_multiplier,
-            0.24
+            0.288
         );
         assert_eq!(games[0].config.cost_city, rules.cost_city);
     }

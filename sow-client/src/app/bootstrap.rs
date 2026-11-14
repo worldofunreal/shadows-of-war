@@ -56,7 +56,7 @@ impl SowApp {
         let db_tx = WakeSender::new(db_tx_raw);
         type EngineInitData = (
             sow_core::game::GameState,
-            sow_core::water_components::WaterComponents,
+            Option<sow_core::water_components::WaterComponents>,
             sow_core::protocol::ServerStartMessage,
         );
         let (engine_init_tx_raw, engine_init_rx) =
@@ -169,6 +169,7 @@ impl SowApp {
                 prev_sync_point,
                 needs_first_upload,
                 configured_physical: winit::dpi::PhysicalSize::new(0, 0),
+                player_palette_cache: None,
             },
             net: NetState {
                 client: net_client,
@@ -202,11 +203,13 @@ impl SowApp {
                 offline_last_update: web_time::Instant::now(),
                 offline_intents: Vec::new(),
                 last_synced_cost_tick: None,
+                last_synced_hud_key: None,
                 config: sow_core::game_config::GameConfig::default(),
                 paused: false,
                 tutorial_observation: crate::app::TutorialObservation::default(),
                 fog_explored: sow_core::bitset::DenseBitSet::new(),
                 fog_visible: sow_core::bitset::DenseBitSet::new(),
+                fog_dirty: true,
                 force_fog_upload: true,
             },
             input: InputState {

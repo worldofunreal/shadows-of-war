@@ -210,7 +210,10 @@ mod tests {
             (gold_per_game_minute(cfg.factory_gold_income) - 60.0 * (32.0 / 7.0)).abs()
                 < 1e-9
         );
-        assert_eq!(cfg.global_speed_multiplier, 0.10);
+        assert_eq!(
+            cfg.global_speed_multiplier,
+            crate::game_config::NORMAL_GAME_SPEED
+        );
         assert_eq!(cfg.troop_base_income, 1_600.0);
         assert_eq!(cfg.city_troop_income, 600.0);
         assert_eq!(cfg.farm_troop_income, 600.0);
@@ -237,9 +240,9 @@ mod tests {
             ..Default::default()
         };
         let troop_rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
-        // Four levels at 600 troops/s, scaled by the 0.10 Normal speed.
+        // Four levels at 600 troops/s, scaled by the shared 0.18 Normal speed.
         assert!(
-            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 240.0).abs()
+            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 432.0).abs()
                 < 1e-10
         );
     }

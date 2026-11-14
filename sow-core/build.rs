@@ -1,6 +1,60 @@
 //! Shared by native workers and WASM clients. Deployment identity belongs to
-//! the server; only simulation sources and their dependencies identify rules.
+//! the server; simulation sources and shared simulation settings identify rules.
 use std::{fs, path::Path};
+
+fn generate_game_speed_config(root: &Path) -> Vec<u8> {
+    use std::fmt::Write as _;
+
+    let path = root.join("sow-dist/config/game-speed.json");
+    println!("cargo:rerun-if-changed={}", path.display());
+    let source = fs::read(&path).expect("read shared game speed config");
+    let config: serde_json::Value =
+        serde_json::from_slice(&source).expect("parse shared game speed config");
+    let normal = config["normal_game_speed"]
+        .as_f64()
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .expect("normal_game_speed must be a positive finite number");
+    let presets = config["presets"]
+        .as_array()
+        .expect("presets must be an array");
+    let expected = ["slowest", "slow", "normal", "fast", "fastest", "turbo"];
+    assert_eq!(
+        presets.len(),
+        expected.len(),
+        "expected six game speed presets"
+    );
+
+    let mut generated = format!(
+        "/// Local fallback when a match does not choose another preset.\n\
+         /// Its shared JSON value is also enforced for standard server matches.\n\
+         pub const NORMAL_GAME_SPEED: f64 = {normal:?};\n"
+    );
+    generated.push_str("pub const GAME_SPEED_PRESETS: [(&str, f64); 6] = [\n");
+    let mut previous_ratio = 0.0;
+    for (preset, expected_key) in presets.iter().zip(expected) {
+        let key = preset["key"].as_str().expect("preset key must be a string");
+        let ratio = preset["ratio"]
+            .as_f64()
+            .filter(|value| value.is_finite() && *value > 0.0)
+            .expect("preset ratio must be a positive finite number");
+        assert_eq!(key, expected_key, "game speed preset order/name changed");
+        assert!(ratio > previous_ratio, "game speed ratios must increase");
+        if key == "normal" {
+            assert_eq!(ratio, 1.0, "normal preset ratio must be 1.0");
+        }
+        previous_ratio = ratio;
+        writeln!(
+            &mut generated,
+            "    ({key:?}, NORMAL_GAME_SPEED * {ratio:?}),"
+        )
+        .unwrap();
+    }
+    generated.push_str("];\n");
+    let output = std::env::var_os("OUT_DIR").expect("Cargo OUT_DIR");
+    fs::write(Path::new(&output).join("game_speed.rs"), generated)
+        .expect("write generated game speed config");
+    source
+}
 
 fn source(root: &Path, path: &Path, hash: &mut blake3::Hasher) {
     if path.is_dir() {
@@ -35,9 +89,12 @@ fn source(root: &Path, path: &Path, hash: &mut blake3::Hasher) {
 fn main() {
     let manifest = std::env::var_os("CARGO_MANIFEST_DIR").expect("crate directory");
     let root = Path::new(&manifest).parent().expect("workspace directory");
+    let game_speed_config = generate_game_speed_config(root);
     let mut hash = blake3::Hasher::new();
     hash.update(b"sow-simulation-rules-v1");
     source(root, &root.join("sow-core/src"), &mut hash);
+    hash.update(b"sow-game-speed-config-v1");
+    hash.update(&game_speed_config);
     source(root, &root.join("sow-core/Cargo.toml"), &mut hash);
     source(root, &root.join("sow-server/src/replay.rs"), &mut hash);
     // Only the sow-data the simulation reads. Prices, rewards and campaign progress are

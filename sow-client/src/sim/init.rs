@@ -9,6 +9,7 @@ pub(crate) struct SimInitOpts {
     pub geo_bounds: Option<sow_core::map_file::GeoBounds>,
     pub map_rosters: Vec<sow_core::map_file::MapRosterPreset>,
     pub num_land_tiles: u32,
+    pub precomputed_water: Option<sow_core::water_components::WaterComponents>,
 }
 
 impl SowApp {
@@ -21,12 +22,13 @@ impl SowApp {
         let geo_bounds = opts.geo_bounds;
         let map_rosters = opts.map_rosters;
         let num_land_tiles = opts.num_land_tiles;
+        let precomputed_water = opts.precomputed_water;
         self.reset_progress_session();
         self.ui.app.hud_state.attack_ratio = crate::ui::hud::state::DEFAULT_ATTACK_RATIO;
         self.sim.config = (*config).clone();
         let map_w = config.map_width;
         let map_h = config.map_height;
-        let mut new_engine = sow_core::engine::initialize_match_engine(
+        let mut new_engine = sow_core::engine::initialize_match_engine_with_water(
             (*config).clone(),
             seed,
             &map_bytes,
@@ -35,6 +37,7 @@ impl SowApp {
             geo_bounds,
             map_rosters,
             num_land_tiles,
+            precomputed_water,
         );
         if self.net.is_offline && new_engine.state.config.tutorial {
             self.sim.tutorial_observation.reset();
@@ -98,6 +101,10 @@ impl SowApp {
         self.ui.is_spectating = false;
         self.ui.observing = false;
         self.ui.endgame_cache = None;
+        self.sim.last_synced_cost_tick = None;
+        self.sim.last_synced_hud_key = None;
+        self.sim.fog_dirty = true;
+        self.gfx.player_palette_cache = None;
         self.sfx.reset_for_match();
         self.sfx.sync_server_phase(&phase);
     }

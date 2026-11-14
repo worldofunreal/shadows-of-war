@@ -484,17 +484,19 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
 
     var base_color = terrain_color.rgb;
     if !is_land && (terrain_byte & 0x20u) != 0u {
-        let shore = clamp(
-            ocean_shore_edge(cell_hex, local_pos)
-                * globals.shader_params[__MAP_WATER_SHORE_STRENGTH__].x,
-            0.0,
-            1.0
-        );
-        let shore_color = pow(
-            max(globals.shader_params[__MAP_WATER_SHORE__].rgb, vec3<f32>(0.0)),
-            vec3<f32>(2.2)
-        );
-        base_color = mix(base_color, shore_color, shore);
+        let shore_strength = globals.shader_params[__MAP_WATER_SHORE_STRENGTH__].x;
+        if shore_strength > 0.0001 {
+            let shore = clamp(
+                ocean_shore_edge(cell_hex, local_pos) * shore_strength,
+                0.0,
+                1.0
+            );
+            let shore_color = pow(
+                max(globals.shader_params[__MAP_WATER_SHORE__].rgb, vec3<f32>(0.0)),
+                vec3<f32>(2.2)
+            );
+            base_color = mix(base_color, shore_color, shore);
+        }
     }
 
     // ── Peak/Valley Elevation Shading (Premium 3D Relief) ──
@@ -733,16 +735,17 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
             } else {
                 var border_albedo = globals.shader_params[__MAP_BORDER_NEUTRAL_COLOR__].rgb * border_darkness;
                 if owner_id > 0u {
-                    border_albedo = owner_albedo(owner_id) * border_darkness;
+                    let owner_col = owner_albedo(owner_id);
+                    border_albedo = owner_col * border_darkness;
                     if owner_id == u32(globals.my_player_id) {
-                        border_albedo = owner_albedo(owner_id) * globals.shader_params[__MAP_LOCAL_BORDER__].x;
+                        border_albedo = owner_col * globals.shader_params[__MAP_LOCAL_BORDER__].x;
                     }
 
                     // ── Dynamic Conquest Border Shockwave Pulse ──
                     if flash_val > 0.0 && globals.effect_shockwave > 0.0 {
                         let pulse = 1.0 - min_border_dist / max(abs(globals.border_thickness), 0.0001);
                         // Keep conquest pulse in the conquering player's hue instead of whitening it.
-                        let conquer_glow = min(owner_albedo(owner_id) * globals.shader_params[__MAP_BORDER_CONQUEST_COLOR_GAIN__].x, vec3<f32>(1.0, 1.0, 1.0));
+                        let conquer_glow = min(owner_col * globals.shader_params[__MAP_BORDER_CONQUEST_COLOR_GAIN__].x, vec3<f32>(1.0, 1.0, 1.0));
                         border_albedo = mix(
                             border_albedo,
                             conquer_glow,
@@ -814,18 +817,20 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     }
 
     // ── Upgraded Lighting (Sun directional diffuse + Specular highlights) ──
-    let light_vector = globals.shader_params[__MAP_LIGHT_DIRECTION__].xyz;
-    let light_dir = light_vector / max(length(light_vector), 0.0001);
-    if globals.shader_params[__MAP_DIFFUSE_ENABLED__].x > 0.5 {
-        let diffuse = max(globals.shader_params[__MAP_LIGHT_DIFFUSE_FLOOR__].x, dot(normal, light_dir));
-        base_color = base_color * (diffuse * globals.shader_params[__MAP_LIGHT_DIFFUSE_GAIN__].x);
-    }
+    let diffuse_on = globals.shader_params[__MAP_DIFFUSE_ENABLED__].x > 0.5;
+    if diffuse_on || is_specular {
+        let light_dir = globals.shader_params[__MAP_LIGHT_DIRECTION__].xyz;
+        if diffuse_on {
+            let diffuse = max(globals.shader_params[__MAP_LIGHT_DIFFUSE_FLOOR__].x, dot(normal, light_dir));
+            base_color = base_color * (diffuse * globals.shader_params[__MAP_LIGHT_DIFFUSE_GAIN__].x);
+        }
 
-    if is_specular {
-        let view_dir = vec3<f32>(0.0, 0.0, 1.0);
-        let half_dir = normalize(light_dir + view_dir);
-        let spec = pow(max(0.0, dot(normal, half_dir)), globals.shader_params[__MAP_SPECULAR_POWER__].x);
-        base_color = base_color + globals.shader_params[__MAP_SPECULAR_COLOR__].rgb * spec * globals.shader_params[__MAP_SPECULAR_STRENGTH__].x;
+        if is_specular {
+            let view_dir = vec3<f32>(0.0, 0.0, 1.0);
+            let half_dir = normalize(light_dir + view_dir);
+            let spec = pow(max(0.0, dot(normal, half_dir)), globals.shader_params[__MAP_SPECULAR_POWER__].x);
+            base_color = base_color + globals.shader_params[__MAP_SPECULAR_COLOR__].rgb * spec * globals.shader_params[__MAP_SPECULAR_STRENGTH__].x;
+        }
     }
 
     // ── Golden Hour Sun Sweep (slow warm-cool color temperature cycle) ──

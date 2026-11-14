@@ -115,22 +115,32 @@ impl AudioMixer {
         self.voices.push(Voice::new(source, left_gain, right_gain));
     }
 
-    fn next_frame(&mut self) -> (f32, f32) {
+    fn next_frame(&mut self) -> ((f32, f32), bool) {
         let mut left = 0.0;
         let mut right = 0.0;
+        let mut any_finished = false;
         for voice in &mut self.voices {
             if let Some((voice_left, voice_right)) = voice.next_frame(self.sample_rate) {
                 left += voice_left;
                 right += voice_right;
             }
+            if voice.current.is_none() {
+                any_finished = true;
+            }
         }
-        self.voices.retain(|voice| voice.current.is_some());
 
         let master = output_gain();
         (
-            (left * master).clamp(-1.0, 1.0),
-            (right * master).clamp(-1.0, 1.0),
+            (
+                (left * master).clamp(-1.0, 1.0),
+                (right * master).clamp(-1.0, 1.0),
+            ),
+            any_finished,
         )
+    }
+
+    fn prune_finished_voices(&mut self) {
+        self.voices.retain(|voice| voice.current.is_some());
     }
 }
 
@@ -295,8 +305,10 @@ where
         config,
         move |data: &mut [T], _| {
             let mut mixer = mixer.lock().unwrap_or_else(|e| e.into_inner());
+            let mut any_finished = false;
             for frame in data.chunks_mut(channels) {
-                let (left, right) = mixer.next_frame();
+                let ((left, right), finished) = mixer.next_frame();
+                any_finished |= finished;
                 for (channel, sample) in frame.iter_mut().enumerate() {
                     let value = match channel {
                         0 => left,
@@ -305,6 +317,9 @@ where
                     };
                     *sample = T::from_sample(value);
                 }
+            }
+            if any_finished {
+                mixer.prune_finished_voices();
             }
         },
         |error| log::warn!("Audio stream error: {error}"),

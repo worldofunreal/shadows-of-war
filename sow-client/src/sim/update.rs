@@ -61,16 +61,16 @@ impl SowApp {
                         //   ... dispatch ...
                         //   crate::diag::record_tick((Instant::now() - tick_start).as_micros() as u64);
 
-                        // Update UI HUD State from my player id
-                        self.sync_hud_player_state();
                         self.process_resource_notifications();
-                        self.sync_building_costs();
 
                         if ticks_processed >= 10 {
                             break;
                         }
                     }
                     if ticks_processed > 0 {
+                        // Sync HUD counters and building costs once after catchup settles.
+                        self.sync_hud_player_state();
+                        self.sync_building_costs();
                         // NOTE(2026-08-22): [SIM PERF]/[DIAG SIM TICK] reporting
                         // disabled — added to diagnose the F-Stack relay lag
                         // report; forensics exonerated relay and sim (p50=9ms @
@@ -120,9 +120,11 @@ impl SowApp {
                     self.dispatch_sim_command(sow_core::protocol::SimCommand::Turn(turn));
                 }
 
-                self.sync_hud_player_state();
-                self.process_resource_notifications();
-                self.sync_building_costs();
+                if ticks_this_frame > 0 {
+                    self.sync_hud_player_state();
+                    self.process_resource_notifications();
+                    self.sync_building_costs();
+                }
             }
         }
         if self.ui.app.phase == crate::ClientPhase::Playing
@@ -351,6 +353,16 @@ impl SowApp {
     }
 
     pub(crate) fn sync_hud_player_state(&mut self) {
+        let sync_key = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .map(|s| (s.tick, self.sim.my_player_id));
+        if sync_key.is_some() && sync_key == self.sim.last_synced_hud_key {
+            return;
+        }
+        self.sim.last_synced_hud_key = sync_key;
+
         if let Some(player) = self.sim.current_snapshot.as_ref().and_then(|s| {
             s.players
                 .iter()

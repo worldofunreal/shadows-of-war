@@ -448,16 +448,82 @@ pub fn nearest_structure_site(
     radius: i32,
     existing: &BuildingGrid,
 ) -> Option<u32> {
+    if radius < 0 || map.width == 0 || map.height == 0 {
+        return None;
+    }
+    let w = map.width as i32;
+    let h = map.height as i32;
+    let x_min = x.saturating_sub(radius).max(0);
+    let x_max = x.saturating_add(radius).min(w - 1);
+    let y_min = y.saturating_sub(radius).max(0);
+    let y_max = y.saturating_add(radius).min(h - 1);
+    if x_min > x_max || y_min > y_max {
+        return None;
+    }
+
+    let min_r = (x_min - x)
+        .max(0)
+        .max(x - x_max)
+        .max(y_min - y)
+        .max(y - y_max);
+    let max_r = (x - x_min)
+        .abs()
+        .max((x_max - x).abs())
+        .max((y - y_min).abs())
+        .max((y_max - y).abs())
+        .min(radius);
+
     let mut best: Option<(i64, u32)> = None;
-    for row in (y - radius).max(0)..=(y + radius).min(map.height as i32 - 1) {
-        for col in (x - radius).max(0)..=(x + radius).min(map.width as i32 - 1) {
-            let distance = euclid_sq(col as i64, row as i64, x as i64, y as i64);
-            let tile = xy_idx(col as u32, row as u32, map.width);
-            if best.is_some_and(|current| current <= (distance, tile)) {
-                continue;
+    let consider = |best: &mut Option<(i64, u32)>, col: i32, row: i32| {
+        let distance = euclid_sq(col as i64, row as i64, x as i64, y as i64);
+        let tile = xy_idx(col as u32, row as u32, map.width);
+        if best.is_some_and(|current| current <= (distance, tile)) {
+            return;
+        }
+        if validate_structure_site(map, owner_id, kind, tile, existing).is_ok() {
+            *best = Some((distance, tile));
+        }
+    };
+
+    for r in min_r..=max_r {
+        // Every point on Chebyshev ring r has distance >= r^2; no farther ring can beat best_dist.
+        if let Some((best_dist, _)) = best
+            && (r as i64).saturating_mul(r as i64) > best_dist
+        {
+            break;
+        }
+        if r == 0 {
+            consider(&mut best, x, y);
+            continue;
+        }
+        let col_lo = (x - r).max(x_min);
+        let col_hi = (x + r).min(x_max);
+        let top_row = y - r;
+        if top_row >= y_min && top_row <= y_max {
+            for col in col_lo..=col_hi {
+                consider(&mut best, col, top_row);
             }
-            if validate_structure_site(map, owner_id, kind, tile, existing).is_ok() {
-                best = Some((distance, tile));
+        }
+        let bot_row = y + r;
+        if bot_row >= y_min && bot_row <= y_max {
+            for col in col_lo..=col_hi {
+                consider(&mut best, col, bot_row);
+            }
+        }
+        let inner_lo = (y - r + 1).max(y_min);
+        let inner_hi = (y + r - 1).min(y_max);
+        if inner_lo <= inner_hi {
+            let left_col = x - r;
+            let right_col = x + r;
+            let check_left = left_col >= x_min && left_col <= x_max;
+            let check_right = right_col >= x_min && right_col <= x_max;
+            for row in inner_lo..=inner_hi {
+                if check_left {
+                    consider(&mut best, left_col, row);
+                }
+                if check_right {
+                    consider(&mut best, right_col, row);
+                }
             }
         }
     }

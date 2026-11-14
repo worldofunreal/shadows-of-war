@@ -122,6 +122,10 @@ pub mod dev_config {
         pub fn get() -> Self {
             GLOBAL.read().expect("dev config lock").clone()
         }
+        /// Borrow the active dev config under a shared read lock without cloning.
+        pub fn with<R>(f: impl FnOnce(&Self) -> R) -> R {
+            f(&GLOBAL.read().expect("dev config lock"))
+        }
         pub fn set(value: Self) {
             *GLOBAL.write().expect("dev config lock") = value;
         }

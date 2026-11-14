@@ -1,0 +1,11 @@
+{
+  "normal_game_speed": 0.18,
+  "presets": [
+    { "key": "slowest", "ratio": 0.4 },
+    { "key": "slow", "ratio": 0.8 },
+    { "key": "normal", "ratio": 1.0 },
+    { "key": "fast", "ratio": 1.6 },
+    { "key": "fastest", "ratio": 2.4 },
+    { "key": "turbo", "ratio": 3.6 }
+  ]
+}

@@ -291,6 +291,15 @@ impl DenseBitSet {
         self.non_empty_blocks.iter().all(|&b| b == 0)
     }
 
+    /// Clears all set bits while keeping the backing allocation intact.
+    pub fn reset_zeroed(&mut self, block_count: usize) {
+        self.blocks.resize(block_count, 0);
+        self.blocks.fill(0);
+        let dir_len = (block_count + 63) / 64;
+        self.non_empty_blocks.resize(dir_len, 0);
+        self.non_empty_blocks.fill(0);
+    }
+
     /// Rebuilds the local directory after a caller has edited `blocks` directly.
     pub fn rebuild_index(&mut self) {
         self.non_empty_blocks

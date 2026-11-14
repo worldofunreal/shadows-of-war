@@ -4677,7 +4677,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
 .sow-hud__world-building-bar {
   position: absolute;
-  transform: translate(-50%, 0);
+  left: 0;
+  top: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4693,9 +4694,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   box-shadow:
     var(--sow-tactical-surface-compact-shadow),
     0 0 8px rgb(218 165 32 / 25%);
-  backdrop-filter: blur(4px);
   pointer-events: none;
-  will-change: transform, left, top;
+  will-change: transform;
 }
 
 .sow-hud__world-building-thumb {

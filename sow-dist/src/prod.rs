@@ -40,7 +40,8 @@ impl Config {
 /// (`sow-dist/config/<site>.json`), check them with the parser the server uses,
 /// and install them over SSH. The server reads the file at every lobby
 /// creation, so new matches use it without a restart. The repo file is the
-/// source of truth; running the command without edits re-syncs the server.
+/// source of truth for site-specific rules. Shared speed is built from
+/// `sow-dist/config/game-speed.json` and cannot be changed here.
 pub(crate) fn edit_server_config(root: &Path) -> Result<()> {
     use std::io::Write;
     let config = Config::load();
@@ -65,6 +66,13 @@ pub(crate) fn edit_server_config(root: &Path) -> Result<()> {
             bail!("editor exited with an error; nothing was installed");
         }
         let text = fs::read_to_string(&local)?;
+        if serde_json::from_str::<serde_json::Value>(&text)
+            .ok()
+            .is_some_and(|value| value.get("global_speed_multiplier").is_some())
+        {
+            eprintln!("❌ global_speed_multiplier is shared by both sites; edit sow-dist/config/game-speed.json and deploy with ./sow ptr or ./sow p");
+            continue;
+        }
         match sow_core::game_config::GameConfig::with_overrides(&text) {
             Ok(_) => break text,
             Err(error) => {
@@ -1157,6 +1165,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
             &paths.root.join("docs/legal/LICENSE-ASSETS"),
             &paths.root.join("docs/legal/WASM-THIRD-PARTY-NOTICES.zip"),
             &paths.root.join("sow-dist/src/main.rs"),
+            &paths.root.join("sow-dist/config/game-speed.json"),
             &paths.art_pipeline()?.config_path,
         ],
     )
@@ -1174,6 +1183,7 @@ fn freebsd_build_fingerprint(root: &Path) -> Result<String> {
             &root.join("sow-net"),
             &root.join("sow-server"),
             &root.join("sow-relay"),
+            &root.join("sow-dist/config/game-speed.json"),
             // Compile-time assets referenced from outside the Rust crates.
             &root.join("assets/geo_entities.json"),
             &root.join("assets/guides"),
@@ -2491,9 +2501,12 @@ mod build_fingerprint_tests {
         fs::write(&relay, b"relay-v1").unwrap();
         let atlas = root.path().join("assets/geo_entities.json");
         let map = root.path().join("assets/maps/world/map.bin.br");
+        let game_speed = root.path().join("sow-dist/config/game-speed.json");
         fs::create_dir_all(map.parent().unwrap()).unwrap();
+        fs::create_dir_all(game_speed.parent().unwrap()).unwrap();
         fs::write(&atlas, b"atlas-v1").unwrap();
         fs::write(&map, b"map-v1").unwrap();
+        fs::write(&game_speed, b"speed-v1").unwrap();
 
         let before = freebsd_build_fingerprint(root.path()).unwrap();
         fs::write(&atlas, b"atlas-v2").unwrap();
@@ -2504,7 +2517,14 @@ mod build_fingerprint_tests {
         let after_map = freebsd_build_fingerprint(root.path()).unwrap();
         assert_ne!(after_atlas, after_map);
 
+        fs::write(&game_speed, b"speed-v2").unwrap();
+        let after_game_speed = freebsd_build_fingerprint(root.path()).unwrap();
+        assert_ne!(after_map, after_game_speed);
+
         fs::write(&relay, b"relay-v2").unwrap();
-        assert_ne!(after_map, freebsd_build_fingerprint(root.path()).unwrap());
+        assert_ne!(
+            after_game_speed,
+            freebsd_build_fingerprint(root.path()).unwrap()
+        );
     }
 }

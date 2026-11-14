@@ -530,7 +530,7 @@
     }
 
     function layout() {
-        if (!root) return;
+        if (!root || !loaderVisible) return;
         const mode = layoutMode();
         const cfg = layoutConfig(mode);
         const { w: screenW, h: screenH, top, left } = stageSize();

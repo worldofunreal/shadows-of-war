@@ -27,6 +27,21 @@ impl TrackedProjectile {
 
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PlayerPaletteCacheKey {
+    pub tick: u64,
+    pub blend_mode_bits: u32,
+    pub tribe_blend_mode_bits: u32,
+    pub my_player_id: u16,
+    pub player_count: usize,
+}
+
+pub struct PlayerPaletteCache {
+    pub key: PlayerPaletteCacheKey,
+    pub colors: Box<crate::render::gpu::PlayerColors>,
+    pub skin_styles: Box<crate::render::gpu::PlayerSkinStyles>,
+}
+
 pub struct GraphicsState {
     pub window: Option<Box<dyn winit::window::Window>>,
     pub surface: Option<blade_graphics::Surface>,
@@ -39,6 +54,7 @@ pub struct GraphicsState {
     pub prev_sync_point: Option<blade_graphics::SyncPoint>,
     pub needs_first_upload: bool,
     pub configured_physical: winit::dpi::PhysicalSize<u32>,
+    pub player_palette_cache: Option<PlayerPaletteCache>,
 }
 
 /// One-shot timings for a multiplayer match handoff and loader. These events are
@@ -250,11 +266,13 @@ pub struct SimState {
     pub offline_last_update: web_time::Instant,
     pub offline_intents: Vec<sow_core::protocol::GameplayIntent>,
     pub last_synced_cost_tick: Option<u64>,
+    pub last_synced_hud_key: Option<(u64, Option<u16>)>,
     pub config: sow_core::game_config::GameConfig,
     pub paused: bool,
     pub tutorial_observation: TutorialObservation,
     pub fog_explored: sow_core::bitset::DenseBitSet,
     pub fog_visible: sow_core::bitset::DenseBitSet,
+    pub fog_dirty: bool,
     pub force_fog_upload: bool,
 }
 
@@ -785,7 +803,7 @@ pub struct TaskState {
     pub db_rx: crossbeam_channel::Receiver<crate::player_progress::DbEvent>,
     pub pending_engine_init_data: Option<(
         sow_core::game::GameState,
-        sow_core::water_components::WaterComponents,
+        Option<sow_core::water_components::WaterComponents>,
         sow_core::protocol::ServerStartMessage,
     )>,
     pub engine_init_queued_msg: Option<sow_core::protocol::ServerStartMessage>,
