@@ -53,17 +53,7 @@ impl SowApp {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
         let mut played_combat_this_tick = false;
         let now_instant = web_time::Instant::now();
-        let alive_warships: std::collections::HashSet<u64> = snap
-            .fleets
-            .iter()
-            .filter(|fleet| {
-                fleet.owner_id == my_id && fleet.unit_type == sow_core::game::UnitType::Warship
-            })
-            .map(|fleet| fleet.id)
-            .collect();
-        self.input
-            .selected_warships
-            .retain(|id| alive_warships.contains(id));
+        let fog_of_war = crate::theme::dev_config::DevConfig::with(|dev| dev.fog_of_war);
         self.sfx.sync_server_phase(&snap.phase);
         self.sfx.begin_tick();
         for event in events {
@@ -103,14 +93,6 @@ impl SowApp {
                             cue_color: None,
                             start_time: now_instant,
                         });
-                }
-                sow_core::game::GameEvent::WarshipSpawned {
-                    owner_id, fleet_id, ..
-                } => {
-                    if owner_id == my_id {
-                        self.ui.app.hud_state.selected_warship_build = false;
-                        self.input.selected_warships = vec![fleet_id];
-                    }
                 }
                 sow_core::game::GameEvent::NavalActionRejected { player_id, reason } => {
                     if player_id != my_id || my_id == 0 {
@@ -177,7 +159,7 @@ impl SowApp {
                         false,
                     );
                 }
-                sow_core::game::GameEvent::NavalShot { owner_id, tile } => {
+                sow_core::game::GameEvent::NavalShot { owner_id, tile, .. } => {
                     let x = tile % self.sim.map_w.max(1);
                     let y = tile / self.sim.map_w.max(1);
                     self.sfx.play_combat(
@@ -190,10 +172,42 @@ impl SowApp {
                 }
                 sow_core::game::GameEvent::NavalImpact {
                     owner_id,
+                    target_owner,
+                    source_fleet_id,
+                    target_fleet_id,
                     tile,
                     sunk,
+                    captured,
+                    target_type,
+                    damage,
+                    health_after,
+                    troops_lost,
                     ..
                 } => {
+                    let event_tile_visible =
+                        !fog_of_war || self.sim.fog_visible.contains(tile);
+                    if owner_id == my_id || target_owner == my_id || event_tile_visible {
+                        self.ui.push_naval_activity(crate::app::NavalActivity {
+                            id: 0,
+                            kind: if captured {
+                                crate::app::NavalActivityKind::Captured
+                            } else if sunk {
+                                crate::app::NavalActivityKind::Sunk
+                            } else {
+                                crate::app::NavalActivityKind::Hit
+                            },
+                            source_owner: owner_id,
+                            target_owner,
+                            source_fleet_id,
+                            target_fleet_id: Some(target_fleet_id),
+                            target_type,
+                            damage,
+                            health_after,
+                            troops_lost,
+                            event_tile_visible,
+                            tile,
+                        });
+                    }
                     let x = tile % self.sim.map_w.max(1);
                     let y = tile / self.sim.map_w.max(1);
                     let color = snap
@@ -232,21 +246,31 @@ impl SowApp {
                         (u32::from(owner_id) << 16) ^ tile,
                         self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5),
                     );
-                    if sunk {
-                        let factor = crate::render::motion::viewport_impact_factor(
-                            x as f32 + 0.5,
-                            y as f32 + 0.5,
-                            &self.input,
-                        );
-                        if factor > 0.05 {
-                            self.ui.camera_shake.push(
-                                now_instant,
-                                1.8 * factor,
-                                0.20,
-                                [0.0, 1.0],
-                                0.15,
-                            );
-                        }
+                }
+                sow_core::game::GameEvent::TradeShipCaptured {
+                    owner_id,
+                    target_owner,
+                    source_fleet_id,
+                    fleet_id,
+                    tile,
+                } => {
+                    let event_tile_visible =
+                        !fog_of_war || self.sim.fog_visible.contains(tile);
+                    if owner_id == my_id || target_owner == my_id || event_tile_visible {
+                        self.ui.push_naval_activity(crate::app::NavalActivity {
+                            id: 0,
+                            kind: crate::app::NavalActivityKind::Captured,
+                            source_owner: owner_id,
+                            target_owner,
+                            source_fleet_id: Some(source_fleet_id),
+                            target_fleet_id: Some(fleet_id),
+                            target_type: sow_core::game::UnitType::TradeShip,
+                            damage: 0.0,
+                            health_after: 0.0,
+                            troops_lost: 0.0,
+                            event_tile_visible,
+                            tile,
+                        });
                     }
                 }
                 sow_core::game::GameEvent::AbilityTriggered {
@@ -327,25 +351,6 @@ impl SowApp {
                         self.ui
                             .trigger_viewport_alert(crate::app::ViewportAlertKind::ConquerPlayer);
                     }
-                }
-                sow_core::game::GameEvent::PlayerRebelled {
-                    player_id,
-                    rebel_id,
-                    ..
-                } if player_id == my_id && my_id != 0 => {
-                    let name = snap
-                        .players
-                        .iter()
-                        .find(|player| player.id == rebel_id)
-                        .map(|player| player.name.clone())
-                        .unwrap_or_else(|| "Rebels".to_string());
-                    self.ui.app.hud_state.push_notification_for_players(
-                        crate::ui::UiText::new("hud.debt_rebellion").with("name", name),
-                        [Some(my_id), Some(rebel_id)],
-                        3,
-                        Some(format!("debt-rebellion:{rebel_id}")),
-                        false,
-                    );
                 }
                 sow_core::game::GameEvent::TileCaptured {
                     x,

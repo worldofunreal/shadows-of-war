@@ -989,7 +989,7 @@
       "pause_game": true,
       "unlocks": {
         "buildings": {
-          "City": 2
+          "Tower": 1
         }
       },
       "next": "boudica_structure_upgrade"
@@ -1001,10 +1001,9 @@
       "hint_key": "tutorial.campaign_boudica_boudica_structure_upgrade_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "structure_upgrade",
-        "kind": "City",
+        "type": "tower",
         "value": 1,
-        "scope": "step"
+        "scope": "total"
       },
       "marker": {
         "target": "player"
@@ -1015,7 +1014,7 @@
         "gesture": "tap"
       },
       "pause_game": true,
-      "paused_action": "upgrade_until_started",
+      "paused_action": "build_until_started",
       "next": "boudica_city_upgrade_wait"
     },
     {
@@ -1026,8 +1025,8 @@
       "speaker": "boudica",
       "trigger": {
         "type": "structure_level",
-        "kind": "City",
-        "value": 2,
+        "kind": "Tower",
+        "value": 1,
         "scope": "total"
       },
       "guide": {

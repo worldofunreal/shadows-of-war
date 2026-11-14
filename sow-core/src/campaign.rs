@@ -26,7 +26,7 @@ impl CampaignAction {
             Self::TransportFleet => None,
             Self::TradeShip => Some((BuildingKind::Port, 1)),
             Self::Warship => Some((BuildingKind::Port, 1)),
-            Self::Nuke => Some((BuildingKind::City, BuildingKind::City.max_level())),
+            Self::Nuke => Some((BuildingKind::Factory, 4)),
         }
     }
 }
@@ -50,9 +50,15 @@ impl CampaignUnlocks {
 
     pub fn allows_action(&self, action: CampaignAction) -> bool {
         self.actions.contains(&action)
-            && action
-                .required_building()
-                .is_none_or(|(kind, level)| self.allows_building(kind, level))
+            && match action {
+                CampaignAction::Nuke => {
+                    self.allows_building(BuildingKind::Factory, 4)
+                        || self.allows_building(BuildingKind::Tower, 4)
+                }
+                _ => action
+                    .required_building()
+                    .is_none_or(|(kind, level)| self.allows_building(kind, level)),
+            }
     }
 
     pub fn is_valid(&self) -> bool {
@@ -112,7 +118,7 @@ mod tests {
             CampaignAction::Nuke,
         ];
         let granted = CampaignUnlocks {
-            buildings: HashMap::from([(BuildingKind::Port, 1), (BuildingKind::City, 3)]),
+            buildings: HashMap::from([(BuildingKind::Port, 1), (BuildingKind::Factory, 3)]),
             actions: actions.clone(),
         };
         assert!(granted.allows_action(CampaignAction::TradeShip));
@@ -120,7 +126,7 @@ mod tests {
         assert!(granted.allows_action(CampaignAction::Warship));
         assert!(!granted.allows_action(CampaignAction::Nuke));
         let no_port = CampaignUnlocks {
-            buildings: HashMap::from([(BuildingKind::City, 3)]),
+            buildings: HashMap::from([(BuildingKind::Factory, 3)]),
             actions: actions.clone(),
         };
         assert!(!no_port.allows_action(CampaignAction::Warship));
@@ -130,14 +136,19 @@ mod tests {
         let unlocked = CampaignUnlocks {
             buildings: HashMap::from([
                 (BuildingKind::Port, 2),
-                (BuildingKind::City, BuildingKind::City.max_level()),
+                (BuildingKind::Factory, BuildingKind::Factory.max_level()),
             ]),
-            actions,
+            actions: actions.clone(),
         };
         assert!(
             CampaignAction::ALL
                 .into_iter()
                 .all(|action| unlocked.allows_action(action))
         );
+        let tower_nuke = CampaignUnlocks {
+            buildings: HashMap::from([(BuildingKind::Tower, BuildingKind::Tower.max_level())]),
+            actions,
+        };
+        assert!(tower_nuke.allows_action(CampaignAction::Nuke));
     }
 }

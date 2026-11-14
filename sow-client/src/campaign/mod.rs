@@ -119,6 +119,8 @@ pub struct Faction {
     /// Bot intelligence override; `None` = engine default. Only the JSON loader sets it.
     pub iq: Option<u32>,
     pub leader: Leader,
+    /// Optional explicit entity type override (`None` = standard Tribe `PlayerType::Bot`, `Nation` = Bot Hero).
+    pub player_type: Option<sow_core::player::PlayerType>,
     /// Shared by the map nameplate and story dialogue; absent uses the generic portrait.
     pub avatar: Option<String>,
     pub support_interval_seconds: Option<u32>,
@@ -194,7 +196,11 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             leader: f.leader,
             troops: Some(f.starting_troops as f64),
             iq: f.iq,
-            campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
+            player_type: f.player_type,
+            campaign_avatar: f.avatar.clone().or_else(|| {
+                (!matches!(f.player_type, Some(sow_core::player::PlayerType::Nation)))
+                    .then(|| "null".into())
+            }),
             campaign_support_interval_seconds: f.support_interval_seconds,
             campaign_gold_loot_bonus: f.gold_loot_bonus,
             campaign_gold_loot_override: f.gold_loot_override,
@@ -232,6 +238,8 @@ struct RosterEntry {
     iq: Option<u32>,
     civ: String,
     leader: String,
+    #[serde(default)]
+    player_type: Option<sow_core::player::PlayerType>,
     #[serde(default)]
     avatar: Option<String>,
     #[serde(default)]
@@ -386,6 +394,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             color,
             iq: e.iq,
             leader,
+            player_type: e.player_type,
             avatar: e.avatar.clone(),
             support_interval_seconds: e.support_interval_seconds,
             gold_loot_bonus: e.gold_loot_bonus,

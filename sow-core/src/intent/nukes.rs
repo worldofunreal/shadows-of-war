@@ -1,9 +1,6 @@
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GamePhase, ProjectileKind};
 
-/// Silo cooldown after launching (must match execution/nukes.rs).
-const SILO_COOLDOWN_TICKS: u32 = 90;
-
 impl SowEngine {
     pub fn apply_launch_nuke_intent(&mut self, player_id: u16, target_tile: u32) {
         if self.state.phase != GamePhase::Playing {
@@ -15,22 +12,17 @@ impl SowEngine {
         let Some(player) = self.state.player(player_id) else {
             return;
         };
-        if !player.alive || player.gold < self.state.config.nuke_cost {
+        if !player.alive {
             return;
         }
-        let required_city_level = if player.player_type == crate::player::PlayerType::Human {
-            1
-        } else {
-            crate::game::NukeKind::AtomBomb.required_city_level()
-        };
 
         let w = self.state.map.width;
         let area = w.saturating_mul(self.state.map.height);
-        if target_tile >= area {
+        if target_tile >= area || w == 0 {
             return;
         }
 
-        // Find the closest ready city that's not on cooldown
+        // Find the closest ready city whose nuclear silo is armed (`nuke_ready`).
         let tx = (target_tile % w) as i32;
         let ty = (target_tile / w) as i32;
 
@@ -41,8 +33,10 @@ impl SowEngine {
                 b.kind == BuildingKind::City
                     && b.owner_id == player_id
                     && !b.under_construction
-                    && b.active_level() >= required_city_level
-                    && self.silo_cooldowns.get(&b.id).copied().unwrap_or(0) == 0
+                    && self
+                        .city_arsenals
+                        .get(&b.id)
+                        .is_some_and(|state| state.nuke_ready)
             })
             .min_by_key(|b| {
                 let bx = (b.tile_idx % w) as i32;
@@ -57,15 +51,10 @@ impl SowEngine {
         let silo_tile = silo.tile_idx;
         let level = 1;
 
-        // Deduct gold cost
-        let nuke_cost = self.state.config.nuke_cost;
-        let Some(player_mut) = self.state.player_mut(player_id) else {
-            return;
-        };
-        player_mut.gold = (player_mut.gold - nuke_cost).max(0.0);
-
-        // Set silo cooldown
-        self.silo_cooldowns.insert(silo_id, SILO_COOLDOWN_TICKS);
+        // Consume the armed nuke on launch (gold and build time were paid in CityArsenal).
+        if let Some(state) = self.city_arsenals.get_mut(&silo_id) {
+            state.nuke_ready = false;
+        }
 
         // Spawn projectile
         let id = self.state.next_projectile_id;

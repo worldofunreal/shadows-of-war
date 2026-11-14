@@ -92,6 +92,21 @@ pub fn boat_speed_bonus_from_port_levels(port_levels: u32) -> f64 {
     (port_levels as f64 * 0.01).min(0.30)
 }
 
+/// Canonical gold cost to queue a strategic arsenal build inside a qualified City.
+#[inline]
+pub fn city_arsenal_cost_gold(
+    kind: crate::game::CityArsenalKind,
+    owned_warships: u32,
+    leader: crate::player::Leader,
+    cfg: &crate::game_config::GameConfig,
+) -> f64 {
+    match kind {
+        crate::game::CityArsenalKind::Warship => crate::game::UnitType::Warship
+            .gold_cost_with_owned_count_for_leader(owned_warships, leader),
+        crate::game::CityArsenalKind::Nuke | crate::game::CityArsenalKind::AntiNuke => cfg.nuke_cost,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,16 +162,17 @@ mod tests {
     #[test]
     fn upgrades_cost_less_than_a_new_building_with_no_hidden_discounts() {
         let cfg = crate::game_config::GameConfig::default();
-        let next_foundation = structure_build_cost_gold(BuildingKind::City, 2, &cfg);
-        let normal = structure_upgrade_cost_gold(BuildingKind::City, 2, 2, &cfg);
+        let next_foundation = structure_build_cost_gold(BuildingKind::Factory, 2, &cfg);
+        let normal = structure_upgrade_cost_gold(BuildingKind::Factory, 2, 2, &cfg);
 
         assert_eq!(normal, next_foundation * 0.75);
     }
 
     #[test]
     fn every_building_has_three_upgrades_after_its_foundation() {
+        assert_eq!(BuildingKind::City.max_level(), 1);
         assert!(
-            BuildingKind::ALL
+            BuildingKind::DISTRICTS
                 .into_iter()
                 .all(|kind| kind.max_level() == 4)
         );

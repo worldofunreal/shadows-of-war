@@ -95,8 +95,9 @@ impl SowEngine {
             // `ai_tier(player_type, is_ai_controlled)` — the single source of
             // truth. IQ (assigned per-tier at spawn) drives cadence; RNG is
             // WyRand(seed, bot_id, interval) → lockstep-safe across clients.
+            let policy = profile::AiBehaviorPolicy::for_tier(tier);
             let (is_under_attack, ghost_retaliation, _attack_entries_examined) =
-                if tier == profile::AiTier::Ghost {
+                if policy.uses_retaliation_ai {
                     let (retaliation, examined) = self.ghost_retaliation_for(bot_id, tick);
                     (retaliation.is_some(), retaliation, examined)
                 } else {
@@ -240,23 +241,44 @@ impl SowEngine {
                                 && fleet.unit_type == crate::game::UnitType::Warship
                         })
                         .count() as u32;
-                    player.gold
-                        >= crate::game::UnitType::Warship
+                    let cost = if self.legacy_building_rules {
+                        crate::game::UnitType::Warship
                             .gold_cost_with_owned_count_for_leader(owned_warships, player.leader)
+                    } else {
+                        crate::building::city_arsenal_cost_gold(
+                            crate::game::CityArsenalKind::Warship,
+                            owned_warships,
+                            player.leader,
+                            &self.state.config,
+                        )
+                    };
+                    player.gold >= cost
                         && self.boat_slots_used(bot_id)
                             < crate::building::player_fleet_capacity(&self.buildings, bot_id)
                 })
                 && self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
-                && let Some(target_tile) = self.ai_warship_patrol_target(bot_id)
             {
-                decisions.push(BotDecision {
-                    bot_id,
-                    kind: profile::BotDecisionKind::Build,
-                    intent: crate::protocol::GameplayIntent::BuildShip {
-                        target_tile,
-                        kind: crate::game::UnitType::Warship,
-                    },
-                });
+                if !self.legacy_building_rules {
+                    if let Some(city_tile) = self.ai_warship_city_tile(bot_id) {
+                        decisions.push(BotDecision {
+                            bot_id,
+                            kind: profile::BotDecisionKind::Build,
+                            intent: crate::protocol::GameplayIntent::CityArsenal {
+                                tile_idx: city_tile,
+                                kind: crate::game::CityArsenalKind::Warship,
+                            },
+                        });
+                    }
+                } else if let Some(target_tile) = self.ai_warship_patrol_target(bot_id) {
+                    decisions.push(BotDecision {
+                        bot_id,
+                        kind: profile::BotDecisionKind::Build,
+                        intent: crate::protocol::GameplayIntent::BuildShip {
+                            target_tile,
+                            kind: crate::game::UnitType::Warship,
+                        },
+                    });
+                }
             }
 
             self.placement_scratch.neighbor_scratch = neighbor_players;
@@ -297,46 +319,87 @@ impl SowEngine {
         }
     }
 
+    fn ai_warship_city_tile(&self, owner_id: u16) -> Option<u32> {
+        let mut fallback: Option<u32> = None;
+        for city in &self.buildings {
+            if city.owner_id != owner_id
+                || city.kind != crate::game::BuildingKind::City
+                || city.under_construction
+            {
+                continue;
+            }
+            let has_ready_port = self.buildings.iter().any(|port| {
+                port.tile_idx == city.tile_idx
+                    && port.owner_id == owner_id
+                    && port.kind == crate::game::BuildingKind::Port
+                    && !port.under_construction
+                    && port.active_level() >= 1
+            });
+            if !has_ready_port
+                || crate::building::city_has_active_build(
+                    &self.buildings,
+                    &self.city_arsenals,
+                    city.tile_idx,
+                )
+            {
+                continue;
+            }
+            let Some(spawn_tile) = crate::warp_fleet::coastal_warship_spawn_tile(
+                &self.state.map,
+                &self.water,
+                city.tile_idx,
+            ) else {
+                continue;
+            };
+            let spawn_component = self.water.component_of(spawn_tile);
+            let touches_enemy_fleet = self.fleets.iter().any(|fleet| {
+                fleet.troops > 0.0
+                    && fleet.owner_id != owner_id
+                    && self.naval_target_allowed(owner_id, fleet.owner_id)
+                    && self.water.component_of(fleet.current_tile) == spawn_component
+            });
+            if touches_enemy_fleet {
+                return Some(city.tile_idx);
+            }
+            if fallback.is_none() {
+                fallback = Some(city.tile_idx);
+            }
+        }
+        fallback
+    }
+
     fn ai_warship_patrol_target(&self, owner_id: u16) -> Option<u32> {
-        let width = self.state.map.width;
-        if width == 0 {
+        if self.state.map.width == 0 {
             return None;
         }
-        let connected_components: std::collections::HashSet<u32> = self.buildings.iter()
-            .filter(|port| port.owner_id == owner_id
+        let mut connected_components = std::collections::HashSet::new();
+        let mut first_shore: Option<u32> = None;
+        for port in self.buildings.iter().filter(|port| {
+            port.owner_id == owner_id
                 && port.kind == crate::game::BuildingKind::Port
                 && !port.under_construction
-                && port.active_level() >= 1)
-            .flat_map(|port| {
-                let footprint = crate::building::BuildingFootprint::at(
-                    crate::game::BuildingKind::Port,
-                    port.tile_idx % width,
-                    port.tile_idx / width,
-                );
-                let mut components = Vec::new();
-                for y in footprint.top..footprint.top + footprint.height as i32 {
-                    for x in footprint.left..footprint.left + footprint.width as i32 {
-                        if self.state.map.is_valid_coord(x, y) {
-                            self.state.map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
-                                if !footprint.contains(nx as i32, ny as i32) {
-                                    let tile = ny * width + nx;
-                                    if self.state.map.terrain[tile as usize].is_water() {
-                                        let component = self.water.component_of(tile);
-                                        if component != 0 { components.push(component); }
-                                    }
-                                }
-                            });
-                        }
+                && port.active_level() >= 1
+        }) {
+            crate::building::for_each_city_coastal_water_tile(
+                &self.state.map,
+                port.tile_idx,
+                |tile| {
+                    let component = self.water.component_of(tile);
+                    if component != 0 {
+                        connected_components.insert(component);
+                        first_shore = Some(first_shore.map_or(tile, |cur| cur.min(tile)));
                     }
-                }
-                components
+                },
+            );
+        }
+        self.fleets
+            .iter()
+            .filter(|fleet| {
+                fleet.troops > 0.0
+                    && fleet.owner_id != owner_id
+                    && self.naval_target_allowed(owner_id, fleet.owner_id)
+                    && connected_components.contains(&self.water.component_of(fleet.current_tile))
             })
-            .collect();
-        self.fleets.iter()
-            .filter(|fleet| fleet.troops > 0.0
-                && fleet.owner_id != owner_id
-                && self.naval_target_allowed(owner_id, fleet.owner_id)
-                && connected_components.contains(&self.water.component_of(fleet.current_tile)))
             .min_by_key(|fleet| {
                 let priority = match fleet.unit_type {
                     crate::game::UnitType::TransportShip => 0,
@@ -346,36 +409,7 @@ impl SowEngine {
                 (priority, fleet.id)
             })
             .map(|fleet| fleet.current_tile)
-            .or_else(|| self.buildings.iter().filter(|port| {
-                port.owner_id == owner_id
-                    && port.kind == crate::game::BuildingKind::Port
-                    && !port.under_construction
-                    && port.active_level() >= 1
-            }).flat_map(|port| {
-                let footprint = crate::building::BuildingFootprint::at(
-                    crate::game::BuildingKind::Port,
-                    port.tile_idx % width,
-                    port.tile_idx / width,
-                );
-                let mut shores = Vec::new();
-                for y in footprint.top..footprint.top + footprint.height as i32 {
-                    for x in footprint.left..footprint.left + footprint.width as i32 {
-                        if self.state.map.is_valid_coord(x, y) {
-                            self.state.map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
-                                if !footprint.contains(nx as i32, ny as i32) {
-                                    let tile = ny * width + nx;
-                                    if self.state.map.terrain[tile as usize].is_water()
-                                        && connected_components.contains(&self.water.component_of(tile))
-                                    {
-                                        shores.push(tile);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                }
-                shores
-            }).min())
+            .or(first_shore)
     }
 }
 

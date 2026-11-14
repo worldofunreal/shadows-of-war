@@ -286,7 +286,7 @@ impl SowApp {
                 color: leader.filler_rgb(),
                 player_type: sow_core::player::PlayerType::Human,
                 team: config.player_team.or(match config.game_mode.as_str() {
-                    "Teams" | "HumansVsNations" => Some(sow_core::protocol::Team::Red),
+                    "Teams" | "PvE" => Some(sow_core::protocol::Team::Red),
                     _ => None,
                 }),
                 spawn_x: 0,

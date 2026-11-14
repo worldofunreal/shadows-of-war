@@ -1384,6 +1384,11 @@ export function render() {
             menuUi.createDraft.game_mode = pendingCreateMode;
             pendingCreateMode = null;
         }
+        if (menuUi.createDraft.game_mode !== "PvE") {
+            menuUi.createDraft.nation_count = 0;
+        } else if (!menuUi.createDraft.nation_count) {
+            menuUi.createDraft.nation_count = Math.min(Number(menuUi.state?.bot_limits?.nations) || 129, 8);
+        }
         menuUi.createOffline = !!menuUi.state.custom_game_is_sp;
         menuUi.createPrivate = !!menuUi.state.custom_game_is_private;
         menuUi.createPassword = "";
@@ -1619,6 +1624,7 @@ export function animateProgressionTo(
     }
     progressionAnimationTarget = Object.assign({}, target);
     const start = performance.now();
+    let lastLevel = from.level;
     // A filling bar drops its width easing and shows a moving shine with a lit leading edge.
     const track = from.xp !== target.xp ? root.querySelector<HTMLElement>(".sow-menu__xp-track") : null;
     track?.classList.add("is-filling");
@@ -1644,13 +1650,19 @@ export function animateProgressionTo(
             const t = Math.min(1, (now - start) / duration);
             const eased = 1 - Math.pow(1 - t, 3);
             const currentXp = from.xp + (target.xp - from.xp) * eased;
+            const currentLevel = levelOverride == null ? levelFromXp(currentXp) : levelOverride;
             writeProgression({
                 xp: currentXp,
-                level: levelOverride == null ? levelFromXp(currentXp) : levelOverride,
+                level: currentLevel,
                 crowns: from.crowns + (target.crowns - from.crowns) * eased,
                 laurels: from.laurels + (target.laurels - from.laurels) * eased,
                 gems: from.gems + (target.gems - from.gems) * eased,
             });
+            if (levelOverride == null && currentLevel > lastLevel) {
+                lastLevel = currentLevel;
+                pulseRewardCounter("[data-progression-level-value]", true);
+                if (activeRewardStage) playRewardImpact("[data-progression-level-value]", "level", 1, currentLevel);
+            }
             if (t < 1) {
                 frameId = requestAnimationFrame(frame);
                 progressionAnimationFrame = frameId;
@@ -2129,45 +2141,31 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
         const nextValues = Object.assign({}, current);
         const oldLevel = nextValues.level;
         if (stage.kind === "level") {
-            nextValues.level = stage.level;
+            nextValues.level = Math.max(nextValues.level, stage.level);
         } else {
             nextValues[stage.kind] = target[stage.kind];
-            nextValues.level = levelStages.length ? oldLevel : levelFromXp(nextValues.xp);
-            // XP fills only the current level; each level card then refills the bar it opens.
-            if (stage.kind === "xp" && levelStages.length)
-                nextValues.xp = Math.min(target.xp, totalXpForLevel(Math.min(...Array.from(gainedLevels))));
+            nextValues.level = levelFromXp(nextValues.xp);
         }
         presentationPhase = "progressing";
         if (stage.kind === "level") {
-            // Flash, reset the bar under the flash, then fill the new level up to the next one or the remainder.
             const combo = levelStages.indexOf(stage);
-            writeProgression(nextValues);
             pulseRewardCounter(stage.selector, true);
             if (!skipRequested) playRewardImpact(stage.selector, "level", 1 + 0.3 * combo, stage.level);
-            const refill = Object.assign({}, nextValues, {
-                xp: Math.max(nextValues.xp, Math.min(target.xp, totalXpForLevel(stage.level + 1))),
-            });
-            const req = xpForLevel(stage.level);
-            const fillPct = req > 0 ? Math.min(100, ((refill.xp - nextValues.xp) / req) * 100) : 0;
             window.setTimeout(function () {
-                if (token !== rewardAnimationToken) return;
-                animateProgressionTo(
-                    refill,
-                    320 + fillPct * 5,
-                    token,
-                    stage.level,
-                ).then(function (shown) {
-                    if (shown) next(index + 1);
-                    else finish(false);
-                });
+                if (token !== rewardAnimationToken) {
+                    finish(false);
+                    return;
+                }
+                next(index + 1);
             }, 340);
             return;
         }
-        const heldLevel = levelStages.length ? oldLevel : null;
-        const req = xpForLevel(heldLevel ?? current.level);
+        const req = xpForLevel(current.level);
         const fillPct = req > 0 ? Math.min(100, ((nextValues.xp - current.xp) / req) * 100) : 0;
-        const duration = stage.kind === "xp" ? 360 + fillPct * 4.4 : 380;
-        animateProgressionTo(nextValues, duration, token, heldLevel).then(function (shown) {
+        const levelsGained = Math.max(0, nextValues.level - oldLevel);
+        const duration =
+            stage.kind === "xp" ? Math.min(2400, 360 + fillPct * 4.4 + levelsGained * 450) : 380;
+        animateProgressionTo(nextValues, duration, token).then(function (shown) {
             if (!shown) {
                 finish(false);
                 return;
@@ -2313,11 +2311,11 @@ function presentRankedResult(result: RankedResult) {
         (!placed ? " is-placement" : "");
     card.dataset.tier = rankTier(placed ? result.tier_after : "unranked");
     card.innerHTML =
-        "<span class='sow-ranked__eyebrow'>" +
+        "<header class='sow-ranked__result-header'><span class='sow-ranked__eyebrow'>" +
         esc(SOW_t("lobbies.ranked_1v1")) +
         "</span><h2 id='sow-ranked-result-title'>" +
         esc(title) +
-        "</h2><div class='sow-ranked__result-seal'>" +
+        "</h2></header><div class='sow-ranked__result-pedestal'><div class='sow-ranked__result-seal'>" +
         "<div class='sow-ranked__old-emblem'>" +
         rankEmblem(
             first || !placed ? "unranked" : result.tier_before,
@@ -2327,11 +2325,13 @@ function presentRankedResult(result: RankedResult) {
         rankEmblem(placed ? result.tier_after : "unranked", placed ? result.division_after : null) +
         "</div></div>" +
         (placed
-            ? "<strong class='sow-menu__ranked-result-rank' data-rank-name>" +
+            ? "<div class='sow-ranked__rank-ribbon'><strong class='sow-menu__ranked-result-rank' data-rank-name>" +
               esc(rankName(result.tier_after, result.division_after)) +
-              "</strong><p class='sow-ranked__previous'>" +
-              esc(SOW_t("lobbies.rank_previous", { score: result.score_before })) +
-              "</p><strong class='sow-ranked__points' data-rank-score>" +
+              "</strong></div>"
+            : "") +
+        "</div>" +
+        (placed
+            ? "<div class='sow-ranked__score-vault'><div class='sow-ranked__score-main'><strong class='sow-ranked__points' data-rank-score>" +
               esc(SOW_t("lobbies.rank_score", { score: result.score_after })) +
               "</strong><p class='sow-menu__ranked-result-change' data-direction='" +
               (result.score_after >= result.score_before ? "up" : "down") +
@@ -2343,8 +2343,11 @@ function presentRankedResult(result: RankedResult) {
                           (result.score_after - result.score_before),
                   }),
               ) +
+              "</p></div><p class='sow-ranked__previous'>" +
+              esc(SOW_t("lobbies.rank_previous", { score: result.score_before })) +
               "</p>" +
               (result.points_breakdown ? rankedPointsBreakdownMarkup(result.points_breakdown) : "") +
+              "</div>" +
               rankProgressMarkup(result.score_after, result.ladder || menuUi.rankedLadder)
             : rankPlacements(result.games_played)) +
         "<div class='sow-ranked__actions'><button type='button' class='sow-menu__primary' data-ranked-again>" +
@@ -3406,8 +3409,14 @@ root.addEventListener("click", function (event) {
     if (command === "set_create_mode") {
         const mode = target.dataset.mode;
         if (!mode) return;
+        const prevMode = menuUi.createDraft?.game_mode || "FFA";
         if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
         menuUi.createDraft.game_mode = mode;
+        if (mode !== "PvE") {
+            menuUi.createDraft.nation_count = 0;
+        } else if (prevMode !== "PvE" && !menuUi.createDraft.nation_count) {
+            menuUi.createDraft.nation_count = Math.min(Number(menuUi.state?.bot_limits?.nations) || 129, 8);
+        }
         render();
         return;
     }
@@ -3526,7 +3535,8 @@ root.addEventListener("click", function (event) {
         };
         const CREATE_MODE_TARGETS: Record<string, string> = {
             teams: "Teams",
-            hnv: "HumansVsNations",
+            pve: "PvE",
+            hnv: "PvE",
             ffa: "FFA",
         };
         const closeMissionPanels = function () {
@@ -3580,8 +3590,14 @@ root.addEventListener("click", function (event) {
                 send("join_lobby", { lobby_id: openModeLobby.id });
                 render();
             } else if (currentScreen() === "create") {
+                const prevMode = menuUi.createDraft?.game_mode || "FFA";
                 menuUi.createDraft = menuUi.createDraft || cloneConfig();
                 menuUi.createDraft.game_mode = createMode;
+                if (createMode !== "PvE") {
+                    menuUi.createDraft.nation_count = 0;
+                } else if (prevMode !== "PvE" && !menuUi.createDraft.nation_count) {
+                    menuUi.createDraft.nation_count = Math.min(Number(menuUi.state?.bot_limits?.nations) || 129, 8);
+                }
                 render();
             } else {
                 pendingCreateMode = createMode;
@@ -4347,6 +4363,9 @@ root.addEventListener("submit", function (event) {
         event.preventDefault();
         syncCreateDraft(form);
         const config = menuUi.createDraft || cloneConfig();
+        if (config.game_mode !== "PvE") {
+            config.nation_count = 0;
+        }
         if (menuUi.createOffline) {
             send("start_single_player", { config: config });
         } else {
@@ -4404,7 +4423,11 @@ root.addEventListener("input", function (event) {
                 const mp = Number(menuUi.createDraft.max_players) || 8;
                 const bc = menuUi.createDraft.bot_count != null ? Number(menuUi.createDraft.bot_count) : 128;
                 const nc =
-                    menuUi.createDraft.nation_count != null ? Number(menuUi.createDraft.nation_count) : 32;
+                    menuUi.createDraft.game_mode === "PvE"
+                        ? menuUi.createDraft.nation_count != null
+                            ? Number(menuUi.createDraft.nation_count)
+                            : 0
+                        : 0;
                 totalBadge.textContent = String(mp + bc + nc);
             }
         }

@@ -99,6 +99,7 @@ impl SowEngine {
                 self.retreat_mutual_aggression(proposer_id, target_id);
             }
         }
+        self.building_aggregates_dirty = true;
         if new_alliance {
             self.hero_alliance_formed(proposer, target);
         }
@@ -139,6 +140,7 @@ impl SowEngine {
             self.campaign_relations
                 .insert(target, crate::protocol::CampaignRelation::Enemy);
         }
+        self.building_aggregates_dirty = true;
     }
 
     fn campaign_players_touch(&self, human_id: u16, target_id: u16) -> bool {
@@ -254,6 +256,7 @@ impl SowEngine {
         }
         self.campaign_relations.insert(target_id, relation);
         self.campaign_contact_resolved.insert(target_id);
+        self.building_aggregates_dirty = true;
         if new_alliance {
             self.hero_alliance_formed(human_id, target_id);
         }
@@ -325,16 +328,77 @@ impl SowEngine {
     /// Allies and teammates may move gold and troops to each other. Send, Request and
     /// Accept all ask this one question, so a broken alliance also voids a pending request.
     pub(crate) fn resources_can_move(&self, payer: u16, receiver: u16) -> bool {
-        let (Some(payer_player), Some(receiver_player)) =
-            (self.state.player(payer), self.state.player(receiver))
-        else {
-            return false;
-        };
-        payer != receiver
-            && payer_player.alive
-            && receiver_player.alive
-            && (payer_player.alliances.contains(&receiver)
-                || (payer_player.team.is_some() && payer_player.team == receiver_player.team))
+        crate::engine::players_can_move_resources(&self.state, payer, receiver)
+    }
+
+    pub(crate) fn transfer_resources_clamped(
+        &mut self,
+        sender: u16,
+        target: u16,
+        gold: f64,
+        troops: f64,
+    ) -> (f64, f64) {
+        let actual_g = self.gold_transferable(sender, gold);
+        let actual_t = self.troops_transferable(sender, target, troops);
+        if let Some(s_player) = self.state.player_mut(sender) {
+            s_player.gold -= actual_g;
+            s_player.troops -= actual_t;
+        }
+        if actual_g > 0.0 || actual_t > 0.0 {
+            if let Some(t_player) = self.state.player_mut(target) {
+                t_player.credit_gold(actual_g);
+                t_player.credit_troops(actual_t);
+            }
+            self.state
+                .events
+                .push(crate::game::GameEvent::ResourceTransferred {
+                    sender_id: sender,
+                    receiver_id: target,
+                    gold: actual_g,
+                    troops: actual_t,
+                });
+            self.hero_shared_feast(sender, target, actual_t);
+        }
+        (actual_g, actual_t)
+    }
+
+    pub(crate) fn trigger_help_call(&mut self, caller: u16) {
+        if !self.can_trigger_help_call(caller) {
+            return;
+        }
+        let tick = self.current_tick_u32();
+        let ranked_1v1 = self.state.config.ranked_1v1;
+        let caller_is_human = self.state.player(caller).is_some_and(|p| p.is_human());
+        let targets: Vec<u16> = self
+            .state
+            .players
+            .iter()
+            .filter(|p| {
+                self.resources_can_move(p.id, caller)
+                    && !(ranked_1v1 && caller_is_human && p.is_human())
+            })
+            .map(|p| p.id)
+            .collect();
+        self.help_calls_proposed.retain(|h| h.caller != caller);
+        if targets.is_empty() {
+            return;
+        }
+        self.mark_help_call_cooldown(caller);
+        let call_id = self.next_help_call_id;
+        self.next_help_call_id = self.next_help_call_id.wrapping_add(1).max(1);
+        for target in targets {
+            self.help_calls_proposed
+                .push(crate::engine::HelpCallProposed {
+                    caller,
+                    target,
+                    created_tick: tick,
+                    call_id,
+                    ghost_decided: false,
+                });
+        }
+        self.state
+            .events
+            .push(crate::game::GameEvent::HelpCallSubmitted { caller_id: caller });
     }
 
     /// Gold the payer can give now: the requested amount, capped at what it holds.
@@ -459,7 +523,9 @@ impl SowEngine {
                 | GameplayIntent::SendResources { target_player, .. }
                 | GameplayIntent::RequestResources { target_player, .. }
                 | GameplayIntent::OfferTrade { target_player, .. }
-                | GameplayIntent::AcceptResourceRequest { target_player } => Some(*target_player),
+                | GameplayIntent::AcceptResourceRequest { target_player }
+                | GameplayIntent::AcceptHelpCall { target_player }
+                | GameplayIntent::IgnoreHelpCall { target_player } => Some(*target_player),
                 _ => None,
             };
             if let Some(target) = target
@@ -626,89 +692,21 @@ impl SowEngine {
                 if let Some(player) = self.state.player_mut(pid) {
                     player.gold -= cost;
                 }
-                let fleet_id = self.state.next_fleet_id;
-                self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
-                let mut fleet = crate::warp_fleet::WarpFleet::new(
-                    fleet_id,
+                self.spawn_warship_fleet(
                     pid,
-                    0,
-                    crate::game::UnitType::Warship,
-                    crate::game::UnitType::Warship.max_health(),
-                    (route.src_tile, route.landing_tile),
+                    route.port_id,
+                    route.src_tile,
+                    route.landing_tile,
+                    route.src_tile,
                     route.path,
                 );
-                if let Some(warship) = fleet.warship.as_mut() {
-                    warship.patrol_tile = *target_tile;
-                }
-                fleet.set_speed_bonus_percent(crate::building::player_boat_speed_bonus(
-                    &self.buildings,
-                    pid,
-                ));
-                self.add_fleet(fleet);
-                self.state.events.push(crate::game::GameEvent::WarshipSpawned {
-                    owner_id: pid,
-                    fleet_id,
-                    tile: route.src_tile,
-                });
-                if matches!(
-                    self.state.player(pid).map(|player| player.leader.ability()),
-                    Some(crate::geo_entities::Ability::WarshipCost { .. })
-                ) {
-                    let width = self.state.map.width.max(1);
-                    self.state.announce_leader_ability(
-                        pid,
-                        Some((route.src_tile % width, route.src_tile / width)),
-                    );
-                }
             }
-            GameplayIntent::MoveWarships {
-                unit_ids,
-                target_tile,
-            } => {
-                if !self.campaign_allows_action(crate::campaign::CampaignAction::Warship) {
-                    return;
-                }
-                let pid = stamped.player_id;
-                let target = *target_tile;
-                let w = self.state.map.width;
-                let order_tick = self.state.tick;
-                let area = w.saturating_mul(self.state.map.height);
-                if target >= area
-                    || !self.state.map.terrain[target as usize].is_water()
-                    || self.water.component_of(target) == 0
-                {
-                    return;
-                }
-                for uid in unit_ids {
-                    if let Some(fleet) = self.fleets.iter_mut().find(|f| {
-                        f.id == *uid
-                            && f.owner_id == pid
-                            && f.unit_type == crate::game::UnitType::Warship
-                    }) {
-                        if self.water.component_of(fleet.current_tile)
-                            == self.water.component_of(target)
-                            && let Some(path) = self.path_scratch.astar.find_path(
-                                &self.state.map,
-                                &[fleet.current_tile],
-                                target,
-                            )
-                        {
-                            fleet.replace_path(path);
-                            fleet.retreating = false;
-                            if let Some(state) = fleet.warship.as_mut() {
-                                state.mode = crate::warp_fleet::WarshipMode::Patrolling;
-                                state.patrol_tile = target;
-                                state.patrol_target = Some(target);
-                                state.target_fleet = None;
-                                state.retreat_port_id = None;
-                                state.manual_order_tick = order_tick;
-                            }
-                        }
-                    }
-                }
-            }
+            GameplayIntent::MoveWarships { .. } => {}
             GameplayIntent::LaunchNuke { target_tile, .. } => {
                 self.apply_launch_nuke_intent(stamped.player_id, *target_tile);
+            }
+            GameplayIntent::CityArsenal { tile_idx, kind } => {
+                self.apply_city_arsenal_intent(stamped.player_id, *tile_idx, *kind);
             }
             // INK TIDE lockstep input: never reaches the SoW engine — the
             // racer sim runs on the racer clients. Opaque to SoW.
@@ -748,6 +746,9 @@ impl SowEngine {
                             b.owner_id == pid && b.kind == crate::game::BuildingKind::Tower
                         });
                         self.buildings.retain(|b| b.owner_id != pid);
+                        let buildings = &self.buildings;
+                        self.city_arsenals
+                            .retain(|id, _| buildings.iter().any(|b| b.id == *id));
                         self.building_grid.mark_dirty();
                         self.building_aggregates_dirty = true;
                         self.sea_lanes_dirty = true;
@@ -772,10 +773,16 @@ impl SowEngine {
             GameplayIntent::ExpressEmote { kind, pinned } => {
                 let tick = self.state.tick;
                 let phase = self.state.phase.clone();
-                if let Some(player) = self.state.player_mut(stamped.player_id)
+                let trigger_help = if let Some(player) = self.state.player_mut(stamped.player_id)
                     && crate::emote::can_express(player, &phase)
                 {
                     crate::emote::express(player, Some(*kind), *pinned, false, tick);
+                    *kind == crate::emote::EmoteKind::Help
+                } else {
+                    false
+                };
+                if trigger_help {
+                    self.trigger_help_call(stamped.player_id);
                 }
             }
             GameplayIntent::ClearEmote => {
@@ -931,30 +938,13 @@ impl SowEngine {
                 let t = *troops;
                 let valid_amounts = (g > 0.0 || t > 0.0) && g.is_finite() && t.is_finite();
                 if valid_amounts && self.resources_can_move(sender, target) {
-                    let actual_g = self.gold_transferable(sender, g);
-                    let actual_t = self.troops_transferable(sender, target, t);
-                    if let Some(s_player) = self.state.player_mut(sender) {
-                        s_player.gold -= actual_g;
-                        s_player.troops -= actual_t;
-                    }
-                    if actual_g > 0.0 || actual_t > 0.0 {
-                        if let Some(t_player) = self.state.player_mut(target) {
-                            t_player.credit_gold(actual_g);
-                            t_player.credit_troops(actual_t);
-                        }
-                        self.state
-                            .events
-                            .push(crate::game::GameEvent::ResourceTransferred {
-                                sender_id: sender,
-                                receiver_id: target,
-                                gold: actual_g,
-                                troops: actual_t,
-                            });
-                        self.hero_shared_feast(sender, target, actual_t);
-                    } else if self
-                        .state
-                        .player(sender)
-                        .is_some_and(|player| player.is_human())
+                    let (actual_g, actual_t) = self.transfer_resources_clamped(sender, target, g, t);
+                    if actual_g <= 0.0
+                        && actual_t <= 0.0
+                        && self
+                            .state
+                            .player(sender)
+                            .is_some_and(|player| player.is_human())
                     {
                         self.state
                             .events
@@ -1024,26 +1014,7 @@ impl SowEngine {
                         return;
                     }
                     // The acceptor pays only what fits; the rest stays with the acceptor.
-                    let actual_g = self.gold_transferable(acceptor, req.gold);
-                    let actual_t = self.troops_transferable(acceptor, target, req.troops);
-                    if let Some(acc_player) = self.state.player_mut(acceptor) {
-                        acc_player.gold -= actual_g;
-                        acc_player.troops -= actual_t;
-                    }
-                    if (actual_g > 0.0 || actual_t > 0.0)
-                        && let Some(prop_player) = self.state.player_mut(target)
-                    {
-                        prop_player.credit_gold(actual_g);
-                        prop_player.credit_troops(actual_t);
-                        self.state
-                            .events
-                            .push(crate::game::GameEvent::ResourceTransferred {
-                                sender_id: acceptor,
-                                receiver_id: target,
-                                gold: actual_g,
-                                troops: actual_t,
-                            });
-                    }
+                    self.transfer_resources_clamped(acceptor, target, req.gold, req.troops);
                 }
             }
             GameplayIntent::RejectResourceRequest { target_player } => {
@@ -1060,6 +1031,73 @@ impl SowEngine {
                         .push(crate::game::GameEvent::ResourceRequestRejected {
                             rejector_id: rejector,
                             requester_id: target,
+                        });
+                }
+            }
+            GameplayIntent::AcceptHelpCall { target_player } => {
+                let responder = stamped.player_id;
+                let caller = *target_player;
+                let Some(pos) = self
+                    .help_calls_proposed
+                    .iter()
+                    .position(|h| h.caller == caller && h.target == responder)
+                else {
+                    return;
+                };
+                self.help_calls_proposed.remove(pos);
+                if !self.resources_can_move(responder, caller) {
+                    return;
+                }
+                let Some((gold, troops)) = self
+                    .state
+                    .player(responder)
+                    .zip(self.state.player(caller))
+                    .map(|(helper, caller_player)| {
+                        crate::diplomacy::compute_help_aid(
+                            helper,
+                            caller_player,
+                            self.is_player_under_attack(caller),
+                        )
+                    })
+                else {
+                    return;
+                };
+                let (actual_g, actual_t) =
+                    self.transfer_resources_clamped(responder, caller, gold, troops);
+                if actual_g <= 0.0
+                    && actual_t <= 0.0
+                    && self.state.player(responder).is_some_and(|p| {
+                        p.player_type == crate::player::PlayerType::Human && !p.is_ai_controlled
+                    })
+                {
+                    self.state
+                        .events
+                        .push(crate::game::GameEvent::ResourceTransferRejected {
+                            sender_id: responder,
+                            receiver_id: caller,
+                        });
+                }
+            }
+            GameplayIntent::IgnoreHelpCall { target_player } => {
+                let responder = stamped.player_id;
+                let caller = *target_player;
+                let Some(pos) = self
+                    .help_calls_proposed
+                    .iter()
+                    .position(|h| h.caller == caller && h.target == responder)
+                else {
+                    return;
+                };
+                self.help_calls_proposed.remove(pos);
+                let is_ai_responder = self.state.player(responder).is_some_and(|p| {
+                    p.is_ai_controlled || p.player_type != crate::player::PlayerType::Human
+                });
+                if is_ai_responder {
+                    self.state
+                        .events
+                        .push(crate::game::GameEvent::HelpCallDeclined {
+                            responder_id: responder,
+                            caller_id: caller,
                         });
                 }
             }
@@ -1105,6 +1143,52 @@ impl SowEngine {
             self.apply_launch_fleet_intent_with_route(player_id, target_tile, troops, route);
         } else {
             self.apply_launch_fleet_intent(player_id, target_tile, troops);
+        }
+    }
+
+    pub(crate) fn spawn_warship_fleet(
+        &mut self,
+        pid: u16,
+        home_port_id: u64,
+        src_tile: u32,
+        landing_tile: u32,
+        patrol_tile: u32,
+        path: Vec<u32>,
+    ) {
+        let fleet_id = self.state.next_fleet_id;
+        self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
+        let mut fleet = crate::warp_fleet::WarpFleet::new(
+            fleet_id,
+            pid,
+            0,
+            crate::game::UnitType::Warship,
+            crate::game::UnitType::Warship.max_health(),
+            (src_tile, landing_tile),
+            path,
+        );
+        if let Some(warship) = fleet.warship.as_mut() {
+            warship.home_port_id = Some(home_port_id);
+            warship.patrol_tile = patrol_tile;
+        }
+        fleet.set_speed_bonus_percent(crate::building::player_boat_speed_bonus(
+            &self.buildings,
+            pid,
+        ));
+        self.add_fleet(fleet);
+        self.state.events.push(crate::game::GameEvent::WarshipSpawned {
+            owner_id: pid,
+            fleet_id,
+            tile: src_tile,
+        });
+        if matches!(
+            self.state.player(pid).map(|player| player.leader.ability()),
+            Some(crate::geo_entities::Ability::WarshipCost { .. })
+        ) {
+            let width = self.state.map.width.max(1);
+            self.state.announce_leader_ability(
+                pid,
+                Some((src_tile % width, src_tile / width)),
+            );
         }
     }
 }

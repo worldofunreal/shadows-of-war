@@ -31,7 +31,7 @@ pub(super) struct BotDecision {
 // Food chain (per design):
 //   Ghost/Human = TOP    (the goats; pro teammate / the player)
 //   Nation      = NEXT   (mid-game food)
-//   Tribe       = LOWEST (early-game food; no player initiation on Vanilla)
+//   Tribe       = LOWEST (free-land first; reluctant AI-player initiation on Vanilla)
 // ──────────────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,7 +40,7 @@ pub enum AiTier {
     Ghost,
     /// `Nation` — smart, mid-game challengers.
     Nation,
-    /// `Bot` aka tribes — lowest IQ, passive food on default difficulty.
+    /// `Bot` aka tribes — lowest IQ, free-land growth and opportunistic AI wars.
     Tribe,
 }
 
@@ -65,14 +65,12 @@ pub(super) struct BotAiProfile {
     pub(super) reserve_ratio: f64,
     pub(super) expand_ratio: f64,
     pub(super) refuse_human_chance: i32,
-    /// Tribe-only: Vanilla permits neutral growth and delayed human attacks;
-    /// Terminator also hunts AI players.
+    /// Whether this AI can initiate attacks against player-owned territory.
     pub(super) attacks_players: bool,
 }
 
-/// Posture for a tier from the match's tuning. Whether a tier may start
-/// fights with AI players is fixed design: Vanilla tribes only grow and take
-/// delayed shots at humans; Terminator tribes also hunt AI players.
+/// Posture for a tier from the match's tuning. Human targets still pass the
+/// shared grace/refusal rules; Vanilla tribes may also fight other AI tiers.
 pub(super) fn ai_profile_for(
     ai: &AiTuning,
     tier: AiTier,
@@ -81,7 +79,7 @@ pub(super) fn ai_profile_for(
     let (posture, attacks_players) = match (tier, difficulty) {
         (AiTier::Ghost, _) => (ai.ghost, true),
         (AiTier::Nation, _) => (ai.nation, true),
-        (AiTier::Tribe, BotDifficulty::Vanilla) => (ai.tribe_vanilla, false),
+        (AiTier::Tribe, BotDifficulty::Vanilla) => (ai.tribe_vanilla, true),
         (AiTier::Tribe, BotDifficulty::Terminator) => (ai.tribe_terminator, true),
     };
     BotAiProfile {
@@ -105,6 +103,66 @@ pub(super) fn ranked_ghost_profile(iq: u32) -> BotAiProfile {
     }
 }
 
+/// `Ghost` (human-like top tier), `Nation` (Bot Hero), and `Tribe` (standard bot).
+/// Adjusting one field here lets Bot Heroes and Ghosts diverge cleanly without
+/// affecting Tribes or leaking side effects across shared IQ gates.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct AiBehaviorPolicy {
+    /// Use delayed, proportional counterattacks when attacked instead of synchronous largest-attack defense.
+    pub(super) uses_retaliation_ai: bool,
+    /// Use Ghost probabilistic alliance acceptance and proposals instead of hard 0.8x/0.5x ratios.
+    pub(super) uses_probabilistic_diplomacy: bool,
+    /// Ghosts may opportunistically strike a neighboring Tribe below `trigger_ratio` (1-in-3 roll).
+    pub(super) uses_tribe_bypass: bool,
+    /// May betray bordering human allies under `maybe_betray_for_attack` (unless campaign-pinned).
+    pub(super) betrays_human_allies: bool,
+    /// Prioritize City/Factory/Farm construction before Towers while economy targets are unmet.
+    pub(super) prioritizes_economy_buildings: bool,
+    /// Use regional `nation_bot_attack_order` + Terminator `walled_in_bot_targets` probe before Ghost attack loop.
+    pub(super) uses_regional_nation_planning: bool,
+    /// Launch nuclear strikes (`maybe_launch_nuke`, still gated by `bot_iq >= 100`).
+    pub(super) launches_nukes: bool,
+    /// Hold half of standard `reserve_ratio` when actively defending territory.
+    pub(super) desperate_defense_half_reserve: bool,
+}
+
+impl AiBehaviorPolicy {
+    pub(super) const fn for_tier(tier: AiTier) -> Self {
+        match tier {
+            AiTier::Ghost => Self {
+                uses_retaliation_ai: true,
+                uses_probabilistic_diplomacy: true,
+                uses_tribe_bypass: true,
+                betrays_human_allies: true,
+                prioritizes_economy_buildings: true,
+                uses_regional_nation_planning: false,
+                launches_nukes: true,
+                desperate_defense_half_reserve: true,
+            },
+            AiTier::Nation => Self {
+                uses_retaliation_ai: true,
+                uses_probabilistic_diplomacy: true,
+                uses_tribe_bypass: false,
+                betrays_human_allies: false,
+                prioritizes_economy_buildings: true,
+                uses_regional_nation_planning: false,
+                launches_nukes: true,
+                desperate_defense_half_reserve: true,
+            },
+            AiTier::Tribe => Self {
+                uses_retaliation_ai: false,
+                uses_probabilistic_diplomacy: false,
+                uses_tribe_bypass: false,
+                betrays_human_allies: false,
+                prioritizes_economy_buildings: false,
+                uses_regional_nation_planning: false,
+                launches_nukes: false,
+                desperate_defense_half_reserve: false,
+            },
+        }
+    }
+}
+
 /// Describes which behaviours an AI entity should run this tick.
 pub(super) struct AiSlot {
     pub(super) bot_id: u16,
@@ -114,6 +172,13 @@ pub(super) struct AiSlot {
     pub(super) is_under_attack: bool,
     pub(super) ghost_retaliation: Option<GhostRetaliation>,
     pub(super) profile: BotAiProfile,
+}
+
+impl AiSlot {
+    #[inline]
+    pub(super) const fn policy(&self) -> AiBehaviorPolicy {
+        AiBehaviorPolicy::for_tier(self.tier)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

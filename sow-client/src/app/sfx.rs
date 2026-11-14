@@ -22,6 +22,70 @@ struct PendingElimination {
     spatial: SpatialSoundParams,
 }
 
+pub(crate) fn init_sfx_bank() {
+    use sow_audio::{SfxId, register_sfx_wav};
+    register_sfx_wav(
+        SfxId::AttackOrder,
+        include_bytes!("../../../assets/gameplay/sfx/attack_order_1.wav"),
+    );
+    register_sfx_wav(
+        SfxId::AttackOrder,
+        include_bytes!("../../../assets/gameplay/sfx/attack_order_2.wav"),
+    );
+    register_sfx_wav(
+        SfxId::AttackStalled,
+        include_bytes!("../../../assets/gameplay/sfx/attack_stalled.wav"),
+    );
+    register_sfx_wav(
+        SfxId::UnderAttack,
+        include_bytes!("../../../assets/gameplay/sfx/under_attack.wav"),
+    );
+    register_sfx_wav(
+        SfxId::CombatImpact,
+        include_bytes!("../../../assets/gameplay/sfx/combat_impact.wav"),
+    );
+    register_sfx_wav(
+        SfxId::DeployTroops,
+        include_bytes!("../../../assets/gameplay/sfx/deploy_troops.wav"),
+    );
+    register_sfx_wav(
+        SfxId::PlayerEliminated,
+        include_bytes!("../../../assets/gameplay/sfx/player_eliminated.wav"),
+    );
+    register_sfx_wav(
+        SfxId::BuildingPlacement,
+        include_bytes!("../../../assets/gameplay/sfx/building_placement.wav"),
+    );
+    register_sfx_wav(
+        SfxId::BuildingUpgradeStart,
+        include_bytes!("../../../assets/gameplay/sfx/building_upgrade_start.wav"),
+    );
+    register_sfx_wav(
+        SfxId::BuildingCompleted,
+        include_bytes!("../../../assets/gameplay/sfx/building_completed.wav"),
+    );
+    register_sfx_wav(
+        SfxId::NukeLaunch,
+        include_bytes!("../../../assets/gameplay/sfx/nuke_launch.wav"),
+    );
+    register_sfx_wav(
+        SfxId::NukeImpact,
+        include_bytes!("../../../assets/gameplay/sfx/nuke_impact.wav"),
+    );
+    register_sfx_wav(
+        SfxId::Victory,
+        include_bytes!("../../../assets/gameplay/sfx/victory_1.wav"),
+    );
+    register_sfx_wav(
+        SfxId::Victory,
+        include_bytes!("../../../assets/gameplay/sfx/victory_2.wav"),
+    );
+    register_sfx_wav(
+        SfxId::Defeat,
+        include_bytes!("../../../assets/gameplay/sfx/defeat.wav"),
+    );
+}
+
 #[derive(Default)]
 pub(crate) struct SfxDirector {
     client_active: bool,
@@ -132,6 +196,20 @@ impl SfxDirector {
         }
         self.last_ordinary = Some(now);
         sow_audio::play_building_placement_sound(kind, spatial);
+    }
+
+    pub(crate) fn play_upgrade_start(
+        &mut self,
+        now: Instant,
+        spatial: SpatialSoundParams,
+    ) {
+        if !self.ordinary_allowed(now)
+            || !Self::open_gap(&mut self.last_placement, now, PLACEMENT_GAP)
+        {
+            return;
+        }
+        self.last_ordinary = Some(now);
+        sow_audio::play_building_upgrade_start_sound(spatial);
     }
 
     pub(crate) fn play_completion(

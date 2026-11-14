@@ -106,15 +106,28 @@ impl SowEngine {
                     log::error!("spawn_ai: no free land left for {role:?} bots");
                     break;
                 };
-                let Some(character) = self.closest_free_character(role, position, &used, &mut rng)
-                else {
-                    log::error!("spawn_ai: catalog has no free {role:?} character left");
-                    break;
-                };
-                if !self.spawn_catalog_bot(character, position) {
-                    break;
+                if role == Role::Nation {
+                    let leader = self.closest_free_bot_hero(position, &used, &mut rng);
+                    let Some(leader) = leader else {
+                        log::error!("spawn_ai: catalog has no enabled hero left");
+                        break;
+                    };
+                    if !self.spawn_bot_hero(leader, position) {
+                        break;
+                    }
+                    used.insert(leader.id());
+                } else {
+                    let Some(character) =
+                        self.closest_free_character(role, position, &used, &mut rng)
+                    else {
+                        log::error!("spawn_ai: catalog has no free {role:?} character left");
+                        break;
+                    };
+                    if !self.spawn_catalog_bot(character, position) {
+                        break;
+                    }
+                    used.insert(character.id.as_str());
                 }
-                used.insert(character.id.as_str());
                 spawned += 1;
             }
             log::debug!(
@@ -124,29 +137,25 @@ impl SowEngine {
         }
     }
 
-    /// Closest free character of `role` to a map tile, by home coordinates.
-    /// Maps without real geography pick at random. Basic f64 ops only (lockstep-safe).
-    pub(crate) fn closest_free_character(
+    fn closest_by_geo<T: Copy>(
         &self,
-        role: crate::geo_entities::Role,
+        candidates: &[T],
         (x, y): (u32, u32),
-        used: &std::collections::HashSet<&'static str>,
         rng: &mut wyrand::WyRand,
-    ) -> Option<&'static crate::geo_entities::GeoEntity> {
-        let home = self
-            .state
-            .geo_bounds
-            .map(|bounds| bounds.unproject(x, y, self.state.map.width, self.state.map.height));
-        let free: Vec<_> = crate::geo_entities::bots(role)
-            .filter(|character| !used.contains(character.id.as_str()))
-            .collect();
-        if free.is_empty() {
+        entity_of: impl Fn(&T) -> &'static crate::geo_entities::GeoEntity,
+    ) -> Option<T> {
+        if candidates.is_empty() {
             return None;
         }
-        let Some((lat, lon)) = home else {
-            return Some(free[(rng.rand() as usize) % free.len()]);
+        let Some((lat, lon)) = self
+            .state
+            .geo_bounds
+            .map(|bounds| bounds.unproject(x, y, self.state.map.width, self.state.map.height))
+        else {
+            return Some(candidates[(rng.rand() as usize) % candidates.len()]);
         };
-        let distance = |character: &crate::geo_entities::GeoEntity| {
+        let distance = |item: &T| {
+            let character = entity_of(item);
             let (Some(clat), Some(clon)) = (character.lat, character.lon) else {
                 return f64::MAX;
             };
@@ -155,16 +164,88 @@ impl SowEngine {
             let dlon = dlon.min(360.0 - dlon);
             dlat * dlat + dlon * dlon
         };
-        free.into_iter()
+        candidates
+            .iter()
+            .copied()
             .min_by(|a, b| distance(a).total_cmp(&distance(b)))
+    }
+
+    /// Closest free character of `role` to a map tile, by home coordinates.
+    /// Maps without real geography pick at random. Basic f64 ops only (lockstep-safe).
+    pub(crate) fn closest_free_character(
+        &self,
+        role: crate::geo_entities::Role,
+        position: (u32, u32),
+        used: &std::collections::HashSet<&'static str>,
+        rng: &mut wyrand::WyRand,
+    ) -> Option<&'static crate::geo_entities::GeoEntity> {
+        let free: Vec<_> = crate::geo_entities::bots(role)
+            .filter(|character| !used.contains(character.id.as_str()))
+            .collect();
+        self.closest_by_geo(&free, position, rng, |character| *character)
+    }
+
+    /// Closest unused playable Hero (`Leader::all()`) to a map tile for Bot Hero spawns.
+    /// Avoids duplicating human/ghost heroes first; wraps around only when requested
+    /// count + existing players exceeds the hero catalog.
+    fn closest_free_bot_hero(
+        &self,
+        position: (u32, u32),
+        used: &std::collections::HashSet<&'static str>,
+        rng: &mut wyrand::WyRand,
+    ) -> Option<crate::player::Leader> {
+        let unused: Vec<_> = crate::player::Leader::all()
+            .filter(|leader| {
+                !used.contains(leader.id())
+                    && !self.state.players.iter().any(|player| {
+                        player.player_type == crate::player::PlayerType::Human
+                            && player.leader == *leader
+                    })
+            })
+            .collect();
+        if !unused.is_empty() {
+            return self.closest_by_geo(&unused, position, rng, |leader| leader.character());
+        }
+        let all: Vec<_> = crate::player::Leader::all().collect();
+        self.closest_by_geo(&all, position, rng, |leader| leader.character())
+    }
+
+    fn spawn_bot_hero(&mut self, leader: crate::player::Leader, position: (u32, u32)) -> bool {
+        self.spawn_ai_entity(
+            leader.display_name().to_string(),
+            leader.character(),
+            Some(leader),
+            true,
+            position,
+        )
     }
 
     fn spawn_catalog_bot(
         &mut self,
         character: &'static crate::geo_entities::GeoEntity,
+        position: (u32, u32),
+    ) -> bool {
+        let hero_leader = character.hero.as_ref().and_then(|_| {
+            crate::player::Leader::all_known().find(|leader| leader.id() == character.id)
+        });
+        let is_nation = character.role == crate::geo_entities::Role::Nation || hero_leader.is_some();
+        self.spawn_ai_entity(
+            character.name.clone(),
+            character,
+            hero_leader,
+            is_nation,
+            position,
+        )
+    }
+
+    fn spawn_ai_entity(
+        &mut self,
+        name: String,
+        character: &'static crate::geo_entities::GeoEntity,
+        leader_override: Option<crate::player::Leader>,
+        is_nation: bool,
         (x, y): (u32, u32),
     ) -> bool {
-        use crate::geo_entities::Role;
         use crate::player::Player;
         let Some(bot_id) = self.state.next_free_player_id() else {
             log::error!("spawn_ai: player ID space exhausted");
@@ -174,41 +255,35 @@ impl SowEngine {
             return false;
         };
         let config = self.state.config.clone();
-        let color = match character.role {
-            Role::Nation => {
-                let Some(color) = crate::player::next_nation_palette_color(&self.state.players)
-                else {
-                    log::error!("spawn_ai: Nation color palette is exhausted");
-                    return false;
-                };
-                color
-            }
-            Role::Tribe => [0.5; 3],
+        let color = if is_nation {
+            let Some(color) = crate::player::next_nation_palette_color(&self.state.players) else {
+                log::error!("spawn_ai: Nation color palette is exhausted");
+                return false;
+            };
+            color
+        } else {
+            [0.5; 3]
         };
-        let mut player = if character.role == Role::Nation {
-            let mut player = Player::new_nation(
-                bot_id,
-                character.name.clone(),
-                color,
-                &config,
-            );
-            // Nations form the opposing team in Humans vs Nations.
-            if config.game_mode == "HumansVsNations" {
+        let mut player = if is_nation {
+            let mut player = Player::new_nation(bot_id, name, color, &config);
+            if let Some(leader) = leader_override {
+                player.leader = leader;
+            }
+            // Bot Heroes form the opposing team in PvE.
+            if config.game_mode == "PvE" {
                 player.team = Some(crate::protocol::Team::Blue);
             }
             player
         } else {
-            Player::new_bot(
-                bot_id,
-                character.name.clone(),
-                color,
-                &config,
-            )
+            Player::new_bot(bot_id, name, color, &config)
         };
-        // The bot is shown as its catalog people; its random hero only carries the ability.
         player.realm = Some(character.entity.clone());
         self.state.spawn_player(player, sx, sy);
-        if let Some(avatar) = &character.avatar {
+        // Playable Hero spritesheets resolve automatically via `Player::leader`;
+        // legacy non-hero bots still use `campaign_avatars`.
+        if leader_override.is_none()
+            && let Some(avatar) = &character.avatar
+        {
             self.campaign_avatars.insert(bot_id, avatar.clone());
         }
         true
@@ -431,8 +506,26 @@ impl SowEngine {
                 );
                 continue;
             };
-            let mut player = Player::new_bot(bot_id, s.name.clone(), s.color, &config);
-            player.team = s.team;
+            let mut player = match s.player_type {
+                Some(crate::player::PlayerType::Nation) => {
+                    let mut nation = Player::new_nation(bot_id, s.name.clone(), s.color, &config);
+                    if config.game_mode == "PvE" && s.team.is_none() {
+                        nation.team = Some(crate::protocol::Team::Blue);
+                    }
+                    nation
+                }
+                Some(crate::player::PlayerType::Human) => {
+                    let mut human = Player::new_human(bot_id, s.name.clone(), s.color, &config);
+                    human.is_ai_controlled = true;
+                    human
+                }
+                Some(crate::player::PlayerType::Bot) | None => {
+                    Player::new_bot(bot_id, s.name.clone(), s.color, &config)
+                }
+            };
+            if s.team.is_some() {
+                player.team = s.team;
+            }
             player.leader = s.leader;
             if let Some(t) = s.troops {
                 player.troops = t;

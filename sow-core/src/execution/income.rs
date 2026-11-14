@@ -1,4 +1,3 @@
-use crate::building::aggregate_buildings_per_player;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
     alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
@@ -13,18 +12,7 @@ impl SowEngine {
             return;
         }
 
-        if self.building_aggregates_dirty {
-            let max_pid = self
-                .state
-                .players
-                .iter()
-                .map(|p| p.id as usize)
-                .max()
-                .unwrap_or(0);
-            self.building_aggregates =
-                aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
-            self.building_aggregates_dirty = false;
-        }
+        self.refresh_building_aggregates();
 
         if self.sea_lanes_dirty {
             crate::sea_lane::update_sea_lanes(self);
@@ -162,105 +150,6 @@ impl SowEngine {
                 player.credit_troops_capped(troops, player.max_troops);
             }
         }
-
-        self.update_debt_rebellions(&config);
-    }
-
-    fn update_debt_rebellions(&mut self, config: &crate::game_config::GameConfig) {
-        let tick_ms = if config.tick_rate_ms.is_finite() && config.tick_rate_ms > 0.0 {
-            config.tick_rate_ms
-        } else {
-            100.0
-        };
-        let debt_grace_ticks = (30_000.0 / tick_ms).ceil() as u64;
-
-        for index in 0..self.state.players.len() {
-            let player = &self.state.players[index];
-            let player_id = player.id;
-            let eligible =
-                player.player_type == crate::player::PlayerType::Human && !player.is_ai_controlled;
-            if !eligible || player.gold >= 0.0 || !player.alive {
-                self.debt_episodes.remove(&player_id);
-                continue;
-            }
-
-            let (debt_start_tick, rebelled) = *self
-                .debt_episodes
-                .entry(player_id)
-                .or_insert((self.state.tick, false));
-            if rebelled || self.state.tick.saturating_sub(debt_start_tick) < debt_grace_ticks {
-                continue;
-            }
-
-            let Some(building_index) = self
-                .buildings
-                .iter()
-                .enumerate()
-                .filter(|(_, building)| {
-                    building.owner_id == player_id
-                        && !building.under_construction
-                        && building.active_level() > 0
-                })
-                .max_by_key(|(_, building)| {
-                    (
-                        building.kind == crate::game::BuildingKind::City,
-                        building.active_level(),
-                        std::cmp::Reverse(building.id),
-                    )
-                })
-                .map(|(index, _)| index)
-            else {
-                continue;
-            };
-            let Some(rebel_id) = self.state.next_free_player_id() else {
-                continue;
-            };
-            let Some(color) =
-                crate::player::best_available_nation_palette_color(&self.state.players, None)
-            else {
-                log::error!(
-                    "debt rebellion: no Nation color remains at the required perceptual distance"
-                );
-                self.debt_episodes
-                    .insert(player_id, (debt_start_tick, true));
-                continue;
-            };
-            let building = self.buildings[building_index];
-            let parent_name = self.state.players[index].name.clone();
-            let mut rebel = crate::player::Player::new_nation(
-                rebel_id,
-                format!("{} Rebels", parent_name),
-                color,
-                config,
-            );
-            rebel.has_spawned = true;
-            self.state.register_player(rebel);
-            let x = building.tile_idx % self.state.map.width;
-            let y = building.tile_idx / self.state.map.width;
-            let (eliminated, change) = self.state.set_tile_owner_for_execution(x, y, rebel_id);
-            let mut elimination_candidates: Vec<_> = eliminated
-                .into_iter()
-                .map(|(victim, ex, ey)| (victim, rebel_id, ex, ey))
-                .collect();
-            elimination_candidates
-                .extend(self.annex_enclosed_components(change.into_iter().collect()));
-            for (victim, conqueror, ex, ey) in elimination_candidates {
-                self.eliminate_player(victim, conqueror, ex, ey, false);
-            }
-            self.buildings[building_index].owner_id = rebel_id;
-            self.building_aggregates_dirty = true;
-            self.sea_lanes_dirty = true;
-            self.ai_attack_index_dirty = true;
-            self.debt_episodes
-                .insert(player_id, (debt_start_tick, true));
-            self.state
-                .events
-                .push(crate::game::GameEvent::PlayerRebelled {
-                    player_id,
-                    rebel_id,
-                    building_id: building.id,
-                });
-        }
     }
 }
 
@@ -311,9 +200,8 @@ mod economy_speed_tests {
 
 #[cfg(test)]
 mod zero_troop_bot_income_tests {
-    use crate::building::Building;
     use crate::engine::SowEngine;
-    use crate::game::{BuildingKind, GameEvent, GamePhase, GameState};
+    use crate::game::{GamePhase, GameState};
     use crate::game_config::GameConfig;
     use crate::map::MapTile;
     use crate::player::Player;
@@ -356,101 +244,6 @@ mod zero_troop_bot_income_tests {
         }
     }
 
-    #[test]
-    fn debt_rebellion_waits_thirty_seconds_and_rearms_after_debt_ends() {
-        let mut config = GameConfig::default();
-        config.gold_base_income = 0.0;
-        config.factory_gold_income = 0.0;
-        config.territory_gold_amount = 0.0;
-        let mut state = GameState::new(9, 8, 4, config.clone());
-        state.phase = GamePhase::Playing;
-        for (id, name) in [(1, "Human"), (2, "Opponent")] {
-            let mut player = Player::new_human(id, name.into(), [0.3, 0.5, 0.8], &config);
-            player.alive = true;
-            player.troops = 50_000.0;
-            if id == 1 {
-                player.gold = -1.0;
-            }
-            state.register_player(player);
-        }
-        for tile in 0..4 {
-            state.set_tile_owner(tile, 0, 1);
-        }
-        for tile in 4..8 {
-            state.set_tile_owner(tile, 0, 2);
-        }
-        let mut engine = SowEngine::new(state, WaterComponents::default());
-        engine.add_building(Building {
-            id: 1,
-            owner_id: 1,
-            tile_idx: 0,
-            kind: BuildingKind::City,
-            level: 1,
-            under_construction: false,
-            ticks_until_complete: 0,
-        });
-        engine.add_building(Building {
-            id: 2,
-            owner_id: 1,
-            tile_idx: 1,
-            kind: BuildingKind::Factory,
-            level: 1,
-            under_construction: false,
-            ticks_until_complete: 0,
-        });
-
-        for tick in 0..300 {
-            engine.state.tick = tick;
-            engine.execute_income();
-        }
-        assert!(
-            engine
-                .state
-                .events
-                .iter()
-                .all(|event| !matches!(event, GameEvent::PlayerRebelled { .. }))
-        );
-        engine.state.tick = 300;
-        engine.execute_income();
-        assert_eq!(
-            engine
-                .state
-                .events
-                .iter()
-                .filter(|event| matches!(event, GameEvent::PlayerRebelled { .. }))
-                .count(),
-            1
-        );
-
-        engine.state.player_mut(1).unwrap().gold = 100.0;
-        engine.state.tick = 301;
-        engine.execute_income();
-        engine.state.player_mut(1).unwrap().gold = -1.0;
-        for tick in 302..602 {
-            engine.state.tick = tick;
-            engine.execute_income();
-        }
-        assert_eq!(
-            engine
-                .state
-                .events
-                .iter()
-                .filter(|event| matches!(event, GameEvent::PlayerRebelled { .. }))
-                .count(),
-            1
-        );
-        engine.state.tick = 602;
-        engine.execute_income();
-        assert_eq!(
-            engine
-                .state
-                .events
-                .iter()
-                .filter(|event| matches!(event, GameEvent::PlayerRebelled { .. }))
-                .count(),
-            2
-        );
-    }
     #[test]
     fn bot_with_150_tiles_does_not_receive_a_free_city_below_cost() {
         let config = GameConfig::default();

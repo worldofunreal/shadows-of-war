@@ -8,7 +8,7 @@ use crate::protocol::GameplayIntent;
 use crate::rng::NextIntExt;
 use wyrand::WyRand;
 
-use super::profile::{AiTier, BotDecision, BotDecisionKind, ai_tier};
+use super::profile::{AiBehaviorPolicy, BotDecision, BotDecisionKind, ai_tier};
 
 const GHOST_ALLIANCE_CHOICE_SALT: u64 = 0x4748_414c_0000_0001;
 
@@ -97,8 +97,9 @@ impl SowEngine {
     ) {
         let (bot_id, bot_iq) = bot;
         let (alliance_cost, send_cost) = costs;
-        let is_ghost = self.state.player(bot_id).is_some_and(|player| {
-            ai_tier(player.player_type, player.is_ai_controlled) == Some(AiTier::Ghost)
+        let uses_probabilistic_diplomacy = self.state.player(bot_id).is_some_and(|player| {
+            ai_tier(player.player_type, player.is_ai_controlled)
+                .is_some_and(|tier| AiBehaviorPolicy::for_tier(tier).uses_probabilistic_diplomacy)
         });
         // ── Alliance Proposal Evaluation ───────────────────────────────
         let mut proposals_to_accept = Vec::new();
@@ -127,7 +128,7 @@ impl SowEngine {
                     let current_points = self.state.player(bot_id).unwrap().iq_points;
                     if current_points >= alliance_cost {
                         let tick = self.current_tick_u32();
-                        let mut rng = is_ghost.then(|| {
+                        let mut rng = uses_probabilistic_diplomacy.then(|| {
                             ghost_alliance_rng(self.state.seed, bot_id, proposer, u64::from(tick))
                         });
                         let traitor_roll = if let Some(rng) = rng.as_mut() {
@@ -144,7 +145,7 @@ impl SowEngine {
                             (Some(p_me), Some(p_prop))
                                 if !should_reject_traitor_request(p_prop, tick, traitor_roll) =>
                             {
-                                if is_ghost {
+                                if uses_probabilistic_diplomacy {
                                     let chance = ghost_alliance_probability(
                                         p_me.troops,
                                         p_me.tile_count,
@@ -188,10 +189,132 @@ impl SowEngine {
             });
         }
 
+        // ── Respond to Emote Help Calls ──────────────────────────
+        for idx in 0..self.help_calls_proposed.len() {
+            let (caller, target, created_tick, call_id, ghost_decided) = {
+                let h = &self.help_calls_proposed[idx];
+                (h.caller, h.target, h.created_tick, h.call_id, h.ghost_decided)
+            };
+            if target != bot_id || !self.resources_can_move(bot_id, caller) {
+                continue;
+            }
+            let campaign_auto_accept = self.campaign_accepts_alliance_requests_ids.contains(&bot_id)
+                || (self.state.config.tutorial
+                    && self.campaign_relations.get(&bot_id)
+                        == Some(&crate::protocol::CampaignRelation::Allied));
+            if campaign_auto_accept {
+                decisions.push(BotDecision {
+                    bot_id,
+                    kind: BotDecisionKind::Build,
+                    intent: GameplayIntent::AcceptHelpCall {
+                        target_player: caller,
+                    },
+                });
+                continue;
+            }
+            let help_cost = send_cost.min(10.0);
+            if uses_probabilistic_diplomacy {
+                if ghost_decided {
+                    continue;
+                }
+                let delay = crate::diplomacy::ghost_think_delay_ticks(
+                    self.state.seed,
+                    bot_id,
+                    caller,
+                    created_tick,
+                    0x4845_4C50,
+                );
+                let tick = self.current_tick_u32();
+                if tick < created_tick.saturating_add(delay) {
+                    continue;
+                }
+                self.help_calls_proposed[idx].ghost_decided = true;
+                let caller_under_attack = self.is_player_under_attack(caller);
+                let outcome = match (self.state.player(bot_id), self.state.player(caller)) {
+                    (Some(p_me), Some(p_caller)) => crate::diplomacy::roll_ghost_help_outcome(
+                        self.state.seed,
+                        bot_id,
+                        caller,
+                        call_id,
+                        p_me,
+                        p_caller,
+                        is_under_attack,
+                        caller_under_attack,
+                        tick,
+                    ),
+                    _ => crate::diplomacy::GhostHelpOutcome::Ignore,
+                };
+                match outcome {
+                    crate::diplomacy::GhostHelpOutcome::Help => {
+                        let current_points = self.state.player(bot_id).map_or(0.0, |p| p.iq_points);
+                        if current_points >= help_cost {
+                            if let Some(p_me) = self.state.player_mut(bot_id) {
+                                p_me.iq_points -= help_cost;
+                            }
+                            decisions.push(BotDecision {
+                                bot_id,
+                                kind: BotDecisionKind::Build,
+                                intent: GameplayIntent::AcceptHelpCall {
+                                    target_player: caller,
+                                },
+                            });
+                        }
+                    }
+                    crate::diplomacy::GhostHelpOutcome::Ignore => {}
+                    crate::diplomacy::GhostHelpOutcome::Decline => {
+                        decisions.push(BotDecision {
+                            bot_id,
+                            kind: BotDecisionKind::Build,
+                            intent: GameplayIntent::IgnoreHelpCall {
+                                target_player: caller,
+                            },
+                        });
+                    }
+                }
+            } else {
+                let tick = self.current_tick_u32();
+                let caller_under_attack = self.is_player_under_attack(caller);
+                let help_yes = match (self.state.player(bot_id), self.state.player(caller)) {
+                    (Some(p_me), Some(p_caller)) => crate::diplomacy::roll_bot_help_decision(
+                        self.state.seed,
+                        bot_id,
+                        caller,
+                        call_id,
+                        p_me,
+                        p_caller,
+                        is_under_attack,
+                        caller_under_attack,
+                        tick,
+                    ),
+                    _ => false,
+                };
+                let current_points = self.state.player(bot_id).map_or(0.0, |p| p.iq_points);
+                if help_yes && current_points >= help_cost {
+                    if let Some(p_me) = self.state.player_mut(bot_id) {
+                        p_me.iq_points -= help_cost;
+                    }
+                    decisions.push(BotDecision {
+                        bot_id,
+                        kind: BotDecisionKind::Build,
+                        intent: GameplayIntent::AcceptHelpCall {
+                            target_player: caller,
+                        },
+                    });
+                } else {
+                    decisions.push(BotDecision {
+                        bot_id,
+                        kind: BotDecisionKind::Build,
+                        intent: GameplayIntent::IgnoreHelpCall {
+                            target_player: caller,
+                        },
+                    });
+                }
+            }
+        }
+
         // ── Respond to Resource Requests ─────────────────────────
-        // Requests are checked on this AI decision, not on a 40-120 second
-        // modulo window. Ghosts therefore answer teammates on their normal
-        // top-tier cadence instead of appearing to ignore the request.
+        // Ghosts pause briefly like human players before deciding and may ignore;
+        // regular Bots answer immediately on their turn.
         {
             for req in &self.resource_requests_proposed {
                 if req.target != bot_id {
@@ -216,6 +339,76 @@ impl SowEngine {
                         || (self.state.config.tutorial
                             && self.campaign_relations.get(&bot_id)
                                 == Some(&crate::protocol::CampaignRelation::Allied)));
+                if !campaign_auto_accept
+                    && uses_probabilistic_diplomacy
+                    && !(req.is_trade() && !self.trade_settles(req))
+                {
+                    if self
+                        .ghost_resource_request_ignored
+                        .contains(&(requester, bot_id, req.created_tick))
+                    {
+                        continue;
+                    }
+                    let delay = crate::diplomacy::ghost_think_delay_ticks(
+                        self.state.seed,
+                        bot_id,
+                        requester,
+                        req.created_tick,
+                        0x5245_5155,
+                    );
+                    if self.current_tick_u32() < req.created_tick.saturating_add(delay) {
+                        continue;
+                    }
+                    let outcome = match (self.state.player(bot_id), self.state.player(requester)) {
+                        (Some(p_me), Some(p_req)) => {
+                            crate::diplomacy::roll_ghost_resource_request_outcome(
+                                self.state.seed,
+                                bot_id,
+                                requester,
+                                req.created_tick,
+                                p_me,
+                                p_req,
+                                req.troops,
+                                is_under_attack,
+                            )
+                        }
+                        _ => crate::diplomacy::GhostHelpOutcome::Ignore,
+                    };
+                    match outcome {
+                        crate::diplomacy::GhostHelpOutcome::Help => {
+                            let current_points = self.state.player(bot_id).unwrap().iq_points;
+                            if current_points >= send_cost {
+                                if let Some(p_me) = self.state.player_mut(bot_id) {
+                                    p_me.iq_points -= send_cost;
+                                }
+                                decisions.push(BotDecision {
+                                    bot_id,
+                                    kind: BotDecisionKind::Build,
+                                    intent: GameplayIntent::AcceptResourceRequest {
+                                        target_player: requester,
+                                    },
+                                });
+                            }
+                        }
+                        crate::diplomacy::GhostHelpOutcome::Ignore => {
+                            self.ghost_resource_request_ignored.insert((
+                                requester,
+                                bot_id,
+                                req.created_tick,
+                            ));
+                        }
+                        crate::diplomacy::GhostHelpOutcome::Decline => {
+                            decisions.push(BotDecision {
+                                bot_id,
+                                kind: BotDecisionKind::Build,
+                                intent: GameplayIntent::RejectResourceRequest {
+                                    target_player: requester,
+                                },
+                            });
+                        }
+                    }
+                    break;
+                }
                 // A trade the bot cannot settle now is declined instead of retried forever.
                 let accept = if campaign_auto_accept {
                     true
@@ -274,6 +467,44 @@ impl SowEngine {
             }
         }
 
+        // ── Proactive AI Emote Help Calls (when paired with human allies) ──
+        {
+            let has_human_partner = self.state.players.iter().any(|other| {
+                other.player_type == PlayerType::Human
+                    && !other.is_ai_controlled
+                    && self.resources_can_move(other.id, bot_id)
+            });
+            if has_human_partner
+                && (is_under_attack || self.playing_ticks >= 300)
+                && self.can_trigger_help_call(bot_id)
+                && !self.help_calls_proposed.iter().any(|h| h.caller == bot_id)
+                && !self
+                    .resource_requests_proposed
+                    .iter()
+                    .any(|r| r.proposer == bot_id)
+                && let Some(p_me) = self.state.player(bot_id)
+                && crate::emote::can_ai_express(p_me, &self.state.phase)
+                && p_me.active_emote.is_none()
+            {
+                let needs_help = is_under_attack
+                    || p_me.troops < p_me.max_troops * 0.25
+                    || p_me.gold < 15_000.0;
+                if needs_help {
+                    let tick = self.state.tick;
+                    if let Some(player) = self.state.player_mut(bot_id) {
+                        crate::emote::express(
+                            player,
+                            Some(crate::emote::EmoteKind::Help),
+                            false,
+                            false,
+                            tick,
+                        );
+                    }
+                    self.trigger_help_call(bot_id);
+                }
+            }
+        }
+
         // ── Proactive Resource Requesting (Bots requesting help, prioritized human first, 10% default) ──
         {
             let req_interval = {
@@ -287,6 +518,7 @@ impl SowEngine {
             };
             if self.state.tick > req_interval
                 && self.state.tick.is_multiple_of(req_interval)
+                && !self.help_calls_proposed.iter().any(|h| h.caller == bot_id)
                 && let Some(p_me) = self.state.player(bot_id)
             {
                 let is_weak = p_me.troops < p_me.max_troops * 0.25 || p_me.gold < 30_000.0;
@@ -427,7 +659,7 @@ impl SowEngine {
                 5
             };
 
-            let mut rng = is_ghost
+            let mut rng = uses_probabilistic_diplomacy
                 .then(|| ghost_alliance_rng(self.state.seed, bot_id, bot_id, self.state.tick));
             let start_index = rng
                 .as_mut()
@@ -476,7 +708,7 @@ impl SowEngine {
 
                         let meets_threshold = if can_renew {
                             roll < roll_cap
-                        } else if is_ghost {
+                        } else if uses_probabilistic_diplomacy {
                             let chance = ghost_alliance_probability(
                                 me_troops,
                                 me_tile_count,

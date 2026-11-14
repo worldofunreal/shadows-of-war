@@ -5,7 +5,7 @@
   "require_speaker_portraits": true,
   "settings": {
     "starting_troops": 1100,
-    "starting_gold": 360
+    "starting_gold": 400
   },
   "entry": "t3_intro_farm",
   "speakers": {
@@ -36,6 +36,7 @@
       "presentation": "dialogue",
       "unlocks": {
         "buildings": {
+          "City": 1,
           "Farm": 2,
           "Tower": 1
         }
@@ -50,18 +51,77 @@
     {
       "id": "t3_choose_farm",
       "type": "guide",
+      "title_key": "tutorial.campaign_tactics_03_choose_city_title",
+      "hint_key": "tutorial.campaign_tactics_03_choose_city_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "trigger": {
+        "type": "ui",
+        "action": "dock_city",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_city",
+        "gesture": "tap"
+      },
+      "next": "t3_place_hub_city"
+    },
+    {
+      "id": "t3_place_hub_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_build_city_title",
+      "hint_key": "tutorial.campaign_tactics_03_build_city_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "build_until_started",
+      "trigger": {
+        "type": "city",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "next": "t3_wait_hub_city"
+    },
+    {
+      "id": "t3_wait_hub_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_build_city_title",
+      "hint_key": "tutorial.campaign_tactics_03_build_city_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "City",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "next": "t3_open_city_farm"
+    },
+    {
+      "id": "t3_open_city_farm",
+      "type": "guide",
       "title_key": "tutorial.campaign_tactics_03_choose_farm_title",
       "hint_key": "tutorial.campaign_tactics_03_choose_farm_hint",
       "speaker": "sun_tzu",
       "pause_game": true,
       "trigger": {
-        "type": "ui",
-        "action": "dock_farm",
+        "type": "building_selected",
+        "kind": "City",
         "scope": "step"
       },
       "guide": {
-        "kind": "ui",
-        "target": "dock_farm",
+        "kind": "world",
+        "target": "upgrade_building",
         "gesture": "tap"
       },
       "next": "t3_build_farm"
@@ -84,7 +144,7 @@
       },
       "guide": {
         "kind": "world",
-        "target": "build_site",
+        "target": "upgrade_structure",
         "gesture": "tap"
       },
       "next": "t3_wait_farm"
@@ -168,7 +228,7 @@
       "unlocks": {
         "buildings": {
           "Farm": 2,
-          "City": 2,
+          "City": 1,
           "Tower": 1
         }
       },
@@ -194,7 +254,7 @@
       "paused_action": "build_until_started",
       "trigger": {
         "type": "city",
-        "value": 1,
+        "value": 2,
         "scope": "total"
       },
       "marker": {

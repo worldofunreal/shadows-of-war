@@ -5,7 +5,7 @@
   "require_speaker_portraits": true,
   "settings": {
     "starting_troops": 1400,
-    "starting_gold": 360,
+    "starting_gold": 560,
     "campaign_support": {
       "after_defeated": "river_raiders",
       "share_percent": 40
@@ -45,6 +45,7 @@
       "pause_game": true,
       "unlocks": {
         "buildings": {
+          "City": 1,
           "Factory": 4,
           "Tower": 1
         }
@@ -56,12 +57,71 @@
       },
       "trigger": {
         "type": "ui",
-        "action": "dock_factory",
+        "action": "dock_city",
         "scope": "step"
       },
       "guide": {
         "kind": "ui",
-        "target": "dock_factory",
+        "target": "dock_city",
+        "gesture": "tap"
+      },
+      "next": "t4_place_city"
+    },
+    {
+      "id": "t4_place_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_build_city_title",
+      "hint_key": "tutorial.campaign_tactics_03_build_city_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "paused_action": "build_until_started",
+      "trigger": {
+        "type": "city",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "next": "t4_wait_city"
+    },
+    {
+      "id": "t4_wait_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_03_build_city_title",
+      "hint_key": "tutorial.campaign_tactics_03_build_city_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "City",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "next": "t4_open_city_factory"
+    },
+    {
+      "id": "t4_open_city_factory",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_04_choose_factory_title",
+      "hint_key": "tutorial.campaign_tactics_04_choose_factory_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "trigger": {
+        "type": "building_selected",
+        "kind": "City",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
         "gesture": "tap"
       },
       "next": "t4_build_factory"
@@ -84,7 +144,7 @@
       },
       "guide": {
         "kind": "world",
-        "target": "build_site",
+        "target": "upgrade_structure",
         "gesture": "tap"
       },
       "next": "t4_wait_factory"
@@ -116,7 +176,7 @@
       "pause_game": true,
       "trigger": {
         "type": "building_selected",
-        "kind": "Factory",
+        "kind": "City",
         "scope": "step"
       },
       "guide": {
@@ -137,7 +197,7 @@
       "unlocks": {
         "buildings": {
           "Factory": 4,
-          "City": 2,
+          "City": 1,
           "Farm": 2,
           "Tower": 2
         }

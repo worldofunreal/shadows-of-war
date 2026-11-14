@@ -154,6 +154,14 @@ pub fn can_express(player: &crate::player::Player, phase: &crate::game::GamePhas
         && !player.is_ai_controlled
 }
 
+/// Whether an AI-controlled player (Ghost, Nation, or Tribe) can express an autonomous emote.
+pub fn can_ai_express(player: &crate::player::Player, phase: &crate::game::GamePhase) -> bool {
+    matches!(phase, crate::game::GamePhase::Playing)
+        && player.alive
+        && player.has_spawned
+        && (player.is_ai_controlled || player.player_type != crate::player::PlayerType::Human)
+}
+
 /// The same audience is used by map bubbles and HUD notices; camera visibility is separate.
 /// Whether `viewer` sees `sender`'s bubble: scripted campaign lines are for everyone, player emotes for allies and team.
 pub fn is_visible(
@@ -307,7 +315,7 @@ mod tests {
         let current = crate::protocol::gameplay_build_identity();
         assert_eq!(
             current,
-            format!("turns-7/net-11/rules-{}", crate::SIMULATION_RULES_ID)
+            format!("turns-8/net-12/rules-{}", crate::SIMULATION_RULES_ID)
         );
         let mut engine = engine();
         let config = engine.state.config.clone();

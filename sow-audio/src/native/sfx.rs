@@ -270,6 +270,13 @@ pub fn play_combat_sound(
     let SpatialSoundParams { wx, wy, .. } = spatial;
     let position_seed = wx.to_bits().rotate_left(11) ^ wy.to_bits().rotate_left(23);
     let troops_scale = (troops / 5000.0).clamp(0.15, 1.0).sqrt();
+    if let Some(clip) = super::clip::pick_clip(
+        super::clip::SfxId::CombatImpact,
+        0.28 + 0.17 * troops_scale,
+    ) {
+        queue_spatial(clip, spatial, SoundPriority::Background);
+        return;
+    }
     let gain = 0.075 + 0.045 * troops_scale;
     queue_spatial(
         SfxSource::new(Event::Combat(kind), seed ^ position_seed, gain),
@@ -279,6 +286,10 @@ pub fn play_combat_sound(
 }
 
 pub fn play_building_completed_sound(kind: BuildingSoundKind, spatial: SpatialSoundParams) {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::BuildingCompleted, 0.45) {
+        queue_spatial(clip, spatial, SoundPriority::Foreground);
+        return;
+    }
     queue_spatial(
         SfxSource::new(
             Event::BuildingComplete(kind),
@@ -291,6 +302,10 @@ pub fn play_building_completed_sound(kind: BuildingSoundKind, spatial: SpatialSo
 }
 
 pub fn play_nuke_launch_sound(spatial: SpatialSoundParams) {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::NukeLaunch, 0.50) {
+        queue_spatial(clip, spatial, SoundPriority::Foreground);
+        return;
+    }
     queue_spatial(
         SfxSource::new(Event::NuclearLaunch, Event::NuclearLaunch.seed(), 0.22),
         spatial,
@@ -299,6 +314,15 @@ pub fn play_nuke_launch_sound(spatial: SpatialSoundParams) {
 }
 
 pub fn play_nuke_impact_sound(level: u8, spatial: SpatialSoundParams) {
+    let clip_gain = match level {
+        1 => 0.45,
+        2 => 0.58,
+        _ => 0.72,
+    };
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::NukeImpact, clip_gain) {
+        queue_spatial(clip, spatial, SoundPriority::Foreground);
+        return;
+    }
     let event = Event::NuclearImpact(level);
     let gain = match level {
         1 => 0.18,

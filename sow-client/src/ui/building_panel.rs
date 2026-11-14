@@ -299,7 +299,17 @@ impl crate::app::SowApp {
         let building = snapshot
             .buildings
             .iter()
-            .find(|building| building.tile_idx == menu.tile_idx && building.owner_id == my_id)?;
+            .find(|building| {
+                building.tile_idx == menu.tile_idx
+                    && building.owner_id == my_id
+                    && building.kind == sow_core::game::BuildingKind::City
+            })
+            .or_else(|| {
+                snapshot
+                    .buildings
+                    .iter()
+                    .find(|building| building.tile_idx == menu.tile_idx && building.owner_id == my_id)
+            })?;
         let leader = snapshot
             .players
             .iter()

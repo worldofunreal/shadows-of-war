@@ -59,6 +59,7 @@ pub(super) fn think_window_ticks(
 
 pub(super) fn pick_stack_click_tile(
     buildings: &[crate::building::Building],
+    city_arsenals: &std::collections::HashMap<u64, crate::building::CityArsenalState>,
     bot_id: u16,
     kind: BuildingKind,
     max_level: u8,
@@ -70,6 +71,7 @@ pub(super) fn pick_stack_click_tile(
             || b.under_construction
             || b.level >= kind.max_level()
             || b.level.saturating_add(1) > max_level
+            || crate::building::city_has_active_build(buildings, city_arsenals, b.tile_idx)
         {
             continue;
         }
@@ -92,7 +94,13 @@ pub(super) fn stack_build_decision(
     player_gold: f64,
     max_level: u8,
 ) -> Option<BotDecision> {
-    let stack_tile = pick_stack_click_tile(&engine.buildings, bot_id, kind, max_level)?;
+    let stack_tile = pick_stack_click_tile(
+        &engine.buildings,
+        &engine.city_arsenals,
+        bot_id,
+        kind,
+        max_level,
+    )?;
     let building = engine
         .buildings
         .iter()
@@ -108,6 +116,33 @@ pub(super) fn stack_build_decision(
             building_id: building.id,
         },
     })
+}
+
+/// Finds an owned ready City tile where `kind` district can be newly added.
+pub(super) fn resolve_district_city_site(
+    map: &crate::map::GameMap,
+    buildings: &[crate::building::Building],
+    city_arsenals: &std::collections::HashMap<u64, crate::building::CityArsenalState>,
+    owner_id: u16,
+    kind: BuildingKind,
+) -> Option<u32> {
+    buildings
+        .iter()
+        .filter(|b| {
+            b.owner_id == owner_id && b.kind == BuildingKind::City && !b.under_construction
+        })
+        .find_map(|city| {
+            crate::building::validate_district_site(
+                map,
+                buildings,
+                city_arsenals,
+                owner_id,
+                kind,
+                city.tile_idx,
+            )
+            .is_ok()
+            .then_some(city.tile_idx)
+        })
 }
 
 pub(super) const PLACEMENT_ATTEMPTS: i32 = 8;

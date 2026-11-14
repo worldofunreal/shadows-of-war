@@ -14,6 +14,7 @@
     iq?: number;
     civ: string;
     leader: string;
+    player_type?: "Bot" | "Nation";
     avatar?: string;
     support_interval_seconds?: number;
     gold_loot_bonus?: number;
@@ -431,6 +432,7 @@
       <label><input id="fassaultforce" type="checkbox" style="width:auto" ${f.assault_force === true ? "checked" : ""}> Eligible for configured campaign assaults</label>
       <label><input id="fcanrequest" type="checkbox" style="width:auto" ${f.can_request_alliance !== false ? "checked" : ""}> Allow AI requests and generic neutral terms</label>
       <label>Autonomous attacks against player</label><select id="fattack"><option value="" ${f.can_attack_player == null ? "selected" : ""}>Follow relationship</option><option value="true" ${f.can_attack_player === true ? "selected" : ""}>Allowed</option><option value="false" ${f.can_attack_player === false ? "selected" : ""}>Passive</option></select>
+      <label>Bot tier</label><select id="fplayertype"><option value="" ${!f.player_type || f.player_type === "Bot" ? "selected" : ""}>Tribe (Standard Bot)</option><option value="Nation" ${f.player_type === "Nation" ? "selected" : ""}>Bot Hero (High IQ Nation)</option></select>
       <label>Neutral faction color</label><input id="fcolor" type="color" value="${escapeHtml(f.color || FACTION_COLORS[0])}">
       <label>Nameplate and dialogue portrait</label><div class="faction-avatar-picker"><img id="fportrait" width="256" height="256" alt=""><select id="fa">${avatarHtml}</select></div>
       <label>Ally support interval (seconds; blank disables)</label><input id="finterval" type="number" min="5" max="600" value="${f.support_interval_seconds ?? ""}" placeholder="Disabled">
@@ -501,6 +503,11 @@
       document.getElementById("fattack").onchange = (e) => {
         if ((e.target as HTMLSelectElement).value === "") delete f.can_attack_player;
         else f.can_attack_player = (e.target as HTMLSelectElement).value === "true";
+        markRosterDirty();
+      };
+      document.getElementById("fplayertype").onchange = (e) => {
+        if ((e.target as HTMLSelectElement).value === "") delete f.player_type;
+        else f.player_type = (e.target as HTMLSelectElement).value as "Nation";
         markRosterDirty();
       };
       document.getElementById("ftroops").oninput = (e) => {
@@ -800,6 +807,7 @@
         iq: f.iq ?? 100,
         civ: f.civ,
         leader: f.leader,
+        ...(f.player_type && f.player_type !== "Bot" ? { player_type: f.player_type } : {}),
         ...(f.can_attack_player != null ? { can_attack_player: f.can_attack_player } : {}),
         ...(f.support_interval_seconds != null
           ? { support_interval_seconds: Number(f.support_interval_seconds) }
@@ -963,6 +971,8 @@
         throw new Error("attack permission must be true or false");
       if (f.assault_force != null && typeof f.assault_force !== "boolean")
         throw new Error("assault force setting must be true or false");
+      if (f.player_type != null && f.player_type !== "Bot" && f.player_type !== "Nation")
+        throw new Error("player type must be Bot or Nation");
       if (
         String(f.civ)
           .replace(/[^a-z0-9]/gi, "")
@@ -983,6 +993,7 @@
         iq: f.iq == null ? 100 : f.iq,
         civ: f.civ,
         leader: f.leader,
+        ...(f.player_type && f.player_type !== "Bot" ? { player_type: f.player_type } : {}),
         ...(f.can_attack_player != null ? { can_attack_player: f.can_attack_player } : {}),
         ...(f.support_interval_seconds != null
           ? { support_interval_seconds: Number(f.support_interval_seconds) }
@@ -1036,6 +1047,7 @@
         !Number.isInteger(f.y) ||
         !f.civ ||
         !f.leader ||
+        (f.player_type != null && f.player_type !== "Bot" && f.player_type !== "Nation") ||
         (f.iq != null && (!Number.isInteger(f.iq) || f.iq < 0 || f.iq > 180)) ||
         (f.support_interval_seconds != null &&
           (!Number.isInteger(f.support_interval_seconds) ||

@@ -323,6 +323,24 @@ impl SowApp {
             ));
         }
 
+        for rejection in &snapshot.help_call_rejections {
+            if rejection.requester_id != my_id {
+                continue;
+            }
+            let name = snapshot
+                .players
+                .iter()
+                .find(|player| player.id == rejection.rejector_id)
+                .map(|player| player.name.as_str())
+                .unwrap_or("Ally");
+            notifications.push((
+                crate::ui::UiText::new("hud.help_call_declined").with("name", name),
+                [Some(rejection.rejector_id), Some(my_id)],
+                2,
+                format!("help-declined:{}", rejection.rejector_id),
+            ));
+        }
+
         for rejection in &snapshot.resource_transfer_rejections {
             if rejection.sender_id != my_id {
                 continue;

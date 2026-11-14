@@ -10,10 +10,12 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 /// Persisted turn recordings; changing live messages must not change this.
 /// 6: buildings use kind-specific footprints.
 /// 7: ships are built toward a target tile instead of a named port.
-pub const GAMEPLAY_FORMAT_VERSION: u64 = 7;
+/// 8: city-centric districts and city arsenal.
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 8;
 // 10: website authentication uses game-owned opaque sessions.
 // 11: the start message's GameConfig carries bot tuning (`ai`).
-pub const LIVE_PROTOCOL_VERSION: u64 = 11;
+// 12: city arsenal intent & snapshot state.
+pub const LIVE_PROTOCOL_VERSION: u64 = 12;
 
 /// What two builds must share to play together. The public version is left out on
 /// purpose: a server, price or menu release must not lock out store and portal clients.
@@ -136,6 +138,19 @@ pub enum GameplayIntent {
         troops: f64,
         pay_gold: f64,
         pay_troops: f64,
+    },
+    /// Queue a strategic arsenal item (`Warship`, `Nuke`, `AntiNuke`) inside an owned City.
+    CityArsenal {
+        tile_idx: u32,
+        kind: crate::game::CityArsenalKind,
+    },
+    /// Answer an active emote-triggered Help Call by sending contextual emergency aid.
+    AcceptHelpCall {
+        target_player: crate::player::PlayerId,
+    },
+    /// Dismiss or decline an active Help Call.
+    IgnoreHelpCall {
+        target_player: crate::player::PlayerId,
     },
 }
 
@@ -533,6 +548,8 @@ pub struct PlayerSnapshot {
     pub alliance_timers: std::collections::HashMap<crate::player::PlayerId, u32>,
     pub alliance_requests: Vec<crate::player::PlayerId>,
     #[serde(default)]
+    pub alliance_request_timers: std::collections::HashMap<crate::player::PlayerId, u32>,
+    #[serde(default)]
     pub resource_requests: Vec<ResourceRequest>,
     pub disconnected: bool,
     pub active_emote: Option<crate::emote::ActiveEmote>,
@@ -566,6 +583,10 @@ pub struct PlayerSnapshot {
     pub nuke_available: bool,
     #[serde(default)]
     pub nuke_cooldown_ticks: u32,
+    #[serde(default)]
+    pub help_calls: Vec<HelpCall>,
+    #[serde(default)]
+    pub help_cooldown_ticks: u32,
 }
 
 impl PlayerSnapshot {
@@ -598,6 +619,19 @@ pub struct ResourceRequest {
     pub pay_gold: f64,
     #[serde(default)]
     pub pay_troops: f64,
+    #[serde(default)]
+    pub remaining_ticks: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct HelpCall {
+    pub caller: crate::player::PlayerId,
+    #[serde(default)]
+    pub suggested_gold: f64,
+    #[serde(default)]
+    pub suggested_troops: f64,
+    #[serde(default)]
+    pub remaining_ticks: u32,
 }
 
 /// A single tile whose owner changed during a tick.
@@ -616,6 +650,14 @@ pub struct BuildingSnapshot {
     pub level: u8,
     pub under_construction: bool,
     pub ticks_until_complete: u32,
+    #[serde(default)]
+    pub has_anti_nuke: bool,
+    #[serde(default)]
+    pub nuke_ready: bool,
+    #[serde(default)]
+    pub arsenal_build: Option<crate::building::CityArsenalBuild>,
+    #[serde(default)]
+    pub sam_cooldown_ticks: u32,
 }
 
 impl BuildingSnapshot {
@@ -727,6 +769,8 @@ pub struct SimSnapshot {
     pub resource_transfers: Vec<ResourceTransfer>,
     #[serde(default)]
     pub resource_rejections: Vec<ResourceRejection>,
+    #[serde(default)]
+    pub help_call_rejections: Vec<ResourceRejection>,
     #[serde(default)]
     pub resource_transfer_rejections: Vec<ResourceTransferRejection>,
     pub winner: Option<u16>,

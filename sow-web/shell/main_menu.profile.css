@@ -292,19 +292,28 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__rank-badge {
+  --rank-light: #ffe8a3;
+  --rank-glow: #f5c542;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 5px 14px 5px 8px;
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(245, 197, 66, 0.2) 0%, rgba(185, 140, 52, 0.1) 100%);
-  border: 1px solid var(--sow-gold);
-  color: #ffe8a3;
-  font-size: 11px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--rank-glow) 22%, rgba(20, 26, 36, 0.9)) 0%,
+    rgba(10, 14, 22, 0.94) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--rank-glow) 65%, rgba(255, 255, 255, 0.16));
+  color: var(--rank-light);
+  font-size: 11.5px;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  box-shadow: 0 0 16px rgba(245, 197, 66, 0.2);
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--rank-glow) 22%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__rank-badge .sow-ranked__emblem {
@@ -2639,7 +2648,19 @@
   outline-offset: var(--sow-tactical-focus-offset);
 }
 
-#sow-menu[data-screen="profile"] .sow-ranked__overview { padding: clamp(18px, 3vw, 28px); border: 1px solid #7b653d; border-radius: 12px; background: radial-gradient(ellipse at 0 0, #65513533, transparent 60%), var(--sow-profile-panel); }
+#sow-menu[data-screen="profile"] .sow-ranked__overview {
+  --rank-light: #f1cb7d;
+  --rank-glow: #c8974d;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid color-mix(in srgb, var(--rank-glow) 55%, #3c4454);
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--rank-glow) 20%, transparent), transparent 60%),
+    var(--sow-profile-panel);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 240, 204, 0.14);
+}
 .sow-ranked__hero { display: flex; gap: 28px; align-items: center; }
 .sow-ranked__summary { display: grid; flex: 1; min-width: 0; gap: 12px; }
 .sow-ranked__summary h2 { margin: 0; color: #fff0d2; font-family: var(--font-display, serif); font-size: clamp(24px, 3vw, 34px); }
@@ -4855,109 +4876,122 @@
 .sow-heroes__ach-btn {
   appearance: none;
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 8px 11px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(212, 168, 67, 0.32);
-  background: rgba(8, 11, 16, 0.72);
+  border: 1px solid rgba(212, 168, 67, 0.34);
+  background: rgba(8, 11, 16, 0.76);
   color: #f1f5f9;
   font-family: inherit;
   text-align: start;
   cursor: pointer;
   backdrop-filter: blur(6px);
-  transition: border-color 140ms ease, background 140ms ease;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
 .sow-heroes__ach-btn:hover {
-  border-color: rgba(245, 197, 66, 0.6);
-  background: rgba(14, 18, 26, 0.86);
+  border-color: rgba(245, 197, 66, 0.68);
+  background: rgba(14, 18, 26, 0.9);
 }
 
-.sow-heroes__ach-btn-row {
-  display: flex;
+.sow-heroes__ach-star-badge {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  font-size: 11px;
-}
-
-.sow-heroes__ach-own {
-  padding: 2px 6px;
-  border-radius: 999px;
-  font-size: 9px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: #94a3b8;
-}
-
-.sow-heroes__ach-own.is-owned {
-  border-color: rgba(245, 197, 66, 0.45);
+  justify-content: center;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--sow-gold-bright, #ffe8a3);
   background: rgba(245, 197, 66, 0.14);
-  color: #ffe8a3;
+  border: 1px solid rgba(245, 197, 66, 0.38);
+  white-space: nowrap;
 }
 
-.sow-heroes__ach-own.is-weekly_free {
-  border-color: rgba(52, 211, 153, 0.45);
-  background: rgba(16, 185, 129, 0.14);
+.sow-heroes__ach-star-badge.is-complete {
   color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(52, 211, 153, 0.48);
 }
 
-.sow-heroes__ach-count {
-  font-weight: 800;
-  color: var(--sow-gold-bright, #ffe8a3);
-  font-variant-numeric: tabular-nums;
-}
-
-.sow-heroes__ach-xp {
-  font-weight: 700;
-  color: var(--sow-cyan, #67e8f9);
-  font-variant-numeric: tabular-nums;
-}
-
-.sow-heroes__ach-record {
-  color: #94a3b8;
-  font-variant-numeric: tabular-nums;
-}
-
-.sow-heroes__ach-cta {
-  margin-inline-start: auto;
-  font-weight: 800;
-  color: var(--sow-gold-bright, #ffe8a3);
-}
-
-.sow-heroes__ach-strip-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 10.5px;
-  color: #cbd5e1;
-}
-
-.sow-heroes__ach-next-label {
+.sow-heroes__ach-chains {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
   min-width: 0;
+}
+
+.sow-heroes__ach-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sow-heroes__ach-chain-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.sow-heroes__ach-chain-head span {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sow-heroes__ach-bar {
+.sow-heroes__ach-chain-head b {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--sow-gold-bright, #ffe8a3);
+}
+
+.sow-heroes__ach-segments {
+  display: grid;
+  gap: 2px;
   width: 100%;
-  height: 4px;
+  height: 5px;
+}
+
+.sow-heroes__ach-seg {
+  position: relative;
+  display: block;
+  height: 100%;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
 
-.sow-heroes__ach-bar i {
+.sow-heroes__ach-seg i {
   display: block;
   height: 100%;
+  border-radius: 2px;
   background: linear-gradient(90deg, #b89230 0%, #f5c542 100%);
+}
+
+.sow-heroes__ach-seg.is-done i {
+  background: linear-gradient(90deg, #eab308 0%, #fde047 100%);
+}
+
+.sow-heroes__ach-cta {
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--sow-gold-bright, #ffe8a3);
+  padding-inline: 2px;
 }
 
 .sow-hero-info__tab-count {
@@ -5168,6 +5202,7 @@
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 0;
   overflow: hidden;
   border: 1px solid var(--sow-tactical-surface-accent-border-soft, rgba(255, 255, 255, 0.14));
@@ -5257,7 +5292,7 @@
 
 #sow-menu[data-screen="heroes"] .sow-heroes__ach-btn {
   padding: 6px 10px;
-  gap: 4px;
+  gap: 10px;
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__actions {
@@ -5302,14 +5337,8 @@
     margin-top: 4px;
   }
   #sow-menu[data-screen="heroes"] .sow-heroes__ach-btn {
-    padding: 4px 8px;
-    gap: 2px;
-  }
-  #sow-menu[data-screen="heroes"] .sow-heroes__ach-btn-row {
-    font-size: 10px;
-  }
-  #sow-menu[data-screen="heroes"] .sow-heroes__ach-next-label {
-    display: none;
+    padding: 5px 8px;
+    gap: 8px;
   }
   #sow-menu[data-screen="heroes"] .sow-heroes__actions {
     margin-top: 5px;
@@ -5410,14 +5439,7 @@
   }
   #sow-menu[data-screen="heroes"] .sow-heroes__ach-btn {
     padding: 5px 9px;
-    gap: 4px;
-  }
-  #sow-menu[data-screen="heroes"] .sow-heroes__ach-btn-row {
-    font-size: 10px;
-    gap: 4px 8px;
-  }
-  #sow-menu[data-screen="heroes"] .sow-heroes__ach-next-label {
-    display: none;
+    gap: 8px;
   }
   .sow-hero-info--dossier {
     max-height: 92dvh;
@@ -5438,3 +5460,133 @@
   }
 }
 
+
+/* Hero Dossier Achievements - Progression Paths */
+#sow-menu .sow-hero-ach-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+#sow-menu .sow-hero-ach-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+#sow-menu .sow-hero-ach-section__head h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--sow-text, #f3efe6);
+}
+
+#sow-menu .sow-hero-ach-section__head p {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  color: rgba(243, 239, 230, 0.62);
+}
+
+#sow-menu .sow-hero-ach-section__count {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #f3c86a;
+  white-space: nowrap;
+}
+
+#sow-menu .sow-hero-ach-path {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#sow-menu .sow-hero-ach-step {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+#sow-menu .sow-hero-ach-step.is-done {
+  opacity: 0.68;
+  border-color: rgba(74, 222, 128, 0.22);
+}
+
+#sow-menu .sow-hero-ach-step.is-current {
+  background: rgba(243, 200, 106, 0.08);
+  border-color: rgba(243, 200, 106, 0.45);
+}
+
+#sow-menu .sow-hero-ach-step.is-upcoming {
+  opacity: 0.55;
+}
+
+#sow-menu .sow-hero-ach-step__marker {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(243, 239, 230, 0.75);
+}
+
+#sow-menu .sow-hero-ach-step.is-done .sow-hero-ach-step__marker {
+  background: rgba(74, 222, 128, 0.16);
+  color: #4ade80;
+}
+
+#sow-menu .sow-hero-ach-step.is-current .sow-hero-ach-step__marker {
+  background: rgba(243, 200, 106, 0.2);
+  color: #f3c86a;
+}
+
+#sow-menu .sow-hero-ach-step__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#sow-menu .sow-hero-ach-step__top strong {
+  font-size: 0.84rem;
+  color: var(--sow-text, #f3efe6);
+}
+
+#sow-menu .sow-hero-ach-step__laurels {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f3c86a;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(243, 200, 106, 0.12);
+}
+
+#sow-menu .sow-hero-ach-step__desc {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: rgba(243, 239, 230, 0.65);
+}
+
+#sow-menu .sow-hero-ach-step__bar {
+  margin-top: 6px;
+}
+
+#sow-menu .sow-hero-ach-step__meta {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgba(243, 239, 230, 0.75);
+  white-space: nowrap;
+}
+
+#sow-menu .sow-hero-ach-step.is-done .sow-hero-ach-step__meta {
+  color: #4ade80;
+}

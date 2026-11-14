@@ -174,16 +174,6 @@ impl SowApp {
                     kind: crate::app::ClickMarkerKind::TransportOrder,
                 });
             }
-            sow_core::protocol::GameplayIntent::MoveWarships { target_tile, .. } => {
-                let wx = (*target_tile % self.sim.map_w) as f32 + 0.5;
-                let wy = (*target_tile / self.sim.map_w) as f32 + 0.5;
-                self.ui.click_markers.push(crate::app::ClickMarker {
-                    world_x: wx,
-                    world_y: wy,
-                    start_time: web_time::Instant::now(),
-                    kind: crate::app::ClickMarkerKind::WarshipOrder,
-                });
-            }
             sow_core::protocol::GameplayIntent::Spawn { x, y } => {
                 let wx = *x as f32 + 0.5;
                 let wy = *y as f32 + 0.5;
@@ -218,18 +208,6 @@ impl SowApp {
                     against_enemy,
                     self.spatial_sound_params(wx, wy),
                 );
-                if against_enemy || commitment >= 0.5 {
-                    let zoom = self.input.camera_zoom.max(0.001);
-                    let cx = (self.input.screen_w * 0.5 - self.input.camera_x) / zoom;
-                    let cy = (self.input.screen_h * 0.5 - self.input.camera_y) / zoom;
-                    self.ui.camera_shake.push(
-                        now,
-                        0.6 + 1.4 * commitment,
-                        0.15,
-                        [wx - cx, wy - cy],
-                        0.0,
-                    );
-                }
                 record_attack_launch_notice(
                     &mut self.ui.attack_launch_notices,
                     &intent,
@@ -240,6 +218,23 @@ impl SowApp {
                     self.input.camera_zoom,
                     now,
                 );
+            }
+            sow_core::protocol::GameplayIntent::UpgradeStructure { building_id } => {
+                if self.sim.map_w > 0
+                    && let Some(tile_idx) = self
+                        .sim
+                        .current_snapshot
+                        .as_ref()
+                        .and_then(|s| s.buildings.iter().find(|b| b.id == *building_id))
+                        .map(|b| b.tile_idx)
+                {
+                    let wx = (tile_idx % self.sim.map_w) as f32 + 0.5;
+                    let wy = (tile_idx / self.sim.map_w) as f32 + 0.5;
+                    self.sfx.play_upgrade_start(
+                        web_time::Instant::now(),
+                        self.spatial_sound_params(wx, wy),
+                    );
+                }
             }
             _ => {}
         }

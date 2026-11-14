@@ -322,6 +322,9 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
     normalize_map_roster(&mut config, map_entry.as_ref());
 
     config.game_mode = game_mode.to_string();
+    if config.game_mode != "PvE" {
+        config.nation_count = 0;
+    }
 
     if kind == LobbyKind::Matchmaking {
         let mut rng = rand::thread_rng();
@@ -388,7 +391,7 @@ fn normalize_map_roster(
 
 /// Matchmaking queue depth: exactly ONE joinable lobby at a time. When it
 /// launches (or dies), the next one spawns and rotates to the next game mode,
-/// so over time a single slot cycles through FFA / Teams with a fresh map and
+/// so over time a single slot cycles through FFA / Teams / PvE with a fresh map and
 /// fresh randomized capacity and map-scaled neutral population each cycle.
 fn ensure_queue_depth(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
     let has_joinable = games.iter().any(|g| {
@@ -400,7 +403,7 @@ fn ensure_queue_depth(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
         return;
     }
     static ROTATION: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    const MODES: &[&str] = &["FFA", "Teams", "HumansVsNations"];
+    const MODES: &[&str] = &["FFA", "Teams", "PvE"];
     let idx = ROTATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % MODES.len();
     spawn_waiting_lobby(
         games,
@@ -588,7 +591,7 @@ pub fn join_player(
     if host_config.as_ref().is_some_and(|config| {
         !matches!(
             config.game_mode.as_str(),
-            "FFA" | "Teams" | "HumansVsNations"
+            "FFA" | "Teams" | "PvE"
         )
     }) {
         return Err("Unsupported custom game mode".to_string());
@@ -781,8 +784,8 @@ pub fn join_player(
     }
 
     // Teams mode: drop the joiner into whichever team is smaller (Red on a tie).
-    // HumansVsNations: every human joins Red (AI nations are Blue, spawned engine-side).
-    let team = if lobby.game_mode == "HumansVsNations" {
+    // PvE: every human joins Red (Bot Heroes are Blue, spawned engine-side).
+    let team = if lobby.game_mode == "PvE" {
         Some(Team::Red)
     } else if lobby.game_mode == "Teams" {
         let reds = lobby
@@ -1487,7 +1490,7 @@ mod name_tests {
     fn matchmaking_capacity_stays_between_12_and_256() {
         let mut games = Vec::new();
         let mut next_id = 1;
-        for mode in ["FFA", "Teams", "HumansVsNations"] {
+        for mode in ["FFA", "Teams", "PvE"] {
             spawn_waiting_lobby(
                 &mut games,
                 &mut next_id,
@@ -1534,7 +1537,7 @@ mod name_tests {
                 game_mode: "FFA".to_string(),
                 kind: LobbyKind::Custom,
                 is_private: false,
-                config_override: Some(config),
+                config_override: Some(config.clone()),
                 password: None,
                 host_name: "Host".to_string(),
             },
@@ -1542,7 +1545,21 @@ mod name_tests {
 
         assert_eq!(games[0].config.max_players, 37);
         assert_eq!(games[0].config.bot_count, 11);
-        assert_eq!(games[0].config.nation_count, 19);
+        assert_eq!(games[0].config.nation_count, 0);
+
+        spawn_waiting_lobby(
+            &mut games,
+            &mut 2,
+            SpawnLobbyOpts {
+                game_mode: "PvE".to_string(),
+                kind: LobbyKind::Custom,
+                is_private: false,
+                config_override: Some(config),
+                password: None,
+                host_name: "Host".to_string(),
+            },
+        );
+        assert_eq!(games[1].config.nation_count, 19);
         let rules = GameConfig::default();
         assert!(!games[0].config.tutorial);
         assert_eq!(games[0].config.tick_rate_ms, rules.tick_rate_ms);

@@ -1416,8 +1416,8 @@ pub(super) fn render_nameplates(
             continue;
         }
         let is_me = player.id == my_id;
-        let has_human_priority =
-            player.player_type == PlayerType::Human || system.campaign_emotes.contains_key(&player.id);
+        let has_human_priority = matches!(player.player_type, PlayerType::Human | PlayerType::Nation)
+            || system.campaign_emotes.contains_key(&player.id);
         let style = NameplateStyle::for_player(player.player_type, player.is_campaign_faction);
         let Some(state) = visuals.get_mut(&player.id) else {
             continue;

@@ -43,6 +43,8 @@ pub struct SpatialSoundParams {
     pub screen_h: f32,
 }
 
+pub use native::{SfxId, register_sfx_wav};
+
 pub fn play_death_sound(player_type: PlayerSoundType, seed: u32, spatial: SpatialSoundParams) {
     native::play_death_sound(player_type, seed, spatial);
 }
@@ -78,6 +80,10 @@ pub fn play_under_attack_sound(severity: f32, spatial: SpatialSoundParams) {
 
 pub fn play_building_placement_sound(kind: BuildingSoundKind, spatial: SpatialSoundParams) {
     native::play_building_placement_sound(kind, spatial);
+}
+
+pub fn play_building_upgrade_start_sound(spatial: SpatialSoundParams) {
+    native::play_building_upgrade_start_sound(spatial);
 }
 
 pub fn play_building_completed_sound(kind: BuildingSoundKind, spatial: SpatialSoundParams) {

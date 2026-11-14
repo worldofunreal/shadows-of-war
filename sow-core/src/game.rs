@@ -48,6 +48,16 @@ impl BuildingKind {
         BuildingKind::Port,
         BuildingKind::Farm,
     ];
+    pub const DISTRICTS: [BuildingKind; 4] = [
+        BuildingKind::Farm,
+        BuildingKind::Factory,
+        BuildingKind::Tower,
+        BuildingKind::Port,
+    ];
+    #[inline]
+    pub const fn is_district(self) -> bool {
+        !matches!(self, BuildingKind::City)
+    }
     #[inline]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -60,7 +70,13 @@ impl BuildingKind {
     }
 
     pub const fn max_level(self) -> u8 {
-        4
+        match self {
+            BuildingKind::City => 1,
+            BuildingKind::Tower
+            | BuildingKind::Factory
+            | BuildingKind::Port
+            | BuildingKind::Farm => 4,
+        }
     }
 
     pub fn construction_duration_ticks(self) -> u32 {
@@ -95,8 +111,44 @@ impl NukeKind {
         }
     }
 
+    pub const fn required_district_level(self) -> u8 {
+        match self {
+            NukeKind::AtomBomb => 4,
+        }
+    }
+
     pub fn gold_cost(self, _prev_launches: u32) -> f64 {
         0.0
+    }
+}
+
+/// Strategic arsenal items built inside a qualified City.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum CityArsenalKind {
+    Warship,
+    Nuke,
+    AntiNuke,
+}
+
+impl CityArsenalKind {
+    pub const ALL: [Self; 3] = [Self::Warship, Self::Nuke, Self::AntiNuke];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Warship => "Warship",
+            Self::Nuke => "Nuke",
+            Self::AntiNuke => "Anti-Nuke",
+        }
+    }
+
+    /// Construction duration in simulation ticks.
+    pub const fn duration_ticks(self) -> u32 {
+        match self {
+            Self::Warship => 30,
+            Self::Nuke => 90,
+            Self::AntiNuke => 90,
+        }
     }
 }
 
@@ -232,11 +284,6 @@ pub enum GameEvent {
         #[serde(default)]
         by_nuke: bool,
     },
-    PlayerRebelled {
-        player_id: u16,
-        rebel_id: u16,
-        building_id: u64,
-    },
     GameOver {
         winner_id: u16,
         winning_team: Option<crate::protocol::Team>,
@@ -290,6 +337,13 @@ pub enum GameEvent {
         sender_id: u16,
         receiver_id: u16,
     },
+    HelpCallSubmitted {
+        caller_id: u16,
+    },
+    HelpCallDeclined {
+        responder_id: u16,
+        caller_id: u16,
+    },
     TransportShipLanded {
         owner_id: u16,
         x: u32,
@@ -307,16 +361,44 @@ pub enum GameEvent {
     NavalImpact {
         owner_id: u16,
         target_owner: u16,
+        #[serde(default)]
+        source_fleet_id: Option<u64>,
+        #[serde(default)]
+        target_fleet_id: u64,
         tile: u32,
         target_type: UnitType,
+        #[serde(default)]
+        damage: f64,
+        #[serde(default)]
+        health_before: f64,
+        #[serde(default)]
+        health_after: f64,
+        #[serde(default)]
+        troops_lost: f64,
         sunk: bool,
+        #[serde(default)]
+        captured: bool,
     },
     NavalShot {
         owner_id: u16,
+        #[serde(default)]
+        target_owner: u16,
+        #[serde(default)]
+        source_fleet_id: u64,
+        #[serde(default)]
+        target_fleet_id: u64,
         tile: u32,
+        #[serde(default)]
+        target_tile: u32,
+        #[serde(default)]
+        damage: f64,
     },
     TradeShipCaptured {
         owner_id: u16,
+        #[serde(default)]
+        target_owner: u16,
+        #[serde(default)]
+        source_fleet_id: u64,
         fleet_id: u64,
         tile: u32,
     },

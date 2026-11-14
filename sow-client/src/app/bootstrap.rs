@@ -16,6 +16,7 @@ impl Default for SowApp {
 
 impl SowApp {
     pub fn new() -> Self {
+        crate::app::sfx::init_sfx_bank();
         // ── Simulation ──────────────────────────────────────────────────────────
         let map_w: u32 = 800;
         let map_h: u32 = 600;
@@ -234,7 +235,6 @@ impl SowApp {
                 shift_pressed: false,
                 has_snapped_camera_to_spawn,
                 spawn_intent_rate: sow_core::spawn_rate_limit::SpawnIntentRateLimit::default(),
-                selected_warships: Vec::new(),
                 key_pan_up: false,
                 key_pan_down: false,
                 key_pan_left: false,
@@ -285,6 +285,10 @@ impl SowApp {
                 transport_impacts: std::collections::VecDeque::with_capacity(
                     crate::app::MAX_TRANSPORT_IMPACTS,
                 ),
+                naval_activity: std::collections::VecDeque::with_capacity(
+                    crate::app::MAX_NAVAL_ACTIVITY,
+                ),
+                naval_activity_revision: 0,
                 death_nameplates: Vec::with_capacity(crate::app::MAX_DEATH_NAMEPLATES),
                 attack_badge_labels: std::collections::HashMap::new(),
                 attack_badge_style_key: None,
@@ -307,7 +311,6 @@ impl SowApp {
                 border_flash_intensities: std::collections::HashMap::new(),
                 last_player_attack_flash_time: std::collections::HashMap::new(),
                 viewport_alert: None,
-                camera_shake: crate::render::motion::CameraShakeState::default(),
             },
             sfx: crate::app::sfx::SfxDirector::default(),
             time: TimeState {

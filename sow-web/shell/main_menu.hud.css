@@ -1092,11 +1092,42 @@ html[dir="rtl"] #sow-hud-dev-layer {
   display: grid;
   gap: 4px;
   min-height: 0;
+  max-height: 80px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--sow-gold) 58%, transparent)
     transparent;
+}
+.sow-hud__naval-activity {
+  display: grid;
+  gap: 4px;
+  min-height: 0;
+  border-top: 1px solid var(--sow-tactical-surface-border);
+  padding-top: 4px;
+}
+.sow-hud__naval-activity[hidden] {
+  display: none !important;
+}
+.sow-hud__naval-activity-title {
+  margin: 0;
+  color: var(--sow-text-muted);
+  font: 800 8px/1.2 var(--sow-ui-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sow-hud__naval-activity-list {
+  display: grid;
+  gap: 4px;
+  max-height: 80px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--sow-gold) 58%, transparent)
+    transparent;
+}
+.sow-hud__operation.is-naval {
+  border-inline-start: 2px solid color-mix(in srgb, #7edbff 72%, transparent);
 }
 .sow-hud__operation {
   display: grid;
@@ -1322,137 +1353,6 @@ html[dir="rtl"] #sow-hud-dev-layer {
   top: 2px;
   right: 2px;
   bottom: auto;
-}
-
-.sow-hud__fleet-strip {
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-}
-
-.sow-hud__fleet-status {
-  cursor: default;
-}
-
-.sow-hud__building-btn[data-fleet-kind="trade"],
-.sow-hud__building-btn[data-fleet-kind="transport"],
-.sow-hud__building-btn[data-fleet-kind="warship"] {
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  min-height: 62px;
-}
-
-.sow-hud__fleet-kind-label {
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--sow-text-muted);
-  font: 750 8px/1 var(--sow-ui-font);
-  letter-spacing: 0.02em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.sow-hud__fleet-count {
-  position: absolute;
-  top: 2px;
-  right: 3px;
-  min-width: 14px;
-  padding: 1px 3px;
-  border-radius: 8px;
-  background: rgba(5, 12, 20, 0.86);
-  color: #f5f8ff;
-  font: 750 9px/1 var(--sow-ui-font);
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
-
-.sow-hud__fleet-selection {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 7px 8px;
-  border: 1px solid color-mix(in srgb, var(--sow-gold) 48%, transparent);
-  border-inline-start: 3px solid var(--sow-gold-bright);
-  border-radius: var(--sow-tactical-surface-radius-compact);
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--sow-gold) 13%, var(--sow-panel-card)),
-    var(--sow-panel-card)
-  );
-  box-shadow: var(--sow-tactical-surface-highlight);
-}
-.sow-hud__fleet-selection[hidden] {
-  display: none !important;
-}
-.sow-hud__fleet-selection-copy {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.sow-hud__fleet-selection-copy > .sow-hud__building-icon {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-}
-.sow-hud__fleet-selection-text {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.sow-hud__fleet-selection-text strong {
-  overflow: hidden;
-  color: var(--sow-gold-bright);
-  font: 800 11px/1.15 var(--sow-ui-font);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sow-hud__fleet-selection-text small {
-  color: var(--sow-text-muted);
-  font: 550 9px/1.3 var(--sow-ui-font);
-}
-.sow-hud__fleet-selection-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  flex: 0 0 auto;
-}
-.sow-hud__fleet-selection-actions button {
-  min-height: 34px;
-  padding: 4px 8px;
-  border: 1px solid var(--sow-tactical-surface-border);
-  border-radius: var(--sow-tactical-surface-radius-tight);
-  background: var(--sow-tactical-surface-subcard-bg);
-  color: var(--sow-text-primary);
-  font: 750 9px/1.1 var(--sow-ui-font);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.sow-hud__fleet-selection-actions button:hover,
-.sow-hud__fleet-selection-actions button:focus-visible {
-  border-color: var(--sow-gold-bright);
-  color: var(--sow-gold-bright);
-}
-
-@media (max-width: 599px) {
-  .sow-hud__fleet-selection {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 6px;
-    padding: 6px;
-  }
-  .sow-hud__fleet-selection-actions button {
-    flex: 1 1 0;
-    min-width: 0;
-    padding-inline: 4px;
-    font-size: 8px;
-  }
 }
 
 .sow-hud__army-allocation {
@@ -2453,11 +2353,22 @@ html[dir="rtl"] .sow-hud__bot-badge {
   align-content: start;
   gap: 10px;
 }
+.sow-hud__inbox-bulk {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 16px 2px;
+}
+.sow-hud__inbox-bulk[hidden],
 .sow-hud__inbox-list[hidden],
 .sow-hud__inbox-empty[hidden],
 .sow-hud__request-resources[hidden],
 .sow-hud__request-swap[hidden],
-.sow-hud__request-metric[hidden] {
+.sow-hud__request-metric[hidden],
+.sow-hud__request-timer[hidden],
+.sow-hud__request-toasts[hidden],
+.sow-hud__request-toast-more[hidden] {
   display: none;
 }
 .sow-hud__inbox-empty {
@@ -2494,10 +2405,61 @@ html[dir="rtl"] .sow-hud__bot-badge {
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
+.sow-hud__request-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-inline-size: 0;
+}
 .sow-hud__request-type {
   color: var(--sow-muted);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.3;
+  min-inline-size: 0;
+}
+.sow-hud__request-card.is-renewal .sow-hud__request-type {
+  color: #8be9fd;
+  font-weight: 700;
+}
+.sow-hud__request-timer {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid rgb(238 194 104 / 36%);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 5%);
+  color: var(--sow-gold-bright);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.sow-hud__request-card.is-expiring .sow-hud__request-timer {
+  border-color: rgb(248 113 113 / 72%);
+  background: rgb(220 38 38 / 22%);
+  color: #fecaca;
+}
+.sow-hud__request-timer-bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgb(255 255 255 / 7%);
+  pointer-events: none;
+}
+.sow-hud__request-timer-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--sow-gold), #ffe59e);
+  transition: transform 240ms linear;
+}
+html[dir="rtl"] .sow-hud__request-timer-fill {
+  transform-origin: right center;
+}
+.sow-hud__request-card.is-expiring .sow-hud__request-timer-fill {
+  background: linear-gradient(90deg, #ef4444, #fca5a5);
 }
 .sow-hud__request-resources {
   display: flex;
@@ -2557,6 +2519,192 @@ html[dir="rtl"] .sow-hud__bot-badge {
 }
 .sow-hud__request-card.is-inactive .sow-hud__request-identity {
   opacity: 0.55;
+}
+.sow-hud__inbox-bulk-btn,
+.sow-hud__request-actions button.sow-hud__request-accept,
+.sow-hud__request-actions button.sow-hud__request-reject {
+  min-inline-size: 0;
+}
+.sow-hud__request-accept {
+  border-color: rgb(74 222 128 / 45%) !important;
+  background: rgb(34 197 94 / 12%) !important;
+  color: #86efac !important;
+}
+.sow-hud__request-accept:not(:disabled):hover {
+  border-color: rgb(74 222 128 / 80%) !important;
+  background: rgb(34 197 94 / 22%) !important;
+  box-shadow: 0 0 14px rgb(74 222 128 / 22%);
+}
+.sow-hud__request-reject {
+  border-color: rgb(248 113 113 / 44%) !important;
+  background: rgb(239 68 68 / 11%) !important;
+  color: #fca5a5 !important;
+}
+.sow-hud__request-reject:not(:disabled):hover {
+  border-color: rgb(248 113 113 / 80%) !important;
+  background: rgb(239 68 68 / 22%) !important;
+  box-shadow: 0 0 14px rgb(239 68 68 / 22%);
+}
+.sow-hud__inbox-bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--sow-line);
+  border-radius: 4px 8px 4px 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  touch-action: manipulation;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+/* Request Toast Deck (stacked diagonal cards) */
+.sow-hud__request-toasts {
+  position: absolute;
+  top: calc(var(--sow-hud-top-edge) + 56px);
+  inset-inline-end: max(12px, var(--sow-sar));
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: min(312px, calc(100vw - 24px));
+  --stack-offset-x: -7px;
+  --stack-offset-y: 7px;
+  pointer-events: none;
+}
+html[dir="rtl"] .sow-hud__request-toasts {
+  --stack-offset-x: 7px;
+}
+.sow-hud__request-toast-stack {
+  position: relative;
+  display: grid;
+  width: 100%;
+}
+.sow-hud__request-toast {
+  grid-area: 1 / 1;
+  padding: 10px 12px 12px;
+  gap: 8px;
+  transform-origin: top center;
+  transform: translate3d(
+      calc(var(--stack-i, 0) * var(--stack-offset-x)),
+      calc(var(--stack-i, 0) * var(--stack-offset-y)),
+      0
+    )
+    scale(calc(1 - var(--stack-i, 0) * 0.035));
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease,
+    filter 200ms ease;
+  will-change: transform, opacity;
+}
+.sow-hud__request-toast.is-front {
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow:
+    var(--sow-tactical-card-shadow),
+    0 14px 32px rgb(0 0 0 / 52%),
+    0 0 22px color-mix(in srgb, var(--sow-gold) 18%, transparent),
+    var(--sow-tactical-surface-highlight);
+}
+.sow-hud__request-toast.is-stacked {
+  pointer-events: none;
+  opacity: calc(1 - var(--stack-i, 0) * 0.14);
+  filter: brightness(calc(1 - var(--stack-i, 0) * 0.11));
+}
+.sow-hud__request-toast.is-entering {
+  animation: sow-request-toast-enter 280ms cubic-bezier(0.2, 0.9, 0.25, 1.12)
+    both;
+}
+.sow-hud__request-toast .sow-hud__request-identity {
+  flex-basis: 100%;
+}
+.sow-hud__request-toast .sow-hud__request-name {
+  font-size: 15px;
+}
+.sow-hud__request-toast .sow-hud__request-type {
+  font-size: 12.5px;
+}
+.sow-hud__request-toast .sow-hud__notification-avatar {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+}
+.sow-hud__request-toast .sow-hud__request-actions {
+  flex-basis: 100%;
+}
+.sow-hud__request-toast .sow-hud__request-actions button {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+.sow-hud__request-toast-more {
+  pointer-events: auto;
+  margin-top: 14px;
+  padding: 4px 10px;
+  border: 1px solid var(--sow-tactical-surface-accent-border);
+  border-radius: 999px;
+  background: var(--sow-panel-card);
+  color: var(--sow-gold-bright);
+  box-shadow: var(--sow-tactical-card-shadow);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  touch-action: manipulation;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease;
+}
+.sow-hud__request-toast-more:hover {
+  transform: translateY(-1px);
+  border-color: var(--sow-gold-bright);
+}
+@keyframes sow-request-toast-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(28px, -4px, 0) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translate3d(-4px, 1px, 0) scale(1.01);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+html[dir="rtl"] .sow-hud__request-toast.is-entering {
+  animation-name: sow-request-toast-enter-rtl;
+}
+@keyframes sow-request-toast-enter-rtl {
+  from {
+    opacity: 0;
+    transform: translate3d(-28px, -4px, 0) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translate3d(4px, 1px, 0) scale(1.01);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+#sow-hud[data-overlay-open="true"] .sow-hud__request-toasts {
+  display: none;
+}
+#sow-hud.is-reduced-motion .sow-hud__request-toast.is-entering {
+  animation: none;
 }
 
 /* Dev Tools */
@@ -4436,6 +4584,352 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
   .sow-hud__building-progress-time {
     font-size: 12px;
+  }
+}
+
+.sow-hud__building-card.is-city-card {
+  width: min(328px, calc(100vw - 24px));
+  max-width: min(328px, calc(100vw - 24px));
+  gap: 7px;
+  padding: 10px 11px;
+}
+
+.sow-hud__city-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.sow-hud__city-trait {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(11, 16, 20, 0.82);
+  color: #f6e7c4;
+}
+
+.sow-hud__city-trait.is-coastal {
+  border-color: rgba(84, 186, 255, 0.42);
+  color: #8dd4ff;
+}
+
+.sow-hud__city-trait.is-rail {
+  border-color: rgba(240, 169, 43, 0.45);
+  color: var(--sow-gold-bright);
+}
+
+.sow-hud__city-trait-icon {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.sow-hud__city-construction {
+  padding: 5px 7px;
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
+  background: var(--sow-tactical-surface-subcard-bg);
+}
+
+.sow-hud__city-construction .sow-hud__building-card-thumb {
+  width: 28px;
+  height: 28px;
+}
+
+.sow-hud__city-construction .sow-hud__building-card-art {
+  width: 20px;
+  height: 20px;
+}
+
+.sow-hud__city-construction .sow-hud__building-progress-track {
+  height: 26px;
+}
+
+.sow-hud__city-districts {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sow-hud__city-district-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(8, 12, 16, 0.56);
+}
+
+.sow-hud__city-district-info {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sow-hud__city-district-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(12, 17, 22, 0.9);
+}
+
+.sow-hud__city-district-art {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.sow-hud__city-district-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sow-hud__city-district-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.sow-hud__city-district-name {
+  color: #f8f2e4;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sow-hud__city-district-lv {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #d6d0c4;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.sow-hud__city-district-lv.is-max {
+  background: rgba(65, 201, 126, 0.16);
+  color: #82f1b0;
+}
+
+.sow-hud__city-district-lv.is-building {
+  background: rgba(240, 169, 43, 0.2);
+  color: var(--sow-gold-bright);
+}
+
+.sow-hud__city-district-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sow-hud__city-district-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #e6dfd1;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.sow-hud__city-district-stat.is-preview {
+  color: #9be8ba;
+}
+
+.sow-hud__city-district-stat .sow-hud__building-stat-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.sow-hud__city-district-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 4px 7px;
+  border: 1px solid var(--sow-button-primary-border);
+  border-radius: var(--sow-button-radius);
+  background: var(--sow-button-primary-bg);
+  color: var(--sow-button-primary-text);
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.sow-hud__city-district-btn:hover:not(.is-locked):not(.is-max) {
+  filter: brightness(1.06);
+}
+
+.sow-hud__city-district-btn:active:not(.is-max) {
+  transform: translateY(1px);
+}
+
+.sow-hud__city-district-btn.is-discounted:not(.is-locked) {
+  box-shadow: 0 0 0 1px rgba(102, 232, 155, 0.48), var(--sow-button-primary-shadow);
+}
+
+.sow-hud__city-district-btn.is-locked,
+.sow-hud__city-district-btn.is-max {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(34, 41, 47, 0.92);
+  color: #b7b1a6;
+}
+
+.sow-hud__city-district-btn.is-max {
+  border-color: rgba(65, 201, 126, 0.32);
+  background: rgba(18, 42, 31, 0.85);
+  color: #82f1b0;
+  cursor: default;
+}
+
+.sow-hud__city-district-btn .sow-hud__building-upgrade-pill {
+  height: 21px;
+  padding: 0 5px;
+  font-size: 10.5px;
+}
+
+.sow-hud__city-district-btn.is-locked .sow-hud__building-upgrade-cost {
+  border-color: rgba(232, 93, 74, 0.45);
+  background: rgba(44, 16, 16, 0.78);
+  color: #ff9485;
+}
+
+.sow-hud__city-district-lock {
+  width: 14px;
+  height: 14px;
+}
+
+.sow-hud__city-arsenal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.sow-hud__city-arsenal-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 54px;
+  padding: 5px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(12, 18, 24, 0.86);
+  color: #f6f0e2;
+  cursor: pointer;
+  transition: filter 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.sow-hud__city-arsenal-btn:hover:not(.is-locked) {
+  border-color: rgba(240, 169, 43, 0.52);
+  filter: brightness(1.08);
+}
+
+.sow-hud__city-arsenal-btn:active {
+  transform: translateY(1px);
+}
+
+.sow-hud__city-arsenal-btn.is-ready {
+  border-color: rgba(65, 201, 126, 0.56);
+  background: linear-gradient(180deg, rgba(28, 72, 46, 0.85), rgba(14, 34, 24, 0.92));
+}
+
+.sow-hud__city-arsenal-btn.active {
+  border-color: var(--sow-gold-bright);
+  box-shadow: 0 0 0 1px rgba(240, 169, 43, 0.65);
+}
+
+.sow-hud__city-arsenal-btn.is-cooling {
+  border-color: rgba(84, 186, 255, 0.42);
+  background: rgba(16, 30, 44, 0.88);
+  cursor: default;
+}
+
+.sow-hud__city-arsenal-btn.is-locked {
+  opacity: 0.68;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(18, 22, 26, 0.72);
+  color: #a9a296;
+}
+
+.sow-hud__city-arsenal-art {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.sow-hud__city-arsenal-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.sow-hud__city-arsenal-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--sow-gold-bright);
+}
+
+.sow-hud__city-arsenal-btn.is-locked .sow-hud__city-arsenal-meta {
+  color: #ff9485;
+}
+
+.sow-hud__city-arsenal-meta.is-ready,
+.sow-hud__city-arsenal-btn.is-ready .sow-hud__city-arsenal-meta {
+  color: #82f1b0;
+}
+
+.sow-hud__city-arsenal-btn.is-cooling .sow-hud__city-arsenal-meta {
+  color: #8dd4ff;
+}
+
+@media (max-width: 720px) {
+  .sow-hud__building-card.is-city-card {
+    width: min(300px, calc(100vw - 16px));
+    max-width: min(300px, calc(100vw - 16px));
+    padding: 8px 9px;
+    gap: 6px;
+  }
+
+  .sow-hud__city-district-btn .sow-hud__building-upgrade-time {
+    display: none;
   }
 }
 
@@ -6581,6 +7075,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   }
   .sow-hud__operations-list {
     grid-auto-rows: max-content;
+    max-height: 65px;
+  }
+  .sow-hud__naval-activity-list {
+    max-height: 65px;
   }
   .sow-hud__operation {
     grid-template-columns: 28px minmax(0, 1fr) max-content max-content;
@@ -6758,8 +7256,31 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   #sow-hud[data-overlay-open="true"] .sow-hud__right-rail,
   #sow-hud[data-overlay-open="true"] .sow-hud__hover-card,
   #sow-hud[data-overlay-open="true"] .sow-hud__notification,
+  #sow-hud[data-overlay-open="true"] .sow-hud__request-toasts,
   #sow-hud[data-overlay-open="true"] .sow-hud__map-feedback {
     display: none;
+  }
+  .sow-hud__request-toasts {
+    top: calc(var(--sow-hud-top-edge) + 54px);
+    inset-inline: 0;
+    margin-inline: auto;
+    align-items: center;
+    width: min(312px, calc(100vw - 28px));
+    --stack-offset-x: -5px;
+    --stack-offset-y: 6px;
+  }
+  html[dir="rtl"] .sow-hud__request-toasts {
+    --stack-offset-x: 5px;
+  }
+  .sow-hud__request-toast {
+    padding: 9px 10px 11px;
+    gap: 7px;
+  }
+  .sow-hud__request-toast .sow-hud__request-name {
+    font-size: 14px;
+  }
+  .sow-hud__request-toast .sow-hud__request-type {
+    font-size: 12px;
   }
 }
 
@@ -6887,8 +7408,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
       transparent;
     -webkit-overflow-scrolling: touch;
   }
-  #sow-hud[data-compact="true"] .sow-hud__buildings-strip,
-  #sow-hud[data-compact="true"] .sow-hud__fleet-strip {
+  #sow-hud[data-compact="true"] .sow-hud__buildings-strip {
     flex: 0 0 auto;
     width: auto;
     gap: 4px;
@@ -6896,19 +7416,6 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   #sow-hud[data-compact="true"] .sow-hud__building-btn {
     flex: 0 0 44px;
     min-height: 44px;
-  }
-  #sow-hud[data-compact="true"] .sow-hud__building-btn[data-fleet-kind] {
-    flex-basis: 52px;
-    min-height: 54px;
-  }
-  #sow-hud[data-compact="true"]
-    .sow-hud__building-btn[data-fleet-kind]
-    .sow-hud__building-icon {
-    width: 24px;
-    height: 24px;
-  }
-  #sow-hud[data-compact="true"] .sow-hud__fleet-kind-label {
-    font-size: 7px;
   }
   #sow-hud[data-compact="true"] .sow-hud__building-icon {
     width: 28px;
@@ -7114,11 +7621,13 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 #sow-hud[data-compact="true"] .sow-hud__dock-inner,
 #sow-hud[data-compact="true"] .sow-hud__operations,
 #sow-hud[data-compact="true"] .sow-hud__hover-card,
-#sow-hud[data-compact="true"] .sow-hud__notifications {
+#sow-hud[data-compact="true"] .sow-hud__notifications,
+#sow-hud[data-compact="true"] .sow-hud__request-toasts {
   scale: var(--sow-hud-density);
 }
 
-#sow-hud[data-compact="true"] .sow-hud__status-right {
+#sow-hud[data-compact="true"] .sow-hud__status-right,
+#sow-hud[data-compact="true"] .sow-hud__request-toasts {
   transform-origin: right top;
 }
 #sow-hud[data-compact="true"] .sow-hud__nameplate {
@@ -7148,6 +7657,10 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__notifications {
   transform-origin: right top;
 }
 
+html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
+  transform-origin: left top;
+}
+
 html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__status-right,
 html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail,
 html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__left-rail {
@@ -7155,6 +7668,62 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__left-rail {
 }
 html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail {
   transform-origin: left bottom;
+}
+
+/* Compact horizontal & small windows keep the card stack tucked under the top-right status bar. */
+#sow-hud[data-compact="true"] .sow-hud__request-toasts {
+  top: calc(var(--sow-hud-top-edge) + 48px);
+  inset-inline-start: auto;
+  inset-inline-end: max(8px, var(--sow-sar));
+  margin-inline: 0;
+  align-items: flex-end;
+  width: min(286px, calc(100vw - 128px));
+  --stack-offset-x: -4px;
+  --stack-offset-y: 4px;
+}
+
+html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
+  --stack-offset-x: 4px;
+}
+
+#sow-hud[data-compact="true"] .sow-hud__request-toast {
+  padding: 7px 9px 9px;
+  gap: 6px;
+}
+
+#sow-hud[data-compact="true"] .sow-hud__request-toast .sow-hud__notification-avatar {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+}
+
+#sow-hud[data-compact="true"] .sow-hud__request-toast .sow-hud__request-name {
+  font-size: 13px;
+}
+
+#sow-hud[data-compact="true"] .sow-hud__request-toast .sow-hud__request-type {
+  font-size: 11px;
+}
+
+#sow-hud[data-compact="true"] .sow-hud__request-toast .sow-hud__request-actions button {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+#sow-hud[data-compact="true"][data-overlay-open="true"] .sow-hud__request-toasts {
+  display: none;
+}
+
+@media (max-width: 640px) and (orientation: portrait) {
+  #sow-hud[data-compact="true"] .sow-hud__request-toasts {
+    top: calc(var(--sow-hud-top-edge) + 54px);
+    inset-inline: max(10px, var(--sow-sal)) max(10px, var(--sow-sar));
+    margin-inline: auto;
+    align-items: center;
+    width: min(332px, calc(100vw - 20px));
+    transform-origin: center top;
+  }
 }
 
 @media (pointer: coarse) {
@@ -7166,7 +7735,8 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail {
       .sow-hud__right-rail,
       .sow-hud__dock-inner,
       .sow-hud__operations,
-      .sow-hud__notifications
+      .sow-hud__notifications,
+      .sow-hud__request-toasts
     )
     :is(button, input, select, textarea) {
     zoom: var(--sow-hud-hit-target-zoom);
@@ -7184,7 +7754,8 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail {
       .sow-hud__right-rail,
       .sow-hud__dock-inner,
       .sow-hud__operations,
-      .sow-hud__notifications
+      .sow-hud__notifications,
+      .sow-hud__request-toasts
     )
     :is(button, input, select, textarea) {
     zoom: var(--sow-hud-hit-target-zoom);

@@ -16,8 +16,10 @@ impl SowEngine {
         self.state.map.dirty_tiles = dirty_indices;
         self.refresh_building_aggregates();
 
+        let tick = self.current_tick_u32();
         let proposed = &self.alliances_proposed;
         let proposed_resources = &self.resource_requests_proposed;
+        let proposed_help = &self.help_calls_proposed;
         let emote_phase = self.state.phase.clone();
         let boats_in_use = self.boat_slots_used_by_player();
         let players = self
@@ -25,11 +27,6 @@ impl SowEngine {
             .players
             .iter()
             .map(|p| {
-                let nuke_city_level = if p.player_type == crate::player::PlayerType::Human {
-                    1
-                } else {
-                    crate::game::NukeKind::AtomBomb.required_city_level()
-                };
                 let (cx, cy) = if p.tile_count > 0 {
                     (
                         (p.sum_x / p.tile_count as u64) as f32,
@@ -41,11 +38,14 @@ impl SowEngine {
 
                 let name = p.name.clone();
 
-                let alliance_requests = proposed
-                    .iter()
-                    .filter(|prop| prop.target == p.id)
-                    .map(|prop| prop.proposer)
-                    .collect();
+                let mut alliance_requests = Vec::new();
+                let mut alliance_request_timers = std::collections::HashMap::new();
+                for prop in proposed.iter().filter(|prop| prop.target == p.id) {
+                    alliance_requests.push(prop.proposer);
+                    let remaining = crate::diplomacy::ALLIANCE_REQUEST_TTL_TICKS
+                        .saturating_sub(tick.saturating_sub(prop.created_tick));
+                    alliance_request_timers.insert(prop.proposer, remaining);
+                }
 
                 let resource_requests = proposed_resources
                     .iter()
@@ -56,8 +56,29 @@ impl SowEngine {
                         troops: r.troops,
                         pay_gold: r.pay_gold,
                         pay_troops: r.pay_troops,
+                        remaining_ticks: crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS
+                            .saturating_sub(tick.saturating_sub(r.created_tick)),
                     })
                     .collect();
+
+                let help_calls = proposed_help
+                    .iter()
+                    .filter(|h| h.target == p.id && self.resources_can_move(h.target, h.caller))
+                    .filter_map(|h| {
+                        let caller = self.state.player(h.caller)?;
+                        let caller_under_attack = self.is_player_under_attack(h.caller);
+                        let (suggested_gold, suggested_troops) =
+                            crate::diplomacy::compute_help_aid(p, caller, caller_under_attack);
+                        Some(crate::protocol::HelpCall {
+                            caller: h.caller,
+                            suggested_gold,
+                            suggested_troops,
+                            remaining_ticks: crate::diplomacy::HELP_CALL_TTL_TICKS
+                                .saturating_sub(tick.saturating_sub(h.created_tick)),
+                        })
+                    })
+                    .collect();
+                let help_cooldown_ticks = self.help_call_cooldown_remaining(p.id);
 
                 crate::protocol::PlayerSnapshot {
                     id: p.id,
@@ -81,6 +102,7 @@ impl SowEngine {
                     alliances: p.alliances.clone(),
                     alliance_timers: p.alliance_timers.clone(),
                     alliance_requests,
+                    alliance_request_timers,
                     resource_requests,
                     disconnected: p.disconnected,
                     active_emote: p.active_emote,
@@ -110,12 +132,14 @@ impl SowEngine {
                             .map_or(0, |aggregate| aggregate.port_levels),
                     ),
                     nuke_available: p.alive
-                        && p.gold >= self.state.config.nuke_cost
                         && self.buildings.iter().any(|building| {
                             building.owner_id == p.id
                                 && building.kind == crate::game::BuildingKind::City
-                                && building.active_level() >= nuke_city_level
-                                && self.silo_cooldowns.get(&building.id).copied().unwrap_or(0) == 0
+                                && !building.under_construction
+                                && self
+                                    .city_arsenals
+                                    .get(&building.id)
+                                    .is_some_and(|state| state.nuke_ready)
                         }),
                     nuke_cooldown_ticks: self
                         .buildings
@@ -123,11 +147,20 @@ impl SowEngine {
                         .filter(|building| {
                             building.owner_id == p.id
                                 && building.kind == crate::game::BuildingKind::City
-                                && building.active_level() >= nuke_city_level
+                                && !building.under_construction
                         })
-                        .map(|building| self.silo_cooldowns.get(&building.id).copied().unwrap_or(0))
+                        .filter_map(|building| {
+                            self.city_arsenals.get(&building.id).and_then(|state| {
+                                state.arsenal_build.and_then(|build| {
+                                    (build.kind == crate::game::CityArsenalKind::Nuke)
+                                        .then_some(build.ticks_until_complete)
+                                })
+                            })
+                        })
                         .min()
                         .unwrap_or(0),
+                    help_calls,
+                    help_cooldown_ticks,
                 }
             })
             .collect();
@@ -200,14 +233,37 @@ impl SowEngine {
         let buildings: Vec<crate::protocol::BuildingSnapshot> = self
             .buildings
             .iter()
-            .map(|b| crate::protocol::BuildingSnapshot {
-                id: b.id,
-                tile_idx: b.tile_idx,
-                owner_id: b.owner_id,
-                kind: b.kind,
-                level: b.level,
-                under_construction: b.under_construction,
-                ticks_until_complete: b.ticks_until_complete,
+            .map(|b| {
+                let (has_anti_nuke, nuke_ready, arsenal_build, sam_cooldown_ticks) =
+                    if b.kind == crate::game::BuildingKind::City {
+                        let arsenal = self.city_arsenals.get(&b.id).copied().unwrap_or_default();
+                        let sam_cd = if arsenal.has_anti_nuke {
+                            self.silo_cooldowns.get(&b.id).copied().unwrap_or(0)
+                        } else {
+                            0
+                        };
+                        (
+                            arsenal.has_anti_nuke,
+                            arsenal.nuke_ready,
+                            arsenal.arsenal_build,
+                            sam_cd,
+                        )
+                    } else {
+                        (false, false, None, 0)
+                    };
+                crate::protocol::BuildingSnapshot {
+                    id: b.id,
+                    tile_idx: b.tile_idx,
+                    owner_id: b.owner_id,
+                    kind: b.kind,
+                    level: b.level,
+                    under_construction: b.under_construction,
+                    ticks_until_complete: b.ticks_until_complete,
+                    has_anti_nuke,
+                    nuke_ready,
+                    arsenal_build,
+                    sam_cooldown_ticks,
+                }
             })
             .collect();
 
@@ -298,6 +354,25 @@ impl SowEngine {
                         Some(crate::protocol::ResourceRejection {
                             rejector_id: *rejector_id,
                             requester_id: *requester_id,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            help_call_rejections: self
+                .state
+                .events
+                .iter()
+                .filter_map(|e| {
+                    if let crate::game::GameEvent::HelpCallDeclined {
+                        responder_id,
+                        caller_id,
+                    } = e
+                    {
+                        Some(crate::protocol::ResourceRejection {
+                            rejector_id: *responder_id,
+                            requester_id: *caller_id,
                         })
                     } else {
                         None

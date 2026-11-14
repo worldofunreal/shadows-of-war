@@ -160,6 +160,7 @@ pub enum PlacementError {
     Occupied,
     CoastRequired,
     LowlandRequired,
+    CityRequired,
 }
 
 impl PlacementError {
@@ -170,22 +171,72 @@ impl PlacementError {
             Self::Occupied => "hud.build_occupied",
             Self::CoastRequired => "hud.build_coast_required",
             Self::LowlandRequired => "hud.build_lowland_required",
+            Self::CityRequired => "hud.build_occupied",
         }
     }
 }
 
+/// Calls `visit(water_tile)` for every water tile immediately bordering the 4×4 City footprint at `city_tile`.
+pub fn for_each_city_coastal_water_tile(
+    map: &GameMap,
+    city_tile: u32,
+    mut visit: impl FnMut(u32),
+) {
+    if map.width == 0 || map.height == 0 || city_tile >= map.width.saturating_mul(map.height) {
+        return;
+    }
+    let (x, y) = idx_xy(city_tile, map.width);
+    let footprint = BuildingFootprint::at(BuildingKind::City, x, y);
+    let left = footprint.left.saturating_sub(1).max(0);
+    let top = footprint.top.saturating_sub(1).max(0);
+    let right = (footprint.left + footprint.width as i32).min(map.width as i32 - 1);
+    let bottom = (footprint.top + footprint.height as i32).min(map.height as i32 - 1);
+    for fy in top..=bottom {
+        for fx in left..=right {
+            if footprint.contains(fx, fy) {
+                continue;
+            }
+            let tile = fy as u32 * map.width + fx as u32;
+            if map.terrain[tile as usize].is_water() {
+                visit(tile);
+            }
+        }
+    }
+}
+
+/// Returns true if the 4×4 City footprint centered around `(x, y)` touches at least one water tile.
+pub fn city_footprint_touches_water(
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    terrain_at: impl Fn(u32, u32) -> u8,
+) -> bool {
+    let footprint = BuildingFootprint::at(BuildingKind::City, x, y);
+    for fy in footprint.top - 1..=footprint.top + footprint.height as i32 {
+        for fx in footprint.left - 1..=footprint.left + footprint.width as i32 {
+            if fx >= 0
+                && fy >= 0
+                && fx < width as i32
+                && fy < height as i32
+                && terrain_at(fx as u32, fy as u32) & 0x80 == 0
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Shared per-cell rules also identify the exact conflicts in a selected foundation.
 pub fn validate_building_cell(
-    kind: BuildingKind,
+    _kind: BuildingKind,
     owner_id: u16,
     tile_owner: u16,
     terrain: u8,
 ) -> Result<(), PlacementError> {
     if owner_id == 0 || tile_owner != owner_id || terrain & 0x80 == 0 {
         return Err(PlacementError::OwnLand);
-    }
-    if kind == BuildingKind::Farm && terrain & 0x1f >= 10 {
-        return Err(PlacementError::LowlandRequired);
     }
     Ok(())
 }
@@ -224,23 +275,10 @@ pub fn validate_building_site(
     if occupied(footprint) {
         return Err(PlacementError::Occupied);
     }
-    if kind == BuildingKind::Port {
-        let mut coast = false;
-        for fy in footprint.top - 1..=footprint.top + footprint.height as i32 {
-            for fx in footprint.left - 1..=footprint.left + footprint.width as i32 {
-                if fx >= 0
-                    && fy >= 0
-                    && fx < width as i32
-                    && fy < height as i32
-                    && terrain_at(fx as u32, fy as u32) & 0x80 == 0
-                {
-                    coast = true;
-                }
-            }
-        }
-        if !coast {
-            return Err(PlacementError::CoastRequired);
-        }
+    if kind == BuildingKind::Port
+        && !city_footprint_touches_water(x, y, width, height, &terrain_at)
+    {
+        return Err(PlacementError::CoastRequired);
     }
     Ok(())
 }
@@ -256,6 +294,31 @@ pub fn validate_structure_site(
         return Err(PlacementError::OutsideMap);
     }
     let (x, y) = idx_xy(tile, map.width);
+    if kind.is_district() {
+        let has_city = existing
+            .iter_in_range(x, y, 0)
+            .any(|building| building.x == x && building.y == y);
+        if !has_city {
+            return Err(PlacementError::CityRequired);
+        }
+        let already_built = existing
+            .iter_non_city_in_range(x, y, 0)
+            .any(|building| building.x == x && building.y == y && building.kind == kind);
+        if already_built {
+            return Err(PlacementError::Occupied);
+        }
+        return validate_building_site(
+            kind,
+            x,
+            y,
+            map.width,
+            map.height,
+            owner_id,
+            |fx, fy| map.owner_id(fx, fy),
+            |fx, fy| map.terrain[map.ref_id(fx, fy)].as_byte(),
+            |_| false,
+        );
+    }
     validate_building_site(
         kind,
         x,
@@ -263,14 +326,61 @@ pub fn validate_structure_site(
         map.width,
         map.height,
         owner_id,
-        |x, y| map.owner_id(x, y),
-        |x, y| map.terrain[map.ref_id(x, y)].as_byte(),
+        |fx, fy| map.owner_id(fx, fy),
+        |fx, fy| map.terrain[map.ref_id(fx, fy)].as_byte(),
         |footprint| {
-            existing.iter_all_in_range(x, y, 3).any(|building| {
+            existing.iter_in_range(x, y, 3).any(|building| {
                 footprint.intersects(BuildingFootprint::at(building.kind, building.x, building.y))
             })
         },
     )
+}
+
+/// Authoritative check for creating a Lv.1 district inside a ready owned City at `city_tile`.
+pub fn validate_district_site(
+    map: &GameMap,
+    buildings: &[crate::building::Building],
+    city_arsenals: &std::collections::HashMap<u64, crate::building::CityArsenalState>,
+    owner_id: u16,
+    kind: BuildingKind,
+    city_tile: u32,
+) -> Result<u64, PlacementError> {
+    if !kind.is_district() {
+        return Err(PlacementError::Occupied);
+    }
+    if map.width == 0 || city_tile >= map.width.saturating_mul(map.height) {
+        return Err(PlacementError::OutsideMap);
+    }
+    let (x, y) = idx_xy(city_tile, map.width);
+    if owner_id == 0 || map.owner_id(x, y) != owner_id || !map.terrain[city_tile as usize].is_land()
+    {
+        return Err(PlacementError::OwnLand);
+    }
+    let Some(city) = buildings.iter().find(|b| {
+        b.tile_idx == city_tile
+            && b.kind == BuildingKind::City
+            && b.owner_id == owner_id
+            && !b.under_construction
+    }) else {
+        return Err(PlacementError::CityRequired);
+    };
+    if crate::building::city_has_active_build(buildings, city_arsenals, city_tile) {
+        return Err(PlacementError::Occupied);
+    }
+    if buildings
+        .iter()
+        .any(|b| b.tile_idx == city_tile && b.kind == kind)
+    {
+        return Err(PlacementError::Occupied);
+    }
+    if kind == BuildingKind::Port
+        && !city_footprint_touches_water(x, y, map.width, map.height, |fx, fy| {
+            map.terrain[map.ref_id(fx, fy)].as_byte()
+        })
+    {
+        return Err(PlacementError::CoastRequired);
+    }
+    Ok(city.id)
 }
 
 fn for_each_valid_land_structure_index(

@@ -392,7 +392,7 @@ function renderHeroesCard(leader: MenuLeader, activeId: string) {
                   total: achSummary.totalCount,
               })) +
               "'>★ " +
-              esc(achSummary.unlockedCount + "/" + achSummary.totalCount) +
+              esc(achSummary.unlockedCount) +
               "</span>"
             : "";
     const meta =
@@ -1016,8 +1016,8 @@ function renderHeroCareerRecord(leader: MenuLeader): string {
         "<div>" +
         "<span class='sow-hero-info__ach-preview-kicker'>" +
         esc(tText("heroes.hero_achievements", "Hero Achievements")) +
-        " · " +
-        esc(summary.unlockedCount + "/" + summary.totalCount) +
+        " · ★ " +
+        esc(summary.unlockedCount) +
         "</span>" +
         "<strong>" +
         esc(nextLabel) +
@@ -1211,8 +1211,8 @@ export function renderHeroInfoModal() {
         (tab === "achievements" ? " is-active" : "") +
         "' data-command='switch_hero_info_tab' data-hero-info-tab='achievements'>" +
         esc(tText("heroes.tab_achievements", "Achievements")) +
-        "<b class='sow-hero-info__tab-count'>" +
-        esc(achSummary.unlockedCount + "/" + achSummary.totalCount) +
+        "<b class='sow-hero-info__tab-count'>★ " +
+        esc(achSummary.unlockedCount) +
         "</b>" +
         "</button>" +
         "</div>" +

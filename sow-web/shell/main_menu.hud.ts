@@ -10,14 +10,35 @@ import {
 } from "./avatar-presentation.ts";
 import { abilityIconMarkup, esc } from "./main_menu.core.ts";
 import { renderLocaleSettingRow } from "./main_menu.settings.ts";
+import {
+  createRequestToastDeckState,
+  dismissAllRequestToasts,
+  dismissFrontRequestToast,
+  dismissRequestToastByKey,
+  isValidInboxRequest,
+  readRequestCountdown,
+  reconcileRequestToastDeck,
+  requestKey,
+  resetRequestToastDeck,
+  syncRequestCountdowns,
+  type RequestCountdownRecord,
+  type RequestToastDeckState,
+  type RequestToastEntry,
+} from "./request-toast-deck.ts";
 import { syncDropdownScope } from "./sow-dropdown.ts";
 import { SOWTooltip } from "./sow-tooltip.ts";
+import {
+  resolveTransferHotkey,
+  resolveTransferMaxTarget,
+} from "./transfer-hotkeys.ts";
 import type {
   HudAvatarIdentity,
   HudAvatarTransition,
   HudBuildingPlacement,
   HudBuildingProgressItem,
   HudBuildingCelebrationItem,
+  HudCityArsenal,
+  HudCityDistrict,
   HudCombatOperation,
   HudDevTools,
   HudInboxRequest,
@@ -27,6 +48,7 @@ import type {
   HudMapMenu,
   HudMapMenuBuilding,
   HudMapMenuItem,
+  HudNavalActivity,
   HudNotification,
   HudStateEnvelope,
   HudDevParameter,
@@ -86,11 +108,17 @@ type PlayerIdentityParts = {
 type InboxAmount = "gold" | "troops" | "pay_gold" | "pay_troops";
 type InboxRequestParts = PlayerIdentityParts & {
   type: HTMLElement;
+  timer: HTMLElement;
+  progressFill: HTMLElement;
   resources: HTMLElement;
   amounts: Record<InboxAmount, { element: HTMLElement; value: HTMLElement }>;
   swap: HTMLElement;
   accept: HTMLButtonElement;
   reject: HTMLButtonElement;
+  requestKey: string;
+};
+type RequestToastCardParts = InboxRequestParts & {
+  stackIndex: number;
 };
 type LeaderboardRow = {
   card: HTMLElement;
@@ -165,7 +193,12 @@ type CompleteHudDevTools = HudDevTools & {
 type HudRingState = Partial<
   Pick<
     MenuHudPayload,
-    "emotes" | "emote_active" | "emote_pinned" | "player_leader" | "gold"
+    | "emotes"
+    | "emote_active"
+    | "emote_pinned"
+    | "help_cooldown_seconds"
+    | "player_leader"
+    | "gold"
   >
 > & {
   map_menu?: HudMapMenu | null;
@@ -207,14 +240,6 @@ type HudRefs = {
   worldProgressOverlay: HTMLElement;
   worldCelebrationsOverlay: HTMLElement;
   buildingButtons: HTMLButtonElement[];
-  fleetStrip: HTMLElement;
-  fleetTrade: HTMLElement;
-  fleetTransport: HTMLElement;
-  fleetWarship: HTMLButtonElement;
-  fleetNuke: HTMLButtonElement;
-  fleetSelection: HTMLElement;
-  fleetSelectionTitle: HTMLElement;
-  fleetSelectionHint: HTMLElement;
   panelButtons: HTMLButtonElement[];
   leaderboard: HTMLElement;
   rows: HTMLElement;
@@ -224,6 +249,9 @@ type HudRefs = {
   lbTeamWrap: HTMLElement;
   inbox: HTMLElement;
   inboxRows: HTMLElement;
+  inboxBulk: HTMLElement;
+  inboxAcceptAll: HTMLButtonElement;
+  inboxRejectAll: HTMLButtonElement;
   inboxClose: HTMLElement;
   inboxButton: HTMLElement;
   inboxTotal: HTMLElement;
@@ -231,7 +259,12 @@ type HudRefs = {
   inboxRequests: Record<string, InboxRequestParts>;
   inboxRequestKeys: string[];
   inboxRenderKey: string;
+  requestToasts: HTMLDivElement;
+  requestToastStack: HTMLDivElement;
+  requestToastMore: HTMLButtonElement;
+  requestToastCards: RequestToastCardParts[];
   transfer: HTMLElement;
+  transferTitle: HTMLElement;
   transferTarget: HTMLElement;
   transferClose: HTMLElement;
   transferReturnFocus: HTMLElement | null;
@@ -277,6 +310,10 @@ type HudRefs = {
   operationRows: HTMLElement;
   combatOperationRows: Record<string, CombatOperationRow>;
   combatOperationsOrderKey: string;
+  navalActivityTitle: HTMLElement;
+  navalActivityList: HTMLElement;
+  navalActivityRows: Record<string, CombatOperationRow>;
+  navalActivityOrderKey: string;
   notifications: HTMLDivElement;
   topbar: HTMLElement;
   dock: HTMLElement;
@@ -379,6 +416,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   let notificationTimer: number | null = null;
   let bellRingTimer: number | null = null;
   let lastInboxCount = -1;
+  const requestCountdowns = new Map<string, RequestCountdownRecord>();
+  const requestToastDeck: RequestToastDeckState = createRequestToastDeckState();
+  let requestToastExpiryTimer: number | null = null;
+  let requestCountdownTimer: number | null = null;
+  let latestInboxRequests: HudInboxRequest[] = [];
   let activeNotifications: ActiveHudNotification[] = [];
   let notificationCards: HudNotificationCard[] = [];
   let notificationLayoutFrame = 0;
@@ -1166,12 +1208,25 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   }
 
   // Ships and nukes use the same pixel-art path as buildings, at the same size.
-  function unitIcon(name: string): string {
+  function unitIcon(name: string, cls?: string): string {
     return (
-      '<span class="sow-hud__building-icon is-pixel-art" style="background-image:url(&quot;' +
+      '<span class="' +
+      (cls || "sow-hud__building-icon") +
+      ' is-pixel-art" style="background-image:url(&quot;' +
       escapeHudText(asset("gameplay/units/" + name + ".webp")) +
       '&quot;);background-size:contain;" aria-hidden="true"></span>'
     );
+  }
+
+  function structureOrUnitIcon(
+    kind: string,
+    level?: number,
+    cls?: string,
+  ): string {
+    if (kind === "Warship") return unitIcon("warship", cls);
+    if (kind === "Nuke") return unitIcon("atom-bomb", cls);
+    if (kind === "AntiNuke") return unitIcon("sam-missile", cls);
+    return buildingIcon(kind, level, cls);
   }
 
   // Gold price row under the art. Unpriced tiles keep the empty row so every tile lines up.
@@ -1501,9 +1556,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       hasVisibleNotification &&
       !hudRoot!.classList.contains("is-reduced-motion")
     ) {
-      notifications.classList.remove("is-reanchoring");
-      void notifications.offsetWidth;
-      notifications.classList.add("is-reanchoring");
+      if (!notifications.classList.contains("is-reanchoring")) {
+        notifications.classList.add("is-reanchoring");
+      }
     } else {
       notifications.classList.remove("is-reanchoring");
     }
@@ -1558,14 +1613,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           "[data-command='select_building']",
         ),
       ),
-      fleetStrip: requiredHudElement("sow-hud-fleet-strip"),
-      fleetTrade: requiredHudQuery(root, "[data-fleet-kind='trade']"),
-      fleetTransport: requiredHudQuery(root, "[data-fleet-kind='transport']"),
-      fleetWarship: requiredHudButtonQuery(root, "[data-fleet-kind='warship']"),
-      fleetNuke: requiredHudButtonQuery(root, "[data-fleet-kind='nuke']"),
-      fleetSelection: requiredHudElement("sow-hud-fleet-selection"),
-      fleetSelectionTitle: requiredHudElement("sow-hud-fleet-selection-title"),
-      fleetSelectionHint: requiredHudElement("sow-hud-fleet-selection-hint"),
       panelButtons: Array.from(
         root.querySelectorAll<HTMLButtonElement>(
           ".sow-hud__topbar [data-command^='toggle_']",
@@ -1579,6 +1626,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       lbTeamWrap: requiredHudElement("sow-hud-lb-team-wrap"),
       inbox: requiredHudElement("sow-hud-inbox"),
       inboxRows: requiredHudElement("sow-hud-inbox-rows"),
+      inboxBulk: requiredHudElement("sow-hud-inbox-bulk"),
+      inboxAcceptAll: requiredHudButton("sow-hud-inbox-accept-all"),
+      inboxRejectAll: requiredHudButton("sow-hud-inbox-reject-all"),
       inboxClose: requiredHudElement("sow-hud-inbox-close"),
       inboxButton: requiredHudQuery(root, ".sow-hud__inbox-pill"),
       inboxTotal: requiredHudElement("sow-hud-inbox-total"),
@@ -1586,7 +1636,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       inboxRequests: Object.create(null),
       inboxRequestKeys: [],
       inboxRenderKey: "",
+      requestToasts: document.createElement("div"),
+      requestToastStack: document.createElement("div"),
+      requestToastMore: document.createElement("button"),
+      requestToastCards: [],
       transfer: requiredHudElement("sow-hud-transfer"),
+      transferTitle: requiredHudElement("sow-hud-transfer-title"),
       transferTarget: requiredHudElement("sow-hud-transfer-target"),
       transferClose: requiredHudElement("sow-hud-transfer-close"),
       transferReturnFocus: null,
@@ -1656,6 +1711,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       operationRows: requiredHudElement("sow-hud-operations-list"),
       combatOperationRows: Object.create(null),
       combatOperationsOrderKey: "",
+      navalActivityTitle: requiredHudElement("sow-hud-naval-activity-title"),
+      navalActivityList: requiredHudElement("sow-hud-naval-activity-list"),
+      navalActivityRows: Object.create(null),
+      navalActivityOrderKey: "",
       notifications: document.createElement("div"),
       topbar: requiredHudQuery(root, ".sow-hud__topbar"),
       dock: requiredHudElement("sow-hud-dock"),
@@ -2103,94 +2162,19 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       buildingIcon("City") +
       tileCost(true) +
       "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Factory" aria-label="' +
-      SOW_t("hud.map_action_factory") +
-      '">' +
-      buildingIcon("Factory") +
-      tileCost(true) +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Port" aria-label="' +
-      SOW_t("hud.map_action_port") +
-      '">' +
-      buildingIcon("Port") +
-      tileCost(true) +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Tower" aria-label="' +
-      SOW_t("hud.map_action_tower") +
-      '">' +
-      buildingIcon("Tower") +
-      tileCost(true) +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Farm" aria-label="Farm">' +
-      buildingIcon("Farm") +
-      tileCost(true) +
-      "</button>" +
-      "      </div>" +
-      '      <div class="sow-hud__fleet-strip" id="sow-hud-fleet-strip">' +
-      '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img" aria-label="' +
-      SOW_t("hud.fleet_trade_label") +
-      '">' +
-      unitIcon("trade-ship") +
-      '<span class="sow-hud__fleet-count" aria-hidden="true">0</span>' +
-      '<span class="sow-hud__fleet-kind-label">' +
-      SOW_t("hud.fleet_trade_label") +
-      "</span>" +
-      tileLock() +
-      "</span>" +
-      '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="transport" role="img" aria-label="' +
-      SOW_t("hud.fleet_transport_label") +
-      '">' +
-      unitIcon("transport-ship") +
-      '<span class="sow-hud__fleet-count" aria-hidden="true">0</span>' +
-      '<span class="sow-hud__fleet-kind-label">' +
-      SOW_t("hud.fleet_transport_label") +
-      "</span>" +
-      tileLock() +
-      "</span>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_warship" data-fleet-kind="warship" aria-label="' +
-      esc(SOW_t("hud.map_action_build_warship")) +
-      '" data-sow-tooltip="' +
-      esc(SOW_t("hud.map_action_build_warship")) +
-      '">' +
-      unitIcon("warship") +
-      '<span class="sow-hud__fleet-count" aria-hidden="true">0</span>' +
-      '<span class="sow-hud__fleet-kind-label">' +
-      SOW_t("hud.fleet_warship_label") +
-      "</span>" +
-      tileCost(true) +
-      tileLock() +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_nuke" data-fleet-kind="nuke" aria-label="' +
-      esc(SOW_t("hud.map_action_nuke")) +
-      '" data-sow-tooltip="' +
-      esc(SOW_t("hud.map_action_nuke")) +
-      '">' +
-      unitIcon("atom-bomb") +
-      tileCost(true) +
-      tileLock() +
-      "</button>" +
       "      </div>" +
       "    </div>" +
-      '    <section class="sow-hud__fleet-selection" id="sow-hud-fleet-selection" hidden aria-live="polite">' +
-      '      <div class="sow-hud__fleet-selection-copy">' +
-      unitIcon("warship") +
-      '        <div class="sow-hud__fleet-selection-text"><strong id="sow-hud-fleet-selection-title"></strong><small id="sow-hud-fleet-selection-hint"></small></div>' +
-      "      </div>" +
-      '      <div class="sow-hud__fleet-selection-actions">' +
-      '<button type="button" data-command="select_all_warships">' +
-      SOW_t("hud.fleet_select_all") +
-      '</button><button type="button" data-command="center_selected_warships">' +
-      SOW_t("hud.fleet_center") +
-      '</button><button type="button" data-command="clear_warship_selection">' +
-      SOW_t("hud.fleet_clear_selection") +
-      "</button></div>" +
-      "    </section>" +
       "  </div>" +
       "</footer>" +
       '<aside class="sow-hud__operations" id="sow-hud-operations" hidden aria-label="' +
       SOW_t("hud.combat_operations") +
       '">' +
       '  <div class="sow-hud__operations-list" id="sow-hud-operations-list"></div>' +
+      '  <section class="sow-hud__naval-activity" id="sow-hud-naval-activity" hidden>' +
+      '    <h3 class="sow-hud__naval-activity-title" id="sow-hud-naval-activity-title">' +
+      SOW_t("hud.naval_activity") +
+      '</h3><div class="sow-hud__naval-activity-list" id="sow-hud-naval-activity-list"></div>' +
+      "  </section>" +
       "</aside>" +
       "</div>" +
       '<aside class="sow-hud__panel sow-hud__leaderboard sow-hud__sheet hidden" id="sow-hud-leaderboard">' +
@@ -2241,6 +2225,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '">' +
       hudIcon("close", "sow-hud__close-icon") +
       "</button></div>" +
+      '  <div class="sow-hud__inbox-bulk" id="sow-hud-inbox-bulk" hidden>' +
+      '    <button class="sow-hud__request-reject sow-hud__inbox-bulk-btn" id="sow-hud-inbox-reject-all" type="button" data-command="reject_all_alliances">' +
+      SOW_t("hud.reject_all") +
+      "</button>" +
+      '    <button class="sow-hud__request-accept sow-hud__inbox-bulk-btn" id="sow-hud-inbox-accept-all" type="button" data-command="accept_all_alliances">' +
+      SOW_t("hud.accept_all") +
+      "</button>" +
+      "  </div>" +
       '  <div class="sow-hud__sheet-body sow-hud__inbox-list" id="sow-hud-inbox-rows"></div>' +
       '  <p class="sow-hud__inbox-empty" id="sow-hud-inbox-empty" hidden>' +
       SOW_t("hud.no_pending_requests") +
@@ -2435,6 +2427,22 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     hudRefs.notifications.className = "sow-hud__notifications";
     hudRefs.notifications.setAttribute("aria-live", "polite");
     hudRoot!.appendChild(hudRefs.notifications);
+    hudRefs.requestToasts.id = "sow-hud-request-toasts";
+    hudRefs.requestToasts.className = "sow-hud__request-toasts";
+    hudRefs.requestToasts.setAttribute("role", "region");
+    hudRefs.requestToasts.setAttribute("aria-live", "polite");
+    hudRefs.requestToasts.setAttribute("aria-label", SOW_t("hud.inbox"));
+    hudRefs.requestToasts.hidden = true;
+    hudRefs.requestToastStack.className = "sow-hud__request-toast-stack";
+    hudRefs.requestToastMore.type = "button";
+    hudRefs.requestToastMore.className = "sow-hud__request-toast-more";
+    hudRefs.requestToastMore.dataset.command = "open_inbox_from_toast";
+    hudRefs.requestToastMore.hidden = true;
+    hudRefs.requestToasts.append(
+      hudRefs.requestToastStack,
+      hudRefs.requestToastMore,
+    );
+    hudRoot!.appendChild(hudRefs.requestToasts);
     hudRefs.mapFeedback.className = "sow-hud__map-feedback";
     hudRefs.mapFeedback.setAttribute("aria-live", "polite");
     hudRefs.mapFeedback.hidden = true;
@@ -2795,10 +2803,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     request_allies: { icon: "request", key: "hud.map_action_request_allies" },
     alliance: { status: "allied", key: "hud.map_action_alliance" },
     build_city: { key: "hud.map_action_city" },
-    build_factory: { key: "hud.map_action_factory" },
-    build_port: { key: "hud.map_action_port" },
-    build_tower: { key: "hud.map_action_tower" },
-    build_farm: { key: "hud.map_action_farm" },
     upgrade_structure: { icon: "upgrade", key: "hud.map_action_upgrade" },
     nuke: { icon: "nuke", key: "hud.map_action_nuke" },
   };
@@ -2975,25 +2979,335 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             ? Number(item.cost)
             : null,
         level:
-          item && Number.isFinite(Number(item.level))
+          item && item.level != null && Number.isFinite(Number(item.level))
             ? Number(item.level)
             : null,
         disabled: Boolean(item && item.disabled),
         reason_key: (item && item.reason_key) || null,
         reason_level:
-          item && Number.isFinite(Number(item.reason_level))
+          item &&
+          item.reason_level != null &&
+          Number.isFinite(Number(item.reason_level))
             ? Number(item.reason_level)
             : null,
         reason_seconds:
-          item && Number.isFinite(Number(item.reason_seconds))
+          item &&
+          item.reason_seconds != null &&
+          Number.isFinite(Number(item.reason_seconds))
             ? Number(item.reason_seconds)
             : null,
         reason_troops:
-          item && Number.isFinite(Number(item.reason_troops))
+          item &&
+          item.reason_troops != null &&
+          Number.isFinite(Number(item.reason_troops))
             ? Number(item.reason_troops)
             : null,
       };
     });
+  }
+
+  function districtActionCta(d: HudCityDistrict): string {
+    if (d.next_level == null) return "MAX";
+    if (d.level === 0) return SOW_t("hud.map_action_build");
+    return SOW_t("hud.map_action_upgrade") + " Lv." + d.next_level;
+  }
+
+  function districtLockReason(
+    d: HudCityDistrict,
+    busy: boolean,
+    availableGold: number | undefined,
+  ): string {
+    if (d.locked_reason === "coast_required")
+      return SOW_t("hud.build_coast_required");
+    if (d.locked_reason === "campaign_locked")
+      return SOW_t("hud.campaign_unlock_required");
+    if (busy || d.under_construction)
+      return SOW_t("hud.building_in_progress");
+    if (d.next_level == null) return SOW_t("hud.building_max_level");
+    if (!d.affordable) {
+      return (
+        mapActionReason(
+          { disabled: true, cost: d.cost ?? undefined },
+          availableGold,
+        ) || ""
+      );
+    }
+    return "";
+  }
+
+  function patchCityDistrictButtons(
+    menu: HTMLElement,
+    districts: HudCityDistrict[],
+    busy: boolean,
+    availableGold: number | undefined,
+  ): void {
+    districts.forEach(function (d) {
+      const btn = menu.querySelector<HTMLButtonElement>(
+        '[data-district-kind="' + d.kind + '"]',
+      );
+      if (!btn) return;
+      const costVal = Math.max(0, Math.ceil(Number(d.cost) || 0));
+      const costText = d.cost != null ? formatHudMetric(costVal) : "";
+      const timeText =
+        d.seconds != null
+          ? Math.max(1, Math.ceil(Number(d.seconds) || 0)) + "s"
+          : "";
+      const costEl = btn.querySelector<HTMLElement>("[data-district-cost]");
+      if (costEl && costEl.textContent !== costText) {
+        costEl.textContent = costText;
+      }
+      const timeEl = btn.querySelector<HTMLElement>("[data-district-time]");
+      if (timeEl && timeEl.textContent !== timeText) {
+        timeEl.textContent = timeText;
+      }
+      const isMax = d.next_level == null;
+      const enabled = Boolean(d.enabled) && !busy && !isMax;
+      btn.disabled = false;
+      btn.classList.toggle("is-locked", !enabled && !isMax);
+      btn.classList.toggle("is-max", isMax);
+      btn.setAttribute("aria-disabled", String(!enabled));
+      const title = SOW_t("hud.map_action_" + d.kind.toLowerCase());
+      const cta = districtActionCta(d);
+      const reason = districtLockReason(d, busy, availableGold);
+      const metaSummary = costText ? costText + "g · " + timeText : "";
+      const accessibleLabel = reason
+        ? title + " · " + cta + ". " + reason
+        : title + " · " + cta + (metaSummary ? " · " + metaSummary : "");
+      if (btn.getAttribute("aria-label") !== accessibleLabel) {
+        btn.setAttribute("aria-label", accessibleLabel);
+      }
+      const tipText =
+        reason || (metaSummary ? cta + " · " + metaSummary : cta);
+      if (btn.dataset.sowTooltipKey !== tipText) {
+        btn.dataset.sowTooltipKey = tipText;
+        SOWTooltip.set(btn, {
+          title: title,
+          text: tipText,
+          tone: reason && !isMax ? "danger" : "gold",
+        });
+      }
+    });
+  }
+
+  function patchCityArsenalButtons(
+    menu: HTMLElement,
+    arsenal: HudCityArsenal,
+    busy: boolean,
+    availableGold: number | undefined,
+  ): void {
+    const warshipBtn = menu.querySelector<HTMLButtonElement>(
+      '[data-arsenal-kind="Warship"]',
+    );
+    if (warshipBtn) {
+      const w = arsenal.warship;
+      const costVal = Math.max(0, Math.ceil(Number(w.cost) || 0));
+      const costText = formatHudMetric(costVal);
+      const timeText = Math.max(1, Math.ceil(Number(w.seconds) || 0)) + "s";
+      const costEl =
+        warshipBtn.querySelector<HTMLElement>("[data-arsenal-cost]");
+      if (costEl && costEl.textContent !== costText) {
+        costEl.textContent = costText;
+      }
+      const timeEl =
+        warshipBtn.querySelector<HTMLElement>("[data-arsenal-time]");
+      if (timeEl && timeEl.textContent !== timeText) {
+        timeEl.textContent = timeText;
+      }
+      const enabled = Boolean(w.enabled) && !busy;
+      warshipBtn.disabled = false;
+      warshipBtn.classList.toggle("is-locked", !enabled);
+      warshipBtn.setAttribute("aria-disabled", String(!enabled));
+      const reason = !w.campaign_unlocked
+        ? SOW_t("hud.campaign_unlock_required")
+        : !w.unlocked
+          ? SOW_t("hud.map_action_port") + " Lv.1"
+          : busy
+            ? SOW_t("hud.building_in_progress")
+            : !w.capacity_ok
+              ? SOW_t("hud.fleet_capacity_full")
+              : !w.affordable
+                ? mapActionReason({ disabled: true, cost: w.cost }, availableGold) ||
+                  ""
+                : "";
+      const title = SOW_t("hud.map_action_build_warship");
+      const tipText = reason || costText + "g · " + timeText;
+      const accessibleLabel = title + " · " + tipText;
+      if (warshipBtn.getAttribute("aria-label") !== accessibleLabel) {
+        warshipBtn.setAttribute("aria-label", accessibleLabel);
+      }
+      if (warshipBtn.dataset.sowTooltipKey !== tipText) {
+        warshipBtn.dataset.sowTooltipKey = tipText;
+        SOWTooltip.set(warshipBtn, {
+          title: title,
+          text: tipText,
+          tone: reason ? "danger" : "gold",
+        });
+      }
+    }
+
+    const nukeBtn = menu.querySelector<HTMLButtonElement>(
+      '[data-arsenal-kind="Nuke"], [data-command="select_nuke"]',
+    );
+    if (nukeBtn) {
+      const n = arsenal.nuke;
+      const title = SOW_t("hud.map_action_nuke");
+      if (n.can_launch) {
+        nukeBtn.disabled = false;
+        nukeBtn.classList.remove("is-locked");
+        nukeBtn.classList.add("is-ready");
+        nukeBtn.classList.toggle("active", Boolean(n.selected));
+        nukeBtn.setAttribute("aria-disabled", "false");
+        nukeBtn.setAttribute("aria-pressed", String(Boolean(n.selected)));
+        const readyText = SOW_t("hud.ready");
+        const statusEl = nukeBtn.querySelector<HTMLElement>(
+          "[data-arsenal-status]",
+        );
+        if (statusEl && statusEl.textContent !== readyText) {
+          statusEl.textContent = readyText;
+        }
+        const accessibleLabel = title + " · " + readyText;
+        if (nukeBtn.getAttribute("aria-label") !== accessibleLabel) {
+          nukeBtn.setAttribute("aria-label", accessibleLabel);
+        }
+        if (nukeBtn.dataset.sowTooltipKey !== readyText) {
+          nukeBtn.dataset.sowTooltipKey = readyText;
+          SOWTooltip.set(nukeBtn, {
+            title: title,
+            text: readyText,
+            tone: "gold",
+          });
+        }
+      } else {
+        const costVal = Math.max(0, Math.ceil(Number(n.cost) || 0));
+        const costText = formatHudMetric(costVal);
+        const timeText = Math.max(1, Math.ceil(Number(n.seconds) || 0)) + "s";
+        const costEl =
+          nukeBtn.querySelector<HTMLElement>("[data-arsenal-cost]");
+        if (costEl && costEl.textContent !== costText) {
+          costEl.textContent = costText;
+        }
+        const timeEl =
+          nukeBtn.querySelector<HTMLElement>("[data-arsenal-time]");
+        if (timeEl && timeEl.textContent !== timeText) {
+          timeEl.textContent = timeText;
+        }
+        const enabled = Boolean(n.can_build) && !busy;
+        nukeBtn.disabled = false;
+        nukeBtn.classList.remove("is-ready", "active");
+        nukeBtn.classList.toggle("is-locked", !enabled);
+        nukeBtn.setAttribute("aria-disabled", String(!enabled));
+        const reason = !n.campaign_unlocked
+          ? SOW_t("hud.campaign_unlock_required")
+          : !n.unlocked
+            ? SOW_t("hud.map_action_factory") +
+              " / " +
+              SOW_t("hud.map_action_tower") +
+              " Lv.4"
+            : busy
+              ? SOW_t("hud.building_in_progress")
+              : !n.affordable
+                ? mapActionReason(
+                    { disabled: true, cost: n.cost },
+                    availableGold,
+                  ) || ""
+                : "";
+        const tipText = reason || costText + "g · " + timeText;
+        const accessibleLabel = title + " · " + tipText;
+        if (nukeBtn.getAttribute("aria-label") !== accessibleLabel) {
+          nukeBtn.setAttribute("aria-label", accessibleLabel);
+        }
+        if (nukeBtn.dataset.sowTooltipKey !== tipText) {
+          nukeBtn.dataset.sowTooltipKey = tipText;
+          SOWTooltip.set(nukeBtn, {
+            title: title,
+            text: tipText,
+            tone: reason ? "danger" : "gold",
+          });
+        }
+      }
+    }
+
+    const antiBtn = menu.querySelector<HTMLButtonElement>(
+      '[data-arsenal-kind="AntiNuke"]',
+    );
+    if (antiBtn) {
+      const a = arsenal.anti_nuke;
+      const title = "Anti-Nuke";
+      if (a.installed) {
+        const cooldown = Math.max(0, Number(a.cooldown_seconds) || 0);
+        const ready = cooldown <= 0;
+        const statusText = ready
+          ? SOW_t("hud.ready")
+          : Math.ceil(cooldown) + "s";
+        antiBtn.disabled = false;
+        antiBtn.classList.remove("is-locked");
+        antiBtn.classList.toggle("is-ready", ready);
+        antiBtn.classList.toggle("is-cooling", !ready);
+        antiBtn.setAttribute("aria-disabled", "true");
+        const cdEl = antiBtn.querySelector<HTMLElement>(
+          "[data-arsenal-cooldown]",
+        );
+        if (cdEl && cdEl.textContent !== statusText) {
+          cdEl.textContent = statusText;
+        }
+        const accessibleLabel = title + " · " + statusText;
+        if (antiBtn.getAttribute("aria-label") !== accessibleLabel) {
+          antiBtn.setAttribute("aria-label", accessibleLabel);
+        }
+        if (antiBtn.dataset.sowTooltipKey !== statusText) {
+          antiBtn.dataset.sowTooltipKey = statusText;
+          SOWTooltip.set(antiBtn, {
+            title: title,
+            text: statusText,
+            tone: ready ? "gold" : undefined,
+          });
+        }
+      } else {
+        const costVal = Math.max(0, Math.ceil(Number(a.cost) || 0));
+        const costText = formatHudMetric(costVal);
+        const timeText = Math.max(1, Math.ceil(Number(a.seconds) || 0)) + "s";
+        const costEl =
+          antiBtn.querySelector<HTMLElement>("[data-arsenal-cost]");
+        if (costEl && costEl.textContent !== costText) {
+          costEl.textContent = costText;
+        }
+        const timeEl =
+          antiBtn.querySelector<HTMLElement>("[data-arsenal-time]");
+        if (timeEl && timeEl.textContent !== timeText) {
+          timeEl.textContent = timeText;
+        }
+        const enabled = Boolean(a.enabled) && !busy;
+        antiBtn.disabled = false;
+        antiBtn.classList.remove("is-ready", "is-cooling");
+        antiBtn.classList.toggle("is-locked", !enabled);
+        antiBtn.setAttribute("aria-disabled", String(!enabled));
+        const reason = !a.campaign_unlocked
+          ? SOW_t("hud.campaign_unlock_required")
+          : !a.unlocked
+            ? SOW_t("hud.map_action_tower") + " Lv.4"
+            : busy
+              ? SOW_t("hud.building_in_progress")
+              : !a.affordable
+                ? mapActionReason(
+                    { disabled: true, cost: a.cost },
+                    availableGold,
+                  ) || ""
+                : "";
+        const tipText = reason || costText + "g · " + timeText;
+        const accessibleLabel = title + " · " + tipText;
+        if (antiBtn.getAttribute("aria-label") !== accessibleLabel) {
+          antiBtn.setAttribute("aria-label", accessibleLabel);
+        }
+        if (antiBtn.dataset.sowTooltipKey !== tipText) {
+          antiBtn.dataset.sowTooltipKey = tipText;
+          SOWTooltip.set(antiBtn, {
+            title: title,
+            text: tipText,
+            tone: reason ? "danger" : "gold",
+          });
+        }
+      }
+    }
   }
 
   function patchBuildingDetailsCard(
@@ -3001,12 +3315,24 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     building: HudMapMenuBuilding,
     availableGold: number | undefined,
   ): void {
-    if (building.under_construction || building.remaining_seconds != null) {
+    const construction = building.construction;
+    if (
+      construction ||
+      building.under_construction ||
+      building.remaining_seconds != null
+    ) {
       patchBuildingProgressBar(
         menu,
-        building.remaining_seconds,
-        building.progress,
+        construction ? construction.remaining_seconds : building.remaining_seconds,
+        construction ? construction.progress : building.progress,
       );
+    }
+    const busy = Boolean(construction || building.under_construction);
+    if (Array.isArray(building.districts) && building.districts.length > 0) {
+      patchCityDistrictButtons(menu, building.districts, busy, availableGold);
+    }
+    if (building.arsenal) {
+      patchCityArsenalButtons(menu, building.arsenal, busy, availableGold);
     }
     const upgrade = building.upgrade;
     if (!upgrade) return;
@@ -3048,7 +3374,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     return (
       '<div class="sow-hud__building-progress-row" role="status">' +
       '<span class="sow-hud__building-card-thumb" aria-hidden="true">' +
-      buildingIcon(kind, Math.max(1, level), "sow-hud__building-card-art") +
+      structureOrUnitIcon(
+        kind,
+        Math.max(1, level),
+        "sow-hud__building-card-art",
+      ) +
       "</span>" +
       '<div class="sow-hud__building-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">' +
       '<div class="sow-hud__building-progress-fill" data-building-progress-fill></div>' +
@@ -3138,6 +3468,149 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     menu.style.setProperty("--caret-offset-x", caretOffsetX.toFixed(1) + "px");
   }
 
+  function renderCityDistrictRow(tileIdx: number, d: HudCityDistrict): string {
+    const isMax = d.next_level == null;
+    const locked = Boolean(d.locked_reason);
+    const title = SOW_t("hud.map_action_" + d.kind.toLowerCase());
+    const preview = (d.metrics && d.metrics.length ? d.metrics : d.next_gains || []).slice(0, 2);
+    const statsHtml = preview.length
+      ? '<span class="sow-hud__city-district-stats">' +
+        preview
+          .map(function (c) {
+            return (
+              '<span class="sow-hud__city-district-stat' +
+              (d.level === 0 ? " is-preview" : "") +
+              '">' +
+              statusIcon(c.icon, "sow-hud__building-stat-icon") +
+              "<b>" +
+              escapeHudText(c.label) +
+              "</b></span>"
+            );
+          })
+          .join("") +
+        "</span>"
+      : "";
+    const btnAttrs =
+      'data-district-kind="' +
+      escapeHudText(d.kind) +
+      '" data-district-tile="' +
+      tileIdx +
+      '"' +
+      (!isMax && !locked ? ' data-map-action="upgrade_structure"' : "");
+    const btnBody = isMax
+      ? '<span class="sow-hud__city-district-max">MAX</span>'
+      : locked
+        ? hudIcon("lock", "sow-hud__city-district-lock")
+        : '<span class="sow-hud__city-district-cta">' +
+          escapeHudText(
+            d.level === 0 ? SOW_t("hud.map_action_build") : "Lv." + d.next_level,
+          ) +
+          "</span>" +
+          '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-cost">' +
+          hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
+          "<b data-district-cost></b>" +
+          "</span>" +
+          '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-time">' +
+          "<b data-district-time></b>" +
+          "</span>";
+    return (
+      '<div class="sow-hud__city-district-row">' +
+      '<div class="sow-hud__city-district-info">' +
+      '<span class="sow-hud__city-district-thumb" aria-hidden="true">' +
+      buildingIcon(d.kind, Math.max(1, d.level), "sow-hud__city-district-art") +
+      "</span>" +
+      '<div class="sow-hud__city-district-copy">' +
+      '<div class="sow-hud__city-district-head">' +
+      '<strong class="sow-hud__city-district-name">' +
+      escapeHudText(title) +
+      "</strong>" +
+      '<span class="sow-hud__city-district-lv' +
+      (isMax ? " is-max" : d.under_construction ? " is-building" : "") +
+      '">Lv.' +
+      d.level +
+      "/" +
+      d.max_level +
+      "</span>" +
+      "</div>" +
+      statsHtml +
+      "</div>" +
+      "</div>" +
+      '<button type="button" class="sow-hud__city-district-btn' +
+      (d.discounted ? " is-discounted" : "") +
+      '" ' +
+      btnAttrs +
+      ">" +
+      btnBody +
+      "</button>" +
+      "</div>"
+    );
+  }
+
+  function renderCityArsenalGrid(tileIdx: number, arsenal: HudCityArsenal): string {
+    const warshipHtml =
+      '<button type="button" class="sow-hud__city-arsenal-btn" data-arsenal-kind="Warship" data-arsenal-tile="' +
+      tileIdx +
+      '">' +
+      unitIcon("warship", "sow-hud__city-arsenal-art") +
+      '<span class="sow-hud__city-arsenal-name">' +
+      escapeHudText(SOW_t("hud.fleet_warship_label")) +
+      "</span>" +
+      '<span class="sow-hud__city-arsenal-meta">' +
+      hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
+      "<b data-arsenal-cost></b>" +
+      '<span class="sow-hud__city-arsenal-sep">·</span>' +
+      "<b data-arsenal-time></b>" +
+      "</span>" +
+      "</button>";
+
+    const nukeAttrs = arsenal.nuke.can_launch
+      ? 'data-command="select_nuke"'
+      : 'data-arsenal-kind="Nuke" data-arsenal-tile="' + tileIdx + '"';
+    const nukeMeta = arsenal.nuke.can_launch
+      ? '<span class="sow-hud__city-arsenal-meta is-ready" data-arsenal-status></span>'
+      : '<span class="sow-hud__city-arsenal-meta">' +
+        hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
+        "<b data-arsenal-cost></b>" +
+        '<span class="sow-hud__city-arsenal-sep">·</span>' +
+        "<b data-arsenal-time></b>" +
+        "</span>";
+    const nukeHtml =
+      '<button type="button" class="sow-hud__city-arsenal-btn" ' +
+      nukeAttrs +
+      ">" +
+      unitIcon("atom-bomb", "sow-hud__city-arsenal-art") +
+      '<span class="sow-hud__city-arsenal-name">' +
+      escapeHudText(SOW_t("hud.map_action_nuke")) +
+      "</span>" +
+      nukeMeta +
+      "</button>";
+
+    const antiMeta = arsenal.anti_nuke.installed
+      ? '<span class="sow-hud__city-arsenal-meta is-installed" data-arsenal-cooldown></span>'
+      : '<span class="sow-hud__city-arsenal-meta">' +
+        hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
+        "<b data-arsenal-cost></b>" +
+        '<span class="sow-hud__city-arsenal-sep">·</span>' +
+        "<b data-arsenal-time></b>" +
+        "</span>";
+    const antiHtml =
+      '<button type="button" class="sow-hud__city-arsenal-btn" data-arsenal-kind="AntiNuke" data-arsenal-tile="' +
+      tileIdx +
+      '">' +
+      unitIcon("sam-missile", "sow-hud__city-arsenal-art") +
+      '<span class="sow-hud__city-arsenal-name">SAM</span>' +
+      antiMeta +
+      "</button>";
+
+    return (
+      '<div class="sow-hud__city-arsenal-grid">' +
+      warshipHtml +
+      nukeHtml +
+      antiHtml +
+      "</div>"
+    );
+  }
+
   function renderBuildingDetailsCard(
     menu: HTMLElement,
     mapMenu: HudMapMenu,
@@ -3155,16 +3628,29 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     const kind = String(building.kind);
     const level = Math.max(0, Math.floor(Number(building.level) || 0));
+    const visualLevel = Math.max(
+      1,
+      Math.floor(Number(building.visual_level || level) || 1),
+    );
     const maxLevel = Math.max(
       level,
       Math.floor(Number(building.max_level) || level),
     );
+    const construction = building.construction || null;
     const underConstruction =
       Boolean(building.under_construction) ||
+      Boolean(construction) ||
       building.remaining_seconds != null;
+    const isCityFoundation = Boolean(building.city_foundation);
+    const districts = Array.isArray(building.districts) ? building.districts : [];
+    const arsenal = building.arsenal || null;
+    const hasCityPanel = districts.length > 0 || Boolean(arsenal);
     const chips = Array.isArray(building.chips) ? building.chips : [];
     const upgrade =
       !underConstruction && building.upgrade ? building.upgrade : null;
+    const tileIdx = Number.isFinite(Number(building.tile_idx))
+      ? Number(building.tile_idx)
+      : Number(mapMenu.tile_idx);
     const session = String(mapMenu.session) + ":" + String(mapMenu.tile_idx);
     menu.dataset.session = String(mapMenu.session);
     menu.dataset.tileIdx = String(mapMenu.tile_idx);
@@ -3172,34 +3658,136 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     menu.classList.remove("hidden", "has-tether");
     menu.classList.add("is-building-card");
 
+    const districtSig = districts
+      .map(function (d) {
+        return [
+          d.kind,
+          d.level,
+          d.under_construction ? 1 : 0,
+          d.locked_reason || "",
+          d.next_level ?? "",
+          d.discounted ? 1 : 0,
+          (d.metrics || []).map((c) => c.icon + "=" + c.label).join(","),
+          (d.next_gains || []).map((c) => c.icon + "=" + c.label).join(","),
+        ].join("/");
+      })
+      .join("|");
+    const arsenalSig = arsenal
+      ? [
+          arsenal.warship.unlocked ? 1 : 0,
+          arsenal.warship.campaign_unlocked ? 1 : 0,
+          arsenal.nuke.can_launch ? "L" : arsenal.nuke.unlocked ? "B" : "X",
+          arsenal.nuke.selected ? 1 : 0,
+          arsenal.anti_nuke.installed
+            ? arsenal.anti_nuke.cooldown_seconds > 0
+              ? "C"
+              : "R"
+            : arsenal.anti_nuke.unlocked
+              ? "B"
+              : "X",
+        ].join(":")
+      : "";
+
     const renderKey = [
       window.SOW_LOCALE || "en",
       "building_details",
       session,
       kind,
       level,
+      visualLevel,
       maxLevel,
-      underConstruction
-        ? "constructing"
-        : upgrade
-          ? "upgrade:" + upgrade.next_level
-          : "max",
+      isCityFoundation ? "foundation" : hasCityPanel ? "city" : "legacy",
+      building.coastal ? 1 : 0,
+      building.railway_connected ? 1 : 0,
+      construction
+        ? "c:" + construction.kind + ":" + construction.target_level
+        : underConstruction
+          ? "constructing"
+          : upgrade
+            ? "upgrade:" + upgrade.next_level
+            : "max",
       chips
         .map(function (chip) {
           return chip.icon + "=" + chip.label;
         })
         .join("|"),
+      districtSig,
+      arsenalSig,
     ].join(":");
 
     if (menu.dataset.renderKey !== renderKey) {
       const card = document.createElement("div");
       card.dataset.buildingKind = kind.toLowerCase();
-      if (underConstruction) {
-        const targetLv = level > 0 ? level + 1 : 1;
+      if (isCityFoundation || (!hasCityPanel && underConstruction)) {
+        const activeKind = construction ? construction.kind : kind;
+        const targetLv = construction
+          ? construction.target_level
+          : level > 0
+            ? level + 1
+            : 1;
         card.className = "sow-hud__building-card is-constructing";
         card.innerHTML =
           '<span class="sow-hud__building-card-caret" aria-hidden="true"></span>' +
-          renderBuildingProgressBarMarkup(kind, targetLv);
+          renderBuildingProgressBarMarkup(activeKind, targetLv);
+      } else if (hasCityPanel) {
+        const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
+        const traitsHtml =
+          (building.coastal
+            ? '<span class="sow-hud__city-trait is-coastal" title="Coastal">' +
+              hudIcon("anchor", "sow-hud__city-trait-icon") +
+              "</span>"
+            : "") +
+          (building.railway_connected
+            ? '<span class="sow-hud__city-trait is-rail" title="Railway">' +
+              hudIcon("speed", "sow-hud__city-trait-icon") +
+              "</span>"
+            : "");
+        const constructionHtml = construction
+          ? '<div class="sow-hud__city-construction">' +
+            renderBuildingProgressBarMarkup(
+              construction.kind,
+              construction.target_level,
+            ) +
+            "</div>"
+          : "";
+        const districtsHtml = districts.length
+          ? '<div class="sow-hud__city-districts">' +
+            districts
+              .map(function (d) {
+                return renderCityDistrictRow(tileIdx, d);
+              })
+              .join("") +
+            "</div>"
+          : "";
+        const arsenalHtml = arsenal ? renderCityArsenalGrid(tileIdx, arsenal) : "";
+        card.className = "sow-hud__building-card is-city-card";
+        card.innerHTML =
+          '<span class="sow-hud__building-card-caret" aria-hidden="true"></span>' +
+          '<div class="sow-hud__building-card-head">' +
+          '<span class="sow-hud__building-card-thumb" aria-hidden="true">' +
+          buildingIcon(
+            kind,
+            Math.max(1, visualLevel),
+            "sow-hud__building-card-art",
+          ) +
+          "</span>" +
+          '<div class="sow-hud__building-card-identity">' +
+          '<strong class="sow-hud__building-card-title">' +
+          escapeHudText(buildingTitle) +
+          "</strong>" +
+          '<div class="sow-hud__city-badges">' +
+          traitsHtml +
+          '<span class="sow-hud__building-card-level' +
+          (visualLevel >= 4 ? " is-max" : "") +
+          '">Lv.' +
+          visualLevel +
+          "</span>" +
+          "</div>" +
+          "</div>" +
+          "</div>" +
+          constructionHtml +
+          districtsHtml +
+          arsenalHtml;
       } else {
         const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
         const isMax = !upgrade && maxLevel > 0 && level >= maxLevel;
@@ -3478,17 +4066,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const currentTiles = new Set<number>();
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      const levelNum = Math.max(1, item.level);
       currentTiles.add(item.tile_idx);
       let bar = activeProgressBars.get(item.tile_idx);
       if (!bar) {
         bar = document.createElement("div");
         bar.className = "sow-hud__world-building-bar";
         bar.dataset.tile = String(item.tile_idx);
+        bar.dataset.kind = item.kind;
+        bar.dataset.level = String(levelNum);
         bar.innerHTML =
           '<span class="sow-hud__world-building-thumb" aria-hidden="true">' +
-          buildingIcon(
+          structureOrUnitIcon(
             item.kind,
-            Math.max(1, item.level),
+            levelNum,
             "sow-hud__world-building-art",
           ) +
           "</span>" +
@@ -3498,6 +4089,22 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           "</div>";
         overlay.appendChild(bar);
         activeProgressBars.set(item.tile_idx, bar);
+      } else if (
+        bar.dataset.kind !== item.kind ||
+        bar.dataset.level !== String(levelNum)
+      ) {
+        bar.dataset.kind = item.kind;
+        bar.dataset.level = String(levelNum);
+        const thumb = bar.querySelector<HTMLElement>(
+          ".sow-hud__world-building-thumb",
+        );
+        if (thumb) {
+          thumb.innerHTML = structureOrUnitIcon(
+            item.kind,
+            levelNum,
+            "sow-hud__world-building-art",
+          );
+        }
       }
 
       const visible = item.visible !== false;
@@ -3717,21 +4324,48 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     return SOW_t(slot.type === "clear" ? "hud.emote_clear" : "hud.emote_pin");
   }
 
+  function helpEmoteCooldownSeconds(): number {
+    const secs = Number(hudState?.hud?.help_cooldown_seconds || 0);
+    return Number.isFinite(secs) && secs > 0 ? Math.ceil(secs) : 0;
+  }
+
   function ringSlotDisabled(slot: RingSlot): boolean {
     if (slot.type === "pin") return !slot.enabled;
+    if (slot.type === "emote" && slot.definition.kind === "help") {
+      return helpEmoteCooldownSeconds() > 0;
+    }
     return Boolean(
       slot.type === "action" &&
       (slot.item.disabled || (slot.presentation && slot.presentation.disabled)),
     );
   }
 
+  function ringSlotReason(
+    slot: RingSlot,
+    availableGold: number | undefined,
+  ): string {
+    if (slot.type === "action") return mapActionReason(slot.item, availableGold);
+    if (slot.type === "emote" && slot.definition.kind === "help") {
+      const cooldown = helpEmoteCooldownSeconds();
+      if (cooldown > 0) {
+        return tWithFallback(
+          "hud.emote_help_cooldown",
+          { seconds: String(cooldown) },
+          cooldown + "s",
+        );
+      }
+    }
+    return "";
+  }
+
   function ringSlotDetail(
     slot: RingSlot,
     availableGold: number | undefined,
   ): string {
-    if (slot.type !== "action") return "";
-    const reason = mapActionReason(slot.item, availableGold);
+    if (slot.type !== "action" && slot.type !== "emote") return "";
+    const reason = ringSlotReason(slot, availableGold);
     if (reason) return escapeHudText(reason);
+    if (slot.type !== "action") return "";
     const parts = [];
     if (slot.item.level != null)
       parts.push("Lv " + slot.item.level + " → " + (slot.item.level + 1));
@@ -4085,8 +4719,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       if (!button) return;
       const disabled = ringSlotDisabled(slot);
       const name = ringSlotLabel(slot);
-      const reason =
-        slot.type === "action" ? mapActionReason(slot.item, availableGold) : "";
+      const reason = ringSlotReason(slot, availableGold);
       const accessibleLabel = reason ? name + ". " + reason : name;
       if (button.disabled !== disabled) button.disabled = disabled;
       button.setAttribute("aria-disabled", String(disabled));
@@ -4100,6 +4733,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             : slot.item.reason_key
               ? "lock"
               : "gold";
+      else if (slot.type === "emote" && disabled) blocked = "clock";
       if (button.dataset.blocked !== blocked) {
         button.dataset.blocked = blocked;
         const badge = button.querySelector<HTMLElement>(".sow-hud__ring-badge");
@@ -6396,12 +7030,37 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       target.focus({ preventScroll: true });
   }
 
-  function createInboxRequest(request: HudInboxRequest): InboxRequestParts {
+  function tWithFallback(
+    key: string,
+    vars?: Record<string, string>,
+    fallback?: string,
+  ): string {
+    const text = SOW_t(key, vars);
+    if (text === key && fallback) {
+      return fallback.replace(/\{(\w+)\}/g, function (_m, name) {
+        return vars && vars[name] != null ? vars[name] : "";
+      });
+    }
+    return text;
+  }
+
+  function createInboxRequest(
+    request: HudInboxRequest,
+    variant: "inbox" | "toast" = "inbox",
+  ): InboxRequestParts {
     const element = document.createElement("article");
-    element.className = "sow-hud__request-card";
+    element.className =
+      "sow-hud__request-card" +
+      (variant === "toast" ? " sow-hud__request-toast" : "");
     const identity = createPlayerIdentity();
+    const headerRow = document.createElement("div");
+    headerRow.className = "sow-hud__request-header-row";
     const type = document.createElement("span");
     type.className = "sow-hud__request-type";
+    const timer = document.createElement("span");
+    timer.className = "sow-hud__request-timer";
+    timer.hidden = true;
+    headerRow.append(type, timer);
     const resources = document.createElement("div");
     resources.className = "sow-hud__request-resources";
     // A trade's price sits after the swap mark: what they ask ⇄ what they give.
@@ -6432,21 +7091,23 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       pay_gold: metric("pay_gold"),
       pay_troops: metric("pay_troops"),
     };
-    identity.copy.append(type, resources);
+    identity.copy.append(headerRow, resources);
     const actions = document.createElement("div");
     actions.className = "sow-hud__request-actions";
     const buttons = (["accept", "reject"] as const).map(function (action) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "sow-hud__request-" + action;
-      button.dataset.command =
-        action +
-        (request.kind === "resources" ? "_resource_request" : "_alliance");
-      button.dataset.playerId = String(request.requester_id);
       actions.appendChild(button);
       return button;
     });
-    element.append(identity.element, actions);
+    const timerBar = document.createElement("span");
+    timerBar.className = "sow-hud__request-timer-bar";
+    timerBar.setAttribute("aria-hidden", "true");
+    const progressFill = document.createElement("span");
+    progressFill.className = "sow-hud__request-timer-fill";
+    timerBar.appendChild(progressFill);
+    element.append(identity.element, actions, timerBar);
     return {
       element: element,
       portrait: identity.portrait,
@@ -6454,19 +7115,272 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       copy: identity.copy,
       name: identity.name,
       type: type,
+      timer: timer,
+      progressFill: progressFill,
       resources: resources,
       amounts: amounts,
       swap: swap,
       accept: buttons[0],
       reject: buttons[1],
+      requestKey: requestKey(request),
     };
   }
+
+  function patchRequestCardCountdown(
+    row: InboxRequestParts,
+    key: string,
+    nowMs: number,
+  ): void {
+    const countdown = readRequestCountdown(key, requestCountdowns, nowMs);
+    if (!countdown) {
+      row.timer.hidden = true;
+      row.element.classList.remove("is-expiring");
+      row.progressFill.style.transform = "scaleX(1)";
+      return;
+    }
+    const label = tWithFallback(
+      "hud.request_expires_in",
+      { seconds: String(countdown.remainingSeconds) },
+      countdown.remainingSeconds + "s",
+    );
+    if (row.timer.textContent !== label) row.timer.textContent = label;
+    row.timer.hidden = false;
+    row.element.classList.toggle("is-expiring", countdown.urgent);
+    row.progressFill.style.transform =
+      "scaleX(" + countdown.progress.toFixed(3) + ")";
+  }
+
+  function patchInboxRequestCard(
+    row: InboxRequestParts,
+    request: HudInboxRequest,
+    numbers: Intl.NumberFormat,
+    nowMs: number,
+  ): void {
+    const key = requestKey(request);
+    row.requestKey = key;
+    row.element.dataset.requestKey = key;
+    const name = request.name || SOW_t("hud.player_name");
+    renderPlayerIdentity(row, name, request.avatar);
+    const values: Record<string, string> = { name: name };
+    let trade = false;
+    (["gold", "troops", "pay_gold", "pay_troops"] as const).forEach(
+      function (kind) {
+        let value = Number(request[kind]);
+        value = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+        if (value > 0 && kind.startsWith("pay_")) trade = true;
+        values[kind] = numbers.format(value);
+        row.amounts[kind].value.textContent = values[kind];
+        row.amounts[kind].element.hidden = value === 0;
+        row.amounts[kind].element.setAttribute(
+          "aria-label",
+          SOW_t(kind.endsWith("gold") ? "hud.gold" : "hud.troops") +
+            ": " +
+            values[kind],
+        );
+      },
+    );
+    row.swap.hidden = !trade;
+    const isRenewal = request.kind === "alliance" && Boolean(request.is_renewal);
+    const isHelp = request.kind === "help";
+    const isResources = request.kind === "resources";
+    const hasResourceAmounts = values.gold !== "0" || values.troops !== "0";
+    row.type.textContent = isHelp
+      ? tWithFallback(
+          "hud.help_call_title",
+          undefined,
+          SOW_t("hud.resource_request_title"),
+        )
+      : isResources
+        ? trade
+          ? SOW_t("hud.trade_offer_title")
+          : SOW_t("hud.resource_request_title")
+        : isRenewal
+          ? tWithFallback(
+              "hud.alliance_renew_prompt",
+              undefined,
+              SOW_t("hud.alliance_request_title"),
+            )
+          : SOW_t("hud.alliance_request_title");
+    row.element.classList.toggle("is-renewal", isRenewal);
+    row.resources.hidden = isHelp ? !hasResourceAmounts : !isResources;
+    row.element.setAttribute(
+      "aria-label",
+      isHelp
+        ? tWithFallback(
+            "hud.help_call_aria",
+            values,
+            SOW_t("hud.resource_request", values),
+          )
+        : SOW_t(
+            !isResources
+              ? "hud.alliance_request"
+              : trade
+                ? "hud.trade_offer"
+                : "hud.resource_request",
+            values,
+          ),
+    );
+    const suffix = isHelp
+      ? "_help_call"
+      : isResources
+        ? "_resource_request"
+        : "_alliance";
+    row.accept.dataset.command = "accept" + suffix;
+    row.accept.dataset.playerId = String(request.requester_id);
+    row.reject.dataset.command = "reject" + suffix;
+    row.reject.dataset.playerId = String(request.requester_id);
+    row.accept.textContent = SOW_t(
+      isHelp || (isResources && !trade) ? "hud.send" : "hud.accept",
+    );
+    row.reject.textContent = SOW_t(
+      isHelp || isResources ? "hud.ignore_request" : "hud.reject",
+    );
+    row.accept.disabled = request.active === false;
+    SOWTooltip.set(
+      row.accept,
+      row.accept.disabled ? SOW_t("hud.action_unavailable") : null,
+    );
+    row.element.classList.toggle("is-inactive", row.accept.disabled);
+    patchRequestCardCountdown(row, key, nowMs);
+  }
+
+  function syncAllRequestCountdowns(): void {
+    if (!hudRefs) return;
+    const nowMs = Date.now();
+    for (const key of hudRefs.inboxRequestKeys) {
+      const row = hudRefs.inboxRequests[key];
+      if (row) patchRequestCardCountdown(row, key, nowMs);
+    }
+    for (const card of hudRefs.requestToastCards) {
+      patchRequestCardCountdown(card, card.requestKey, nowMs);
+    }
+  }
+
+  function stopRequestTimers(): void {
+    if (requestToastExpiryTimer) {
+      window.clearTimeout(requestToastExpiryTimer);
+      requestToastExpiryTimer = null;
+    }
+    if (requestCountdownTimer) {
+      window.clearInterval(requestCountdownTimer);
+      requestCountdownTimer = null;
+    }
+  }
+
+  function ensureRequestCountdownLoop(): void {
+    const needsTick =
+      Boolean(hudRefs) &&
+      requestCountdowns.size > 0 &&
+      (activeHudPanel === "inbox" || requestToastDeck.entries.length > 0);
+    if (!needsTick) {
+      if (requestCountdownTimer) {
+        window.clearInterval(requestCountdownTimer);
+        requestCountdownTimer = null;
+      }
+      return;
+    }
+    if (!requestCountdownTimer) {
+      requestCountdownTimer = window.setInterval(function () {
+        syncAllRequestCountdowns();
+      }, 250);
+    }
+  }
+
+  function renderRequestToasts(
+    requests: HudInboxRequest[],
+    inboxOpen: boolean,
+  ): void {
+    if (!hudRefs || !hudRefs.requestToasts || !hudRefs.requestToastStack) return;
+    const nowMs = Date.now();
+    const view = reconcileRequestToastDeck(
+      requestToastDeck,
+      requests,
+      requestCountdowns,
+      nowMs,
+      { inboxOpen: inboxOpen },
+    );
+    if (requestToastExpiryTimer) {
+      window.clearTimeout(requestToastExpiryTimer);
+      requestToastExpiryTimer = null;
+    }
+    if (view.nextExpiryMs != null && view.visible.length > 0) {
+      requestToastExpiryTimer = window.setTimeout(
+        function () {
+          requestToastExpiryTimer = null;
+          renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
+        },
+        Math.max(20, view.nextExpiryMs - nowMs),
+      );
+    }
+    const existingByKey = new Map<string, RequestToastCardParts>();
+    for (const card of hudRefs.requestToastCards) {
+      existingByKey.set(card.requestKey, card);
+    }
+    const numbers = new Intl.NumberFormat(window.SOW_LOCALE || "en", {
+      maximumFractionDigits: 0,
+    });
+    const nextCards: RequestToastCardParts[] = [];
+    const visibleKeys = new Set<string>();
+    view.visible.forEach(function (entry: RequestToastEntry, index: number) {
+      visibleKeys.add(entry.key);
+      let card = existingByKey.get(entry.key);
+      const isNew = !card;
+      if (!card) {
+        card = Object.assign(
+          createInboxRequest(entry.request, "toast"),
+          { stackIndex: index },
+        );
+      }
+      card.stackIndex = index;
+      patchInboxRequestCard(card, entry.request, numbers, nowMs);
+      card.element.dataset.stackIndex = String(index);
+      card.element.style.setProperty("--stack-i", String(index));
+      card.element.classList.toggle("is-front", index === 0);
+      card.element.classList.toggle("is-stacked", index > 0);
+      if (isNew) {
+        card.element.classList.add("is-entering");
+      }
+      nextCards.push(card);
+    });
+    for (const [key, oldCard] of existingByKey.entries()) {
+      if (!visibleKeys.has(key)) oldCard.element.remove();
+    }
+    // Append back-to-front in DOM or set z-index explicitly; z-index controls paint order cleanly.
+    nextCards.forEach(function (card, index) {
+      card.element.style.zIndex = String(MAX_TOAST_Z_BASE - index);
+      const before = hudRefs!.requestToastStack.children[index] || null;
+      if (before !== card.element) {
+        hudRefs!.requestToastStack.insertBefore(card.element, before);
+      }
+    });
+    hudRefs.requestToastCards = nextCards;
+    if (view.overflowCount > 0) {
+      hudRefs.requestToastMore.textContent = tWithFallback(
+        "hud.request_stack_more",
+        { count: String(view.overflowCount) },
+        "+" + view.overflowCount,
+      );
+      hudRefs.requestToastMore.hidden = false;
+    } else {
+      hudRefs.requestToastMore.hidden = true;
+    }
+    const visible = view.visible.length > 0 && !inboxOpen;
+    hudRefs.requestToasts.hidden = !visible;
+    hudRefs.requestToasts.dataset.stackCount = String(view.visible.length);
+    if (hudRoot) {
+      hudRoot.dataset.requestToastsVisible = String(visible);
+    }
+    ensureRequestCountdownLoop();
+  }
+
+  const MAX_TOAST_Z_BASE = 10;
 
   function renderInbox(requests: HudInboxRequest[]): void {
     if (!hudRefs || !hudRefs.inboxRows || !Array.isArray(requests)) return;
     const renderKey =
       String(window.SOW_LOCALE || "en") + ":" + JSON.stringify(requests);
     if (renderKey === hudRefs.inboxRenderKey) return;
+    const nowMs = Date.now();
     const previous = hudRefs.inboxRequests;
     const previousKeys = hudRefs.inboxRequestKeys;
     const focusedKey = previousKeys.find(function (key) {
@@ -6474,74 +7388,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     });
     const next: Record<string, InboxRequestParts> = Object.create(null);
     const keys: string[] = [];
+    let allianceCount = 0;
     const numbers = new Intl.NumberFormat(window.SOW_LOCALE || "en", {
       maximumFractionDigits: 0,
     });
     requests.forEach(function (request) {
-      if (
-        !request ||
-        (request.kind !== "alliance" && request.kind !== "resources") ||
-        !Number.isSafeInteger(request.requester_id) ||
-        request.requester_id <= 0
-      )
-        return;
-      const key = request.kind + ":" + request.requester_id;
+      if (!isValidInboxRequest(request)) return;
+      const key = requestKey(request);
       if (next[key]) return;
-      const row = previous[key] || createInboxRequest(request);
-      const name = request.name || SOW_t("hud.player_name");
-      renderPlayerIdentity(row, name, request.avatar);
-      const values: Record<string, string> = { name: name };
-      let trade = false;
-      (["gold", "troops", "pay_gold", "pay_troops"] as const).forEach(
-        function (kind) {
-          let value = Number(request[kind]);
-          value = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
-          if (value > 0 && kind.startsWith("pay_")) trade = true;
-          values[kind] = numbers.format(value);
-          row.amounts[kind].value.textContent = values[kind];
-          row.amounts[kind].element.hidden = value === 0;
-          row.amounts[kind].element.setAttribute(
-            "aria-label",
-            SOW_t(kind.endsWith("gold") ? "hud.gold" : "hud.troops") +
-              ": " +
-              values[kind],
-          );
-        },
-      );
-      row.swap.hidden = !trade;
-      row.type.textContent = SOW_t(
-        request.kind !== "resources"
-          ? "hud.alliance_request_title"
-          : trade
-            ? "hud.trade_offer_title"
-            : "hud.resource_request_title",
-      );
-      row.resources.hidden = request.kind !== "resources";
-      row.element.setAttribute(
-        "aria-label",
-        SOW_t(
-          request.kind !== "resources"
-            ? "hud.alliance_request"
-            : trade
-              ? "hud.trade_offer"
-              : "hud.resource_request",
-          values,
-        ),
-      );
-      // A request is answered with Send or Ignore, a trade with Accept or Ignore; alliances keep Accept and Reject.
-      const resourceRequest = request.kind === "resources";
-      row.accept.textContent = SOW_t(
-        resourceRequest && !trade ? "hud.send" : "hud.accept",
-      );
-      row.reject.textContent = SOW_t(
-        resourceRequest ? "hud.ignore_request" : "hud.reject",
-      );
-      row.accept.disabled = request.active === false;
-      SOWTooltip.set(
-        row.accept,
-        row.accept.disabled ? SOW_t("hud.action_unavailable") : null,
-      );
-      row.element.classList.toggle("is-inactive", row.accept.disabled);
+      if (request.kind === "alliance") allianceCount += 1;
+      const row = previous[key] || createInboxRequest(request, "inbox");
+      patchInboxRequestCard(row, request, numbers, nowMs);
       next[key] = row;
       keys.push(key);
     });
@@ -6556,9 +7413,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     hudRefs.inboxRequests = next;
     hudRefs.inboxRequestKeys = keys;
     hudRefs.inboxRenderKey = renderKey;
+    hudRefs.inboxBulk.hidden = allianceCount < 2;
     hudRefs.inboxRows.hidden = keys.length === 0;
     hudRefs.inboxEmpty!.hidden = keys.length !== 0;
     hudRefs.inboxTotal!.textContent = numbers.format(keys.length);
+    ensureRequestCountdownLoop();
     if (focusedKey && !next[focusedKey]) {
       const nextRow =
         next[keys[Math.min(previousKeys.indexOf(focusedKey), keys.length - 1)]];
@@ -6574,16 +7433,28 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   function triggerBellAnimation(): void {
     if (!hudRefs || !hudRefs.inboxButton) return;
     const btn = hudRefs.inboxButton;
-    if (btn.classList) {
-      if (typeof btn.classList.remove === "function") {
-        btn.classList.remove("is-ringing");
-      } else if (typeof btn.classList.toggle === "function") {
-        btn.classList.toggle("is-ringing", false);
+    if (
+      (btn.classList &&
+        typeof btn.classList.contains === "function" &&
+        btn.classList.contains("is-ringing")) ||
+      (typeof bellRingTimer !== "undefined" && bellRingTimer !== null)
+    ) {
+      return;
+    }
+    const clearRinging = function (): void {
+      if (hudRefs && hudRefs.inboxButton && hudRefs.inboxButton.classList) {
+        const activeBtn = hudRefs.inboxButton;
+        if (typeof activeBtn.classList.remove === "function") {
+          activeBtn.classList.remove("is-ringing");
+        } else if (typeof activeBtn.classList.toggle === "function") {
+          activeBtn.classList.toggle("is-ringing", false);
+        }
       }
-    }
-    if (typeof (btn as HTMLElement).offsetWidth === "number") {
-      void (btn as HTMLElement).offsetWidth;
-    }
+      if (typeof bellRingTimer !== "undefined" && bellRingTimer) {
+        if (typeof clearTimeout === "function") clearTimeout(bellRingTimer);
+        bellRingTimer = null;
+      }
+    };
     if (btn.classList) {
       if (typeof btn.classList.add === "function") {
         btn.classList.add("is-ringing");
@@ -6591,24 +7462,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         btn.classList.toggle("is-ringing", true);
       }
     }
-    if (typeof bellRingTimer !== "undefined" && bellRingTimer) {
-      if (typeof clearTimeout === "function") clearTimeout(bellRingTimer);
-      bellRingTimer = null;
+    if (typeof btn.addEventListener === "function") {
+      btn.addEventListener("animationend", clearRinging, { once: true });
     }
     if (typeof setTimeout === "function") {
-      const timer = setTimeout(function () {
-        if (hudRefs && hudRefs.inboxButton && hudRefs.inboxButton.classList) {
-          const activeBtn = hudRefs.inboxButton;
-          if (typeof activeBtn.classList.remove === "function") {
-            activeBtn.classList.remove("is-ringing");
-          } else if (typeof activeBtn.classList.toggle === "function") {
-            activeBtn.classList.toggle("is-ringing", false);
-          }
-        }
-        if (typeof bellRingTimer !== "undefined") {
-          bellRingTimer = null;
-        }
-      }, 850) as unknown as number;
+      const timer = setTimeout(clearRinging, 850) as unknown as number;
       if (typeof bellRingTimer !== "undefined") {
         bellRingTimer = timer;
       }
@@ -6841,8 +7699,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (command === "focus_world") {
       button.dataset.focusX = String(operation.focus_x);
       button.dataset.focusY = String(operation.focus_y);
-      if (operation.kind === "fleet" && operation.direction === "outgoing")
-        button.dataset.fleetId = String(operation.id);
+      const fleetId = operation.focus_fleet_id ??
+        (operation.kind === "fleet" && operation.direction === "outgoing"
+          ? operation.id
+          : null);
+      if (fleetId != null) button.dataset.fleetId = String(fleetId);
     } else if (command === "counter_attack") {
       button.dataset.playerId = String(operation.player_id);
       button.dataset.incomingTroops = String(
@@ -7021,8 +7882,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         .forEach(function (button) {
           button.dataset.focusX = String(operation.focus_x);
           button.dataset.focusY = String(operation.focus_y);
-          button.dataset.fleetId =
-            operation.kind === "fleet" && outgoing ? String(operation.id) : "";
+          const fleetId = operation.focus_fleet_id ??
+            (operation.kind === "fleet" && outgoing ? operation.id : null);
+          button.dataset.fleetId = fleetId == null ? "" : String(fleetId);
         });
       row.actions
         .querySelectorAll<HTMLButtonElement>('[data-command="counter_attack"]')
@@ -7043,6 +7905,116 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     hudRefs.combatOperationRows = nextRows;
     hudRefs.operations.hidden = nextKeys.length === 0;
+  }
+
+  function renderNavalActivity(
+    activities: NonNullable<MenuHudPayload["naval_activity"]>,
+  ): void {
+    if (!hudRefs) return;
+    activities = Array.isArray(activities) ? activities : [];
+    const nextKeys = activities
+      .slice()
+      .reverse()
+      .map(function (activity) {
+        return String(activity.id);
+      });
+    const orderKey = nextKeys.join("\u001e");
+    hudRefs.navalActivityTitle.textContent = SOW_t("hud.naval_activity");
+    if (orderKey === hudRefs.navalActivityOrderKey) {
+      hudRefs.operations.hidden =
+        nextKeys.length === 0 && hudRefs.combatOperationsOrderKey.length === 0;
+      return;
+    }
+
+    const nextRows: Record<string, CombatOperationRow> = Object.create(null);
+    const byId = new Map<string, HudNavalActivity>();
+    activities.forEach(function (activity) {
+      byId.set(String(activity.id), activity);
+    });
+    const fragment = document.createDocumentFragment();
+    nextKeys.forEach(function (key) {
+      const activity = byId.get(key);
+      if (!activity) return;
+      const row = hudRefs!.navalActivityRows[key] || createCombatOperationRow();
+      const sourceName = activity.source_name || SOW_t("hud.player_name");
+      const targetName = activity.target_name ||
+        (activity.target_type === "transport"
+          ? SOW_t("hud.fleet_transport_label")
+          : activity.target_type === "trade"
+            ? SOW_t("hud.fleet_trade_label")
+            : SOW_t("hud.fleet_warship_label"));
+      const damage = String(Math.max(0, Math.round(Number(activity.damage) || 0)));
+      const health = String(
+        Math.max(0, Math.round(Number(activity.health_after) || 0)),
+      );
+      const troops = formatNameplateTroops(
+        Math.max(0, Number(activity.troops_lost) || 0),
+      );
+      let details: string;
+      if (activity.kind === "hit") {
+        details = SOW_t("hud.naval_hit", { target: targetName, damage, health });
+      } else if (activity.kind === "sunk") {
+        details = activity.target_type === "transport"
+          ? SOW_t("hud.naval_transport_sunk", { target: targetName, troops })
+          : SOW_t("hud.naval_warship_sunk", { target: targetName, damage });
+      } else {
+        details = activity.target_type === "trade"
+          ? SOW_t("hud.naval_trade_captured", { target: targetName })
+          : SOW_t("hud.naval_warship_captured", { target: targetName });
+      }
+      row.element.classList.add("is-naval");
+      row.element.classList.remove("is-incoming", "is-outgoing", "is-retreating");
+      renderAvatarIdentity(
+        row.portrait,
+        row.emblem,
+        activity.source_avatar || { kind: "fallback" },
+      );
+      if (row.name.textContent !== sourceName) row.name.textContent = sourceName;
+      if (row.detailsLabel.textContent !== details)
+        row.detailsLabel.textContent = details;
+      row.detailsSeparator.hidden = true;
+      row.detailsEta.hidden = true;
+      row.troops.textContent = "";
+      row.actions.replaceChildren();
+      const hasFocus =
+        activity.focus_x != null &&
+        activity.focus_y != null &&
+        Number.isFinite(Number(activity.focus_x)) &&
+        Number.isFinite(Number(activity.focus_y));
+      if (hasFocus) {
+        const operation: HudCombatOperation = {
+          kind: "fleet",
+          id: activity.focus_fleet_id || activity.id,
+          direction: "incoming",
+          player_id: 0,
+          name: null,
+          avatar: { kind: "fallback" },
+          neutral: false,
+          troops: 0,
+          eta_seconds: null,
+          retreating: false,
+          focus_x: activity.focus_x,
+          focus_y: activity.focus_y,
+          focus_fleet_id: activity.focus_fleet_id,
+        };
+        row.actions.appendChild(
+          operationAction(
+            "focus_world",
+            "camera",
+            SOW_t("hud.center_camera"),
+            operation,
+          ),
+        );
+      }
+      fragment.appendChild(row.element);
+      nextRows[key] = row;
+    });
+    hudRefs.navalActivityList.replaceChildren(fragment);
+    hudRefs.navalActivityRows = nextRows;
+    hudRefs.navalActivityOrderKey = orderKey;
+    hudRefs.navalActivityList.parentElement!.hidden = nextKeys.length === 0;
+    hudRefs.operations.hidden =
+      nextKeys.length === 0 && hudRefs.combatOperationsOrderKey.length === 0;
   }
 
   function renderHoverCard(
@@ -7144,6 +8116,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
       hudRoot.dataset.overlayOpen = "false";
       hudRoot.dataset.notificationsVisible = "false";
+      hudRoot.dataset.requestToastsVisible = "false";
       if (hudRefs && hudRefs.mapMenu) hudRefs.mapMenu.classList.add("hidden");
       leaderboardRows = Object.create(null);
       leaderboardTeamRows = Object.create(null);
@@ -7151,11 +8124,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       lastLeaderboardTeams = [];
       lastLeaderboardPlayersPayload = null;
       lastLeaderboardTeamsPayload = null;
+      latestInboxRequests = [];
+      requestCountdowns.clear();
+      resetRequestToastDeck(requestToastDeck);
+      stopRequestTimers();
       if (hudRefs) {
         hudRefs.inboxRequests = Object.create(null);
         hudRefs.inboxRequestKeys = [];
         hudRefs.inboxRenderKey = "";
+        if (hudRefs.inboxBulk) hudRefs.inboxBulk.hidden = true;
         if (hudRefs.inboxRows) hudRefs.inboxRows.replaceChildren();
+        hudRefs.requestToastCards = [];
+        if (hudRefs.requestToastStack)
+          hudRefs.requestToastStack.replaceChildren();
+        if (hudRefs.requestToasts) hudRefs.requestToasts.hidden = true;
+        if (hudRefs.requestToastMore) hudRefs.requestToastMore.hidden = true;
       }
       if (hudRefs && hudRefs.rows) hudRefs.rows.replaceChildren();
       if (notificationTimer) window.clearTimeout(notificationTimer);
@@ -7176,6 +8159,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       }
       activeNotifications = [];
       renderCombatOperations([]);
+      renderNavalActivity([]);
       pendingCounterAttacks = Object.create(null);
       notificationCards.forEach(clearNotificationCard);
       notificationCursor = 0;
@@ -7296,7 +8280,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const spawnSecs = hud.spawn_timer_secs;
     const isDeploying = spawnSecs != null && spawnSecs > 0;
     let hasBuildingItems = false;
-    let hasFleetItems = false;
 
     const goldText = formatHudMetric(gold);
     if (hudRefs!.plateGold && hudRefs!.plateGold.dataset.val !== goldText) {
@@ -7556,249 +8539,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       hudRefs!.buildingsStrip.style.display =
         !isDeploying && hasBuildingItems ? "flex" : "none";
     }
-    if (hudRefs!.fleetStrip) {
-      const fleetPanel = hud.fleet_panel || {};
-      const fleetUnlocks = campaignUnlocks(hud);
-      const portLevels = Math.max(0, Number(fleetPanel.port_levels) || 0);
-      const cityLevel = Math.max(0, Number(fleetPanel.city_level) || 0);
-      const tradeRequiredPortLevel = Math.max(
-        1,
-        Number(fleetPanel.trade_required_port_level) || 1,
-      );
-      const warshipRequiredPortLevel = Math.max(
-        1,
-        Number(fleetPanel.warship_required_port_level) || 1,
-      );
-      const nukeRequiredCityLevel = Math.max(
-        1,
-        Number(fleetPanel.nuke_required_city_level) || 1,
-      );
-      const tradeCampaignLocked =
-        !campaignAllowsAction(fleetUnlocks, "trade_ship") ||
-        !campaignAllowsBuilding(fleetUnlocks, "Port", tradeRequiredPortLevel);
-      const transportCampaignLocked = !campaignAllowsAction(
-        fleetUnlocks,
-        "transport_fleet",
-      );
-      const warshipCampaignLocked =
-        !campaignAllowsAction(fleetUnlocks, "warship") ||
-        !campaignAllowsBuilding(fleetUnlocks, "Port", warshipRequiredPortLevel);
-      const nukeCampaignLocked =
-        !campaignAllowsAction(fleetUnlocks, "nuke") ||
-        !campaignAllowsBuilding(fleetUnlocks, "City", nukeRequiredCityLevel);
-      const tradeUnlocked =
-        !tradeCampaignLocked && portLevels >= tradeRequiredPortLevel;
-      const warshipUnlocked =
-        !warshipCampaignLocked && portLevels >= warshipRequiredPortLevel;
-      const nukeUnlocked =
-        !nukeCampaignLocked && cityLevel >= nukeRequiredCityLevel;
-      const militaryFull =
-        Number(fleetPanel.military_used) >=
-        Number(fleetPanel.military_capacity);
-      const warshipSelected = Boolean(hud.selected_warship_build);
-      if (hudRefs!.fleetTrade) {
-        const hideTrade = fleetUnlocks !== null && tradeCampaignLocked;
-        hudRefs!.fleetTrade.hidden = hideTrade;
-        hudRefs!.fleetTrade.style.display = hideTrade ? "none" : "";
-        const tradeCount = Math.floor(Number(fleetPanel.trade_ships) || 0);
-        const tradeCapacity = Math.floor(
-          Number(fleetPanel.trade_capacity) || 0,
-        );
-        const countBadge = hudRefs!.fleetTrade.querySelector<HTMLElement>(
-          ".sow-hud__fleet-count",
-        );
-        if (countBadge) countBadge.textContent = String(tradeCount);
-        let tradeStatus =
-          SOW_t("hud.fleet_trade_label") +
-          " · " +
-          tradeCount +
-          "/" +
-          tradeCapacity;
-        const tradeReason = !tradeUnlocked
-          ? SOW_t("hud.map_action_port") + " " + tradeRequiredPortLevel
-          : "";
-        if (tradeReason) tradeStatus += " · " + tradeReason;
-        hudRefs!.fleetTrade.setAttribute("aria-label", tradeStatus);
-        SOWTooltip.set(hudRefs!.fleetTrade, tradeStatus);
-        hudRefs!.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
-        setCampaignLock(
-          hudRefs!.fleetTrade,
-          fleetUnlocks === null && !tradeUnlocked,
-        );
-      }
-      if (hudRefs!.fleetTransport) {
-        const hideTransport = fleetUnlocks !== null && transportCampaignLocked;
-        hudRefs!.fleetTransport.hidden = hideTransport;
-        hudRefs!.fleetTransport.style.display = hideTransport ? "none" : "";
-        const transportCount = Math.max(
-          0,
-          Math.floor(Number(fleetPanel.transport_ships) || 0),
-        );
-        const countBadge = hudRefs!.fleetTransport.querySelector<HTMLElement>(
-          ".sow-hud__fleet-count",
-        );
-        if (countBadge) countBadge.textContent = String(transportCount);
-        const transportLabel =
-          SOW_t("hud.fleet_transport_label") + " · " + transportCount;
-        hudRefs!.fleetTransport.setAttribute("aria-label", transportLabel);
-        SOWTooltip.set(hudRefs!.fleetTransport, transportLabel);
-        setCampaignLock(
-          hudRefs!.fleetTransport,
-          fleetUnlocks !== null && transportCampaignLocked,
-        );
-      }
-      if (hudRefs!.fleetWarship) {
-        const hideWarship = fleetUnlocks !== null && warshipCampaignLocked;
-        hudRefs!.fleetWarship.hidden = hideWarship;
-        hudRefs!.fleetWarship.style.display = hideWarship ? "none" : "";
-        const warshipCost = Math.max(0, Number(fleetPanel.warship_cost) || 0);
-        const warshipCount = Math.max(
-          0,
-          Math.floor(Number(fleetPanel.warships) || 0),
-        );
-        const selectedWarships = Math.max(
-          0,
-          Math.floor(Number(fleetPanel.selected_warships) || 0),
-        );
-        const countBadge = hudRefs!.fleetWarship.querySelector<HTMLElement>(
-          ".sow-hud__fleet-count",
-        );
-        if (countBadge) countBadge.textContent = String(warshipCount);
-        const warshipDisabled =
-          warshipCampaignLocked ||
-          !warshipUnlocked ||
-          militaryFull ||
-          gold < warshipCost;
-        hudRefs!.fleetWarship.disabled = warshipDisabled;
-        hudRefs!.fleetWarship.setAttribute(
-          "aria-disabled",
-          String(warshipDisabled),
-        );
-        hudRefs!.fleetWarship.setAttribute(
-          "aria-pressed",
-          String(warshipSelected),
-        );
-        hudRefs!.fleetWarship.classList.toggle("active", warshipSelected);
-        hudRefs!.fleetWarship.classList.toggle(
-          "is-locked",
-          warshipDisabled && !warshipSelected,
-        );
-        const warshipReason = !warshipUnlocked
-          ? SOW_t("lobbies.locked") +
-            " · " +
-            SOW_t("hud.map_action_port") +
-            " " +
-            warshipRequiredPortLevel
-          : militaryFull
-            ? Math.floor(Number(fleetPanel.military_used) || 0) +
-              "/" +
-              Math.floor(Number(fleetPanel.military_capacity) || 0)
-            : gold < warshipCost
-              ? SOW_t("hud.not_enough_gold", {
-                  cost: Math.ceil(warshipCost).toLocaleString(),
-                  available: Math.floor(gold).toLocaleString(),
-                })
-              : SOW_t("hud.map_action_port") +
-                " " +
-                warshipRequiredPortLevel +
-                " · " +
-                Math.floor(warshipCost).toLocaleString() +
-                "g";
-        const warshipLabel =
-          SOW_t("hud.map_action_build_warship") +
-          " · " +
-          warshipCount +
-          (selectedWarships > 0 ? " · " + selectedWarships : "") +
-          " · " +
-          warshipReason;
-        hudRefs!.fleetWarship.setAttribute("aria-label", warshipLabel);
-        SOWTooltip.set(hudRefs!.fleetWarship, warshipLabel);
-        setCampaignLock(
-          hudRefs!.fleetWarship,
-          fleetUnlocks === null && warshipDisabled,
-        );
-        setTileCost(hudRefs!.fleetWarship, warshipCost);
-        hudRefs!.fleetSelection.hidden =
-          isDeploying || hideWarship || selectedWarships === 0;
-        hudRefs!.fleetSelectionTitle.textContent =
-          SOW_t("hud.warship_selection_title") +
-          " · " +
-          SOW_t("hud.fleet_selected_count", { count: selectedWarships });
-        hudRefs!.fleetSelectionHint.textContent = SOW_t(
-          "hud.warship_order_hint",
-        );
-        const selectAllButton =
-          hudRefs!.fleetSelection.querySelector<HTMLButtonElement>(
-            '[data-command="select_all_warships"]',
-          );
-        if (selectAllButton)
-          selectAllButton.hidden = selectedWarships >= warshipCount;
-      }
-      if (hudRefs!.fleetNuke) {
-        const hideNuke = fleetUnlocks !== null && nukeCampaignLocked;
-        hudRefs!.fleetNuke.hidden = hideNuke;
-        hudRefs!.fleetNuke.style.display = hideNuke ? "none" : "";
-        const cooldownTicks = Math.max(
-          0,
-          Number(fleetPanel.nuke_cooldown_ticks) || 0,
-        );
-        const nukeCost = Math.max(0, Number(fleetPanel.nuke_cost) || 0);
-        const nukeReady =
-          Boolean(fleetPanel.nuke_available) &&
-          cooldownTicks === 0 &&
-          gold >= nukeCost;
-        const nukeDisabled = nukeCampaignLocked || !nukeUnlocked || !nukeReady;
-        hudRefs!.fleetNuke.disabled = nukeDisabled;
-        hudRefs!.fleetNuke.setAttribute("aria-disabled", String(nukeDisabled));
-        hudRefs!.fleetNuke.setAttribute(
-          "aria-pressed",
-          String(hud.selected_nuke === "AtomBomb"),
-        );
-        hudRefs!.fleetNuke.classList.toggle("is-locked", nukeDisabled);
-        hudRefs!.fleetNuke.classList.toggle(
-          "active",
-          hud.selected_nuke === "AtomBomb",
-        );
-        const nukeReason = !nukeUnlocked
-          ? SOW_t("lobbies.locked") +
-            " · " +
-            SOW_t("hud.map_action_city") +
-            " " +
-            nukeRequiredCityLevel
-          : cooldownTicks > 0
-            ? SOW_t("lobbies.locked") +
-              " · " +
-              Math.ceil(cooldownTicks / 10) +
-              "s"
-            : gold < nukeCost
-              ? SOW_t("hud.not_enough_gold", {
-                  cost: Math.ceil(nukeCost).toLocaleString(),
-                  available: Math.floor(gold).toLocaleString(),
-                })
-              : !nukeReady
-                ? SOW_t("lobbies.locked")
-                : SOW_t("hud.map_action_nuke") +
-                  " · " +
-                  Math.floor(nukeCost).toLocaleString() +
-                  "g";
-        const nukeLabel = SOW_t("hud.map_action_nuke") + " · " + nukeReason;
-        hudRefs!.fleetNuke.setAttribute("aria-label", nukeLabel);
-        SOWTooltip.set(hudRefs!.fleetNuke, nukeLabel);
-        setCampaignLock(
-          hudRefs!.fleetNuke,
-          fleetUnlocks === null && nukeDisabled,
-        );
-        setTileCost(hudRefs!.fleetNuke, nukeCost);
-      }
-      hasFleetItems =
-        (hudRefs!.fleetTrade && !hudRefs!.fleetTrade.hidden) ||
-        (hudRefs!.fleetTransport && !hudRefs!.fleetTransport.hidden) ||
-        (hudRefs!.fleetWarship && !hudRefs!.fleetWarship.hidden) ||
-        (hudRefs!.fleetNuke && !hudRefs!.fleetNuke.hidden);
-      hudRefs!.fleetStrip.style.display =
-        isDeploying || !hasFleetItems ? "none" : "flex";
-    }
-
     syncEmoteTexts(hud);
     if (hudRefs!.devSidebar) {
       hudRefs!.devSidebar.classList.toggle(
@@ -7863,6 +8603,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       }
     }
 
+    if (Array.isArray(hud.inbox)) {
+      latestInboxRequests = hud.inbox;
+      syncRequestCountdowns(latestInboxRequests, requestCountdowns, Date.now());
+    } else if (Number(hud.inbox_count || 0) === 0) {
+      latestInboxRequests = [];
+      requestCountdowns.clear();
+    }
+
     if (hudRefs!.inbox) {
       const inboxWasHidden = hudRefs!.inbox.classList.contains("hidden");
       hudRefs!.inbox.classList.toggle("hidden", !inboxOpen);
@@ -7880,7 +8628,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           if (typeof clearTimeout === "function") clearTimeout(bellRingTimer);
           bellRingTimer = null;
         }
-        renderInbox(hud.inbox || []);
+        renderInbox(latestInboxRequests);
         if (inboxWasHidden && hudRefs!.inboxClose) hudRefs!.inboxClose.focus();
       } else if (
         !inboxWasHidden &&
@@ -7890,6 +8638,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         hudRefs!.inboxButton.focus();
       }
     }
+    renderRequestToasts(latestInboxRequests, inboxOpen);
     if (hudRefs!.transfer) {
       const transferWasHidden = hudRefs!.transfer.classList.contains("hidden");
       hudRefs!.transfer.classList.toggle("hidden", !hud.transfer);
@@ -7923,10 +8672,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         hudRefs!.transferStockGold.textContent = formatNameplateTroops(
           transferLive.target_gold,
         );
+        const modeKey =
+          String(transferLive.mode || "") + ":" + String(allAllies > 0);
         const reseed =
           transferWasHidden ||
           hudRefs!.transfer.dataset.seededTarget !==
-            String(transferLive.target_id);
+            String(transferLive.target_id) ||
+          hudRefs!.transfer.dataset.seededMode !== modeKey;
         if (reseed) {
           delete transferFlips.troops;
           delete transferFlips.gold;
@@ -7944,6 +8696,27 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           toggle.classList.toggle("is-want", asks);
         });
         const kind = transferKind(transferLive, hud);
+        hudRefs!.transfer.dataset.transferKind = kind;
+        hudRefs!.transferTitle.textContent =
+          allAllies > 0 && kind === "request"
+            ? SOW_t("hud.map_action_request_allies")
+            : kind === "send"
+              ? tWithFallback(
+                  "hud.send_resources_title",
+                  undefined,
+                  SOW_t("hud.send"),
+                )
+              : kind === "request"
+                ? tWithFallback(
+                    "hud.request_resources_title",
+                    undefined,
+                    SOW_t("hud.request"),
+                  )
+                : tWithFallback(
+                    "hud.trade_offer_title",
+                    undefined,
+                    SOW_t("hud.trade"),
+                  );
         // The panel carries one action, the one the rows add up to; the others are hidden, not greyed out.
         const ctas = [
           [hudRefs!.transferSend, "send"],
@@ -7964,6 +8737,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           hudRefs!.transfer.dataset.seededTarget = String(
             transferLive.target_id,
           );
+          hudRefs!.transfer.dataset.seededMode = modeKey;
           hudRefs!.transferGold.value = "0";
           hudRefs!.transferTroops.value = "0";
         }
@@ -8007,6 +8781,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     renderNotifications(hud.notifications, forceNotifications, hudScreen);
     renderCombatOperations(hud.operations);
+    renderNavalActivity(hud.naval_activity || []);
     renderMapFeedback(hud.map_feedback);
 
     // Leaderboard
@@ -8155,7 +8930,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         mapMenuOpen,
       ),
     );
-    const dockHidden = !(isDeploying || hasBuildingItems || hasFleetItems);
+    const dockHidden = !(isDeploying || hasBuildingItems);
     if (hudRefs!.dock && hudRefs!.dock.hidden !== dockHidden) {
       hudRefs!.dock.hidden = dockHidden;
       syncCompactHudBounds(hudScreen);
@@ -8179,22 +8954,39 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         : Number(zoom.current) >= Number(zoom.ceiling) - 0.02;
     }
     document.addEventListener("pointerdown", function (event) {
-      if (
-        !hudRefs ||
-        !hudRefs.settings ||
-        hudRefs.settings.classList.contains("hidden")
-      )
-        return;
+      if (!hudRefs) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (
-        hudRefs.settings.contains(target) ||
-        target.closest('[data-command="toggle_settings"]') ||
-        target.closest(".sow-control-dropdown__menu")
-      )
-        return;
-      setHudPanel(null);
-      renderHud();
+        hudRefs.settings &&
+        !hudRefs.settings.classList.contains("hidden") &&
+        !hudRefs.settings.contains(target) &&
+        !target.closest('[data-command="toggle_settings"]') &&
+        !target.closest(".sow-control-dropdown__menu")
+      ) {
+        setHudPanel(null);
+        renderHud();
+      }
+      if (
+        activeHudPanel === "inbox" &&
+        hudRefs.inbox &&
+        !hudRefs.inbox.classList.contains("hidden") &&
+        !hudRefs.inbox.contains(target) &&
+        !target.closest('[data-command="toggle_inbox"]')
+      ) {
+        setHudPanel(null);
+        renderHud();
+      }
+      if (
+        hudRefs.requestToasts &&
+        !hudRefs.requestToasts.hidden &&
+        !hudRefs.requestToasts.contains(target) &&
+        !target.closest('[data-command="toggle_inbox"]')
+      ) {
+        if (dismissAllRequestToasts(requestToastDeck)) {
+          renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
+        }
+      }
     });
     hudRoot.addEventListener("pointerdown", function (event) {
       const target = event.target;
@@ -8259,7 +9051,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const emoteChoice = target.closest<HTMLElement>("[data-emote-kind]");
       if (emoteChoice) {
         const emoteKind = emoteChoice.dataset.emoteKind;
-        if (!emoteKind) return;
+        if (
+          !emoteKind ||
+          (emoteChoice as HTMLButtonElement).disabled ||
+          emoteChoice.getAttribute("aria-disabled") === "true"
+        ) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         send("express_emote", {
@@ -8294,6 +9092,28 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           send("clear_placement");
         } else if (nudge) {
           send("nudge_placement", { direction: nudge });
+        }
+        return;
+      }
+      const districtBtn = target.closest<HTMLButtonElement>("[data-district-kind]");
+      if (districtBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const kind = districtBtn.dataset.districtKind;
+        const tileIdx = Number(districtBtn.dataset.districtTile);
+        if (kind && Number.isFinite(tileIdx)) {
+          send("build_or_upgrade_district", { tile_idx: tileIdx, kind });
+        }
+        return;
+      }
+      const arsenalBtn = target.closest<HTMLButtonElement>("[data-arsenal-kind]");
+      if (arsenalBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const kind = arsenalBtn.dataset.arsenalKind;
+        const tileIdx = Number(arsenalBtn.dataset.arsenalTile);
+        if (kind && Number.isFinite(tileIdx)) {
+          send("city_arsenal", { tile_idx: tileIdx, kind });
         }
         return;
       }
@@ -8353,7 +9173,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return;
       }
       const btn = target.closest<HTMLElement>("[data-command]");
-      if (!btn) return;
+      if (!btn) {
+        if (target.closest(".sow-hud__request-toast")) {
+          if (dismissFrontRequestToast(requestToastDeck)) {
+            renderRequestToasts(
+              latestInboxRequests,
+              activeHudPanel === "inbox",
+            );
+          }
+        }
+        return;
+      }
       const cmd = btn.dataset.command;
       if (!cmd) return;
       if (cmd === "zoom_in" || cmd === "zoom_out") {
@@ -8552,10 +9382,54 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         cmd === "accept_alliance" ||
         cmd === "reject_alliance" ||
         cmd === "accept_resource_request" ||
-        cmd === "reject_resource_request"
+        cmd === "reject_resource_request" ||
+        cmd === "accept_help_call" ||
+        cmd === "reject_help_call"
       ) {
         const requesterId = Number(btn.dataset.playerId);
+        const cardEl = btn.closest<HTMLElement>("[data-request-key]");
+        const key = cardEl ? cardEl.dataset.requestKey : undefined;
+        const fromToast = Boolean(btn.closest(".sow-hud__request-toast"));
         if (requesterId > 0) send(cmd, { target_player_id: requesterId });
+        if (key) dismissRequestToastByKey(requestToastDeck, key);
+        if (fromToast) {
+          renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
+        } else if (
+          activeHudPanel === "inbox" &&
+          hudRefs &&
+          hudRefs.inboxRequestKeys.length <= 1
+        ) {
+          setHudPanel(null);
+          renderHud();
+        }
+      } else if (
+        cmd === "accept_all_alliances" ||
+        cmd === "reject_all_alliances"
+      ) {
+        const intent =
+          cmd === "accept_all_alliances"
+            ? "accept_alliance"
+            : "reject_alliance";
+        let hasResourceRequests = false;
+        latestInboxRequests.forEach(function (request) {
+          if (!isValidInboxRequest(request)) return;
+          if (request.kind === "alliance") {
+            send(intent, { target_player_id: request.requester_id });
+            dismissRequestToastByKey(requestToastDeck, requestKey(request));
+          } else {
+            hasResourceRequests = true;
+          }
+        });
+        if (!hasResourceRequests && activeHudPanel === "inbox") {
+          setHudPanel(null);
+          renderHud();
+        } else {
+          renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
+        }
+      } else if (cmd === "open_inbox_from_toast") {
+        dismissAllRequestToasts(requestToastDeck);
+        setHudPanel("inbox");
+        renderHud();
       } else if (cmd === "cancel_betrayal") {
         betrayalOpen = false;
         pendingCounterAttacks = Object.create(null);
@@ -8655,14 +9529,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       } else if (cmd === "select_building") {
         const kind = btn.dataset.kind;
         if (kind) send("select_building", { kind });
-      } else if (cmd === "select_warship") {
-        send("select_warship");
-      } else if (cmd === "select_all_warships") {
-        send("select_all_warships");
-      } else if (cmd === "center_selected_warships") {
-        send("center_selected_warships");
-      } else if (cmd === "clear_warship_selection") {
-        send("clear_warship_selection");
       } else if (cmd === "select_nuke") {
         send("select_nuke");
       } else if (cmd === "confirm_endgame_leave") {
@@ -8778,6 +9644,71 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       syncEmoteTexts(hudState && hudState.hud);
     });
   }
+  document.addEventListener(
+    "keydown",
+    function (event) {
+      if (
+        !hudInitialized ||
+        (hudRoot && hudRoot.hidden) ||
+        !hudRefs ||
+        !hudRefs.transfer ||
+        hudRefs.transfer.classList.contains("hidden")
+      ) {
+        return;
+      }
+      if (betrayalOpen || activeHudPanel !== null) return;
+      if (
+        (hudRefs.surrender && !hudRefs.surrender.classList.contains("hidden")) ||
+        (hudRefs.endgame && !hudRefs.endgame.classList.contains("hidden"))
+      ) {
+        return;
+      }
+      const action = resolveTransferHotkey(event);
+      if (!action) return;
+      if (action === "close") {
+        event.preventDefault();
+        event.stopPropagation();
+        send("close_transfer");
+        return;
+      }
+      const live = hudState && hudState.hud;
+      const offer = live && live.transfer;
+      if (!live || !offer) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (action === "set_max") {
+        const target = resolveTransferMaxTarget(
+          document.activeElement === hudRefs.transferTroops,
+          document.activeElement === hudRefs.transferGold,
+        );
+        const resources: TransferResource[] =
+          target === "both" ? ["troops", "gold"] : [target];
+        resources.forEach(function (resource) {
+          const input =
+            resource === "troops"
+              ? hudRefs!.transferTroops
+              : hudRefs!.transferGold;
+          input.value = String(transferPresetAmount(resource, "max", offer, live));
+        });
+        return;
+      }
+      const kind = transferKind(offer, live);
+      const cta =
+        kind === "send"
+          ? hudRefs.transferSend
+          : kind === "request"
+            ? hudRefs.transferRequest
+            : hudRefs.transferTrade;
+      if (
+        !cta.disabled &&
+        (wholeAmount(Number(hudRefs.transferTroops.value)) > 0 ||
+          wholeAmount(Number(hudRefs.transferGold.value)) > 0)
+      ) {
+        cta.click();
+      }
+    },
+    true,
+  );
   if (hudRoot)
     hudRoot.addEventListener("keydown", function (event) {
       if (handleHudDropdownKeydown(event)) return;
@@ -8840,17 +9771,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         event.preventDefault();
         event.stopPropagation();
         send("clear_placement");
-        return;
-      }
-      if (
-        event.key === "Escape" &&
-        hudRefs &&
-        hudRefs.transfer &&
-        !hudRefs.transfer.classList.contains("hidden")
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        send("close_transfer");
         return;
       }
       if (event.key === "Escape" && activeHudPanel === "leaderboard") {

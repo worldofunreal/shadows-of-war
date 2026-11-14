@@ -67,7 +67,8 @@ impl SowApp {
                     .iter()
                     .any(|attacker| !old_attackers.contains(attacker));
 
-                // 2. Detect new alliance requests targeting us
+                // 2. Trigger viewport alert on new alliance requests targeting us.
+                // Interactive request toasts for both alliance and resource requests are rendered directly from `hud.inbox`.
                 if let Some(my_info_new) = snap.players.iter().find(|p| p.id == my_id)
                     && let Some(my_info_old) = existing.players.iter().find(|p| p.id == my_id)
                 {
@@ -76,49 +77,6 @@ impl SowApp {
                             self.ui.trigger_viewport_alert(
                                 crate::app::ViewportAlertKind::AllianceRequest,
                             );
-                            if let Some(requester) = snap.players.iter().find(|p| p.id == *req) {
-                                notifications.push((
-                                    crate::ui::UiText::new("hud.alliance_request").with(
-                                        "name",
-                                        sow_core::player::display_name(
-                                            requester.id,
-                                            &requester.name,
-                                            requester.player_type,
-                                        ),
-                                    ),
-                                    [Some(*req), Some(my_id)],
-                                    3,
-                                    format!("alliance-request:{req}"),
-                                    false,
-                                ));
-                            }
-                        }
-                    }
-                    for request in &my_info_new.resource_requests {
-                        if !my_info_old
-                            .resource_requests
-                            .iter()
-                            .any(|old| old.requester == request.requester)
-                            && let Some(requester) =
-                                snap.players.iter().find(|p| p.id == request.requester)
-                        {
-                            notifications.push((
-                                crate::ui::UiText::new("hud.resource_request")
-                                    .with(
-                                        "name",
-                                        sow_core::player::display_name(
-                                            requester.id,
-                                            &requester.name,
-                                            requester.player_type,
-                                        ),
-                                    )
-                                    .with("gold", crate::utils::format_number(request.gold))
-                                    .with("troops", crate::utils::format_number(request.troops)),
-                                [Some(request.requester), Some(my_id)],
-                                3,
-                                format!("resource-request:{}", request.requester),
-                                false,
-                            ));
                         }
                     }
                     for ally_id in &my_info_new.alliances {
@@ -231,6 +189,9 @@ impl SowApp {
                     || event.age_seconds(snap.tick, self.sim.config.tick_rate_ms)
                         >= sow_core::emote::EMOTE_DURATION_SECS
                     || !sow_core::emote::is_visible(&snap.players, player, my_id)
+                    || (event.kind == sow_core::emote::EmoteKind::Help
+                        && !event.scripted
+                        && player.id != my_id)
                     || existing
                         .players
                         .iter()
@@ -306,24 +267,6 @@ impl SowApp {
                         });
                     self.ui.last_player_attack_flash_time.insert(my_id, now);
                 }
-                if being_attacked_triggered
-                    && under_attack_severity >= 0.35
-                    && let Some(attack) = first_incoming
-                {
-                    let my_pos = snap
-                        .players
-                        .iter()
-                        .find(|p| p.id == my_id)
-                        .map_or([0.0, 0.0], |p| [p.centroid_x, p.centroid_y]);
-                    let dir = [my_pos[0] - attack.front_cx, my_pos[1] - attack.front_cy];
-                    self.ui.camera_shake.push(
-                        now,
-                        1.4 + 3.2 * under_attack_severity,
-                        0.18 + 0.12 * under_attack_severity,
-                        dir,
-                        (under_attack_severity - 0.3).clamp(0.0, 0.85),
-                    );
-                }
             } else {
                 self.ui.last_player_attack_flash_time.remove(&my_id);
             }
@@ -360,24 +303,6 @@ impl SowApp {
                         .any(|p| p.id == old_attack.target_owner && p.alive);
                     if !still_active && target_alive {
                         let severity = ((old_attack.troops as f32) / my_troops).clamp(0.2, 1.0);
-                        let my_pos = snap
-                            .players
-                            .iter()
-                            .find(|p| p.id == my_id)
-                            .map_or([old_attack.front_cx, old_attack.front_cy], |p| {
-                                [p.centroid_x, p.centroid_y]
-                            });
-                        let recoil = [
-                            my_pos[0] - old_attack.front_cx,
-                            my_pos[1] - old_attack.front_cy,
-                        ];
-                        self.ui.camera_shake.push(
-                            now,
-                            1.4 + 1.4 * severity,
-                            0.18,
-                            recoil,
-                            0.15,
-                        );
                         self.sfx.play_attack_stalled(
                             now,
                             severity,

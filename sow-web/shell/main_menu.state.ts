@@ -466,18 +466,85 @@ export interface HudBuildingUpgradeOffer {
     enabled: boolean;
 }
 
+export interface HudCityConstruction {
+    kind: string;
+    active_level: number;
+    target_level: number;
+    remaining_seconds: number;
+    progress: number;
+    is_city_foundation: boolean;
+}
+
+export interface HudCityDistrict {
+    kind: string;
+    building_id: number | null;
+    level: number;
+    max_level: number;
+    under_construction: boolean;
+    locked_reason: string | null;
+    next_level: number | null;
+    cost: number | null;
+    seconds: number | null;
+    discounted: boolean;
+    affordable: boolean;
+    enabled: boolean;
+    metrics: HudBuildingChip[];
+    next_gains: HudBuildingChip[];
+}
+
+export interface HudCityArsenal {
+    warship: {
+        unlocked: boolean;
+        campaign_unlocked: boolean;
+        capacity_ok: boolean;
+        cost: number;
+        seconds: number;
+        affordable: boolean;
+        enabled: boolean;
+    };
+    nuke: {
+        unlocked: boolean;
+        campaign_unlocked: boolean;
+        ready: boolean;
+        selected: boolean;
+        cost: number;
+        seconds: number;
+        affordable: boolean;
+        can_build: boolean;
+        can_launch: boolean;
+    };
+    anti_nuke: {
+        unlocked: boolean;
+        campaign_unlocked: boolean;
+        installed: boolean;
+        cooldown_seconds: number;
+        cost: number;
+        seconds: number;
+        affordable: boolean;
+        enabled: boolean;
+    };
+}
+
 export interface HudMapMenuBuilding {
+    tile_idx?: number;
     kind: string;
     level: number;
+    visual_level?: number;
     max_level?: number;
     under_construction?: boolean;
+    city_foundation?: boolean;
+    coastal?: boolean;
+    railway_connected?: boolean;
     anchor_x?: number;
     anchor_y?: number;
     anchor_radius?: number;
     remaining_seconds?: number | null;
     progress?: number | null;
+    construction?: HudCityConstruction | null;
     chips?: HudBuildingChip[];
     upgrade?: HudBuildingUpgradeOffer | null;
+    districts?: HudCityDistrict[];
+    arsenal?: HudCityArsenal | null;
 }
 
 export interface HudBuildingPlacement {
@@ -566,11 +633,14 @@ export interface HudMapFeedback {
 }
 
 export interface HudInboxRequest {
-    kind: "alliance" | "resources";
+    kind: "alliance" | "resources" | "help";
     requester_id: number;
     name: string;
     avatar: HudAvatarIdentity;
     active: boolean;
+    is_renewal?: boolean;
+    remaining_seconds?: number;
+    ttl_seconds?: number;
     gold?: number;
     troops?: number;
     /** A trade's price: what the requester gives in return. */
@@ -591,7 +661,23 @@ export interface HudCombatOperation {
     retreating: boolean;
     focus_x: number | null;
     focus_y: number | null;
+    focus_fleet_id?: number | null;
     incoming_troops?: number;
+}
+
+export interface HudNavalActivity {
+    id: number;
+    kind: "hit" | "sunk" | "captured";
+    source_name: string | null;
+    source_avatar: HudAvatarIdentity | null;
+    target_name: string | null;
+    target_type: "transport" | "trade" | "warship";
+    damage: number;
+    health_after: number;
+    troops_lost: number;
+    focus_x: number | null;
+    focus_y: number | null;
+    focus_fleet_id: number | null;
 }
 
 export interface HudDevParameter {
@@ -643,6 +729,7 @@ export interface MenuHudPayload {
     hero_income_rate?: number;
     attack_ratio: number;
     operations: HudCombatOperation[];
+    naval_activity?: HudNavalActivity[];
     spawn_timer_secs: number | null;
     spawn_duration_secs?: number;
     has_spawned?: boolean;
@@ -651,13 +738,11 @@ export interface MenuHudPayload {
     building_in_progress?: HudBuildingInProgress | null;
     buildings_in_progress?: HudBuildingProgressItem[];
     building_celebrations?: HudBuildingCelebrationItem[];
-    selected_warship_build: boolean;
     selected_nuke: string | null;
     fleet_panel: {
         trade_ships: number;
         transport_ships: number;
         warships: number;
-        selected_warships: number;
         trade_capacity: number;
         port_levels: number;
         city_level: number;
@@ -682,6 +767,7 @@ export interface MenuHudPayload {
     }[];
     emote_active: boolean;
     emote_pinned: boolean;
+    help_cooldown_seconds?: number;
     fps: number | null;
     ping: number | null;
     inbox_count: number;

@@ -614,7 +614,7 @@ mod bot_iq_alliance_tests {
             engine.state.player_mut(2).unwrap().disconnected = false;
             assert!(attack_targets(&run_ai_attack(&mut engine, tier, &[2], false)).is_empty());
 
-            engine.state.config.game_mode = "HumansVsNations".into();
+            engine.state.config.game_mode = "PvE".into();
             let mode_attack = attack_targets(&run_ai_attack(&mut engine, tier, &[2], false));
             assert_eq!(mode_attack.contains(&2), tier == AiTier::Nation);
         }
@@ -655,7 +655,7 @@ mod bot_iq_alliance_tests {
         );
         assert_eq!(
             ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Nation, BotDifficulty::Vanilla).refuse_human_chance,
-            20
+            0
         );
         assert_eq!(
             ai_profile_for(&crate::game_config::AiTuning::default(), AiTier::Ghost, BotDifficulty::Vanilla).refuse_human_chance,
@@ -666,7 +666,6 @@ mod bot_iq_alliance_tests {
             50
         );
         for (tier, difficulty) in [
-            (AiTier::Nation, BotDifficulty::Vanilla),
             (AiTier::Tribe, BotDifficulty::Vanilla),
             (AiTier::Tribe, BotDifficulty::Terminator),
         ] {
@@ -716,7 +715,7 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn terminator_nation_probes_a_walled_in_bot_with_one_percent_of_its_troops() {
+    fn bot_hero_uses_decisive_troop_commit_against_a_tribe() {
         use crate::map::MapTile;
 
         let config = crate::game_config::GameConfig {
@@ -757,8 +756,9 @@ mod bot_iq_alliance_tests {
         assert!(matches!(
             decisions.as_slice(),
             [decision] if matches!(&decision.intent, GameplayIntent::Attack(attack)
-                if attack.target_owner == 2 && attack.troops == Some(100.0))
-        ));
+                if attack.target_owner == 2
+                    && attack.troops.is_some_and(|troops| (troops - 8_000.0).abs() < 0.01))
+        ), "expected the 4x Tribe commit capped by reserve, got {decisions:?}");
     }
 
     #[test]
@@ -794,9 +794,14 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn vanilla_tribe_waits_for_human_grace_but_defends_when_attacked() {
+    fn vanilla_tribe_expands_first_targets_ai_and_respects_defense_trigger() {
         let mut engine = test_engine_two_players(43);
-        engine.state.player_mut(1).unwrap().iq = 60;
+        {
+            let tribe = engine.state.player_mut(1).unwrap();
+            tribe.iq = 60;
+            tribe.troops = 1_200.0;
+            tribe.max_troops = 1_500.0;
+        }
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
 
         let idle = run_vanilla_tribe_attack(&mut engine, &[2], false, false);
@@ -817,8 +822,98 @@ mod bot_iq_alliance_tests {
         engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
         engine.ai_attack_index[1].push(0);
 
+        engine.state.player_mut(1).unwrap().troops = 1_000.0;
+        let below_trigger = run_vanilla_tribe_attack(&mut engine, &[2], false, true);
+        assert!(attack_targets(&below_trigger).is_empty());
+
+        engine.state.player_mut(1).unwrap().troops = 1_200.0;
         let defense = run_vanilla_tribe_attack(&mut engine, &[2], false, true);
         assert_eq!(attack_targets(&defense), vec![2]);
+
+        engine.attacks.clear();
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Bot;
+        let tribe_war = run_vanilla_tribe_attack(&mut engine, &[2], false, false);
+        assert_eq!(attack_targets(&tribe_war), vec![2]);
+
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Nation;
+        let expansion = run_vanilla_tribe_attack(&mut engine, &[2], true, false);
+        assert_eq!(attack_targets(&expansion), vec![0]);
+
+        for target_type in [PlayerType::Nation, PlayerType::Human] {
+            let mut attacked = 0;
+            for seed in 1..=32 {
+                let mut engine = test_engine_two_players(seed);
+                {
+                    let tribe = engine.state.player_mut(1).unwrap();
+                    tribe.iq = 60;
+                    tribe.troops = 1_200.0;
+                    tribe.max_troops = 1_500.0;
+                    tribe.bot_rng = wyrand::WyRand::new(seed);
+                }
+                let target = engine.state.player_mut(2).unwrap();
+                target.player_type = target_type;
+                target.is_ai_controlled = target_type == PlayerType::Human;
+                let decisions = run_vanilla_tribe_attack(&mut engine, &[2], false, false);
+                attacked += usize::from(attack_targets(&decisions) == [2]);
+            }
+            assert!((5..=27).contains(&attacked), "target {target_type:?}: {attacked}/32");
+        }
+
+        // Ghosts can take a Tribe below their usual trigger on a seeded
+        // one-in-three roll; Bot Heroes wait for the normal trigger.
+        for tier in [AiTier::Ghost, AiTier::Nation] {
+            let mut subtrigger_attacks = 0;
+            for seed in 1..=60 {
+                let mut engine = test_engine_two_players(seed);
+                {
+                    let actor = engine.state.player_mut(1).unwrap();
+                    if tier == AiTier::Ghost {
+                        actor.player_type = PlayerType::Human;
+                        actor.is_ai_controlled = true;
+                    } else {
+                        actor.player_type = PlayerType::Nation;
+                    }
+                    actor.iq = if tier == AiTier::Ghost { 170 } else { 165 };
+                    actor.iq_points = 100.0;
+                    actor.troops = 1_000.0;
+                    actor.max_troops = 10_000.0;
+                    actor.bot_rng = wyrand::WyRand::new(seed);
+                }
+                engine.state.player_mut(2).unwrap().troops = 100.0;
+                let decisions = run_ai_attack(&mut engine, tier, &[2], false);
+                subtrigger_attacks += usize::from(attack_targets(&decisions) == [2]);
+            }
+            if tier == AiTier::Ghost {
+                assert!(
+                    (10..=30).contains(&subtrigger_attacks),
+                    "Ghost sub-trigger attacks should occur about one-third of the time, got {subtrigger_attacks}/60"
+                );
+            } else {
+                assert_eq!(
+                    subtrigger_attacks, 0,
+                    "Bot Heroes must wait for their normal Tribe attack trigger"
+                );
+            }
+
+            let mut engine = test_engine_two_players(61);
+            {
+                let actor = engine.state.player_mut(1).unwrap();
+                actor.player_type = if tier == AiTier::Ghost {
+                    PlayerType::Human
+                } else {
+                    PlayerType::Nation
+                };
+                actor.is_ai_controlled = tier == AiTier::Ghost;
+                actor.iq = if tier == AiTier::Ghost { 170 } else { 165 };
+                actor.iq_points = 100.0;
+                actor.troops = 5_000.0;
+                actor.max_troops = 10_000.0;
+            }
+            engine.state.player_mut(2).unwrap().troops = 100.0;
+            let triggered = run_ai_attack(&mut engine, tier, &[2], false);
+            assert_eq!(attack_targets(&triggered), vec![2]);
+        }
     }
 
     fn naval_target_decision(
@@ -933,6 +1028,13 @@ mod bot_iq_alliance_tests {
                 tribe.max_troops = 10_000.0;
             }
             engine.state.tick = 1_350;
+            let mut profile =
+                ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla);
+            // This scenario isolates grace permission and naval reach; human
+            // refusal is covered separately with its default 50% setting.
+            if tier == AiTier::Tribe {
+                profile.refuse_human_chance = 0;
+            }
             let slot = AiSlot {
                 bot_id: 1,
                 tier,
@@ -940,7 +1042,7 @@ mod bot_iq_alliance_tests {
                 do_structures: false,
                 is_under_attack: false,
                 ghost_retaliation: None,
-                profile: ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla),
+                profile,
             };
             let iq = engine.state.player(1).unwrap().iq;
             let mut decisions = Vec::new();
@@ -972,6 +1074,13 @@ mod bot_iq_alliance_tests {
                 tribe.troops = 8_000.0;
                 tribe.max_troops = 10_000.0;
             }
+            let mut profile =
+                ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla);
+            // Test disconnected-player eligibility independently of the
+            // Tribe's separately covered refusal chance.
+            if tier == AiTier::Tribe {
+                profile.refuse_human_chance = 0;
+            }
             let slot = AiSlot {
                 bot_id: 1,
                 tier,
@@ -979,7 +1088,7 @@ mod bot_iq_alliance_tests {
                 do_structures: false,
                 is_under_attack: false,
                 ghost_retaliation: None,
-                profile: ai_profile_for(&crate::game_config::AiTuning::default(), tier, BotDifficulty::Vanilla),
+                profile,
             };
             let iq = engine.state.player(1).unwrap().iq;
             let mut decisions = Vec::new();
@@ -1003,6 +1112,7 @@ mod bot_iq_alliance_tests {
     fn remote_bot_defense_scenario(
         tier: AiTier,
         split_sea: bool,
+        actor_troops: f64,
     ) -> (SowEngine, Vec<crate::intent::nation::profile::BotDecision>) {
         use crate::game::{GamePhase, GameState};
         use crate::map::MapTile;
@@ -1037,7 +1147,7 @@ mod bot_iq_alliance_tests {
             AiTier::Nation => 150,
             AiTier::Tribe => 60,
         };
-        actor.troops = 5_000.0;
+        actor.troops = actor_troops;
         actor.max_troops = 10_000.0;
         actor.tile_count = 1;
         actor.border_insert(0);
@@ -1106,12 +1216,15 @@ mod bot_iq_alliance_tests {
 
     #[test]
     fn vanilla_tribe_can_retaliate_across_open_water_without_a_port() {
-        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Tribe, false);
+        let (_, below_trigger) = remote_bot_defense_scenario(AiTier::Tribe, false, 5_000.0);
+        assert!(below_trigger.is_empty());
+
+        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Tribe, false, 8_000.0);
         assert!(matches!(
             decisions.as_slice(),
             [decision] if matches!(&decision.intent, GameplayIntent::LaunchFleet {
                 target_tile,
-                troops: Some(1_000.0),
+                troops: Some(1_600.0),
             } if *target_tile == 63)
         ));
         assert_eq!(engine.bot_work.naval_routes_calculated, 1);
@@ -1121,7 +1234,7 @@ mod bot_iq_alliance_tests {
 
     #[test]
     fn failed_remote_tribe_defense_falls_back_to_neutral_land_not_illegal_land_attack() {
-        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Tribe, true);
+        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Tribe, true, 8_000.0);
         assert_eq!(attack_targets(&decisions), vec![0]);
         assert!(
             !decisions
@@ -1133,7 +1246,7 @@ mod bot_iq_alliance_tests {
 
     #[test]
     fn ghost_retaliation_uses_the_shared_naval_route_without_a_port() {
-        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Ghost, false);
+        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Ghost, false, 5_000.0);
         assert!(matches!(
             decisions.as_slice(),
             [decision] if matches!(&decision.intent, GameplayIntent::LaunchFleet {
@@ -1296,7 +1409,7 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().gold = 100_000_000.0;
         engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
 
-        // Give bot 1 a silo
+        // Give bot 1 a silo with an armed nuke
         engine.buildings.push(crate::building::Building {
             id: 100,
             owner_id: 1,
@@ -1306,6 +1419,13 @@ mod bot_iq_alliance_tests {
             under_construction: false,
             ticks_until_complete: 0,
         });
+        engine.city_arsenals.insert(
+            100,
+            crate::building::CityArsenalState {
+                nuke_ready: true,
+                ..Default::default()
+            },
+        );
 
         // Give bot 2 a city
         engine.buildings.push(crate::building::Building {
@@ -1328,6 +1448,13 @@ mod bot_iq_alliance_tests {
             under_construction: false,
             ticks_until_complete: 0,
         });
+        engine.city_arsenals.insert(
+            101,
+            crate::building::CityArsenalState {
+                has_anti_nuke: true,
+                ..Default::default()
+            },
+        );
 
         for _ in 0..30 {
             engine.state.tick += 1;
@@ -1355,13 +1482,18 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn test_nuke_launch_target_centroid() {
+    fn ghost_policy_uses_the_gated_nuke_path_and_target_centroid() {
         let mut engine = test_engine_two_players(42);
-        engine.state.player_mut(1).unwrap().iq_points = 500.0;
-        engine.state.player_mut(1).unwrap().gold = 100_000_000.0;
-        engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
+        {
+            let ghost = engine.state.player_mut(1).unwrap();
+            ghost.iq_points = 500.0;
+            ghost.gold = 100_000_000.0;
+            ghost.player_type = PlayerType::Human;
+            ghost.is_ai_controlled = true;
+        }
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Bot;
 
-        // Give bot 1 a silo
+        // Give bot 1 a silo with an armed nuke
         engine.buildings.push(crate::building::Building {
             id: 100,
             owner_id: 1,
@@ -1371,6 +1503,13 @@ mod bot_iq_alliance_tests {
             under_construction: false,
             ticks_until_complete: 0,
         });
+        engine.city_arsenals.insert(
+            100,
+            crate::building::CityArsenalState {
+                nuke_ready: true,
+                ..Default::default()
+            },
+        );
 
         // Give bot 2 a city
         engine.buildings.push(crate::building::Building {
@@ -1387,9 +1526,24 @@ mod bot_iq_alliance_tests {
         engine.state.map.set_owner_id(1, 0, 2);
 
         engine.refresh_building_grid();
+        let slot = AiSlot {
+            bot_id: 1,
+            tier: AiTier::Ghost,
+            do_attack: true,
+            do_structures: false,
+            is_under_attack: false,
+            ghost_retaliation: None,
+            profile: ai_profile_for(
+                &crate::game_config::AiTuning::default(),
+                AiTier::Ghost,
+                BotDifficulty::Vanilla,
+            ),
+        };
         let mut decisions = Vec::new();
-        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
-        assert!(!decisions.is_empty());
+        engine.nation_run_combat_for_slot(&slot, (1, 135), (5.0, 5.0), &[2], false, &mut decisions);
+        assert!(decisions
+            .iter()
+            .any(|decision| matches!(decision.intent, GameplayIntent::LaunchNuke { .. })));
         assert_eq!(engine.recent_nuke_targets.get(&(2, 1)), Some(&1));
     }
 
@@ -1431,6 +1585,13 @@ mod bot_iq_alliance_tests {
                 ticks_until_complete: 0,
             },
         ]);
+        engine.city_arsenals.insert(
+            100,
+            crate::building::CityArsenalState {
+                nuke_ready: true,
+                ..Default::default()
+            },
+        );
 
         let mut decisions = Vec::new();
         engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
@@ -1458,6 +1619,13 @@ mod bot_iq_alliance_tests {
             under_construction: false,
             ticks_until_complete: 0,
         });
+        engine.city_arsenals.insert(
+            100,
+            crate::building::CityArsenalState {
+                nuke_ready: true,
+                ..Default::default()
+            },
+        );
         engine.buildings.push(crate::building::Building {
             id: 101,
             owner_id: 2,
@@ -1627,6 +1795,33 @@ mod bot_iq_alliance_tests {
     #[test]
     fn test_nation_keeps_building_mid_game() {
         let mut engine = test_engine_nation_mid_game();
+        engine.refresh_building_aggregates();
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.ai_attack_index[1].push(0);
+        let slot = AiSlot {
+            bot_id: 1,
+            tier: AiTier::Nation,
+            do_attack: false,
+            do_structures: true,
+            is_under_attack: true,
+            ghost_retaliation: None,
+            profile: ai_profile_for(
+                &crate::game_config::AiTuning::default(),
+                AiTier::Nation,
+                BotDifficulty::Vanilla,
+            ),
+        };
+        let mut first_build = Vec::new();
+        engine.nation_run_structure_build_for_slot(&slot, 1, 140, 5.0, &mut first_build);
+        assert!(matches!(
+            first_build.first().map(|decision| &decision.intent),
+            Some(GameplayIntent::BuildStructure {
+                kind: BuildingKind::City | BuildingKind::Factory | BuildingKind::Farm,
+                ..
+            })
+        ));
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+
         let initial_count = engine.buildings.len();
         engine.state.config.global_speed_multiplier = 1.0;
         for _ in 0..2000 {
@@ -1832,40 +2027,49 @@ mod bot_iq_alliance_tests {
         game.player_lookup = vec![None, Some(0)];
 
         let mut engine = SowEngine::new(game, WaterComponents::default());
+        let city_tile = 16 * w + 16;
         engine.buildings.push(crate::building::Building {
             id: 1,
             owner_id: 1,
-            tile_idx: 16 * w + 16,
+            tile_idx: city_tile,
             kind: BuildingKind::City,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine.buildings.push(crate::building::Building {
+            id: 2,
+            owner_id: 1,
+            tile_idx: city_tile,
+            kind: BuildingKind::Factory,
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
         });
         engine.refresh_building_grid();
 
-        let city_tile = 16 * w + 16;
         engine.apply_stamped_intent(
             &crate::protocol::StampedIntent {
                 player_id: 1,
                 intent: crate::protocol::GameplayIntent::BuildStructure {
-                    kind: BuildingKind::City,
+                    kind: BuildingKind::Factory,
                     target_tile: city_tile,
                 },
             },
             0,
         );
 
-        assert_eq!(engine.buildings.len(), 1);
-        assert_eq!(engine.buildings[0].level, 1);
+        assert_eq!(engine.buildings.len(), 2);
+        assert_eq!(engine.buildings[1].level, 1);
 
         engine.apply_stamped_intent(
             &crate::protocol::StampedIntent {
                 player_id: 1,
-                intent: crate::protocol::GameplayIntent::UpgradeStructure { building_id: 1 },
+                intent: crate::protocol::GameplayIntent::UpgradeStructure { building_id: 2 },
             },
             0,
         );
-        assert_eq!(engine.buildings[0].level, 2);
+        assert_eq!(engine.buildings[1].level, 2);
     }
 
     #[test]
@@ -1956,11 +2160,11 @@ mod bot_iq_alliance_tests {
             ghost_iq
         );
 
-        // Nation band 130-159, strictly below the ghost floor of 160.
+        // Bot Heroes and Ghosts share the high-IQ band; Tribes remain lower.
         let n = Player::new_nation(9, "n".into(), [1.0; 3], &config);
         assert!(
-            (130..=159).contains(&n.iq),
-            "nation IQ {} must be 130-159",
+            (160..=180).contains(&n.iq),
+            "Bot Hero IQ {} must be in top band 160-180",
             n.iq
         );
 
@@ -1970,13 +2174,7 @@ mod bot_iq_alliance_tests {
             "tribe IQ ceiling {} must be <= 85 (no accidental élite tribes)",
             t_hi
         );
-        // And the food chain strictness:
-        assert!(
-            ghost_iq > n.iq,
-            "ghost {} must out-IQ nation {}",
-            ghost_iq,
-            n.iq
-        );
+        assert!(ghost_iq >= 160 && n.iq >= 160);
     }
 
     #[test]
@@ -2977,5 +3175,316 @@ mod bot_iq_alliance_tests {
                 "{relation:?} campaign faction receives normal AI decisions"
             );
         }
+    }
+
+    #[test]
+    fn help_emote_emits_30s_call_with_30s_cooldown_and_isolates_ranked_1v1() {
+        use crate::diplomacy::{HELP_CALL_COOLDOWN_TICKS, HELP_CALL_TTL_TICKS};
+        use crate::emote::EmoteKind;
+        use crate::protocol::StampedIntent;
+
+        let mut engine = test_engine_two_players(17);
+        {
+            let p1 = engine.state.player_mut(1).unwrap();
+            p1.player_type = PlayerType::Human;
+            p1.has_spawned = true;
+            p1.gold = 200.0;
+            p1.troops = 100.0;
+            p1.alliances.push(2);
+        }
+        {
+            let p2 = engine.state.player_mut(2).unwrap();
+            p2.has_spawned = true;
+            p2.alliances.push(1);
+            p2.gold = 2_000.0;
+            p2.troops = 1_000.0;
+        }
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ExpressEmote {
+                    kind: EmoteKind::Help,
+                    pinned: false,
+                },
+            },
+            0,
+        );
+        assert_eq!(engine.help_calls_proposed.len(), 1);
+        assert_eq!(engine.help_calls_proposed[0].caller, 1);
+        assert_eq!(engine.help_calls_proposed[0].target, 2);
+        assert_eq!(engine.help_calls_proposed[0].created_tick, 0);
+        assert_eq!(engine.help_call_cooldown_remaining(1), HELP_CALL_COOLDOWN_TICKS);
+
+        let snap = engine.build_snapshot();
+        let caller_snap = snap.players.iter().find(|p| p.id == 1).unwrap();
+        let ally_snap = snap.players.iter().find(|p| p.id == 2).unwrap();
+        assert_eq!(caller_snap.help_cooldown_ticks, HELP_CALL_COOLDOWN_TICKS as u32);
+        assert_eq!(ally_snap.help_calls.len(), 1);
+        assert_eq!(ally_snap.help_calls[0].caller, 1);
+        assert_eq!(ally_snap.help_calls[0].remaining_ticks, HELP_CALL_TTL_TICKS as u32);
+
+        // Cooldown prevents emitting a second call before 300 ticks elapse.
+        engine.state.tick = 100;
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ExpressEmote {
+                    kind: EmoteKind::Help,
+                    pinned: false,
+                },
+            },
+            1,
+        );
+        assert_eq!(engine.help_calls_proposed[0].created_tick, 0);
+
+        // After 301 ticks, the active help call expires and cooldown lifts.
+        engine.state.tick = u64::from(HELP_CALL_TTL_TICKS) + 1;
+        engine.prune_alliance_diplomacy();
+        assert!(engine.help_calls_proposed.is_empty());
+        assert_eq!(engine.help_call_cooldown_remaining(1), 0);
+
+        // Ranked 1v1 human duels must neither emit nor apply Help Calls.
+        let mut duel = test_engine_two_players(19);
+        duel.state.player_mut(1).unwrap().player_type = PlayerType::Human;
+        duel.state.player_mut(1).unwrap().has_spawned = true;
+        duel.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        duel.state.player_mut(2).unwrap().has_spawned = true;
+        duel.state.player_mut(1).unwrap().alliances.push(2);
+        duel.state.player_mut(2).unwrap().alliances.push(1);
+        duel.state.config.ranked_1v1 = true;
+        duel.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ExpressEmote {
+                    kind: EmoteKind::Help,
+                    pinned: false,
+                },
+            },
+            0,
+        );
+        assert!(duel.help_calls_proposed.is_empty());
+        assert_eq!(duel.help_call_cooldown_remaining(1), 0);
+    }
+
+    #[test]
+    fn bot_allies_respond_immediately_and_can_accept_or_deny_help_calls() {
+        use crate::emote::EmoteKind;
+        use crate::protocol::StampedIntent;
+
+        let mut engine = test_engine_two_players(42);
+        {
+            let p2 = engine.state.player_mut(2).unwrap();
+            p2.player_type = PlayerType::Human;
+            p2.has_spawned = true;
+            p2.troops = 50.0;
+            p2.max_troops = 1_500.0;
+            p2.gold = 50.0;
+            p2.alliances.push(1);
+        }
+        engine.state.player_mut(1).unwrap().alliances.push(2);
+
+        // Nation ally accepts immediately when well-supplied, or denies when pressed/unwilling.
+        let mut saw_accept = false;
+        let mut saw_decline = false;
+        for seed in 1u64..80 {
+            let mut e = test_engine_two_players(seed);
+            e.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+            e.state.player_mut(2).unwrap().troops = 100.0;
+            e.state.player_mut(2).unwrap().max_troops = 1_500.0;
+            e.state.player_mut(2).unwrap().gold = 50.0;
+            e.state.player_mut(1).unwrap().alliances.push(2);
+            e.state.player_mut(2).unwrap().alliances.push(1);
+            e.state.player_mut(1).unwrap().iq_points = 50.0;
+            e.state.player_mut(1).unwrap().gold = 20_000.0;
+            e.state.player_mut(1).unwrap().troops = 1_200.0;
+            e.help_calls_proposed.push(crate::engine::HelpCallProposed {
+                caller: 2,
+                target: 1,
+                created_tick: 0,
+                call_id: 1,
+                ghost_decided: false,
+            });
+            let mut decisions = Vec::new();
+            e.nation_run_diplomacy_for_slot(
+                (1, 135),
+                (5.0, 5.0),
+                &[],
+                false,
+                false,
+                &mut decisions,
+            );
+            assert_eq!(
+                decisions.len(),
+                1,
+                "Nation bot must answer immediately without human think delay"
+            );
+            match decisions[0].intent {
+                GameplayIntent::AcceptHelpCall { target_player: 2 } => saw_accept = true,
+                GameplayIntent::IgnoreHelpCall { target_player: 2 } => saw_decline = true,
+                ref other => panic!("unexpected intent for help call: {other:?}"),
+            }
+            if saw_accept && saw_decline {
+                break;
+            }
+        }
+        assert!(saw_accept, "expected at least one seed where bot accepts help call");
+        assert!(saw_decline, "expected at least one seed where bot declines help call");
+
+        // Accepting transfers aid and clears the ally's entry.
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::ExpressEmote {
+                    kind: EmoteKind::Help,
+                    pinned: false,
+                },
+            },
+            0,
+        );
+        let troops_before = engine.state.player(2).unwrap().troops;
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::AcceptHelpCall { target_player: 2 },
+            },
+            1,
+        );
+        assert!(engine.state.player(2).unwrap().troops > troops_before);
+        assert!(engine.help_calls_proposed.is_empty());
+    }
+
+    #[test]
+    fn ghost_ally_delays_like_human_and_supports_help_ignore_and_decline() {
+        use crate::diplomacy::GHOST_HELP_DELAY_MIN_TICKS;
+
+        let setup_ghost = |seed: u64, tick: u64| {
+            let mut e = test_engine_two_players(seed);
+            let p1 = e.state.player_mut(1).unwrap();
+            p1.player_type = PlayerType::Human;
+            p1.is_ai_controlled = true;
+            p1.has_spawned = true;
+            p1.iq_points = 50.0;
+            p1.troops = 1_200.0;
+            p1.gold = 25_000.0;
+            p1.alliances.push(2);
+            let p2 = e.state.player_mut(2).unwrap();
+            p2.player_type = PlayerType::Human;
+            p2.has_spawned = true;
+            p2.troops = 120.0;
+            p2.max_troops = 1_500.0;
+            p2.gold = 40.0;
+            p2.alliances.push(1);
+            e.state.tick = tick;
+            e
+        };
+
+        // Before the minimum 20-tick human delay, Ghost must wait quietly on both Help Calls and Resource Requests.
+        let mut waiting = setup_ghost(10, u64::from(GHOST_HELP_DELAY_MIN_TICKS - 1));
+        waiting.help_calls_proposed.push(crate::engine::HelpCallProposed {
+            caller: 2,
+            target: 1,
+            created_tick: 0,
+            call_id: 7,
+            ghost_decided: false,
+        });
+        waiting
+            .resource_requests_proposed
+            .push(crate::engine::ResourceRequestProposed {
+                proposer: 2,
+                target: 1,
+                gold: 100.0,
+                troops: 50.0,
+                pay_gold: 0.0,
+                pay_troops: 0.0,
+                created_tick: 0,
+            });
+        let mut early_decisions = Vec::new();
+        waiting.nation_run_diplomacy_for_slot(
+            (1, 160),
+            (5.0, 5.0),
+            &[],
+            false,
+            false,
+            &mut early_decisions,
+        );
+        assert!(
+            early_decisions.is_empty(),
+            "Ghost must not answer before human think delay: {early_decisions:?}"
+        );
+
+        // After the full delay window (60 ticks), Ghost covers Help, silent Ignore, and Decline across seeds.
+        let (mut saw_help, mut saw_ignore, mut saw_decline) = (false, false, false);
+        for seed in 1u64..150 {
+            let mut e = setup_ghost(seed, 65);
+            e.help_calls_proposed.push(crate::engine::HelpCallProposed {
+                caller: 2,
+                target: 1,
+                created_tick: 0,
+                call_id: 7,
+                ghost_decided: false,
+            });
+            let mut decisions = Vec::new();
+            e.nation_run_diplomacy_for_slot(
+                (1, 160),
+                (5.0, 5.0),
+                &[],
+                false,
+                false,
+                &mut decisions,
+            );
+            if decisions.iter().any(|d| {
+                matches!(
+                    d.intent,
+                    GameplayIntent::AcceptHelpCall { target_player: 2 }
+                )
+            }) {
+                saw_help = true;
+            } else if decisions.iter().any(|d| {
+                matches!(
+                    d.intent,
+                    GameplayIntent::IgnoreHelpCall { target_player: 2 }
+                )
+            }) {
+                saw_decline = true;
+            } else if e.help_calls_proposed[0].ghost_decided {
+                saw_ignore = true;
+            }
+            if saw_help && saw_ignore && saw_decline {
+                break;
+            }
+        }
+        assert!(saw_help, "Ghost should help across some seeds");
+        assert!(saw_ignore, "Ghost should silently ignore across some seeds");
+        assert!(saw_decline, "Ghost should occasionally decline explicitly");
+
+        // Ghost also applies silent Ignore to ResourceRequests after the delay window.
+        let mut saw_req_ignore = false;
+        for seed in 1u64..150 {
+            let mut e = setup_ghost(seed, 65);
+            e.resource_requests_proposed.push(crate::engine::ResourceRequestProposed {
+                proposer: 2,
+                target: 1,
+                gold: 100.0,
+                troops: 50.0,
+                pay_gold: 0.0,
+                pay_troops: 0.0,
+                created_tick: 0,
+            });
+            let mut decisions = Vec::new();
+            e.nation_run_diplomacy_for_slot(
+                (1, 160),
+                (5.0, 5.0),
+                &[],
+                false,
+                false,
+                &mut decisions,
+            );
+            if decisions.is_empty() && !e.ghost_resource_request_ignored.is_empty() {
+                saw_req_ignore = true;
+                break;
+            }
+        }
+        assert!(saw_req_ignore, "Ghost should silently ignore some resource requests after delay");
     }
 }

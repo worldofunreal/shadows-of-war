@@ -666,4 +666,37 @@ mod alliance_lifecycle_tests {
             }
         );
     }
+
+    #[test]
+    fn snapshot_includes_remaining_ticks_for_pending_requests() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine.state.tick = 10;
+        engine.push_alliance_proposal(1, 2);
+        if let Some(p1) = engine.state.player_mut(1) {
+            p1.alliances.push(2);
+        }
+        if let Some(p2) = engine.state.player_mut(2) {
+            p2.alliances.push(1);
+        }
+        engine.resource_requests_proposed.push(crate::engine::ResourceRequestProposed {
+            proposer: 1,
+            target: 2,
+            gold: 100.0,
+            troops: 0.0,
+            pay_gold: 0.0,
+            pay_troops: 0.0,
+            created_tick: 10,
+        });
+        engine.state.tick = 35;
+        let snapshot = engine.build_snapshot();
+        let p2 = snapshot.players.iter().find(|p| p.id == 2).unwrap();
+        assert_eq!(
+            p2.alliance_request_timers.get(&1).copied(),
+            Some(ALLIANCE_REQUEST_TTL_TICKS - 25)
+        );
+        assert_eq!(
+            p2.resource_requests[0].remaining_ticks,
+            crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS - 25
+        );
+    }
 }

@@ -6484,11 +6484,12 @@ fn apply_verified_participant_reward_to_account(
     let used_free_rotation = leader_meta
         .map(|l| free_rotation.contains(&l))
         .unwrap_or(false);
-    let match_mode = if mode.eq_ignore_ascii_case("HumansVsNations")
+    let match_mode = if mode.eq_ignore_ascii_case("PvE")
+        || mode.eq_ignore_ascii_case("HumansVsNations")
         || mode.eq_ignore_ascii_case("Humans vs Nations")
         || mode.eq_ignore_ascii_case("hnv")
     {
-        crate::missions::MatchMode::HumansVsNations
+        crate::missions::MatchMode::Pve
     } else if mode.eq_ignore_ascii_case("Teams")
         || mode.eq_ignore_ascii_case("Team")
         || participant.team.is_some()

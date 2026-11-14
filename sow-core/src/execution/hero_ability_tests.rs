@@ -2120,20 +2120,28 @@ fn kin_and_foreign_follow_the_people_each_hero_leads() {
         assert!(!describes(kinsman, None, 1, target), "the hero's own land");
     }
 
-    // The real spawn gives a catalog bot its catalog people, not its random hero's.
+    // Real spawns give Bot Heroes their chosen Leader realm and catalog Tribes their catalog realm.
     let mut engine = arena(24, 4, hero, None);
-    engine.spawn_ai(1, 0);
-    let bot = engine
+    engine.spawn_ai(1, 1);
+    let bot_hero = engine
         .state
         .players
         .iter()
         .find(|player| player.player_type == PlayerType::Nation)
         .expect("the nation bot spawned");
+    assert_eq!(bot_hero.name, bot_hero.leader.display_name());
+    assert_eq!(bot_hero.realm(), bot_hero.leader.character().entity);
+    let tribe = engine
+        .state
+        .players
+        .iter()
+        .find(|player| player.id > 3 && player.player_type == PlayerType::Bot)
+        .expect("the tribe bot spawned");
     assert!(
-        crate::geo_entities::bots(crate::geo_entities::Role::Nation)
-            .any(|character| character.name == bot.name && character.entity == bot.realm()),
+        crate::geo_entities::bots(crate::geo_entities::Role::Tribe)
+            .any(|character| character.name == tribe.name && character.entity == tribe.realm()),
         "{} is shown as its catalog people",
-        bot.name
+        tribe.name
     );
 }
 
@@ -2481,13 +2489,15 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             (f64::from(e.buildings[1].level), owner_marks(&e)[1])
         }
         Ability::CityFarmFounding => {
-            e.add_building(make(1, 1, BuildingKind::City, 16, 16, 1, false));
-            e.state.next_building_id = 2;
             e.state.player_mut(1).unwrap().gold = 1_000_000.0;
+            let city_tile = 16 * e.state.map.width + 16;
             send(
                 &mut e,
                 1,
-                GameplayIntent::UpgradeStructure { building_id: 1 },
+                GameplayIntent::BuildStructure {
+                    kind: BuildingKind::City,
+                    target_tile: city_tile,
+                },
             );
             let duration = e.buildings[0].ticks_until_complete;
             assert!(duration > 0);
@@ -2566,7 +2576,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 (extra_gold, extra_troops),
                 if active {
                     (
-                        cfg.factory_gold_income * 2.5 * 0.25,
+                        cfg.factory_gold_income * (1.0 + 1.1948581737791502) * 0.25,
                         cfg.farm_troop_income * 2.0 * 0.25,
                     )
                 } else {
@@ -2701,10 +2711,10 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
         Ability::FactoryCityUpgradeDiscount { .. } => {
             use super::hero_effects::AbilityState::{Conditional, Ready};
             let active = matches!(leader.ability(), Ability::FactoryCityUpgradeDiscount { .. });
-            let city = make(1, 1, BuildingKind::City, 16, 16, 1, false);
+            let city = make(1, 1, BuildingKind::Tower, 16, 16, 1, false);
             e.add_building(city);
             let full_cost = crate::building::structure_upgrade_cost_gold(
-                BuildingKind::City,
+                BuildingKind::Tower,
                 2,
                 1,
                 &e.state.config,
@@ -3670,9 +3680,9 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             let active = leader.ability() == Ability::KitchenPhilosophy;
             e.state.player_mut(1).unwrap().gold = 1_000_000.0;
             e.add_building(make(1, 1, BuildingKind::Farm, 16, 16, 1, false));
-            e.add_building(make(2, 1, BuildingKind::City, 24, 16, 1, false));
-            e.add_building(make(3, 1, BuildingKind::City, 29, 16, 1, false));
-            e.add_building(make(4, 1, BuildingKind::City, 20, 16, 1, false));
+            e.add_building(make(2, 1, BuildingKind::Factory, 24, 16, 1, false));
+            e.add_building(make(3, 1, BuildingKind::Factory, 29, 16, 1, false));
+            e.add_building(make(4, 1, BuildingKind::Factory, 20, 16, 1, false));
             send(
                 &mut e,
                 1,
@@ -3693,7 +3703,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 send(&mut e, 1, GameplayIntent::UpgradeStructure { building_id });
             }
             e.add_building(make(5, 1, BuildingKind::Farm, 18, 16, 1, true));
-            let mut same_tick = make(6, 1, BuildingKind::City, 17, 16, 2, true);
+            let mut same_tick = make(6, 1, BuildingKind::Factory, 17, 16, 2, true);
             same_tick.ticks_until_complete = 5;
             e.add_building(same_tick);
             if active {
@@ -3807,13 +3817,13 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             use super::hero_effects::AbilityState::{Conditional, Ready};
             let active = leader.ability() == Ability::CookhamExchange;
             e.add_building(make(1, 1, BuildingKind::Farm, 31, 16, 2, false));
-            e.add_building(make(2, 1, BuildingKind::City, 18, 16, 1, false));
-            e.add_building(make(3, 1, BuildingKind::City, 24, 16, 4, false));
+            e.add_building(make(2, 1, BuildingKind::Factory, 18, 16, 1, false));
+            e.add_building(make(3, 1, BuildingKind::Factory, 24, 16, 4, false));
             if active {
                 assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
             }
-            e.add_building(make(4, 1, BuildingKind::City, 26, 16, 2, false));
-            e.add_building(make(5, 1, BuildingKind::City, 29, 16, 3, false));
+            e.add_building(make(4, 1, BuildingKind::Factory, 26, 16, 2, false));
+            e.add_building(make(5, 1, BuildingKind::Factory, 29, 16, 3, false));
             e.add_building(make(6, 1, BuildingKind::City, 25, 16, 1, false));
             if active {
                 assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
@@ -3918,7 +3928,8 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             use super::hero_effects::AbilityState::{Conditional, Ready};
             let denies = leader.ability() == Ability::CityDenial;
             let (x, y) = (16, 16);
-            e.add_building(make(1, 1, BuildingKind::City, x, y, 3, false));
+            e.add_building(make(1, 1, BuildingKind::Factory, x, y, 3, false));
+            e.add_building(make(2, 1, BuildingKind::City, x, y, 1, false));
             e.state.player_mut(1).unwrap().gold = 1_000_000.0;
             send(
                 &mut e,
@@ -4430,23 +4441,47 @@ fn redesigned_peter_founds_a_legal_port_during_real_conquest() {
                 }
             }
         }
-        assert_eq!(e.buildings.len(), 1);
-        let port = e.buildings[0];
-        assert_eq!(port.kind, BuildingKind::Port);
+        assert_eq!(e.buildings.len(), 2);
+        let city = e
+            .buildings
+            .iter()
+            .find(|b| b.kind == BuildingKind::City)
+            .copied()
+            .expect("coastal hero founding creates a city");
+        let port = e
+            .buildings
+            .iter()
+            .find(|b| b.kind == BuildingKind::Port)
+            .copied()
+            .expect("coastal hero founding adds a port district");
+        assert_eq!(city.tile_idx, port.tile_idx);
+        assert!(!city.under_construction);
         assert!(!port.under_construction);
+        assert!(
+            crate::building::validate_structure_site(
+                &e.state.map,
+                1,
+                BuildingKind::City,
+                city.tile_idx,
+                &crate::building::BuildingGrid::default()
+            )
+            .is_ok()
+        );
+        let mut grid = crate::building::BuildingGrid::default();
+        grid.rebuild([&city].into_iter(), e.state.map.width, e.state.map.height);
         assert!(
             crate::building::validate_structure_site(
                 &e.state.map,
                 1,
                 BuildingKind::Port,
                 port.tile_idx,
-                &crate::building::BuildingGrid::default()
+                &grid
             )
             .is_ok()
         );
         let gold = e.state.player(1).unwrap().gold;
         e.hero_coastal_foundings();
-        assert_eq!(e.buildings.len(), 1);
+        assert_eq!(e.buildings.len(), 2);
         assert_eq!(e.state.player(1).unwrap().gold, gold);
         assert_eq!(owner_marks(&e)[1], 1);
     }
@@ -4459,56 +4494,20 @@ fn natavan_founds_one_farm_at_a_legal_site_when_the_city_reaches_level_two() {
     let leader = Leader::of("natavan");
     let mut engine = arena(64, 32, leader, Some(Leader::of("cleopatra")));
     engine.state.map.terrain.fill(MapTile::from_byte(0x8a));
-    let city = Building {
-        id: 1,
-        owner_id: 1,
-        tile_idx: 16 * 64 + 16,
-        kind: BuildingKind::City,
-        level: 1,
-        under_construction: false,
-        ticks_until_complete: 0,
-    };
-    engine.add_building(city);
-    engine.state.next_building_id = 2;
-    engine.state.player_mut(1).unwrap().gold = 1_000_000.0;
-    // This diagonal site fits inside the search box, but is over twelve tiles away.
-    for y in 16..=17 {
-        for x in 27..=28 {
-            engine.state.map.terrain[y * 64 + x] = MapTile::from_byte(0x80);
-        }
-    }
+    // Before any City exists without a Farm district, Natavan feedback is Conditional.
     assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
-    let bytes = bincode::serialize(&engine).unwrap();
-    let mut blocked: SowEngine = bincode::deserialize(&bytes).unwrap();
-    send(
-        &mut blocked,
-        1,
-        GameplayIntent::UpgradeStructure {
-            building_id: city.id,
-        },
-    );
-    for _ in 0..blocked.buildings[0].ticks_until_complete {
-        blocked.execute_construction();
-    }
-    assert_eq!(blocked.buildings[0].level, 2);
-    assert_eq!(blocked.buildings.len(), 1);
-    assert_eq!(owner_marks(&blocked)[1], 0);
 
-    // The only other eligible foundation is exactly twelve tiles from the city.
-    for y in 15..=16 {
-        for x in 27..=28 {
-            engine.state.map.terrain[y * 64 + x] = MapTile::from_byte(0x80);
-        }
-    }
-    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Ready);
+    engine.state.player_mut(1).unwrap().gold = 1_000_000.0;
+    let first_city_tile = 16 * 64 + 16;
     send(
         &mut engine,
         1,
-        GameplayIntent::UpgradeStructure {
-            building_id: city.id,
+        GameplayIntent::BuildStructure {
+            kind: BuildingKind::City,
+            target_tile: first_city_tile,
         },
     );
-    let gold_after_upgrade = engine.state.player(1).unwrap().gold;
+    let gold_after_build = engine.state.player(1).unwrap().gold;
     let ticks = engine.buildings[0].ticks_until_complete;
     assert!(ticks > 1);
     for _ in 0..ticks - 1 {
@@ -4516,35 +4515,38 @@ fn natavan_founds_one_farm_at_a_legal_site_when_the_city_reaches_level_two() {
     }
     assert_eq!(engine.buildings.len(), 1);
     engine.execute_construction();
+    assert_eq!(engine.buildings.len(), 2);
     let farm = engine.buildings[1];
     assert_eq!(farm.kind, BuildingKind::Farm);
-    assert_eq!(farm.tile_idx, 16 * 64 + 28);
+    assert_eq!(farm.tile_idx, first_city_tile);
     assert_eq!(farm.active_level(), 1);
-    assert_eq!(engine.state.player(1).unwrap().gold, gold_after_upgrade);
+    assert_eq!(engine.state.player(1).unwrap().gold, gold_after_build);
     assert!(engine.state.events.iter().any(|event| matches!(
         event,
         GameEvent::AbilityTriggered {
             owner_id: 1,
-            tile: Some((28, 16)),
+            tile: Some((16, 16)),
             ..
         }
     )));
+    // Once all Cities have a Farm district, feedback returns to Conditional.
     assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
     engine.refresh_building_aggregates();
     assert_eq!(engine.building_aggregates[1].farm_levels, 1);
 
-    send(
-        &mut engine,
-        1,
-        GameplayIntent::UpgradeStructure {
-            building_id: city.id,
-        },
-    );
-    for _ in 0..=engine.buildings[0].ticks_until_complete {
-        engine.execute_construction();
-    }
-    assert_eq!(engine.buildings[0].active_level(), 3);
-    assert_eq!(engine.buildings.len(), 2);
+    // An existing City without a Farm marks Natavan as Ready.
+    let second_city_tile = 16 * 64 + 28;
+    engine.add_building(Building {
+        id: engine.state.next_building_id,
+        owner_id: 1,
+        tile_idx: second_city_tile,
+        kind: BuildingKind::City,
+        level: 1,
+        under_construction: false,
+        ticks_until_complete: 0,
+    });
+    engine.state.next_building_id += 1;
+    assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Ready);
 }
 
 #[test]

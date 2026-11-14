@@ -32,11 +32,7 @@ pub fn player_territory_rgb(
             team_color
         }
     });
-    if player_type == crate::player::PlayerType::Nation {
-        muted_nation_rgb(color)
-    } else {
-        color
-    }
+    color
 }
 
 /// First palette color not currently used by a living Nation.
@@ -47,48 +43,6 @@ pub fn next_nation_palette_color(players: &[Player]) -> Option<[f32; 3]> {
         .enumerate()
         .find(|(index, _)| !used[*index])
         .map(|(_, color)| color.rgb)
-}
-
-/// Pick the free Nation color that stays farthest from the colors in this match.
-/// Used for breakaway Nations, whose team can differ from the catalog Nations.
-pub fn best_available_nation_palette_color(
-    players: &[Player],
-    team: Option<crate::protocol::Team>,
-) -> Option<[f32; 3]> {
-    const MIN_COLOR_GAP: f32 = 0.03;
-    let used = used_nation_palette_slots(players);
-    let existing: Vec<[f32; 3]> = players
-        .iter()
-        .filter(|player| {
-            player.alive
-                && matches!(player.player_type, PlayerType::Human | PlayerType::Nation)
-                && team.map_or(true, |team| player.team != Some(team))
-        })
-        .map(|player| {
-            player_territory_rgb(player.player_type, player.team, player.color, false)
-        })
-        .map(oklab2)
-        .collect();
-
-    PREMIUM_COLORS
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| !used[*index])
-        .filter_map(|(_, color)| {
-            let rendered = oklab2(player_territory_rgb(
-                PlayerType::Nation,
-                team,
-                color.rgb,
-                false,
-            ));
-            let gap = existing
-                .iter()
-                .map(|other| distance_ok2(rendered, *other))
-                .fold(f32::INFINITY, f32::min);
-            (gap >= MIN_COLOR_GAP).then_some((gap, color.rgb))
-        })
-        .max_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(_, color)| color)
 }
 
 fn used_nation_palette_slots(players: &[Player]) -> Vec<bool> {
@@ -106,38 +60,6 @@ fn used_nation_palette_slots(players: &[Player]) -> Vec<bool> {
         }
     }
     used
-}
-
-fn oklab2(rgb: [f32; 3]) -> [f32; 3] {
-    let linear = rgb.map(|channel| {
-        if channel <= 0.04045 {
-            channel / 12.92
-        } else {
-            ((channel + 0.055) / 1.055).powf(2.4)
-        }
-    });
-    let [r, g, b] = linear;
-    let l = (0.4122214708 * r + 0.5363325363 * g + 0.0519036911 * b).cbrt();
-    let m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b).cbrt();
-    let s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b).cbrt();
-    [
-        0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-        2.0 * (1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s),
-        2.0 * (0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s),
-    ]
-}
-
-fn distance_ok2(a: [f32; 3], b: [f32; 3]) -> f32 {
-    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
-}
-
-fn muted_nation_rgb(color: [f32; 3]) -> [f32; 3] {
-    const MAX_CHANNEL: f32 = 0.72;
-    let gray = 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2];
-    let muted = color.map(|channel| channel * 0.5 + gray * 0.5);
-    let peak = muted[0].max(muted[1]).max(muted[2]);
-    let scale = (MAX_CHANNEL / peak.max(0.001)).min(1.0);
-    muted.map(|channel| channel * scale)
 }
 
 /// Campaign diplomacy colors are visual state only; they do not assign gameplay teams.

@@ -344,17 +344,30 @@ fn render_buildings(
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let my_id = sim.my_player_id.unwrap_or(0);
+    let mut tile_totals: HashMap<u32, (u8, u16, BuildingKind, u8)> = HashMap::new();
     for building in &snapshot.buildings {
         let active_level = building.active_level();
-        if let Some(previous) = ui
-            .building_levels_seen
-            .insert(building.tile_idx, active_level)
-            && active_level > previous
+        let entry = tile_totals.entry(building.tile_idx).or_insert((
+            0,
+            building.owner_id,
+            building.kind,
+            active_level,
+        ));
+        entry.0 = entry.0.saturating_add(active_level);
+        entry.1 = building.owner_id;
+        if building.kind != BuildingKind::City && active_level > 0 {
+            entry.2 = building.kind;
+            entry.3 = active_level;
+        }
+    }
+    for (tile_idx, (total_level, owner_id, celeb_kind, celeb_level)) in tile_totals {
+        if let Some(previous) = ui.building_levels_seen.insert(tile_idx, total_level)
+            && total_level > previous
         {
-            ui.building_upgrade_flashes.insert(building.tile_idx, now);
-            if building.owner_id == my_id {
+            ui.building_upgrade_flashes.insert(tile_idx, now);
+            if owner_id == my_id {
                 ui.building_celebrations
-                    .insert(building.tile_idx, (building.kind, active_level, now));
+                    .insert(tile_idx, (celeb_kind, celeb_level, now));
             }
         }
     }
@@ -678,7 +691,23 @@ fn render_building_selection_focus(
         colors.line,
     );
 
-    if kind == BuildingKind::Tower && menu.building_level > 0 && !menu.building_under_construction {
+    let snapshot_buildings = sim
+        .current_snapshot
+        .as_ref()
+        .map(|s| s.buildings.as_slice())
+        .unwrap_or(&[]);
+    let tower_level = snapshot_buildings
+        .iter()
+        .find(|b| b.tile_idx == menu.tile_idx && b.kind == BuildingKind::Tower)
+        .map(|b| b.active_level())
+        .unwrap_or_else(|| {
+            if kind == BuildingKind::Tower && !menu.building_under_construction {
+                menu.building_level
+            } else {
+                0
+            }
+        });
+    if tower_level > 0 {
         let range_multiplier = sim
             .engine
             .as_ref()
@@ -691,16 +720,25 @@ fn render_building_selection_focus(
                     .map(|player| player.leader.tower_range_multiplier())
             })
             .unwrap_or(1.0);
-        let range = sow_core::building::tower_range_for_level(
-            menu.building_level,
-            &sim.config,
-            range_multiplier,
-        );
+        let range =
+            sow_core::building::tower_range_for_level(tower_level, &sim.config, range_multiplier);
         text.push_ring(
             anchor_center,
             range as f32 * zoom,
             [0.91, 0.71, 0.34, 0.30],
             (1.4 * sf).max(1.0),
+        );
+    }
+    let has_anti_nuke = snapshot_buildings
+        .iter()
+        .any(|b| b.tile_idx == menu.tile_idx && b.kind == BuildingKind::City && b.has_anti_nuke);
+    if has_anti_nuke {
+        let sam_radius = sow_core::execution::sam::sam_range(4) as f32 * zoom;
+        text.push_ring(
+            anchor_center,
+            sam_radius,
+            [0.35, 0.85, 0.98, 0.35],
+            (1.6 * sf).max(1.0),
         );
     }
 }
@@ -1052,11 +1090,39 @@ fn collect_buildings(
     out.clear();
     clusters.clear();
     for building in &snapshot.buildings {
+        if building.kind != BuildingKind::City
+            && snapshot
+                .buildings
+                .iter()
+                .any(|c| c.tile_idx == building.tile_idx && c.kind == BuildingKind::City)
+        {
+            continue;
+        }
         let tile_x = building.tile_idx % map_w;
         let tile_y = building.tile_idx / map_w;
         let active_level = building.active_level();
+        let display_level = if building.kind == BuildingKind::City {
+            if building.under_construction && active_level == 0 {
+                0
+            } else {
+                sow_core::building::city_snapshot_visual_level(
+                    &snapshot.buildings,
+                    building.tile_idx,
+                )
+            }
+        } else {
+            active_level
+        };
         let detail = lod.detail(building.kind);
-        let keep_local_progress = building.owner_id == my_id && building.under_construction;
+        let has_active_city_build = building.kind == BuildingKind::City
+            && (building.under_construction
+                || building.arsenal_build.is_some()
+                || snapshot
+                    .buildings
+                    .iter()
+                    .any(|b| b.tile_idx == building.tile_idx && b.under_construction));
+        let keep_local_progress = building.owner_id == my_id
+            && (building.under_construction || has_active_city_build);
         if detail == BuildingDetail::Cluster && !keep_local_progress {
             let (bx, by) = crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
             let key = BuildingClusterKey {
@@ -1064,7 +1130,7 @@ fn collect_buildings(
                 grid_y: (tile_y as f32 / lod.cluster_cell_size) as i32,
                 owner_id: building.owner_id,
                 kind: building.kind,
-                level: active_level,
+                level: display_level,
             };
             let entry = clusters.entry(key).or_insert((0.0, 0.0, 0));
             entry.0 += bx;
@@ -1078,7 +1144,7 @@ fn collect_buildings(
             bx: footprint.left as f32 + footprint.width as f32 * 0.5,
             by: footprint.top as f32 + footprint.height as f32 * 0.5,
             kind: building.kind,
-            level: active_level,
+            level: display_level,
             under_construction: building.under_construction,
             count: 1,
             owner_id: building.owner_id,

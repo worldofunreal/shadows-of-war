@@ -1519,8 +1519,8 @@ export function renderHeroMasteryProfileCard(
         "<span class='sow-ach-hero-card__rank'>" +
         esc(rankLabel) +
         "</span>" +
-        "<span>" +
-        esc(summary.unlockedCount + "/" + summary.totalCount) +
+        "<span>★ " +
+        esc(summary.unlockedCount) +
         " · " +
         esc(summary.earnedLaurels + "/" + summary.totalLaurels) +
         " " +
@@ -1643,118 +1643,87 @@ export function sortAchievementsList(
 /** Compact Featured Hero Status & Achievements ribbon inside Hero Selection. */
 export function renderHeroSelectionAchievementStrip(leader: MenuLeader): string {
     const summary = computeHeroAchievementSummary(leader);
-    const statusLabel = getHeroOwnershipLabel(summary.ownershipStatus);
-    const matches = summary.matchesPlayed;
-    const wins = summary.wins;
-    const winRate = matches > 0 ? Math.round((wins / matches) * 100) : 0;
-    const next = summary.nextAchievement;
-    const nextText = next
-        ? next.localizedTitle + " (" + next.progress + "/" + next.target + " · +" + next.points + ")"
-        : tText("heroes.all_hero_achievements_done", "All {total} hero achievements completed!", {
-              total: summary.totalCount,
-          });
-    const nextPct = next ? next.percent : 100;
+
+    function renderMiniChain(label: string, items: EnrichedAchievement[]): string {
+        const ordered = items.slice().sort((a, b) => a.target - b.target);
+        const currentIdx = ordered.findIndex((a) => !a.unlocked);
+        const current = currentIdx >= 0 ? ordered[currentIdx] : null;
+        const progressLabel = current ? current.progress + "/" + current.target : "✓";
+
+        const segments = ordered
+            .map((a, idx) => {
+                const state = a.unlocked ? "is-done" : idx === currentIdx ? "is-current" : "is-upcoming";
+                const fill = a.unlocked ? 100 : idx === currentIdx ? Math.max(8, a.percent) : 0;
+                return (
+                    "<span class='sow-heroes__ach-seg " +
+                    state +
+                    "'><i style='width:" +
+                    esc(fill) +
+                    "%'></i></span>"
+                );
+            })
+            .join("");
+
+        return (
+            "<div class='sow-heroes__ach-chain'>" +
+            "<div class='sow-heroes__ach-chain-head'>" +
+            "<span>" +
+            esc(label) +
+            "</span>" +
+            "<b>" +
+            esc(progressLabel) +
+            "</b>" +
+            "</div>" +
+            "<div class='sow-heroes__ach-segments' style='grid-template-columns:repeat(" +
+            ordered.length +
+            ",minmax(0,1fr))'>" +
+            segments +
+            "</div>" +
+            "</div>"
+        );
+    }
 
     return (
         "<div class='sow-heroes__ach-strip' data-hero-achievement-strip>" +
-        "<div class='sow-heroes__ach-strip-meta'>" +
-        "<span class='sow-heroes__ach-own is-" +
-        esc(summary.ownershipStatus) +
-        "'>" +
-        esc(statusLabel) +
-        "</span>" +
-        "<span class='sow-heroes__ach-record'>" +
-        esc(
-            matches > 0
-                ? matches + " " + tText("heroes.stat_matches", "Matches") + " · " + wins + "W (" + winRate + "%)"
-                : tText("heroes.mastery_rank_" + summary.masteryRankKey, getHeroMasteryRankLabel(summary.masteryRankKey)),
-        ) +
-        "</span>" +
-        "<span class='sow-heroes__ach-xp'>" +
-        esc(summary.xp + " XP") +
-        "</span>" +
-        "</div>" +
         "<button type='button' class='sow-heroes__ach-btn' data-command='open_hero_info' data-leader-id='" +
         esc(leader.id) +
         "' data-hero-info-tab='achievements'>" +
-        "<div class='sow-heroes__ach-btn-row'>" +
-        "<strong class='sow-heroes__ach-count'>★ " +
-        esc(summary.unlockedCount + "/" + summary.totalCount) +
-        " " +
-        esc(tText("heroes.hero_achievements", "Hero Achievements")) +
-        "</strong>" +
-        "<span class='sow-heroes__ach-next-label'>" +
-        esc(next ? tText("heroes.next_milestone", "Next") + ": " + nextText : nextText) +
+        "<span class='sow-heroes__ach-star-badge" +
+        (summary.unlockedCount === summary.totalCount ? " is-complete" : "") +
+        "'>★ " +
+        esc(summary.unlockedCount) +
         "</span>" +
-        "<span class='sow-heroes__ach-cta'>›</span>" +
+        "<div class='sow-heroes__ach-chains'>" +
+        renderMiniChain(tText("heroes.ach_cat_mastery", "Mastery"), summary.masteryAchievements) +
+        renderMiniChain(tText("heroes.ach_cat_victories", "Victories"), summary.winsAchievements) +
         "</div>" +
-        "<div class='sow-heroes__ach-bar'><i style='width:" +
-        esc(next ? nextPct : summary.percent) +
-        "%'></i></div>" +
+        "<span class='sow-heroes__ach-cta' aria-hidden='true'>›</span>" +
         "</button>" +
         "</div>"
     );
 }
 
-/** 3rd Tab inside the Hero Dossier Modal: Full Hero Status + Filterable Achievements. */
+/** 3rd Tab inside the Hero Dossier Modal: Full Hero Status + Progression Paths. */
 export function renderHeroDossierAchievementsTab(
     leader: MenuLeader,
-    controls: {
+    _controls?: {
         category: "all" | "recruit" | "mastery" | "victories";
         status: "all" | "in_progress" | "unlocked" | "locked";
         sort: "tier" | "closest" | "points";
     },
 ): string {
     const summary = computeHeroAchievementSummary(leader);
-    const matches = summary.matchesPlayed;
-    const wins = summary.wins;
-    const winRate = matches > 0 ? Math.round((wins / matches) * 100) + "%" : "0%";
     const rankLabel = getHeroMasteryRankLabel(summary.masteryRankKey);
-    const statusLabel = getHeroOwnershipLabel(summary.ownershipStatus);
-
-    const catCounts = {
-        all: summary.achievements.length,
-        recruit: summary.recruitAchievement ? 1 : 0,
-        mastery: summary.masteryAchievements.length,
-        victories: summary.winsAchievements.length,
-    };
-
-    const filtered = summary.achievements.filter(function (a) {
-        if (controls.category !== "all" && a.heroKind !== controls.category) return false;
-        if (controls.status === "unlocked" && !a.unlocked) return false;
-        if (controls.status === "in_progress" && (a.unlocked || a.progress <= 0)) return false;
-        if (controls.status === "locked" && (a.unlocked || a.progress > 0)) return false;
-        return true;
-    });
-
-    const sorted = filtered.slice().sort(function (a, b) {
-        if (controls.sort === "closest") {
-            if (a.unlocked !== b.unlocked) return a.unlocked ? 1 : -1;
-            if (b.percent !== a.percent) return b.percent - a.percent;
-            return a.target - b.target;
-        }
-        if (controls.sort === "points") {
-            if (b.points !== a.points) return b.points - a.points;
-            return b.percent - a.percent;
-        }
-        // "tier": Recruit -> Mastery tiers -> Wins tiers
-        const orderA = a.heroKind === "recruit" ? 0 : a.heroKind === "mastery" ? 1 : 2;
-        const orderB = b.heroKind === "recruit" ? 0 : b.heroKind === "mastery" ? 1 : 2;
-        if (orderA !== orderB) return orderA - orderB;
-        return a.target - b.target;
-    });
 
     const headerCard =
         "<div class='sow-hero-info__ach-summary'>" +
-        "<div class='sow-hero-info__ach-status-row'>" +
-        "<span class='sow-ach-hero-card__own is-" +
-        esc(summary.ownershipStatus) +
-        "'>" +
-        esc(statusLabel) +
-        "</span>" +
-        "<span class='sow-ach-hero-card__rank'>" +
+        "<div class='sow-hero-info__ach-overall'>" +
+        "<div class='sow-hero-info__ach-overall-head'>" +
+        "<strong>★ " +
+        esc(summary.unlockedCount) +
+        " · <span class='sow-ach-hero-card__rank'>" +
         esc(rankLabel) +
-        "</span>" +
+        "</span></strong>" +
         "<span class='sow-hero-info__ach-laurels'>" +
         "<img src='" +
         esc(currencyAsset("laurel")) +
@@ -1765,113 +1734,104 @@ export function renderHeroDossierAchievementsTab(
         })) +
         "</span>" +
         "</div>" +
-        "<div class='sow-hero-info__ach-overall'>" +
-        "<div class='sow-hero-info__ach-overall-head'>" +
-        "<strong>" +
-        esc(tText("heroes.achievements_progress", "{unlocked}/{total} Achievements", {
-            unlocked: summary.unlockedCount,
-            total: summary.totalCount,
-        })) +
-        "</strong>" +
-        "<span>" +
-        esc(summary.percent) +
-        "% · " +
-        esc(matches) +
-        " " +
-        esc(tText("heroes.stat_matches", "Matches")) +
-        " · " +
-        esc(wins) +
-        " " +
-        esc(tText("heroes.stat_wins", "Wins")) +
-        " (" +
-        esc(winRate) +
-        ") · " +
-        esc(summary.xp) +
-        " XP</span>" +
-        "</div>" +
         "<div class='sow-profile__achievement-track'><i style='width:" +
         esc(summary.percent) +
         "%'></i></div>" +
         "</div>" +
         "</div>";
 
-    const catPills: { id: "all" | "recruit" | "mastery" | "victories"; label: string }[] = [
-        { id: "all", label: tText("heroes.ach_cat_all", "All") + " (" + catCounts.all + ")" },
-        { id: "recruit", label: tText("heroes.ach_cat_recruit", "Recruit") + " (" + catCounts.recruit + ")" },
-        { id: "mastery", label: tText("heroes.ach_cat_mastery", "Mastery") + " (" + catCounts.mastery + ")" },
-        { id: "victories", label: tText("heroes.ach_cat_victories", "Victories") + " (" + catCounts.victories + ")" },
-    ];
+    function renderPathSection(
+        title: string,
+        subtitle: string,
+        items: typeof summary.achievements,
+    ): string {
+        if (!items.length) return "";
+        const ordered = items.slice().sort((a, b) => a.target - b.target);
+        const doneCount = ordered.filter((a) => a.unlocked).length;
+        const currentIdx = ordered.findIndex((a) => !a.unlocked);
 
-    const statusPills: { id: "all" | "in_progress" | "unlocked" | "locked"; label: string }[] = [
-        { id: "all", label: tText("heroes.ach_status_all", "All") },
-        { id: "in_progress", label: tText("heroes.ach_status_active", "In Progress") },
-        { id: "unlocked", label: tText("heroes.ach_status_done", "Completed") },
-        { id: "locked", label: tText("heroes.ach_status_locked", "Upcoming") },
-    ];
-
-    const sortPills: { id: "tier" | "closest" | "points"; label: string }[] = [
-        { id: "tier", label: tText("heroes.ach_sort_tier", "Tier Order") },
-        { id: "closest", label: tText("heroes.ach_sort_closest", "Closest %") },
-        { id: "points", label: tText("heroes.ach_sort_laurels", "Laurels") },
-    ];
-
-    const controlsHtml =
-        "<div class='sow-hero-info__ach-controls'>" +
-        "<div class='sow-hero-info__ach-pill-row' role='group' aria-label='" +
-        esc(tText("heroes.hero_achievements", "Hero Achievements")) +
-        "'>" +
-        catPills
-            .map(
-                (p) =>
-                    "<button type='button' class='sow-hero-info__ach-pill" +
-                    (controls.category === p.id ? " is-active" : "") +
-                    "' data-command='hero_info_ach_category' data-category='" +
-                    esc(p.id) +
+        const stepsHtml = ordered
+            .map((a, idx) => {
+                const stateClass = a.unlocked
+                    ? "is-done"
+                    : idx === currentIdx
+                      ? "is-current"
+                      : "is-upcoming";
+                const progressText = a.unlocked
+                    ? tText("heroes.ach_status_done", "Completed")
+                    : `${a.progress}/${a.target}`;
+                return (
+                    "<div class='sow-hero-ach-step " +
+                    stateClass +
                     "'>" +
-                    esc(p.label) +
-                    "</button>",
-            )
-            .join("") +
-        "</div>" +
-        "<div class='sow-hero-info__ach-subcontrols'>" +
-        "<div class='sow-hero-info__ach-pill-row sow-hero-info__ach-pill-row--sm'>" +
-        statusPills
-            .map(
-                (p) =>
-                    "<button type='button' class='sow-hero-info__ach-pill" +
-                    (controls.status === p.id ? " is-active" : "") +
-                    "' data-command='hero_info_ach_status' data-status='" +
-                    esc(p.id) +
-                    "'>" +
-                    esc(p.label) +
-                    "</button>",
-            )
-            .join("") +
-        "</div>" +
-        "<div class='sow-hero-info__ach-pill-row sow-hero-info__ach-pill-row--sm'>" +
-        sortPills
-            .map(
-                (p) =>
-                    "<button type='button' class='sow-hero-info__ach-pill" +
-                    (controls.sort === p.id ? " is-active" : "") +
-                    "' data-command='hero_info_ach_sort' data-sort='" +
-                    esc(p.id) +
-                    "'>" +
-                    esc(p.label) +
-                    "</button>",
-            )
-            .join("") +
-        "</div>" +
-        "</div>" +
-        "</div>";
+                    "<div class='sow-hero-ach-step__marker'>" +
+                    (a.unlocked ? "✓" : idx === currentIdx ? "●" : "○") +
+                    "</div>" +
+                    "<div class='sow-hero-ach-step__body'>" +
+                    "<div class='sow-hero-ach-step__top'>" +
+                    "<strong>" +
+                    esc(a.localizedTitle || a.title) +
+                    "</strong>" +
+                    "<span class='sow-hero-ach-step__laurels'>+" +
+                    esc(a.points) +
+                    "</span>" +
+                    "</div>" +
+                    "<p class='sow-hero-ach-step__desc'>" +
+                    esc(a.localizedDescription || a.description) +
+                    "</p>" +
+                    (idx === currentIdx
+                        ? "<div class='sow-profile__achievement-track sow-hero-ach-step__bar'><i style='width:" +
+                          esc(a.percent) +
+                          "%'></i></div>"
+                        : "") +
+                    "</div>" +
+                    "<div class='sow-hero-ach-step__meta'>" +
+                    esc(progressText) +
+                    "</div>" +
+                    "</div>"
+                );
+            })
+            .join("");
 
-    const listHtml = sorted.length
-        ? "<div class='sow-hero-info__ach-grid'>" +
-          sorted.map((a) => renderAchievementCard(a, { compact: true })).join("") +
-          "</div>"
-        : "<p class='sow-hero-info__bio-status'>" +
-          esc(tText("heroes.ach_empty_filtered", "No hero achievements match these filters.")) +
-          "</p>";
+        return (
+            "<section class='sow-hero-ach-section'>" +
+            "<header class='sow-hero-ach-section__head'>" +
+            "<div>" +
+            "<h3>" +
+            esc(title) +
+            "</h3>" +
+            "<p>" +
+            esc(subtitle) +
+            "</p>" +
+            "</div>" +
+            "<span class='sow-hero-ach-section__count'>★ " +
+            esc(doneCount) +
+            "</span>" +
+            "</header>" +
+            "<div class='sow-hero-ach-path'>" +
+            stepsHtml +
+            "</div>" +
+            "</section>"
+        );
+    }
 
-    return "<div class='sow-hero-info__ach'>" + headerCard + controlsHtml + listHtml + "</div>";
+    const recruitItems = summary.recruitAchievement ? [summary.recruitAchievement] : [];
+    const sectionsHtml =
+        renderPathSection(
+            tText("heroes.ach_cat_recruit", "Recruit"),
+            tText("heroes.ach_recruit_sub", "Unlock this commander into your vanguard"),
+            recruitItems,
+        ) +
+        renderPathSection(
+            tText("heroes.ach_cat_mastery", "Mastery Path"),
+            tText("heroes.ach_mastery_sub", "Matches played with this commander"),
+            summary.masteryAchievements,
+        ) +
+        renderPathSection(
+            tText("heroes.ach_cat_victories", "Victories Path"),
+            tText("heroes.ach_victories_sub", "Battles won with this commander"),
+            summary.winsAchievements,
+        );
+
+    return "<div class='sow-hero-info__ach'>" + headerCard + sectionsHtml + "</div>";
 }

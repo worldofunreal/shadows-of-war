@@ -42,6 +42,11 @@ impl SowEngine {
         }
 
         for (building, old_owner) in transfers {
+            if building.kind == crate::game::BuildingKind::City
+                && let Some(state) = self.city_arsenals.get_mut(&building.id)
+            {
+                state.arsenal_build = None;
+            }
             self.hero_structure_transferred(building, old_owner);
         }
     }
@@ -203,11 +208,15 @@ impl SowEngine {
         }
 
         // Mutual expiration enforcement
+        let had_expired = !expired_alliances.is_empty();
         for (a, b) in expired_alliances {
             if let Some(p_b) = self.state.player_mut(b) {
                 p_b.alliances.retain(|&id| id != a);
                 p_b.alliance_timers.remove(&a);
             }
+        }
+        if had_expired {
+            self.building_aggregates_dirty = true;
         }
     }
 
@@ -348,9 +357,7 @@ impl SowEngine {
 
         if self.state.config.ranked_1v1 {
             self.check_ranked_duel_winner(win_threshold);
-        } else if self.state.config.game_mode == "Teams"
-            || self.state.config.game_mode == "HumansVsNations"
-        {
+        } else if self.state.config.game_mode == "Teams" || self.state.config.game_mode == "PvE" {
             self.check_team_winner(win_threshold);
         } else {
             self.check_ffa_winner(win_threshold);
@@ -841,7 +848,7 @@ mod tests {
 
     #[test]
     fn simultaneous_victory_candidates_have_a_stable_winner() {
-        for mode in ["FFA", "Teams", "HumansVsNations"] {
+        for mode in ["FFA", "Teams", "PvE"] {
             for reverse in [false, true] {
                 let config = GameConfig {
                     game_mode: mode.into(),
@@ -882,7 +889,7 @@ mod tests {
         for (mode, ranked_1v1) in [
             ("FFA", false),
             ("Teams", false),
-            ("HumansVsNations", false),
+            ("PvE", false),
             ("FFA", true),
         ] {
             for (leading_tiles, expected_winner) in [(74, None), (75, Some(1))] {
@@ -895,7 +902,7 @@ mod tests {
                 let mut state = GameState::new(42, 10, 10, config.clone());
                 state.total_land_tiles = 99;
 
-                if mode == "Teams" || mode == "HumansVsNations" {
+                if mode == "Teams" || mode == "PvE" {
                     for (id, team, tiles) in [
                         (1, Team::Red, 40),
                         (3, Team::Red, leading_tiles - 40),
@@ -924,7 +931,7 @@ mod tests {
                     engine.state.winner, expected_winner,
                     "mode={mode}, ranked={ranked_1v1}, land={leading_tiles}"
                 );
-                if mode == "Teams" || mode == "HumansVsNations" {
+                if mode == "Teams" || mode == "PvE" {
                     assert_eq!(
                         engine.state.winning_team,
                         expected_winner.map(|_| Team::Red)
@@ -982,7 +989,7 @@ mod tests {
 
     #[test]
     fn tutorial_skips_automatic_victory_without_changing_normal_games() {
-        for game_mode in ["FFA", "Teams", "HumansVsNations"] {
+        for game_mode in ["FFA", "Teams", "PvE"] {
             // Map-control victory with an opponent, then last player/team below the threshold.
             for (red_tiles, blue_tiles) in [(70, 10), (10, 0)] {
                 for tutorial in [false, true] {

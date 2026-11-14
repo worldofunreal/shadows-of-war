@@ -3,6 +3,7 @@ import {
   rankLabel as rankLabelText,
   rankName,
   rankOverview,
+  rankTier,
   rankedPointsBreakdownMarkup,
 } from "./main_menu.ranked.ts";
 import {
@@ -871,12 +872,14 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
   });
   const rankBadge =
     rankedRating && rankedRating.placements_complete
-      ? "<span class='sow-profile__rank-badge' tabindex='0' data-sow-tooltip='" +
+      ? "<span class='sow-profile__rank-badge' data-tier='" +
+        rankTier(rankedRating.tier) +
+        "' tabindex='0' data-sow-tooltip='" +
         esc(rankLabelText(rankedRating)) +
         "' data-sow-tooltip-icon='ranked' data-sow-tooltip-tone='gold' data-sow-tooltip-tap='true'>" +
         rankEmblem(rankedRating.tier, rankedRating.division) +
         "<b>" +
-        esc(rankName(rankedRating.tier, rankedRating.division)) +
+        esc(rankLabelText(rankedRating)) +
         "</b>" +
         "</span>"
       : "";

@@ -995,13 +995,14 @@ const ART_ICONS: [(&str, &str, &str, &str); 14] = [
     ),
 ];
 /// Art folders routed into the runtime asset tree.
-const ART_FOLDERS: [(&str, &str); 7] = [
+const ART_FOLDERS: [(&str, &str); 8] = [
     ("brand", "shell/brand"),
     ("ranked", "shell/ranked"),
     ("icons/abilities", "gameplay/icons/abilities"),
     ("loader", "shell/loader"),
     ("skins", "gameplay/skins"),
     ("music", "gameplay/music"),
+    ("sfx", "gameplay/sfx"),
     ("units", "gameplay/units"),
 ];
 const GAMEPLAY_UNIT_ART: [&str; 5] = [
@@ -1307,7 +1308,17 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         if dir == SPRITE_ABILITY_ART {
             continue; // published with the avatars below
         }
-        for file in fs::read_dir(art.join(dir))? {
+        let source_dir = if dir == "sfx" && !art.join(dir).is_dir() {
+            root.join("assets/gameplay/sfx")
+        } else {
+            art.join(dir)
+        };
+        if dir == "sfx" && !source_dir.is_dir() {
+            continue;
+        }
+        for file in fs::read_dir(&source_dir)
+            .with_context(|| format!("read art folder {}", source_dir.display()))?
+        {
             let file = file?.path();
             let name = file
                 .file_name()
@@ -4048,6 +4059,12 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         &paths.assets_gameplay.join("music"),
         &assets.join("gameplay/music"),
     )?;
+    if paths.assets_gameplay.join("sfx").is_dir() {
+        copy_dir(
+            &paths.assets_gameplay.join("sfx"),
+            &assets.join("gameplay/sfx"),
+        )?;
+    }
     if paths.assets_gameplay.join("bios").is_dir() {
         copy_dir(
             &paths.assets_gameplay.join("bios"),

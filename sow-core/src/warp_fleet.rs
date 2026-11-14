@@ -22,6 +22,9 @@ pub enum WarshipMode {
 /// while it continues to mean transported troops for transports.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WarshipState {
+    /// Active Port district that owns this ship's patrol assignment.
+    #[serde(default)]
+    pub home_port_id: Option<u64>,
     pub patrol_tile: u32,
     pub patrol_target: Option<u32>,
     pub target_fleet: Option<u64>,
@@ -39,6 +42,7 @@ pub struct WarshipState {
 impl WarshipState {
     pub fn new(patrol_tile: u32) -> Self {
         Self {
+            home_port_id: None,
             patrol_tile,
             patrol_target: None,
             target_fleet: None,
@@ -89,7 +93,7 @@ pub fn resolve_warship_route(
     buildings: &[crate::building::Building],
     owner_id: u16,
     target_tile: u32,
-) -> Result<FleetRoute, WarshipLaunchError> {
+) -> Result<WarshipRoute, WarshipLaunchError> {
     let area = map.width.saturating_mul(map.height);
     if map.width == 0 || target_tile >= area {
         return Err(WarshipLaunchError::InvalidTile);
@@ -111,32 +115,12 @@ pub fn resolve_warship_route(
             && building.active_level() >= 1
     }) {
         has_ready_port = true;
-        let x = port.tile_idx % map.width;
-        let y = port.tile_idx / map.width;
-        let footprint = crate::building::BuildingFootprint::at(
-            crate::game::BuildingKind::Port,
-            x,
-            y,
-        );
         let mut port_sources = Vec::new();
-        for fy in footprint.top..footprint.top + footprint.height as i32 {
-            for fx in footprint.left..footprint.left + footprint.width as i32 {
-                if !map.is_valid_coord(fx, fy) {
-                    continue;
-                }
-                map.for_each_neighbor(fx as u32, fy as u32, |nx, ny| {
-                    if footprint.contains(nx as i32, ny as i32) {
-                        return;
-                    }
-                    let tile = ny * map.width + nx;
-                    if map.terrain[tile as usize].is_water()
-                        && water.component_of(tile) == component
-                    {
-                        port_sources.push((tile, port.tile_idx));
-                    }
-                });
+        crate::building::for_each_city_coastal_water_tile(map, port.tile_idx, |tile| {
+            if water.component_of(tile) == component {
+                port_sources.push((tile, port.id, port.tile_idx));
             }
-        }
+        });
         port_sources.sort_unstable();
         port_sources.dedup();
         sources.extend(port_sources);
@@ -147,22 +131,64 @@ pub fn resolve_warship_route(
     if sources.is_empty() {
         return Err(WarshipLaunchError::NoConnectedPort);
     }
-    sources.sort_unstable_by_key(|&(shore, port)| {
+    sources.sort_unstable_by_key(|&(shore, port_id, _)| {
         let (sx, sy) = (shore % map.width, shore / map.width);
         let (tx, ty) = (target_tile % map.width, target_tile / map.width);
-        (sx.abs_diff(tx) + sy.abs_diff(ty), port, shore)
+        (sx.abs_diff(tx) + sy.abs_diff(ty), port_id, shore)
     });
-    let shore_tiles: Vec<_> = sources.iter().map(|&(shore, _)| shore).collect();
+    let shore_tiles: Vec<_> = sources.iter().map(|&(shore, _, _)| shore).collect();
     let path = path_scratch
         .astar
         .find_path(map, &shore_tiles, target_tile)
         .ok_or(WarshipLaunchError::NoWaterPath)?;
     let src_tile = *path.first().ok_or(WarshipLaunchError::NoWaterPath)?;
-    Ok(FleetRoute {
+    let port_id = sources
+        .iter()
+        .find_map(|&(shore, port_id, _)| (shore == src_tile).then_some(port_id))
+        .ok_or(WarshipLaunchError::NoWaterPath)?;
+    Ok(WarshipRoute {
+        port_id,
         src_tile,
         landing_tile: target_tile,
         path,
     })
+}
+
+/// Picks a deterministic water tile adjacent to the 4×4 City footprint at `city_tile`
+/// for launching a newly constructed Warship.
+pub fn coastal_warship_spawn_tile(
+    map: &GameMap,
+    water: &WaterComponents,
+    city_tile: u32,
+) -> Option<u32> {
+    if map.width == 0 || city_tile >= map.width.saturating_mul(map.height) {
+        return None;
+    }
+    let cx = city_tile % map.width;
+    let cy = city_tile / map.width;
+    let mut best_connected: Option<(u32, u32)> = None;
+    let mut best_any: Option<(u32, u32)> = None;
+    crate::building::for_each_city_coastal_water_tile(map, city_tile, |tile| {
+        let tx = tile % map.width;
+        let ty = tile / map.width;
+        let key = (tx.abs_diff(cx) + ty.abs_diff(cy), tile);
+        if best_any.is_none_or(|cur| key < cur) {
+            best_any = Some(key);
+        }
+        if water.component_of(tile) != 0 && best_connected.is_none_or(|cur| key < cur) {
+            best_connected = Some(key);
+        }
+    });
+    best_connected.or(best_any).map(|(_, tile)| tile)
+}
+
+/// Resolved route from an active Port district to a warship's initial patrol tile.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct WarshipRoute {
+    pub port_id: u64,
+    pub src_tile: u32,
+    pub landing_tile: u32,
+    pub path: Vec<u32>,
 }
 
 /// Resolved water-only route for a transport launch (spawn shore → landing shore).

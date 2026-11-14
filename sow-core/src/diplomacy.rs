@@ -12,6 +12,14 @@ pub const ALLIANCE_REQUEST_COOLDOWN_TICKS: u32 = 300;
 pub const RESOURCE_REQUEST_COOLDOWN_TICKS: u32 = 100;
 /// A resource request or trade offer left unanswered this long is withdrawn (~30s).
 pub const RESOURCE_REQUEST_TTL_TICKS: u32 = 300;
+/// Lifetime of an emote-triggered Help Call (~30s at 100ms/tick).
+pub const HELP_CALL_TTL_TICKS: u32 = 300;
+/// Minimum delay before the same player can trigger another Help Call (~30s at 100ms/tick).
+pub const HELP_CALL_COOLDOWN_TICKS: u32 = 300;
+/// Minimum human-like thinking delay for allied Ghosts (~2.0s at 100ms/tick).
+pub const GHOST_HELP_DELAY_MIN_TICKS: u32 = 20;
+/// Maximum human-like thinking delay for allied Ghosts (~6.0s at 100ms/tick).
+pub const GHOST_HELP_DELAY_MAX_TICKS: u32 = 60;
 /// Last ~30s of an alliance: renewal proposals may be attempted (throttled by RNG).
 pub const ALLIANCE_RENEWAL_WINDOW_TICKS: u32 = 300;
 /// Minimum time between betrayals for one bot (~60s).
@@ -140,6 +148,233 @@ pub fn alliance_propose_roll_cap(bot_id: PlayerId, bot_iq: u32, renewing: bool) 
 /// ~90% reject traitors when evaluating inbound requests.
 pub fn should_reject_traitor_request(requestor: &Player, tick: u32, roll_0_100: i32) -> bool {
     is_traitor_active(requestor, tick) && roll_0_100 >= 10
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GhostHelpOutcome {
+    Help,
+    Ignore,
+    Decline,
+}
+
+#[inline]
+pub fn ghost_think_delay_ticks(
+    seed: u64,
+    ghost_id: PlayerId,
+    caller_id: PlayerId,
+    created_tick: u32,
+    salt: u64,
+) -> u32 {
+    let mut rng = WyRand::new(
+        seed ^ u64::from(ghost_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ u64::from(caller_id).wrapping_mul(0xD6E8_FEB8_6659_FD93)
+            ^ u64::from(created_tick).wrapping_mul(0xA076_1D64_78BD_642F)
+            ^ salt,
+    );
+    rng.next_int(
+        GHOST_HELP_DELAY_MIN_TICKS as i32,
+        GHOST_HELP_DELAY_MAX_TICKS as i32 + 1,
+    ) as u32
+}
+
+/// Computes contextual emergency aid `(gold, troops)` from `helper` to `caller`,
+/// prioritizing troops when `caller` is under attack or low while keeping reserves.
+pub fn compute_help_aid(helper: &Player, caller: &Player, caller_under_attack: bool) -> (f64, f64) {
+    let caller_room = (caller.max_troops - caller.troops).max(0.0);
+    let helper_spare_troops = (helper.troops - 1.0).max(0.0);
+    let troop_reserve = (helper.max_troops * 0.20).max(1.0);
+    let surplus_troops = (helper.troops - troop_reserve)
+        .max(0.0)
+        .min(helper_spare_troops)
+        .min(caller_room);
+    let gold_reserve = 2_000.0;
+    let surplus_gold = (helper.gold - gold_reserve).max(0.0);
+
+    let caller_troop_ratio = if caller.max_troops > 0.0 {
+        caller.troops / caller.max_troops
+    } else {
+        1.0
+    };
+    let caller_needs_troops =
+        caller_under_attack || caller_troop_ratio < 0.35 || caller.troops <= 500.0;
+    let caller_needs_gold = caller.gold < 30_000.0 || !caller_needs_troops || caller_room < 10.0;
+
+    let (mut gold, mut troops) = (0.0, 0.0);
+    if caller_needs_troops && surplus_troops >= 1.0 {
+        troops = (surplus_troops * 0.25)
+            .floor()
+            .min(caller_room)
+            .max(1.0)
+            .min(surplus_troops);
+        if caller_needs_gold && surplus_gold >= 100.0 {
+            gold = (surplus_gold * 0.15).floor();
+        }
+    } else {
+        if surplus_gold >= 100.0 {
+            gold = (surplus_gold * 0.20).floor();
+        }
+        if caller_room >= 50.0 && surplus_troops >= 50.0 && caller_troop_ratio < 0.70 {
+            troops = (surplus_troops * 0.15).floor();
+        }
+    }
+
+    if gold <= 0.0 && troops <= 0.0 {
+        let fallback_gold = (helper.gold.max(0.0) * 0.10).floor();
+        let fallback_troops = (helper_spare_troops.min(caller_room) * 0.10).floor();
+        return (fallback_gold, fallback_troops);
+    }
+    (gold, troops)
+}
+
+/// Immediate deterministic roll (`true` = send aid, `false` = deny immediately) for allied Bots.
+#[allow(clippy::too_many_arguments)]
+pub fn roll_bot_help_decision(
+    seed: u64,
+    bot_id: PlayerId,
+    caller_id: PlayerId,
+    call_id: u64,
+    helper: &Player,
+    caller: &Player,
+    helper_under_attack: bool,
+    caller_under_attack: bool,
+    tick: u32,
+) -> bool {
+    let mut rng = WyRand::new(
+        seed ^ u64::from(bot_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ u64::from(caller_id).wrapping_mul(0xD6E8_FEB8_6659_FD93)
+            ^ call_id.wrapping_mul(0xBF58_476D_1CE4_E5B9)
+            ^ 0x424F_5448_454C_5001,
+    );
+    let roll = rng.next_int(0, 100);
+    if should_reject_traitor_request(caller, tick, roll) {
+        return false;
+    }
+    let (aid_g, aid_t) = compute_help_aid(helper, caller, caller_under_attack);
+    if aid_g <= 0.0 && aid_t <= 0.0 {
+        return false;
+    }
+    let helper_ratio = if helper.max_troops > 0.0 {
+        helper.troops / helper.max_troops
+    } else {
+        0.0
+    };
+    let mut chance: i32 = if helper_under_attack || helper_ratio < 0.25 {
+        20
+    } else if helper_ratio >= 0.45 || helper.gold >= 80_000.0 {
+        70
+    } else {
+        45
+    };
+    if caller_under_attack {
+        chance += 15;
+    }
+    roll < chance.clamp(5, 95)
+}
+
+/// Delayed human-like roll for allied Ghosts (`Help`, silent `Ignore`, or `Decline`).
+#[allow(clippy::too_many_arguments)]
+pub fn roll_ghost_help_outcome(
+    seed: u64,
+    ghost_id: PlayerId,
+    caller_id: PlayerId,
+    call_id: u64,
+    helper: &Player,
+    caller: &Player,
+    helper_under_attack: bool,
+    caller_under_attack: bool,
+    tick: u32,
+) -> GhostHelpOutcome {
+    let mut rng = WyRand::new(
+        seed ^ u64::from(ghost_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ u64::from(caller_id).wrapping_mul(0xD6E8_FEB8_6659_FD93)
+            ^ call_id.wrapping_mul(0x94D0_49BB_1331_11EB)
+            ^ 0x4748_4F53_5448_454C,
+    );
+    let roll = rng.next_int(0, 100);
+    if should_reject_traitor_request(caller, tick, roll) {
+        return if roll < 70 {
+            GhostHelpOutcome::Ignore
+        } else {
+            GhostHelpOutcome::Decline
+        };
+    }
+    let (aid_g, aid_t) = compute_help_aid(helper, caller, caller_under_attack);
+    if aid_g <= 0.0 && aid_t <= 0.0 {
+        return if roll < 85 {
+            GhostHelpOutcome::Ignore
+        } else {
+            GhostHelpOutcome::Decline
+        };
+    }
+    let helper_ratio = if helper.max_troops > 0.0 {
+        helper.troops / helper.max_troops
+    } else {
+        0.0
+    };
+    let (help_cap, ignore_cap) = if helper_under_attack || helper_ratio < 0.25 {
+        (15, 80)
+    } else if helper_ratio >= 0.45 || helper.gold >= 80_000.0 {
+        let help = if caller_under_attack { 80 } else { 70 };
+        (help, 95)
+    } else {
+        let help = if caller_under_attack { 55 } else { 45 };
+        (help, 90)
+    };
+    if roll < help_cap {
+        GhostHelpOutcome::Help
+    } else if roll < ignore_cap {
+        GhostHelpOutcome::Ignore
+    } else {
+        GhostHelpOutcome::Decline
+    }
+}
+
+/// Delayed human-like evaluation for Ghosts answering explicit `RequestResources` / `OfferTrade`.
+pub fn roll_ghost_resource_request_outcome(
+    seed: u64,
+    ghost_id: PlayerId,
+    requester_id: PlayerId,
+    created_tick: u32,
+    helper: &Player,
+    requester: &Player,
+    requested_troops: f64,
+    helper_under_attack: bool,
+) -> GhostHelpOutcome {
+    let mut rng = WyRand::new(
+        seed ^ u64::from(ghost_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ u64::from(requester_id).wrapping_mul(0xD6E8_FEB8_6659_FD93)
+            ^ u64::from(created_tick).wrapping_mul(0xBF58_476D_1CE4_E5B9)
+            ^ 0x4748_5245_5155_4553,
+    );
+    let roll = rng.next_int(0, 100);
+    if should_reject_traitor_request(requester, created_tick, roll) {
+        return if roll < 70 {
+            GhostHelpOutcome::Ignore
+        } else {
+            GhostHelpOutcome::Decline
+        };
+    }
+    let helper_ratio = if helper.max_troops > 0.0 {
+        helper.troops / helper.max_troops
+    } else {
+        0.0
+    };
+    let (help_cap, ignore_cap) = if helper_under_attack || helper_ratio < 0.20 {
+        (10, 75)
+    } else if helper.troops >= requested_troops * 2.0 {
+        (80, 95)
+    } else if helper_ratio >= 0.40 || helper.gold >= 80_000.0 {
+        (45, 85)
+    } else {
+        (20, 75)
+    };
+    if roll < help_cap {
+        GhostHelpOutcome::Help
+    } else if roll < ignore_cap {
+        GhostHelpOutcome::Ignore
+    } else {
+        GhostHelpOutcome::Decline
+    }
 }
 
 /// Betrayal only when attack logic would target an ally — not on a diplomacy timer.

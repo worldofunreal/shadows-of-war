@@ -10,5 +10,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["shell/**/*.ts", "site/auth-callback.ts"],
-  "exclude": ["shell/sdk/**/*.ts", "shell/sw.ts"]
+  "exclude": ["shell/sdk/**/*.ts", "shell/sw.ts", "shell/**/*.test.ts"]
 }

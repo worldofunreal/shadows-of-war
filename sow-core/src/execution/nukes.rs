@@ -121,19 +121,30 @@ impl SowEngine {
             };
             // Earlier impacts in this batch may have taken this ship as a prize.
             // Recheck its current owner before applying another queued shell.
-            if !self.naval_target_allowed(owner_id, self.fleets[target_index].owner_id) {
+            let target_owner = self.fleets[target_index].owner_id;
+            if !self.naval_target_allowed(owner_id, target_owner) {
                 continue;
             }
-            let sunk = {
+            let (health_before, troops_lost, sunk) = {
                 let target = &mut self.fleets[target_index];
-                target.troops = (target.troops - damage.max(0.0)).max(0.0);
+                let before = target.troops;
+                let cargo_lost = if target_type == crate::game::UnitType::TransportShip {
+                    before
+                } else {
+                    0.0
+                };
+                target.troops = if target_type == crate::game::UnitType::TransportShip {
+                    0.0
+                } else {
+                    (before - damage.max(0.0)).max(0.0)
+                };
                 if target.troops <= 0.0 {
                     target.retreating = false;
                     if let Some(warship) = target.warship.as_mut() {
                         warship.target_fleet = None;
                     }
                 }
-                target.troops <= 0.0
+                (before, cargo_lost, target.troops <= 0.0)
             };
             if sunk && let Some(source_id) = source_id {
                 if let Some(source) = self.fleets.iter_mut().find(|fleet| fleet.id == source_id) {
@@ -147,12 +158,20 @@ impl SowEngine {
                 }
             }
             let captured = sunk && self.hero_warship_prize(owner_id, target_index);
+            let health_after = self.fleets[target_index].troops;
             self.state.events.push(crate::game::GameEvent::NavalImpact {
                 owner_id,
                 target_owner,
+                source_fleet_id: source_id,
+                target_fleet_id: target_id,
                 tile,
                 target_type,
+                damage,
+                health_before,
+                health_after,
+                troops_lost,
                 sunk: sunk && !captured,
+                captured,
             });
         }
 
@@ -241,6 +260,11 @@ impl SowEngine {
             let dy = by as i64 - cy as i64;
             dx * dx + dy * dy > inner_sq
         });
+        let buildings = &self.buildings;
+        self.city_arsenals
+            .retain(|id, _| buildings.iter().any(|b| b.id == *id));
+        self.silo_cooldowns
+            .retain(|id, _| buildings.iter().any(|b| b.id == *id));
         self.building_grid.dirty = true;
         self.building_aggregates_dirty = true;
         self.bot_sam_tiles_cache = None;

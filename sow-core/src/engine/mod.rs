@@ -342,6 +342,34 @@ impl ResourceRequestProposed {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HelpCallProposed {
+    pub caller: PlayerId,
+    pub target: PlayerId,
+    #[serde(default)]
+    pub created_tick: u32,
+    #[serde(default)]
+    pub call_id: u64,
+    #[serde(default)]
+    pub ghost_decided: bool,
+}
+
+pub(crate) fn players_can_move_resources(
+    state: &GameState,
+    payer: PlayerId,
+    receiver: PlayerId,
+) -> bool {
+    let (Some(payer_player), Some(receiver_player)) = (state.player(payer), state.player(receiver))
+    else {
+        return false;
+    };
+    payer != receiver
+        && payer_player.alive
+        && receiver_player.alive
+        && (payer_player.alliances.contains(&receiver)
+            || (payer_player.team.is_some() && payer_player.team == receiver_player.team))
+}
+
 pub type SeaLaneCalcState = (usize, Vec<crate::sea_lane::SeaLane>, Vec<(u64, u32, u32)>);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -408,6 +436,17 @@ pub struct SowEngine {
     pub resource_requests_proposed: Vec<ResourceRequestProposed>,
     /// `(proposer, target)` → tick when another resource request is allowed.
     pub resource_request_cooldown_until: std::collections::HashMap<(PlayerId, PlayerId), u32>,
+    /// Emote-triggered Help Calls routed to eligible allies/teammates (expire after `HELP_CALL_TTL_TICKS`).
+    #[serde(default)]
+    pub help_calls_proposed: Vec<HelpCallProposed>,
+    /// Caller id → tick when another Help Call may be emitted via `EmoteKind::Help`.
+    #[serde(default)]
+    pub help_call_cooldown_until: std::collections::HashMap<PlayerId, u32>,
+    #[serde(default)]
+    pub next_help_call_id: u64,
+    /// `(proposer, target, created_tick)` resource requests silently ignored by a Ghost.
+    #[serde(default)]
+    pub ghost_resource_request_ignored: std::collections::BTreeSet<(PlayerId, PlayerId, u32)>,
     /// Campaign progression is episode-local and absent from every other match.
     pub campaign_unlocks: Option<crate::campaign::CampaignUnlocks>,
     pub campaign_unlock_revision: u64,
@@ -453,10 +492,10 @@ pub struct SowEngine {
     /// Tick when the pending final capture started waiting.
     #[serde(skip)]
     pub campaign_pre_defeat_since: u64,
-    /// Player id -> (first debt tick, rebellion already started this debt episode).
-    pub(crate) debt_episodes: std::collections::HashMap<PlayerId, (u64, bool)>,
     pub projectiles: Vec<crate::game::Projectile>,
     pub silo_cooldowns: std::collections::HashMap<u64, u32>,
+    #[serde(default)]
+    pub city_arsenals: std::collections::HashMap<u64, crate::building::CityArsenalState>,
     pub mirv_launches: std::collections::HashMap<u16, u32>,
     /// Launch count by `(target player, tile)`; lookup-only during scoring.
     pub recent_nuke_targets: std::collections::HashMap<(u16, u32), u64>,
@@ -495,6 +534,11 @@ impl SowEngine {
             .unwrap_or(0);
         self.building_aggregates =
             aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
+        crate::building::populate_railway_connections(
+            &self.buildings,
+            &self.state,
+            &mut self.building_aggregates,
+        );
         self.building_aggregates_dirty = false;
     }
 
@@ -545,6 +589,10 @@ impl SowEngine {
             alliance_betray_cooldown_until: std::collections::HashMap::new(),
             resource_requests_proposed: Vec::new(),
             resource_request_cooldown_until: std::collections::HashMap::new(),
+            help_calls_proposed: Vec::new(),
+            help_call_cooldown_until: std::collections::HashMap::new(),
+            next_help_call_id: 1,
+            ghost_resource_request_ignored: std::collections::BTreeSet::new(),
             campaign_unlocks,
             campaign_unlock_revision: 0,
             campaign_avatars: std::collections::HashMap::new(),
@@ -569,9 +617,9 @@ impl SowEngine {
             campaign_pre_defeat_targets: std::collections::HashSet::new(),
             campaign_pre_defeat_pending: None,
             campaign_pre_defeat_since: 0,
-            debt_episodes: std::collections::HashMap::new(),
             projectiles: Vec::new(),
             silo_cooldowns: std::collections::HashMap::new(),
+            city_arsenals: std::collections::HashMap::new(),
             mirv_launches: std::collections::HashMap::new(),
             recent_nuke_targets: std::collections::HashMap::new(),
             mirv_cooldown_targets: std::collections::HashMap::new(),
@@ -792,10 +840,27 @@ impl SowEngine {
             .retain(|_, until| *until > tick);
         self.resource_request_cooldown_until
             .retain(|_, until| *until > tick);
+        self.help_call_cooldown_until
+            .retain(|_, until| *until > tick);
         // Unanswered resource requests and trade offers lapse, so a stale price cannot be taken later.
         self.resource_requests_proposed.retain(|r| {
             tick.saturating_sub(r.created_tick) <= crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS
         });
+        {
+            let state = &self.state;
+            self.help_calls_proposed.retain(|h| {
+                tick.saturating_sub(h.created_tick) <= crate::diplomacy::HELP_CALL_TTL_TICKS
+                    && players_can_move_resources(state, h.target, h.caller)
+            });
+        }
+        if !self.ghost_resource_request_ignored.is_empty() {
+            let live_requests = &self.resource_requests_proposed;
+            self.ghost_resource_request_ignored.retain(|&(proposer, target, created_tick)| {
+                live_requests.iter().any(|r| {
+                    r.proposer == proposer && r.target == target && r.created_tick == created_tick
+                })
+            });
+        }
         for player in &mut self.state.players {
             if player.traitor && player.traitor_tick > 0 && tick >= player.traitor_tick {
                 player.traitor = false;
@@ -851,6 +916,47 @@ impl SowEngine {
             .saturating_add(RESOURCE_REQUEST_COOLDOWN_TICKS);
         self.resource_request_cooldown_until
             .insert((proposer, target), until);
+    }
+
+    #[inline]
+    pub fn can_trigger_help_call(&self, caller: PlayerId) -> bool {
+        let tick = self.current_tick_u32();
+        self.help_call_cooldown_until
+            .get(&caller)
+            .is_none_or(|until| *until <= tick)
+    }
+
+    #[inline]
+    pub fn help_call_cooldown_remaining(&self, caller: PlayerId) -> u32 {
+        let tick = self.current_tick_u32();
+        self.help_call_cooldown_until
+            .get(&caller)
+            .copied()
+            .unwrap_or(0)
+            .saturating_sub(tick)
+    }
+
+    pub fn mark_help_call_cooldown(&mut self, caller: PlayerId) {
+        let until = self
+            .current_tick_u32()
+            .saturating_add(crate::diplomacy::HELP_CALL_COOLDOWN_TICKS);
+        self.help_call_cooldown_until.insert(caller, until);
+    }
+
+    #[inline]
+    pub(crate) fn is_player_under_attack(&self, player_id: PlayerId) -> bool {
+        let Some(player) = self.state.player(player_id) else {
+            return false;
+        };
+        self.attacks.iter().any(|attack| {
+            attack.target_owner == player_id
+                && attack.troops > 0.0
+                && !player.alliances.contains(&attack.owner_id)
+        }) || self.fleets.iter().any(|fleet| {
+            fleet.target_owner == player_id
+                && fleet.troops > 0.0
+                && !player.alliances.contains(&fleet.owner_id)
+        })
     }
 
     pub(crate) fn record_alliance_request_lifecycle(
@@ -938,6 +1044,9 @@ impl SowEngine {
         self.attacks.retain(|a| a.owner_id != player_id);
         self.ai_attack_index_dirty = true;
         self.fleets.retain(|f| f.owner_id != player_id);
+        self.help_calls_proposed
+            .retain(|h| h.caller != player_id && h.target != player_id);
+        self.help_call_cooldown_until.remove(&player_id);
         self.clear_campaign_assaults_for(player_id);
     }
 
@@ -1335,6 +1444,7 @@ impl SowEngine {
                 }
             }
         }
+        self.building_aggregates_dirty = true;
     }
 
     fn spawn_campaign_assault_reserve(
@@ -2185,6 +2295,7 @@ mod tests {
                 campaign_assault_force: faction.assault_force,
                 campaign_hold_structures_until_contact: false,
                 campaign_accepts_alliance_requests: faction.accepts_alliance_requests,
+                player_type: None,
             })
             .collect();
         assert_eq!(config.scripted_spawns.len(), selected.len());
@@ -2597,12 +2708,9 @@ mod tests {
         engine.spawn_ai(3, 0);
         assert_eq!(engine.state.players.len(), 3);
         for player in &engine.state.players {
-            let character = crate::geo_entities::by_name(&player.name).unwrap();
-            assert_eq!(character.role, crate::geo_entities::Role::Nation);
-            assert_eq!(
-                engine.campaign_avatars.get(&player.id),
-                character.avatar.as_ref()
-            );
+            assert_eq!(player.player_type, PlayerType::Nation);
+            assert_eq!(player.name, player.leader.display_name());
+            assert!(!engine.campaign_avatars.contains_key(&player.id));
         }
     }
 
@@ -2858,7 +2966,7 @@ mod tests {
     }
 
     /// Regression: nations must NEVER carry a team in "Teams" mode (teams are
-    /// human-only), and must be Blue in "HumansVsNations". The old code force-
+    /// human-only), and must be Blue in "PvE". The old code force-
     /// assigned Red/Blue to nations alternating by index — that bug must not
     /// return.
     #[test]
@@ -2906,12 +3014,12 @@ mod tests {
                 p.team
             );
         }
-        // HumansVsNations: every nation is Blue.
-        for p in spawn_nations("HumansVsNations") {
+        // PvE: every nation is Blue.
+        for p in spawn_nations("PvE") {
             assert_eq!(
                 p.team,
                 Some(crate::protocol::Team::Blue),
-                "HvN nation {} wrong team {:?}",
+                "PvE nation {} wrong team {:?}",
                 p.id,
                 p.team
             );
@@ -2978,13 +3086,13 @@ mod tests {
             "Australia is empty"
         );
         assert!(count((15.0, 30.0), (-10.0, 30.0)) >= 3, "Sahara is empty");
-        let names: std::collections::HashSet<_> = engine
+        let identities: std::collections::HashSet<_> = engine
             .state
             .players
             .iter()
-            .map(|player| &player.name)
+            .map(|player| (format!("{:?}", player.player_type), &player.name))
             .collect();
-        assert_eq!(names.len(), roster, "bots must never repeat a character");
+        assert_eq!(identities.len(), roster, "bots must never repeat a character");
     }
 
     #[test]

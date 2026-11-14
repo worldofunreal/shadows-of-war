@@ -188,6 +188,10 @@ pub fn play_attack_order_sound(
     against_enemy: bool,
     spatial: SpatialSoundParams,
 ) {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::AttackOrder, 0.45) {
+        queue_spatial(clip, spatial, SoundPriority::Normal);
+        return;
+    }
     queue_spatial(
         AttackOrderSource::new(commitment, against_enemy),
         spatial,
@@ -196,6 +200,13 @@ pub fn play_attack_order_sound(
 }
 
 pub fn play_attack_stalled_sound(severity: f32, spatial: SpatialSoundParams) {
+    if let Some(clip) = super::clip::pick_clip(
+        super::clip::SfxId::AttackStalled,
+        0.40 + 0.15 * severity.clamp(0.0, 1.0),
+    ) {
+        queue_spatial(clip, spatial, SoundPriority::Normal);
+        return;
+    }
     queue_spatial(
         AttackStalledSource::new(severity),
         spatial,
@@ -204,11 +215,19 @@ pub fn play_attack_stalled_sound(severity: f32, spatial: SpatialSoundParams) {
 }
 
 pub fn play_deploy_sound(spatial: SpatialSoundParams) {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::DeployTroops, 0.40) {
+        queue_spatial(clip, spatial, SoundPriority::Normal);
+        return;
+    }
     queue_spatial(DeploySource::new(), spatial, SoundPriority::Normal);
 }
 
 pub fn play_under_attack_sound(severity: f32, spatial: SpatialSoundParams) {
     let s = severity.clamp(0.0, 1.0);
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::UnderAttack, 0.40 + 0.20 * s) {
+        queue_spatial(clip, spatial, SoundPriority::Foreground);
+        return;
+    }
     let amp = 0.18 + 0.12 * s;
     let first = PulseSource::new(150.0 - 18.0 * s, 0.10, 10.0, amp);
     let second = PulseSource::new(132.0 - 16.0 * s, 0.10, 10.0, amp * 0.9);

@@ -328,8 +328,8 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
             let (dummy_tx, _dummy_rx) = mpsc::channel::<Vec<u8>>(8);
 
             // Teams: drop the ghost into whichever team is smaller (Red on a tie),
-            // mirroring join_player. HumansVsNations: ghosts are human-side → Red.
-            let team = if g.game_mode == "HumansVsNations" {
+            // mirroring join_player. PvE: ghosts are human-side → Red.
+            let team = if g.game_mode == "PvE" {
                 Some(Team::Red)
             } else if g.game_mode == "Teams" {
                 let reds = g

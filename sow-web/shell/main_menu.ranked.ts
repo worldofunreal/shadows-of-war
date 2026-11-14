@@ -13,10 +13,19 @@ export function rankName(tier: string, division?: string | null): string {
     return SOW_t("ranked.tier_" + rankTier(tier)) + (division ? " " + division : "");
 }
 
-export function rankLabel(rating: Pick<ProfileRating, "tier" | "division" | "placements_complete" | "games_played"> | null): string {
-    return rating && rating.placements_complete
-        ? rankName(rating.tier, rating.division)
-        : SOW_t("ranked.placements", { played: Math.min(5, rating?.games_played || 0) });
+export function rankLabel(
+    rating:
+        | (Pick<ProfileRating, "tier" | "division" | "placements_complete" | "games_played"> &
+              Partial<Pick<ProfileRating, "score">>)
+        | null,
+): string {
+    if (!rating || !rating.placements_complete) {
+        return SOW_t("ranked.placements", { played: Math.min(5, rating?.games_played || 0) });
+    }
+    const name = rankName(rating.tier, rating.division);
+    return typeof rating.score === "number" && Number.isFinite(rating.score)
+        ? name + " · " + rating.score
+        : name;
 }
 
 export function rankEmblem(tier: string, division?: string | null): string {
@@ -59,7 +68,11 @@ export function rankPlacements(played: number): string {
 
 export function rankedPointsBreakdownMarkup(points: RankedPointsBreakdown): string {
     if (points.protected_loss) {
-        return "<p class='sow-ranked__breakdown'>" + esc(SOW_t("lobbies.rank_protected_loss")) + "</p>";
+        return (
+            "<p class='sow-ranked__breakdown'><span class='sow-ranked__chip is-protected'>" +
+            esc(SOW_t("lobbies.rank_protected_loss")) +
+            "</span></p>"
+        );
     }
     const components: Array<[number, string]> = [
         [points.base, "base"],
@@ -70,19 +83,46 @@ export function rankedPointsBreakdownMarkup(points: RankedPointsBreakdown): stri
         [points.limit, "limits"],
     ];
     const visible = components.filter(([value]) => value !== 0);
-    if (!visible.length) return "<p class='sow-ranked__breakdown'>" + esc(SOW_t("lobbies.rank_draw")) + "</p>";
-    return "<p class='sow-ranked__breakdown'>" + visible.map(function ([value, key]) {
-        return esc((value > 0 ? "+" : "") + value + " " + SOW_t("lobbies.rank_breakdown_" + key));
-    }).join(" · ") + "</p>";
+    if (!visible.length) {
+        return (
+            "<p class='sow-ranked__breakdown'><span class='sow-ranked__chip is-neutral'>" +
+            esc(SOW_t("lobbies.rank_draw")) +
+            "</span></p>"
+        );
+    }
+    return (
+        "<p class='sow-ranked__breakdown'>" +
+        visible
+            .map(function ([value, key], idx) {
+                const tone =
+                    key === "streak" && value > 0
+                        ? "is-streak"
+                        : value > 0
+                          ? "is-positive"
+                          : "is-negative";
+                return (
+                    "<span class='sow-ranked__chip " +
+                    tone +
+                    "' style='--chip-idx:" +
+                    idx +
+                    "'>" +
+                    esc((value > 0 ? "+" : "") + value + " " + SOW_t("lobbies.rank_breakdown_" + key)) +
+                    "</span>"
+                );
+            })
+            .join(" ") +
+        "</p>"
+    );
 }
 
 export function rankOverview(rating: ProfileRating | null, ladder: RankedLadder | null | undefined, own: boolean): string {
     const placed = !!rating?.placements_complete;
+    const heroTier = rankTier(placed ? rating.tier : "unranked");
     const tiers = (ladder?.steps || []).filter((step, index, steps) => !index || step.tier !== steps[index - 1].tier);
-    return "<section class='sow-ranked__overview' aria-label='" + esc(SOW_t("ranked.my_rank")) + "'><div class='sow-ranked__hero'>" +
+    return "<section class='sow-ranked__overview' data-tier='" + heroTier + "' aria-label='" + esc(SOW_t("ranked.my_rank")) + "'><div class='sow-ranked__hero'>" +
         rankEmblem(placed ? rating.tier : "unranked", placed ? rating.division : null) +
         "<div class='sow-ranked__summary'><span class='sow-ranked__eyebrow'>" + esc(SOW_t("lobbies.ranked_1v1")) +
-        "</span><h2>" + esc(rankLabel(rating)) + "</h2>" +
+        "</span><h2>" + esc(placed ? rankName(rating.tier, rating.division) : rankLabel(rating)) + "</h2>" +
         (placed ? "<p class='sow-ranked__points'>" + esc(SOW_t("lobbies.rank_score", { score: rating.score })) + "</p>" +
             rankProgressMarkup(rating.score, ladder) : rankPlacements(rating?.games_played || 0)) +
         "</div></div>" + (tiers.length ? "<ol class='sow-ranked__leagues'>" + tiers.map(step =>
@@ -100,21 +140,34 @@ export function renderRankedDuel(lobby: MenuLobby | null, loading = false): stri
     const me = lobby?.players.find(player => player.player_id === state?.my_player_id);
     const rival = lobby?.players.find(player => player.player_id !== state?.my_player_id);
     const rating = menuUi.rankedRating;
+    const myTier = rankTier(rating?.placements_complete ? rating.tier : "unranked");
     const playerCard = (name: string, leader: string | null | undefined, opponent: boolean) =>
         "<article class='sow-ranked__player" + (opponent ? " sow-ranked__player--rival" : "") +
-        "'><img class='sow-ranked__portrait' " + avatarImageAttribute(leader === undefined ? avatarImage() : avatarImage(leader)) +
+        "'" + (!opponent ? " data-tier='" + myTier + "'" : "") +
+        "><img class='sow-ranked__portrait' " + avatarImageAttribute(leader === undefined ? avatarImage() : avatarImage(leader)) +
         " alt='' width='128' height='128'><strong>" + esc(name) + "</strong>" +
         (!opponent ? rankEmblem(rating?.placements_complete ? rating.tier : "unranked", rating?.placements_complete ? rating.division : null) +
-            "<span>" + esc(rankLabel(rating)) + "</span>" : "<span>" + esc(SOW_t(loading ? "menu.loading" : rival?.is_ready ? "lobbies.ready" : "menu.loading")) + "</span>") + "</article>";
+            "<span class='sow-ranked__player-rank' data-ranked-player-rank>" + esc(rankLabel(rating)) + "</span>" :
+            "<span class='sow-ranked__player-status'>" + esc(SOW_t(loading ? "menu.loading" : rival?.is_ready ? "lobbies.ready" : "menu.loading")) + "</span>") + "</article>";
     return "<div class='sow-ranked__duel" + (lobby ? " is-found" : "") + "' data-ranked-match='" + esc(lobby?.id || "search") +
         "'><div class='sow-ranked__duel-heading'><span class='sow-ranked__eyebrow'>" + esc(SOW_t("lobbies.ranked_1v1")) +
         "</span><h2>" + esc(SOW_t(lobby ? "ranked.found" : "ranked.searching")) + "</h2></div><div class='sow-ranked__players'>" +
         playerCard(me?.name || state?.player_name || SOW_t("menu.anonymous"), me?.leader, false) +
-        "<span class='sow-ranked__vs' aria-hidden='true'>VS</span>" +
-        (rival ? playerCard(rival.name, rival.leader, true) : "<article class='sow-ranked__player sow-ranked__player--empty'><div class='sow-ranked__search-halo' aria-hidden='true'>?</div><strong>" +
+        "<span class='sow-ranked__vs' aria-hidden='true'><svg class='sow-ranked__vs-swords' viewBox='0 0 36 36' fill='none'>" +
+        "<path d='M6 30L13 23M7 25L11 29M29 7L25 7L11 21L15 25L29 11L29 7Z' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/>" +
+        "<path d='M30 30L23 23M29 25L25 29M7 7L11 7L25 21L21 25L7 11L7 7Z' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/>" +
+        "</svg><b>VS</b></span>" +
+        (rival ? playerCard(rival.name, rival.leader, true) : "<article class='sow-ranked__player sow-ranked__player--empty'>" +
+            "<div class='sow-ranked__search-halo' aria-hidden='true'>" +
+            "<svg class='sow-ranked__radar-svg' viewBox='0 0 100 100' fill='none'>" +
+            "<circle cx='50' cy='50' r='44' stroke='currentColor' stroke-opacity='0.24' stroke-width='1.5' stroke-dasharray='4 4'/>" +
+            "<circle cx='50' cy='50' r='28' stroke='currentColor' stroke-opacity='0.34' stroke-width='1.2'/>" +
+            "<path d='M50 6V20M50 80V94M6 50H20M80 50H94' stroke='currentColor' stroke-opacity='0.4' stroke-width='1.5' stroke-linecap='round'/>" +
+            "</svg><span class='sow-ranked__search-glyph'>?</span></div><strong>" +
             esc(SOW_t("ranked.searching")) + "</strong></article>") + "</div>" +
-        (lobby ? `<div class='sow-ranked__map' style="background-image:url('${esc(lobbyThumb(lobby))}')"><span>` +
-            esc(formatMapName(lobby)) + "</span></div>" : "") + "</div>";
+        (lobby ? `<div class='sow-ranked__map' style="background-image:url('${esc(lobbyThumb(lobby))}')"><div class='sow-ranked__map-meta'><small class='sow-ranked__map-kicker'>` +
+            esc(SOW_t("lobbies.map")) + "</small><span>" +
+            esc(formatMapName(lobby)) + "</span></div></div>" : "") + "</div>";
 }
 
 export function animateRankResult(card: HTMLElement, result: import("./main_menu.state.ts").RankedResult,

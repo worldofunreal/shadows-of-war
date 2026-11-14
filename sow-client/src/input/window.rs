@@ -111,7 +111,6 @@ impl SowApp {
     fn rebase_single_touch_drag(&mut self) {
         if self.input.active_touches.len() == 1
             && self.ui.app.hud_state.selected_nuke_kind.is_none()
-            && !self.ui.app.hud_state.selected_warship_build
         {
             if let Some((x, y)) = single_touch_position(&self.input.active_touches) {
                 self.input.last_mouse_x = x;
@@ -245,26 +244,9 @@ impl SowApp {
             }
         }
 
-        if code == winit::keyboard::KeyCode::KeyX {
-            self.select_all_warships();
-            return;
-        }
-
         let building = match code {
             winit::keyboard::KeyCode::Digit1 | winit::keyboard::KeyCode::Numpad1 => {
                 Some(sow_core::game::BuildingKind::City)
-            }
-            winit::keyboard::KeyCode::Digit2 | winit::keyboard::KeyCode::Numpad2 => {
-                Some(sow_core::game::BuildingKind::Factory)
-            }
-            winit::keyboard::KeyCode::Digit3 | winit::keyboard::KeyCode::Numpad3 => {
-                Some(sow_core::game::BuildingKind::Port)
-            }
-            winit::keyboard::KeyCode::Digit4 | winit::keyboard::KeyCode::Numpad4 => {
-                Some(sow_core::game::BuildingKind::Tower)
-            }
-            winit::keyboard::KeyCode::Digit5 | winit::keyboard::KeyCode::Numpad5 => {
-                Some(sow_core::game::BuildingKind::Farm)
             }
             _ => None,
         };
@@ -279,7 +261,6 @@ impl SowApp {
             self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
         }
         if code == winit::keyboard::KeyCode::Escape || code == winit::keyboard::KeyCode::KeyQ {
-            self.input.selected_warships.clear();
             self.clear_placement();
             self.close_map_context_menu();
         }
@@ -354,7 +335,6 @@ impl SowApp {
         }
 
         let build_tool_selected = self.ui.app.hud_state.building_placement.is_some();
-        let warship_tool_selected = self.ui.app.hud_state.selected_warship_build;
 
         if left {
             if pressed {
@@ -375,8 +355,7 @@ impl SowApp {
                     && !self.machinima_camera_active()
                     && (is_touch || !build_tool_selected)
                     && (self.ui.tutorial_camera_only
-                        || (!warship_tool_selected
-                            && self.ui.app.hud_state.selected_nuke_kind.is_none()));
+                        || self.ui.app.hud_state.selected_nuke_kind.is_none());
                 if !is_touch {
                     let action_sent = dismisses_radial
                         || (!self.ui.tutorial_camera_only
@@ -429,10 +408,6 @@ impl SowApp {
                     self.input.dragging = false;
                 }
                 let distance_sq = (x - start.x).powi(2) + (y - start.y).powi(2);
-                if self.input.shift_pressed && distance_sq > 400.0 {
-                    self.select_warships_in_rect(start.x, start.y, x, y);
-                    return;
-                }
                 if distance_sq > 400.0 || self.ui.app.phase != ClientPhase::Playing {
                     return;
                 }
@@ -471,14 +446,11 @@ impl SowApp {
             self.input.last_right_press = Some(web_time::Instant::now());
             if self.ui.app.hud_state.building_placement.is_some()
                 || self.ui.app.hud_state.selected_nuke_kind.is_some()
-                || self.ui.app.hud_state.selected_warship_build
             {
                 self.clear_placement();
                 self.close_map_context_menu();
-            } else if !self.move_selected_warships(x, y) {
-                self.open_map_context_menu(x, y);
             } else {
-                self.close_map_context_menu();
+                self.open_map_context_menu(x, y);
             }
         } else if right && !pressed {
             log::info!(
@@ -655,7 +627,6 @@ impl SowApp {
             || start.action_sent
             || self.ui.app.hud_state.building_placement.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
-            || self.ui.app.hud_state.selected_warship_build
             || start.started_at.elapsed().as_millis() < TOUCH_HOLD_MS
         {
             return;

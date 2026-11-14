@@ -82,9 +82,19 @@ impl AudioSource for BuildingPlacementSource {
 }
 
 pub fn play_building_placement_sound(kind: BuildingSoundKind, spatial: SpatialSoundParams) {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::BuildingPlacement, 0.45) {
+        queue_spatial(clip, spatial, SoundPriority::Normal);
+        return;
+    }
     queue_spatial(
         BuildingPlacementSource::new(kind),
         spatial,
         SoundPriority::Normal,
     );
+}
+
+pub fn play_building_upgrade_start_sound(spatial: SpatialSoundParams) {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::BuildingUpgradeStart, 0.45) {
+        queue_spatial(clip, spatial, SoundPriority::Normal);
+    }
 }

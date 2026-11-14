@@ -23,7 +23,8 @@ pub enum MatchMode {
     #[default]
     Ffa,
     Teams,
-    HumansVsNations,
+    #[serde(alias = "humans_vs_nations")]
+    Pve,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,7 +89,8 @@ pub enum MissionActionTarget {
     HeroesFreeRotation,
     HeroesAll,
     Teams,
-    Hnv,
+    #[serde(alias = "hnv")]
+    Pve,
     Ffa,
 }
 
@@ -296,7 +298,7 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         lane: 2,
         axis: PreferenceAxis::Onboarding,
         tag: "defeat_empires",
-        action_target: MissionActionTarget::Battle,
+        action_target: MissionActionTarget::Pve,
     },
     MissionDefinition {
         id: "onboarding_6_victories",
@@ -408,7 +410,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         gems_reward: 1,
         target: 1,
         requirement: MissionRequirement::WinMode {
-            mode: MatchMode::HumansVsNations,
+            mode: MatchMode::Pve,
             count: 1,
         },
         icon: "shield",
@@ -416,7 +418,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         lane: 0,
         axis: PreferenceAxis::Mode,
         tag: "hnv",
-        action_target: MissionActionTarget::Hnv,
+        action_target: MissionActionTarget::Pve,
     },
     MissionDefinition {
         id: "daily_ranked_3",
@@ -660,7 +662,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         lane: 2,
         axis: PreferenceAxis::Combat,
         tag: "combat",
-        action_target: MissionActionTarget::Battle,
+        action_target: MissionActionTarget::Pve,
     },
     MissionDefinition {
         id: "daily_variety_2",
@@ -726,7 +728,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         gems_reward: 2,
         target: 2,
         requirement: MissionRequirement::WinMode {
-            mode: MatchMode::HumansVsNations,
+            mode: MatchMode::Pve,
             count: 2,
         },
         icon: "shield",
@@ -734,7 +736,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         lane: 0,
         axis: PreferenceAxis::Mode,
         tag: "hnv",
-        action_target: MissionActionTarget::Hnv,
+        action_target: MissionActionTarget::Pve,
     },
     MissionDefinition {
         id: "weekly_peak_first_2",
@@ -829,7 +831,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         lane: 2,
         axis: PreferenceAxis::Combat,
         tag: "combat",
-        action_target: MissionActionTarget::Battle,
+        action_target: MissionActionTarget::Pve,
     },
 ];
 
@@ -1858,7 +1860,7 @@ mod tests {
         let mut weekly_swaps = 0u8;
         let mut weekly_out = BTreeSet::new();
 
-        // HnV match must NOT count as Teams even though team is present on HnV!
+        // PvE match must NOT count as Teams even though team is present on PvE!
         // Also tests 2-contender guard on Top-3 FFA vs >=6 contender match.
         advance_missions_after_match_with_hands(
             HandSyncState {
@@ -1878,7 +1880,7 @@ mod tests {
             None,
             &MatchMissionContext {
                 player_level: 5,
-                mode: MatchMode::HumansVsNations,
+                mode: MatchMode::Pve,
                 won: true,
                 leader_id: Some("boudica"),
                 peak_territory_rank: Some(1),

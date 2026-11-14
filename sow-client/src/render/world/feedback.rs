@@ -692,8 +692,7 @@ fn render_click_markers(
         let elapsed = now.duration_since(marker.start_time).as_secs_f32();
         let duration = match marker.kind {
             crate::app::ClickMarkerKind::Generic => CLICK_MARKER_DURATION,
-            crate::app::ClickMarkerKind::TransportOrder
-            | crate::app::ClickMarkerKind::WarshipOrder => NAVAL_ORDER_MARKER_DURATION,
+            crate::app::ClickMarkerKind::TransportOrder => NAVAL_ORDER_MARKER_DURATION,
         };
         if elapsed >= duration {
             return false;
@@ -719,13 +718,6 @@ fn render_click_markers(
             crate::app::ClickMarkerKind::TransportOrder => {
                 let color = [0.28, 0.88, 1.0, (1.0 - t) * 0.95];
                 text.push_ring(center, 34.0 * t * zoom_scaled * sf, color, 2.2 * sf);
-                text.push_cross(center, 5.0 * zoom_scaled * (1.0 - t) * sf, color, 1.5 * sf);
-            }
-            crate::app::ClickMarkerKind::WarshipOrder => {
-                let color = [1.0, 0.78, 0.3, (1.0 - t) * 0.98];
-                let radius = 36.0 * t * zoom_scaled * sf;
-                text.push_ring(center, radius, color, 2.4 * sf);
-                text.push_ring(center, radius * 0.64, [1.0, 0.92, 0.65, color[3] * 0.8], 1.5 * sf);
                 text.push_cross(center, 5.0 * zoom_scaled * (1.0 - t) * sf, color, 1.5 * sf);
             }
         }

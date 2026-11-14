@@ -71,6 +71,10 @@ fn build_death_sound(player_type: PlayerSoundType, seed: u32, wx: f32, wy: f32) 
 }
 
 pub fn play_death_sound(player_type: PlayerSoundType, seed: u32, spatial: SpatialSoundParams) {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::PlayerEliminated, 0.45) {
+        queue_spatial(clip, spatial, SoundPriority::Foreground);
+        return;
+    }
     let SpatialSoundParams { wx, wy, .. } = spatial;
     queue_spatial(
         build_death_sound(player_type, seed, wx, wy),

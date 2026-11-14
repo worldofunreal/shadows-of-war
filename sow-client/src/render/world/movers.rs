@@ -256,11 +256,9 @@ struct MoverSlot {
     is_fleet: bool,
     arc_trail: bool,
     is_owned_warship: bool,
-    selected: bool,
     health_fraction: f32,
     veterancy: u8,
     warship_mode: Option<sow_core::warp_fleet::WarshipMode>,
-    patrol_center: Option<(f32, f32)>,
     in_combat: bool,
 }
 
@@ -319,7 +317,6 @@ impl MoverScene {
         fog_of_war_enabled: bool,
         my_id: u16,
         fog_visible: &sow_core::bitset::DenseBitSet,
-        selected_warships: &[u64],
         shader_params: &[[f32; 4]; sow_render::shader_params::PARAM_CAPACITY],
     ) {
         let setting = |id: &str, fallback: f32| {
@@ -374,7 +371,7 @@ impl MoverScene {
                 || fog_visible.contains(fleet.current_tile);
             if is_visible {
                 alive.insert(fleet.id);
-                self.ingest_fleet(fleet, map_w, my_id, selected_warships.contains(&fleet.id));
+                self.ingest_fleet(fleet, map_w, my_id);
             }
         }
         for proj in &snap.projectiles {
@@ -421,7 +418,7 @@ impl MoverScene {
         }
     }
 
-    fn ingest_fleet(&mut self, fleet: &FleetSnapshot, map_w: u32, my_id: u16, selected: bool) {
+    fn ingest_fleet(&mut self, fleet: &FleetSnapshot, map_w: u32, my_id: u16) {
         let (prev_x, prev_y, curr_x, curr_y, progress) = if fleet.unit_type
             == UnitType::TransportShip
             && fleet.path_cursor > 0
@@ -506,11 +503,9 @@ impl MoverScene {
             is_fleet: true,
             arc_trail: false,
             is_owned_warship: fleet.unit_type == UnitType::Warship && fleet.owner_id == my_id,
-            selected,
             health_fraction: (fleet.troops / fleet.max_health.max(1.0)).clamp(0.0, 1.0) as f32,
             veterancy: fleet.warship.as_ref().map_or(0, |state| state.veterancy),
             warship_mode: fleet.warship.as_ref().map(|state| state.mode),
-            patrol_center: fleet.warship.as_ref().map(|state| tile_to_world(state.patrol_tile, map_w)),
             in_combat: fleet.warship.as_ref().is_some_and(|state| state.target_fleet.is_some()),
         };
         self.upsert_slot(fleet.id, entry);
@@ -601,11 +596,9 @@ impl MoverScene {
             is_fleet: false,
             arc_trail: is_nuke,
             is_owned_warship: false,
-            selected: false,
             health_fraction: 1.0,
             veterancy: 0,
             warship_mode: None,
-            patrol_center: None,
             in_combat: false,
         };
         self.upsert_slot(key, entry);
@@ -940,8 +933,8 @@ impl MoverScene {
                             _ => [0.78, 0.9, 1.0, 0.66],
                         }
                     };
-                    let radius = sprite_size * if slot.selected { 0.96 } else { 0.80 };
-                    let segments = if slot.selected { 20 } else { 14 };
+                    let radius = sprite_size * 0.80;
+                    let segments = 14;
                     for segment in 0..=segments {
                         let angle = std::f32::consts::TAU * segment as f32 / segments as f32;
                         arc_scratch.push([wx + angle.cos() * radius, wy + angle.sin() * radius]);
@@ -950,34 +943,13 @@ impl MoverScene {
                         renderer,
                         &arc_scratch,
                         arc_scratch[0],
-                        if slot.selected { 2.6 } else { 0.9 },
-                        if slot.selected { [1.0, 0.93, 0.62, 1.0] } else { status_color },
+                        0.9,
+                        status_color,
                         false,
                         1.0,
                         0.0,
                     );
                     arc_scratch.clear();
-                    if slot.selected {
-                        let outer_radius = radius * 1.45;
-                        for segment in 0..=28 {
-                            let angle = std::f32::consts::TAU * segment as f32 / 28.0;
-                            arc_scratch.push([
-                                wx + angle.cos() * outer_radius,
-                                wy + angle.sin() * outer_radius,
-                            ]);
-                        }
-                        self.push_trail_segments(
-                            renderer,
-                            &arc_scratch,
-                            arc_scratch[0],
-                            1.8,
-                            [1.0, 0.86, 0.42, 0.9],
-                            false,
-                            1.0,
-                            0.0,
-                        );
-                        arc_scratch.clear();
-                    }
                     if slot.health_fraction < 0.999 {
                         let segments = 12;
                         for segment in 0..=segments {
@@ -1000,28 +972,6 @@ impl MoverScene {
                         }
                         arc_scratch.clear();
                     }
-                }
-                if slot.selected && let Some((px, py)) = slot.patrol_center {
-                    arc_scratch.clear();
-                    let center_radius = 2.0_f32.max(sprite_size * 0.22);
-                    arc_scratch.extend([
-                        [px - center_radius, py - center_radius],
-                        [px + center_radius, py - center_radius],
-                        [px + center_radius, py + center_radius],
-                        [px - center_radius, py + center_radius],
-                        [px - center_radius, py - center_radius],
-                    ]);
-                    self.push_trail_segments(
-                        renderer,
-                        &arc_scratch,
-                        arc_scratch[0],
-                        1.0,
-                        [0.7, 0.94, 1.0, 0.7],
-                        false,
-                        1.0,
-                        0.0,
-                    );
-                    arc_scratch.clear();
                 }
             }
 

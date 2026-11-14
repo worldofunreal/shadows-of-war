@@ -163,6 +163,9 @@ pub struct ScriptedSpawn {
     /// Accepts every alliance request from the human without troop, territory or IQ-point checks.
     #[serde(default)]
     pub campaign_accepts_alliance_requests: bool,
+    /// Optional player kind override (`None` defaults to `PlayerType::Bot`, `Some(PlayerType::Nation)` spawns a Bot Hero).
+    #[serde(default)]
+    pub player_type: Option<crate::player::PlayerType>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -208,22 +211,22 @@ pub struct AiTuning {
 impl Default for AiTuning {
     fn default() -> Self {
         Self {
-            think_tribe: [80, 120],         // 8–12 s
-            think_nation: [40, 80],         // 4–8 s
-            think_nation_attacked: [5, 30], // 0.5–3 s
-            think_ghost: [1, 10],           // 0.1–1 s
-            think_ghost_attacked: [5, 6],   // 0.5–0.6 s
+            think_tribe: [80, 120],       // 8–12 s
+            think_nation: [1, 10],        // 0.1–1 s (Bot Hero)
+            think_nation_attacked: [5, 6], // 0.5–0.6 s
+            think_ghost: [1, 10],         // 0.1–1 s
+            think_ghost_attacked: [5, 6], // 0.5–0.6 s
             ghost: AiPosture {
                 trigger: 0.40,
-                reserve: 0.30,
+                reserve: 0.20,
                 expand: 0.10,
                 refuse_human_chance: 0,
             },
             nation: AiPosture {
-                trigger: 0.45,
+                trigger: 0.40,
                 reserve: 0.20,
-                expand: 0.15,
-                refuse_human_chance: 20,
+                expand: 0.10,
+                refuse_human_chance: 0,
             },
             tribe_vanilla: AiPosture {
                 trigger: 0.75,
@@ -554,10 +557,10 @@ impl GameConfig {
     }
 
     pub fn max_nation_bots() -> u32 {
-        let count = crate::geo_entities::bots(crate::geo_entities::Role::Nation).count();
+        let count = crate::player::Leader::count();
         assert!(
             count <= crate::player::PREMIUM_COLORS.len(),
-            "the Nation color palette needs one slot per spawnable Nation"
+            "the Nation color palette needs one slot per spawnable Bot Hero"
         );
         count as u32
     }
@@ -602,7 +605,7 @@ impl Default for GameConfig {
             // Explicit Custom/offline defaults. Matchmaking replaces these
             // with its lobby-specific capacity and AI population draw.
             bot_count: 420,
-            nation_count: 128,
+            nation_count: 0,
             bot_difficulty: BotDifficulty::Vanilla,
             seed: 42,
 

@@ -1,7 +1,263 @@
 use super::placement::{BuildingFootprint, hex_distance};
-use crate::game::BuildingKind;
+use crate::execution::hero_effects::allied;
+use crate::game::{BuildingKind, CityArsenalKind, GameState};
+use crate::map::MapTile;
 use crate::rng::stable_tile_sample;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// Maximum Euclidean tile distance between two Cities linked by railway.
+pub const RAILWAY_LINK_DISTANCE: u32 = 36;
+/// Minimum active `Factory` district level required on a City to form railways.
+pub const RAILWAY_REQUIRED_FACTORY_LEVEL: u8 = 2;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CityArsenalBuild {
+    pub kind: CityArsenalKind,
+    pub ticks_until_complete: u32,
+    pub total_ticks: u32,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CityArsenalState {
+    pub has_anti_nuke: bool,
+    pub nuke_ready: bool,
+    pub arsenal_build: Option<CityArsenalBuild>,
+}
+
+impl CityArsenalState {
+    #[inline]
+    pub const fn is_building(self) -> bool {
+        self.arsenal_build.is_some()
+    }
+}
+
+fn compute_city_visual_level(
+    items: impl Iterator<Item = (u32, BuildingKind, u8)>,
+    tile_idx: u32,
+) -> u8 {
+    let mut city_active = 0u8;
+    let mut best_district = 0u8;
+    for (item_tile, kind, lvl) in items {
+        if item_tile != tile_idx {
+            continue;
+        }
+        if kind == BuildingKind::City {
+            city_active = city_active.max(lvl);
+        } else {
+            best_district = best_district.max(lvl);
+        }
+    }
+    if city_active == 0 {
+        0
+    } else {
+        best_district.max(city_active)
+    }
+}
+
+/// Visual tier `0..=4` for a City on the map (`0` while the City base is still under construction,
+/// otherwise `1..=4` from the highest completed district at `tile_idx`).
+#[inline]
+pub fn city_visual_level(buildings: &[Building], tile_idx: u32) -> u8 {
+    compute_city_visual_level(
+        buildings.iter().map(|b| (b.tile_idx, b.kind, b.active_level())),
+        tile_idx,
+    )
+}
+
+/// Snapshot equivalent of [`city_visual_level`] for client UI and map overlays.
+#[inline]
+pub fn city_snapshot_visual_level(
+    buildings: &[crate::protocol::BuildingSnapshot],
+    tile_idx: u32,
+) -> u8 {
+    compute_city_visual_level(
+        buildings.iter().map(|b| (b.tile_idx, b.kind, b.active_level())),
+        tile_idx,
+    )
+}
+
+/// True when the City or any co-located district/arsenal task at `tile_idx` is under construction.
+#[inline]
+pub fn city_has_active_build(
+    buildings: &[Building],
+    city_arsenals: &HashMap<u64, CityArsenalState>,
+    tile_idx: u32,
+) -> bool {
+    buildings.iter().any(|b| {
+        b.tile_idx == tile_idx
+            && (b.under_construction
+                || (b.kind == BuildingKind::City
+                    && city_arsenals
+                        .get(&b.id)
+                        .is_some_and(|state| state.arsenal_build.is_some())))
+    })
+}
+
+fn railway_axis_is_land_with(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    map_w: u32,
+    map_h: u32,
+    is_land: Option<&dyn Fn(u32) -> bool>,
+) -> bool {
+    let (mut x, mut y) = (x0, y0);
+    let (sx, sy) = ((x1 - x0).signum(), (y1 - y0).signum());
+    loop {
+        if x < 0 || y < 0 || x >= map_w as i32 || y >= map_h as i32 {
+            return false;
+        }
+        let tile = y as u32 * map_w + x as u32;
+        if is_land.is_some_and(|check| !check(tile)) {
+            return false;
+        }
+        if x == x1 && y == y1 {
+            return true;
+        }
+        x += sx;
+        y += sy;
+    }
+}
+
+fn railway_route_is_land_with(
+    ax: i32,
+    ay: i32,
+    bx: i32,
+    by: i32,
+    map_w: u32,
+    map_h: u32,
+    is_land: Option<&dyn Fn(u32) -> bool>,
+) -> Option<bool> {
+    if railway_axis_is_land_with(ax, ay, bx, ay, map_w, map_h, is_land)
+        && railway_axis_is_land_with(bx, ay, bx, by, map_w, map_h, is_land)
+    {
+        Some(true)
+    } else if railway_axis_is_land_with(ax, ay, ax, by, map_w, map_h, is_land)
+        && railway_axis_is_land_with(ax, by, bx, by, map_w, map_h, is_land)
+    {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// Canonical check for whether an L-shaped land railway axis crosses only land tiles.
+pub fn railway_axis_is_land(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    map_w: u32,
+    map_h: u32,
+    terrain: Option<&[MapTile]>,
+) -> bool {
+    let checker = terrain.map(|tiles| {
+        move |tile: u32| tiles.get(tile as usize).is_some_and(MapTile::is_land)
+    });
+    railway_axis_is_land_with(
+        x0,
+        y0,
+        x1,
+        y1,
+        map_w,
+        map_h,
+        checker.as_ref().map(|f| f as &dyn Fn(u32) -> bool),
+    )
+}
+
+/// Returns `Some(horizontal_first)` if `(ax, ay)` and `(bx, by)` connect over land by railway.
+pub fn railway_route_is_land(
+    ax: i32,
+    ay: i32,
+    bx: i32,
+    by: i32,
+    map_w: u32,
+    map_h: u32,
+    terrain: Option<&[MapTile]>,
+) -> Option<bool> {
+    let checker = terrain.map(|tiles| {
+        move |tile: u32| tiles.get(tile as usize).is_some_and(MapTile::is_land)
+    });
+    railway_route_is_land_with(
+        ax,
+        ay,
+        bx,
+        by,
+        map_w,
+        map_h,
+        checker.as_ref().map(|f| f as &dyn Fn(u32) -> bool),
+    )
+}
+
+/// Snapshot check matching [`populate_railway_connections`] for whether `city_tile` has an active railway link.
+pub fn city_snapshot_has_railway(
+    snapshot: &crate::protocol::SimSnapshot,
+    city_tile: u32,
+    map_w: u32,
+    map_h: u32,
+    is_land: Option<&dyn Fn(u32) -> bool>,
+) -> bool {
+    if map_w == 0 || map_h == 0 || u64::from(city_tile) >= u64::from(map_w) * u64::from(map_h) {
+        return false;
+    }
+    let Some(city) = snapshot.buildings.iter().find(|b| {
+        b.tile_idx == city_tile
+            && b.kind == BuildingKind::City
+            && b.active_level() > 0
+            && snapshot.buildings.iter().any(|d| {
+                d.tile_idx == b.tile_idx
+                    && d.kind == BuildingKind::Factory
+                    && d.owner_id == b.owner_id
+                    && d.active_level() >= RAILWAY_REQUIRED_FACTORY_LEVEL
+            })
+    }) else {
+        return false;
+    };
+    let owner_a = city.owner_id;
+    let ax = (city.tile_idx % map_w) as i32;
+    let ay = (city.tile_idx / map_w) as i32;
+    let max_dist_sq = (RAILWAY_LINK_DISTANCE as i32) * (RAILWAY_LINK_DISTANCE as i32);
+    let players_allied = |a: u16, b: u16| -> bool {
+        if a == b {
+            return true;
+        }
+        let Some(pa) = snapshot.players.iter().find(|p| p.id == a) else {
+            return false;
+        };
+        let Some(pb) = snapshot.players.iter().find(|p| p.id == b) else {
+            return false;
+        };
+        (pa.team.is_some() && pa.team == pb.team)
+            || (pa.alliances.contains(&b) && pb.alliances.contains(&a))
+    };
+    snapshot.buildings.iter().any(|other| {
+        if other.tile_idx == city_tile
+            || other.kind != BuildingKind::City
+            || other.active_level() == 0
+            || u64::from(other.tile_idx) >= u64::from(map_w) * u64::from(map_h)
+            || !players_allied(owner_a, other.owner_id)
+        {
+            return false;
+        }
+        let has_factory = snapshot.buildings.iter().any(|d| {
+            d.tile_idx == other.tile_idx
+                && d.kind == BuildingKind::Factory
+                && d.owner_id == other.owner_id
+                && d.active_level() >= RAILWAY_REQUIRED_FACTORY_LEVEL
+        });
+        if !has_factory {
+            return false;
+        }
+        let bx = (other.tile_idx % map_w) as i32;
+        let by = (other.tile_idx / map_w) as i32;
+        let dx = ax - bx;
+        let dy = ay - by;
+        dx * dx + dy * dy <= max_dist_sq
+            && railway_route_is_land_with(ax, ay, bx, by, map_w, map_h, is_land).is_some()
+    })
+}
 
 #[inline]
 pub fn upgrade_duration_ticks(kind: BuildingKind, target_level: u8) -> u32 {
@@ -103,6 +359,8 @@ pub struct BuildingAggregate {
     pub count_factory: u32,
     pub count_port: u32,
     pub count_farm: u32,
+    /// Number of owned Cities with a `Factory Lv.2+` connected over land within railway range.
+    pub railway_connections: u32,
 }
 
 impl BuildingAggregate {
@@ -180,6 +438,71 @@ pub fn aggregate_buildings_per_player(
         }
     }
     out
+}
+
+/// Populates [`BuildingAggregate::railway_connections`] for each owner whose ready Cities have
+/// a `Factory` district at level >= [`RAILWAY_REQUIRED_FACTORY_LEVEL`] linked over land within
+/// [`RAILWAY_LINK_DISTANCE`] tiles to another friendly or owned railway-ready City.
+pub fn populate_railway_connections(
+    buildings: &[Building],
+    state: &GameState,
+    aggregates: &mut [BuildingAggregate],
+) {
+    for agg in aggregates.iter_mut() {
+        agg.railway_connections = 0;
+    }
+    let map_w = state.map.width;
+    let map_h = state.map.height;
+    if map_w == 0 || map_h == 0 {
+        return;
+    }
+    let total_tiles = u64::from(map_w) * u64::from(map_h);
+
+    // Collect ready Cities that host a ready Factory Lv.2+.
+    let mut nodes: Vec<(u32, u16, i32, i32)> = Vec::new();
+    for b in buildings {
+        if b.kind != BuildingKind::City
+            || b.active_level() == 0
+            || u64::from(b.tile_idx) >= total_tiles
+        {
+            continue;
+        }
+        let has_rail_factory = buildings.iter().any(|d| {
+            d.tile_idx == b.tile_idx
+                && d.kind == BuildingKind::Factory
+                && d.owner_id == b.owner_id
+                && d.active_level() >= RAILWAY_REQUIRED_FACTORY_LEVEL
+        });
+        if has_rail_factory {
+            let x = (b.tile_idx % map_w) as i32;
+            let y = (b.tile_idx / map_w) as i32;
+            nodes.push((b.tile_idx, b.owner_id, x, y));
+        }
+    }
+    if nodes.len() < 2 {
+        return;
+    }
+
+    let max_dist_sq = (RAILWAY_LINK_DISTANCE as i32) * (RAILWAY_LINK_DISTANCE as i32);
+    let terrain = Some(state.map.terrain.as_slice());
+    for (i, &(_, owner_a, ax, ay)) in nodes.iter().enumerate() {
+        let Some(agg) = aggregates.get_mut(owner_a as usize) else {
+            continue;
+        };
+        let connected = nodes.iter().enumerate().any(|(j, &(_, owner_b, bx, by))| {
+            if i == j || (owner_a != owner_b && !allied(state, owner_a, owner_b)) {
+                return false;
+            }
+            let dx = ax - bx;
+            let dy = ay - by;
+            let dist_sq = dx * dx + dy * dy;
+            dist_sq <= max_dist_sq
+                && railway_route_is_land(ax, ay, bx, by, map_w, map_h, terrain).is_some()
+        });
+        if connected {
+            agg.railway_connections = agg.railway_connections.saturating_add(1);
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

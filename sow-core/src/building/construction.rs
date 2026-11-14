@@ -53,6 +53,68 @@ impl SowEngine {
         for building in completed {
             self.hero_structure_ready(building);
         }
+
+        let mut finished_arsenal = Vec::new();
+        for (&city_id, state) in &mut self.city_arsenals {
+            let Some(build) = &mut state.arsenal_build else {
+                continue;
+            };
+            if build.ticks_until_complete > 0 {
+                build.ticks_until_complete -= 1;
+            }
+            if build.ticks_until_complete == 0 {
+                let kind = build.kind;
+                state.arsenal_build = None;
+                match kind {
+                    crate::game::CityArsenalKind::Warship => {
+                        finished_arsenal.push((city_id, kind));
+                    }
+                    crate::game::CityArsenalKind::Nuke => {
+                        state.nuke_ready = true;
+                    }
+                    crate::game::CityArsenalKind::AntiNuke => {
+                        state.has_anti_nuke = true;
+                        self.bot_sam_tiles_cache = None;
+                    }
+                }
+            }
+        }
+        for (city_id, kind) in finished_arsenal {
+            if kind != crate::game::CityArsenalKind::Warship {
+                continue;
+            }
+            let Some(city) = self.buildings.iter().find(|b| b.id == city_id).copied() else {
+                continue;
+            };
+            let Some(port_id) = self
+                .buildings
+                .iter()
+                .find(|district| {
+                    district.tile_idx == city.tile_idx
+                        && district.owner_id == city.owner_id
+                        && district.kind == BuildingKind::Port
+                        && !district.under_construction
+                        && district.active_level() >= 1
+                })
+                .map(|district| district.id)
+            else {
+                continue;
+            };
+            if let Some(spawn_tile) = crate::warp_fleet::coastal_warship_spawn_tile(
+                &self.state.map,
+                &self.water,
+                city.tile_idx,
+            ) {
+                self.spawn_warship_fleet(
+                    city.owner_id,
+                    port_id,
+                    spawn_tile,
+                    spawn_tile,
+                    spawn_tile,
+                    Vec::new(),
+                );
+            }
+        }
     }
 
     pub fn execute_trade_ships(&mut self) {

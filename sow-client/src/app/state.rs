@@ -300,7 +300,6 @@ pub struct InputState {
     pub shift_pressed: bool,
     pub has_snapped_camera_to_spawn: bool,
     pub spawn_intent_rate: sow_core::spawn_rate_limit::SpawnIntentRateLimit,
-    pub selected_warships: Vec<u64>,
     pub key_pan_up: bool,
     pub key_pan_down: bool,
     pub key_pan_left: bool,
@@ -382,7 +381,6 @@ pub struct ClickMarker {
 pub enum ClickMarkerKind {
     Generic,
     TransportOrder,
-    WarshipOrder,
 }
 
 #[derive(Clone, Debug)]
@@ -633,6 +631,8 @@ pub struct UiState {
     pub transport_target_seen: std::collections::HashSet<u64>,
     pub transport_target_snapshot_tick: Option<u64>,
     pub transport_impacts: std::collections::VecDeque<TransportImpact>,
+    pub naval_activity: std::collections::VecDeque<NavalActivity>,
+    pub naval_activity_revision: u64,
     pub death_nameplates: Vec<DeathNameplateAnimation>,
     pub attack_badge_labels: std::collections::HashMap<u64, AttackBadgeLabel>,
     pub attack_badge_style_key: Option<[u32; 2]>,
@@ -655,8 +655,32 @@ pub struct UiState {
     pub last_player_attack_flash_time: std::collections::HashMap<u16, web_time::Instant>,
     /// Screen vignette alert state.
     pub viewport_alert: Option<ViewportAlertState>,
-    pub(crate) camera_shake: crate::render::motion::CameraShakeState,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavalActivityKind {
+    Hit,
+    Sunk,
+    Captured,
+}
+
+#[derive(Clone, Debug)]
+pub struct NavalActivity {
+    pub id: u64,
+    pub kind: NavalActivityKind,
+    pub source_owner: u16,
+    pub target_owner: u16,
+    pub source_fleet_id: Option<u64>,
+    pub target_fleet_id: Option<u64>,
+    pub target_type: sow_core::game::UnitType,
+    pub damage: f64,
+    pub health_after: f64,
+    pub troops_lost: f64,
+    pub event_tile_visible: bool,
+    pub tile: u32,
+}
+
+pub const MAX_NAVAL_ACTIVITY: usize = 12;
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -700,6 +724,16 @@ pub fn easeout_flash_with_duration(elapsed: f32, duration: f32) -> Option<f32> {
 }
 
 impl UiState {
+    pub(crate) fn push_naval_activity(&mut self, activity: NavalActivity) {
+        if self.naval_activity.len() == MAX_NAVAL_ACTIVITY {
+            self.naval_activity.pop_front();
+        }
+        self.naval_activity_revision = self.naval_activity_revision.wrapping_add(1);
+        let mut activity = activity;
+        activity.id = self.naval_activity_revision;
+        self.naval_activity.push_back(activity);
+    }
+
     pub(crate) fn trigger_alliance_celebration(&mut self, a: u16, b: u16, now: web_time::Instant) {
         queue_alliance_celebration(&mut self.alliance_celebrations, a, b, now);
     }

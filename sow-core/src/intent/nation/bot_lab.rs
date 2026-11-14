@@ -442,24 +442,24 @@ impl S16Scenario {
         };
         assert_eq!(
             profile_signature(AiTier::Ghost),
-            (0.40, 0.30, 0.10, 0, true),
+            (0.40, 0.20, 0.10, 0, true),
             "S16 SETUP FAIL: Ghost profile changed"
         );
         assert_eq!(
             profile_signature(AiTier::Nation),
-            (0.45, 0.20, 0.15, 20, true),
+            (0.40, 0.20, 0.10, 0, true),
             "S16 SETUP FAIL: Nation profile changed"
         );
         assert_eq!(
             profile_signature(AiTier::Tribe),
-            (0.75, 0.50, 0.10, 50, false),
+            (0.75, 0.50, 0.10, 50, true),
             "S16 SETUP FAIL: Vanilla Tribe profile changed"
         );
         let ai = crate::game_config::AiTuning::default();
         let window = |tier, attacked| super::structures::think_window_ticks(&ai, tier, attacked);
         assert_eq!(window(AiTier::Tribe, false), (80, 120));
-        assert_eq!(window(AiTier::Nation, false), (40, 80));
-        assert_eq!(window(AiTier::Nation, true), (5, 30));
+        assert_eq!(window(AiTier::Nation, false), (1, 10));
+        assert_eq!(window(AiTier::Nation, true), (5, 6));
         assert_eq!(window(AiTier::Ghost, false), (1, 10));
         assert_eq!(window(AiTier::Ghost, true), (5, 6));
         assert_eq!(
@@ -2501,27 +2501,24 @@ fn s13_team_members_spawn_clustered() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// S14 — OF calculateBotAttackTroops parity: nations hunt tribes DECISIVELY.
-//   A) A tribe too big to strike (affordable < 2× its troops) is never
-//      poked — not by land initiation, not by the weakest-player fleet
-//      path. The nation grows on free land instead of bleeding into a
-//      defense that scales with the tribe's TOTAL troops.
-//   B) A tribe within striking range gets the 4×-sized decisive strike
-//      (never a pointless poke) and gets eaten.
+// S14 — Nations need their normal troop trigger before hunting Tribes, then
+//   use the existing decisive-scaling rule instead of repeated weak pokes.
+//   A) A ready, adjacent Nation can open a war against a large Tribe.
+//   B) A small Tribe in range gets the decisive strike and gets eaten.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn s14_nation_hunts_tribes_decisively() {
-    // A) big tribe nearby: the attrition war OPENS (no troops-ratio floor —
-    // tribes sit at cap while nations trail theirs, so any ratio bar closes
-    // the window and freezes the map mid-game)
+    // A) Put the Nation above its normal trigger and in direct contact; a
+    // growing but under-trigger Nation must wait for its normal war push.
     {
         let mut engine = build_lab(
             90,
             90,
             "FFA",
-            &[LabPlayer::nation(1, 10, 10), LabPlayer::tribe(2, 26, 26)],
+            &[LabPlayer::nation(1, 10, 10), LabPlayer::tribe(2, 13, 10)],
         );
-        grant_block(&mut engine, 2, 23, 23, 12, 12); // 144 tiles ≈ 5.2K troops
+        grant_block(&mut engine, 1, 8, 8, 5, 5);
+        grant_block(&mut engine, 2, 13, 9, 12, 12); // 144 tiles ≈ 5.2K troops
         let mut attacked = false;
         let mut max_nation_tiles = 1u32;
         for _ in 0..1_200 {
@@ -2591,7 +2588,8 @@ fn s14_nation_hunts_tribes_decisively() {
 // S15 — OF isAttackTooWeak parity: a smart AI never initiates against a
 // neighbor whose troops dwarf its affordable wave (<20%), and never freezes:
 // with free land adjacent it grows instead (OF expansions precede wars).
-// Passive big tribe as the neighbor so no defensive counter-confound.
+// A Nation as the neighbor isolates the FFA player-target weakness rule;
+// Tribe attacks still require their configured troop trigger (S14).
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn s15_no_suicide_against_dwarfing_player() {
@@ -2745,15 +2743,16 @@ fn s16_checkpoint_decision_and_state_reference() {
     // the S16 behavior contracts below separately guard progress and survival.
     // Uses current AI tuning, occupancy pacing, and the linear 8-to-36 finish
     // threshold, which first remates a 9-tile target at tick 112 in this trace.
+    // Combat/build fingerprints include neutral-first Tribe targeting,
+    // Ghost-only below-trigger Tribe attacks and equal elite economy priority.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x4a52_2133_8938_6eff),
-        (500, 0x272c_59f4_e2a8_e56e),
-        (607, 0x59c8_5afd_450a_d1b0),
+        (250, 14_461_527_465_065_729_842),
+        (372, 5_634_585_296_377_643_087),
     ];
     assert_eq!(
         checkpoints,
         s16_building_rules_trace(false),
-        "same seed must reproduce the current format-7 checkpoints"
+        "same seed must reproduce the current format-8 checkpoints"
     );
     assert_eq!(
         checkpoints, REFERENCE,
@@ -2770,17 +2769,17 @@ fn historical_s16_building_rules_keep_recorded_results() {
         "same seed must reproduce historical-building checkpoints"
     );
     // Historical buildings with current AI tuning and the linear 8-to-36 finish
-    // threshold: the first 9-tile finishes are P33 and P53 at tick 108.
+    // threshold. Fingerprints include the AI policies noted above.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x7aef_ad3d_bbae_2817),
-        (500, 0x85c8_1f26_3161_cbb5),
-        (750, 0xbbda_44c9_fdf9_3966),
-        (1000, 0xef61_dcb6_d770_557a),
-        (1250, 0xc7b5_f697_0380_781a),
-        (1500, 0xfb9e_03de_a955_eaf9),
-        (1750, 0x7124_9085_5870_6d73),
-        (2000, 0x1896_76f9_3fef_5046),
-        (2102, 0xf55f_c3aa_c8e6_379a),
+        (250, 8_041_180_051_744_791_537),
+        (500, 17_471_609_105_312_756_664),
+        (750, 12_487_642_550_425_394_505),
+        (1000, 1_428_277_517_039_172_483),
+        (1250, 6_553_211_344_018_676_035),
+        (1500, 250_236_741_886_633_545),
+        (1750, 11_964_597_755_233_964_231),
+        (2000, 6_008_221_631_658_316_717),
+        (2102, 237_313_664_713_283_067),
     ];
     assert_eq!(
         checkpoints, REFERENCE,
@@ -3074,8 +3073,10 @@ fn s18_world_map_team_spawn_zones() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// S19 — MIXED FFA TIER BALANCE: 15 ghosts, 30 nations, 180 tribes on open land,
-// ghosts and nations with identical starts. Measurement, not a contract:
+// S19 — MIXED FFA TIER BALANCE: 15 ghosts, 15 Bot Heroes and the current
+// matchmaking Tribe population on open land. Ghosts and Bot Heroes share IQ,
+// starting resources and paired Leaders; their positions are interleaved.
+// Measurement, not a contract:
 // prints per-tier survivors, land and troop fill per seed so tier tuning can
 // be compared before/after. Run with
 // `cargo test -p sow-core --lib s19_ -- --ignored --nocapture`.
@@ -3085,32 +3086,60 @@ fn s18_world_map_team_spawn_zones() {
 fn s19_mixed_ffa_tier_balance() {
     const STEP_SECONDS: f64 = 30.0;
     const STEPS: u32 = 20;
+    const GHOSTS: u32 = 15;
+    const NATIONS: u32 = 15;
+    let tribes = crate::game_config::GameConfig::max_tribe_bots();
+    let total = tribes + GHOSTS + NATIONS;
     let tier_of = |p: &Player| match ai_tier(p.player_type, p.is_ai_controlled) {
         Some(AiTier::Ghost) => 0,
         Some(AiTier::Nation) => 1,
         _ => 2,
     };
+    let seeds = [
+        7u64, 11, 23, 42, 99, 101, 202, 303, 404, 505, 606, 707, 808, 909, 1010, 1111, 1212,
+        1313, 1414, 1515,
+    ];
     let mut final_alive = [0u32; 3];
-    for seed in [7u64, 11, 23, 42, 99] {
+    for seed in seeds {
         let mut specs = Vec::new();
-        for id in 1..=225u16 {
-            let (i, j) = (u32::from(id - 1) % 15, u32::from(id - 1) / 15);
-            let (x, y) = (6 + 13 * i, 6 + 13 * j);
-            specs.push(match id % 15 {
-                0 => LabPlayer {
+        let mut elite_slots = vec![None; total as usize];
+        let mut elite_leaders = Vec::with_capacity((GHOSTS + NATIONS) as usize);
+        for elite_index in 0..(GHOSTS + NATIONS) {
+            let slot = elite_index * total / (GHOSTS + NATIONS);
+            let leader = crate::player::Leader::nth((elite_index / 2) as usize)
+                .expect("the Bot Hero catalog can pair all measured elites");
+            elite_slots[slot as usize] = Some(if elite_index % 2 == 0 { 0 } else { 1 });
+            elite_leaders.push((slot, leader));
+        }
+        for index in 0..total {
+            let id = (index + 1) as u16;
+            let (x, y) = (6 + 9 * (index % 22), 6 + 9 * (index / 22));
+            specs.push(match elite_slots[index as usize] {
+                Some(0) => LabPlayer {
                     gold: 50_000.0,
                     troops: 4_000.0,
                     max_troops: 6_000.0,
                     ..LabPlayer::ghost(id, x, y)
                 },
-                5 | 10 => LabPlayer::nation(id, x, y),
+                Some(1) => LabPlayer {
+                    iq: 170,
+                    ..LabPlayer::nation(id, x, y)
+                },
                 _ => LabPlayer::tribe(id, x, y),
             });
         }
         let mut engine = build_lab(200, 200, "FFA", &specs);
+        for (slot, leader) in elite_leaders {
+            engine
+                .state
+                .player_mut((slot + 1) as u16)
+                .expect("every measured elite was spawned")
+                .leader = leader;
+        }
         engine.state.seed = seed;
         let window = (STEP_SECONDS / engine.state.config.per_tick(1.0)).ceil() as u64;
         let mut stats = [(0u32, 0u32, 0.0f64); 3];
+        let mut opening_stats = stats;
         for step in 1..=STEPS {
             run_window(&mut engine, window);
             stats = [(0, 0, 0.0); 3];
@@ -3124,26 +3153,32 @@ fn s19_mixed_ffa_tier_balance() {
                     0.0
                 };
             }
-            let fmt = |(alive, tiles, fill): (u32, u32, f64)| {
-                format!(
-                    "{alive:>2} alive {tiles:>5} tiles {:>3.0}% fill",
-                    100.0 * fill / f64::from(alive.max(1))
-                )
-            };
-            eprintln!(
-                "S19 seed {seed:>2} {:>4}s | ghost {} | nation {} | tribe {}",
-                step * STEP_SECONDS as u32,
-                fmt(stats[0]),
-                fmt(stats[1]),
-                fmt(stats[2])
-            );
+            if step == 1 {
+                opening_stats = stats;
+            }
         }
+        let fmt = |(alive, tiles, fill): (u32, u32, f64)| {
+            format!(
+                "{alive:>2} alive {tiles:>5} tiles {:>3.0}% fill",
+                100.0 * fill / f64::from(alive.max(1))
+            )
+        };
+        eprintln!(
+            "S19 seed {seed:>4} | 30s ghost {} nation {} tribe {} | 600s ghost {} nation {} tribe {}",
+            fmt(opening_stats[0]),
+            fmt(opening_stats[1]),
+            fmt(opening_stats[2]),
+            fmt(stats[0]),
+            fmt(stats[1]),
+            fmt(stats[2])
+        );
         for tier in 0..3 {
             final_alive[tier] += stats[tier].0;
         }
     }
     eprintln!(
-        "S19 TOTAL survivors over 5 seeds: ghost {} · nation {} · tribe {}",
+        "S19 TOTAL survivors over {} seeds: ghost {} · nation {} · tribe {}",
+        seeds.len(),
         final_alive[0], final_alive[1], final_alive[2]
     );
 }

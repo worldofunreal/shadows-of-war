@@ -656,7 +656,7 @@ pub const GEMS_MIN_PLAYED_SECONDS: u32 = 300;
 pub struct GemInput<'a> {
     /// Match queue: "Matchmaking", "Custom" or "Ranked1v1".
     pub queue: &'a str,
-    /// Game mode: "FFA", "Teams" or "HumansVsNations".
+    /// Game mode: "FFA", "Teams" or "PvE".
     pub mode: &'a str,
     pub won: bool,
     pub players_defeated: u32,
@@ -739,7 +739,7 @@ mod tests {
         assert_eq!(match_gems(GemInput { won: true, ..played }), 3);
         assert_eq!(match_gems(GemInput { won: true, mode: "Teams", ..played }), 1);
         assert_eq!(
-            match_gems(GemInput { won: true, mode: "HumansVsNations", ..played }),
+            match_gems(GemInput { won: true, mode: "PvE", ..played }),
             1
         );
         assert_eq!(match_gems(GemInput { won: true, queue: "Ranked1v1", ..played }), 1);

@@ -20,26 +20,15 @@ impl SeaLane {
     }
 }
 
-/// Find the first cardinal-neighbor water tile adjacent to a land tile.
+/// Find the first water tile adjacent to the City/Port 4×4 footprint at `land_idx`.
 fn adjacent_water_tile(map: &crate::map::GameMap, land_idx: u32) -> Option<u32> {
-    let w = map.width;
-    let x = land_idx % w;
-    let y = land_idx / w;
-    let neighbors = [
-        (x.wrapping_sub(1), y),
-        (x + 1, y),
-        (x, y.wrapping_sub(1)),
-        (x, y + 1),
-    ];
-    for &(nx, ny) in &neighbors {
-        if nx < map.width && ny < map.height {
-            let ni = ny * w + nx;
-            if !map.terrain[ni as usize].is_land() {
-                return Some(ni);
-            }
+    let mut found = None;
+    crate::building::for_each_city_coastal_water_tile(map, land_idx, |tile| {
+        if found.is_none() {
+            found = Some(tile);
         }
-    }
-    None
+    });
+    found
 }
 
 /// Recompute all sea lanes between completed ports on the same water component.

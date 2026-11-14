@@ -1,13 +1,14 @@
 use crate::building::structure_build_cost_gold;
 use crate::engine::SowEngine;
-use crate::game::BuildingKind;
+use crate::game::{BuildingKind, CityArsenalKind};
 use crate::protocol::GameplayIntent;
 use crate::rng::NextIntExt;
 
 use super::profile::{AiSlot, BotDecision, BotDecisionKind};
 use super::structures::{
     PLACEMENT_ATTEMPTS, StructureCandidates, bot_structure_target_count, cheapest_gold_cost,
-    resolve_farm_from_candidates, resolve_structure_from_candidates, stack_build_decision,
+    resolve_district_city_site, resolve_farm_from_candidates, resolve_structure_from_candidates,
+    stack_build_decision,
 };
 
 impl SowEngine {
@@ -38,6 +39,13 @@ impl SowEngine {
                         .unwrap_or_default();
                     let city_equivalent =
                         agg.ready_city_count.max((player_tile_count / 1000).max(1));
+                    let economy_priority_gap = slot.policy().prioritizes_economy_buildings
+                        && [BuildingKind::City, BuildingKind::Factory, BuildingKind::Farm]
+                            .into_iter()
+                            .any(|kind| {
+                                agg.total_structures_of_kind(kind)
+                                    < bot_structure_target_count(kind, city_equivalent, bot_iq)
+                            });
                     let mut build_order = [
                         BuildingKind::Tower,
                         BuildingKind::City,
@@ -50,6 +58,21 @@ impl SowEngine {
                     let prioritize_ports =
                         city_equivalent >= 3 && agg.count_port < port_target_count;
                     build_order.sort_by(|&a, &b| {
+                        if economy_priority_gap {
+                            let a_unmet_economy = matches!(
+                                a,
+                                BuildingKind::City | BuildingKind::Factory | BuildingKind::Farm
+                            ) && agg.total_structures_of_kind(a)
+                                < bot_structure_target_count(a, city_equivalent, bot_iq);
+                            let b_unmet_economy = matches!(
+                                b,
+                                BuildingKind::City | BuildingKind::Factory | BuildingKind::Farm
+                            ) && agg.total_structures_of_kind(b)
+                                < bot_structure_target_count(b, city_equivalent, bot_iq);
+                            if a_unmet_economy != b_unmet_economy {
+                                return b_unmet_economy.cmp(&a_unmet_economy);
+                            }
+                        }
                         if prioritize_ports
                             && (a == BuildingKind::Port) != (b == BuildingKind::Port)
                         {
@@ -71,6 +94,53 @@ impl SowEngine {
                         if !self.campaign_allows_building(kind, 1) {
                             continue;
                         }
+                        if kind.is_district()
+                            && !self.legacy_building_rules
+                            && agg.ready_city_count == 0
+                        {
+                            continue;
+                        }
+                        if kind == BuildingKind::Tower
+                            && bot_iq >= 100
+                            && !self.legacy_building_rules
+                            && player_gold >= self.state.config.nuke_cost
+                            && self.campaign_allows_building(BuildingKind::Tower, 4)
+                            && let Some(city_tile) = self.buildings.iter().find_map(|tower| {
+                                (tower.owner_id == bot_id
+                                    && tower.kind == BuildingKind::Tower
+                                    && !tower.under_construction
+                                    && tower.active_level() >= 4
+                                    && !crate::building::city_has_active_build(
+                                        &self.buildings,
+                                        &self.city_arsenals,
+                                        tower.tile_idx,
+                                    )
+                                    && self.buildings.iter().any(|c| {
+                                        c.tile_idx == tower.tile_idx
+                                            && c.kind == BuildingKind::City
+                                            && c.owner_id == bot_id
+                                            && !c.under_construction
+                                            && !self
+                                                .city_arsenals
+                                                .get(&c.id)
+                                                .is_some_and(|s| s.has_anti_nuke)
+                                    }))
+                                .then_some(tower.tile_idx)
+                            })
+                        {
+                            if let Some(p_me) = self.state.player_mut(bot_id) {
+                                p_me.iq_points -= build_cost;
+                            }
+                            decisions.push(BotDecision {
+                                bot_id,
+                                kind: BotDecisionKind::Build,
+                                intent: GameplayIntent::CityArsenal {
+                                    tile_idx: city_tile,
+                                    kind: CityArsenalKind::AntiNuke,
+                                },
+                            });
+                            break;
+                        }
                         let owned = agg.total_structures_of_kind(kind);
                         let level_count = agg.levels_of_kind(kind);
                         let mut target_count =
@@ -80,7 +150,7 @@ impl SowEngine {
                                 .ai_attack_index
                                 .get(bot_id as usize)
                                 .is_some_and(|attacks| !attacks.is_empty());
-                            if under_attack {
+                            if under_attack && !economy_priority_gap {
                                 target_count += 3;
                             }
                         }
@@ -128,31 +198,39 @@ impl SowEngine {
                         if self.state.player(bot_id).is_none_or(|p| p.gold < cost) {
                             continue;
                         }
-                        let (_blocks_examined, _directory_words_examined) = {
-                            let (state, scratch) = (&mut self.state, &mut self.placement_scratch);
-                            let p = state.player_mut(bot_id).unwrap();
-                            scratch.border_scratch.clear();
-                            scratch.interior_scratch.clear();
-                            let blocks_examined = {
-                                p.border_tiles.sample_ones(
-                                    p.bot_rng.rand() as u32,
-                                    PLACEMENT_ATTEMPTS as usize,
-                                    &mut scratch.border_scratch,
-                                );
-                                (0, 0)
-                            };
-                            if p.tile_count > 500 {
-                                let cx = (p.sum_x / p.tile_count as u64) as i32;
-                                let cy = (p.sum_y / p.tile_count as u64) as i32;
-                                for _ in 0..PLACEMENT_ATTEMPTS {
-                                    let dx = p.bot_rng.next_int(-40, 41);
-                                    let dy = p.bot_rng.next_int(-40, 41);
-                                    scratch.interior_scratch.push((cx + dx, cy + dy));
+                        let target_tile = if !self.legacy_building_rules && kind.is_district() {
+                            resolve_district_city_site(
+                                &self.state.map,
+                                &self.buildings,
+                                &self.city_arsenals,
+                                bot_id,
+                                kind,
+                            )
+                        } else {
+                            let (_blocks_examined, _directory_words_examined) = {
+                                let (state, scratch) = (&mut self.state, &mut self.placement_scratch);
+                                let p = state.player_mut(bot_id).unwrap();
+                                scratch.border_scratch.clear();
+                                scratch.interior_scratch.clear();
+                                let blocks_examined = {
+                                    p.border_tiles.sample_ones(
+                                        p.bot_rng.rand() as u32,
+                                        PLACEMENT_ATTEMPTS as usize,
+                                        &mut scratch.border_scratch,
+                                    );
+                                    (0, 0)
+                                };
+                                if p.tile_count > 500 {
+                                    let cx = (p.sum_x / p.tile_count as u64) as i32;
+                                    let cy = (p.sum_y / p.tile_count as u64) as i32;
+                                    for _ in 0..PLACEMENT_ATTEMPTS {
+                                        let dx = p.bot_rng.next_int(-40, 41);
+                                        let dy = p.bot_rng.next_int(-40, 41);
+                                        scratch.interior_scratch.push((cx + dx, cy + dy));
+                                    }
                                 }
-                            }
-                            blocks_examined
-                        };
-                        let target_tile = {
+                                blocks_examined
+                            };
                             let border_candidates =
                                 std::mem::take(&mut self.placement_scratch.border_scratch);
                             let interior_candidates =
@@ -161,7 +239,7 @@ impl SowEngine {
                                 border: &border_candidates,
                                 interior: &interior_candidates,
                             };
-                            let target_tile = if kind == BuildingKind::Farm {
+                            let target_tile = if kind == BuildingKind::Farm && self.legacy_building_rules {
                                 resolve_farm_from_candidates(
                                     &self.state.map,
                                     bot_id,

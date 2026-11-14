@@ -15,6 +15,7 @@ const BOT_NAVAL_LOCAL_BUDGET: usize = 192;
 const BOT_NAVAL_LOCAL_RADIUS: u32 = 150;
 const BOT_NAVAL_CHANCE_SALT: u64 = 0x4E41_5641_4C00_0003;
 const BOT_NAVAL_SOURCE_SALT: u64 = 0x4E41_5653_5243_0001;
+const VANILLA_TRIBE_TARGET_SALT: u64 = 0x5452_4942_455F_0001;
 const HUMAN_ATTACK_GRACE_MS: f64 = 120_000.0;
 
 struct NavalDecisionContext {
@@ -24,6 +25,8 @@ struct NavalDecisionContext {
     has_land_move: bool,
     force_naval: bool,
     has_hostile_neighbors: bool,
+    ghost_tribe_bypass: bool,
+    vanilla_tribe: bool,
 }
 
 struct BotSurroundings {
@@ -39,15 +42,26 @@ fn ghost_attack_rng(seed: u64, ghost_id: u16, attack_id: u64, salt: u64) -> WyRa
     WyRand::new(seed ^ ghost_key ^ attack_key ^ salt)
 }
 
+pub(super) fn retaliation_delay_ticks_for_tier(
+    ai: &crate::game_config::AiTuning,
+    tier: AiTier,
+    seed: u64,
+    actor_id: u16,
+    attack_id: u64,
+) -> u64 {
+    let (min, max) = super::structures::think_window_ticks(ai, tier, true);
+    let mut rng = ghost_attack_rng(seed, actor_id, attack_id, GHOST_RETALIATION_DELAY_SALT);
+    rng.next_int(min as i32, max as i32 + 1) as u64
+}
+
+#[cfg(test)]
 pub(super) fn ghost_retaliation_delay_ticks(
     ai: &crate::game_config::AiTuning,
     seed: u64,
     ghost_id: u16,
     attack_id: u64,
 ) -> u64 {
-    let (min, max) = super::structures::think_window_ticks(ai, AiTier::Ghost, true);
-    let mut rng = ghost_attack_rng(seed, ghost_id, attack_id, GHOST_RETALIATION_DELAY_SALT);
-    rng.next_int(min as i32, max as i32 + 1) as u64
+    retaliation_delay_ticks_for_tier(ai, AiTier::Ghost, seed, ghost_id, attack_id)
 }
 
 pub(super) fn ranked_ghost_retaliation_delay_ticks(
@@ -90,13 +104,37 @@ fn is_real_human(player: &crate::player::Player) -> bool {
 }
 
 #[inline]
+fn vanilla_tribe_reluctant_target(player: &crate::player::Player) -> bool {
+    is_real_human(player)
+        || player.player_type == crate::player::PlayerType::Nation
+        || (player.player_type == crate::player::PlayerType::Human && player.is_ai_controlled)
+}
+
+#[inline]
+fn vanilla_tribe_skips_target(
+    seed: u64,
+    tribe_id: u16,
+    target_id: u16,
+    tick: u64,
+    chance: i32,
+) -> bool {
+    let mut rng = WyRand::new(
+        seed ^ u64::from(tribe_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ u64::from(target_id).wrapping_mul(0xD6E8_FEB8_6659_FD93)
+            ^ tick.wrapping_mul(0xA076_1D64_78BD_642F)
+            ^ VANILLA_TRIBE_TARGET_SALT,
+    );
+    rng.next_int(0, 100) < chance
+}
+
+#[inline]
 fn human_betrayal_allowed(
-    is_nation: bool,
+    allows_human_betrayal: bool,
     relation: Option<crate::protocol::CampaignRelation>,
 ) -> bool {
     match relation {
         Some(_) => false,
-        None => !is_nation,
+        None => allows_human_betrayal,
     }
 }
 
@@ -157,7 +195,7 @@ impl SowEngine {
     }
 
     /// Real humans are protected during the opening grace period, except in
-    /// HumansVsNations and while disconnected. Campaign relations remain the
+    /// PvE and while disconnected. Campaign relations remain the
     /// authority for scripted factions, and retaliation is always eligible.
     fn ai_target_allowed(
         &self,
@@ -191,7 +229,7 @@ impl SowEngine {
             return campaign_attacks_players(relation, override_attack, true);
         }
 
-        (self.state.config.game_mode == "HumansVsNations"
+        (self.state.config.game_mode == "PvE"
             && self
                 .state
                 .player(attacker_id)
@@ -209,6 +247,8 @@ impl SowEngine {
         let Some(defender) = self.state.player(ghost_id) else {
             return (None, 0);
         };
+        let tier = super::profile::ai_tier(defender.player_type, defender.is_ai_controlled)
+            .unwrap_or(AiTier::Ghost);
         let Some(inbound_attacks) = self.ai_attack_index.get(ghost_id as usize) else {
             return (None, 0);
         };
@@ -254,8 +294,9 @@ impl SowEngine {
                     defender.iq,
                 )
             } else {
-                ghost_retaliation_delay_ticks(
+                retaliation_delay_ticks_for_tier(
                     &self.state.config.ai,
+                    tier,
                     self.state.seed,
                     ghost_id,
                     attack.id,
@@ -582,8 +623,12 @@ impl SowEngine {
     ) {
         let (bot_id, bot_iq) = bot;
         let (attack_cost, alliance_cost) = costs;
-        let is_mfo = slot.tier == AiTier::Nation;
+        let policy = slot.policy();
         let campaign_relation = self.campaign_relations.get(&bot_id).copied();
+        let vanilla_tribe = slot.tier == AiTier::Tribe
+            && self.state.config.bot_difficulty
+                == crate::game_config::BotDifficulty::Vanilla
+            && campaign_relation.is_none();
         let attacks_players = campaign_attacks_players(
             campaign_relation,
             self.campaign_can_attack_player.get(&bot_id).copied(),
@@ -690,7 +735,7 @@ impl SowEngine {
                                 continue;
                             }
                             if p_ally.is_human()
-                                && !human_betrayal_allowed(is_mfo, campaign_relation)
+                                && !human_betrayal_allowed(policy.betrays_human_allies, campaign_relation)
                             {
                                 continue;
                             }
@@ -731,8 +776,7 @@ impl SowEngine {
                     }
                 }
 
-                let vanilla_tribe_defense =
-                    slot.tier == AiTier::Tribe && campaign_relation.is_none() && !attacks_players;
+                let vanilla_tribe_defense = vanilla_tribe;
                 let defensive_player_attackers = if campaign_relation
                     == Some(crate::protocol::CampaignRelation::Neutral)
                     || (vanilla_tribe_defense && slot.is_under_attack)
@@ -792,7 +836,7 @@ impl SowEngine {
                         .iter()
                         .copied()
                         .filter(|&id| {
-                            if slot.tier == AiTier::Ghost
+                            if policy.uses_retaliation_ai
                                 && slot.ghost_retaliation.is_some_and(|retaliation| {
                                     id == retaliation.attacker_id
                                         && !retaliation.is_ready_at(self.state.tick)
@@ -865,7 +909,7 @@ impl SowEngine {
 
                 let can_fleet = !assault_controls_attacks
                     && self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet);
-                let has_tribe_target = is_mfo
+                let has_tribe_target = policy.uses_regional_nation_planning
                     && targets.iter().any(|&target_id| {
                         self.state
                             .player(target_id)
@@ -875,7 +919,7 @@ impl SowEngine {
                 let mut defender_target = ready_retaliation
                     .filter(|retaliation| targets.contains(&retaliation.attacker_id))
                     .map(|retaliation| retaliation.attacker_id);
-                if slot.tier != AiTier::Ghost
+                if !policy.uses_retaliation_ai
                     && (bot_iq >= 100 || !defensive_player_attackers.is_empty())
                 {
                     let mut largest_attack = 0.0;
@@ -910,9 +954,8 @@ impl SowEngine {
                     targets.push(defender_id);
                 }
 
-                // Vanilla tribes keep their passive AI-vs-AI food-chain role,
-                // but may include eligible real humans after the shared grace
-                // period (or when disconnected / explicitly defending).
+                // Real humans still pass the grace rule; Vanilla tribes can
+                // also target other AI tiers after neutral land is exhausted.
                 let attackable_targets: Vec<u16> = targets
                     .iter()
                     .copied()
@@ -928,12 +971,94 @@ impl SowEngine {
                     })
                     .collect();
 
-                let nation_bot_order = if is_mfo {
+                let trigger_met = troops >= max_troops * trigger_ratio;
+                let ghost_tribe_bypass = policy.uses_tribe_bypass
+                    && !trigger_met
+                    && defender_target.is_none()
+                    && slot.ghost_retaliation.is_none()
+                    && campaign_target.is_none()
+                    && !assault_controls_attacks
+                    && (can_fleet
+                        || attackable_targets.iter().any(|target_id| {
+                            self.state.player(*target_id).is_some_and(|target| {
+                                target.player_type == crate::player::PlayerType::Bot
+                            })
+                        }))
+                    && self
+                        .state
+                        .player_mut(bot_id)
+                        .unwrap()
+                        .bot_rng
+                        .next_int(0, 3)
+                        == 0;
+                let ghost_tribe_target = if ghost_tribe_bypass {
+                    attackable_targets
+                        .iter()
+                        .copied()
+                        .filter(|target_id| {
+                            self.state.player(*target_id).is_some_and(|target| {
+                                target.player_type == crate::player::PlayerType::Bot
+                            })
+                        })
+                        .min_by(|a, b| {
+                            let a_troops = self.state.player(*a).map_or(f64::MAX, |p| p.troops);
+                            let b_troops = self.state.player(*b).map_or(f64::MAX, |p| p.troops);
+                            a_troops.total_cmp(&b_troops).then_with(|| a.cmp(b))
+                        })
+                } else {
+                    None
+                };
+                let vanilla_tribe_target = if vanilla_tribe
+                    && !has_neutral
+                    && trigger_met
+                    && defender_target.is_none()
+                {
+                    let mut chosen = None;
+                    if !attackable_targets.is_empty() {
+                        let start = self
+                            .state
+                            .player_mut(bot_id)
+                            .unwrap()
+                            .bot_rng
+                            .next_int(0, attackable_targets.len() as i32)
+                            as usize;
+                        for offset in 0..attackable_targets.len() {
+                            let target_id = attackable_targets
+                                [(start + offset) % attackable_targets.len()];
+                            let defensive_target = defender_target == Some(target_id)
+                                || defensive_player_attackers.contains(&target_id)
+                                || self.is_attacked_by(bot_id, target_id);
+                            let reluctant = self
+                                .state
+                                .player(target_id)
+                                .is_some_and(vanilla_tribe_reluctant_target);
+                            if reluctant
+                                && !defensive_target
+                                && vanilla_tribe_skips_target(
+                                    self.state.seed,
+                                    bot_id,
+                                    target_id,
+                                    self.state.tick,
+                                    refuse_human_chance,
+                                )
+                            {
+                                continue;
+                            }
+                            chosen = Some(target_id);
+                            break;
+                        }
+                    }
+                    chosen
+                } else {
+                    None
+                };
+
+                let nation_bot_order = if policy.uses_regional_nation_planning {
                     self.nation_bot_attack_order(bot_id, &targets)
                 } else {
                     Vec::new()
                 };
-                if is_mfo
+                if policy.uses_regional_nation_planning
                     && self.state.config.bot_difficulty
                         == crate::game_config::BotDifficulty::Terminator
                     && !assault_controls_attacks
@@ -964,18 +1089,15 @@ impl SowEngine {
                     }
                 }
 
-                let has_land_attack = if is_mfo {
-                    !attackable_targets.is_empty() && (!has_neutral || has_tribe_target)
-                } else {
-                    !attackable_targets.is_empty()
-                        && troops >= max_troops * slot.profile.trigger_ratio
-                };
+                let has_land_attack = !attackable_targets.is_empty()
+                    && (trigger_met || ghost_tribe_target.is_some());
                 let local_defense =
                     defender_target.is_some_and(|target| neighbor_players.contains(&target));
                 let has_land_move = has_neutral || has_land_attack || local_defense;
                 let force_naval = !has_land_move
                     || defender_target.is_some_and(|target| !neighbor_players.contains(&target));
                 if can_fleet
+                    && !(vanilla_tribe && has_neutral)
                     && !local_defense
                     && !campaign_route_attempted
                     && self.try_naval_move(
@@ -989,6 +1111,8 @@ impl SowEngine {
                             has_land_move,
                             force_naval,
                             has_hostile_neighbors: !attackable_targets.is_empty(),
+                            ghost_tribe_bypass,
+                            vanilla_tribe,
                         },
                         decisions,
                     )
@@ -996,13 +1120,8 @@ impl SowEngine {
                     return;
                 }
 
-                // Target precedence:
-                //   1. Defend the biggest inbound attack.
-                //   2. Nations: eat tribes or expand into wilderness.
-                //      Tribes remain valid food even while free land exists.
-                //   3. Nations: prefer tribes, then wilderness, then any
-                //      eligible rival (including humans after the grace).
-                //   4. Other tiers keep their existing player/neutral behavior.
+                // Target precedence: Vanilla tribes expand into free land;
+                // other decisions defend first, then apply their tier policy.
                 let land_defender_target =
                     defender_target.filter(|target| neighbor_players.contains(target));
                 if slot.tier == AiTier::Tribe
@@ -1012,9 +1131,22 @@ impl SowEngine {
                     targets.retain(|target| *target != remote_defender);
                 }
 
-                let (target_owner, is_neutral) = if let Some(attacker_id) = land_defender_target {
+                let (target_owner, is_neutral) = if vanilla_tribe && has_neutral {
+                    (0, true)
+                } else if let Some(attacker_id) = land_defender_target {
                     (attacker_id, false)
-                } else if is_mfo && !targets.is_empty() && (!has_neutral || has_tribe_target) {
+                } else if let Some(tribe_id) = ghost_tribe_target {
+                    (tribe_id, false)
+                } else if vanilla_tribe {
+                    let Some(target_id) = vanilla_tribe_target else {
+                        return;
+                    };
+                    (target_id, false)
+                } else if policy.uses_regional_nation_planning
+                    && trigger_met
+                    && !targets.is_empty()
+                    && (!has_neutral || has_tribe_target)
+                {
                     let mut chosen_target = has_tribe_target
                         .then(|| {
                             nation_bot_order
@@ -1066,7 +1198,7 @@ impl SowEngine {
                     } else {
                         return;
                     }
-                } else if is_mfo && has_neutral {
+                } else if policy.uses_regional_nation_planning && has_neutral {
                     (0, true)
                 } else if !attackable_targets.is_empty() && troops >= max_troops * trigger_ratio {
                     let target_owner = if bot_iq >= 130 {
@@ -1126,7 +1258,7 @@ impl SowEngine {
                 } else if has_neutral {
                     (0, true)
                 } else if targets.is_empty() {
-                    if slot.tier == AiTier::Nation {
+                    if policy.launches_nukes {
                         self.maybe_launch_nuke(
                             bot_id,
                             decisions,
@@ -1142,10 +1274,8 @@ impl SowEngine {
                     return;
                 };
 
-                let is_defending = land_defender_target.is_some();
-                // Vanilla tribes may initiate only against humans permitted by
-                // the shared grace/disconnection rule; their neutral growth
-                // remains independent of player-target behavior.
+                let is_defending = land_defender_target.is_some()
+                    && (slot.tier != AiTier::Tribe || trigger_met);
                 let target_is_real_human =
                     self.state.player(target_owner).is_some_and(is_real_human);
                 let can_initiate = !assault_controls_attacks
@@ -1177,7 +1307,16 @@ impl SowEngine {
                 // Infinity/false when teammates back the attack. The tribe
                 // window applies everywhere (tribes are the map's food).
                 let is_team_game = self.state.config.game_mode != "FFA";
-                if !is_neutral && !is_defending && bot_iq >= 130 {
+                let ghost_tribe_subtrigger_attack = policy.uses_tribe_bypass
+                    && ghost_tribe_bypass
+                    && self.state.player(target_owner).is_some_and(|target| {
+                        target.player_type == crate::player::PlayerType::Bot
+                    });
+                if !is_neutral
+                    && !is_defending
+                    && bot_iq >= 130
+                    && (trigger_met || ghost_tribe_subtrigger_attack)
+                {
                     let (target_troops, target_is_tribe) = self
                         .state
                         .player(target_owner)
@@ -1249,7 +1388,7 @@ impl SowEngine {
                     let reserve = max_troops
                         * if is_neutral {
                             expand_ratio
-                        } else if is_defending {
+                        } else if is_defending && policy.desperate_defense_half_reserve {
                             // Desperate defense: keep only half of standard reserve ratio
                             reserve_ratio * 0.5
                         } else {
@@ -1295,7 +1434,7 @@ impl SowEngine {
                         });
                     }
                 }
-                if slot.tier == AiTier::Nation && !assault_controls_attacks {
+                if policy.launches_nukes && !assault_controls_attacks {
                     self.maybe_launch_nuke(bot_id, decisions, bot_iq, &targets, defender_target);
                 }
             }
@@ -1503,6 +1642,7 @@ impl SowEngine {
             BOT_NAVAL_LOCAL_BUDGET,
         );
 
+        let policy = slot.policy();
         let reserve_ratio = slot.profile.reserve_ratio;
         let expand_ratio = slot.profile.expand_ratio;
         let trigger_met = troops >= max_troops * slot.profile.trigger_ratio;
@@ -1570,7 +1710,20 @@ impl SowEngine {
                     {
                         continue;
                     }
-                    if slot.tier == AiTier::Ghost
+                    if context.vanilla_tribe
+                        && !is_defending
+                        && vanilla_tribe_reluctant_target(target)
+                        && vanilla_tribe_skips_target(
+                            self.state.seed,
+                            bot_id,
+                            target_owner,
+                            self.state.tick,
+                            slot.profile.refuse_human_chance,
+                        )
+                    {
+                        continue;
+                    }
+                    if policy.uses_retaliation_ai
                         && slot.ghost_retaliation.is_some_and(|retaliation| {
                             target_owner == retaliation.attacker_id
                                 && !retaliation.is_ready_at(self.state.tick)
@@ -1579,11 +1732,15 @@ impl SowEngine {
                         continue;
                     }
                     let can_attack_player = context.attacks_players || is_real_human(target);
+                    let ghost_tribe_subtrigger_attack = policy.uses_tribe_bypass
+                        && context.ghost_tribe_bypass
+                        && target.player_type == crate::player::PlayerType::Bot;
+                    if slot.tier == AiTier::Tribe && is_defending && !trigger_met {
+                        continue;
+                    }
                     if !is_defending
                         && (!can_attack_player
-                            || (!trigger_met
-                                && !(slot.tier == AiTier::Nation
-                                    && target.player_type == crate::player::PlayerType::Bot)))
+                            || (!trigger_met && !ghost_tribe_subtrigger_attack))
                     {
                         continue;
                     }
@@ -1602,7 +1759,12 @@ impl SowEngine {
                             reserve_ratio,
                         )
                     } else if is_defending {
-                        (troops - max_troops * reserve_ratio * 0.5)
+                        let reserve = if policy.desperate_defense_half_reserve {
+                            reserve_ratio * 0.5
+                        } else {
+                            reserve_ratio
+                        };
+                        (troops - max_troops * reserve)
                             .max(0.0)
                             .min(troops * 0.20)
                     } else {
@@ -1733,45 +1895,76 @@ impl SowEngine {
 
         if self.building_aggregates_dirty {
             self.bot_sam_tiles_cache = None;
-            self.building_aggregates = crate::building::core::aggregate_buildings_per_player(
-                self.buildings.iter().copied(),
-                self.state.players.len(),
-            );
-            self.building_aggregates_dirty = false;
-        }
-
-        if !self.buildings.iter().any(|b| {
-            b.owner_id == bot_id
-                && b.kind == BuildingKind::City
-                && b.active_level() >= BuildingKind::City.max_level()
-        }) {
-            return;
-        }
-
-        let mut has_silo = false;
-        for b in &self.buildings {
-            if b.owner_id == bot_id
-                && b.kind == BuildingKind::City
-                && b.active_level() >= BuildingKind::City.max_level()
-                && !b.under_construction
-                && self.silo_cooldowns.get(&b.id).copied().unwrap_or(0) == 0
-            {
-                has_silo = true;
-                break;
-            }
-        }
-        if !has_silo {
-            return;
+            self.refresh_building_aggregates();
         }
 
         let Some(player) = self.state.player(bot_id) else {
             return;
         };
-        let cost = self.state.config.nuke_cost;
-        let perceived_cost = cost;
+        let nuke_cost = crate::building::city_arsenal_cost_gold(
+            crate::game::CityArsenalKind::Nuke,
+            0,
+            player.leader,
+            &self.state.config,
+        );
 
-        if player.gold < perceived_cost {
-            return;
+        if self.legacy_building_rules {
+            let has_silo = self.buildings.iter().any(|b| {
+                b.owner_id == bot_id
+                    && b.kind == BuildingKind::City
+                    && b.active_level() >= BuildingKind::City.max_level()
+                    && !b.under_construction
+                    && self.silo_cooldowns.get(&b.id).copied().unwrap_or(0) == 0
+            });
+            if !has_silo || player.gold < self.state.config.nuke_cost {
+                return;
+            }
+        } else {
+            let has_ready_nuke = self.buildings.iter().any(|b| {
+                b.owner_id == bot_id
+                    && b.kind == BuildingKind::City
+                    && !b.under_construction
+                    && self.city_arsenals.get(&b.id).is_some_and(|s| s.nuke_ready)
+            });
+            if !has_ready_nuke {
+                if player.gold < nuke_cost {
+                    return;
+                }
+                let req = NukeKind::AtomBomb.required_district_level();
+                if let Some(city_tile) = self.buildings.iter().find_map(|city| {
+                    if city.owner_id != bot_id
+                        || city.kind != BuildingKind::City
+                        || city.under_construction
+                    {
+                        return None;
+                    }
+                    if crate::building::city_has_active_build(
+                        &self.buildings,
+                        &self.city_arsenals,
+                        city.tile_idx,
+                    ) {
+                        return None;
+                    }
+                    let has_silo_district = self.buildings.iter().any(|d| {
+                        d.tile_idx == city.tile_idx
+                            && d.owner_id == bot_id
+                            && !d.under_construction
+                            && matches!(d.kind, BuildingKind::Factory | BuildingKind::Tower)
+                            && d.active_level() >= req
+                    });
+                    has_silo_district.then_some(city.tile_idx)
+                }) {
+                    decisions.push(BotDecision {
+                        bot_id,
+                        kind: BotDecisionKind::Build,
+                        intent: GameplayIntent::CityArsenal {
+                            tile_idx: city_tile,
+                            kind: crate::game::CityArsenalKind::Nuke,
+                        },
+                    });
+                }
+                return;
+            }
         }
         let kind = NukeKind::AtomBomb;
 
@@ -1813,9 +2006,18 @@ impl SowEngine {
                 self.buildings
                     .iter()
                     .filter(|b| {
-                        b.kind == BuildingKind::Tower
-                            && b.active_level() >= BuildingKind::Tower.max_level()
-                            && !b.under_construction
+                        if self.legacy_building_rules {
+                            b.kind == BuildingKind::Tower
+                                && b.active_level() >= BuildingKind::Tower.max_level()
+                                && !b.under_construction
+                        } else {
+                            b.kind == BuildingKind::City
+                                && !b.under_construction
+                                && self
+                                    .city_arsenals
+                                    .get(&b.id)
+                                    .is_some_and(|s| s.has_anti_nuke)
+                        }
                     })
                     .map(|b| (b.tile_idx, b.owner_id))
                     .collect(),
@@ -1926,18 +2128,18 @@ mod campaign_relationship_tests {
     #[test]
     fn campaign_allies_never_betray_humans_but_other_bot_rules_stay_intact() {
         assert!(!human_betrayal_allowed(
-            false,
+            true,
             Some(CampaignRelation::Allied)
         ));
         assert!(!human_betrayal_allowed(
-            false,
+            true,
             Some(CampaignRelation::Neutral)
         ));
         assert!(!human_betrayal_allowed(
-            false,
+            true,
             Some(CampaignRelation::Enemy)
         ));
-        assert!(!human_betrayal_allowed(true, None));
-        assert!(human_betrayal_allowed(false, None));
+        assert!(!human_betrayal_allowed(false, None));
+        assert!(human_betrayal_allowed(true, None));
     }
 }

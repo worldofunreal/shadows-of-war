@@ -16,9 +16,17 @@ fn result_source(
 }
 
 pub fn play_victory_sound() {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::Victory, 0.50) {
+        play_ui(clip);
+        return;
+    }
     play_ui(result_source([392.0, 523.25, 659.25, 0.0], 0.13, 6.5, 0.11));
 }
 
 pub fn play_defeat_sound() {
+    if let Some(clip) = super::clip::pick_clip(super::clip::SfxId::Defeat, 0.50) {
+        play_ui(clip);
+        return;
+    }
     play_ui(result_source([330.0, 262.0, 196.0, 0.0], 0.18, 5.5, 0.09));
 }

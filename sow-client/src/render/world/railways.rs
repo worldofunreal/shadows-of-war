@@ -19,6 +19,7 @@ struct RailBuilding {
     tile_idx: u32,
     owner_id: u16,
     kind: BuildingKind,
+    level: u8,
     under_construction: bool,
 }
 
@@ -41,6 +42,7 @@ pub(crate) struct RailwayRenderState {
     snapshot_tick: Option<u64>,
     link_distance_bits: Option<u32>,
     buildings: Vec<RailBuilding>,
+    player_links: Vec<(u16, Option<sow_core::protocol::Team>, Vec<u16>)>,
     segments: Vec<RailSegment>,
     trains: Vec<VisualTrain>,
     train_count: usize,
@@ -82,9 +84,18 @@ impl RailwayRenderState {
                         && old.tile_idx == new.tile_idx
                         && old.owner_id == new.owner_id
                         && old.kind == new.kind
+                        && old.level == new.level
                         && old.under_construction == new.under_construction
                 });
-        if buildings_match && self.link_distance_bits == Some(distance_bits) {
+        let links_match = self.player_links.len() == snapshot.players.len()
+            && self
+                .player_links
+                .iter()
+                .zip(&snapshot.players)
+                .all(|((id, team, allies), p)| {
+                    *id == p.id && *team == p.team && *allies == p.alliances
+                });
+        if buildings_match && links_match && self.link_distance_bits == Some(distance_bits) {
             return;
         }
 
@@ -95,10 +106,25 @@ impl RailwayRenderState {
                 tile_idx: building.tile_idx,
                 owner_id: building.owner_id,
                 kind: building.kind,
+                level: building.level,
                 under_construction: building.under_construction,
             }));
+        self.player_links.clear();
+        self.player_links.extend(
+            snapshot
+                .players
+                .iter()
+                .map(|p| (p.id, p.team, p.alliances.clone())),
+        );
         self.link_distance_bits = Some(distance_bits);
-        self.segments = build_segments(&snapshot.buildings, map_w, map_h, terrain, link_distance);
+        self.segments = build_segments(
+            &snapshot.buildings,
+            &snapshot.players,
+            map_w,
+            map_h,
+            terrain,
+            link_distance,
+        );
         self.trains.clear();
         self.train_count = 0;
     }
@@ -136,8 +162,26 @@ impl RailwayRenderState {
     }
 }
 
+fn players_allied(
+    players: &[sow_core::protocol::PlayerSnapshot],
+    a: u16,
+    b: u16,
+) -> bool {
+    if a == b {
+        return true;
+    }
+    let Some(pa) = players.iter().find(|p| p.id == a) else {
+        return false;
+    };
+    let Some(pb) = players.iter().find(|p| p.id == b) else {
+        return false;
+    };
+    pa.team.is_some() && pa.team == pb.team || (pa.alliances.contains(&b) && pb.alliances.contains(&a))
+}
+
 fn build_segments(
     buildings: &[BuildingSnapshot],
+    players: &[sow_core::protocol::PlayerSnapshot],
     map_w: u32,
     map_h: u32,
     terrain: Option<&[MapTile]>,
@@ -149,9 +193,17 @@ fn build_segments(
 
     let eligible: Vec<_> = buildings
         .iter()
-        .filter(|building| {
-            !building.under_construction
-                && u64::from(building.tile_idx) < u64::from(map_w) * u64::from(map_h)
+        .filter(|city| {
+            city.kind == BuildingKind::City
+                && !city.under_construction
+                && u64::from(city.tile_idx) < u64::from(map_w) * u64::from(map_h)
+                && buildings.iter().any(|factory| {
+                    factory.tile_idx == city.tile_idx
+                        && factory.owner_id == city.owner_id
+                        && factory.kind == BuildingKind::Factory
+                        && factory.active_level()
+                            >= sow_core::building::RAILWAY_REQUIRED_FACTORY_LEVEL
+                })
         })
         .copied()
         .collect();
@@ -198,6 +250,9 @@ fn build_segments(
                 }
 
                 let other = eligible[other_index];
+                if !players_allied(players, building.owner_id, other.owner_id) {
+                    continue;
+                }
                 let bx = (other.tile_idx % map_w) as i32;
                 let by = (other.tile_idx / map_w) as i32;
                 let distance_sq = ((ax - bx) * (ax - bx) + (ay - by) * (ay - by)) as f32;
@@ -207,12 +262,9 @@ fn build_segments(
                     continue;
                 }
 
-                let horizontal_first = if route_is_land(ax, ay, bx, by, true, map_w, map_h, terrain)
-                {
-                    true
-                } else if route_is_land(ax, ay, bx, by, false, map_w, map_h, terrain) {
-                    false
-                } else {
+                let Some(horizontal_first) = sow_core::building::railway_route_is_land(
+                    ax, ay, bx, by, map_w, map_h, terrain,
+                ) else {
                     continue;
                 };
                 best = Some((other_index, distance_sq, horizontal_first));
@@ -264,52 +316,6 @@ fn build_segments(
         });
     }
     edges
-}
-
-fn route_is_land(
-    ax: i32,
-    ay: i32,
-    bx: i32,
-    by: i32,
-    horizontal_first: bool,
-    map_w: u32,
-    map_h: u32,
-    terrain: Option<&[MapTile]>,
-) -> bool {
-    if horizontal_first {
-        axis_is_land(ax, ay, bx, ay, map_w, map_h, terrain)
-            && axis_is_land(bx, ay, bx, by, map_w, map_h, terrain)
-    } else {
-        axis_is_land(ax, ay, ax, by, map_w, map_h, terrain)
-            && axis_is_land(ax, by, bx, by, map_w, map_h, terrain)
-    }
-}
-
-fn axis_is_land(
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
-    map_w: u32,
-    map_h: u32,
-    terrain: Option<&[MapTile]>,
-) -> bool {
-    let (mut x, mut y) = (x0, y0);
-    let (sx, sy) = ((x1 - x0).signum(), (y1 - y0).signum());
-    loop {
-        if x < 0 || y < 0 || x >= map_w as i32 || y >= map_h as i32 {
-            return false;
-        }
-        let tile = y as u32 * map_w + x as u32;
-        if terrain.is_some_and(|tiles| !tiles.get(tile as usize).is_some_and(MapTile::is_land)) {
-            return false;
-        }
-        if x == x1 && y == y1 {
-            return true;
-        }
-        x += sx;
-        y += sy;
-    }
 }
 
 fn append_axis_tiles(
@@ -369,7 +375,9 @@ pub(crate) fn render(
         sim.map_w,
         sim.map_h,
         terrain,
-        dev.railway_link_distance.clamp(4.0, 150.0),
+        dev.railway_link_distance
+            .max(sow_core::building::RAILWAY_LINK_DISTANCE as f32)
+            .clamp(4.0, 150.0),
     );
     state.advance_trains(
         now,

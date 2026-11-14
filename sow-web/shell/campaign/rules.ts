@@ -77,7 +77,7 @@ export const WORLD_TARGETS = [
     "upgrade_structure",
 ];
 export const STRUCTURE_LEVEL_LIMITS: Record<string, number> = {
-    City: 4,
+    City: 1,
     Farm: 4,
     Factory: 4,
     Tower: 4,
@@ -89,7 +89,7 @@ export const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS: Record<string, { kind: strin
         transport_fleet: null,
         trade_ship: Object.freeze({ kind: "Port", level: 1 }),
         warship: Object.freeze({ kind: "Port", level: 1 }),
-        nuke: Object.freeze({ kind: "City", level: STRUCTURE_LEVEL_LIMITS.City }),
+        nuke: Object.freeze({ kind: "Factory", level: STRUCTURE_LEVEL_LIMITS.Factory }),
     });
 export const BUILDING_METRIC_KINDS: Record<string, string> = {
     city: "City",
@@ -286,7 +286,10 @@ export function stepCampaignRequirements(step: CampaignStep): CampaignRecord[] {
         );
     if (trigger.type === "structure_level") addBuilding(trigger.kind, trigger.value);
     if (trigger.type === "building_selected")
-        addBuilding(trigger.kind, step.guide && step.guide.target === "upgrade_building" ? 2 : 1);
+        addBuilding(
+            trigger.kind,
+            step.guide && step.guide.target === "upgrade_building" && trigger.kind !== "City" ? 2 : 1,
+        );
     if (trigger.type === "structure_upgrade") addBuilding(trigger.kind, 2);
     if (trigger.type === "nuke") addAction("nuke");
     if (trigger.type === "fleet") {
@@ -302,12 +305,8 @@ export function stepCampaignRequirements(step: CampaignStep): CampaignRecord[] {
         (value) => typeof value === "string",
     );
     uiTargets.forEach((target) => {
-        const dock = /^dock_(city|factory|port|tower|farm)$/.exec(target);
-        if (dock) addBuilding(dock[1] === "tower" ? "Tower" : dock[1][0].toUpperCase() + dock[1].slice(1), 1);
-        if (target === "dock_trade_ship") addAction("trade_ship");
-        if (target === "dock_warship") addAction("warship");
-        if (target === "dock_nuke" || target === "map_nuke" || target === "map_nuke_launch")
-            addAction("nuke");
+        if (target === "dock_city") addBuilding("City", 1);
+        if (target === "map_nuke" || target === "map_nuke_launch") addAction("nuke");
         if (target === "map_fleet") addAction("transport_fleet");
     });
     return requirements;
@@ -340,13 +339,6 @@ export const UI_TARGETS: Record<string, string> = {
     hud_center_camera: '#sow-hud [data-command="center_camera"]',
     hud_inbox: '#sow-hud [data-command="toggle_inbox"]',
     dock_city: '#sow-hud [data-command="select_building"][data-kind="City"]',
-    dock_factory: '#sow-hud [data-command="select_building"][data-kind="Factory"]',
-    dock_port: '#sow-hud [data-command="select_building"][data-kind="Port"]',
-    dock_tower: '#sow-hud [data-command="select_building"][data-kind="Tower"]',
-    dock_farm: '#sow-hud [data-command="select_building"][data-kind="Farm"]',
-    dock_trade_ship: '#sow-hud [data-fleet-kind="trade"]',
-    dock_warship: '#sow-hud [data-command="select_warship"]',
-    dock_nuke: '#sow-hud [data-command="select_nuke"]',
     transfer_gold: "#sow-hud-transfer-gold",
     transfer_troops: "#sow-hud-transfer-troops",
     transfer_dir_troops: "#sow-hud-transfer-dir-troops",
@@ -363,10 +355,6 @@ export const UI_TARGETS: Record<string, string> = {
     map_build: '#sow-hud [data-map-group="build"]',
     map_nuke: '#sow-hud [data-map-action="nuke"]',
     map_build_city: '#sow-hud [data-map-action="build_city"]',
-    map_build_farm: '#sow-hud [data-map-action="build_farm"]',
-    map_build_factory: '#sow-hud [data-map-action="build_factory"]',
-    map_build_port: '#sow-hud [data-map-action="build_port"]',
-    map_build_tower: '#sow-hud [data-map-action="build_tower"]',
     map_nuke_launch: '#sow-hud [data-map-action="nuke"]',
     map_back: "#sow-hud [data-map-back]",
     rankings: '#sow-hud [data-command="toggle_leaderboard"]',

@@ -55,6 +55,7 @@ function gameModeLabel(mode: string) {
     const keys: Record<string, string> = {
         FFA: "lobbies.free_for_all",
         Teams: "lobbies.teams_two",
+        PvE: "lobbies.humans_vs_nations",
         HumansVsNations: "lobbies.humans_vs_nations",
         Matchmaking: "lobbies.matchmaking",
     };
@@ -931,9 +932,9 @@ export function stepCreateSlider(field: string, delta: number) {
         const cur = draft.bot_count != null ? Number(draft.bot_count) : 128;
         draft.bot_count = Math.max(0, Math.min(maxTribes, cur + delta));
     } else if (field === "nation_count") {
-        const maxNations = botLimit("nations", 200);
-        const cur = draft.nation_count != null ? Number(draft.nation_count) : 32;
-        draft.nation_count = Math.max(0, Math.min(maxNations, cur + delta));
+        const maxNations = botLimit("nations", 129);
+        const cur = draft.nation_count != null ? Number(draft.nation_count) : 0;
+        draft.nation_count = draft.game_mode === "PvE" ? Math.max(0, Math.min(maxNations, cur + delta)) : 0;
     } else if (field === "seed") {
         const cur = Number(draft.seed) || 42;
         draft.seed = Math.max(1, Math.min(9999, cur + delta));
@@ -1001,6 +1002,9 @@ export function syncCreateDraft(form: HTMLFormElement) {
     ) {
         draft.map_roster_preset = selected.default_roster || null;
     }
+    if (draft.game_mode !== "PvE") {
+        draft.nation_count = 0;
+    }
 }
 
 export function renderPasswordModal() {
@@ -1061,11 +1065,12 @@ export function renderCreate() {
     const modeMeta: Record<string, { label: string; icon: string }> = {
         FFA: { label: SOW_t("lobbies.free_for_all"), icon: createTacticalIcon("ffa") },
         Teams: { label: SOW_t("lobbies.teams_two"), icon: createTacticalIcon("teams") },
-        HumansVsNations: { label: SOW_t("lobbies.hvn"), icon: createTacticalIcon("hvn") },
+        PvE: { label: SOW_t("lobbies.hvn"), icon: createTacticalIcon("hvn") },
     };
 
     const currentMode = config.game_mode || "FFA";
-    const modeOptionsHtml = ["FFA", "Teams", "HumansVsNations"]
+    const isPveMode = currentMode === "PvE";
+    const modeOptionsHtml = ["FFA", "Teams", "PvE"]
         .map(function (mode) {
             const meta = modeMeta[mode] || { label: mode, icon: "" };
             const isSelected = currentMode === mode;
@@ -1308,8 +1313,12 @@ export function renderCreate() {
     const botCountVal = config.bot_count != null ? Number(config.bot_count) : 128;
     const botCountPct = sliderFillPercent(botCountVal, 0, maxTribesLimit);
 
-    const maxNationsLimit = botLimit("nations", 200);
-    const nationCountVal = config.nation_count != null ? Number(config.nation_count) : 32;
+    const maxNationsLimit = botLimit("nations", 129);
+    const nationCountVal = isPveMode
+        ? config.nation_count != null
+            ? Number(config.nation_count)
+            : 0
+        : 0;
     const nationCountPct = sliderFillPercent(nationCountVal, 0, maxNationsLimit);
 
     const totalEntities = maxPlayersVal + botCountVal + nationCountVal;
@@ -1524,34 +1533,36 @@ export function renderCreate() {
         "</button>" +
         "</div>" +
         "</div>" +
-        "<div class='sow-menu__slider-field sow-create__force-row'>" +
-        "<div class='sow-menu__slider-label sow-create__force-header'>" +
-        "<span class='sow-create__force-title'>" +
-        "<i class='sow-create__force-badge sow-create__force-badge--nations'>" +
-        createTacticalIcon("nations") +
-        "</i>" +
-        "<span>" +
-        esc(SOW_t("lobbies.complex_ai")) +
-        "</span></span>" +
-        "<b class='sow-create__force-val' data-val-for='nation_count'>" +
-        nationCountVal +
-        "</b></div>" +
-        "<div class='sow-create__slider-control'>" +
-        "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='nation_count' data-step='-4' aria-label='-'>" +
-        createTacticalIcon("minus") +
-        "</button>" +
-        "<input class='sow-menu__range' name='nation_count' type='range' min='0' max='" +
-        maxNationsLimit +
-        "' step='4' value='" +
-        nationCountVal +
-        "' style='--sow-slider-fill:" +
-        nationCountPct +
-        "%'>" +
-        "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='nation_count' data-step='4' aria-label='+'>" +
-        createTacticalIcon("plus") +
-        "</button>" +
-        "</div>" +
-        "</div>" +
+        (isPveMode
+            ? "<div class='sow-menu__slider-field sow-create__force-row'>" +
+              "<div class='sow-menu__slider-label sow-create__force-header'>" +
+              "<span class='sow-create__force-title'>" +
+              "<i class='sow-create__force-badge sow-create__force-badge--nations'>" +
+              createTacticalIcon("nations") +
+              "</i>" +
+              "<span>" +
+              esc(SOW_t("lobbies.complex_ai")) +
+              "</span></span>" +
+              "<b class='sow-create__force-val' data-val-for='nation_count'>" +
+              nationCountVal +
+              "</b></div>" +
+              "<div class='sow-create__slider-control'>" +
+              "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='nation_count' data-step='-1' aria-label='-'>" +
+              createTacticalIcon("minus") +
+              "</button>" +
+              "<input class='sow-menu__range' name='nation_count' type='range' min='0' max='" +
+              maxNationsLimit +
+              "' step='1' value='" +
+              nationCountVal +
+              "' style='--sow-slider-fill:" +
+              nationCountPct +
+              "%'>" +
+              "<button type='button' class='sow-create__step-btn' data-command='step_create_slider' data-field='nation_count' data-step='1' aria-label='+'>" +
+              createTacticalIcon("plus") +
+              "</button>" +
+              "</div>" +
+              "</div>"
+            : "") +
         "</section>" +
         renderFeedback() +
         "</div>" +
@@ -1811,12 +1822,18 @@ export function updateRankedQueue() {
         progress.value = state.map_download_progress || 0;
         progress.hidden = !state.downloading_map;
     }
-    const label = panel.querySelector<HTMLElement>(".sow-ranked__player > span:last-child");
+    const label = panel.querySelector<HTMLElement>(
+        "[data-ranked-player-rank], .sow-ranked__player > span:last-child",
+    );
     if (label) label.textContent = rankLabel(menuUi.rankedRating);
     const badge = panel.querySelector<HTMLElement>(".sow-ranked__player .sow-ranked__emblem");
     const rating = menuUi.rankedRating;
     const tier = rating?.placements_complete ? rating.tier : "unranked";
     const division = rating?.placements_complete ? rating.division : null;
+    const playerCard = panel.querySelector<HTMLElement>(
+        ".sow-ranked__player:not(.sow-ranked__player--rival):not(.sow-ranked__player--empty)",
+    );
+    if (playerCard) playerCard.dataset.tier = rankTier(tier);
     if (
         badge &&
         (badge.dataset.tier !== rankTier(tier) ||
@@ -1833,6 +1850,10 @@ export function renderQueue() {
             "<main class='sow-menu__main sow-menu__main--ranked' data-screen-panel='queue'>" +
             renderRankedDuel(lobby) +
             "<footer class='sow-ranked__queue-footer'>" +
+            "<div class='sow-ranked__console-status'>" +
+            "<span class='sow-ranked__beacon" +
+            (lobby ? " is-locked" : "") +
+            "' aria-hidden='true'></span>" +
             (lobby
                 ? "<span data-ranked-sync role='status'></span><progress data-ranked-download max='100' aria-label='" +
                   esc(SOW_t("menu.loading")) +
@@ -1846,7 +1867,8 @@ export function renderQueue() {
                       }),
                   ) +
                   "</span>") +
-            "<button type='button' class='sow-menu__secondary' data-command='leave_lobby'>" +
+            "</div>" +
+            "<button type='button' class='sow-menu__secondary sow-ranked__cancel-btn' data-command='leave_lobby'>" +
             esc(SOW_t("lobbies.cancel")) +
             "</button></footer></main>"
         );

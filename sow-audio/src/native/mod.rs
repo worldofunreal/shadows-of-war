@@ -1,4 +1,5 @@
 mod building;
+pub mod clip;
 mod combat;
 mod death;
 mod engine;
@@ -8,7 +9,8 @@ mod result;
 mod sfx;
 mod tone;
 
-pub use building::play_building_placement_sound;
+pub use building::{play_building_placement_sound, play_building_upgrade_start_sound};
+pub use clip::{SfxId, register_sfx_wav};
 pub use combat::{
     play_attack_order_sound, play_attack_stalled_sound, play_deploy_sound,
     play_under_attack_sound,

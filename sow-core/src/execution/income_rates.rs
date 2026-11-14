@@ -46,6 +46,12 @@ pub fn troop_income_per_second(
         ) * leader.resource_bonus_multiplier(Source::Territory, Resource::Troops)
 }
 
+/// Bonus gold per second earned from landlocked or allied Cities linked by `Factory Lv.2+` railways.
+#[inline]
+pub fn railway_gold_bonus_per_second(connections: u32, cfg: &GameConfig) -> f64 {
+    connections as f64 * cfg.factory_gold_income * 0.5
+}
+
 /// Per-game-second income before NPC handicap and `per_tick()` scaling.
 pub fn gold_income_per_second(
     tiles: u32,
@@ -58,6 +64,7 @@ pub fn gold_income_per_second(
         + cfg.factory_gold_income
             * agg.factory_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Factory), Resource::Gold)
+        + railway_gold_bonus_per_second(agg.railway_connections, cfg)
         + cfg.farm_gold_income
             * agg.farm_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Gold)

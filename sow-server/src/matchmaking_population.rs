@@ -5,15 +5,6 @@ use sow_core::map_file::MapCatalogEntry;
 pub const MIN_MATCHMAKING_PLAYERS: u32 = 12;
 pub const MAX_MATCHMAKING_PLAYERS: u32 = sow_core::protocol::MAX_MATCH_PARTICIPANTS as u32;
 
-const MIN_NEUTRAL_AI: u32 = 64;
-const MAX_NEUTRAL_AI: u32 = 640;
-const DEFAULT_NEUTRAL_AI: f64 = 256.0;
-const AI_LAND_TILES_PER_ENTITY: f64 = 1_200.0;
-const AI_VARIATION_MIN: f64 = 0.85;
-const AI_VARIATION_MAX: f64 = 1.15;
-const NATION_SHARE_MIN: f64 = 0.12;
-const NATION_SHARE_MAX: f64 = 0.20;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MatchmakingPopulation {
     pub max_players: u32,
@@ -22,20 +13,14 @@ pub struct MatchmakingPopulation {
 }
 
 pub fn roll(
-    map: Option<&MapCatalogEntry>,
+    _map: Option<&MapCatalogEntry>,
     game_mode: &str,
     rng: &mut impl Rng,
 ) -> MatchmakingPopulation {
     let max_players = roll_human_capacity(game_mode, rng);
     let bot_count = GameConfig::max_tribe_bots();
-    let nation_count = if game_mode == "HumansVsNations" {
-        // HvN nations are determined from the final human roster.
-        0
-    } else {
-        let neutral_ai = roll_neutral_ai(map.map(|entry| entry.num_land_tiles).unwrap_or(0), rng);
-        let nation_share = rng.gen_range(NATION_SHARE_MIN..=NATION_SHARE_MAX);
-        ((neutral_ai as f64) * nation_share).round() as u32
-    };
+    // Public FFA/Teams stay Tribes-only; PvE Bot Heroes are resolved at start from human_side_players.
+    let nation_count = 0;
 
     MatchmakingPopulation {
         max_players,
@@ -45,7 +30,7 @@ pub fn roll(
 }
 
 pub fn finalize_for_start(config: &mut GameConfig, human_side_players: u32) -> bool {
-    if config.game_mode != "HumansVsNations" {
+    if config.game_mode != "PvE" {
         return false;
     }
     config.nation_count = human_side_players;
@@ -64,18 +49,6 @@ fn roll_human_capacity(game_mode: &str, rng: &mut impl Rng) -> u32 {
         players -= players % 2;
     }
     players.clamp(MIN_MATCHMAKING_PLAYERS, MAX_MATCHMAKING_PLAYERS)
-}
-
-fn roll_neutral_ai(land_tiles: u32, rng: &mut impl Rng) -> u32 {
-    let base = if land_tiles == 0 {
-        DEFAULT_NEUTRAL_AI
-    } else {
-        land_tiles as f64 / AI_LAND_TILES_PER_ENTITY
-    };
-    let variation = rng.gen_range(AI_VARIATION_MIN..=AI_VARIATION_MAX);
-    (base * variation)
-        .round()
-        .clamp(MIN_NEUTRAL_AI as f64, MAX_NEUTRAL_AI as f64) as u32
 }
 
 #[cfg(test)]
@@ -129,15 +102,7 @@ mod tests {
     }
 
     #[test]
-    fn larger_maps_get_more_neutral_ai_budget() {
-        assert!(
-            roll_neutral_ai(93_119, &mut StdRng::seed_from_u64(1))
-                < roll_neutral_ai(702_702, &mut StdRng::seed_from_u64(1))
-        );
-    }
-
-    #[test]
-    fn matchmaking_modes_keep_full_tribe_pool_and_vary_nations() {
+    fn matchmaking_modes_keep_full_tribe_pool_and_drop_nations() {
         let full_tribe_pool = GameConfig::max_tribe_bots();
         // Tribes promoted to playable heroes leave the bot pool (Wiradjuri: 401 -> 400).
         assert_eq!(full_tribe_pool, 400, "matchmaking requires 400 tribes");
@@ -145,28 +110,24 @@ mod tests {
 
         for (seed, mode) in [(29, "FFA"), (31, "Teams")] {
             let mut rng = StdRng::seed_from_u64(seed);
-            let mut nation_counts = std::collections::HashSet::new();
 
             for _ in 0..100 {
                 let population = roll(Some(&map), mode, &mut rng);
                 assert_eq!(population.bot_count, full_tribe_pool, "mode={mode}");
-                assert!(population.nation_count > 0, "mode={mode}");
-                nation_counts.insert(population.nation_count);
+                assert_eq!(population.nation_count, 0, "mode={mode}");
             }
-
-            assert!(nation_counts.len() > 1, "mode={mode} nations did not vary");
         }
     }
 
     #[test]
-    fn hvn_starts_without_extra_nations_and_finalizes_to_human_roster() {
+    fn pve_starts_without_extra_nations_and_finalizes_to_human_roster() {
         let mut rng = StdRng::seed_from_u64(13);
-        let population = roll(Some(&map(420_244)), "HumansVsNations", &mut rng);
+        let population = roll(Some(&map(420_244)), "PvE", &mut rng);
         assert_eq!(population.bot_count, GameConfig::max_tribe_bots());
         assert_eq!(population.nation_count, 0);
 
         let mut config = GameConfig {
-            game_mode: "HumansVsNations".to_string(),
+            game_mode: "PvE".to_string(),
             bot_count: population.bot_count,
             nation_count: population.nation_count,
             ..Default::default()

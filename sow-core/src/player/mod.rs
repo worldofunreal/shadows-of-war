@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 mod colors;
 
 pub use colors::{
-    best_available_nation_palette_color, campaign_relation_rgb, next_nation_palette_color,
-    player_territory_rgb, team_territory_rgb,
+    campaign_relation_rgb, next_nation_palette_color, player_territory_rgb, team_territory_rgb,
 };
 pub use sow_data::{Leader, NamedColor, PREMIUM_COLORS};
 
@@ -43,8 +42,8 @@ pub enum AvatarIdentityRef<'a> {
     Fallback,
 }
 
-/// Humans show their hero; every bot carries its catalog portrait in
-/// `campaign_avatar`, and a bot without one shows the shared fallback portrait.
+/// Humans and Bot Heroes show their leader's portrait; standard bots show
+/// `campaign_avatar` when present, falling back to the generic bot portrait.
 pub fn avatar_identity_ref(player: &crate::protocol::PlayerSnapshot) -> AvatarIdentityRef<'_> {
     if let Some(slug) = player.campaign_avatar.as_deref() {
         if slug.is_empty() || slug == "null" {
@@ -54,12 +53,12 @@ pub fn avatar_identity_ref(player: &crate::protocol::PlayerSnapshot) -> AvatarId
     }
 
     match player.player_type {
-        PlayerType::Human => AvatarIdentityRef::Portrait {
+        PlayerType::Human | PlayerType::Nation => AvatarIdentityRef::Portrait {
             // Portrait files are named by art slug; a hero's id can differ (tribe_wiradjuri -> windradyne).
             slug: player.leader.art_slug(),
             leader: Some(player.leader),
         },
-        PlayerType::Bot | PlayerType::Nation => AvatarIdentityRef::Fallback,
+        PlayerType::Bot => AvatarIdentityRef::Fallback,
     }
 }
 
@@ -335,9 +334,8 @@ impl Player {
         config: &crate::game_config::GameConfig,
     ) -> Self {
         let mut rng = WyRand::new(id as u64);
-        // Nation (PlayerType::Nation) = second tier on the food chain
-        // (mid-game food). Strictly below ghosts and above tribes. Band 130-159.
-        let iq = rng.next_int(130, 160) as u32;
+        // Bot Hero (`PlayerType::Nation`) = elite AI hero tier, matching Ghost IQ (160..=180).
+        let iq = rng.next_int(160, 181) as u32;
         let leader = Leader::nth(rng.next_int(0, Leader::count() as i32) as usize)
             .expect("index drawn below the hero count");
         let final_color = color;
@@ -480,6 +478,7 @@ mod avatar_identity_tests {
             alliances: Vec::new(),
             alliance_timers: Default::default(),
             alliance_requests: Vec::new(),
+            alliance_request_timers: Default::default(),
             resource_requests: Vec::new(),
             disconnected: false,
             active_emote: None,
@@ -498,6 +497,8 @@ mod avatar_identity_tests {
             boat_capacity: 0,
             nuke_available: false,
             nuke_cooldown_ticks: 0,
+            help_calls: Vec::new(),
+            help_cooldown_ticks: 0,
         }
     }
 
@@ -526,7 +527,10 @@ mod avatar_identity_tests {
         );
         assert_eq!(
             avatar_identity_ref(&players[2]),
-            AvatarIdentityRef::Fallback
+            AvatarIdentityRef::Portrait {
+                slug: "caesar",
+                leader: Some(Leader::of("caesar")),
+            }
         );
         assert_eq!(
             avatar_identity_ref(&players[3]),
@@ -556,7 +560,10 @@ mod avatar_identity_tests {
         );
         assert_eq!(
             avatar_identity_for_player_id(&players, 3),
-            AvatarIdentity::Fallback
+            AvatarIdentity::Portrait {
+                slug: "caesar".into(),
+                leader: Some(Leader::of("caesar"))
+            }
         );
         assert_eq!(
             avatar_identity_for_player_id(&players, 4),
@@ -584,7 +591,10 @@ mod avatar_identity_tests {
         assert_eq!(repeated[1], None);
         assert_eq!(
             notification_avatar_identities(&players, [None, Some(3)])[1],
-            Some(AvatarIdentity::Fallback)
+            Some(AvatarIdentity::Portrait {
+                slug: "caesar".into(),
+                leader: Some(Leader::of("caesar"))
+            })
         );
     }
 
