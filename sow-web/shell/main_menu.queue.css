@@ -668,22 +668,42 @@
 .sow-ranked__vs-swords { width: 22px; height: 22px; color: #f5d896; filter: drop-shadow(0 0 8px rgba(245, 216, 150, 0.45)); }
 .sow-ranked__vs b { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; color: #fff2d6; line-height: 1; }
 .sow-ranked__map {
-  height: 92px; position: relative; display: flex; align-items: flex-end; justify-content: center;
-  margin-top: 20px; border: 1px solid rgba(214, 182, 117, 0.42); border-radius: 14px;
-  overflow: hidden; background-size: cover; background-position: center;
+  width: min(100%, 460px);
+  margin: 20px auto 0;
+  display: grid;
+  grid-template-columns: 192px minmax(0, 1fr);
+  align-items: center;
+  border: 1px solid rgba(214, 182, 117, 0.42);
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(155deg, rgba(24, 29, 40, 0.94), rgba(10, 13, 20, 0.98));
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 240, 200, 0.2);
 }
+.sow-ranked__map-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-inline-end: 1px solid rgba(214, 182, 117, 0.28);
+  background: #0b0f17;
+}
 .sow-ranked__map-meta {
-  width: 100%; padding: 14px 20px 11px; box-sizing: border-box;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  background: linear-gradient(180deg, transparent, rgba(8, 11, 18, 0.88) 45%, rgba(8, 11, 18, 0.97));
-  text-align: center;
+  min-width: 0;
+  padding: 12px 18px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: start;
 }
 .sow-ranked__map-kicker { color: #d8bd85; font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
 .sow-ranked__map-meta span,
 .sow-ranked__map > span {
-  color: #fff3dd; font-family: var(--font-display, serif); font-size: 16px; font-weight: 700;
-  letter-spacing: 0.04em; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+  color: #fff3dd; font-family: var(--font-display, serif); font-size: 17px; font-weight: 700;
+  letter-spacing: 0.03em; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+  overflow-wrap: anywhere;
 }
 .is-found .sow-ranked__player { animation: sow-ranked-left 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .is-found .sow-ranked__player--rival { animation-name: sow-ranked-right; }
@@ -743,6 +763,9 @@
   .sow-ranked__vs-swords { width: 16px; height: 16px; }
   .sow-ranked__vs b { font-size: 10px; }
   .sow-ranked__search-halo { width: 76px; height: 76px; font-size: 28px; }
+  .sow-ranked__map { grid-template-columns: 144px minmax(0, 1fr); }
+  .sow-ranked__map-meta { padding: 10px 14px; }
+  .sow-ranked__map-meta span { font-size: 15px; }
   .sow-ranked__queue-footer { flex-direction: column; justify-content: center; padding: 12px; }
   .sow-ranked__console-status { justify-content: center; text-align: center; }
   .sow-ranked__queue-footer button { width: 100%; }
@@ -764,8 +787,8 @@
   .sow-ranked__player { min-height: 140px; padding: 12px; gap: 6px; }
   .sow-ranked__portrait { width: 54px; height: 54px; outline-width: 2px; }
   .sow-ranked__player .sow-ranked__emblem { display: none; }
-  .sow-ranked__map { height: 48px; margin-top: 10px; }
-  .sow-ranked__map-meta { padding: 6px 12px; }
-  .sow-ranked__map-kicker { display: none; }
+  .sow-ranked__map { width: min(100%, 380px); grid-template-columns: 128px minmax(0, 1fr); margin-top: 10px; }
+  .sow-ranked__map-meta { padding: 8px 12px; gap: 2px; }
+  .sow-ranked__map-meta span { font-size: 14px; }
   #web-loader .sow-ranked__loader { inset: 3% 7vw 26%; }
 }

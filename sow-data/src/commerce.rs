@@ -1,5 +1,6 @@
 #[cfg(feature = "server")]
-use crate::geo_entities::{Gender, Region};
+use crate::geo_entities::Gender;
+use crate::geo_entities::Region;
 use crate::leaders::Leader;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -137,6 +138,23 @@ pub struct StoreOffer {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct StoreBundleOffer {
+    pub id: String,
+    pub theme_key: String,
+    pub title: String,
+    pub subtitle: String,
+    /// "leader" or "skin".
+    pub kind: String,
+    pub item_ids: Vec<String>,
+    pub discount_percent: u64,
+    pub base_crowns: u64,
+    pub cost_crowns: u64,
+    pub base_gems: u64,
+    pub cost_gems: u64,
+    pub ends_at: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct StoreCatalog {
     pub rotation_period: u64,
     pub free_leaders: Vec<String>,
@@ -145,6 +163,8 @@ pub struct StoreCatalog {
     pub gem_bundles: Vec<GemBundle>,
     #[serde(default)]
     pub offers: Vec<StoreOffer>,
+    #[serde(default)]
+    pub bundles: Vec<StoreBundleOffer>,
     pub crowns: u64,
     pub gems: u64,
 }
@@ -691,6 +711,217 @@ pub fn store_offers(unix_seconds: u64) -> Vec<StoreOffer> {
     offers
 }
 
+/// Weekly themed bundles (Regional Heroes, Vanguard Trio, Territory Skin Pack).
+pub fn store_bundles(unix_seconds: u64) -> Vec<StoreBundleOffer> {
+    let week = rotation_period(unix_seconds);
+    let ends_at = (week + 1) * ROTATION_PERIOD_SECS - ROTATION_RESET_OFFSET_SECS;
+    let regions = [
+        (
+            Region::Europe,
+            "europe",
+            "Lords of Europe",
+            "European Commander Bundle · 3 Heroes",
+        ),
+        (
+            Region::Asia,
+            "asia",
+            "Dynasties of Asia",
+            "Asian Commander Bundle · 3 Heroes",
+        ),
+        (
+            Region::Africa,
+            "africa",
+            "Monarchs of Africa",
+            "African Commander Bundle · 3 Heroes",
+        ),
+        (
+            Region::Americas,
+            "americas",
+            "Sovereigns of the Americas",
+            "Americas Commander Bundle · 3 Heroes",
+        ),
+        (
+            Region::Oceania,
+            "oceania",
+            "Warlords of Oceania",
+            "Oceanian Commander Bundle · 3 Heroes",
+        ),
+    ];
+    let (target_region, theme_key, title, subtitle) = regions[(week as usize) % regions.len()];
+    let regional_seed = offer_hash(week, theme_key);
+
+    let mut regional_candidates: Vec<Leader> = Leader::all()
+        .filter(|leader| {
+            !leader.always_free()
+                && leader.price_crowns() > 0
+                && leader.character().region == target_region
+        })
+        .collect();
+    regional_candidates.sort_by_key(|leader| offer_hash(regional_seed, leader_id(*leader)));
+
+    let mut regional_leaders: Vec<Leader> = regional_candidates.into_iter().take(3).collect();
+    if regional_leaders.len() < 3 {
+        let mut fallback: Vec<Leader> = Leader::all()
+            .filter(|leader| {
+                !leader.always_free()
+                    && leader.price_crowns() > 0
+                    && !regional_leaders.contains(leader)
+            })
+            .collect();
+        fallback.sort_by_key(|leader| offer_hash(regional_seed ^ 0x55AA, leader_id(*leader)));
+        for leader in fallback {
+            if regional_leaders.len() >= 3 {
+                break;
+            }
+            regional_leaders.push(leader);
+        }
+    }
+
+    let mut bundles = Vec::new();
+    if regional_leaders.len() == 3 {
+        let base_crowns: u64 = regional_leaders.iter().map(|l| l.price_crowns()).sum();
+        let base_gems: u64 = regional_leaders.iter().map(|l| l.price_gems()).sum();
+        let discount_percent = 30;
+        bundles.push(StoreBundleOffer {
+            id: format!("bundle:weekly:{week}:{theme_key}"),
+            theme_key: theme_key.to_string(),
+            title: title.to_string(),
+            subtitle: subtitle.to_string(),
+            kind: "leader".to_string(),
+            item_ids: regional_leaders
+                .iter()
+                .map(|l| leader_id(*l).to_string())
+                .collect(),
+            discount_percent,
+            base_crowns,
+            cost_crowns: discounted(base_crowns, discount_percent, OfferCurrency::Crowns),
+            base_gems,
+            cost_gems: discounted(base_gems, discount_percent, OfferCurrency::Gems),
+            ends_at,
+        });
+    }
+
+    // 2. Vanguard Coalition Bundle (35% OFF, non-overlapping commanders)
+    let vanguard_seed = offer_hash(week, "vanguard");
+    let mut vanguard_candidates: Vec<Leader> = Leader::all()
+        .filter(|leader| {
+            !leader.always_free()
+                && leader.price_crowns() > 0
+                && !regional_leaders.contains(leader)
+        })
+        .collect();
+    vanguard_candidates.sort_by_key(|leader| {
+        (
+            leader.price_crowns(),
+            offer_hash(vanguard_seed, leader_id(*leader)),
+        )
+    });
+    let vanguard_leaders: Vec<Leader> = vanguard_candidates.into_iter().take(3).collect();
+    if vanguard_leaders.len() == 3 {
+        let base_crowns: u64 = vanguard_leaders.iter().map(|l| l.price_crowns()).sum();
+        let base_gems: u64 = vanguard_leaders.iter().map(|l| l.price_gems()).sum();
+        let discount_percent = 35;
+        bundles.push(StoreBundleOffer {
+            id: format!("bundle:weekly:{week}:vanguard"),
+            theme_key: "vanguard".to_string(),
+            title: "Vanguard Coalition".to_string(),
+            subtitle: "Starter Commander Pack · 3 Heroes".to_string(),
+            kind: "leader".to_string(),
+            item_ids: vanguard_leaders
+                .iter()
+                .map(|l| leader_id(*l).to_string())
+                .collect(),
+            discount_percent,
+            base_crowns,
+            cost_crowns: discounted(base_crowns, discount_percent, OfferCurrency::Crowns),
+            base_gems,
+            cost_gems: discounted(base_gems, discount_percent, OfferCurrency::Gems),
+            ends_at,
+        });
+    }
+
+    // 3. Territory Pattern Pack (35% OFF, 3 Skins)
+    let skin_seed = offer_hash(week, "skins_pack");
+    let mut all_skins = skins();
+    all_skins.sort_by_key(|skin| offer_hash(skin_seed, &skin.id));
+    let bundle_skins: Vec<SkinOffer> = all_skins.into_iter().take(3).collect();
+    if bundle_skins.len() == 3 {
+        let base_crowns: u64 = bundle_skins.iter().map(|s| s.cost_crowns).sum();
+        let base_gems: u64 = bundle_skins.iter().map(|s| s.cost_gems).sum();
+        let discount_percent = 35;
+        bundles.push(StoreBundleOffer {
+            id: format!("bundle:weekly:{week}:skins"),
+            theme_key: "skins".to_string(),
+            title: "Conqueror's Pattern Pack".to_string(),
+            subtitle: "Territory Style Bundle · 3 Patterns".to_string(),
+            kind: "skin".to_string(),
+            item_ids: bundle_skins.into_iter().map(|s| s.id).collect(),
+            discount_percent,
+            base_crowns,
+            cost_crowns: discounted(base_crowns, discount_percent, OfferCurrency::Crowns),
+            base_gems,
+            cost_gems: discounted(base_gems, discount_percent, OfferCurrency::Gems),
+            ends_at,
+        });
+    }
+
+    bundles
+}
+
+/// Computes the prorated unowned items and price `(unowned_ids, base_cost, discounted_cost)`
+/// for a live bundle in the requested currency ("crowns" or "gems").
+pub fn bundle_purchase_quote(
+    bundle_id: &str,
+    currency: &str,
+    owned_leaders: &BTreeSet<String>,
+    owned_skins: &BTreeSet<String>,
+    unix_seconds: u64,
+) -> Result<(String, Vec<String>, u64, u64), &'static str> {
+    let offer_currency = match currency {
+        "gems" => OfferCurrency::Gems,
+        "" | "crowns" => OfferCurrency::Crowns,
+        _ => return Err("invalid bundle unlock currency"),
+    };
+    let bundle = store_bundles(unix_seconds)
+        .into_iter()
+        .find(|b| b.id == bundle_id.trim())
+        .ok_or("bundle offer expired")?;
+
+    let mut unowned_ids = Vec::new();
+    let mut base_cost = 0u64;
+    if bundle.kind == "leader" {
+        for item_id in &bundle.item_ids {
+            let leader = leader_from_id(item_id).ok_or("unknown leader in bundle")?;
+            if !owns_leader(owned_leaders, leader) && !leader.always_free() {
+                unowned_ids.push(leader_id(leader).to_string());
+                base_cost += match offer_currency {
+                    OfferCurrency::Gems => leader.price_gems(),
+                    OfferCurrency::Crowns => leader.price_crowns(),
+                };
+            }
+        }
+    } else if bundle.kind == "skin" {
+        for item_id in &bundle.item_ids {
+            let skin = skin_by_id(item_id).ok_or("unknown skin in bundle")?;
+            if !owned_skins.contains(&skin.id) {
+                unowned_ids.push(skin.id);
+                base_cost += match offer_currency {
+                    OfferCurrency::Gems => skin.cost_gems,
+                    OfferCurrency::Crowns => skin.cost_crowns,
+                };
+            }
+        }
+    } else {
+        return Err("invalid bundle kind");
+    }
+
+    if unowned_ids.is_empty() {
+        return Err("bundle already owned");
+    }
+    let cost = discounted(base_cost, bundle.discount_percent, offer_currency);
+    Ok((bundle.kind, unowned_ids, base_cost, cost))
+}
+
 /// Price of a purchase. Without an offer it is the list price; with one, the
 /// offer must still be live and match the item and currency exactly.
 pub fn purchase_cost(
@@ -779,8 +1010,9 @@ pub fn catalog_for_profile(
         leaders,
         skins,
         gem_bundles: gem_bundles(),
-        // Only the server's /store/catalog fills these (`store_offers`).
+        // Only the server's /store/catalog fills these (`store_offers` / `store_bundles`).
         offers: Vec::new(),
+        bundles: Vec::new(),
         crowns,
         gems,
     }
@@ -1403,5 +1635,32 @@ mod tests {
             assert!(still_deferred.is_empty());
             assert!(next.iter().all(|leader| !first.contains(leader)));
         }
+    }
+
+    #[test]
+    fn bundles_rotate_weekly_and_prorate_owned_items() {
+        let now = 1_776_790_800;
+        let bundles = store_bundles(now);
+        assert_eq!(bundles.len(), 3);
+        let regional = &bundles[0];
+        assert_eq!(regional.kind, "leader");
+        assert_eq!(regional.item_ids.len(), 3);
+        assert_eq!(regional.discount_percent, 30);
+
+        let empty_owned = BTreeSet::new();
+        let (_, unowned_all, base_all, cost_all) =
+            bundle_purchase_quote(&regional.id, "crowns", &empty_owned, &empty_owned, now).unwrap();
+        assert_eq!(unowned_all.len(), 3);
+        assert_eq!(base_all, regional.base_crowns);
+        assert_eq!(cost_all, regional.cost_crowns);
+        assert!(cost_all < base_all);
+
+        let mut owned_one = BTreeSet::new();
+        owned_one.insert(regional.item_ids[0].clone());
+        let (_, unowned_two, base_two, cost_two) =
+            bundle_purchase_quote(&regional.id, "crowns", &owned_one, &empty_owned, now).unwrap();
+        assert_eq!(unowned_two.len(), 2);
+        assert!(base_two < base_all);
+        assert!(cost_two < cost_all);
     }
 }

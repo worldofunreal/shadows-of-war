@@ -6,16 +6,15 @@ import type { ProfileRating } from "./main_menu.profile.ts";
 // Shared presentation for queue, loader, profile and the confirmed match result.
 const TIER_KEYS: Record<string, string> = {
     nomad: "nomad",
-    settlement: "settlement",
-    citystate: "city_state",
-    city_state: "city_state",
-    kingdom: "kingdom",
-    republic: "republic",
-    empire: "empire",
-    dynasty: "dynasty",
-    hegemony: "hegemony",
-    dominion: "dominion",
-    eternal: "eternal",
+    chieftain: "chieftain",
+    commander: "commander",
+    governor: "governor",
+    king: "king",
+    emperor: "emperor",
+    sovereign: "sovereign",
+    overlord: "overlord",
+    immortal: "immortal",
+    deity: "deity",
     bronze: "bronze",
     silver: "silver",
     gold: "gold",
@@ -27,15 +26,15 @@ const TIER_KEYS: Record<string, string> = {
 
 const TIER_EMBLEM_SVG: Record<string, string> = {
     nomad: "bronze",
-    settlement: "bronze",
-    city_state: "silver",
-    kingdom: "silver",
-    republic: "gold",
-    empire: "gold",
-    dynasty: "platinum",
-    hegemony: "diamond",
-    dominion: "master",
-    eternal: "grandmaster",
+    chieftain: "bronze",
+    commander: "silver",
+    governor: "silver",
+    king: "gold",
+    emperor: "gold",
+    sovereign: "platinum",
+    overlord: "diamond",
+    immortal: "master",
+    deity: "grandmaster",
     bronze: "bronze",
     silver: "silver",
     gold: "gold",
@@ -209,9 +208,16 @@ export function renderRankedDuel(lobby: MenuLobby | null, loading = false): stri
             "<path d='M50 6V20M50 80V94M6 50H20M80 50H94' stroke='currentColor' stroke-opacity='0.4' stroke-width='1.5' stroke-linecap='round'/>" +
             "</svg><span class='sow-ranked__search-glyph'>?</span></div><strong>" +
             esc(SOW_t("ranked.searching")) + "</strong></article>") + "</div>" +
-        (lobby ? `<div class='sow-ranked__map' style="background-image:url('${esc(lobbyThumb(lobby))}')"><div class='sow-ranked__map-meta'><small class='sow-ranked__map-kicker'>` +
-            esc(SOW_t("lobbies.map")) + "</small><span>" +
-            esc(formatMapName(lobby)) + "</span></div></div>" : "") + "</div>";
+        (lobby
+            ? "<div class='sow-ranked__map'><img class='sow-ranked__map-thumb' src='" +
+              esc(lobbyThumb(lobby)) +
+              "' alt='' width='320' height='180'><div class='sow-ranked__map-meta'><small class='sow-ranked__map-kicker'>" +
+              esc(SOW_t("lobbies.map")) +
+              "</small><span>" +
+              esc(formatMapName(lobby)) +
+              "</span></div></div>"
+            : "") +
+        "</div>";
 }
 
 export function animateRankResult(card: HTMLElement, result: import("./main_menu.state.ts").RankedResult,

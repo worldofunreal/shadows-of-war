@@ -75,6 +75,10 @@ pub enum UiAction {
         currency: String,
         offer_id: Option<String>,
     },
+    UnlockBundle {
+        bundle_id: String,
+        currency: String,
+    },
     EquipSkin(String),
 }
 

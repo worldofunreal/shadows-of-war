@@ -32,6 +32,7 @@ import type {
     MenuLeaderOffer,
     MenuSkinOffer,
     MenuStore,
+    MenuStoreBundleOffer,
     MenuStoreOffer,
 } from "./main_menu.state.ts";
 import { renderFeedback } from "./main_menu.surfaces.ts";
@@ -602,6 +603,125 @@ function storeOfferById(id: string | undefined) {
     );
 }
 
+function storeBundleOffers(): MenuStoreBundleOffer[] {
+    const bundles = menuUi.state!.store && menuUi.state!.store.bundles;
+    if (!Array.isArray(bundles)) return [];
+    const now = Date.now() / 1000;
+    return bundles.filter(function (bundle) {
+        return Number(bundle.ends_at) > now;
+    });
+}
+
+function storeBundleOfferById(id: string | undefined): MenuStoreBundleOffer | null {
+    if (!id) return null;
+    return (
+        storeBundleOffers().find(function (bundle) {
+            return bundle.id === id;
+        }) || null
+    );
+}
+
+function discountedStoreAmount(base: number, percent: number, currency: "gems" | "crowns") {
+    const step = currency === "gems" ? 5 : 25;
+    const raw = Math.floor((base * (100 - percent)) / 100);
+    return Math.min(base, Math.max(1, Math.floor(raw / step) * step));
+}
+
+function activeOfferForItem(
+    kind: "leader" | "skin",
+    itemId: string | undefined,
+    currency: "gems" | "crowns",
+): MenuStoreOffer | null {
+    if (!itemId) return null;
+    const norm = function (v: string) {
+        return String(v || "")
+            .replace(/[^a-z0-9]/gi, "")
+            .toLowerCase();
+    };
+    const target = norm(itemId);
+    return (
+        storeOffers().find(function (offer) {
+            return offer.kind === kind && offer.currency === currency && norm(offer.item_id) === target;
+        }) || null
+    );
+}
+
+interface BundleQuoteItem {
+    id: string;
+    name: string;
+    art: string;
+    owned: boolean;
+    baseCrowns: number;
+    baseGems: number;
+}
+
+function computeBundleQuote(bundle: MenuStoreBundleOffer) {
+    const isSkin = bundle.kind === "skin";
+    const items: BundleQuoteItem[] = [];
+    let unownedCount = 0;
+    let ownedCount = 0;
+    let baseCrowns = 0;
+    let baseGems = 0;
+
+    for (const itemId of bundle.item_ids || []) {
+        if (isSkin) {
+            const skin = storeSkinById(itemId);
+            if (!skin) continue;
+            const owned = !!skin.owned;
+            if (owned) ownedCount += 1;
+            else {
+                unownedCount += 1;
+                baseCrowns += Number(skin.cost_crowns) || 0;
+                baseGems += Number(skin.cost_gems) || 0;
+            }
+            items.push({
+                id: skin.id,
+                name: skin.name,
+                art: asset(skin.asset_path),
+                owned: owned,
+                baseCrowns: Number(skin.cost_crowns) || 0,
+                baseGems: Number(skin.cost_gems) || 0,
+            });
+        } else {
+            const offer = storeLeaderById(itemId);
+            if (!offer) continue;
+            const leader = leaderById(offer.id);
+            const owned = !!offer.owned || !!offer.permanently_free;
+            if (owned) ownedCount += 1;
+            else {
+                unownedCount += 1;
+                baseCrowns += Number(offer.cost_crowns) || 0;
+                baseGems += Number(offer.cost_gems) || 0;
+            }
+            items.push({
+                id: offer.id,
+                name: leaderDisplayName(leader),
+                art: avatarImage(offer.id),
+                owned: owned,
+                baseCrowns: Number(offer.cost_crowns) || 0,
+                baseGems: Number(offer.cost_gems) || 0,
+            });
+        }
+    }
+
+    const allOwned = items.length > 0 && unownedCount === 0;
+    const costCrowns =
+        unownedCount > 0 ? discountedStoreAmount(baseCrowns, bundle.discount_percent, "crowns") : 0;
+    const costGems =
+        unownedCount > 0 ? discountedStoreAmount(baseGems, bundle.discount_percent, "gems") : 0;
+
+    return {
+        items,
+        unownedCount,
+        ownedCount,
+        allOwned,
+        baseCrowns,
+        costCrowns,
+        baseGems,
+        costGems,
+    };
+}
+
 function offerItemOwned(offer: MenuStoreOffer) {
     if (offer.kind === "skin") {
         const skin = storeSkinById(offer.item_id);
@@ -624,12 +744,18 @@ function offerTimeLeft(endsAt: number) {
 
 function renderLeaderCurrencyButton(offer: MenuLeaderOffer, currency: "gems" | "crowns") {
     const isGems = currency === "gems";
-    const cost = Math.max(0, Number(isGems ? offer.cost_gems : offer.cost_crowns) || 0);
+    const liveOffer = activeOfferForItem("leader", offer.id, currency);
+    const baseCost = Math.max(0, Number(isGems ? offer.cost_gems : offer.cost_crowns) || 0);
+    const cost = liveOffer ? Number(liveOffer.cost) : baseCost;
     const insufficient = storeBalance(currency) < cost;
     const disabled = insufficient || (menuUi.state && menuUi.state.store_busy) ? " disabled" : "";
     const amountClass = insufficient ? "sow-store__currency-amount--insufficient" : "";
+    const strikeHtml = liveOffer
+        ? "<s class='sow-store__list-price'>" + esc(baseCost) + "</s> "
+        : "";
     return (
         "<button class='sow-store__buy" +
+        (liveOffer ? " sow-store__buy--on-sale" : "") +
         (insufficient ? " sow-store__buy--insufficient" : "") +
         "' type='button' data-command='unlock_leader' data-currency='" +
         currency +
@@ -638,8 +764,7 @@ function renderLeaderCurrencyButton(offer: MenuLeaderOffer, currency: "gems" | "
         "'" +
         disabled +
         ">" +
-        esc(SOW_t("store.buy")) +
-        " " +
+        strikeHtml +
         renderCurrencyAmount(cost, isGems ? "gem" : "crown", amountClass) +
         "</button>"
     );
@@ -685,7 +810,11 @@ export function renderSkinPickerModal() {
 export function openLeaderPurchase(leaderId: string, currency: string, storeOffer?: MenuStoreOffer | null) {
     const offer = storeLeaderById(leaderId);
     const isGems = currency === "gems";
-    const cost = storeOffer ? storeOffer.cost : offer && (isGems ? offer.cost_gems : offer.cost_crowns);
+    const resolvedOffer =
+        storeOffer || (offer ? activeOfferForItem("leader", offer.id, isGems ? "gems" : "crowns") : null);
+    const cost = resolvedOffer
+        ? resolvedOffer.cost
+        : offer && (isGems ? offer.cost_gems : offer.cost_crowns);
     if (
         !offer ||
         offer.owned ||
@@ -694,7 +823,7 @@ export function openLeaderPurchase(leaderId: string, currency: string, storeOffe
     )
         return;
     menuUi.state!.error = null;
-    const offerId = storeOffer ? storeOffer.id : undefined;
+    const offerId = resolvedOffer ? resolvedOffer.id : undefined;
     menuUi.purchaseIntent = { type: "leader", leaderId: offer.id, offerId: offerId };
     menuUi.purchaseModal = {
         type: "leader",
@@ -711,7 +840,9 @@ export function openLeaderPurchase(leaderId: string, currency: string, storeOffe
 export function openSkinPurchase(skinId: string, currency: string, storeOffer?: MenuStoreOffer | null) {
     const skin = storeSkinById(skinId);
     const isGems = currency !== "crowns";
-    const cost = storeOffer ? storeOffer.cost : skin && (isGems ? skin.cost_gems : skin.cost_crowns);
+    const resolvedOffer =
+        storeOffer || (skin ? activeOfferForItem("skin", skin.id, isGems ? "gems" : "crowns") : null);
+    const cost = resolvedOffer ? resolvedOffer.cost : skin && (isGems ? skin.cost_gems : skin.cost_crowns);
     if (
         !skin ||
         skin.owned ||
@@ -720,7 +851,7 @@ export function openSkinPurchase(skinId: string, currency: string, storeOffer?: 
     )
         return;
     menuUi.state!.error = null;
-    const offerId = storeOffer ? storeOffer.id : undefined;
+    const offerId = resolvedOffer ? resolvedOffer.id : undefined;
     menuUi.purchaseIntent = { type: "skin", skinId: skin.id, offerId: offerId };
     menuUi.purchaseModal = {
         type: "skin",
@@ -734,7 +865,34 @@ export function openSkinPurchase(skinId: string, currency: string, storeOffer?: 
     render();
 }
 
-export function openOfferPurchase(offerId: string) {
+export function openOfferPurchase(offerId: string, currency?: string) {
+    const bundleOffer = storeBundleOfferById(offerId);
+    if (bundleOffer) {
+        const quote = computeBundleQuote(bundleOffer);
+        const isGems = currency === "gems";
+        const cost = isGems ? quote.costGems : quote.costCrowns;
+        if (
+            quote.allOwned ||
+            (menuUi.state && menuUi.state.store_busy) ||
+            storeBalance(isGems ? "gems" : "crowns") < cost
+        )
+            return;
+        menuUi.state!.error = null;
+        menuUi.purchaseIntent = {
+            type: "store_bundle",
+            bundleOfferId: bundleOffer.id,
+        };
+        menuUi.purchaseModal = {
+            type: "store_bundle",
+            bundleOfferId: bundleOffer.id,
+            currency: isGems ? "gems" : "crowns",
+            phase: "confirm",
+            submitted: false,
+        };
+        trackStoreEvent("store_buy_tap", "bundle", bundleOffer.id, isGems ? "gems" : "crowns");
+        render();
+        return;
+    }
     const offer = storeOfferById(offerId);
     if (!offer || offerItemOwned(offer)) return;
     if (offer.kind === "skin") openSkinPurchase(offer.item_id, offer.currency, offer);
@@ -743,6 +901,12 @@ export function openOfferPurchase(offerId: string) {
 
 function purchaseModalCost() {
     const modal = menuUi.purchaseModal!;
+    if (modal.type === "store_bundle") {
+        const bundle = storeBundleOfferById(modal.bundleOfferId);
+        if (!bundle) return 0;
+        const quote = computeBundleQuote(bundle);
+        return modal.currency === "gems" ? quote.costGems : quote.costCrowns;
+    }
     const offer = storeOfferById(modal.offerId);
     if (offer) return offer.cost;
     const isGems = modal.currency === "gems";
@@ -773,7 +937,7 @@ function bundleBadge(bundle: MenuGemBundle, bundles: MenuGemBundle[]) {
     );
 }
 
-function renderStoreBundle(bundle: MenuGemBundle, index: number, bundles: MenuGemBundle[]) {
+function renderStoreBundle(bundle: MenuGemBundle, _index: number, bundles: MenuGemBundle[]) {
     const art = bundle.asset_path
         ? asset(bundle.asset_path)
         : asset("gameplay/store/gem_bundles/" + bundle.id + ".webp");
@@ -794,12 +958,18 @@ function renderStoreBundle(bundle: MenuGemBundle, index: number, bundles: MenuGe
 
 function renderSkinCurrencyButton(skin: MenuSkinOffer, currency: "gems" | "crowns") {
     const isGems = currency === "gems";
-    const cost = Math.max(0, Number(isGems ? skin.cost_gems : skin.cost_crowns) || 0);
+    const liveOffer = activeOfferForItem("skin", skin.id, currency);
+    const baseCost = Math.max(0, Number(isGems ? skin.cost_gems : skin.cost_crowns) || 0);
+    const cost = liveOffer ? Number(liveOffer.cost) : baseCost;
     const insufficient = storeBalance(currency) < cost;
     const disabled = insufficient || (menuUi.state && menuUi.state.store_busy) ? " disabled" : "";
     const amountClass = insufficient ? "sow-store__currency-amount--insufficient" : "";
+    const strikeHtml = liveOffer
+        ? "<s class='sow-store__list-price'>" + esc(baseCost) + "</s> "
+        : "";
     return (
         "<button class='sow-store__buy" +
+        (liveOffer ? " sow-store__buy--on-sale" : "") +
         (insufficient ? " sow-store__buy--insufficient" : "") +
         "' type='button' data-command='open_skin_purchase' data-currency='" +
         currency +
@@ -808,14 +978,20 @@ function renderSkinCurrencyButton(skin: MenuSkinOffer, currency: "gems" | "crown
         "'" +
         disabled +
         ">" +
-        esc(SOW_t("store.buy")) +
-        " " +
+        strikeHtml +
         renderCurrencyAmount(cost, isGems ? "gem" : "crown", amountClass) +
         "</button>"
     );
 }
 
 function renderStoreSkinPromo(skin: MenuSkinOffer) {
+    const liveGemOffer = activeOfferForItem("skin", skin.id, "gems");
+    const liveCrownOffer = activeOfferForItem("skin", skin.id, "crowns");
+    const discountPct = liveGemOffer
+        ? liveGemOffer.discount_percent
+        : liveCrownOffer
+          ? liveCrownOffer.discount_percent
+          : 0;
     let action;
     const busyDisabled = menuUi.state && menuUi.state.store_busy ? " disabled" : "";
     if (skin.owned) {
@@ -837,9 +1013,15 @@ function renderStoreSkinPromo(skin: MenuSkinOffer) {
             "</div>";
     }
     return (
-        "<article class='sow-store__skin'><div class='sow-store__skin-art'><img src='" +
+        "<article class='sow-store__skin" +
+        (discountPct > 0 && !skin.owned ? " is-on-sale" : "") +
+        "'><div class='sow-store__skin-art'><img src='" +
         esc(asset(skin.asset_path)) +
-        "' alt='' width='96' height='96' loading='lazy'></div><div class='sow-store__skin-body'><h3>" +
+        "' alt='' width='96' height='96' loading='lazy'>" +
+        (discountPct > 0 && !skin.owned
+            ? "<b class='sow-store__discount'>-" + esc(discountPct) + "%</b>"
+            : "") +
+        "</div><div class='sow-store__skin-body'><h3>" +
         esc(skin.name) +
         "</h3><p>" +
         esc(SOW_t("store.territory_pattern")) +
@@ -849,70 +1031,244 @@ function renderStoreSkinPromo(skin: MenuSkinOffer) {
     );
 }
 
+function renderBundleCurrencyButton(
+    bundle: MenuStoreBundleOffer,
+    currency: "crowns" | "gems",
+    baseCost: number,
+    cost: number,
+) {
+    const isGems = currency === "gems";
+    const insufficient = storeBalance(currency) < cost;
+    const disabled = insufficient || (menuUi.state && menuUi.state.store_busy) ? " disabled" : "";
+    const amountClass = insufficient ? "sow-store__currency-amount--insufficient" : "";
+    return (
+        "<button class='sow-store__buy sow-store__bundle-buy" +
+        (insufficient ? " sow-store__buy--insufficient" : "") +
+        "' type='button' data-command='open_offer_purchase' data-offer-id='" +
+        esc(bundle.id) +
+        "' data-currency='" +
+        currency +
+        "'" +
+        disabled +
+        ">" +
+        "<s class='sow-store__list-price'>" +
+        esc(baseCost) +
+        "</s> " +
+        renderCurrencyAmount(cost, isGems ? "gem" : "crown", amountClass) +
+        "</button>"
+    );
+}
+
+function renderStoreBundleOfferCard(bundle: MenuStoreBundleOffer) {
+    const quote = computeBundleQuote(bundle);
+    if (!quote.items.length) return "";
+    const isSkin = bundle.kind === "skin";
+
+    const portraitsHtml = quote.items
+        .map(function (item) {
+            return (
+                "<span class='sow-store__bundle-portrait" +
+                (isSkin ? " is-skin" : "") +
+                (item.owned ? " is-owned" : "") +
+                "'><img src='" +
+                esc(item.art) +
+                "' alt='" +
+                esc(item.name) +
+                "' width='72' height='72' loading='lazy'>" +
+                (item.owned ? "<i class='sow-store__bundle-owned-check'>✓</i>" : "") +
+                "</span>"
+            );
+        })
+        .join("");
+
+    const rosterChipsHtml = quote.items
+        .map(function (item) {
+            if (isSkin) {
+                return (
+                    "<span class='sow-store__bundle-chip" +
+                    (item.owned ? " is-owned" : "") +
+                    "'>" +
+                    (item.owned ? "✓ " : "") +
+                    esc(item.name) +
+                    "</span>"
+                );
+            }
+            return (
+                "<button type='button' class='sow-store__bundle-chip" +
+                (item.owned ? " is-owned" : "") +
+                "' data-command='open_hero_info' data-leader-id='" +
+                esc(item.id) +
+                "' data-hero-info-tab='overview'>" +
+                (item.owned ? "✓ " : "") +
+                esc(item.name) +
+                "</button>"
+            );
+        })
+        .join("");
+
+    const proratedNote =
+        quote.ownedCount > 0 && !quote.allOwned
+            ? "<span class='sow-store__bundle-prorated'>✓ " +
+              esc(quote.ownedCount + "/" + quote.items.length) +
+              " " +
+              esc(SOW_t("store.unlocked")) +
+              "</span>"
+            : "";
+
+    const actionsHtml = quote.allOwned
+        ? "<div class='sow-store__bundle-complete'><span class='sow-store__offer-state'>✓ " +
+          esc(SOW_t("store.unlocked")) +
+          "</span></div>"
+        : "<div class='sow-store__buy-row sow-store__bundle-actions'>" +
+          renderBundleCurrencyButton(bundle, "crowns", quote.baseCrowns, quote.costCrowns) +
+          renderBundleCurrencyButton(bundle, "gems", quote.baseGems, quote.costGems) +
+          "</div>";
+
+    return (
+        "<article class='sow-store__bundle-card is-theme-" +
+        esc(bundle.theme_key) +
+        (quote.allOwned ? " is-owned" : "") +
+        "'>" +
+        "<div class='sow-store__bundle-top'>" +
+        "<span class='sow-store__bundle-discount'>-" +
+        esc(bundle.discount_percent) +
+        "% OFF</span>" +
+        "<span class='sow-store__bundle-timer'>" +
+        esc(offerTimeLeft(bundle.ends_at)) +
+        "</span>" +
+        "</div>" +
+        "<div class='sow-store__bundle-visual'>" +
+        "<div class='sow-store__bundle-portraits'>" +
+        portraitsHtml +
+        "</div>" +
+        "<div class='sow-store__bundle-copy'>" +
+        "<h3>" +
+        esc(bundle.title) +
+        "</h3>" +
+        "<p>" +
+        esc(bundle.subtitle) +
+        "</p>" +
+        proratedNote +
+        "</div>" +
+        "</div>" +
+        "<div class='sow-store__bundle-chips'>" +
+        rosterChipsHtml +
+        "</div>" +
+        actionsHtml +
+        "</article>"
+    );
+}
+
+function renderBundlesShowcaseSection(kindFilter?: "leader" | "skin") {
+    const bundles = storeBundleOffers().filter(function (bundle) {
+        return !kindFilter || bundle.kind === kindFilter;
+    });
+    if (!bundles.length) return "";
+    const cards = bundles.map(renderStoreBundleOfferCard).join("");
+    if (!cards) return "";
+    return (
+        "<section class='sow-store__section sow-store__section--bundles' aria-labelledby='sow-store-weekly-bundles'>" +
+        "<div class='sow-store__section-head'>" +
+        "<h2 id='sow-store-weekly-bundles'>Weekly Value Bundles</h2>" +
+        "<span>" +
+        esc(SOW_t("store.ends_in", { time: offerTimeLeft(bundles[0].ends_at) })) +
+        "</span>" +
+        "</div>" +
+        "<div class='sow-store__bundle-showcase'>" +
+        cards +
+        "</div>" +
+        "</section>"
+    );
+}
+
 function renderStoreOffer(offer: MenuStoreOffer) {
     const isSkin = offer.kind === "skin";
     const skin = isSkin ? storeSkinById(offer.item_id) : null;
     const leaderOffer = isSkin ? null : storeLeaderById(offer.item_id);
     if (isSkin ? !skin : !leaderOffer) return "";
-    const name = skin ? skin.name : leaderDisplayName(leaderById(leaderOffer!.id));
+    const leader = leaderOffer ? leaderById(leaderOffer.id) : null;
+    const name = skin ? skin.name : leaderDisplayName(leader);
+    const sublabel = skin ? SOW_t("store.territory_pattern") : leaderCivilization(leader);
     const art = skin ? asset(skin.asset_path) : avatarImage(leaderOffer!.id);
     const kind = offer.currency === "gems" ? "gem" : "crown";
     const insufficient = storeBalance(offer.currency) < Number(offer.cost);
     const disabled = insufficient || (menuUi.state && menuUi.state.store_busy) ? " disabled" : "";
     const action = offerItemOwned(offer)
-        ? "<span class='sow-store__offer-state'>" + esc(SOW_t("store.unlocked")) + "</span>"
-        : "<button class='sow-store__buy" +
+        ? "<span class='sow-store__offer-state'>✓ " + esc(SOW_t("store.unlocked")) + "</span>"
+        : "<button class='sow-store__buy sow-store__buy--deal" +
           (insufficient ? " sow-store__buy--insufficient" : "") +
           "' type='button' data-command='open_offer_purchase' data-offer-id='" +
           esc(offer.id) +
           "'" +
           disabled +
           ">" +
-          esc(SOW_t("store.buy")) +
-          " " +
+          "<s class='sow-store__list-price'>" +
+          esc(offer.base_cost) +
+          "</s> " +
           renderCurrencyAmount(
               offer.cost,
               kind,
               insufficient ? "sow-store__currency-amount--insufficient" : "",
           ) +
           "</button>";
+    const inspectAttr = leaderOffer
+        ? " data-command='open_hero_info' data-leader-id='" +
+          esc(leaderOffer.id) +
+          "' data-hero-info-tab='overview'"
+        : "";
+    const artTag = leaderOffer ? "button type='button'" : "div";
+    const artClose = leaderOffer ? "button" : "div";
     return (
-        "<article class='sow-store__skin sow-store__offer'><div class='sow-store__skin-art" +
-        (isSkin ? "" : " sow-store__skin-art--leader") +
-        "'><img src='" +
+        "<article class='sow-store__skin sow-store__offer sow-store__deal-card'>" +
+        "<" +
+        artTag +
+        " class='sow-store__skin-art" +
+        (isSkin ? "" : " sow-store__skin-art--leader sow-store__hero-inspect") +
+        "'" +
+        inspectAttr +
+        "><img src='" +
         esc(art) +
         "' alt='' width='96' height='96' loading='lazy'><b class='sow-store__discount'>-" +
         esc(offer.discount_percent) +
-        "%</b></div><div class='sow-store__skin-body'><h3>" +
+        "%</b></" +
+        artClose +
+        "><div class='sow-store__skin-body'>" +
+        "<div class='sow-store__deal-meta'>" +
+        "<span class='sow-store__deal-cadence'>" +
+        esc(offer.cadence === "weekly" ? SOW_t("store.weekly_offers") : SOW_t("store.daily_offers")) +
+        "</span>" +
+        "<span class='sow-store__deal-timer'>" +
+        esc(offerTimeLeft(offer.ends_at)) +
+        "</span>" +
+        "</div>" +
+        "<h3>" +
         esc(name) +
         "</h3><p>" +
-        esc(isSkin ? SOW_t("store.territory_pattern") : SOW_t("store.leader")) +
-        " · <s class='sow-store__list-price'>" +
-        renderCurrencyAmount(offer.base_cost, kind) +
-        "</s></p>" +
+        esc(sublabel) +
+        "</p>" +
         action +
         "</div></article>"
     );
 }
 
-function renderOfferSection(cadence: "daily" | "weekly") {
+function renderFlashDealsSection(kindFilter?: "leader" | "skin") {
     const offers = storeOffers().filter(function (offer) {
-        return offer.cadence === cadence;
+        return !kindFilter || offer.kind === kindFilter;
     });
     if (!offers.length) return "";
     const cards = offers.map(renderStoreOffer).join("");
     if (!cards) return "";
-    const headingId = "sow-store-" + cadence;
     return (
-        "<section class='sow-store__section' aria-labelledby='" +
-        headingId +
-        "'><div class='sow-store__section-head'><h2 id='" +
-        headingId +
-        "'>" +
-        esc(SOW_t(cadence === "daily" ? "store.daily_offers" : "store.weekly_offers")) +
-        "</h2><span>" +
+        "<section class='sow-store__section' aria-labelledby='sow-store-flash-deals'>" +
+        "<div class='sow-store__section-head'>" +
+        "<h2 id='sow-store-flash-deals'>" +
+        esc(SOW_t("store.featured_offers")) +
+        "</h2>" +
+        "<span>" +
         esc(SOW_t("store.ends_in", { time: offerTimeLeft(offers[0].ends_at) })) +
-        "</span></div><div class='sow-store__skin-grid'>" +
+        "</span>" +
+        "</div>" +
+        "<div class='sow-store__skin-grid sow-store__deal-grid'>" +
         cards +
         "</div></section>"
     );
@@ -921,20 +1277,31 @@ function renderOfferSection(cadence: "daily" | "weekly") {
 function renderStoreHero(offer: MenuLeaderOffer) {
     const leader = leaderById(offer.id);
     const displayName = leaderDisplayName(leader);
+    const liveGemOffer = activeOfferForItem("leader", offer.id, "gems");
+    const liveCrownOffer = activeOfferForItem("leader", offer.id, "crowns");
+    const discountPct = liveGemOffer
+        ? liveGemOffer.discount_percent
+        : liveCrownOffer
+          ? liveCrownOffer.discount_percent
+          : 0;
     return (
-        "<article class='sow-store__skin sow-store__hero'>" +
+        "<article class='sow-store__skin sow-store__hero" +
+        (discountPct > 0 ? " is-on-sale" : "") +
+        "'>" +
         "<button type='button' class='sow-store__skin-art sow-store__skin-art--leader sow-store__hero-inspect' data-command='open_hero_info' data-leader-id='" +
         esc(offer.id) +
-        "' data-hero-info-tab='biography' aria-label='" +
-        esc(displayName + " — " + SOW_t("heroes.tab_biography")) +
+        "' data-hero-info-tab='overview' aria-label='" +
+        esc(displayName) +
         "'><img src='" +
         esc(avatarImage(offer.id)) +
-        "' alt='' width='96' height='96' loading='lazy'></button>" +
+        "' alt='' width='96' height='96' loading='lazy'>" +
+        (discountPct > 0 ? "<b class='sow-store__discount'>-" + esc(discountPct) + "%</b>" : "") +
+        "</button>" +
         "<div class='sow-store__skin-body'><div class='sow-store__hero-head'><h3>" +
         esc(displayName) +
         "</h3><button type='button' class='sow-store__hero-bio-btn' data-command='open_hero_info' data-leader-id='" +
         esc(offer.id) +
-        "' data-hero-info-tab='biography'>" +
+        "' data-hero-info-tab='overview'>" +
         esc(SOW_t("heroes.bio_view_dossier")) +
         "</button></div><p>" +
         esc(leaderCivilization(leader)) +
@@ -951,6 +1318,17 @@ function renderHeroSection(leaders: MenuLeaderOffer[]) {
             return !offer.owned && !offer.permanently_free && Number(offer.cost_crowns) > 0;
         })
         .sort(function (left, right) {
+            const leftSale =
+                activeOfferForItem("leader", left.id, "gems") ||
+                activeOfferForItem("leader", left.id, "crowns")
+                    ? 0
+                    : 1;
+            const rightSale =
+                activeOfferForItem("leader", right.id, "gems") ||
+                activeOfferForItem("leader", right.id, "crowns")
+                    ? 0
+                    : 1;
+            if (leftSale !== rightSale) return leftSale - rightSale;
             return Number(left.cost_crowns) - Number(right.cost_crowns);
         });
     if (!locked.length) return "";
@@ -965,8 +1343,42 @@ function renderHeroSection(leaders: MenuLeaderOffer[]) {
     );
 }
 
+function renderSkinsSection(skins: MenuSkinOffer[]) {
+    const sorted = skins.slice().sort(function (left, right) {
+        const leftOwned = left.owned ? 1 : 0;
+        const rightOwned = right.owned ? 1 : 0;
+        if (leftOwned !== rightOwned) return leftOwned - rightOwned;
+        const leftSale =
+            activeOfferForItem("skin", left.id, "gems") ||
+            activeOfferForItem("skin", left.id, "crowns")
+                ? 0
+                : 1;
+        const rightSale =
+            activeOfferForItem("skin", right.id, "gems") ||
+            activeOfferForItem("skin", right.id, "crowns")
+                ? 0
+                : 1;
+        if (leftSale !== rightSale) return leftSale - rightSale;
+        return Number(left.cost_gems || 0) - Number(right.cost_gems || 0);
+    });
+    return (
+        "<section class='sow-store__section' aria-labelledby='sow-store-skins'><div class='sow-store__section-head'><h2 id='sow-store-skins'>" +
+        esc(SOW_t("store.skins")) +
+        "</h2><span>" +
+        esc(SOW_t("store.territory_patterns")) +
+        "</span></div><div class='sow-store__skin-grid'>" +
+        (sorted.map(renderStoreSkinPromo).join("") ||
+            "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") +
+        "</div></section>"
+    );
+}
+
 function purchaseItemOwned() {
     if (!menuUi.purchaseIntent) return false;
+    if (menuUi.purchaseIntent.type === "store_bundle") {
+        const bundle = storeBundleOfferById(menuUi.purchaseIntent.bundleOfferId);
+        return !!bundle && computeBundleQuote(bundle).allOwned;
+    }
     if (menuUi.purchaseIntent.skinId) {
         const skin = storeSkinById(menuUi.purchaseIntent.skinId);
         return !!skin && !!skin.owned;
@@ -979,11 +1391,31 @@ function renderPurchaseArt(
     leader: MenuLeader | null,
     skin: MenuSkinOffer | null,
     bundle: MenuGemBundle | null,
+    storeBundle: MenuStoreBundleOffer | null,
     success: boolean,
 ) {
     let visualClass = "";
     let art;
-    if (bundle) {
+    if (storeBundle) {
+        const quote = computeBundleQuote(storeBundle);
+        visualClass = " sow-purchase-modal__visual--bundle sow-purchase-modal__visual--store-bundle";
+        art =
+            "<div class='sow-store__bundle-portraits sow-store__bundle-portraits--modal'>" +
+            quote.items
+                .map(function (item) {
+                    return (
+                        "<span class='sow-store__bundle-portrait" +
+                        (storeBundle.kind === "skin" ? " is-skin" : "") +
+                        "'><img src='" +
+                        esc(item.art) +
+                        "' alt='" +
+                        esc(item.name) +
+                        "' width='88' height='88'></span>"
+                    );
+                })
+                .join("") +
+            "</div>";
+    } else if (bundle) {
         const bundleArt = bundle.asset_path
             ? asset(bundle.asset_path)
             : asset("gameplay/store/gem_bundles/" + bundle.id + ".webp");
@@ -1034,10 +1466,15 @@ export function renderPurchaseModal() {
         menuUi.purchaseModal.type === "bundle"
             ? storeBundleByProductId(menuUi.purchaseModal.productId)
             : null;
+    const storeBundle =
+        menuUi.purchaseModal.type === "store_bundle"
+            ? storeBundleOfferById(menuUi.purchaseModal.bundleOfferId)
+            : null;
     if (
         (menuUi.purchaseModal.leaderId && (!leader || !offer)) ||
         (menuUi.purchaseModal.skinId && !skin) ||
-        (menuUi.purchaseModal.type === "bundle" && !bundle)
+        (menuUi.purchaseModal.type === "bundle" && !bundle) ||
+        (menuUi.purchaseModal.type === "store_bundle" && !storeBundle)
     )
         return "";
     const isProduct = menuUi.purchaseModal.type === "product";
@@ -1050,9 +1487,11 @@ export function renderPurchaseModal() {
         (menuUi.state && menuUi.state.store_busy);
     const itemName = bundle
         ? SOW_t("store.gems_count", { amount: bundle.gems })
-        : skin
-          ? skin.name
-          : leaderDisplayName(leader);
+        : storeBundle
+          ? storeBundle.title
+          : skin
+            ? skin.name
+            : leaderDisplayName(leader);
     const heading = bundle
         ? "<span class='sow-purchase-modal__bundle-amount'>" +
           renderCurrencyAmount(bundle.gems, "gem") +
@@ -1060,13 +1499,21 @@ export function renderPurchaseModal() {
         : esc(itemName);
     // "product" modals only show delivery of an already paid leader/skin.
     const storeOffer = storeOfferById(menuUi.purchaseModal.offerId);
+    const storeBundleQuote = storeBundle ? computeBundleQuote(storeBundle) : null;
     const currencyKind = menuUi.purchaseModal.currency === "gems" ? "gem" : "crown";
+    const baseCost = storeBundleQuote
+        ? menuUi.purchaseModal.currency === "gems"
+            ? storeBundleQuote.baseGems
+            : storeBundleQuote.baseCrowns
+        : storeOffer
+          ? storeOffer.base_cost
+          : 0;
     const summary =
         bundle || isProduct
             ? ""
-            : (storeOffer
+            : (baseCost > 0
                   ? "<s class='sow-store__list-price'>" +
-                    renderCurrencyAmount(storeOffer.base_cost, currencyKind) +
+                    renderCurrencyAmount(baseCost, currencyKind) +
                     "</s> "
                   : "") + renderCurrencyAmount(purchaseModalCost(), currencyKind);
     const error =
@@ -1121,7 +1568,7 @@ export function renderPurchaseModal() {
         "' aria-label='" +
         esc(itemName) +
         "'><div class='sow-purchase-modal__layout'>" +
-        renderPurchaseArt(leader, skin, bundle, success) +
+        renderPurchaseArt(leader, skin, bundle, storeBundle, success) +
         "<div class='sow-purchase-modal__copy'>" +
         head +
         price +
@@ -1169,7 +1616,9 @@ export function resolvePurchaseModal() {
             menuUi.purchaseModal.type,
             menuUi.purchaseModal.type === "skin"
                 ? menuUi.purchaseModal.skinId
-                : menuUi.purchaseModal.leaderId,
+                : menuUi.purchaseModal.type === "store_bundle"
+                  ? menuUi.purchaseModal.bundleOfferId
+                  : menuUi.purchaseModal.leaderId,
             menuUi.purchaseModal.currency === "gems" ? "gems" : "crowns",
         );
         menuUi.purchaseModal.phase = "spending";
@@ -1186,9 +1635,17 @@ export function resolvePurchaseModal() {
 export function renderStore() {
     const store = menuUi.state!.store || {};
     const bundles = Array.isArray(store.gem_bundles) ? store.gem_bundles : [];
+    const leaders = Array.isArray(store.leaders) ? store.leaders : [];
     const skins = Array.isArray(store.skins) ? store.skins : [];
     const crowns = store.crowns || 0;
     const gemsForSale = isAndroidTwa();
+    const activeTab = menuUi.storeTab || "featured";
+    const lockedLeadersCount = leaders.filter(function (offer) {
+        return !offer.owned && !offer.permanently_free && Number(offer.cost_crowns) > 0;
+    }).length;
+    const unownedSkinsCount = skins.filter(function (skin) {
+        return !skin.owned && Number(skin.cost_gems || skin.cost_crowns || 0) > 0;
+    }).length;
     const featured = gemsForSale
         ? bundles.find(function (bundle) {
               return bundle.product_id === "sow_gems_2600";
@@ -1205,11 +1662,76 @@ export function renderStore() {
               esc(SOW_t("store.restore_purchases")) +
               "</button>"
             : "";
+    const tabsHtml =
+        "<nav class='sow-store__tabs' aria-label='" +
+        esc(SOW_t("store.shop")) +
+        "'>" +
+        "<button type='button' class='sow-store__tab" +
+        (activeTab === "featured" ? " is-active" : "") +
+        "' data-command='switch_store_tab' data-store-tab='featured'>" +
+        esc(SOW_t("store.featured_offers")) +
+        "</button>" +
+        "<button type='button' class='sow-store__tab" +
+        (activeTab === "leaders" ? " is-active" : "") +
+        "' data-command='switch_store_tab' data-store-tab='leaders'>" +
+        esc(SOW_t("store.leaders")) +
+        (lockedLeadersCount > 0 ? " <b>" + esc(lockedLeadersCount) + "</b>" : "") +
+        "</button>" +
+        "<button type='button' class='sow-store__tab" +
+        (activeTab === "skins" ? " is-active" : "") +
+        "' data-command='switch_store_tab' data-store-tab='skins'>" +
+        esc(SOW_t("store.skins")) +
+        (unownedSkinsCount > 0 ? " <b>" + esc(unownedSkinsCount) + "</b>" : "") +
+        "</button>" +
+        "</nav>";
+
+    const featuredGemsHtml =
+        activeTab === "featured"
+            ? (featured
+                  ? "<article class='sow-store__featured'><div><p class='sow-store__eyebrow'>" +
+                    esc(SOW_t("store.kingdom_vault")) +
+                    "</p><h2>" +
+                    renderCurrencyAmount(featured.gems, "gem") +
+                    " " +
+                    esc(SOW_t("store.gems")) +
+                    "</h2><p>" +
+                    esc(SOW_t("store.build_next_army")) +
+                    "</p></div>" +
+                    featuredAction +
+                    "</article>"
+                  : "") +
+              (gemsForSale
+                  ? "<section class='sow-store__section' aria-labelledby='sow-store-gems'><div class='sow-store__section-head'><h2 id='sow-store-gems'>" +
+                    esc(SOW_t("store.gems")) +
+                    "</h2><button class='sow-store__link' type='button' data-command='main_nav' data-nav-screen='heroes'>" +
+                    esc(SOW_t("store.view_heroes")) +
+                    "</button></div><div class='sow-store__bundle-grid'>" +
+                    (bundles.map(renderStoreBundle).join("") ||
+                        "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") +
+                    "</div></section>"
+                  : "")
+            : "";
+
+    const tabBodyHtml =
+        activeTab === "leaders"
+            ? renderBundlesShowcaseSection("leader") +
+              renderFlashDealsSection("leader") +
+              renderHeroSection(leaders)
+            : activeTab === "skins"
+              ? renderBundlesShowcaseSection("skin") +
+                renderFlashDealsSection("skin") +
+                renderSkinsSection(skins)
+              : renderBundlesShowcaseSection() +
+                renderFlashDealsSection() +
+                featuredGemsHtml +
+                renderHeroSection(leaders) +
+                renderSkinsSection(skins);
+
     return (
         "<main class='sow-menu__main sow-menu__main--store' data-screen-panel='store'><section class='sow-menu__store-slot' data-store-slot aria-label='" +
         esc(SOW_t("store.shop")) +
         "'>" +
-        "<header class='sow-store__heading'><div><p class='sow-store__eyebrow'>" +
+        "<header class='sow-store__heading'><div class='sow-store__heading-copy'><p class='sow-store__eyebrow'>" +
         esc(SOW_t("store.shop")) +
         "</p><h1>" +
         esc(SOW_t("store.featured_offers")) +
@@ -1222,55 +1744,10 @@ export function renderStore() {
         "'>" +
         renderCurrencyAmount(crowns, "crown") +
         "</span></div></header>" +
+        tabsHtml +
         restoreAction +
         renderFeedback() +
-        (featured
-            ? "<article class='sow-store__featured'><div><p class='sow-store__eyebrow'>" +
-              esc(SOW_t("store.kingdom_vault")) +
-              "</p><h2>" +
-              renderCurrencyAmount(featured.gems, "gem") +
-              " " +
-              esc(SOW_t("store.gems")) +
-              "</h2><p>" +
-              esc(SOW_t("store.build_next_army")) +
-              "</p></div>" +
-              featuredAction +
-              "</article>"
-            : "") +
-        (gemsForSale
-            ? "<section class='sow-store__section' aria-labelledby='sow-store-gems'><div class='sow-store__section-head'><h2 id='sow-store-gems'>" +
-              esc(SOW_t("store.gems")) +
-              "</h2><button class='sow-store__link' type='button' data-command='main_nav' data-nav-screen='heroes'>" +
-              esc(SOW_t("store.view_heroes")) +
-              "</button></div><div class='sow-store__bundle-grid'>" +
-              (bundles.map(renderStoreBundle).join("") ||
-                  "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") +
-              "</div></section>"
-            : "") +
-        renderOfferSection("daily") +
-        renderOfferSection("weekly") +
-        renderHeroSection(Array.isArray(store.leaders) ? store.leaders : []) +
-        "<section class='sow-store__section' aria-labelledby='sow-store-skins'><div class='sow-store__section-head'><h2 id='sow-store-skins'>" +
-        esc(SOW_t("store.skins")) +
-        "</h2><span>" +
-        esc(SOW_t("store.territory_patterns")) +
-        "</span></div><div class='sow-store__skin-grid'>" +
-        (skins.map(renderStoreSkinPromo).join("") ||
-            "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") +
-        "</div></section>" +
-        "<section class='sow-store__promos'><button type='button' data-command='main_nav' data-nav-screen='heroes'><strong>" +
-        esc(SOW_t("store.leaders")) +
-        "</strong><span>" +
-        esc(SOW_t("store.choose_commander")) +
-        "</span><b>" +
-        esc(SOW_t("store.view")) +
-        "</b></button><button type='button' data-command='main_nav' data-nav-screen='heroes'><strong>" +
-        esc(SOW_t("store.skins")) +
-        "</strong><span>" +
-        esc(SOW_t("store.change_territory_style")) +
-        "</span><b>" +
-        esc(SOW_t("store.view")) +
-        "</b></button></section>" +
+        tabBodyHtml +
         "</section></main>"
     );
 }
@@ -1330,16 +1807,26 @@ export function loadStoreCatalog() {
     const state = menuUi.state;
     if (!state) return;
     const expectedPeriod = Number(state.store && state.store.rotation_period) || 0;
+    const nowSecs = Date.now() / 1000;
     const offersExpired = (Array.isArray(state.store && state.store.offers) ? state.store.offers! : []).some(
         function (offer) {
-            return Number(offer.ends_at) <= Date.now() / 1000;
+            return Number(offer.ends_at) <= nowSecs;
+        },
+    );
+    const bundlesExpired = (Array.isArray(state.store && state.store.bundles) ? state.store.bundles! : []).some(
+        function (bundle) {
+            return Number(bundle.ends_at) <= nowSecs;
         },
     );
     if (
         menuUi.storeCatalogLoading ||
-        (menuUi.storeCatalogLoaded && loadedRotationPeriod >= expectedPeriod && !offersExpired) ||
+        (menuUi.storeCatalogLoaded &&
+            loadedRotationPeriod >= expectedPeriod &&
+            !offersExpired &&
+            !bundlesExpired) ||
         Date.now() < menuUi.storeCatalogRetryAt
-    ) return;
+    )
+        return;
     menuUi.storeCatalogLoading = true;
     fetch(profileApi("/store/catalog"), { headers: { Accept: "application/json" } })
         .then(function (response) {

@@ -135,6 +135,11 @@ enum WebMenuCommand {
         #[serde(default)]
         offer_id: Option<String>,
     },
+    UnlockBundle {
+        bundle_id: String,
+        #[serde(default)]
+        currency: String,
+    },
     EquipSkin {
         skin_id: String,
     },
@@ -1196,6 +1201,15 @@ impl SowApp {
                         skin_id,
                         currency,
                         offer_id,
+                    }));
+                }
+                WebMenuCommand::UnlockBundle {
+                    bundle_id,
+                    currency,
+                } => {
+                    self.process_ui_actions(Some(UiAction::UnlockBundle {
+                        bundle_id,
+                        currency,
                     }));
                 }
                 WebMenuCommand::EquipSkin { skin_id } => {
@@ -5833,7 +5847,8 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         .iter()
         .filter_map(|id| sow_data::commerce::leader_from_id(id))
         .collect::<Vec<_>>();
-    let store_catalog = sow_data::commerce::catalog_for_profile(
+    let now_secs = (js_sys::Date::now().max(0.0) / 1000.0) as u64;
+    let mut store_catalog = sow_data::commerce::catalog_for_profile(
         &progress.owned_leaders,
         &progress.owned_skins,
         progress.crowns,
@@ -5841,6 +5856,8 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         inputs.rotation_period,
         &free_leaders,
     );
+    store_catalog.offers = sow_data::commerce::store_offers(now_secs);
+    store_catalog.bundles = sow_data::commerce::store_bundles(now_secs);
     let leaders: Vec<serde_json::Value> = sow_core::player::Leader::all()
         .map(|leader| {
             let slug = leader.id();

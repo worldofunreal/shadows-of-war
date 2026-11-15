@@ -519,8 +519,8 @@
   transform: scale(1.035);
 }
 
-.sow-campaign__episode:hover .sow-campaign__leader-art,
-.sow-campaign__episode:focus-within .sow-campaign__leader-art {
+.sow-campaign__episode:hover .sow-campaign__episode-art .sow-campaign__leader-art,
+.sow-campaign__episode:focus-within .sow-campaign__episode-art .sow-campaign__leader-art {
   filter: saturate(1) contrast(1.04);
   transform: translateY(-50%) scale(1.035);
 }

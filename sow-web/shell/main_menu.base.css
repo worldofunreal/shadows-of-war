@@ -2578,45 +2578,45 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   --rank-glow: #a66c46;
 }
 [data-tier="bronze"],
-[data-tier="settlement"] {
+[data-tier="chieftain"] {
   --rank-light: #efbe97;
   --rank-glow: #c28353;
 }
 [data-tier="silver"],
-[data-tier="city_state"] {
+[data-tier="commander"] {
   --rank-light: #dce9fa;
   --rank-glow: #859db8;
 }
-[data-tier="kingdom"] {
+[data-tier="governor"] {
   --rank-light: #cfe4ff;
   --rank-glow: #5b87c7;
 }
 [data-tier="gold"],
-[data-tier="republic"] {
+[data-tier="king"] {
   --rank-light: #ffe09a;
   --rank-glow: #d3a63e;
 }
-[data-tier="empire"] {
+[data-tier="emperor"] {
   --rank-light: #ffd180;
   --rank-glow: #e07b39;
 }
 [data-tier="platinum"],
-[data-tier="dynasty"] {
+[data-tier="sovereign"] {
   --rank-light: #aefff1;
   --rank-glow: #4fc5b5;
 }
 [data-tier="diamond"],
-[data-tier="hegemony"] {
+[data-tier="overlord"] {
   --rank-light: #c1e6ff;
   --rank-glow: #599fe7;
 }
 [data-tier="master"],
-[data-tier="dominion"] {
+[data-tier="immortal"] {
   --rank-light: #e6c0ff;
   --rank-glow: #b775e5;
 }
 [data-tier="grandmaster"],
-[data-tier="eternal"] {
+[data-tier="deity"] {
   --rank-light: #ffe8a5;
   --rank-glow: #ef9a58;
 }

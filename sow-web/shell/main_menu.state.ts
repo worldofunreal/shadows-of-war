@@ -223,6 +223,21 @@ export interface MenuStoreOffer {
     ends_at: number;
 }
 
+export interface MenuStoreBundleOffer {
+    id: string;
+    theme_key: string;
+    title: string;
+    subtitle: string;
+    kind: "leader" | "skin";
+    item_ids: string[];
+    discount_percent: number;
+    base_crowns: number;
+    cost_crowns: number;
+    base_gems: number;
+    cost_gems: number;
+    ends_at: number;
+}
+
 export interface MenuGemBundle {
     id: string;
     product_id: string;
@@ -240,6 +255,7 @@ export interface MenuStore {
     skins: MenuSkinOffer[];
     gem_bundles: MenuGemBundle[];
     offers?: MenuStoreOffer[];
+    bundles?: MenuStoreBundleOffer[];
 }
 
 export interface MenuSettings {

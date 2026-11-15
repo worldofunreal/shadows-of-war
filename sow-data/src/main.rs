@@ -341,6 +341,16 @@ struct UnlockSkinRequest {
 }
 
 #[derive(Deserialize)]
+struct UnlockBundleRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    bundle_id: String,
+    #[serde(default)]
+    currency: String,
+}
+
+#[derive(Deserialize)]
 struct EquipSkinRequest {
     account_id: String,
     #[serde(default)]
@@ -414,7 +424,9 @@ async fn handle_store_catalog(
         period,
         &rotation,
     );
-    catalog.offers = sow_data::commerce::store_offers(sow_data::commerce::unix_now());
+    let now = sow_data::commerce::unix_now();
+    catalog.offers = sow_data::commerce::store_offers(now);
+    catalog.bundles = sow_data::commerce::store_bundles(now);
     Ok(Json(catalog))
 }
 
@@ -754,6 +766,38 @@ async fn handle_unlock_skin(
             &payload.currency,
             payload.offer_id.as_deref(),
         )
+        .await
+    {
+        Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
+        Err(error) => (
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+async fn handle_unlock_bundle(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<UnlockBundleRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    match state
+        .db
+        .unlock_bundle(&account_id, &payload.bundle_id, &payload.currency)
         .await
     {
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
@@ -1890,6 +1934,7 @@ async fn main() {
         )
         .route("/store/leaders/unlock", post(handle_unlock_leader))
         .route("/store/skins/unlock", post(handle_unlock_skin))
+        .route("/store/bundles/unlock", post(handle_unlock_bundle))
         .route("/store/skins/equip", post(handle_equip_skin))
         .route(
             "/internal/revenuecat/webhook",

@@ -3328,7 +3328,15 @@ root.addEventListener("click", function (event) {
     }
     if (command === "open_offer_purchase") {
         const purchaseOfferId = target.dataset.offerId;
-        if (purchaseOfferId) openOfferPurchase(purchaseOfferId);
+        if (purchaseOfferId) openOfferPurchase(purchaseOfferId, target.dataset.currency);
+        return;
+    }
+    if (command === "switch_store_tab") {
+        const storeTab = target.dataset.storeTab;
+        if (storeTab === "featured" || storeTab === "leaders" || storeTab === "skins") {
+            menuUi.storeTab = storeTab;
+            render();
+        }
         return;
     }
     if (command === "open_skin_picker") {
@@ -3363,6 +3371,12 @@ root.addEventListener("click", function (event) {
                     skin_id: menuUi.purchaseModal.skinId,
                     currency: menuUi.purchaseModal.currency || "gems",
                     offer_id: menuUi.purchaseModal.offerId || null,
+                });
+        } else if (menuUi.purchaseModal.type === "store_bundle") {
+            if (!(menuUi.state && menuUi.state.store_busy))
+                send("unlock_bundle", {
+                    bundle_id: menuUi.purchaseModal.bundleOfferId,
+                    currency: menuUi.purchaseModal.currency || "crowns",
                 });
         }
         render();

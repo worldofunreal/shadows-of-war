@@ -749,11 +749,6 @@ export function renderCampaign() {
         "</h1>" +
         "</div>" +
         "</header>" +
-        "<nav class='sow-campaign__sagas-nav' aria-label='" +
-        esc(SOW_t("lobbies.the_saga")) +
-        "'><div class='sow-campaign__sagas-rail'>" +
-        sagaTabsHtml +
-        "</div></nav>" +
         "<div class='sow-campaign__workspace'>" +
         featuredHtml +
         "<section class='sow-menu__battlefield sow-campaign__battlefield sow-campaign__roster'>" +

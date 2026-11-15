@@ -228,6 +228,12 @@ impl SowApp {
                 } => {
                     self.unlock_skin(skin_id, currency, offer_id);
                 }
+                UiAction::UnlockBundle {
+                    bundle_id,
+                    currency,
+                } => {
+                    self.unlock_bundle(bundle_id, currency);
+                }
                 UiAction::EquipSkin(skin_id) => {
                     self.equip_skin(skin_id);
                 }

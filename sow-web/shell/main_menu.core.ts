@@ -18,18 +18,20 @@ import type {
 } from "./main_menu.profile.ts";
 
 export interface PurchaseIntent {
-    type: "bundle" | "leader" | "skin";
+    type: "bundle" | "leader" | "skin" | "store_bundle";
     productId?: string;
     leaderId?: string;
     skinId?: string;
     offerId?: string;
+    bundleOfferId?: string;
 }
 
 export interface PurchaseModal {
-    type: "bundle" | "product" | "leader" | "skin";
+    type: "bundle" | "product" | "leader" | "skin" | "store_bundle";
     phase: "confirm" | "processing" | "spending" | "success";
     productId?: string;
     bundleId?: string;
+    bundleOfferId?: string;
     gems?: number;
     leaderId?: string;
     skinId?: string;
@@ -103,6 +105,7 @@ interface MenuUi {
     profileLastPhase: string | null;
     profileNavStack: { accountId: string; tab: string }[];
     storeOpen: boolean;
+    storeTab: "featured" | "leaders" | "skins";
     skinPickerOpen: boolean;
     heroInfoOpen: boolean;
     heroInfoTab: "overview" | "biography" | "achievements";
@@ -195,6 +198,7 @@ export const menuUi: MenuUi = {
     profileLastPhase: null,
     profileNavStack: [],
     storeOpen: false,
+    storeTab: "featured",
     skinPickerOpen: false,
     heroInfoOpen: false,
     heroInfoTab: "overview",
@@ -947,6 +951,12 @@ export function renderKey(): string {
             }),
             gem_bundles: (state.store.gem_bundles || []).map(function (bundle) {
                 return [bundle.id, bundle.product_id, bundle.gems, bundle.asset_path, bundle.bonus_percent];
+            }),
+            offers: (state.store.offers || []).map(function (offer) {
+                return [offer.id, offer.cost, offer.ends_at];
+            }),
+            bundles: (state.store.bundles || []).map(function (bundle) {
+                return [bundle.id, bundle.cost_crowns, bundle.cost_gems, bundle.ends_at];
             }),
         },
         account_id: state.account_id,

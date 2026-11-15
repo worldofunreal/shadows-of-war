@@ -1433,6 +1433,13 @@ impl SowApp {
         self.post_profile_action("skin unlock", "/store/skins/unlock", fields);
     }
 
+    pub(crate) fn unlock_bundle(&mut self, bundle_id: String, currency: String) {
+        let mut fields = serde_json::Map::new();
+        fields.insert("bundle_id".into(), serde_json::Value::String(bundle_id));
+        fields.insert("currency".into(), serde_json::Value::String(currency));
+        self.post_profile_action("bundle unlock", "/store/bundles/unlock", fields);
+    }
+
     pub(crate) fn equip_skin(&mut self, skin_id: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("skin_id".into(), serde_json::Value::String(skin_id));

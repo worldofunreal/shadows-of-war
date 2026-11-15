@@ -3891,6 +3891,81 @@ impl PlayerDb {
         Ok(account)
     }
 
+    pub async fn unlock_bundle(
+        &self,
+        account_id: &str,
+        bundle_id: &str,
+        currency: &str,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let use_gems = match currency {
+            "gems" => true,
+            "" | "crowns" => false,
+            _ => return Err("invalid bundle unlock currency".into()),
+        };
+        let now = crate::commerce::unix_now();
+        let purchase_id = format!("in_game:bundle:{}", bundle_id.trim());
+        let mut failure = None;
+        let account = self
+            .update_account_atomic(account_id, &[&purchase_id], |account| {
+                let quote = crate::commerce::bundle_purchase_quote(
+                    bundle_id,
+                    if use_gems { "gems" } else { "crowns" },
+                    &account.profile.owned_leaders,
+                    &account.profile.owned_skins,
+                    now,
+                );
+                let (kind, unowned_ids, _base_cost, cost) = match quote {
+                    Ok(q) => q,
+                    Err(err) => {
+                        failure = Some(err);
+                        return;
+                    }
+                };
+                let balance = if use_gems {
+                    &mut account.profile.gems
+                } else {
+                    &mut account.profile.crowns
+                };
+                if *balance < cost {
+                    failure = Some(if use_gems {
+                        "insufficient gems"
+                    } else {
+                        "insufficient crowns"
+                    });
+                    return;
+                }
+                *balance -= cost;
+                if kind == "leader" {
+                    for id in &unowned_ids {
+                        account.profile.owned_leaders.insert(id.clone());
+                    }
+                } else {
+                    for id in &unowned_ids {
+                        account.profile.owned_skins.insert(id.clone());
+                    }
+                }
+                account.profile.purchase_history.insert(
+                    purchase_id.clone(),
+                    PurchaseRecord {
+                        id: purchase_id.clone(),
+                        provider: "in_game".to_string(),
+                        environment: "local".to_string(),
+                        product_id: format!("sow_bundle_unlock_{}", bundle_id.trim()),
+                        transaction_id: None,
+                        status: "granted".to_string(),
+                        acquired_at: now,
+                        updated_at: now,
+                    },
+                );
+                account.updated_at = now;
+            })
+            .await?;
+        if let Some(error) = failure {
+            return Err(error.into());
+        }
+        Ok(account)
+    }
+
     pub async fn equip_skin(
         &self,
         account_id: &str,
