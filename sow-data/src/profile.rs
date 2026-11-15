@@ -1101,7 +1101,7 @@ mod tests {
         assert_eq!(ladder.steps.first().unwrap().score, 0);
         assert_eq!(ladder.steps.first().unwrap().tier, "Nomad");
         assert_eq!(ladder.steps.last().unwrap().score, 9000);
-        assert_eq!(ladder.steps.last().unwrap().tier, "Eternal");
+        assert_eq!(ladder.steps.last().unwrap().tier, "Deity");
     }
 
     #[test]
@@ -1211,7 +1211,7 @@ mod tests {
         ).unwrap();
         assert_eq!(rating.win_streak, 0);
         rating.normalize_ladder();
-        assert_eq!(rating.tier, "Settlement");
+        assert_eq!(rating.tier, "Chieftain");
         assert_eq!(rating.division, None);
         assert!(rating.placements_complete);
 

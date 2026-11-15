@@ -85,8 +85,8 @@ fn animal_alias_band(league_score: Option<u16>) -> (f32, f32) {
     let (tier, _) = sow_data::profile::tier_for_score(league_score.unwrap_or(0));
     match tier {
         "Nomad" | "Bronze" => (0.10, 0.20),
-        "Settlement" | "Silver" => (0.05, 0.10),
-        "CityState" | "Gold" => (0.0, 0.02),
+        "Chieftain" | "Silver" => (0.05, 0.10),
+        "Commander" | "Gold" => (0.0, 0.02),
         _ => (0.0, 0.0),
     }
 }
