@@ -285,10 +285,6 @@ impl SowApp {
                 transport_impacts: std::collections::VecDeque::with_capacity(
                     crate::app::MAX_TRANSPORT_IMPACTS,
                 ),
-                naval_activity: std::collections::VecDeque::with_capacity(
-                    crate::app::MAX_NAVAL_ACTIVITY,
-                ),
-                naval_activity_revision: 0,
                 death_nameplates: Vec::with_capacity(crate::app::MAX_DEATH_NAMEPLATES),
                 attack_badge_labels: std::collections::HashMap::new(),
                 attack_badge_style_key: None,

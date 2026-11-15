@@ -1099,33 +1099,6 @@ html[dir="rtl"] #sow-hud-dev-layer {
   scrollbar-color: color-mix(in srgb, var(--sow-gold) 58%, transparent)
     transparent;
 }
-.sow-hud__naval-activity {
-  display: grid;
-  gap: 4px;
-  min-height: 0;
-  border-top: 1px solid var(--sow-tactical-surface-border);
-  padding-top: 4px;
-}
-.sow-hud__naval-activity[hidden] {
-  display: none !important;
-}
-.sow-hud__naval-activity-title {
-  margin: 0;
-  color: var(--sow-text-muted);
-  font: 800 8px/1.2 var(--sow-ui-font);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.sow-hud__naval-activity-list {
-  display: grid;
-  gap: 4px;
-  max-height: 80px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--sow-gold) 58%, transparent)
-    transparent;
-}
 .sow-hud__operation.is-naval {
   border-inline-start: 2px solid color-mix(in srgb, #7edbff 72%, transparent);
 }
@@ -2567,47 +2540,69 @@ html[dir="rtl"] .sow-hud__request-timer-fill {
     box-shadow 0.16s ease;
 }
 
-/* Request Toast Deck (stacked diagonal cards) */
+/* Request Toast Deck (stacked 3D cards at top-right toolbar margin) */
 .sow-hud__request-toasts {
   position: absolute;
-  top: calc(var(--sow-hud-top-edge) + 56px);
-  inset-inline-end: max(12px, var(--sow-sar));
+  top: var(--sow-hud-top-edge);
+  inset-inline-end: calc(
+    var(--sow-hud-right-edge) + var(--sow-hud-toolbar-side-offset)
+  );
   z-index: 95;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-  width: min(312px, calc(100vw - 24px));
-  --stack-offset-x: -7px;
+  width: min(
+    312px,
+    calc(
+      100vw - var(--sow-hud-right-edge) - var(--sow-hud-toolbar-side-offset) -
+        20px
+    )
+  );
+  --stack-offset-x: -16px;
   --stack-offset-y: 7px;
+  --stack-offset-z: -42px;
+  --stack-tilt-y: 4deg;
+  --stack-tilt-z: -0.6deg;
   pointer-events: none;
 }
 html[dir="rtl"] .sow-hud__request-toasts {
-  --stack-offset-x: 7px;
+  --stack-offset-x: 16px;
+  --stack-tilt-y: -4deg;
+  --stack-tilt-z: 0.6deg;
 }
 .sow-hud__request-toast-stack {
   position: relative;
   display: grid;
   width: 100%;
+  perspective: 960px;
+  perspective-origin: 50% 42%;
+  transform-style: preserve-3d;
 }
 .sow-hud__request-toast {
   grid-area: 1 / 1;
+  position: relative;
+  z-index: calc(20 - var(--stack-i, 0));
   padding: 10px 12px 12px;
   gap: 8px;
-  transform-origin: top center;
+  transform-origin: center center;
   transform: translate3d(
       calc(var(--stack-i, 0) * var(--stack-offset-x)),
       calc(var(--stack-i, 0) * var(--stack-offset-y)),
-      0
+      calc(var(--stack-i, 0) * var(--stack-offset-z))
     )
-    scale(calc(1 - var(--stack-i, 0) * 0.035));
+    rotateY(calc(var(--stack-i, 0) * var(--stack-tilt-y)))
+    rotateZ(calc(var(--stack-i, 0) * var(--stack-tilt-z)))
+    scale(calc(1 - var(--stack-i, 0) * 0.04));
   transition:
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 200ms ease,
-    filter 200ms ease;
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease,
+    filter 220ms ease,
+    box-shadow 220ms ease;
   will-change: transform, opacity;
 }
 .sow-hud__request-toast.is-front {
+  z-index: 25;
   pointer-events: auto;
   cursor: pointer;
   box-shadow:
@@ -2618,12 +2613,28 @@ html[dir="rtl"] .sow-hud__request-toasts {
 }
 .sow-hud__request-toast.is-stacked {
   pointer-events: none;
-  opacity: calc(1 - var(--stack-i, 0) * 0.14);
-  filter: brightness(calc(1 - var(--stack-i, 0) * 0.11));
+  opacity: calc(1 - var(--stack-i, 0) * 0.06);
+  filter: brightness(calc(1 - var(--stack-i, 0) * 0.15));
 }
 .sow-hud__request-toast.is-entering {
-  animation: sow-request-toast-enter 280ms cubic-bezier(0.2, 0.9, 0.25, 1.12)
+  animation: sow-request-toast-enter 260ms cubic-bezier(0.22, 1, 0.36, 1)
     both;
+}
+.sow-hud__request-toast.is-leaving {
+  pointer-events: none;
+  z-index: 30;
+}
+.sow-hud__request-toast.is-leaving-accept {
+  animation: sow-request-toast-leave-accept 240ms
+    cubic-bezier(0.22, 0.85, 0.45, 1) both;
+}
+.sow-hud__request-toast.is-leaving-dismiss {
+  animation: sow-request-toast-leave-dismiss 240ms
+    cubic-bezier(0.22, 0.85, 0.45, 1) both;
+}
+.sow-hud__request-toast.is-leaving-expire {
+  z-index: 12;
+  animation: sow-request-toast-leave-expire 220ms ease-out both;
 }
 .sow-hud__request-toast .sow-hud__request-identity {
   flex-basis: 100%;
@@ -2648,7 +2659,7 @@ html[dir="rtl"] .sow-hud__request-toasts {
 }
 .sow-hud__request-toast-more {
   pointer-events: auto;
-  margin-top: 14px;
+  margin-top: 18px;
   padding: 4px 10px;
   border: 1px solid var(--sow-tactical-surface-accent-border);
   border-radius: 999px;
@@ -2672,15 +2683,15 @@ html[dir="rtl"] .sow-hud__request-toasts {
 @keyframes sow-request-toast-enter {
   from {
     opacity: 0;
-    transform: translate3d(28px, -4px, 0) scale(0.96);
+    transform: translate3d(42px, -10px, 36px) rotateY(-12deg) scale(0.95);
   }
   70% {
     opacity: 1;
-    transform: translate3d(-4px, 1px, 0) scale(1.01);
+    transform: translate3d(-4px, 2px, 6px) rotateY(1.5deg) scale(1.01);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, 0, 0) rotateY(0deg) scale(1);
   }
 }
 html[dir="rtl"] .sow-hud__request-toast.is-entering {
@@ -2689,21 +2700,92 @@ html[dir="rtl"] .sow-hud__request-toast.is-entering {
 @keyframes sow-request-toast-enter-rtl {
   from {
     opacity: 0;
-    transform: translate3d(-28px, -4px, 0) scale(0.96);
+    transform: translate3d(-42px, -10px, 36px) rotateY(12deg) scale(0.95);
   }
   70% {
     opacity: 1;
-    transform: translate3d(4px, 1px, 0) scale(1.01);
+    transform: translate3d(4px, 2px, 6px) rotateY(-1.5deg) scale(1.01);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, 0, 0) rotateY(0deg) scale(1);
+  }
+}
+@keyframes sow-request-toast-leave-accept {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(88px, -18px, 44px) rotateY(-16deg) rotateZ(5deg)
+      scale(0.92);
+  }
+}
+html[dir="rtl"] .sow-hud__request-toast.is-leaving-accept {
+  animation-name: sow-request-toast-leave-accept-rtl;
+}
+@keyframes sow-request-toast-leave-accept-rtl {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-88px, -18px, 44px) rotateY(16deg) rotateZ(-5deg)
+      scale(0.92);
+  }
+}
+@keyframes sow-request-toast-leave-dismiss {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-96px, 14px, 28px) rotateY(18deg) rotateZ(-6deg)
+      scale(0.9);
+  }
+}
+html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
+  animation-name: sow-request-toast-leave-dismiss-rtl;
+}
+@keyframes sow-request-toast-leave-dismiss-rtl {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(96px, 14px, 28px) rotateY(-18deg) rotateZ(6deg)
+      scale(0.9);
+  }
+}
+@keyframes sow-request-toast-leave-expire {
+  from {
+    opacity: 1;
+    transform: translate3d(
+        calc(var(--stack-i, 0) * var(--stack-offset-x)),
+        calc(var(--stack-i, 0) * var(--stack-offset-y)),
+        calc(var(--stack-i, 0) * var(--stack-offset-z))
+      )
+      scale(calc(1 - var(--stack-i, 0) * 0.04));
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(
+        calc(var(--stack-i, 0) * var(--stack-offset-x)),
+        calc(var(--stack-i, 0) * var(--stack-offset-y) - 8px),
+        calc(var(--stack-i, 0) * var(--stack-offset-z) - 32px)
+      )
+      scale(0.88);
   }
 }
 #sow-hud[data-overlay-open="true"] .sow-hud__request-toasts {
   display: none;
 }
-#sow-hud.is-reduced-motion .sow-hud__request-toast.is-entering {
+#sow-hud.is-reduced-motion .sow-hud__request-toast.is-entering,
+#sow-hud.is-reduced-motion .sow-hud__request-toast.is-leaving {
   animation: none;
 }
 
@@ -7077,9 +7159,6 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     grid-auto-rows: max-content;
     max-height: 65px;
   }
-  .sow-hud__naval-activity-list {
-    max-height: 65px;
-  }
   .sow-hud__operation {
     grid-template-columns: 28px minmax(0, 1fr) max-content max-content;
     gap: 2px 4px;
@@ -7261,16 +7340,30 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
     display: none;
   }
   .sow-hud__request-toasts {
-    top: calc(var(--sow-hud-top-edge) + 54px);
-    inset-inline: 0;
-    margin-inline: auto;
-    align-items: center;
-    width: min(312px, calc(100vw - 28px));
-    --stack-offset-x: -5px;
+    top: var(--sow-hud-top-edge);
+    inset-inline-start: auto;
+    inset-inline-end: calc(
+      var(--sow-hud-right-edge) + var(--sow-hud-toolbar-side-offset)
+    );
+    margin-inline: 0;
+    align-items: flex-end;
+    width: min(
+      300px,
+      calc(
+        100vw - var(--sow-hud-right-edge) - var(--sow-hud-toolbar-side-offset) -
+          16px
+      )
+    );
+    --stack-offset-x: -12px;
     --stack-offset-y: 6px;
+    --stack-offset-z: -34px;
+    --stack-tilt-y: 3deg;
+    --stack-tilt-z: -0.45deg;
   }
   html[dir="rtl"] .sow-hud__request-toasts {
-    --stack-offset-x: 5px;
+    --stack-offset-x: 12px;
+    --stack-tilt-y: -3deg;
+    --stack-tilt-z: 0.45deg;
   }
   .sow-hud__request-toast {
     padding: 9px 10px 11px;
@@ -7281,6 +7374,32 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   }
   .sow-hud__request-toast .sow-hud__request-type {
     font-size: 12px;
+  }
+}
+
+@media (max-width: 720px) and (orientation: portrait) {
+  .sow-hud__request-toasts {
+    top: calc(
+      var(--sow-hud-top-edge) + var(--sow-player-panel-height, 84px) + 8px
+    );
+    inset-inline-start: auto;
+    inset-inline-end: calc(var(--sow-hud-right-edge) + 52px);
+    margin-inline: 0;
+    align-items: flex-end;
+    width: min(
+      292px,
+      calc(100vw - var(--sow-sal) - var(--sow-hud-right-edge) - 64px)
+    );
+    --stack-offset-x: -6px;
+    --stack-offset-y: 5px;
+    --stack-offset-z: -24px;
+    --stack-tilt-y: 0deg;
+    --stack-tilt-z: 0deg;
+  }
+  html[dir="rtl"] .sow-hud__request-toasts {
+    --stack-offset-x: 6px;
+    --stack-tilt-y: 0deg;
+    --stack-tilt-z: 0deg;
   }
 }
 
@@ -7670,25 +7789,43 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail {
   transform-origin: left bottom;
 }
 
-/* Compact horizontal & small windows keep the card stack tucked under the top-right status bar. */
+/* Compact horizontal & small windows align the 2-card 3D deck to the margin of the top-right toolbar. */
 #sow-hud[data-compact="true"] .sow-hud__request-toasts {
-  top: calc(var(--sow-hud-top-edge) + 48px);
+  top: var(--sow-hud-top-edge);
   inset-inline-start: auto;
-  inset-inline-end: max(8px, var(--sow-sar));
+  inset-inline-end: calc(
+    var(--sow-hud-right-edge) +
+      var(--sow-hud-toolbar-side-offset) * var(--sow-hud-density, 1)
+  );
   margin-inline: 0;
   align-items: flex-end;
-  width: min(286px, calc(100vw - 128px));
-  --stack-offset-x: -4px;
-  --stack-offset-y: 4px;
+  width: min(
+    286px,
+    calc(
+      100vw - var(--sow-hud-right-edge) -
+        var(--sow-hud-toolbar-side-offset) * var(--sow-hud-density, 1) - 18px
+    )
+  );
+  --stack-offset-x: -12px;
+  --stack-offset-y: 5px;
+  --stack-offset-z: -32px;
+  --stack-tilt-y: 3deg;
+  --stack-tilt-z: -0.4deg;
 }
 
 html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
-  --stack-offset-x: 4px;
+  --stack-offset-x: 12px;
+  --stack-tilt-y: -3deg;
+  --stack-tilt-z: 0.4deg;
 }
 
 #sow-hud[data-compact="true"] .sow-hud__request-toast {
   padding: 7px 9px 9px;
   gap: 6px;
+}
+
+#sow-hud[data-compact="true"] .sow-hud__request-toast-more {
+  margin-top: 10px;
 }
 
 #sow-hud[data-compact="true"] .sow-hud__request-toast .sow-hud__notification-avatar {
@@ -7717,12 +7854,26 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
 
 @media (max-width: 640px) and (orientation: portrait) {
   #sow-hud[data-compact="true"] .sow-hud__request-toasts {
-    top: calc(var(--sow-hud-top-edge) + 54px);
-    inset-inline: max(10px, var(--sow-sal)) max(10px, var(--sow-sar));
-    margin-inline: auto;
-    align-items: center;
-    width: min(332px, calc(100vw - 20px));
-    transform-origin: center top;
+    top: calc(
+      var(--sow-hud-top-edge) + var(--sow-player-panel-height, 84px) + 8px
+    );
+    inset-inline-start: auto;
+    inset-inline-end: calc(
+      var(--sow-hud-right-edge) + 52px * var(--sow-hud-density, 1)
+    );
+    margin-inline: 0;
+    align-items: flex-end;
+    width: min(
+      304px,
+      calc(
+        100vw - var(--sow-sal) - var(--sow-hud-right-edge) - 60px *
+          var(--sow-hud-density, 1)
+      )
+    );
+    transform-origin: right top;
+  }
+  html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
+    transform-origin: left top;
   }
 }
 

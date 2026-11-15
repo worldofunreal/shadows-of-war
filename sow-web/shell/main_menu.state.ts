@@ -665,21 +665,6 @@ export interface HudCombatOperation {
     incoming_troops?: number;
 }
 
-export interface HudNavalActivity {
-    id: number;
-    kind: "hit" | "sunk" | "captured";
-    source_name: string | null;
-    source_avatar: HudAvatarIdentity | null;
-    target_name: string | null;
-    target_type: "transport" | "trade" | "warship";
-    damage: number;
-    health_after: number;
-    troops_lost: number;
-    focus_x: number | null;
-    focus_y: number | null;
-    focus_fleet_id: number | null;
-}
-
 export interface HudDevParameter {
     id: string;
     label: string;
@@ -729,7 +714,6 @@ export interface MenuHudPayload {
     hero_income_rate?: number;
     attack_ratio: number;
     operations: HudCombatOperation[];
-    naval_activity?: HudNavalActivity[];
     spawn_timer_secs: number | null;
     spawn_duration_secs?: number;
     has_spawned?: boolean;

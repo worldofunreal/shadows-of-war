@@ -1101,18 +1101,7 @@ fn collect_buildings(
         let tile_x = building.tile_idx % map_w;
         let tile_y = building.tile_idx / map_w;
         let active_level = building.active_level();
-        let display_level = if building.kind == BuildingKind::City {
-            if building.under_construction && active_level == 0 {
-                0
-            } else {
-                sow_core::building::city_snapshot_visual_level(
-                    &snapshot.buildings,
-                    building.tile_idx,
-                )
-            }
-        } else {
-            active_level
-        };
+        let display_level = active_level;
         let detail = lod.detail(building.kind);
         let has_active_city_build = building.kind == BuildingKind::City
             && (building.under_construction

@@ -227,6 +227,7 @@ impl SowEngine {
             );
 
             if slot.do_attack
+                && (self.legacy_building_rules || !structures::has_pending_build(&decisions, bot_id))
                 && !self.fleets.iter().any(|fleet| {
                     fleet.owner_id == bot_id
                         && fleet.unit_type == crate::game::UnitType::Warship

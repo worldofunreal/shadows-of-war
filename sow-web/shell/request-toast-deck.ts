@@ -1,8 +1,34 @@
 import type { HudInboxRequest } from "./main_menu.state.ts";
 
 export const MAX_REQUEST_TOAST_CARDS = 4;
+export const DESKTOP_MAX_REQUEST_TOASTS = 3;
+export const COMPACT_HORIZONTAL_MAX_REQUEST_TOASTS = 2;
+export const MOBILE_MAX_REQUEST_TOASTS = 1;
 export const REQUEST_TOAST_TTL_MS = 7000;
 export const REQUEST_URGENT_THRESHOLD_SECS = 5;
+
+/** Picks how many floating request cards fit side-by-side in 3D stack for this viewport. */
+export function resolveRequestToastMaxVisible(
+    width: number,
+    height: number,
+    compactLandscape = false,
+): number {
+    const w = Number(width);
+    const h = Number(height);
+    if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        const isPortrait = w <= h;
+        if (w <= 720 || (isPortrait && w <= 899)) {
+            return MOBILE_MAX_REQUEST_TOASTS;
+        }
+        if (compactLandscape || (w > h && (w < 960 || h < 720))) {
+            return COMPACT_HORIZONTAL_MAX_REQUEST_TOASTS;
+        }
+        return DESKTOP_MAX_REQUEST_TOASTS;
+    }
+    return compactLandscape
+        ? COMPACT_HORIZONTAL_MAX_REQUEST_TOASTS
+        : DESKTOP_MAX_REQUEST_TOASTS;
+}
 
 export interface RequestCountdownRecord {
     signature: string;
@@ -154,7 +180,7 @@ export function reconcileRequestToastDeck(
     requests: HudInboxRequest[],
     countdowns: Map<string, RequestCountdownRecord>,
     nowMs: number,
-    options: { inboxOpen?: boolean; toastTtlMs?: number } = {},
+    options: { inboxOpen?: boolean; toastTtlMs?: number; maxVisible?: number } = {},
 ): RequestToastDeckView {
     const toastTtlMs = Math.max(1000, options.toastTtlMs ?? REQUEST_TOAST_TTL_MS);
     const currentByKey = new Map<string, { request: HudInboxRequest; signature: string }>();
@@ -224,7 +250,11 @@ export function reconcileRequestToastDeck(
         state.knownSignatures.set(key, live.signature);
     }
 
-    const visible = state.entries.slice(0, MAX_REQUEST_TOAST_CARDS);
+    const rawLimit = Number(options.maxVisible);
+    const maxVisible = Number.isFinite(rawLimit)
+        ? Math.max(1, Math.min(MAX_REQUEST_TOAST_CARDS, Math.floor(rawLimit)))
+        : MAX_REQUEST_TOAST_CARDS;
+    const visible = state.entries.slice(0, maxVisible);
     let nextExpiryMs: number | null = null;
     for (const entry of state.entries) {
         if (nextExpiryMs === null || entry.toastExpiresAtMs < nextExpiryMs) {

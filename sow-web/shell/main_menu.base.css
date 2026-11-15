@@ -2572,35 +2572,51 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   --rank-light: #f1cb7d;
   --rank-glow: #c8974d;
 }
-[data-tier="unranked"] {
-  --rank-light: #aab7c8;
-  --rank-glow: #64748b;
+[data-tier="unranked"],
+[data-tier="nomad"] {
+  --rank-light: #e7c29d;
+  --rank-glow: #a66c46;
 }
-[data-tier="bronze"] {
+[data-tier="bronze"],
+[data-tier="settlement"] {
   --rank-light: #efbe97;
-  --rank-glow: #b47a51;
+  --rank-glow: #c28353;
 }
-[data-tier="silver"] {
-  --rank-light: #e3efff;
-  --rank-glow: #91a7c0;
+[data-tier="silver"],
+[data-tier="city_state"] {
+  --rank-light: #dce9fa;
+  --rank-glow: #859db8;
 }
-[data-tier="gold"] {
+[data-tier="kingdom"] {
+  --rank-light: #cfe4ff;
+  --rank-glow: #5b87c7;
+}
+[data-tier="gold"],
+[data-tier="republic"] {
   --rank-light: #ffe09a;
   --rank-glow: #d3a63e;
 }
-[data-tier="platinum"] {
+[data-tier="empire"] {
+  --rank-light: #ffd180;
+  --rank-glow: #e07b39;
+}
+[data-tier="platinum"],
+[data-tier="dynasty"] {
   --rank-light: #aefff1;
   --rank-glow: #4fc5b5;
 }
-[data-tier="diamond"] {
+[data-tier="diamond"],
+[data-tier="hegemony"] {
   --rank-light: #c1e6ff;
   --rank-glow: #599fe7;
 }
-[data-tier="master"] {
+[data-tier="master"],
+[data-tier="dominion"] {
   --rank-light: #e6c0ff;
   --rank-glow: #b775e5;
 }
-[data-tier="grandmaster"] {
+[data-tier="grandmaster"],
+[data-tier="eternal"] {
   --rank-light: #ffe8a5;
   --rank-glow: #ef9a58;
 }

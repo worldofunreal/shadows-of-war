@@ -7,9 +7,8 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SampleFormat, SizedSample, Stream, StreamConfig};
 use web_time::{Duration, Instant};
 
-use super::tone::{note_envelope, warm_at};
 
-pub(super) const SAMPLE_RATE: u32 = 22050;
+pub(super) const SAMPLE_RATE: u32 = 44100;
 pub(super) const OPEN_BACKOFF: Duration = Duration::from_secs(2);
 pub(super) const MAX_VOICES: u8 = 3;
 const MAX_TOTAL_VOICES: u8 = MAX_VOICES + 2;
@@ -165,106 +164,6 @@ fn audio_state() -> &'static Mutex<AudioState> {
             open_backoff_until: None,
         })
     })
-}
-
-pub(super) struct SimpleRng {
-    state: u32,
-}
-
-impl SimpleRng {
-    pub(super) fn new(seed: u32) -> Self {
-        Self {
-            state: if seed == 0 { 0x12345678 } else { seed },
-        }
-    }
-
-    pub(super) fn next_u32(&mut self) -> u32 {
-        let mut x = self.state;
-        x ^= x << 13;
-        x ^= x >> 17;
-        x ^= x << 5;
-        self.state = x;
-        x
-    }
-
-    fn next_f32(&mut self) -> f32 {
-        (self.next_u32() & 0xFFFFFF) as f32 / 16777216.0
-    }
-
-    pub(super) fn range(&mut self, min: f32, max: f32) -> f32 {
-        min + self.next_f32() * (max - min)
-    }
-}
-
-pub(super) struct ArpeggioSource {
-    sample_idx: u64,
-    note_freqs: [f32; 4],
-    note_durations: [u32; 4],
-    decay_rate: f32,
-    amplitude: f32,
-    total_samples: u64,
-}
-
-impl ArpeggioSource {
-    pub(super) fn new(
-        note_freqs: [f32; 4],
-        note_durations: [u32; 4],
-        decay_rate: f32,
-        amplitude: f32,
-    ) -> Self {
-        let total_samples = note_durations.iter().map(|&d| d as u64).sum();
-        Self {
-            sample_idx: 0,
-            note_freqs,
-            note_durations,
-            decay_rate,
-            amplitude,
-            total_samples,
-        }
-    }
-}
-
-impl Iterator for ArpeggioSource {
-    type Item = f32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.sample_idx >= self.total_samples {
-            return None;
-        }
-
-        let mut accumulated_samples = 0;
-        let mut note_idx = 0;
-        for i in 0..4 {
-            let next_accum = accumulated_samples + self.note_durations[i] as u64;
-            if self.sample_idx < next_accum {
-                note_idx = i;
-                break;
-            }
-            accumulated_samples = next_accum;
-        }
-
-        let note_sample_idx = self.sample_idx - accumulated_samples;
-        let note_t = note_sample_idx as f32 / SAMPLE_RATE as f32;
-        let freq = self.note_freqs[note_idx];
-
-        self.sample_idx += 1;
-        if freq < 1.0 {
-            return Some(0.0);
-        }
-
-        let val = warm_at(freq, note_t);
-
-        let note_dur_secs = self.note_durations[note_idx] as f32 / SAMPLE_RATE as f32;
-        let envelope = note_envelope(note_t, note_dur_secs, self.decay_rate, 0.008, 0.015);
-
-        Some(val * envelope * self.amplitude)
-    }
-}
-
-impl AudioSource for ArpeggioSource {
-    fn sample_rate(&self) -> u32 {
-        SAMPLE_RATE
-    }
 }
 
 fn active_voice_count(mixer: &AudioMixer) -> u8 {

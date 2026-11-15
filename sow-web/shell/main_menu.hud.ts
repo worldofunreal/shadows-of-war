@@ -20,6 +20,7 @@ import {
   reconcileRequestToastDeck,
   requestKey,
   resetRequestToastDeck,
+  resolveRequestToastMaxVisible,
   syncRequestCountdowns,
   type RequestCountdownRecord,
   type RequestToastDeckState,
@@ -48,7 +49,6 @@ import type {
   HudMapMenu,
   HudMapMenuBuilding,
   HudMapMenuItem,
-  HudNavalActivity,
   HudNotification,
   HudStateEnvelope,
   HudDevParameter,
@@ -310,10 +310,6 @@ type HudRefs = {
   operationRows: HTMLElement;
   combatOperationRows: Record<string, CombatOperationRow>;
   combatOperationsOrderKey: string;
-  navalActivityTitle: HTMLElement;
-  navalActivityList: HTMLElement;
-  navalActivityRows: Record<string, CombatOperationRow>;
-  navalActivityOrderKey: string;
   notifications: HTMLDivElement;
   topbar: HTMLElement;
   dock: HTMLElement;
@@ -418,6 +414,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   let lastInboxCount = -1;
   const requestCountdowns = new Map<string, RequestCountdownRecord>();
   const requestToastDeck: RequestToastDeckState = createRequestToastDeckState();
+  type RequestToastExitMode = "accept" | "dismiss" | "expire";
+  const pendingToastExitModes = new Map<string, RequestToastExitMode>();
+  const leavingToastCards = new Map<
+    string,
+    { element: HTMLElement; timer: number | null }
+  >();
   let requestToastExpiryTimer: number | null = null;
   let requestCountdownTimer: number | null = null;
   let latestInboxRequests: HudInboxRequest[] = [];
@@ -1471,6 +1473,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (hudState && hudState.phase === "Playing" && hudState.hud)
           renderPlacementPanel(hudState.hud.building_placement);
         renderNotifications([], false, hudScreen);
+        if (
+          hudRefs &&
+          (hudRefs.requestToastCards.length > 0 ||
+            requestToastDeck.entries.length > 0)
+        ) {
+          renderRequestToasts(
+            latestInboxRequests,
+            activeHudPanel === "inbox",
+            hudScreen,
+          );
+        }
         scheduleNotificationPlacement();
       };
       window.addEventListener("resize", onViewportChange, { passive: true });
@@ -1711,10 +1724,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       operationRows: requiredHudElement("sow-hud-operations-list"),
       combatOperationRows: Object.create(null),
       combatOperationsOrderKey: "",
-      navalActivityTitle: requiredHudElement("sow-hud-naval-activity-title"),
-      navalActivityList: requiredHudElement("sow-hud-naval-activity-list"),
-      navalActivityRows: Object.create(null),
-      navalActivityOrderKey: "",
       notifications: document.createElement("div"),
       topbar: requiredHudQuery(root, ".sow-hud__topbar"),
       dock: requiredHudElement("sow-hud-dock"),
@@ -2170,11 +2179,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       SOW_t("hud.combat_operations") +
       '">' +
       '  <div class="sow-hud__operations-list" id="sow-hud-operations-list"></div>' +
-      '  <section class="sow-hud__naval-activity" id="sow-hud-naval-activity" hidden>' +
-      '    <h3 class="sow-hud__naval-activity-title" id="sow-hud-naval-activity-title">' +
-      SOW_t("hud.naval_activity") +
-      '</h3><div class="sow-hud__naval-activity-list" id="sow-hud-naval-activity-list"></div>' +
-      "  </section>" +
       "</aside>" +
       "</div>" +
       '<aside class="sow-hud__panel sow-hud__leaderboard sow-hud__sheet hidden" id="sow-hud-leaderboard">' +
@@ -3718,6 +3722,53 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (menu.dataset.renderKey !== renderKey) {
       const card = document.createElement("div");
       card.dataset.buildingKind = kind.toLowerCase();
+      const chipsHtml = chips.length
+        ? '<div class="sow-hud__building-card-stats">' +
+          chips
+            .map(function (chip) {
+              const label = chip.label
+                ? '<b class="sow-hud__building-stat-value">' +
+                  escapeHudText(chip.label) +
+                  "</b>"
+                : "";
+              return (
+                '<span class="sow-hud__building-stat-pill' +
+                (upgrade ? " is-gain" : "") +
+                '" data-stat-icon="' +
+                escapeHudText(chip.icon) +
+                '">' +
+                statusIcon(chip.icon, "sow-hud__building-stat-icon") +
+                label +
+                "</span>"
+              );
+            })
+            .join("") +
+          "</div>"
+        : "";
+
+      const footerHtml = upgrade
+        ? '<button type="button" class="sow-hud__building-upgrade-btn" data-map-action="upgrade_structure">' +
+          '<span class="sow-hud__building-upgrade-cta">' +
+          statusIcon("arrow-up", "sow-hud__building-upgrade-arrow") +
+          '<span class="sow-hud__building-upgrade-label">' +
+          escapeHudText(SOW_t("hud.map_action_upgrade")) +
+          " <em>Lv." +
+          upgrade.next_level +
+          "</em></span>" +
+          "</span>" +
+          '<span class="sow-hud__building-upgrade-meta">' +
+          '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-cost">' +
+          hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
+          "<b data-building-cost></b>" +
+          "</span>" +
+          '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-time">' +
+          statusIcon("clock", "sow-hud__building-upgrade-meta-icon") +
+          "<b data-building-time></b>" +
+          "</span>" +
+          "</span>" +
+          "</button>"
+        : "";
+
       if (isCityFoundation || (!hasCityPanel && underConstruction)) {
         const activeKind = construction ? construction.kind : kind;
         const targetLv = construction
@@ -3786,6 +3837,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           "</div>" +
           "</div>" +
           constructionHtml +
+          chipsHtml +
+          footerHtml +
           districtsHtml +
           arsenalHtml;
       } else {
@@ -3798,53 +3851,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             upgrade.next_level +
             "</em>"
           : "Lv." + Math.max(1, level) + (isMax ? " · MAX" : "");
-
-        const chipsHtml = chips.length
-          ? '<div class="sow-hud__building-card-stats">' +
-            chips
-              .map(function (chip) {
-                const label = chip.label
-                  ? '<b class="sow-hud__building-stat-value">' +
-                    escapeHudText(chip.label) +
-                    "</b>"
-                  : "";
-                return (
-                  '<span class="sow-hud__building-stat-pill' +
-                  (upgrade ? " is-gain" : "") +
-                  '" data-stat-icon="' +
-                  escapeHudText(chip.icon) +
-                  '">' +
-                  statusIcon(chip.icon, "sow-hud__building-stat-icon") +
-                  label +
-                  "</span>"
-                );
-              })
-              .join("") +
-            "</div>"
-          : "";
-
-        const footerHtml = upgrade
-          ? '<button type="button" class="sow-hud__building-upgrade-btn" data-map-action="upgrade_structure">' +
-            '<span class="sow-hud__building-upgrade-cta">' +
-            statusIcon("arrow-up", "sow-hud__building-upgrade-arrow") +
-            '<span class="sow-hud__building-upgrade-label">' +
-            escapeHudText(SOW_t("hud.map_action_upgrade")) +
-            " <em>Lv." +
-            upgrade.next_level +
-            "</em></span>" +
-            "</span>" +
-            '<span class="sow-hud__building-upgrade-meta">' +
-            '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-cost">' +
-            hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
-            "<b data-building-cost></b>" +
-            "</span>" +
-            '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-time">' +
-            statusIcon("clock", "sow-hud__building-upgrade-meta-icon") +
-            "<b data-building-time></b>" +
-            "</span>" +
-            "</span>" +
-            "</button>"
-          : "";
 
         card.className = "sow-hud__building-card";
         card.innerHTML =
@@ -7286,18 +7292,130 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
   }
 
+  function isRequestToastReducedMotion(): boolean {
+    if (hudRoot && hudRoot.classList.contains("is-reduced-motion")) return true;
+    return Boolean(
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
+  }
+
+  function syncRequestToastsContainerVisibility(
+    inboxOpen: boolean,
+    visibleCount: number,
+  ): void {
+    if (!hudRefs || !hudRefs.requestToasts) return;
+    const visible = !inboxOpen && (visibleCount > 0 || leavingToastCards.size > 0);
+    hudRefs.requestToasts.hidden = !visible;
+    hudRefs.requestToasts.dataset.stackCount = String(visibleCount);
+    if (hudRoot) {
+      hudRoot.dataset.requestToastsVisible = String(visible);
+    }
+  }
+
+  function finalizeLeavingToastCard(key: string): void {
+    const active = leavingToastCards.get(key);
+    if (!active) return;
+    if (active.timer !== null) {
+      window.clearTimeout(active.timer);
+    }
+    leavingToastCards.delete(key);
+    active.element.remove();
+    syncRequestToastsContainerVisibility(
+      activeHudPanel === "inbox",
+      hudRefs ? hudRefs.requestToastCards.length : 0,
+    );
+  }
+
+  function clearLeavingRequestToasts(): void {
+    pendingToastExitModes.clear();
+    for (const [key, active] of Array.from(leavingToastCards.entries())) {
+      if (active.timer !== null) {
+        window.clearTimeout(active.timer);
+      }
+      leavingToastCards.delete(key);
+      active.element.remove();
+    }
+  }
+
+  function startLeavingToastCard(
+    card: RequestToastCardParts,
+    mode: RequestToastExitMode,
+  ): void {
+    finalizeLeavingToastCard(card.requestKey);
+    const el = card.element;
+    el.classList.remove("is-entering", "is-front", "is-stacked");
+    if (activeHudPanel === "inbox" || isRequestToastReducedMotion()) {
+      el.remove();
+      return;
+    }
+    el.classList.add("is-leaving", "is-leaving-" + mode);
+    el.style.zIndex = String(MAX_TOAST_Z_BASE + 2);
+    const onDone = function (event?: AnimationEvent): void {
+      if (
+        event &&
+        (event.target !== el ||
+          !event.animationName ||
+          event.animationName.indexOf("sow-request-toast-leave-") !== 0)
+      ) {
+        return;
+      }
+      el.removeEventListener("animationend", onDone as EventListener);
+      finalizeLeavingToastCard(card.requestKey);
+    };
+    el.addEventListener("animationend", onDone as EventListener);
+    const timer = window.setTimeout(function () {
+      finalizeLeavingToastCard(card.requestKey);
+    }, 320);
+    leavingToastCards.set(card.requestKey, { element: el, timer });
+  }
+
+  function triggerRequestToastEnterAnimation(el: HTMLElement): void {
+    if (isRequestToastReducedMotion()) {
+      el.classList.remove("is-entering");
+      return;
+    }
+    el.classList.add("is-entering");
+    const onDone = function (event?: AnimationEvent): void {
+      if (
+        event &&
+        (event.target !== el ||
+          !event.animationName ||
+          event.animationName.indexOf("sow-request-toast-enter") !== 0)
+      ) {
+        return;
+      }
+      el.removeEventListener("animationend", onDone as EventListener);
+      el.classList.remove("is-entering");
+    };
+    el.addEventListener("animationend", onDone as EventListener);
+    window.setTimeout(function () {
+      el.classList.remove("is-entering");
+    }, 320);
+  }
+
   function renderRequestToasts(
     requests: HudInboxRequest[],
     inboxOpen: boolean,
+    hudScreen: HudScreenSize = cachedHudScreen(),
   ): void {
     if (!hudRefs || !hudRefs.requestToasts || !hudRefs.requestToastStack) return;
+    if (inboxOpen) {
+      clearLeavingRequestToasts();
+    }
+    const maxVisible = resolveRequestToastMaxVisible(
+      hudScreen.width,
+      hudScreen.height,
+      Boolean(hudRoot && hudRoot.dataset.compact === "true"),
+    );
     const nowMs = Date.now();
     const view = reconcileRequestToastDeck(
       requestToastDeck,
       requests,
       requestCountdowns,
       nowMs,
-      { inboxOpen: inboxOpen },
+      { inboxOpen: inboxOpen, maxVisible: maxVisible },
     );
     if (requestToastExpiryTimer) {
       window.clearTimeout(requestToastExpiryTimer);
@@ -7323,6 +7441,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const visibleKeys = new Set<string>();
     view.visible.forEach(function (entry: RequestToastEntry, index: number) {
       visibleKeys.add(entry.key);
+      if (leavingToastCards.has(entry.key)) {
+        finalizeLeavingToastCard(entry.key);
+      }
       let card = existingByKey.get(entry.key);
       const isNew = !card;
       if (!card) {
@@ -7337,15 +7458,22 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       card.element.style.setProperty("--stack-i", String(index));
       card.element.classList.toggle("is-front", index === 0);
       card.element.classList.toggle("is-stacked", index > 0);
-      if (isNew) {
-        card.element.classList.add("is-entering");
+      if (index > 0) {
+        // Clear any leftover entrance lock immediately when pushed back into the 3D deck.
+        card.element.classList.remove("is-entering");
+      } else if (isNew) {
+        triggerRequestToastEnterAnimation(card.element);
       }
       nextCards.push(card);
     });
     for (const [key, oldCard] of existingByKey.entries()) {
-      if (!visibleKeys.has(key)) oldCard.element.remove();
+      if (!visibleKeys.has(key)) {
+        const mode = pendingToastExitModes.get(key) || "expire";
+        pendingToastExitModes.delete(key);
+        startLeavingToastCard(oldCard, mode);
+      }
     }
-    // Append back-to-front in DOM or set z-index explicitly; z-index controls paint order cleanly.
+    // Insert active deck cards back-to-front at indices 0..N-1; leaving cards remain at >= N while flying out.
     nextCards.forEach(function (card, index) {
       card.element.style.zIndex = String(MAX_TOAST_Z_BASE - index);
       const before = hudRefs!.requestToastStack.children[index] || null;
@@ -7364,12 +7492,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     } else {
       hudRefs.requestToastMore.hidden = true;
     }
-    const visible = view.visible.length > 0 && !inboxOpen;
-    hudRefs.requestToasts.hidden = !visible;
-    hudRefs.requestToasts.dataset.stackCount = String(view.visible.length);
-    if (hudRoot) {
-      hudRoot.dataset.requestToastsVisible = String(visible);
-    }
+    syncRequestToastsContainerVisibility(inboxOpen, view.visible.length);
     ensureRequestCountdownLoop();
   }
 
@@ -7907,116 +8030,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     hudRefs.operations.hidden = nextKeys.length === 0;
   }
 
-  function renderNavalActivity(
-    activities: NonNullable<MenuHudPayload["naval_activity"]>,
-  ): void {
-    if (!hudRefs) return;
-    activities = Array.isArray(activities) ? activities : [];
-    const nextKeys = activities
-      .slice()
-      .reverse()
-      .map(function (activity) {
-        return String(activity.id);
-      });
-    const orderKey = nextKeys.join("\u001e");
-    hudRefs.navalActivityTitle.textContent = SOW_t("hud.naval_activity");
-    if (orderKey === hudRefs.navalActivityOrderKey) {
-      hudRefs.operations.hidden =
-        nextKeys.length === 0 && hudRefs.combatOperationsOrderKey.length === 0;
-      return;
-    }
-
-    const nextRows: Record<string, CombatOperationRow> = Object.create(null);
-    const byId = new Map<string, HudNavalActivity>();
-    activities.forEach(function (activity) {
-      byId.set(String(activity.id), activity);
-    });
-    const fragment = document.createDocumentFragment();
-    nextKeys.forEach(function (key) {
-      const activity = byId.get(key);
-      if (!activity) return;
-      const row = hudRefs!.navalActivityRows[key] || createCombatOperationRow();
-      const sourceName = activity.source_name || SOW_t("hud.player_name");
-      const targetName = activity.target_name ||
-        (activity.target_type === "transport"
-          ? SOW_t("hud.fleet_transport_label")
-          : activity.target_type === "trade"
-            ? SOW_t("hud.fleet_trade_label")
-            : SOW_t("hud.fleet_warship_label"));
-      const damage = String(Math.max(0, Math.round(Number(activity.damage) || 0)));
-      const health = String(
-        Math.max(0, Math.round(Number(activity.health_after) || 0)),
-      );
-      const troops = formatNameplateTroops(
-        Math.max(0, Number(activity.troops_lost) || 0),
-      );
-      let details: string;
-      if (activity.kind === "hit") {
-        details = SOW_t("hud.naval_hit", { target: targetName, damage, health });
-      } else if (activity.kind === "sunk") {
-        details = activity.target_type === "transport"
-          ? SOW_t("hud.naval_transport_sunk", { target: targetName, troops })
-          : SOW_t("hud.naval_warship_sunk", { target: targetName, damage });
-      } else {
-        details = activity.target_type === "trade"
-          ? SOW_t("hud.naval_trade_captured", { target: targetName })
-          : SOW_t("hud.naval_warship_captured", { target: targetName });
-      }
-      row.element.classList.add("is-naval");
-      row.element.classList.remove("is-incoming", "is-outgoing", "is-retreating");
-      renderAvatarIdentity(
-        row.portrait,
-        row.emblem,
-        activity.source_avatar || { kind: "fallback" },
-      );
-      if (row.name.textContent !== sourceName) row.name.textContent = sourceName;
-      if (row.detailsLabel.textContent !== details)
-        row.detailsLabel.textContent = details;
-      row.detailsSeparator.hidden = true;
-      row.detailsEta.hidden = true;
-      row.troops.textContent = "";
-      row.actions.replaceChildren();
-      const hasFocus =
-        activity.focus_x != null &&
-        activity.focus_y != null &&
-        Number.isFinite(Number(activity.focus_x)) &&
-        Number.isFinite(Number(activity.focus_y));
-      if (hasFocus) {
-        const operation: HudCombatOperation = {
-          kind: "fleet",
-          id: activity.focus_fleet_id || activity.id,
-          direction: "incoming",
-          player_id: 0,
-          name: null,
-          avatar: { kind: "fallback" },
-          neutral: false,
-          troops: 0,
-          eta_seconds: null,
-          retreating: false,
-          focus_x: activity.focus_x,
-          focus_y: activity.focus_y,
-          focus_fleet_id: activity.focus_fleet_id,
-        };
-        row.actions.appendChild(
-          operationAction(
-            "focus_world",
-            "camera",
-            SOW_t("hud.center_camera"),
-            operation,
-          ),
-        );
-      }
-      fragment.appendChild(row.element);
-      nextRows[key] = row;
-    });
-    hudRefs.navalActivityList.replaceChildren(fragment);
-    hudRefs.navalActivityRows = nextRows;
-    hudRefs.navalActivityOrderKey = orderKey;
-    hudRefs.navalActivityList.parentElement!.hidden = nextKeys.length === 0;
-    hudRefs.operations.hidden =
-      nextKeys.length === 0 && hudRefs.combatOperationsOrderKey.length === 0;
-  }
-
   function renderHoverCard(
     hov: NonNullable<MenuHudPayload["hovered"]> | null,
   ): void {
@@ -8127,6 +8140,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       latestInboxRequests = [];
       requestCountdowns.clear();
       resetRequestToastDeck(requestToastDeck);
+      clearLeavingRequestToasts();
       stopRequestTimers();
       if (hudRefs) {
         hudRefs.inboxRequests = Object.create(null);
@@ -8159,7 +8173,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       }
       activeNotifications = [];
       renderCombatOperations([]);
-      renderNavalActivity([]);
       pendingCounterAttacks = Object.create(null);
       notificationCards.forEach(clearNotificationCard);
       notificationCursor = 0;
@@ -8781,7 +8794,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     renderNotifications(hud.notifications, forceNotifications, hudScreen);
     renderCombatOperations(hud.operations);
-    renderNavalActivity(hud.naval_activity || []);
     renderMapFeedback(hud.map_feedback);
 
     // Leaderboard
@@ -8983,6 +8995,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         !hudRefs.requestToasts.contains(target) &&
         !target.closest('[data-command="toggle_inbox"]')
       ) {
+        for (const card of hudRefs.requestToastCards) {
+          pendingToastExitModes.set(card.requestKey, "dismiss");
+        }
         if (dismissAllRequestToasts(requestToastDeck)) {
           renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
         }
@@ -9175,6 +9190,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const btn = target.closest<HTMLElement>("[data-command]");
       if (!btn) {
         if (target.closest(".sow-hud__request-toast")) {
+          const front = requestToastDeck.entries[0];
+          if (front) pendingToastExitModes.set(front.key, "dismiss");
           if (dismissFrontRequestToast(requestToastDeck)) {
             renderRequestToasts(
               latestInboxRequests,
@@ -9391,7 +9408,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const key = cardEl ? cardEl.dataset.requestKey : undefined;
         const fromToast = Boolean(btn.closest(".sow-hud__request-toast"));
         if (requesterId > 0) send(cmd, { target_player_id: requesterId });
-        if (key) dismissRequestToastByKey(requestToastDeck, key);
+        if (key) {
+          pendingToastExitModes.set(
+            key,
+            cmd.indexOf("accept_") === 0 ? "accept" : "dismiss",
+          );
+          dismissRequestToastByKey(requestToastDeck, key);
+        }
         if (fromToast) {
           renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
         } else if (
@@ -9410,12 +9433,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           cmd === "accept_all_alliances"
             ? "accept_alliance"
             : "reject_alliance";
+        const exitMode: RequestToastExitMode =
+          cmd === "accept_all_alliances" ? "accept" : "dismiss";
         let hasResourceRequests = false;
         latestInboxRequests.forEach(function (request) {
           if (!isValidInboxRequest(request)) return;
           if (request.kind === "alliance") {
+            const key = requestKey(request);
             send(intent, { target_player_id: request.requester_id });
-            dismissRequestToastByKey(requestToastDeck, requestKey(request));
+            pendingToastExitModes.set(key, exitMode);
+            dismissRequestToastByKey(requestToastDeck, key);
           } else {
             hasResourceRequests = true;
           }
@@ -9427,6 +9454,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
         }
       } else if (cmd === "open_inbox_from_toast") {
+        clearLeavingRequestToasts();
         dismissAllRequestToasts(requestToastDeck);
         setHudPanel("inbox");
         renderHud();

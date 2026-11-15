@@ -7,7 +7,6 @@ mod engine;
 mod preview;
 mod result;
 mod sfx;
-mod tone;
 
 pub use building::{play_building_placement_sound, play_building_upgrade_start_sound};
 pub use clip::{SfxId, register_sfx_wav};

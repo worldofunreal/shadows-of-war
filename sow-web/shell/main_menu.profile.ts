@@ -327,8 +327,8 @@ function applyProfileSnapshot(id: string, data: ProfileData) {
       const emblem = root.querySelector<HTMLElement>("[data-ranked-emblem]");
       if (emblem)
         emblem.innerHTML = rankEmblem(
-          rating?.placements_complete ? rating.tier : "unranked",
-          rating?.placements_complete ? rating.division : null,
+          rating?.tier || "Nomad",
+          rating?.division || null,
         );
     }
   }
@@ -870,19 +870,18 @@ function profileHeaderMarkup(data: ProfileData | null, own: boolean | null) {
   const rankedRating = (data?.ratings || []).find(function (r) {
     return r.queue === "Ranked1v1" && r.mode === "FFA";
   });
-  const rankBadge =
-    rankedRating && rankedRating.placements_complete
-      ? "<span class='sow-profile__rank-badge' data-tier='" +
-        rankTier(rankedRating.tier) +
-        "' tabindex='0' data-sow-tooltip='" +
-        esc(rankLabelText(rankedRating)) +
-        "' data-sow-tooltip-icon='ranked' data-sow-tooltip-tone='gold' data-sow-tooltip-tap='true'>" +
-        rankEmblem(rankedRating.tier, rankedRating.division) +
-        "<b>" +
-        esc(rankLabelText(rankedRating)) +
-        "</b>" +
-        "</span>"
-      : "";
+  const rankBadge = rankedRating
+    ? "<span class='sow-profile__rank-badge' data-tier='" +
+      rankTier(rankedRating.tier) +
+      "' tabindex='0' data-sow-tooltip='" +
+      esc(rankLabelText(rankedRating)) +
+      "' data-sow-tooltip-icon='ranked' data-sow-tooltip-tone='gold' data-sow-tooltip-tap='true'>" +
+      rankEmblem(rankedRating.tier, rankedRating.division) +
+      "<b>" +
+      esc(rankLabelText(rankedRating)) +
+      "</b>" +
+      "</span>"
+    : "";
   const hasNavBack =
     !own || (menuUi.profileNavStack && menuUi.profileNavStack.length > 0);
   const backLabel = hasNavBack

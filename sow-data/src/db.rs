@@ -966,7 +966,7 @@ impl PlayerDb {
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(SEASON_RATINGS_TABLE)?;
         if let Some(value) = table.get(key.as_str())? {
-            let rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+            let mut rating = serde_json::from_slice::<SeasonRating>(value.value())?;
             if rating.account_id != account.id
                 || rating.season_id != crate::profile::CURRENT_SEASON_ID
                 || rating.queue != "Ranked1v1"
@@ -975,6 +975,7 @@ impl PlayerDb {
             {
                 return Err("stored ranked rating identity is invalid".into());
             }
+            rating.normalize_ladder();
             return Ok(rating);
         }
         Ok(crate::profile::initial_ranked_rating(
@@ -1009,10 +1010,9 @@ impl PlayerDb {
                 crate::profile::CURRENT_SEASON_ID
             );
             if let Some(value) = ratings.get(key.as_str())? {
-                stored_ratings.insert(
-                    account_id.clone(),
-                    serde_json::from_slice::<SeasonRating>(value.value())?,
-                );
+                let mut rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+                rating.normalize_ladder();
+                stored_ratings.insert(account_id.clone(), rating);
             }
         }
         drop(ratings);
@@ -1068,7 +1068,7 @@ impl PlayerDb {
         else {
             return Ok(None);
         };
-        let (Some(score_before), Some(score_after), Some(tier_before), Some(tier_after)) = (
+        let (Some(score_before), Some(score_after), Some(_), Some(_)) = (
             participant.rating_before,
             participant.rating_after,
             participant.tier_before.as_ref(),
@@ -1076,17 +1076,19 @@ impl PlayerDb {
         ) else {
             return Ok(None);
         };
+        let (tier_before, division_before) = crate::profile::tier_for_score(score_before);
+        let (tier_after, division_after) = crate::profile::tier_for_score(score_after);
         Ok(Some(crate::profile::RankedResultPresentation {
             ladder: Some(crate::profile::ranked_ladder()),
             score_before,
             score_after,
             rating_delta: participant.rating_delta.unwrap_or_default(),
-            tier_before: tier_before.clone(),
-            tier_after: tier_after.clone(),
-            division_before: participant.division_before.clone(),
-            division_after: participant.division_after.clone(),
+            tier_before: tier_before.to_string(),
+            tier_after: tier_after.to_string(),
+            division_before,
+            division_after,
             games_played: participant.games_played_after.unwrap_or_default(),
-            placements_complete: participant.placements_complete_after.unwrap_or(false),
+            placements_complete: true,
             points_breakdown: participant.ranked_points_breakdown.clone(),
         }))
     }
@@ -1854,7 +1856,8 @@ impl PlayerDb {
         for item in table.iter()? {
             let (key, value) = item?;
             if key.value().starts_with(&prefix) {
-                let rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+                let mut rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+                rating.normalize_ladder();
                 if account.kind == AccountKind::Human || rating.queue == "Ranked1v1" {
                     ratings.push(rating);
                 }
@@ -1917,7 +1920,9 @@ impl PlayerDb {
             let (key, value) = item?;
             let key = key.value();
             if key.contains(&marker) && key.ends_with(&format!(":{mode}")) {
-                ratings.push(serde_json::from_slice::<SeasonRating>(value.value())?);
+                let mut rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+                rating.normalize_ladder();
+                ratings.push(rating);
             }
         }
         drop(table);
@@ -4206,8 +4211,8 @@ impl PlayerDb {
                             ("iq", old, iq.to_string())
                         }
                         RankedBotManualUpdate::SetRating { score, .. } => {
-                            if !(800..=4000).contains(&score) {
-                                return Err("ranked bot rating must be between 800 and 4000".into());
+                            if score > crate::profile::RANKED_MAX_SCORE {
+                                return Err("ranked bot rating must be between 0 and 10000".into());
                             }
                             let key = format!(
                                 "rating:{}:{}:Ranked1v1:FFA",
@@ -4217,7 +4222,10 @@ impl PlayerDb {
                             let mut ratings = txn.open_table(SEASON_RATINGS_TABLE)?;
                             let mut rating = match ratings.get(key.as_str())? {
                                 Some(value) => {
-                                    serde_json::from_slice::<SeasonRating>(value.value())?
+                                    let mut r =
+                                        serde_json::from_slice::<SeasonRating>(value.value())?;
+                                    r.normalize_ladder();
+                                    r
                                 }
                                 None => crate::profile::initial_ranked_rating(
                                     account_id.clone(),
@@ -5991,7 +5999,11 @@ fn settle_ranked_ratings(
         }
         let key = format!("rating:{}:{}:Ranked1v1:FFA", account.id, record.season_id);
         let rating = match table.get(key.as_str())? {
-            Some(value) => serde_json::from_slice::<SeasonRating>(value.value())?,
+            Some(value) => {
+                let mut r = serde_json::from_slice::<SeasonRating>(value.value())?;
+                r.normalize_ladder();
+                r
+            }
             None => {
                 let initial = match account.kind {
                     AccountKind::Bot => {

@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn every_building_has_three_upgrades_after_its_foundation() {
-        assert_eq!(BuildingKind::City.max_level(), 1);
+        assert_eq!(BuildingKind::City.max_level(), 4);
         assert!(
             BuildingKind::DISTRICTS
                 .into_iter()

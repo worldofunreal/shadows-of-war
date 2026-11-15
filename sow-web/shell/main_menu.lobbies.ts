@@ -1828,8 +1828,8 @@ export function updateRankedQueue() {
     if (label) label.textContent = rankLabel(menuUi.rankedRating);
     const badge = panel.querySelector<HTMLElement>(".sow-ranked__player .sow-ranked__emblem");
     const rating = menuUi.rankedRating;
-    const tier = rating?.placements_complete ? rating.tier : "unranked";
-    const division = rating?.placements_complete ? rating.division : null;
+    const tier = rating?.tier || "Nomad";
+    const division = rating?.division || null;
     const playerCard = panel.querySelector<HTMLElement>(
         ".sow-ranked__player:not(.sow-ranked__player--rival):not(.sow-ranked__player--empty)",
     );

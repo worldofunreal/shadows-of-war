@@ -2577,7 +2577,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 if active {
                     (
                         cfg.factory_gold_income * (1.0 + 1.1948581737791502) * 0.25,
-                        cfg.farm_troop_income * 2.0 * 0.25,
+                        cfg.farm_troop_income * 2.5 * 0.25,
                     )
                 } else {
                     (0.0, 0.0)

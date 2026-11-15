@@ -5,7 +5,6 @@ import {
     animateRankResult,
     rankEmblem,
     rankName,
-    rankPlacements,
     rankProgressMarkup,
     rankTier,
     rankedPointsBreakdownMarkup,
@@ -2275,10 +2274,6 @@ function rankedResultKey(state: MenuState) {
 }
 
 function rankedResultTitle(result: RankedResult) {
-    if (!result.placements_complete) {
-        return SOW_t("ranked.placements", { played: Math.min(5, result.games_played) });
-    }
-    if (result.games_played === 5) return SOW_t("ranked.first_league");
     const before = result.tier_before + (result.division_before ? " " + result.division_before : "");
     const after = result.tier_after + (result.division_after ? " " + result.division_after : "");
     if (before === after) return SOW_t("lobbies.ranked_result_title");
@@ -2297,19 +2292,16 @@ function presentRankedResult(result: RankedResult) {
     layer.setAttribute("aria-modal", "true");
     layer.setAttribute("aria-labelledby", "sow-ranked-result-title");
     const card = document.createElement("div");
-    const placed = result.placements_complete;
-    const first = placed && result.games_played === 5;
     const changed =
         result.tier_before !== result.tier_after || result.division_before !== result.division_after;
     const league = result.tier_before !== result.tier_after;
-    const promoted = placed && changed && result.score_after > result.score_before;
+    const promoted = changed && result.score_after > result.score_before;
     const title = rankedResultTitle(result);
     card.className =
         "sow-menu__ranked-result-card" +
-        (first || (promoted && league) ? " is-league-up" : "") +
-        (placed && changed && !promoted && !first ? " is-rank-down" : "") +
-        (!placed ? " is-placement" : "");
-    card.dataset.tier = rankTier(placed ? result.tier_after : "unranked");
+        (promoted && league ? " is-league-up" : "") +
+        (changed && !promoted ? " is-rank-down" : "");
+    card.dataset.tier = rankTier(result.tier_after || "Nomad");
     card.innerHTML =
         "<header class='sow-ranked__result-header'><span class='sow-ranked__eyebrow'>" +
         esc(SOW_t("lobbies.ranked_1v1")) +
@@ -2317,39 +2309,32 @@ function presentRankedResult(result: RankedResult) {
         esc(title) +
         "</h2></header><div class='sow-ranked__result-pedestal'><div class='sow-ranked__result-seal'>" +
         "<div class='sow-ranked__old-emblem'>" +
-        rankEmblem(
-            first || !placed ? "unranked" : result.tier_before,
-            first || !placed ? null : result.division_before,
-        ) +
+        rankEmblem(result.tier_before || "Nomad", result.division_before) +
         "</div><div data-rank-current-emblem>" +
-        rankEmblem(placed ? result.tier_after : "unranked", placed ? result.division_after : null) +
+        rankEmblem(result.tier_after || "Nomad", result.division_after) +
         "</div></div>" +
-        (placed
-            ? "<div class='sow-ranked__rank-ribbon'><strong class='sow-menu__ranked-result-rank' data-rank-name>" +
-              esc(rankName(result.tier_after, result.division_after)) +
-              "</strong></div>"
-            : "") +
+        "<div class='sow-ranked__rank-ribbon'><strong class='sow-menu__ranked-result-rank' data-rank-name>" +
+        esc(rankName(result.tier_after || "Nomad", result.division_after)) +
+        "</strong></div>" +
         "</div>" +
-        (placed
-            ? "<div class='sow-ranked__score-vault'><div class='sow-ranked__score-main'><strong class='sow-ranked__points' data-rank-score>" +
-              esc(SOW_t("lobbies.rank_score", { score: result.score_after })) +
-              "</strong><p class='sow-menu__ranked-result-change' data-direction='" +
-              (result.score_after >= result.score_before ? "up" : "down") +
-              "'>" +
-              esc(
-                  SOW_t("ranked.delta", {
-                      points:
-                          (result.score_after > result.score_before ? "+" : "") +
-                          (result.score_after - result.score_before),
-                  }),
-              ) +
-              "</p></div><p class='sow-ranked__previous'>" +
-              esc(SOW_t("lobbies.rank_previous", { score: result.score_before })) +
-              "</p>" +
-              (result.points_breakdown ? rankedPointsBreakdownMarkup(result.points_breakdown) : "") +
-              "</div>" +
-              rankProgressMarkup(result.score_after, result.ladder || menuUi.rankedLadder)
-            : rankPlacements(result.games_played)) +
+        "<div class='sow-ranked__score-vault'><div class='sow-ranked__score-main'><strong class='sow-ranked__points' data-rank-score>" +
+        esc(SOW_t("lobbies.rank_score", { score: result.score_after })) +
+        "</strong><p class='sow-menu__ranked-result-change' data-direction='" +
+        (result.score_after >= result.score_before ? "up" : "down") +
+        "'>" +
+        esc(
+            SOW_t("ranked.delta", {
+                points:
+                    (result.score_after > result.score_before ? "+" : "") +
+                    (result.score_after - result.score_before),
+            }),
+        ) +
+        "</p></div><p class='sow-ranked__previous'>" +
+        esc(SOW_t("lobbies.rank_previous", { score: result.score_before })) +
+        "</p>" +
+        (result.points_breakdown ? rankedPointsBreakdownMarkup(result.points_breakdown) : "") +
+        "</div>" +
+        rankProgressMarkup(result.score_after, result.ladder || menuUi.rankedLadder) +
         "<div class='sow-ranked__actions'><button type='button' class='sow-menu__primary' data-ranked-again>" +
         esc(SOW_t("ranked.play_again")) +
         "</button><button type='button' class='sow-menu__secondary' data-ranked-continue>" +

@@ -70,13 +70,7 @@ impl BuildingKind {
     }
 
     pub const fn max_level(self) -> u8 {
-        match self {
-            BuildingKind::City => 1,
-            BuildingKind::Tower
-            | BuildingKind::Factory
-            | BuildingKind::Port
-            | BuildingKind::Farm => 4,
-        }
+        4
     }
 
     pub fn construction_duration_ticks(self) -> u32 {

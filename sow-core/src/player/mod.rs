@@ -271,13 +271,11 @@ impl Player {
         let leader = Leader::nth(rng.next_int(0, Leader::count() as i32) as usize)
             .expect("index drawn below the hero count");
         let starting_troops = config.starting_troops * 0.5; // ponytail: tribes get half
-        let starting_gold = if iq >= 130 {
-            config.starting_gold
-        } else if iq >= 100 {
-            config.starting_gold * 0.5
-        } else {
-            0.0
-        };
+        // One minute of baseline income short of the first City at Normal speed.
+        // Calculate once at spawn; custom speeds naturally shorten or lengthen the wait.
+        let starting_gold = (config.cost_city
+            - 60.0 * config.gold_base_income * crate::game_config::NORMAL_GAME_SPEED * 0.75)
+            .clamp(0.0, config.starting_gold.max(0.0));
         Self {
             id,
             alive: true,

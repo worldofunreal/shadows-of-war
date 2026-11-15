@@ -47,19 +47,35 @@ fn default_territory_gold_tiles() -> u32 {
 }
 
 fn default_city_troop_income() -> f64 {
-    600.0
+    40.0 / NORMAL_GAME_SPEED
 }
 
 fn default_farm_troop_income() -> f64 {
+    60.0 / NORMAL_GAME_SPEED
+}
+
+fn default_city_gold_income() -> f64 {
+    0.10 / NORMAL_GAME_SPEED
+}
+
+fn default_port_troop_income() -> f64 {
+    50.0 / NORMAL_GAME_SPEED
+}
+
+fn default_district_max_troops() -> f64 {
+    250.0
+}
+
+fn default_hero_district_troop_income() -> f64 {
     600.0
 }
 
 fn default_farm_gold_income() -> f64 {
-    16.0 / 21.0
+    0.20 / NORMAL_GAME_SPEED
 }
 
 fn default_port_gold_income() -> f64 {
-    48.0 / 21.0
+    0.50 / NORMAL_GAME_SPEED
 }
 
 fn default_factory_gold_income() -> f64 {
@@ -446,12 +462,18 @@ pub struct GameConfig {
     // ==========================================
     // Buildings (separate foundations plus explicit level upgrades)
     // ==========================================
-    /// Max troop capacity added per City level.
+    /// City level-1 capacity; subsequent marginal levels grow by 1.5x.
     pub city_max_troops: f64,
-    /// Troop income per game second added per City level.
+    /// Capacity from a district's first upgrade; subsequent upgrades grow by 1.5x.
+    #[serde(default = "default_district_max_troops")]
+    pub district_max_troops: f64,
+    /// Troop income per game second per weighted City level.
     #[serde(default = "default_city_troop_income")]
     pub city_troop_income: f64,
-    /// Troop income per game second added per Farm level. Farms never affect capacity.
+    /// Gold income per game second per weighted City level.
+    #[serde(default = "default_city_gold_income")]
+    pub city_gold_income: f64,
+    /// Troop income per game second per weighted Farm level.
     #[serde(default = "default_farm_troop_income")]
     pub farm_troop_income: f64,
     /// Gold income per game second added per weighted Farm level.
@@ -468,16 +490,19 @@ pub struct GameConfig {
     /// Gold income per game second added per weighted Port level.
     #[serde(default = "default_port_gold_income")]
     pub port_gold_income: f64,
+    /// Troop income per game second per weighted Port level.
+    #[serde(default = "default_port_troop_income")]
+    pub port_troop_income: f64,
     // Hero-only bases: each one pays only the hero whose ability produces it, so the
     // economy of every other player is unchanged.
     /// Gold income per game second per weighted City level, paid to Ashoka only.
     #[serde(default = "default_hero_city_gold_income")]
     pub hero_city_gold_income: f64,
     /// Troop income per game second per Factory level, paid to Ramesses II only.
-    #[serde(default = "default_city_troop_income")]
+    #[serde(default = "default_hero_district_troop_income")]
     pub hero_factory_troop_income: f64,
     /// Troop income per game second per Port level, paid to Artemisia I only.
-    #[serde(default = "default_city_troop_income")]
+    #[serde(default = "default_hero_district_troop_income")]
     pub hero_port_troop_income: f64,
     /// Gold income per game second per active alliance, paid to Sālote Tupou III only.
     #[serde(default = "default_alliance_gold_income")]
@@ -635,8 +660,8 @@ impl Default for GameConfig {
 
             // Economy & Income Rates
             starting_troops: 5000.0,
-            starting_gold: 160.0,
-            gold_base_income: 10.0,
+            starting_gold: 200.0,
+            gold_base_income: 1.0 / NORMAL_GAME_SPEED,
             territory_gold_amount: default_territory_gold_amount(),
             territory_gold_tiles: default_territory_gold_tiles(),
             troop_base_income: default_troop_base_income(),
@@ -648,8 +673,10 @@ impl Default for GameConfig {
             territory_troop_tiles: default_territory_troop_tiles(),
 
             // Buildings (stacking)
-            city_max_troops: 3_630.0,
+            city_max_troops: 5_000.0,
+            district_max_troops: default_district_max_troops(),
             city_troop_income: default_city_troop_income(),
+            city_gold_income: default_city_gold_income(),
             farm_troop_income: default_farm_troop_income(),
             farm_gold_income: default_farm_gold_income(),
             tower_range: 6.0,
@@ -657,9 +684,10 @@ impl Default for GameConfig {
             tower_strength: 0.05,
             factory_gold_income: default_factory_gold_income(),
             port_gold_income: default_port_gold_income(),
+            port_troop_income: default_port_troop_income(),
             hero_city_gold_income: default_hero_city_gold_income(),
-            hero_factory_troop_income: default_city_troop_income(),
-            hero_port_troop_income: default_city_troop_income(),
+            hero_factory_troop_income: default_hero_district_troop_income(),
+            hero_port_troop_income: default_hero_district_troop_income(),
             alliance_gold_income: default_alliance_gold_income(),
             alliance_troop_income: default_alliance_troop_income(),
             trade_troop_income: default_trade_troop_income(),

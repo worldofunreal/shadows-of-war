@@ -561,7 +561,6 @@ struct HudScalarKey {
     player_endgame_stats: Option<[u64; 5]>,
     snapshot_tick: u64,
     combat_operations_tick: u64,
-    naval_activity_revision: u64,
     at_zoom_floor: bool,
     at_zoom_ceiling: bool,
     tutorial_camera_zoom_hundredths: i32,
@@ -2481,7 +2480,6 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         dev_preview,
         snapshot_tick: if cold_open { snapshot_tick } else { 0 },
         combat_operations_tick,
-        naval_activity_revision: app.ui.naval_activity_revision,
         map_menu_view: map_menu.map(|menu| menu.view),
         map_menu_session: map_menu.map(|menu| menu.session).unwrap_or(0),
         map_menu_tile: map_menu.map(|menu| menu.tile_idx).unwrap_or(u32::MAX),
@@ -4024,12 +4022,7 @@ fn building_detail_payload(
                 .map(|f| f as &dyn Fn(u32) -> bool)
                 .or_else(|| renderer_is_land.as_ref().map(|f| f as &dyn Fn(u32) -> bool)),
         );
-    let visual_level = if building.kind == BuildingKind::City {
-        sow_core::building::city_snapshot_visual_level(&snapshot.buildings, building.tile_idx)
-            .max(building.active_level())
-    } else {
-        building.active_level()
-    };
+    let visual_level = building.active_level();
 
     let districts = if is_city_mode {
         BuildingKind::DISTRICTS
@@ -4457,98 +4450,6 @@ fn build_combat_operations_payload(
     operations
 }
 
-fn build_naval_activity_payload(
-    app: &SowApp,
-    snapshot: &sow_core::protocol::SimSnapshot,
-    my_player_id: u16,
-    map_width: u32,
-) -> Vec<serde_json::Value> {
-    let players: HashMap<_, _> = snapshot
-        .players
-        .iter()
-        .map(|player| (player.id, player))
-        .collect();
-    app.ui
-        .naval_activity
-        .iter()
-        .map(|activity| {
-            let owner_identity = |player_id: u16| {
-                players.get(&player_id).map(|player| {
-                    (
-                        sow_core::player::display_name(
-                            player.id,
-                            &player.name,
-                            player.player_type,
-                        ),
-                        sow_core::player::avatar_identity(player),
-                    )
-                })
-            };
-            let source = owner_identity(activity.source_owner);
-            let target_name = owner_identity(activity.target_owner)
-                .map(|(name, _)| name)
-                .or_else(|| (activity.target_owner == 0).then(|| String::new()));
-            let focus_fleet_id = if activity.kind == crate::app::NavalActivityKind::Sunk {
-                None
-            } else if activity.source_owner == my_player_id {
-                activity.source_fleet_id.or(activity.target_fleet_id)
-            } else {
-                activity.target_fleet_id
-            };
-            let focus_fleet = if let Some(fleet_id) = focus_fleet_id {
-                snapshot.fleets.iter().find(|fleet| {
-                    fleet.id == fleet_id
-                        && (fleet.owner_id == my_player_id
-                            || !crate::theme::dev_config::DevConfig::with(|dev| dev.fog_of_war)
-                            || app.sim.fog_visible.contains(fleet.current_tile))
-                })
-            } else {
-                None
-            };
-            let focus = focus_fleet
-                .filter(|_| map_width > 0)
-                .map(|fleet| {
-                    (
-                        fleet.id,
-                        (fleet.current_tile % map_width) as f32 + 0.5,
-                        (fleet.current_tile / map_width) as f32 + 0.5,
-                    )
-                })
-                .or_else(|| {
-                    (map_width > 0 && activity.event_tile_visible).then_some((
-                        0,
-                        (activity.tile % map_width) as f32 + 0.5,
-                        (activity.tile / map_width) as f32 + 0.5,
-                    ))
-                });
-            let kind = match activity.kind {
-                crate::app::NavalActivityKind::Hit => "hit",
-                crate::app::NavalActivityKind::Sunk => "sunk",
-                crate::app::NavalActivityKind::Captured => "captured",
-            };
-            let target_type = match activity.target_type {
-                sow_core::game::UnitType::TransportShip => "transport",
-                sow_core::game::UnitType::TradeShip => "trade",
-                sow_core::game::UnitType::Warship => "warship",
-            };
-            serde_json::json!({
-                "id": activity.id,
-                "kind": kind,
-                "source_name": source.as_ref().map(|(name, _)| name.as_str()),
-                "source_avatar": source.map(|(_, avatar)| avatar),
-                "target_name": target_name,
-                "target_type": target_type,
-                "damage": activity.damage.max(0.0),
-                "health_after": activity.health_after.max(0.0),
-                "troops_lost": activity.troops_lost.max(0.0),
-                "focus_x": focus.map(|point| point.1),
-                "focus_y": focus.map(|point| point.2),
-                "focus_fleet_id": focus.and_then(|point| (point.0 != 0).then_some(point.0)),
-            })
-        })
-        .collect()
-}
-
 fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json::Value {
     if app.ui.app.phase != crate::ClientPhase::Playing {
         return serde_json::Value::Null;
@@ -4732,9 +4633,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 &app.sim.fog_visible,
             )
         })
-        .unwrap_or_default();
-    let naval_activity = snapshot
-        .map(|snapshot| build_naval_activity_payload(app, snapshot, my_pid, app.sim.map_w))
         .unwrap_or_default();
     let match_over = !app.ui.is_spectating
         && snapshot.is_some_and(|snapshot| {
@@ -4983,8 +4881,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 let progress =
                     (1.0 - f64::from(arsenal.ticks_until_complete) / f64::from(total))
                         .clamp(0.0, 1.0);
-                let visual_level =
-                    sow_core::building::city_snapshot_visual_level(&snapshot.buildings, city.tile_idx);
+                let visual_level = city.active_level();
                 let bx = (city.tile_idx % map_w) as f32 + 0.5;
                 let by = (city.tile_idx / map_w) as f32 + 0.5;
                 let [screen_x, screen_y] =
@@ -5122,7 +5019,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "hero_income_rate": hud.hero_income_rate,
         "attack_ratio": hud.attack_ratio,
         "operations": operations,
-        "naval_activity": naval_activity,
         "spawn_timer_secs": hud.spawn_timer_secs,
         "spawn_duration_secs": sow_core::game::DEPLOYMENT_PHASE_DURATION_MS / 1000.0,
         "has_spawned": me.is_some_and(|player| player.has_spawned),

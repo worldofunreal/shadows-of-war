@@ -60,43 +60,47 @@ pub(crate) fn building_metrics(
     }
     use sow_core::geo_entities::{District, Resource, Source};
     let level_weight = sow_core::building::income_level_weight(level);
+    let gold_weight = sow_core::building::gold_income_level_weight(level);
+    let district_capacity = config.district_max_troops
+        * sow_core::building::district_capacity_level_weight(level);
     let level = f64::from(level);
     let per_second = config.global_speed_multiplier;
     let hero = |district, resource| leader.resource_bonus_multiplier(Source::District(district), resource);
     let hero_bonus = |district, resource| {
         leader.resource_bonus_hero_bonus(Source::District(district), resource)
     };
-    match kind {
+    let mut metrics = match kind {
         BuildingKind::City => {
             let mut metrics = vec![
                 BuildingMetric::new(
                     Icon::Troops,
-                    config.city_max_troops * level * leader.city_troop_capacity_multiplier(),
+                    config.city_max_troops * level_weight * leader.city_troop_capacity_multiplier(),
                     "+",
                     " cap",
                 ),
                 BuildingMetric::new(
                     Icon::Troops,
                     config.city_troop_income
-                        * level
+                        * level_weight
                         * hero(District::City, Resource::Troops)
                         * per_second,
                     "+",
                     "/s",
                 ),
             ];
-            if let Some(bonus) = hero_bonus(District::City, Resource::Gold) {
-                metrics.push(BuildingMetric::new(
-                    Icon::Gold,
-                    config.hero_city_gold_income * level_weight * bonus * per_second,
-                    "+",
-                    "/s",
-                ));
-            }
+            metrics.push(BuildingMetric::new(
+                Icon::Gold,
+                (config.city_gold_income * hero(District::City, Resource::Gold)
+                    + config.hero_city_gold_income
+                        * hero_bonus(District::City, Resource::Gold).unwrap_or(0.0))
+                    * level_weight * per_second,
+                "+",
+                "/s",
+            ));
             metrics
         }
         BuildingKind::Port => {
-            let mut metrics = vec![
+            let metrics = vec![
                 BuildingMetric::new(Icon::Boat, level, "+", ""),
                 BuildingMetric::new(Icon::Speed, level, "+", "%"),
                 BuildingMetric::new(
@@ -108,29 +112,23 @@ pub(crate) fn building_metrics(
                     "+",
                     "/s",
                 ),
-                // Merchant income with trade routes, at most.
                 BuildingMetric::new(
-                    Icon::Gold,
-                    config.trade_ship_gold_income * level * per_second,
+                    Icon::Troops,
+                    (config.port_troop_income * level_weight * hero(District::Port, Resource::Troops)
+                        + config.hero_port_troop_income * level
+                            * hero_bonus(District::Port, Resource::Troops).unwrap_or(0.0))
+                        * per_second,
                     "+",
                     "/s",
                 ),
             ];
-            if let Some(bonus) = hero_bonus(District::Port, Resource::Troops) {
-                metrics.push(BuildingMetric::new(
-                    Icon::Troops,
-                    config.hero_port_troop_income * level * bonus * per_second,
-                    "+",
-                    "/s",
-                ));
-            }
             metrics
         }
         BuildingKind::Factory => {
             let mut metrics = vec![BuildingMetric::new(
                 Icon::Gold,
                 config.factory_gold_income
-                    * level_weight
+                    * gold_weight
                     * hero(District::Factory, Resource::Gold)
                     * per_second,
                 "+",
@@ -175,7 +173,7 @@ pub(crate) fn building_metrics(
             BuildingMetric::new(
                 Icon::Troops,
                 config.farm_troop_income
-                    * level
+                    * level_weight
                     * hero(District::Farm, Resource::Troops)
                     * per_second,
                 "+",
@@ -191,7 +189,11 @@ pub(crate) fn building_metrics(
                 "/s",
             ),
         ],
+    };
+    if kind.is_district() && district_capacity > 0.0 {
+        metrics.push(BuildingMetric::new(Icon::Troops, district_capacity, "+", " cap"));
     }
+    metrics
 }
 
 /// What the next level adds: only the effects that change, as "+" amounts.
@@ -200,9 +202,11 @@ pub(crate) fn upgrade_gains(
     next: &[BuildingMetric],
 ) -> Vec<BuildingMetric> {
     next.iter()
-        .enumerate()
-        .filter_map(|(index, metric)| match (current.get(index), metric.value) {
-            (Some(before), Some(after)) if before.icon == metric.icon => {
+        .filter_map(|metric| match (
+            current.iter().find(|before| before.icon == metric.icon && before.unit == metric.unit),
+            metric.value,
+        ) {
+            (Some(before), Some(after)) => {
                 let gain = after - before.value.unwrap_or(0.0);
                 (gain.abs() > 1e-6).then_some(BuildingMetric {
                     value: Some(gain),

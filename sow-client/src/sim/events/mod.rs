@@ -184,30 +184,6 @@ impl SowApp {
                     troops_lost,
                     ..
                 } => {
-                    let event_tile_visible =
-                        !fog_of_war || self.sim.fog_visible.contains(tile);
-                    if owner_id == my_id || target_owner == my_id || event_tile_visible {
-                        self.ui.push_naval_activity(crate::app::NavalActivity {
-                            id: 0,
-                            kind: if captured {
-                                crate::app::NavalActivityKind::Captured
-                            } else if sunk {
-                                crate::app::NavalActivityKind::Sunk
-                            } else {
-                                crate::app::NavalActivityKind::Hit
-                            },
-                            source_owner: owner_id,
-                            target_owner,
-                            source_fleet_id,
-                            target_fleet_id: Some(target_fleet_id),
-                            target_type,
-                            damage,
-                            health_after,
-                            troops_lost,
-                            event_tile_visible,
-                            tile,
-                        });
-                    }
                     let x = tile % self.sim.map_w.max(1);
                     let y = tile / self.sim.map_w.max(1);
                     let color = snap
@@ -247,32 +223,7 @@ impl SowApp {
                         self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5),
                     );
                 }
-                sow_core::game::GameEvent::TradeShipCaptured {
-                    owner_id,
-                    target_owner,
-                    source_fleet_id,
-                    fleet_id,
-                    tile,
-                } => {
-                    let event_tile_visible =
-                        !fog_of_war || self.sim.fog_visible.contains(tile);
-                    if owner_id == my_id || target_owner == my_id || event_tile_visible {
-                        self.ui.push_naval_activity(crate::app::NavalActivity {
-                            id: 0,
-                            kind: crate::app::NavalActivityKind::Captured,
-                            source_owner: owner_id,
-                            target_owner,
-                            source_fleet_id: Some(source_fleet_id),
-                            target_fleet_id: Some(fleet_id),
-                            target_type: sow_core::game::UnitType::TradeShip,
-                            damage: 0.0,
-                            health_after: 0.0,
-                            troops_lost: 0.0,
-                            event_tile_visible,
-                            tile,
-                        });
-                    }
-                }
+                sow_core::game::GameEvent::TradeShipCaptured { .. } => {}
                 sow_core::game::GameEvent::AbilityTriggered {
                     owner_id,
                     tile,

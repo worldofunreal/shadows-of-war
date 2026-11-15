@@ -80,13 +80,13 @@ static BOT_POOL: OnceLock<BotPool> = OnceLock::new();
 const ANIMAL_ALIAS_SUFFIX_COUNT: usize = 10_000;
 
 /// Chance band for generated animal aliases, by the humans' ranked league.
-/// No rated human (`None`) counts as Bronze.
+/// No rated human (`None`) counts as the entry league (`Nomad`).
 fn animal_alias_band(league_score: Option<u16>) -> (f32, f32) {
     let (tier, _) = sow_data::profile::tier_for_score(league_score.unwrap_or(0));
     match tier {
-        "Bronze" => (0.10, 0.20),
-        "Silver" => (0.05, 0.10),
-        "Gold" => (0.0, 0.02),
+        "Nomad" | "Bronze" => (0.10, 0.20),
+        "Settlement" | "Silver" => (0.05, 0.10),
+        "CityState" | "Gold" => (0.0, 0.02),
         _ => (0.0, 0.0),
     }
 }
@@ -409,9 +409,9 @@ mod tests {
         };
         assert!((0.12..=0.18).contains(&draws(None)));
         assert!((0.06..=0.09).contains(&draws(Some(1300))));
-        assert!((0.005..=0.015).contains(&draws(Some(1700))));
-        assert_eq!(draws(Some(2000)), 0.0);
-        assert_eq!(animal_alias_band(Some(2000)), (0.0, 0.0));
+        assert!((0.005..=0.015).contains(&draws(Some(2300))));
+        assert_eq!(draws(Some(3000)), 0.0);
+        assert_eq!(animal_alias_band(Some(3000)), (0.0, 0.0));
     }
 
     #[test]

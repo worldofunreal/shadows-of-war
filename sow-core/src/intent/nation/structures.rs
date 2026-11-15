@@ -27,17 +27,24 @@ pub(super) fn bot_structure_target_count(
         }
         BuildingKind::Factory => {
             let val = ((city_equivalent as f64) * 0.65 * factor).floor() as u32;
-            if factor > 0.4 { val.max(1) } else { val }
+            val.max(1)
         }
         BuildingKind::Port => {
             let val = ((city_equivalent as f64) * 0.30 * factor).floor() as u32;
-            if factor > 0.4 { val.max(1) } else { val }
+            val.max(1)
         }
         BuildingKind::Farm => {
             let val = ((city_equivalent as f64) * 0.45 * factor).floor() as u32;
-            if factor > 0.4 { val.max(1) } else { val }
+            val.max(1)
         }
     }
+}
+
+/// One construction or arsenal order per bot decision cycle avoids competing for a city queue.
+pub(super) fn has_pending_build(decisions: &[BotDecision], bot_id: u16) -> bool {
+    decisions.iter().rev()
+        .take_while(|decision| decision.bot_id == bot_id)
+        .any(|decision| decision.kind == BotDecisionKind::Build)
 }
 
 /// Decision window per tier from the match's tuning, in ticks, inclusive.

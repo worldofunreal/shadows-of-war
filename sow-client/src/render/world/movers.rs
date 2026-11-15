@@ -4,6 +4,7 @@ use sow_core::protocol::{FleetSnapshot, ProjectileSnapshot, SimSnapshot};
 use std::collections::{HashMap, HashSet};
 
 const TRAIL_CAP: usize = 32;
+const SHELL_SPRITE_SCALE: f32 = 0.8;
 const NUKE_ARC_MIN_HEIGHT: f32 = 50.0;
 const NUKE_ARC_SAMPLES: usize = 128;
 const NUKE_CURVE_MIN_SAMPLES: usize = 64;
@@ -254,6 +255,7 @@ struct MoverSlot {
     trail_start: u32,
     trail_len: u32,
     is_fleet: bool,
+    is_shell: bool,
     arc_trail: bool,
     is_owned_warship: bool,
     health_fraction: f32,
@@ -501,6 +503,7 @@ impl MoverScene {
             trail_start,
             trail_len,
             is_fleet: true,
+            is_shell: false,
             arc_trail: false,
             is_owned_warship: fleet.unit_type == UnitType::Warship && fleet.owner_id == my_id,
             health_fraction: (fleet.troops / fleet.max_health.max(1.0)).clamp(0.0, 1.0) as f32,
@@ -542,7 +545,11 @@ impl MoverScene {
                 (sprite, 0.65 + level as f32 * 0.12, tc)
             }
             ProjectileKind::SAMMissile => (MoverSpriteId::SamMissile, 0.6, [0.39, 0.78, 1.0, 0.85]),
-            ProjectileKind::Shell => (MoverSpriteId::SamMissile, 0.22, [0.94, 0.97, 1.0, 0.82]),
+            ProjectileKind::Shell => (
+                MoverSpriteId::SamMissile,
+                0.22 * SHELL_SPRITE_SCALE,
+                [0.94, 0.97, 1.0, 0.82],
+            ),
         };
 
         let is_nuke = matches!(proj.kind, ProjectileKind::Nuke { .. });
@@ -594,6 +601,7 @@ impl MoverScene {
             trail_start,
             trail_len,
             is_fleet: false,
+            is_shell: matches!(proj.kind, ProjectileKind::Shell),
             arc_trail: is_nuke,
             is_owned_warship: false,
             health_fraction: 1.0,
@@ -795,6 +803,9 @@ impl MoverScene {
                 MoverSpriteId::TradeShip => min_trade_ship_px,
                 MoverSpriteId::Warship => min_warship_px,
                 MoverSpriteId::AtomBomb => min_nuke_px,
+                MoverSpriteId::SamMissile if slot.is_shell => {
+                    min_sam_px * SHELL_SPRITE_SCALE
+                }
                 MoverSpriteId::SamMissile => min_sam_px,
             };
             if minimum_screen_size > 0.0 && sprite_size * params.camera_zoom < minimum_screen_size {

@@ -4,34 +4,76 @@ import type { MenuLobby, RankedLadder, RankedPointsBreakdown, RankedStep } from 
 import type { ProfileRating } from "./main_menu.profile.ts";
 
 // Shared presentation for queue, loader, profile and the confirmed match result.
-export function rankTier(tier: string): string {
-    const known = /^(Bronze|Silver|Gold|Platinum|Diamond|Master|Grandmaster)$/;
-    return known.test(tier) ? tier.toLowerCase() : "unranked";
+const TIER_KEYS: Record<string, string> = {
+    nomad: "nomad",
+    settlement: "settlement",
+    citystate: "city_state",
+    city_state: "city_state",
+    kingdom: "kingdom",
+    republic: "republic",
+    empire: "empire",
+    dynasty: "dynasty",
+    hegemony: "hegemony",
+    dominion: "dominion",
+    eternal: "eternal",
+    bronze: "bronze",
+    silver: "silver",
+    gold: "gold",
+    platinum: "platinum",
+    diamond: "diamond",
+    master: "master",
+    grandmaster: "grandmaster",
+};
+
+const TIER_EMBLEM_SVG: Record<string, string> = {
+    nomad: "bronze",
+    settlement: "bronze",
+    city_state: "silver",
+    kingdom: "silver",
+    republic: "gold",
+    empire: "gold",
+    dynasty: "platinum",
+    hegemony: "diamond",
+    dominion: "master",
+    eternal: "grandmaster",
+    bronze: "bronze",
+    silver: "silver",
+    gold: "gold",
+    platinum: "platinum",
+    diamond: "diamond",
+    master: "master",
+    grandmaster: "grandmaster",
+    unranked: "bronze",
+};
+
+export function rankTier(tier?: string | null): string {
+    if (!tier) return "nomad";
+    return TIER_KEYS[tier.toLowerCase()] || "nomad";
 }
 
-export function rankName(tier: string, division?: string | null): string {
+export function rankName(tier?: string | null, division?: string | null): string {
     return SOW_t("ranked.tier_" + rankTier(tier)) + (division ? " " + division : "");
 }
 
 export function rankLabel(
     rating:
-        | (Pick<ProfileRating, "tier" | "division" | "placements_complete" | "games_played"> &
-              Partial<Pick<ProfileRating, "score">>)
+        | (Pick<ProfileRating, "tier" | "division"> &
+              Partial<Pick<ProfileRating, "score" | "placements_complete" | "games_played">>)
         | null,
 ): string {
-    if (!rating || !rating.placements_complete) {
-        return SOW_t("ranked.placements", { played: Math.min(5, rating?.games_played || 0) });
-    }
-    const name = rankName(rating.tier, rating.division);
-    return typeof rating.score === "number" && Number.isFinite(rating.score)
-        ? name + " · " + rating.score
-        : name;
+    const name = rankName(rating?.tier || "Nomad", rating?.division);
+    const score =
+        rating && typeof rating.score === "number" && Number.isFinite(rating.score)
+            ? rating.score
+            : 0;
+    return name + " · " + score;
 }
 
-export function rankEmblem(tier: string, division?: string | null): string {
+export function rankEmblem(tier?: string | null, division?: string | null): string {
     const key = rankTier(tier);
+    const svg = TIER_EMBLEM_SVG[key] || "bronze";
     return "<span class='sow-ranked__emblem' data-tier='" + key + "' aria-hidden='true'><img src='" +
-        esc(asset("shell/ranked/" + key + ".svg")) + "' alt='' width='160' height='160'>" +
+        esc(asset("shell/ranked/" + svg + ".svg")) + "' alt='' width='160' height='160'>" +
         (division ? "<b>" + esc(division) + "</b>" : "") + "</span>";
 }
 
@@ -116,17 +158,19 @@ export function rankedPointsBreakdownMarkup(points: RankedPointsBreakdown): stri
 }
 
 export function rankOverview(rating: ProfileRating | null, ladder: RankedLadder | null | undefined, own: boolean): string {
-    const placed = !!rating?.placements_complete;
-    const heroTier = rankTier(placed ? rating.tier : "unranked");
+    const currentTier = rating?.tier || "Nomad";
+    const currentDivision = rating?.division || null;
+    const currentScore = rating && Number.isFinite(rating.score) ? rating.score : 0;
+    const heroTier = rankTier(currentTier);
     const tiers = (ladder?.steps || []).filter((step, index, steps) => !index || step.tier !== steps[index - 1].tier);
     return "<section class='sow-ranked__overview' data-tier='" + heroTier + "' aria-label='" + esc(SOW_t("ranked.my_rank")) + "'><div class='sow-ranked__hero'>" +
-        rankEmblem(placed ? rating.tier : "unranked", placed ? rating.division : null) +
+        rankEmblem(currentTier, currentDivision) +
         "<div class='sow-ranked__summary'><span class='sow-ranked__eyebrow'>" + esc(SOW_t("lobbies.ranked_1v1")) +
-        "</span><h2>" + esc(placed ? rankName(rating.tier, rating.division) : rankLabel(rating)) + "</h2>" +
-        (placed ? "<p class='sow-ranked__points'>" + esc(SOW_t("lobbies.rank_score", { score: rating.score })) + "</p>" +
-            rankProgressMarkup(rating.score, ladder) : rankPlacements(rating?.games_played || 0)) +
+        "</span><h2>" + esc(rankName(currentTier, currentDivision)) + "</h2>" +
+        "<p class='sow-ranked__points'>" + esc(SOW_t("lobbies.rank_score", { score: currentScore })) + "</p>" +
+        rankProgressMarkup(currentScore, ladder) +
         "</div></div>" + (tiers.length ? "<ol class='sow-ranked__leagues'>" + tiers.map(step =>
-            "<li" + (placed && step.tier === rating.tier ? " class='is-current' aria-current='step'" : "") + ">" +
+            "<li" + (rankTier(step.tier) === heroTier ? " class='is-current' aria-current='step'" : "") + ">" +
             rankEmblem(step.tier) + "<strong>" + esc(rankName(step.tier)) + "</strong><small>" + esc(step.score) +
             "</small></li>").join("") + "</ol>" : "") +
         "<div class='sow-ranked__actions'>" + (own ? "<button type='button' class='sow-menu__primary' data-command='quick_match'>" +
@@ -140,13 +184,13 @@ export function renderRankedDuel(lobby: MenuLobby | null, loading = false): stri
     const me = lobby?.players.find(player => player.player_id === state?.my_player_id);
     const rival = lobby?.players.find(player => player.player_id !== state?.my_player_id);
     const rating = menuUi.rankedRating;
-    const myTier = rankTier(rating?.placements_complete ? rating.tier : "unranked");
+    const myTier = rankTier(rating?.tier || "Nomad");
     const playerCard = (name: string, leader: string | null | undefined, opponent: boolean) =>
         "<article class='sow-ranked__player" + (opponent ? " sow-ranked__player--rival" : "") +
         "'" + (!opponent ? " data-tier='" + myTier + "'" : "") +
         "><img class='sow-ranked__portrait' " + avatarImageAttribute(leader === undefined ? avatarImage() : avatarImage(leader)) +
         " alt='' width='128' height='128'><strong>" + esc(name) + "</strong>" +
-        (!opponent ? rankEmblem(rating?.placements_complete ? rating.tier : "unranked", rating?.placements_complete ? rating.division : null) +
+        (!opponent ? rankEmblem(rating?.tier || "Nomad", rating?.division || null) +
             "<span class='sow-ranked__player-rank' data-ranked-player-rank>" + esc(rankLabel(rating)) + "</span>" :
             "<span class='sow-ranked__player-status'>" + esc(SOW_t(loading ? "menu.loading" : rival?.is_ready ? "lobbies.ready" : "menu.loading")) + "</span>") + "</article>";
     return "<div class='sow-ranked__duel" + (lobby ? " is-found" : "") + "' data-ranked-match='" + esc(lobby?.id || "search") +
@@ -172,7 +216,6 @@ export function renderRankedDuel(lobby: MenuLobby | null, loading = false): stri
 
 export function animateRankResult(card: HTMLElement, result: import("./main_menu.state.ts").RankedResult,
     reduced: () => boolean): { finish: () => void; cancel: () => void } {
-    if (!result.placements_complete) return { finish() {}, cancel() {} };
     const ladder = result.ladder || menuUi.rankedLadder;
     const score = card.querySelector<HTMLElement>("[data-rank-score]");
     const rank = card.querySelector<HTMLElement>("[data-rank-name]");
@@ -185,7 +228,6 @@ export function animateRankResult(card: HTMLElement, result: import("./main_menu
     let started: number | null = null;
     let stopped = false;
     let lastStep = result.tier_before + (result.division_before || "");
-    const firstLeague = result.placements_complete && result.games_played === 5;
     function write(value: number, final: boolean) {
         const progress = rankProgress(value, ladder);
         const tier = final ? result.tier_after : progress?.step.tier || result.tier_before;
@@ -211,7 +253,7 @@ export function animateRankResult(card: HTMLElement, result: import("./main_menu
             if (target) target.textContent = label;
             if (remaining) remaining.textContent = SOW_t("ranked.remaining", { points: progress.remaining });
         }
-        if (final || (!firstLeague && tier === result.tier_after && tier !== result.tier_before))
+        if (final || (tier === result.tier_after && tier !== result.tier_before))
             card.classList.add("is-rank-revealed");
     }
     function finish() {
@@ -228,7 +270,6 @@ export function animateRankResult(card: HTMLElement, result: import("./main_menu
         const t = Math.max(0, Math.min(1, (elapsed - 360) / 800));
         const value = Math.round(result.score_before + (result.score_after - result.score_before) * (1 - Math.pow(1 - t, 3)));
         write(value, t === 1);
-        if (firstLeague && t >= 0.45) card.classList.add("is-rank-revealed");
         if (t < 1) frameId = requestAnimationFrame(frame);
         else stopped = true;
     }

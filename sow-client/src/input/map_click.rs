@@ -896,7 +896,9 @@ impl SowApp {
             MapMenuAction::UpgradeStructure => {
                 if let Some(building) =
                     self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-                        snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx)
+                        snapshot.buildings.iter().find(|b| {
+                            b.tile_idx == tile_idx && b.kind == sow_core::game::BuildingKind::City
+                        })
                     })
                 {
                     self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructure {
@@ -1266,7 +1268,10 @@ impl SowApp {
                 let Some(building) = snapshot
                     .buildings
                     .iter()
-                    .find(|building| building.tile_idx == tile_idx)
+                    .find(|building| {
+                        building.tile_idx == tile_idx
+                            && building.kind == sow_core::game::BuildingKind::City
+                    })
                 else {
                     return (None, None);
                 };

@@ -4,6 +4,8 @@ use crate::game::{GameEvent, GamePhase};
 use crate::geo_entities::LossWhen;
 use crate::warp_fleet::best_shore_spawn_for_transport;
 
+const WARSHIP_BASE_STEPS_PER_TICK: f64 = 0.8;
+
 impl SowEngine {
     /// Fleet movement, retreat, landing, and naval combat.
     pub fn execute_fleets(&mut self) {
@@ -148,10 +150,10 @@ impl SowEngine {
                     continue;
                 }
             } else if fleet.path_cursor < fleet.path.len() {
-                let base_speed = if fleet.unit_type == crate::game::UnitType::TransportShip {
-                    transport_base_steps_per_tick
-                } else {
-                    1.0
+                let base_speed = match fleet.unit_type {
+                    crate::game::UnitType::TransportShip => transport_base_steps_per_tick,
+                    crate::game::UnitType::Warship => WARSHIP_BASE_STEPS_PER_TICK,
+                    crate::game::UnitType::TradeShip => 1.0,
                 };
                 let speed = fleet.movement_steps_per_tick(base_speed);
                 let progress = fleet.movement_progress + speed;

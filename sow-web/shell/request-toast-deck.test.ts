@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { HudInboxRequest } from "./main_menu.state.ts";
 import {
+    COMPACT_HORIZONTAL_MAX_REQUEST_TOASTS,
+    DESKTOP_MAX_REQUEST_TOASTS,
     MAX_REQUEST_TOAST_CARDS,
+    MOBILE_MAX_REQUEST_TOASTS,
     REQUEST_TOAST_TTL_MS,
     createRequestToastDeckState,
     dismissAllRequestToasts,
@@ -11,6 +14,7 @@ import {
     readRequestCountdown,
     reconcileRequestToastDeck,
     requestKey,
+    resolveRequestToastMaxVisible,
     syncRequestCountdowns,
     type RequestCountdownRecord,
 } from "./request-toast-deck.ts";
@@ -191,5 +195,39 @@ describe("request-toast-deck", () => {
         dismissRequestToastByKey(state, "help:5");
         const afterDismiss = reconcileRequestToastDeck(state, [req], countdowns, 10_100);
         expect(afterDismiss.visible.length).toBe(0);
+    });
+
+    test("resolves viewport deck limits to 3 desktop, 2 compact horizontal, and 1 mobile", () => {
+        expect(resolveRequestToastMaxVisible(1440, 900, false)).toBe(DESKTOP_MAX_REQUEST_TOASTS);
+        expect(resolveRequestToastMaxVisible(844, 390, true)).toBe(COMPACT_HORIZONTAL_MAX_REQUEST_TOASTS);
+        expect(resolveRequestToastMaxVisible(900, 620, false)).toBe(COMPACT_HORIZONTAL_MAX_REQUEST_TOASTS);
+        expect(resolveRequestToastMaxVisible(390, 844, false)).toBe(MOBILE_MAX_REQUEST_TOASTS);
+        expect(resolveRequestToastMaxVisible(768, 1024, false)).toBe(MOBILE_MAX_REQUEST_TOASTS);
+
+        const requests = [allianceReq(1), allianceReq(2), allianceReq(3), allianceReq(4)];
+        const now = 30_000;
+        const countdowns = new Map<string, RequestCountdownRecord>();
+        syncRequestCountdowns(requests, countdowns, now);
+
+        const desktopState = createRequestToastDeckState();
+        const desktopView = reconcileRequestToastDeck(desktopState, requests, countdowns, now, {
+            maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+        });
+        expect(desktopView.visible.length).toBe(3);
+        expect(desktopView.overflowCount).toBe(1);
+
+        const compactState = createRequestToastDeckState();
+        const compactView = reconcileRequestToastDeck(compactState, requests, countdowns, now, {
+            maxVisible: COMPACT_HORIZONTAL_MAX_REQUEST_TOASTS,
+        });
+        expect(compactView.visible.length).toBe(2);
+        expect(compactView.overflowCount).toBe(2);
+
+        const mobileState = createRequestToastDeckState();
+        const mobileView = reconcileRequestToastDeck(mobileState, requests, countdowns, now, {
+            maxVisible: MOBILE_MAX_REQUEST_TOASTS,
+        });
+        expect(mobileView.visible.length).toBe(1);
+        expect(mobileView.overflowCount).toBe(3);
     });
 });

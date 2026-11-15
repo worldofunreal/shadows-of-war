@@ -1927,6 +1927,9 @@ impl SowEngine {
                     && self.city_arsenals.get(&b.id).is_some_and(|s| s.nuke_ready)
             });
             if !has_ready_nuke {
+                if super::structures::has_pending_build(decisions, bot_id) {
+                    return;
+                }
                 if player.gold < nuke_cost {
                     return;
                 }

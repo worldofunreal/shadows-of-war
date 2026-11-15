@@ -107,11 +107,13 @@ impl SowApp {
             );
         }
 
-        self.sfx.queue_elimination(
-            crate::player_sound_type(victim_type),
-            seed,
-            self.spatial_sound_params(wx, wy),
-        );
+        if my_id != 0 && (conqueror_id == my_id || reward_data.is_some()) {
+            self.sfx.queue_elimination(
+                crate::player_sound_type(victim_type),
+                seed,
+                self.spatial_sound_params(wx, wy),
+            );
+        }
 
         if conqueror_id == my_id
             && my_id != 0

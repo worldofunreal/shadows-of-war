@@ -26,11 +26,14 @@ pub fn troop_income_per_second(
     use crate::geo_entities::{District, Resource, Source};
     cfg.troop_base_income
         + cfg.city_troop_income
-            * agg.city_levels as f64
+            * agg.city_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::City), Resource::Troops)
         + cfg.farm_troop_income
-            * agg.farm_levels as f64
+            * agg.farm_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Troops)
+        + cfg.port_troop_income
+            * agg.port_income_level_weight
+            * leader.resource_bonus_multiplier(Source::District(District::Port), Resource::Troops)
         + hero_only_income(
             leader.resource_bonus_hero_bonus(Source::District(District::Factory), Resource::Troops),
             cfg.hero_factory_troop_income * agg.factory_levels as f64,
@@ -61,6 +64,9 @@ pub fn gold_income_per_second(
 ) -> f64 {
     use crate::geo_entities::{District, Resource, Source};
     cfg.gold_base_income
+        + cfg.city_gold_income
+            * agg.city_income_level_weight
+            * leader.resource_bonus_multiplier(Source::District(District::City), Resource::Gold)
         + cfg.factory_gold_income
             * agg.factory_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Factory), Resource::Gold)
@@ -109,7 +115,7 @@ pub fn imperial_standard_income(
     let multiplier = f64::from(percent) / 100.0;
     (
         cfg.factory_gold_income * agg.factory_income_level_weight * multiplier,
-        cfg.farm_troop_income * f64::from(agg.farm_levels) * multiplier,
+        cfg.farm_troop_income * agg.farm_income_level_weight * multiplier,
     )
 }
 
@@ -212,7 +218,7 @@ mod tests {
             cfg.per_tick(per_second) * ticks_per_second * 60.0 / cfg.global_speed_multiplier
         };
 
-        assert!((gold_per_game_minute(cfg.gold_base_income) - 600.0).abs() < 1e-9);
+        assert!((gold_per_game_minute(cfg.gold_base_income) - 60.0 / crate::game_config::NORMAL_GAME_SPEED).abs() < 1e-9);
         assert!(
             (gold_per_game_minute(cfg.factory_gold_income)
                 - 60.0 * (0.85 / crate::game_config::NORMAL_GAME_SPEED))
@@ -224,11 +230,11 @@ mod tests {
             crate::game_config::NORMAL_GAME_SPEED
         );
         assert_eq!(cfg.troop_base_income, 1_600.0);
-        assert_eq!(cfg.city_troop_income, 600.0);
-        assert_eq!(cfg.farm_troop_income, 600.0);
+        assert_eq!(cfg.city_troop_income, 40.0 / crate::game_config::NORMAL_GAME_SPEED);
+        assert_eq!(cfg.farm_troop_income, 60.0 / crate::game_config::NORMAL_GAME_SPEED);
         assert_eq!(cfg.hero_factory_troop_income, 600.0);
         assert_eq!(cfg.hero_port_troop_income, 600.0);
-        assert_eq!(cfg.city_max_troops, 3_630.0);
+        assert_eq!(cfg.city_max_troops, 5_000.0);
         assert_eq!(cfg.territory_troop_amount, 3.0);
         assert_eq!(cfg.max_troops_base, 5_000.0);
         assert_eq!(cfg.max_troops_scale, 55.0);
@@ -246,12 +252,13 @@ mod tests {
         let cfg = default_cfg();
         let agg = BuildingAggregate {
             city_levels: 4,
+            city_income_level_weight: 8.125,
             ..Default::default()
         };
         let troop_rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
-        // Four levels at 600 troops/s, scaled by the shared 0.18 Normal speed.
+        // Marginal gains of 40, 60, 90 and 135 troops/s at Normal speed.
         assert!(
-            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 432.0).abs()
+            ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 325.0).abs()
                 < 1e-10
         );
     }
@@ -270,10 +277,11 @@ mod tests {
         cfg.city_troop_income = 25.0;
         let agg = BuildingAggregate {
             city_levels: 2,
+            city_income_level_weight: 2.5,
             ..Default::default()
         };
         let rate = troop_income_per_second(0, agg, Leader::of("caesar"), &cfg);
-        assert_eq!(rate, cfg.troop_base_income + 50.0);
+        assert_eq!(rate, cfg.troop_base_income + 62.5);
     }
 
     #[test]
@@ -284,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn farm_troops_scale_linearly_while_farm_and_port_gold_are_weighted() {
+    fn farm_and_port_income_use_weighted_levels() {
         let cfg = default_cfg();
         let agg = BuildingAggregate {
             farm_levels: 2,
@@ -300,29 +308,30 @@ mod tests {
             crate::geo_entities::Resource::Troops,
         );
         assert!(
-            (troop_rate - (1_600.0 + cfg.farm_troop_income * 2.0 * farm_troop_bonus)).abs()
+            (troop_rate - (1_600.0 + 4.75 * (cfg.farm_troop_income * farm_troop_bonus + cfg.port_troop_income))).abs()
                 < 1e-12
         );
-        assert!((gold_rate - (10.0 + 4.75 * (16.0 + 48.0) / 21.0)).abs() < 1e-12);
+        assert!((gold_rate - (cfg.gold_base_income + 4.75 * (cfg.farm_gold_income + cfg.port_gold_income))).abs() < 1e-12);
 
         let ragnar_gold = gold_income_per_second(0, agg, Leader::of("cleopatra"), &cfg);
-        assert!((ragnar_gold - (10.0 + 4.75 * (16.0 + 72.0) / 21.0)).abs() < 1e-12);
+        assert!((ragnar_gold - (cfg.gold_base_income + 4.75 * (cfg.farm_gold_income + cfg.port_gold_income * 1.5))).abs() < 1e-12);
     }
 
     #[test]
-    fn port_troops_are_hero_only_and_scale_linearly() {
+    fn port_troops_include_weighted_base_and_hero_bonus() {
         let cfg = default_cfg();
         let agg = BuildingAggregate {
             port_levels: 4,
+            port_income_level_weight: 8.125,
             ..Default::default()
         };
         assert_eq!(
             troop_income_per_second(0, agg, Leader::of("caesar"), &cfg),
-            cfg.troop_base_income
+            cfg.troop_base_income + cfg.port_troop_income * 8.125
         );
         assert_eq!(
             troop_income_per_second(0, agg, Leader::of("cleopatra"), &cfg),
-            cfg.troop_base_income
+            cfg.troop_base_income + cfg.port_troop_income * 8.125
         );
         let artemisia = Leader::of("artemisia_i");
         let port_troop_bonus = artemisia
@@ -333,7 +342,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             troop_income_per_second(0, agg, artemisia, &cfg),
-            cfg.troop_base_income + cfg.hero_port_troop_income * 4.0 * port_troop_bonus
+            cfg.troop_base_income
+                + cfg.port_troop_income * 8.125 * port_troop_bonus
+                + cfg.hero_port_troop_income * 4.0 * port_troop_bonus
         );
     }
 
@@ -362,8 +373,8 @@ mod tests {
         );
         let agg = aggregates[1];
         assert_eq!(agg.farm_levels, 3);
-        assert!((agg.farm_income_level_weight - 3.19485817377915).abs() < 1e-12);
+        assert!((agg.farm_income_level_weight - 3.5).abs() < 1e-12);
         assert_eq!(agg.port_levels, 4);
-        assert!((agg.port_income_level_weight - 5.328426582167173).abs() < 1e-12);
+        assert!((agg.port_income_level_weight - 8.125).abs() < 1e-12);
     }
 }

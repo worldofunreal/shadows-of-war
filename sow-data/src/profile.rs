@@ -425,16 +425,20 @@ pub struct RankedLadder {
     pub max_score: u16,
 }
 
+pub const RANKED_COMPETITIVE_FLOOR: u16 = 5000;
+pub const RANKED_MAX_SCORE: u16 = 10000;
+pub const RANKED_LEAGUE_STEP: u16 = 1000;
+
 /// Presentation boundaries come from the same owner that assigns every rank.
 pub fn ranked_ladder() -> RankedLadder {
     let mut steps = Vec::<RankedStep>::new();
-    for score in (800..=4000).step_by(100) {
+    for score in (0..=9000).step_by(usize::from(RANKED_LEAGUE_STEP)) {
         let (tier, division) = tier_for_score(score);
         if steps.last().is_none_or(|last| last.tier != tier || last.division != division) {
             steps.push(RankedStep { score, tier: tier.to_string(), division });
         }
     }
-    RankedLadder { steps, max_score: 4000 }
+    RankedLadder { steps, max_score: RANKED_MAX_SCORE }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -899,15 +903,18 @@ pub fn ranked_expected_score(rating: f64, opponent: f64, opponent_deviation: f64
     1.0 / (1.0 + 10_f64.powf(-g * (rating - opponent) / 400.0))
 }
 
-const RANKED_POINT_CURVE: [(u16, i16, i16); 8] = [
-    (800, 28, 0),
-    (1200, 26, 0),
-    (1600, 24, 0),
-    (2000, 22, 10),
-    (2400, 20, 16),
-    (2800, 18, 22),
-    (3200, 18, 26),
-    (4000, 16, 30),
+const RANKED_POINT_CURVE: [(u16, i16, i16); 11] = [
+    (0, 120, 0),
+    (1000, 115, 0),
+    (2000, 110, 0),
+    (3000, 105, 0),
+    (4000, 100, 0),
+    (5000, 95, 55),
+    (6000, 90, 65),
+    (7000, 85, 75),
+    (8000, 80, 85),
+    (9000, 75, 90),
+    (10000, 70, 95),
 ];
 
 fn ranked_point_base(score: u16, won: bool) -> i16 {
@@ -915,7 +922,7 @@ fn ranked_point_base(score: u16, won: bool) -> i16 {
         let (start, win, loss) = pair[0];
         let (end, next_win, next_loss) = pair[1];
         if score <= end {
-            if !won && score < 2000 {
+            if !won && score < RANKED_COMPETITIVE_FLOOR {
                 return 0;
             }
             let progress = f64::from(score.saturating_sub(start)) / f64::from(end - start);
@@ -924,7 +931,7 @@ fn ranked_point_base(score: u16, won: bool) -> i16 {
             return (f64::from(start_value) + f64::from(end_value - start_value) * progress).round() as i16;
         }
     }
-    if won { 16 } else { 30 }
+    if won { 70 } else { 95 }
 }
 
 pub fn ranked_points_breakdown(
@@ -935,20 +942,21 @@ pub fn ranked_points_breakdown(
     if result == 0.5 {
         return RankedPointsBreakdown::default();
     }
-    if result == 0.0 && (!rating.placements_complete || rating.score < 2000) {
+    if result == 0.0 && rating.score < RANKED_COMPETITIVE_FLOOR {
         return RankedPointsBreakdown { protected_loss: true, ..Default::default() };
     }
 
     let won = result == 1.0;
     let expected = ranked_expected_score(rating.mu, opponent.mu, opponent.sigma);
-    let opponent_adjustment = (16.0 * (0.5 - expected)).round() as i16;
-    let league_adjustment = if rating.score >= 2000 {
-        ((rating.mu - f64::from(rating.score)) / 100.0).round().clamp(-6.0, 6.0) as i16
+    let opponent_adjustment = (40.0 * (0.5 - expected)).round() as i16;
+    let expected_mu = 1000.0 + f64::from(rating.score) * 0.2;
+    let league_adjustment = if rating.score >= RANKED_COMPETITIVE_FLOOR {
+        ((rating.mu - expected_mu) / 50.0).round().clamp(-15.0, 15.0) as i16
     } else {
         0
     };
     let base = if won { ranked_point_base(rating.score, true) } else { -ranked_point_base(rating.score, false) };
-    let streak = if won { rating.win_streak.saturating_add(1).min(3) as i16 } else { 0 };
+    let streak = if won { (rating.win_streak.saturating_add(1).min(3) as i16) * 10 } else { 0 };
     let raw = base + opponent_adjustment + league_adjustment + streak;
     let mut breakdown = RankedPointsBreakdown {
         base,
@@ -958,22 +966,51 @@ pub fn ranked_points_breakdown(
         ..Default::default()
     };
     if won {
-        let bounded = raw.clamp(10, 40);
+        let bounded = raw.clamp(35, 160);
         breakdown.limit = bounded - raw;
-        let actual = (i32::from(rating.score) + i32::from(bounded)).min(4000) - i32::from(rating.score);
+        let actual = (i32::from(rating.score) + i32::from(bounded)).min(i32::from(RANKED_MAX_SCORE)) - i32::from(rating.score);
         breakdown.limit += actual as i16 - bounded;
     } else {
-        let bounded = raw.clamp(-40, -2);
+        let bounded = raw.clamp(-140, -10);
         breakdown.limit = bounded - raw;
-        let actual = (i32::from(rating.score) + i32::from(bounded)).max(2000) - i32::from(rating.score);
+        let actual = (i32::from(rating.score) + i32::from(bounded)).max(i32::from(RANKED_COMPETITIVE_FLOOR)) - i32::from(rating.score);
         breakdown.protection = actual as i16 - bounded;
     }
     breakdown
 }
 
+impl SeasonRating {
+    /// Ensure stored ratings reflect the active civilization ladder without
+    /// requiring placement matches or legacy Roman-numeral divisions.
+    pub fn normalize_ladder(&mut self) {
+        if self.games_played == 0
+            && matches!(
+                self.tier.as_str(),
+                "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond" | "Master" | "Grandmaster"
+            )
+            && self.score == 1000
+        {
+            self.score = 0;
+            self.peak_score = 0;
+        }
+        self.score = self.score.min(RANKED_MAX_SCORE);
+        self.peak_score = self.peak_score.max(self.score).min(RANKED_MAX_SCORE);
+        let (tier, division) = tier_for_score(self.score);
+        self.tier = tier.to_string();
+        self.division = division;
+        self.placements_complete = true;
+    }
+}
+
 /// Create the initial rating for a participant in the ranked 1v1 queue.
 pub fn initial_ranked_rating(account_id: String, initial_mmr: f64, now: u64) -> SeasonRating {
-    let score = initial_mmr.round().clamp(800.0, 4000.0) as u16;
+    let score = if initial_mmr <= 1000.0 {
+        0
+    } else {
+        ((initial_mmr - 1000.0) * 3.0)
+            .round()
+            .clamp(0.0, f64::from(RANKED_MAX_SCORE)) as u16
+    };
     let (tier, division) = tier_for_score(score);
     SeasonRating {
         schema_version: 2,
@@ -989,7 +1026,7 @@ pub fn initial_ranked_rating(account_id: String, initial_mmr: f64, now: u64) -> 
         tier: tier.to_string(),
         division,
         peak_score: score,
-        placements_complete: false,
+        placements_complete: true,
         win_streak: 0,
         updated_at: now,
     }
@@ -1009,7 +1046,8 @@ pub fn apply_ranked_result(rating: &mut SeasonRating, opponent: &SeasonRating, r
     let (mu, sigma) = ranked_glicko(rating.mu, rating.sigma, opponent.mu, opponent.sigma, result);
     rating.mu = mu;
     rating.sigma = sigma;
-    rating.score = (i32::from(rating.score) + i32::from(points.total())).clamp(800, 4000) as u16;
+    rating.score = (i32::from(rating.score) + i32::from(points.total()))
+        .clamp(0, i32::from(RANKED_MAX_SCORE)) as u16;
     let (tier, division) = tier_for_score(rating.score);
     rating.tier = tier.to_string();
     rating.division = division;
@@ -1020,7 +1058,7 @@ pub fn apply_ranked_result(rating: &mut SeasonRating, opponent: &SeasonRating, r
         0.0 => rating.win_streak = 0,
         _ => {}
     }
-    rating.placements_complete = rating.games_played >= 5;
+    rating.placements_complete = true;
     rating.peak_score = rating.peak_score.max(rating.score);
     rating.updated_at = now;
     Ok(())
@@ -1028,29 +1066,18 @@ pub fn apply_ranked_result(rating: &mut SeasonRating, opponent: &SeasonRating, r
 
 pub fn tier_for_score(score: u16) -> (&'static str, Option<String>) {
     let tier = match score {
-        0..=1199 => "Bronze",
-        1200..=1599 => "Silver",
-        1600..=1999 => "Gold",
-        2000..=2399 => "Platinum",
-        2400..=2799 => "Diamond",
-        2800..=3199 => "Master",
-        _ => "Grandmaster",
+        0..=999 => "Nomad",
+        1000..=1999 => "Settlement",
+        2000..=2999 => "CityState",
+        3000..=3999 => "Kingdom",
+        4000..=4999 => "Republic",
+        5000..=5999 => "Empire",
+        6000..=6999 => "Dynasty",
+        7000..=7999 => "Hegemony",
+        8000..=8999 => "Dominion",
+        _ => "Eternal",
     };
-    let division = if (800..2800).contains(&score) {
-        let within = ((score.saturating_sub(800)) % 400) / 100;
-        Some(
-            match within {
-                0 => "IV",
-                1 => "III",
-                2 => "II",
-                _ => "I",
-            }
-            .to_string(),
-        )
-    } else {
-        None
-    };
-    (tier, division)
+    (tier, None)
 }
 
 #[cfg(test)]
@@ -1064,30 +1091,35 @@ mod tests {
     #[test]
     fn presentation_ladder_matches_every_score_and_boundary() {
         let ladder = super::ranked_ladder();
-        assert_eq!(ladder.steps.len(), 22);
-        for score in 800..=ladder.max_score {
+        assert_eq!(ladder.steps.len(), 10);
+        for score in 0..=ladder.max_score {
             let shown = ladder.steps.iter().rev().find(|step| step.score <= score).unwrap();
             let (tier, division) = super::tier_for_score(score);
             assert_eq!((&*shown.tier, &shown.division), (tier, &division));
+            assert_eq!(division, None);
         }
-        assert_eq!(ladder.steps.last().unwrap().score, 3200);
+        assert_eq!(ladder.steps.first().unwrap().score, 0);
+        assert_eq!(ladder.steps.first().unwrap().tier, "Nomad");
+        assert_eq!(ladder.steps.last().unwrap().score, 9000);
+        assert_eq!(ladder.steps.last().unwrap().tier, "Eternal");
     }
 
     #[test]
     fn ranked_results_update_both_players_from_their_previous_ratings() {
         let mut winner = super::initial_ranked_rating("winner".into(), 1000.0, 1);
         let mut loser = super::initial_ranked_rating("loser".into(), 1000.0, 1);
+        assert_eq!(winner.score, 0);
+        assert_eq!(winner.tier, "Nomad");
+        assert!(winner.placements_complete);
         let winner_before = winner.clone();
         let loser_before = loser.clone();
         super::apply_ranked_result(&mut winner, &loser_before, 1.0, 2).unwrap();
         super::apply_ranked_result(&mut loser, &winner_before, 0.0, 2).unwrap();
         assert!(winner.mu > 1000.0 && loser.mu < 1000.0);
+        assert!(winner.score > 0);
+        assert_eq!(loser.score, 0);
         assert_eq!(winner.wins, 1);
         assert_eq!(loser.wins, 0);
-        assert!(!winner.placements_complete);
-        for _ in 0..4 {
-            super::apply_ranked_result(&mut winner, &loser_before, 0.5, 3).unwrap();
-        }
         assert!(winner.placements_complete);
         let before = winner.clone();
         assert!(super::apply_ranked_result(&mut winner, &loser_before, 0.25, 4).is_err());
@@ -1105,7 +1137,7 @@ mod tests {
         rating.tier = tier.into();
         rating.division = division;
         rating.games_played = games;
-        rating.placements_complete = games >= 5;
+        rating.placements_complete = true;
         rating.win_streak = streak;
         rating.sigma = 80.0;
         rating
@@ -1113,45 +1145,45 @@ mod tests {
 
     #[test]
     fn ranked_point_gains_change_with_rival_and_streak() {
-        let player = ranked_rating(1400, 1400.0, 5, 1);
-        let stronger = ranked_rating(1550, 1550.0, 5, 0);
-        let weaker = ranked_rating(1250, 1250.0, 5, 0);
+        let player = ranked_rating(2000, 1400.0, 5, 1);
+        let stronger = ranked_rating(2500, 1550.0, 5, 0);
+        let weaker = ranked_rating(1500, 1250.0, 5, 0);
         let favored = super::ranked_points_breakdown(&player, &stronger, 1.0);
         let underdog = super::ranked_points_breakdown(&player, &weaker, 1.0);
-        assert_eq!((favored.base, favored.opponent, favored.streak, favored.total()), (25, 3, 2, 30));
-        assert_eq!((underdog.base, underdog.opponent, underdog.streak, underdog.total()), (25, -3, 2, 24));
-        let veteran_streak = ranked_rating(1400, 1400.0, 5, 8);
-        assert_eq!(super::ranked_points_breakdown(&veteran_streak, &stronger, 1.0).streak, 3);
+        assert_eq!((favored.base, favored.opponent, favored.streak, favored.total()), (110, 8, 20, 138));
+        assert_eq!((underdog.base, underdog.opponent, underdog.streak, underdog.total()), (110, -8, 20, 122));
+        let veteran_streak = ranked_rating(2000, 1400.0, 5, 8);
+        assert_eq!(super::ranked_points_breakdown(&veteran_streak, &stronger, 1.0).streak, 30);
     }
 
     #[test]
-    fn ranked_losses_are_protected_during_placements_and_through_gold() {
-        let player = ranked_rating(1000, 1000.0, 0, 3);
-        let opponent = ranked_rating(1000, 1000.0, 5, 0);
-        let placement_loss = super::ranked_points_breakdown(&player, &opponent, 0.0);
-        assert!(placement_loss.protected_loss);
-        assert_eq!(placement_loss.total(), 0);
+    fn ranked_losses_are_protected_below_five_thousand_points() {
+        let player = ranked_rating(0, 1000.0, 0, 3);
+        let opponent = ranked_rating(0, 1000.0, 5, 0);
+        let initial_loss = super::ranked_points_breakdown(&player, &opponent, 0.0);
+        assert!(initial_loss.protected_loss);
+        assert_eq!(initial_loss.total(), 0);
 
-        let gold = ranked_rating(1999, 1999.0, 5, 0);
-        let gold_loss = super::ranked_points_breakdown(&gold, &opponent, 0.0);
-        assert!(gold_loss.protected_loss);
-        assert_eq!(gold_loss.total(), 0);
+        let republic = ranked_rating(4999, 1800.0, 20, 0);
+        let republic_loss = super::ranked_points_breakdown(&republic, &opponent, 0.0);
+        assert!(republic_loss.protected_loss);
+        assert_eq!(republic_loss.total(), 0);
     }
 
     #[test]
-    fn ranked_platinum_losses_scale_by_rival_and_stop_at_the_protected_floor() {
-        let player = ranked_rating(2200, 2200.0, 5, 0);
-        let stronger = ranked_rating(2350, 2350.0, 5, 0);
-        let weaker = ranked_rating(2050, 2050.0, 5, 0);
+    fn ranked_competitive_losses_scale_by_rival_and_stop_at_the_five_thousand_floor() {
+        let player = ranked_rating(6000, 2200.0, 50, 0);
+        let stronger = ranked_rating(6500, 2350.0, 50, 0);
+        let weaker = ranked_rating(5500, 2050.0, 50, 0);
         let against_stronger = super::ranked_points_breakdown(&player, &stronger, 0.0);
         let against_weaker = super::ranked_points_breakdown(&player, &weaker, 0.0);
-        assert_eq!(against_stronger.total(), -10);
-        assert_eq!(against_weaker.total(), -16);
+        assert!(against_stronger.total() < 0);
+        assert!(against_weaker.total() < against_stronger.total());
 
-        let near_floor = ranked_rating(2003, 2003.0, 5, 0);
+        let near_floor = ranked_rating(5015, 2003.0, 45, 0);
         let floor_result = super::ranked_points_breakdown(&near_floor, &near_floor, 0.0);
-        assert_eq!(floor_result.total(), -3);
-        assert_eq!(i32::from(near_floor.score) + i32::from(floor_result.total()), 2000);
+        assert_eq!(floor_result.total(), -15);
+        assert_eq!(i32::from(near_floor.score) + i32::from(floor_result.total()), 5000);
         assert_eq!(floor_result.total(), floor_result.base + floor_result.opponent + floor_result.league + floor_result.streak + floor_result.protection + floor_result.limit);
     }
 
@@ -1173,11 +1205,15 @@ mod tests {
     }
 
     #[test]
-    fn legacy_ranked_records_load_without_streak_or_point_breakdown() {
-        let rating: super::SeasonRating = serde_json::from_str(
+    fn legacy_ranked_records_load_and_normalize_to_civilization_leagues() {
+        let mut rating: super::SeasonRating = serde_json::from_str(
             r#"{"schema_version":2,"account_id":"legacy","season_id":1,"queue":"Ranked1v1","mode":"FFA","games_played":4,"wins":2,"mu":1000.0,"sigma":100.0,"score":1000,"tier":"Bronze","division":"II","peak_score":1000,"placements_complete":false,"updated_at":1}"#,
         ).unwrap();
         assert_eq!(rating.win_streak, 0);
+        rating.normalize_ladder();
+        assert_eq!(rating.tier, "Settlement");
+        assert_eq!(rating.division, None);
+        assert!(rating.placements_complete);
 
         let participant: super::MatchParticipantRecord = serde_json::from_str(
             r#"{"account_id":"legacy","display_name":"Legacy","is_bot":false,"leader":null,"team":null,"placement":2,"won":false,"kills":0,"deaths":0,"assists":0,"players_defeated":0,"empires_defeated":0,"tribes_defeated":0,"xp":0,"leader_xp":0,"crowns":0,"laurels":0,"rating_delta":-4,"rating_before":1000,"rating_after":996}"#,

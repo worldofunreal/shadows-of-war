@@ -36,27 +36,15 @@ fn compute_city_visual_level(
     items: impl Iterator<Item = (u32, BuildingKind, u8)>,
     tile_idx: u32,
 ) -> u8 {
-    let mut city_active = 0u8;
-    let mut best_district = 0u8;
-    for (item_tile, kind, lvl) in items {
-        if item_tile != tile_idx {
-            continue;
-        }
-        if kind == BuildingKind::City {
-            city_active = city_active.max(lvl);
-        } else {
-            best_district = best_district.max(lvl);
-        }
-    }
-    if city_active == 0 {
-        0
-    } else {
-        best_district.max(city_active)
-    }
+    items
+        .filter(|(tile, kind, _)| *tile == tile_idx && *kind == BuildingKind::City)
+        .map(|(_, _, level)| level)
+        .max()
+        .unwrap_or(0)
 }
 
 /// Visual tier `0..=4` for a City on the map (`0` while the City base is still under construction,
-/// otherwise `1..=4` from the highest completed district at `tile_idx`).
+/// otherwise the City's own completed level `1..=4`).
 #[inline]
 pub fn city_visual_level(buildings: &[Building], tile_idx: u32) -> u8 {
     compute_city_visual_level(
@@ -322,7 +310,7 @@ pub fn tower_range_for_level(
 
 const GOLD_INCOME_LEVEL_GROWTH: f64 = 1.1948581737791502;
 
-fn gold_income_level_weight(level: u8) -> f64 {
+pub fn gold_income_level_weight(level: u8) -> f64 {
     (0..level)
         .map(|n| GOLD_INCOME_LEVEL_GROWTH.powi(i32::from(n)))
         .sum()
@@ -330,6 +318,11 @@ fn gold_income_level_weight(level: u8) -> f64 {
 
 pub fn income_level_weight(level: u8) -> f64 {
     (0..level).map(|n| 1.5_f64.powi(i32::from(n))).sum()
+}
+
+/// Capacity starts with the district's first completed upgrade, not its foundation.
+pub fn district_capacity_level_weight(level: u8) -> f64 {
+    income_level_weight(level.saturating_sub(1))
 }
 
 /// Per-player totals for income / fleet gates (only **ready** structures count).
@@ -344,12 +337,14 @@ pub struct BuildingAggregate {
     pub farm_income_level_weight: f64,
     /// Sum of 1.5x marginal level weights across active Ports.
     pub port_income_level_weight: f64,
-    /// Sum of 1.5x marginal level weights across active Factories.
+    /// Sum of the factory's gold-specific marginal weights.
     pub factory_income_level_weight: f64,
     /// Sum of 1.5x marginal level weights across active Cities.
     pub city_income_level_weight: f64,
+    /// Shared small housing bonus from completed district upgrades.
+    pub district_capacity_level_weight: f64,
     pub has_completed_port: bool,
-    /// Ready cities only (for bot `city_equivalent` base).
+    /// Ready cities only (for the bot district-placement gate).
     pub ready_city_count: u32,
     /// Ready factories only.
     pub ready_factory_count: u32,
@@ -412,6 +407,9 @@ pub fn aggregate_buildings_per_player(
             continue;
         }
         let a = &mut out[i];
+        if b.kind.is_district() {
+            a.district_capacity_level_weight += district_capacity_level_weight(active_lvl);
+        }
         match b.kind {
             BuildingKind::City => {
                 a.city_levels += active_lvl as u32;
@@ -428,12 +426,12 @@ pub fn aggregate_buildings_per_player(
             }
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
-                a.port_income_level_weight += gold_income_level_weight(active_lvl);
+                a.port_income_level_weight += income_level_weight(active_lvl);
                 a.has_completed_port = true;
             }
             BuildingKind::Farm => {
                 a.farm_levels += active_lvl as u32;
-                a.farm_income_level_weight += gold_income_level_weight(active_lvl);
+                a.farm_income_level_weight += income_level_weight(active_lvl);
             }
         }
     }

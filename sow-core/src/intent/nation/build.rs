@@ -22,6 +22,14 @@ impl SowEngine {
     ) {
         // ── Structure building (IQ-scaled, all bots) ─────────────────
         if slot.do_structures {
+            let build_cost = if !self.legacy_building_rules
+                && self.building_aggregates.get(bot_id as usize)
+                    .is_none_or(|agg| agg.count_city == 0)
+            {
+                0.0
+            } else {
+                build_cost
+            };
             let current_points = self.state.player(bot_id).unwrap().iq_points;
             if current_points >= build_cost {
                 let (player_gold, player_tile_count) = {
@@ -37,8 +45,7 @@ impl SowEngine {
                         .get(bot_id as usize)
                         .copied()
                         .unwrap_or_default();
-                    let city_equivalent =
-                        agg.ready_city_count.max((player_tile_count / 1000).max(1));
+                    let city_equivalent = (player_tile_count / 1000).max(1);
                     let economy_priority_gap = slot.policy().prioritizes_economy_buildings
                         && [BuildingKind::City, BuildingKind::Factory, BuildingKind::Farm]
                             .into_iter()
@@ -154,19 +161,15 @@ impl SowEngine {
                                 target_count += 3;
                             }
                         }
-                        let total_owned = agg.count_city
-                            + agg.count_tower
-                            + agg.count_factory
-                            + agg.count_port
-                            + agg.count_farm;
-                        let density = total_owned as f32 / player_tile_count.max(1) as f32;
+                        let density = agg.count_city as f32 / player_tile_count.max(1) as f32;
                         let is_density_high = bot_iq >= 110 && density > 1.0 / 600.0;
                         let structure_floor = player_tile_count / 800;
-                        let under_structure_floor = total_owned < structure_floor;
-                        let wants_new = owned < target_count || under_structure_floor;
+                        let under_structure_floor = agg.count_city < structure_floor;
+                        let wants_new = owned < target_count
+                            || (kind == BuildingKind::City && under_structure_floor);
                         let cost = structure_build_cost_gold(kind, level_count, &self.state.config);
 
-                        if !wants_new || is_density_high {
+                        if !self.legacy_building_rules || !wants_new || is_density_high {
                             if let Some(d) = stack_build_decision(
                                 self,
                                 bot_id,

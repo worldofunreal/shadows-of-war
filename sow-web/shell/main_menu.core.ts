@@ -261,10 +261,7 @@ export function renderQuickMatchButton(): string {
         "</strong><small data-ranked-current>" +
         esc(rankedLabel) +
         "</small></div><span data-ranked-emblem>" +
-        rankEmblem(
-            ranked?.placements_complete ? ranked.tier : "unranked",
-            ranked?.placements_complete ? ranked.division : null,
-        ) +
+        rankEmblem(ranked?.tier || "Nomad", ranked?.division || null) +
         "</span></button>"
     );
 }

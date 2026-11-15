@@ -2665,7 +2665,7 @@
 .sow-ranked__summary { display: grid; flex: 1; min-width: 0; gap: 12px; }
 .sow-ranked__summary h2 { margin: 0; color: #fff0d2; font-family: var(--font-display, serif); font-size: clamp(24px, 3vw, 34px); }
 .sow-ranked__summary .sow-ranked__placements { justify-content: start; margin: 0; }
-.sow-ranked__leagues { list-style: none; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); padding: 20px 0 0; margin: 24px 0 0; border-top: 1px solid var(--sow-tactical-surface-border); gap: 8px; }
+.sow-ranked__leagues { list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); padding: 20px 0 0; margin: 24px 0 0; border-top: 1px solid var(--sow-tactical-surface-border); gap: 10px 8px; }
 .sow-ranked__leagues li { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 8px 2px; border: 1px solid transparent; border-radius: 8px; color: var(--sow-muted); }
 .sow-ranked__leagues .sow-ranked__emblem { width: min(100%, 72px); }
 .sow-ranked__leagues strong { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }

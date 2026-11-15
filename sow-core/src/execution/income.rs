@@ -56,9 +56,10 @@ impl SowEngine {
             let council_active = council_multiplier > 1.0;
             let mut max_tr = config.max_troops_base
                 + max_troops_bonus * config.max_troops_scale
-                + agg.city_levels as f64
+                + agg.city_income_level_weight
                     * config.city_max_troops
-                    * leader.city_troop_capacity_multiplier();
+                    * leader.city_troop_capacity_multiplier()
+                + agg.district_capacity_level_weight * config.district_max_troops;
             if is_standard_bot {
                 max_tr /= 1.5;
             }
