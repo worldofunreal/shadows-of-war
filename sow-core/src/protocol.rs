@@ -627,6 +627,8 @@ pub struct ResourceRequest {
 pub struct HelpCall {
     pub caller: crate::player::PlayerId,
     #[serde(default)]
+    pub call_id: u64,
+    #[serde(default)]
     pub suggested_gold: f64,
     #[serde(default)]
     pub suggested_troops: f64,

@@ -442,6 +442,9 @@ pub struct SowEngine {
     /// Caller id → tick when another Help Call may be emitted via `EmoteKind::Help`.
     #[serde(default)]
     pub help_call_cooldown_until: std::collections::HashMap<PlayerId, u32>,
+    /// AI id → tick when another Help Call or proactive Resource Request is allowed (~30s).
+    #[serde(default)]
+    pub ai_help_ask_cooldown_until: std::collections::HashMap<PlayerId, u32>,
     #[serde(default)]
     pub next_help_call_id: u64,
     /// `(proposer, target, created_tick)` resource requests silently ignored by a Ghost.
@@ -591,6 +594,7 @@ impl SowEngine {
             resource_request_cooldown_until: std::collections::HashMap::new(),
             help_calls_proposed: Vec::new(),
             help_call_cooldown_until: std::collections::HashMap::new(),
+            ai_help_ask_cooldown_until: std::collections::HashMap::new(),
             next_help_call_id: 1,
             ghost_resource_request_ignored: std::collections::BTreeSet::new(),
             campaign_unlocks,
@@ -842,6 +846,8 @@ impl SowEngine {
             .retain(|_, until| *until > tick);
         self.help_call_cooldown_until
             .retain(|_, until| *until > tick);
+        self.ai_help_ask_cooldown_until
+            .retain(|_, until| *until > tick);
         // Unanswered resource requests and trade offers lapse, so a stale price cannot be taken later.
         self.resource_requests_proposed.retain(|r| {
             tick.saturating_sub(r.created_tick) <= crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS
@@ -941,6 +947,68 @@ impl SowEngine {
             .current_tick_u32()
             .saturating_add(crate::diplomacy::HELP_CALL_COOLDOWN_TICKS);
         self.help_call_cooldown_until.insert(caller, until);
+    }
+
+    /// True when an AI player has cleared its unified 30s ask cooldown across both Help Calls
+    /// and proactive Resource Requests.
+    #[inline]
+    pub fn can_ai_ask_for_help(&self, ai_id: PlayerId) -> bool {
+        let tick = self.current_tick_u32();
+        self.can_trigger_help_call(ai_id)
+            && self
+                .ai_help_ask_cooldown_until
+                .get(&ai_id)
+                .is_none_or(|until| *until <= tick)
+            && !self
+                .resource_request_cooldown_until
+                .iter()
+                .any(|(&(proposer, _), &until)| proposer == ai_id && until > tick)
+    }
+
+    pub fn mark_ai_help_ask_cooldown(&mut self, ai_id: PlayerId) {
+        let until = self
+            .current_tick_u32()
+            .saturating_add(crate::diplomacy::HELP_CALL_COOLDOWN_TICKS);
+        self.ai_help_ask_cooldown_until.insert(ai_id, until);
+    }
+
+    /// Pending AI-originated Help Calls and non-trade Resource Requests targeting `human_id`.
+    pub fn ai_pending_requests_to_human(&self, human_id: PlayerId) -> usize {
+        let help_count = self
+            .help_calls_proposed
+            .iter()
+            .filter(|h| {
+                h.target == human_id
+                    && self
+                        .state
+                        .player(h.caller)
+                        .is_some_and(|p| !p.is_live_human())
+            })
+            .count();
+        let req_count = self
+            .resource_requests_proposed
+            .iter()
+            .filter(|r| {
+                r.target == human_id
+                    && !r.is_trade()
+                    && self
+                        .state
+                        .player(r.proposer)
+                        .is_some_and(|p| !p.is_live_human())
+            })
+            .count();
+        help_count + req_count
+    }
+
+    #[inline]
+    pub fn ai_human_recipient_has_capacity(&self, target_id: PlayerId) -> bool {
+        let is_live_human = self
+            .state
+            .player(target_id)
+            .is_some_and(|p| p.is_live_human());
+        !is_live_human
+            || self.ai_pending_requests_to_human(target_id)
+                < crate::diplomacy::AI_MAX_PENDING_REQUESTS_PER_HUMAN
     }
 
     #[inline]
@@ -1047,6 +1115,7 @@ impl SowEngine {
         self.help_calls_proposed
             .retain(|h| h.caller != player_id && h.target != player_id);
         self.help_call_cooldown_until.remove(&player_id);
+        self.ai_help_ask_cooldown_until.remove(&player_id);
         self.clear_campaign_assaults_for(player_id);
     }
 

@@ -71,6 +71,7 @@ impl SowEngine {
                             crate::diplomacy::compute_help_aid(p, caller, caller_under_attack);
                         Some(crate::protocol::HelpCall {
                             caller: h.caller,
+                            call_id: h.call_id,
                             suggested_gold,
                             suggested_troops,
                             remaining_ticks: crate::diplomacy::HELP_CALL_TTL_TICKS

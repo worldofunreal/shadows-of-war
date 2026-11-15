@@ -634,6 +634,7 @@ export interface HudMapFeedback {
 
 export interface HudInboxRequest {
     kind: "alliance" | "resources" | "help";
+    call_id?: number;
     requester_id: number;
     name: string;
     avatar: HudAvatarIdentity;

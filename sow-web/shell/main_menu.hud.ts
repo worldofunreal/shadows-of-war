@@ -249,6 +249,8 @@ type HudRefs = {
   lbTeamWrap: HTMLElement;
   inbox: HTMLElement;
   inboxRows: HTMLElement;
+  inboxFilters: HTMLElement;
+  inboxFilterButtons: HTMLButtonElement[];
   inboxBulk: HTMLElement;
   inboxAcceptAll: HTMLButtonElement;
   inboxRejectAll: HTMLButtonElement;
@@ -422,6 +424,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   >();
   let requestToastExpiryTimer: number | null = null;
   let requestCountdownTimer: number | null = null;
+  type InboxCategoryFilter = "all" | "alliance" | "aid";
+  let inboxFilter: InboxCategoryFilter = "all";
   let latestInboxRequests: HudInboxRequest[] = [];
   let activeNotifications: ActiveHudNotification[] = [];
   let notificationCards: HudNotificationCard[] = [];
@@ -1639,6 +1643,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       lbTeamWrap: requiredHudElement("sow-hud-lb-team-wrap"),
       inbox: requiredHudElement("sow-hud-inbox"),
       inboxRows: requiredHudElement("sow-hud-inbox-rows"),
+      inboxFilters: requiredHudElement("sow-hud-inbox-filters"),
+      inboxFilterButtons: Array.from(
+        root.querySelectorAll<HTMLButtonElement>("[data-inbox-filter]"),
+      ),
       inboxBulk: requiredHudElement("sow-hud-inbox-bulk"),
       inboxAcceptAll: requiredHudButton("sow-hud-inbox-accept-all"),
       inboxRejectAll: requiredHudButton("sow-hud-inbox-reject-all"),
@@ -2229,18 +2237,42 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '">' +
       hudIcon("close", "sow-hud__close-icon") +
       "</button></div>" +
+      '  <div class="sow-hud__inbox-filters" id="sow-hud-inbox-filters" role="tablist" aria-label="' +
+      SOW_t("hud.inbox") +
+      '">' +
+      '    <button class="sow-hud__inbox-filter is-active" type="button" role="tab" aria-selected="true" data-command="filter_inbox" data-inbox-filter="all">' +
+      '      <span class="sow-hud__inbox-filter-label">' +
+      SOW_t("hud.inbox_filter_all") +
+      "</span>" +
+      '      <span class="sow-hud__inbox-filter-count" data-filter-count>0</span>' +
+      "    </button>" +
+      '    <button class="sow-hud__inbox-filter" type="button" role="tab" aria-selected="false" data-command="filter_inbox" data-inbox-filter="alliance">' +
+      '      <span class="sow-hud__inbox-filter-label">' +
+      SOW_t("hud.inbox_filter_alliances") +
+      "</span>" +
+      '      <span class="sow-hud__inbox-filter-count" data-filter-count>0</span>' +
+      "    </button>" +
+      '    <button class="sow-hud__inbox-filter" type="button" role="tab" aria-selected="false" data-command="filter_inbox" data-inbox-filter="aid">' +
+      '      <span class="sow-hud__inbox-filter-label">' +
+      SOW_t("hud.inbox_filter_aid") +
+      "</span>" +
+      '      <span class="sow-hud__inbox-filter-count" data-filter-count>0</span>' +
+      "    </button>" +
+      "  </div>" +
       '  <div class="sow-hud__inbox-bulk" id="sow-hud-inbox-bulk" hidden>' +
-      '    <button class="sow-hud__request-reject sow-hud__inbox-bulk-btn" id="sow-hud-inbox-reject-all" type="button" data-command="reject_all_alliances">' +
+      '    <button class="sow-hud__request-reject sow-hud__inbox-bulk-btn" id="sow-hud-inbox-reject-all" type="button" data-command="reject_all_inbox">' +
       SOW_t("hud.reject_all") +
       "</button>" +
-      '    <button class="sow-hud__request-accept sow-hud__inbox-bulk-btn" id="sow-hud-inbox-accept-all" type="button" data-command="accept_all_alliances">' +
+      '    <button class="sow-hud__request-accept sow-hud__inbox-bulk-btn" id="sow-hud-inbox-accept-all" type="button" data-command="accept_all_inbox">' +
       SOW_t("hud.accept_all") +
       "</button>" +
       "  </div>" +
-      '  <div class="sow-hud__sheet-body sow-hud__inbox-list" id="sow-hud-inbox-rows"></div>' +
-      '  <p class="sow-hud__inbox-empty" id="sow-hud-inbox-empty" hidden>' +
+      '  <div class="sow-hud__sheet-body sow-hud__inbox-body" id="sow-hud-inbox-body">' +
+      '    <div class="sow-hud__inbox-list" id="sow-hud-inbox-rows"></div>' +
+      '    <p class="sow-hud__inbox-empty" id="sow-hud-inbox-empty" hidden>' +
       SOW_t("hud.no_pending_requests") +
       "</p>" +
+      "  </div>" +
       "</aside>" +
       '<aside class="sow-hud__dialog sow-hud__transfer hidden" id="sow-hud-transfer" role="dialog" aria-modal="false" aria-labelledby="sow-hud-transfer-title">' +
       '  <div class="sow-hud__sheet-header sow-hud__transfer-header">' +
@@ -7498,10 +7530,36 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
   const MAX_TOAST_Z_BASE = 10;
 
+  function matchesInboxFilter(
+    request: HudInboxRequest,
+    filter: InboxCategoryFilter,
+  ): boolean {
+    if (filter === "all") return true;
+    if (filter === "alliance") return request.kind === "alliance";
+    return request.kind === "resources" || request.kind === "help";
+  }
+
+  function inboxRequestIntent(
+    request: HudInboxRequest,
+    accept: boolean,
+  ): string {
+    if (request.kind === "alliance") {
+      return accept ? "accept_alliance" : "reject_alliance";
+    }
+    if (request.kind === "resources") {
+      return accept ? "accept_resource_request" : "reject_resource_request";
+    }
+    return accept ? "accept_help_call" : "reject_help_call";
+  }
+
   function renderInbox(requests: HudInboxRequest[]): void {
     if (!hudRefs || !hudRefs.inboxRows || !Array.isArray(requests)) return;
     const renderKey =
-      String(window.SOW_LOCALE || "en") + ":" + JSON.stringify(requests);
+      String(window.SOW_LOCALE || "en") +
+      ":" +
+      inboxFilter +
+      ":" +
+      JSON.stringify(requests);
     if (renderKey === hudRefs.inboxRenderKey) return;
     const nowMs = Date.now();
     const previous = hudRefs.inboxRequests;
@@ -7510,16 +7568,26 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       return previous[key].element.contains(document.activeElement);
     });
     const next: Record<string, InboxRequestParts> = Object.create(null);
+    const seenKeys = new Set<string>();
     const keys: string[] = [];
+    let totalCount = 0;
     let allianceCount = 0;
+    let aidCount = 0;
     const numbers = new Intl.NumberFormat(window.SOW_LOCALE || "en", {
       maximumFractionDigits: 0,
     });
     requests.forEach(function (request) {
       if (!isValidInboxRequest(request)) return;
       const key = requestKey(request);
-      if (next[key]) return;
-      if (request.kind === "alliance") allianceCount += 1;
+      if (seenKeys.has(key)) return;
+      seenKeys.add(key);
+      totalCount += 1;
+      if (request.kind === "alliance") {
+        allianceCount += 1;
+      } else {
+        aidCount += 1;
+      }
+      if (!matchesInboxFilter(request, inboxFilter)) return;
       const row = previous[key] || createInboxRequest(request, "inbox");
       patchInboxRequestCard(row, request, numbers, nowMs);
       next[key] = row;
@@ -7536,10 +7604,43 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     hudRefs.inboxRequests = next;
     hudRefs.inboxRequestKeys = keys;
     hudRefs.inboxRenderKey = renderKey;
-    hudRefs.inboxBulk.hidden = allianceCount < 2;
+    const filterCounts: Record<InboxCategoryFilter, number> = {
+      all: totalCount,
+      alliance: allianceCount,
+      aid: aidCount,
+    };
+    hudRefs.inboxFilterButtons.forEach(function (tab) {
+      const tabFilter = tab.dataset.inboxFilter as
+        | InboxCategoryFilter
+        | undefined;
+      if (!tabFilter) return;
+      const isSelected = tabFilter === inboxFilter;
+      tab.classList.toggle("is-active", isSelected);
+      tab.setAttribute("aria-selected", String(isSelected));
+      const badge = tab.querySelector<HTMLElement>("[data-filter-count]");
+      if (badge) {
+        badge.textContent = numbers.format(filterCounts[tabFilter] || 0);
+      }
+    });
+    const hasAcceptable = keys.some(function (key) {
+      return !next[key].accept.disabled;
+    });
+    hudRefs.inboxBulk.hidden = keys.length < 2;
+    hudRefs.inboxAcceptAll.disabled = !hasAcceptable;
+    hudRefs.inboxRejectAll.disabled = false;
     hudRefs.inboxRows.hidden = keys.length === 0;
-    hudRefs.inboxEmpty!.hidden = keys.length !== 0;
-    hudRefs.inboxTotal!.textContent = numbers.format(keys.length);
+    if (hudRefs.inboxEmpty) {
+      hudRefs.inboxEmpty.hidden = keys.length !== 0;
+      hudRefs.inboxEmpty.textContent =
+        totalCount === 0
+          ? SOW_t("hud.no_pending_requests")
+          : tWithFallback(
+              "hud.no_filtered_requests",
+              {},
+              "No requests in this category.",
+            );
+    }
+    hudRefs.inboxTotal!.textContent = numbers.format(totalCount);
     ensureRequestCountdownLoop();
     if (focusedKey && !next[focusedKey]) {
       const nextRow =
@@ -8137,6 +8238,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       lastLeaderboardTeams = [];
       lastLeaderboardPlayersPayload = null;
       lastLeaderboardTeamsPayload = null;
+      inboxFilter = "all";
       latestInboxRequests = [];
       requestCountdowns.clear();
       resetRequestToastDeck(requestToastDeck);
@@ -9419,35 +9521,63 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
         } else if (
           activeHudPanel === "inbox" &&
-          hudRefs &&
-          hudRefs.inboxRequestKeys.length <= 1
+          latestInboxRequests.filter(isValidInboxRequest).length <= 1
         ) {
           setHudPanel(null);
           renderHud();
         }
+      } else if (cmd === "filter_inbox") {
+        const nextFilter = btn.dataset.inboxFilter as
+          | InboxCategoryFilter
+          | undefined;
+        if (
+          nextFilter === "all" ||
+          nextFilter === "alliance" ||
+          nextFilter === "aid"
+        ) {
+          inboxFilter = nextFilter;
+          renderInbox(latestInboxRequests);
+        }
       } else if (
+        cmd === "accept_all_inbox" ||
+        cmd === "reject_all_inbox" ||
         cmd === "accept_all_alliances" ||
         cmd === "reject_all_alliances"
       ) {
-        const intent =
-          cmd === "accept_all_alliances"
-            ? "accept_alliance"
-            : "reject_alliance";
-        const exitMode: RequestToastExitMode =
-          cmd === "accept_all_alliances" ? "accept" : "dismiss";
-        let hasResourceRequests = false;
+        const isAcceptAll =
+          cmd === "accept_all_inbox" || cmd === "accept_all_alliances";
+        const bulkFilter: InboxCategoryFilter =
+          cmd === "accept_all_alliances" || cmd === "reject_all_alliances"
+            ? "alliance"
+            : inboxFilter;
+        const exitMode: RequestToastExitMode = isAcceptAll
+          ? "accept"
+          : "dismiss";
+        let hasRemainingOutsideFilter = false;
+        const seenBulkKeys = new Set<string>();
         latestInboxRequests.forEach(function (request) {
           if (!isValidInboxRequest(request)) return;
-          if (request.kind === "alliance") {
-            const key = requestKey(request);
-            send(intent, { target_player_id: request.requester_id });
-            pendingToastExitModes.set(key, exitMode);
-            dismissRequestToastByKey(requestToastDeck, key);
-          } else {
-            hasResourceRequests = true;
+          const key = requestKey(request);
+          if (seenBulkKeys.has(key)) return;
+          seenBulkKeys.add(key);
+          if (!matchesInboxFilter(request, bulkFilter)) {
+            hasRemainingOutsideFilter = true;
+            return;
           }
+          const rendered = hudRefs && hudRefs.inboxRequests[key];
+          if (
+            isAcceptAll &&
+            (!request.active || (rendered && rendered.accept.disabled))
+          ) {
+            return;
+          }
+          send(inboxRequestIntent(request, isAcceptAll), {
+            target_player_id: request.requester_id,
+          });
+          pendingToastExitModes.set(key, exitMode);
+          dismissRequestToastByKey(requestToastDeck, key);
         });
-        if (!hasResourceRequests && activeHudPanel === "inbox") {
+        if (!hasRemainingOutsideFilter && activeHudPanel === "inbox") {
           setHudPanel(null);
           renderHud();
         } else {

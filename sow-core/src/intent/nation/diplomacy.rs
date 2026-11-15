@@ -1,6 +1,6 @@
 use crate::diplomacy::{
     alliance_can_renew, alliance_propose_roll_cap, is_valid_alliance_target,
-    should_reject_traitor_request,
+    roll_ai_emergency_help_ask, should_reject_traitor_request,
 };
 use crate::engine::SowEngine;
 use crate::player::PlayerType;
@@ -467,92 +467,95 @@ impl SowEngine {
             }
         }
 
-        // ── Proactive AI Emote Help Calls (when paired with human allies) ──
+        // ── Proactive Emergency Aid (extreme emergencies only, strict 30s AI cooldown, 30% roll) ──
+        if self.playing_ticks >= 450
+            && self.can_ai_ask_for_help(bot_id)
+            && !self.help_calls_proposed.iter().any(|h| h.caller == bot_id)
+            && !self
+                .resource_requests_proposed
+                .iter()
+                .any(|r| r.proposer == bot_id)
+            && let Some(p_me) = self.state.player(bot_id)
+            && p_me.alive
+            && p_me.has_spawned
+            && p_me.max_troops > 0.0
         {
-            let has_human_partner = self.state.players.iter().any(|other| {
-                other.player_type == PlayerType::Human
-                    && !other.is_ai_controlled
-                    && self.resources_can_move(other.id, bot_id)
-            });
-            if has_human_partner
-                && (is_under_attack || self.playing_ticks >= 300)
-                && self.can_trigger_help_call(bot_id)
-                && !self.help_calls_proposed.iter().any(|h| h.caller == bot_id)
-                && !self
-                    .resource_requests_proposed
-                    .iter()
-                    .any(|r| r.proposer == bot_id)
-                && let Some(p_me) = self.state.player(bot_id)
-                && crate::emote::can_ai_express(p_me, &self.state.phase)
-                && p_me.active_emote.is_none()
-            {
-                let needs_help = is_under_attack
-                    || p_me.troops < p_me.max_troops * 0.25
-                    || p_me.gold < 15_000.0;
-                if needs_help {
-                    let tick = self.state.tick;
-                    if let Some(player) = self.state.player_mut(bot_id) {
-                        crate::emote::express(
-                            player,
-                            Some(crate::emote::EmoteKind::Help),
-                            false,
-                            false,
-                            tick,
-                        );
-                    }
-                    self.trigger_help_call(bot_id);
-                }
-            }
-        }
+            let troop_ratio = p_me.troops / p_me.max_troops;
+            let has_hostile_neighbor = neighbor_players
+                .iter()
+                .any(|&nid| !self.resources_can_move(bot_id, nid) && !p_me.alliances.contains(&nid));
+            let extreme_emergency = (is_under_attack && troop_ratio < 0.35)
+                || (troop_ratio < 0.12 && has_hostile_neighbor);
 
-        // ── Proactive Resource Requesting (Bots requesting help, prioritized human first, 10% default) ──
-        {
-            let req_interval = {
-                let mut rng = WyRand::new(
-                    self.state
-                        .seed
-                        .wrapping_add(bot_id as u64)
-                        .wrapping_add(1337),
-                );
-                rng.next_int(600, 1200) as u64 // every 30-60 seconds
-            };
-            if self.state.tick > req_interval
-                && self.state.tick.is_multiple_of(req_interval)
-                && !self.help_calls_proposed.iter().any(|h| h.caller == bot_id)
-                && let Some(p_me) = self.state.player(bot_id)
-            {
-                let is_weak = p_me.troops < p_me.max_troops * 0.25 || p_me.gold < 30_000.0;
-                if is_weak && !p_me.alliances.is_empty() {
-                    // Find target to ask: Prioritize human allies first
-                    let mut target_id = None;
+            if extreme_emergency {
+                let can_send_help_call = self.can_trigger_help_call(bot_id)
+                    && crate::emote::can_ai_express(p_me, &self.state.phase)
+                    && p_me.active_emote.is_none()
+                    && self.state.players.iter().any(|other| {
+                        other.is_live_human()
+                            && other.alive
+                            && self.resources_can_move(other.id, bot_id)
+                            && self.ai_human_recipient_has_capacity(other.id)
+                    });
+
+                let mut resource_request_target: Option<(u16, f64, f64)> = None;
+                if !can_send_help_call && !p_me.alliances.is_empty() {
+                    // Prioritize live human allies with inbox capacity first.
                     for &ally_id in &p_me.alliances {
                         if let Some(p_ally) = self.state.player(ally_id)
                             && p_ally.alive
-                            && p_ally.player_type == crate::player::PlayerType::Human
+                            && p_ally.is_live_human()
+                            && self.resources_can_move(bot_id, ally_id)
+                            && self.can_send_resource_request(bot_id, ally_id)
+                            && self.ai_human_recipient_has_capacity(ally_id)
                         {
-                            target_id = Some(ally_id);
-                            break;
-                        }
-                    }
-                    // Fallback to bot allies
-                    if target_id.is_none() {
-                        for &ally_id in &p_me.alliances {
-                            if let Some(p_ally) = self.state.player(ally_id)
-                                && p_ally.alive
-                            {
-                                target_id = Some(ally_id);
+                            let ask_gold = (p_ally.gold * 0.10).floor().max(0.0);
+                            let ask_troops = (p_ally.troops * 0.10).floor().max(0.0);
+                            if ask_gold > 0.0 || ask_troops > 0.0 {
+                                resource_request_target = Some((ally_id, ask_gold, ask_troops));
                                 break;
                             }
                         }
                     }
+                    // Fallback to AI allies.
+                    if resource_request_target.is_none() {
+                        for &ally_id in &p_me.alliances {
+                            if let Some(p_ally) = self.state.player(ally_id)
+                                && p_ally.alive
+                                && !p_ally.is_live_human()
+                                && self.resources_can_move(bot_id, ally_id)
+                                && self.can_send_resource_request(bot_id, ally_id)
+                            {
+                                let ask_gold = (p_ally.gold * 0.10).floor().max(0.0);
+                                let ask_troops = (p_ally.troops * 0.10).floor().max(0.0);
+                                if ask_gold > 0.0 || ask_troops > 0.0 {
+                                    resource_request_target = Some((ally_id, ask_gold, ask_troops));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
 
-                    if let Some(target) = target_id
-                        && let Some(p_target) = self.state.player(target)
-                    {
-                        // Ask for 10% of what they have
-                        let ask_gold = (p_target.gold * 0.10).floor().max(0.0);
-                        let ask_troops = (p_target.troops * 0.10).floor().max(0.0);
-                        if ask_gold > 0.0 || ask_troops > 0.0 {
+                if can_send_help_call || resource_request_target.is_some() {
+                    let tick_u32 = self.current_tick_u32();
+                    if roll_ai_emergency_help_ask(self.state.seed, bot_id, tick_u32) {
+                        if can_send_help_call {
+                            self.trigger_help_call(bot_id);
+                            if self.help_calls_proposed.iter().any(|h| h.caller == bot_id) {
+                                let tick = self.state.tick;
+                                if let Some(player) = self.state.player_mut(bot_id) {
+                                    crate::emote::express(
+                                        player,
+                                        Some(crate::emote::EmoteKind::Help),
+                                        false,
+                                        false,
+                                        tick,
+                                    );
+                                }
+                            }
+                        } else if let Some((target, ask_gold, ask_troops)) = resource_request_target
+                        {
                             decisions.push(BotDecision {
                                 bot_id,
                                 kind: BotDecisionKind::Build,
@@ -563,6 +566,9 @@ impl SowEngine {
                                 },
                             });
                         }
+                    } else {
+                        // Stay silent this emergency cycle and respect the full 30s AI cooldown.
+                        self.mark_ai_help_ask_cooldown(bot_id);
                     }
                 }
             }

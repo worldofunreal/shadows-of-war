@@ -99,6 +99,12 @@ export function requestSignature(request: HudInboxRequest): string {
             request.is_renewal ? 1 : 0,
         ].join(":");
     }
+    if (request.kind === "help") {
+        const callId = Number(request.call_id);
+        return Number.isFinite(callId) && callId > 0
+            ? `help:${request.requester_id}:${Math.floor(callId)}`
+            : `help:${request.requester_id}`;
+    }
     return [
         request.kind,
         request.requester_id,
@@ -243,7 +249,7 @@ export function reconcileRequestToastDeck(
 
     const incomingKeys = new Set(incoming.map((entry) => entry.key));
     const filteredRetained = retained.filter((entry) => !incomingKeys.has(entry.key));
-    state.entries = [...incoming, ...filteredRetained];
+    const combined = [...incoming, ...filteredRetained];
 
     state.knownSignatures.clear();
     for (const [key, live] of currentByKey.entries()) {
@@ -254,7 +260,14 @@ export function reconcileRequestToastDeck(
     const maxVisible = Number.isFinite(rawLimit)
         ? Math.max(1, Math.min(MAX_REQUEST_TOAST_CARDS, Math.floor(rawLimit)))
         : MAX_REQUEST_TOAST_CARDS;
-    const visible = state.entries.slice(0, maxVisible);
+    const kept = combined.slice(0, maxVisible);
+    const evicted = combined.slice(maxVisible);
+    for (const entry of evicted) {
+        // Evicted overflow cards disappear from floating toasts ("once and bye") and stay in Inbox.
+        state.dismissedSignatures.add(entry.signature);
+    }
+    state.entries = kept;
+    const visible = kept;
     let nextExpiryMs: number | null = null;
     for (const entry of state.entries) {
         if (nextExpiryMs === null || entry.toastExpiresAtMs < nextExpiryMs) {
@@ -264,7 +277,7 @@ export function reconcileRequestToastDeck(
 
     return {
         visible,
-        overflowCount: Math.max(0, state.entries.length - visible.length),
+        overflowCount: Math.max(0, currentByKey.size - visible.length),
         totalPending: currentByKey.size,
         nextExpiryMs,
     };

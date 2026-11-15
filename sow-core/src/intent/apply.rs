@@ -368,7 +368,14 @@ impl SowEngine {
         }
         let tick = self.current_tick_u32();
         let ranked_1v1 = self.state.config.ranked_1v1;
-        let caller_is_human = self.state.player(caller).is_some_and(|p| p.is_human());
+        let (caller_is_human, caller_is_ai) = self
+            .state
+            .player(caller)
+            .map(|p| (p.is_human(), !p.is_live_human()))
+            .unwrap_or((false, false));
+        if caller_is_ai && !self.can_ai_ask_for_help(caller) {
+            return;
+        }
         let targets: Vec<u16> = self
             .state
             .players
@@ -376,6 +383,9 @@ impl SowEngine {
             .filter(|p| {
                 self.resources_can_move(p.id, caller)
                     && !(ranked_1v1 && caller_is_human && p.is_human())
+                    && !(caller_is_ai
+                        && p.is_live_human()
+                        && !self.ai_human_recipient_has_capacity(p.id))
             })
             .map(|p| p.id)
             .collect();
@@ -384,6 +394,9 @@ impl SowEngine {
             return;
         }
         self.mark_help_call_cooldown(caller);
+        if caller_is_ai {
+            self.mark_ai_help_ask_cooldown(caller);
+        }
         let call_id = self.next_help_call_id;
         self.next_help_call_id = self.next_help_call_id.wrapping_add(1).max(1);
         for target in targets {
@@ -443,6 +456,22 @@ impl SowEngine {
         {
             return;
         }
+        let is_plain_request = pay_gold <= 0.0 && pay_troops <= 0.0;
+        let proposer_is_ai = self
+            .state
+            .player(proposer)
+            .is_some_and(|p| !p.is_live_human());
+        let target_is_live_human = self
+            .state
+            .player(target)
+            .is_some_and(|p| p.is_live_human());
+        if is_plain_request
+            && proposer_is_ai
+            && (!self.can_ai_ask_for_help(proposer)
+                || (target_is_live_human && !self.ai_human_recipient_has_capacity(target)))
+        {
+            return;
+        }
         let request = if pay_gold > 0.0 || pay_troops > 0.0 {
             // Each resource flows one way, and the proposer must hold its price now.
             let one_way = !(gold > 0.0 && pay_gold > 0.0) && !(troops > 0.0 && pay_troops > 0.0);
@@ -484,6 +513,14 @@ impl SowEngine {
         let is_trade = request.is_trade();
         self.resource_requests_proposed.push(request);
         self.mark_resource_request_cooldown(proposer, target);
+        if !is_trade
+            && self
+                .state
+                .player(proposer)
+                .is_some_and(|p| !p.is_live_human())
+        {
+            self.mark_ai_help_ask_cooldown(proposer);
+        }
         self.state
             .events
             .push(crate::game::GameEvent::ResourceRequestSubmitted {

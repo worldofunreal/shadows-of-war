@@ -8,8 +8,12 @@ use wyrand::WyRand;
 pub const ALLIANCE_REQUEST_TTL_TICKS: u32 = 200;
 /// Minimum delay before the same pair can get another outgoing request (~30s).
 pub const ALLIANCE_REQUEST_COOLDOWN_TICKS: u32 = 300;
-/// Minimum delay before the same pair can send another resource request (~10s).
-pub const RESOURCE_REQUEST_COOLDOWN_TICKS: u32 = 100;
+/// Minimum delay before the same pair can send another resource request (~30s at 100ms/tick).
+pub const RESOURCE_REQUEST_COOLDOWN_TICKS: u32 = 300;
+/// Maximum concurrent pending AI-originated help/resource asks targeting one human player.
+pub const AI_MAX_PENDING_REQUESTS_PER_HUMAN: usize = 3;
+/// Percentage chance an AI in an extreme emergency actually asks allies instead of staying silent.
+pub const AI_EMERGENCY_HELP_ASK_CHANCE_PCT: i32 = 30;
 /// A resource request or trade offer left unanswered this long is withdrawn (~30s).
 pub const RESOURCE_REQUEST_TTL_TICKS: u32 = 300;
 /// Lifetime of an emote-triggered Help Call (~30s at 100ms/tick).
@@ -375,6 +379,17 @@ pub fn roll_ghost_resource_request_outcome(
     } else {
         GhostHelpOutcome::Decline
     }
+}
+
+/// Probabilistic restraint when an AI faces an extreme emergency:
+/// most crises stay silent ("better not bother") rather than flooding allies.
+pub fn roll_ai_emergency_help_ask(seed: u64, ai_id: PlayerId, tick: u32) -> bool {
+    let mut rng = WyRand::new(
+        seed ^ u64::from(ai_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ u64::from(tick).wrapping_mul(0xD6E8_FEB8_6659_FD93)
+            ^ 0x4149_4153_4B5F_484C,
+    );
+    rng.next_int(0, 100) < AI_EMERGENCY_HELP_ASK_CHANCE_PCT
 }
 
 /// Betrayal only when attack logic would target an ally — not on a diplomacy timer.

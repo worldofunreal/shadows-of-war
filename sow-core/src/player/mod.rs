@@ -416,6 +416,12 @@ impl Player {
     pub fn is_human(&self) -> bool {
         self.player_type == PlayerType::Human
     }
+
+    /// Live human player (excludes AI-controlled Ghosts, whose `player_type` is also `Human`).
+    #[inline]
+    pub fn is_live_human(&self) -> bool {
+        self.player_type == PlayerType::Human && !self.is_ai_controlled
+    }
     /// The people or realm this player is shown as, the one hero `Kin`/`Foreign` targets
     /// compare: a catalog bot's own catalog entity, otherwise its hero's.
     pub fn realm(&self) -> &str {

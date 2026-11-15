@@ -3487,4 +3487,210 @@ mod bot_iq_alliance_tests {
         }
         assert!(saw_req_ignore, "Ghost should silently ignore some resource requests after delay");
     }
+
+    fn tvt_aid_test_engine(ghost_count: u16) -> SowEngine {
+        use crate::protocol::Team;
+
+        let config = crate::game_config::GameConfig::default();
+        let mut game = GameState::new(77, 16, 16, config.clone());
+        game.phase = GamePhase::Playing;
+        game.config.game_mode = "TvT".to_string();
+
+        let mut lookup: Vec<Option<usize>> = vec![None];
+        let mut add_player = |mut p: Player, x: u32, y: u32, team: Option<Team>| {
+            p.alive = true;
+            p.has_spawned = true;
+            p.gold = 500.0; // low gold so only extreme troop emergency should trigger aid
+            p.troops = 600.0;
+            p.max_troops = 1_000.0;
+            p.team = team;
+            p.tile_count = 1;
+            let idx = y * 16 + x;
+            p.border_insert(idx);
+            let slot = game.players.len();
+            while lookup.len() <= p.id as usize {
+                lookup.push(None);
+            }
+            lookup[p.id as usize] = Some(slot);
+            game.players.push(p);
+        };
+
+        // Player 1: live human ally on Red team
+        let mut human = Player::new_human(1, "Human1".into(), [0.2, 0.5, 1.0], &config);
+        human.gold = 100_000.0;
+        human.troops = 5_000.0;
+        human.max_troops = 10_000.0;
+        add_player(human, 2, 2, Some(Team::Red));
+
+        // Players 2..=1+ghost_count: Ghost allies on Red team
+        for i in 0..ghost_count {
+            let id = 2 + i;
+            let mut ghost = Player::new_human(id, format!("Ghost{id}"), [0.8, 0.2, 0.2], &config);
+            ghost.is_ai_controlled = true;
+            ghost.alliances.push(1);
+            add_player(ghost, 3 + u32::from(i), 2, Some(Team::Red));
+        }
+
+        // Hostile enemy on Blue team adjacent to Ghosts
+        let enemy_id = 2 + ghost_count;
+        let enemy = Player::new_bot(enemy_id, "Enemy".into(), [0.1, 0.4, 0.9], &config);
+        add_player(enemy, 3, 3, Some(Team::Blue));
+
+        game.player_lookup = lookup;
+        if let Some(human) = game.players.get_mut(0) {
+            for i in 0..ghost_count {
+                human.alliances.push(2 + i);
+            }
+        }
+        for idx in 0..(16 * 16) {
+            game.map.terrain[idx] = crate::map::MapTile::from_byte(0b1000_0000);
+        }
+        game.map.set_owner_id(2, 2, 1);
+        for i in 0..ghost_count {
+            game.map.set_owner_id(3 + u32::from(i), 2, 2 + i);
+        }
+        game.map.set_owner_id(3, 3, enemy_id);
+
+        let mut engine = SowEngine::new(game, WaterComponents::default());
+        engine.playing_ticks = 600;
+        engine
+    }
+
+    #[test]
+    fn peacetime_low_gold_ghosts_do_not_spam_help_or_resource_requests() {
+        let mut engine = tvt_aid_test_engine(1);
+        assert!(engine.resources_can_move(2, 1));
+        let enemy_id = 3u16;
+
+        // Low gold (500) + healthy 60% troops (even under attack) must NOT ask for help or resources.
+        for tick in 500..=1500 {
+            engine.state.tick = tick;
+            let mut decisions = Vec::new();
+            engine.nation_run_diplomacy_for_slot(
+                (2, 135),
+                (50.0, 50.0),
+                &[enemy_id],
+                false,
+                tick % 2 == 0,
+                &mut decisions,
+            );
+            assert!(
+                engine.help_calls_proposed.is_empty(),
+                "healthy-troop ghost should never spam help call at tick {tick}"
+            );
+            assert!(
+                !decisions
+                    .iter()
+                    .any(|d| matches!(d.intent, GameplayIntent::RequestResources { .. })),
+                "healthy-troop ghost should never spam resource request at tick {tick}"
+            );
+        }
+    }
+
+    #[test]
+    fn ai_help_and_resource_requests_share_unified_30s_cooldown_across_rolls() {
+        let mut engine = tvt_aid_test_engine(1);
+        let enemy_id = 3u16;
+        // Put Ghost 2 into extreme emergency (10% troops under attack).
+        engine.state.player_mut(2).unwrap().troops = 100.0;
+
+        // Find a tick where the 30% roll declines ("ni pedo").
+        let silent_tick = (600u32..1000)
+            .find(|&t| !crate::diplomacy::roll_ai_emergency_help_ask(engine.state.seed, 2, t))
+            .expect("must find a silent roll tick");
+        engine.state.tick = u64::from(silent_tick);
+        let mut decisions = Vec::new();
+        engine.nation_run_diplomacy_for_slot(
+            (2, 135),
+            (50.0, 50.0),
+            &[enemy_id],
+            false,
+            true,
+            &mut decisions,
+        );
+        assert!(engine.help_calls_proposed.is_empty());
+        assert!(decisions.is_empty());
+        assert!(
+            !engine.can_ai_ask_for_help(2),
+            "silent emergency roll must still consume the 30s AI ask cooldown"
+        );
+
+        // Neither HelpCall nor plain RequestResources can fire during the 30s cooldown.
+        engine.state.tick = u64::from(silent_tick) + 150;
+        engine.trigger_help_call(2);
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 2,
+            intent: GameplayIntent::RequestResources {
+                target_player: 1,
+                gold: 100.0,
+                troops: 0.0,
+            },
+        }]);
+        assert!(engine.help_calls_proposed.is_empty());
+        assert!(engine.resource_requests_proposed.is_empty());
+
+        // After 300 ticks, pick a tick where the 30% roll succeeds.
+        let ask_tick = (silent_tick + crate::diplomacy::HELP_CALL_COOLDOWN_TICKS..)
+            .find(|&t| crate::diplomacy::roll_ai_emergency_help_ask(engine.state.seed, 2, t))
+            .expect("must find a positive roll tick");
+        engine.state.tick = u64::from(ask_tick);
+        decisions.clear();
+        engine.nation_run_diplomacy_for_slot(
+            (2, 135),
+            (50.0, 50.0),
+            &[enemy_id],
+            false,
+            true,
+            &mut decisions,
+        );
+        assert_eq!(engine.help_calls_proposed.len(), 1);
+        assert!(
+            !decisions
+                .iter()
+                .any(|d| matches!(d.intent, GameplayIntent::RequestResources { .. })),
+            "must use a single aid channel per crisis, not both HelpCall and RequestResources"
+        );
+        assert!(!engine.can_ai_ask_for_help(2));
+    }
+
+    #[test]
+    fn tvt_limits_pending_ai_requests_per_live_human_to_three() {
+        let mut engine = tvt_aid_test_engine(5);
+        engine.state.tick = 600;
+
+        // Ghost 2 & Ghost 3 send Help Calls; Ghost 4 sends a Resource Request => 3 pending for Human 1.
+        engine.trigger_help_call(2);
+        engine.trigger_help_call(3);
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 4,
+            intent: GameplayIntent::RequestResources {
+                target_player: 1,
+                gold: 50.0,
+                troops: 0.0,
+            },
+        }]);
+        assert_eq!(engine.ai_pending_requests_to_human(1), 3);
+        assert!(!engine.ai_human_recipient_has_capacity(1));
+
+        // Ghost 5 & Ghost 6 are blocked from pushing a 4th pending AI request onto Human 1.
+        engine.trigger_help_call(5);
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 6,
+            intent: GameplayIntent::RequestResources {
+                target_player: 1,
+                gold: 50.0,
+                troops: 0.0,
+            },
+        }]);
+        assert_eq!(engine.ai_pending_requests_to_human(1), 3);
+        assert_eq!(
+            engine
+                .help_calls_proposed
+                .iter()
+                .filter(|h| h.target == 1)
+                .count(),
+            2
+        );
+        assert_eq!(engine.resource_requests_proposed.len(), 1);
+    }
 }

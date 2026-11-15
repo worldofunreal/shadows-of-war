@@ -230,4 +230,94 @@ describe("request-toast-deck", () => {
         expect(mobileView.visible.length).toBe(1);
         expect(mobileView.overflowCount).toBe(3);
     });
+
+    test("keeps help call toast identity stable across changing suggested amounts when call_id matches", () => {
+        const state = createRequestToastDeckState();
+        const countdowns = new Map();
+        const helpCall = {
+            kind: "help" as const,
+            call_id: 42,
+            requester_id: 7,
+            name: "Zotie",
+            avatar: { kind: "fallback" as const },
+            active: true,
+            remaining_seconds: 25,
+            ttl_seconds: 30,
+            gold: 11,
+            troops: 37,
+        };
+
+        syncRequestCountdowns([helpCall], countdowns, 1000);
+        const first = reconcileRequestToastDeck(state, [helpCall], countdowns, 1000, {
+            maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+        });
+        expect(first.visible.length).toBe(1);
+        const initialExpiry = first.visible[0].toastExpiresAtMs;
+
+        // Live suggested amounts tick upward while call_id stays 42: signature must not change.
+        const tickedHelpCall = { ...helpCall, remaining_seconds: 24, gold: 19, troops: 52 };
+        syncRequestCountdowns([tickedHelpCall], countdowns, 2000);
+        const second = reconcileRequestToastDeck(state, [tickedHelpCall], countdowns, 2000, {
+            maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+        });
+        expect(second.visible.length).toBe(1);
+        expect(second.visible[0].toastExpiresAtMs).toBe(initialExpiry);
+
+        // Dismissed toast must not re-pop when live gold/troops tick upward on the same call_id.
+        expect(dismissFrontRequestToast(state)).toBe(true);
+        const afterDismiss = reconcileRequestToastDeck(state, [tickedHelpCall], countdowns, 2500, {
+            maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+        });
+        expect(afterDismiss.visible.length).toBe(0);
+
+        // A genuinely new call_id from the same player is treated as a fresh notification.
+        const newCall = { ...tickedHelpCall, call_id: 43, remaining_seconds: 30 };
+        syncRequestCountdowns([newCall], countdowns, 3000);
+        const afterNewCall = reconcileRequestToastDeck(state, [newCall], countdowns, 3000, {
+            maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+        });
+        expect(afterNewCall.visible.length).toBe(1);
+    });
+
+    test("evicted buried toasts do not resurrect once pushed past maxVisible (once and bye)", () => {
+        const state = createRequestToastDeckState();
+        const countdowns = new Map();
+        const makeHelp = (id: number, callId: number) => ({
+            kind: "help" as const,
+            call_id: callId,
+            requester_id: id,
+            name: `Ally${id}`,
+            avatar: { kind: "fallback" as const },
+            active: true,
+            remaining_seconds: 25,
+            ttl_seconds: 30,
+            gold: 100,
+            troops: 200,
+        });
+
+        const initial = [makeHelp(1, 1), makeHelp(2, 2), makeHelp(3, 3)];
+        syncRequestCountdowns(initial, countdowns, 1000);
+        const v1 = reconcileRequestToastDeck(state, initial, countdowns, 1000, {
+            maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+        });
+        expect(v1.visible.map((e) => e.request.requester_id)).toEqual([1, 2, 3]);
+
+        // A 4th arrival pushes tail requester 3 past desktop limit (3): evicted permanently from toasts.
+        const withFourth = [...initial, makeHelp(4, 4)];
+        syncRequestCountdowns(withFourth, countdowns, 1500);
+        const v2 = reconcileRequestToastDeck(state, withFourth, countdowns, 1500, {
+            maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+        });
+        expect(v2.visible.map((e) => e.request.requester_id)).toEqual([4, 1, 2]);
+        expect(v2.overflowCount).toBe(1);
+        expect(v2.totalPending).toBe(4);
+
+        // Dismissing front card (4) leaves [1, 2] without resurrecting buried card (3).
+        expect(dismissFrontRequestToast(state)).toBe(true);
+        const v3 = reconcileRequestToastDeck(state, withFourth, countdowns, 2000, {
+            maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+        });
+        expect(v3.visible.map((e) => e.request.requester_id)).toEqual([1, 2]);
+        expect(v3.overflowCount).toBe(2);
+    });
 });

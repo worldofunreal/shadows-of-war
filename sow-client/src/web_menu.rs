@@ -625,6 +625,7 @@ fn player_inbox_signature(player: &sow_core::protocol::PlayerSnapshot) -> u64 {
     player.help_calls.len().hash(&mut hasher);
     for call in &player.help_calls {
         call.caller.hash(&mut hasher);
+        call.call_id.hash(&mut hasher);
         call.suggested_gold.to_bits().hash(&mut hasher);
         call.suggested_troops.to_bits().hash(&mut hasher);
     }
@@ -3834,6 +3835,7 @@ fn build_inbox(
             }
             requests.push(serde_json::json!({
                 "kind": "help",
+                "call_id": call.call_id,
                 "requester_id": caller.id,
                 "name": &caller.name,
                 "avatar": avatar,

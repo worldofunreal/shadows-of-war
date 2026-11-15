@@ -2321,17 +2321,98 @@ html[dir="rtl"] .sow-hud__bot-badge {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-.sow-hud__inbox-list {
+.sow-hud__inbox-filters {
+  flex: none;
   display: grid;
-  align-content: start;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 16px 2px;
+}
+.sow-hud__inbox-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid rgb(238 194 104 / 20%);
+  border-radius: 4px 8px 4px 4px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--sow-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+.sow-hud__inbox-filter:hover {
+  border-color: rgb(238 194 104 / 45%);
+  color: #fff5d8;
+}
+.sow-hud__inbox-filter.is-active {
+  border-color: var(--sow-gold-bright);
+  background: color-mix(in srgb, var(--sow-gold) 18%, transparent);
+  color: var(--sow-gold-bright);
+}
+.sow-hud__inbox-filter-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sow-hud__inbox-filter-count {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  color: inherit;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.sow-hud__inbox-filter.is-active .sow-hud__inbox-filter-count {
+  background: rgb(238 194 104 / 22%);
+}
+.sow-hud__inbox-body {
+  display: block;
+}
+.sow-hud__inbox-list {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+}
+.sow-hud__inbox-list > .sow-hud__request-card {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px 12px 14px;
+}
+.sow-hud__inbox-list > .sow-hud__request-card .sow-hud__request-identity {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+.sow-hud__inbox-list > .sow-hud__request-card .sow-hud__request-actions {
+  flex: none;
+  inline-size: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.sow-hud__inbox-list > .sow-hud__request-card .sow-hud__request-actions button {
+  min-block-size: 38px;
+  min-height: 38px;
+  padding: 7px 10px;
 }
 .sow-hud__inbox-bulk {
   flex: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  padding: 10px 16px 2px;
+  padding: 8px 16px 2px;
 }
 .sow-hud__inbox-bulk[hidden],
 .sow-hud__inbox-list[hidden],

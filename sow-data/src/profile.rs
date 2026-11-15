@@ -1067,15 +1067,15 @@ pub fn apply_ranked_result(rating: &mut SeasonRating, opponent: &SeasonRating, r
 pub fn tier_for_score(score: u16) -> (&'static str, Option<String>) {
     let tier = match score {
         0..=999 => "Nomad",
-        1000..=1999 => "Settlement",
-        2000..=2999 => "CityState",
-        3000..=3999 => "Kingdom",
-        4000..=4999 => "Republic",
-        5000..=5999 => "Empire",
-        6000..=6999 => "Dynasty",
-        7000..=7999 => "Hegemony",
-        8000..=8999 => "Dominion",
-        _ => "Eternal",
+        1000..=1999 => "Chieftain",
+        2000..=2999 => "Commander",
+        3000..=3999 => "Governor",
+        4000..=4999 => "King",
+        5000..=5999 => "Emperor",
+        6000..=6999 => "Sovereign",
+        7000..=7999 => "Overlord",
+        8000..=8999 => "Immortal",
+        _ => "Deity",
     };
     (tier, None)
 }
