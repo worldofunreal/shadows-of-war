@@ -619,6 +619,8 @@ pub struct UiState {
     pub detonation_scratch: Vec<(f32, f32, sow_core::game::ProjectileKind)>,
     /// Cached endgame copy for panel fade-out (is_victory, title, subtitle).
     pub endgame_cache: Option<(bool, String, String)>,
+    /// Delayed endgame reveal sequence (waits 1.25s for death animation before panel + result SFX).
+    pub endgame_sequence: Option<EndgameSequence>,
     /// One-time match-stat snapshot shown while confirming a manual exit.
     pub manual_endgame_stats: Option<[u64; 5]>,
 
@@ -696,7 +698,23 @@ pub fn easeout_flash_with_duration(elapsed: f32, duration: f32) -> Option<f32> {
     }
 }
 
+/// Delay before revealing the Victory/Defeat panel so the death animation and elimination SFX play cleanly.
+pub const ENDGAME_REVEAL_DELAY_SECS: f32 = 1.25;
+
+#[derive(Clone, Copy, Debug)]
+pub struct EndgameSequence {
+    pub started_at: web_time::Instant,
+    pub won: bool,
+    pub revealed: bool,
+}
+
 impl UiState {
+    pub(crate) fn endgame_revealed(&self) -> bool {
+        self.endgame_sequence
+            .as_ref()
+            .is_some_and(|seq| seq.revealed)
+    }
+
     pub(crate) fn trigger_alliance_celebration(&mut self, a: u16, b: u16, now: web_time::Instant) {
         queue_alliance_celebration(&mut self.alliance_celebrations, a, b, now);
     }

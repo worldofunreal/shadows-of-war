@@ -1221,6 +1221,7 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
             "--exclude=.git",
             "--exclude=dist",
             "--exclude=target",
+            "--exclude=sow-backfill",
             "--exclude=sow-dist/.env*",
             &source,
             &destination,

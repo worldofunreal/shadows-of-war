@@ -134,7 +134,9 @@ impl SfxDirector {
         let Some(pending) = self.pending_elimination.take() else {
             return;
         };
-        if !self.gameplay_allowed(now)
+        if !self.client_active
+            || self.result_played
+            || self.critical_active(now)
             || !Self::gap_open(self.last_elimination, now, ELIMINATION_GAP)
         {
             return;
@@ -294,7 +296,7 @@ impl SfxDirector {
         seed: u32,
         spatial: SpatialSoundParams,
     ) {
-        if !self.client_active || !self.server_playing {
+        if !self.client_active || self.result_played {
             return;
         }
         let replace = self.pending_elimination.is_none_or(|pending| {

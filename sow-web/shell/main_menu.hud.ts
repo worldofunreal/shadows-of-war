@@ -381,6 +381,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   let emoteTextTarget: Window["SOW_menu_command"] | null = null;
   let hudSafeArea = [0, 0, 0, 0];
   let surrenderModalOpen = false;
+  let wasEndgameOpen = false;
   let devSidebarOpen = false;
   let devToolsSchemaKey = "";
   let devTab = "";
@@ -397,6 +398,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   let leaderboardWork: LeaderboardUpdate | null = null;
   let leaderboardFrame = 0;
   let leaderboardPanelOpen = false;
+  let leaderboardOpenedAtMs = 0;
+  let leaderboardSyncRetryAtMs = 0;
   // When we may ask each target again: the same ~10s the server enforces per pair.
   const TRANSFER_REQUEST_COOLDOWN_MS = 10_000;
   const transferRequestReadyAt: Record<number, number> = Object.create(null);
@@ -534,15 +537,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       if (hudRefs && hudRoot) syncDropdownScope(hudRoot, null);
     }
     if (previous === "leaderboard" && next !== previous)
-      send("toggle_leaderboard");
-    if (previous === "inbox" && next !== previous) send("toggle_inbox");
+      send("toggle_leaderboard", { open: false });
+    if (previous === "inbox" && next !== previous)
+      send("toggle_inbox", { open: false });
     activeHudPanel = next;
     if (next && devSidebarOpen) {
       devSidebarOpen = false;
       send("toggle_dev_sidebar");
     }
-    if (next === "leaderboard") send("toggle_leaderboard");
-    if (next === "inbox") send("toggle_inbox");
+    if (next === "leaderboard") {
+      leaderboardOpenedAtMs = Date.now();
+      leaderboardSyncRetryAtMs = 0;
+      send("toggle_leaderboard", { open: true });
+    }
+    if (next === "inbox") send("toggle_inbox", { open: true });
   }
 
   function setHudDropdownOpen(
@@ -2397,6 +2405,26 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "</div>" +
       '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-endgame-modal">' +
       '  <section class="sow-hud__endgame-card" role="dialog" aria-modal="true" aria-labelledby="sow-hud-endgame-banner">' +
+      '    <div class="sow-hud__endgame-fx" aria-hidden="true">' +
+      '      <span class="sow-hud__endgame-rays"></span>' +
+      '      <span class="sow-hud__endgame-shockwave"></span>' +
+      "    </div>" +
+      '    <div class="sow-hud__endgame-crest" aria-hidden="true">' +
+      '      <span class="sow-hud__endgame-ribbon is-left"></span>' +
+      '      <svg class="sow-hud__endgame-emblem is-victory" viewBox="0 0 64 40" fill="none">' +
+      '        <path d="M8 24C14 22 19 18 22 12C19 20 15 26 8 29Z" fill="currentColor" opacity="0.85"/>' +
+      '        <path d="M56 24C50 22 45 18 42 12C45 20 49 26 56 29Z" fill="currentColor" opacity="0.85"/>' +
+      '        <path d="M32 4L39 14L48 11L43 24H21L16 11L25 14Z" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity="0.22"/>' +
+      '        <polygon points="32,12 36,19 32,26 28,19" fill="currentColor"/>' +
+      "      </svg>" +
+      '      <svg class="sow-hud__endgame-emblem is-defeat" viewBox="0 0 64 40" fill="none">' +
+      '        <path d="M10 15C16 18 21 22 23 28C18 24 14 20 10 18Z" fill="currentColor" opacity="0.75"/>' +
+      '        <path d="M54 15C48 18 43 22 41 28C46 24 50 20 54 18Z" fill="currentColor" opacity="0.75"/>' +
+      '        <path d="M22 8H42L40 23L32 33L24 23Z" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity="0.18"/>' +
+      '        <path d="M34 9L29 18L35 22L30 31" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+      "      </svg>" +
+      '      <span class="sow-hud__endgame-ribbon is-right"></span>' +
+      "    </div>" +
       '    <div class="sow-hud__endgame-hero">' +
       '      <div class="sow-hud__endgame-portrait-wrap">' +
       '        <img class="sow-hud__endgame-portrait" id="sow-hud-endgame-portrait" src="" alt="' +
@@ -6032,7 +6060,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       teamRenderKey +
       "\u001d" +
       playerRenderKey;
-    if (renderKey === leaderboardRenderKey) return;
+    const expectedNonEmpty = sortedPlayers.length > 0 || teams.length > 0;
+    const rowsPopulatedOrPending =
+      !expectedNonEmpty ||
+      hudRefs.rows.childElementCount > 0 ||
+      leaderboardWork !== null;
+    if (renderKey === leaderboardRenderKey && rowsPopulatedOrPending) return;
     leaderboardRenderKey = renderKey;
     leaderboardWork = {
       players: sortedPlayers,
@@ -8238,6 +8271,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       lastLeaderboardTeams = [];
       lastLeaderboardPlayersPayload = null;
       lastLeaderboardTeamsPayload = null;
+      leaderboardOpenedAtMs = 0;
+      leaderboardSyncRetryAtMs = 0;
       inboxFilter = "all";
       latestInboxRequests = [];
       requestCountdowns.clear();
@@ -8909,6 +8944,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       ) {
         hudRefs!.lbSearch.value = leaderboardFilterQuery;
       }
+      if (hud.leaderboard_open === false) {
+        const now = Date.now();
+        if (
+          now - leaderboardOpenedAtMs >= 350 &&
+          now - leaderboardSyncRetryAtMs >= 1000
+        ) {
+          leaderboardSyncRetryAtMs = now;
+          send("toggle_leaderboard", { open: true });
+        }
+      } else if (hud.leaderboard_open === true) {
+        leaderboardSyncRetryAtMs = 0;
+      }
       if (Array.isArray(hud.leaderboard)) {
         const teams = Array.isArray(hud.team_leaderboard)
           ? hud.team_leaderboard
@@ -8966,6 +9013,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const isWinner = Boolean(hud.is_winner);
     if (hudRefs!.endgame) {
       hudRefs!.endgame.classList.toggle("hidden", !isOver);
+      if (isOver && !wasEndgameOpen) {
+        hudRefs!.endgame.classList.remove("is-entering");
+        void hudRefs!.endgame.offsetWidth;
+        hudRefs!.endgame.classList.add("is-entering");
+      } else if (!isOver && wasEndgameOpen) {
+        hudRefs!.endgame.classList.remove("is-entering");
+      }
+      wasEndgameOpen = isOver;
       if (isOver) {
         const result = isWinner ? "victory" : "defeat";
         const stats = hud.player_endgame_stats || {};
@@ -9729,7 +9784,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         hudState.hud.dev_tools &&
         typeof hudState.hud.dev_tools.open === "boolean"
       ) {
-        devSidebarOpen = hudState.hud.dev_tools.open;
+        const nextDevOpen = hudState.hud.dev_tools.open;
+        if (nextDevOpen && !devSidebarOpen && activeHudPanel !== null) {
+          activeHudPanel = null;
+        }
+        devSidebarOpen = nextDevOpen;
       }
     }
     renderHud();
@@ -10071,6 +10130,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     hudRefs = null;
     activeProgressBars.clear();
     activeCelebrations.clear();
+    const cachedLbPlayers = lastLeaderboardPlayersPayload;
+    const cachedLbTeams = lastLeaderboardTeamsPayload;
+    cancelLeaderboardWork();
+    leaderboardRows = Object.create(null);
+    leaderboardTeamRows = Object.create(null);
+    leaderboardRenderKey = "";
+    lastLeaderboardPlayersPayload = null;
+    lastLeaderboardTeamsPayload = null;
     if (hudRoot) hudRoot.replaceChildren();
     if (hudDevLayer && hudDevLayer.parentNode) {
       const freshDevLayer = hudDevLayer.cloneNode(false) as HTMLElement;
@@ -10078,6 +10145,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       hudDevLayer = freshDevLayer;
     }
     renderHud(true);
+    if (
+      activeHudPanel === "leaderboard" &&
+      !Array.isArray(lastLeaderboardPlayersPayload) &&
+      Array.isArray(cachedLbPlayers)
+    ) {
+      const teams = cachedLbTeams || lastLeaderboardTeams;
+      lastLeaderboardPlayersPayload = cachedLbPlayers;
+      lastLeaderboardTeamsPayload = teams;
+      updateLeaderboard(cachedLbPlayers, teams);
+    }
     const refreshedRefs = hudRefs as HudRefs | null;
     if (
       transferDraft &&

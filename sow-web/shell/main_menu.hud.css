@@ -3768,6 +3768,480 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   border-color: rgba(74, 222, 128, 0.5);
 }
 
+/* League of Legends-inspired Victory / Defeat entrance choreography (scoped to #sow-hud-endgame-modal) */
+#sow-hud-endgame-modal {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-card {
+  position: relative;
+  overflow: hidden;
+  border-top: 2px solid color-mix(in srgb, var(--sow-gold) 65%, transparent);
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(245, 197, 66, 0.14) 0%,
+      transparent 60%
+    ),
+    linear-gradient(
+      170deg,
+      rgba(20, 25, 34, 0.97) 0%,
+      rgba(9, 12, 17, 0.99) 100%
+    );
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-card[data-result="victory"] {
+  border-color: color-mix(in srgb, var(--sow-gold) 58%, rgba(74, 222, 128, 0.45));
+  box-shadow:
+    var(--sow-tactical-modal-shadow),
+    0 0 48px rgba(245, 197, 66, 0.18),
+    inset 0 1px 0 rgba(255, 244, 196, 0.22);
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-card[data-result="defeat"] {
+  border-color: rgba(248, 113, 113, 0.42);
+  border-top-color: rgba(248, 113, 113, 0.72);
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(220, 38, 38, 0.16) 0%,
+      transparent 58%
+    ),
+    linear-gradient(
+      170deg,
+      rgba(24, 17, 21, 0.97) 0%,
+      rgba(10, 11, 15, 0.99) 100%
+    );
+  box-shadow:
+    var(--sow-tactical-modal-shadow),
+    0 0 42px rgba(220, 38, 38, 0.16),
+    inset 0 1px 0 rgba(254, 202, 202, 0.12);
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-rays {
+  position: absolute;
+  left: 50%;
+  top: 28px;
+  width: 460px;
+  height: 460px;
+  margin-left: -230px;
+  margin-top: -230px;
+  border-radius: 50%;
+  opacity: 0;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 224, 130, 0.16) 0deg 8deg,
+    transparent 8deg 28deg
+  );
+  -webkit-mask: radial-gradient(circle, #000 0%, transparent 66%);
+  mask: radial-gradient(circle, #000 0%, transparent 66%);
+}
+
+#sow-hud-endgame-modal
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-rays {
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(248, 113, 113, 0.1) 0deg 6deg,
+    transparent 6deg 32deg
+  );
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-shockwave {
+  position: absolute;
+  left: 50%;
+  top: 48px;
+  width: 120px;
+  height: 120px;
+  margin-left: -60px;
+  margin-top: -60px;
+  border-radius: 50%;
+  opacity: 0;
+  border: 2px solid rgba(255, 224, 130, 0.78);
+  box-shadow: 0 0 24px rgba(245, 197, 66, 0.45);
+}
+
+#sow-hud-endgame-modal
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-shockwave {
+  border-color: rgba(248, 113, 113, 0.65);
+  box-shadow: 0 0 22px rgba(220, 38, 38, 0.42);
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-crest {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: -6px 0 12px;
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-ribbon {
+  flex: 1;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--sow-gold) 78%, #fff) 100%
+  );
+  transform-origin: right center;
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-ribbon.is-right {
+  background: linear-gradient(
+    270deg,
+    transparent 0%,
+    color-mix(in srgb, var(--sow-gold) 78%, #fff) 100%
+  );
+  transform-origin: left center;
+}
+
+#sow-hud-endgame-modal
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-ribbon {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(248, 113, 113, 0.7) 100%
+  );
+}
+
+#sow-hud-endgame-modal
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-ribbon.is-right {
+  background: linear-gradient(
+    270deg,
+    transparent 0%,
+    rgba(248, 113, 113, 0.7) 100%
+  );
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-emblem {
+  width: 58px;
+  height: 36px;
+  flex: 0 0 auto;
+  color: var(--sow-gold-bright, #ffe8a3);
+  filter: drop-shadow(0 4px 12px rgba(245, 197, 66, 0.35));
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-emblem.is-defeat {
+  display: none;
+  color: #fca5a5;
+  filter: drop-shadow(0 4px 12px rgba(220, 38, 38, 0.35));
+}
+
+#sow-hud-endgame-modal
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-emblem.is-victory {
+  display: none;
+}
+
+#sow-hud-endgame-modal
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-emblem.is-defeat {
+  display: block;
+}
+
+#sow-hud-endgame-modal .sow-hud__endgame-hero,
+#sow-hud-endgame-modal .sow-hud__endgame-stats,
+#sow-hud-endgame-modal .sow-hud__endgame-store,
+#sow-hud-endgame-modal .sow-hud__endgame-actions {
+  position: relative;
+  z-index: 1;
+}
+
+#sow-hud-endgame-modal
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-portrait {
+  filter: saturate(0.72) contrast(1.06);
+}
+
+#sow-hud-endgame-modal.is-entering {
+  animation: sow-endgame-backdrop-in 340ms ease-out both;
+}
+
+#sow-hud-endgame-modal.is-entering
+  .sow-hud__endgame-card[data-result="victory"] {
+  animation: sow-endgame-card-victory 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+#sow-hud-endgame-modal.is-entering
+  .sow-hud__endgame-card[data-result="defeat"] {
+  animation: sow-endgame-card-defeat 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+#sow-hud-endgame-modal.is-entering
+  .sow-hud__endgame-card[data-result="victory"]
+  .sow-hud__endgame-rays {
+  animation: sow-endgame-rays 2200ms ease-out 60ms both;
+}
+
+#sow-hud-endgame-modal.is-entering
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-rays {
+  animation: sow-endgame-rays-defeat 1400ms ease-out 60ms both;
+}
+
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-shockwave {
+  animation: sow-endgame-shockwave 640ms cubic-bezier(0.12, 0.85, 0.25, 1) 40ms
+    both;
+}
+
+#sow-hud-endgame-modal.is-entering
+  .sow-hud__endgame-card[data-result="victory"]
+  .sow-hud__endgame-emblem.is-victory {
+  animation: sow-endgame-crest-victory 540ms cubic-bezier(0.16, 1, 0.3, 1) 40ms
+    both;
+}
+
+#sow-hud-endgame-modal.is-entering
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-emblem.is-defeat {
+  animation: sow-endgame-crest-defeat 560ms cubic-bezier(0.22, 1, 0.36, 1) 40ms
+    both;
+}
+
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-ribbon {
+  animation: sow-endgame-ribbon-in 420ms cubic-bezier(0.16, 1, 0.3, 1) 140ms
+    both;
+}
+
+#sow-hud-endgame-modal.is-entering
+  .sow-hud__endgame-card[data-result="victory"]
+  .sow-hud__endgame-banner {
+  animation: sow-endgame-banner-victory 520ms cubic-bezier(0.16, 1, 0.3, 1) 90ms
+    both;
+}
+
+#sow-hud-endgame-modal.is-entering
+  .sow-hud__endgame-card[data-result="defeat"]
+  .sow-hud__endgame-banner {
+  animation: sow-endgame-banner-defeat 540ms cubic-bezier(0.22, 1, 0.36, 1) 90ms
+    both;
+}
+
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-portrait-wrap {
+  animation: sow-endgame-rise-in 420ms cubic-bezier(0.16, 1, 0.3, 1) 160ms both;
+}
+
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-stat {
+  animation: sow-endgame-rise-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-stat:nth-child(1) {
+  animation-delay: 250ms;
+}
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-stat:nth-child(2) {
+  animation-delay: 295ms;
+}
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-stat:nth-child(3) {
+  animation-delay: 340ms;
+}
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-stat:nth-child(4) {
+  animation-delay: 385ms;
+}
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-stat:nth-child(5) {
+  animation-delay: 430ms;
+}
+
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-store {
+  animation: sow-endgame-rise-in 360ms cubic-bezier(0.16, 1, 0.3, 1) 460ms both;
+}
+
+#sow-hud-endgame-modal.is-entering .sow-hud__endgame-actions {
+  animation: sow-endgame-rise-in 360ms cubic-bezier(0.16, 1, 0.3, 1) 520ms both;
+}
+
+@keyframes sow-endgame-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sow-endgame-card-victory {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sow-endgame-card-defeat {
+  0% {
+    opacity: 0;
+    transform: translateY(-22px) scale(0.95);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(3px) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sow-endgame-crest-victory {
+  0% {
+    opacity: 0;
+    transform: scale(1.65) translateY(-6px);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(0.94) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sow-endgame-crest-defeat {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px) scale(1.35);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(2px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sow-endgame-banner-victory {
+  0% {
+    opacity: 0;
+    transform: scale(1.38);
+    letter-spacing: 0.16em;
+  }
+  70% {
+    opacity: 1;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    letter-spacing: 0.07em;
+  }
+}
+
+@keyframes sow-endgame-banner-defeat {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(1.18);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(2px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sow-endgame-ribbon-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes sow-endgame-rays {
+  0% {
+    opacity: 0;
+    transform: rotate(-20deg) scale(0.55);
+  }
+  25% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0.28;
+    transform: rotate(35deg) scale(1.1);
+  }
+}
+
+@keyframes sow-endgame-rays-defeat {
+  0% {
+    opacity: 0;
+    transform: scale(0.65);
+  }
+  30% {
+    opacity: 0.65;
+  }
+  100% {
+    opacity: 0.12;
+    transform: scale(1);
+  }
+}
+
+@keyframes sow-endgame-shockwave {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.25);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+@keyframes sow-endgame-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sow-hud-endgame-modal.is-entering,
+  #sow-hud-endgame-modal.is-entering * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+#sow-hud.is-reduced-motion #sow-hud-endgame-modal.is-entering,
+#sow-hud.is-reduced-motion #sow-hud-endgame-modal.is-entering * {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 .sow-hud__exit-card {
   position: relative;
   width: min(560px, calc(100vw - 24px));

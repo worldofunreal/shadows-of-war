@@ -53,7 +53,6 @@ impl SowApp {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
         let mut played_combat_this_tick = false;
         let now_instant = web_time::Instant::now();
-        let fog_of_war = crate::theme::dev_config::DevConfig::with(|dev| dev.fog_of_war);
         self.sfx.sync_server_phase(&snap.phase);
         self.sfx.begin_tick();
         for event in events {
@@ -172,16 +171,8 @@ impl SowApp {
                 }
                 sow_core::game::GameEvent::NavalImpact {
                     owner_id,
-                    target_owner,
-                    source_fleet_id,
-                    target_fleet_id,
                     tile,
                     sunk,
-                    captured,
-                    target_type,
-                    damage,
-                    health_after,
-                    troops_lost,
                     ..
                 } => {
                     let x = tile % self.sim.map_w.max(1);
@@ -304,21 +295,16 @@ impl SowApp {
                     }
                 }
                 sow_core::game::GameEvent::TileCaptured {
-                    x,
-                    y,
                     new_owner,
                     previous_owner,
-                    troops,
+                    ..
                 } => {
                     self.handle_tile_captured(
-                        snap,
                         my_id,
                         &mut played_combat_this_tick,
                         &combat::CaptureEventInfo {
-                            pos: (x, y),
                             new_owner,
                             previous_owner,
-                            troops,
                         },
                     );
                 }

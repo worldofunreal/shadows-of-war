@@ -4503,16 +4503,11 @@ root.addEventListener("change", function (event) {
     if (input instanceof HTMLInputElement && input.dataset.setting === "menu_tips") {
         const disabled = !input.checked;
         if (menuUi.state) menuUi.state.menu_tips_disabled = disabled;
-        const guides = (menuUi.state?.menu_guides || {}) as Record<
-            string,
-            { completed_steps?: unknown[]; current_step?: string | null; status?: string } | undefined
-        >;
-        const welcome = guides.welcome;
         send("save_menu_guide_progress", {
-            guide_id: "welcome",
-            completed_steps: Array.isArray(welcome?.completed_steps) ? welcome.completed_steps : [],
-            current_step: welcome?.current_step ?? "welcome_heroes",
-            status: welcome?.status || "active",
+            guide_id: "settings",
+            completed_steps: [],
+            current_step: null,
+            status: "active",
             menu_tips_disabled: disabled,
         });
         if (!disabled && window.SOW_menu_guide && menuUi.state) {

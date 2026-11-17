@@ -277,6 +277,31 @@ impl SowApp {
         }
     }
 
+    fn advance_endgame_sequence(&mut self, now: Instant) {
+        if self.ui.is_spectating {
+            self.ui.endgame_sequence = None;
+            return;
+        }
+        let Some(seq) = self.ui.endgame_sequence.as_mut() else {
+            return;
+        };
+        if seq.revealed {
+            return;
+        }
+        if now.duration_since(seq.started_at).as_secs_f32()
+            >= crate::app::ENDGAME_REVEAL_DELAY_SECS
+        {
+            seq.revealed = true;
+            let won = seq.won;
+            self.sfx.play_result(won);
+            self.ui.trigger_viewport_alert(if won {
+                crate::app::ViewportAlertKind::Victory
+            } else {
+                crate::app::ViewportAlertKind::Defeat
+            });
+        }
+    }
+
     pub(super) fn render_frame_ui_and_present(
         &mut self,
         sf: f32,
@@ -295,6 +320,7 @@ impl SowApp {
             sync.time_remaining = (sync.time_remaining - dt).max(0.0);
         }
         if self.ui.app.phase == ClientPhase::Playing {
+            self.advance_endgame_sequence(now);
             self.sync_hud_player_state();
         }
 

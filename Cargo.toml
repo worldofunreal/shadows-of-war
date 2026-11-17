@@ -46,7 +46,6 @@ wasm-bindgen-futures = "0.4.72"
 wasm-bindgen = "0.2.122"
 wasm-bindgen-cli-support = "0.2.122"
 minifier = "0.3.2"
-getrandom = { version = "0.2", features = ["js"] }
 console_error_panic_hook = "0.1.7"
 console_log = "1.0"
 web-sys = { version = "0.3.69", features = ["Window", "Document", "Element", "HtmlElement", "HtmlInputElement", "Navigator", "CssStyleDeclaration", "Node", "VisibilityState", "Location", "BinaryType", "Worker", "MessageEvent", "Storage"] }
@@ -64,7 +63,6 @@ libm = "0.2.16"
 axum = "0.8.9"
 tower-http = { version = "0.6.10", features = ["fs", "compression-br", "cors"] }
 futures-channel = "0.3"
-arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
 cpal = { version = "0.17.3", features = ["wasm-bindgen"] }
 tempfile = "3"
 

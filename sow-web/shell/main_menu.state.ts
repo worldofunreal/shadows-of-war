@@ -772,6 +772,7 @@ export interface MenuHudPayload {
     fps: number | null;
     ping: number | null;
     inbox_count: number;
+    leaderboard_open?: boolean;
     match_over: boolean;
     is_spectating: boolean;
     tutorial: HudTutorial;

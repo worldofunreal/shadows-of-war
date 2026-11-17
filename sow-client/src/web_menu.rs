@@ -235,7 +235,10 @@ enum WebMenuCommand {
         kind: sow_core::game::CityArsenalKind,
     },
     SelectNuke,
-    ToggleInbox,
+    ToggleInbox {
+        #[serde(default)]
+        open: Option<bool>,
+    },
     AcceptAlliance {
         target_player_id: u16,
     },
@@ -296,7 +299,10 @@ enum WebMenuCommand {
     CounterAttack {
         target_player_id: u16,
     },
-    ToggleLeaderboard,
+    ToggleLeaderboard {
+        #[serde(default)]
+        open: Option<bool>,
+    },
     ToggleDevSidebar,
     SetDevConfig {
         field: String,
@@ -1410,9 +1416,9 @@ impl SowApp {
                         self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
                     }
                 }
-                WebMenuCommand::ToggleInbox => {
+                WebMenuCommand::ToggleInbox { open } => {
                     self.ui.app.hud_state.show_alliance_inbox =
-                        !self.ui.app.hud_state.show_alliance_inbox;
+                        open.unwrap_or(!self.ui.app.hud_state.show_alliance_inbox);
                 }
                 WebMenuCommand::AcceptAlliance { target_player_id } => {
                     self.send_intent(sow_core::protocol::GameplayIntent::AcceptAlliance {
@@ -1624,8 +1630,8 @@ impl SowApp {
                         }
                     }
                 }
-                WebMenuCommand::ToggleLeaderboard => {
-                    self.ui.show_leaderboard = !self.ui.show_leaderboard;
+                WebMenuCommand::ToggleLeaderboard { open } => {
+                    self.ui.show_leaderboard = open.unwrap_or(!self.ui.show_leaderboard);
                     if self.ui.show_leaderboard {
                         self.ui.leaderboard_refresh_at = None;
                         self.ui.leaderboard_publish_pending = true;
@@ -1680,6 +1686,7 @@ impl SowApp {
                 WebMenuCommand::ContinueObserving => {
                     self.ui.is_spectating = true;
                     self.ui.endgame_cache = None;
+                    self.ui.endgame_sequence = None;
                     self.ui.manual_endgame_stats = None;
                 }
                 WebMenuCommand::ZoomIn => {
@@ -2322,6 +2329,20 @@ fn quantize_tenths_i64(value: f64) -> (i64, i8) {
     (tenths, sign)
 }
 
+fn endgame_active_for_player(
+    app: &SowApp,
+    snapshot: Option<&sow_core::protocol::SimSnapshot>,
+    me: Option<MyPlayerSummary>,
+) -> bool {
+    !app.ui.is_spectating
+        && app.ui.endgame_revealed()
+        && snapshot.is_some_and(|snapshot| {
+            snapshot.winner.is_some()
+                || snapshot.winning_team.is_some()
+                || me.is_some_and(|player| !player.alive && player.has_spawned)
+        })
+}
+
 fn endgame_stats_snapshot(app: &SowApp, player_id: u16) -> Option<[u64; 5]> {
     app.sim
         .engine
@@ -2374,11 +2395,7 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         || map_menu.is_some()
         || has_active_construction
         || has_active_celebrations;
-    let endgame_active = !app.ui.is_spectating
-        && snapshot.is_some_and(|snapshot| {
-            snapshot.winner.is_some()
-                || me.is_some_and(|player| !player.alive && player.has_spawned)
-        });
+    let endgame_active = endgame_active_for_player(app, snapshot, me);
     let player_endgame_stats = if endgame_active {
         endgame_stats_snapshot(app, my_pid)
     } else {
@@ -4650,11 +4667,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             )
         })
         .unwrap_or_default();
-    let match_over = !app.ui.is_spectating
-        && snapshot.is_some_and(|snapshot| {
-            snapshot.winner.is_some()
-                || me.is_some_and(|player| !player.alive && player.has_spawned)
-        });
+    let match_over = endgame_active_for_player(app, snapshot, me);
     let is_winner = snapshot.is_some_and(|snapshot| {
         if let Some(team) = snapshot.winning_team {
             me.and_then(|player| player.team) == Some(team)
@@ -5081,6 +5094,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
         "ping": app.net.current_ping_ms,
         "inbox_count": me.map(|player| player.inbox_count).unwrap_or(0),
+        "leaderboard_open": app.ui.show_leaderboard,
         "match_over": match_over,
         "is_spectating": app.ui.is_spectating,
         "tutorial": tutorial_state,
@@ -5597,7 +5611,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
 
     let payload = if app.ui.app.phase == crate::ClientPhase::Playing {
         LAST_MENU_INPUTS.with(|last| *last.borrow_mut() = None);
-        let include_leaderboard = if app.ui.show_leaderboard {
+        let include_leaderboard = if app.ui.show_leaderboard && app.sim.current_snapshot.is_some()
+        {
             let now = Instant::now();
             let due = app.ui.leaderboard_publish_pending
                 || app.ui.leaderboard_refresh_at.map_or(true, |last| {
@@ -5641,6 +5656,9 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         LAST_HOVER_CARD.with(|last| last.borrow_mut().clear());
         LAST_TUTORIAL_POINTER.with(|last| last.borrow_mut().clear());
         LAST_WEB_INBOX_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
+        app.ui.show_leaderboard = false;
+        app.ui.show_dev_sidebar = false;
+        app.ui.app.hud_state.show_alliance_inbox = false;
         app.ui.leaderboard_top_three = [None; 3];
         app.ui.leaderboard_refresh_at = None;
         app.ui.leaderboard_publish_pending = false;

@@ -274,6 +274,7 @@ impl SowApp {
                 last_projectile_snapshot_tick: None,
                 detonation_scratch: Vec::new(),
                 endgame_cache: None,
+                endgame_sequence: None,
                 manual_endgame_stats: None,
                 silo_cooldowns: std::collections::HashMap::new(),
                 mover_scene: crate::render::world::movers::MoverScene::new(),

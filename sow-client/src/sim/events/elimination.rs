@@ -107,7 +107,7 @@ impl SowApp {
             );
         }
 
-        if my_id != 0 && (conqueror_id == my_id || reward_data.is_some()) {
+        if my_id != 0 && (player_id == my_id || conqueror_id == my_id || reward_data.is_some()) {
             self.sfx.queue_elimination(
                 crate::player_sound_type(victim_type),
                 seed,

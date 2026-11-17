@@ -101,6 +101,7 @@ impl SowApp {
         self.ui.is_spectating = false;
         self.ui.observing = false;
         self.ui.endgame_cache = None;
+        self.ui.endgame_sequence = None;
         self.sim.last_synced_cost_tick = None;
         self.sim.last_synced_hud_key = None;
         self.sim.fog_dirty = true;

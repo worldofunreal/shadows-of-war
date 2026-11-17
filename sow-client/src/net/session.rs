@@ -168,6 +168,7 @@ impl SowApp {
         self.ui.app.phase = ClientPhase::MainMenu;
         self.ui.is_spectating = false;
         self.ui.endgame_cache = None;
+        self.ui.endgame_sequence = None;
         self.prepare_menu_return("lobby", None);
     }
 
@@ -309,6 +310,7 @@ impl SowApp {
         }
         self.ui.is_spectating = false;
         self.ui.endgame_cache = None;
+        self.ui.endgame_sequence = None;
         self.reset_progress_session();
 
         let campaign_receipt_id = campaign_episode.map(|episode| format!("campaign:{episode}"));

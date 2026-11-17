@@ -582,18 +582,33 @@ impl SowApp {
             .and_then(|p| p.team);
         self.maybe_record_match_progress(&snap, snap.winner, snap.winning_team, my_team);
 
-        // Viewport Alerts and one-shot result sound: Victory / Defeat.
-        let match_won = snap
-            .winner
-            .map(|winner| winner == my_id)
-            .or_else(|| snap.winning_team.map(|team| Some(team) == my_team));
-        if let Some(won) = match_won {
-            self.sfx.play_result(won);
-            self.ui.trigger_viewport_alert(if won {
-                crate::app::ViewportAlertKind::Victory
-            } else {
-                crate::app::ViewportAlertKind::Defeat
-            });
+        // Delayed endgame reveal: wait 1.25s for the death animation and elimination SFX
+        // before opening the Victory/Defeat panel, fanfare, and viewport alert.
+        if !self.ui.is_spectating {
+            let me = snap.players.iter().find(|p| p.id == my_id);
+            let eliminated = me.is_some_and(|p| !p.alive && p.has_spawned);
+            if snap.winner.is_some() || snap.winning_team.is_some() || eliminated {
+                let won = if let Some(team) = snap.winning_team {
+                    my_team == Some(team)
+                } else if let Some(winner) = snap.winner {
+                    winner == my_id
+                } else {
+                    false
+                };
+                match &mut self.ui.endgame_sequence {
+                    Some(seq) if !seq.revealed => {
+                        seq.won = won;
+                    }
+                    None => {
+                        self.ui.endgame_sequence = Some(crate::app::EndgameSequence {
+                            started_at: web_time::Instant::now(),
+                            won,
+                            revealed: false,
+                        });
+                    }
+                    Some(_) => {}
+                }
+            }
         }
 
         if let Some((x, y)) = local_spawn_target {
