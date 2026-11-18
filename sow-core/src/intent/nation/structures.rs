@@ -1,4 +1,4 @@
-use crate::building::find_structure_site_near;
+use crate::building::{find_structure_site_near, structure_build_cost_gold};
 use crate::engine::SowEngine;
 
 use crate::game::BuildingKind;
@@ -213,9 +213,9 @@ pub(super) fn resolve_farm_from_candidates(
 /// Cheapest possible gold cost for a building.
 #[inline]
 pub(super) fn cheapest_gold_cost(cfg: &crate::game_config::GameConfig) -> f64 {
-    cfg.cost_city
-        .min(cfg.cost_tower)
-        .min(cfg.cost_factory)
-        .min(cfg.cost_port)
-        .min(cfg.cost_farm)
+    BuildingKind::ALL
+        .into_iter()
+        .filter(|&kind| kind != BuildingKind::SAM)
+        .map(|kind| structure_build_cost_gold(kind, 0, cfg))
+        .fold(f64::INFINITY, f64::min)
 }

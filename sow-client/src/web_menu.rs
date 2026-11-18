@@ -4648,6 +4648,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     avatar.map(|avatar| {
                         let mut identity = serde_json::to_value(avatar)
                             .unwrap_or_else(|_| serde_json::json!({ "kind": "fallback" }));
+                        if let Some(player_id) = notification.players[index] {
+                            identity["player_id"] = serde_json::json!(player_id);
+                        }
                         if let Some(player) = notification.players[index]
                             .and_then(|id| players.iter().find(|player| player.id == id))
                             && let Some(expression) = player_avatar_expression(player, app)

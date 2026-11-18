@@ -187,7 +187,7 @@
   padding: 6px 16px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--sow-button-radius, 8px);
-  background: rgba(14, 15, 18, 0.85);
+  background: var(--sow-button-dark-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-shadow: var(--sow-button-dark-shadow);
@@ -525,8 +525,9 @@
   padding: 6px;
   margin-top: 14px;
   border-radius: 12px;
-  background: rgba(14, 15, 18, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--sow-tactical-surface-card-bg);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border-soft);
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -843,7 +844,7 @@
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: rgba(14, 15, 18, 0.9);
+  background: var(--sow-tactical-panel-base);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #94a3b8;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
@@ -1095,7 +1096,7 @@
   padding: 10px;
   border-radius: 12px;
   border: 1px solid var(--sow-profile-line);
-  background: rgba(11, 14, 20, 0.88);
+  background: var(--sow-tactical-surface-card-bg);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-group {
@@ -1221,7 +1222,7 @@
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--sow-profile-line);
-  background: rgba(14, 17, 24, 0.78);
+  background: var(--sow-tactical-surface-subcard-bg);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-search-wrap {
@@ -1253,8 +1254,8 @@
 #sow-menu[data-screen="profile"] .sow-profile__ach-search-input {
   width: 100%;
   padding: 8px 14px 8px 34px;
-  background: rgba(14, 15, 18, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--sow-tactical-track-bg);
+  border: 1px solid var(--sow-tactical-track-border);
   border-radius: 8px;
   color: #f1f5f9;
   font-family: inherit;
@@ -1266,7 +1267,7 @@
 #sow-menu[data-screen="profile"] .sow-profile__ach-search-input:focus {
   border-color: var(--sow-gold);
   box-shadow: 0 0 12px color-mix(in srgb, var(--sow-tactical-accent) 25%, transparent);
-  background: rgba(20, 22, 28, 0.98);
+  background: var(--sow-tactical-panel-base);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-mobile-cat {
@@ -1293,7 +1294,7 @@
 #sow-menu[data-screen="profile"] .sow-profile__ach-dd.is-filtered .sow-control-dropdown__trigger {
   border-color: var(--sow-control-accent);
   color: var(--sow-gold-bright);
-  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.25);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sow-tactical-accent) 25%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-playable,
@@ -1302,8 +1303,8 @@
   min-height: 36px;
   padding: 0 11px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(20, 24, 32, 0.9);
+  border: 1px solid var(--sow-tactical-surface-border);
+  background: var(--sow-tactical-surface-compact-bg);
   color: #cbd5e1;
   font-family: inherit;
   font-size: 11.5px;
@@ -1330,8 +1331,8 @@
   align-items: center;
   padding: 2px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(10, 12, 18, 0.9);
+  border: 1px solid var(--sow-tactical-surface-border);
+  background: var(--sow-tactical-track-bg);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-view-btn {
@@ -1374,8 +1375,8 @@
   gap: 6px;
   padding: 6px 11px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(18, 22, 29, 0.9);
+  border: 1px solid var(--sow-tactical-surface-border);
+  background: var(--sow-tactical-surface-compact-bg);
   color: #94a3b8;
   font-family: inherit;
   font-size: 11.5px;
@@ -1495,7 +1496,7 @@
   padding: 28px 18px;
   border-radius: 12px;
   border: 1px dashed rgba(255, 255, 255, 0.14);
-  background: rgba(14, 17, 24, 0.65);
+  background: var(--sow-tactical-surface-subcard-bg);
   text-align: center;
   color: #94a3b8;
 }
@@ -1521,7 +1522,7 @@
   padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid var(--sow-profile-line, var(--sow-tactical-surface-border, rgba(255, 255, 255, 0.1)));
-  background: linear-gradient(180deg, rgba(20, 23, 30, 0.94) 0%, rgba(12, 14, 19, 0.98) 100%);
+  background: var(--sow-tactical-surface-card-bg);
 }
 
 #sow-menu .sow-ach-chain.is-unlocked {
@@ -1579,8 +1580,8 @@
   appearance: none;
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(10, 12, 16, 0.8);
+  border: 1px solid var(--sow-tactical-surface-border);
+  background: var(--sow-tactical-panel-base);
   color: #64748b;
   font-family: inherit;
   font-size: 10.5px;
@@ -1622,8 +1623,8 @@
   padding: 15px 16px;
   border-radius: 12px;
   border: 1px solid var(--sow-profile-line, var(--sow-tactical-surface-border, rgba(255, 255, 255, 0.1)));
-  background: linear-gradient(165deg, rgba(22, 25, 33, 0.95) 0%, rgba(12, 14, 19, 0.98) 100%);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
 }
 
 #sow-menu .sow-ach-hero-card.is-owned {
@@ -2710,11 +2711,18 @@
 .sow-ranked__leagues .sow-ranked__emblem { width: min(100%, 72px); }
 .sow-ranked__leagues strong { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
 .sow-ranked__leagues small { color: var(--sow-muted); font-variant-numeric: tabular-nums; font-size: 11px; }
-.sow-ranked__leagues .is-current { color: #ffe1a1; background: #b98c3422; border-color: #bca069; }
+.sow-ranked__leagues .is-current {
+  color: var(--sow-gold-bright);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent);
+  border-color: var(--sow-tactical-surface-accent-border);
+}
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row { grid-template-columns: 32px 48px minmax(0,1fr) auto; min-height: 76px; transition: background 140ms, border-color 140ms; }
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem { width: 48px; }
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row .sow-ranked__emblem b { font-size: 8px; padding: 1px 4px; }
-#sow-menu[data-screen="profile"] .sow-profile__ranked-row.is-self { border-color: #d2ad67; background: #c1973c18; }
+#sow-menu[data-screen="profile"] .sow-profile__ranked-row.is-self {
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 10%, transparent);
+}
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong { display: grid; text-align: end; gap: 3px; font-variant-numeric: tabular-nums; }
 #sow-menu[data-screen="profile"] .sow-profile__ranked-row > strong small { font-weight: 400; color: var(--sow-muted); font-size: 10px; }
 @media (max-width: 600px) {
@@ -3966,7 +3974,7 @@ button.sow-store__bundle-chip:hover {
   font-variant-numeric: tabular-nums;
   color: color-mix(in srgb, var(--sow-tactical-accent-bright) 82%, transparent);
   border-color: var(--sow-tactical-surface-accent-border-soft);
-  background: rgba(12, 16, 24, 0.82);
+  background: var(--sow-tactical-panel-base);
 }
 
 button.sow-heroes__star-tag,
@@ -3988,7 +3996,7 @@ button.sow-heroes__rarity-tag:focus-visible {
 .sow-heroes__star-tag.is-started {
   color: var(--sow-gold-bright);
   border-color: var(--sow-tactical-surface-accent-border);
-  background: color-mix(in srgb, var(--sow-tactical-accent) 14%, rgba(12, 16, 24, 0.88));
+  background: color-mix(in srgb, var(--sow-tactical-accent) 14%, var(--sow-tactical-panel-base));
 }
 
 .sow-heroes__star-tag.is-complete {
@@ -4161,7 +4169,7 @@ button.sow-heroes__rarity-tag:focus-visible {
 
 .sow-hero-briefing__ability-name {
   margin: 0 0 3px;
-  color: #f1bd4b;
+  color: var(--sow-tactical-accent-bright);
   font-size: 14px;
   font-weight: 900;
   line-height: 1.2;
@@ -5131,12 +5139,14 @@ button.sow-heroes__rarity-tag:focus-visible {
 }
 
 .sow-hero-info--dossier .sow-hero-info__art::after {
-  background: linear-gradient(
-    180deg,
-    rgba(6, 9, 14, 0.25) 0%,
-    rgba(6, 9, 14, 0.58) 55%,
-    rgba(10, 16, 24, 0.96) 100%
-  );
+  background:
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent), transparent 60%),
+    linear-gradient(
+      180deg,
+      rgba(6, 9, 14, 0.25) 0%,
+      rgba(6, 9, 14, 0.58) 55%,
+      var(--sow-tactical-panel-base) 100%
+    );
 }
 
 .sow-hero-info__close {
@@ -5178,8 +5188,8 @@ button.sow-heroes__rarity-tag:focus-visible {
   display: flex;
   gap: 8px;
   padding: 0 20px;
-  background: rgba(0, 0, 0, 0.28);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--sow-tactical-panel-base);
+  border-bottom: 1px solid var(--sow-tactical-surface-border);
   flex-shrink: 0;
 }
 
@@ -5207,6 +5217,7 @@ button.sow-heroes__rarity-tag:focus-visible {
 }
 
 .sow-hero-info__body {
+  position: relative;
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 18px 22px 24px;
@@ -5244,8 +5255,8 @@ button.sow-heroes__rarity-tag:focus-visible {
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--sow-tactical-surface-subcard-bg);
+  border: 1px solid var(--sow-tactical-surface-border);
   border-radius: 8px;
 }
 
@@ -5383,7 +5394,7 @@ button.sow-heroes__rarity-tag:focus-visible {
 .sow-heroes__ach-btn:hover,
 .sow-heroes__ach-btn:focus-visible {
   border-color: var(--sow-tactical-surface-accent-border);
-  background: rgba(14, 18, 26, 0.56);
+  background: var(--sow-tactical-surface-compact-bg);
 }
 
 .sow-heroes__ach-star-badge {
@@ -5505,7 +5516,7 @@ button.sow-heroes__rarity-tag:focus-visible {
   padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid var(--sow-tactical-surface-accent-border-soft);
-  background: rgba(14, 19, 28, 0.78);
+  background: var(--sow-tactical-surface-subcard-bg);
 }
 
 .sow-hero-info__ach-preview-top {
@@ -5548,8 +5559,8 @@ button.sow-heroes__rarity-tag:focus-visible {
   gap: 8px;
   padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(14, 18, 26, 0.8);
+  border: 1px solid var(--sow-tactical-surface-border);
+  background: var(--sow-tactical-surface-subcard-bg);
 }
 
 .sow-hero-info__ach-status-row {

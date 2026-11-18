@@ -9,6 +9,7 @@
 }
 
 .sow-menu__queue-summary-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -180,6 +181,7 @@
 }
 
 .sow-menu__queue-players-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 20px;
@@ -570,14 +572,18 @@
 .sow-ranked__duel-heading { text-align: center; margin-bottom: 24px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .sow-ranked__duel-heading .sow-ranked__eyebrow {
   display: inline-flex; align-items: center; padding: 4px 14px; border-radius: 999px;
-  border: 1px solid rgba(216, 189, 133, 0.38);
-  background: linear-gradient(180deg, rgba(216, 189, 133, 0.14), rgba(216, 189, 133, 0.04));
-  box-shadow: 0 0 20px rgba(216, 189, 133, 0.15);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent),
+    color-mix(in srgb, var(--sow-tactical-accent) 5%, transparent)
+  );
+  box-shadow: 0 0 20px color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent);
 }
 .sow-ranked__duel-heading h2 {
   margin: 2px 0 0; color: #fff3da; font-family: var(--font-display, serif);
   font-size: clamp(26px, 4vw, 38px); letter-spacing: 0.03em;
-  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.75), 0 0 32px rgba(214, 182, 117, 0.22);
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.75), 0 0 32px color-mix(in srgb, var(--sow-tactical-accent) 22%, transparent);
 }
 .sow-ranked__players { display: grid; grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr); gap: 20px; align-items: center; }
 .sow-ranked__player {
@@ -636,48 +642,66 @@
 }
 .sow-ranked__search-halo {
   position: relative; width: 108px; height: 108px; display: grid; place-items: center;
-  border-radius: 50%; border: 1px solid rgba(214, 182, 117, 0.45);
-  background: radial-gradient(circle, rgba(214, 182, 117, 0.12), rgba(14, 20, 30, 0.85) 72%);
-  color: #f2dfb6; font-family: var(--font-display, serif); font-size: 38px;
-  box-shadow: 0 0 28px rgba(214, 182, 117, 0.16), inset 0 0 18px rgba(214, 182, 117, 0.12);
+  border-radius: 50%; border: 1px solid var(--sow-tactical-surface-accent-border);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent),
+    var(--sow-tactical-panel-base) 72%
+  );
+  color: var(--sow-tactical-accent-bright); font-family: var(--font-display, serif); font-size: 38px;
+  box-shadow:
+    0 0 28px color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent),
+    inset 0 0 18px color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent);
   isolation: isolate;
 }
 .sow-ranked__search-halo::before {
   content: ""; position: absolute; inset: 4px; border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent 0deg 250deg, rgba(214, 182, 117, 0.34) 340deg, rgba(255, 232, 175, 0.65) 360deg);
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 250deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 34%, transparent) 340deg,
+    color-mix(in srgb, var(--sow-tactical-accent-bright) 68%, transparent) 360deg
+  );
   mask-image: radial-gradient(circle, transparent 22%, #000 24%);
   animation: sow-ranked-radar-spin 2800ms linear infinite;
   z-index: -1;
 }
 .sow-ranked__search-halo::after {
   content: ""; position: absolute; inset: -1px; border-radius: 50%;
-  border: 1px solid rgba(214, 182, 117, 0.5);
+  border: 1px solid var(--sow-tactical-surface-accent-border);
   animation: sow-ranked-search 2400ms ease-out infinite;
   pointer-events: none;
 }
-.sow-ranked__radar-svg { position: absolute; inset: 0; width: 100%; height: 100%; color: #d8bd85; pointer-events: none; }
-.sow-ranked__search-glyph { position: relative; z-index: 1; text-shadow: 0 0 16px rgba(214, 182, 117, 0.55); }
+.sow-ranked__radar-svg { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--sow-tactical-accent); pointer-events: none; }
+.sow-ranked__search-glyph { position: relative; z-index: 1; text-shadow: 0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 55%, transparent); }
 .sow-ranked__vs {
   width: 64px; height: 64px; margin-inline: auto;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  border-radius: 50%; border: 1px solid rgba(229, 201, 150, 0.58);
-  background: radial-gradient(circle at 50% 28%, #3c3120, #11151f 76%);
-  color: #f3d58e; font-family: var(--font-display, serif); font-size: 13px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.68), 0 0 26px rgba(196, 149, 73, 0.28), inset 0 1px 0 rgba(255, 238, 195, 0.32);
+  border-radius: 50%; border: 1px solid var(--sow-tactical-surface-accent-border);
+  background: radial-gradient(
+    circle at 50% 28%,
+    color-mix(in srgb, var(--sow-tactical-accent) 22%, #141822),
+    var(--sow-tactical-panel-base) 76%
+  );
+  color: var(--sow-tactical-accent-bright); font-family: var(--font-display, serif); font-size: 13px;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.68),
+    0 0 26px color-mix(in srgb, var(--sow-tactical-accent) 28%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
-.sow-ranked__vs-swords { width: 22px; height: 22px; color: #f5d896; filter: drop-shadow(0 0 8px rgba(245, 216, 150, 0.45)); }
-.sow-ranked__vs b { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; color: #fff2d6; line-height: 1; }
+.sow-ranked__vs-swords { width: 22px; height: 22px; color: var(--sow-tactical-accent-bright); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--sow-tactical-accent) 45%, transparent)); }
+.sow-ranked__vs b { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; color: #f8fafc; line-height: 1; }
 .sow-ranked__map {
   width: min(100%, 460px);
   margin: 20px auto 0;
   display: grid;
   grid-template-columns: 192px minmax(0, 1fr);
   align-items: center;
-  border: 1px solid rgba(214, 182, 117, 0.42);
+  border: 1px solid var(--sow-tactical-surface-accent-border);
   border-radius: 14px;
   overflow: hidden;
-  background: linear-gradient(155deg, rgba(24, 29, 40, 0.94), rgba(10, 13, 20, 0.98));
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 240, 200, 0.2);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
 }
 .sow-ranked__map-thumb {
   display: block;
@@ -685,7 +709,7 @@
   height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-inline-end: 1px solid rgba(214, 182, 117, 0.28);
+  border-inline-end: 1px solid var(--sow-tactical-surface-accent-border-soft);
   background: #0b0f17;
 }
 .sow-ranked__map-meta {
@@ -698,7 +722,7 @@
   gap: 4px;
   text-align: start;
 }
-.sow-ranked__map-kicker { color: #d8bd85; font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+.sow-ranked__map-kicker { color: var(--sow-tactical-accent-bright); font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
 .sow-ranked__map-meta span,
 .sow-ranked__map > span {
   color: #fff3dd; font-family: var(--font-display, serif); font-size: 17px; font-weight: 700;
@@ -736,7 +760,7 @@
   box-shadow: 0 0 12px #4ade80, 0 0 24px rgba(74, 222, 128, 0.65);
 }
 .sow-ranked__queue-footer button { min-height: 42px; min-width: 132px; }
-.sow-ranked__queue-footer progress { width: 148px; height: 8px; accent-color: #d6b675; }
+.sow-ranked__queue-footer progress { width: 148px; height: 8px; accent-color: var(--sow-tactical-accent); }
 .sow-menu__main--ranked.sow-screen-panel--entering,
 [data-screen-panel="profile"].sow-screen-panel--entering { --sow-screen-enter-offset: 12px; animation-duration: 220ms; }
 #web-loader .sow-ranked__loader { position: absolute; z-index: 3; inset: 6% max(24px, 7vw) 24%; display: grid; align-content: center; margin: auto; max-width: 880px; }

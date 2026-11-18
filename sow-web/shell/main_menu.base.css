@@ -164,13 +164,76 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   box-shadow: var(--sow-tactical-card-shadow);
 }
 
-/* Subtle equipped-skin filigree on menu chrome without clipping protruding badges/pills. */
-#sow-menu[data-skin] :where(.sow-menu__topbar, .sow-menu__command, .sow-menu__main-nav) {
-  position: relative;
+/* Subtle equipped-skin filigree on menu chrome, modals, and panel surfaces without clipping protruding badges/pills. */
+:is(
+  #sow-menu[data-skin] :where(
+    .sow-menu__topbar,
+    .sow-menu__command,
+    .sow-menu__main-nav,
+    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
+    .sow-purchase-modal__copy,
+    .sow-hero-info__body,
+    .sow-profile__cover-overlay,
+    .sow-profile__achievements-laurel-card,
+    .sow-profile__overview-sidebar .sow-ranked__overview,
+    .sow-heroes__featured-copy,
+    .sow-store__featured,
+    .sow-store__bundle-card:not([class*="is-theme-"]),
+    .sow-campaign__featured-content,
+    .sow-menu__custom-card,
+    .sow-menu__queue-summary-card,
+    .sow-menu__queue-players-card,
+    .sow-ranked__map,
+    .sow-auth,
+    .sow-directive-card,
+    .sow-menu-whisper__card
+  ),
+  html[data-sow-skin] :where(.sow-analytics-consent)
+) {
   isolation: isolate;
 }
 
-#sow-menu[data-skin] :where(.sow-menu__topbar, .sow-menu__command, .sow-menu__main-nav)::before {
+#sow-menu[data-skin] :where(
+  .sow-menu__topbar,
+  .sow-menu__command,
+  .sow-menu__main-nav,
+  .sow-profile__achievements-laurel-card,
+  .sow-profile__overview-sidebar .sow-ranked__overview,
+  .sow-store__featured,
+  .sow-store__bundle-card:not([class*="is-theme-"]),
+  .sow-campaign__featured-content,
+  .sow-menu__queue-summary-card,
+  .sow-menu__queue-players-card,
+  .sow-ranked__map
+) {
+  position: relative;
+}
+
+:is(
+  #sow-menu[data-skin] :where(
+    .sow-menu__topbar,
+    .sow-menu__command,
+    .sow-menu__main-nav,
+    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
+    .sow-purchase-modal__copy,
+    .sow-hero-info__body,
+    .sow-profile__cover-overlay,
+    .sow-profile__achievements-laurel-card,
+    .sow-profile__overview-sidebar .sow-ranked__overview,
+    .sow-heroes__featured-copy,
+    .sow-store__featured,
+    .sow-store__bundle-card:not([class*="is-theme-"]),
+    .sow-campaign__featured-content,
+    .sow-menu__custom-card,
+    .sow-menu__queue-summary-card,
+    .sow-menu__queue-players-card,
+    .sow-ranked__map,
+    .sow-auth,
+    .sow-directive-card,
+    .sow-menu-whisper__card
+  ),
+  html[data-sow-skin] :where(.sow-analytics-consent)
+)::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -183,8 +246,44 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   background-size: var(--sow-skin-pattern-size);
   background-position: 0 0;
   opacity: var(--sow-skin-pattern-opacity);
-  -webkit-mask-image: var(--sow-skin-mask, none);
-  mask-image: var(--sow-skin-mask, none);
+  --sow-skin-mask-default: radial-gradient(
+    min(100%, 460px) 220px at 0% 0%,
+    #000 0%,
+    rgb(0 0 0 / 36%) 44%,
+    transparent 84%
+  );
+  -webkit-mask-image: var(--sow-skin-mask, var(--sow-skin-mask-default));
+  mask-image: var(--sow-skin-mask, var(--sow-skin-mask-default));
+}
+
+html[dir="rtl"] :is(
+  #sow-menu[data-skin] :where(
+    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
+    .sow-purchase-modal__copy,
+    .sow-hero-info__body,
+    .sow-profile__cover-overlay,
+    .sow-profile__achievements-laurel-card,
+    .sow-profile__overview-sidebar .sow-ranked__overview,
+    .sow-heroes__featured-copy,
+    .sow-store__featured,
+    .sow-store__bundle-card:not([class*="is-theme-"]),
+    .sow-campaign__featured-content,
+    .sow-menu__custom-card,
+    .sow-menu__queue-summary-card,
+    .sow-menu__queue-players-card,
+    .sow-ranked__map,
+    .sow-auth,
+    .sow-directive-card,
+    .sow-menu-whisper__card
+  ),
+  html[data-sow-skin] :where(.sow-analytics-consent)
+) {
+  --sow-skin-mask-default: radial-gradient(
+    min(100%, 460px) 220px at 100% 0%,
+    #000 0%,
+    rgb(0 0 0 / 36%) 44%,
+    transparent 84%
+  );
 }
 
 #sow-menu[data-skin] .sow-menu__topbar {
@@ -205,6 +304,24 @@ html[dir="rtl"] #sow-menu[data-skin] .sow-menu__command {
 
 #sow-menu[data-skin] .sow-menu__main-nav {
   --sow-skin-mask: linear-gradient(180deg, #000 0%, rgb(0 0 0 / 42%) 44%, transparent 88%);
+}
+
+#sow-menu[data-skin] :where(.sow-heroes__featured-copy, .sow-campaign__featured-content) {
+  --sow-skin-mask: radial-gradient(
+    min(100%, 420px) 180px at 0% 100%,
+    #000 0%,
+    rgb(0 0 0 / 34%) 46%,
+    transparent 86%
+  );
+}
+
+html[dir="rtl"] #sow-menu[data-skin] :where(.sow-heroes__featured-copy, .sow-campaign__featured-content) {
+  --sow-skin-mask: radial-gradient(
+    min(100%, 420px) 180px at 100% 100%,
+    #000 0%,
+    rgb(0 0 0 / 34%) 46%,
+    transparent 86%
+  );
 }
 
 .sow-menu__nameplate {
@@ -1390,9 +1507,9 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   width: 42px;
   height: 42px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  background: rgba(20, 22, 28, 0.88);
-  color: #e5e7eb;
+  border: 1px solid var(--sow-button-dark-border);
+  background: var(--sow-button-dark-bg);
+  color: var(--sow-button-dark-text);
   font-size: 22px;
   line-height: 1;
   transition:
@@ -1413,7 +1530,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 .sow-menu__icon-button:hover {
   border-color: var(--sow-gold);
   color: var(--sow-gold-bright);
-  background: rgba(28, 30, 38, 0.96);
+  background: var(--sow-tactical-surface-card-bg);
   transform: translateY(-1px);
   box-shadow: 0 0 12px color-mix(in srgb, var(--sow-gold) 25%, transparent);
 }
@@ -1819,6 +1936,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 }
 
 .sow-menu__modal {
+  position: relative;
   width: min(100%, 640px);
   max-height: min(90vh, 760px);
   padding: 24px;
@@ -1942,7 +2060,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   background: repeating-conic-gradient(
     from 12deg,
     transparent 0 20deg,
-    rgba(255, 214, 91, 0.3) 22deg 28deg,
+    color-mix(in srgb, var(--sow-tactical-accent-bright) 30%, transparent) 22deg 28deg,
     transparent 30deg 60deg
   );
   opacity: 0;
@@ -2010,6 +2128,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 }
 
 .sow-purchase-modal__copy {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -2044,9 +2163,17 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--sow-gold-bright);
+  color: #fde047;
   font-size: clamp(26px, 4vw, 40px);
   font-variant-numeric: tabular-nums;
+}
+
+.sow-purchase-modal__price--crown {
+  color: #fde047;
+}
+
+.sow-purchase-modal__price--gem {
+  color: #e9d5ff;
 }
 
 .sow-purchase-modal__price .sow-store__currency-icon {
@@ -2072,7 +2199,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  color: var(--sow-gold-bright);
+  color: #e9d5ff;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2098,7 +2225,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 .sow-purchase-modal__pending i {
   width: 30px;
   height: 30px;
-  border: 3px solid rgba(255, 214, 91, 0.24);
+  border: 3px solid color-mix(in srgb, var(--sow-tactical-accent-bright) 24%, transparent);
   border-top-color: var(--sow-gold-bright);
   border-radius: 50%;
   animation: sow-purchase-pending 760ms linear infinite;
@@ -2480,13 +2607,14 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   min-width: 0;
   overflow: hidden;
   padding: clamp(12px, 2.4vw, 24px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
   border-inline-start: 3px solid var(--sow-control-accent-bright);
   border-radius: 10px;
   background: var(--sow-tactical-surface-card-bg);
   box-shadow:
-    0 16px 40px rgba(0, 0, 0, 0.58),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    var(--sow-tactical-modal-shadow),
+    0 0 24px color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   justify-content: flex-start;
@@ -2806,8 +2934,8 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   gap: 10px;
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(11, 15, 23, 0.78), rgba(7, 10, 16, 0.88));
+  border: 1px solid var(--sow-tactical-surface-border);
+  background: var(--sow-tactical-surface-subcard-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   text-align: start;
 }
@@ -3251,6 +3379,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 }
 
 .sow-menu-whisper__card {
+  position: relative;
   pointer-events: auto;
   display: flex;
   flex-direction: column;

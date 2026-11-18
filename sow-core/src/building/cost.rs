@@ -1,4 +1,5 @@
-use super::core::{Building, gold_income_level_weight, income_level_weight};
+use super::core::{Building, gold_income_level_weight, income_level_weight, tower_defense_weight};
+use crate::execution::sam::{SAM_COOLDOWN_TICKS, sam_cooldown_ticks};
 use crate::game::BuildingKind;
 
 const COST_MULTIPLIER_PER_DOUBLING: f64 = 1.1;
@@ -13,13 +14,22 @@ pub fn count_kind(buildings: &[Building], owner_id: u16, kind: BuildingKind) -> 
         .sum()
 }
 
-/// Gold price for a new structure, adding 10% of base cost per doubling of (owned levels + 1).
+/// Gold price for a new structure. After any opening price, the cost scales with owned levels.
 #[inline]
 pub fn structure_build_cost_gold(
     kind: BuildingKind,
     count: u32,
     cfg: &crate::game_config::GameConfig,
 ) -> f64 {
+    if count == 0
+        && matches!(
+            kind,
+            BuildingKind::City | BuildingKind::Farm | BuildingKind::Factory | BuildingKind::Port
+        )
+        && let Some(cost) = cfg.first_economic_structure_cost
+    {
+        return cost;
+    }
     let base_cost = match kind {
         BuildingKind::City => cfg.cost_city,
         BuildingKind::Tower => cfg.cost_tower,
@@ -35,7 +45,7 @@ pub fn structure_build_cost_gold(
     scaled.min(base_cost * cap_mult)
 }
 
-/// Gold price for the next level, discounted 25% against equivalent new production.
+/// Gold price for the next level, discounted 25% against equivalent benefit from new structures.
 #[inline]
 pub fn structure_upgrade_cost_gold(
     kind: BuildingKind,
@@ -47,15 +57,18 @@ pub fn structure_upgrade_cost_gold(
         return f64::INFINITY;
     }
     let foundation = structure_build_cost_gold(kind, owned_levels, cfg);
-    let marginal = match kind {
+    let level_weight = |level| match kind {
         BuildingKind::City | BuildingKind::Farm | BuildingKind::Port => {
-            income_level_weight(target_level) - income_level_weight(target_level - 1)
+            income_level_weight(level)
         }
-        BuildingKind::Factory => {
-            gold_income_level_weight(target_level) - gold_income_level_weight(target_level - 1)
+        BuildingKind::Factory => gold_income_level_weight(level),
+        BuildingKind::Tower => tower_defense_weight(level, cfg),
+        BuildingKind::SAM if cfg.progressive_defense_upgrades && level > 0 => {
+            f64::from(SAM_COOLDOWN_TICKS) / f64::from(sam_cooldown_ticks(level, cfg))
         }
-        BuildingKind::Tower | BuildingKind::SAM => 1.0,
+        BuildingKind::SAM => f64::from(level),
     };
+    let marginal = level_weight(target_level) - level_weight(target_level - 1);
     foundation * marginal * 0.75
 }
 

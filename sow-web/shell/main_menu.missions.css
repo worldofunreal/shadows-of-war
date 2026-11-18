@@ -266,7 +266,7 @@
     display: flex;
     flex-direction: column;
     padding: 0;
-    background: var(--sow-tactical-panel-base, rgba(13, 14, 18, 0.96));
+    background: var(--sow-tactical-surface-card-bg);
     border: 1px solid var(--sow-tactical-surface-border);
     border-top-color: var(--sow-tactical-surface-accent-border);
     border-radius: var(--sow-tactical-surface-radius, 12px);
@@ -1339,7 +1339,7 @@
 }
 
 .sow-missions__swap-quota svg {
-    color: var(--sow-accent-bright, #fde047);
+    color: var(--sow-tactical-accent-bright);
 }
 
 .sow-missions__swap-quota svg,
@@ -1456,7 +1456,7 @@
 .sow-missions__swap-confirm-copy strong {
     font-size: 0.8rem;
     font-weight: 800;
-    color: var(--sow-accent-bright, #fde047);
+    color: var(--sow-tactical-accent-bright);
 }
 
 .sow-missions__swap-confirm-copy span {

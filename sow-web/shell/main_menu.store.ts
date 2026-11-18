@@ -1501,7 +1501,7 @@ export function renderPurchaseModal() {
             ? skin.name
             : leaderDisplayName(leader);
     const heading = bundle
-        ? "<span class='sow-purchase-modal__bundle-amount'>" +
+        ? "<span class='sow-purchase-modal__bundle-amount sow-purchase-modal__price--gem'>" +
           renderCurrencyAmount(bundle.gems, "gem") +
           "</span>"
         : esc(itemName);
@@ -1553,7 +1553,11 @@ export function renderPurchaseModal() {
     const price =
         success || spending || processing || !summary
             ? ""
-            : "<strong class='sow-purchase-modal__price'>" + summary + "</strong>";
+            : "<strong class='sow-purchase-modal__price sow-purchase-modal__price--" +
+              currencyKind +
+              "'>" +
+              summary +
+              "</strong>";
     const successClass = success ? " is-success" : "";
     const itemClass = menuUi.purchaseModal.leaderId ? " is-leader" : "";
     const phaseClass =

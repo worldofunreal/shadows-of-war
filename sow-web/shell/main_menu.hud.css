@@ -10,8 +10,8 @@
 
 #sow-hud,
 #sow-hud-dev-layer {
-  --sow-gold: var(--sow-accent);
-  --sow-gold-bright: var(--sow-accent-bright);
+  --sow-gold: var(--sow-tactical-accent);
+  --sow-gold-bright: var(--sow-tactical-accent-bright);
   --sow-coin: #f5d898;
   --sow-panel: var(--sow-tactical-panel);
   --sow-panel-wash: var(--sow-tactical-panel-wash);
@@ -20,6 +20,88 @@
   --sow-muted: var(--sow-control-muted);
   --sow-surface-shadow: var(--sow-tactical-card-shadow);
   --sow-dock-reserve: 88px;
+}
+
+/* Equipped territory skin filigree shared with the main menu across HUD tactical surfaces. */
+#sow-hud[data-skin]
+  :where(
+    .sow-hud__nameplate,
+    .sow-hud__rail-card,
+    .sow-hud__dock-inner,
+    .sow-hud__sheet,
+    .sow-hud__dialog,
+    .sow-hud__building-card,
+    .sow-hud__hover-card
+  ) {
+  isolation: isolate;
+}
+
+#sow-hud[data-skin]
+  :where(
+    .sow-hud__nameplate,
+    .sow-hud__rail-card,
+    .sow-hud__dock-inner,
+    .sow-hud__sheet,
+    .sow-hud__dialog,
+    .sow-hud__building-card,
+    .sow-hud__hover-card
+  )::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  background-image: var(--sow-skin-pattern);
+  background-repeat: repeat;
+  background-size: var(--sow-skin-pattern-size);
+  background-position: 0 0;
+  opacity: var(--sow-skin-pattern-opacity);
+  -webkit-mask-image: var(
+    --sow-hud-skin-mask,
+    linear-gradient(180deg, #000 0%, rgb(0 0 0 / 42%) 48%, transparent 90%)
+  );
+  mask-image: var(
+    --sow-hud-skin-mask,
+    linear-gradient(180deg, #000 0%, rgb(0 0 0 / 42%) 48%, transparent 90%)
+  );
+}
+
+#sow-hud[data-skin] .sow-hud__nameplate {
+  --sow-hud-skin-mask: radial-gradient(
+    120% 95% at 0% 0%,
+    #000 0%,
+    rgb(0 0 0 / 46%) 48%,
+    transparent 88%
+  );
+}
+
+html[dir="rtl"] #sow-hud[data-skin] .sow-hud__nameplate {
+  --sow-hud-skin-mask: radial-gradient(
+    120% 95% at 100% 0%,
+    #000 0%,
+    rgb(0 0 0 / 46%) 48%,
+    transparent 88%
+  );
+}
+
+#sow-hud[data-skin] .sow-hud__dock-inner {
+  --sow-hud-skin-mask: radial-gradient(
+    90% 110% at 50% 0%,
+    #000 0%,
+    rgb(0 0 0 / 45%) 52%,
+    transparent 92%
+  );
+}
+
+#sow-hud[data-skin] :where(.sow-hud__sheet, .sow-hud__dialog) {
+  --sow-hud-skin-mask: linear-gradient(
+    180deg,
+    #000 0%,
+    rgb(0 0 0 / 38%) 28%,
+    transparent 68%
+  );
 }
 
 #sow-hud {
@@ -241,28 +323,36 @@ html[dir="rtl"] #sow-hud-dev-layer {
   padding: 6px;
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border);
-  border-inline-start: 2px solid rgb(224 190 119 / 40%);
+  border-inline-start: 2px solid color-mix(in srgb, var(--sow-gold) 62%, transparent);
   border-radius: var(--sow-tactical-surface-radius-compact);
   background: var(--sow-tactical-surface-card-bg);
-  box-shadow: var(--sow-tactical-card-shadow);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    var(--sow-tactical-card-shadow);
   backdrop-filter: blur(var(--sow-tactical-surface-blur));
   -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   pointer-events: auto;
   cursor: pointer;
   user-select: none;
   transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__nameplate:hover,
 .sow-hud__nameplate:focus-visible {
-  border-color: var(--sow-tactical-surface-border);
+  border-color: color-mix(in srgb, var(--sow-gold) 44%, var(--sow-tactical-surface-border));
   border-top-color: var(--sow-gold-bright);
+  border-inline-start-color: var(--sow-gold-bright);
   box-shadow:
-    0 12px 36px rgb(0 0 0 / 75%),
-    0 0 16px rgb(110 215 60 / 20%),
-    inset 0 1px 0 rgb(255 255 255 / 12%);
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 14px 36px rgb(0 0 0 / 78%),
+    0 0 18px color-mix(in srgb, var(--sow-gold) 26%, transparent);
+}
+
+.sow-hud__nameplate:active {
+  transform: scale(0.985);
 }
 
 .sow-hud__nameplate:not([hidden]) {
@@ -276,13 +366,24 @@ html[dir="rtl"] #sow-hud-dev-layer {
   aspect-ratio: 1;
   position: relative;
   overflow: hidden;
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--sow-gold) 66%, transparent);
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 72%, transparent);
   box-shadow:
-    0 0 0 2px rgb(5 10 13 / 84%),
-    0 0 12px color-mix(in srgb, var(--sow-gold) 20%, transparent),
-    inset 0 1px 0 rgb(255 255 255 / 12%);
+    0 0 0 2px rgb(5 10 13 / 88%),
+    0 0 14px color-mix(in srgb, var(--sow-gold) 26%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 16%);
   background: var(--sow-tactical-surface-compact-bg);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.sow-hud__nameplate:hover .sow-hud__nameplate-avatar-wrap {
+  border-color: var(--sow-gold-bright);
+  box-shadow:
+    0 0 0 2px rgb(5 10 13 / 90%),
+    0 0 18px color-mix(in srgb, var(--sow-gold) 45%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 22%);
 }
 
 .sow-hud__nameplate-avatar {
@@ -323,6 +424,20 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border: 1px solid var(--sow-tactical-track-border);
   box-shadow: var(--sow-tactical-track-shadow);
   overflow: hidden;
+  isolation: isolate;
+}
+
+/* Liquid-glass top specular reflection tube over the troop bar. */
+.sow-hud__nameplate-bar::after {
+  content: "";
+  position: absolute;
+  inset-inline: 1px;
+  top: 1px;
+  height: 42%;
+  z-index: 2;
+  border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 18%), rgb(255 255 255 / 2%));
+  pointer-events: none;
 }
 
 .sow-hud__nameplate-bar i {
@@ -334,36 +449,45 @@ html[dir="rtl"] #sow-hud-dev-layer {
   width: 0;
   background: var(--sow-nameplate-troop-fill);
   border-radius: 6px;
+  border-inline-end: 1px solid rgb(230 255 170 / 70%);
   box-shadow:
-    inset 0 1px 0 rgb(217 255 136 / 38%),
-    0 0 8px rgb(118 219 54 / 35%),
-    0 0 3px rgb(217 255 136 / 28%);
-  transition: width 0.15s ease;
+    inset 0 1px 0 rgb(217 255 136 / 44%),
+    0 0 10px rgb(118 219 54 / 42%),
+    0 0 4px rgb(217 255 136 / 34%);
+  transition: width 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__nameplate-bar.has-pending > #sow-hud-nameplate-fill {
   border-start-end-radius: 0;
   border-end-end-radius: 0;
+  border-inline-end: 0;
   box-shadow: inset 0 1px 0 rgb(217 255 136 / 38%);
 }
 
 .sow-hud__nameplate-bar .sow-hud__nameplate-pending {
   z-index: 1;
-  background: var(--sow-fill-pending-wash), var(--sow-nameplate-troop-fill);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgb(255 255 255 / 22%) 0 4px,
+      rgb(255 255 255 / 6%) 4px 8px
+    ),
+    var(--sow-fill-pending-wash),
+    var(--sow-nameplate-troop-fill);
   border-radius: 0;
   border-start-end-radius: 6px;
   border-end-end-radius: 6px;
-  border-inline-start: 1px solid rgb(255 255 255 / 72%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 42%);
+  border-inline-start: 1.5px solid rgb(255 255 255 / 82%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 48%);
   transition:
-    inset-inline-start 0.15s ease,
-    width 0.15s ease;
+    inset-inline-start 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__nameplate-bar > span {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 3;
   display: flex;
   direction: ltr;
   align-items: center;
@@ -395,7 +519,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   align-self: stretch;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -406,18 +530,26 @@ html[dir="rtl"] #sow-hud-dev-layer {
   gap: 3px;
   min-width: 0;
   height: 100%;
-  padding: 0 3px;
+  padding: 0 4px;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: var(--sow-tactical-surface-radius-tight);
-  background: var(--sow-tactical-surface-subcard-bg);
-  box-shadow: var(--sow-tactical-surface-highlight);
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-top-color: rgb(255 255 255 / 16%);
+  border-radius: 5px;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 4%), transparent 60%),
+    var(--sow-tactical-surface-subcard-bg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 8%),
+    0 2px 6px rgb(0 0 0 / 35%);
   color: #f5f1e8;
   font-size: 13px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .sow-hud__nameplate-stat b {
@@ -435,9 +567,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__nameplate-stat--gold {
   color: var(--sow-coin);
+  border-bottom-color: rgb(245 197 66 / 26%);
 }
 .sow-hud__nameplate-stat--gold-rate {
   color: #a9d79c;
+  border-bottom-color: rgb(169 215 156 / 24%);
 }
 #sow-hud-nameplate-gold-rate.is-hero-active {
   color: var(--sow-coin);
@@ -445,10 +579,15 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 .sow-hud__nameplate-stat--troop-rate {
   color: var(--sow-cyan);
+  border-bottom-color: rgb(56 189 248 / 26%);
 }
 .sow-hud__nameplate-stat--gold.is-in-debt,
 .sow-hud__nameplate-stat--gold-rate.is-negative {
   color: #ff8585;
+  border-color: rgb(248 113 113 / 42%);
+  background:
+    linear-gradient(180deg, rgb(239 68 68 / 14%), transparent 75%),
+    var(--sow-tactical-surface-subcard-bg);
 }
 
 .sow-hud__inbox-pill {
@@ -457,15 +596,18 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__inbox-badge {
   position: absolute;
-  top: 4px;
-  inset-inline-end: 4px;
-  min-width: 14px;
-  padding: 1px 3px;
-  border: 1px solid var(--sow-tactical-panel-base);
-  border-radius: 4px;
-  background: #b86461;
+  top: 3px;
+  inset-inline-end: 3px;
+  min-width: 15px;
+  padding: 1.5px 4px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 65%),
+    0 0 10px rgb(239 68 68 / 55%);
   color: #fff;
-  font: 700 9px/1 monospace;
+  font: 800 9px/1 var(--sow-ui-font, system-ui, sans-serif);
   transform-origin: center center;
 }
 
@@ -587,26 +729,30 @@ html[dir="rtl"] #sow-hud-dev-layer {
   position: absolute;
   top: max(12px, var(--sow-sat));
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(0) scale(1);
   background: var(--sow-panel-card);
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
-  padding: 9px 14px;
+  padding: 8px 14px;
   display: flex;
   align-items: center;
   gap: 12px;
-  box-shadow: var(--sow-surface-shadow);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    var(--sow-surface-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   pointer-events: none;
   z-index: 55;
   transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__hover-card.hidden {
   opacity: 0;
-  transform: translateX(-50%) translateY(-10px);
+  transform: translateX(-50%) translateY(-10px) scale(0.97);
   pointer-events: none;
 }
 
@@ -616,6 +762,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   gap: 6px;
   font-weight: 800;
   font-size: 13px;
+  color: var(--sow-gold-bright);
 }
 
 .sow-hud__hover-stats {
@@ -624,6 +771,16 @@ html[dir="rtl"] #sow-hud-dev-layer {
   gap: 10px;
   font-size: 12px;
   color: var(--sow-muted);
+}
+
+.sow-hud__hover-stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  background: rgb(255 255 255 / 4%);
 }
 
 .sow-hud__hover-stats b {
@@ -648,33 +805,37 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 .sow-hud__rail-card {
+  position: relative;
   background: var(--sow-panel-card);
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border);
-  border-inline-start-color: rgba(224, 190, 119, 0.4);
+  border-inline-start: 2px solid color-mix(in srgb, var(--sow-gold) 58%, transparent);
   border-radius: var(--sow-tactical-surface-radius-compact);
   padding: 10px 8px 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 7px;
-  box-shadow: var(--sow-tactical-card-shadow);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    var(--sow-tactical-card-shadow);
   width: 70px;
   backdrop-filter: blur(var(--sow-tactical-surface-blur));
   -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__left-rail:hover .sow-hud__rail-card,
 .sow-hud__left-rail.is-adjusting .sow-hud__rail-card {
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: color-mix(in srgb, var(--sow-gold) 44%, rgba(255, 255, 255, 0.18));
   border-top-color: var(--sow-gold-bright);
+  border-inline-start-color: var(--sow-gold-bright);
   box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.75),
-    0 0 16px rgba(110, 215, 60, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 14px 36px rgba(0, 0, 0, 0.78),
+    0 0 18px color-mix(in srgb, var(--sow-gold) 24%, rgba(110, 215, 60, 0.18));
 }
 
 .sow-hud__slider-vertical-wrap {
@@ -689,30 +850,30 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__slider-vertical-wrap::before {
   content: "";
   position: absolute;
-  inset-inline-start: 8px;
+  inset-inline-start: 7px;
   top: 6px;
   bottom: 6px;
-  width: 4px;
+  width: 5px;
   background: linear-gradient(
     to top,
-    rgba(255, 255, 255, 0.15) 0,
-    rgba(255, 255, 255, 0.15) 1px,
+    rgba(255, 255, 255, 0.22) 0,
+    rgba(255, 255, 255, 0.22) 1px,
     transparent 1px,
     transparent 24%,
-    rgba(255, 255, 255, 0.25) 24%,
-    rgba(255, 255, 255, 0.25) calc(24% + 1px),
+    rgba(255, 255, 255, 0.32) 24%,
+    rgba(255, 255, 255, 0.32) calc(24% + 1px),
     transparent calc(24% + 1px),
     transparent 49%,
-    rgba(182, 240, 106, 0.55) 49%,
-    rgba(182, 240, 106, 0.55) calc(49% + 1px),
-    transparent calc(49% + 1px),
+    color-mix(in srgb, var(--sow-gold-bright) 72%, rgba(182, 240, 106, 0.65)) 49%,
+    color-mix(in srgb, var(--sow-gold-bright) 72%, rgba(182, 240, 106, 0.65)) calc(49% + 1.5px),
+    transparent calc(49% + 1.5px),
     transparent 74%,
-    rgba(255, 255, 255, 0.25) 74%,
-    rgba(255, 255, 255, 0.25) calc(74% + 1px),
+    rgba(255, 255, 255, 0.32) 74%,
+    rgba(255, 255, 255, 0.32) calc(74% + 1px),
     transparent calc(74% + 1px),
     transparent calc(100% - 1px),
-    rgba(255, 255, 255, 0.15) calc(100% - 1px),
-    rgba(255, 255, 255, 0.15) 100%
+    rgba(255, 255, 255, 0.22) calc(100% - 1px),
+    rgba(255, 255, 255, 0.22) 100%
   );
   pointer-events: none;
 }
@@ -770,9 +931,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
     var(--sow-tactical-track-bg);
   box-shadow:
     var(--sow-tactical-track-shadow),
-    0 0 12px rgba(118, 219, 54, 0.5),
-    0 0 4px rgba(217, 255, 136, 0.8),
-    0 1px 0 rgba(255, 255, 255, 0.12);
+    0 0 14px rgba(118, 219, 54, 0.55),
+    0 0 5px rgba(217, 255, 136, 0.85),
+    0 1px 0 rgba(255, 255, 255, 0.14);
   filter: brightness(1.12);
 }
 
@@ -784,9 +945,9 @@ html[dir="rtl"] #sow-hud-dev-layer {
     var(--sow-tactical-track-bg);
   box-shadow:
     var(--sow-tactical-track-shadow),
-    0 0 12px rgba(118, 219, 54, 0.5),
-    0 0 4px rgba(217, 255, 136, 0.8),
-    0 1px 0 rgba(255, 255, 255, 0.12);
+    0 0 14px rgba(118, 219, 54, 0.55),
+    0 0 5px rgba(217, 255, 136, 0.85),
+    0 1px 0 rgba(255, 255, 255, 0.14);
   filter: brightness(1.12);
 }
 
@@ -795,16 +956,16 @@ html[dir="rtl"] #sow-hud-dev-layer {
   appearance: none;
   width: var(--sow-range-thumb-size);
   height: var(--sow-range-thumb-size);
-  border-radius: 7px;
+  border-radius: 8px;
   border: 1.5px solid var(--sow-gold-bright);
   background:
-    var(--sow-crossed-swords) center / 23px 23px no-repeat,
-    linear-gradient(145deg, #273746 0%, #10161d 100%);
+    var(--sow-crossed-swords) center / 22px 22px no-repeat,
+    radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--sow-gold) 28%, #2a3b4c) 0%, #10161e 78%);
   box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.75),
-    0 0 10px rgba(255, 213, 79, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+    0 4px 12px rgba(0, 0, 0, 0.8),
+    0 0 12px color-mix(in srgb, var(--sow-gold) 42%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.65);
   margin-left: calc(
     (var(--sow-range-track-width) - var(--sow-range-thumb-size)) / 2
   );
@@ -819,16 +980,16 @@ html[dir="rtl"] #sow-hud-dev-layer {
 .sow-hud__range-vertical::-moz-range-thumb {
   width: var(--sow-range-thumb-size);
   height: var(--sow-range-thumb-size);
-  border-radius: 7px;
+  border-radius: 8px;
   border: 1.5px solid var(--sow-gold-bright);
   background:
-    var(--sow-crossed-swords) center / 23px 23px no-repeat,
-    linear-gradient(145deg, #273746 0%, #10161d 100%);
+    var(--sow-crossed-swords) center / 22px 22px no-repeat,
+    radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--sow-gold) 28%, #2a3b4c) 0%, #10161e 78%);
   box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.75),
-    0 0 10px rgba(255, 213, 79, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+    0 4px 12px rgba(0, 0, 0, 0.8),
+    0 0 12px color-mix(in srgb, var(--sow-gold) 42%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.65);
   cursor: pointer;
   transition:
     transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -839,11 +1000,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__range-vertical:hover::-webkit-slider-thumb,
 .sow-hud__range-vertical:hover::-moz-range-thumb {
-  border-color: #ffe082;
+  border-color: #fff6d6;
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.85),
-    0 0 16px rgba(255, 213, 79, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 5px 16px rgba(0, 0, 0, 0.86),
+    0 0 18px color-mix(in srgb, var(--sow-gold-bright) 68%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
   transform: scale(1.08);
 }
 
@@ -854,11 +1015,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border-color: #ffffff;
   box-shadow:
     0 6px 20px rgba(0, 0, 0, 0.9),
-    0 0 24px rgba(255, 213, 79, 0.85),
+    0 0 24px color-mix(in srgb, var(--sow-gold-bright) 85%, transparent),
     0 0 12px rgba(182, 240, 106, 0.8),
     inset 0 1px 0 rgba(255, 255, 255, 0.55),
     inset 0 -1px 0 rgba(0, 0, 0, 0.8);
-  transform: scale(1.18);
+  transform: scale(1.16);
   filter: brightness(1.15);
 }
 
@@ -874,112 +1035,206 @@ html[dir="rtl"] #sow-hud-dev-layer {
   z-index: 50;
 }
 
+/* Tactical Beveled Medallion Buttons (Topbar & Right Camera Rail) */
 .sow-hud__icon-btn {
+  position: relative;
+  isolation: isolate;
   width: 44px;
   height: 44px;
-  border-radius: var(--sow-tactical-surface-radius-tight);
-  background: var(--sow-tactical-surface-compact-bg);
+  border-radius: 9px;
+  background:
+    radial-gradient(
+      90% 80% at 50% 18%,
+      color-mix(in srgb, var(--sow-gold) 12%, rgba(255, 255, 255, 0.05)) 0%,
+      transparent 72%
+    ),
+    var(--sow-tactical-surface-compact-bg);
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border-soft);
   border-inline-start-color: color-mix(
     in srgb,
-    var(--sow-gold) 34%,
+    var(--sow-gold) 38%,
     transparent
   );
-  color: #dedfd9;
+  color: #ece8de;
   font-size: 18px;
   display: grid;
   place-items: center;
   cursor: pointer;
-  box-shadow: var(--sow-surface-shadow);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    var(--sow-surface-shadow);
   transition:
-    transform 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* Luminous edge crest bar on tactical medallion buttons. */
+.sow-hud__icon-btn::after {
+  content: "";
+  position: absolute;
+  inset-block: 24%;
+  inset-inline-start: 1.5px;
+  width: 2.5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    #fff6d6 25%,
+    var(--sow-gold-bright) 50%,
+    #fff6d6 75%,
+    transparent
+  );
+  box-shadow: 0 0 8px var(--sow-gold);
+  opacity: 0;
+  transform: scaleY(0.35);
+  pointer-events: none;
+  transition:
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sow-hud__icon-btn.sow-hud__exit-pill::after {
+  background: linear-gradient(
+    180deg,
+    transparent,
+    #fecaca 25%,
+    #f87171 50%,
+    #fecaca 75%,
+    transparent
+  );
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.75);
+}
+
 .sow-hud__icon-btn.hidden,
 .sow-hud__icon-btn[hidden] {
   display: none !important;
 }
 
 .sow-hud__icon-btn .sow-hud__action-icon {
-  width: 30px;
-  height: 30px;
-  transition: transform 0.15s ease;
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.sow-hud__icon-btn:hover,
-.sow-hud__icon-btn[data-command="prompt_surrender"]:hover,
-.sow-hud__icon-btn[data-command="toggle_settings"]:hover,
-.sow-hud__icon-btn[data-command="toggle_inbox"]:hover,
-.sow-hud__icon-btn[data-command="toggle_leaderboard"]:hover,
-.sow-hud__icon-btn[data-command="toggle_dev_sidebar"]:hover,
-.sow-hud__icon-btn[data-command="zoom_in"]:hover,
-.sow-hud__icon-btn[data-command="zoom_out"]:hover,
-.sow-hud__icon-btn[data-command="center_camera"]:hover {
-  border-color: #00e5ff;
-  color: #00e5ff;
-  background: var(--sow-tactical-surface-card-bg);
-  box-shadow: 0 0 12px color-mix(in srgb, #00e5ff 32%, transparent);
+@media (hover: hover) {
+  .sow-hud__icon-btn:hover,
+  .sow-hud__icon-btn[data-command="toggle_settings"]:hover,
+  .sow-hud__icon-btn[data-command="toggle_inbox"]:hover,
+  .sow-hud__icon-btn[data-command="toggle_leaderboard"]:hover,
+  .sow-hud__icon-btn[data-command="toggle_dev_sidebar"]:hover,
+  .sow-hud__icon-btn[data-command="zoom_in"]:hover,
+  .sow-hud__icon-btn[data-command="zoom_out"]:hover,
+  .sow-hud__icon-btn[data-command="center_camera"]:hover {
+    border-color: color-mix(in srgb, var(--sow-gold-bright) 72%, rgba(255, 255, 255, 0.2));
+    color: var(--sow-gold-bright);
+    background:
+      radial-gradient(
+        95% 85% at 50% 20%,
+        color-mix(in srgb, var(--sow-gold) 26%, transparent) 0%,
+        transparent 74%
+      ),
+      var(--sow-tactical-surface-card-bg);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 6px 18px rgba(0, 0, 0, 0.55),
+      0 0 14px color-mix(in srgb, var(--sow-gold) 34%, transparent);
+  }
+
+  .sow-hud__icon-btn:hover::after {
+    opacity: 0.65;
+    transform: scaleY(0.75);
+  }
+
+  .sow-hud__icon-btn.sow-hud__exit-pill:hover,
+  .sow-hud__icon-btn[data-command="prompt_surrender"]:hover {
+    border-color: rgba(248, 113, 113, 0.78);
+    color: #fca5a5;
+    background:
+      radial-gradient(
+        95% 85% at 50% 20%,
+        rgba(239, 68, 68, 0.24) 0%,
+        transparent 74%
+      ),
+      var(--sow-tactical-surface-card-bg);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 6px 18px rgba(0, 0, 0, 0.55),
+      0 0 14px rgba(239, 68, 68, 0.34);
+  }
+
+  .sow-hud__icon-btn:hover .sow-hud__action-icon {
+    transform: translateY(-1px) scale(1.09);
+    filter:
+      brightness(1.08)
+      drop-shadow(0 3px 5px rgba(0, 0, 0, 0.6))
+      drop-shadow(0 0 8px color-mix(in srgb, currentColor 38%, transparent));
+  }
 }
 
-.sow-hud__icon-btn:hover .sow-hud__action-icon {
-  transform: scale(1.08);
-}
-
-.sow-hud__icon-btn:active,
 .sow-hud__icon-btn.active,
 .sow-hud__icon-btn[aria-expanded="true"],
 .sow-hud__icon-btn.is-holding,
-.sow-hud__icon-btn[data-command="prompt_surrender"]:active,
-.sow-hud__icon-btn[data-command="toggle_settings"]:active,
 .sow-hud__icon-btn[data-command="toggle_settings"].active,
 .sow-hud__icon-btn[data-command="toggle_settings"][aria-expanded="true"],
-.sow-hud__icon-btn[data-command="toggle_inbox"]:active,
 .sow-hud__icon-btn[data-command="toggle_inbox"].active,
 .sow-hud__icon-btn[data-command="toggle_inbox"][aria-expanded="true"],
-.sow-hud__icon-btn[data-command="toggle_leaderboard"]:active,
 .sow-hud__icon-btn[data-command="toggle_leaderboard"].active,
 .sow-hud__icon-btn[data-command="toggle_leaderboard"][aria-expanded="true"],
-.sow-hud__icon-btn[data-command="toggle_dev_sidebar"]:active,
 .sow-hud__icon-btn[data-command="toggle_dev_sidebar"].active,
 .sow-hud__icon-btn[data-command="toggle_dev_sidebar"][aria-expanded="true"],
-.sow-hud__icon-btn[data-command="zoom_in"]:active,
 .sow-hud__icon-btn[data-command="zoom_in"].is-holding,
+.sow-hud__icon-btn[data-command="zoom_out"].is-holding {
+  border-color: var(--sow-gold-bright);
+  color: var(--sow-gold-bright);
+  background:
+    radial-gradient(
+      95% 85% at 50% 24%,
+      color-mix(in srgb, var(--sow-gold) 32%, transparent) 0%,
+      transparent 75%
+    ),
+    var(--sow-tactical-surface-card-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 6px 18px rgba(0, 0, 0, 0.6),
+    0 0 16px color-mix(in srgb, var(--sow-gold) 44%, transparent);
+}
+
+.sow-hud__icon-btn.active::after,
+.sow-hud__icon-btn[aria-expanded="true"]::after,
+.sow-hud__icon-btn.is-holding::after {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.sow-hud__icon-btn:active,
+.sow-hud__icon-btn[data-command="prompt_surrender"]:active,
+.sow-hud__icon-btn[data-command="toggle_settings"]:active,
+.sow-hud__icon-btn[data-command="toggle_inbox"]:active,
+.sow-hud__icon-btn[data-command="toggle_leaderboard"]:active,
+.sow-hud__icon-btn[data-command="toggle_dev_sidebar"]:active,
+.sow-hud__icon-btn[data-command="zoom_in"]:active,
 .sow-hud__icon-btn[data-command="zoom_out"]:active,
-.sow-hud__icon-btn[data-command="zoom_out"].is-holding,
 .sow-hud__icon-btn[data-command="center_camera"]:active {
-  border-color: #ff9800;
-  color: #ff9800;
-  background: var(--sow-tactical-surface-card-bg);
-  box-shadow: 0 0 14px color-mix(in srgb, #ff9800 36%, transparent);
-  transform: scale(0.96);
+  transform: scale(0.94);
+  transition-duration: 65ms;
 }
 
 .sow-hud__icon-btn:active .sow-hud__action-icon,
 .sow-hud__icon-btn.is-holding .sow-hud__action-icon {
-  transform: scale(0.94);
-}
-
-.sow-hud__icon-btn.active:hover,
-.sow-hud__icon-btn[aria-expanded="true"]:hover,
-.sow-hud__icon-btn.is-holding:hover {
-  border-color: #ffa726;
-  color: #ffa726;
-  background: var(--sow-tactical-surface-card-bg);
-  box-shadow: 0 0 16px color-mix(in srgb, #ff9800 45%, transparent);
-}
-
-.sow-hud__icon-btn.active:hover .sow-hud__action-icon,
-.sow-hud__icon-btn[aria-expanded="true"]:hover .sow-hud__action-icon,
-.sow-hud__icon-btn.is-holding:hover .sow-hud__action-icon {
-  transform: scale(1.04);
+  transform: scale(0.93);
+  transition-duration: 65ms;
 }
 
 .sow-hud__icon-btn.is-zoom-limited {
-  opacity: 0.45;
+  opacity: 0.42;
+  filter: saturate(0.5);
 }
 
 /* Bottom Action Dock */
@@ -1004,6 +1259,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 .sow-hud__dock-inner {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1013,7 +1269,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
   padding: 7px 9px 8px;
-  box-shadow: var(--sow-surface-shadow);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    var(--sow-surface-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   pointer-events: auto;
   width: 100%;
   transition:
@@ -1038,6 +1298,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
 .sow-hud__building-btn {
   position: relative;
+  isolation: isolate;
   min-width: 0;
   min-height: 54px;
   flex: 1 1 0;
@@ -1045,20 +1306,77 @@ html[dir="rtl"] #sow-hud-dev-layer {
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 1px;
   place-items: center;
-  padding: 3px 2px 2px;
+  padding: 4px 2px 3px;
   border: 1px solid var(--sow-tactical-surface-border);
-  border-radius: var(--sow-tactical-surface-radius-tight);
-  background: var(--sow-tactical-surface-subcard-bg);
-  box-shadow: var(--sow-tactical-surface-highlight);
+  border-top-color: rgb(255 255 255 / 14%);
+  border-radius: 7px;
+  background:
+    radial-gradient(
+      85% 75% at 50% 34%,
+      color-mix(in srgb, var(--sow-gold) 10%, transparent) 0%,
+      transparent 72%
+    ),
+    var(--sow-tactical-surface-subcard-bg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 8%),
+    0 3px 10px rgb(0 0 0 / 38%);
   color: var(--sow-gold-bright);
   cursor: pointer;
   touch-action: manipulation;
   transition:
-    transform 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease,
-    color 0.15s ease;
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Pedestal spotlight behind building sprite on hover/active. */
+.sow-hud__building-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(
+      80% 70% at 50% 34%,
+      color-mix(in srgb, var(--sow-gold) 26%, rgba(255, 255, 255, 0.08)) 0%,
+      transparent 72%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      transparent 55%
+    );
+  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Luminous top crest bar on building blueprint cards. */
+.sow-hud__building-btn::after {
+  content: "";
+  position: absolute;
+  top: 1.5px;
+  inset-inline: 22%;
+  height: 2px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #fff6d6 25%,
+    var(--sow-gold-bright) 50%,
+    #fff6d6 75%,
+    transparent
+  );
+  box-shadow: 0 0 8px var(--sow-gold);
+  transform: scaleX(0.35);
+  transition:
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__operations {
@@ -1081,8 +1399,24 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
   background: var(--sow-panel-card);
-  box-shadow: var(--sow-surface-shadow);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 10%),
+    var(--sow-surface-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   pointer-events: auto;
+  animation: sow-hud-ops-panel-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sow-hud-ops-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
 }
 
 .sow-hud__operations[hidden] {
@@ -1100,7 +1434,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
     transparent;
 }
 .sow-hud__operation.is-naval {
-  border-inline-start: 2px solid color-mix(in srgb, #7edbff 72%, transparent);
+  border-inline-start: 2.5px solid color-mix(in srgb, #7edbff 78%, transparent);
 }
 .sow-hud__operation {
   display: grid;
@@ -1109,16 +1443,58 @@ html[dir="rtl"] #sow-hud-dev-layer {
   gap: 2px 7px;
   min-width: 0;
   min-height: 48px;
-  padding: 3px 5px;
+  padding: 3px 6px;
   border: 1px solid var(--sow-tactical-surface-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
   background: var(--sow-tactical-surface-subcard-bg);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
+  animation: sow-hud-op-row-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes sow-hud-op-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .sow-hud__operation.is-incoming {
-  border-inline-start: 2px solid var(--sow-red);
+  border-inline-start: 2.5px solid #f87171;
+  border-color: rgb(248 113 113 / 28%);
+  background:
+    radial-gradient(
+      90% 100% at 0% 50%,
+      rgb(239 68 68 / 16%) 0%,
+      transparent 68%
+    ),
+    var(--sow-tactical-surface-subcard-bg);
+  animation:
+    sow-hud-op-row-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    sow-hud-incoming-pulse 1.8s ease-in-out infinite alternate;
+}
+@keyframes sow-hud-incoming-pulse {
+  from {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 6%),
+      0 0 0 rgb(239 68 68 / 0%);
+  }
+  to {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 10%),
+      inset 3px 0 12px rgb(239 68 68 / 22%);
+  }
 }
 .sow-hud__operation.is-outgoing {
-  border-inline-start: 2px solid var(--sow-cyan);
+  border-inline-start: 2.5px solid var(--sow-cyan);
+  background:
+    radial-gradient(
+      90% 100% at 0% 50%,
+      rgb(56 189 248 / 12%) 0%,
+      transparent 68%
+    ),
+    var(--sow-tactical-surface-subcard-bg);
 }
 .sow-hud__operation.is-retreating {
   opacity: 0.68;
@@ -1132,9 +1508,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
   width: 30px;
   height: 30px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--sow-gold) 42%, transparent);
-  border-radius: 5px 5px 9px 4px;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 48%, transparent);
+  border-radius: 6px;
   background: rgb(255 255 255 / 6%);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 45%);
 }
 .sow-hud__operation-portrait {
   width: 100%;
@@ -1213,15 +1590,32 @@ html[dir="rtl"] #sow-hud-dev-layer {
   flex: 0 0 44px;
   padding: 0;
   border: 1px solid var(--sow-button-dark-border);
-  border-radius: 5px 5px 10px 4px;
+  border-top-color: rgb(255 255 255 / 16%);
+  border-radius: 7px;
   background: var(--sow-button-dark-bg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 10%),
+    0 3px 8px rgb(0 0 0 / 42%);
   color: #e9e5dc;
   cursor: pointer;
   touch-action: manipulation;
+  transition:
+    transform 130ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
 }
 .sow-hud__operation-action:hover:not(:disabled) {
-  border-color: var(--sow-gold);
+  border-color: var(--sow-gold-bright);
   color: var(--sow-gold-bright);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 0 12px color-mix(in srgb, var(--sow-gold) 32%, transparent);
+  transform: translateY(-1px);
+}
+.sow-hud__operation-action:active:not(:disabled) {
+  transform: scale(0.94);
+  transition-duration: 60ms;
 }
 .sow-hud__operation-action:disabled {
   opacity: 0.5;
@@ -1233,8 +1627,17 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 .sow-hud__operation.is-incoming
   .sow-hud__operation-action[data-command="counter_attack"] {
-  border-color: rgb(222 133 129 / 42%);
-  color: #f0aaa5;
+  border-color: rgb(248 113 113 / 52%);
+  background:
+    radial-gradient(circle at 50% 25%, rgb(239 68 68 / 22%), transparent 72%),
+    var(--sow-button-dark-bg);
+  color: #fca5a5;
+}
+.sow-hud__operation.is-incoming
+  .sow-hud__operation-action[data-command="counter_attack"]:hover:not(:disabled) {
+  border-color: #fca5a5;
+  color: #fff;
+  box-shadow: 0 0 14px rgb(239 68 68 / 45%);
 }
 .sow-hud__operation-action[data-command="scuttle_fleet"] {
   border-color: rgb(222 133 129 / 42%);
@@ -1249,6 +1652,10 @@ html[dir="rtl"] #sow-hud-dev-layer {
   font-size: 30px;
   line-height: 1;
   pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__building-icon.is-pixel-art {
@@ -1273,25 +1680,89 @@ html[dir="rtl"] #sow-hud-dev-layer {
   pointer-events: none;
 }
 
-.sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"]),
-.sow-hud__building-btn:focus-visible:not(:disabled):not(
-    [aria-disabled="true"]
-  ) {
-  border-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
-  background: color-mix(in srgb, var(--sow-gold) 7%, transparent);
+@media (hover: hover) {
+  .sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"]) {
+    border-color: color-mix(in srgb, var(--sow-gold) 68%, rgba(255, 255, 255, 0.2));
+    color: var(--sow-gold-bright);
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 6px 14px rgba(0, 0, 0, 0.48),
+      0 0 12px color-mix(in srgb, var(--sow-gold) 24%, transparent);
+  }
+
+  .sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"])::before {
+    opacity: 1;
+  }
+
+  .sow-hud__building-btn:not(.active):hover:not(:disabled):not([aria-disabled="true"])::after {
+    opacity: 0.55;
+    transform: scaleX(0.7);
+  }
+
+  .sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"])
+    .sow-hud__building-icon {
+    transform: translateY(-2px) scale(1.08);
+    filter:
+      brightness(1.08)
+      drop-shadow(0 4px 6px rgba(0, 0, 0, 0.65))
+      drop-shadow(0 0 8px color-mix(in srgb, var(--sow-gold) 36%, transparent));
+  }
+}
+
+.sow-hud__building-btn:focus-visible:not(:disabled):not([aria-disabled="true"]) {
+  border-color: color-mix(in srgb, var(--sow-gold) 68%, transparent);
   color: var(--sow-gold-bright);
 }
 
-.sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"]) {
-  transform: translateY(-1px);
+.sow-hud__building-btn:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.95);
+  transition-duration: 65ms;
 }
 
 .sow-hud__building-btn.active {
-  border-color: color-mix(in srgb, var(--sow-gold) 66%, white 8%);
-  background: color-mix(in srgb, var(--sow-gold) 12%, transparent);
+  border-color: var(--sow-gold-bright);
+  background:
+    radial-gradient(
+      90% 80% at 50% 28%,
+      color-mix(in srgb, var(--sow-gold) 28%, transparent) 0%,
+      transparent 75%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--sow-gold) 18%, transparent),
+      color-mix(in srgb, var(--sow-gold) 6%, rgba(9, 10, 13, 0.5))
+    );
   color: var(--sow-gold-bright);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--sow-gold) 9%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 4px 14px rgba(0, 0, 0, 0.52),
+    0 0 16px color-mix(in srgb, var(--sow-gold) 34%, transparent);
+}
+
+.sow-hud__building-btn.active::before {
+  opacity: 1;
+}
+
+.sow-hud__building-btn.active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.sow-hud__building-btn.active .sow-hud__building-icon {
+  transform: translateY(-2px) scale(1.08);
+  filter:
+    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.65))
+    drop-shadow(0 0 10px color-mix(in srgb, var(--sow-gold) 52%, transparent));
+}
+
+.sow-hud__building-btn.is-unaffordable:not(.active) .sow-hud__building-icon {
+  opacity: 0.68;
+  filter: saturate(0.55) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+}
+
+.sow-hud__building-btn.is-unaffordable:not(.active) .sow-hud__tile-cost {
+  color: #f0948e;
 }
 
 .sow-hud__building-btn:disabled,
@@ -1308,9 +1779,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
   gap: 2px;
   min-height: 11px;
   color: var(--sow-gold-bright);
-  font: 750 10px/1 var(--sow-ui-font);
+  font: 800 10px/1 var(--sow-ui-font);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
   pointer-events: none;
+  transition: color 150ms ease;
 }
 
 .sow-hud__tile-cost-icon {
@@ -1430,7 +1903,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border: 1px solid color-mix(in srgb, var(--sow-gold) 48%, transparent);
   border-top-color: color-mix(in srgb, var(--sow-gold-bright) 72%, transparent);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 10%),
+    inset 0 1px 0 rgb(255 255 255 / 12%),
     0 6px 20px rgb(0 0 0 / 45%);
   text-align: start;
   transition:
@@ -1476,15 +1949,17 @@ html[dir="rtl"] #sow-hud-dev-layer {
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--sow-gold) 46%, transparent);
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 52%, transparent);
   background: linear-gradient(
     180deg,
-    rgb(245 197 66 / 22%),
-    rgb(245 197 66 / 6%)
+    color-mix(in srgb, var(--sow-gold) 24%, transparent),
+    color-mix(in srgb, var(--sow-gold) 6%, transparent)
   );
   color: var(--sow-gold-bright);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 16%),
+    0 0 12px color-mix(in srgb, var(--sow-gold) 22%, transparent);
   flex: 0 0 auto;
 }
 
@@ -1575,6 +2050,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 .sow-hud__deploy-fill {
+  position: relative;
+  overflow: hidden;
   display: block;
   width: 100%;
   height: 100%;
@@ -1582,6 +2059,28 @@ html[dir="rtl"] #sow-hud-dev-layer {
   background: var(--sow-fill-construction-gradient);
   box-shadow: var(--sow-fill-construction-shadow);
   transition: width 100ms linear;
+}
+
+.sow-hud__deploy-fill::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: -35%;
+  width: 35%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+  animation: sow-deploy-fill-sheen 1.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes sow-deploy-fill-sheen {
+  to {
+    transform: translateX(380%);
+  }
 }
 
 .sow-hud__deploy-panel[data-spawned="true"] .sow-hud__deploy-fill {
@@ -1703,12 +2202,64 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: 18px 18px 0 0;
   background: var(--sow-panel-card);
-  box-shadow: var(--sow-surface-shadow);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    var(--sow-surface-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   color: #f5f1e8;
   font-size: 16px;
   pointer-events: auto;
   touch-action: manipulation;
+  animation: sow-hud-sheet-in-bottom 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+@keyframes sow-hud-sheet-in-bottom {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes sow-hud-sheet-in-side {
+  from {
+    opacity: 0;
+    transform: translate3d(20px, 0, 0) scale(0.988);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes sow-hud-sheet-slot-cascade {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.sow-hud__sheet:not(.hidden) > .sow-hud__sheet-header {
+  animation: sow-hud-sheet-slot-cascade 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sow-hud__sheet:not(.hidden)
+  > :where(.sow-hud__leaderboard-toolbar, .sow-hud__inbox-filters, .sow-hud__dev-category-bar) {
+  animation: sow-hud-sheet-slot-cascade 240ms cubic-bezier(0.16, 1, 0.3, 1) 35ms both;
+}
+
+.sow-hud__sheet:not(.hidden) > .sow-hud__sheet-body {
+  animation: sow-hud-sheet-slot-cascade 260ms cubic-bezier(0.16, 1, 0.3, 1) 65ms both;
+}
+
 .sow-hud__sheet.hidden,
 .sow-hud__sheet[hidden] {
   display: none !important;
@@ -1724,6 +2275,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
     padding-bottom: 0;
     border-bottom: 1px solid var(--sow-line);
     border-radius: 14px;
+    animation-name: sow-hud-sheet-in-side;
   }
   .sow-hud__leaderboard.sow-hud__sheet {
     width: min(540px, calc(100vw - var(--sow-sheet-end) - 16px));
@@ -1744,6 +2296,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
     padding-inline-end: env(safe-area-inset-right, 0px);
     border-inline-end: 0;
     border-radius: 18px 0 0 0;
+    animation-name: sow-hud-sheet-in-side;
   }
   .sow-hud__leaderboard.sow-hud__sheet {
     width: min(58vw, 520px);
@@ -1767,6 +2320,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
   margin: 0;
   padding: 4px 8px 4px 16px;
   border-bottom: 1px solid var(--sow-line);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sow-gold) 8%, transparent) 0%,
+    transparent 100%
+  );
 }
 .sow-hud__sheet-title-group {
   display: flex;
@@ -1796,17 +2354,35 @@ html[dir="rtl"] #sow-hud-dev-layer {
   display: grid;
   place-items: center;
   flex: none;
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
-  min-height: 48px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
-  border: 0;
-  border-radius: 12px;
-  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 7%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%);
   color: #f5f1e8;
   font-size: 22px;
   line-height: 1;
+  cursor: pointer;
+  transition:
+    transform 130ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.sow-hud__sheet-btn:hover,
+.sow-hud__sheet .sow-hud__close-btn:hover {
+  border-color: color-mix(in srgb, var(--sow-gold) 55%, transparent);
+  background: color-mix(in srgb, var(--sow-gold) 14%, rgb(255 255 255 / 8%));
+  color: var(--sow-gold-bright);
+}
+.sow-hud__sheet-btn:active,
+.sow-hud__sheet .sow-hud__close-btn:active {
+  transform: scale(0.93);
+  transition-duration: 60ms;
 }
 .sow-hud__sheet-body {
   flex: 1;
@@ -4322,9 +4898,17 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-bezel {
-  fill: rgb(9 10 13 / 94%);
-  stroke: color-mix(in srgb, var(--sow-gold) 48%, transparent);
-  stroke-width: 0.5;
+  fill: url(#sow-ring-depth);
+  stroke: color-mix(in srgb, var(--sow-gold) 58%, transparent);
+  stroke-width: 0.65;
+}
+
+.sow-hud__ring-compass {
+  fill: none;
+  stroke: color-mix(in srgb, var(--sow-gold-bright) 36%, rgba(255, 255, 255, 0.14));
+  stroke-width: 0.45;
+  stroke-dasharray: 1.4 3.6;
+  pointer-events: none;
 }
 
 .sow-hud__ring-sector {
@@ -4345,21 +4929,24 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-wedge {
-  fill: color-mix(in srgb, var(--ring-accent) 7%, rgb(22 24 30));
-  stroke: rgb(255 255 255 / 7%);
-  stroke-width: 0.35;
-  transition: fill 120ms ease;
+  fill: color-mix(in srgb, var(--ring-accent) 9%, rgb(20 22 28));
+  stroke: rgb(255 255 255 / 9%);
+  stroke-width: 0.38;
+  transition:
+    fill 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    stroke 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__ring-rim {
   fill: none;
   stroke: var(--ring-accent);
-  stroke-width: 1.4;
+  stroke-width: 1.5;
   stroke-linecap: round;
-  opacity: 0.5;
+  opacity: 0.55;
   transition:
-    opacity 120ms ease,
-    stroke-width 120ms ease;
+    opacity 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    stroke-width 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sow-hud__ring-hold {
@@ -4378,12 +4965,14 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__ring-sector.is-hot .sow-hud__ring-wedge {
-  fill: color-mix(in srgb, var(--ring-accent) 24%, rgb(28 31 39));
+  fill: color-mix(in srgb, var(--ring-accent) 28%, rgb(30 34 44));
+  stroke: color-mix(in srgb, var(--ring-accent) 52%, rgba(255, 255, 255, 0.18));
 }
 
 .sow-hud__ring-sector.is-hot .sow-hud__ring-rim {
   opacity: 1;
-  stroke-width: 2.4;
+  stroke-width: 2.7;
+  filter: drop-shadow(0 0 3px var(--ring-accent));
 }
 
 .sow-hud__ring-sector.is-disabled .sow-hud__ring-wedge {
@@ -4410,8 +4999,16 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
 .sow-hud__ring-hub-plate {
   fill: rgb(11 12 16);
-  stroke: color-mix(in srgb, var(--sow-gold) 55%, transparent);
-  stroke-width: 0.7;
+  stroke: color-mix(in srgb, var(--sow-gold) 64%, transparent);
+  stroke-width: 0.75;
+}
+
+.sow-hud__ring-hub-trim {
+  fill: none;
+  stroke: rgb(255 255 255 / 12%);
+  stroke-width: 0.35;
+  stroke-dasharray: 2 2;
+  pointer-events: none;
 }
 
 .sow-hud__ring-slot {
@@ -4428,14 +5025,17 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   font: inherit;
   pointer-events: none;
   transform: translate(-50%, -50%);
-  transition: transform 120ms ease;
+  transition:
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 150ms cubic-bezier(0.22, 1, 0.36, 1);
   animation: sow-ring-slot-in 220ms cubic-bezier(0.2, 1.2, 0.35, 1) backwards;
   animation-delay: calc(var(--slot-index, 0) * 22ms);
 }
 
 .sow-hud__ring-slot.is-hot:not(:disabled) {
-  transform: translate(-50%, -50%) rotate(var(--slot-angle)) translateY(-3px)
-    rotate(calc(-1 * var(--slot-angle)));
+  transform: translate(-50%, -50%) rotate(var(--slot-angle)) translateY(-3.5px)
+    rotate(calc(-1 * var(--slot-angle))) scale(1.1);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--ring-accent, var(--sow-gold)) 52%, transparent));
 }
 
 .sow-hud__ring-slot:disabled .sow-hud__map-action-title {
@@ -6799,6 +7399,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   border-color: #24272a;
 }
 
+.sow-hud__notification[data-command="focus_player"],
+.sow-hud__notification-avatar[data-command="focus_player"] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .sow-hud__notification-portrait {
   width: 100%;
   height: 100%;
@@ -6885,9 +7491,18 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius);
-  box-shadow: var(--sow-tactical-modal-shadow);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    var(--sow-tactical-modal-shadow);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   pointer-events: auto;
   z-index: 70;
+  animation: sow-hud-sheet-in-side 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sow-hud__dialog:not(.hidden) > .sow-hud__dialog-body {
+  animation: sow-hud-sheet-slot-cascade 250ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
 }
 
 .sow-hud__dialog.hidden {

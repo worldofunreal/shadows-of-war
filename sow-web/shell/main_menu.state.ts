@@ -808,5 +808,6 @@ export interface HudStateEnvelope {
     hud?: MenuHudPayload | null;
     settings?: MenuSettings;
     selected_leader?: string;
+    selected_skin?: string | null;
     leaders?: MenuLeader[];
 }

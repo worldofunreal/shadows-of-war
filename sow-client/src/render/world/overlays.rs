@@ -753,7 +753,7 @@ struct PlacementPreviewColors {
     building: [f32; 4],
 }
 
-const PLACEMENT_CONFLICT_COLOR: [f32; 4] = [0.35, 0.02, 0.03, 1.0];
+const PLACEMENT_CONFLICT_COLOR: [f32; 4] = [0.92, 0.12, 0.14, 0.42];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct PlacementFootprintGeometry {
@@ -873,9 +873,13 @@ fn render_placement_conflicts(
     camera: [f32; 2],
     zoom: f32,
     whole_footprint: bool,
+    skip_footprint: Option<sow_core::building::BuildingFootprint>,
 ) {
     for y in footprint.top..footprint.top + footprint.height as i32 {
         for x in footprint.left..footprint.left + footprint.width as i32 {
+            if skip_footprint.is_some_and(|excluded| excluded.contains(x, y)) {
+                continue;
+            }
             let conflict = whole_footprint
                 || !map.is_valid_coord(x, y)
                 || sow_core::building::validate_building_cell(
@@ -944,6 +948,10 @@ fn render_rejected_placement_marker(
     let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
     let geometry = placement_footprint_geometry(footprint, [input.camera_x, input.camera_y], zoom);
     let metrics = placement_grid_metrics(zoom, sf);
+    let (suggested_x, suggested_y) = (
+        (suggested_tile_idx % map.width) as i32,
+        (suggested_tile_idx / map.width) as i32,
+    );
     if metrics.draw_inner_grid {
         render_placement_conflicts(
             text,
@@ -957,6 +965,11 @@ fn render_rejected_placement_marker(
             [input.camera_x, input.camera_y],
             zoom,
             !visible || error == Some(sow_core::building::PlacementError::CoastRequired),
+            Some(sow_core::building::BuildingFootprint::at(
+                kind,
+                suggested_x as u32,
+                suggested_y as u32,
+            )),
         );
     }
     render_building_footprint_grid(
@@ -965,12 +978,11 @@ fn render_rejected_placement_marker(
         geometry.top_left,
         geometry.size,
         zoom,
-        metrics,
-        [1.0, 0.32, 0.28, 0.95],
-    );
-    let (suggested_x, suggested_y) = (
-        (suggested_tile_idx % map.width) as i32,
-        (suggested_tile_idx / map.width) as i32,
+        PlacementGridMetrics {
+            draw_inner_grid: false,
+            ..metrics
+        },
+        [1.0, 0.34, 0.30, 0.92],
     );
     let (dx, dy) = (suggested_x - tile_x as i32, suggested_y - tile_y as i32);
     let controls = crate::input::placement::placement_controls(
@@ -1030,15 +1042,15 @@ fn render_rejected_placement_marker(
         .unwrap_or(geometry.center);
     text.push_cross(
         cross_center,
-        (geometry.size[0].min(geometry.size[1]) * 0.24).max(6.0 * sf),
+        (zoom * 0.30).max(4.0 * sf),
         [0.12, 0.01, 0.01, 0.95],
-        4.0 * sf,
+        2.8 * sf,
     );
     text.push_cross(
         cross_center,
-        (geometry.size[0].min(geometry.size[1]) * 0.24).max(6.0 * sf),
+        (zoom * 0.30).max(4.0 * sf),
         [1.0, 0.91, 0.78, 1.0],
-        2.0 * sf,
+        1.3 * sf,
     );
 }
 
@@ -1095,6 +1107,33 @@ fn render_building_placement_preview(
     let colors = placement_preview_colors(site_valid, can_confirm);
     let metrics = placement_grid_metrics(zoom, sf);
     let map = &engine.state.map;
+    render_building_footprint_fill(text, footprint_top_left, footprint_size_px, colors.fill);
+    if metrics.draw_inner_grid && !site_valid {
+        render_placement_conflicts(
+            text,
+            map,
+            &engine.building_grid,
+            kind,
+            my_id,
+            tile_x,
+            tile_y,
+            footprint,
+            [input.camera_x, input.camera_y],
+            zoom,
+            !target_visible
+                || site_error == Some(sow_core::building::PlacementError::CoastRequired),
+            None,
+        );
+    }
+    render_building_footprint_grid(
+        text,
+        footprint,
+        footprint_top_left,
+        footprint_size_px,
+        zoom,
+        metrics,
+        colors.line,
+    );
     if let Some(tile_idx) = placement
         .attempted_tile_idx
         .filter(|&tile_idx| tile_idx != placement.tile_idx)
@@ -1111,31 +1150,6 @@ fn render_building_placement_preview(
             sf,
         );
     }
-    render_building_footprint_fill(text, footprint_top_left, footprint_size_px, colors.fill);
-    if metrics.draw_inner_grid && !site_valid {
-        render_placement_conflicts(
-            text,
-            map,
-            &engine.building_grid,
-            kind,
-            my_id,
-            tile_x,
-            tile_y,
-            footprint,
-            [input.camera_x, input.camera_y],
-            zoom,
-            !target_visible || site_error == Some(sow_core::building::PlacementError::CoastRequired),
-        );
-    }
-    render_building_footprint_grid(
-        text,
-        footprint,
-        footprint_top_left,
-        footprint_size_px,
-        zoom,
-        metrics,
-        colors.line,
-    );
     let dragging = input.building_drag_offset.is_some();
     let sprite_size = building_sprite_size(
         building_footprint_marker_size(kind, zoom / sf, BUILDING_MIN_MARKER_SIZE),
@@ -1157,15 +1171,15 @@ fn render_building_placement_preview(
     if !site_valid {
         text.push_cross(
             center_px,
-            (footprint_size_px[0].min(footprint_size_px[1]) * 0.16).max(5.0 * sf),
+            (zoom * 0.30).max(4.0 * sf),
             [0.12, 0.01, 0.01, 0.95],
-            4.0 * sf,
+            2.8 * sf,
         );
         text.push_cross(
             center_px,
-            (footprint_size_px[0].min(footprint_size_px[1]) * 0.16).max(5.0 * sf),
+            (zoom * 0.30).max(4.0 * sf),
             [1.0, 0.91, 0.78, 1.0],
-            2.0 * sf,
+            1.3 * sf,
         );
     }
     if kind == BuildingKind::Tower {

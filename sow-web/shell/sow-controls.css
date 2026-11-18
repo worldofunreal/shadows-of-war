@@ -36,11 +36,13 @@
     rgb(11 12 16 / 0%) 44%
   );
   --sow-tactical-surface-card-bg: var(--sow-tactical-panel-wash), var(--sow-tactical-panel);
-  --sow-tactical-surface-subcard-bg: linear-gradient(
-    180deg,
-    rgb(20 22 28 / 92%),
-    rgb(10 11 15 / 96%)
-  );
+  --sow-tactical-surface-subcard-bg:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--sow-tactical-accent) 4%, transparent) 0%,
+      rgb(11 12 16 / 0%) 48%
+    ),
+    linear-gradient(180deg, rgb(20 22 28 / 92%), rgb(10 11 15 / 96%));
   --sow-tactical-surface-compact-bg: var(--sow-button-dark-bg);
   --sow-tactical-surface-border: rgb(255 255 255 / 9%);
   --sow-tactical-surface-accent-border: color-mix(in srgb, var(--sow-tactical-accent) 52%, transparent);
@@ -369,6 +371,7 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
 
 .sow-analytics-consent {
   position: fixed;
+  isolation: isolate;
   z-index: 2147483000;
   inset-inline-end: max(1rem, env(safe-area-inset-right));
   bottom: max(1rem, env(safe-area-inset-bottom));

@@ -1,11 +1,23 @@
+use crate::building::income_level_weight;
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GamePhase, ProjectileKind};
+use crate::game_config::GameConfig;
 
 /// SAM steps per tick (fast interceptor).
 const SAM_STEPS_PER_TICK: u8 = 4;
 
-/// SAM cooldown in ticks.
-const SAM_COOLDOWN_TICKS: u32 = 90;
+/// Level-one SAM cooldown in ticks.
+pub(crate) const SAM_COOLDOWN_TICKS: u32 = 90;
+
+pub fn sam_cooldown_ticks(level: u8, cfg: &GameConfig) -> u32 {
+    if cfg.progressive_defense_upgrades {
+        (f64::from(SAM_COOLDOWN_TICKS) / income_level_weight(level.max(1)))
+            .round()
+            .max(1.0) as u32
+    } else {
+        SAM_COOLDOWN_TICKS
+    }
+}
 
 /// Base SAM range constant.
 const SAM_MAX_RANGE: f32 = 150.0;
@@ -48,31 +60,24 @@ impl SowEngine {
         let width = self.state.map.width;
 
         // Completed standalone SAMs intercept incoming nuclear strikes at their active level.
-        let sams: Vec<(u64, u16, u32, f32)> = self
+        let sams: Vec<(u64, u16, u32, u8)> = self
             .buildings
             .iter()
             .filter(|b| {
                 b.kind == BuildingKind::SAM && b.active_level() > 0
             })
-            .map(|b| {
-                (
-                    b.id,
-                    b.owner_id,
-                    b.tile_idx,
-                    sam_range(b.active_level()),
-                )
-            })
+            .map(|b| (b.id, b.owner_id, b.tile_idx, b.active_level()))
             .collect();
 
         let mut sam_missiles = Vec::new();
 
-        for (sam_id, sam_owner, sam_tile, range) in &sams {
+        for (sam_id, sam_owner, sam_tile, level) in &sams {
             // Check cooldown
             if self.silo_cooldowns.get(sam_id).copied().unwrap_or(0) > 0 {
                 continue;
             }
 
-            let range_u32 = *range as u32;
+            let range_u32 = sam_range(*level) as u32;
 
             // Find closest incoming nuke (not owned by us) within range
             let mut best_target: Option<(u64, f32)> = None;
@@ -112,7 +117,8 @@ impl SowEngine {
                         self.state.next_projectile_id.wrapping_add(1).max(1);
 
                     sam_missiles.push((id, *sam_owner, *sam_tile, target.dst_tile));
-                    self.silo_cooldowns.insert(*sam_id, SAM_COOLDOWN_TICKS);
+                    self.silo_cooldowns
+                        .insert(*sam_id, sam_cooldown_ticks(*level, &self.state.config));
                 }
             }
         }

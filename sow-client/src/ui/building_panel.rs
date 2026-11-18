@@ -150,10 +150,13 @@ pub(crate) fn building_metrics(
                 config,
                 leader.tower_range_multiplier(),
             ));
+            let defense_weight = sow_core::building::tower_defense_weight(level as u8, config);
             let mut stats = vec![
                 BuildingMetric::new(
                     Icon::Shield,
-                    level * 5.0 * leader.tower_loss_multiplier(sow_core::geo_entities::Side::Defender),
+                    (defense_weight * config.tower_strength).clamp(0.0, 0.50)
+                        * 100.0
+                        * leader.tower_loss_multiplier(sow_core::geo_entities::Side::Defender),
                     "+",
                     "%",
                 ),
@@ -189,12 +192,21 @@ pub(crate) fn building_metrics(
                 "/s",
             ),
         ],
-        BuildingKind::SAM => vec![BuildingMetric::new(
-            Icon::Range,
-            f64::from(sow_core::execution::sam::sam_range(level as u8)),
-            "",
-            "",
-        )],
+        BuildingKind::SAM => {
+            let mut stats = vec![BuildingMetric::new(
+                Icon::Range,
+                f64::from(sow_core::execution::sam::sam_range(level as u8)),
+                "",
+                "",
+            )];
+            if config.progressive_defense_upgrades {
+                let cooldown = sow_core::execution::sam::sam_cooldown_ticks(level as u8, config);
+                let shots_per_minute =
+                    60_000.0 / (f64::from(cooldown) * f64::from(config.tick_rate_ms));
+                stats.push(BuildingMetric::new(Icon::Shield, shots_per_minute, "", "/min"));
+            }
+            stats
+        }
     };
     if kind.grants_building_troop_capacity() && district_capacity > 0.0 {
         metrics.push(BuildingMetric::new(Icon::Troops, district_capacity, "+", " cap"));

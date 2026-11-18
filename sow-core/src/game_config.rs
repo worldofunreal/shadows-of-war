@@ -542,6 +542,12 @@ pub struct GameConfig {
     /// Gold cost to place a SAM battery.
     #[serde(default = "default_cost_sam")]
     pub cost_sam: f64,
+    /// Opening price for each economic building type with no owned levels.
+    #[serde(default)]
+    pub first_economic_structure_cost: Option<f64>,
+    /// Scale tower strength and SAM firing rate with building level.
+    #[serde(default)]
+    pub progressive_defense_upgrades: bool,
     /// Legacy field retained for saved configs; upgrades discount equivalent production by 25%.
     #[serde(default = "default_structure_upgrade_scale")]
     pub structure_upgrade_scale: f64,
@@ -632,6 +638,12 @@ impl GameConfig {
         merge_known(&mut value, patch, "")?;
         let config: Self = serde_json::from_value(value).map_err(|e| e.to_string())?;
         config.ai.validate()?;
+        if config
+            .first_economic_structure_cost
+            .is_some_and(|cost| !cost.is_finite() || cost < 0.0)
+        {
+            return Err("first_economic_structure_cost must be finite and nonnegative".into());
+        }
         Ok(config)
     }
 
@@ -719,6 +731,8 @@ impl Default for GameConfig {
             cost_port: 200.0,
             cost_farm: default_cost_farm(),
             cost_sam: default_cost_sam(),
+            first_economic_structure_cost: None,
+            progressive_defense_upgrades: false,
             structure_upgrade_scale: default_structure_upgrade_scale(),
             cost_scale_cap_multiplier: 10.0,
             nuke_cost: 500.0,

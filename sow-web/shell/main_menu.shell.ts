@@ -1410,7 +1410,7 @@ const KNOWN_SKIN_IDS = new Set([
 ]);
 
 function activeEquippedSkinId(state: MenuState | null): string | null {
-    if (!state || state.phase !== "MainMenu") return null;
+    if (!state) return null;
     const skinId = typeof state.selected_skin === "string" ? state.selected_skin.trim() : "";
     if (!skinId || !KNOWN_SKIN_IDS.has(skinId)) return null;
     const skins = state.store && Array.isArray(state.store.skins) ? state.store.skins : null;
@@ -1420,13 +1420,16 @@ function activeEquippedSkinId(state: MenuState | null): string | null {
 
 function syncMenuSkinTheme(state: MenuState | null): void {
     const skinId = activeEquippedSkinId(state);
+    const hudEl = typeof document !== "undefined" ? document.getElementById("sow-hud") : null;
     if (skinId) {
         root.dataset.skin = skinId;
+        if (hudEl) hudEl.dataset.skin = skinId;
         if (typeof document !== "undefined" && document.documentElement) {
             document.documentElement.dataset.sowSkin = skinId;
         }
     } else {
         delete root.dataset.skin;
+        if (hudEl) delete hudEl.dataset.skin;
         if (typeof document !== "undefined" && document.documentElement) {
             delete document.documentElement.dataset.sowSkin;
         }

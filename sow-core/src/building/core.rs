@@ -287,6 +287,14 @@ pub fn income_level_weight(level: u8) -> f64 {
     (0..level).map(|n| 1.5_f64.powi(i32::from(n))).sum()
 }
 
+pub fn tower_defense_weight(level: u8, cfg: &crate::game_config::GameConfig) -> f64 {
+    if cfg.progressive_defense_upgrades {
+        income_level_weight(level)
+    } else {
+        f64::from(level)
+    }
+}
+
 /// Capacity starts with a non-City building's first completed upgrade, not its foundation.
 pub fn district_capacity_level_weight(level: u8) -> f64 {
     income_level_weight(level.saturating_sub(1))
@@ -603,6 +611,7 @@ struct DefenseTower {
     x: u32,
     y: u32,
     active_level: u8,
+    defense_weight: f64,
     range: i32,
 }
 
@@ -678,6 +687,7 @@ impl DefenseGrid {
                         x: bx,
                         y: by,
                         active_level,
+                        defense_weight: tower_defense_weight(active_level, cfg),
                         range,
                     });
                 }
@@ -712,7 +722,7 @@ impl DefenseGrid {
             } else {
                 (4 * (tower.range - distance)) as f64 / tower.range as f64
             };
-            *weighted_levels += coverage * tower.active_level as f64;
+            *weighted_levels += coverage * tower.defense_weight;
             if NEED_CAPTURE_FALLOFF {
                 *strongest_coverage = strongest_coverage.max(coverage);
             }
