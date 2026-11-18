@@ -36,7 +36,9 @@
       "leader": "Caesar",
       "avatar": "colonia_veterans",
       "can_attack_player": false,
-      "gold_loot_override": 360
+      "gold_loot_override": 360,
+      "troop_loot_bonus": 2600,
+      "prebuilt_buildings": [["Factory", 1]]
     },
     {
       "id": "golden_syndicate",

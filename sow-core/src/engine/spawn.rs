@@ -339,7 +339,36 @@ impl SowEngine {
                 if let Some(iq) = ghost_iq {
                     player.iq = iq;
                 }
+                if config.tutorial && !is_ai_controlled {
+                    let streak_mult = match config.campaign_streak_tier {
+                        1 => 1.15,
+                        2 => 1.25,
+                        tier if tier >= 3 => 1.35,
+                        _ => 1.0,
+                    };
+                    let revive_mult = if config.campaign_revive_boost { 1.50 } else { 1.0 };
+                    player.troops = (player.troops * streak_mult * revive_mult).round();
+                    player.troops_received = player.troops.max(0.0);
+                    let bonus_gold = match config.campaign_streak_tier {
+                        1 => 100.0,
+                        2 => 150.0,
+                        tier if tier >= 3 => 250.0,
+                        _ => 0.0,
+                    } + if config.campaign_revive_boost { 150.0 } else { 0.0 };
+                    player.gold += bonus_gold;
+                }
                 self.state.spawn_player(player, sx, sy);
+                if config.tutorial && !is_ai_controlled && config.campaign_streak_tier >= 2 {
+                    use crate::game::BuildingKind;
+                    let mut prebuilt = vec![(BuildingKind::City, 1)];
+                    if config.campaign_streak_tier >= 3 {
+                        prebuilt.push((BuildingKind::Tower, 1));
+                    }
+                    self.place_prebuilt_structures(player_id, sx, sy, &prebuilt);
+                    if config.campaign_streak_tier >= 3 {
+                        self.state.announce_leader_ability(player_id, Some((sx, sy)));
+                    }
+                }
                 log::debug!("spawn_human: scripted at ({},{})", sx, sy);
                 return;
             }
@@ -549,6 +578,15 @@ impl SowEngine {
                 .filter(|gold| *gold <= 1_000_000)
             {
                 self.campaign_gold_loot_override.insert(bot_id, gold);
+            }
+            if let Some(troops) = s
+                .campaign_troop_loot_bonus
+                .filter(|troops| *troops <= 1_000_000)
+            {
+                self.campaign_troop_loot_bonus.insert(bot_id, troops);
+            }
+            if !s.prebuilt_buildings.is_empty() {
+                self.place_prebuilt_structures(bot_id, sx, sy, &s.prebuilt_buildings);
             }
             if let Some(group) = &s.campaign_alliance_group {
                 self.campaign_alliance_groups.insert(bot_id, group.clone());
@@ -766,6 +804,62 @@ impl SowEngine {
             (pick.sum_x / u64::from(pick.tile_count)) as u32,
             (pick.sum_y / u64::from(pick.tile_count)) as u32,
         ))
+    }
+
+    pub(crate) fn place_prebuilt_structures(
+        &mut self,
+        owner_id: u16,
+        cx: u32,
+        cy: u32,
+        items: &[(crate::game::BuildingKind, u8)],
+    ) {
+        use crate::building::Building;
+        use crate::game::BuildingKind;
+        let map_w = self.state.map.width;
+        let map_h = self.state.map.height;
+        if map_w == 0 || map_h == 0 || cx >= map_w || cy >= map_h {
+            return;
+        }
+        let anchor_tile = cy * map_w + cx;
+        for &(kind, raw_level) in items {
+            if kind == BuildingKind::City
+                && self
+                    .buildings
+                    .iter()
+                    .any(|building| building.owner_id == owner_id && building.kind == kind)
+            {
+                continue;
+            }
+            self.refresh_building_grid();
+            let Some(tile_idx) = crate::building::find_structure_site_near(
+                &self.state.map,
+                owner_id,
+                anchor_tile,
+                kind,
+                &self.building_grid,
+                &mut self.placement_scratch,
+                false,
+            ) else {
+                continue;
+            };
+            let level = raw_level.clamp(1, kind.max_level());
+            let id = self.state.next_building_id;
+            self.state.next_building_id = self.state.next_building_id.wrapping_add(1).max(1);
+            self.add_building(Building {
+                id,
+                owner_id,
+                tile_idx,
+                kind,
+                level,
+                under_construction: false,
+                ticks_until_complete: 0,
+            });
+            if kind == BuildingKind::City
+                && let Some(player) = self.state.player_mut(owner_id)
+            {
+                player.cities = player.cities.saturating_add(1);
+            }
+        }
     }
 
     pub(crate) fn nearest_free_land(&self, tx: u32, ty: u32) -> Option<(u32, u32)> {

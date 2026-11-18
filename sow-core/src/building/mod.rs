@@ -579,20 +579,18 @@ mod tests {
                 "City overlaps at {x},{y}"
             );
         }
-        for kind in BuildingKind::DISTRICTS {
+        let water = map.ref_id(east as u32 + 1, 16);
+        map.terrain[water] = MapTile::from_byte(0);
+        for kind in BuildingKind::NON_CITY {
             assert_eq!(
                 validate_structure_site(&map, 1, kind, xy_idx(east as u32, 16, 40), &grid),
-                Err(PlacementError::CityRequired),
-                "{kind:?} requires parent City"
+                Ok(()),
+                "{kind:?} has its own foundation"
             );
             assert_eq!(
                 validate_structure_site(&map, 1, kind, city_tile, &grid),
-                if kind == BuildingKind::Port {
-                    Err(PlacementError::CoastRequired)
-                } else {
-                    Ok(())
-                },
-                "{kind:?} inside inland City"
+                Err(PlacementError::Occupied),
+                "{kind:?} cannot overlap a City"
             );
         }
     }
@@ -621,27 +619,33 @@ mod tests {
             validate_structure_site(&map, 1, BuildingKind::City, 0, &grid),
             Err(PlacementError::OutsideMap)
         );
-        for kind in BuildingKind::DISTRICTS {
+        for kind in BuildingKind::NON_CITY {
             assert_eq!(
                 validate_structure_site(&map, 1, kind, xy_idx(4, 4, 20), &grid),
-                Err(PlacementError::CityRequired)
+                if kind == BuildingKind::Port {
+                    Err(PlacementError::CoastRequired)
+                } else {
+                    Ok(())
+                }
             );
         }
+        let port_tile = xy_idx(14, 10, 20);
         assert_eq!(
-            validate_structure_site(&map, 1, BuildingKind::Port, tile, &grid),
+            validate_structure_site(&map, 1, BuildingKind::Port, port_tile, &grid),
             Err(PlacementError::CoastRequired)
         );
-        let water = map.ref_id(12, 10);
+        let water = map.ref_id(15, 10);
         map.terrain[water] = MapTile::from_byte(0);
         assert_eq!(
-            validate_structure_site(&map, 1, BuildingKind::Port, tile, &grid),
+            validate_structure_site(&map, 1, BuildingKind::Port, port_tile, &grid),
             Ok(())
         );
-        let farm_high = map.ref_id(9, 9);
+        let farm_tile = xy_idx(14, 14, 20);
+        let farm_high = map.ref_id(13, 13);
         map.terrain[farm_high] = MapTile::from_byte(0x80 | 10);
         assert_eq!(
-            validate_structure_site(&map, 1, BuildingKind::Farm, tile, &grid),
-            Ok(())
+            validate_structure_site(&map, 1, BuildingKind::Farm, farm_tile, &grid),
+            Err(PlacementError::LowlandRequired)
         );
         map.set_owner_id(8, 8, 2);
         assert_eq!(

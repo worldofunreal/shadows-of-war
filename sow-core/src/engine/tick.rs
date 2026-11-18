@@ -24,6 +24,9 @@ impl SowEngine {
                 if kind == crate::game::BuildingKind::Tower {
                     self.defense_grid_dirty = true;
                 }
+                if kind == crate::game::BuildingKind::SAM {
+                    self.bot_sam_tiles_cache = None;
+                }
 
                 // Update player counts if necessary
                 if kind == crate::game::BuildingKind::City {
@@ -42,10 +45,43 @@ impl SowEngine {
         }
 
         for (building, old_owner) in transfers {
-            if building.kind == crate::game::BuildingKind::City
-                && let Some(state) = self.city_arsenals.get_mut(&building.id)
+            if let Some(state) = self.building_productions.get_mut(&building.id)
             {
                 state.arsenal_build = None;
+            }
+            if self.state.config.tutorial {
+                self.state.events.push(crate::game::GameEvent::StructureCaptured {
+                    building_id: building.id,
+                    kind: building.kind,
+                    level: building.level,
+                    new_owner: building.owner_id,
+                    old_owner,
+                    tile_idx: building.tile_idx,
+                });
+            }
+            if self.state.config.tutorial
+                && !building.under_construction
+                && self
+                    .state
+                    .player(building.owner_id)
+                    .is_some_and(|p| p.player_type == crate::player::PlayerType::Human && !p.is_ai_controlled)
+            {
+                let bonus_troops = f64::from(building.level.max(1)) * 120.0;
+                let bonus_gold = f64::from(building.level.max(1)) * 30.0;
+                if let Some(attack) = self.attacks.iter_mut().find(|a| {
+                    a.owner_id == building.owner_id
+                        && !a.retreating
+                        && a.target_owner == old_owner
+                        && a.troops > 0.0
+                }) {
+                    attack.troops += bonus_troops;
+                } else if let Some(player) = self.state.player_mut(building.owner_id) {
+                    player.credit_troops_capped(bonus_troops, player.max_troops);
+                }
+                if let Some(player) = self.state.player_mut(building.owner_id) {
+                    player.credit_gold(bonus_gold);
+                }
+                self.record_blitz_cascade_tick();
             }
             self.hero_structure_transferred(building, old_owner);
         }
@@ -224,11 +260,14 @@ impl SowEngine {
         let Some(support) = self.state.config.campaign_support.clone() else {
             return;
         };
-        if !self
-            .state
-            .players
-            .iter()
-            .any(|player| player.name == support.after_defeated && !player.alive)
+        let immediate_on_contact = support.after_defeated.is_empty()
+            || support.after_defeated.eq_ignore_ascii_case("immediate");
+        if !immediate_on_contact
+            && !self
+                .state
+                .players
+                .iter()
+                .any(|player| player.name == support.after_defeated && !player.alive)
         {
             return;
         }
@@ -297,8 +336,9 @@ impl SowEngine {
                 / u64::from(self.state.config.tick_rate_ms.max(1.0) as u32))
             .max(1);
             let Some(next_tick) = self.campaign_support_next_tick.get(&ally_id).copied() else {
+                let first_delay = if immediate_on_contact { 1 } else { interval_ticks };
                 self.campaign_support_next_tick
-                    .insert(ally_id, self.state.tick.saturating_add(interval_ticks));
+                    .insert(ally_id, self.state.tick.saturating_add(first_delay));
                 continue;
             };
             if self.state.tick < next_tick {
@@ -1086,5 +1126,77 @@ mod tests {
         // P2 was disconnected for those 10 ticks, so alive_ticks stayed at 100.
         assert_eq!(engine.state.player(1).unwrap().alive_ticks, 110);
         assert_eq!(engine.state.player(2).unwrap().alive_ticks, 100);
+    }
+
+    #[test]
+    fn conquest_blitz_tutorial_rules_apply_supercharger_and_cascades() {
+        use crate::game_config::ScriptedSpawn;
+        use crate::player::{Leader, PlayerType};
+        use crate::protocol::{CampaignRelation, PlayerInfo, Team};
+
+        let mut cfg = GameConfig::default();
+        cfg.map_width = 24;
+        cfg.map_height = 24;
+        cfg.tutorial = true;
+        cfg.campaign_streak_tier = 3;
+        cfg.campaign_revive_boost = true;
+        cfg.starting_troops = 1000.0;
+        cfg.starting_gold = 100.0;
+        cfg.scripted_spawns = vec![ScriptedSpawn {
+            name: "Pinata".into(),
+            x: 16,
+            y: 12,
+            color: [0.85, 0.33, 0.31],
+            team: Some(Team::Red),
+            leader: Leader::of("ragnar"),
+            troops: Some(400.0),
+            iq: Some(60),
+            campaign_avatar: None,
+            campaign_support_interval_seconds: None,
+            campaign_gold_loot_bonus: Some(50),
+            campaign_gold_loot_override: None,
+            campaign_alliance_group: None,
+            campaign_relation: Some(CampaignRelation::Enemy),
+            campaign_faction_id: Some("pinata".into()),
+            campaign_can_request_alliance: Some(false),
+            campaign_can_attack_player: Some(false),
+            campaign_assault_force: false,
+            campaign_hold_structures_until_contact: false,
+            campaign_accepts_alliance_requests: false,
+            player_type: None,
+            campaign_troop_loot_bonus: Some(900),
+            prebuilt_buildings: vec![(crate::game::BuildingKind::Farm, 1)],
+        }];
+        cfg.player_spawn = Some((8, 12));
+        let mut engine = crate::engine::initialize_match_engine_with_water(
+            cfg,
+            42,
+            &[],
+            vec![PlayerInfo {
+                id: 1,
+                name: "Human".into(),
+                player_type: PlayerType::Human,
+                color: [0.94, 0.55, 0.16],
+                team: None,
+                spawn_x: 8,
+                spawn_y: 12,
+                leader: Leader::of("caesar"),
+                skin_style: 0,
+                is_ai_controlled: false,
+            }],
+            vec![],
+            None,
+            vec![],
+            24 * 24,
+            None,
+        );
+        let me = engine.state.player(1).expect("human spawned");
+        // Tier 3 (+35%) * revive (+50%) => 1000 * 1.35 * 1.5 = 2025 troops
+        assert_eq!(me.troops, 2025.0);
+        // Tier 3 (+250) + revive (+150) + base 100 = 500 gold
+        assert_eq!(me.gold, 500.0);
+        assert!(engine.buildings.iter().any(|b| b.owner_id == 1 && b.kind == crate::game::BuildingKind::City));
+        assert!(engine.buildings.iter().any(|b| b.owner_id == 1 && b.kind == crate::game::BuildingKind::Tower));
+        assert!(engine.buildings.iter().any(|b| b.owner_id == 2 && b.kind == crate::game::BuildingKind::Farm));
     }
 }

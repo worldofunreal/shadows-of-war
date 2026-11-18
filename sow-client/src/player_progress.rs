@@ -94,6 +94,10 @@ pub struct PlayerProgress {
     pub ranked_matches: u32,
     #[serde(default)]
     pub ranked_wins: u32,
+    #[serde(default)]
+    pub conquest_streak: u32,
+    #[serde(default)]
+    pub best_conquest_streak: u32,
 }
 
 fn deserialize_leader<'de, D>(deserializer: D) -> Result<Option<Leader>, D::Error>
@@ -272,6 +276,27 @@ impl PlayerProgress {
         true
     }
 
+    pub fn record_campaign_streak_win(&mut self) -> u32 {
+        self.conquest_streak = self.conquest_streak.saturating_add(1);
+        if self.conquest_streak > self.best_conquest_streak {
+            self.best_conquest_streak = self.conquest_streak;
+        }
+        self.conquest_streak
+    }
+
+    pub fn reset_campaign_streak(&mut self) -> bool {
+        if self.conquest_streak == 0 {
+            return false;
+        }
+        self.conquest_streak = 0;
+        true
+    }
+
+    #[inline]
+    pub fn supercharger_tier(&self) -> u8 {
+        self.conquest_streak.min(3) as u8
+    }
+
     pub fn has_history(&self) -> bool {
         self.matches_played > 0
             || self.wins > 0
@@ -423,6 +448,33 @@ impl PlayerProgress {
             ..Default::default()
         });
         self.apply_reward(leader, reward);
+    }
+}
+
+#[cfg(test)]
+mod blitz_streak_tests {
+    use super::PlayerProgress;
+
+    #[test]
+    fn conquest_streak_tracks_best_and_caps_supercharger_tier_at_three() {
+        let mut p = PlayerProgress::default();
+        assert_eq!(p.conquest_streak, 0);
+        assert_eq!(p.supercharger_tier(), 0);
+        assert!(!p.reset_campaign_streak());
+
+        assert_eq!(p.record_campaign_streak_win(), 1);
+        assert_eq!(p.supercharger_tier(), 1);
+        assert_eq!(p.record_campaign_streak_win(), 2);
+        assert_eq!(p.supercharger_tier(), 2);
+        assert_eq!(p.record_campaign_streak_win(), 3);
+        assert_eq!(p.supercharger_tier(), 3);
+        assert_eq!(p.record_campaign_streak_win(), 4);
+        assert_eq!(p.supercharger_tier(), 3);
+        assert_eq!(p.best_conquest_streak, 4);
+
+        assert!(p.reset_campaign_streak());
+        assert_eq!(p.conquest_streak, 0);
+        assert_eq!(p.best_conquest_streak, 4);
     }
 }
 

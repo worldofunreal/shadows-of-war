@@ -294,6 +294,7 @@ export function campaignEpisodeHeroSlug(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "boudica";
     if (id.startsWith("tactics_")) return "sun_tzu";
+    if (id.startsWith("blitz_")) return "caesar";
     if (id.startsWith("six_sky")) return "lady_six_sky";
     const prefixMatch = id.match(/^([a-z0-9_]+)_(?:ep\d+|\d+)$/);
     const candidate = prefixMatch ? prefixMatch[1] : id;
@@ -304,12 +305,39 @@ export function campaignEpisodeHeroSlug(episodeId: string): string {
     return "boudica";
 }
 
+const BLITZ_MAP_ROTATION = ["europe", "bajacalifornia", "southeastasia", "africa", "northamerica"];
+
+function blitzNodeNumber(episodeId: string): number | null {
+    if (episodeId === "tactics_01_expand") return 1;
+    if (episodeId === "tactics_02_ask_ally") return 2;
+    if (episodeId === "tactics_03_farm_vs_city") return 3;
+    if (episodeId === "tactics_04_factory_gold") return 4;
+    const m = episodeId.match(/^blitz_(\d+)$/);
+    return m ? Number(m[1]) : null;
+}
+
+function blitzArchetypeTag(episodeId: string): { label: string; kind: string } | null {
+    const n = blitzNodeNumber(episodeId);
+    if (n === null) return null;
+    if (n % 5 === 0) return { label: "Boss", kind: "boss" };
+    const slot = n % 5;
+    if (slot === 1) return { label: "Cascade", kind: "cascade" };
+    if (slot === 2) return { label: "Flank", kind: "flank" };
+    if (slot === 3) return { label: "Eco Rush", kind: "eco" };
+    return { label: "High Stakes", kind: "tense" };
+}
+
 export function campaignEpisodeMapName(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "eastanglia";
     if (id === "tactics_01_expand" || id === "tactics_03_farm_vs_city") return "europe";
     if (id === "tactics_02_ask_ally") return "bajacalifornia";
     if (id === "tactics_04_factory_gold") return "southeastasia";
+    const blitzMatch = id.match(/^blitz_(\d+)$/);
+    if (blitzMatch) {
+        const idx = Math.max(0, Number(blitzMatch[1]) - 5) % BLITZ_MAP_ROTATION.length;
+        return BLITZ_MAP_ROTATION[idx];
+    }
     if (id.startsWith("six_sky")) return "northamerica";
     return "world";
 }
@@ -318,6 +346,7 @@ export function campaignEpisodeSagaId(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "boudica";
     if (id.startsWith("tactics_")) return "art_of_war";
+    if (id.startsWith("blitz_")) return "conquest_blitz";
     if (id.startsWith("six_sky")) return "six_sky";
     const prefixMatch = id.match(/^([a-z0-9_]+)_(?:ep\d+|\d+)$/);
     return prefixMatch ? prefixMatch[1] : id;
@@ -327,6 +356,7 @@ export function campaignSagaTitle(sagaId: string): string {
     if (sagaId === "all") return SOW_t("lobbies.the_saga") || "The Saga";
     if (sagaId === "boudica") return SOW_t("lobbies.campaign_boudica_title") || "Rise of the Iceni";
     if (sagaId === "art_of_war") return SOW_t("lobbies.campaign_art_of_war_title") || "Art of War";
+    if (sagaId === "conquest_blitz") return SOW_t("lobbies.campaign_blitz_title") || "Conquest Blitz";
     if (sagaId === "six_sky") {
         return leaderDisplayName(leaderById("lady_six_sky")) || "Lady Six Sky";
     }
@@ -343,7 +373,7 @@ export function campaignEpisodeHeroArt(heroSlug: string) {
 }
 
 export function campaignHeroImage(episodeId?: string | null): string {
-    const id = episodeId || menuUi.selectedCampaignEpisode || "tactics_01_expand";
+    const id = episodeId || menuUi.selectedCampaignEpisode || "blitz_05";
     const heroSlug = campaignEpisodeHeroSlug(id);
     const compact =
         typeof window.matchMedia === "function"
@@ -495,6 +525,10 @@ function renderCampaignEpisode(
         : "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>" +
           esc(SOW_t("lobbies.locked")) +
           "</button>";
+    const archetype = blitzArchetypeTag(episode.id);
+    const archetypeHtml = archetype
+        ? `<span class='sow-campaign__archetype-tag is-${esc(archetype.kind)}'>${esc(archetype.label)}</span>`
+        : "";
     return (
         "<article class='sow-campaign__episode" +
         (completed ? " is-complete" : unlocked ? " is-unlocked" : " is-locked") +
@@ -512,6 +546,7 @@ function renderCampaignEpisode(
         " alt='' loading='lazy' decoding='async'></div>" +
         "<div class='sow-campaign__episode-copy'><div class='sow-campaign__episode-status'>" +
         esc(status) +
+        archetypeHtml +
         "</div>" +
         "<h2>" +
         esc(title) +
@@ -734,6 +769,25 @@ export function renderCampaign() {
           ? "<div class='sow-campaign__complete'>" + esc(SOW_t("lobbies.saga_complete")) + "</div>"
           : "";
 
+    const streak = Number(campaign && campaign.conquest_streak) || 0;
+    const bestStreak = Number(campaign && campaign.best_conquest_streak) || 0;
+    const superTier = Math.min(3, Number(campaign && campaign.supercharger_tier) || streak);
+    const superchargerBar =
+        "<section class='sow-campaign__supercharger' aria-label='Warlord Supercharger'>" +
+        "<div class='sow-supercharger__head'>" +
+        "<span class='sow-supercharger__title'>🔥 Warlord Supercharger</span>" +
+        "<span class='sow-supercharger__count'>" +
+        (streak > 0 ? `Streak x${streak}` : "Win 1 match to ignite") +
+        (bestStreak > 1 ? ` · Best x${bestStreak}` : "") +
+        "</span>" +
+        "</div>" +
+        "<div class='sow-supercharger__tiers'>" +
+        `<div class='sow-supercharger__tier${superTier >= 1 ? " is-active" : ""}'><b>T1</b><span>+15% Troops</span></div>` +
+        `<div class='sow-supercharger__tier${superTier >= 2 ? " is-active" : ""}'><b>T2</b><span>+25% + City Lv1</span></div>` +
+        `<div class='sow-supercharger__tier${superTier >= 3 ? " is-active" : ""}'><b>T3</b><span>+35% +30% Atk + Tower</span></div>` +
+        "</div>" +
+        "</section>";
+
     return (
         "<main class='sow-menu__main sow-campaign' data-screen-panel='campaign'>" +
         "<header class='sow-campaign__intro'>" +
@@ -759,6 +813,7 @@ export function renderCampaign() {
         "</h2></div>" +
         continueButton +
         "</div>" +
+        superchargerBar +
         "<div class='sow-campaign__episodes'>" +
         (filteredEpisodes.length
             ? filteredEpisodes

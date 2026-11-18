@@ -3872,7 +3872,8 @@ button.sow-store__bundle-chip:hover {
 }
 
 .sow-heroes__rotation,
-.sow-heroes__rarity-tag {
+.sow-heroes__rarity-tag,
+.sow-heroes__star-tag {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
@@ -3890,6 +3891,42 @@ button.sow-store__bundle-chip:hover {
   letter-spacing: 0.14em;
   line-height: 1;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sow-heroes__star-tag {
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 232, 163, 0.8);
+  border-color: rgba(245, 197, 66, 0.34);
+  background: rgba(12, 16, 24, 0.82);
+}
+
+button.sow-heroes__star-tag {
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 140ms ease, filter 140ms ease, background 140ms ease;
+}
+
+button.sow-heroes__star-tag:hover,
+button.sow-heroes__star-tag:focus-visible {
+  border-color: rgba(245, 197, 66, 0.78);
+  filter: brightness(1.1);
+}
+
+.sow-heroes__star-tag.is-started {
+  color: var(--sow-gold-bright, #ffe8a3);
+  border-color: rgba(245, 197, 66, 0.56);
+  background: rgba(26, 21, 10, 0.84);
+}
+
+.sow-heroes__star-tag.is-complete {
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.52);
+  background: rgba(10, 28, 22, 0.84);
 }
 
 .sow-heroes__rarity-tag[data-rarity="common"] {
@@ -3913,6 +3950,7 @@ button.sow-store__bundle-chip:hover {
 }
 
 .sow-heroes__tags[hidden],
+.sow-heroes__star-tag[hidden],
 .sow-heroes__rarity-tag[hidden],
 .sow-heroes__rotation[hidden],
 .sow-heroes__perk[hidden] {
@@ -4162,12 +4200,24 @@ button.sow-store__bundle-chip:hover {
   min-height: 44px;
 }
 
+#sow-menu[data-screen="heroes"] .sow-heroes__featured-controls {
+  position: absolute;
+  top: 10px;
+  inset-inline-start: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+#sow-menu[data-screen="heroes"] .sow-heroes__featured-controls > * {
+  pointer-events: auto;
+}
+
 .sow-heroes__info {
   display: grid;
-  position: absolute;
-  z-index: 5;
-  top: 10px;
-  inset-inline-end: 10px;
+  position: static;
   width: 36px;
   height: 36px;
   min-width: 36px;
@@ -4601,13 +4651,14 @@ button.sow-store__bundle-chip:hover {
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__featured-skins {
-  position: absolute;
-  top: 10px;
-  inset-inline-end: 52px;
-  z-index: 5;
+  position: static;
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+#sow-menu[data-screen="heroes"] .sow-heroes__featured-skins:empty {
+  display: none;
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__skins {
@@ -4731,11 +4782,6 @@ button.sow-store__bundle-chip:hover {
     text-transform: uppercase;
   }
 
-  #sow-menu[data-screen="heroes"] .sow-heroes__featured-skins {
-    top: 10px;
-    inset-inline-end: 52px;
-  }
-
   #sow-menu[data-screen="heroes"] .sow-heroes__roster {
     padding-inline-end: 0;
   }
@@ -4820,7 +4866,8 @@ button.sow-store__bundle-chip:hover {
   }
 
   #sow-menu[data-screen="heroes"] .sow-heroes__rotation,
-  #sow-menu[data-screen="heroes"] .sow-heroes__rarity-tag {
+  #sow-menu[data-screen="heroes"] .sow-heroes__rarity-tag,
+  #sow-menu[data-screen="heroes"] .sow-heroes__star-tag {
     padding: 4px 7px;
     font-size: 8.5px;
   }
@@ -5241,31 +5288,32 @@ button.sow-store__bundle-chip:hover {
 }
 
 .sow-heroes__ach-strip {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .sow-heroes__ach-btn {
   appearance: none;
   width: 100%;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(212, 168, 67, 0.34);
-  background: rgba(8, 11, 16, 0.76);
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.12);
+  background: transparent;
   color: #f1f5f9;
   font-family: inherit;
   text-align: start;
   cursor: pointer;
-  backdrop-filter: blur(6px);
-  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
-.sow-heroes__ach-btn:hover {
-  border-color: rgba(245, 197, 66, 0.68);
-  background: rgba(14, 18, 26, 0.9);
+.sow-heroes__ach-btn:hover,
+.sow-heroes__ach-btn:focus-visible {
+  border-color: rgba(245, 197, 66, 0.48);
+  background: rgba(14, 18, 26, 0.56);
 }
 
 .sow-heroes__ach-star-badge {
@@ -5312,7 +5360,8 @@ button.sow-store__bundle-chip:hover {
   gap: 6px;
   font-size: 10px;
   line-height: 1;
-  color: rgba(226, 232, 240, 0.78);
+  color: rgba(226, 232, 240, 0.84);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 }
 
 .sow-heroes__ach-chain-head span {
@@ -5363,6 +5412,7 @@ button.sow-store__bundle-chip:hover {
   font-weight: 800;
   color: var(--sow-gold-bright, #ffe8a3);
   padding-inline: 2px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 }
 
 .sow-hero-info__tab-count {
@@ -5557,70 +5607,80 @@ button.sow-store__bundle-chip:hover {
 
 #sow-menu[data-screen="heroes"] .sow-heroes__featured::after {
   background:
-    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--sow-control-accent) 10%, transparent), transparent 55%),
     linear-gradient(
-      180deg,
-      rgba(5, 7, 10, 0.04) 28%,
-      rgba(5, 7, 10, 0.24) 56%,
-      rgba(5, 7, 10, 0.94) 100%
+      0deg,
+      rgba(7, 9, 13, 0.96) 0%,
+      rgba(7, 9, 13, 0.84) 24%,
+      rgba(7, 9, 13, 0.42) 48%,
+      rgba(7, 9, 13, 0.08) 68%,
+      transparent 82%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(7, 9, 13, 0.58) 0%,
+      rgba(7, 9, 13, 0.24) 40%,
+      rgba(7, 9, 13, 0.04) 68%,
+      transparent 88%
+    );
+}
+
+#sow-menu[data-screen="heroes"]:dir(rtl) .sow-heroes__featured::after {
+  background:
+    linear-gradient(
+      0deg,
+      rgba(7, 9, 13, 0.96) 0%,
+      rgba(7, 9, 13, 0.84) 24%,
+      rgba(7, 9, 13, 0.42) 48%,
+      rgba(7, 9, 13, 0.08) 68%,
+      transparent 82%
+    ),
+    linear-gradient(
+      270deg,
+      rgba(7, 9, 13, 0.58) 0%,
+      rgba(7, 9, 13, 0.24) 40%,
+      rgba(7, 9, 13, 0.04) 68%,
+      transparent 88%
     );
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy {
-  padding: 12px 14px;
+  padding: 16px 18px 14px;
 }
 
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--sow-tactical-surface-accent-border-soft, rgba(255, 255, 255, 0.14));
-  border-radius: var(--sow-tactical-surface-radius-compact, 10px);
-  background: var(--sow-tactical-surface-compact-bg, rgba(10, 14, 21, 0.78));
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.48);
-  backdrop-filter: blur(8px);
+  gap: 8px;
 }
 
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__identity {
-  margin: 0;
-  padding: 8px 12px 7px;
-  border-bottom: 1px solid var(--sow-tactical-surface-border, rgba(255, 255, 255, 0.12));
-}
-
-#sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__identity-head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  margin: 0 0 2px;
-}
-
-#sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__civilization {
-  display: inline-block;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   margin: 0;
-  font-size: 9.5px;
-  line-height: 1.15;
+  padding: 0;
+  border: 0;
 }
 
-#sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-heroes__tags {
-  display: inline-flex;
+#sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-heroes__tags:not([hidden]) {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  margin: 0;
+  justify-content: flex-start;
+  gap: 5px;
+  margin: 0 0 3px;
 }
 
+#sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-heroes__star-tag,
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-heroes__rarity-tag,
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-heroes__rotation {
-  padding: 2px 6px;
+  padding: 3px 7px;
   font-size: 8.5px;
   letter-spacing: 0.1em;
   line-height: 1.1;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__name {
@@ -5628,12 +5688,25 @@ button.sow-store__bundle-chip:hover {
   font-size: clamp(20px, 2.3vw, 28px);
   line-height: 1.03;
   overflow-wrap: anywhere;
+  text-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.94),
+    0 1px 3px rgba(0, 0, 0, 0.88);
+}
+
+#sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__civilization {
+  display: block;
+  margin: 1px 0 0;
+  font-size: 10px;
+  line-height: 1.15;
+  text-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.92),
+    0 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__ability,
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__random-copy {
   margin: 0;
-  padding: 8px 12px;
+  padding: 0;
 }
 
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__ability {
@@ -5650,11 +5723,18 @@ button.sow-store__bundle-chip:hover {
   margin: 0 0 2px;
   font-size: 13px;
   line-height: 1.15;
+  text-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.94),
+    0 1px 3px rgba(0, 0, 0, 0.86);
 }
 
 #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__description {
   font-size: 12px;
   line-height: 1.32;
+  color: rgba(248, 245, 238, 0.92);
+  text-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.94),
+    0 1px 3px rgba(0, 0, 0, 0.88);
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__ach-strip {
@@ -5662,8 +5742,8 @@ button.sow-store__bundle-chip:hover {
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__ach-btn {
-  padding: 6px 10px;
-  gap: 10px;
+  padding: 5px 6px;
+  gap: 8px;
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__actions {
@@ -5672,23 +5752,25 @@ button.sow-store__bundle-chip:hover {
 
 @media (max-width: 680px), (orientation: portrait) {
   #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy {
-    padding: 8px 10px 9px;
+    padding: 10px 12px;
+  }
+  #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection {
+    gap: 6px;
   }
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__identity {
-    padding: 6px 10px 5px;
+    gap: 2px;
+  }
+  #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__name {
+    font-size: clamp(18px, 5vw, 24px);
+    line-height: 1.02;
+    text-transform: uppercase;
   }
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__civilization {
     font-size: 9px;
     letter-spacing: 0.11em;
   }
-  #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__name {
-    font-size: clamp(17px, 4.8vw, 22px);
-    line-height: 1.02;
-    text-transform: uppercase;
-  }
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__ability,
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__random-copy {
-    padding: 6px 10px;
     gap: 8px;
   }
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__icon-slot {
@@ -5708,7 +5790,7 @@ button.sow-store__bundle-chip:hover {
     margin-top: 4px;
   }
   #sow-menu[data-screen="heroes"] .sow-heroes__ach-btn {
-    padding: 5px 8px;
+    padding: 4px 5px;
     gap: 8px;
   }
   #sow-menu[data-screen="heroes"] .sow-heroes__actions {
@@ -5725,6 +5807,11 @@ button.sow-store__bundle-chip:hover {
 }
 
 @media (orientation: landscape) and (max-height: 680px) {
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured-controls {
+    top: 8px;
+    inset-inline-start: 8px;
+    gap: 5px;
+  }
   #sow-menu[data-screen="heroes"] .sow-heroes__info {
     width: 30px;
     height: 30px;
@@ -5732,24 +5819,23 @@ button.sow-store__bundle-chip:hover {
     min-height: 30px;
     font-size: 18px;
   }
-  #sow-menu[data-screen="heroes"] .sow-heroes__featured-skins {
-    inset-inline-end: 46px;
-  }
   #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy {
-    padding: 8px 10px;
+    padding: 9px 11px;
+  }
+  #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection {
+    gap: 5px;
   }
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__identity {
-    padding: 5px 10px;
-  }
-  #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__civilization {
-    font-size: 8.5px;
+    gap: 1px;
   }
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__name {
     font-size: clamp(15px, 2.6vh, 20px);
   }
+  #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__civilization {
+    font-size: 8.5px;
+  }
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__ability,
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__random-copy {
-    padding: 5px 10px;
     gap: 8px;
   }
   #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection .sow-hero-briefing__icon-slot {
@@ -5806,11 +5892,11 @@ button.sow-store__bundle-chip:hover {
 
 @media (orientation: landscape) and (max-height: 680px) {
   #sow-menu[data-screen="heroes"] .sow-heroes__ach-strip {
-    margin-top: 5px;
+    margin-top: 4px;
   }
   #sow-menu[data-screen="heroes"] .sow-heroes__ach-btn {
-    padding: 5px 9px;
-    gap: 8px;
+    padding: 4px 5px;
+    gap: 7px;
   }
   .sow-hero-info--dossier {
     max-height: 92dvh;

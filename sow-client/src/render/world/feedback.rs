@@ -97,8 +97,71 @@ pub(crate) fn render(
     render_transport_targets(text, snapshot, sim, ui, input, dev, sf, now);
     render_transport_impacts(text, ui, input, sf, now);
     render_death_nameplates(text, ui, input, dev, avatars, sf, now);
+    render_cascade_callouts(text, ui, input, dev, sf, now);
     render_attack_badges(text, snapshot, sim, ui, input, dev, avatars, sf, now);
     render_attack_launch_notices(text, ui, input, dev, sf, now);
+}
+
+const CASCADE_CALLOUT_DURATION: f32 = 1.65;
+const CASCADE_CALLOUT_FONT_SIZE: f32 = 19.0;
+
+fn render_cascade_callouts(
+    text: &mut TextRenderer,
+    ui: &mut UiState,
+    input: &InputState,
+    dev: &DevConfig,
+    sf: f32,
+    now: Instant,
+) {
+    let sf = sf.max(0.01);
+    let screen_w = input.screen_w / sf;
+    let screen_h = input.screen_h / sf;
+    let font_scale = dev.font_size_scale.max(0.1);
+    let char_spacing = dev.font_char_spacing.max(0.1);
+    ui.cascade_callouts.retain(|callout| {
+        let elapsed = now.duration_since(callout.start_time).as_secs_f32();
+        let Some((progress, rise, anim_scale)) =
+            floating_notice_animation(elapsed, CASCADE_CALLOUT_DURATION)
+        else {
+            return false;
+        };
+        let screen = world_to_screen(callout.world_x, callout.world_y - rise * 1.15, input, sf);
+        if screen[0] < -200.0
+            || screen[0] > screen_w + 200.0
+            || screen[1] < -160.0
+            || screen[1] > screen_h + 160.0
+        {
+            return true;
+        }
+        let step_boost = 1.0 + 0.12 * f32::from(callout.chain_step.saturating_sub(1).min(5));
+        let alpha = (1.0 - progress * progress).clamp(0.0, 1.0);
+        let base_rgb = if callout.is_surge {
+            crate::rgb(56, 239, 125)
+        } else if callout.chain_step >= 3 {
+            crate::rgb(255, 110, 64)
+        } else {
+            crate::rgb(255, 214, 10)
+        };
+        let color = [base_rgb[0], base_rgb[1], base_rgb[2], alpha];
+        let font_size = CASCADE_CALLOUT_FONT_SIZE * step_boost * anim_scale * font_scale * sf;
+        let measure = text.measure_string(&callout.label, font_size, char_spacing);
+        let required = callout.label.chars().count().saturating_add(2);
+        if text.remaining_instance_capacity() < required {
+            return true;
+        }
+        text.push_string(
+            &callout.label,
+            [
+                screen[0] * sf - measure.width * 0.5,
+                screen[1] * sf - measure.height * 0.35,
+            ],
+            font_size,
+            color,
+            dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+            (0.0, char_spacing),
+        );
+        true
+    });
 }
 
 fn render_attack_launch_notices(
@@ -474,7 +537,12 @@ fn render_death_nameplates(
             continue;
         };
         let alpha = 1.0 - progress;
-        let font_size = GOLD_REWARD_FONT_SIZE * scale * reward_scale * sf;
+        let streak_scale = if ui.cascade_streak > 1 {
+            1.0 + 0.08 * f32::from(ui.cascade_streak.saturating_sub(1).min(4))
+        } else {
+            1.0
+        };
+        let font_size = GOLD_REWARD_FONT_SIZE * scale * streak_scale * reward_scale * sf;
         let measure = prepared.measure_at(font_size);
         let badge_size = GOLD_REWARD_ASSIST_SIZE * reward_scale * sf;
         let coin_size = GOLD_REWARD_COIN_SIZE * reward_scale * sf;

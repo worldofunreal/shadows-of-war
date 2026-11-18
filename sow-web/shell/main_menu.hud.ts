@@ -38,8 +38,7 @@ import type {
   HudBuildingPlacement,
   HudBuildingProgressItem,
   HudBuildingCelebrationItem,
-  HudCityArsenal,
-  HudCityDistrict,
+  HudBuildingProduction,
   HudCombatOperation,
   HudDevTools,
   HudInboxRequest,
@@ -732,6 +731,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     port: "anchor",
     tower: "defense",
     farm: "farm",
+    sam: "sam-missile",
   };
 
   const HUD_GLYPHS: Record<string, string> = {
@@ -1167,6 +1167,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
   function buildingIcon(kind: string, level?: number, cls?: string): string {
     const name = String(kind || "");
+    if (name.toLowerCase() === "sam")
+      return unitIcon("sam-missile", cls || "sow-hud__building-icon");
     const art = window.SOW_BUILDING_ART;
     const canonical =
       name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
@@ -2187,6 +2189,36 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       buildingIcon("City") +
       tileCost(true) +
       "</button>" +
+      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Factory" aria-label="' +
+      SOW_t("hud.map_action_factory") +
+      '">' +
+      buildingIcon("Factory") +
+      tileCost(true) +
+      "</button>" +
+      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Port" aria-label="' +
+      SOW_t("hud.map_action_port") +
+      '">' +
+      buildingIcon("Port") +
+      tileCost(true) +
+      "</button>" +
+      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Tower" aria-label="' +
+      SOW_t("hud.map_action_tower") +
+      '">' +
+      buildingIcon("Tower") +
+      tileCost(true) +
+      "</button>" +
+      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Farm" aria-label="' +
+      SOW_t("hud.map_action_farm") +
+      '">' +
+      buildingIcon("Farm") +
+      tileCost(true) +
+      "</button>" +
+      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="SAM" aria-label="' +
+      SOW_t("hud.map_action_sam") +
+      '">' +
+      buildingIcon("SAM") +
+      tileCost(true) +
+      "</button>" +
       "      </div>" +
       "    </div>" +
       "  </div>" +
@@ -2867,6 +2899,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     request_allies: { icon: "request", key: "hud.map_action_request_allies" },
     alliance: { status: "allied", key: "hud.map_action_alliance" },
     build_city: { key: "hud.map_action_city" },
+    build_sam: { key: "hud.map_action_sam" },
     upgrade_structure: { icon: "upgrade", key: "hud.map_action_upgrade" },
     nuke: { icon: "nuke", key: "hud.map_action_nuke" },
   };
@@ -3070,305 +3103,93 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     });
   }
 
-  function districtActionCta(d: HudCityDistrict): string {
-    if (d.next_level == null) return "MAX";
-    if (d.level === 0) return SOW_t("hud.map_action_build");
-    return SOW_t("hud.map_action_upgrade") + " Lv." + d.next_level;
-  }
-
-  function districtLockReason(
-    d: HudCityDistrict,
-    busy: boolean,
-    availableGold: number | undefined,
-  ): string {
-    if (d.locked_reason === "coast_required")
-      return SOW_t("hud.build_coast_required");
-    if (d.locked_reason === "campaign_locked")
-      return SOW_t("hud.campaign_unlock_required");
-    if (busy || d.under_construction)
-      return SOW_t("hud.building_in_progress");
-    if (d.next_level == null) return SOW_t("hud.building_max_level");
-    if (!d.affordable) {
-      return (
-        mapActionReason(
-          { disabled: true, cost: d.cost ?? undefined },
-          availableGold,
-        ) || ""
-      );
-    }
-    return "";
-  }
-
-  function patchCityDistrictButtons(
+  function patchBuildingProductionButtons(
     menu: HTMLElement,
-    districts: HudCityDistrict[],
-    busy: boolean,
-    availableGold: number | undefined,
-  ): void {
-    districts.forEach(function (d) {
-      const btn = menu.querySelector<HTMLButtonElement>(
-        '[data-district-kind="' + d.kind + '"]',
-      );
-      if (!btn) return;
-      const costVal = Math.max(0, Math.ceil(Number(d.cost) || 0));
-      const costText = d.cost != null ? formatHudMetric(costVal) : "";
-      const timeText =
-        d.seconds != null
-          ? Math.max(1, Math.ceil(Number(d.seconds) || 0)) + "s"
-          : "";
-      const costEl = btn.querySelector<HTMLElement>("[data-district-cost]");
-      if (costEl && costEl.textContent !== costText) {
-        costEl.textContent = costText;
-      }
-      const timeEl = btn.querySelector<HTMLElement>("[data-district-time]");
-      if (timeEl && timeEl.textContent !== timeText) {
-        timeEl.textContent = timeText;
-      }
-      const isMax = d.next_level == null;
-      const enabled = Boolean(d.enabled) && !busy && !isMax;
-      btn.disabled = false;
-      btn.classList.toggle("is-locked", !enabled && !isMax);
-      btn.classList.toggle("is-max", isMax);
-      btn.setAttribute("aria-disabled", String(!enabled));
-      const title = SOW_t("hud.map_action_" + d.kind.toLowerCase());
-      const cta = districtActionCta(d);
-      const reason = districtLockReason(d, busy, availableGold);
-      const metaSummary = costText ? costText + "g · " + timeText : "";
-      const accessibleLabel = reason
-        ? title + " · " + cta + ". " + reason
-        : title + " · " + cta + (metaSummary ? " · " + metaSummary : "");
-      if (btn.getAttribute("aria-label") !== accessibleLabel) {
-        btn.setAttribute("aria-label", accessibleLabel);
-      }
-      const tipText =
-        reason || (metaSummary ? cta + " · " + metaSummary : cta);
-      if (btn.dataset.sowTooltipKey !== tipText) {
-        btn.dataset.sowTooltipKey = tipText;
-        SOWTooltip.set(btn, {
-          title: title,
-          text: tipText,
-          tone: reason && !isMax ? "danger" : "gold",
-        });
-      }
-    });
-  }
-
-  function patchCityArsenalButtons(
-    menu: HTMLElement,
-    arsenal: HudCityArsenal,
+    production: HudBuildingProduction,
     busy: boolean,
     availableGold: number | undefined,
   ): void {
     const warshipBtn = menu.querySelector<HTMLButtonElement>(
-      '[data-arsenal-kind="Warship"]',
+      '[data-production-kind="Warship"]',
     );
-    if (warshipBtn) {
-      const w = arsenal.warship;
-      const costVal = Math.max(0, Math.ceil(Number(w.cost) || 0));
-      const costText = formatHudMetric(costVal);
-      const timeText = Math.max(1, Math.ceil(Number(w.seconds) || 0)) + "s";
-      const costEl =
-        warshipBtn.querySelector<HTMLElement>("[data-arsenal-cost]");
-      if (costEl && costEl.textContent !== costText) {
-        costEl.textContent = costText;
-      }
-      const timeEl =
-        warshipBtn.querySelector<HTMLElement>("[data-arsenal-time]");
-      if (timeEl && timeEl.textContent !== timeText) {
-        timeEl.textContent = timeText;
-      }
-      const enabled = Boolean(w.enabled) && !busy;
+    if (warshipBtn && production.warship) {
+      const warship = production.warship;
+      const costText = formatHudMetric(Math.max(0, Math.ceil(Number(warship.cost) || 0)));
+      const timeText = Math.max(1, Math.ceil(Number(warship.seconds) || 0)) + "s";
+      const cost = warshipBtn.querySelector<HTMLElement>("[data-production-cost]");
+      const time = warshipBtn.querySelector<HTMLElement>("[data-production-time]");
+      if (cost && cost.textContent !== costText) cost.textContent = costText;
+      if (time && time.textContent !== timeText) time.textContent = timeText;
+      const enabled = Boolean(warship.enabled) && !busy;
       warshipBtn.disabled = false;
       warshipBtn.classList.toggle("is-locked", !enabled);
       warshipBtn.setAttribute("aria-disabled", String(!enabled));
-      const reason = !w.campaign_unlocked
+      const reason = !warship.campaign_unlocked
         ? SOW_t("hud.campaign_unlock_required")
-        : !w.unlocked
-          ? SOW_t("hud.map_action_port") + " Lv.1"
-          : busy
-            ? SOW_t("hud.building_in_progress")
-            : !w.capacity_ok
-              ? SOW_t("hud.fleet_capacity_full")
-              : !w.affordable
-                ? mapActionReason({ disabled: true, cost: w.cost }, availableGold) ||
-                  ""
-                : "";
+        : busy
+          ? SOW_t("hud.building_in_progress")
+          : !warship.capacity_ok
+            ? SOW_t("hud.fleet_capacity_full")
+            : !warship.affordable
+              ? mapActionReason({ disabled: true, cost: warship.cost }, availableGold) || ""
+              : "";
       const title = SOW_t("hud.map_action_build_warship");
-      const tipText = reason || costText + "g · " + timeText;
-      const accessibleLabel = title + " · " + tipText;
-      if (warshipBtn.getAttribute("aria-label") !== accessibleLabel) {
-        warshipBtn.setAttribute("aria-label", accessibleLabel);
-      }
-      if (warshipBtn.dataset.sowTooltipKey !== tipText) {
-        warshipBtn.dataset.sowTooltipKey = tipText;
-        SOWTooltip.set(warshipBtn, {
-          title: title,
-          text: tipText,
-          tone: reason ? "danger" : "gold",
-        });
+      const tip = reason || costText + "g · " + timeText;
+      const label = title + " · " + tip;
+      if (warshipBtn.getAttribute("aria-label") !== label) warshipBtn.setAttribute("aria-label", label);
+      if (warshipBtn.dataset.sowTooltipKey !== tip) {
+        warshipBtn.dataset.sowTooltipKey = tip;
+        SOWTooltip.set(warshipBtn, { title, text: tip, tone: reason ? "danger" : "gold" });
       }
     }
 
     const nukeBtn = menu.querySelector<HTMLButtonElement>(
-      '[data-arsenal-kind="Nuke"], [data-command="select_nuke"]',
+      '[data-production-kind="Nuke"], [data-command="select_nuke"]',
     );
-    if (nukeBtn) {
-      const n = arsenal.nuke;
+    if (nukeBtn && production.nuke) {
+      const nuke = production.nuke;
       const title = SOW_t("hud.map_action_nuke");
-      if (n.can_launch) {
+      if (nuke.can_launch) {
         nukeBtn.disabled = false;
         nukeBtn.classList.remove("is-locked");
         nukeBtn.classList.add("is-ready");
-        nukeBtn.classList.toggle("active", Boolean(n.selected));
+        nukeBtn.classList.toggle("active", Boolean(nuke.selected));
         nukeBtn.setAttribute("aria-disabled", "false");
-        nukeBtn.setAttribute("aria-pressed", String(Boolean(n.selected)));
+        nukeBtn.setAttribute("aria-pressed", String(Boolean(nuke.selected)));
         const readyText = SOW_t("hud.ready");
-        const statusEl = nukeBtn.querySelector<HTMLElement>(
-          "[data-arsenal-status]",
-        );
-        if (statusEl && statusEl.textContent !== readyText) {
-          statusEl.textContent = readyText;
-        }
-        const accessibleLabel = title + " · " + readyText;
-        if (nukeBtn.getAttribute("aria-label") !== accessibleLabel) {
-          nukeBtn.setAttribute("aria-label", accessibleLabel);
-        }
+        const status = nukeBtn.querySelector<HTMLElement>("[data-production-status]");
+        if (status && status.textContent !== readyText) status.textContent = readyText;
+        const label = title + " · " + readyText;
+        if (nukeBtn.getAttribute("aria-label") !== label) nukeBtn.setAttribute("aria-label", label);
         if (nukeBtn.dataset.sowTooltipKey !== readyText) {
           nukeBtn.dataset.sowTooltipKey = readyText;
-          SOWTooltip.set(nukeBtn, {
-            title: title,
-            text: readyText,
-            tone: "gold",
-          });
+          SOWTooltip.set(nukeBtn, { title, text: readyText, tone: "gold" });
         }
       } else {
-        const costVal = Math.max(0, Math.ceil(Number(n.cost) || 0));
-        const costText = formatHudMetric(costVal);
-        const timeText = Math.max(1, Math.ceil(Number(n.seconds) || 0)) + "s";
-        const costEl =
-          nukeBtn.querySelector<HTMLElement>("[data-arsenal-cost]");
-        if (costEl && costEl.textContent !== costText) {
-          costEl.textContent = costText;
-        }
-        const timeEl =
-          nukeBtn.querySelector<HTMLElement>("[data-arsenal-time]");
-        if (timeEl && timeEl.textContent !== timeText) {
-          timeEl.textContent = timeText;
-        }
-        const enabled = Boolean(n.can_build) && !busy;
+        const costText = formatHudMetric(Math.max(0, Math.ceil(Number(nuke.cost) || 0)));
+        const timeText = Math.max(1, Math.ceil(Number(nuke.seconds) || 0)) + "s";
+        const cost = nukeBtn.querySelector<HTMLElement>("[data-production-cost]");
+        const time = nukeBtn.querySelector<HTMLElement>("[data-production-time]");
+        if (cost && cost.textContent !== costText) cost.textContent = costText;
+        if (time && time.textContent !== timeText) time.textContent = timeText;
+        const enabled = Boolean(nuke.can_build) && !busy;
         nukeBtn.disabled = false;
         nukeBtn.classList.remove("is-ready", "active");
         nukeBtn.classList.toggle("is-locked", !enabled);
         nukeBtn.setAttribute("aria-disabled", String(!enabled));
-        const reason = !n.campaign_unlocked
+        const reason = !nuke.campaign_unlocked
           ? SOW_t("hud.campaign_unlock_required")
-          : !n.unlocked
-            ? SOW_t("hud.map_action_factory") +
-              " / " +
-              SOW_t("hud.map_action_tower") +
-              " Lv.4"
-            : busy
-              ? SOW_t("hud.building_in_progress")
-              : !n.affordable
-                ? mapActionReason(
-                    { disabled: true, cost: n.cost },
-                    availableGold,
-                  ) || ""
-                : "";
-        const tipText = reason || costText + "g · " + timeText;
-        const accessibleLabel = title + " · " + tipText;
-        if (nukeBtn.getAttribute("aria-label") !== accessibleLabel) {
-          nukeBtn.setAttribute("aria-label", accessibleLabel);
-        }
-        if (nukeBtn.dataset.sowTooltipKey !== tipText) {
-          nukeBtn.dataset.sowTooltipKey = tipText;
-          SOWTooltip.set(nukeBtn, {
-            title: title,
-            text: tipText,
-            tone: reason ? "danger" : "gold",
-          });
-        }
-      }
-    }
-
-    const antiBtn = menu.querySelector<HTMLButtonElement>(
-      '[data-arsenal-kind="AntiNuke"]',
-    );
-    if (antiBtn) {
-      const a = arsenal.anti_nuke;
-      const title = "Anti-Nuke";
-      if (a.installed) {
-        const cooldown = Math.max(0, Number(a.cooldown_seconds) || 0);
-        const ready = cooldown <= 0;
-        const statusText = ready
-          ? SOW_t("hud.ready")
-          : Math.ceil(cooldown) + "s";
-        antiBtn.disabled = false;
-        antiBtn.classList.remove("is-locked");
-        antiBtn.classList.toggle("is-ready", ready);
-        antiBtn.classList.toggle("is-cooling", !ready);
-        antiBtn.setAttribute("aria-disabled", "true");
-        const cdEl = antiBtn.querySelector<HTMLElement>(
-          "[data-arsenal-cooldown]",
-        );
-        if (cdEl && cdEl.textContent !== statusText) {
-          cdEl.textContent = statusText;
-        }
-        const accessibleLabel = title + " · " + statusText;
-        if (antiBtn.getAttribute("aria-label") !== accessibleLabel) {
-          antiBtn.setAttribute("aria-label", accessibleLabel);
-        }
-        if (antiBtn.dataset.sowTooltipKey !== statusText) {
-          antiBtn.dataset.sowTooltipKey = statusText;
-          SOWTooltip.set(antiBtn, {
-            title: title,
-            text: statusText,
-            tone: ready ? "gold" : undefined,
-          });
-        }
-      } else {
-        const costVal = Math.max(0, Math.ceil(Number(a.cost) || 0));
-        const costText = formatHudMetric(costVal);
-        const timeText = Math.max(1, Math.ceil(Number(a.seconds) || 0)) + "s";
-        const costEl =
-          antiBtn.querySelector<HTMLElement>("[data-arsenal-cost]");
-        if (costEl && costEl.textContent !== costText) {
-          costEl.textContent = costText;
-        }
-        const timeEl =
-          antiBtn.querySelector<HTMLElement>("[data-arsenal-time]");
-        if (timeEl && timeEl.textContent !== timeText) {
-          timeEl.textContent = timeText;
-        }
-        const enabled = Boolean(a.enabled) && !busy;
-        antiBtn.disabled = false;
-        antiBtn.classList.remove("is-ready", "is-cooling");
-        antiBtn.classList.toggle("is-locked", !enabled);
-        antiBtn.setAttribute("aria-disabled", String(!enabled));
-        const reason = !a.campaign_unlocked
-          ? SOW_t("hud.campaign_unlock_required")
-          : !a.unlocked
-            ? SOW_t("hud.map_action_tower") + " Lv.4"
-            : busy
-              ? SOW_t("hud.building_in_progress")
-              : !a.affordable
-                ? mapActionReason(
-                    { disabled: true, cost: a.cost },
-                    availableGold,
-                  ) || ""
-                : "";
-        const tipText = reason || costText + "g · " + timeText;
-        const accessibleLabel = title + " · " + tipText;
-        if (antiBtn.getAttribute("aria-label") !== accessibleLabel) {
-          antiBtn.setAttribute("aria-label", accessibleLabel);
-        }
-        if (antiBtn.dataset.sowTooltipKey !== tipText) {
-          antiBtn.dataset.sowTooltipKey = tipText;
-          SOWTooltip.set(antiBtn, {
-            title: title,
-            text: tipText,
-            tone: reason ? "danger" : "gold",
-          });
+          : busy
+            ? SOW_t("hud.building_in_progress")
+            : !nuke.affordable
+              ? mapActionReason({ disabled: true, cost: nuke.cost }, availableGold) || ""
+              : "";
+        const tip = reason || costText + "g · " + timeText;
+        const label = title + " · " + tip;
+        if (nukeBtn.getAttribute("aria-label") !== label) nukeBtn.setAttribute("aria-label", label);
+        if (nukeBtn.dataset.sowTooltipKey !== tip) {
+          nukeBtn.dataset.sowTooltipKey = tip;
+          SOWTooltip.set(nukeBtn, { title, text: tip, tone: reason ? "danger" : "gold" });
         }
       }
     }
@@ -3392,11 +3213,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       );
     }
     const busy = Boolean(construction || building.under_construction);
-    if (Array.isArray(building.districts) && building.districts.length > 0) {
-      patchCityDistrictButtons(menu, building.districts, busy, availableGold);
-    }
-    if (building.arsenal) {
-      patchCityArsenalButtons(menu, building.arsenal, busy, availableGold);
+    if (building.production) {
+      patchBuildingProductionButtons(menu, building.production, busy, availableGold);
     }
     const upgrade = building.upgrade;
     if (!upgrade) return;
@@ -3532,147 +3350,56 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     menu.style.setProperty("--caret-offset-x", caretOffsetX.toFixed(1) + "px");
   }
 
-  function renderCityDistrictRow(tileIdx: number, d: HudCityDistrict): string {
-    const isMax = d.next_level == null;
-    const locked = Boolean(d.locked_reason);
-    const title = SOW_t("hud.map_action_" + d.kind.toLowerCase());
-    const preview = (d.metrics && d.metrics.length ? d.metrics : d.next_gains || []).slice(0, 2);
-    const statsHtml = preview.length
-      ? '<span class="sow-hud__city-district-stats">' +
-        preview
-          .map(function (c) {
-            return (
-              '<span class="sow-hud__city-district-stat' +
-              (d.level === 0 ? " is-preview" : "") +
-              '">' +
-              statusIcon(c.icon, "sow-hud__building-stat-icon") +
-              "<b>" +
-              escapeHudText(c.label) +
-              "</b></span>"
-            );
-          })
-          .join("") +
-        "</span>"
-      : "";
-    const btnAttrs =
-      'data-district-kind="' +
-      escapeHudText(d.kind) +
-      '" data-district-tile="' +
-      tileIdx +
-      '"' +
-      (!isMax && !locked ? ' data-map-action="upgrade_structure"' : "");
-    const btnBody = isMax
-      ? '<span class="sow-hud__city-district-max">MAX</span>'
-      : locked
-        ? hudIcon("lock", "sow-hud__city-district-lock")
-        : '<span class="sow-hud__city-district-cta">' +
-          escapeHudText(
-            d.level === 0 ? SOW_t("hud.map_action_build") : "Lv." + d.next_level,
-          ) +
+  function renderBuildingProductionGrid(
+    buildingId: number,
+    production: HudBuildingProduction,
+  ): string {
+    const buttons: string[] = [];
+    if (production.warship) {
+      buttons.push(
+        '<button type="button" class="sow-hud__city-arsenal-btn" data-production-kind="Warship" data-building-id="' +
+          buildingId +
+          '">' +
+          unitIcon("warship", "sow-hud__city-arsenal-art") +
+          '<span class="sow-hud__city-arsenal-name">' +
+          escapeHudText(SOW_t("hud.fleet_warship_label")) +
           "</span>" +
-          '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-cost">' +
+          '<span class="sow-hud__city-arsenal-meta">' +
           hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
-          "<b data-district-cost></b>" +
+          "<b data-production-cost></b>" +
+          '<span class="sow-hud__city-arsenal-sep">·</span>' +
+          "<b data-production-time></b>" +
           "</span>" +
-          '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-time">' +
-          "<b data-district-time></b>" +
+          "</button>",
+      );
+    }
+    if (production.nuke) {
+      const attrs = production.nuke.can_launch
+        ? 'data-command="select_nuke"'
+        : 'data-production-kind="Nuke" data-building-id="' + buildingId + '"';
+      const meta = production.nuke.can_launch
+        ? '<span class="sow-hud__city-arsenal-meta is-ready" data-production-status></span>'
+        : '<span class="sow-hud__city-arsenal-meta">' +
+          hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
+          "<b data-production-cost></b>" +
+          '<span class="sow-hud__city-arsenal-sep">·</span>' +
+          "<b data-production-time></b>" +
           "</span>";
-    return (
-      '<div class="sow-hud__city-district-row">' +
-      '<div class="sow-hud__city-district-info">' +
-      '<span class="sow-hud__city-district-thumb" aria-hidden="true">' +
-      buildingIcon(d.kind, Math.max(1, d.level), "sow-hud__city-district-art") +
-      "</span>" +
-      '<div class="sow-hud__city-district-copy">' +
-      '<div class="sow-hud__city-district-head">' +
-      '<strong class="sow-hud__city-district-name">' +
-      escapeHudText(title) +
-      "</strong>" +
-      '<span class="sow-hud__city-district-lv' +
-      (isMax ? " is-max" : d.under_construction ? " is-building" : "") +
-      '">Lv.' +
-      d.level +
-      "/" +
-      d.max_level +
-      "</span>" +
-      "</div>" +
-      statsHtml +
-      "</div>" +
-      "</div>" +
-      '<button type="button" class="sow-hud__city-district-btn' +
-      (d.discounted ? " is-discounted" : "") +
-      '" ' +
-      btnAttrs +
-      ">" +
-      btnBody +
-      "</button>" +
-      "</div>"
-    );
-  }
-
-  function renderCityArsenalGrid(tileIdx: number, arsenal: HudCityArsenal): string {
-    const warshipHtml =
-      '<button type="button" class="sow-hud__city-arsenal-btn" data-arsenal-kind="Warship" data-arsenal-tile="' +
-      tileIdx +
-      '">' +
-      unitIcon("warship", "sow-hud__city-arsenal-art") +
-      '<span class="sow-hud__city-arsenal-name">' +
-      escapeHudText(SOW_t("hud.fleet_warship_label")) +
-      "</span>" +
-      '<span class="sow-hud__city-arsenal-meta">' +
-      hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
-      "<b data-arsenal-cost></b>" +
-      '<span class="sow-hud__city-arsenal-sep">·</span>' +
-      "<b data-arsenal-time></b>" +
-      "</span>" +
-      "</button>";
-
-    const nukeAttrs = arsenal.nuke.can_launch
-      ? 'data-command="select_nuke"'
-      : 'data-arsenal-kind="Nuke" data-arsenal-tile="' + tileIdx + '"';
-    const nukeMeta = arsenal.nuke.can_launch
-      ? '<span class="sow-hud__city-arsenal-meta is-ready" data-arsenal-status></span>'
-      : '<span class="sow-hud__city-arsenal-meta">' +
-        hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
-        "<b data-arsenal-cost></b>" +
-        '<span class="sow-hud__city-arsenal-sep">·</span>' +
-        "<b data-arsenal-time></b>" +
-        "</span>";
-    const nukeHtml =
-      '<button type="button" class="sow-hud__city-arsenal-btn" ' +
-      nukeAttrs +
-      ">" +
-      unitIcon("atom-bomb", "sow-hud__city-arsenal-art") +
-      '<span class="sow-hud__city-arsenal-name">' +
-      escapeHudText(SOW_t("hud.map_action_nuke")) +
-      "</span>" +
-      nukeMeta +
-      "</button>";
-
-    const antiMeta = arsenal.anti_nuke.installed
-      ? '<span class="sow-hud__city-arsenal-meta is-installed" data-arsenal-cooldown></span>'
-      : '<span class="sow-hud__city-arsenal-meta">' +
-        hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
-        "<b data-arsenal-cost></b>" +
-        '<span class="sow-hud__city-arsenal-sep">·</span>' +
-        "<b data-arsenal-time></b>" +
-        "</span>";
-    const antiHtml =
-      '<button type="button" class="sow-hud__city-arsenal-btn" data-arsenal-kind="AntiNuke" data-arsenal-tile="' +
-      tileIdx +
-      '">' +
-      unitIcon("sam-missile", "sow-hud__city-arsenal-art") +
-      '<span class="sow-hud__city-arsenal-name">SAM</span>' +
-      antiMeta +
-      "</button>";
-
-    return (
-      '<div class="sow-hud__city-arsenal-grid">' +
-      warshipHtml +
-      nukeHtml +
-      antiHtml +
-      "</div>"
-    );
+      buttons.push(
+        '<button type="button" class="sow-hud__city-arsenal-btn" ' +
+          attrs +
+          ">" +
+          unitIcon("atom-bomb", "sow-hud__city-arsenal-art") +
+          '<span class="sow-hud__city-arsenal-name">' +
+          escapeHudText(SOW_t("hud.map_action_nuke")) +
+          "</span>" +
+          meta +
+          "</button>",
+      );
+    }
+    return buttons.length
+      ? '<div class="sow-hud__city-arsenal-grid">' + buttons.join("") + "</div>"
+      : "";
   }
 
   function renderBuildingDetailsCard(
@@ -3706,15 +3433,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       Boolean(construction) ||
       building.remaining_seconds != null;
     const isCityFoundation = Boolean(building.city_foundation);
-    const districts = Array.isArray(building.districts) ? building.districts : [];
-    const arsenal = building.arsenal || null;
-    const hasCityPanel = districts.length > 0 || Boolean(arsenal);
+    const production = building.production || null;
+    const hasProductionPanel = Boolean(production);
     const chips = Array.isArray(building.chips) ? building.chips : [];
     const upgrade =
       !underConstruction && building.upgrade ? building.upgrade : null;
-    const tileIdx = Number.isFinite(Number(building.tile_idx))
-      ? Number(building.tile_idx)
-      : Number(mapMenu.tile_idx);
     const session = String(mapMenu.session) + ":" + String(mapMenu.tile_idx);
     menu.dataset.session = String(mapMenu.session);
     menu.dataset.tileIdx = String(mapMenu.tile_idx);
@@ -3722,33 +3445,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     menu.classList.remove("hidden", "has-tether");
     menu.classList.add("is-building-card");
 
-    const districtSig = districts
-      .map(function (d) {
-        return [
-          d.kind,
-          d.level,
-          d.under_construction ? 1 : 0,
-          d.locked_reason || "",
-          d.next_level ?? "",
-          d.discounted ? 1 : 0,
-          (d.metrics || []).map((c) => c.icon + "=" + c.label).join(","),
-          (d.next_gains || []).map((c) => c.icon + "=" + c.label).join(","),
-        ].join("/");
-      })
-      .join("|");
-    const arsenalSig = arsenal
+    const productionSig = production
       ? [
-          arsenal.warship.unlocked ? 1 : 0,
-          arsenal.warship.campaign_unlocked ? 1 : 0,
-          arsenal.nuke.can_launch ? "L" : arsenal.nuke.unlocked ? "B" : "X",
-          arsenal.nuke.selected ? 1 : 0,
-          arsenal.anti_nuke.installed
-            ? arsenal.anti_nuke.cooldown_seconds > 0
-              ? "C"
-              : "R"
-            : arsenal.anti_nuke.unlocked
-              ? "B"
-              : "X",
+          production.warship ? "W" : "",
+          production.nuke ? (production.nuke.can_launch ? "L" : "N") : "",
         ].join(":")
       : "";
 
@@ -3760,7 +3460,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       level,
       visualLevel,
       maxLevel,
-      isCityFoundation ? "foundation" : hasCityPanel ? "city" : "legacy",
+      isCityFoundation ? "foundation" : hasProductionPanel ? "production" : "building",
+      building.building_id ?? "",
       building.coastal ? 1 : 0,
       building.railway_connected ? 1 : 0,
       construction
@@ -3775,8 +3476,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           return chip.icon + "=" + chip.label;
         })
         .join("|"),
-      districtSig,
-      arsenalSig,
+      productionSig,
     ].join(":");
 
     if (menu.dataset.renderKey !== renderKey) {
@@ -3829,7 +3529,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           "</button>"
         : "";
 
-      if (isCityFoundation || (!hasCityPanel && underConstruction)) {
+      if (isCityFoundation || (!hasProductionPanel && underConstruction)) {
         const activeKind = construction ? construction.kind : kind;
         const targetLv = construction
           ? construction.target_level
@@ -3840,7 +3540,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         card.innerHTML =
           '<span class="sow-hud__building-card-caret" aria-hidden="true"></span>' +
           renderBuildingProgressBarMarkup(activeKind, targetLv);
-      } else if (hasCityPanel) {
+      } else if (hasProductionPanel) {
         const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
         const traitsHtml =
           (building.coastal
@@ -3861,16 +3561,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             ) +
             "</div>"
           : "";
-        const districtsHtml = districts.length
-          ? '<div class="sow-hud__city-districts">' +
-            districts
-              .map(function (d) {
-                return renderCityDistrictRow(tileIdx, d);
-              })
-              .join("") +
-            "</div>"
-          : "";
-        const arsenalHtml = arsenal ? renderCityArsenalGrid(tileIdx, arsenal) : "";
+        const productionHtml = renderBuildingProductionGrid(
+          Number(building.building_id) || 0,
+          production || {},
+        );
         card.className = "sow-hud__building-card is-city-card";
         card.innerHTML =
           '<span class="sow-hud__building-card-caret" aria-hidden="true"></span>' +
@@ -3899,8 +3593,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           constructionHtml +
           chipsHtml +
           footerHtml +
-          districtsHtml +
-          arsenalHtml;
+          productionHtml;
       } else {
         const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
         const isMax = !upgrade && maxLevel > 0 && level >= maxLevel;
@@ -4293,6 +3986,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     build_port: 2,
     build_tower: 3,
     build_farm: 4,
+    build_sam: 5,
   };
   const RING_EMOTE_SLOTS: Record<string, number> = {
     greet: 0,
@@ -9267,25 +8961,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
         return;
       }
-      const districtBtn = target.closest<HTMLButtonElement>("[data-district-kind]");
-      if (districtBtn) {
+      const productionBtn = target.closest<HTMLButtonElement>("[data-production-kind]");
+      if (productionBtn) {
         event.preventDefault();
         event.stopPropagation();
-        const kind = districtBtn.dataset.districtKind;
-        const tileIdx = Number(districtBtn.dataset.districtTile);
-        if (kind && Number.isFinite(tileIdx)) {
-          send("build_or_upgrade_district", { tile_idx: tileIdx, kind });
-        }
-        return;
-      }
-      const arsenalBtn = target.closest<HTMLButtonElement>("[data-arsenal-kind]");
-      if (arsenalBtn) {
-        event.preventDefault();
-        event.stopPropagation();
-        const kind = arsenalBtn.dataset.arsenalKind;
-        const tileIdx = Number(arsenalBtn.dataset.arsenalTile);
-        if (kind && Number.isFinite(tileIdx)) {
-          send("city_arsenal", { tile_idx: tileIdx, kind });
+        const kind = productionBtn.dataset.productionKind;
+        const buildingId = Number(productionBtn.dataset.buildingId);
+        if (kind && Number.isSafeInteger(buildingId) && buildingId > 0) {
+          send("building_production", { building_id: buildingId, kind });
         }
         return;
       }

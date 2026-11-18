@@ -105,6 +105,8 @@ pub(crate) struct SfxDirector {
     pending_elimination: Option<PendingElimination>,
     under_attack_active: bool,
     result_played: bool,
+    cascade_chain: u8,
+    last_cascade_at: Option<Instant>,
 }
 
 impl SfxDirector {
@@ -332,6 +334,28 @@ impl SfxDirector {
         }
         self.mark_critical(now);
         sow_audio::play_nuke_impact_sound(level, spatial);
+    }
+
+    pub(crate) fn play_cascade(
+        &mut self,
+        now: Instant,
+        chain_step: u8,
+        spatial: SpatialSoundParams,
+    ) {
+        if !self.client_active || self.result_played {
+            return;
+        }
+        let step = if self
+            .last_cascade_at
+            .is_some_and(|last| now.duration_since(last).as_secs_f32() <= 4.5)
+        {
+            self.cascade_chain.saturating_add(1).max(chain_step).clamp(1, 8)
+        } else {
+            chain_step.clamp(1, 8)
+        };
+        self.cascade_chain = step;
+        self.last_cascade_at = Some(now);
+        sow_audio::play_cascade_sound(step, spatial);
     }
 
     pub(crate) fn play_result(&mut self, won: bool) {

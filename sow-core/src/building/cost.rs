@@ -1,4 +1,4 @@
-use super::core::Building;
+use super::core::{Building, gold_income_level_weight, income_level_weight};
 use crate::game::BuildingKind;
 
 const COST_MULTIPLIER_PER_DOUBLING: f64 = 1.1;
@@ -26,6 +26,7 @@ pub fn structure_build_cost_gold(
         BuildingKind::Factory => cfg.cost_factory,
         BuildingKind::Port => cfg.cost_port,
         BuildingKind::Farm => cfg.cost_farm,
+        BuildingKind::SAM => cfg.cost_sam,
     };
     let cap_mult = cfg.cost_scale_cap_multiplier.max(1.0);
     let count_factor = 1.0
@@ -34,8 +35,7 @@ pub fn structure_build_cost_gold(
     scaled.min(base_cost * cap_mult)
 }
 
-/// Gold price for moving one structure to its next level.
-/// The level is authoritative; nearby structures never participate in this cost.
+/// Gold price for the next level, discounted 25% against equivalent new production.
 #[inline]
 pub fn structure_upgrade_cost_gold(
     kind: BuildingKind,
@@ -47,7 +47,16 @@ pub fn structure_upgrade_cost_gold(
         return f64::INFINITY;
     }
     let foundation = structure_build_cost_gold(kind, owned_levels, cfg);
-    foundation * 0.75
+    let marginal = match kind {
+        BuildingKind::City | BuildingKind::Farm | BuildingKind::Port => {
+            income_level_weight(target_level) - income_level_weight(target_level - 1)
+        }
+        BuildingKind::Factory => {
+            gold_income_level_weight(target_level) - gold_income_level_weight(target_level - 1)
+        }
+        BuildingKind::Tower | BuildingKind::SAM => 1.0,
+    };
+    foundation * marginal * 0.75
 }
 
 #[inline]
@@ -92,7 +101,7 @@ pub fn boat_speed_bonus_from_port_levels(port_levels: u32) -> f64 {
     (port_levels as f64 * 0.01).min(0.30)
 }
 
-/// Canonical gold cost to queue a strategic arsenal build inside a qualified City.
+/// Canonical gold cost for a queued strategic product.
 #[inline]
 pub fn city_arsenal_cost_gold(
     kind: crate::game::CityArsenalKind,
@@ -160,19 +169,20 @@ mod tests {
     }
 
     #[test]
-    fn upgrades_cost_less_than_a_new_building_with_no_hidden_discounts() {
+    fn upgrades_discount_equivalent_production_with_no_hidden_discounts() {
         let cfg = crate::game_config::GameConfig::default();
         let next_foundation = structure_build_cost_gold(BuildingKind::Factory, 2, &cfg);
         let normal = structure_upgrade_cost_gold(BuildingKind::Factory, 2, 2, &cfg);
 
-        assert_eq!(normal, next_foundation * 0.75);
+        let marginal = (1.45_f64 / 0.85).cbrt();
+        assert!((normal - next_foundation * marginal * 0.75).abs() < 1e-9);
     }
 
     #[test]
     fn every_building_has_three_upgrades_after_its_foundation() {
         assert_eq!(BuildingKind::City.max_level(), 4);
         assert!(
-            BuildingKind::DISTRICTS
+            BuildingKind::NON_CITY
                 .into_iter()
                 .all(|kind| kind.max_level() == 4)
         );
@@ -182,31 +192,39 @@ mod tests {
     fn initial_building_prices_match_the_balance_table() {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
-            (BuildingKind::City, 200.0),
+            (BuildingKind::City, 125.0),
             (BuildingKind::Tower, 100.0),
-            (BuildingKind::Factory, 175.0),
+            (BuildingKind::Factory, 100.0),
             (BuildingKind::Port, 200.0),
-            (BuildingKind::Farm, 125.0),
+            (BuildingKind::Farm, 175.0),
+            (BuildingKind::SAM, 500.0),
         ] {
             assert_eq!(structure_build_cost_gold(kind, 0, &cfg), expected);
         }
     }
 
     #[test]
-    fn every_upgrade_level_uses_seventy_five_percent_after_existing_cost_growth() {
+    fn every_upgrade_level_prices_its_marginal_benefit_after_existing_cost_growth() {
         let cfg = crate::game_config::GameConfig::default();
-        for kind in BuildingKind::ALL {
-            let base = structure_build_cost_gold(kind, 0, &cfg);
+        for (kind, expected) in [
+            (BuildingKind::City, [154.69, 244.37, 379.69]),
+            (BuildingKind::Farm, [216.56, 342.12, 531.56]),
+            (BuildingKind::Factory, [98.58, 124.05, 153.53]),
+            (BuildingKind::Port, [247.50, 390.99, 607.50]),
+            (BuildingKind::Tower, [82.50, 86.89, 90.0]),
+            (BuildingKind::SAM, [412.50, 434.44, 450.0]),
+        ] {
             for target_level in 2..=kind.max_level() {
                 let previous_owned_levels = u32::from(target_level - 1);
-                let placement = structure_build_cost_gold(kind, previous_owned_levels, &cfg);
                 let upgrade =
                     structure_upgrade_cost_gold(kind, target_level, previous_owned_levels, &cfg);
-                let expected_multiplier = 1.0
-                    + (COST_MULTIPLIER_PER_DOUBLING - 1.0)
-                        * (f64::from(previous_owned_levels) + 1.0).log2();
-                assert!((placement / base - expected_multiplier).abs() < 1e-12);
-                assert_eq!(upgrade, placement * 0.75);
+                assert!((upgrade - expected[usize::from(target_level - 2)]).abs() < 0.005);
+                for owned_levels in [10, 100, 1_000] {
+                    let cost = structure_upgrade_cost_gold(kind, target_level, owned_levels, &cfg);
+                    let scale = structure_build_cost_gold(kind, owned_levels, &cfg)
+                        / structure_build_cost_gold(kind, previous_owned_levels, &cfg);
+                    assert!((cost - upgrade * scale).abs() < 1e-9);
+                }
             }
         }
     }

@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use std::error::Error;
 use std::path::PathBuf;
 
+mod blitz_gen;
 mod building_atlas;
 mod exporter;
 mod image_map;
@@ -55,6 +56,23 @@ enum Commands {
     /// Stamp geographic bounds (SOWM v2) into existing map.bin files.
     #[command(name = "stamp-geo")]
     StampGeo(StampGeoArgs),
+    /// Generate & headless-validate Conquest Blitz Sawtooth campaign nodes.
+    #[command(name = "generate-blitz-levels")]
+    GenerateBlitzLevels(GenerateBlitzArgs),
+}
+
+#[derive(Parser, Debug)]
+struct GenerateBlitzArgs {
+    #[arg(long, default_value = "assets/campaign")]
+    campaign_root: PathBuf,
+    #[arg(long, default_value = "assets/maps")]
+    maps_root: PathBuf,
+    #[arg(long, default_value_t = 5)]
+    start: u32,
+    #[arg(long, default_value_t = 16)]
+    count: u32,
+    #[arg(long, default_value_t = false)]
+    dry_run: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -334,6 +352,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 badge_manifest: repo_root.join(args.badge_manifest),
             })
             .map_err(|error| error.to_string().into())
+        }
+        Some(Commands::GenerateBlitzLevels(args)) => {
+            let repo_root = std::env::current_dir()?;
+            blitz_gen::run(blitz_gen::GenerateBlitzArgs {
+                campaign_root: repo_root.join(args.campaign_root),
+                maps_root: repo_root.join(args.maps_root),
+                start: args.start,
+                count: args.count,
+                dry_run: args.dry_run,
+            })
         }
         None => {
             let args = cli.generate;

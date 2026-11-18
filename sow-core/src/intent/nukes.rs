@@ -22,7 +22,7 @@ impl SowEngine {
             return;
         }
 
-        // Find the closest ready city whose nuclear silo is armed (`nuke_ready`).
+        // Find the closest armed level-four Factory or Tower producer.
         let tx = (target_tile % w) as i32;
         let ty = (target_tile / w) as i32;
 
@@ -30,11 +30,12 @@ impl SowEngine {
             .buildings
             .iter()
             .filter(|b| {
-                b.kind == BuildingKind::City
+                matches!(b.kind, BuildingKind::Factory | BuildingKind::Tower)
                     && b.owner_id == player_id
                     && !b.under_construction
+                    && b.active_level() >= crate::game::NukeKind::AtomBomb.required_district_level()
                     && self
-                        .city_arsenals
+                        .building_productions
                         .get(&b.id)
                         .is_some_and(|state| state.nuke_ready)
             })
@@ -51,8 +52,8 @@ impl SowEngine {
         let silo_tile = silo.tile_idx;
         let level = 1;
 
-        // Consume the armed nuke on launch (gold and build time were paid in CityArsenal).
-        if let Some(state) = self.city_arsenals.get_mut(&silo_id) {
+        // Consume the armed nuke on launch (gold and build time were paid in production).
+        if let Some(state) = self.building_productions.get_mut(&silo_id) {
             state.nuke_ready = false;
         }
 

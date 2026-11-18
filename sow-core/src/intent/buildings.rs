@@ -1,13 +1,12 @@
 use crate::building::{
-    Building, CityArsenalBuild, city_arsenal_cost_gold, city_has_active_build,
-    structure_build_cost_gold, structure_upgrade_cost_gold, validate_district_site,
-    validate_structure_site,
+    Building, CityArsenalBuild, city_arsenal_cost_gold, structure_build_cost_gold,
+    structure_upgrade_cost_gold, validate_structure_site,
 };
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, CityArsenalKind, GameEvent, GamePhase, NavalActionFailure, UnitType};
 
 impl SowEngine {
-    /// The first District level-2 upgrade is a one-time Boudica tutorial allowance.
+    /// Boudica's tutorial grants one free City level-2 upgrade.
     pub fn tutorial_city_upgrade_is_free(&self, player_id: u16, building_id: u64) -> bool {
         if !self.state.config.tutorial
             || !self.state.config.buildings_enabled
@@ -22,12 +21,12 @@ impl SowEngine {
         else {
             return false;
         };
-        building.kind.is_district()
+        building.kind == BuildingKind::City
             && building.level == 1
             && !building.under_construction
             && !self.buildings.iter().any(|candidate| {
                 candidate.owner_id == player_id
-                    && candidate.kind.is_district()
+                    && candidate.kind == BuildingKind::City
                     && candidate.level >= 2
             })
     }
@@ -117,25 +116,12 @@ impl SowEngine {
         // Placement is intentionally separate from upgrades. A nearby building
         // never absorbs a new foundation order.
         let spawn_idx = if !self.legacy_building_rules {
-            if kind == BuildingKind::City {
-                if validate_structure_site(
-                    &self.state.map,
-                    player_id,
-                    BuildingKind::City,
-                    target_tile,
-                    &self.building_grid,
-                )
-                .is_err()
-                {
-                    return;
-                }
-            } else if validate_district_site(
+            if validate_structure_site(
                 &self.state.map,
-                &self.buildings,
-                &self.city_arsenals,
                 player_id,
                 kind,
                 target_tile,
+                &self.building_grid,
             )
             .is_err()
             {
@@ -171,7 +157,12 @@ impl SowEngine {
         player_mut.structures_built = player_mut.structures_built.saturating_add(1);
         let id = self.state.next_building_id;
         self.state.next_building_id = self.state.next_building_id.wrapping_add(1).max(1);
-        let dur = crate::building::structure_build_duration_ticks(kind);
+        let base_dur = crate::building::structure_build_duration_ticks(kind);
+        let dur = if self.state.config.tutorial {
+            (base_dur / 2).max(1)
+        } else {
+            base_dur
+        };
         let under = dur > 0;
         let ticks = if under { dur } else { 0 };
         self.add_building(Building {
@@ -213,7 +204,10 @@ impl SowEngine {
         let building = self.buildings[idx];
         if building.owner_id != player_id
             || building.under_construction
-            || city_has_active_build(&self.buildings, &self.city_arsenals, building.tile_idx)
+            || self
+                .building_productions
+                .get(&building.id)
+                .is_some_and(|state| state.arsenal_build.is_some())
         {
             return;
         }
@@ -238,8 +232,12 @@ impl SowEngine {
         let b = &mut self.buildings[idx];
         b.level = target_level;
         b.under_construction = true;
-        b.ticks_until_complete =
-            crate::building::structure_upgrade_duration_ticks(b.kind, target_level);
+        let upgrade_ticks = crate::building::structure_upgrade_duration_ticks(b.kind, target_level);
+        b.ticks_until_complete = if self.state.config.tutorial {
+            (upgrade_ticks / 2).max(1)
+        } else {
+            upgrade_ticks
+        };
         if b.kind == BuildingKind::Tower {
             self.defense_grid_dirty = true;
         }
@@ -261,11 +259,89 @@ impl SowEngine {
         }
     }
 
+    pub(super) fn apply_building_production_intent(
+        &mut self,
+        player_id: u16,
+        building_id: u64,
+        kind: CityArsenalKind,
+    ) {
+        self.queue_building_production(player_id, building_id, kind, None);
+    }
+
+    /// Old replays address a City tile; resolve their former co-located producer if present.
     pub(super) fn apply_city_arsenal_intent(
         &mut self,
         player_id: u16,
         tile_idx: u32,
         kind: CityArsenalKind,
+    ) {
+        let producer_kind = match kind {
+            CityArsenalKind::Warship => BuildingKind::Port,
+            CityArsenalKind::Nuke => return,
+            CityArsenalKind::AntiNuke => return,
+        };
+        let Some(building_id) = self
+            .buildings
+            .iter()
+            .find(|b| b.tile_idx == tile_idx && b.owner_id == player_id && b.kind == producer_kind)
+            .map(|b| b.id)
+        else {
+            return;
+        };
+        self.queue_building_production(player_id, building_id, kind, None);
+    }
+
+    pub(super) fn apply_build_ship_intent(
+        &mut self,
+        player_id: u16,
+        target_tile: u32,
+        unit_type: UnitType,
+    ) {
+        if unit_type != UnitType::Warship {
+            return;
+        }
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::Warship) {
+            self.state.events.push(GameEvent::NavalActionRejected {
+                player_id,
+                reason: NavalActionFailure::CampaignLocked,
+            });
+            return;
+        }
+        let route = match crate::warp_fleet::resolve_warship_route(
+            &self.state.map,
+            &self.water,
+            &mut self.path_scratch,
+            &self.buildings,
+            player_id,
+            target_tile,
+        ) {
+            Ok(route) => route,
+            Err(error) => {
+                let reason = match error {
+                    crate::warp_fleet::WarshipLaunchError::InvalidTile => NavalActionFailure::InvalidTarget,
+                    crate::warp_fleet::WarshipLaunchError::TargetNotWater => NavalActionFailure::TargetNotWater,
+                    crate::warp_fleet::WarshipLaunchError::NoPort => NavalActionFailure::NoPort,
+                    crate::warp_fleet::WarshipLaunchError::NoConnectedPort => NavalActionFailure::NoConnectedPort,
+                    crate::warp_fleet::WarshipLaunchError::NoWaterPath => NavalActionFailure::NoWaterPath,
+                };
+                self.state.events.push(GameEvent::NavalActionRejected { player_id, reason });
+                return;
+            }
+        };
+        self.queue_building_production(
+            player_id,
+            route.port_id,
+            CityArsenalKind::Warship,
+            Some(route),
+        );
+    }
+
+    fn queue_building_production(
+        &mut self,
+        player_id: u16,
+        building_id: u64,
+        kind: CityArsenalKind,
+        warship_route: Option<crate::warp_fleet::WarshipRoute>,
     ) {
         if self.state.phase != GamePhase::Playing || !self.state.config.buildings_enabled {
             return;
@@ -276,6 +352,7 @@ impl SowEngine {
         if !player.alive {
             return;
         }
+        let leader = player.leader;
         let allowed = match kind {
             CityArsenalKind::Warship => {
                 self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
@@ -283,7 +360,7 @@ impl SowEngine {
             CityArsenalKind::Nuke => {
                 self.campaign_allows_action(crate::campaign::CampaignAction::Nuke)
             }
-            CityArsenalKind::AntiNuke => self.campaign_allows_building(BuildingKind::Tower, 4),
+            CityArsenalKind::AntiNuke => false,
         };
         if !allowed {
             if kind == CityArsenalKind::Warship {
@@ -295,45 +372,35 @@ impl SowEngine {
             return;
         }
 
-        let Some(city) = self.buildings.iter().find(|b| {
-            b.tile_idx == tile_idx
-                && b.kind == BuildingKind::City
-                && b.owner_id == player_id
-                && !b.under_construction
-        }) else {
+        let Some(building) = self.buildings.iter().find(|b| b.id == building_id).copied() else {
             return;
         };
-        let city_id = city.id;
-        if city_has_active_build(&self.buildings, &self.city_arsenals, tile_idx) {
+        if building.owner_id != player_id
+            || building.under_construction
+            || self
+                .building_productions
+                .get(&building_id)
+                .is_some_and(|state| state.arsenal_build.is_some())
+        {
             return;
         }
-        let state = self.city_arsenals.get(&city_id).copied().unwrap_or_default();
-
-        let has_district = |district_kind: BuildingKind, min_level: u8| {
-            self.buildings.iter().any(|b| {
-                b.tile_idx == tile_idx
-                    && b.kind == district_kind
-                    && b.owner_id == player_id
-                    && !b.under_construction
-                    && b.active_level() >= min_level
-            })
-        };
 
         match kind {
             CityArsenalKind::Warship => {
-                if !has_district(BuildingKind::Port, 1) {
+                if building.kind != BuildingKind::Port || building.active_level() < 1 {
                     self.state.events.push(GameEvent::NavalActionRejected {
                         player_id,
                         reason: NavalActionFailure::NoPort,
                     });
                     return;
                 }
-                if crate::warp_fleet::coastal_warship_spawn_tile(
-                    &self.state.map,
-                    &self.water,
-                    tile_idx,
-                )
-                .is_none()
+                if warship_route.is_none()
+                    && crate::warp_fleet::coastal_warship_spawn_tile(
+                        &self.state.map,
+                        &self.water,
+                        building.tile_idx,
+                    )
+                    .is_none()
                 {
                     self.state.events.push(GameEvent::NavalActionRejected {
                         player_id,
@@ -342,7 +409,16 @@ impl SowEngine {
                     return;
                 }
                 let capacity = crate::building::player_fleet_capacity(&self.buildings, player_id);
-                if self.boat_slots_used(player_id) >= capacity {
+                let queued = self
+                    .building_productions
+                    .values()
+                    .filter(|state| {
+                        state
+                            .arsenal_build
+                            .is_some_and(|build| build.kind == CityArsenalKind::Warship)
+                    })
+                    .count() as u32;
+                if self.boat_slots_used(player_id).saturating_add(queued) >= capacity {
                     self.state.events.push(GameEvent::NavalActionRejected {
                         player_id,
                         reason: NavalActionFailure::CapacityFull,
@@ -351,27 +427,34 @@ impl SowEngine {
                 }
             }
             CityArsenalKind::Nuke => {
-                let req = crate::game::NukeKind::AtomBomb.required_district_level();
-                if state.nuke_ready
-                    || (!has_district(BuildingKind::Factory, req)
-                        && !has_district(BuildingKind::Tower, req))
+                if !matches!(building.kind, BuildingKind::Factory | BuildingKind::Tower)
+                    || building.active_level() < crate::game::NukeKind::AtomBomb.required_district_level()
+                    || self
+                        .building_productions
+                        .get(&building_id)
+                        .is_some_and(|state| state.nuke_ready)
                 {
                     return;
                 }
             }
-            CityArsenalKind::AntiNuke => {
-                if state.has_anti_nuke || !has_district(BuildingKind::Tower, 4) {
-                    return;
-                }
-            }
+            CityArsenalKind::AntiNuke => return,
         }
 
-        let owned_warships = self
+        let queued_warships = self.building_productions.iter().filter(|(building_id, state)| {
+            state
+                .arsenal_build
+                .is_some_and(|build| build.kind == CityArsenalKind::Warship)
+                && self.buildings.iter().any(|building| {
+                    building.id == **building_id && building.owner_id == player_id
+                })
+        }).count() as u32;
+        let owned_warships = (self
             .fleets
             .iter()
             .filter(|f| f.owner_id == player_id && f.unit_type == UnitType::Warship)
-            .count() as u32;
-        let cost = city_arsenal_cost_gold(kind, owned_warships, player.leader, &self.state.config);
+            .count() as u32)
+            .saturating_add(queued_warships);
+        let cost = city_arsenal_cost_gold(kind, owned_warships, leader, &self.state.config);
         let Some(player_mut) = self.state.player_mut(player_id) else {
             return;
         };
@@ -387,10 +470,12 @@ impl SowEngine {
         player_mut.gold = (player_mut.gold - cost).max(0.0);
 
         let duration = kind.duration_ticks();
-        self.city_arsenals.entry(city_id).or_default().arsenal_build = Some(CityArsenalBuild {
+        self.building_productions.entry(building_id).or_default().arsenal_build = Some(CityArsenalBuild {
             kind,
             ticks_until_complete: duration,
             total_ticks: duration,
+            warship_source_tile: warship_route.as_ref().map(|route| route.src_tile),
+            warship_target_tile: warship_route.as_ref().map(|route| route.landing_tile),
         });
     }
 }
@@ -457,9 +542,9 @@ mod tests {
         for _ in 0..max_ticks {
             engine.execute_construction();
         }
-        engine.apply_build_structure_intent(1, BuildingKind::Factory, 10 * 32 + 14);
+        engine.apply_build_structure_intent(1, BuildingKind::Factory, 10 * 32 + 17);
         assert!(engine.buildings.iter().any(|b| {
-            b.kind == BuildingKind::Factory && b.tile_idx == 10 * 32 + 14 && b.level == 1
+            b.kind == BuildingKind::Factory && b.tile_idx == 10 * 32 + 17 && b.level == 1
         }));
         let gold = engine.state.player(1).unwrap().gold;
         engine.apply_build_structure_intent(1, BuildingKind::City, 10 * 32 + 13);
@@ -549,7 +634,10 @@ mod tests {
     fn first_boudica_tutorial_city_upgrade_is_free_once() {
         let mut game = engine(true);
         assert!(game.set_campaign_unlocks(crate::campaign::CampaignUnlocks {
-            buildings: std::collections::HashMap::from([(BuildingKind::Factory, 2)]),
+            buildings: std::collections::HashMap::from([
+                (BuildingKind::City, 2),
+                (BuildingKind::Factory, 2),
+            ]),
             actions: vec![],
         }));
         game.buildings.push(building(1, BuildingKind::City, 1));
@@ -559,25 +647,22 @@ mod tests {
         });
         game.state.player_mut(1).unwrap().gold = 0.0;
 
-        assert!(game.tutorial_city_upgrade_is_free(1, 2));
-        game.apply_upgrade_structure_intent(1, 2);
-
-        assert_eq!(game.buildings[1].level, 2);
-        assert_eq!(game.state.player(1).unwrap().gold, 0.0);
         assert!(!game.tutorial_city_upgrade_is_free(1, 2));
+        assert!(game.tutorial_city_upgrade_is_free(1, 1));
+        game.apply_upgrade_structure_intent(1, 1);
+
+        assert_eq!(game.buildings[0].level, 2);
+        assert_eq!(game.state.player(1).unwrap().gold, 0.0);
+        assert!(!game.tutorial_city_upgrade_is_free(1, 1));
 
         game.buildings.push(Building {
             tile_idx: 100,
             ..building(3, BuildingKind::City, 1)
         });
-        game.buildings.push(Building {
-            tile_idx: 100,
-            ..building(4, BuildingKind::Factory, 1)
-        });
-        assert!(!game.tutorial_city_upgrade_is_free(1, 4));
+        assert!(!game.tutorial_city_upgrade_is_free(1, 3));
         game.state.player_mut(1).unwrap().gold = 1_000_000.0;
-        let cost = structure_upgrade_cost_gold(BuildingKind::Factory, 2, 3, &game.state.config);
-        game.apply_upgrade_structure_intent(1, 4);
+        let cost = structure_upgrade_cost_gold(BuildingKind::City, 2, 3, &game.state.config);
+        game.apply_upgrade_structure_intent(1, 3);
         assert!((game.state.player(1).unwrap().gold - (1_000_000.0 - cost)).abs() < 1e-9);
     }
 
@@ -611,18 +696,14 @@ mod tests {
                 game.state.map.set_owner_id(x, y, 1);
             }
         }
-        let city_tile = 16 * 32 + 16;
-        game.buildings.push(Building {
-            tile_idx: city_tile,
-            ..building(1, BuildingKind::City, 1)
-        });
-        game.state.next_building_id = 2;
+        let factory_tile = 16 * 32 + 16;
         game.state.player_mut(1).unwrap().tile_count = 32 * 32;
         let gold = game.state.player(1).unwrap().gold;
 
-        game.apply_build_structure_intent(1, BuildingKind::Factory, city_tile);
+        game.apply_build_structure_intent(1, BuildingKind::Factory, factory_tile);
 
-        assert_eq!(game.buildings.len(), 2);
+        assert_eq!(game.buildings.len(), 1);
+        assert_eq!(game.buildings[0].kind, BuildingKind::Factory);
         assert!(game.state.player(1).unwrap().gold < gold);
     }
 
@@ -673,52 +754,48 @@ mod tests {
 
         let unowned_tile = game.state.map.ref_id(2, 2) as u32;
         let empty_land_tile = game.state.map.ref_id(4, 12) as u32;
+        let highland = game.state.map.ref_id(12, 4);
+        game.state.map.terrain[highland] = crate::map::MapTile::from_byte(0x80 | 10);
         game.apply_build_structure_intent(1, BuildingKind::Farm, unowned_tile);
-        game.apply_build_structure_intent(1, BuildingKind::Farm, empty_land_tile);
+        game.apply_build_structure_intent(1, BuildingKind::Farm, highland as u32);
         assert_eq!(game.buildings.len(), 2);
 
-        game.apply_build_structure_intent(1, BuildingKind::Farm, city_a);
+        game.apply_build_structure_intent(1, BuildingKind::Farm, empty_land_tile);
         assert_eq!(game.buildings.len(), 3);
-        assert_eq!(game.buildings[2].tile_idx, city_a);
+        assert_eq!(game.buildings[2].tile_idx, empty_land_tile);
         assert!(game.buildings[2].under_construction);
 
-        // Second Farm inside same City is rejected; second owned City allows its own Farm.
+        // Occupied foundations reject both another Farm and overlap with a City.
+        game.apply_build_structure_intent(1, BuildingKind::Farm, empty_land_tile);
         game.apply_build_structure_intent(1, BuildingKind::Farm, city_a);
         assert_eq!(game.buildings.len(), 3);
 
-        game.apply_build_structure_intent(1, BuildingKind::Farm, city_b);
+        game.state.map.terrain[highland] = crate::map::MapTile::from_byte(0x80);
+        game.apply_build_structure_intent(1, BuildingKind::Farm, highland as u32);
         assert_eq!(game.buildings.len(), 4);
     }
 
     #[test]
-    fn nuclear_launches_require_a_finished_city_at_the_minimum_level() {
+    fn nuclear_launches_require_a_finished_factory_at_the_minimum_level() {
         let mut game = engine(false);
         game.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Bot;
         let required_level = crate::game::NukeKind::AtomBomb.required_district_level();
-        game.buildings.push(building(1, BuildingKind::City, 1));
-        game.buildings.push(Building {
-            tile_idx: 1,
-            ..building(
-                2,
-                BuildingKind::Factory,
-                required_level.saturating_sub(1),
-            )
-        });
+        game.buildings.push(building(1, BuildingKind::Factory, required_level.saturating_sub(1)));
         let gold = game.state.player(1).unwrap().gold;
 
-        game.apply_city_arsenal_intent(1, 1, CityArsenalKind::Nuke);
+        game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
         game.apply_launch_nuke_intent(1, 4);
         assert!(game.projectiles.is_empty());
         assert_eq!(game.state.player(1).unwrap().gold, gold);
 
-        game.buildings[1].level = required_level;
-        game.buildings[1].under_construction = true;
-        game.apply_city_arsenal_intent(1, 1, CityArsenalKind::Nuke);
+        game.buildings[0].level = required_level;
+        game.buildings[0].under_construction = true;
+        game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
         game.apply_launch_nuke_intent(1, 4);
         assert!(game.projectiles.is_empty());
 
-        game.buildings[1].under_construction = false;
-        game.apply_city_arsenal_intent(1, 1, CityArsenalKind::Nuke);
+        game.buildings[0].under_construction = false;
+        game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
         assert_eq!(
             game.state.player(1).unwrap().gold,
             gold - game.state.config.nuke_cost
@@ -738,14 +815,10 @@ mod tests {
     }
 
     #[test]
-    fn human_nuclear_test_unlock_accepts_a_finished_level_one_city() {
+    fn tower_nuclear_production_is_independent_of_a_city() {
         let mut game = engine(false);
-        game.add_building(building(1, BuildingKind::City, 1));
-        game.add_building(Building {
-            tile_idx: 1,
-            ..building(2, BuildingKind::Tower, 4)
-        });
-        game.apply_city_arsenal_intent(1, 1, CityArsenalKind::Nuke);
+        game.add_building(building(1, BuildingKind::Tower, 4));
+        game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
         for _ in 0..CityArsenalKind::Nuke.duration_ticks() {
             game.execute_construction();
         }
@@ -785,7 +858,7 @@ mod tests {
     }
 
     #[test]
-    fn upgrades_use_the_agreed_fraction_of_the_next_placement_cost() {
+    fn upgrades_charge_the_agreed_fraction_of_equivalent_new_production() {
         let mut game = pacing_match();
         game.add_building(building(1, BuildingKind::City, 1));
         game.add_building(Building {
@@ -795,16 +868,22 @@ mod tests {
         game.state.player_mut(1).unwrap().gold = 1_000.0;
         let config = game.state.config.clone();
         let upgrade_cost = structure_upgrade_cost_gold(BuildingKind::Factory, 2, 1, &config);
-        assert_eq!(
-            upgrade_cost,
-            structure_build_cost_gold(BuildingKind::Factory, 1, &config) * 0.75
-        );
+        let marginal = (1.45_f64 / 0.85).cbrt();
+        let expected = structure_build_cost_gold(BuildingKind::Factory, 1, &config) * marginal * 0.75;
+        assert!((upgrade_cost - expected).abs() < 1e-9);
 
         let gold = game.state.player(1).unwrap().gold;
         game.apply_upgrade_structure_intent(1, 2);
         assert!(game.buildings[1].under_construction);
         let after_upgrade = game.state.player(1).unwrap().gold;
         assert!((after_upgrade - (gold - upgrade_cost)).abs() < 1e-9);
+
+        game.state.player_mut(1).unwrap().leader = crate::player::Leader::of("queen_nefertiti");
+        let city_cost = structure_upgrade_cost_gold(BuildingKind::City, 2, 1, &config) * 0.65;
+        let (quoted, discounted) = game.structure_upgrade_quote(1).unwrap();
+        assert!(discounted && (quoted - city_cost).abs() < 1e-9);
+        game.apply_upgrade_structure_intent(1, 1);
+        assert!((game.state.player(1).unwrap().gold - (after_upgrade - city_cost)).abs() < 1e-9);
     }
 
     #[test]

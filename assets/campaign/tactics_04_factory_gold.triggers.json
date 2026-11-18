@@ -4,14 +4,14 @@
   "text_namespace": "tutorial.campaign_tactics_",
   "require_speaker_portraits": true,
   "settings": {
-    "starting_troops": 1400,
-    "starting_gold": 560,
+    "starting_troops": 1600,
+    "starting_gold": 640,
     "campaign_support": {
-      "after_defeated": "river_raiders",
+      "after_defeated": "immediate",
       "share_percent": 40
     }
   },
-  "entry": "t4_choose_factory",
+  "entry": "t4_crush_syndicate",
   "speakers": {
     "sun_tzu": {
       "name_key": "tutorial.campaign_tactics_sun_tzu",
@@ -36,164 +36,8 @@
   },
   "steps": [
     {
-      "id": "t4_choose_factory",
-      "type": "guide",
-      "title_key": "tutorial.campaign_tactics_04_choose_factory_title",
-      "body_key": "tutorial.campaign_tactics_04_choose_factory_body",
-      "hint_key": "tutorial.campaign_tactics_04_choose_factory_hint",
-      "speaker": "sun_tzu",
-      "pause_game": true,
-      "unlocks": {
-        "buildings": {
-          "City": 1,
-          "Factory": 4,
-          "Tower": 1
-        }
-      },
-      "camera": {
-        "shot": "approach",
-        "to": "player",
-        "seconds": 1
-      },
-      "trigger": {
-        "type": "ui",
-        "action": "dock_city",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "ui",
-        "target": "dock_city",
-        "gesture": "tap"
-      },
-      "next": "t4_place_city"
-    },
-    {
-      "id": "t4_place_city",
+      "id": "t4_crush_syndicate",
       "type": "objective",
-      "title_key": "tutorial.campaign_tactics_03_build_city_title",
-      "hint_key": "tutorial.campaign_tactics_03_build_city_hint",
-      "speaker": "sun_tzu",
-      "pause_game": true,
-      "paused_action": "build_until_started",
-      "trigger": {
-        "type": "city",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "build_site",
-        "gesture": "tap"
-      },
-      "next": "t4_wait_city"
-    },
-    {
-      "id": "t4_wait_city",
-      "type": "objective",
-      "title_key": "tutorial.campaign_tactics_03_build_city_title",
-      "hint_key": "tutorial.campaign_tactics_03_build_city_hint",
-      "speaker": "sun_tzu",
-      "trigger": {
-        "type": "structure_level",
-        "kind": "City",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "next": "t4_open_city_factory"
-    },
-    {
-      "id": "t4_open_city_factory",
-      "type": "guide",
-      "title_key": "tutorial.campaign_tactics_04_choose_factory_title",
-      "hint_key": "tutorial.campaign_tactics_04_choose_factory_hint",
-      "speaker": "sun_tzu",
-      "pause_game": true,
-      "trigger": {
-        "type": "building_selected",
-        "kind": "City",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "upgrade_building",
-        "gesture": "tap"
-      },
-      "next": "t4_build_factory"
-    },
-    {
-      "id": "t4_build_factory",
-      "type": "objective",
-      "title_key": "tutorial.campaign_tactics_04_build_factory_title",
-      "hint_key": "tutorial.campaign_tactics_04_build_factory_hint",
-      "speaker": "sun_tzu",
-      "pause_game": true,
-      "paused_action": "build_until_started",
-      "trigger": {
-        "type": "factory",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "upgrade_structure",
-        "gesture": "tap"
-      },
-      "next": "t4_wait_factory"
-    },
-    {
-      "id": "t4_wait_factory",
-      "type": "objective",
-      "title_key": "tutorial.campaign_tactics_04_build_factory_title",
-      "hint_key": "tutorial.campaign_tactics_04_wait_factory_hint",
-      "speaker": "sun_tzu",
-      "trigger": {
-        "type": "structure_level",
-        "kind": "Factory",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "next": "t4_select_factory"
-    },
-    {
-      "id": "t4_select_factory",
-      "type": "guide",
-      "title_key": "tutorial.campaign_tactics_04_select_factory_title",
-      "body_key": "tutorial.campaign_tactics_04_select_factory_body",
-      "hint_key": "tutorial.campaign_tactics_04_select_factory_hint",
-      "speaker": "sun_tzu",
-      "pause_game": true,
-      "trigger": {
-        "type": "building_selected",
-        "kind": "City",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "upgrade_building",
-        "gesture": "tap"
-      },
-      "next": "t4_upgrade_lv2"
-    },
-    {
-      "id": "t4_upgrade_lv2",
-      "type": "guide",
-      "title_key": "tutorial.campaign_tactics_04_upgrade_factory_title",
-      "hint_key": "tutorial.campaign_tactics_04_upgrade_factory_hint",
-      "speaker": "sun_tzu",
-      "pause_game": true,
-      "paused_action": "upgrade_until_started",
       "unlocks": {
         "buildings": {
           "Factory": 4,
@@ -202,43 +46,6 @@
           "Tower": 2
         }
       },
-      "trigger": {
-        "type": "structure_upgrade",
-        "kind": "Factory",
-        "value": 1,
-        "scope": "step"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "upgrade_structure",
-        "gesture": "tap"
-      },
-      "next": "t4_upgrade_lv3"
-    },
-    {
-      "id": "t4_upgrade_lv3",
-      "type": "objective",
-      "title_key": "tutorial.campaign_tactics_04_level3_title",
-      "body_key": "tutorial.campaign_tactics_04_level3_body",
-      "hint_key": "tutorial.campaign_tactics_04_level3_hint",
-      "speaker": "sun_tzu",
-      "trigger": {
-        "type": "structure_level",
-        "kind": "Factory",
-        "value": 3,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "river_raiders"
-      },
-      "next": "t4_crush_syndicate"
-    },
-    {
-      "id": "t4_crush_syndicate",
-      "type": "objective",
       "title_key": "tutorial.campaign_tactics_04_crush_syndicate_title",
       "body_key": "tutorial.campaign_tactics_04_crush_syndicate_body",
       "hint_key": "tutorial.campaign_tactics_04_crush_syndicate_hint",

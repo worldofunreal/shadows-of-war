@@ -261,7 +261,7 @@ impl SowEngine {
             dx * dx + dy * dy > inner_sq
         });
         let buildings = &self.buildings;
-        self.city_arsenals
+        self.building_productions
             .retain(|id, _| buildings.iter().any(|b| b.id == *id));
         self.silo_cooldowns
             .retain(|id, _| buildings.iter().any(|b| b.id == *id));

@@ -119,7 +119,11 @@ fn default_structure_upgrade_scale() -> f64 {
 }
 
 fn default_cost_farm() -> f64 {
-    125.0
+    175.0
+}
+
+fn default_cost_sam() -> f64 {
+    500.0
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -182,6 +186,12 @@ pub struct ScriptedSpawn {
     /// Optional player kind override (`None` defaults to `PlayerType::Bot`, `Some(PlayerType::Nation)` spawns a Bot Hero).
     #[serde(default)]
     pub player_type: Option<crate::player::PlayerType>,
+    /// Extra troops injected into the conquering front/army when this campaign faction is defeated.
+    #[serde(default)]
+    pub campaign_troop_loot_bonus: Option<u32>,
+    /// Pre-built structures placed at this faction's spawn for immediate tactical synergies.
+    #[serde(default)]
+    pub prebuilt_buildings: Vec<(crate::game::BuildingKind, u8)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -322,6 +332,8 @@ const MATCH_OWNED_KEYS: &[&str] = &[
     "buildings_unlock_after_defeated",
     "campaign_support",
     "campaign_player_color",
+    "campaign_streak_tier",
+    "campaign_revive_boost",
     "tutorial",
     "ranked_1v1",
     "ranked_bot_iq",
@@ -527,7 +539,10 @@ pub struct GameConfig {
     /// Gold cost to place a Farm.
     #[serde(default = "default_cost_farm")]
     pub cost_farm: f64,
-    /// Legacy field retained for saved configs; upgrades use a fixed 75% price.
+    /// Gold cost to place a SAM battery.
+    #[serde(default = "default_cost_sam")]
+    pub cost_sam: f64,
+    /// Legacy field retained for saved configs; upgrades discount equivalent production by 25%.
     #[serde(default = "default_structure_upgrade_scale")]
     pub structure_upgrade_scale: f64,
     /// Max multiplier applied to structure base cost as count grows (cost plateaus at base × this).
@@ -563,6 +578,12 @@ pub struct GameConfig {
     /// multiplayer; set only at the match initialization boundary.
     #[serde(default)]
     pub tutorial: bool,
+    /// Single-player Warlord Supercharger tier (`0..=3`), applied only when `tutorial` is true.
+    #[serde(default)]
+    pub campaign_streak_tier: u8,
+    /// Single-player rescue boost (+50% starting troops/gold) after a near-miss retry.
+    #[serde(default)]
+    pub campaign_revive_boost: bool,
     /// Server-assigned ranked duel rules; ordinary matches retain their rules.
     #[serde(default)]
     pub ranked_1v1: bool,
@@ -660,7 +681,7 @@ impl Default for GameConfig {
 
             // Economy & Income Rates
             starting_troops: 5000.0,
-            starting_gold: 200.0,
+            starting_gold: 160.0,
             gold_base_income: 1.0 / NORMAL_GAME_SPEED,
             territory_gold_amount: default_territory_gold_amount(),
             territory_gold_tiles: default_territory_gold_tiles(),
@@ -692,11 +713,12 @@ impl Default for GameConfig {
             alliance_troop_income: default_alliance_troop_income(),
             trade_troop_income: default_trade_troop_income(),
             elimination_troop_bounty: default_elimination_troop_bounty(),
-            cost_city: 200.0,
+            cost_city: 125.0,
             cost_tower: 100.0,
-            cost_factory: 175.0,
+            cost_factory: 100.0,
             cost_port: 200.0,
-            cost_farm: 125.0,
+            cost_farm: default_cost_farm(),
+            cost_sam: default_cost_sam(),
             structure_upgrade_scale: default_structure_upgrade_scale(),
             cost_scale_cap_multiplier: 10.0,
             nuke_cost: 500.0,
@@ -711,6 +733,8 @@ impl Default for GameConfig {
             campaign_support: None,
             campaign_player_color: None,
             tutorial: false,
+            campaign_streak_tier: 0,
+            campaign_revive_boost: false,
             ranked_1v1: false,
             ranked_bot_iq: None,
             ai: AiTuning::default(),

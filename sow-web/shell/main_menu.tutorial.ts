@@ -91,6 +91,8 @@ interface TutorialRuntime {
     cameraReactionTarget: string | null | undefined;
     dialogueResourceKey: string | null;
     dialogueGoldSnapshot: number | null;
+    nearMissOpen: boolean;
+    nearMissNode: HTMLElement | null;
 }
 
 (function () {
@@ -163,7 +165,184 @@ interface TutorialRuntime {
         cameraReactionTarget: null,
         dialogueResourceKey: null as string | null,
         dialogueGoldSnapshot: null as number | null,
+        nearMissOpen: false,
+        nearMissNode: null,
     };
+
+    function removeNearMissModal() {
+        runtime.nearMissOpen = false;
+        if (runtime.nearMissNode && runtime.nearMissNode.parentNode) {
+            runtime.nearMissNode.parentNode.removeChild(runtime.nearMissNode);
+        }
+        runtime.nearMissNode = null;
+    }
+
+    function restartEpisodeInPlace(reviveBoost: boolean) {
+        const episodeId = runtime.episodeId;
+        const roster = runtime.roster;
+        const definition = runtime.definition;
+        if (!episodeId || !roster || !definition) {
+            if (episodeId) startEpisode(episodeId, false);
+            return;
+        }
+        removeNearMissModal();
+        clearTutorialCameraMove();
+        clearStepRevealTimer();
+        menuGuide.pause();
+        if (runtime.machine) {
+            runtime.machine.dispose();
+            runtime.machine = null;
+        }
+        runtime.generation++;
+        runtime.active = false;
+        runtime.uiCounts = Object.create(null);
+        runtime.uiPaused = null;
+        runtime.cameraOnly = null;
+        runtime.pausedAction = null;
+        runtime.observingAfterDefeat = false;
+        runtime.completionSent = false;
+        runtime.lastActionStepId = null;
+        runtime.lastUnlockCommand = null;
+        runtime.resolvedReactions = new Set();
+        runtime.priorChoices = Object.create(null);
+        runtime.markerId = undefined;
+        runtime.markerAction = undefined;
+        runtime.dialogueResourceKey = null;
+        runtime.dialogueGoldSnapshot = null;
+        send("restart_campaign_episode", {
+            episode_id: episodeId,
+            roster: roster,
+            match: definition.settings,
+            revive_boost: reviveBoost,
+        });
+    }
+
+    function showNearMissModal(hud: CampaignRecord, tutorial: CampaignRecord) {
+        if (runtime.nearMissOpen) return;
+        runtime.nearMissOpen = true;
+        removeNearMissModal();
+        runtime.nearMissOpen = true;
+
+        const factions = (runtime.roster && Array.isArray(runtime.roster.factions)
+            ? runtime.roster.factions
+            : []) as CampaignRecord[];
+        const hostileIds = new Set(
+            factions
+                .filter((f) => f && f.relation === "enemy")
+                .map((f) => String(f.id || "")),
+        );
+        const startEnemyTroops = factions
+            .filter((f) => hostileIds.has(String(f.id || "")))
+            .reduce((sum, f) => sum + Math.max(0, Number(f.starting_troops) || 0), 0);
+
+        const players = Array.isArray(hud.players) ? (hud.players as CampaignRecord[]) : [];
+        let aliveEnemyTroops = 0;
+        players.forEach((p) => {
+            if (!p || p.is_me || p.is_alive === false) return;
+            const fid = String(p.campaign_faction_id || "");
+            if (!hostileIds.size || hostileIds.has(fid)) {
+                aliveEnemyTroops += Math.max(0, Number(p.troops) || 0);
+            }
+        });
+        const denom = Math.max(1, startEnemyTroops);
+        const rawRatioLeft = Math.min(0.95, Math.max(0.04, aliveEnemyTroops / denom));
+        const progressPct = Math.round(Math.min(96, Math.max(72, (1 - rawRatioLeft) * 100)));
+        const enemyRemainingPct = Math.max(4, 100 - progressPct);
+        const remainingTroops = Math.max(50, Math.round(aliveEnemyTroops));
+        const streak = Number(tutorial.conquest_streak) || 0;
+        const streakTier = Math.min(3, streak);
+
+        const txt = (key: string, fallback: string, vars?: CampaignRecord) =>
+            window.SOW_hasText?.(key) ? String(window.SOW_t(key, vars)) : fallback;
+
+        const backdrop = document.createElement("div");
+        backdrop.className = "sow-story__nearmiss-backdrop";
+        const card = document.createElement("div");
+        card.className = "sow-story__nearmiss-card";
+
+        const streakWarning =
+            streak >= 1
+                ? `<div class="sow-nearmiss__streak-warn">🔥 ${txt(
+                      "blitz.streak_danger",
+                      `Streak x${streak} (Supercharger Tier ${streakTier}) at risk!`,
+                      { streak: streak, tier: streakTier },
+                  )}</div>`
+                : "";
+
+        card.innerHTML =
+            `<div class="sow-nearmiss__eyebrow">${txt("blitz.near_miss_eyebrow", "NEAR VICTORY")}</div>` +
+            `<h2 class="sow-nearmiss__title">${txt(
+                "blitz.near_miss_title",
+                `SO CLOSE! — ${progressPct}% Complete`,
+                { pct: progressPct },
+            )}</h2>` +
+            `<div class="sow-nearmiss__bar" role="progressbar" aria-valuenow="${progressPct}" aria-valuemin="0" aria-valuemax="100">` +
+            `<div class="sow-nearmiss__fill" style="width:${progressPct}%"></div>` +
+            `</div>` +
+            `<p class="sow-nearmiss__stat">${txt(
+                "blitz.near_miss_stat",
+                `Enemy at ${enemyRemainingPct}% (${remainingTroops.toLocaleString()} troops left)`,
+                { pct: enemyRemainingPct, troops: remainingTroops.toLocaleString() },
+            )}</p>` +
+            `<p class="sow-nearmiss__hint">${txt(
+                "blitz.near_miss_hint",
+                "Tip: Crush small tribes & capture structures first to trigger a Troop Cascade.",
+            )}</p>` +
+            streakWarning +
+            `<div class="sow-nearmiss__actions">` +
+            `<button type="button" class="sow-nearmiss__btn is-rescue" data-nearmiss-action="rescue">⚡ ${txt(
+                streak >= 1 ? "blitz.rescue_streak" : "blitz.rescue_boost",
+                streak >= 1 ? "+50% Troops & Save Streak" : "+50% Starting Troops",
+            )}</button>` +
+            `<button type="button" class="sow-nearmiss__btn is-retry" data-nearmiss-action="retry">↺ ${txt(
+                streak >= 1 ? "blitz.retry_lose_streak" : "blitz.retry_now",
+                streak >= 1 ? "Instant Retry (Resets Streak)" : "Instant Retry",
+            )}</button>` +
+            `<button type="button" class="sow-nearmiss__btn is-exit" data-nearmiss-action="exit">${txt(
+                "blitz.exit_map",
+                "Back to Map",
+            )}</button>` +
+            `</div>`;
+
+        card.addEventListener("click", function (ev) {
+            const btn = (ev.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+                "[data-nearmiss-action]",
+            );
+            if (!btn || btn.disabled) return;
+            const action = btn.dataset.nearmissAction;
+            const buttons = card.querySelectorAll<HTMLButtonElement>("button");
+            if (action === "rescue") {
+                buttons.forEach((b) => (b.disabled = true));
+                const breakPromise =
+                    typeof window.SOW_portalRewardedBreak === "function"
+                        ? window.SOW_portalRewardedBreak()
+                        : Promise.resolve(true);
+                breakPromise
+                    .then(function (watched) {
+                        if (watched !== false) {
+                            restartEpisodeInPlace(true);
+                        } else {
+                            buttons.forEach((b) => (b.disabled = false));
+                        }
+                    })
+                    .catch(function () {
+                        buttons.forEach((b) => (b.disabled = false));
+                    });
+            } else if (action === "retry") {
+                if (streak >= 1) send("reset_conquest_streak");
+                restartEpisodeInPlace(false);
+            } else if (action === "exit") {
+                if (streak >= 1) send("reset_conquest_streak");
+                removeNearMissModal();
+                send("leave_lobby");
+            }
+        });
+
+        backdrop.appendChild(card);
+        root.hidden = false;
+        root.appendChild(backdrop);
+        runtime.nearMissNode = backdrop;
+    }
 
     const {
         targetPlayer,
@@ -1196,6 +1375,7 @@ interface TutorialRuntime {
         if (!runtime.observingAfterDefeat && (facts.eliminated_faction_ids || []).includes("player")) {
             runtime.observingAfterDefeat = true;
             send("continue_observing");
+            showNearMissModal(hud, tutorial);
         }
         const targetStep = machineView.step;
         const freeExploration =
@@ -1280,6 +1460,9 @@ interface TutorialRuntime {
         }
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
+            try {
+                window.CrazyGames?.SDK?.game?.happytime?.();
+            } catch {}
             trackExperience("campaign_episode_complete", { episode_id: runtime.episodeId });
             send("complete_campaign_episode", { episode_id: runtime.episodeId });
         }
@@ -1638,6 +1821,7 @@ interface TutorialRuntime {
         clearStepRevealTimer();
         syncTransferGuide(null);
         runtime.priorChoices = Object.create(null);
+        removeNearMissModal();
         runtime.episodeId = null;
         runtime.roster = null;
         runtime.definition = null;

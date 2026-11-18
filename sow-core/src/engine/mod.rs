@@ -294,6 +294,16 @@ pub fn initialize_match_engine_with_water(
                 .map(|player| (player_id, player.tile_count))
         })
         .collect();
+    engine.campaign_starting_troops = engine
+        .campaign_faction_ids
+        .keys()
+        .filter_map(|&player_id| {
+            engine
+                .state
+                .player(player_id)
+                .map(|player| (player_id, player.troops))
+        })
+        .collect();
     engine
 }
 
@@ -419,6 +429,8 @@ pub struct SowEngine {
     pub legacy_elimination_rewards: bool,
     pub building_aggregates: Vec<BuildingAggregate>,
     pub building_aggregates_dirty: bool,
+    #[serde(default)]
+    pub railway_links: Vec<crate::building::RailwayLink>,
     /// Claims survive checkpoints; a recaptured city cannot mint another reward.
     #[serde(default)]
     pub(crate) hero_claims: std::collections::BTreeSet<(PlayerId, u64, u8)>,
@@ -469,6 +481,19 @@ pub struct SowEngine {
     /// Starting territory per scripted campaign faction, retained across checkpoints.
     #[serde(default)]
     pub campaign_starting_tile_counts: std::collections::HashMap<PlayerId, u32>,
+    /// Starting troops per scripted campaign faction, used for near-miss calibration.
+    #[serde(default)]
+    pub campaign_starting_troops: std::collections::HashMap<PlayerId, f64>,
+    /// Optional troop bounty injected when a scripted campaign faction is defeated.
+    #[serde(default)]
+    pub campaign_troop_loot_bonus: std::collections::HashMap<PlayerId, u32>,
+    /// Single-player Blitz cascade chain counter and tick anchor.
+    #[serde(default)]
+    pub blitz_cascade_count: u8,
+    #[serde(default)]
+    pub blitz_last_cascade_tick: u64,
+    #[serde(default)]
+    pub campaign_near_miss_applied: bool,
     /// Scripted campaign attackers and the live factions they are ordered to pursue.
     pub campaign_assault_targets: std::collections::HashMap<PlayerId, Vec<PlayerId>>,
     /// Factions marked as eligible for a configured campaign assault in their roster.
@@ -497,14 +522,15 @@ pub struct SowEngine {
     pub campaign_pre_defeat_since: u64,
     pub projectiles: Vec<crate::game::Projectile>,
     pub silo_cooldowns: std::collections::HashMap<u64, u32>,
-    #[serde(default)]
-    pub city_arsenals: std::collections::HashMap<u64, crate::building::CityArsenalState>,
+    /// Per-producer queues and armed nukes. The alias loads saved city-keyed queues.
+    #[serde(default, alias = "city_arsenals")]
+    pub building_productions: std::collections::HashMap<u64, crate::building::CityArsenalState>,
     pub mirv_launches: std::collections::HashMap<u16, u32>,
     /// Launch count by `(target player, tile)`; lookup-only during scoring.
     pub recent_nuke_targets: std::collections::HashMap<(u16, u32), u64>,
     pub mirv_cooldown_targets: std::collections::HashMap<u16, u64>,
     pub(crate) bot_route_cache: Vec<(PlayerId, u32, crate::warp_fleet::FleetRoute)>,
-    pub(crate) bot_sam_tiles_cache: Option<Vec<(u32, u16)>>,
+    pub(crate) bot_sam_tiles_cache: Option<Vec<(u32, u16, u32)>>,
     pub(crate) bot_crown_leader: Option<u16>,
     pub(crate) ai_attack_index: Vec<Vec<usize>>,
     pub(crate) ai_attack_index_dirty: bool,
@@ -537,7 +563,7 @@ impl SowEngine {
             .unwrap_or(0);
         self.building_aggregates =
             aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
-        crate::building::populate_railway_connections(
+        self.railway_links = crate::building::populate_railway_connections(
             &self.buildings,
             &self.state,
             &mut self.building_aggregates,
@@ -582,6 +608,7 @@ impl SowEngine {
             legacy_elimination_rewards: false,
             building_aggregates: Vec::with_capacity(256),
             building_aggregates_dirty: true,
+            railway_links: Vec::new(),
             hero_claims: Default::default(),
             hero_income_active: Default::default(),
             sea_lanes_dirty: true,
@@ -608,6 +635,11 @@ impl SowEngine {
             campaign_can_attack_player: std::collections::HashMap::new(),
             campaign_faction_ids: std::collections::HashMap::new(),
             campaign_starting_tile_counts: std::collections::HashMap::new(),
+            campaign_starting_troops: std::collections::HashMap::new(),
+            campaign_troop_loot_bonus: std::collections::HashMap::new(),
+            blitz_cascade_count: 0,
+            blitz_last_cascade_tick: 0,
+            campaign_near_miss_applied: false,
             campaign_assault_targets: std::collections::HashMap::new(),
             campaign_assault_force_ids: std::collections::HashSet::new(),
             campaign_assault_troop_caps: std::collections::HashMap::new(),
@@ -623,7 +655,7 @@ impl SowEngine {
             campaign_pre_defeat_since: 0,
             projectiles: Vec::new(),
             silo_cooldowns: std::collections::HashMap::new(),
-            city_arsenals: std::collections::HashMap::new(),
+            building_productions: std::collections::HashMap::new(),
             mirv_launches: std::collections::HashMap::new(),
             recent_nuke_targets: std::collections::HashMap::new(),
             mirv_cooldown_targets: std::collections::HashMap::new(),
@@ -648,6 +680,21 @@ impl SowEngine {
     pub fn campaign_structures_held(&self, player_id: PlayerId) -> bool {
         self.campaign_structure_hold_ids.contains(&player_id)
             && !self.campaign_contact_resolved.contains(&player_id)
+    }
+
+    pub(crate) fn record_blitz_cascade_tick(&mut self) -> u8 {
+        let window_ticks = ((4500.0 / f64::from(self.state.config.tick_rate_ms.max(1.0)))
+            .round() as u64)
+            .max(1);
+        if self.blitz_last_cascade_tick > 0
+            && self.state.tick.saturating_sub(self.blitz_last_cascade_tick) <= window_ticks
+        {
+            self.blitz_cascade_count = self.blitz_cascade_count.saturating_add(1).min(8);
+        } else {
+            self.blitz_cascade_count = 1;
+        }
+        self.blitz_last_cascade_tick = self.state.tick;
+        self.blitz_cascade_count
     }
 
     #[inline]
@@ -1259,14 +1306,27 @@ impl SowEngine {
                 &self.state.config,
             )
         });
+        let campaign_troop_loot = if self.state.config.tutorial {
+            f64::from(self.campaign_troop_loot_bonus.remove(&victim_id).unwrap_or(0))
+        } else {
+            0.0
+        };
         if killer_multiplier != 1.0 || troop_bounty > 0.0 {
             self.state.announce_leader_ability(conqueror_id, None);
         }
         let killer_final_gold = (f64::from(killer_gold) * killer_multiplier) as u32;
         if let Some(attacker) = self.state.player_mut(conqueror_id) {
             attacker.credit_gold(f64::from(killer_final_gold));
-            attacker.credit_troops_capped(troop_bounty, attacker.max_troops);
+            attacker.credit_troops_capped(troop_bounty + campaign_troop_loot, attacker.max_troops);
             attacker.kills += 1;
+        }
+        if self.state.config.tutorial
+            && self
+                .state
+                .player(conqueror_id)
+                .is_some_and(|p| p.player_type == crate::player::PlayerType::Human)
+        {
+            self.record_blitz_cascade_tick();
         }
 
         let mut assist_event_rewards = Vec::new();
@@ -2365,6 +2425,8 @@ mod tests {
                 campaign_hold_structures_until_contact: false,
                 campaign_accepts_alliance_requests: faction.accepts_alliance_requests,
                 player_type: None,
+                campaign_troop_loot_bonus: None,
+                prebuilt_buildings: Vec::new(),
             })
             .collect();
         assert_eq!(config.scripted_spawns.len(), selected.len());

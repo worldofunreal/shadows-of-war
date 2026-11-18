@@ -729,11 +729,14 @@ fn render_building_selection_focus(
             (1.4 * sf).max(1.0),
         );
     }
-    let has_anti_nuke = snapshot_buildings
+    let sam_level = snapshot_buildings
         .iter()
-        .any(|b| b.tile_idx == menu.tile_idx && b.kind == BuildingKind::City && b.has_anti_nuke);
-    if has_anti_nuke {
-        let sam_radius = sow_core::execution::sam::sam_range(4) as f32 * zoom;
+        .find(|building| {
+            building.tile_idx == menu.tile_idx && building.kind == BuildingKind::SAM
+        })
+        .map_or(0, |building| building.active_level());
+    if sam_level > 0 {
+        let sam_radius = sow_core::execution::sam::sam_range(sam_level) * zoom;
         text.push_ring(
             anchor_center,
             sam_radius,
@@ -969,6 +972,13 @@ fn render_building_placement_preview(
             range as f32 * input.camera_zoom,
             [0.75, 0.85, 1.0, 0.32],
             (1.5 * sf).max(1.0),
+        );
+    } else if kind == BuildingKind::SAM {
+        text.push_ring(
+            center_px,
+            sow_core::execution::sam::sam_range(1) * input.camera_zoom,
+            [0.35, 0.85, 0.98, 0.35],
+            (1.6 * sf).max(1.0),
         );
     }
 }

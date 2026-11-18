@@ -100,6 +100,9 @@ export interface MenuCampaignEpisode {
 
 export interface MenuCampaign {
     tutorial_completed: boolean;
+    conquest_streak?: number;
+    best_conquest_streak?: number;
+    supercharger_tier?: number;
     episodes: MenuCampaignEpisode[];
     continue_episode: string | null;
 }
@@ -482,7 +485,7 @@ export interface HudBuildingUpgradeOffer {
     enabled: boolean;
 }
 
-export interface HudCityConstruction {
+export interface HudBuildingConstruction {
     kind: string;
     active_level: number;
     target_level: number;
@@ -491,26 +494,8 @@ export interface HudCityConstruction {
     is_city_foundation: boolean;
 }
 
-export interface HudCityDistrict {
-    kind: string;
-    building_id: number | null;
-    level: number;
-    max_level: number;
-    under_construction: boolean;
-    locked_reason: string | null;
-    next_level: number | null;
-    cost: number | null;
-    seconds: number | null;
-    discounted: boolean;
-    affordable: boolean;
-    enabled: boolean;
-    metrics: HudBuildingChip[];
-    next_gains: HudBuildingChip[];
-}
-
-export interface HudCityArsenal {
-    warship: {
-        unlocked: boolean;
+export interface HudBuildingProduction {
+    warship?: {
         campaign_unlocked: boolean;
         capacity_ok: boolean;
         cost: number;
@@ -518,8 +503,7 @@ export interface HudCityArsenal {
         affordable: boolean;
         enabled: boolean;
     };
-    nuke: {
-        unlocked: boolean;
+    nuke?: {
         campaign_unlocked: boolean;
         ready: boolean;
         selected: boolean;
@@ -529,19 +513,10 @@ export interface HudCityArsenal {
         can_build: boolean;
         can_launch: boolean;
     };
-    anti_nuke: {
-        unlocked: boolean;
-        campaign_unlocked: boolean;
-        installed: boolean;
-        cooldown_seconds: number;
-        cost: number;
-        seconds: number;
-        affordable: boolean;
-        enabled: boolean;
-    };
 }
 
 export interface HudMapMenuBuilding {
+    building_id?: number;
     tile_idx?: number;
     kind: string;
     level: number;
@@ -556,11 +531,10 @@ export interface HudMapMenuBuilding {
     anchor_radius?: number;
     remaining_seconds?: number | null;
     progress?: number | null;
-    construction?: HudCityConstruction | null;
+    construction?: HudBuildingConstruction | null;
     chips?: HudBuildingChip[];
     upgrade?: HudBuildingUpgradeOffer | null;
-    districts?: HudCityDistrict[];
-    arsenal?: HudCityArsenal | null;
+    production?: HudBuildingProduction | null;
 }
 
 export interface HudBuildingPlacement {

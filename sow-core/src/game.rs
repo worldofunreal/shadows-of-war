@@ -38,25 +38,39 @@ pub enum BuildingKind {
     Factory,
     Port,
     Farm,
+    SAM,
 }
 
 impl BuildingKind {
-    pub const ALL: [BuildingKind; 5] = [
+    pub const ALL: [BuildingKind; 6] = [
         BuildingKind::City,
         BuildingKind::Tower,
         BuildingKind::Factory,
         BuildingKind::Port,
         BuildingKind::Farm,
+        BuildingKind::SAM,
     ];
-    pub const DISTRICTS: [BuildingKind; 4] = [
-        BuildingKind::Farm,
-        BuildingKind::Factory,
+    pub const NON_CITY: [BuildingKind; 5] = [
         BuildingKind::Tower,
+        BuildingKind::Factory,
         BuildingKind::Port,
+        BuildingKind::Farm,
+        BuildingKind::SAM,
     ];
     #[inline]
-    pub const fn is_district(self) -> bool {
+    pub const fn is_non_city(self) -> bool {
         !matches!(self, BuildingKind::City)
+    }
+    #[inline]
+    pub const fn grants_building_troop_capacity(self) -> bool {
+        matches!(
+            self,
+            BuildingKind::Tower
+                | BuildingKind::Factory
+                | BuildingKind::Port
+                | BuildingKind::Farm
+                | BuildingKind::SAM
+        )
     }
     #[inline]
     pub fn as_str(self) -> &'static str {
@@ -66,6 +80,7 @@ impl BuildingKind {
             BuildingKind::Factory => "Factory",
             BuildingKind::Port => "Port",
             BuildingKind::Farm => "Farm",
+            BuildingKind::SAM => "SAM",
         }
     }
 
@@ -80,6 +95,7 @@ impl BuildingKind {
             BuildingKind::Factory => 35,
             BuildingKind::Port => 30,
             BuildingKind::Farm => 25,
+            BuildingKind::SAM => 90,
         }
     }
 }
@@ -116,7 +132,7 @@ impl NukeKind {
     }
 }
 
-/// Strategic arsenal items built inside a qualified City.
+/// Strategic production queued at an eligible Port, Factory, or Tower.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum CityArsenalKind {
@@ -411,6 +427,21 @@ pub enum GameEvent {
         tile: Option<(u32, u32)>,
         #[serde(default)]
         affected: Vec<u16>,
+    },
+    StructureCaptured {
+        building_id: u64,
+        kind: BuildingKind,
+        level: u8,
+        new_owner: u16,
+        old_owner: u16,
+        tile_idx: u32,
+    },
+    TacticalSurge {
+        player_id: u16,
+        tile_x: u32,
+        tile_y: u32,
+        bonus_troops: u32,
+        chain_step: u8,
     },
 }
 

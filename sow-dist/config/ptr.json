@@ -7,10 +7,10 @@
       "trigger": 0.4
     },
     "nation": {
-      "expand": 0.1,
-      "refuse_human_chance": 0,
-      "reserve": 0.3,
-      "trigger": 0.4
+      "expand": 0.15,
+      "refuse_human_chance": 20,
+      "reserve": 0.2,
+      "trigger": 0.45
     },
     "think_ghost": [
       1,
@@ -21,12 +21,12 @@
       6
     ],
     "think_nation": [
-      1,
-      10
+      40,
+      80
     ],
     "think_nation_attacked": [
       5,
-      6
+      30
     ],
     "think_tribe": [
       80,

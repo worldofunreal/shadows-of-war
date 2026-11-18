@@ -444,27 +444,9 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         let result;
         if (guide.kind === "world") {
             if (guide.target === "upgrade_structure") {
-                const trigger = step.trigger || {};
-                const districtKinds: Record<string, string> = {
-                    farm: "Farm",
-                    factory: "Factory",
-                    tower: "Tower",
-                    port: "Port",
-                };
-                const targetKind =
-                    typeof trigger.kind === "string"
-                        ? trigger.kind
-                        : districtKinds[String(trigger.type)] || "";
                 const upgradeBtn =
                     typeof document.querySelector === "function"
-                        ? (targetKind
-                              ? document.querySelector<HTMLElement>(
-                                    '#sow-hud-map-menu.is-building-card [data-district-kind="' +
-                                        targetKind +
-                                        '"][data-map-action="upgrade_structure"]',
-                                )
-                              : null) ||
-                          document.querySelector<HTMLElement>(
+                        ? document.querySelector<HTMLElement>(
                               '#sow-hud-map-menu.is-building-card [data-map-action="upgrade_structure"]',
                           )
                         : null;

@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 
 const RELOCATION_RADIUS: u32 = 24;
 const FEAST_MIN_GIFT: f64 = 500.0;
+const CITY_FARM_FOUNDING_CLAIM: u8 = 3;
 
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -739,7 +740,7 @@ impl SowEngine {
             ),
             Ability::CityTowerUpgrade => ready(self.buildings.iter().any(|building| {
                 building.owner_id == owner
-                    && (building.kind == BuildingKind::City || building.kind.is_district())
+                    && (building.kind == BuildingKind::City || building.kind.is_non_city())
                     && building.kind != BuildingKind::Tower
                     && (building.under_construction || building.active_level() > 0)
                     && self
@@ -771,7 +772,7 @@ impl SowEngine {
             Ability::FactoryCityUpgradeDiscount { .. } => {
                 ready(self.buildings.iter().any(|b| {
                     b.owner_id == owner
-                        && b.kind.is_district()
+                        && b.kind.is_non_city()
                         && !b.under_construction
                         && b.level < b.kind.max_level()
                         && self.campaign_allows_building(b.kind, b.level + 1)
@@ -786,10 +787,20 @@ impl SowEngine {
                 {
                     Conditional
                 } else {
+                    let grid = self.placement_grid();
                     ready(self.active_cities(owner).any(|city| {
-                        !self.buildings.iter().any(|b| {
-                            b.tile_idx == city.tile_idx && b.kind == BuildingKind::Farm
-                        })
+                        !self
+                            .hero_claims
+                            .contains(&(owner, city.id, CITY_FARM_FOUNDING_CLAIM))
+                            && self
+                                .hero_foundation_near(
+                                    owner,
+                                    city.tile_idx,
+                                    BuildingKind::Farm,
+                                    12,
+                                    grid.as_ref(),
+                                )
+                                .is_some()
                     }))
                 }
             }
@@ -1129,7 +1140,7 @@ impl SowEngine {
     }
 
     pub(crate) fn hero_city_upgrade_discount(&self, target: Building) -> u32 {
-        if !target.kind.is_district() && target.kind != BuildingKind::City {
+        if !target.kind.is_non_city() && target.kind != BuildingKind::City {
             return 0;
         }
         let Some(Ability::FactoryCityUpgradeDiscount { percent }) = self
@@ -1162,7 +1173,7 @@ impl SowEngine {
     }
 
     fn nearby_district_upgrade(&self, anchor: Building, radius: u32) -> Option<usize> {
-        self.nearby_upgrade_matching(anchor, radius, |b| b.kind.is_district())
+        self.nearby_upgrade_matching(anchor, radius, |b| b.kind.is_non_city())
     }
 
     fn nearby_upgrade_matching(
@@ -1468,7 +1479,7 @@ impl SowEngine {
             .iter()
             .enumerate()
             .filter_map(|(index, &target)| {
-                if (target.kind != BuildingKind::City && !target.kind.is_district())
+                if (target.kind != BuildingKind::City && !target.kind.is_non_city())
                     || target.id == farm.id
                     || target.owner_id != farm.owner_id
                     || !target.under_construction
@@ -1502,7 +1513,7 @@ impl SowEngine {
                 Some((city.tile_idx % width, city.tile_idx / width)),
             );
         }
-        if building.kind != BuildingKind::City && building.kind.is_district() {
+        if building.kind != BuildingKind::City && building.kind.is_non_city() {
             if building.kind != BuildingKind::Tower
                 && self
                     .state
@@ -1551,17 +1562,34 @@ impl SowEngine {
             }
         }
         if self.state.config.buildings_enabled
+            && building.kind == BuildingKind::City
             && self.campaign_allows_building(BuildingKind::Farm, 1)
             && self
                 .state
                 .player(building.owner_id)
                 .is_some_and(|p| p.alive && p.leader.ability() == Ability::CityFarmFounding)
-            && !self
-                .buildings
-                .iter()
-                .any(|b| b.tile_idx == building.tile_idx && b.kind == BuildingKind::Farm)
+            && !self.hero_claims.contains(&(
+                building.owner_id,
+                building.id,
+                CITY_FARM_FOUNDING_CLAIM,
+            ))
         {
-            self.found_hero_structure(building.owner_id, BuildingKind::Farm, building.tile_idx);
+            // City Farm Founding now grants a separate Farm on a legal nearby footprint.
+            self.refresh_building_grid();
+            if let Some(site) = self.hero_foundation_near(
+                building.owner_id,
+                building.tile_idx,
+                BuildingKind::Farm,
+                12,
+                &self.building_grid,
+            ) {
+                self.hero_claims.insert((
+                    building.owner_id,
+                    building.id,
+                    CITY_FARM_FOUNDING_CLAIM,
+                ));
+                self.found_hero_structure(building.owner_id, BuildingKind::Farm, site);
+            }
         } else if self
             .state
             .player(building.owner_id)
@@ -2018,41 +2046,9 @@ impl SowEngine {
                 continue;
             }
             let width = self.state.map.width;
-            let click_idx = crate::building::placement::xy_idx(x, y, width);
-            let existing_city_tile = self
-                .buildings
-                .iter()
-                .filter(|b| {
-                    b.owner_id == owner
-                        && b.kind == BuildingKind::City
-                        && !b.under_construction
-                        && nearby(b.tile_idx, click_idx, width, 12)
-                        && !self
-                            .buildings
-                            .iter()
-                            .any(|d| d.tile_idx == b.tile_idx && d.kind == BuildingKind::Port)
-                        && crate::building::placement::city_footprint_touches_water(
-                            b.tile_idx % width,
-                            b.tile_idx / width,
-                            width,
-                            self.state.map.height,
-                            |fx, fy| self.state.map.terrain[self.state.map.ref_id(fx, fy)].as_byte(),
-                        )
-                })
-                .min_by_key(|b| {
-                    (tile_distance_squared(b.tile_idx, click_idx, width), b.id)
-                })
-                .map(|b| b.tile_idx);
-
-            if let Some(city_tile) = existing_city_tile {
-                self.hero_claims.insert((owner, 0, 0));
-                self.found_hero_structure(owner, BuildingKind::Port, city_tile);
-                continue;
-            }
-
             self.refresh_building_grid();
-            // Pick closest legal City foundation whose 4×4 footprint touches water.
-            let mut coastal_city_site: Option<(u32, u32)> = None;
+            // Peter founds a standalone Port on a legal coastal 2×2 footprint.
+            let mut coastal_port_site: Option<(u32, u32)> = None;
             for dy in -12..=12i32 {
                 for dx in -12..=12i32 {
                     if dx * dx + dy * dy > 144 {
@@ -2068,12 +2064,13 @@ impl SowEngine {
                     if crate::building::placement::validate_structure_site(
                         &self.state.map,
                         owner,
-                        BuildingKind::City,
+                        BuildingKind::Port,
                         site,
                         &self.building_grid,
                     )
                     .is_ok()
-                        && crate::building::placement::city_footprint_touches_water(
+                        && crate::building::placement::structure_footprint_touches_water(
+                            BuildingKind::Port,
                             ux,
                             uy,
                             width,
@@ -2084,16 +2081,15 @@ impl SowEngine {
                         )
                     {
                         let key = (dx * dx + dy * dy) as u32;
-                        if coastal_city_site.is_none_or(|(best_d, best_t)| (key, site) < (best_d, best_t)) {
-                            coastal_city_site = Some((key, site));
+                        if coastal_port_site.is_none_or(|(best_d, best_t)| (key, site) < (best_d, best_t)) {
+                            coastal_port_site = Some((key, site));
                         }
                     }
                 }
             }
-            if let Some((_, city_tile)) = coastal_city_site {
+            if let Some((_, port_tile)) = coastal_port_site {
                 self.hero_claims.insert((owner, 0, 0));
-                self.found_hero_structure(owner, BuildingKind::City, city_tile);
-                self.found_hero_structure(owner, BuildingKind::Port, city_tile);
+                self.found_hero_structure(owner, BuildingKind::Port, port_tile);
             }
         }
     }

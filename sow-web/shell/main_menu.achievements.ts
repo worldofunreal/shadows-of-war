@@ -1688,11 +1688,6 @@ export function renderHeroSelectionAchievementStrip(leader: MenuLeader): string 
         "<button type='button' class='sow-heroes__ach-btn' data-command='open_hero_info' data-leader-id='" +
         esc(leader.id) +
         "' data-hero-info-tab='achievements'>" +
-        "<span class='sow-heroes__ach-star-badge" +
-        (summary.unlockedCount === summary.totalCount ? " is-complete" : "") +
-        "'>★ " +
-        esc(summary.unlockedCount) +
-        "</span>" +
         "<div class='sow-heroes__ach-chains'>" +
         renderMiniChain(tText("heroes.ach_cat_mastery", "Mastery"), summary.masteryAchievements) +
         renderMiniChain(tText("heroes.ach_cat_victories", "Victories"), summary.winsAchievements) +

@@ -630,7 +630,16 @@ export function renderHeroBriefing(
               (tagsMarkup || "") +
               "</div>"
             : "";
-    const identity = headerRow + (name ? "<h2" + id + " class='sow-hero-briefing__name'>" + esc(name) + "</h2>" : "");
+    const identity =
+        surfaceName === "selection"
+            ? (tagsMarkup || "") +
+              (name ? "<h2" + id + " class='sow-hero-briefing__name'>" + esc(name) + "</h2>" : "") +
+              (civilization
+                  ? "<small class='sow-heroes__civilization sow-hero-briefing__civilization'>" +
+                    esc(civilization) +
+                    "</small>"
+                  : "")
+            : headerRow + (name ? "<h2" + id + " class='sow-hero-briefing__name'>" + esc(name) + "</h2>" : "");
     let ability = "";
     if (random) {
         if (description)

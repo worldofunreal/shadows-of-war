@@ -49,7 +49,7 @@ pub fn troop_income_per_second(
         ) * leader.resource_bonus_multiplier(Source::Territory, Resource::Troops)
 }
 
-/// Bonus gold per second earned from landlocked or allied Cities linked by `Factory Lv.2+` railways.
+/// Passive bonus gold per second for each connected Factory station in a City/Port rail network.
 #[inline]
 pub fn railway_gold_bonus_per_second(connections: u32, cfg: &GameConfig) -> f64 {
     connections as f64 * cfg.factory_gold_income * 0.5
@@ -96,7 +96,7 @@ pub fn tafaifa_council_multiplier(leader: Leader, living_allies: usize) -> f64 {
     }
 }
 
-/// Extra gold and troops per game second from balanced active districts.
+/// Extra gold and troops per game second from balanced active City, Factory, and Farm levels.
 pub fn imperial_standard_income(
     agg: BuildingAggregate,
     leader: Leader,
@@ -240,11 +240,11 @@ mod tests {
         assert_eq!(cfg.max_troops_scale, 55.0);
         assert_eq!(cfg.territory_troop_tiles, 16);
         assert_eq!(cfg.territory_gold_tiles, 1_024);
-        assert_eq!(cfg.cost_city, 200.0);
+        assert_eq!(cfg.cost_city, 125.0);
         assert_eq!(cfg.cost_tower, 100.0);
-        assert_eq!(cfg.cost_factory, 175.0);
+        assert_eq!(cfg.cost_factory, 100.0);
         assert_eq!(cfg.cost_port, 200.0);
-        assert_eq!(cfg.cost_farm, 125.0);
+        assert_eq!(cfg.cost_farm, 175.0);
     }
 
     #[test]

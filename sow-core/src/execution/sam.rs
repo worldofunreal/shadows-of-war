@@ -16,7 +16,10 @@ pub fn sam_range(level: u8) -> f32 {
 }
 
 /// Orthogonal Chebyshev distance between two tile indices on a square grid.
-fn hex_distance(a: u32, b: u32, width: u32) -> u32 {
+pub fn sam_tile_distance(a: u32, b: u32, width: u32) -> u32 {
+    if width == 0 {
+        return u32::MAX;
+    }
     let ax = (a % width) as i32;
     let ay = (a / width) as i32;
     let bx = (b % width) as i32;
@@ -27,32 +30,36 @@ fn hex_distance(a: u32, b: u32, width: u32) -> u32 {
     dx.max(dy) as u32
 }
 
+pub fn sam_covers_tile(sam_tile: u32, target_tile: u32, width: u32, level: u8) -> bool {
+    sam_tile_distance(sam_tile, target_tile, width) <= sam_range(level) as u32
+}
+
 impl SowEngine {
     pub fn execute_sam(&mut self) {
         if self.state.phase != GamePhase::Playing {
             return;
         }
+        if !self.projectiles.iter().any(|projectile| {
+            projectile.active && matches!(projectile.kind, ProjectileKind::Nuke { .. })
+        }) {
+            return;
+        }
 
         let width = self.state.map.width;
 
-        // Cities with an active Anti-Nuke defense battery intercept incoming nuclear strikes.
+        // Completed standalone SAMs intercept incoming nuclear strikes at their active level.
         let sams: Vec<(u64, u16, u32, f32)> = self
             .buildings
             .iter()
             .filter(|b| {
-                b.kind == BuildingKind::City
-                    && !b.under_construction
-                    && self
-                        .city_arsenals
-                        .get(&b.id)
-                        .is_some_and(|state| state.has_anti_nuke)
+                b.kind == BuildingKind::SAM && b.active_level() > 0
             })
             .map(|b| {
                 (
                     b.id,
                     b.owner_id,
                     b.tile_idx,
-                    sam_range(BuildingKind::Tower.max_level()),
+                    sam_range(b.active_level()),
                 )
             })
             .collect();
@@ -80,7 +87,7 @@ impl SowEngine {
                 }
 
                 // Check if destination is within range of SAM
-                let dist = hex_distance(*sam_tile, proj.dst_tile, width);
+                let dist = sam_tile_distance(*sam_tile, proj.dst_tile, width);
                 if dist > range_u32 {
                     continue;
                 }
@@ -158,7 +165,7 @@ impl SowEngine {
                     .unwrap_or(nuke.dst_tile);
 
                 // Intercept if on the same tile or within 1 hex neighbor
-                if hex_distance(sam_tile, nuke_tile, width) <= 1 {
+                if sam_tile_distance(sam_tile, nuke_tile, width) <= 1 {
                     intercepted_nukes.push(nuke.id);
                     intercepted_sams.push(sam.id);
                     break;

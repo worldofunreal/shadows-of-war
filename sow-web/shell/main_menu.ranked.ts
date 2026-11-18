@@ -84,7 +84,7 @@ export function rankProgress(score: number, ladder?: RankedLadder | null) {
     const step = steps[index];
     const next: RankedStep | null = steps[index + 1] || null;
     const ceiling = next ? next.score : ladder.max_score;
-    return { step, next, remaining: Math.max(0, ceiling - score),
+    return { step, next, ceiling, remaining: Math.max(0, ceiling - score),
         fraction: Math.max(0, Math.min(1, (score - step.score) / Math.max(1, ceiling - step.score))) };
 }
 
@@ -93,7 +93,7 @@ export function rankProgressMarkup(score: number, ladder?: RankedLadder | null):
     if (!progress) return "";
     const target = progress.next ? rankName(progress.next.tier, progress.next.division) : SOW_t("ranked.maximum");
     return "<div class='sow-ranked__progress'><div class='sow-ranked__progress-label'><span data-rank-target>" +
-        esc(target) + "</span><strong data-rank-remaining>" + esc(SOW_t("ranked.remaining", { points: progress.remaining })) +
+        esc(target) + "</span><strong data-rank-remaining>" + esc(Math.round(score) + " / " + progress.ceiling) +
         "</strong></div><div class='sow-ranked__track' role='progressbar' aria-label='" + esc(target) +
         "' aria-valuemin='0' aria-valuemax='100' aria-valuenow='" + Math.round(progress.fraction * 100) +
         "'><i style='transform:scaleX(" + progress.fraction + ")'></i></div></div>";
@@ -109,11 +109,7 @@ export function rankPlacements(played: number): string {
 
 export function rankedPointsBreakdownMarkup(points: RankedPointsBreakdown): string {
     if (points.protected_loss) {
-        return (
-            "<p class='sow-ranked__breakdown'><span class='sow-ranked__chip is-protected'>" +
-            esc(SOW_t("lobbies.rank_protected_loss")) +
-            "</span></p>"
-        );
+        return "";
     }
     const components: Array<[number, string]> = [
         [points.base, "base"],
@@ -125,11 +121,7 @@ export function rankedPointsBreakdownMarkup(points: RankedPointsBreakdown): stri
     ];
     const visible = components.filter(([value]) => value !== 0);
     if (!visible.length) {
-        return (
-            "<p class='sow-ranked__breakdown'><span class='sow-ranked__chip is-neutral'>" +
-            esc(SOW_t("lobbies.rank_draw")) +
-            "</span></p>"
-        );
+        return "";
     }
     return (
         "<p class='sow-ranked__breakdown'>" +
@@ -257,7 +249,7 @@ export function animateRankResult(card: HTMLElement, result: import("./main_menu
             track?.setAttribute("aria-valuenow", String(Math.round(progress.fraction * 100)));
             track?.setAttribute("aria-label", label);
             if (target) target.textContent = label;
-            if (remaining) remaining.textContent = SOW_t("ranked.remaining", { points: progress.remaining });
+            if (remaining) remaining.textContent = Math.round(value) + " / " + progress.ceiling;
         }
         if (final || (tier === result.tier_after && tier !== result.tier_before))
             card.classList.add("is-rank-revealed");

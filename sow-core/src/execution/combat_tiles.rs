@@ -833,6 +833,16 @@ impl SowEngine {
                 if let Some(victim) = self.state.player_mut(victim_id) {
                     victim.troops = 0.0;
                 }
+                if self.state.config.tutorial {
+                    self.inject_campaign_troop_cascade(killer_id, victim_id);
+                    if self
+                        .state
+                        .player(victim_id)
+                        .is_some_and(|p| p.player_type == crate::player::PlayerType::Human && !p.is_ai_controlled)
+                    {
+                        self.calibrate_campaign_near_miss(victim_id);
+                    }
+                }
                 self.eliminate_player_with_assists(
                     victim_id,
                     killer_id,
@@ -1340,6 +1350,11 @@ impl SowEngine {
         let mut to_remove = Vec::new();
         let mut finishing_victims = DenseBitSet::new();
         let mut threshold_crossing_forces = Vec::new();
+        let mut tactical_surges: Vec<(u16, u32, u32, u32)> = Vec::new();
+        let tutorial_mode = self.state.config.tutorial;
+        let streak_tier = self.state.config.campaign_streak_tier;
+        let surge_cooldown_ok =
+            tutorial_mode && tick_now.saturating_sub(self.blitz_last_cascade_tick) >= 30;
 
         for i in 0..self.attacks.len() {
             let owner_id = self.attacks[i].owner_id;
@@ -1533,12 +1548,21 @@ impl SowEngine {
 
             let adjacent = (frontier_size(execution, &self.state) as f64).max(1.0);
 
-            let troop_strength = attack_strength(
+            let mut troop_strength = attack_strength(
                 &self.state,
                 execution.owner_id,
                 execution.target_owner,
                 execution.troops,
             );
+            if tutorial_mode
+                && streak_tier >= 3
+                && self
+                    .state
+                    .player(execution.owner_id)
+                    .is_some_and(|p| p.player_type == crate::player::PlayerType::Human && !p.is_ai_controlled)
+            {
+                troop_strength *= 1.30;
+            }
             let defense_strength = defense_strength(
                 &self.state,
                 execution.owner_id,
@@ -2167,6 +2191,33 @@ impl SowEngine {
                         troops: execution.troops,
                     });
 
+                    if surge_cooldown_ok
+                        && tactical_surges.is_empty()
+                        && execution.target_owner != 0
+                        && execution.troops >= 40.0
+                        && self.state.player(execution.owner_id).is_some_and(|p| {
+                            p.player_type == crate::player::PlayerType::Human && !p.is_ai_controlled
+                        })
+                    {
+                        let surge_sample = stable_tile_sample(
+                            self.state.seed ^ tick_now,
+                            execution.owner_id,
+                            execution.target_owner,
+                            tile_idx,
+                            0x5A17_B117_C45C_AD31,
+                        );
+                        if surge_sample < 0.045 {
+                            let bonus = (execution.troops * 0.22).clamp(120.0, 600.0);
+                            execution.troops += bonus;
+                            tactical_surges.push((
+                                execution.owner_id,
+                                target_tile.x,
+                                target_tile.y,
+                                bonus.round() as u32,
+                            ));
+                        }
+                    }
+
                     if execution.target_owner != 0
                         && defender_tile_count == finish_threshold.saturating_add(1)
                         && !finish_protected_by_campaign(
@@ -2233,6 +2284,17 @@ impl SowEngine {
             .into_iter()
             .map(|(victim, conqueror, x, y)| (victim, conqueror, x, y, None)),
         );
+        for (player_id, tx, ty, bonus_troops) in tactical_surges {
+            let chain_step = self.record_blitz_cascade_tick();
+            self.state.events.push(GameEvent::TacticalSurge {
+                player_id,
+                tile_x: tx,
+                tile_y: ty,
+                bonus_troops,
+                chain_step,
+            });
+        }
+
         for (victim, conqueror, x, y, last_defenders) in elimination_candidates {
             crate::execution::hero_effects::recruit_conquered_reserves(
                 &mut self.state,
@@ -2241,10 +2303,90 @@ impl SowEngine {
                 (x, y),
                 last_defenders,
             );
+            if self.state.config.tutorial {
+                self.inject_campaign_troop_cascade(conqueror, victim);
+                if self
+                    .state
+                    .player(victim)
+                    .is_some_and(|p| p.player_type == crate::player::PlayerType::Human && !p.is_ai_controlled)
+                {
+                    self.calibrate_campaign_near_miss(victim);
+                }
+            }
             self.eliminate_player(victim, conqueror, x, y, false);
         }
         self.hero_coastal_foundings();
         self.campaign_pre_defeat_pending = pre_defeat_pending;
+    }
+
+    fn inject_campaign_troop_cascade(&mut self, conqueror_id: u16, victim_id: u16) {
+        let Some(conqueror) = self.state.player(conqueror_id) else {
+            return;
+        };
+        if conqueror.player_type != crate::player::PlayerType::Human || conqueror.is_ai_controlled {
+            return;
+        }
+        let Some(&bonus) = self.campaign_troop_loot_bonus.get(&victim_id) else {
+            return;
+        };
+        if bonus == 0 {
+            return;
+        }
+        if let Some(best_attack) = self
+            .attacks
+            .iter_mut()
+            .filter(|a| a.owner_id == conqueror_id && !a.retreating && a.troops > 0.0)
+            .max_by(|a, b| a.troops.total_cmp(&b.troops))
+        {
+            best_attack.troops += f64::from(bonus);
+            self.campaign_troop_loot_bonus.remove(&victim_id);
+        }
+    }
+
+    fn calibrate_campaign_near_miss(&mut self, human_id: u16) {
+        if self.campaign_near_miss_applied {
+            return;
+        }
+        self.campaign_near_miss_applied = true;
+        let mut best_enemy: Option<(u16, f64)> = None;
+        for player in &self.state.players {
+            if !player.alive
+                || player.id == human_id
+                || player.tile_count == 0
+                || self.campaign_relations.get(&player.id)
+                    == Some(&crate::protocol::CampaignRelation::Allied)
+            {
+                continue;
+            }
+            let start_troops = self
+                .campaign_starting_troops
+                .get(&player.id)
+                .copied()
+                .unwrap_or(player.troops)
+                .max(1.0);
+            let start_tiles = self
+                .campaign_starting_tile_counts
+                .get(&player.id)
+                .copied()
+                .unwrap_or(player.tile_count)
+                .max(1);
+            let troop_ratio = player.troops / start_troops;
+            let tile_ratio = f64::from(player.tile_count) / f64::from(start_tiles);
+            if troop_ratio <= 0.55 || tile_ratio <= 0.55 {
+                let target_troops = (start_troops * 0.05).clamp(60.0, 220.0);
+                if player.troops > target_troops {
+                    let score = troop_ratio.min(tile_ratio);
+                    if best_enemy.is_none_or(|(_, best_score)| score < best_score) {
+                        best_enemy = Some((player.id, target_troops));
+                    }
+                }
+            }
+        }
+        if let Some((enemy_id, target_troops)) = best_enemy
+            && let Some(enemy) = self.state.player_mut(enemy_id)
+        {
+            enemy.troops = target_troops;
+        }
     }
 }
 

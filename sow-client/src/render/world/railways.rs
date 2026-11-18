@@ -2,13 +2,11 @@ use crate::app::{InputState, SimState, UiState};
 use crate::render::gpu::TextRenderer;
 use crate::theme::dev_config::DevConfig;
 use sow_core::game::BuildingKind;
-use sow_core::map::MapTile;
 use sow_core::protocol::{BuildingSnapshot, SimSnapshot};
-use std::collections::{HashMap, HashSet};
+use sow_core::building::RailwayLink;
+use std::collections::HashMap;
 use web_time::Instant;
 
-const GRID_CELL_SIZE: i32 = 32;
-const MAX_CANDIDATES_PER_BUILDING: usize = 64;
 const MAX_RENDERED_TRAINS: usize = 60;
 const TRACK_BED_COLOR: [f32; 3] = [0.12, 0.11, 0.10];
 const TRACK_RAIL_COLOR: [f32; 3] = [0.63, 0.54, 0.40];
@@ -40,9 +38,8 @@ struct VisualTrain {
 #[derive(Default)]
 pub(crate) struct RailwayRenderState {
     snapshot_tick: Option<u64>,
-    link_distance_bits: Option<u32>,
     buildings: Vec<RailBuilding>,
-    player_links: Vec<(u16, Option<sow_core::protocol::Team>, Vec<u16>)>,
+    railway_links: Vec<RailwayLink>,
     segments: Vec<RailSegment>,
     trains: Vec<VisualTrain>,
     train_count: usize,
@@ -63,13 +60,8 @@ impl RailwayRenderState {
         snapshot: &SimSnapshot,
         map_w: u32,
         map_h: u32,
-        terrain: Option<&[MapTile]>,
-        link_distance: f32,
     ) {
-        let distance_bits = link_distance.to_bits();
-        if self.snapshot_tick == Some(snapshot.tick)
-            && self.link_distance_bits == Some(distance_bits)
-        {
+        if self.snapshot_tick == Some(snapshot.tick) {
             return;
         }
         self.snapshot_tick = Some(snapshot.tick);
@@ -87,15 +79,7 @@ impl RailwayRenderState {
                         && old.level == new.level
                         && old.under_construction == new.under_construction
                 });
-        let links_match = self.player_links.len() == snapshot.players.len()
-            && self
-                .player_links
-                .iter()
-                .zip(&snapshot.players)
-                .all(|((id, team, allies), p)| {
-                    *id == p.id && *team == p.team && *allies == p.alliances
-                });
-        if buildings_match && links_match && self.link_distance_bits == Some(distance_bits) {
+        if buildings_match && self.railway_links == snapshot.railway_links {
             return;
         }
 
@@ -109,21 +93,12 @@ impl RailwayRenderState {
                 level: building.level,
                 under_construction: building.under_construction,
             }));
-        self.player_links.clear();
-        self.player_links.extend(
-            snapshot
-                .players
-                .iter()
-                .map(|p| (p.id, p.team, p.alliances.clone())),
-        );
-        self.link_distance_bits = Some(distance_bits);
+        self.railway_links.clone_from(&snapshot.railway_links);
         self.segments = build_segments(
             &snapshot.buildings,
-            &snapshot.players,
+            &snapshot.railway_links,
             map_w,
             map_h,
-            terrain,
-            link_distance,
         );
         self.trains.clear();
         self.train_count = 0;
@@ -162,139 +137,39 @@ impl RailwayRenderState {
     }
 }
 
-fn players_allied(
-    players: &[sow_core::protocol::PlayerSnapshot],
-    a: u16,
-    b: u16,
-) -> bool {
-    if a == b {
-        return true;
-    }
-    let Some(pa) = players.iter().find(|p| p.id == a) else {
-        return false;
-    };
-    let Some(pb) = players.iter().find(|p| p.id == b) else {
-        return false;
-    };
-    pa.team.is_some() && pa.team == pb.team || (pa.alliances.contains(&b) && pb.alliances.contains(&a))
-}
-
 fn build_segments(
     buildings: &[BuildingSnapshot],
-    players: &[sow_core::protocol::PlayerSnapshot],
+    links: &[RailwayLink],
     map_w: u32,
     map_h: u32,
-    terrain: Option<&[MapTile]>,
-    max_distance: f32,
 ) -> Vec<RailSegment> {
-    if map_w == 0 || map_h == 0 {
+    if map_w == 0 || map_h == 0 || links.is_empty() {
         return Vec::new();
     }
-
-    let eligible: Vec<_> = buildings
-        .iter()
-        .filter(|city| {
-            city.kind == BuildingKind::City
-                && !city.under_construction
-                && u64::from(city.tile_idx) < u64::from(map_w) * u64::from(map_h)
-                && buildings.iter().any(|factory| {
-                    factory.tile_idx == city.tile_idx
-                        && factory.owner_id == city.owner_id
-                        && factory.kind == BuildingKind::Factory
-                        && factory.active_level()
-                            >= sow_core::building::RAILWAY_REQUIRED_FACTORY_LEVEL
-                })
-        })
-        .copied()
-        .collect();
-    if eligible.len() < 2 {
-        return Vec::new();
-    }
-
-    let mut grid: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
-    for (index, building) in eligible.iter().enumerate() {
-        let x = (building.tile_idx % map_w) as i32;
-        let y = (building.tile_idx / map_w) as i32;
-        grid.entry((x / GRID_CELL_SIZE, y / GRID_CELL_SIZE))
-            .or_default()
-            .push(index);
-    }
-
-    let cell_radius = (max_distance / GRID_CELL_SIZE as f32).ceil() as i32;
-    let mut offsets: Vec<_> = (-cell_radius..=cell_radius)
-        .flat_map(|dy| (-cell_radius..=cell_radius).map(move |dx| (dx, dy)))
-        .collect();
-    offsets.sort_by_key(|(dx, dy)| dx * dx + dy * dy);
-
-    let max_distance_sq = max_distance * max_distance;
-    let mut edges = Vec::with_capacity(eligible.len());
-    let mut seen = HashSet::with_capacity(eligible.len());
-    for (index, building) in eligible.iter().enumerate() {
-        let ax = (building.tile_idx % map_w) as i32;
-        let ay = (building.tile_idx / map_w) as i32;
-        let cell = (ax / GRID_CELL_SIZE, ay / GRID_CELL_SIZE);
-        let mut best: Option<(usize, f32, bool)> = None;
-        let mut checked = 0;
-
-        'cells: for (dx, dy) in &offsets {
-            let Some(candidates) = grid.get(&(cell.0 + dx, cell.1 + dy)) else {
-                continue;
-            };
-            for &other_index in candidates {
-                if other_index == index {
-                    continue;
-                }
-                checked += 1;
-                if checked > MAX_CANDIDATES_PER_BUILDING {
-                    break 'cells;
-                }
-
-                let other = eligible[other_index];
-                if !players_allied(players, building.owner_id, other.owner_id) {
-                    continue;
-                }
-                let bx = (other.tile_idx % map_w) as i32;
-                let by = (other.tile_idx / map_w) as i32;
-                let distance_sq = ((ax - bx) * (ax - bx) + (ay - by) * (ay - by)) as f32;
-                if distance_sq > max_distance_sq
-                    || best.is_some_and(|(_, best_distance, _)| distance_sq >= best_distance)
-                {
-                    continue;
-                }
-
-                let Some(horizontal_first) = sow_core::building::railway_route_is_land(
-                    ax, ay, bx, by, map_w, map_h, terrain,
-                ) else {
-                    continue;
-                };
-                best = Some((other_index, distance_sq, horizontal_first));
-            }
-        }
-
-        let Some((other_index, _, horizontal_first)) = best else {
+    let by_id: HashMap<_, _> = buildings.iter().map(|building| (building.id, building)).collect();
+    let mut segments = Vec::with_capacity(links.len());
+    for link in links {
+        let (Some(a_building), Some(b_building)) = (
+            by_id.get(&link.from_building_id),
+            by_id.get(&link.to_building_id),
+        ) else {
             continue;
         };
-        let other = eligible[other_index];
-        let pair = if building.id < other.id {
-            (building.id, other.id)
-        } else {
-            (other.id, building.id)
-        };
-        if !seen.insert(pair) {
+        let (a_building, b_building) = (*a_building, *b_building);
+        if u64::from(a_building.tile_idx) >= u64::from(map_w) * u64::from(map_h)
+            || u64::from(b_building.tile_idx) >= u64::from(map_w) * u64::from(map_h)
+        {
             continue;
         }
-
-        let bx = (other.tile_idx % map_w) as i32;
-        let by = (other.tile_idx / map_w) as i32;
-        let a = crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
-        let b = crate::render::world::movers::tile_to_world(other.tile_idx, map_w);
-        let corner = if horizontal_first {
-            [b.0, a.1]
-        } else {
-            [a.0, b.1]
-        };
+        let ax = (a_building.tile_idx % map_w) as i32;
+        let ay = (a_building.tile_idx / map_w) as i32;
+        let bx = (b_building.tile_idx % map_w) as i32;
+        let by = (b_building.tile_idx / map_w) as i32;
+        let a = crate::render::world::movers::tile_to_world(a_building.tile_idx, map_w);
+        let b = crate::render::world::movers::tile_to_world(b_building.tile_idx, map_w);
+        let corner = if link.horizontal_first { [b.0, a.1] } else { [a.0, b.1] };
         let mut path_tiles = Vec::new();
-        if horizontal_first {
+        if link.horizontal_first {
             append_axis_tiles(ax, ay, bx, ay, map_w, map_h, &mut path_tiles);
             append_axis_tiles(bx, ay, bx, by, map_w, map_h, &mut path_tiles);
         } else {
@@ -306,16 +181,20 @@ fn build_segments(
         if length <= 0.0 {
             continue;
         }
-        edges.push(RailSegment {
+        segments.push(RailSegment {
             a: [a.0, a.1],
             corner,
             b: [b.0, b.1],
             path_tiles,
-            owner_id: building.owner_id,
+            owner_id: if a_building.kind == BuildingKind::Factory {
+                a_building.owner_id
+            } else {
+                b_building.owner_id
+            },
             length,
         });
     }
-    edges
+    segments
 }
 
 fn append_axis_tiles(
@@ -366,19 +245,7 @@ pub(crate) fn render(
         return;
     }
 
-    let terrain = sim
-        .engine
-        .as_ref()
-        .map(|engine| engine.state.map.terrain.as_slice());
-    state.sync(
-        snapshot,
-        sim.map_w,
-        sim.map_h,
-        terrain,
-        dev.railway_link_distance
-            .max(sow_core::building::RAILWAY_LINK_DISTANCE as f32)
-            .clamp(4.0, 150.0),
-    );
+    state.sync(snapshot, sim.map_w, sim.map_h);
     state.advance_trains(
         now,
         dev.train_speed.max(0.0),

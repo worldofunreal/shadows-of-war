@@ -95,6 +95,11 @@ pub fn register_sfx_wav(id: SfxId, wav_bytes: &[u8]) -> bool {
 
 /// Picks a random registered clip for `id`, returning a `ClipSource` scaled by `gain`.
 pub fn pick_clip(id: SfxId, gain: f32) -> Option<ClipSource> {
+    pick_clip_pitched(id, gain, 1.0)
+}
+
+/// Picks a random registered clip for `id`, scaled by `gain` and playback `pitch_ratio`.
+pub fn pick_clip_pitched(id: SfxId, gain: f32, pitch_ratio: f32) -> Option<ClipSource> {
     let map = bank().read().ok()?;
     let variants = map.get(&id)?;
     if variants.is_empty() {
@@ -109,6 +114,7 @@ pub fn pick_clip(id: SfxId, gain: f32) -> Option<ClipSource> {
         samples: Arc::clone(&variants[idx]),
         idx: 0,
         gain,
+        pitch_ratio: pitch_ratio.clamp(0.5, 2.5),
     })
 }
 
@@ -116,6 +122,7 @@ pub struct ClipSource {
     samples: Arc<[f32]>,
     idx: usize,
     gain: f32,
+    pitch_ratio: f32,
 }
 
 impl Iterator for ClipSource {
@@ -130,6 +137,6 @@ impl Iterator for ClipSource {
 
 impl AudioSource for ClipSource {
     fn sample_rate(&self) -> u32 {
-        SAMPLE_RATE
+        ((SAMPLE_RATE as f32) * self.pitch_ratio).round().max(8000.0) as u32
     }
 }

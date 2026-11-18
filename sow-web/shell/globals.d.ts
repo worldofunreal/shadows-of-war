@@ -103,6 +103,7 @@ declare global {
         SOW_portalBeforeMatch?: (proceed: () => void) => void;
         SOW_portalRewardedAvailable?: () => boolean;
         SOW_portalRewardedBreak?: () => Promise<boolean>;
+        CrazyGames?: { SDK?: { game?: { happytime?: () => void } } };
         SOW_setPortalAudioMuted?: (muted: boolean) => void;
         SOW_analyticsTrack: (name: string, props?: unknown) => void;
         SOW_LOCALE: string;

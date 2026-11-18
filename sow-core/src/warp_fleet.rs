@@ -116,7 +116,11 @@ pub fn resolve_warship_route(
     }) {
         has_ready_port = true;
         let mut port_sources = Vec::new();
-        crate::building::for_each_city_coastal_water_tile(map, port.tile_idx, |tile| {
+        crate::building::for_each_structure_coastal_water_tile(
+            map,
+            crate::game::BuildingKind::Port,
+            port.tile_idx,
+            |tile| {
             if water.component_of(tile) == component {
                 port_sources.push((tile, port.id, port.tile_idx));
             }
@@ -154,21 +158,25 @@ pub fn resolve_warship_route(
     })
 }
 
-/// Picks a deterministic water tile adjacent to the 4×4 City footprint at `city_tile`
+/// Picks a deterministic water tile adjacent to the 2×2 Port footprint at `port_tile`
 /// for launching a newly constructed Warship.
 pub fn coastal_warship_spawn_tile(
     map: &GameMap,
     water: &WaterComponents,
-    city_tile: u32,
+    port_tile: u32,
 ) -> Option<u32> {
-    if map.width == 0 || city_tile >= map.width.saturating_mul(map.height) {
+    if map.width == 0 || port_tile >= map.width.saturating_mul(map.height) {
         return None;
     }
-    let cx = city_tile % map.width;
-    let cy = city_tile / map.width;
+    let cx = port_tile % map.width;
+    let cy = port_tile / map.width;
     let mut best_connected: Option<(u32, u32)> = None;
     let mut best_any: Option<(u32, u32)> = None;
-    crate::building::for_each_city_coastal_water_tile(map, city_tile, |tile| {
+    crate::building::for_each_structure_coastal_water_tile(
+        map,
+        crate::game::BuildingKind::Port,
+        port_tile,
+        |tile| {
         let tx = tile % map.width;
         let ty = tile / map.width;
         let key = (tx.abs_diff(cx) + ty.abs_diff(cy), tile);

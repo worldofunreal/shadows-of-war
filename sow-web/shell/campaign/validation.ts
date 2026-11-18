@@ -129,11 +129,21 @@ export function validate(
             tactics_04_factory_gold: ["southeastasia", 1000, 592],
             boudica: ["eastanglia", 896, 504],
         };
+        const BLITZ_MAP_SPECS: [string, number, number][] = [
+            ["europe", 1000, 576],
+            ["bajacalifornia", 848, 1000],
+            ["southeastasia", 1000, 592],
+            ["africa", 956, 1000],
+            ["northamerica", 1000, 516],
+        ];
+        const blitzMatch = definition.episode_id.match(/^blitz_(\d+)$/);
         const expectedMap =
             EPISODE_MAPS[definition.episode_id] ??
-            (/^six_sky_ep[123]$/.test(definition.episode_id)
-                ? ["northamerica", 1000, 516]
-                : null);
+            (blitzMatch
+                ? BLITZ_MAP_SPECS[Math.max(0, Number(blitzMatch[1]) - 5) % BLITZ_MAP_SPECS.length]
+                : /^six_sky_ep[123]$/.test(definition.episode_id)
+                  ? ["northamerica", 1000, 516]
+                  : null);
         if (
             !object(roster) ||
             typeof roster.map !== "string" ||
@@ -287,6 +297,39 @@ export function validate(
                     "Fixed gold loot must be an integer from 0 to 1,000,000.",
                 );
             if (
+                faction.troop_loot_bonus != null &&
+                (!Number.isInteger(faction.troop_loot_bonus) ||
+                    faction.troop_loot_bonus < 0 ||
+                    faction.troop_loot_bonus > 1_000_000)
+            )
+                issue(
+                    null,
+                    "roster.factions.troop_loot_bonus",
+                    "Troop loot bonus must be an integer from 0 to 1,000,000.",
+                );
+            if (faction.prebuilt_buildings != null) {
+                const validKinds = new Set(["city", "tower", "defense_tower", "factory", "port", "farm"]);
+                const validList =
+                    Array.isArray(faction.prebuilt_buildings) &&
+                    faction.prebuilt_buildings.every(
+                        (entry: unknown) =>
+                            Array.isArray(entry) &&
+                            entry.length === 2 &&
+                            typeof entry[0] === "string" &&
+                            validKinds.has(entry[0].trim().toLowerCase()) &&
+                            Number.isInteger(entry[1]) &&
+                            Number(entry[1]) >= 1 &&
+                            Number(entry[1]) <= 5,
+                    );
+                if (!validList) {
+                    issue(
+                        null,
+                        "roster.factions.prebuilt_buildings",
+                        "Prebuilt buildings must be [kind, level 1–5] pairs.",
+                    );
+                }
+            }
+            if (
                 faction.alliance_group != null &&
                 (typeof faction.alliance_group !== "string" ||
                     !/^[a-z][a-z0-9_]{0,63}$/.test(faction.alliance_group))
@@ -307,6 +350,7 @@ export function validate(
             !allowMissingFactionReferences &&
             object(settings) &&
             object(settings.campaign_support) &&
+            settings.campaign_support.after_defeated !== "immediate" &&
             !rosterFactions.has(settings.campaign_support.after_defeated)
         )
             issue(

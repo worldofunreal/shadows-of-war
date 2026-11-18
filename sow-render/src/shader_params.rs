@@ -423,16 +423,6 @@ pub static PARAMS: &[ParamDef] = &[
         "×"
     ),
     legacy_number!(
-        "railway_link_distance",
-        "Maximum building link",
-        "Railways",
-        36.0,
-        4.0,
-        150.0,
-        1.0,
-        "tiles"
-    ),
-    legacy_number!(
         "railway_track_width",
         "Track width",
         "Railways",

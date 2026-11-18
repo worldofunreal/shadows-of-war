@@ -1419,7 +1419,7 @@ mod bot_iq_alliance_tests {
             under_construction: false,
             ticks_until_complete: 0,
         });
-        engine.city_arsenals.insert(
+        engine.building_productions.insert(
             100,
             crate::building::CityArsenalState {
                 nuke_ready: true,
@@ -1448,7 +1448,7 @@ mod bot_iq_alliance_tests {
             under_construction: false,
             ticks_until_complete: 0,
         });
-        engine.city_arsenals.insert(
+        engine.building_productions.insert(
             101,
             crate::building::CityArsenalState {
                 has_anti_nuke: true,
@@ -1503,7 +1503,7 @@ mod bot_iq_alliance_tests {
             under_construction: false,
             ticks_until_complete: 0,
         });
-        engine.city_arsenals.insert(
+        engine.building_productions.insert(
             100,
             crate::building::CityArsenalState {
                 nuke_ready: true,
@@ -1585,7 +1585,7 @@ mod bot_iq_alliance_tests {
                 ticks_until_complete: 0,
             },
         ]);
-        engine.city_arsenals.insert(
+        engine.building_productions.insert(
             100,
             crate::building::CityArsenalState {
                 nuke_ready: true,
@@ -1619,7 +1619,7 @@ mod bot_iq_alliance_tests {
             under_construction: false,
             ticks_until_complete: 0,
         });
-        engine.city_arsenals.insert(
+        engine.building_productions.insert(
             100,
             crate::building::CityArsenalState {
                 nuke_ready: true,

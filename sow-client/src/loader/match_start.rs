@@ -76,11 +76,15 @@ impl SowApp {
         for key in options.keys() {
             if !matches!(
                 key.as_str(),
-                "starting_troops" | "starting_gold" | "campaign_support"
+                "starting_troops" | "starting_gold" | "campaign_support" | "revive_boost"
             ) {
                 return Err(format!("Campaign setting is not allowed: {key}"));
             }
         }
+        let revive_boost = options
+            .get("revive_boost")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
         let starting_troops = options
             .get("starting_troops")
             .and_then(serde_json::Value::as_f64)
@@ -114,11 +118,12 @@ impl SowApp {
                 {
                     return Err("Campaign support contains an unknown setting.".to_string());
                 }
-                let after_defeated = support
-                    .get("after_defeated")
-                    .and_then(serde_json::Value::as_str)
-                    .and_then(&resolve_faction_display_name)
-                    .ok_or_else(|| "Campaign support milestone is invalid.".to_string())?;
+                let after_defeated = match support.get("after_defeated").and_then(serde_json::Value::as_str) {
+                    Some(s) if s.is_empty() || s.eq_ignore_ascii_case("immediate") => s.to_string(),
+                    Some(s) => resolve_faction_display_name(s)
+                        .ok_or_else(|| "Campaign support milestone is invalid.".to_string())?,
+                    None => return Err("Campaign support milestone is invalid.".to_string()),
+                };
                 let share_percent = support
                     .get("share_percent")
                     .and_then(serde_json::Value::as_u64)
@@ -164,6 +169,8 @@ impl SowApp {
                 starting_gold,
                 buildings_enabled: true,
                 campaign_support,
+                campaign_streak_tier: self.progress.supercharger_tier(),
+                campaign_revive_boost: revive_boost,
                 ..Default::default()
             },
             true,

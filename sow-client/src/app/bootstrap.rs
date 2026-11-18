@@ -308,6 +308,9 @@ impl SowApp {
                 border_flash_intensities: std::collections::HashMap::new(),
                 last_player_attack_flash_time: std::collections::HashMap::new(),
                 viewport_alert: None,
+                cascade_streak: 0,
+                cascade_last_at: None,
+                cascade_callouts: Vec::new(),
             },
             sfx: crate::app::sfx::SfxDirector::default(),
             time: TimeState {

@@ -1557,3 +1557,125 @@
     }
   }
 }
+
+.sow-story__nearmiss-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 12, 18, 0.78);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.sow-story__nearmiss-card {
+  width: min(100%, 460px);
+  padding: 24px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 196, 78, 0.45);
+  background: linear-gradient(170deg, #16202d 0%, #0d131c 100%);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+  color: #f4f7f8;
+  text-align: center;
+}
+
+.sow-nearmiss__eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffbe4f;
+  margin-bottom: 6px;
+}
+
+.sow-nearmiss__title {
+  margin: 0 0 14px;
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.sow-nearmiss__bar {
+  width: 100%;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  margin-bottom: 10px;
+}
+
+.sow-nearmiss__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f59e0b 0%, #ef4444 55%, #22c55e 100%);
+  transition: width 320ms ease-out;
+}
+
+.sow-nearmiss__stat {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffd57e;
+}
+
+.sow-nearmiss__hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #bfd0d8;
+}
+
+.sow-nearmiss__streak-warn {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sow-nearmiss__actions {
+  display: grid;
+  gap: 10px;
+}
+
+.sow-nearmiss__btn {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.sow-nearmiss__btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.sow-nearmiss__btn.is-rescue {
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  border-color: #fde68a;
+  color: #111827;
+}
+
+.sow-nearmiss__btn.is-retry {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+.sow-nearmiss__btn.is-exit {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  min-height: 36px;
+  font-size: 12px;
+}

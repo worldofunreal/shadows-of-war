@@ -1140,9 +1140,12 @@ impl SowEngine {
 
     fn port_water_tiles(&self, port_tile: u32) -> Vec<u32> {
         let mut tiles = Vec::new();
-        crate::building::for_each_city_coastal_water_tile(&self.state.map, port_tile, |tile| {
-            tiles.push(tile);
-        });
+        crate::building::for_each_structure_coastal_water_tile(
+            &self.state.map,
+            crate::game::BuildingKind::Port,
+            port_tile,
+            |tile| tiles.push(tile),
+        );
         tiles.sort_unstable();
         tiles.dedup();
         tiles

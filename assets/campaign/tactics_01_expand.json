@@ -19,7 +19,9 @@
       "leader": "Ragnar",
       "avatar": "irish_raiders_1",
       "can_attack_player": false,
-      "gold_loot_override": 150
+      "gold_loot_override": 150,
+      "troop_loot_bonus": 1100,
+      "prebuilt_buildings": [["Farm", 1]]
     },
     {
       "id": "red_branch_fort",

@@ -152,6 +152,11 @@ pub enum GameplayIntent {
     IgnoreHelpCall {
         target_player: crate::player::PlayerId,
     },
+    /// Queue production at this specific owned building.
+    BuildingProduction {
+        building_id: u64,
+        kind: crate::game::CityArsenalKind,
+    },
 }
 
 /// Boat control frame for INK TIDE lockstep turns.
@@ -764,6 +769,8 @@ pub struct SimSnapshot {
     pub fleets: Vec<FleetSnapshot>,
     pub attacks: Vec<AttackSnapshot>,
     pub buildings: Vec<BuildingSnapshot>,
+    #[serde(default)]
+    pub railway_links: Vec<crate::building::RailwayLink>,
     pub projectiles: Vec<ProjectileSnapshot>,
     #[serde(default)]
     pub nuke_alerts: Vec<NukeAlert>,

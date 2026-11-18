@@ -1,0 +1,85 @@
+{
+  "_comment": "Conquest Blitz Node 14 (Tense) on northamerica",
+  "map": "northamerica",
+  "player_spawn": [
+    379,
+    332
+  ],
+  "player_color": "#f08c28",
+  "factions": [
+    {
+      "id": "outpost_alpha",
+      "name": "Outpost Alpha",
+      "x": 364,
+      "y": 332,
+      "starting_troops": 1000,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d9534f",
+      "iq": 65,
+      "civ": "Raiders",
+      "leader": "Ragnar",
+      "avatar": "ragnar",
+      "can_attack_player": false,
+      "gold_loot_override": 180,
+      "troop_loot_bonus": 3400,
+      "prebuilt_buildings": [
+        [
+          "City",
+          1
+        ]
+      ]
+    },
+    {
+      "id": "vanguard_keep",
+      "name": "Vanguard Keep",
+      "x": 364,
+      "y": 320,
+      "starting_troops": 1700,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d4822a",
+      "iq": 75,
+      "civ": "Warband",
+      "leader": "Alexander",
+      "avatar": "alexander",
+      "can_attack_player": true,
+      "gold_loot_override": 220,
+      "troop_loot_bonus": 3910,
+      "prebuilt_buildings": [
+        [
+          "Farm",
+          1
+        ]
+      ]
+    },
+    {
+      "id": "sector_boss",
+      "name": "Sector 14 Warlord",
+      "x": 408,
+      "y": 320,
+      "starting_troops": 5400,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#a83232",
+      "iq": 95,
+      "civ": "Citadel",
+      "leader": "Richard",
+      "avatar": "richard",
+      "can_attack_player": true,
+      "prebuilt_buildings": [
+        [
+          "City",
+          1
+        ],
+        [
+          "Tower",
+          1
+        ]
+      ]
+    }
+  ]
+}

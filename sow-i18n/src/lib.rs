@@ -75,6 +75,8 @@ pub struct WebStrings {
     pub site: WebDomain,
     #[serde(default)]
     pub missions: WebDomain,
+    #[serde(default)]
+    pub blitz: WebDomain,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

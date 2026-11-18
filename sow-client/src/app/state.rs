@@ -588,6 +588,16 @@ pub struct AttackBadgeLabel {
     pub last_update: web_time::Instant,
 }
 
+#[derive(Clone, Debug)]
+pub struct CascadeCallout {
+    pub world_x: f32,
+    pub world_y: f32,
+    pub label: String,
+    pub chain_step: u8,
+    pub is_surge: bool,
+    pub start_time: web_time::Instant,
+}
+
 pub struct UiState {
     pub app: crate::ClientApp,
     /// True during an offline scripted tutorial or campaign match.
@@ -655,6 +665,10 @@ pub struct UiState {
     pub last_player_attack_flash_time: std::collections::HashMap<u16, web_time::Instant>,
     /// Screen vignette alert state.
     pub viewport_alert: Option<ViewportAlertState>,
+    /// Active cascade combo streak and floating world callouts (Conquest Blitz juice).
+    pub cascade_streak: u8,
+    pub cascade_last_at: Option<web_time::Instant>,
+    pub cascade_callouts: Vec<CascadeCallout>,
 }
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
@@ -717,6 +731,47 @@ impl UiState {
 
     pub(crate) fn trigger_alliance_celebration(&mut self, a: u16, b: u16, now: web_time::Instant) {
         queue_alliance_celebration(&mut self.alliance_celebrations, a, b, now);
+    }
+
+    pub(crate) fn push_cascade_callout(
+        &mut self,
+        world_x: f32,
+        world_y: f32,
+        custom_label: Option<String>,
+        chain_override: Option<u8>,
+        is_surge: bool,
+        now: web_time::Instant,
+    ) -> u8 {
+        let within_window = self
+            .cascade_last_at
+            .is_some_and(|last| now.duration_since(last).as_secs_f32() <= 4.5);
+        let step = if within_window {
+            self.cascade_streak.saturating_add(1)
+        } else {
+            1
+        };
+        let step = chain_override.map_or(step, |c| step.max(c)).clamp(1, 8);
+        self.cascade_streak = step;
+        self.cascade_last_at = Some(now);
+
+        let label = custom_label.unwrap_or_else(|| match step {
+            1 => "¡GOLPE TÁCTICO!".to_string(),
+            2 => "¡BRECHA! x2".to_string(),
+            3 => "¡ARRASA! x3".to_string(),
+            n => format!("¡IMPARABLE! x{n}"),
+        });
+        if self.cascade_callouts.len() >= 8 {
+            self.cascade_callouts.remove(0);
+        }
+        self.cascade_callouts.push(CascadeCallout {
+            world_x,
+            world_y,
+            label,
+            chain_step: step,
+            is_surge,
+            start_time: now,
+        });
+        step
     }
 
     pub(crate) fn trigger_viewport_alert(&mut self, kind: ViewportAlertKind) {

@@ -1922,9 +1922,10 @@ impl SowEngine {
         } else {
             let has_ready_nuke = self.buildings.iter().any(|b| {
                 b.owner_id == bot_id
-                    && b.kind == BuildingKind::City
+                    && matches!(b.kind, BuildingKind::Factory | BuildingKind::Tower)
                     && !b.under_construction
-                    && self.city_arsenals.get(&b.id).is_some_and(|s| s.nuke_ready)
+                    && b.active_level() >= 4
+                    && self.building_productions.get(&b.id).is_some_and(|s| s.nuke_ready)
             });
             if !has_ready_nuke {
                 if super::structures::has_pending_build(decisions, bot_id) {
@@ -1934,34 +1935,27 @@ impl SowEngine {
                     return;
                 }
                 let req = NukeKind::AtomBomb.required_district_level();
-                if let Some(city_tile) = self.buildings.iter().find_map(|city| {
-                    if city.owner_id != bot_id
-                        || city.kind != BuildingKind::City
-                        || city.under_construction
+                if let Some(producer_id) = self.buildings.iter().find_map(|producer| {
+                    if producer.owner_id != bot_id
+                        || producer.under_construction
+                        || !matches!(producer.kind, BuildingKind::Factory | BuildingKind::Tower)
+                        || producer.active_level() < req
+                        || !self.campaign_allows_building(producer.kind, req)
                     {
                         return None;
                     }
-                    if crate::building::city_has_active_build(
-                        &self.buildings,
-                        &self.city_arsenals,
-                        city.tile_idx,
-                    ) {
+                    if self.building_productions.get(&producer.id).is_some_and(|state| {
+                        state.arsenal_build.is_some() || state.nuke_ready
+                    }) {
                         return None;
                     }
-                    let has_silo_district = self.buildings.iter().any(|d| {
-                        d.tile_idx == city.tile_idx
-                            && d.owner_id == bot_id
-                            && !d.under_construction
-                            && matches!(d.kind, BuildingKind::Factory | BuildingKind::Tower)
-                            && d.active_level() >= req
-                    });
-                    has_silo_district.then_some(city.tile_idx)
+                    Some(producer.id)
                 }) {
                     decisions.push(BotDecision {
                         bot_id,
                         kind: BotDecisionKind::Build,
-                        intent: GameplayIntent::CityArsenal {
-                            tile_idx: city_tile,
+                        intent: GameplayIntent::BuildingProduction {
+                            building_id: producer_id,
                             kind: crate::game::CityArsenalKind::Nuke,
                         },
                     });
@@ -2014,15 +2008,17 @@ impl SowEngine {
                                 && b.active_level() >= BuildingKind::Tower.max_level()
                                 && !b.under_construction
                         } else {
-                            b.kind == BuildingKind::City
-                                && !b.under_construction
-                                && self
-                                    .city_arsenals
-                                    .get(&b.id)
-                                    .is_some_and(|s| s.has_anti_nuke)
+                            b.kind == BuildingKind::SAM && b.active_level() > 0
                         }
                     })
-                    .map(|b| (b.tile_idx, b.owner_id))
+                    .map(|b| {
+                        let range = if self.legacy_building_rules {
+                            48
+                        } else {
+                            crate::execution::sam::sam_range(b.active_level()) as u32
+                        };
+                        (b.tile_idx, b.owner_id, range)
+                    })
                     .collect(),
             );
         }
@@ -2042,13 +2038,14 @@ impl SowEngine {
                 BuildingKind::Factory => 15000.0 * (b.level as f64),
                 BuildingKind::Port => 10000.0 * (b.level as f64),
                 BuildingKind::Farm => 7000.0 * (b.level as f64),
+                BuildingKind::SAM => 4500.0 * (b.level as f64),
             };
 
             let bx = b.tile_idx % self.state.map.width;
             let by = b.tile_idx / self.state.map.width;
 
             // SAM avoidance
-            let sam_covered = shielded_cities.iter().any(|&(sam_tile, sam_owner)| {
+            let sam_covered = shielded_cities.iter().any(|&(sam_tile, sam_owner, range)| {
                 if sam_owner == bot_id || bot_alliances.contains(&sam_owner) {
                     return false;
                 }
@@ -2056,7 +2053,8 @@ impl SowEngine {
                     sam_tile % self.state.map.width,
                     sam_tile / self.state.map.width,
                 );
-                (bx as i32 - sx as i32).abs() + (by as i32 - sy as i32).abs() <= 48
+                (bx as i32 - sx as i32).abs().max((by as i32 - sy as i32).abs())
+                    <= range as i32
             });
             if sam_covered {
                 score -= 100000.0;

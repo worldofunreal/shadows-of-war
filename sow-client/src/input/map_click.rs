@@ -40,11 +40,29 @@ pub(crate) enum MapMenuAction {
     RequestAllies,
     Alliance,
     BuildCity,
+    BuildTower,
+    BuildFactory,
+    BuildPort,
+    BuildFarm,
+    BuildSam,
     UpgradeStructure,
     Nuke,
 }
 
 impl MapMenuAction {
+    const fn building_kind(self) -> Option<sow_core::game::BuildingKind> {
+        use sow_core::game::BuildingKind;
+        match self {
+            Self::BuildCity => Some(BuildingKind::City),
+            Self::BuildTower => Some(BuildingKind::Tower),
+            Self::BuildFactory => Some(BuildingKind::Factory),
+            Self::BuildPort => Some(BuildingKind::Port),
+            Self::BuildFarm => Some(BuildingKind::Farm),
+            Self::BuildSam => Some(BuildingKind::SAM),
+            _ => None,
+        }
+    }
+
     pub(crate) const fn name(self) -> &'static str {
         match self {
             Self::Emote => "emote",
@@ -56,6 +74,11 @@ impl MapMenuAction {
             Self::RequestAllies => "request_allies",
             Self::Alliance => "alliance",
             Self::BuildCity => "build_city",
+            Self::BuildTower => "build_tower",
+            Self::BuildFactory => "build_factory",
+            Self::BuildPort => "build_port",
+            Self::BuildFarm => "build_farm",
+            Self::BuildSam => "build_sam",
             Self::UpgradeStructure => "upgrade_structure",
             Self::Nuke => "nuke",
         }
@@ -151,7 +174,14 @@ impl MapTarget {
                 .collect();
         }
         if self.owner == self.my_id && self.is_land {
-            return vec![MapMenuAction::BuildCity];
+            return vec![
+                MapMenuAction::BuildCity,
+                MapMenuAction::BuildFactory,
+                MapMenuAction::BuildPort,
+                MapMenuAction::BuildTower,
+                MapMenuAction::BuildFarm,
+                MapMenuAction::BuildSam,
+            ];
         }
         if self.owner == 0 {
             let mut actions = Vec::new();
@@ -671,12 +701,22 @@ impl SowApp {
             Some(_) => {}
             None => {
                 if let Some((col, row)) = self.tile_coords(tile_idx) {
-                    let kind = sow_core::game::BuildingKind::City;
-                    if kind.max_level() > 0
-                        && self.campaign_building_max_level(kind) >= 1
-                        && self.resolve_building_target(kind, col, row).is_ok()
-                    {
-                        actions.push(MapMenuAction::BuildCity);
+                    for action in [
+                        MapMenuAction::BuildCity,
+                        MapMenuAction::BuildFactory,
+                        MapMenuAction::BuildPort,
+                        MapMenuAction::BuildTower,
+                        MapMenuAction::BuildFarm,
+                        MapMenuAction::BuildSam,
+                    ] {
+                        let Some(kind) = action.building_kind() else {
+                            continue;
+                        };
+                        if self.campaign_building_max_level(kind) >= 1
+                            && self.resolve_building_target(kind, col, row).is_ok()
+                        {
+                            actions.push(action);
+                        }
                     }
                 }
             }
@@ -704,7 +744,7 @@ impl SowApp {
                 let action_unavailable = if action == MapMenuAction::Alliance {
                     self.map_menu_alliance_state(tile_idx)
                         .is_none_or(|state| !state.can_act())
-                } else if campaign_fleet {
+                } else if campaign_fleet && action == MapMenuAction::Fleet {
                     let blocker = self.map_target(tile_idx).and_then(|target| {
                         if target.is_teammate {
                             Some(("hud.fleet_teammate", None))
@@ -737,39 +777,20 @@ impl SowApp {
                     }
                 } else if action == MapMenuAction::Nuke {
                     let owner_id = self.sim.my_player_id.unwrap_or_default();
-                    let required_level = 1;
-                    let ready_city = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-                        snapshot.buildings.iter().any(|building| {
-                            building.owner_id == owner_id
-                                && building.kind == sow_core::game::BuildingKind::City
-                                && !building.under_construction
-                                && building.active_level() >= required_level
+                    let has_ready_nuke = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                        snapshot.players.iter().any(|player| {
+                            player.id == owner_id && player.nuke_available
                         })
                     });
-                    if !ready_city {
-                        reason_key = Some("hud.map_action_city");
-                        reason_level = Some(required_level);
+                    if !self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Nuke) {
+                        reason_key = Some("hud.campaign_unlock_required");
+                        true
+                    } else if !has_ready_nuke {
+                        reason_key = Some("hud.map_action_factory");
+                        reason_level = Some(4);
                         true
                     } else {
-                        let cooldown_ticks = self
-                            .sim
-                            .current_snapshot
-                            .as_ref()
-                            .and_then(|snapshot| {
-                                snapshot.players.iter().find(|player| player.id == owner_id)
-                            })
-                            .map_or(0, |player| player.nuke_cooldown_ticks);
-                        if cooldown_ticks > 0 {
-                            reason_key = Some("lobbies.locked");
-                            reason_seconds = Some(
-                                ((cooldown_ticks as f32 * self.sim.config.tick_rate_ms / 1000.0)
-                                    .ceil() as u32)
-                                    .max(1),
-                            );
-                            true
-                        } else {
-                            false
-                        }
+                        false
                     }
                 } else if action == MapMenuAction::RequestAllies {
                     reason_key = (!self.has_trade_partners()).then_some("hud.resources_no_allies");
@@ -876,29 +897,27 @@ impl SowApp {
                 self.alliance_from_tile(tile_idx);
             }
             MapMenuAction::BuildCity => {
-                let kind = sow_core::game::BuildingKind::City;
-                if !self
-                    .ui
-                    .app
-                    .hud_state
-                    .building_placement
-                    .is_some_and(|p| p.pending)
-                {
-                    self.ui.app.hud_state.building_placement =
-                        Some(crate::ui::hud::state::BuildingPlacement {
-                            kind,
-                            tile_idx,
-                            pending: false,
-                        });
-                    self.confirm_building_placement();
-                }
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::City, tile_idx);
+            }
+            MapMenuAction::BuildTower => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::Tower, tile_idx);
+            }
+            MapMenuAction::BuildFactory => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::Factory, tile_idx);
+            }
+            MapMenuAction::BuildPort => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::Port, tile_idx);
+            }
+            MapMenuAction::BuildFarm => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::Farm, tile_idx);
+            }
+            MapMenuAction::BuildSam => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::SAM, tile_idx);
             }
             MapMenuAction::UpgradeStructure => {
                 if let Some(building) =
                     self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-                        snapshot.buildings.iter().find(|b| {
-                            b.tile_idx == tile_idx && b.kind == sow_core::game::BuildingKind::City
-                        })
+                        snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx)
                     })
                 {
                     self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructure {
@@ -913,6 +932,29 @@ impl SowApp {
         if !keep_building_panel_open {
             self.close_map_context_menu();
         }
+    }
+
+    fn start_building_from_map_menu(
+        &mut self,
+        kind: sow_core::game::BuildingKind,
+        tile_idx: u32,
+    ) {
+        if self
+            .ui
+            .app
+            .hud_state
+            .building_placement
+            .is_some_and(|placement| placement.pending)
+        {
+            return;
+        }
+        self.ui.app.hud_state.building_placement =
+            Some(crate::ui::hud::state::BuildingPlacement {
+                kind,
+                tile_idx,
+                pending: false,
+            });
+        self.confirm_building_placement();
     }
 
     fn spawn_at(&mut self, col: i32, row: i32) {
@@ -1235,9 +1277,8 @@ impl SowApp {
         tile_idx: u32,
     ) -> (Option<f64>, Option<u8>) {
         match action {
-            MapMenuAction::Nuke => (Some(self.sim.config.nuke_cost), None),
-            MapMenuAction::BuildCity => {
-                let kind = sow_core::game::BuildingKind::City;
+            MapMenuAction::Nuke => (None, None),
+            action if let Some(kind) = action.building_kind() => {
                 let owner = self.sim.my_player_id.unwrap_or(0);
                 let count = self
                     .sim
@@ -1268,10 +1309,7 @@ impl SowApp {
                 let Some(building) = snapshot
                     .buildings
                     .iter()
-                    .find(|building| {
-                        building.tile_idx == tile_idx
-                            && building.kind == sow_core::game::BuildingKind::City
-                    })
+                    .find(|building| building.tile_idx == tile_idx)
                 else {
                     return (None, None);
                 };
@@ -1623,15 +1661,6 @@ impl SowApp {
         {
             return;
         }
-        if kind != sow_core::game::BuildingKind::City
-            && self
-                .sim
-                .engine
-                .as_ref()
-                .is_none_or(|engine| !engine.legacy_building_rules)
-        {
-            return;
-        }
         if self.campaign_building_max_level(kind) < 1 {
             self.add_map_feedback(crate::ui::UiText::new("hud.campaign_unlock_required"));
             return;
@@ -1742,13 +1771,18 @@ impl SowApp {
         }
     }
 
-    pub(crate) fn city_touches_water(&self, tile_idx: u32) -> bool {
+    pub(crate) fn structure_touches_water(
+        &self,
+        kind: sow_core::game::BuildingKind,
+        tile_idx: u32,
+    ) -> bool {
         if let Some(engine) = self.sim.engine.as_ref() {
             let (w, h) = (engine.state.map.width, engine.state.map.height);
             if w == 0 || h == 0 {
                 return false;
             }
-            return sow_core::building::city_footprint_touches_water(
+            return sow_core::building::structure_footprint_touches_water(
+                kind,
                 tile_idx % w,
                 tile_idx / w,
                 w,
@@ -1763,7 +1797,8 @@ impl SowApp {
         if w == 0 || h == 0 || renderer.terrain.len() < (w * h) as usize {
             return false;
         }
-        sow_core::building::city_footprint_touches_water(
+        sow_core::building::structure_footprint_touches_water(
+            kind,
             tile_idx % w,
             tile_idx / w,
             w,
@@ -1772,13 +1807,12 @@ impl SowApp {
         )
     }
 
-    pub(crate) fn build_or_upgrade_district(
+    pub(crate) fn build_or_upgrade_building(
         &mut self,
         tile_idx: u32,
         kind: sow_core::game::BuildingKind,
     ) {
-        if !kind.is_district()
-            || self.ui.observing
+        if self.ui.observing
             || self.ui.tutorial_camera_only
             || self.ui.app.phase != crate::ClientPhase::Playing
         {
@@ -1794,20 +1828,14 @@ impl SowApp {
         if !matches!(snapshot.phase, sow_core::game::GamePhase::Playing) {
             return;
         }
-        let Some(city) = snapshot.buildings.iter().find(|b| {
+        let existing = snapshot.buildings.iter().find(|b| {
             b.tile_idx == tile_idx
                 && b.owner_id == owner_id
-                && b.kind == sow_core::game::BuildingKind::City
-                && !b.under_construction
-        }) else {
-            return;
-        };
-        if city.arsenal_build.is_some()
-            || snapshot
-                .buildings
-                .iter()
-                .any(|b| b.tile_idx == tile_idx && b.under_construction)
-        {
+                && b.kind == kind
+        });
+        if existing.is_some_and(|building| {
+            building.under_construction || building.arsenal_build.is_some()
+        }) {
             return;
         }
         let player_gold = snapshot
@@ -1815,11 +1843,6 @@ impl SowApp {
             .iter()
             .find(|p| p.id == owner_id)
             .map_or(0.0, |p| p.gold);
-        let existing = snapshot
-            .buildings
-            .iter()
-            .find(|b| b.tile_idx == tile_idx && b.owner_id == owner_id && b.kind == kind)
-            .copied();
         if let Some(district) = existing {
             let next_level = district.active_level().saturating_add(1);
             if next_level > kind.max_level()
@@ -1866,7 +1889,9 @@ impl SowApp {
             self.add_map_feedback(crate::ui::UiText::new("hud.campaign_unlock_required"));
             return;
         }
-        if kind == sow_core::game::BuildingKind::Port && !self.city_touches_water(tile_idx) {
+        if kind == sow_core::game::BuildingKind::Port
+            && !self.structure_touches_water(sow_core::game::BuildingKind::Port, tile_idx)
+        {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_no_water_access"));
             return;
         }
@@ -1890,9 +1915,9 @@ impl SowApp {
         });
     }
 
-    pub(crate) fn queue_city_arsenal(
+    pub(crate) fn queue_building_production(
         &mut self,
-        tile_idx: u32,
+        building_id: u64,
         kind: sow_core::game::CityArsenalKind,
     ) {
         if self.ui.observing
@@ -1914,7 +1939,7 @@ impl SowApp {
                     return;
                 }
             }
-            sow_core::game::CityArsenalKind::AntiNuke => {}
+            sow_core::game::CityArsenalKind::AntiNuke => return,
         }
         let owner_id = self
             .sim
@@ -1926,39 +1951,56 @@ impl SowApp {
         if !matches!(snapshot.phase, sow_core::game::GamePhase::Playing) {
             return;
         }
-        let Some(city) = snapshot.buildings.iter().find(|b| {
-            b.tile_idx == tile_idx
-                && b.owner_id == owner_id
-                && b.kind == sow_core::game::BuildingKind::City
-                && !b.under_construction
-        }) else {
+        let Some(producer) = snapshot
+            .buildings
+            .iter()
+            .find(|building| building.id == building_id && building.owner_id == owner_id)
+        else {
             return;
         };
-        if city.arsenal_build.is_some()
-            || snapshot
-                .buildings
-                .iter()
-                .any(|b| b.tile_idx == tile_idx && b.under_construction)
+        let qualifies = match kind {
+            sow_core::game::CityArsenalKind::Warship => {
+                producer.kind == sow_core::game::BuildingKind::Port && producer.active_level() >= 1
+            }
+            sow_core::game::CityArsenalKind::Nuke => {
+                matches!(
+                    producer.kind,
+                    sow_core::game::BuildingKind::Factory | sow_core::game::BuildingKind::Tower
+                ) && producer.active_level() >= 4
+            }
+            sow_core::game::CityArsenalKind::AntiNuke => false,
+        };
+        if !qualifies
+            || producer.under_construction
+            || producer.arsenal_build.is_some()
+            || (kind == sow_core::game::CityArsenalKind::Nuke && producer.nuke_ready)
         {
             return;
         }
         let Some(player) = snapshot.players.iter().find(|p| p.id == owner_id) else {
             return;
         };
+        let queued_warships = snapshot.buildings.iter().filter(|building| {
+            building.owner_id == owner_id
+                && building.arsenal_build.is_some_and(|build| {
+                    build.kind == sow_core::game::CityArsenalKind::Warship
+                })
+        }).count() as u32;
         if kind == sow_core::game::CityArsenalKind::Warship
-            && player.boats_in_use >= player.boat_capacity
+            && player.boats_in_use.saturating_add(queued_warships) >= player.boat_capacity
         {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_capacity_full"));
             return;
         }
         let owned_warships = if kind == sow_core::game::CityArsenalKind::Warship {
-            snapshot
+            (snapshot
                 .fleets
                 .iter()
                 .filter(|f| {
                     f.owner_id == owner_id && f.unit_type == sow_core::game::UnitType::Warship
                 })
-                .count() as u32
+                .count() as u32)
+                .saturating_add(queued_warships)
         } else {
             0
         };
@@ -1975,7 +2017,10 @@ impl SowApp {
             );
             return;
         }
-        self.send_intent(sow_core::protocol::GameplayIntent::CityArsenal { tile_idx, kind });
+        self.send_intent(sow_core::protocol::GameplayIntent::BuildingProduction {
+            building_id,
+            kind,
+        });
     }
 
     pub(crate) fn select_nuke_kind(&mut self, kind: sow_core::game::NukeKind) {

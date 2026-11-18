@@ -139,6 +139,7 @@ impl TutorialObservation {
                     sow_core::game::BuildingKind::Factory => "factories",
                     sow_core::game::BuildingKind::Port => "ports",
                     sow_core::game::BuildingKind::Farm => "farms",
+                    sow_core::game::BuildingKind::SAM => "sams",
                 };
                 self.seen_buildings_by_kind
                     .entry(kind.to_string())
@@ -155,6 +156,7 @@ impl TutorialObservation {
             (sow_core::game::BuildingKind::Factory, "factory"),
             (sow_core::game::BuildingKind::Tower, "tower"),
             (sow_core::game::BuildingKind::Port, "port"),
+            (sow_core::game::BuildingKind::SAM, "sam"),
         ] {
             let level = engine
                 .buildings
@@ -216,6 +218,7 @@ impl TutorialObservation {
                 sow_core::game::BuildingKind::Factory => "factory",
                 sow_core::game::BuildingKind::Tower => "tower",
                 sow_core::game::BuildingKind::Port => "port",
+                sow_core::game::BuildingKind::SAM => "sam",
             };
             let level = u64::from(building.active_level());
             self.faction_structure_levels
@@ -349,6 +352,7 @@ impl TutorialObservation {
                         sow_core::game::BuildingKind::Factory => "factories",
                         sow_core::game::BuildingKind::Port => "ports",
                         sow_core::game::BuildingKind::Farm => "farms",
+                        sow_core::game::BuildingKind::SAM => "sams",
                     };
                     self.seen_buildings_by_kind
                         .entry(key.to_string())

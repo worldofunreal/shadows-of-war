@@ -385,6 +385,8 @@ export const FACTION_FIELDS: readonly string[] = Object.freeze([
     "support_interval_seconds",
     "gold_loot_bonus",
     "gold_loot_override",
+    "troop_loot_bonus",
+    "prebuilt_buildings",
     "alliance_group",
     "assault_force",
     "hold_structures_until_contact",
@@ -530,7 +532,9 @@ export function factionReferenceIds(definition: CampaignDefinition): Set<string>
     };
     if (!object(definition)) return refs;
     const settings = definition.settings || {};
-    add(settings.campaign_support && settings.campaign_support.after_defeated);
+    if (settings.campaign_support && settings.campaign_support.after_defeated !== "immediate") {
+        add(settings.campaign_support.after_defeated);
+    }
     Object.values(object(definition.speakers) ? definition.speakers : {}).forEach((speaker) => {
         add(speaker && speaker.faction);
         add(speaker && speaker.base_expression && speaker.base_expression?.until?.target);

@@ -242,30 +242,41 @@ impl SowEngine {
                                 && fleet.unit_type == crate::game::UnitType::Warship
                         })
                         .count() as u32;
+                    let queued_warships = self
+                        .building_productions
+                        .iter()
+                        .filter(|(building_id, state)| {
+                            state.arsenal_build.is_some_and(|build| {
+                                build.kind == crate::game::CityArsenalKind::Warship
+                            }) && self.buildings.iter().any(|building| {
+                                building.id == **building_id && building.owner_id == bot_id
+                            })
+                        })
+                        .count() as u32;
                     let cost = if self.legacy_building_rules {
                         crate::game::UnitType::Warship
                             .gold_cost_with_owned_count_for_leader(owned_warships, player.leader)
                     } else {
                         crate::building::city_arsenal_cost_gold(
                             crate::game::CityArsenalKind::Warship,
-                            owned_warships,
+                            owned_warships.saturating_add(queued_warships),
                             player.leader,
                             &self.state.config,
                         )
                     };
                     player.gold >= cost
-                        && self.boat_slots_used(bot_id)
+                        && self.boat_slots_used(bot_id).saturating_add(queued_warships)
                             < crate::building::player_fleet_capacity(&self.buildings, bot_id)
                 })
                 && self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
             {
                 if !self.legacy_building_rules {
-                    if let Some(city_tile) = self.ai_warship_city_tile(bot_id) {
+                    if let Some(port_id) = self.ai_warship_port_id(bot_id) {
                         decisions.push(BotDecision {
                             bot_id,
                             kind: profile::BotDecisionKind::Build,
-                            intent: crate::protocol::GameplayIntent::CityArsenal {
-                                tile_idx: city_tile,
+                            intent: crate::protocol::GameplayIntent::BuildingProduction {
+                                building_id: port_id,
                                 kind: crate::game::CityArsenalKind::Warship,
                             },
                         });
@@ -320,35 +331,22 @@ impl SowEngine {
         }
     }
 
-    fn ai_warship_city_tile(&self, owner_id: u16) -> Option<u32> {
-        let mut fallback: Option<u32> = None;
-        for city in &self.buildings {
-            if city.owner_id != owner_id
-                || city.kind != crate::game::BuildingKind::City
-                || city.under_construction
-            {
-                continue;
-            }
-            let has_ready_port = self.buildings.iter().any(|port| {
-                port.tile_idx == city.tile_idx
-                    && port.owner_id == owner_id
-                    && port.kind == crate::game::BuildingKind::Port
-                    && !port.under_construction
-                    && port.active_level() >= 1
-            });
-            if !has_ready_port
-                || crate::building::city_has_active_build(
-                    &self.buildings,
-                    &self.city_arsenals,
-                    city.tile_idx,
-                )
-            {
-                continue;
-            }
+    fn ai_warship_port_id(&self, owner_id: u16) -> Option<u64> {
+        let mut fallback: Option<u64> = None;
+        for port in self.buildings.iter().filter(|port| {
+            port.owner_id == owner_id
+                && port.kind == crate::game::BuildingKind::Port
+                && !port.under_construction
+                && port.active_level() >= 1
+                && self
+                    .building_productions
+                    .get(&port.id)
+                    .is_none_or(|state| state.arsenal_build.is_none())
+        }) {
             let Some(spawn_tile) = crate::warp_fleet::coastal_warship_spawn_tile(
                 &self.state.map,
                 &self.water,
-                city.tile_idx,
+                port.tile_idx,
             ) else {
                 continue;
             };
@@ -360,10 +358,10 @@ impl SowEngine {
                     && self.water.component_of(fleet.current_tile) == spawn_component
             });
             if touches_enemy_fleet {
-                return Some(city.tile_idx);
+                return Some(port.id);
             }
             if fallback.is_none() {
-                fallback = Some(city.tile_idx);
+                fallback = Some(port.id);
             }
         }
         fallback
@@ -381,8 +379,9 @@ impl SowEngine {
                 && !port.under_construction
                 && port.active_level() >= 1
         }) {
-            crate::building::for_each_city_coastal_water_tile(
+            crate::building::for_each_structure_coastal_water_tile(
                 &self.state.map,
+                crate::game::BuildingKind::Port,
                 port.tile_idx,
                 |tile| {
                     let component = self.water.component_of(tile);

@@ -113,6 +113,13 @@ impl SowApp {
                 seed,
                 self.spatial_sound_params(wx, wy),
             );
+            if conqueror_id == my_id && self.sim.config.tutorial {
+                let step = self
+                    .ui
+                    .push_cascade_callout(wx, wy, None, None, false, now_instant);
+                self.sfx
+                    .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+            }
         }
 
         if conqueror_id == my_id

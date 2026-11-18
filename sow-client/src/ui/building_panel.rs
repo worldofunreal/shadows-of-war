@@ -189,8 +189,14 @@ pub(crate) fn building_metrics(
                 "/s",
             ),
         ],
+        BuildingKind::SAM => vec![BuildingMetric::new(
+            Icon::Range,
+            f64::from(sow_core::execution::sam::sam_range(level as u8)),
+            "",
+            "",
+        )],
     };
-    if kind.is_district() && district_capacity > 0.0 {
+    if kind.grants_building_troop_capacity() && district_capacity > 0.0 {
         metrics.push(BuildingMetric::new(Icon::Troops, district_capacity, "+", " cap"));
     }
     metrics

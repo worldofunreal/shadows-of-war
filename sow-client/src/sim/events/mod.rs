@@ -360,6 +360,66 @@ impl SowApp {
                             .push_notification_for_players(text, players, 3, None, false);
                     }
                 }
+                sow_core::game::GameEvent::StructureCaptured {
+                    new_owner,
+                    tile_idx,
+                    level,
+                    ..
+                } => {
+                    if new_owner == my_id && my_id != 0 && self.sim.config.tutorial {
+                        let map_w = self.sim.map_w.max(1);
+                        let wx = (tile_idx % map_w) as f32 + 0.5;
+                        let wy = (tile_idx / map_w) as f32 + 0.5;
+                        let bonus_troops = u32::from(level) * 120;
+                        let label = format!("+{} TROPAS!", crate::utils::format_number(bonus_troops as f64));
+                        let step = self.ui.push_cascade_callout(
+                            wx,
+                            wy,
+                            Some(label),
+                            None,
+                            false,
+                            now_instant,
+                        );
+                        self.sfx
+                            .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+                    }
+                }
+                sow_core::game::GameEvent::TacticalSurge {
+                    player_id,
+                    tile_x,
+                    tile_y,
+                    bonus_troops,
+                    chain_step,
+                } => {
+                    if player_id == my_id && my_id != 0 {
+                        let wx = tile_x as f32 + 0.5;
+                        let wy = tile_y as f32 + 0.5;
+                        let label = if chain_step >= 2 {
+                            format!(
+                                "¡AVANCE TÁCTICO x{}! +{}",
+                                chain_step,
+                                crate::utils::format_number(bonus_troops as f64)
+                            )
+                        } else {
+                            format!(
+                                "¡GOLPE TÁCTICO! +{}",
+                                crate::utils::format_number(bonus_troops as f64)
+                            )
+                        };
+                        let step = self.ui.push_cascade_callout(
+                            wx,
+                            wy,
+                            Some(label),
+                            Some(chain_step),
+                            true,
+                            now_instant,
+                        );
+                        self.sfx
+                            .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+                        self.ui
+                            .trigger_viewport_alert(crate::app::ViewportAlertKind::ConquerPlayer);
+                    }
+                }
                 _ => {}
             }
         }

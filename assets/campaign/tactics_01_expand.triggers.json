@@ -4,7 +4,7 @@
   "text_namespace": "tutorial.campaign_tactics_",
   "require_speaker_portraits": true,
   "settings": {
-    "starting_troops": 1400,
+    "starting_troops": 1600,
     "starting_gold": 160
   },
   "entry": "t1_intro_expand",
@@ -38,8 +38,6 @@
       "body_key": "tutorial.campaign_tactics_01_expand_body",
       "hint_key": "tutorial.campaign_tactics_01_expand_hint",
       "speaker": "sun_tzu",
-      "pause_game": true,
-      "paused_action": "expand_once_then_resume",
       "unlocks": {
         "buildings": {
           "Tower": 1,
@@ -53,7 +51,7 @@
       },
       "trigger": {
         "type": "territory",
-        "value": 16,
+        "value": 8,
         "scope": "step"
       },
       "marker": {

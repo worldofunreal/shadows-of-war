@@ -662,81 +662,7 @@ impl SowEngine {
                 self.apply_upgrade_structure_intent(stamped.player_id, *building_id);
             }
             GameplayIntent::BuildShip { target_tile, kind } => {
-                let pid = stamped.player_id;
-                if *kind != crate::game::UnitType::Warship {
-                    return;
-                }
-                if *kind == crate::game::UnitType::Warship
-                    && !self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
-                {
-                    self.state.events.push(crate::game::GameEvent::NavalActionRejected {
-                        player_id: pid,
-                        reason: crate::game::NavalActionFailure::CampaignLocked,
-                    });
-                    return;
-                }
-                let Some(player) = self.state.player(pid) else {
-                    return;
-                };
-                if !player.alive {
-                    return;
-                }
-                let route = match crate::warp_fleet::resolve_warship_route(
-                    &self.state.map,
-                    &self.water,
-                    &mut self.path_scratch,
-                    &self.buildings,
-                    pid,
-                    *target_tile,
-                ) {
-                    Ok(route) => route,
-                    Err(error) => {
-                        let reason = match error {
-                            crate::warp_fleet::WarshipLaunchError::InvalidTile => crate::game::NavalActionFailure::InvalidTarget,
-                            crate::warp_fleet::WarshipLaunchError::TargetNotWater => crate::game::NavalActionFailure::TargetNotWater,
-                            crate::warp_fleet::WarshipLaunchError::NoPort => crate::game::NavalActionFailure::NoPort,
-                            crate::warp_fleet::WarshipLaunchError::NoConnectedPort => crate::game::NavalActionFailure::NoConnectedPort,
-                            crate::warp_fleet::WarshipLaunchError::NoWaterPath => crate::game::NavalActionFailure::NoWaterPath,
-                        };
-                        self.state.events.push(crate::game::GameEvent::NavalActionRejected {
-                            player_id: pid,
-                            reason,
-                        });
-                        return;
-                    }
-                };
-                let capacity = crate::building::player_fleet_capacity(&self.buildings, pid);
-                if self.boat_slots_used(pid) >= capacity {
-                    self.state.events.push(crate::game::GameEvent::NavalActionRejected {
-                        player_id: pid,
-                        reason: crate::game::NavalActionFailure::CapacityFull,
-                    });
-                    return;
-                }
-                let owned_warships = self
-                    .fleets
-                    .iter()
-                    .filter(|fleet| fleet.owner_id == pid && fleet.unit_type == *kind)
-                    .count() as u32;
-                let cost = kind.gold_cost_with_owned_count_for_leader(owned_warships, player.leader);
-                if player.gold < cost {
-                    self.state.events.push(crate::game::GameEvent::NavalActionRejected {
-                        player_id: pid,
-                        reason: crate::game::NavalActionFailure::InsufficientGold,
-                    });
-                    return;
-                }
-                if let Some(player) = self.state.player_mut(pid) {
-                    player.gold -= cost;
-                }
-                self.spawn_warship_fleet(
-                    pid,
-                    route.port_id,
-                    route.src_tile,
-                    route.landing_tile,
-                    route.src_tile,
-                    route.path,
-                );
+                self.apply_build_ship_intent(stamped.player_id, *target_tile, *kind);
             }
             GameplayIntent::MoveWarships { .. } => {}
             GameplayIntent::LaunchNuke { target_tile, .. } => {
@@ -744,6 +670,9 @@ impl SowEngine {
             }
             GameplayIntent::CityArsenal { tile_idx, kind } => {
                 self.apply_city_arsenal_intent(stamped.player_id, *tile_idx, *kind);
+            }
+            GameplayIntent::BuildingProduction { building_id, kind } => {
+                self.apply_building_production_intent(stamped.player_id, *building_id, *kind);
             }
             // INK TIDE lockstep input: never reaches the SoW engine — the
             // racer sim runs on the racer clients. Opaque to SoW.
@@ -784,7 +713,7 @@ impl SowEngine {
                         });
                         self.buildings.retain(|b| b.owner_id != pid);
                         let buildings = &self.buildings;
-                        self.city_arsenals
+                        self.building_productions
                             .retain(|id, _| buildings.iter().any(|b| b.id == *id));
                         self.building_grid.mark_dirty();
                         self.building_aggregates_dirty = true;

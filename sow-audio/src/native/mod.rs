@@ -20,6 +20,6 @@ pub use engine::{set_host_muted, set_master_volume};
 pub use preview::export_sfx_preview;
 pub use result::{play_defeat_sound, play_victory_sound};
 pub use sfx::{
-    play_building_completed_sound, play_combat_sound, play_nuke_impact_sound,
+    play_building_completed_sound, play_cascade_sound, play_combat_sound, play_nuke_impact_sound,
     play_nuke_launch_sound,
 };

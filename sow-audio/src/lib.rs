@@ -49,6 +49,10 @@ pub fn play_death_sound(player_type: PlayerSoundType, seed: u32, spatial: Spatia
     native::play_death_sound(player_type, seed, spatial);
 }
 
+pub fn play_cascade_sound(chain_step: u8, spatial: SpatialSoundParams) {
+    native::play_cascade_sound(chain_step, spatial);
+}
+
 pub fn play_deploy_sound(spatial: SpatialSoundParams) {
     native::play_deploy_sound(spatial);
 }

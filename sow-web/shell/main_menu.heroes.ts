@@ -310,16 +310,44 @@ function heroesStatusLabel(leader: MenuLeader | null) {
 }
 
 function renderHeroStatusTags(leader: MenuLeader | null, live: boolean) {
+    const achSummary = leader ? computeHeroAchievementSummary(leader) : null;
+    const starsLabel = achSummary ? "★ " + achSummary.unlockedCount : "";
+    const starsTitle = achSummary
+        ? tText("heroes.achievements_progress", "{unlocked}/{total} Achievements", {
+              unlocked: achSummary.unlockedCount,
+              total: achSummary.totalCount,
+          })
+        : "";
+    const starsStarted = !!achSummary && achSummary.unlockedCount > 0;
+    const starsComplete = !!achSummary && achSummary.totalCount > 0 && achSummary.unlockedCount === achSummary.totalCount;
     const rarityLabel = leader ? heroesRarityLabel(leader) : "";
     const raritySlug = leader && leader.rarity ? leader.rarity : "";
     const statusLabel = heroesStatusLabel(leader);
-    const hasAny = Boolean(rarityLabel || statusLabel);
+    const hasAny = Boolean(starsLabel || rarityLabel || statusLabel);
     if (!live && !hasAny) return "";
+    const starTagCommand = live
+        ? " data-command='open_hero_info' data-leader-id='" +
+          esc(leader ? leader.id : "") +
+          "' data-hero-info-tab='achievements'"
+        : " data-command='switch_hero_info_tab' data-hero-info-tab='achievements'";
     return (
         "<div class='sow-heroes__tags'" +
         (live ? " data-hero-tags" : "") +
         (!hasAny ? " hidden" : "") +
         ">" +
+        (live || starsLabel
+            ? "<button type='button' class='sow-heroes__star-tag" +
+              (starsStarted ? " is-started" : "") +
+              (starsComplete ? " is-complete" : "") +
+              "'" +
+              (live ? " data-hero-stars" : "") +
+              starTagCommand +
+              (starsTitle ? " title='" + esc(starsTitle) + "' aria-label='" + esc(starsTitle) + "'" : "") +
+              (!starsLabel ? " hidden" : "") +
+              ">" +
+              esc(starsLabel) +
+              "</button>"
+            : "") +
         (live || rarityLabel
             ? "<span class='sow-heroes__rarity-tag'" +
               (live ? " data-hero-rarity" : "") +
@@ -810,10 +838,35 @@ export function updateHeroesPreview() {
         }
     }
     const tags = featured.querySelector<HTMLElement>("[data-hero-tags]");
+    const starsNode = featured.querySelector<HTMLElement>("[data-hero-stars]");
     const rarityNode = featured.querySelector<HTMLElement>("[data-hero-rarity]");
     const status = featured.querySelector<HTMLElement>("[data-hero-status]");
+    const achSummary = targetLeader ? computeHeroAchievementSummary(targetLeader) : null;
+    const starsLabel = achSummary ? "★ " + achSummary.unlockedCount : "";
     const rarityLabel = targetLeader ? heroesRarityLabel(targetLeader) : "";
     const statusLabel = heroesStatusLabel(targetLeader);
+    if (starsNode) {
+        starsNode.textContent = starsLabel;
+        starsNode.hidden = !starsLabel;
+        starsNode.classList.toggle("is-started", !!achSummary && achSummary.unlockedCount > 0);
+        starsNode.classList.toggle(
+            "is-complete",
+            !!achSummary && achSummary.totalCount > 0 && achSummary.unlockedCount === achSummary.totalCount,
+        );
+        if (targetLeader) {
+            starsNode.dataset.leaderId = targetLeader.id;
+            const starsTitle = achSummary
+                ? tText("heroes.achievements_progress", "{unlocked}/{total} Achievements", {
+                      unlocked: achSummary.unlockedCount,
+                      total: achSummary.totalCount,
+                  })
+                : "";
+            if (starsTitle) {
+                starsNode.title = starsTitle;
+                starsNode.setAttribute("aria-label", starsTitle);
+            }
+        }
+    }
     if (rarityNode) {
         rarityNode.textContent = rarityLabel;
         rarityNode.hidden = !rarityLabel;
@@ -825,7 +878,7 @@ export function updateHeroesPreview() {
         else status.textContent = statusLabel;
         status.hidden = !statusLabel;
     }
-    if (tags) tags.hidden = !rarityLabel && !statusLabel;
+    if (tags) tags.hidden = !starsLabel && !rarityLabel && !statusLabel;
     const achStrip = featured.querySelector<HTMLElement>("[data-hero-achievement-strip]");
     if (achStrip) {
         achStrip.innerHTML = randomSelected ? "" : renderHeroSelectionAchievementStrip(activeLeader);
@@ -1381,16 +1434,19 @@ export function renderHeroes() {
         (locked ? " is-locked" : "") +
         (motionReduced ? " is-motion-reduced" : "") +
         "' aria-labelledby='sow-heroes-selected'>" +
-        "<div class='sow-heroes__featured-skins' data-hero-skins>" +
-        (activeRandom ? "" : renderFeaturedTopControls()) +
-        "</div>" +
+        "<div class='sow-heroes__featured-controls'>" +
         "<button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' data-leader-id='" +
         esc(activeRandom ? "" : activeLeader.id) +
         "' aria-label='" +
         esc(displayName) +
         "'" +
         (activeRandom ? " hidden" : "") +
-        ">i</button><picture><source media='(max-width: 900px), (orientation: portrait)' srcset='" +
+        ">i</button>" +
+        "<div class='sow-heroes__featured-skins' data-hero-skins>" +
+        (activeRandom ? "" : renderFeaturedTopControls()) +
+        "</div>" +
+        "</div>" +
+        "<picture><source media='(max-width: 900px), (orientation: portrait)' srcset='" +
         esc(featuredArt.band) +
         "'><img src='" +
         esc(featuredArt.column) +

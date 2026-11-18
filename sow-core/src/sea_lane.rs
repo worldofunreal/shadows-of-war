@@ -20,14 +20,19 @@ impl SeaLane {
     }
 }
 
-/// Find the first water tile adjacent to the City/Port 4×4 footprint at `land_idx`.
+/// Find the first water tile adjacent to a Port's 2×2 footprint at `port_idx`.
 fn adjacent_water_tile(map: &crate::map::GameMap, land_idx: u32) -> Option<u32> {
     let mut found = None;
-    crate::building::for_each_city_coastal_water_tile(map, land_idx, |tile| {
-        if found.is_none() {
-            found = Some(tile);
-        }
-    });
+    crate::building::for_each_structure_coastal_water_tile(
+        map,
+        crate::game::BuildingKind::Port,
+        land_idx,
+        |tile| {
+            if found.is_none() {
+                found = Some(tile);
+            }
+        },
+    );
     found
 }
 

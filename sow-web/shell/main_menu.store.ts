@@ -13,6 +13,7 @@ import {
     root,
     selfCreds,
     send,
+    stageLeaderSelection,
 } from "./main_menu.core.ts";
 import type { PurchaseIntent } from "./main_menu.core.ts";
 import { profileApi } from "./main_menu.profile.ts";
@@ -1608,6 +1609,11 @@ export function resolvePurchaseModal() {
         if (menuUi.purchaseModal.type === "leader" && menuUi.purchaseModal.leaderId) {
             menuUi.tempSelectedLeader = menuUi.purchaseModal.leaderId;
             menuUi.tempSelectedRandom = false;
+            stageLeaderSelection(false, menuUi.purchaseModal.leaderId);
+            send("set_leader", {
+                leader_id: menuUi.purchaseModal.leaderId,
+                prefer_random: false,
+            });
         }
         menuUi.storeCheckoutRequestId = null;
         menuUi.storeCheckoutBusy = false;

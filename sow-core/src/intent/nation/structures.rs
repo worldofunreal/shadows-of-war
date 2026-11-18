@@ -27,16 +27,17 @@ pub(super) fn bot_structure_target_count(
         }
         BuildingKind::Factory => {
             let val = ((city_equivalent as f64) * 0.65 * factor).floor() as u32;
-            val.max(1)
+            if factor > 0.4 { val.max(1) } else { val }
         }
         BuildingKind::Port => {
             let val = ((city_equivalent as f64) * 0.30 * factor).floor() as u32;
-            val.max(1)
+            if factor > 0.4 { val.max(1) } else { val }
         }
         BuildingKind::Farm => {
             let val = ((city_equivalent as f64) * 0.45 * factor).floor() as u32;
-            val.max(1)
+            if factor > 0.4 { val.max(1) } else { val }
         }
+        BuildingKind::SAM => 0,
     }
 }
 
@@ -66,7 +67,7 @@ pub(super) fn think_window_ticks(
 
 pub(super) fn pick_stack_click_tile(
     buildings: &[crate::building::Building],
-    city_arsenals: &std::collections::HashMap<u64, crate::building::CityArsenalState>,
+    building_productions: &std::collections::HashMap<u64, crate::building::CityArsenalState>,
     bot_id: u16,
     kind: BuildingKind,
     max_level: u8,
@@ -78,7 +79,9 @@ pub(super) fn pick_stack_click_tile(
             || b.under_construction
             || b.level >= kind.max_level()
             || b.level.saturating_add(1) > max_level
-            || crate::building::city_has_active_build(buildings, city_arsenals, b.tile_idx)
+            || building_productions
+                .get(&b.id)
+                .is_some_and(|state| state.arsenal_build.is_some())
         {
             continue;
         }
@@ -103,7 +106,7 @@ pub(super) fn stack_build_decision(
 ) -> Option<BotDecision> {
     let stack_tile = pick_stack_click_tile(
         &engine.buildings,
-        &engine.city_arsenals,
+        &engine.building_productions,
         bot_id,
         kind,
         max_level,
@@ -123,33 +126,6 @@ pub(super) fn stack_build_decision(
             building_id: building.id,
         },
     })
-}
-
-/// Finds an owned ready City tile where `kind` district can be newly added.
-pub(super) fn resolve_district_city_site(
-    map: &crate::map::GameMap,
-    buildings: &[crate::building::Building],
-    city_arsenals: &std::collections::HashMap<u64, crate::building::CityArsenalState>,
-    owner_id: u16,
-    kind: BuildingKind,
-) -> Option<u32> {
-    buildings
-        .iter()
-        .filter(|b| {
-            b.owner_id == owner_id && b.kind == BuildingKind::City && !b.under_construction
-        })
-        .find_map(|city| {
-            crate::building::validate_district_site(
-                map,
-                buildings,
-                city_arsenals,
-                owner_id,
-                kind,
-                city.tile_idx,
-            )
-            .is_ok()
-            .then_some(city.tile_idx)
-        })
 }
 
 pub(super) const PLACEMENT_ATTEMPTS: i32 = 8;

@@ -2,6 +2,7 @@ use crate::engine::SowEngine;
 
 impl SowEngine {
     pub fn build_snapshot(&mut self) -> crate::protocol::SimSnapshot {
+        self.refresh_building_aggregates();
         let mut dirty_indices = std::mem::take(&mut self.state.map.dirty_tiles);
         let dirty_tiles: Vec<crate::protocol::DirtyTile> = {
             let map = &self.state.map;
@@ -135,10 +136,15 @@ impl SowEngine {
                     nuke_available: p.alive
                         && self.buildings.iter().any(|building| {
                             building.owner_id == p.id
-                                && building.kind == crate::game::BuildingKind::City
+                                && matches!(
+                                    building.kind,
+                                    crate::game::BuildingKind::Factory | crate::game::BuildingKind::Tower
+                                )
                                 && !building.under_construction
+                                && building.active_level()
+                                    >= crate::game::NukeKind::AtomBomb.required_district_level()
                                 && self
-                                    .city_arsenals
+                                    .building_productions
                                     .get(&building.id)
                                     .is_some_and(|state| state.nuke_ready)
                         }),
@@ -147,11 +153,16 @@ impl SowEngine {
                         .iter()
                         .filter(|building| {
                             building.owner_id == p.id
-                                && building.kind == crate::game::BuildingKind::City
+                                && matches!(
+                                    building.kind,
+                                    crate::game::BuildingKind::Factory | crate::game::BuildingKind::Tower
+                                )
                                 && !building.under_construction
+                                && building.active_level()
+                                    >= crate::game::NukeKind::AtomBomb.required_district_level()
                         })
                         .filter_map(|building| {
-                            self.city_arsenals.get(&building.id).and_then(|state| {
+                            self.building_productions.get(&building.id).and_then(|state| {
                                 state.arsenal_build.and_then(|build| {
                                     (build.kind == crate::game::CityArsenalKind::Nuke)
                                         .then_some(build.ticks_until_complete)
@@ -235,23 +246,25 @@ impl SowEngine {
             .buildings
             .iter()
             .map(|b| {
-                let (has_anti_nuke, nuke_ready, arsenal_build, sam_cooldown_ticks) =
-                    if b.kind == crate::game::BuildingKind::City {
-                        let arsenal = self.city_arsenals.get(&b.id).copied().unwrap_or_default();
-                        let sam_cd = if arsenal.has_anti_nuke {
-                            self.silo_cooldowns.get(&b.id).copied().unwrap_or(0)
-                        } else {
-                            0
-                        };
-                        (
-                            arsenal.has_anti_nuke,
-                            arsenal.nuke_ready,
-                            arsenal.arsenal_build,
-                            sam_cd,
-                        )
-                    } else {
-                        (false, false, None, 0)
-                    };
+                let production = self.building_productions.get(&b.id).copied().unwrap_or_default();
+                let has_anti_nuke = self.legacy_building_rules
+                    && b.kind == crate::game::BuildingKind::City
+                    && production.has_anti_nuke;
+                let nuke_producer = matches!(
+                    b.kind,
+                    crate::game::BuildingKind::Factory | crate::game::BuildingKind::Tower
+                ) && b.active_level() >= crate::game::NukeKind::AtomBomb.required_district_level();
+                let nuke_ready = nuke_producer && production.nuke_ready;
+                let arsenal_build = if nuke_producer || b.kind == crate::game::BuildingKind::Port {
+                    production.arsenal_build
+                } else {
+                    None
+                };
+                let sam_cooldown_ticks = if b.kind == crate::game::BuildingKind::SAM {
+                    self.silo_cooldowns.get(&b.id).copied().unwrap_or(0)
+                } else {
+                    0
+                };
                 crate::protocol::BuildingSnapshot {
                     id: b.id,
                     tile_idx: b.tile_idx,
@@ -277,6 +290,7 @@ impl SowEngine {
             fleets,
             attacks,
             buildings,
+            railway_links: self.railway_links.clone(),
             projectiles: self
                 .projectiles
                 .iter()

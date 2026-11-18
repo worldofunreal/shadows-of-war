@@ -27,6 +27,9 @@ impl SowEngine {
                 if b.kind == BuildingKind::Port {
                     self.sea_lanes_dirty = true;
                 }
+                if b.kind == BuildingKind::SAM {
+                    self.bot_sam_tiles_cache = None;
+                }
                 if b.kind == BuildingKind::Tower {
                     self.defense_grid_dirty = true;
                     self.render_defense_dirty = true;
@@ -54,8 +57,8 @@ impl SowEngine {
             self.hero_structure_ready(building);
         }
 
-        let mut finished_arsenal = Vec::new();
-        for (&city_id, state) in &mut self.city_arsenals {
+        let mut finished_production = Vec::new();
+        for (&building_id, state) in &mut self.building_productions {
             let Some(build) = &mut state.arsenal_build else {
                 continue;
             };
@@ -63,57 +66,56 @@ impl SowEngine {
                 build.ticks_until_complete -= 1;
             }
             if build.ticks_until_complete == 0 {
-                let kind = build.kind;
+                let build = *build;
                 state.arsenal_build = None;
-                match kind {
+                match build.kind {
                     crate::game::CityArsenalKind::Warship => {
-                        finished_arsenal.push((city_id, kind));
+                        finished_production.push((building_id, build));
                     }
                     crate::game::CityArsenalKind::Nuke => {
                         state.nuke_ready = true;
                     }
                     crate::game::CityArsenalKind::AntiNuke => {
                         state.has_anti_nuke = true;
-                        self.bot_sam_tiles_cache = None;
                     }
                 }
             }
         }
-        for (city_id, kind) in finished_arsenal {
-            if kind != crate::game::CityArsenalKind::Warship {
+        for (building_id, build) in finished_production {
+            let Some(port) = self.buildings.iter().find(|b| b.id == building_id).copied() else {
+                continue;
+            };
+            if port.kind != BuildingKind::Port || port.under_construction || port.active_level() < 1 {
                 continue;
             }
-            let Some(city) = self.buildings.iter().find(|b| b.id == city_id).copied() else {
-                continue;
-            };
-            let Some(port_id) = self
-                .buildings
-                .iter()
-                .find(|district| {
-                    district.tile_idx == city.tile_idx
-                        && district.owner_id == city.owner_id
-                        && district.kind == BuildingKind::Port
-                        && !district.under_construction
-                        && district.active_level() >= 1
-                })
-                .map(|district| district.id)
-            else {
-                continue;
-            };
-            if let Some(spawn_tile) = crate::warp_fleet::coastal_warship_spawn_tile(
+            let (source, landing, patrol, path) = if let (Some(source), Some(target)) =
+                (build.warship_source_tile, build.warship_target_tile)
+            {
+                let Some(path) = self
+                    .path_scratch
+                    .astar
+                    .find_path(&self.state.map, &[source], target)
+                else {
+                    continue;
+                };
+                (source, target, target, path)
+            } else if let Some(spawn_tile) = crate::warp_fleet::coastal_warship_spawn_tile(
                 &self.state.map,
                 &self.water,
-                city.tile_idx,
+                port.tile_idx,
             ) {
-                self.spawn_warship_fleet(
-                    city.owner_id,
-                    port_id,
-                    spawn_tile,
-                    spawn_tile,
-                    spawn_tile,
-                    Vec::new(),
-                );
-            }
+                (spawn_tile, spawn_tile, spawn_tile, Vec::new())
+            } else {
+                continue;
+            };
+            self.spawn_warship_fleet(
+                port.owner_id,
+                port.id,
+                source,
+                landing,
+                patrol,
+                path,
+            );
         }
     }
 
@@ -292,7 +294,7 @@ struct TradeRoute {
     path: Vec<u32>,
 }
 
-/// Whether finishing a `kind` building pays `leader` its ability: a district's income,
+/// Whether finishing a `kind` building pays `leader` its ability: building income,
 /// a city's troop cap or a tower's reach.
 fn structure_marks_leader(leader: Leader, kind: BuildingKind) -> bool {
     match (leader.ability(), kind) {

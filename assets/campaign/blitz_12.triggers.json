@@ -1,0 +1,105 @@
+{
+  "version": 2,
+  "episode_id": "blitz_12",
+  "text_namespace": "tutorial.blitz_",
+  "require_speaker_portraits": false,
+  "settings": {
+    "starting_troops": 2360,
+    "starting_gold": 600,
+    "campaign_support": {
+      "after_defeated": "immediate",
+      "share_percent": 45
+    }
+  },
+  "entry": "blitz_cascade_start",
+  "speakers": {
+    "caesar": {
+      "name_key": "tutorial.blitz_advisor_name",
+      "avatar": "caesar"
+    },
+    "sector_boss": {
+      "name_key": "tutorial.blitz_advisor_name",
+      "faction": "sector_boss"
+    }
+  },
+  "steps": [
+    {
+      "id": "blitz_cascade_start",
+      "type": "objective",
+      "unlocks": {
+        "buildings": {
+          "City": 1,
+          "Farm": 2,
+          "Factory": 2,
+          "Tower": 2
+        }
+      },
+      "title_key": "tutorial.blitz_obj_title",
+      "body_key": "tutorial.blitz_obj_body",
+      "hint_key": "tutorial.blitz_obj_hint",
+      "speaker": "caesar",
+      "trigger": {
+        "type": "defeated",
+        "target": "outpost_alpha",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "outpost_alpha"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "blitz_boss_crush"
+    },
+    {
+      "id": "blitz_boss_crush",
+      "type": "objective",
+      "title_key": "tutorial.blitz_obj_title",
+      "body_key": "tutorial.blitz_obj_body",
+      "hint_key": "tutorial.blitz_boss_hint",
+      "speaker": "caesar",
+      "trigger": {
+        "type": "defeated",
+        "target": "sector_boss",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "sector_boss"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "blitz_victory"
+    },
+    {
+      "id": "blitz_victory",
+      "type": "end",
+      "title_key": "tutorial.blitz_victory_title",
+      "body_key": "tutorial.blitz_victory_body",
+      "speaker": "caesar",
+      "presentation": "chapter"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "blitz_boss_panic",
+      "when": {
+        "type": "pre_defeat",
+        "target": "sector_boss"
+      },
+      "during": "blitz_boss_crush",
+      "presentation": "exchange",
+      "exchange": [
+        {
+          "speaker": "sector_boss",
+          "emote": "help",
+          "emote_text_key": "tutorial.blitz_emote_panic"
+        }
+      ]
+    }
+  ]
+}

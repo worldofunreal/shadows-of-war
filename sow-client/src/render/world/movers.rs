@@ -1,6 +1,6 @@
 use crate::render::gpu::{MoverInstanceGpu, MoverSpriteId, TrailSegmentGpu};
-use sow_core::game::{ProjectileKind, UnitType};
-use sow_core::protocol::{FleetSnapshot, ProjectileSnapshot, SimSnapshot};
+use sow_core::game::{BuildingKind, ProjectileKind, UnitType};
+use sow_core::protocol::{BuildingSnapshot, FleetSnapshot, ProjectileSnapshot, SimSnapshot};
 use std::collections::{HashMap, HashSet};
 
 const TRAIL_CAP: usize = 32;
@@ -376,6 +376,19 @@ impl MoverScene {
                 self.ingest_fleet(fleet, map_w, my_id);
             }
         }
+        for building in &snap.buildings {
+            if building.kind != BuildingKind::SAM {
+                continue;
+            }
+            let visible = !fog_of_war_enabled
+                || building.owner_id == my_id
+                || fog_visible.contains(building.tile_idx);
+            if visible {
+                let key = building.id | (1u64 << 62);
+                alive.insert(key);
+                self.ingest_sam_building(building, map_w);
+            }
+        }
         for proj in &snap.projectiles {
             if proj.path.is_empty() {
                 continue;
@@ -418,6 +431,40 @@ impl MoverScene {
                 }
             }
         }
+    }
+
+    fn ingest_sam_building(&mut self, building: &BuildingSnapshot, map_w: u32) {
+        let (x, y) = tile_to_world(building.tile_idx, map_w.max(1));
+        let color = self
+            .player_colors
+            .get(&building.owner_id)
+            .copied()
+            .unwrap_or([0.5, 0.7, 0.8]);
+        self.upsert_slot(
+            building.id | (1u64 << 62),
+            MoverSlot {
+                prev_x: x,
+                prev_y: y,
+                curr_x: x,
+                curr_y: y,
+                path_progress_prev: 0.0,
+                path_progress_curr: 0.0,
+                size: 0.9,
+                color: [color[0], color[1], color[2], if building.under_construction { 0.55 } else { 1.0 }],
+                trail_color: [0.0; 4],
+                sprite: MoverSpriteId::SamMissile,
+                trail_start: 0,
+                trail_len: 0,
+                is_fleet: true,
+                is_shell: false,
+                arc_trail: false,
+                is_owned_warship: false,
+                health_fraction: 1.0,
+                veterancy: 0,
+                warship_mode: None,
+                in_combat: false,
+            },
+        );
     }
 
     fn ingest_fleet(&mut self, fleet: &FleetSnapshot, map_w: u32, my_id: u16) {

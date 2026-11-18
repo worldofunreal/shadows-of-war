@@ -126,6 +126,8 @@ pub struct Faction {
     pub support_interval_seconds: Option<u32>,
     pub gold_loot_bonus: Option<u32>,
     pub gold_loot_override: Option<u32>,
+    pub troop_loot_bonus: Option<u32>,
+    pub prebuilt_buildings: Vec<(sow_core::game::BuildingKind, u8)>,
     pub alliance_group: Option<String>,
     pub can_attack_player: Option<bool>,
     pub assault_force: bool,
@@ -212,6 +214,8 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             campaign_assault_force: f.assault_force,
             campaign_hold_structures_until_contact: f.hold_structures_until_contact,
             campaign_accepts_alliance_requests: f.accepts_alliance_requests,
+            campaign_troop_loot_bonus: f.troop_loot_bonus,
+            prebuilt_buildings: f.prebuilt_buildings.clone(),
         })
         .collect()
 }
@@ -258,6 +262,10 @@ struct RosterEntry {
     hold_structures_until_contact: bool,
     #[serde(default)]
     accepts_alliance_requests: bool,
+    #[serde(default)]
+    troop_loot_bonus: Option<u32>,
+    #[serde(default)]
+    prebuilt_buildings: Vec<(String, u8)>,
 }
 
 #[derive(serde::Deserialize)]
@@ -360,11 +368,24 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             .is_some_and(|seconds| !(5..=600).contains(&seconds))
             || e.gold_loot_bonus.is_some_and(|gold| gold > 1_000_000)
             || e.gold_loot_override.is_some_and(|gold| gold > 1_000_000)
+            || e.troop_loot_bonus.is_some_and(|troops| troops > 1_000_000)
             || e.alliance_group
                 .as_deref()
                 .is_some_and(|group| !valid_campaign_group_id(group))
         {
             return None;
+        }
+        let mut prebuilt_buildings = Vec::with_capacity(e.prebuilt_buildings.len());
+        for (raw_kind, level) in &e.prebuilt_buildings {
+            let kind = match raw_kind.trim().to_ascii_lowercase().as_str() {
+                "city" => sow_core::game::BuildingKind::City,
+                "tower" | "defense_tower" => sow_core::game::BuildingKind::Tower,
+                "factory" => sow_core::game::BuildingKind::Factory,
+                "port" => sow_core::game::BuildingKind::Port,
+                "farm" => sow_core::game::BuildingKind::Farm,
+                _ => return None,
+            };
+            prebuilt_buildings.push((kind, (*level).clamp(1, 5)));
         }
         let color = match e.color.as_deref() {
             Some(color) => parse_campaign_color(color)?,
@@ -399,6 +420,8 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             support_interval_seconds: e.support_interval_seconds,
             gold_loot_bonus: e.gold_loot_bonus,
             gold_loot_override: e.gold_loot_override,
+            troop_loot_bonus: e.troop_loot_bonus,
+            prebuilt_buildings,
             alliance_group: e.alliance_group.clone(),
             can_attack_player: e.can_attack_player,
             assault_force: e.assault_force,

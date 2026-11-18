@@ -10,10 +10,10 @@
       "x": 598,
       "y": 650,
       "starting_troops": 7000,
-      "relation": "neutral",
+      "relation": "allied",
       "can_request_alliance": true,
       "accepts_alliance_requests": true,
-      "support_interval_seconds": 12,
+      "support_interval_seconds": 8,
       "color": "#3aa675",
       "iq": 110,
       "civ": "Merchant League",
@@ -36,7 +36,9 @@
       "leader": "Caesar",
       "avatar": "colonia_veterans",
       "can_attack_player": false,
-      "gold_loot_override": 140
+      "gold_loot_override": 140,
+      "troop_loot_bonus": 2200,
+      "prebuilt_buildings": [["City", 1]]
     },
     {
       "id": "cabo_tyrant",

@@ -2273,16 +2273,13 @@ function rankedResultKey(state: MenuState) {
     return [state.account_id || "", state.menu_return && state.menu_return.match_id].join(":");
 }
 
-function rankedResultTitle(result: RankedResult) {
-    const before = result.tier_before + (result.division_before ? " " + result.division_before : "");
-    const after = result.tier_after + (result.division_after ? " " + result.division_after : "");
-    if (before === after) return SOW_t("lobbies.ranked_result_title");
-    if (result.score_after > result.score_before) {
-        return result.tier_before !== result.tier_after
+function rankedResultKicker(result: RankedResult) {
+    if (result.tier_before !== result.tier_after) {
+        return result.score_after > result.score_before
             ? SOW_t("lobbies.rank_promoted")
-            : SOW_t("ranked.new_division");
+            : SOW_t("ranked.rank_changed");
     }
-    return SOW_t("ranked.rank_changed");
+    return SOW_t("lobbies.ranked_1v1");
 }
 
 function presentRankedResult(result: RankedResult) {
@@ -2296,7 +2293,9 @@ function presentRankedResult(result: RankedResult) {
         result.tier_before !== result.tier_after || result.division_before !== result.division_after;
     const league = result.tier_before !== result.tier_after;
     const promoted = changed && result.score_after > result.score_before;
-    const title = rankedResultTitle(result);
+    const delta = result.score_after - result.score_before;
+    const direction = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+    const kicker = rankedResultKicker(result);
     card.className =
         "sow-menu__ranked-result-card" +
         (promoted && league ? " is-league-up" : "") +
@@ -2304,34 +2303,24 @@ function presentRankedResult(result: RankedResult) {
     card.dataset.tier = rankTier(result.tier_after || "Nomad");
     card.innerHTML =
         "<header class='sow-ranked__result-header'><span class='sow-ranked__eyebrow'>" +
-        esc(SOW_t("lobbies.ranked_1v1")) +
-        "</span><h2 id='sow-ranked-result-title'>" +
-        esc(title) +
-        "</h2></header><div class='sow-ranked__result-pedestal'><div class='sow-ranked__result-seal'>" +
+        esc(kicker) +
+        "</span></header><div class='sow-ranked__result-pedestal'><div class='sow-ranked__result-seal'>" +
         "<div class='sow-ranked__old-emblem'>" +
         rankEmblem(result.tier_before || "Nomad", result.division_before) +
         "</div><div data-rank-current-emblem>" +
         rankEmblem(result.tier_after || "Nomad", result.division_after) +
         "</div></div>" +
-        "<div class='sow-ranked__rank-ribbon'><strong class='sow-menu__ranked-result-rank' data-rank-name>" +
+        "<div class='sow-ranked__rank-ribbon'><h2 id='sow-ranked-result-title' class='sow-menu__ranked-result-rank' data-rank-name>" +
         esc(rankName(result.tier_after || "Nomad", result.division_after)) +
-        "</strong></div>" +
+        "</h2></div>" +
         "</div>" +
         "<div class='sow-ranked__score-vault'><div class='sow-ranked__score-main'><strong class='sow-ranked__points' data-rank-score>" +
         esc(SOW_t("lobbies.rank_score", { score: result.score_after })) +
-        "</strong><p class='sow-menu__ranked-result-change' data-direction='" +
-        (result.score_after >= result.score_before ? "up" : "down") +
+        "</strong><span class='sow-menu__ranked-result-change' data-direction='" +
+        direction +
         "'>" +
-        esc(
-            SOW_t("ranked.delta", {
-                points:
-                    (result.score_after > result.score_before ? "+" : "") +
-                    (result.score_after - result.score_before),
-            }),
-        ) +
-        "</p></div><p class='sow-ranked__previous'>" +
-        esc(SOW_t("lobbies.rank_previous", { score: result.score_before })) +
-        "</p>" +
+        esc((delta > 0 ? "+" : "") + delta) +
+        "</span></div>" +
         (result.points_breakdown ? rankedPointsBreakdownMarkup(result.points_breakdown) : "") +
         "</div>" +
         rankProgressMarkup(result.score_after, result.ladder || menuUi.rankedLadder) +

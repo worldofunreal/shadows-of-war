@@ -19,7 +19,9 @@
       "leader": "Ragnar",
       "avatar": "ragnar",
       "can_attack_player": false,
-      "gold_loot_override": 140
+      "gold_loot_override": 140,
+      "troop_loot_bonus": 2400,
+      "prebuilt_buildings": [["Farm", 1]]
     },
     {
       "id": "iron_bastion",
