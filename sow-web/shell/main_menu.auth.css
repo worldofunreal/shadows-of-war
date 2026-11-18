@@ -7,7 +7,7 @@
   width: min(100%, 430px);
   padding: 28px;
   overflow: hidden;
-  border-color: rgba(245, 197, 66, 0.36);
+  border-color: var(--sow-tactical-surface-accent-border-soft);
   background: var(--sow-tactical-surface-card-bg);
 }
 

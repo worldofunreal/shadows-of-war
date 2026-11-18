@@ -604,9 +604,13 @@
 
 .sow-menu__settings-link:hover,
 .sow-menu__settings-link:focus-visible {
-  border-color: var(--sow-accent);
-  background: linear-gradient(180deg, rgb(245 197 66 / 16%), rgb(18 20 26 / 84%));
-  color: var(--sow-accent-bright);
+  border-color: var(--sow-control-accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sow-control-accent) 16%, transparent),
+    rgb(18 20 26 / 84%)
+  );
+  color: var(--sow-control-accent-bright);
   outline: var(--sow-tactical-focus-outline);
   outline-offset: var(--sow-tactical-focus-offset);
   transform: translateY(-1px);

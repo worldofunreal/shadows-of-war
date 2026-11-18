@@ -11,6 +11,51 @@ const escape = (value: unknown) =>
   );
 const json = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
 const read = (path: string) => readFile(path, "utf8");
+const SITE_LOCALE_ALIASES: Record<string, string> = { zh: "zh-cn", pt: "pt-br", tl: "fil" };
+
+// Runs before paint on unprefixed English localized pages so visitors whose saved
+// preference or browser language matches a published locale land on its localized path
+// without flashing English, while bots and explicit English overrides stay put.
+export function buildSiteLocaleRedirectScript(route: string, languageCodes: string[]): string {
+  const normalizedCodes = languageCodes.map((code) => code.toLowerCase());
+  return (
+    "(function(){try{" +
+    'if(typeof window==="undefined"||!window.location||!/^https?:$/i.test(window.location.protocol))return;' +
+    'var ua=typeof navigator!=="undefined"&&navigator&&navigator.userAgent||"";' +
+    'if(/bot|crawl|spider|slurp|mediapartners|facebookexternalhit|twitterbot|discordbot|telegrambot|whatsapp/i.test(ua))return;' +
+    `var codes=${json(normalizedCodes)};` +
+    "var supported=Object.create(null);" +
+    "for(var i=0;i<codes.length;i++)supported[codes[i]]=true;" +
+    `var aliases=${json(SITE_LOCALE_ALIASES)};` +
+    "function resolve(v){" +
+    'v=String(v||"").trim().toLowerCase().replace(/_/g,"-");' +
+    'if(!v)return"";' +
+    "if(supported[v])return v;" +
+    "if(aliases[v]&&supported[aliases[v]])return aliases[v];" +
+    'var b=v.split("-")[0];' +
+    "if(supported[b])return b;" +
+    "if(aliases[b]&&supported[aliases[b]])return aliases[b];" +
+    'return""' +
+    "}" +
+    'var stored="";' +
+    'try{stored=window.localStorage.getItem("sow_ui_locale")||""}catch(e){}' +
+    "var target=resolve(stored);" +
+    'if(!target&&typeof navigator!=="undefined"&&navigator){' +
+    "var list=Array.isArray(navigator.languages)&&navigator.languages.length" +
+    "?navigator.languages" +
+    ':(typeof navigator.language==="string"&&navigator.language?[navigator.language]:[]);' +
+    "for(var j=0;j<list.length;j++){var c=resolve(list[j]);if(c){target=c;break}}" +
+    "}" +
+    'if(!target||target==="en")return;' +
+    `var base="/"+target+"/"+${json(route)};` +
+    'var cur=(window.location.pathname||"/").replace(/\\/index\\.html$/i,"/");' +
+    "if(cur===base)return;" +
+    'if(document.documentElement)document.documentElement.dataset.sowLocalePending="true";' +
+    'window.location.replace(base+(window.location.search||"")+(window.location.hash||""))' +
+    "}catch(e){}})();"
+  );
+}
+
 type Leader = { id: string; artSlug: string; legacyIds: string[]; region: string; wikipedia: string | null };
 
 export async function publish(
@@ -289,7 +334,14 @@ export async function publish(
           .join("\n") + `\n<link rel="alternate" hreflang="x-default" href="${origin + path("en", route)}">`;
       const worldIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="site-language-icon icon icon-tabler icons-tabler-outline icon-tabler-world" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M3.6 9h16.8"/><path d="M3.6 15h16.8"/><path d="M11.5 3a17 17 0 0 0 0 18"/><path d="M12.5 3a17 17 0 0 1 0 18"/></svg>`;
       const switches = `<details class="site-language"><summary>${worldIcon}<span>${escape(language.name)}</span></summary><nav aria-label="${escape(t("site.select_language"))}">${languages.map((l) => `<a href="${path(l.code, englishOnly.has(route) ? "" : route)}" hreflang="${l.code}" lang="${l.code}" data-site-language="${l.code}" ${l.code === code ? 'aria-current="page"' : ""}>${escape(l.name)}</a>`).join("")}</nav></details>`;
-      const bootstrap = `<script data-cfasync="false">window.SOW_SITE_LOCALE = ${json(code)}; window.SOW_LOCALE_BEFORE_PAINT = true; window.SOW_LOCALE_CATALOG_VERSION = ${registry.version}; window.SOW_LOCALE_CODES = ${json(languages.map((l) => l.code))}; window.SOW_ASSET_TS = ${json(localeVersions)};</script><script data-cfasync="false" src="/sow-i18n.js?v=${fingerprints.get("/sow-i18n.js")}"></script>`;
+      const redirectScript =
+        code === "en" && !englishOnly.has(route)
+          ? buildSiteLocaleRedirectScript(
+              route,
+              languages.map((l) => l.code),
+            )
+          : "";
+      const bootstrap = `<script data-cfasync="false">${redirectScript}window.SOW_SITE_LOCALE = ${json(code)}; window.SOW_LOCALE_BEFORE_PAINT = true; window.SOW_LOCALE_CATALOG_VERSION = ${registry.version}; window.SOW_LOCALE_CODES = ${json(languages.map((l) => l.code))}; window.SOW_ASSET_TS = ${json(localeVersions)};</script><script data-cfasync="false" src="/sow-i18n.js?v=${fingerprints.get("/sow-i18n.js")}"></script>`;
       for (const marker of ["<!-- SOW_SITE_HEADER -->", "<!-- SOW_SITE_LOCALE -->"]) {
         if (html.split(marker).length !== 2) throw Error(`Public page ${url} must contain one ${marker}`);
       }

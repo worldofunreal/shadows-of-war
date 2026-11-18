@@ -435,11 +435,45 @@ export const MAIN_NAV_ITEMS = [
     ["profile", "shell/mobile-nav/profile.webp", "menu.profile"],
 ];
 
+const DESKTOP_NAV_ORDER: Record<string, number> = {
+    battle: 1,
+    heroes: 2,
+    profile: 3,
+    store: 4,
+};
+
+export function computeMainNavIndices(
+    active: string | null | undefined,
+    items: string[][],
+): { count: number; rowIndex: number; colIndex: number } {
+    const count = Math.max(1, items.length);
+    const activeKey = active || "battle";
+    const rowFound = items.findIndex(function (item) {
+        return item[0] === activeKey;
+    });
+    const rowIndex = rowFound >= 0 ? rowFound : 0;
+    const desktopSorted = items.slice().sort(function (a, b) {
+        return (DESKTOP_NAV_ORDER[a[0]] || 99) - (DESKTOP_NAV_ORDER[b[0]] || 99);
+    });
+    const colFound = desktopSorted.findIndex(function (item) {
+        return item[0] === activeKey;
+    });
+    const colIndex = colFound >= 0 ? colFound : 0;
+    return { count: count, rowIndex: rowIndex, colIndex: colIndex };
+}
+
 export function renderMainNavMarkup(active: string | null | undefined, items: string[][]): string {
+    const indices = computeMainNavIndices(active, items);
     return (
         "<nav class='sow-menu__main-nav' aria-label='" +
         esc(SOW_t("menu.main_menu_navigation")) +
-        "'>" +
+        "' style='--sow-nav-count:" +
+        indices.count +
+        ";--sow-nav-row-index:" +
+        indices.rowIndex +
+        ";--sow-nav-col-index:" +
+        indices.colIndex +
+        ";'>" +
         items
             .map(function (item) {
                 const selected = active === item[0];

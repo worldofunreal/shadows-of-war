@@ -9,8 +9,8 @@
   --sow-profile-panel: var(--sow-tactical-surface-card-bg);
   --sow-profile-gold: var(--sow-control-accent);
   --sow-profile-gold-bright: var(--sow-control-accent-bright);
-  --sow-profile-gold-deep: #b89230;
-  --sow-profile-gold-glow: rgba(245, 197, 66, 0.25);
+  --sow-profile-gold-deep: color-mix(in srgb, var(--sow-tactical-accent) 72%, #0d0e12);
+  --sow-profile-gold-glow: color-mix(in srgb, var(--sow-tactical-accent) 25%, transparent);
   --sow-profile-win: #10b981;
   --sow-profile-win-glow: rgba(16, 185, 129, 0.3);
   --sow-profile-loss: #ef4444;
@@ -34,7 +34,8 @@
     linear-gradient(0deg, rgba(9, 10, 13, 0.45), transparent 55%);
 }
 
-#sow-menu[data-screen="profile"] .sow-profile__main {
+#sow-menu[data-screen="profile"] .sow-profile__main,
+#sow-menu [data-screen-panel="profile"].sow-profile__main {
   display: block;
   flex: 1 1 auto;
   min-height: 0;
@@ -44,7 +45,8 @@
   -webkit-overflow-scrolling: touch;
 }
 
-#sow-menu[data-screen="profile"] .sow-profile__page {
+#sow-menu[data-screen="profile"] .sow-profile__page,
+#sow-menu [data-screen-panel="profile"] .sow-profile__page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
@@ -79,8 +81,8 @@
   min-height: 250px;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(245, 197, 66, 0.25);
-  border-top: 1px solid rgba(245, 197, 66, 0.65);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  border-top: 1px solid color-mix(in srgb, var(--sow-tactical-accent) 65%, transparent);
   border-radius: var(--sow-tactical-surface-radius-compact, 14px);
   background-color: #090a0d;
   background-image:
@@ -89,14 +91,14 @@
     var(--sow-hero);
   background-position: center 25%;
   background-size: cover;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 32px rgba(245, 197, 66, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 32px color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent);
   transition: background-image 350ms ease;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__cover-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 85% 25%, rgba(245, 197, 66, 0.14), transparent 65%);
+  background: radial-gradient(ellipse at 85% 25%, color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent), transparent 65%);
   pointer-events: none;
 }
 
@@ -152,23 +154,31 @@
   padding: 6px 16px;
   border: 1px solid var(--sow-gold);
   border-radius: var(--sow-button-radius, 8px);
-  background: linear-gradient(180deg, rgba(245, 197, 66, 0.22) 0%, rgba(185, 140, 52, 0.14) 100%);
-  color: var(--sow-gold-bright, #ffe8a3);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 22%, transparent) 0%,
+    color-mix(in srgb, var(--sow-tactical-accent) 14%, #0d0e12) 100%
+  );
+  color: var(--sow-gold-bright, #fde047);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 0 16px rgba(245, 197, 66, 0.18);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent);
   transition: background 150ms ease, border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__my-profile-btn:hover {
-  background: linear-gradient(180deg, rgba(245, 197, 66, 0.35) 0%, rgba(185, 140, 52, 0.25) 100%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 35%, transparent) 0%,
+    color-mix(in srgb, var(--sow-tactical-accent) 22%, #0d0e12) 100%
+  );
   border-color: #fff;
   color: #fff;
   transform: translateY(-1px);
-  box-shadow: 0 0 24px rgba(245, 197, 66, 0.35);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--sow-tactical-accent) 35%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__back {
@@ -219,10 +229,12 @@
   height: 92px;
   border-radius: 50%;
   border: 3px solid var(--sow-gold);
-  outline: 1.5px solid rgba(245, 197, 66, 0.35);
+  outline: 1.5px solid color-mix(in srgb, var(--sow-tactical-accent) 35%, transparent);
   outline-offset: 4px;
   background: #090c12;
-  box-shadow: 0 0 28px rgba(245, 197, 66, 0.22), 0 12px 32px rgba(0, 0, 0, 0.85);
+  box-shadow:
+    0 0 28px color-mix(in srgb, var(--sow-tactical-accent) 22%, transparent),
+    0 12px 32px rgba(0, 0, 0, 0.85);
   overflow: hidden;
 }
 
@@ -246,10 +258,16 @@
   height: 32px;
   padding: 0 6px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #241c10 0%, #0d111a 100%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 18%, #0d111a) 0%,
+    #0d111a 100%
+  );
   border: 2px solid var(--sow-gold);
-  color: #fff0d2;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 10px rgba(245, 197, 66, 0.3);
+  color: #f8fafc;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.65),
+    0 0 10px color-mix(in srgb, var(--sow-tactical-accent) 30%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__level small {
@@ -356,7 +374,7 @@
   padding: 4px 12px 4px 6px;
   border-radius: 20px;
   background: var(--sow-profile-surface-soft);
-  border: 1px solid rgba(245, 197, 66, 0.2);
+  border: 1px solid color-mix(in srgb, var(--sow-tactical-accent) 22%, transparent);
   color: #f5f1e8;
   font-size: 12px;
   font-weight: 600;
@@ -421,8 +439,10 @@
 #sow-menu[data-screen="profile"] .sow-profile__stat-cell:hover,
 #sow-menu[data-screen="profile"] .sow-profile__stats > div:hover {
   transform: translateY(-2px);
-  border-color: rgba(245, 197, 66, 0.5);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), 0 0 16px rgba(245, 197, 66, 0.12);
+  border-color: var(--sow-tactical-surface-accent-border);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.5),
+    0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__stat-icon {
@@ -432,9 +452,9 @@
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: rgba(245, 197, 66, 0.08);
-  border: 1px solid rgba(245, 197, 66, 0.22);
-  color: var(--sow-gold-bright, #ffe8a3);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sow-tactical-accent) 24%, transparent);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__stat-body {
@@ -538,10 +558,14 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__tab.is-active {
-  color: var(--sow-gold-bright, #ffe8a3);
-  background: linear-gradient(180deg, rgba(245, 197, 66, 0.18) 0%, rgba(245, 197, 66, 0.05) 100%);
-  border-color: rgba(245, 197, 66, 0.4);
-  box-shadow: 0 0 16px rgba(245, 197, 66, 0.15);
+  color: var(--sow-gold-bright);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent) 0%,
+    color-mix(in srgb, var(--sow-tactical-accent) 5%, transparent) 100%
+  );
+  border-color: var(--sow-tactical-surface-accent-border);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 15%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__tab.is-active::after {
@@ -637,9 +661,11 @@
   gap: 14px;
   padding: 16px 20px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(30, 24, 14, 0.75) 0%, rgba(14, 15, 18, 0.98) 100%);
-  border: 1px solid rgba(245, 197, 66, 0.35);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 16px rgba(245, 197, 66, 0.12);
+  background: var(--sow-tactical-surface-card-bg);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  box-shadow:
+    var(--sow-tactical-card-shadow),
+    0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievements-laurel-icon {
@@ -649,9 +675,9 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: rgba(245, 197, 66, 0.1);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 11%, transparent);
   border: 1.5px solid var(--sow-gold);
-  box-shadow: 0 0 14px rgba(245, 197, 66, 0.3);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--sow-tactical-accent) 30%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievements-laurel-icon img {
@@ -730,9 +756,9 @@
 #sow-menu[data-screen="profile"] .sow-profile__achievements-progress-track i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #b89230 0%, #f5c542 100%);
+  background: linear-gradient(90deg, var(--sow-profile-gold-deep) 0%, var(--sow-tactical-accent) 100%);
   border-radius: 4px;
-  box-shadow: 0 0 10px rgba(245, 197, 66, 0.5);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--sow-tactical-accent) 50%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievement-group {
@@ -784,15 +810,19 @@
 
 #sow-menu .sow-profile__achievement:hover {
   transform: translateY(-2px);
-  border-color: rgba(245, 197, 66, 0.4);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 14px rgba(245, 197, 66, 0.1);
+  border-color: var(--sow-tactical-surface-accent-border);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.45),
+    0 0 14px color-mix(in srgb, var(--sow-tactical-accent) 10%, transparent);
 }
 
 #sow-menu .sow-profile__achievement.is-unlocked {
-  border: 1px solid rgba(245, 197, 66, 0.35);
-  border-top: 1px solid rgba(245, 197, 66, 0.7);
-  background: linear-gradient(180deg, rgba(32, 26, 16, 0.8) 0%, rgba(14, 15, 18, 0.98) 100%);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 16px rgba(245, 197, 66, 0.1);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  border-top: 1px solid color-mix(in srgb, var(--sow-tactical-accent) 70%, transparent);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.45),
+    0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 10%, transparent);
 }
 
 #sow-menu .sow-profile__achievement.is-locked {
@@ -821,9 +851,9 @@
 
 #sow-menu .sow-profile__achievement-badge-frame.is-unlocked {
   border-color: var(--sow-gold);
-  background: linear-gradient(135deg, #241c10 0%, #11141a 100%);
-  color: var(--sow-gold-bright, #ffe8a3);
-  box-shadow: 0 0 14px rgba(245, 197, 66, 0.3);
+  background: var(--sow-tactical-surface-subcard-bg);
+  color: var(--sow-gold-bright);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--sow-tactical-accent) 30%, transparent);
 }
 
 #sow-menu .sow-profile__ach-icon {
@@ -852,7 +882,7 @@
 }
 
 #sow-menu .sow-profile__achievement.is-unlocked .sow-profile__ach-hero-avatar {
-  filter: brightness(1.05) drop-shadow(0 0 6px rgba(245, 197, 66, 0.4));
+  filter: brightness(1.05) drop-shadow(0 0 6px color-mix(in srgb, var(--sow-tactical-accent) 40%, transparent));
 }
 
 #sow-menu .sow-profile__achievement-check {
@@ -904,7 +934,7 @@
   border-radius: 6px;
   background: rgba(245, 197, 66, 0.12);
   border: 1px solid rgba(245, 197, 66, 0.35);
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: #ffe8a3;
   font-size: 11px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -959,9 +989,9 @@
 #sow-menu .sow-profile__achievement-track i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #b89230 0%, #f5c542 100%);
+  background: linear-gradient(90deg, var(--sow-profile-gold-deep) 0%, var(--sow-tactical-accent) 100%);
   border-radius: 3px;
-  box-shadow: 0 0 8px rgba(245, 197, 66, 0.4);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--sow-tactical-accent) 40%, transparent);
 }
 
 #sow-menu .sow-profile__achievement.is-unlocked .sow-profile__achievement-track i {
@@ -1094,9 +1124,9 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-btn.is-active {
-  border-color: rgba(245, 197, 66, 0.55);
-  background: linear-gradient(135deg, rgba(245, 197, 66, 0.16) 0%, rgba(24, 20, 13, 0.92) 100%);
-  color: var(--sow-gold-bright, #ffe8a3);
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: var(--sow-tactical-surface-subcard-bg);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-top {
@@ -1116,7 +1146,7 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-btn.is-active .sow-profile__ach-rail-top b {
-  color: #ffe8a3;
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-bar {
@@ -1130,7 +1160,7 @@
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-bar i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #b89230 0%, #f5c542 100%);
+  background: linear-gradient(90deg, var(--sow-profile-gold-deep) 0%, var(--sow-tactical-accent) 100%);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-subs {
@@ -1139,7 +1169,7 @@
   gap: 2px;
   margin: 2px 0 4px 10px;
   padding-inline-start: 8px;
-  border-inline-start: 1px solid rgba(245, 197, 66, 0.28);
+  border-inline-start: 1px solid color-mix(in srgb, var(--sow-tactical-accent) 28%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-sub {
@@ -1166,8 +1196,8 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-rail-sub.is-active {
-  background: rgba(245, 197, 66, 0.14);
-  color: var(--sow-gold-bright, #ffe8a3);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent);
+  color: var(--sow-gold-bright);
   font-weight: 800;
 }
 
@@ -1234,8 +1264,8 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-search-input:focus {
-  border-color: var(--sow-gold, #f5c542);
-  box-shadow: 0 0 12px rgba(245, 197, 66, 0.25);
+  border-color: var(--sow-gold);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sow-tactical-accent) 25%, transparent);
   background: rgba(20, 22, 28, 0.98);
 }
 
@@ -1290,9 +1320,9 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-clear-btn {
-  border-color: rgba(245, 197, 66, 0.4);
-  background: rgba(245, 197, 66, 0.12);
-  color: #ffe8a3;
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-view-toggle {
@@ -1319,8 +1349,8 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-view-btn.is-active {
-  background: rgba(245, 197, 66, 0.18);
-  color: var(--sow-gold-bright, #ffe8a3);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-subbar {
@@ -1355,9 +1385,9 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-subchip.is-active {
-  border-color: var(--sow-gold, #f5c542);
-  background: rgba(245, 197, 66, 0.16);
-  color: var(--sow-gold-bright, #ffe8a3);
+  border-color: var(--sow-gold);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-subchip b {
@@ -1386,7 +1416,7 @@
   padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid var(--sow-profile-line);
-  background: linear-gradient(160deg, rgba(24, 27, 34, 0.95) 0%, rgba(13, 15, 20, 0.98) 100%);
+  background: var(--sow-tactical-surface-card-bg);
   color: #f1f5f9;
   font-family: inherit;
   text-align: start;
@@ -1396,7 +1426,7 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-pillar-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(245, 197, 66, 0.45);
+  border-color: var(--sow-tactical-surface-accent-border);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-pillar-head {
@@ -1415,7 +1445,7 @@
 #sow-menu[data-screen="profile"] .sow-profile__ach-pillar-head span {
   font-size: 12px;
   font-weight: 800;
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: var(--sow-gold-bright);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1429,7 +1459,7 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-pillar-foot b {
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-summary-section {
@@ -1444,15 +1474,15 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ach-search-banner {
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(245, 197, 66, 0.25);
-  background: rgba(245, 197, 66, 0.08);
-  color: #ffe8a3;
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent);
+  color: var(--sow-gold-bright);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1495,7 +1525,7 @@
 }
 
 #sow-menu .sow-ach-chain.is-unlocked {
-  border-color: rgba(245, 197, 66, 0.35);
+  border-color: var(--sow-tactical-surface-accent-border-soft);
 }
 
 #sow-menu .sow-ach-chain.is-mythic {
@@ -1566,15 +1596,15 @@
 }
 
 #sow-menu .sow-ach-chain__step.is-current {
-  border-color: rgba(245, 197, 66, 0.35);
-  color: #fde68a;
+  border-color: var(--sow-tactical-surface-accent-border-soft);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu .sow-ach-chain__step.is-viewing {
-  border-color: var(--sow-gold, #f5c542);
-  background: rgba(245, 197, 66, 0.22);
-  color: #fff0d2;
-  box-shadow: 0 0 0 1px rgba(245, 197, 66, 0.3);
+  border-color: var(--sow-gold);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 22%, transparent);
+  color: #f8fafc;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sow-tactical-accent) 30%, transparent);
 }
 
 /* Unified Per-Hero Codex Cards (1 card per hero) */
@@ -1597,7 +1627,7 @@
 }
 
 #sow-menu .sow-ach-hero-card.is-owned {
-  border-color: rgba(245, 197, 66, 0.35);
+  border-color: var(--sow-tactical-surface-accent-border-soft);
 }
 
 #sow-menu .sow-ach-hero-card.is-locked {
@@ -1657,9 +1687,9 @@
 }
 
 #sow-menu .sow-ach-hero-card__own.is-owned {
-  border-color: rgba(245, 197, 66, 0.45);
-  background: rgba(245, 197, 66, 0.14);
-  color: #ffe8a3;
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent);
+  color: var(--sow-gold-bright);
 }
 
 #sow-menu .sow-ach-hero-card__own.is-weekly_free {
@@ -1713,7 +1743,7 @@
 
 #sow-menu .sow-ach-hero-card__track-head b {
   font-size: 11px;
-  color: #ffe8a3;
+  color: var(--sow-gold-bright);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1722,9 +1752,9 @@
   width: 100%;
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(245, 197, 66, 0.32);
-  background: rgba(245, 197, 66, 0.08);
-  color: var(--sow-gold-bright, #ffe8a3);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 9%, transparent);
+  color: var(--sow-gold-bright);
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 800;
@@ -1735,8 +1765,8 @@
 }
 
 #sow-menu .sow-ach-hero-card__dossier-btn:hover {
-  background: rgba(245, 197, 66, 0.18);
-  border-color: rgba(245, 197, 66, 0.6);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent);
+  border-color: var(--sow-tactical-surface-accent-border);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__victory-list {
@@ -1832,8 +1862,10 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__leader:hover {
   transform: translateY(-2px);
-  border-color: rgba(245, 197, 66, 0.4);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 14px rgba(245, 197, 66, 0.1);
+  border-color: var(--sow-tactical-surface-accent-border);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.4),
+    0 0 14px color-mix(in srgb, var(--sow-tactical-accent) 10%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__leader-avatar-frame {
@@ -1847,7 +1879,7 @@
   display: block;
   width: 52px;
   height: 52px;
-  border: 2px solid rgba(245, 197, 66, 0.45);
+  border: 2px solid var(--sow-tactical-surface-accent-border);
   border-radius: 50%;
   background: #151922;
   object-fit: cover;
@@ -1892,7 +1924,7 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__leader-header b,
 #sow-menu[data-screen="profile"] .sow-profile__leader > b {
-  color: #f2cb79;
+  color: var(--sow-gold-bright);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1910,9 +1942,9 @@
 #sow-menu[data-screen="profile"] .sow-profile__leader-track i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #b89230 0%, #f5c542 100%);
+  background: linear-gradient(90deg, var(--sow-profile-gold-deep) 0%, var(--sow-tactical-accent) 100%);
   border-radius: 2px;
-  box-shadow: 0 0 8px rgba(245, 197, 66, 0.5);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--sow-tactical-accent) 50%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__leader span {
@@ -1988,8 +2020,10 @@
 #sow-menu[data-screen="profile"] .sow-profile__match:hover,
 #sow-menu[data-screen="profile"] .sow-profile__match:focus-visible {
   transform: translateY(-2px);
-  border-color: rgba(245, 197, 66, 0.45);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 197, 66, 0.12);
+  border-color: var(--sow-tactical-surface-accent-border);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.5),
+    0 0 20px color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
   outline: none;
 }
 
@@ -2054,7 +2088,7 @@
   display: block;
   width: 44px;
   height: 44px;
-  border: 1.5px solid rgba(245, 197, 66, 0.4);
+  border: 1.5px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: 50%;
   background: #151922;
   object-fit: cover;
@@ -2140,11 +2174,11 @@
   min-height: 44px;
   margin-top: 16px;
   padding: 0 20px;
-  border: 1px solid rgba(245, 197, 66, 0.3);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: var(--sow-button-radius);
   background: var(--sow-button-dark-bg);
   box-shadow: var(--sow-button-dark-shadow);
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: var(--sow-gold-bright);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: var(--sow-button-tracking);
@@ -2156,7 +2190,11 @@
 #sow-menu[data-screen="profile"] .sow-profile__load-more:hover,
 #sow-menu[data-screen="profile"] .sow-profile__load-more:focus-visible {
   border-color: var(--sow-gold);
-  background: linear-gradient(180deg, rgba(245, 197, 66, 0.22) 0%, rgba(185, 140, 52, 0.18) 100%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 22%, transparent) 0%,
+    color-mix(in srgb, var(--sow-tactical-accent) 14%, #0d0e12) 100%
+  );
   color: #ffffff;
   transform: translateY(-1px);
 }
@@ -2327,10 +2365,12 @@
    ========================================================================== */
 #sow-menu[data-screen="profile"] .sow-profile__overview-sidebar .sow-ranked__overview {
   padding: 22px 18px;
-  border: 1px solid rgba(245, 197, 66, 0.25);
-  border-top: 1px solid rgba(245, 197, 66, 0.55);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  border-top: 1px solid var(--sow-tactical-surface-accent-border);
   border-radius: 12px;
-  background: radial-gradient(ellipse at 50% 0%, rgba(245, 197, 66, 0.14), transparent 70%), var(--sow-profile-panel);
+  background:
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent), transparent 70%),
+    var(--sow-profile-panel);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
 }
 
@@ -2342,7 +2382,7 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__overview-sidebar .sow-ranked__emblem {
   width: 96px;
-  filter: drop-shadow(0 0 20px rgba(245, 197, 66, 0.35));
+  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--sow-tactical-accent) 35%, transparent));
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__overview-sidebar .sow-ranked__summary {
@@ -2694,13 +2734,15 @@
     var(--sow-hero);
 }
 
-#sow-menu[data-screen="store"] .sow-menu__main.sow-menu__main--store {
+#sow-menu[data-screen="store"] .sow-menu__main.sow-menu__main--store,
+#sow-menu [data-screen-panel="store"].sow-menu__main.sow-menu__main--store {
   display: block;
   min-height: 0;
   padding: 0 4px 8px;
 }
 
-#sow-menu[data-screen="store"] .sow-menu__store-slot {
+#sow-menu[data-screen="store"] .sow-menu__store-slot,
+#sow-menu [data-screen-panel="store"] .sow-menu__store-slot {
   width: 100%;
   min-height: 0;
   margin: 0 auto;
@@ -2759,7 +2801,7 @@
 }
 
 .sow-store__balances b {
-  color: var(--sow-gold);
+  color: #f5c542;
   font-size: 16px;
 }
 
@@ -2778,7 +2820,7 @@
 
 .sow-store__balance--crowns {
   border-color: rgba(243, 177, 43, 0.42) !important;
-  color: var(--sow-gold-bright) !important;
+  color: #fde047 !important;
 }
 
 .sow-store__balances small {
@@ -2870,6 +2912,19 @@
   color: var(--sow-button-primary-text);
 }
 
+.sow-store__buy--equipped {
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent);
+  color: var(--sow-tactical-accent-bright);
+}
+
+.sow-store__buy--equipped:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.72);
+  background: rgba(239, 68, 68, 0.16);
+  box-shadow: var(--sow-button-dark-shadow);
+  color: #fecaca;
+}
+
 .sow-store__buy:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -2906,13 +2961,20 @@
   background: var(--sow-tactical-surface-subcard-bg);
 }
 
+.sow-store__skin.is-equipped {
+  border-color: var(--sow-tactical-surface-accent-border);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent), transparent 72%),
+    var(--sow-tactical-surface-subcard-bg);
+}
+
 .sow-store__skin-art {
   display: grid;
   width: 58px;
   height: 58px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(245, 197, 66, 0.35);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: 6px;
   background: #0d0e13;
 }
@@ -3062,14 +3124,18 @@
 }
 
 .sow-store__tab:hover {
-  border-color: rgba(243, 177, 43, 0.45);
+  border-color: var(--sow-tactical-surface-accent-border);
   color: #fff;
 }
 
 .sow-store__tab.is-active {
-  border-color: rgba(243, 177, 43, 0.75);
-  background: linear-gradient(135deg, rgba(243, 177, 43, 0.24), rgba(243, 177, 43, 0.08));
-  box-shadow: 0 0 16px rgba(243, 177, 43, 0.16);
+  border-color: var(--sow-tactical-accent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 24%, transparent),
+    color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent)
+  );
+  box-shadow: 0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent);
   color: var(--sow-gold-bright);
 }
 
@@ -3089,7 +3155,7 @@
 }
 
 .sow-store__tab.is-active b {
-  background: rgba(243, 177, 43, 0.28);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 28%, transparent);
   color: var(--sow-gold-bright);
 }
 
@@ -3106,14 +3172,10 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px;
-  border: 1px solid rgba(243, 177, 43, 0.34);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: 10px;
-  background:
-    radial-gradient(120% 100% at 0% 0%, rgba(243, 177, 43, 0.16), transparent 65%),
-    linear-gradient(180deg, rgba(22, 25, 34, 0.96), rgba(12, 14, 20, 0.98));
-  box-shadow:
-    0 10px 24px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
   overflow: hidden;
 }
 
@@ -3207,7 +3269,7 @@
   height: 56px;
   place-items: center;
   margin-left: -14px;
-  border: 2px solid rgba(243, 177, 43, 0.65);
+  border: 2px solid var(--sow-tactical-surface-accent-border);
   border-radius: 50%;
   background: #0d0e13;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.55);
@@ -3340,8 +3402,8 @@
 }
 
 button.sow-store__bundle-chip:hover {
-  border-color: rgba(243, 177, 43, 0.55);
-  background: rgba(243, 177, 43, 0.12);
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
   color: #fff;
 }
 
@@ -3361,14 +3423,14 @@ button.sow-store__bundle-chip:hover {
 }
 
 .sow-store__deal-card {
-  border-color: rgba(243, 177, 43, 0.28);
+  border-color: var(--sow-tactical-surface-accent-border-soft);
   background:
-    linear-gradient(135deg, rgba(243, 177, 43, 0.08), transparent 65%),
+    linear-gradient(135deg, color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent), transparent 65%),
     var(--sow-tactical-surface-subcard-bg);
 }
 
 .sow-store__skin.is-on-sale {
-  border-color: rgba(243, 177, 43, 0.32);
+  border-color: var(--sow-tactical-surface-accent-border-soft);
 }
 
 .sow-store__deal-meta {
@@ -3396,7 +3458,7 @@ button.sow-store__bundle-chip:hover {
 .sow-store__buy--on-sale,
 .sow-store__buy--deal,
 .sow-store__bundle-buy {
-  border-color: rgba(243, 177, 43, 0.45);
+  border-color: var(--sow-tactical-surface-accent-border);
 }
 
 /* The shop is a focused offer surface. Inventory discovery lives in Heroes. */
@@ -3664,7 +3726,8 @@ button.sow-store__bundle-chip:hover {
     var(--sow-hero);
 }
 
-#sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes {
+#sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes,
+#sow-menu [data-screen-panel="heroes"].sow-menu__main.sow-menu__main--heroes {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -3672,7 +3735,8 @@ button.sow-store__bundle-chip:hover {
   padding: 0 4px 8px;
 }
 
-#sow-menu[data-screen="heroes"] .sow-menu__heroes-slot {
+#sow-menu[data-screen="heroes"] .sow-menu__heroes-slot,
+#sow-menu [data-screen-panel="heroes"] .sow-menu__heroes-slot {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -3900,27 +3964,31 @@ button.sow-store__bundle-chip:hover {
   gap: 3px;
   font-family: inherit;
   font-variant-numeric: tabular-nums;
-  color: rgba(255, 232, 163, 0.8);
-  border-color: rgba(245, 197, 66, 0.34);
+  color: color-mix(in srgb, var(--sow-tactical-accent-bright) 82%, transparent);
+  border-color: var(--sow-tactical-surface-accent-border-soft);
   background: rgba(12, 16, 24, 0.82);
 }
 
-button.sow-heroes__star-tag {
+button.sow-heroes__star-tag,
+button.sow-heroes__rarity-tag {
   appearance: none;
+  font-family: inherit;
   cursor: pointer;
   transition: border-color 140ms ease, filter 140ms ease, background 140ms ease;
 }
 
 button.sow-heroes__star-tag:hover,
-button.sow-heroes__star-tag:focus-visible {
-  border-color: rgba(245, 197, 66, 0.78);
+button.sow-heroes__star-tag:focus-visible,
+button.sow-heroes__rarity-tag:hover,
+button.sow-heroes__rarity-tag:focus-visible {
+  border-color: var(--sow-tactical-accent);
   filter: brightness(1.1);
 }
 
 .sow-heroes__star-tag.is-started {
-  color: var(--sow-gold-bright, #ffe8a3);
-  border-color: rgba(245, 197, 66, 0.56);
-  background: rgba(26, 21, 10, 0.84);
+  color: var(--sow-gold-bright);
+  border-color: var(--sow-tactical-surface-accent-border);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 14%, rgba(12, 16, 24, 0.88));
 }
 
 .sow-heroes__star-tag.is-complete {
@@ -4169,8 +4237,10 @@ button.sow-heroes__star-tag:focus-visible {
   width: 72px;
   height: 72px;
   border-radius: var(--sow-tactical-surface-radius-tight);
-  border: 1px solid rgba(245, 197, 66, 0.4);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(245, 197, 66, 0.18);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.6),
+    0 0 12px color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent);
 }
 
 .sow-menu__leader-copy .sow-hero-briefing__ability-name {
@@ -4977,12 +5047,12 @@ button.sow-heroes__star-tag:focus-visible {
 }
 
 .sow-heroes__playable-btn:hover {
-  border-color: rgba(255, 200, 87, 0.45);
+  border-color: var(--sow-tactical-surface-accent-border);
   color: #fff4d1;
 }
 
 .sow-heroes__playable-btn.is-active {
-  background: rgba(245, 166, 35, 0.18);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent);
   border-color: var(--sow-control-accent);
   color: var(--sow-gold-bright);
 }
@@ -5014,9 +5084,9 @@ button.sow-heroes__star-tag:focus-visible {
   flex-shrink: 0;
   padding: 3px 8px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 200, 87, 0.32);
-  background: rgba(245, 166, 35, 0.12);
-  color: #ffd470;
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
+  color: var(--sow-gold-bright);
   font-family: inherit;
   font-size: 0.68rem;
   font-weight: 700;
@@ -5026,8 +5096,8 @@ button.sow-heroes__star-tag:focus-visible {
 }
 
 .sow-store__hero-bio-btn:hover {
-  background: rgba(245, 166, 35, 0.25);
-  border-color: #ffc857;
+  background: color-mix(in srgb, var(--sow-tactical-accent) 24%, transparent);
+  border-color: var(--sow-tactical-accent);
   color: #fff;
 }
 
@@ -5040,8 +5110,8 @@ button.sow-heroes__star-tag:focus-visible {
   flex-direction: column;
   padding: 0;
   background: var(--sow-tactical-surface-card-bg, #0e151e);
-  border: 1px solid rgba(255, 200, 87, 0.28);
-  border-radius: var(--sow-radius-lg, 12px);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  border-radius: var(--sow-tactical-surface-radius, 12px);
   overflow: hidden;
 }
 
@@ -5132,8 +5202,8 @@ button.sow-heroes__star-tag:focus-visible {
 }
 
 .sow-hero-info__tab.is-active {
-  color: var(--sow-gold-bright, #ffc857);
-  border-bottom-color: var(--sow-gold-bright, #ffc857);
+  color: var(--sow-gold-bright);
+  border-bottom-color: var(--sow-gold-bright);
 }
 
 .sow-hero-info__body {
@@ -5202,8 +5272,8 @@ button.sow-heroes__star-tag:focus-visible {
 
 .sow-hero-info__bio-highlight {
   padding: 12px 14px;
-  background: rgba(245, 166, 35, 0.08);
-  border-inline-start: 3px solid var(--sow-gold-bright, #ffc857);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 9%, transparent);
+  border-inline-start: 3px solid var(--sow-gold-bright);
   border-radius: 6px;
 }
 
@@ -5212,7 +5282,7 @@ button.sow-heroes__star-tag:focus-visible {
   margin: 0 0 6px;
   font-size: 0.92rem;
   font-weight: 800;
-  color: #ffd470;
+  color: var(--sow-gold-bright);
 }
 
 .sow-hero-info__bio p {
@@ -5241,7 +5311,7 @@ button.sow-heroes__star-tag:focus-visible {
 
 .sow-hero-info__bio-sources a,
 .sow-hero-info__bio-cite a {
-  color: #ffc857;
+  color: var(--sow-gold-bright);
   text-decoration: underline;
 }
 
@@ -5269,7 +5339,7 @@ button.sow-heroes__star-tag:focus-visible {
 }
 
 .sow-heroes__card-ach.is-started {
-  color: #f5c542;
+  color: var(--sow-tactical-accent);
 }
 
 .sow-heroes__card-ach-bar {
@@ -5284,7 +5354,7 @@ button.sow-heroes__star-tag:focus-visible {
 .sow-heroes__card-ach-bar i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #b89230 0%, #f5c542 100%);
+  background: linear-gradient(90deg, var(--sow-profile-gold-deep) 0%, var(--sow-tactical-accent) 100%);
 }
 
 .sow-heroes__ach-strip {
@@ -5312,7 +5382,7 @@ button.sow-heroes__star-tag:focus-visible {
 
 .sow-heroes__ach-btn:hover,
 .sow-heroes__ach-btn:focus-visible {
-  border-color: rgba(245, 197, 66, 0.48);
+  border-color: var(--sow-tactical-surface-accent-border);
   background: rgba(14, 18, 26, 0.56);
 }
 
@@ -5327,9 +5397,9 @@ button.sow-heroes__star-tag:focus-visible {
   line-height: 1;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  color: var(--sow-gold-bright, #ffe8a3);
-  background: rgba(245, 197, 66, 0.14);
-  border: 1px solid rgba(245, 197, 66, 0.38);
+  color: var(--sow-gold-bright);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   white-space: nowrap;
 }
 
@@ -5376,7 +5446,7 @@ button.sow-heroes__star-tag:focus-visible {
 .sow-heroes__ach-chain-head b {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: var(--sow-gold-bright);
 }
 
 .sow-heroes__ach-segments {
@@ -5399,18 +5469,18 @@ button.sow-heroes__star-tag:focus-visible {
   display: block;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, #b89230 0%, #f5c542 100%);
+  background: linear-gradient(90deg, var(--sow-profile-gold-deep) 0%, var(--sow-tactical-accent) 100%);
 }
 
 .sow-heroes__ach-seg.is-done i {
-  background: linear-gradient(90deg, #eab308 0%, #fde047 100%);
+  background: linear-gradient(90deg, var(--sow-tactical-accent) 0%, var(--sow-tactical-accent-bright) 100%);
 }
 
 .sow-heroes__ach-cta {
   font-size: 16px;
   line-height: 1;
   font-weight: 800;
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: var(--sow-gold-bright);
   padding-inline: 2px;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 }
@@ -5420,8 +5490,8 @@ button.sow-heroes__star-tag:focus-visible {
   margin-inline-start: 5px;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgba(255, 200, 87, 0.15);
-  color: var(--sow-gold-bright, #ffc857);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 15%, transparent);
+  color: var(--sow-gold-bright);
   font-size: 0.72rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -5434,7 +5504,7 @@ button.sow-heroes__star-tag:focus-visible {
   margin-top: 4px;
   padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 200, 87, 0.24);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   background: rgba(14, 19, 28, 0.78);
 }
 
@@ -5457,9 +5527,9 @@ button.sow-heroes__star-tag:focus-visible {
   appearance: none;
   padding: 5px 10px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 200, 87, 0.38);
-  background: rgba(255, 200, 87, 0.12);
-  color: #ffe8a3;
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
+  color: var(--sow-gold-bright);
   font-family: inherit;
   font-size: 0.75rem;
   font-weight: 800;
@@ -5494,7 +5564,7 @@ button.sow-heroes__star-tag:focus-visible {
 .sow-hero-info__ach-laurels {
   margin-inline-start: auto;
   font-weight: 800;
-  color: var(--sow-gold-bright, #ffc857);
+  color: var(--sow-gold-bright);
   font-variant-numeric: tabular-nums;
 }
 
@@ -5513,7 +5583,7 @@ button.sow-heroes__star-tag:focus-visible {
 }
 
 .sow-hero-info__ach-overall-head b {
-  color: var(--sow-gold-bright, #ffc857);
+  color: var(--sow-gold-bright);
   font-variant-numeric: tabular-nums;
 }
 
@@ -5546,9 +5616,9 @@ button.sow-heroes__star-tag:focus-visible {
 }
 
 .sow-hero-info__ach-pill.is-active {
-  border-color: var(--sow-gold-bright, #ffc857);
-  background: rgba(255, 200, 87, 0.16);
-  color: #ffe8a3;
+  border-color: var(--sow-gold-bright);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent);
+  color: var(--sow-gold-bright);
 }
 
 .sow-hero-info__ach-pill-row--sm .sow-hero-info__ach-pill {

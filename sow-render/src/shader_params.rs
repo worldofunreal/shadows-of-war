@@ -245,7 +245,7 @@ pub static PARAMS: &[ParamDef] = &[
         "shore_thickness",
         "Land shore width",
         "Coast",
-        0.35,
+        0.0,
         0.0,
         1.0,
         0.01,
@@ -275,11 +275,22 @@ pub static PARAMS: &[ParamDef] = &[
         "territory_opacity",
         "Territory opacity",
         "Territories",
-        0.77,
+        0.588,
         0.0,
         1.0,
         0.01,
         ""
+    ),
+    number!(
+        "territory.saturation",
+        "Territory saturation",
+        "Territories",
+        0.85,
+        0.0,
+        1.0,
+        0.01,
+        "",
+        "MAP_TERRITORY_SATURATION"
     ),
     selection!(
         "blend_mode",
@@ -381,12 +392,12 @@ pub static PARAMS: &[ParamDef] = &[
         true
     ),
     legacy_bool!("fog_of_war", "Visibility shading", "Fog of war", false),
-    legacy_bool!("vfx_ambient_grade", "Warm color cycle", "Lighting", true),
+    legacy_bool!("vfx_ambient_grade", "Warm color cycle", "Lighting", false),
     legacy_bool!(
         "vfx_screen_vignette",
         "Screen vignette",
         "Screen atmosphere",
-        true
+        false
     ),
     flag!(
         "vfx.alerts",
@@ -487,83 +498,26 @@ pub static PARAMS: &[ParamDef] = &[
         "World text",
         true
     ),
-    // Ocean palette is evaluated per frame from the depth byte, not baked at map upload.
+    // Water palette matches OpenFront's encodeTerrainTile: shoreline water plus continuous depth darkening.
     color!(
         "water.ocean.shore",
         "Shore water",
         "Ocean water",
-        [100.0 / 255.0, 143.0 / 255.0, 255.0 / 255.0],
+        [126.0 / 255.0, 170.0 / 255.0, 203.0 / 255.0],
         "MAP_WATER_SHORE"
     ),
     color!(
         "water.ocean.shallow",
-        "Shallow water",
         "Ocean water",
-        [78.0 / 255.0, 151.0 / 255.0, 208.0 / 255.0],
+        "Ocean water",
+        [71.0 / 255.0, 133.0 / 255.0, 181.0 / 255.0],
         "MAP_WATER_SHALLOW"
-    ),
-    color!(
-        "water.ocean.shelf",
-        "Coastal shelf",
-        "Ocean water",
-        [63.0 / 255.0, 132.0 / 255.0, 188.0 / 255.0],
-        "MAP_WATER_SHELF"
-    ),
-    color!(
-        "water.ocean.mid",
-        "Mid water",
-        "Ocean water",
-        [52.0 / 255.0, 115.0 / 255.0, 170.0 / 255.0],
-        "MAP_WATER_MID"
-    ),
-    color!(
-        "water.ocean.deep",
-        "Deep water",
-        "Ocean water",
-        [43.0 / 255.0, 97.0 / 255.0, 151.0 / 255.0],
-        "MAP_WATER_DEEP"
-    ),
-    color!(
-        "water.ocean.abyss",
-        "Deep ocean",
-        "Ocean water",
-        [34.0 / 255.0, 80.0 / 255.0, 132.0 / 255.0],
-        "MAP_WATER_ABYSS"
-    ),
-    color!(
-        "water.inland.color",
-        "Lakes and rivers",
-        "Inland water",
-        [52.0 / 255.0, 160.0 / 255.0, 196.0 / 255.0],
-        "MAP_WATER_INLAND"
-    ),
-    number!(
-        "water.inland.strength",
-        "Inland water strength",
-        "Inland water",
-        1.0,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_WATER_INLAND_STRENGTH"
-    ),
-    number!(
-        "water.inland.brightness",
-        "Inland water brightness",
-        "Inland water",
-        1.0,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_WATER_INLAND_BRIGHTNESS"
     ),
     number!(
         "water.depth_cap",
         "Depth color limit",
         "Ocean water",
-        11.0,
+        10.0,
         1.0,
         31.0,
         1.0,
@@ -574,67 +528,12 @@ pub static PARAMS: &[ParamDef] = &[
         "water.depth_scale",
         "Depth scale",
         "Ocean water",
-        2.0,
+        1.0,
         0.0,
         4.0,
         0.01,
         "×",
         "MAP_WATER_DEPTH_SCALE"
-    ),
-    number!(
-        "water.shallow_limit",
-        "Shallow band end",
-        "Ocean water",
-        2.0,
-        0.0,
-        31.0,
-        1.0,
-        "depth steps",
-        "MAP_WATER_SHALLOW_LIMIT"
-    ),
-    number!(
-        "water.shelf_limit",
-        "Shelf band end",
-        "Ocean water",
-        3.0,
-        0.0,
-        31.0,
-        1.0,
-        "depth steps",
-        "MAP_WATER_SHELF_LIMIT"
-    ),
-    number!(
-        "water.mid_limit",
-        "Mid band end",
-        "Ocean water",
-        12.0,
-        0.0,
-        31.0,
-        1.0,
-        "depth steps",
-        "MAP_WATER_MID_LIMIT"
-    ),
-    number!(
-        "water.deep_limit",
-        "Deep band end",
-        "Ocean water",
-        20.0,
-        0.0,
-        31.0,
-        1.0,
-        "depth steps",
-        "MAP_WATER_DEEP_LIMIT"
-    ),
-    number!(
-        "water.transition",
-        "Band transition width",
-        "Ocean water",
-        2.70,
-        0.0,
-        8.0,
-        0.05,
-        "depth steps",
-        "MAP_WATER_TRANSITION"
     ),
     number!(
         "water.shore_band_width",
@@ -670,17 +569,6 @@ pub static PARAMS: &[ParamDef] = &[
         "MAP_WATER_SHORE_STRENGTH"
     ),
     number!(
-        "water.palette_strength",
-        "Palette strength",
-        "Ocean water",
-        1.0,
-        0.0,
-        2.0,
-        0.01,
-        "×",
-        "MAP_WATER_STRENGTH"
-    ),
-    number!(
         "water.brightness",
         "Water brightness",
         "Ocean water",
@@ -707,24 +595,17 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     color!(
         "land.highlands.color",
-        "Highlands at elevation 0",
+        "Highlands",
         "Terrain",
-        [200.0 / 255.0, 183.0 / 255.0, 138.0 / 255.0],
+        [220.0 / 255.0, 203.0 / 255.0, 158.0 / 255.0],
         "MAP_LAND_HIGHLANDS"
     ),
     color!(
         "land.mountains.color",
         "Mountain base",
         "Terrain",
-        [240.0 / 255.0, 223.0 / 255.0, 178.0 / 255.0],
+        [230.0 / 255.0, 230.0 / 255.0, 230.0 / 255.0],
         "MAP_LAND_MOUNTAINS"
-    ),
-    color!(
-        "land.snow.color",
-        "Snow peak",
-        "Terrain",
-        [248.0 / 255.0, 248.0 / 255.0, 248.0 / 255.0],
-        "MAP_LAND_SNOW"
     ),
     number!(
         "land.plains.limit",
@@ -747,28 +628,6 @@ pub static PARAMS: &[ParamDef] = &[
         1.0,
         "height",
         "MAP_LAND_HIGHLANDS_LIMIT"
-    ),
-    number!(
-        "land.snow.start",
-        "Snow blend starts",
-        "Terrain",
-        20.0,
-        0.0,
-        31.0,
-        1.0,
-        "height",
-        "MAP_LAND_SNOW_START"
-    ),
-    number!(
-        "land.snow.blend_range",
-        "Snow blend range",
-        "Terrain",
-        11.0,
-        0.1,
-        31.0,
-        0.1,
-        "height",
-        "MAP_LAND_SNOW_RANGE"
     ),
     number!(
         "land.plains.elevation_tint",
@@ -796,7 +655,7 @@ pub static PARAMS: &[ParamDef] = &[
         "land.noise_strength",
         "Cell color variation",
         "Terrain",
-        0.03,
+        0.0,
         0.0,
         0.2,
         0.001,
@@ -851,7 +710,7 @@ pub static PARAMS: &[ParamDef] = &[
         "lighting.relief.enabled",
         "Terrain relief",
         "Lighting",
-        1.0,
+        0.0,
         "MAP_RELIEF_ENABLED"
     ),
     number!(
@@ -876,11 +735,11 @@ pub static PARAMS: &[ParamDef] = &[
         "×",
         "MAP_LAND_NORMAL_SCALE"
     ),
-    linear_color!(
+    color!(
         "map.backdrop.color",
         "Outside map",
         "Map",
-        [0.015, 0.015, 0.02],
+        [60.0 / 255.0, 60.0 / 255.0, 60.0 / 255.0],
         "MAP_BACKDROP"
     ),
     linear_color!(
@@ -894,7 +753,7 @@ pub static PARAMS: &[ParamDef] = &[
         "land.unclaimed.haze_strength",
         "Haze base",
         "Terrain",
-        0.08,
+        0.0,
         0.0,
         1.0,
         0.01,
@@ -905,7 +764,7 @@ pub static PARAMS: &[ParamDef] = &[
         "land.unclaimed.haze_wave",
         "Haze variation",
         "Terrain",
-        0.04,
+        0.0,
         0.0,
         1.0,
         0.01,
@@ -938,7 +797,7 @@ pub static PARAMS: &[ParamDef] = &[
         "territory.local.fill",
         "Local territory shade",
         "Territories",
-        0.77,
+        1.0,
         0.0,
         2.0,
         0.01,
@@ -1464,7 +1323,7 @@ pub static PARAMS: &[ParamDef] = &[
         "coast.tint_strength",
         "Coast tint strength",
         "Coast",
-        0.65,
+        0.0,
         0.0,
         1.0,
         0.01,
@@ -2294,7 +2153,7 @@ pub static PARAMS: &[ParamDef] = &[
         "lighting.diffuse.enabled",
         "Diffuse lighting",
         "Lighting",
-        1.0,
+        0.0,
         "MAP_DIFFUSE_ENABLED"
     ),
     number!(
@@ -3409,7 +3268,6 @@ pub const SECTION_GROUPS: &[(&str, &[&str])] = &[
         &[
             "Terrain",
             "Ocean water",
-            "Inland water",
             "Coast",
             "Map",
             "Lighting",

@@ -3744,6 +3744,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       kind,
       tileIdx,
       canConfirm ? "1" : "0",
+      placement.adjusted ? "1" : "0",
       String(cost),
       reasonKey,
     ].join(":");
@@ -3766,7 +3767,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         escapeHudText(buildingTitle) +
         "</strong>" +
         (reason
-          ? '<span class="sow-hud__placement-panel-reason">' +
+          ? '<span class="sow-hud__placement-panel-reason' +
+            (placement.adjusted && canConfirm ? " is-advisory" : "") +
+            '">' +
             escapeHudText(reason) +
             "</span>"
           : '<span class="sow-hud__placement-panel-cost">' +

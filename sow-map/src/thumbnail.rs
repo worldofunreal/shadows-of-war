@@ -77,13 +77,66 @@ pub fn write_rendered_source_thumbnail(
     write_wide_thumbnail(&DynamicImage::ImageRgba8(framed), path)
 }
 
+pub const BACKGROUND_RGB: [u8; 3] = [60, 60, 60];
+pub const OCEAN_RGB: [u8; 3] = [71, 133, 181];
+/// Shore water color: `round(0.7 * OCEAN_RGB + 76.5)` matching OpenFront `ColorUtils.ts`.
+pub const SHORE_WATER_RGB: [u8; 3] = [126, 170, 203];
+pub const SAND_RGB: [u8; 3] = [204, 203, 158];
+pub const PLAINS_RGB: [u8; 3] = [190, 220, 138];
+pub const HIGHLAND_RGB: [u8; 3] = [220, 203, 158];
+pub const MOUNTAIN_RGB: [u8; 3] = [230, 230, 230];
+const DEEP_OCEAN_RGBA: [u8; 4] = [OCEAN_RGB[0] - 10, OCEAN_RGB[1] - 10, OCEAN_RGB[2] - 10, 255];
+
+/// Encode one packed `MapTile` byte into an sRGB RGBA8 pixel using OpenFront's `encodeTerrainTile` rules.
+pub fn encode_terrain_tile(byte: u8) -> [u8; 4] {
+    let is_land = (byte & 0x80) != 0;
+    let is_shoreline = (byte & 0x40) != 0;
+    let magnitude = byte & 0x1f;
+
+    let [r, g, b] = if is_land && magnitude == 31 {
+        BACKGROUND_RGB
+    } else if is_land && is_shoreline {
+        SAND_RGB
+    } else if is_land {
+        if magnitude < 10 {
+            [
+                PLAINS_RGB[0],
+                PLAINS_RGB[1].saturating_sub(2 * magnitude),
+                PLAINS_RGB[2],
+            ]
+        } else if magnitude < 20 {
+            let m = magnitude - 10;
+            [
+                HIGHLAND_RGB[0].saturating_add(2 * m),
+                HIGHLAND_RGB[1].saturating_add(2 * m),
+                HIGHLAND_RGB[2].saturating_add(2 * m),
+            ]
+        } else {
+            let m = magnitude / 2;
+            [
+                MOUNTAIN_RGB[0].saturating_add(m),
+                MOUNTAIN_RGB[1].saturating_add(m),
+                MOUNTAIN_RGB[2].saturating_add(m),
+            ]
+        }
+    } else if is_shoreline {
+        SHORE_WATER_RGB
+    } else {
+        let m = magnitude.min(10);
+        [
+            OCEAN_RGB[0].saturating_sub(m),
+            OCEAN_RGB[1].saturating_sub(m),
+            OCEAN_RGB[2].saturating_sub(m),
+        ]
+    };
+
+    [r, g, b, 255]
+}
+
 /// Write a 16:9 thumbnail without cropping the input image.
 pub fn write_wide_thumbnail(img: &DynamicImage, path: &Path) -> Result<(), String> {
-    let background = RgbaImage::from_pixel(
-        THUMBNAIL_WIDTH,
-        THUMBNAIL_HEIGHT,
-        image::Rgba([61, 123, 171, 255]),
-    );
+    let background =
+        RgbaImage::from_pixel(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, image::Rgba(DEEP_OCEAN_RGBA));
     let resized = img.resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, FilterType::Lanczos3);
     let mut canvas = DynamicImage::ImageRgba8(background).to_rgba8();
     let x = (THUMBNAIL_WIDTH.saturating_sub(resized.width())) / 2;
@@ -123,8 +176,7 @@ pub fn terrain_preview_image(width: u32, height: u32, terrain: &[u8]) -> Dynamic
     };
     let pw = ((width as f64 * scale).ceil() as u32).max(1);
     let ph = ((height as f64 * scale).ceil() as u32).max(1);
-    let mut rgba = vec![106u8; (pw * ph * 4) as usize];
-    rgba.chunks_mut(4).for_each(|px| px[3] = 255);
+    let mut rgba = vec![0u8; (pw * ph * 4) as usize];
 
     for py in 0..ph {
         for px in 0..pw {
@@ -134,8 +186,8 @@ pub fn terrain_preview_image(width: u32, height: u32, terrain: &[u8]) -> Dynamic
             let color = terrain
                 .get(idx)
                 .copied()
-                .map(color_from_terrain_byte)
-                .unwrap_or([70, 132, 180, 255]);
+                .map(encode_terrain_tile)
+                .unwrap_or(DEEP_OCEAN_RGBA);
             let o = ((py * pw + px) * 4) as usize;
             rgba[o..o + 4].copy_from_slice(&color);
         }
@@ -228,11 +280,11 @@ fn render_categorical(width: u32, height: u32, land: &[bool], magnitude: &[u8]) 
         });
     }
 
-    let mut out = RgbaImage::from_pixel(width, height, image::Rgba([61, 123, 171, 255]));
+    let mut out = RgbaImage::from_pixel(width, height, image::Rgba(DEEP_OCEAN_RGBA));
     for y in 0..height {
         for x in 0..width {
             let idx = (y * width + x) as usize;
-            let color = if land[idx] {
+            let tile_byte = if land[idx] {
                 let mut shoreline = false;
                 visit_neighbors(
                     x as usize,
@@ -243,33 +295,23 @@ fn render_categorical(width: u32, height: u32, land: &[bool], magnitude: &[u8]) 
                         shoreline |= !land[ny * width as usize + nx];
                     },
                 );
-                if shoreline {
-                    [204, 203, 158, 255]
-                } else {
-                    land_color(magnitude[idx])
-                }
+                let mag = magnitude[idx] & 0x1f;
+                0x80 | if shoreline && mag != 31 { 0x40 } else { 0 } | mag
             } else if water_distance[idx] == 0 {
-                [100, 143, 255, 255]
+                0x40
             } else if water_distance[idx] <= 20 {
-                let adjustment = 1i32 - (water_distance[idx] as i32 / 2).min(10);
-                [
-                    (70 + adjustment).clamp(0, 255) as u8,
-                    (132 + adjustment).clamp(0, 255) as u8,
-                    (180 + adjustment).clamp(0, 255) as u8,
-                    255,
-                ]
+                ((water_distance[idx] + 1) / 2).min(10)
             } else {
-                [61, 123, 171, 255]
+                10
             };
-            out.put_pixel(x, y, image::Rgba(color));
+            out.put_pixel(x, y, image::Rgba(encode_terrain_tile(tile_byte)));
         }
     }
     out
 }
 
 fn sample_source_frame(source: &RgbaImage, frame: SourceFrame) -> RgbaImage {
-    let mut out =
-        RgbaImage::from_pixel(frame.width, frame.height, image::Rgba([61, 123, 171, 255]));
+    let mut out = RgbaImage::from_pixel(frame.width, frame.height, image::Rgba(DEEP_OCEAN_RGBA));
     let source_width = source.width() as i64;
     let source_height = source.height() as i64;
     for y in 0..frame.height {
@@ -306,69 +348,12 @@ fn visit_neighbors(
     }
 }
 
-fn land_color(magnitude: u8) -> [u8; 4] {
-    let m = magnitude as f64;
-    if magnitude < 10 {
-        [190, (220.0 - 2.0 * m) as u8, 138, 255]
-    } else if magnitude < 20 {
-        [
-            (200.0 + 2.0 * m).min(255.0) as u8,
-            (183.0 + 2.0 * m).min(255.0) as u8,
-            (138.0 + 2.0 * m).min(255.0) as u8,
-            255,
-        ]
-    } else {
-        let value = (230.0 + m / 2.0).min(255.0) as u8;
-        [value, value, value, 255]
-    }
-}
-
 fn encode_lossless_webp(rgba: &RgbaImage) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     WebPEncoder::new_lossless(&mut out)
         .encode(rgba, rgba.width(), rgba.height(), ExtendedColorType::Rgba8)
         .map_err(|e| format!("webp encode: {e}"))?;
     Ok(out)
-}
-
-fn color_from_terrain_byte(byte: u8) -> [u8; 4] {
-    let is_land = (byte & 0x80) != 0;
-    let shoreline = (byte & 0x40) != 0;
-    let magnitude = (byte & 0x1f) as f64;
-
-    if !is_land {
-        if shoreline {
-            return [100, 143, 255, 255];
-        }
-        let depth = (magnitude as u8).min(8);
-        return if depth <= 2 {
-            [78, 151, 208, 255]
-        } else if depth <= 6 {
-            [63, 132, 188, 255]
-        } else {
-            [52, 115, 170, 255]
-        };
-    }
-
-    if shoreline {
-        return [204, 203, 158, 255];
-    }
-
-    if magnitude < 10.0 {
-        let adj = 220.0 - 2.0 * magnitude;
-        [190, adj.clamp(0.0, 255.0) as u8, 138, 255]
-    } else if magnitude < 20.0 {
-        let adj = 2.0 * magnitude;
-        [
-            (200.0 + adj).clamp(0.0, 255.0) as u8,
-            (183.0 + adj).clamp(0.0, 255.0) as u8,
-            (138.0 + adj).clamp(0.0, 255.0) as u8,
-            255,
-        ]
-    } else {
-        let adj = (230.0 + magnitude / 2.0).floor().clamp(0.0, 255.0) as u8;
-        [adj, adj, adj, 255]
-    }
 }
 
 #[cfg(test)]

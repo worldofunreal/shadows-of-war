@@ -20,27 +20,27 @@
 }
 
 .sow-directive-card:hover {
-    border-color: rgba(251, 146, 60, 0.45);
-    box-shadow: 0 0 14px rgba(249, 115, 22, 0.14), var(--sow-tactical-card-shadow);
+    border-color: var(--sow-tactical-surface-accent-border);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent), var(--sow-tactical-card-shadow);
 }
 
 .sow-directive-card:focus-visible {
-    outline: 2px solid #f59e0b;
-    outline-offset: 2px;
+    outline: var(--sow-tactical-focus-outline);
+    outline-offset: var(--sow-tactical-focus-offset);
 }
 
 .sow-directive-card.is-ready {
     border-color: var(--sow-control-accent);
-    box-shadow: 0 0 18px rgba(245, 197, 66, 0.24), var(--sow-tactical-card-shadow);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--sow-tactical-accent) 24%, transparent), var(--sow-tactical-card-shadow);
     animation: sow-directive-pulse 2.4s infinite ease-in-out;
 }
 
 @keyframes sow-directive-pulse {
     0%, 100% {
-        box-shadow: 0 0 10px rgba(245, 197, 66, 0.16), var(--sow-tactical-card-shadow);
+        box-shadow: 0 0 10px color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent), var(--sow-tactical-card-shadow);
     }
     50% {
-        box-shadow: 0 0 22px rgba(245, 197, 66, 0.36), var(--sow-tactical-card-shadow);
+        box-shadow: 0 0 22px color-mix(in srgb, var(--sow-tactical-accent) 36%, transparent), var(--sow-tactical-card-shadow);
     }
 }
 
@@ -65,7 +65,7 @@
     width: 20px;
     height: 20px;
     flex-shrink: 0;
-    color: var(--sow-accent-bright, #fde047);
+    color: var(--sow-tactical-accent-bright, #fde047);
 }
 
 .sow-directive__icon svg {
@@ -127,7 +127,7 @@
 
 .sow-directive__progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--sow-accent, #f5c542) 0%, var(--sow-accent-bright, #fde047) 100%);
+    background: linear-gradient(90deg, var(--sow-tactical-accent, #f5c542) 0%, var(--sow-tactical-accent-bright, #fde047) 100%);
     border-radius: 3px;
     transition: width 0.3s ease;
 }
@@ -301,9 +301,9 @@
     width: 30px;
     height: 30px;
     border-radius: 8px;
-    background: rgba(245, 197, 66, 0.12);
+    background: color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
     border: 1px solid var(--sow-tactical-surface-accent-border-soft);
-    color: var(--sow-accent-bright, #fde047);
+    color: var(--sow-tactical-accent-bright, #fde047);
     flex-shrink: 0;
 }
 
@@ -350,9 +350,9 @@
 }
 
 .sow-missions__tab.is-active {
-    color: var(--sow-accent-bright, #fde047);
-    border-bottom-color: var(--sow-accent-bright, #fde047);
-    background: linear-gradient(180deg, transparent 50%, rgba(245, 197, 66, 0.08) 100%);
+    color: var(--sow-tactical-accent-bright, #fde047);
+    border-bottom-color: var(--sow-tactical-accent-bright, #fde047);
+    background: linear-gradient(180deg, transparent 50%, color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent) 100%);
 }
 
 .sow-missions__tab.is-locked {
@@ -376,8 +376,8 @@
 }
 
 .sow-missions__tab.is-active .sow-missions__tab-badge {
-    background: rgba(245, 197, 66, 0.15);
-    border-color: rgba(245, 197, 66, 0.35);
+    background: color-mix(in srgb, var(--sow-tactical-accent) 15%, transparent);
+    border-color: var(--sow-tactical-surface-accent-border-soft);
 }
 
 .sow-missions__tab-badge.is-locked svg {
@@ -417,8 +417,8 @@
     align-items: center;
     gap: 6px;
     font-size: 0.72rem;
-    color: var(--sow-accent-bright, #fde047);
-    background: rgba(245, 197, 66, 0.1);
+    color: var(--sow-tactical-accent-bright, #fde047);
+    background: color-mix(in srgb, var(--sow-tactical-accent) 10%, transparent);
     border: 1px solid var(--sow-tactical-surface-accent-border-soft);
     padding: 4px 10px;
     border-radius: 999px;
@@ -454,7 +454,7 @@
 
 .sow-missions__item.is-ready {
     border-color: var(--sow-tactical-surface-accent-border);
-    background: linear-gradient(90deg, rgba(245, 197, 66, 0.08) 0%, rgba(255, 255, 255, 0.03) 65%);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent) 0%, rgba(255, 255, 255, 0.03) 65%);
 }
 
 .sow-missions__item.is-claimed {
@@ -471,7 +471,7 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--sow-tactical-surface-border);
     border-radius: 8px;
-    color: var(--sow-accent-bright, #fde047);
+    color: var(--sow-tactical-accent-bright, #fde047);
 }
 
 .sow-missions__item-icon svg {
@@ -556,7 +556,7 @@
 
 .sow-missions__item-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--sow-accent, #f5c542) 0%, var(--sow-accent-bright, #fde047) 100%);
+    background: linear-gradient(90deg, var(--sow-tactical-accent, #f5c542) 0%, var(--sow-tactical-accent-bright, #fde047) 100%);
     border-radius: 3px;
     transition: width 0.3s ease;
 }
@@ -669,8 +669,8 @@
 .sow-missions__locked-badge:hover,
 .sow-missions__locked-badge:focus-visible {
     border-color: var(--sow-tactical-surface-accent-border);
-    color: var(--sow-accent-bright, #fde047);
-    background: rgba(245, 197, 66, 0.08);
+    color: var(--sow-tactical-accent-bright, #fde047);
+    background: color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent);
 }
 
 .sow-missions__locked-badge:focus-visible {
@@ -682,9 +682,9 @@
     margin-bottom: 10px;
     padding: 8px 12px;
     border-radius: var(--sow-button-radius, 7px);
-    background: rgba(245, 197, 66, 0.1);
+    background: color-mix(in srgb, var(--sow-tactical-accent) 10%, transparent);
     border: 1px solid var(--sow-tactical-surface-accent-border-soft);
-    color: var(--sow-accent-bright, #fde047);
+    color: var(--sow-tactical-accent-bright, #fde047);
     font-size: 0.78rem;
     font-weight: 700;
 }
@@ -958,7 +958,7 @@
     margin-bottom: 12px;
     border-radius: 50%;
     background: radial-gradient(circle at 35% 30%, #4a3512, #181105 72%);
-    border: 3px solid var(--sow-gold-bright, #ffd36a);
+    border: 3px solid #ffd36a;
     box-shadow:
         0 0 0 4px rgba(255, 211, 106, 0.16),
         0 0 40px rgba(245, 197, 66, 0.65),
@@ -1065,7 +1065,7 @@
     font-weight: 900;
     letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--sow-gold-bright, #ffd36a);
+    color: #ffd36a;
     text-shadow: 0 0 14px rgba(245, 197, 66, 0.65), 0 2px 4px rgba(0, 0, 0, 0.8);
     padding: 3px 14px;
     border-radius: 999px;
@@ -1379,14 +1379,14 @@
 }
 
 .sow-missions__btn-go svg {
-    color: var(--sow-accent-bright, #fde047);
+    color: var(--sow-tactical-accent-bright, #fde047);
     transition: transform 0.14s ease;
 }
 
 .sow-missions__btn-go:hover {
     border-color: var(--sow-tactical-surface-accent-border);
     filter: brightness(1.1);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 12px rgba(245, 197, 66, 0.18);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 12px color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent);
     transform: translateY(-1px);
 }
 

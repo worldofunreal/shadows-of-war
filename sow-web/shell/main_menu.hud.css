@@ -1092,7 +1092,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   display: grid;
   gap: 4px;
   min-height: 0;
-  max-height: 80px;
+  max-height: 168px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -5707,6 +5707,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sow-hud__placement-panel-reason.is-advisory {
+  color: #fbbf24;
 }
 
 .sow-hud__placement-panel-controls {

@@ -376,7 +376,7 @@ export interface MenuState {
     menu_guide_save_pending: boolean;
     achievements: unknown;
     campaign: MenuCampaign;
-    selected_skin: string;
+    selected_skin: string | null;
     store_busy: boolean;
     store: MenuStore;
     native_purchase_scheme: string;
@@ -540,6 +540,7 @@ export interface HudMapMenuBuilding {
 export interface HudBuildingPlacement {
     pending: boolean;
     can_confirm: boolean;
+    adjusted?: boolean;
     kind?: string;
     tile_idx?: number;
     anchor_x?: number;

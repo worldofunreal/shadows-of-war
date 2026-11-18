@@ -14,6 +14,7 @@ import menuFlowApi from "./main_menu.flow.ts";
 import {
     MAIN_NAV_ITEMS,
     avatarImage,
+    computeMainNavIndices,
     currencyAsset,
     currentLeaderSelection,
     currentScreen,
@@ -1309,13 +1310,42 @@ function updateHeroBackdrop(screen: string): void {
     }
 }
 
-function updateFrameChrome(screen: string) {
+function updateFrameChrome(screen: string, screenChanged = false) {
     const backdrop = root.querySelector<HTMLElement>("[data-menu-backdrop]");
     const backdropClass = screenBackdropClass(screen);
-    if (backdrop && backdrop.className !== backdropClass) backdrop.className = backdropClass;
+    const reducedMotion = Boolean(menuUi.state && menuUi.state.settings && menuUi.state.settings.reduced_motion);
+    if (backdrop) {
+        if (backdrop.className !== backdropClass) backdrop.className = backdropClass;
+        if (screenChanged && !reducedMotion) {
+            backdrop.classList.remove("sow-backdrop--shifting");
+            void backdrop.offsetWidth;
+            backdrop.classList.add("sow-backdrop--shifting");
+        }
+    }
+    const activeNav = screenNav(screen);
+    const navBar = root.querySelector<HTMLElement>(".sow-menu__main-nav");
+    const navButtons = Array.from(
+        root.querySelectorAll<HTMLElement>(".sow-menu__main-nav-item[data-nav-screen]"),
+    );
+    if (navBar && navButtons.length) {
+        const renderedItems = navButtons
+            .map(function (btn) {
+                return MAIN_NAV_ITEMS.find(function (candidate) {
+                    return candidate[0] === btn.dataset.navScreen;
+                });
+            })
+            .filter(function (entry): entry is string[] {
+                return Array.isArray(entry);
+            });
+        const indices = computeMainNavIndices(activeNav, renderedItems.length ? renderedItems : MAIN_NAV_ITEMS);
+        navBar.style.setProperty("--sow-nav-count", String(indices.count));
+        navBar.style.setProperty("--sow-nav-row-index", String(indices.rowIndex));
+        navBar.style.setProperty("--sow-nav-col-index", String(indices.colIndex));
+    }
     // Only the nav bar mirrors the screen; header balances and store links also carry data-nav-screen.
-    root.querySelectorAll<HTMLElement>(".sow-menu__main-nav-item[data-nav-screen]").forEach(function (item) {
-        const active = item.dataset.navScreen === screenNav(screen);
+    navButtons.forEach(function (item) {
+        const wasActive = item.classList.contains("is-active");
+        const active = item.dataset.navScreen === activeNav;
         const navItem = MAIN_NAV_ITEMS.find(function (candidate) {
             return candidate[0] === item.dataset.navScreen;
         });
@@ -1324,6 +1354,13 @@ function updateFrameChrome(screen: string) {
         if (labelNode && labelText) labelNode.textContent = labelText;
         if (labelText) item.setAttribute("aria-label", labelText);
         item.classList.toggle("is-active", active);
+        if (!wasActive && active && !reducedMotion) {
+            item.classList.remove("is-just-activated");
+            void item.offsetWidth;
+            item.classList.add("is-just-activated");
+        } else if (!active) {
+            item.classList.remove("is-just-activated");
+        }
         if (active) item.setAttribute("aria-current", "page");
         else item.removeAttribute("aria-current");
     });
@@ -1359,6 +1396,41 @@ function syncScreenPanel(screen: string, screenChanged: boolean) {
     if (current) current.replaceWith(next);
     else stage.appendChild(next);
     next.classList.add("is-active");
+}
+
+const KNOWN_SKIN_IDS = new Set([
+    "ember_vein",
+    "storm_grid",
+    "royal_lattice",
+    "tidal_crest",
+    "hex_bastion",
+    "shield_wall",
+    "war_banner",
+    "dragon_scale",
+]);
+
+function activeEquippedSkinId(state: MenuState | null): string | null {
+    if (!state || state.phase !== "MainMenu") return null;
+    const skinId = typeof state.selected_skin === "string" ? state.selected_skin.trim() : "";
+    if (!skinId || !KNOWN_SKIN_IDS.has(skinId)) return null;
+    const skins = state.store && Array.isArray(state.store.skins) ? state.store.skins : null;
+    if (skins && skins.length && !skins.some((skin) => skin.id === skinId && skin.owned)) return null;
+    return skinId;
+}
+
+function syncMenuSkinTheme(state: MenuState | null): void {
+    const skinId = activeEquippedSkinId(state);
+    if (skinId) {
+        root.dataset.skin = skinId;
+        if (typeof document !== "undefined" && document.documentElement) {
+            document.documentElement.dataset.sowSkin = skinId;
+        }
+    } else {
+        delete root.dataset.skin;
+        if (typeof document !== "undefined" && document.documentElement) {
+            delete document.documentElement.dataset.sowSkin;
+        }
+    }
 }
 
 export function render() {
@@ -1400,6 +1472,7 @@ export function render() {
     }
     menuUi.previousScreen = screen;
     updateHeroBackdrop(screen);
+    syncMenuSkinTheme(menuUi.state);
     root.dataset.screen = screen;
     root.dataset.ready = typeof window.SOW_menu_command === "function" ? "true" : "false";
     root.hidden = menuUi.state.phase !== "MainMenu";
@@ -1434,7 +1507,7 @@ export function render() {
         const initialPanel = activeScreenPanel();
         if (initialPanel) initialPanel.classList.add("is-active");
     } else {
-        updateFrameChrome(screen);
+        updateFrameChrome(screen, screenChanged);
         syncScreenPanel(screen, screenChanged);
     }
     if (screen === "heroes") settleHeroesFeaturedArt();
@@ -3388,6 +3461,12 @@ root.addEventListener("click", function (event) {
         }
         return;
     }
+    if (command === "unequip_skin") {
+        if (!(menuUi.state && menuUi.state.store_busy)) {
+            send("equip_skin", { skin_id: "" });
+        }
+        return;
+    }
     /* POKI_SHARED_STORE_UNLOCK_END */
     if (command === "set_session_mode") {
         menuUi.createOffline = target.dataset.mode === "offline";
@@ -4667,6 +4746,7 @@ function handleMenuStateUpdate(raw: string, parsed: MenuState) {
     if (key !== menuUi.lastRenderKey) {
         render();
     } else {
+        syncMenuSkinTheme(menuUi.state);
         root.hidden = menuUi.state!.phase !== "MainMenu";
         updateLobbyViews();
         updateDynamic();

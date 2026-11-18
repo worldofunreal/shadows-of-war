@@ -4344,11 +4344,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
 
     let screen_scale = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
     let placement_can_confirm = app.building_placement_can_confirm();
-    let placement_reason = if !placement_can_confirm {
-        app.building_placement_reason().map(|r| r.key)
-    } else {
-        None
-    };
+    let placement_reason = app.building_placement_reason().map(|r| r.key);
     let placement_payload = app.ui.app.hud_state.building_placement.map(|placement| {
         let controls = crate::input::placement::placement_controls(
             placement.kind,
@@ -4359,6 +4355,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             screen_scale,
         );
         let cost = app.ui.app.hud_state.building_costs[placement.kind as usize];
+        let adjusted = placement
+            .attempted_tile_idx
+            .is_some_and(|tile_idx| tile_idx != placement.tile_idx);
         let arrows = serde_json::json!({
             "up": [controls.arrows[0].1[0] / screen_scale, controls.arrows[0].1[1] / screen_scale],
             "right": [controls.arrows[1].1[0] / screen_scale, controls.arrows[1].1[1] / screen_scale],
@@ -4368,6 +4367,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         serde_json::json!({
             "pending": placement.pending,
             "can_confirm": placement_can_confirm,
+            "adjusted": adjusted,
             "kind": placement.kind.as_str(),
             "tile_idx": placement.tile_idx,
             "anchor_x": controls.center[0] / screen_scale,

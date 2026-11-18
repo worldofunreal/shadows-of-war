@@ -995,17 +995,23 @@ function renderStoreSkinPromo(skin: MenuSkinOffer) {
           : 0;
     let action;
     const busyDisabled = menuUi.state && menuUi.state.store_busy ? " disabled" : "";
+    const isEquipped = Boolean(skin.owned && menuUi.state!.selected_skin === skin.id);
     if (skin.owned) {
-        action =
-            menuUi.state!.selected_skin === skin.id
-                ? "<span class='sow-store__offer-state'>" + esc(SOW_t("store.equipped")) + "</span>"
-                : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" +
-                  esc(skin.id) +
-                  "'" +
-                  busyDisabled +
-                  ">" +
-                  esc(SOW_t("store.equip")) +
-                  "</button>";
+        action = isEquipped
+            ? "<button class='sow-store__buy sow-store__buy--equipped' type='button' data-command='unequip_skin' data-skin-id='" +
+              esc(skin.id) +
+              "' aria-pressed='true'" +
+              busyDisabled +
+              "><span>" +
+              esc(SOW_t("store.equipped")) +
+              "</span><span aria-hidden='true'>×</span></button>"
+            : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" +
+              esc(skin.id) +
+              "' aria-pressed='false'" +
+              busyDisabled +
+              ">" +
+              esc(SOW_t("store.equip")) +
+              "</button>";
     } else {
         action =
             "<div class='sow-store__buy-row'>" +
@@ -1015,6 +1021,7 @@ function renderStoreSkinPromo(skin: MenuSkinOffer) {
     }
     return (
         "<article class='sow-store__skin" +
+        (isEquipped ? " is-equipped" : "") +
         (discountPct > 0 && !skin.owned ? " is-on-sale" : "") +
         "'><div class='sow-store__skin-art'><img src='" +
         esc(asset(skin.asset_path)) +

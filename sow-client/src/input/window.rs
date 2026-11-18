@@ -425,7 +425,7 @@ impl SowApp {
                     } else if self.input.active_touches.is_empty() {
                         self.open_map_context_menu(start.x, start.y);
                     }
-                } else {
+                } else if is_quick_tap(start.started_at.elapsed().as_millis(), distance_sq) {
                     self.handle_map_click(start.x, start.y);
                 }
             }

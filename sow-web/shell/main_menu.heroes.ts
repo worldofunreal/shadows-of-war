@@ -349,15 +349,20 @@ function renderHeroStatusTags(leader: MenuLeader | null, live: boolean) {
               "</button>"
             : "") +
         (live || rarityLabel
-            ? "<span class='sow-heroes__rarity-tag'" +
+            ? "<button type='button' class='sow-heroes__rarity-tag'" +
               (live ? " data-hero-rarity" : "") +
+              (live
+                  ? " data-command='open_hero_info' data-leader-id='" +
+                    esc(leader ? leader.id : "") +
+                    "' data-hero-info-tab='biography'"
+                  : " data-command='switch_hero_info_tab' data-hero-info-tab='biography'") +
               " data-rarity='" +
               esc(raritySlug) +
               "'" +
               (!rarityLabel ? " hidden" : "") +
               ">" +
               esc(rarityLabel) +
-              "</span>"
+              "</button>"
             : "") +
         (live || statusLabel
             ? "<span class='sow-heroes__rotation'" +
@@ -871,6 +876,7 @@ export function updateHeroesPreview() {
         rarityNode.textContent = rarityLabel;
         rarityNode.hidden = !rarityLabel;
         rarityNode.dataset.rarity = targetLeader && targetLeader.rarity ? targetLeader.rarity : "";
+        if (targetLeader) rarityNode.dataset.leaderId = targetLeader.id;
     }
     if (status) {
         const statusLabelNode = status.querySelector("[data-hero-status-label]");

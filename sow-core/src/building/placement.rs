@@ -491,15 +491,38 @@ pub fn nearest_structure_site(
     radius: i32,
     existing: &BuildingGrid,
 ) -> Option<u32> {
+    nearest_structure_site_in_bounds(
+        map,
+        owner_id,
+        kind,
+        x,
+        y,
+        radius,
+        existing,
+        (0, 0, map.width as i32 - 1, map.height as i32 - 1),
+    )
+}
+
+/// Closest legal foundation within a bounded set of anchor tiles.
+pub fn nearest_structure_site_in_bounds(
+    map: &GameMap,
+    owner_id: u16,
+    kind: BuildingKind,
+    x: i32,
+    y: i32,
+    radius: i32,
+    existing: &BuildingGrid,
+    (bound_x_min, bound_y_min, bound_x_max, bound_y_max): (i32, i32, i32, i32),
+) -> Option<u32> {
     if radius < 0 || map.width == 0 || map.height == 0 {
         return None;
     }
     let w = map.width as i32;
     let h = map.height as i32;
-    let x_min = x.saturating_sub(radius).max(0);
-    let x_max = x.saturating_add(radius).min(w - 1);
-    let y_min = y.saturating_sub(radius).max(0);
-    let y_max = y.saturating_add(radius).min(h - 1);
+    let x_min = x.saturating_sub(radius).max(0).max(bound_x_min);
+    let x_max = x.saturating_add(radius).min(w - 1).min(bound_x_max);
+    let y_min = y.saturating_sub(radius).max(0).max(bound_y_min);
+    let y_max = y.saturating_add(radius).min(h - 1).min(bound_y_max);
     if x_min > x_max || y_min > y_max {
         return None;
     }

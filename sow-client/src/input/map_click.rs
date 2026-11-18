@@ -733,7 +733,7 @@ impl SowApp {
                 let (cost, level) = self.map_menu_cost(action, tile_idx);
                 let mut reason_key = None;
                 let mut reason_level = None;
-                let mut reason_seconds = None;
+                let reason_seconds = None;
                 let mut reason_troops = None;
                 let campaign_fleet = action == MapMenuAction::Fleet
                     && self
@@ -952,6 +952,7 @@ impl SowApp {
             Some(crate::ui::hud::state::BuildingPlacement {
                 kind,
                 tile_idx,
+                attempted_tile_idx: None,
                 pending: false,
             });
         self.confirm_building_placement();
@@ -1017,7 +1018,34 @@ impl SowApp {
         });
     }
 
-    /// Drag and tap: the preview rests on the closest legal foundation, or stays put.
+    fn nearest_visible_structure_site(
+        &mut self,
+        kind: sow_core::game::BuildingKind,
+        x: i32,
+        y: i32,
+        bounds: (i32, i32, i32, i32),
+    ) -> Option<u32> {
+        let (min_x, min_y, max_x, max_y) = bounds;
+        let radius = x
+            .abs_diff(min_x)
+            .max(x.abs_diff(max_x))
+            .max(y.abs_diff(min_y))
+            .max(y.abs_diff(max_y)) as i32;
+        let engine = self.sim.engine.as_mut()?;
+        engine.refresh_building_grid();
+        sow_core::building::nearest_structure_site_in_bounds(
+            &engine.state.map,
+            self.sim.my_player_id.unwrap_or(0),
+            kind,
+            x,
+            y,
+            radius,
+            &engine.building_grid,
+            bounds,
+        )
+    }
+
+    /// Drag and tap snap to a visible foundation; rejected positions remain visible.
     pub(crate) fn move_building_preview(&mut self, col: i32, row: i32) {
         let Some(placement) = self
             .ui
@@ -1028,27 +1056,38 @@ impl SowApp {
         else {
             return;
         };
-        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let (map_w, map_h) = (self.sim.map_w, self.sim.map_h);
+        if map_w == 0 || map_h == 0 {
+            return;
+        }
+        let (col, row) = (col.clamp(0, map_w as i32 - 1), row.clamp(0, map_h as i32 - 1));
+        let requested_tile = row as u32 * map_w + col as u32;
+        let bounds = self.visible_building_anchor_bounds(placement.kind);
         let Some(engine) = self.sim.engine.as_mut() else {
             return;
         };
         engine.refresh_building_grid();
-        if let Some(tile) = sow_core::building::nearest_structure_site(
-            &engine.state.map,
-            my_id,
-            placement.kind,
-            col,
-            row,
-            PLACEMENT_SNAP_RADIUS,
-            &engine.building_grid,
-        ) && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
-        {
-            placement.tile_idx = tile;
+        let tile = bounds.and_then(|bounds| {
+            sow_core::building::nearest_structure_site_in_bounds(
+                &engine.state.map,
+                self.sim.my_player_id.unwrap_or(0),
+                placement.kind,
+                col,
+                row,
+                PLACEMENT_SNAP_RADIUS,
+                &engine.building_grid,
+                bounds,
+            )
+        });
+        let tile_idx = tile.unwrap_or(requested_tile);
+        if let Some(placement) = self.ui.app.hud_state.building_placement.as_mut() {
+            placement.tile_idx = tile_idx;
+            placement.attempted_tile_idx = tile.filter(|&tile| tile != requested_tile).map(|_| requested_tile);
             if crate::web_canvas::has_mobile_pointer() {
                 let footprint = sow_core::building::BuildingFootprint::at(
                     placement.kind,
-                    tile % engine.state.map.width,
-                    tile / engine.state.map.width,
+                    tile_idx % engine.state.map.width,
+                    tile_idx / engine.state.map.width,
                 );
                 let cx = footprint.left as f32 + footprint.width as f32 * 0.5;
                 let cy = footprint.top as f32 + footprint.height as f32 * 0.5;
@@ -1083,6 +1122,7 @@ impl SowApp {
         let (dx, dy) = direction.offset();
         self.input.building_drag_offset = None;
         let my_id = self.sim.my_player_id.unwrap_or(0);
+        let bounds = self.visible_building_anchor_bounds(placement.kind);
         let Some(engine) = self.sim.engine.as_mut() else {
             return;
         };
@@ -1098,19 +1138,25 @@ impl SowApp {
             .take_while(|&(nx, ny)| map.is_valid_coord(nx, ny))
             .map(|(nx, ny)| ny as u32 * map.width + nx as u32)
             .find(|&tile| {
-                sow_core::building::validate_structure_site(
-                    map,
-                    my_id,
-                    placement.kind,
-                    tile,
-                    &engine.building_grid,
-                )
-                .is_ok()
+                let visible = bounds.is_some_and(|(min_x, min_y, max_x, max_y)| {
+                    (min_x..=max_x).contains(&((tile % map.width) as i32))
+                        && (min_y..=max_y).contains(&((tile / map.width) as i32))
+                });
+                visible
+                    && sow_core::building::validate_structure_site(
+                        map,
+                        my_id,
+                        placement.kind,
+                        tile,
+                        &engine.building_grid,
+                    )
+                    .is_ok()
             });
         if let Some(tile) = next
             && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
         {
             placement.tile_idx = tile;
+            placement.attempted_tile_idx = None;
             if crate::web_canvas::has_mobile_pointer() {
                 let footprint = sow_core::building::BuildingFootprint::at(
                     placement.kind,
@@ -1202,20 +1248,55 @@ impl SowApp {
 
     /// One rule for the drawn confirm button, the tutorial guide and the order itself.
     pub(crate) fn building_placement_can_confirm(&mut self) -> bool {
-        self.ui
+        let Some(placement) = self.ui
             .app
             .hud_state
             .building_placement
-            .is_some_and(|p| !p.pending)
+        else {
+            return false;
+        };
+        !placement.pending
             && !self.ui.observing
             && !self.ui.tutorial_camera_only
             && self.ui.app.phase == crate::ClientPhase::Playing
             && self.ui.app.hud_state.sync_state.is_none()
-            && self.building_placement_reason().is_none()
+            && self.building_placement_target_reason(placement).is_none()
+            && self.campaign_building_max_level(placement.kind) >= 1
+            && self.building_gold_shortfall(placement.kind).is_none()
     }
 
     pub(crate) fn building_placement_reason(&mut self) -> Option<crate::ui::UiText> {
         let placement = self.ui.app.hud_state.building_placement?;
+        if let Some(reason) = self.building_placement_target_reason(placement) {
+            return Some(reason);
+        }
+        if self.campaign_building_max_level(placement.kind) < 1 {
+            return Some(crate::ui::UiText::new("hud.campaign_unlock_required"));
+        }
+        if let Some(shortfall) = self.building_gold_shortfall(placement.kind) {
+            return Some(shortfall);
+        }
+        let Some(tile) = placement
+            .attempted_tile_idx
+            .filter(|&tile| tile != placement.tile_idx)
+        else {
+            return None;
+        };
+        if let Err(key) = self.resolve_building_target(
+            placement.kind,
+            (tile % self.sim.map_w) as i32,
+            (tile / self.sim.map_w) as i32,
+        ) {
+            return Some(crate::ui::UiText::new(key));
+        }
+        (!self.building_footprint_is_visible(placement.kind, tile))
+            .then(|| crate::ui::UiText::new("hud.build_no_space"))
+    }
+
+    fn building_placement_target_reason(
+        &mut self,
+        placement: crate::ui::hud::state::BuildingPlacement,
+    ) -> Option<crate::ui::UiText> {
         if let Err(key) = self.resolve_building_target(
             placement.kind,
             (placement.tile_idx % self.sim.map_w) as i32,
@@ -1223,10 +1304,10 @@ impl SowApp {
         ) {
             return Some(crate::ui::UiText::new(key));
         }
-        if self.campaign_building_max_level(placement.kind) < 1 {
-            return Some(crate::ui::UiText::new("hud.campaign_unlock_required"));
+        if !self.building_footprint_is_visible(placement.kind, placement.tile_idx) {
+            return Some(crate::ui::UiText::new("hud.build_no_space"));
         }
-        self.building_gold_shortfall(placement.kind)
+        None
     }
 
     /// One gold rule for the dock, hotkeys and the confirm button.
@@ -1246,6 +1327,9 @@ impl SowApp {
         col: i32,
         row: i32,
     ) -> Result<u32, &'static str> {
+        if self.sim.map_w == 0 || self.sim.map_h == 0 {
+            return Err("hud.action_unavailable");
+        }
         let Some(engine) = self.sim.engine.as_mut() else {
             return Err("hud.action_unavailable");
         };
@@ -1685,7 +1769,6 @@ impl SowApp {
             ((self.input.screen_h * 0.45 - self.input.camera_y) / zoom) as i32,
         );
         let (origin_x, origin_y) = origin.unwrap_or(camera_center);
-        let radius = (self.input.screen_w.max(self.input.screen_h) * 0.5 / zoom).ceil() as i32;
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let tutorial_site = if self.ui.tutorial_active
             && self.ui.tutorial_campaign.is_boudica()
@@ -1717,24 +1800,24 @@ impl SowApp {
         } else {
             None
         };
-        let site = tutorial_site.or_else(|| {
-            self.sim.engine.as_mut().and_then(|engine| {
-                engine.refresh_building_grid();
-                sow_core::building::nearest_structure_site(
-                    &engine.state.map,
-                    my_id,
-                    kind,
-                    origin_x,
-                    origin_y,
-                    radius,
-                    &engine.building_grid,
-                )
-            })
-        });
-        let Some(tile) = site else {
-            self.add_map_feedback(crate::ui::UiText::new("hud.build_no_space"));
+        let (map_w, map_h) = (self.sim.map_w, self.sim.map_h);
+        if map_w == 0 || map_h == 0 {
             return;
-        };
+        }
+        let requested_x = origin_x.clamp(0, map_w as i32 - 1);
+        let requested_y = origin_y.clamp(0, map_h as i32 - 1);
+        let requested_tile = requested_y as u32 * map_w + requested_x as u32;
+        let site = tutorial_site.or_else(|| {
+            self.visible_building_anchor_bounds(kind)
+                .and_then(|bounds| self.nearest_visible_structure_site(kind, origin_x, origin_y, bounds))
+        });
+        let tile = site.unwrap_or(requested_tile);
+        let attempted_tile_idx = tutorial_site
+            .is_none()
+            .then_some(site)
+            .flatten()
+            .filter(|&site| site != requested_tile)
+            .map(|_| requested_tile);
         self.input.key_pan_up = false;
         self.input.key_pan_down = false;
         self.input.key_pan_left = false;
@@ -1742,6 +1825,7 @@ impl SowApp {
         self.ui.app.hud_state.building_placement = Some(crate::ui::hud::state::BuildingPlacement {
             kind,
             tile_idx: tile,
+            attempted_tile_idx,
             pending: false,
         });
         self.ui.app.hud_state.selected_nuke_kind = None;

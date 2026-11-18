@@ -128,12 +128,16 @@
 }
 
 .sow-menu__mode-tab.active {
-  border-color: var(--sow-gold);
-  background: linear-gradient(135deg, rgba(243, 177, 43, 0.24) 0%, rgba(24, 20, 12, 0.92) 100%);
-  color: var(--sow-gold-bright);
+  border-color: var(--sow-tactical-accent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 24%, transparent) 0%,
+    rgba(16, 18, 24, 0.94) 100%
+  );
+  color: var(--sow-tactical-accent-bright);
   box-shadow:
-    0 0 14px rgba(243, 177, 43, 0.22),
-    inset 0 1px 0 rgba(255, 232, 163, 0.22);
+    0 0 14px color-mix(in srgb, var(--sow-tactical-accent) 22%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .sow-create__campaign-shortcut {
@@ -315,7 +319,7 @@
       rgba(6, 9, 14, 0.18) 64%,
       rgba(6, 9, 14, 0.92) 100%
     ),
-    radial-gradient(ellipse at 50% 0%, rgba(243, 177, 43, 0.14), transparent 65%);
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent), transparent 65%);
 }
 
 /* Top HUD Chips inside Map Stage */
@@ -353,7 +357,7 @@
 }
 
 .sow-create__hud-chip--forces {
-  border-color: rgba(243, 177, 43, 0.5);
+  border-color: var(--sow-tactical-surface-accent-border);
   color: var(--sow-gold-bright);
   font-variant-numeric: tabular-nums;
 }
@@ -373,7 +377,7 @@
   height: 38px;
   padding: 0;
   border-radius: 9px;
-  border: 1px solid rgba(243, 177, 43, 0.35);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   background: var(--sow-tactical-panel-base);
   backdrop-filter: blur(8px);
   color: #f5f1e8;
@@ -398,11 +402,11 @@
 }
 
 .sow-create__map-nav:hover {
-  border-color: var(--sow-gold);
-  background: rgba(24, 20, 12, 0.92);
-  color: var(--sow-gold-bright);
+  border-color: var(--sow-tactical-accent);
+  background: var(--sow-tactical-panel-base);
+  color: var(--sow-tactical-accent-bright);
   transform: translateY(-50%) scale(1.06);
-  box-shadow: 0 0 16px rgba(243, 177, 43, 0.35);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 35%, transparent);
 }
 
 .sow-create__map-nav:active {
@@ -537,7 +541,7 @@
 }
 
 .sow-create__map-thumb:hover {
-  border-color: rgba(243, 177, 43, 0.65);
+  border-color: var(--sow-tactical-surface-accent-border);
   transform: translateY(-1px);
 }
 
@@ -546,10 +550,10 @@
 }
 
 .sow-create__map-thumb.is-active {
-  border-color: var(--sow-gold);
+  border-color: var(--sow-tactical-accent);
   box-shadow:
-    0 0 0 1px var(--sow-gold),
-    0 0 12px rgba(243, 177, 43, 0.32);
+    0 0 0 1px var(--sow-tactical-accent),
+    0 0 12px color-mix(in srgb, var(--sow-tactical-accent) 32%, transparent);
 }
 
 .sow-create__map-thumb.is-active img {
@@ -635,16 +639,20 @@
 
 .sow-menu__pill:hover {
   filter: brightness(1.08);
-  border-color: rgba(243, 177, 43, 0.45);
+  border-color: var(--sow-tactical-surface-accent-border);
 }
 
 .sow-menu__pill.active {
-  border-color: var(--sow-gold);
-  background: linear-gradient(145deg, rgba(245, 197, 66, 0.24) 0%, rgba(18, 20, 26, 0.95) 100%);
-  color: var(--sow-gold-bright);
+  border-color: var(--sow-tactical-accent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 24%, transparent) 0%,
+    rgba(18, 20, 26, 0.95) 100%
+  );
+  color: var(--sow-tactical-accent-bright);
   box-shadow:
-    0 0 14px rgba(243, 177, 43, 0.25),
-    inset 0 1px 0 rgba(255, 232, 163, 0.22);
+    0 0 14px color-mix(in srgb, var(--sow-tactical-accent) 25%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .sow-create__mode-card {
@@ -918,8 +926,8 @@
   border-radius: 999px;
   background: linear-gradient(
     90deg,
-    rgba(245, 197, 66, 0.85) 0%,
-    rgba(245, 197, 66, 0.85) var(--sow-slider-fill, 50%),
+    color-mix(in srgb, var(--sow-tactical-accent) 85%, transparent) 0%,
+    color-mix(in srgb, var(--sow-tactical-accent) 85%, transparent) var(--sow-slider-fill, 50%),
     rgba(11, 12, 16, 0.94) var(--sow-slider-fill, 50%),
     rgba(11, 12, 16, 0.94) 100%
   );
@@ -940,9 +948,9 @@
   height: 18px;
   border-radius: 50%;
   border: 2px solid #fff8dc;
-  background: var(--sow-gold);
+  background: var(--sow-tactical-accent);
   cursor: pointer;
-  box-shadow: 0 0 10px rgba(243, 177, 43, 0.85);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--sow-tactical-accent) 85%, transparent);
   transition:
     transform 120ms ease,
     box-shadow 120ms ease;
@@ -950,7 +958,7 @@
 
 .sow-menu__range::-webkit-slider-thumb:hover {
   transform: scale(1.12);
-  box-shadow: 0 0 14px rgba(243, 177, 43, 1);
+  box-shadow: 0 0 14px var(--sow-tactical-accent);
 }
 
 .sow-menu__slider-row {

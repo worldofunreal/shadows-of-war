@@ -54,6 +54,26 @@ pub(crate) enum PlacementButton {
 // ponytail: fixed top inset for the HUD top bar; read the bar's real height if it grows.
 const PLACEMENT_TOP_INSET: f32 = 64.0;
 
+pub(crate) fn visible_building_anchor_bounds(
+    kind: sow_core::game::BuildingKind,
+    map_w: u32,
+    map_h: u32,
+    camera: [f32; 2],
+    screen: [f32; 2],
+    zoom: f32,
+) -> Option<(i32, i32, i32, i32)> {
+    let (width, height) = kind.footprint_dimensions();
+    let zoom = zoom.max(0.01);
+    let min_x = ((-camera[0] / zoom + width as f32 * 0.5).ceil() as i32).max(0);
+    let min_y = ((-camera[1] / zoom + height as f32 * 0.5).ceil() as i32).max(0);
+    let max_x = (((screen[0] - camera[0]) / zoom - width as f32 * 0.5).floor() as i32)
+        .min(map_w as i32 - 1);
+    let max_y = (((screen[1] - camera[1]) / zoom - height as f32 * 0.5).floor() as i32)
+        .min(map_h as i32 - 1);
+    (map_w > 0 && map_h > 0 && min_x <= max_x && min_y <= max_y)
+        .then_some((min_x, min_y, max_x, max_y))
+}
+
 pub(crate) fn placement_controls(
     kind: sow_core::game::BuildingKind,
     tile_idx: u32,
@@ -128,6 +148,32 @@ impl PlacementControls {
 }
 
 impl crate::app::SowApp {
+    pub(crate) fn visible_building_anchor_bounds(
+        &self,
+        kind: sow_core::game::BuildingKind,
+    ) -> Option<(i32, i32, i32, i32)> {
+        visible_building_anchor_bounds(
+            kind,
+            self.sim.map_w,
+            self.sim.map_h,
+            [self.input.camera_x, self.input.camera_y],
+            [self.input.screen_w, self.input.screen_h],
+            self.input.camera_zoom,
+        )
+    }
+
+    pub(crate) fn building_footprint_is_visible(&self, kind: sow_core::game::BuildingKind, tile: u32) -> bool {
+        let map_w = self.sim.map_w;
+        map_w > 0
+            && self
+                .visible_building_anchor_bounds(kind)
+                .is_some_and(|(min_x, min_y, max_x, max_y)| {
+                    let x = (tile % map_w) as i32;
+                    let y = (tile / map_w) as i32;
+                    (min_x..=max_x).contains(&x) && (min_y..=max_y).contains(&y)
+                })
+    }
+
     /// Controls for the live (not yet submitted) preview at the current camera.
     pub(crate) fn placement_controls(&self) -> Option<PlacementControls> {
         let placement = self

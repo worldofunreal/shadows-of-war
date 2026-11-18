@@ -785,7 +785,7 @@ fn placement_footprint_geometry(
 fn placement_preview_colors(site_valid: bool, can_confirm: bool) -> PlacementPreviewColors {
     if !site_valid {
         PlacementPreviewColors {
-            fill: [0.75, 0.10, 0.08, 1.0],
+            fill: [0.75, 0.10, 0.08, 0.58],
             line: [1.0, 0.55, 0.48, 1.0],
             building: [1.0, 0.28, 0.28, 0.94],
         }
@@ -861,6 +861,187 @@ fn render_building_footprint_grid(
     }
 }
 
+fn render_placement_conflicts(
+    text: &mut TextRenderer,
+    map: &sow_core::map::GameMap,
+    building_grid: &sow_core::building::BuildingGrid,
+    kind: BuildingKind,
+    owner_id: u16,
+    tile_x: u32,
+    tile_y: u32,
+    footprint: sow_core::building::BuildingFootprint,
+    camera: [f32; 2],
+    zoom: f32,
+    whole_footprint: bool,
+) {
+    for y in footprint.top..footprint.top + footprint.height as i32 {
+        for x in footprint.left..footprint.left + footprint.width as i32 {
+            let conflict = whole_footprint
+                || !map.is_valid_coord(x, y)
+                || sow_core::building::validate_building_cell(
+                    kind,
+                    owner_id,
+                    map.owner_id(x as u32, y as u32),
+                    map.terrain[map.ref_id(x as u32, y as u32)].as_byte(),
+                )
+                .is_err()
+                || building_grid.iter_all_in_range(tile_x, tile_y, 3).any(|building| {
+                    sow_core::building::BuildingFootprint::at(
+                        building.kind,
+                        building.x,
+                        building.y,
+                    )
+                    .contains(x, y)
+                });
+            if conflict {
+                text.push_rect(
+                    [camera[0] + x as f32 * zoom, camera[1] + y as f32 * zoom],
+                    [zoom; 2],
+                    PLACEMENT_CONFLICT_COLOR,
+                );
+            }
+        }
+    }
+}
+
+fn render_rejected_placement_marker(
+    text: &mut TextRenderer,
+    map: &sow_core::map::GameMap,
+    building_grid: &sow_core::building::BuildingGrid,
+    kind: BuildingKind,
+    owner_id: u16,
+    tile_idx: u32,
+    suggested_tile_idx: u32,
+    input: &InputState,
+    sf: f32,
+) {
+    let (tile_x, tile_y) = (tile_idx % map.width, tile_idx / map.width);
+    let error = sow_core::building::validate_structure_site(
+        map,
+        owner_id,
+        kind,
+        tile_idx,
+        building_grid,
+    )
+    .err();
+    let visible_bounds = crate::input::placement::visible_building_anchor_bounds(
+        kind,
+        map.width,
+        map.height,
+        [input.camera_x, input.camera_y],
+        [input.screen_w, input.screen_h],
+        input.camera_zoom,
+    );
+    let visible = visible_bounds.is_some_and(|(min_x, min_y, max_x, max_y)| {
+        (min_x..=max_x).contains(&(tile_x as i32))
+            && (min_y..=max_y).contains(&(tile_y as i32))
+    });
+    if error.is_none() && visible {
+        return;
+    }
+
+    let zoom = input.camera_zoom;
+    let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
+    let geometry = placement_footprint_geometry(footprint, [input.camera_x, input.camera_y], zoom);
+    let metrics = placement_grid_metrics(zoom, sf);
+    if metrics.draw_inner_grid {
+        render_placement_conflicts(
+            text,
+            map,
+            building_grid,
+            kind,
+            owner_id,
+            tile_x,
+            tile_y,
+            footprint,
+            [input.camera_x, input.camera_y],
+            zoom,
+            !visible || error == Some(sow_core::building::PlacementError::CoastRequired),
+        );
+    }
+    render_building_footprint_grid(
+        text,
+        footprint,
+        geometry.top_left,
+        geometry.size,
+        zoom,
+        metrics,
+        [1.0, 0.32, 0.28, 0.95],
+    );
+    let (suggested_x, suggested_y) = (
+        (suggested_tile_idx % map.width) as i32,
+        (suggested_tile_idx / map.width) as i32,
+    );
+    let (dx, dy) = (suggested_x - tile_x as i32, suggested_y - tile_y as i32);
+    let controls = crate::input::placement::placement_controls(
+        kind,
+        suggested_tile_idx,
+        map.width,
+        [input.camera_x, input.camera_y],
+        zoom,
+        sf,
+    );
+    let clearance = |center: [f32; 2]| {
+        controls
+            .arrows
+            .iter()
+            .map(|(_, [x, y])| (center[0] - x).powi(2) + (center[1] - y).powi(2))
+            .chain(
+                [controls.cancel, controls.confirm]
+                    .iter()
+                    .map(|[x, y]| (center[0] - x).powi(2) + (center[1] - y).powi(2)),
+            )
+            .fold(f32::INFINITY, f32::min)
+    };
+    let edge_candidates = if dx.abs() >= dy.abs() && dx != 0 {
+        let x = input.camera_x
+            + if dx > 0 {
+                (footprint.left as f32 + 0.5) * zoom
+            } else {
+                (footprint.left as f32 + footprint.width as f32 - 0.5) * zoom
+            };
+        [
+            [x, input.camera_y + (footprint.top as f32 + 0.5) * zoom],
+            [
+                x,
+                input.camera_y + (footprint.top as f32 + footprint.height as f32 - 0.5) * zoom,
+            ],
+        ]
+    } else if dy != 0 {
+        let y = input.camera_y
+            + if dy > 0 {
+                (footprint.top as f32 + 0.5) * zoom
+            } else {
+                (footprint.top as f32 + footprint.height as f32 - 0.5) * zoom
+            };
+        [
+            [input.camera_x + (footprint.left as f32 + 0.5) * zoom, y],
+            [
+                input.camera_x + (footprint.left as f32 + footprint.width as f32 - 0.5) * zoom,
+                y,
+            ],
+        ]
+    } else {
+        [geometry.center; 2]
+    };
+    let cross_center = edge_candidates
+        .into_iter()
+        .max_by(|left, right| clearance(*left).total_cmp(&clearance(*right)))
+        .unwrap_or(geometry.center);
+    text.push_cross(
+        cross_center,
+        (geometry.size[0].min(geometry.size[1]) * 0.24).max(6.0 * sf),
+        [0.12, 0.01, 0.01, 0.95],
+        4.0 * sf,
+    );
+    text.push_cross(
+        cross_center,
+        (geometry.size[0].min(geometry.size[1]) * 0.24).max(6.0 * sf),
+        [1.0, 0.91, 0.78, 1.0],
+        2.0 * sf,
+    );
+}
+
 fn render_building_placement_preview(
     text: &mut TextRenderer,
     sim: &SimState,
@@ -880,14 +1061,27 @@ fn render_building_placement_preview(
         return;
     };
     let my_id = sim.my_player_id.unwrap_or(0);
-    let site_valid = sow_core::building::validate_structure_site(
+    let site_error = sow_core::building::validate_structure_site(
         &engine.state.map,
         my_id,
         kind,
         placement.tile_idx,
         &engine.building_grid,
     )
-    .is_ok();
+    .err();
+    let visible_bounds = crate::input::placement::visible_building_anchor_bounds(
+        kind,
+        sim.map_w,
+        sim.map_h,
+        [input.camera_x, input.camera_y],
+        [input.screen_w, input.screen_h],
+        input.camera_zoom,
+    );
+    let target_visible = visible_bounds.is_some_and(|(min_x, min_y, max_x, max_y)| {
+        (min_x..=max_x).contains(&((placement.tile_idx % sim.map_w) as i32))
+            && (min_y..=max_y).contains(&((placement.tile_idx / sim.map_w) as i32))
+    });
+    let site_valid = site_error.is_none() && target_visible;
     let zoom = input.camera_zoom;
     let (tile_x, tile_y) = (
         placement.tile_idx % sim.map_w,
@@ -901,38 +1095,37 @@ fn render_building_placement_preview(
     let colors = placement_preview_colors(site_valid, can_confirm);
     let metrics = placement_grid_metrics(zoom, sf);
     let map = &engine.state.map;
+    if let Some(tile_idx) = placement
+        .attempted_tile_idx
+        .filter(|&tile_idx| tile_idx != placement.tile_idx)
+    {
+        render_rejected_placement_marker(
+            text,
+            map,
+            &engine.building_grid,
+            kind,
+            my_id,
+            tile_idx,
+            placement.tile_idx,
+            input,
+            sf,
+        );
+    }
     render_building_footprint_fill(text, footprint_top_left, footprint_size_px, colors.fill);
     if metrics.draw_inner_grid && !site_valid {
-        for y in footprint.top..footprint.top + footprint.height as i32 {
-            for x in footprint.left..footprint.left + footprint.width as i32 {
-                // Mark only cells rejected by the same ownership, terrain, or overlap rules.
-                let conflict = !map.is_valid_coord(x, y)
-                    || sow_core::building::validate_building_cell(
-                        kind,
-                        my_id,
-                        map.owner_id(x as u32, y as u32),
-                        map.terrain[map.ref_id(x as u32, y as u32)].as_byte(),
-                    )
-                    .is_err()
-                    || engine
-                        .building_grid
-                        .iter_all_in_range(tile_x, tile_y, 3)
-                        .any(|b| {
-                            sow_core::building::BuildingFootprint::at(b.kind, b.x, b.y)
-                                .contains(x, y)
-                        });
-                if conflict {
-                    text.push_rect(
-                        [
-                            input.camera_x + x as f32 * zoom,
-                            input.camera_y + y as f32 * zoom,
-                        ],
-                        [zoom; 2],
-                        PLACEMENT_CONFLICT_COLOR,
-                    );
-                }
-            }
-        }
+        render_placement_conflicts(
+            text,
+            map,
+            &engine.building_grid,
+            kind,
+            my_id,
+            tile_x,
+            tile_y,
+            footprint,
+            [input.camera_x, input.camera_y],
+            zoom,
+            !target_visible || site_error == Some(sow_core::building::PlacementError::CoastRequired),
+        );
     }
     render_building_footprint_grid(
         text,
@@ -960,6 +1153,20 @@ fn render_building_placement_preview(
     let sprite_center = [center_px[0], center_px[1] - lift];
     if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
         text.push_building_sprite(sprite_center, sprite_size, uv_rect, colors.building);
+    }
+    if !site_valid {
+        text.push_cross(
+            center_px,
+            (footprint_size_px[0].min(footprint_size_px[1]) * 0.16).max(5.0 * sf),
+            [0.12, 0.01, 0.01, 0.95],
+            4.0 * sf,
+        );
+        text.push_cross(
+            center_px,
+            (footprint_size_px[0].min(footprint_size_px[1]) * 0.16).max(5.0 * sf),
+            [1.0, 0.91, 0.78, 1.0],
+            2.0 * sf,
+        );
     }
     if kind == BuildingKind::Tower {
         let range_multiplier = engine

@@ -468,8 +468,10 @@ impl MoverScene {
     }
 
     fn ingest_fleet(&mut self, fleet: &FleetSnapshot, map_w: u32, my_id: u16) {
-        let (prev_x, prev_y, curr_x, curr_y, progress) = if fleet.unit_type
-            == UnitType::TransportShip
+        let (prev_x, prev_y, curr_x, curr_y, progress) = if matches!(
+            fleet.unit_type,
+            UnitType::TransportShip | UnitType::TradeShip
+        )
             && fleet.path_cursor > 0
             && !fleet.path.is_empty()
         {
@@ -527,7 +529,7 @@ impl MoverScene {
 
         let trail_start = self.trail_points.len() as u32;
         let traveled = fleet.path_cursor.min(fleet.path.len()).saturating_sub(1);
-        if traveled > 0 {
+        if fleet.unit_type != UnitType::TradeShip && traveled > 0 {
             let start = traveled.saturating_sub(TRAIL_CAP - 1);
             for &tile in &fleet.path[start..=traveled] {
                 let (wx, wy) = tile_to_world(tile, map_w);

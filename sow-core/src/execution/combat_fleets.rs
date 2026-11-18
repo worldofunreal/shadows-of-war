@@ -150,18 +150,21 @@ impl SowEngine {
                     continue;
                 }
             } else if fleet.path_cursor < fleet.path.len() {
-                let base_speed = match fleet.unit_type {
-                    crate::game::UnitType::TransportShip => transport_base_steps_per_tick,
-                    crate::game::UnitType::Warship => WARSHIP_BASE_STEPS_PER_TICK,
-                    crate::game::UnitType::TradeShip => 1.0,
+                let speed = match fleet.unit_type {
+                    crate::game::UnitType::TransportShip => {
+                        fleet.movement_steps_per_tick(transport_base_steps_per_tick)
+                    }
+                    crate::game::UnitType::Warship => {
+                        fleet.movement_steps_per_tick(WARSHIP_BASE_STEPS_PER_TICK)
+                    }
+                    crate::game::UnitType::TradeShip => 0.1,
                 };
-                let speed = fleet.movement_steps_per_tick(base_speed);
                 let progress = fleet.movement_progress + speed;
                 let remaining = fleet.path.len() - fleet.path_cursor;
                 if !progress.is_finite() {
                     fleet.movement_progress = 0.0;
                 } else {
-                    let advance = progress.floor().min(remaining as f64) as usize;
+                    let advance = (progress + f64::EPSILON).floor().min(remaining as f64) as usize;
                     if advance > 0 {
                         fleet.path_cursor += advance;
                         fleet.current_tile = fleet.path[fleet.path_cursor - 1];

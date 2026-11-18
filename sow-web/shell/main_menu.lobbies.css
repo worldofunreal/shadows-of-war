@@ -255,11 +255,11 @@
 }
 
 .sow-menu__lobby:hover {
-  border-color: rgba(243, 177, 43, 0.78);
+  border-color: var(--sow-tactical-accent);
   transform: translateY(-2px);
   box-shadow:
     0 12px 28px rgba(0, 0, 0, 0.55),
-    0 0 16px rgba(243, 177, 43, 0.16);
+    0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent);
 }
 
 .sow-menu__lobby:focus-visible {
@@ -295,7 +295,7 @@
 
 .sow-menu__lobby-chip--status,
 .sow-menu__lobby-count {
-  border-color: rgba(243, 177, 43, 0.62);
+  border-color: var(--sow-tactical-surface-accent-border);
   color: var(--sow-gold-bright);
 }
 

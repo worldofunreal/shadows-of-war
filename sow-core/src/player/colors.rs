@@ -1,6 +1,10 @@
 use sow_data::PREMIUM_COLORS;
 use super::{Player, PlayerType};
 
+/// Neutral stone gray (`#D1CDC7`) used for standard tribes (`PlayerType::Bot`),
+/// matching OpenFront's `default-theme.json` `"Bot"` color.
+pub const TRIBE_TERRITORY_RGB: [f32; 3] = [209.0 / 255.0, 205.0 / 255.0, 199.0 / 255.0];
+
 /// Shared Red/Blue territory color for multiplayer teams.
 #[inline]
 pub fn team_territory_rgb(team: crate::protocol::Team) -> [f32; 3] {
@@ -19,7 +23,7 @@ pub fn player_territory_rgb(
 ) -> [f32; 3] {
     // Campaign factions use Bot AI but keep their authored/diplomatic colors.
     if player_type == PlayerType::Bot && !is_campaign_faction {
-        return [0.5; 3];
+        return TRIBE_TERRITORY_RGB;
     }
     let color = team.map_or(color, |team| {
         let team_color = team_territory_rgb(team);

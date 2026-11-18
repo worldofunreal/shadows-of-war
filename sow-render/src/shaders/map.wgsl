@@ -375,6 +375,38 @@ fn blend_overlay(base: vec3<f32>, blend: vec3<f32>) -> vec3<f32> {
     );
 }
 
+fn srgb_to_linear_channel(c: f32) -> f32 {
+    let v = max(c, 0.0);
+    if v <= 0.04045 {
+        return v / 12.92;
+    }
+    return pow((v + 0.055) / 1.055, 2.4);
+}
+
+fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(
+        srgb_to_linear_channel(c.r),
+        srgb_to_linear_channel(c.g),
+        srgb_to_linear_channel(c.b)
+    );
+}
+
+fn linear_to_srgb_channel(c: f32) -> f32 {
+    let v = max(c, 0.0);
+    if v <= 0.0031308 {
+        return v * 12.92;
+    }
+    return 1.055 * pow(v, 1.0 / 2.4) - 0.055;
+}
+
+fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(
+        linear_to_srgb_channel(c.r),
+        linear_to_srgb_channel(c.g),
+        linear_to_srgb_channel(c.b)
+    );
+}
+
 fn shade_map(in: VertexOutput) -> vec3<f32> {
     let screen_pixel = in.uv * globals.screen_size;
     let world_x = (screen_pixel.x - globals.camera_pos.x) / globals.zoom;
@@ -386,7 +418,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     let cell_y = cell_hex.y;
 
     if cell_x < 0 || cell_y < 0 || cell_x >= i32(globals.map_size.x) || cell_y >= i32(globals.map_size.y) {
-        return globals.shader_params[__MAP_BACKDROP__].rgb;
+        return srgb_to_linear(globals.shader_params[__MAP_BACKDROP__].rgb);
     }
 
     let hex_center = hex_to_world(cell_hex);
@@ -404,85 +436,111 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         flash_val = max(flash_val, 1.0 - globals.preview_phase);
     }
     let is_land = (terrain_byte & 0x80u) != 0u;
+    let mag_raw = terrain_byte & 0x1Fu;
+
+    // Impassable terrain blends seamlessly with the backdrop outside the map.
+    if is_land && mag_raw == 31u {
+        return srgb_to_linear(globals.shader_params[__MAP_BACKDROP__].rgb);
+    }
 
     var terrain_color = vec4<f32>(0.0);
     var normal = vec3<f32>(0.0, 0.0, 1.0);
-    var is_specular = globals.shader_params[__MAP_SPECULAR_ENABLED__].x > 0.5;
-    
+    let is_specular = globals.shader_params[__MAP_SPECULAR_ENABLED__].x > 0.5;
+    let mag_center = f32(mag_raw);
+
     if is_land {
         let is_shoreline = (terrain_byte & 0x40u) != 0u;
-        var mag_center = f32(terrain_byte & 0x1Fu);
 
         let land_noise = terrain_rgba.w;
-        let noise_offset = (land_noise - 0.5) * globals.shader_params[__MAP_LAND_NOISE__].x; // Stable per-tile variation; no diagonal wave pattern
+        let noise_offset = (land_noise - 0.5) * globals.shader_params[__MAP_LAND_NOISE__].x;
 
         if is_shoreline {
             let base = globals.shader_params[__MAP_LAND_SHORE__].rgb;
             terrain_color = vec4<f32>(base + noise_offset * globals.shader_params[__MAP_LAND_SHORE_NOISE__].x, 1.0);
         } else if mag_center < globals.shader_params[__MAP_LAND_PLAINS_LIMIT__].x {
-            let r = globals.shader_params[__MAP_LAND_PLAINS__].x;
-            let g = globals.shader_params[__MAP_LAND_PLAINS__].y - mag_center * globals.shader_params[__MAP_LAND_PLAINS_SLOPE__].x;
-            let b = globals.shader_params[__MAP_LAND_PLAINS__].z;
-            terrain_color = vec4<f32>(vec3<f32>(r, g, b) + noise_offset, 1.0); // Plains
+            let plains = globals.shader_params[__MAP_LAND_PLAINS__].rgb;
+            let r = plains.r;
+            let g = max(0.0, plains.g - mag_center * globals.shader_params[__MAP_LAND_PLAINS_SLOPE__].x);
+            let b = plains.b;
+            terrain_color = vec4<f32>(vec3<f32>(r, g, b) + noise_offset, 1.0);
         } else if mag_center < globals.shader_params[__MAP_LAND_HIGHLANDS_LIMIT__].x {
-            let highlands = globals.shader_params[__MAP_LAND_HIGHLANDS__].rgb + vec3<f32>(mag_center * globals.shader_params[__MAP_LAND_HIGHLANDS_SLOPE__].x);
+            let m = mag_center - globals.shader_params[__MAP_LAND_PLAINS_LIMIT__].x;
+            let highlands = min(
+                vec3<f32>(1.0),
+                globals.shader_params[__MAP_LAND_HIGHLANDS__].rgb + vec3<f32>(m * globals.shader_params[__MAP_LAND_HIGHLANDS_SLOPE__].x)
+            );
             terrain_color = vec4<f32>(highlands + noise_offset * globals.shader_params[__MAP_LAND_HIGHLANDS_NOISE__].x, 1.0);
         } else {
-            let highland_base = globals.shader_params[__MAP_LAND_MOUNTAINS__].rgb;
-            let snowy_peak = globals.shader_params[__MAP_LAND_SNOW__].rgb;
-            let snow_range = max(abs(globals.shader_params[__MAP_LAND_SNOW_RANGE__].x), 0.001);
-            let blend = clamp((mag_center - globals.shader_params[__MAP_LAND_SNOW_START__].x) / snow_range, 0.0, 1.0);
-            let peak_color = mix(highland_base, snowy_peak, blend);
+            let mountain_base = globals.shader_params[__MAP_LAND_MOUNTAINS__].rgb;
+            let m = floor(mag_center * 0.5) / 255.0;
+            let peak_color = min(vec3<f32>(1.0), mountain_base + vec3<f32>(m));
             terrain_color = vec4<f32>(peak_color + noise_offset * globals.shader_params[__MAP_LAND_MOUNTAINS_NOISE__].x, 1.0);
         }
 
-        // Unpack procedural 6-directional elevation normals directly from G/B channels in O(1) time
-        let dx = (terrain_rgba.y * 16.0) - 8.0;
-        let dy = (terrain_rgba.z * 16.0) - 8.0;
-        let normal_scale = globals.shader_params[__MAP_LAND_NORMAL_SCALE__].x / 0.1;
-        normal = normalize(vec3<f32>(-dx * normal_scale, -dy * normal_scale, 1.0));
+        if globals.shader_params[__MAP_RELIEF_ENABLED__].x > 0.5 || globals.shader_params[__MAP_DIFFUSE_ENABLED__].x > 0.5 || is_specular {
+            // Unpack procedural 6-directional elevation normals directly from G/B channels in O(1) time
+            let dx = (terrain_rgba.y * 16.0) - 8.0;
+            let dy = (terrain_rgba.z * 16.0) - 8.0;
+            let normal_scale = globals.shader_params[__MAP_LAND_NORMAL_SCALE__].x / 0.1;
+            normal = normalize(vec3<f32>(-dx * normal_scale, -dy * normal_scale, 1.0));
+        }
         if globals.shader_params[__MAP_RELIEF_ENABLED__].x <= 0.5 {
             normal = vec3<f32>(0.0, 0.0, 1.0);
         }
     } else {
-        let is_ocean_water = (terrain_byte & 0x20u) != 0u;
-
-        if is_ocean_water {
-            let depth = min(f32(terrain_byte & 0x1Fu) * globals.shader_params[__MAP_WATER_DEPTH_SCALE__].x, globals.shader_params[__MAP_WATER_DEPTH_CAP__].x);
-            let shallow_end = globals.shader_params[__MAP_WATER_SHALLOW_LIMIT__].x;
-            let shelf_end = max(shallow_end + 0.001, globals.shader_params[__MAP_WATER_SHELF_LIMIT__].x);
-            let mid_end = max(shelf_end + 0.001, globals.shader_params[__MAP_WATER_MID_LIMIT__].x);
-            let deep_end = max(mid_end + 0.001, globals.shader_params[__MAP_WATER_DEEP_LIMIT__].x);
-            let band_width = globals.shader_params[__MAP_WATER_TRANSITION__].x;
-            let shallow = globals.shader_params[__MAP_WATER_SHALLOW__].rgb;
-            let shelf = globals.shader_params[__MAP_WATER_SHELF__].rgb;
-            let mid = globals.shader_params[__MAP_WATER_MID__].rgb;
-            let deep = globals.shader_params[__MAP_WATER_DEEP__].rgb;
-            let abyss = globals.shader_params[__MAP_WATER_ABYSS__].rgb;
-            var color_flat = abyss;
-            if depth <= deep_end { color_flat = deep; }
-            if depth <= mid_end { color_flat = mid; }
-            if depth <= shelf_end { color_flat = shelf; }
-            if depth <= shallow_end { color_flat = shallow; }
-            if band_width > 0.0 {
-                if depth > shallow_end - band_width && depth < shallow_end + band_width { color_flat = mix(shallow, shelf, smoothstep_safe(shallow_end - band_width, shallow_end + band_width, depth)); }
-                if depth > shelf_end - band_width && depth < shelf_end + band_width { color_flat = mix(shelf, mid, smoothstep_safe(shelf_end - band_width, shelf_end + band_width, depth)); }
-                if depth > mid_end - band_width && depth < mid_end + band_width { color_flat = mix(mid, deep, smoothstep_safe(mid_end - band_width, mid_end + band_width, depth)); }
-                if depth > deep_end - band_width && depth < deep_end + band_width { color_flat = mix(deep, abyss, smoothstep_safe(deep_end - band_width, deep_end + band_width, depth)); }
-            }
-            color_flat = mix(shallow, color_flat, globals.shader_params[__MAP_WATER_STRENGTH__].x);
-            color_flat *= globals.shader_params[__MAP_WATER_BRIGHTNESS__].x;
-            terrain_color = vec4<f32>(color_flat, 1.0);
+        let is_shore_water = (terrain_byte & 0x40u) != 0u;
+        if is_shore_water {
+            terrain_color = vec4<f32>(globals.shader_params[__MAP_WATER_SHORE__].rgb, 1.0);
         } else {
-            let inland = globals.shader_params[__MAP_WATER_INLAND__].rgb * globals.shader_params[__MAP_WATER_INLAND_STRENGTH__].x * globals.shader_params[__MAP_WATER_INLAND_BRIGHTNESS__].x;
-            terrain_color = vec4<f32>(inland, 1.0);
+            let m = min(
+                mag_center * globals.shader_params[__MAP_WATER_DEPTH_SCALE__].x,
+                globals.shader_params[__MAP_WATER_DEPTH_CAP__].x
+            );
+            let ocean = globals.shader_params[__MAP_WATER_SHALLOW__].rgb;
+            let color_flat = max(vec3<f32>(0.0), ocean - vec3<f32>(m / 255.0)) * globals.shader_params[__MAP_WATER_BRIGHTNESS__].x;
+            terrain_color = vec4<f32>(color_flat, 1.0);
         }
     }
 
-    // Convert sRGB palette input to linear space
-    terrain_color = vec4<f32>(pow(max(terrain_color.rgb, vec3<f32>(0.0)), vec3<f32>(2.2)), terrain_color.a);
+    // Evaluate terrain and territory blending in sRGB space (matching OpenFront's TerritoryPass),
+    // then convert once to linear RGB before lighting, borders, and output.
+    var base_srgb = clamp(terrain_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    var albedo_linear = vec3<f32>(0.0);
 
-    var base_color = terrain_color.rgb;
+    if owner_id > 0u && is_land {
+        let packed_owner = owner_packed_color(owner_id);
+        let raw_albedo_srgb = packed_owner_albedo(packed_owner);
+        albedo_linear = srgb_to_linear(raw_albedo_srgb);
+
+        let sat = globals.shader_params[__MAP_TERRITORY_SATURATION__].x;
+        var territory_srgb = raw_albedo_srgb;
+        if sat != 1.0 {
+            let luma = dot(territory_srgb, vec3<f32>(0.299, 0.587, 0.114));
+            territory_srgb = mix(vec3<f32>(luma), territory_srgb, sat);
+        }
+
+        let opacity = globals.territory_opacity;
+        var blended_srgb = base_srgb;
+        let mode = i32((packed_owner >> 24u) & 0xFFu);
+        if (mode == 1) {
+            blended_srgb = base_srgb * territory_srgb;
+        } else if (mode == 2) {
+            blended_srgb = blend_overlay(base_srgb, territory_srgb);
+        } else if (mode == 3) {
+            blended_srgb = territory_srgb;
+        } else {
+            blended_srgb = territory_srgb;
+        }
+
+        if (mode == 3) {
+            base_srgb = blended_srgb;
+        } else {
+            base_srgb = mix(base_srgb, blended_srgb, opacity);
+        }
+    }
+
+    var base_color = srgb_to_linear(base_srgb);
+
     if !is_land && (terrain_byte & 0x20u) != 0u {
         let shore_strength = globals.shader_params[__MAP_WATER_SHORE_STRENGTH__].x;
         if shore_strength > 0.0001 {
@@ -491,53 +549,19 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                 0.0,
                 1.0
             );
-            let shore_color = pow(
-                max(globals.shader_params[__MAP_WATER_SHORE__].rgb, vec3<f32>(0.0)),
-                vec3<f32>(2.2)
-            );
+            let shore_color = srgb_to_linear(globals.shader_params[__MAP_WATER_SHORE__].rgb);
             base_color = mix(base_color, shore_color, shore);
         }
     }
 
-    // ── Peak/Valley Elevation Shading (Premium 3D Relief) ──
-    if is_land {
-        let mag_center = f32(terrain_byte & 0x1Fu);
+    // ── Peak/Valley Elevation Shading (optional Dev Tools toggle) ──
+    if is_land && globals.shader_params[__MAP_RELIEF_ENABLED__].x > 0.5 {
         let height_factor = mag_center / 32.0;
-        if globals.shader_params[__MAP_RELIEF_ENABLED__].x > 0.5 {
-            let elevation_shading = globals.shader_params[__MAP_LAND_RELIEF_BASE__].x + globals.shader_params[__MAP_LAND_RELIEF_GAIN__].x * height_factor;
-            base_color = base_color * elevation_shading;
-        }
+        let elevation_shading = globals.shader_params[__MAP_LAND_RELIEF_BASE__].x + globals.shader_params[__MAP_LAND_RELIEF_GAIN__].x * height_factor;
+        base_color = base_color * elevation_shading;
     }
+
     if owner_id > 0u && is_land {
-        let packed_owner = owner_packed_color(owner_id);
-        let albedo = packed_owner_albedo(packed_owner);
-        let territory_albedo = albedo;
-        
-        let opacity = globals.territory_opacity;
-
-        // Territory overlay — supports different blend modes
-        var blended_color = base_color;
-        let mode = i32((packed_owner >> 24u) & 0xFFu);
-        if (mode == 1) {
-            // Multiply
-            blended_color = base_color * territory_albedo;
-        } else if (mode == 2) {
-            // Overlay
-            blended_color = blend_overlay(base_color, territory_albedo);
-        } else if (mode == 3) {
-            // All Albedo
-            blended_color = territory_albedo;
-        } else {
-            // Normal Mix
-            blended_color = territory_albedo;
-        }
-
-        if (mode == 3) {
-            base_color = blended_color;
-        } else {
-            base_color = mix(base_color, blended_color, opacity);
-        }
-
         // Cosmetic territory pattern for the local player's equipped skin.
         base_color = apply_skin(base_color, owner_id, vec2<f32>(world_x, world_y));
         if owner_id == u32(globals.my_player_id) {
@@ -566,20 +590,22 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
             let shockwave = flash_val * globals.effect_shockwave;
             var flash_tint = vec3<f32>(1.0, 1.0, 1.0);
             if owner_id < 256u && player_skin_styles.styles[owner_id].y > 0.5 {
-                flash_tint = vec3<f32>(1.0, 1.0, 1.0) - albedo;
+                flash_tint = vec3<f32>(1.0, 1.0, 1.0) - albedo_linear;
             }
-            let mountain = f32(terrain_byte & 0x1Fu) >= globals.shader_params[__MAP_LAND_HIGHLANDS_LIMIT__].x;
+            let mountain = mag_center >= globals.shader_params[__MAP_LAND_HIGHLANDS_LIMIT__].x;
             if owner_id < 256u && player_skin_styles.styles[owner_id].z > 0.5 && mountain {
                 flash_tint = globals.shader_params[__MAP_CONQUEST_MOUNTAIN_COLOR__].rgb;
             }
-            let flash_color = mix(flash_tint, albedo, 1.0 - flash_val);
+            let flash_color = mix(flash_tint, albedo_linear, 1.0 - flash_val);
             base_color = mix(base_color, flash_color, shockwave * globals.shader_params[__MAP_CONQUEST_INTERIOR_FLASH__].x);
         }
     } else if is_land {
         // ── Wilderness Atmosphere Haze (unclaimed land fog) ──
-        let haze_color = globals.shader_params[__MAP_LAND_HAZE_COLOR__].rgb;
         let haze_amount = globals.shader_params[__MAP_LAND_HAZE_BASE__].x + globals.shader_params[__MAP_LAND_HAZE_WAVE__].x * sin(world_x * globals.shader_params[__MAP_LAND_HAZE_SCALE_X__].x + world_y * globals.shader_params[__MAP_LAND_HAZE_SCALE_Y__].x);
-        base_color = mix(base_color, haze_color, haze_amount);
+        if haze_amount > 0.0 {
+            let haze_color = globals.shader_params[__MAP_LAND_HAZE_COLOR__].rgb;
+            base_color = mix(base_color, haze_color, clamp(haze_amount, 0.0, 1.0));
+        }
     }
 
     var is_border = false;
@@ -612,7 +638,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         let has_border = ((owner_packed >> 24u) & 1u) != 0u;
         let has_water_neighbor = ((owner_packed >> 25u) & 1u) != 0u;
 
-        if has_border || has_water_neighbor {
+        if has_border || (has_water_neighbor && shore_thickness > 0.0) {
             let is_tribe = owner_id >= 200u;
             const neighbor_dirs = array<vec2<f32>, 4>(
                 vec2<f32>(1.0, 0.0),  // East
@@ -735,7 +761,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
             } else {
                 var border_albedo = globals.shader_params[__MAP_BORDER_NEUTRAL_COLOR__].rgb * border_darkness;
                 if owner_id > 0u {
-                    let owner_col = owner_albedo(owner_id);
+                    let owner_col = srgb_to_linear(owner_albedo(owner_id));
                     border_albedo = owner_col * border_darkness;
                     if owner_id == u32(globals.my_player_id) {
                         border_albedo = owner_col * globals.shader_params[__MAP_LOCAL_BORDER__].x;
@@ -758,7 +784,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                         let neighbor_hex_0 = get_hex_neighbor(cell_hex, 0);
                         let contested_owner = get_cell_owner(neighbor_hex_0);
                         if contested_owner > 0u && contested_owner != owner_id {
-                            let enemy_albedo = owner_albedo(contested_owner);
+                            let enemy_albedo = srgb_to_linear(owner_albedo(contested_owner));
                             let energy_t = sin(globals.time * globals.shader_params[__MAP_BORDER_CONTESTED_RATE__].x) * 0.5 + 0.5;
                             let shimmer = enemy_albedo * border_darkness * globals.shader_params[__MAP_BORDER_CONTESTED_BRIGHTNESS__].x;
                             border_albedo = mix(border_albedo, shimmer, energy_t * globals.shader_params[__MAP_BORDER_CONTESTED_STRENGTH__].x);
@@ -898,6 +924,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_main_srgb(in: VertexOutput) -> @location(0) vec4<f32> {
-    let c = shade_map(in);
-    return vec4(pow(max(c, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), 1.0);
+    return vec4(linear_to_srgb(shade_map(in)), 1.0);
 }

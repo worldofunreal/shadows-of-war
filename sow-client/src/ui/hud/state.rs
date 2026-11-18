@@ -34,6 +34,7 @@ pub struct HudMapFeedback {
 pub struct BuildingPlacement {
     pub kind: sow_core::game::BuildingKind,
     pub tile_idx: u32,
+    pub attempted_tile_idx: Option<u32>,
     pub pending: bool,
 }
 

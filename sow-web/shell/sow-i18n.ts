@@ -322,7 +322,9 @@
             document.documentElement.dataset.locale = localeTag(locale);
             document.documentElement.dataset.localeScript = localeScript(locale);
         }
-        if (!window.SOW_SITE_LOCALE || notify) saveLocale(locale);
+        // Persist only explicit user selections so changing browser/OS language
+        // later still updates both the game shell and the landing page.
+        if (notify) saveLocale(locale);
         if (notify) announce(locale);
         return strings;
     }

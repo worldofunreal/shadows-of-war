@@ -97,7 +97,7 @@
   padding: 0 14px;
   border: 1px solid var(--sow-tactical-surface-border);
   border-radius: 17px;
-  background: rgba(16, 18, 24, 0.85);
+  background: var(--sow-tactical-surface-compact-bg);
   color: #c5ced8;
   font-size: 11px;
   font-weight: 700;
@@ -114,17 +114,21 @@
 }
 
 .sow-campaign__saga-tab:hover {
-  background: rgba(245, 197, 66, 0.12);
-  border-color: rgba(245, 197, 66, 0.5);
+  background: color-mix(in srgb, var(--sow-tactical-accent) 12%, transparent);
+  border-color: var(--sow-tactical-surface-accent-border);
   color: #fff;
   transform: translateY(-1px);
 }
 
 .sow-campaign__saga-tab.is-active {
-  background: linear-gradient(135deg, rgba(245, 197, 66, 0.22) 0%, rgba(14, 15, 20, 0.94) 100%);
-  border-color: var(--sow-gold);
-  color: var(--sow-gold);
-  box-shadow: 0 0 14px rgba(245, 197, 66, 0.25);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sow-tactical-accent) 22%, transparent) 0%,
+    rgba(14, 15, 20, 0.94) 100%
+  );
+  border-color: var(--sow-tactical-accent);
+  color: var(--sow-tactical-accent-bright);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--sow-tactical-accent) 25%, transparent);
 }
 
 .sow-campaign__saga-avatar {
@@ -228,7 +232,7 @@
       rgba(9, 10, 13, 0.92) 80%,
       rgba(9, 10, 13, 0.98) 100%
     ),
-    radial-gradient(ellipse at 50% 10%, rgba(245, 197, 66, 0.14), transparent 60%);
+    radial-gradient(ellipse at 50% 10%, color-mix(in srgb, var(--sow-tactical-accent) 14%, transparent), transparent 60%);
   content: "";
 }
 

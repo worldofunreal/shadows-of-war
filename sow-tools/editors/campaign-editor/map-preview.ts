@@ -474,26 +474,70 @@ const mapPreview = (function (host: typeof globalThis) {
     return Math.max(0, Math.min(size - 1, Math.round(coordinate)));
   }
 
+  const BACKGROUND_RGB: readonly [number, number, number] = [60, 60, 60];
+  const OCEAN_RGB: readonly [number, number, number] = [71, 133, 181];
+  const SAND_RGB: readonly [number, number, number] = [204, 203, 158];
+  const PLAINS_RGB: readonly [number, number, number] = [190, 220, 138];
+  const HIGHLAND_RGB: readonly [number, number, number] = [220, 203, 158];
+  const MOUNTAIN_RGB: readonly [number, number, number] = [230, 230, 230];
+
+  function encodeTerrainTile(tb: number, out: Uint8ClampedArray, offset: number): void {
+    const isLand = (tb & 0x80) !== 0;
+    const isShoreline = (tb & 0x40) !== 0;
+    const magnitude = tb & 0x1f;
+
+    let r: number;
+    let g: number;
+    let b: number;
+
+    if (isLand && magnitude === 31) {
+      [r, g, b] = BACKGROUND_RGB;
+    } else if (isLand && isShoreline) {
+      [r, g, b] = SAND_RGB;
+    } else if (isLand) {
+      if (magnitude < 10) {
+        r = PLAINS_RGB[0];
+        g = Math.max(0, PLAINS_RGB[1] - 2 * magnitude);
+        b = PLAINS_RGB[2];
+      } else if (magnitude < 20) {
+        const m = magnitude - 10;
+        r = Math.min(255, HIGHLAND_RGB[0] + 2 * m);
+        g = Math.min(255, HIGHLAND_RGB[1] + 2 * m);
+        b = Math.min(255, HIGHLAND_RGB[2] + 2 * m);
+      } else {
+        const m = Math.floor(magnitude / 2);
+        r = Math.min(255, MOUNTAIN_RGB[0] + m);
+        g = Math.min(255, MOUNTAIN_RGB[1] + m);
+        b = Math.min(255, MOUNTAIN_RGB[2] + m);
+      }
+    } else if (isShoreline) {
+      r = Math.round(0.7 * OCEAN_RGB[0] + 76.5);
+      g = Math.round(0.7 * OCEAN_RGB[1] + 76.5);
+      b = Math.round(0.7 * OCEAN_RGB[2] + 76.5);
+    } else {
+      const m = Math.min(magnitude, 10);
+      r = Math.max(0, OCEAN_RGB[0] - m);
+      g = Math.max(0, OCEAN_RGB[1] - m);
+      b = Math.max(0, OCEAN_RGB[2] - m);
+    }
+
+    out[offset] = r;
+    out[offset + 1] = g;
+    out[offset + 2] = b;
+    out[offset + 3] = 255;
+  }
+
   function terrainCanvas(terrain: Uint8Array, width: number, height: number): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const image = canvas.getContext("2d").createImageData(width, height),
+    const ctx = canvas.getContext("2d")!;
+    const image = ctx.createImageData(width, height),
       pixels = image.data;
     for (let i = 0; i < width * height; i++) {
-      const value = terrain[i],
-        land = (value & 0x80) !== 0,
-        elevation = value & 0x7f;
-      const red = !land ? 44 : elevation >= 0x18 ? 150 : elevation >= 0x0c ? 120 : 104;
-      const green = !land ? 92 : elevation >= 0x18 ? 132 : elevation >= 0x0c ? 140 : 142;
-      const blue = !land ? 140 : elevation >= 0x18 ? 96 : elevation >= 0x0c ? 86 : 90;
-      const at = i * 4;
-      pixels[at] = red;
-      pixels[at + 1] = green;
-      pixels[at + 2] = blue;
-      pixels[at + 3] = 255;
+      encodeTerrainTile(terrain[i], pixels, i * 4);
     }
-    canvas.getContext("2d").putImageData(image, 0, 0);
+    ctx.putImageData(image, 0, 0);
     return canvas;
   }
 

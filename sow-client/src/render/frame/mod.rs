@@ -397,7 +397,10 @@ impl SowApp {
                         .as_ref()
                         .is_some_and(|c| c.key == palette_key);
                     if !cache_hit {
-                        let default_player_color = pack_player_territory_color([0.5; 3], blend_mode);
+                        let default_player_color = pack_player_territory_color(
+                            sow_core::player::TRIBE_TERRITORY_RGB,
+                            blend_mode,
+                        );
                         let mut colors = Box::new(crate::render::gpu::PlayerColors {
                             colors: [[default_player_color; 4];
                                 crate::render::gpu::PLAYER_COLOR_SLOTS / 4],

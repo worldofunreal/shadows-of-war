@@ -677,7 +677,9 @@ impl WarpFleet {
         let current_tile = path.first().copied().unwrap_or(src_tile);
         let path_cursor = if matches!(
             unit_type,
-            crate::game::UnitType::TransportShip | crate::game::UnitType::Warship
+            crate::game::UnitType::TransportShip
+                | crate::game::UnitType::Warship
+                | crate::game::UnitType::TradeShip
         ) && !path.is_empty()
         {
             1
@@ -716,7 +718,9 @@ impl WarpFleet {
         self.path_cursor =
             if matches!(
                 self.unit_type,
-                crate::game::UnitType::TransportShip | crate::game::UnitType::Warship
+                crate::game::UnitType::TransportShip
+                    | crate::game::UnitType::Warship
+                    | crate::game::UnitType::TradeShip
             ) && !path.is_empty()
             {
                 1
