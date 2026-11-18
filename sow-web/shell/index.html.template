@@ -676,6 +676,12 @@
                 if (typeof wasm.SOW_wake_event_loop === "function") {
                     window.SOW_wake_event_loop = wasm.SOW_wake_event_loop;
                 }
+                if (typeof wasm.SOW_perf_report === "function") {
+                    window.SOW_perf_report = wasm.SOW_perf_report;
+                }
+                if (typeof wasm.SOW_perf_capture === "function") {
+                    window.SOW_perf_capture = wasm.SOW_perf_capture;
+                }
                 if (typeof wasm.sow_set_portal_audio_muted === "function") {
                     window.SOW_setPortalAudioMuted = wasm.sow_set_portal_audio_muted;
                     wasm.sow_set_portal_audio_muted(!!(window.SOW_adPlaying || window.SOW_PORTAL_MUTE_AUDIO));

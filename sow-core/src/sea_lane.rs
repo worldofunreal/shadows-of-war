@@ -21,7 +21,7 @@ impl SeaLane {
 }
 
 /// Find the first water tile adjacent to a Port's 2×2 footprint at `port_idx`.
-fn adjacent_water_tile(map: &crate::map::GameMap, land_idx: u32) -> Option<u32> {
+pub(crate) fn adjacent_water_tile(map: &crate::map::GameMap, land_idx: u32) -> Option<u32> {
     let mut found = None;
     crate::building::for_each_structure_coastal_water_tile(
         map,
@@ -30,6 +30,29 @@ fn adjacent_water_tile(map: &crate::map::GameMap, land_idx: u32) -> Option<u32> 
         |tile| {
             if found.is_none() {
                 found = Some(tile);
+            }
+        },
+    );
+    found
+}
+
+/// Find the first coastal water tile adjacent to a Port that belongs to a valid water component.
+pub(crate) fn adjacent_water_tile_with_component(
+    map: &crate::map::GameMap,
+    water: &crate::water_components::WaterComponents,
+    land_idx: u32,
+) -> Option<(u32, u32)> {
+    let mut found = None;
+    crate::building::for_each_structure_coastal_water_tile(
+        map,
+        crate::game::BuildingKind::Port,
+        land_idx,
+        |tile| {
+            if found.is_none() {
+                let comp = water.component_of(tile);
+                if comp > 0 {
+                    found = Some((tile, comp));
+                }
             }
         },
     );
@@ -137,9 +160,31 @@ pub fn update_sea_lanes(engine: &mut crate::engine::SowEngine) {
     }
 }
 
-/// Route a fleet through the sea lane graph from a source port to a destination port.
-/// Returns the concatenated water-tile path, or None if no route exists.
-pub fn route_through_lanes(
+/// Pre-built adjacency list for a slice of [`SeaLane`]s so repeated queries do not rebuild it.
+#[derive(Default, Clone)]
+pub(crate) struct SeaLaneAdjacency {
+    adj: std::collections::HashMap<u64, Vec<(u64, usize)>>,
+}
+
+impl SeaLaneAdjacency {
+    pub(crate) fn build(sea_lanes: &[SeaLane]) -> Self {
+        let mut adj: std::collections::HashMap<u64, Vec<(u64, usize)>> =
+            std::collections::HashMap::new();
+        for (idx, lane) in sea_lanes.iter().enumerate() {
+            adj.entry(lane.port_a_id)
+                .or_default()
+                .push((lane.port_b_id, idx));
+            adj.entry(lane.port_b_id)
+                .or_default()
+                .push((lane.port_a_id, idx));
+        }
+        Self { adj }
+    }
+}
+
+/// Route a fleet through a pre-built sea lane adjacency graph from `src_port_id` to `dst_port_id`.
+pub(crate) fn route_through_adjacency(
+    adjacency: &SeaLaneAdjacency,
     sea_lanes: &[SeaLane],
     src_port_id: u64,
     dst_port_id: u64,
@@ -147,24 +192,13 @@ pub fn route_through_lanes(
     if src_port_id == dst_port_id {
         return Some(Vec::new());
     }
-
-    // Build adjacency from lanes: port_id -> [(neighbor_port_id, lane_index)]
-    let mut adj: std::collections::HashMap<u64, Vec<(u64, usize)>> =
-        std::collections::HashMap::new();
-    for (idx, lane) in sea_lanes.iter().enumerate() {
-        adj.entry(lane.port_a_id)
-            .or_default()
-            .push((lane.port_b_id, idx));
-        adj.entry(lane.port_b_id)
-            .or_default()
-            .push((lane.port_a_id, idx));
+    if !adjacency.adj.contains_key(&src_port_id) || !adjacency.adj.contains_key(&dst_port_id) {
+        return None;
     }
 
-    // Dijkstra on the port graph (typically < 30 nodes)
     let mut dist: std::collections::HashMap<u64, u32> = std::collections::HashMap::new();
     let mut prev: std::collections::HashMap<u64, (u64, usize, bool)> =
         std::collections::HashMap::new();
-    // (port_id_from, lane_index, reversed)
     let mut heap = std::collections::BinaryHeap::new();
 
     dist.insert(src_port_id, 0);
@@ -177,7 +211,7 @@ pub fn route_through_lanes(
         if cost > *dist.get(&port).unwrap_or(&u32::MAX) {
             continue;
         }
-        if let Some(neighbors) = adj.get(&port) {
+        if let Some(neighbors) = adjacency.adj.get(&port) {
             for &(neighbor, lane_idx) in neighbors {
                 let lane = &sea_lanes[lane_idx];
                 let edge_cost = lane.distance();
@@ -196,7 +230,6 @@ pub fn route_through_lanes(
         return None;
     }
 
-    // Reconstruct path by tracing prev pointers
     let mut lane_segments: Vec<(usize, bool)> = Vec::new();
     let mut current = dst_port_id;
     while current != src_port_id {
@@ -206,12 +239,10 @@ pub fn route_through_lanes(
     }
     lane_segments.reverse();
 
-    // Concatenate tile paths
     let mut full_path = Vec::new();
     for (lane_idx, reversed) in lane_segments {
         let lane = &sea_lanes[lane_idx];
         if reversed {
-            // Traverse B→A: reverse the path
             for &tile in lane.path.iter().rev() {
                 if full_path.last() != Some(&tile) {
                     full_path.push(tile);
@@ -227,4 +258,18 @@ pub fn route_through_lanes(
     }
 
     Some(full_path)
+}
+
+/// Route a fleet through the sea lane graph from a source port to a destination port.
+/// Returns the concatenated water-tile path, or None if no route exists.
+pub fn route_through_lanes(
+    sea_lanes: &[SeaLane],
+    src_port_id: u64,
+    dst_port_id: u64,
+) -> Option<Vec<u32>> {
+    if src_port_id == dst_port_id {
+        return Some(Vec::new());
+    }
+    let adjacency = SeaLaneAdjacency::build(sea_lanes);
+    route_through_adjacency(&adjacency, sea_lanes, src_port_id, dst_port_id)
 }

@@ -1,6 +1,6 @@
 use super::cpu_prep::{
     MapGlobals, PlayerColors, PlayerSkinStyles, compute_has_border, fill_terrain_buffer,
-    get_neighbors, get_neighbors_8,
+    get_neighbors_8,
 };
 use crate::context::RenderContext;
 use blade_graphics as gpu;
@@ -98,7 +98,8 @@ impl MapRenderer {
             let terrain_byte = initial_terrain[idx as usize];
             let is_land = (terrain_byte & 0x80) != 0;
             if is_land {
-                let neighbors = get_neighbors(idx, width, height);
+                // Include diagonal neighbors so reflex 90° coastline corners pass `has_water_neighbor`.
+                let neighbors = get_neighbors_8(idx, width, height);
                 let mut water = false;
                 for &n_opt in &neighbors {
                     if let Some(n) = n_opt {

@@ -8,7 +8,7 @@ use crate::game_config::max_tiles_cap_for_troops;
 use crate::geo_entities::{Ability, LossWhen, Side, Source, Target};
 use crate::map::TerrainType;
 use crate::rng::{NextIntExt, stable_tile_sample};
-use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 const CAPTURE_COST_VARIATION_SALT: u64 = 0xA076_1D64_78BD_642F;
 const CAPTURE_COST_VARIATION: f64 = 0.10;
@@ -16,6 +16,8 @@ const NEUTRAL_CAPTURE_SPEED_MULTIPLIER: f64 = 3.0;
 const FINISHING_TILES_AT_START: u32 = 8;
 const FINISHING_TILES_MAX: u32 = 36;
 const FINISHING_TILES_MAX_COUNT: usize = FINISHING_TILES_MAX as usize;
+const ENCLOSURE_IMMEDIATE_TILE_THRESHOLD: u32 = 100;
+const ENCLOSURE_CHECK_INTERVAL_TICKS: u64 = 10;
 
 #[derive(Clone, Copy)]
 struct FinishingForce {
@@ -575,8 +577,54 @@ impl SowEngine {
             pre_defeat_pending,
         );
 
-        let mut eliminated = Vec::new();
+        let mut due_victims = DenseBitSet::new();
+        let tick = self.state.tick;
+        let pending_list: Vec<u16> = self
+            .pending_enclosure_victims
+            .ones()
+            .map(|id| id as u16)
+            .collect();
+        for victim_id in pending_list {
+            let Some(player) = self.state.player(victim_id) else {
+                self.pending_enclosure_victims.remove(u32::from(victim_id));
+                continue;
+            };
+            if !player.alive || player.tile_count == 0 {
+                self.pending_enclosure_victims.remove(u32::from(victim_id));
+                continue;
+            }
+            if player.tile_count < ENCLOSURE_IMMEDIATE_TILE_THRESHOLD
+                || tick
+                    .wrapping_add(u64::from(victim_id))
+                    .is_multiple_of(ENCLOSURE_CHECK_INTERVAL_TICKS)
+            {
+                self.pending_enclosure_victims.remove(u32::from(victim_id));
+                due_victims.insert(u32::from(victim_id));
+            }
+        }
         for victim_id in changed_victims.ones().map(|id| id as u16) {
+            let Some(player) = self.state.player(victim_id) else {
+                self.pending_enclosure_victims.remove(u32::from(victim_id));
+                continue;
+            };
+            if !player.alive || player.tile_count == 0 {
+                self.pending_enclosure_victims.remove(u32::from(victim_id));
+                continue;
+            }
+            if player.tile_count < ENCLOSURE_IMMEDIATE_TILE_THRESHOLD
+                || tick
+                    .wrapping_add(u64::from(victim_id))
+                    .is_multiple_of(ENCLOSURE_CHECK_INTERVAL_TICKS)
+            {
+                self.pending_enclosure_victims.remove(u32::from(victim_id));
+                due_victims.insert(u32::from(victim_id));
+            } else {
+                self.pending_enclosure_victims.insert(u32::from(victim_id));
+            }
+        }
+
+        let mut eliminated = Vec::new();
+        for victim_id in due_victims.ones().map(|id| id as u16) {
             if !self
                 .state
                 .player(victim_id)
@@ -602,7 +650,11 @@ impl SowEngine {
                 continue;
             }
 
-            let primary = self.primary_border_cluster(victim_id, &clusters);
+            let primary = if clusters.len() == 1 {
+                0
+            } else {
+                self.primary_border_cluster(victim_id, &clusters)
+            };
             let mut candidates = Vec::new();
             if clusters.len() == 1 {
                 if let Some(captor) = self.surrounded_by_single_enemy(victim_id, &clusters[0]) {
@@ -971,36 +1023,42 @@ impl SowEngine {
         self.fleets.sort_unstable_by_key(|fleet| fleet.id);
     }
 
-    fn border_clusters(&self, player_id: u16) -> Vec<BorderCluster> {
+    fn border_clusters(&mut self, player_id: u16) -> Vec<BorderCluster> {
+        let width = self.state.map.width;
+        let map_len = self.state.map.terrain.len();
+        if width == 0 || map_len == 0 {
+            return Vec::new();
+        }
         let Some(player) = self.state.player(player_id) else {
             return Vec::new();
         };
-        if self.state.map.width == 0 {
-            return Vec::new();
-        }
+        self.enclosure_scratch.ensure_len(map_len);
+        let stamp = self.enclosure_scratch.next_tile_stamp();
+        let tile_stamp = &mut self.enclosure_scratch.tile_stamp;
+        let map = &self.state.map;
 
-        let mut seen = HashSet::new();
         let mut clusters = Vec::new();
         for start in player.border_tiles.ones() {
-            if !seen.insert(start) {
+            let start_idx = start as usize;
+            if start_idx >= map_len || tile_stamp[start_idx] == stamp {
                 continue;
             }
+            tile_stamp[start_idx] = stamp;
             let mut tiles = vec![start];
             let mut cursor = 0;
-            let (mut min_x, mut min_y, mut max_x, mut max_y) = (
-                start % self.state.map.width,
-                start / self.state.map.width,
-                start % self.state.map.width,
-                start / self.state.map.width,
-            );
+            let sx = start % width;
+            let sy = start / width;
+            let (mut min_x, mut min_y, mut max_x, mut max_y) = (sx, sy, sx, sy);
             while cursor < tiles.len() {
                 let tile = tiles[cursor];
                 cursor += 1;
-                let x = tile % self.state.map.width;
-                let y = tile / self.state.map.width;
-                self.state.map.for_each_neighbor(x, y, |nx, ny| {
-                    let neighbor = ny * self.state.map.width + nx;
-                    if player.border_tiles.contains(neighbor) && seen.insert(neighbor) {
+                let x = tile % width;
+                let y = tile / width;
+                map.for_each_neighbor(x, y, |nx, ny| {
+                    let neighbor = ny * width + nx;
+                    let n_idx = neighbor as usize;
+                    if player.border_tiles.contains(neighbor) && tile_stamp[n_idx] != stamp {
+                        tile_stamp[n_idx] = stamp;
                         min_x = min_x.min(nx);
                         min_y = min_y.min(ny);
                         max_x = max_x.max(nx);
@@ -1017,77 +1075,150 @@ impl SowEngine {
         clusters
     }
 
-    fn primary_border_cluster(&self, player_id: u16, clusters: &[BorderCluster]) -> usize {
+    fn primary_border_cluster(&mut self, player_id: u16, clusters: &[BorderCluster]) -> usize {
         let largest = clusters
             .iter()
             .enumerate()
             .max_by_key(|(index, cluster)| (cluster.tiles.len(), std::cmp::Reverse(*index)))
             .map_or(0, |(index, _)| index);
-        if !self.border_cluster_is_hole(player_id, largest, clusters) {
+        if clusters.len() <= 1 {
+            return largest;
+        }
+        let map_len = self.state.map.terrain.len();
+        self.enclosure_scratch.ensure_len(map_len);
+        let comp_stamp_val = self.enclosure_scratch.next_comp_stamp();
+        let mut cluster_comp = vec![0u32; clusters.len()];
+        let mut next_comp_id = 0u32;
+
+        if !self.border_cluster_is_hole_cached(
+            player_id,
+            largest,
+            clusters,
+            comp_stamp_val,
+            &mut cluster_comp,
+            &mut next_comp_id,
+        ) {
             return largest;
         }
 
-        clusters
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| !self.border_cluster_is_hole(player_id, *index, clusters))
-            .max_by_key(|(index, cluster)| (cluster.tiles.len(), std::cmp::Reverse(*index)))
-            .map_or(largest, |(index, _)| index)
+        let mut best: Option<(usize, usize)> = None;
+        for (index, cluster) in clusters.iter().enumerate() {
+            if self.border_cluster_is_hole_cached(
+                player_id,
+                index,
+                clusters,
+                comp_stamp_val,
+                &mut cluster_comp,
+                &mut next_comp_id,
+            ) {
+                continue;
+            }
+            let len = cluster.tiles.len();
+            if best.is_none_or(|(best_len, best_idx)| len > best_len || (len == best_len && index < best_idx)) {
+                best = Some((len, index));
+            }
+        }
+        best.map_or(largest, |(_, index)| index)
     }
 
-    fn border_cluster_is_hole(
-        &self,
+    fn border_cluster_is_hole_cached(
+        &mut self,
         player_id: u16,
         index: usize,
         clusters: &[BorderCluster],
+        comp_stamp_val: u32,
+        cluster_comp: &mut [u32],
+        next_comp_id: &mut u32,
     ) -> bool {
-        let cluster = &clusters[index];
-        clusters.iter().enumerate().any(|(other_index, other)| {
-            other_index != index
-                && other.bounds[0] <= cluster.bounds[0]
-                && other.bounds[1] <= cluster.bounds[1]
-                && other.bounds[2] >= cluster.bounds[2]
-                && other.bounds[3] >= cluster.bounds[3]
-                && self.border_clusters_share_territory(player_id, cluster, other)
-        })
-    }
-
-    fn border_clusters_share_territory(
-        &self,
-        player_id: u16,
-        first: &BorderCluster,
-        second: &BorderCluster,
-    ) -> bool {
-        let second_tiles: HashSet<u32> = second.tiles.iter().copied().collect();
-        let mut seen = HashSet::new();
-        let mut stack = VecDeque::new();
-        for &tile in &first.tiles {
-            if self
-                .state
-                .map
-                .owner_id(tile % self.state.map.width, tile / self.state.map.width)
-                == player_id
-                && seen.insert(tile)
+        let bounds = clusters[index].bounds;
+        for (other_index, other) in clusters.iter().enumerate() {
+            if other_index == index
+                || other.bounds[0] > bounds[0]
+                || other.bounds[1] > bounds[1]
+                || other.bounds[2] < bounds[2]
+                || other.bounds[3] < bounds[3]
             {
-                stack.push_back(tile);
+                continue;
             }
-        }
-        while let Some(tile) = stack.pop_front() {
-            if second_tiles.contains(&tile) {
+            let first_comp = self.ensure_cluster_territory_component(
+                player_id,
+                index,
+                clusters,
+                comp_stamp_val,
+                cluster_comp,
+                next_comp_id,
+            );
+            if first_comp == 0 {
+                continue;
+            }
+            let second_comp = self.ensure_cluster_territory_component(
+                player_id,
+                other_index,
+                clusters,
+                comp_stamp_val,
+                cluster_comp,
+                next_comp_id,
+            );
+            if second_comp == first_comp {
                 return true;
             }
-            self.state.map.for_each_neighbor(
-                tile % self.state.map.width,
-                tile / self.state.map.width,
-                |nx, ny| {
-                    let neighbor = ny * self.state.map.width + nx;
-                    if self.state.map.owner_id(nx, ny) == player_id && seen.insert(neighbor) {
-                        stack.push_back(neighbor);
-                    }
-                },
-            );
         }
         false
+    }
+
+    /// Lazily assigns an 8-connected owned-territory component ID to `clusters[cluster_idx]`.
+    /// Each landmass component is flooded at most once across all hole checks for this victim.
+    fn ensure_cluster_territory_component(
+        &mut self,
+        player_id: u16,
+        cluster_idx: usize,
+        clusters: &[BorderCluster],
+        comp_stamp_val: u32,
+        cluster_comp: &mut [u32],
+        next_comp_id: &mut u32,
+    ) -> u32 {
+        if cluster_comp[cluster_idx] != 0 {
+            return cluster_comp[cluster_idx];
+        }
+        let width = self.state.map.width;
+        let map = &self.state.map;
+        let start = clusters[cluster_idx]
+            .tiles
+            .iter()
+            .copied()
+            .find(|&tile| map.owner_id(tile % width, tile / width) == player_id);
+        let Some(start) = start else {
+            return 0;
+        };
+        let start_idx = start as usize;
+        let scratch = &mut self.enclosure_scratch;
+        if scratch.comp_stamp[start_idx] == comp_stamp_val {
+            let existing = scratch.comp_id[start_idx];
+            cluster_comp[cluster_idx] = existing;
+            return existing;
+        }
+        *next_comp_id += 1;
+        let cid = *next_comp_id;
+        scratch.comp_stamp[start_idx] = comp_stamp_val;
+        scratch.comp_id[start_idx] = cid;
+        scratch.queue.clear();
+        scratch.queue.push(start);
+        let mut head = 0usize;
+        while head < scratch.queue.len() {
+            let tile = scratch.queue[head];
+            head += 1;
+            map.for_each_neighbor(tile % width, tile / width, |nx, ny| {
+                let neighbor = ny * width + nx;
+                let n_idx = neighbor as usize;
+                if map.owner_id(nx, ny) == player_id && scratch.comp_stamp[n_idx] != comp_stamp_val {
+                    scratch.comp_stamp[n_idx] = comp_stamp_val;
+                    scratch.comp_id[n_idx] = cid;
+                    scratch.queue.push(neighbor);
+                }
+            });
+        }
+        cluster_comp[cluster_idx] = cid;
+        cid
     }
 
     fn surrounded_by_single_enemy(&self, victim_id: u16, cluster: &BorderCluster) -> Option<u16> {
@@ -1178,33 +1309,43 @@ impl SowEngine {
             && max_enemy_y >= cluster.bounds[3]
     }
 
-    fn territory_is_enclosed(&self, victim_id: u16, start: u32) -> bool {
+    fn territory_is_enclosed(&mut self, victim_id: u16, start: u32) -> bool {
         let width = self.state.map.width;
         let height = self.state.map.height;
-        let mut seen = HashSet::from([start]);
-        let mut stack = vec![start];
-        while let Some(tile) = stack.pop() {
+        let map_len = self.state.map.terrain.len();
+        if width == 0 || height == 0 || start as usize >= map_len {
+            return false;
+        }
+        self.enclosure_scratch.ensure_len(map_len);
+        let stamp = self.enclosure_scratch.next_tile_stamp();
+        let scratch = &mut self.enclosure_scratch;
+        scratch.tile_stamp[start as usize] = stamp;
+        scratch.queue.clear();
+        scratch.queue.push(start);
+        let map = &self.state.map;
+        while let Some(tile) = scratch.queue.pop() {
             let x = tile % width;
             let y = tile / width;
             if x == 0 || y == 0 || x + 1 == width || y + 1 == height {
                 return false;
             }
             let mut open = false;
-            self.state.map.for_each_neighbor4(x, y, |nx, ny| {
+            map.for_each_neighbor4(x, y, |nx, ny| {
                 let neighbor = ny * width + nx;
-                if seen.contains(&neighbor) {
+                let n_idx = neighbor as usize;
+                if scratch.tile_stamp[n_idx] == stamp {
                     return;
                 }
-                let owner = self.state.map.owner_id(nx, ny);
+                let owner = map.owner_id(nx, ny);
                 if owner != 0 && owner != victim_id {
                     return;
                 }
-                if owner == 0 && !self.state.map.terrain[self.state.map.ref_id(nx, ny)].is_land() {
+                if owner == 0 && !map.terrain[map.ref_id(nx, ny)].is_land() {
                     open = true;
                     return;
                 }
-                seen.insert(neighbor);
-                stack.push(neighbor);
+                scratch.tile_stamp[n_idx] = stamp;
+                scratch.queue.push(neighbor);
             });
             if open {
                 return false;

@@ -382,6 +382,118 @@ pub(crate) fn players_can_move_resources(
 
 pub type SeaLaneCalcState = (usize, Vec<crate::sea_lane::SeaLane>, Vec<(u64, u32, u32)>);
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct IndexedTradePort {
+    pub id: u64,
+    pub owner_id: u16,
+    pub tile_idx: u32,
+    pub active_level: u8,
+    pub water_tile: u32,
+    pub water_component: u32,
+    pub x: u32,
+    pub y: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PortTopologyCache {
+    pub valid: bool,
+    pub fingerprint: u64,
+    pub ready_ports: Vec<IndexedTradePort>,
+    pub by_tile: std::collections::HashMap<u32, usize>,
+    pub by_component: std::collections::HashMap<u32, Vec<usize>>,
+    /// Per water component: `0` when 2+ distinct owners have ready ports; `owner_id` when only one owner does.
+    pub component_unique_owner: std::collections::HashMap<u32, u16>,
+    /// Exact active port levels per player (matches `player_port_levels`, including upgrading ports).
+    pub port_levels_by_owner: std::collections::HashMap<u16, u32>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CachedNavalPort {
+    pub id: u64,
+    pub owner_id: u16,
+    pub tile_idx: u32,
+    pub active_level: u8,
+    pub water_tiles: Vec<u32>,
+    pub water_components: Vec<u32>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ActiveNavalPortsCache {
+    pub valid: bool,
+    pub fingerprint: u64,
+    pub ports: std::sync::Arc<Vec<CachedNavalPort>>,
+}
+
+/// Reusable generation-stamped scratch buffers for territory enclosure checks (replaces per-tick HashSets).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct EnclosureScratch {
+    pub tile_stamp: Vec<u32>,
+    pub current_tile_stamp: u32,
+    pub comp_stamp: Vec<u32>,
+    pub comp_id: Vec<u32>,
+    pub current_comp_stamp: u32,
+    pub queue: Vec<u32>,
+}
+
+impl EnclosureScratch {
+    pub(crate) fn ensure_len(&mut self, len: usize) {
+        if self.tile_stamp.len() != len {
+            self.tile_stamp.resize(len, 0);
+            self.tile_stamp.fill(0);
+            self.current_tile_stamp = 0;
+        }
+        if self.comp_stamp.len() != len {
+            self.comp_stamp.resize(len, 0);
+            self.comp_stamp.fill(0);
+            self.comp_id.resize(len, 0);
+            self.current_comp_stamp = 0;
+        }
+    }
+
+    pub(crate) fn next_tile_stamp(&mut self) -> u32 {
+        self.current_tile_stamp = self.current_tile_stamp.wrapping_add(1);
+        if self.current_tile_stamp == 0 {
+            self.tile_stamp.fill(0);
+            self.current_tile_stamp = 1;
+        }
+        self.current_tile_stamp
+    }
+
+    pub(crate) fn next_comp_stamp(&mut self) -> u32 {
+        self.current_comp_stamp = self.current_comp_stamp.wrapping_add(1);
+        if self.current_comp_stamp == 0 {
+            self.comp_stamp.fill(0);
+            self.current_comp_stamp = 1;
+        }
+        self.current_comp_stamp
+    }
+}
+
+/// Cheap deterministic fingerprint over all Port buildings (O(buildings), ~1µs) so port caches
+/// stay valid even after direct test mutations or checkpoint restores without false invalidations
+/// from City/Farm/Factory/Tower/SAM upgrades.
+pub(crate) fn compute_port_fingerprint(
+    buildings: &[Building],
+    map_width: u32,
+    water_tile_count: usize,
+) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325
+        ^ u64::from(map_width).wrapping_mul(0x9e37_79b9_7f4a_7c15)
+        ^ (water_tile_count as u64).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    for b in buildings {
+        if b.kind != crate::game::BuildingKind::Port {
+            continue;
+        }
+        let packed = (u64::from(b.owner_id) << 48)
+            | (u64::from(b.level) << 40)
+            | (u64::from(b.under_construction) << 39)
+            | u64::from(b.tile_idx);
+        h = (h ^ b.id).wrapping_mul(0x1000_0000_01b3);
+        h = (h ^ packed).wrapping_mul(0x1000_0000_01b3);
+    }
+    h
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct BotWorkCounters {
     #[cfg(test)]
@@ -543,6 +655,15 @@ pub struct SowEngine {
     #[serde(skip)]
     pub(crate) finish_threshold_cache: Option<(u64, u32, u32)>,
     #[serde(skip)]
+    pub(crate) port_topology_cache: PortTopologyCache,
+    #[serde(skip)]
+    pub(crate) active_naval_ports_cache: ActiveNavalPortsCache,
+    #[serde(skip)]
+    pub(crate) enclosure_scratch: EnclosureScratch,
+    /// Large-empire victims (`tile_count >= 100`) queued for their staggered enclosure check.
+    #[serde(default)]
+    pub(crate) pending_enclosure_victims: crate::bitset::DenseBitSet,
+    #[serde(skip)]
     pub(crate) bot_work: BotWorkCounters,
     #[cfg(test)]
     #[serde(skip)]
@@ -669,6 +790,10 @@ impl SowEngine {
             bot_naval_slots_used: Vec::new(),
             playing_ticks: 0,
             finish_threshold_cache: None,
+            port_topology_cache: PortTopologyCache::default(),
+            active_naval_ports_cache: ActiveNavalPortsCache::default(),
+            enclosure_scratch: EnclosureScratch::default(),
+            pending_enclosure_victims: crate::bitset::DenseBitSet::new(),
             bot_work: BotWorkCounters::default(),
             #[cfg(test)]
             test_last_ai_intents: Vec::new(),
@@ -2147,6 +2272,7 @@ mod snapshot;
 mod spawn;
 pub use spawn::HumanSpawn;
 mod tick;
+pub use tick::TickProfile;
 
 #[cfg(test)]
 mod tests {

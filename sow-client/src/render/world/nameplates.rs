@@ -30,6 +30,7 @@ const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
 const SPAWN_STICKY_HOLD: Duration = Duration::from_millis(120);
 const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
 const LAND_CACHE_ENTRY_BUDGET: Duration = Duration::from_millis(8);
+const LAND_CACHE_GAMEPLAY_BUDGET: Duration = Duration::from_micros(1_500);
 const LOD_DOT_RADIUS: f32 = 2.0;
 const LOD_STAR_DIAMETER: f32 = 12.0;
 const EMOTE_BUBBLE_FONT_RATIO: f32 = 0.22;
@@ -1819,7 +1820,38 @@ fn sample_nameplates(
     let local_spawn = sim
         .latest_local_spawn
         .filter(|(tick, _, _)| system.local_spawn_tick != Some(*tick));
-    if !nameplate_sample_due(system.sample_tick, snapshot.tick, my_id_changed)
+
+    let mut refresh_just_completed = false;
+    if let Some(engine) = sim.engine.as_ref()
+        && system.land_cache.rebuild_in_progress()
+    {
+        let rebuild_started_at = crate::diag::startup_perf_timer();
+        let step_result = system.land_cache.step_rebuild(
+            &engine.state.map,
+            snapshot.tick,
+            LAND_CACHE_GAMEPLAY_BUDGET,
+        );
+        if let Some(started_at) = rebuild_started_at {
+            crate::diag::record_startup_perf(
+                crate::diag::StartupMetric::LandCacheRebuild,
+                started_at,
+            );
+        }
+        match step_result {
+            Ok(true) => refresh_just_completed = true,
+            Ok(false) => {}
+            Err(()) => {
+                system.order.clear();
+                system.active_ids.clear();
+                system.visuals.clear();
+                system.badge_animations.clear();
+                return;
+            }
+        }
+    }
+
+    if !refresh_just_completed
+        && !nameplate_sample_due(system.sample_tick, snapshot.tick, my_id_changed)
         && local_spawn.is_none()
     {
         return;
@@ -1856,14 +1888,27 @@ fn sample_nameplates(
     );
     if needs_rebuild {
         let rebuild_started_at = crate::diag::startup_perf_timer();
-        let rebuilt = system.land_cache.rebuild(&engine.state.map, snapshot.tick);
+        let can_step_incrementally =
+            !new_player_needs_landmass && system.land_cache.has_result_for(&engine.state.map);
+        let failed = if can_step_incrementally {
+            if !system.land_cache.rebuild_in_progress() {
+                system
+                    .land_cache
+                    .step_rebuild(&engine.state.map, snapshot.tick, LAND_CACHE_GAMEPLAY_BUDGET)
+                    .is_err()
+            } else {
+                false
+            }
+        } else {
+            !system.land_cache.rebuild(&engine.state.map, snapshot.tick)
+        };
         if let Some(started_at) = rebuild_started_at {
             crate::diag::record_startup_perf(
                 crate::diag::StartupMetric::LandCacheRebuild,
                 started_at,
             );
         }
-        if !rebuilt {
+        if failed {
             system.order.clear();
             system.active_ids.clear();
             system.visuals.clear();

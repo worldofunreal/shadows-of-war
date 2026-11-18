@@ -540,7 +540,6 @@ export interface HudMapMenuBuilding {
 export interface HudBuildingPlacement {
     pending: boolean;
     can_confirm: boolean;
-    adjusted?: boolean;
     kind?: string;
     tile_idx?: number;
     anchor_x?: number;

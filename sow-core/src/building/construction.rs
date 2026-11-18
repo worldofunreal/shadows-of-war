@@ -3,9 +3,33 @@ use crate::game::{BuildingKind, GameEvent, GamePhase, UnitType};
 use crate::geo_entities::{Ability, District, Source};
 use crate::player::Leader;
 
-/// Advance construction timers; emits [`GameEvent::StructureReady`].
-/// Split out for unit tests (`advance_building_construction_tick`).
 impl SowEngine {
+    fn credit_city_upgrade_reinforcements(&mut self, building: crate::building::Building) {
+        let Some(player) = self.state.player(building.owner_id) else {
+            return;
+        };
+        if !player.alive || player.tile_count == 0 {
+            return;
+        }
+        let agg = self
+            .building_aggregates
+            .get(usize::from(building.owner_id))
+            .copied()
+            .unwrap_or_default();
+        let capacity = self.troop_capacity(player, agg);
+        let mut base =
+            self.state.config.city_max_troops * player.leader.city_troop_capacity_multiplier();
+        if player.player_type == crate::player::PlayerType::Bot {
+            base /= 1.5;
+        }
+        let troops = crate::building::city_upgrade_reinforcements(building.level, base);
+        if let Some(player) = self.state.player_mut(building.owner_id) {
+            player.max_troops = capacity;
+            player.credit_troops_capped(troops, capacity);
+        }
+    }
+
+    /// Advance construction timers and emit [`GameEvent::StructureReady`].
     pub fn execute_construction(&mut self) {
         if self.state.phase != GamePhase::Playing {
             return;
@@ -53,7 +77,13 @@ impl SowEngine {
                 completed.push(*b);
             }
         }
+        if completed.iter().any(|b| b.kind == BuildingKind::City && b.level > 1) {
+            self.refresh_building_aggregates();
+        }
         for building in completed {
+            if building.kind == BuildingKind::City && building.level > 1 {
+                self.credit_city_upgrade_reinforcements(building);
+            }
             self.hero_structure_ready(building);
         }
 
@@ -118,6 +148,76 @@ impl SowEngine {
             );
         }
     }
+}
+
+const MAX_REGIONAL_TRADE_PORTS: usize = 12;
+const SHORT_RANGE_MIN_DIST_SQ: u64 = 28 * 28;
+const TRADE_SHIP_SPAWN_SPACING_TICKS: u64 = 15;
+
+impl SowEngine {
+    pub(crate) fn refresh_port_topology_cache(&mut self) {
+        let map_width = self.state.map.width.max(1);
+        let fp = crate::engine::compute_port_fingerprint(
+            &self.buildings,
+            map_width,
+            self.water.components.len(),
+        );
+        if self.port_topology_cache.valid && self.port_topology_cache.fingerprint == fp {
+            return;
+        }
+        let cache = &mut self.port_topology_cache;
+        cache.ready_ports.clear();
+        cache.by_tile.clear();
+        cache.by_component.clear();
+        cache.component_unique_owner.clear();
+        cache.port_levels_by_owner.clear();
+
+        for b in &self.buildings {
+            if b.kind != BuildingKind::Port {
+                continue;
+            }
+            let active_level = b.active_level();
+            if active_level > 0 {
+                *cache.port_levels_by_owner.entry(b.owner_id).or_default() +=
+                    u32::from(active_level);
+            }
+            if b.under_construction || active_level < 1 {
+                continue;
+            }
+            let (water_tile, water_component) = crate::sea_lane::adjacent_water_tile_with_component(
+                &self.state.map,
+                &self.water,
+                b.tile_idx,
+            )
+            .unwrap_or((b.tile_idx, 0));
+            let idx = cache.ready_ports.len();
+            cache.ready_ports.push(crate::engine::IndexedTradePort {
+                id: b.id,
+                owner_id: b.owner_id,
+                tile_idx: b.tile_idx,
+                active_level,
+                water_tile,
+                water_component,
+                x: b.tile_idx % map_width,
+                y: b.tile_idx / map_width,
+            });
+            cache.by_tile.insert(b.tile_idx, idx);
+            if water_component > 0 {
+                cache.by_component.entry(water_component).or_default().push(idx);
+                cache
+                    .component_unique_owner
+                    .entry(water_component)
+                    .and_modify(|owner| {
+                        if *owner != 0 && *owner != b.owner_id {
+                            *owner = 0;
+                        }
+                    })
+                    .or_insert(b.owner_id);
+            }
+        }
+        cache.fingerprint = fp;
+        cache.valid = true;
+    }
 
     pub fn execute_trade_ships(&mut self) {
         if self.state.phase != GamePhase::Playing {
@@ -127,32 +227,410 @@ impl SowEngine {
             return;
         }
 
-        let ports = ready_trade_ports(&self.buildings);
-        let sea_lanes = self.state.sea_lanes.clone();
+        self.refresh_port_topology_cache();
+
+        if !self.state.sea_lanes.is_empty() {
+            self.execute_trade_ships_via_sea_lanes();
+            return;
+        }
+
+        if self.port_topology_cache.ready_ports.is_empty() {
+            let mut removed = false;
+            for i in (0..self.fleets.len()).rev() {
+                let fleet = &self.fleets[i];
+                if fleet.unit_type == UnitType::TradeShip
+                    && fleet.troops > 0.0
+                    && fleet.captured_trade_return.is_none()
+                {
+                    self.fleets.swap_remove(i);
+                    removed = true;
+                }
+            }
+            if removed {
+                self.fleets.sort_unstable_by_key(|fleet| fleet.id);
+            }
+            return;
+        }
+
+        let mut ships_per_port_tile = std::collections::HashMap::<u32, u32>::new();
+        let mut in_flight_pairs = std::collections::HashMap::<(u32, u32), u32>::new();
+        let mut to_remove = Vec::new();
+        let mut needs_reroute: Vec<(usize, u16, u32, Option<u32>, Option<u32>)> = Vec::new();
+        let mut punt_arrivals = Vec::new();
+
+        for (index, fleet) in self.fleets.iter().enumerate() {
+            if fleet.unit_type != UnitType::TradeShip || fleet.troops <= 0.0 {
+                continue;
+            }
+            if fleet.captured_trade_return.is_some() {
+                continue;
+            }
+
+            let origin = self
+                .port_topology_cache
+                .by_tile
+                .get(&fleet.src_tile)
+                .copied()
+                .map(|idx| self.port_topology_cache.ready_ports[idx])
+                .filter(|port| port.owner_id == fleet.owner_id);
+            let dst_valid = self
+                .port_topology_cache
+                .by_tile
+                .get(&fleet.dst_tile)
+                .copied()
+                .is_some_and(|idx| {
+                    self.port_topology_cache.ready_ports[idx].owner_id != fleet.owner_id
+                });
+            let arrived = (fleet.path.is_empty() && fleet.path_cursor > 0)
+                || (!fleet.path.is_empty() && fleet.path_cursor >= fleet.path.len());
+            if arrived
+                && dst_valid
+                && let Some(origin_port) = origin
+                && self
+                    .state
+                    .player(fleet.owner_id)
+                    .is_some_and(|p| p.leader.ability() == Ability::PuntGardens)
+            {
+                punt_arrivals.push(origin_port.id);
+            }
+
+            let origin_has_capacity = origin.is_some_and(|port| {
+                port.water_component > 0
+                    && self
+                        .port_topology_cache
+                        .component_unique_owner
+                        .get(&port.water_component)
+                        .is_some_and(|&only| only != port.owner_id)
+                    && ships_per_port_tile.get(&port.tile_idx).copied().unwrap_or(0)
+                        < u32::from(port.active_level)
+            });
+
+            if origin_has_capacity {
+                let origin_port = origin.unwrap();
+                *ships_per_port_tile.entry(origin_port.tile_idx).or_default() += 1;
+                if !fleet.path.is_empty() && !arrived && dst_valid {
+                    *in_flight_pairs
+                        .entry((fleet.src_tile, fleet.dst_tile))
+                        .or_default() += 1;
+                } else {
+                    needs_reroute.push((
+                        index,
+                        fleet.owner_id,
+                        fleet.current_tile,
+                        Some(origin_port.tile_idx),
+                        arrived.then_some(fleet.dst_tile),
+                    ));
+                }
+            } else {
+                // Origin port was captured, destroyed, upgrading, or over quota — try re-homing.
+                needs_reroute.push((
+                    index,
+                    fleet.owner_id,
+                    fleet.current_tile,
+                    None,
+                    arrived.then_some(fleet.dst_tile),
+                ));
+            }
+        }
+
         let map_width = self.state.map.width.max(1);
-        let capacities: std::collections::HashMap<_, _> = self
+        for (roll_seq, (index, owner_id, current_tile, fixed_origin_tile, avoid_dst)) in
+            needs_reroute.into_iter().enumerate()
+        {
+            let source_port = if let Some(origin_tile) = fixed_origin_tile {
+                self.port_topology_cache
+                    .by_tile
+                    .get(&origin_tile)
+                    .copied()
+                    .map(|idx| self.port_topology_cache.ready_ports[idx])
+            } else {
+                // Pick the closest owned ready port with spare slot capacity and foreign partners.
+                let cx = current_tile % map_width;
+                let cy = current_tile / map_width;
+                let chosen = self
+                    .port_topology_cache
+                    .ready_ports
+                    .iter()
+                    .copied()
+                    .filter(|port| {
+                        port.owner_id == owner_id
+                            && port.water_component > 0
+                            && self
+                                .port_topology_cache
+                                .component_unique_owner
+                                .get(&port.water_component)
+                                .is_some_and(|&only| only != owner_id)
+                            && ships_per_port_tile.get(&port.tile_idx).copied().unwrap_or(0)
+                                < u32::from(port.active_level)
+                    })
+                    .min_by_key(|port| {
+                        let dx = u64::from(port.x.abs_diff(cx));
+                        let dy = u64::from(port.y.abs_diff(cy));
+                        (dx * dx + dy * dy, port.id)
+                    });
+                if let Some(port) = chosen {
+                    *ships_per_port_tile.entry(port.tile_idx).or_default() += 1;
+                }
+                chosen
+            };
+
+            let Some(src_port) = source_port else {
+                to_remove.push(index);
+                continue;
+            };
+            let Some(route) = self.pick_organic_trade_route(
+                src_port,
+                avoid_dst,
+                &in_flight_pairs,
+                roll_seq as u64,
+            ) else {
+                if let Some(count) = ships_per_port_tile.get_mut(&src_port.tile_idx) {
+                    *count = count.saturating_sub(1);
+                }
+                to_remove.push(index);
+                continue;
+            };
+            let fleet = &mut self.fleets[index];
+            fleet.src_tile = route.src_tile;
+            fleet.dst_tile = route.dst_tile;
+            fleet.target_owner = route.dst_owner;
+            fleet.replace_path_arc(route.path);
+            *in_flight_pairs
+                .entry((route.src_tile, route.dst_tile))
+                .or_default() += 1;
+        }
+
+        if !to_remove.is_empty() {
+            to_remove.sort_unstable();
+            for index in to_remove.into_iter().rev() {
+                self.fleets.swap_remove(index);
+            }
+            self.fleets.sort_unstable_by_key(|fleet| fleet.id);
+        }
+        for origin_id in punt_arrivals {
+            self.hero_trade_arrived(origin_id);
+        }
+
+        // Per-port organic staggered spawn: each ready port manages its own `active_level` slots.
+        let mut spawn_candidates = Vec::new();
+        for &port in &self.port_topology_cache.ready_ports {
+            if port.water_component == 0 {
+                continue;
+            }
+            if !self
+                .state
+                .player(port.owner_id)
+                .is_some_and(|player| player.alive)
+            {
+                continue;
+            }
+            if self
+                .port_topology_cache
+                .component_unique_owner
+                .get(&port.water_component)
+                .is_none_or(|&only| only == port.owner_id)
+            {
+                continue;
+            }
+            let existing = ships_per_port_tile.get(&port.tile_idx).copied().unwrap_or(0);
+            if existing >= u32::from(port.active_level) {
+                continue;
+            }
+            // First ship of any port departs immediately; Lv2+ extra ships stagger every 15 ticks (~1.5s)
+            // so ships form spaced convoys instead of overlapping on the same pixel.
+            if existing > 0
+                && !self
+                    .state
+                    .tick
+                    .wrapping_add(port.id)
+                    .is_multiple_of(TRADE_SHIP_SPAWN_SPACING_TICKS)
+            {
+                continue;
+            }
+            spawn_candidates.push(port);
+        }
+
+        let mut new_fleets = Vec::new();
+        for (spawn_seq, port) in spawn_candidates.into_iter().enumerate() {
+            let Some(route) = self.pick_organic_trade_route(
+                port,
+                None,
+                &in_flight_pairs,
+                (spawn_seq as u64).wrapping_add(0x517c_c1b7_2722_0a95),
+            ) else {
+                continue;
+            };
+            let id = self.state.next_fleet_id;
+            self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
+            let mut fleet = crate::warp_fleet::WarpFleet::new_with_shared_path(
+                id,
+                port.owner_id,
+                route.dst_owner,
+                UnitType::TradeShip,
+                UnitType::TradeShip.max_health(),
+                (route.src_tile, route.dst_tile),
+                route.path,
+            );
+            let port_levels = self
+                .port_topology_cache
+                .port_levels_by_owner
+                .get(&port.owner_id)
+                .copied()
+                .unwrap_or_default();
+            fleet.set_speed_bonus_percent(
+                crate::building::cost::boat_speed_bonus_from_port_levels(port_levels),
+            );
+            if self
+                .state
+                .player(port.owner_id)
+                .is_some_and(|player| player.leader.has_resource_bonus_from(Source::Trade))
+            {
+                self.state.announce_leader_ability(port.owner_id, None);
+            }
+            *in_flight_pairs
+                .entry((route.src_tile, route.dst_tile))
+                .or_default() += 1;
+            *ships_per_port_tile.entry(port.tile_idx).or_default() += 1;
+            new_fleets.push(fleet);
+        }
+        for fleet in new_fleets {
+            self.add_fleet(fleet);
+        }
+    }
+
+    fn pick_organic_trade_route(
+        &mut self,
+        src: crate::engine::IndexedTradePort,
+        avoid_destination_tile: Option<u32>,
+        in_flight_pairs: &std::collections::HashMap<(u32, u32), u32>,
+        roll_salt: u64,
+    ) -> Option<TradeRoute> {
+        let comp_indices = self
+            .port_topology_cache
+            .by_component
+            .get(&src.water_component)?;
+        let mut candidates: Vec<(u64, crate::engine::IndexedTradePort)> = Vec::new();
+        let mut fallback_avoided: Option<(u64, crate::engine::IndexedTradePort)> = None;
+
+        for &idx in comp_indices {
+            let dst = self.port_topology_cache.ready_ports[idx];
+            if dst.owner_id == src.owner_id {
+                continue;
+            }
+            let dx = u64::from(src.x.abs_diff(dst.x));
+            let dy = u64::from(src.y.abs_diff(dst.y));
+            let dist_sq = dx * dx + dy * dy;
+            if Some(dst.tile_idx) == avoid_destination_tile {
+                fallback_avoided = Some((dist_sq, dst));
+                continue;
+            }
+            candidates.push((dist_sq, dst));
+        }
+
+        if candidates.is_empty() {
+            if let Some(fallback) = fallback_avoided {
+                candidates.push(fallback);
+            } else {
+                return None;
+            }
+        }
+
+        // Regional band: select the closest MAX_REGIONAL_TRADE_PORTS ports in O(P).
+        if candidates.len() > MAX_REGIONAL_TRADE_PORTS {
+            candidates.select_nth_unstable_by_key(MAX_REGIONAL_TRADE_PORTS, |&(d, p)| (d, p.id));
+            candidates.truncate(MAX_REGIONAL_TRADE_PORTS);
+        }
+        candidates.sort_unstable_by_key(|&(d, p)| (d, p.id));
+
+        let n = candidates.len();
+        let proximity_count = (n / 3).max(4).min(n);
+        let owner_player = self.state.player(src.owner_id);
+        let owner_team = owner_player.and_then(|p| p.team);
+
+        let mut weights = [0u64; MAX_REGIONAL_TRADE_PORTS];
+        let mut total_weight = 0u64;
+        for (i, &(dist_sq, dst)) in candidates.iter().enumerate() {
+            let mut mult = 1u64;
+            if i < proximity_count && dist_sq >= SHORT_RANGE_MIN_DIST_SQ {
+                mult += 1;
+            }
+            let friendly = owner_player.is_some_and(|p| {
+                p.alliances.contains(&dst.owner_id)
+                    || (owner_team.is_some()
+                        && self
+                            .state
+                            .player(dst.owner_id)
+                            .is_some_and(|other| other.team == owner_team))
+            });
+            if friendly {
+                mult += 1;
+            }
+            let base = u64::from(dst.active_level.max(1)) * mult;
+            let in_flight = u64::from(
+                in_flight_pairs
+                    .get(&(src.tile_idx, dst.tile_idx))
+                    .copied()
+                    .unwrap_or(0),
+            );
+            let w = ((base * 4) / (1 + in_flight * 3)).max(1);
+            weights[i] = w;
+            total_weight += w;
+        }
+
+        let seed = self
             .state
-            .players
+            .seed
+            .wrapping_add(self.state.tick.wrapping_mul(0x9e37_79b9_7f4a_7c15))
+            .wrapping_add(src.id.wrapping_mul(0xbf58_476d_1ce4_e5b9))
+            .wrapping_add(roll_salt.wrapping_mul(0x94d0_49bb_1331_11eb));
+        let mut rng = wyrand::WyRand::new(seed);
+        let mut roll = rng.rand() % total_weight.max(1);
+        let mut start_idx = 0usize;
+        for (i, &w) in weights[..n].iter().enumerate() {
+            if roll < w {
+                start_idx = i;
+                break;
+            }
+            roll -= w;
+        }
+
+        // Try the weighted pick first; fall back through remaining regional candidates only if A* fails.
+        for offset in 0..n {
+            let (_, dst) = candidates[(start_idx + offset) % n];
+            if let Some(path) = self.path_scratch.find_path_cached(
+                &self.state.map,
+                src.water_tile,
+                dst.water_tile,
+            ) && !path.is_empty()
+            {
+                return Some(TradeRoute {
+                    src_tile: src.tile_idx,
+                    dst_tile: dst.tile_idx,
+                    dst_owner: dst.owner_id,
+                    path,
+                });
+            }
+        }
+        None
+    }
+
+    /// Compatibility path for tests or scenarios supplying explicit synthetic `state.sea_lanes`.
+    fn execute_trade_ships_via_sea_lanes(&mut self) {
+        let sea_lanes = self.state.sea_lanes.clone();
+        let adjacency = crate::sea_lane::SeaLaneAdjacency::build(&sea_lanes);
+        let map_width = self.state.map.width.max(1);
+        let ports: Vec<TradePort> = self
+            .port_topology_cache
+            .ready_ports
             .iter()
-            .map(|player| {
-                (
-                    player.id,
-                    crate::building::player_trade_ship_capacity(&self.buildings, player.id),
-                )
+            .map(|p| TradePort {
+                id: p.id,
+                owner_id: p.owner_id,
+                tile_idx: p.tile_idx,
             })
             .collect();
-        let port_levels: std::collections::HashMap<_, _> = self
-            .state
-            .players
-            .iter()
-            .map(|player| {
-                (
-                    player.id,
-                    crate::building::player_port_levels(&self.buildings, player.id),
-                )
-            })
-            .collect();
-        let mut route_cache = std::collections::HashMap::new();
+        let mut route_cache =
+            std::collections::HashMap::<(u64, u64), Option<std::sync::Arc<Vec<u32>>>>::new();
         let mut retained = std::collections::HashMap::<u16, u32>::new();
         let mut to_remove = Vec::new();
         let mut punt_arrivals = Vec::new();
@@ -162,24 +640,37 @@ impl SowEngine {
                 continue;
             }
             if fleet.captured_trade_return.is_some() {
-                // A captured merchant keeps its one-time route to its new port.
                 continue;
             }
 
-            let capacity = capacities.get(&fleet.owner_id).copied().unwrap_or_default();
+            let capacity = self
+                .port_topology_cache
+                .port_levels_by_owner
+                .get(&fleet.owner_id)
+                .copied()
+                .unwrap_or_default();
             let count = retained.entry(fleet.owner_id).or_default();
             if *count >= capacity {
                 to_remove.push(index);
                 continue;
             }
 
-            let origin = ports
-                .iter()
-                .find(|port| port.owner_id == fleet.owner_id && port.tile_idx == fleet.src_tile);
+            let origin = self
+                .port_topology_cache
+                .by_tile
+                .get(&fleet.src_tile)
+                .copied()
+                .map(|idx| self.port_topology_cache.ready_ports[idx])
+                .filter(|port| port.owner_id == fleet.owner_id);
             let route_is_current = origin.is_some()
-                && ports
-                    .iter()
-                    .any(|port| port.tile_idx == fleet.dst_tile && port.owner_id != fleet.owner_id);
+                && self
+                    .port_topology_cache
+                    .by_tile
+                    .get(&fleet.dst_tile)
+                    .copied()
+                    .is_some_and(|idx| {
+                        self.port_topology_cache.ready_ports[idx].owner_id != fleet.owner_id
+                    });
             let arrived = (fleet.path.is_empty() && fleet.path_cursor > 0)
                 || (!fleet.path.is_empty() && fleet.path_cursor >= fleet.path.len());
             if arrived
@@ -193,7 +684,8 @@ impl SowEngine {
                 punt_arrivals.push(origin.id);
             }
             if fleet.path.is_empty() || arrived || !route_is_current {
-                let Some(route) = find_trade_route(
+                let Some(route) = find_trade_route_via_lanes(
+                    &adjacency,
                     &sea_lanes,
                     map_width,
                     &ports,
@@ -207,19 +699,19 @@ impl SowEngine {
                 };
                 fleet.src_tile = route.src_tile;
                 fleet.dst_tile = route.dst_tile;
-                fleet.replace_path(route.path);
+                fleet.replace_path_arc(route.path);
             }
             *count += 1;
         }
 
-        for index in to_remove.into_iter().rev() {
-            self.fleets.swap_remove(index);
+        if !to_remove.is_empty() {
+            for index in to_remove.into_iter().rev() {
+                self.fleets.swap_remove(index);
+            }
+            self.fleets.sort_unstable_by_key(|fleet| fleet.id);
         }
         for origin_id in punt_arrivals {
             self.hero_trade_arrived(origin_id);
-        }
-        if !retained.is_empty() {
-            self.fleets.sort_unstable_by_key(|fleet| fleet.id);
         }
 
         let mut new_fleets = Vec::new();
@@ -231,13 +723,19 @@ impl SowEngine {
             .map(|player| player.id)
             .collect();
         for player_id in player_ids {
-            let capacity = capacities.get(&player_id).copied().unwrap_or_default();
+            let capacity = self
+                .port_topology_cache
+                .port_levels_by_owner
+                .get(&player_id)
+                .copied()
+                .unwrap_or_default();
             if capacity == 0 {
                 continue;
             }
             let count = retained.entry(player_id).or_default();
             while *count < capacity {
-                let Some(route) = find_trade_route(
+                let Some(route) = find_trade_route_via_lanes(
+                    &adjacency,
                     &sea_lanes,
                     map_width,
                     &ports,
@@ -250,7 +748,7 @@ impl SowEngine {
                 };
                 let id = self.state.next_fleet_id;
                 self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
-                let mut fleet = crate::warp_fleet::WarpFleet::new(
+                let mut fleet = crate::warp_fleet::WarpFleet::new_with_shared_path(
                     id,
                     player_id,
                     route.dst_owner,
@@ -259,9 +757,8 @@ impl SowEngine {
                     (route.src_tile, route.dst_tile),
                     route.path,
                 );
-                let port_levels = port_levels.get(&player_id).copied().unwrap_or_default();
                 fleet.set_speed_bonus_percent(
-                    crate::building::cost::boat_speed_bonus_from_port_levels(port_levels),
+                    crate::building::cost::boat_speed_bonus_from_port_levels(capacity),
                 );
                 if self
                     .state
@@ -291,7 +788,7 @@ struct TradeRoute {
     src_tile: u32,
     dst_tile: u32,
     dst_owner: u16,
-    path: Vec<u32>,
+    path: std::sync::Arc<Vec<u32>>,
 }
 
 /// Whether finishing a `kind` building pays `leader` its ability: building income,
@@ -317,30 +814,15 @@ fn structure_marks_leader(leader: Leader, kind: BuildingKind) -> bool {
     }
 }
 
-fn ready_trade_ports(buildings: &[crate::building::Building]) -> Vec<TradePort> {
-    buildings
-        .iter()
-        .filter(|building| {
-            building.kind == BuildingKind::Port
-                && !building.under_construction
-                && building.active_level() >= 1
-        })
-        .map(|building| TradePort {
-            id: building.id,
-            owner_id: building.owner_id,
-            tile_idx: building.tile_idx,
-        })
-        .collect()
-}
-
-fn find_trade_route(
+fn find_trade_route_via_lanes(
+    adjacency: &crate::sea_lane::SeaLaneAdjacency,
     sea_lanes: &[crate::sea_lane::SeaLane],
     map_width: u32,
     ports: &[TradePort],
     owner_id: u16,
     preferred_tile: Option<u32>,
     avoid_destination_tile: Option<u32>,
-    route_cache: &mut std::collections::HashMap<(u64, u64), Option<Vec<u32>>>,
+    route_cache: &mut std::collections::HashMap<(u64, u64), Option<std::sync::Arc<Vec<u32>>>>,
 ) -> Option<TradeRoute> {
     let mut sources: Vec<_> = ports
         .iter()
@@ -369,7 +851,13 @@ fn find_trade_route(
             let path = route_cache
                 .entry((source.id, destination.id))
                 .or_insert_with(|| {
-                    crate::sea_lane::route_through_lanes(sea_lanes, source.id, destination.id)
+                    crate::sea_lane::route_through_adjacency(
+                        adjacency,
+                        sea_lanes,
+                        source.id,
+                        destination.id,
+                    )
+                    .map(std::sync::Arc::new)
                 })
                 .clone();
             let Some(path) = path else {
@@ -398,7 +886,8 @@ fn find_trade_route(
     }
     best.map(|(_, route)| route).or_else(|| {
         avoid_destination_tile.and_then(|_| {
-            find_trade_route(
+            find_trade_route_via_lanes(
+                adjacency,
                 sea_lanes,
                 map_width,
                 ports,

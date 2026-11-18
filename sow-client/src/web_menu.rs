@@ -777,6 +777,19 @@ pub fn sow_wake_event_loop() {
     wake_event_loop();
 }
 
+/// Returns a rolling JSON snapshot of recent frame and simulation phase timings (p50/p95/max ms)
+/// plus live entity counts for diagnosing late-game performance without console spam.
+#[wasm_bindgen(js_name = SOW_perf_report)]
+pub fn sow_perf_report() -> String {
+    crate::diag::format_perf_report_json()
+}
+
+/// Enable or disable rolling performance capture at runtime (active by default in dev / `?diag=1`).
+#[wasm_bindgen(js_name = SOW_perf_capture)]
+pub fn sow_perf_capture(enabled: bool) {
+    crate::diag::set_perf_capture(enabled);
+}
+
 /// Portal bridges call this while an ad plays or the portal mutes the game.
 /// Sound effects run through Web Audio inside WASM, so muting page media
 /// elements alone would leave them audible.
@@ -3591,13 +3604,6 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
                 "y": layout.button_center[1] / sf,
             }))
             .unwrap_or(serde_json::Value::Null),
-        "confirm_building_placement": app
-            .placement_controls()
-            .map(|controls| serde_json::json!({
-                "x": controls.confirm[0] / sf,
-                "y": controls.confirm[1] / sf,
-            }))
-            .unwrap_or(serde_json::Value::Null),
         "upgrade_buildings": upgrade_buildings,
         "upgrading_buildings": upgrading_buildings,
         "nameplate": nameplate_screen,
@@ -4355,9 +4361,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             screen_scale,
         );
         let cost = app.ui.app.hud_state.building_costs[placement.kind as usize];
-        let adjusted = placement
-            .attempted_tile_idx
-            .is_some_and(|tile_idx| tile_idx != placement.tile_idx);
         let arrows = serde_json::json!({
             "up": [controls.arrows[0].1[0] / screen_scale, controls.arrows[0].1[1] / screen_scale],
             "right": [controls.arrows[1].1[0] / screen_scale, controls.arrows[1].1[1] / screen_scale],
@@ -4367,7 +4370,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         serde_json::json!({
             "pending": placement.pending,
             "can_confirm": placement_can_confirm,
-            "adjusted": adjusted,
             "kind": placement.kind.as_str(),
             "tile_idx": placement.tile_idx,
             "anchor_x": controls.center[0] / screen_scale,

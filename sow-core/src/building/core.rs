@@ -275,12 +275,32 @@ pub fn tower_range_for_level(
     (f64::from(range) * range_multiplier).round() as i32
 }
 
-const GOLD_INCOME_LEVEL_GROWTH: f64 = 1.1948581737791502;
+/// Cumulative weights multiplying the configured level-one income rates.
+pub fn factory_gold_level_weight(level: u8) -> f64 {
+    [0.0, 1.0, 4.0, 8.3, 14.3][usize::from(level.min(4))]
+}
 
-pub fn gold_income_level_weight(level: u8) -> f64 {
-    (0..level)
-        .map(|n| GOLD_INCOME_LEVEL_GROWTH.powi(i32::from(n)))
-        .sum()
+pub fn farm_troop_level_weight(level: u8) -> f64 {
+    [0.0, 1.0, 3.5, 8.0, 15.0][usize::from(level.min(4))]
+}
+
+pub fn port_income_level_weight(level: u8) -> f64 {
+    [0.0, 1.0, 3.5, 7.5, 14.0][usize::from(level.min(4))]
+}
+
+pub fn city_upgrade_reinforcements(level: u8, base_capacity: f64) -> f64 {
+    let share = match level {
+        2 => 0.20,
+        3 => 0.30,
+        4 => 0.40,
+        _ => return 0.0,
+    };
+    let capacity_added = income_level_weight(level) - income_level_weight(level - 1);
+    share * capacity_added * base_capacity
+}
+
+pub fn tower_capture_weight(level: u8) -> f64 {
+    [0.0, 1.0, 1.70, 2.55, 3.75][usize::from(level.min(4))]
 }
 
 pub fn income_level_weight(level: u8) -> f64 {
@@ -308,11 +328,11 @@ pub struct BuildingAggregate {
     pub tower_levels: u32,
     pub factory_levels: u32,
     pub port_levels: u32,
+    pub port_fleet_slots: u32,
     pub farm_levels: u32,
     pub sam_levels: u32,
-    /// Sum of 1.5x marginal level weights across active Farms.
-    pub farm_income_level_weight: f64,
-    /// Sum of 1.5x marginal level weights across active Ports.
+    pub farm_troop_level_weight: f64,
+    pub farm_gold_level_weight: f64,
     pub port_income_level_weight: f64,
     /// Sum of the factory's gold-specific marginal weights.
     pub factory_income_level_weight: f64,
@@ -402,17 +422,19 @@ pub fn aggregate_buildings_per_player(
             }
             BuildingKind::Factory => {
                 a.factory_levels += active_lvl as u32;
-                a.factory_income_level_weight += gold_income_level_weight(active_lvl);
+                a.factory_income_level_weight += factory_gold_level_weight(active_lvl);
                 a.ready_factory_count += 1;
             }
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
-                a.port_income_level_weight += income_level_weight(active_lvl);
+                a.port_income_level_weight += port_income_level_weight(active_lvl);
+                a.port_fleet_slots += super::cost::port_fleet_slots(active_lvl);
                 a.has_completed_port = true;
             }
             BuildingKind::Farm => {
                 a.farm_levels += active_lvl as u32;
-                a.farm_income_level_weight += income_level_weight(active_lvl);
+                a.farm_troop_level_weight += farm_troop_level_weight(active_lvl);
+                a.farm_gold_level_weight += income_level_weight(active_lvl);
             }
             BuildingKind::SAM => {
                 a.sam_levels += active_lvl as u32;
@@ -612,6 +634,7 @@ struct DefenseTower {
     y: u32,
     active_level: u8,
     defense_weight: f64,
+    capture_weight: f64,
     range: i32,
 }
 
@@ -688,6 +711,7 @@ impl DefenseGrid {
                         y: by,
                         active_level,
                         defense_weight: tower_defense_weight(active_level, cfg),
+                        capture_weight: tower_capture_weight(active_level),
                         range,
                     });
                 }
@@ -724,7 +748,7 @@ impl DefenseGrid {
             };
             *weighted_levels += coverage * tower.defense_weight;
             if NEED_CAPTURE_FALLOFF {
-                *strongest_coverage = strongest_coverage.max(coverage);
+                *strongest_coverage = strongest_coverage.max(coverage * tower.capture_weight);
             }
         }
     }
@@ -1108,10 +1132,10 @@ mod defense_influence_tests {
         let center = grid.influence(32, 32, width, 2, 1, seed, &cfg);
         assert_eq!(center, grid.influence(32, 32, width, 2, 1, seed, &cfg));
         let center_sample = defense_sample(seed, 1, 2, 32 * width as u64 + 32);
-        assert_eq!(center.capture_multiplier, 1.0 + 3.0 * center_sample);
+        assert_eq!(center.capture_multiplier, 1.0 + 3.0 * 1.70 * center_sample);
         assert_eq!(
             center.priority_bonus,
-            cfg.tower_priority * 2.0 * (0.5 + center_sample)
+            cfg.tower_priority * 2.5 * (0.5 + center_sample)
         );
         assert_eq!(
             center.priority_bonus,
@@ -1119,21 +1143,21 @@ mod defense_influence_tests {
         );
         assert_eq!(
             center.attacker_loss_multiplier,
-            1.0 + (cfg.tower_strength * 2.0 * (0.5 + center_sample)).clamp(0.0, 0.50)
+            1.0 + (cfg.tower_strength * 2.5 * (0.5 + center_sample)).clamp(0.0, 0.50)
         );
-        assert!((1.0..=4.0).contains(&center.capture_multiplier));
+        assert!((1.0..=6.1).contains(&center.capture_multiplier));
 
         let at_three_quarters = grid.influence(38, 32, width, 2, 1, seed, &cfg);
         let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 38);
-        assert_eq!(at_three_quarters.capture_multiplier, 1.0 + 3.0 * sample);
+        assert_eq!(at_three_quarters.capture_multiplier, 1.0 + 3.0 * 1.70 * sample);
 
         let fading = grid.influence(39, 32, width, 2, 1, seed, &cfg);
         let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 39);
-        assert_eq!(fading.capture_multiplier, 1.0 + 3.0 * 0.5 * sample);
-        assert_eq!(fading.priority_bonus, cfg.tower_priority * (0.5 + sample));
+        assert_eq!(fading.capture_multiplier, 1.0 + 3.0 * (0.5 * 1.70) * sample);
+        assert_eq!(fading.priority_bonus, cfg.tower_priority * 1.25 * (0.5 + sample));
         assert_eq!(
             fading.attacker_loss_multiplier,
-            1.0 + (cfg.tower_strength * (0.5 + sample)).clamp(0.0, 0.50)
+            1.0 + (cfg.tower_strength * 1.25 * (0.5 + sample)).clamp(0.0, 0.50)
         );
 
         let edge = grid.influence(40, 32, width, 2, 1, seed, &cfg);

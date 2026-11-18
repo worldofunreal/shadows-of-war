@@ -488,17 +488,19 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
             normal = vec3<f32>(0.0, 0.0, 1.0);
         }
     } else {
-        let is_shore_water = (terrain_byte & 0x40u) != 0u;
-        if is_shore_water {
-            terrain_color = vec4<f32>(globals.shader_params[__MAP_WATER_SHORE__].rgb, 1.0);
-        } else {
+        let is_ocean_water = (terrain_byte & 0x20u) != 0u;
+        let ocean = globals.shader_params[__MAP_WATER_SHALLOW__].rgb;
+        if is_ocean_water {
             let m = min(
                 mag_center * globals.shader_params[__MAP_WATER_DEPTH_SCALE__].x,
                 globals.shader_params[__MAP_WATER_DEPTH_CAP__].x
             );
-            let ocean = globals.shader_params[__MAP_WATER_SHALLOW__].rgb;
             let color_flat = max(vec3<f32>(0.0), ocean - vec3<f32>(m / 255.0)) * globals.shader_params[__MAP_WATER_BRIGHTNESS__].x;
             terrain_color = vec4<f32>(color_flat, 1.0);
+        } else {
+            let inland = globals.shader_params[__MAP_WATER_INLAND__].rgb * globals.shader_params[__MAP_WATER_INLAND_BRIGHTNESS__].x;
+            let inland_mix = clamp(globals.shader_params[__MAP_WATER_INLAND_STRENGTH__].x, 0.0, 1.0);
+            terrain_color = vec4<f32>(mix(ocean, inland, inland_mix), 1.0);
         }
     }
 
@@ -541,7 +543,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
 
     var base_color = srgb_to_linear(base_srgb);
 
-    if !is_land && (terrain_byte & 0x20u) != 0u {
+    if !is_land {
         let shore_strength = globals.shader_params[__MAP_WATER_SHORE_STRENGTH__].x;
         if shore_strength > 0.0001 {
             let shore = clamp(

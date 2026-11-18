@@ -345,7 +345,8 @@ fn district_income(leader: Leader, district: District, resource: Resource) -> f6
         }
         District::Farm => {
             agg.farm_levels = 3;
-            agg.farm_income_level_weight = 3.0;
+            agg.farm_troop_level_weight = 3.0;
+            agg.farm_gold_level_weight = 3.0;
         }
     }
     let cfg = GameConfig::default();

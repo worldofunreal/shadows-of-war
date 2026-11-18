@@ -1,5 +1,31 @@
 use crate::engine::SowEngine;
 
+/// Per-phase microsecond breakdown and live entity counts captured by [`SowEngine::tick_profiled`].
+/// Pure POD struct so `sow-core` remains clock-free and 100% deterministic.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TickProfile {
+    pub tick: u64,
+    pub total_us: u64,
+    pub income_us: u64,
+    pub ai_think_us: u64,
+    pub construction_us: u64,
+    pub projectiles_us: u64,
+    pub sam_us: u64,
+    pub combat_us: u64,
+    pub sync_buildings_us: u64,
+    pub trade_ships_us: u64,
+    pub fleets_us: u64,
+    pub snapshot_us: u64,
+    pub alive_players: u32,
+    pub buildings: u32,
+    pub ports: u32,
+    pub trade_ships: u32,
+    pub warships: u32,
+    pub transports: u32,
+    pub attacks: u32,
+    pub total_border_tiles: u32,
+}
+
 impl SowEngine {
     pub(crate) fn sync_building_ownership(&mut self) {
         let mut transfers = Vec::new();
@@ -88,6 +114,17 @@ impl SowEngine {
     }
 
     pub fn tick(&mut self) {
+        let _ = self.tick_inner(None::<&mut fn() -> u64>);
+    }
+
+    /// Runs one simulation tick identically to [`Self::tick`] while measuring each subsystem
+    /// with the caller-provided microsecond monotonic clock.
+    pub fn tick_profiled(&mut self, mut now_us: impl FnMut() -> u64) -> TickProfile {
+        self.tick_inner(Some(&mut now_us)).unwrap_or_default()
+    }
+
+    fn tick_inner<F: FnMut() -> u64>(&mut self, mut clock: Option<&mut F>) -> Option<TickProfile> {
+        let t_start = clock.as_mut().map(|c| c());
         if let crate::game::GamePhase::Spawning { end_tick } = self.state.phase {
             self.state.tick += 1;
 
@@ -184,32 +221,50 @@ impl SowEngine {
             if self.state.config.ranked_1v1 {
                 self.check_winner();
             }
-            return;
+            return t_start.map(|s| TickProfile {
+                tick: self.state.tick,
+                total_us: clock.as_mut().map_or(0, |c| c().saturating_sub(s)),
+                ..TickProfile::default()
+            });
         }
 
         if self.state.phase != crate::game::GamePhase::Playing {
-            return;
+            return t_start.map(|s| TickProfile {
+                tick: self.state.tick,
+                total_us: clock.as_mut().map_or(0, |c| c().saturating_sub(s)),
+                ..TickProfile::default()
+            });
         }
         self.state.events.clear(); // Prevent unbounded memory leak (was growing infinitely on tile capture)
         self.state.tick();
 
-        if self.sea_lane_calc.is_some() {
-            crate::sea_lane::update_sea_lanes(self);
+        macro_rules! measure_phase {
+            ($body:expr) => {{
+                let phase_start = clock.as_mut().map(|c| c());
+                $body;
+                match (phase_start, clock.as_mut()) {
+                    (Some(s), Some(c)) => c().saturating_sub(s),
+                    _ => 0,
+                }
+            }};
         }
 
-        self.execute_income();
-        self.prune_alliance_diplomacy();
-        self.execute_ai_think();
-        self.execute_construction();
-        self.execute_projectiles();
-        self.execute_sam();
-        self.execute_combat();
-        self.apply_campaign_support();
-        self.update_campaign_assault();
-
-        self.sync_building_ownership();
-        self.execute_trade_ships();
-        self.execute_fleets();
+        let income_us = measure_phase!({
+            self.execute_income();
+            self.prune_alliance_diplomacy();
+        });
+        let ai_think_us = measure_phase!(self.execute_ai_think());
+        let construction_us = measure_phase!(self.execute_construction());
+        let projectiles_us = measure_phase!(self.execute_projectiles());
+        let sam_us = measure_phase!(self.execute_sam());
+        let combat_us = measure_phase!({
+            self.execute_combat();
+            self.apply_campaign_support();
+            self.update_campaign_assault();
+        });
+        let sync_buildings_us = measure_phase!(self.sync_building_ownership());
+        let trade_ships_us = measure_phase!(self.execute_trade_ships());
+        let fleets_us = measure_phase!(self.execute_fleets());
         self.check_winner();
         self.update_match_telemetry();
 
@@ -254,6 +309,56 @@ impl SowEngine {
         if had_expired {
             self.building_aggregates_dirty = true;
         }
+
+        t_start.map(|s| {
+            let total_us = clock.as_mut().map_or(0, |c| c().saturating_sub(s));
+            let mut alive_players = 0u32;
+            let mut total_border_tiles = 0u32;
+            for p in &self.state.players {
+                if p.alive {
+                    alive_players += 1;
+                    total_border_tiles =
+                        total_border_tiles.saturating_add(p.border_tiles.count_ones() as u32);
+                }
+            }
+            let ports = self
+                .buildings
+                .iter()
+                .filter(|b| b.kind == crate::game::BuildingKind::Port)
+                .count() as u32;
+            let mut trade_ships = 0u32;
+            let mut warships = 0u32;
+            let mut transports = 0u32;
+            for f in &self.fleets {
+                match f.unit_type {
+                    crate::game::UnitType::TradeShip => trade_ships += 1,
+                    crate::game::UnitType::Warship => warships += 1,
+                    crate::game::UnitType::TransportShip => transports += 1,
+                }
+            }
+            TickProfile {
+                tick: self.state.tick,
+                total_us,
+                income_us,
+                ai_think_us,
+                construction_us,
+                projectiles_us,
+                sam_us,
+                combat_us,
+                sync_buildings_us,
+                trade_ships_us,
+                fleets_us,
+                snapshot_us: 0,
+                alive_players,
+                buildings: self.buildings.len() as u32,
+                ports,
+                trade_ships,
+                warships,
+                transports,
+                attacks: self.attacks.len() as u32,
+                total_border_tiles,
+            }
+        })
     }
 
     fn apply_campaign_support(&mut self) {

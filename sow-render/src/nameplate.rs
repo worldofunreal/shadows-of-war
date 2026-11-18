@@ -499,10 +499,12 @@ pub struct NameplateLandCache {
     component_ids: ComponentIdBuffer,
     owner_ids: OwnerIdBuffer,
     flood_stack: Vec<usize>,
+    spawn_flood_stack: Vec<usize>,
     column_heights: Vec<u32>,
     column_components: Vec<u32>,
     histogram_stack: Vec<HistogramEntry>,
     largest_by_owner: OwnerLandmassBuffer,
+    staging_largest_by_owner: OwnerLandmassBuffer,
     map_width: u32,
     map_height: u32,
     last_rebuild_tick: Option<u64>,
@@ -529,9 +531,12 @@ impl NameplateLandCache {
     }
 
     pub fn has_result_for(&self, map: &sow_core::map::GameMap) -> bool {
-        MapIdentity::of(map).is_some_and(|identity| {
-            self.rebuild_work.is_none() && self.completed_map_identity == Some(identity)
-        })
+        MapIdentity::of(map)
+            .is_some_and(|identity| self.completed_map_identity == Some(identity))
+    }
+
+    pub fn rebuild_in_progress(&self) -> bool {
+        self.rebuild_work.is_some()
     }
 
     pub fn has_landmass(&self, player_id: u16) -> bool {
@@ -550,7 +555,7 @@ impl NameplateLandCache {
         spawn_y: u32,
     ) -> Option<TileRect> {
         let owner_id = player_id & sow_core::map::GameMap::PLAYER_ID_MASK;
-        let landmass = spawn_landmass(map, owner_id, spawn_x, spawn_y, &mut self.flood_stack)?;
+        let landmass = spawn_landmass(map, owner_id, spawn_x, spawn_y, &mut self.spawn_flood_stack)?;
         let owner_index = usize::from(owner_id);
         self.largest_by_owner.set(owner_index, landmass);
         landmass.name_rect
@@ -571,7 +576,7 @@ impl NameplateLandCache {
         if !self.has_result_for(map) || tile_count as usize > SPAWN_LOCAL_AREA {
             return false;
         }
-        let Some(landmass) = spawn_landmass(map, owner_id, x, y, &mut self.flood_stack) else {
+        let Some(landmass) = spawn_landmass(map, owner_id, x, y, &mut self.spawn_flood_stack) else {
             return false;
         };
         if landmass.tile_count != tile_count as usize {
@@ -667,7 +672,7 @@ impl NameplateLandCache {
                         self.rebuild_work.as_mut().unwrap().phase = RebuildPhase::Prepare;
                         continue;
                     }
-                    self.largest_by_owner.prepare(index);
+                    self.staging_largest_by_owner.prepare(index);
                     self.rebuild_work.as_mut().unwrap().owner_prepare_index += 1;
                     operations += 1;
                 }
@@ -780,7 +785,7 @@ impl NameplateLandCache {
                     operations += 1;
                     if self.flood_stack.is_empty() {
                         let best = self
-                            .largest_by_owner
+                            .staging_largest_by_owner
                             .get_mut(usize::from(component.owner_id))
                             .expect("owner buffers are prepared before component traversal");
                         if component.count > best.tile_count {
@@ -802,6 +807,7 @@ impl NameplateLandCache {
                     let row = self.rebuild_work.as_ref().unwrap().row;
                     if row == height {
                         let work = self.rebuild_work.take().unwrap();
+                        std::mem::swap(&mut self.largest_by_owner, &mut self.staging_largest_by_owner);
                         self.map_width = identity.width;
                         self.map_height = identity.height;
                         self.ownership_revision = work.ownership_revision;
@@ -824,7 +830,7 @@ impl NameplateLandCache {
                         let owner_id = self.owner_ids.get(index);
                         let selected = component_id != 0
                             && self
-                                .largest_by_owner
+                                .staging_largest_by_owner
                                 .get(usize::from(owner_id))
                                 .is_some_and(|landmass| landmass.component_id == component_id);
                         if selected {
@@ -911,7 +917,7 @@ impl NameplateLandCache {
                                 y1: row as u32 + 1,
                             };
                             let best = self
-                                .largest_by_owner
+                                .staging_largest_by_owner
                                 .get_mut(usize::from(run.owner_id))
                                 .expect("owner buffers are prepared before rectangle traversal");
                             if preferred_name_rect(candidate, best.name_rect, best.bounds) {
@@ -988,7 +994,10 @@ impl NameplateLandCache {
         tick: u64,
         owner_states: &[u16],
     ) {
-        self.completed_map_identity = None;
+        if self.completed_map_identity != Some(identity) {
+            self.completed_map_identity = None;
+            self.largest_by_owner.clear();
+        }
         self.component_ids.set_len(identity.tile_count);
         // Turns mutate the map between frames. Take one atomic owner snapshot so turn activity
         // cannot repeatedly restart a multi-frame cache build.
@@ -1020,6 +1029,7 @@ impl NameplateLandCache {
         self.rebuild_work = None;
         self.owner_ids.clear();
         self.largest_by_owner.clear();
+        self.staging_largest_by_owner.clear();
     }
 }
 

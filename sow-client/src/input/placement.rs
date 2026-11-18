@@ -30,29 +30,14 @@ impl PlacementDirection {
     }
 }
 
-/// Build-mode controls in physical px, one source for drawing and tapping so a
-/// drawn button and its tap area cannot drift apart. Arrows are a drag hint
-/// beside the foundation; cancel and confirm sit above it, clear of the finger.
+/// Layout for the placement arrows and footprint drag target in physical pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PlacementControls {
     pub center: [f32; 2],
     /// Half side of the square that starts a drag (never below a 48px target).
     pub grab_half: f32,
-    pub arrow: f32,
     pub arrows: [(PlacementDirection, [f32; 2]); 4],
-    pub button: f32,
-    pub cancel: [f32; 2],
-    pub confirm: [f32; 2],
 }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PlacementButton {
-    Cancel,
-    Confirm,
-}
-
-// ponytail: fixed top inset for the HUD top bar; read the bar's real height if it grows.
-const PLACEMENT_TOP_INSET: f32 = 64.0;
 
 pub(crate) fn visible_building_anchor_bounds(
     kind: sow_core::game::BuildingKind,
@@ -90,22 +75,10 @@ pub(crate) fn placement_controls(
         camera[1] + (footprint.top as f32 + footprint.height as f32 * 0.5) * zoom,
     ];
     let grab_half = (footprint.width.max(footprint.height) as f32 * 0.5 * zoom).max(24.0 * sf);
-    let arrow = 28.0 * sf;
-    let button = 52.0 * sf;
-    let gap = 6.0 * sf;
-    let arrow_offset = grab_half + gap + arrow * 0.5;
-    let row_offset = grab_half + gap + arrow + 2.0 * gap + button * 0.5;
-    // No room above under the top bar: the row flips below the foundation.
-    let row_y = if center[1] - row_offset - button * 0.5 >= PLACEMENT_TOP_INSET * sf {
-        center[1] - row_offset
-    } else {
-        center[1] + row_offset
-    };
-    let row_dx = button * 0.5 + 2.0 * gap;
+    let arrow_offset = grab_half + 20.0 * sf;
     PlacementControls {
         center,
         grab_half,
-        arrow,
         arrows: [
             (
                 PlacementDirection::Up,
@@ -124,24 +97,10 @@ pub(crate) fn placement_controls(
                 [center[0] - arrow_offset, center[1]],
             ),
         ],
-        button,
-        cancel: [center[0] - row_dx, row_y],
-        confirm: [center[0] + row_dx, row_y],
     }
 }
 
 impl PlacementControls {
-    pub(crate) fn button_at(&self, x: f32, y: f32) -> Option<PlacementButton> {
-        let half = self.button * 0.5;
-        [
-            (PlacementButton::Cancel, self.cancel),
-            (PlacementButton::Confirm, self.confirm),
-        ]
-        .into_iter()
-        .find(|(_, [cx, cy])| (x - cx).abs() <= half && (y - cy).abs() <= half)
-        .map(|(button, _)| button)
-    }
-
     pub(crate) fn grabs(&self, x: f32, y: f32) -> bool {
         (x - self.center[0]).abs() <= self.grab_half && (y - self.center[1]).abs() <= self.grab_half
     }

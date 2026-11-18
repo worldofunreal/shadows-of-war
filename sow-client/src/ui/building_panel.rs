@@ -38,12 +38,14 @@ impl BuildingMetric {
 
     pub(crate) fn label(&self) -> String {
         self.value.map_or_else(String::new, |value| {
-            format!(
-                "{}{}{}",
-                self.prefix,
-                crate::utils::format_number(value),
-                self.unit
-            )
+            let number = if (self.icon == Icon::Gold && self.unit == "/s")
+                || (self.icon == Icon::Shield && self.unit.is_empty() && value.fract() != 0.0)
+            {
+                format!("{value:.2}")
+            } else {
+                crate::utils::format_number(value)
+            };
+            format!("{}{}{}", self.prefix, number, self.unit)
         })
     }
 }
@@ -60,7 +62,6 @@ pub(crate) fn building_metrics(
     }
     use sow_core::geo_entities::{District, Resource, Source};
     let level_weight = sow_core::building::income_level_weight(level);
-    let gold_weight = sow_core::building::gold_income_level_weight(level);
     let district_capacity = config.district_max_troops
         * sow_core::building::district_capacity_level_weight(level);
     let level = f64::from(level);
@@ -100,13 +101,19 @@ pub(crate) fn building_metrics(
             metrics
         }
         BuildingKind::Port => {
+            let weight = sow_core::building::port_income_level_weight(level as u8);
             let metrics = vec![
-                BuildingMetric::new(Icon::Boat, level, "+", ""),
+                BuildingMetric::new(
+                    Icon::Boat,
+                    f64::from(sow_core::building::port_fleet_slots(level as u8)),
+                    "+",
+                    "",
+                ),
                 BuildingMetric::new(Icon::Speed, level, "+", "%"),
                 BuildingMetric::new(
                     Icon::Gold,
                     config.port_gold_income
-                        * level_weight
+                        * weight
                         * hero(District::Port, Resource::Gold)
                         * per_second,
                     "+",
@@ -114,7 +121,7 @@ pub(crate) fn building_metrics(
                 ),
                 BuildingMetric::new(
                     Icon::Troops,
-                    (config.port_troop_income * level_weight * hero(District::Port, Resource::Troops)
+                    (config.port_troop_income * weight * hero(District::Port, Resource::Troops)
                         + config.hero_port_troop_income * level
                             * hero_bonus(District::Port, Resource::Troops).unwrap_or(0.0))
                         * per_second,
@@ -128,7 +135,7 @@ pub(crate) fn building_metrics(
             let mut metrics = vec![BuildingMetric::new(
                 Icon::Gold,
                 config.factory_gold_income
-                    * gold_weight
+                    * sow_core::building::factory_gold_level_weight(level as u8)
                     * hero(District::Factory, Resource::Gold)
                     * per_second,
                 "+",
@@ -160,6 +167,12 @@ pub(crate) fn building_metrics(
                     "+",
                     "%",
                 ),
+                BuildingMetric::new(
+                    Icon::Shield,
+                    sow_core::building::tower_capture_weight(level as u8),
+                    "×",
+                    "",
+                ),
                 BuildingMetric::new(Icon::Range, range, "", ""),
             ];
             if level as u8 >= BuildingKind::Tower.max_level() {
@@ -176,7 +189,7 @@ pub(crate) fn building_metrics(
             BuildingMetric::new(
                 Icon::Troops,
                 config.farm_troop_income
-                    * level_weight
+                    * sow_core::building::farm_troop_level_weight(level as u8)
                     * hero(District::Farm, Resource::Troops)
                     * per_second,
                 "+",
@@ -199,6 +212,12 @@ pub(crate) fn building_metrics(
                 "",
                 "",
             )];
+            stats.push(BuildingMetric::new(
+                Icon::Shield,
+                sow_core::execution::sam::sam_salvo_size(level as u8) as f64,
+                "×",
+                "",
+            ));
             if config.progressive_defense_upgrades {
                 let cooldown = sow_core::execution::sam::sam_cooldown_ticks(level as u8, config);
                 let shots_per_minute =
@@ -380,10 +399,18 @@ impl crate::app::SowApp {
             )
             .0
             .unwrap_or(f64::INFINITY);
+        let mut chips = upgrade_gains(&current, &next);
+        if building.kind == BuildingKind::City {
+            let capacity = config.city_max_troops * leader.city_troop_capacity_multiplier();
+            let troops = sow_core::building::city_upgrade_reinforcements(next_level, capacity);
+            if troops > 0.0 {
+                chips.push(BuildingMetric::new(Icon::Troops, troops, "+", ""));
+            }
+        }
         Some(BuildingPanel {
             tile_idx: building.tile_idx,
             kind: building.kind,
-            chips: upgrade_gains(&current, &next),
+            chips,
             upgrade: Some(UpgradeOffer {
                 next_level,
                 cost,

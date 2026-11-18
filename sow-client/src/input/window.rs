@@ -244,15 +244,6 @@ impl SowApp {
             }
         }
 
-        let building = match code {
-            winit::keyboard::KeyCode::Digit1 | winit::keyboard::KeyCode::Numpad1 => {
-                Some(sow_core::game::BuildingKind::City)
-            }
-            _ => None,
-        };
-        if let Some(kind) = building {
-            self.select_building_kind_from_pointer(kind);
-        }
         if code == winit::keyboard::KeyCode::Enter || code == winit::keyboard::KeyCode::NumpadEnter
         {
             self.confirm_building_placement();
@@ -381,20 +372,17 @@ impl SowApp {
                         action_sent: dismisses_radial,
                     });
                 }
-                if build_tool_selected && (!is_touch || self.input.active_touches.len() == 1) {
-                    if let Some(controls) = self.placement_controls() {
-                        if controls.button_at(x as f32, y as f32).is_some() {
-                            // Release on the button decides; the press never pans the map.
-                            self.input.dragging = false;
-                        } else if controls.grabs(x as f32, y as f32) {
-                            self.input.building_drag_offset = Some((
-                                (x as f32 - controls.center[0]) / self.input.camera_zoom,
-                                (y as f32 - controls.center[1]) / self.input.camera_zoom,
-                            ));
-                            self.input.touch_pan_residual = (0.0, 0.0);
-                            self.input.dragging = false;
-                        }
-                    }
+                if build_tool_selected
+                    && (!is_touch || self.input.active_touches.len() == 1)
+                    && let Some(controls) = self.placement_controls()
+                    && controls.grabs(x as f32, y as f32)
+                {
+                    self.input.building_drag_offset = Some((
+                        (x as f32 - controls.center[0]) / self.input.camera_zoom,
+                        (y as f32 - controls.center[1]) / self.input.camera_zoom,
+                    ));
+                    self.input.touch_pan_residual = (0.0, 0.0);
+                    self.input.dragging = false;
                 }
             } else {
                 let was_building_drag = self.input.building_drag_offset.is_some();

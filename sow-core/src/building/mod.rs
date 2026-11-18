@@ -757,7 +757,7 @@ mod tests {
             first,
             grid.influence(center_x, center_y, width, 2, 1, 1234, &cfg)
         );
-        assert!((1.0..=4.0).contains(&first.capture_multiplier));
+        assert!((1.0..=12.25).contains(&first.capture_multiplier));
         assert!(first.priority_bonus > 0.0);
 
         let edge = grid.influence(center_x + 20, center_y, width, 2, 1, 1234, &cfg);
@@ -770,7 +770,7 @@ mod tests {
                     .capture_multiplier
             })
             .collect();
-        assert!(edge_multipliers.iter().all(|m| (1.0..=1.6).contains(m)));
+        assert!(edge_multipliers.iter().all(|m| (1.0..=3.25).contains(m)));
         let edge_min = edge_multipliers.iter().copied().fold(f64::MAX, f64::min);
         let edge_max = edge_multipliers.iter().copied().fold(f64::MIN, f64::max);
         assert!(edge_min < edge_max);
@@ -780,7 +780,7 @@ mod tests {
         for attack in 0..1_000 {
             let target_owner = 2 + (attack % 255) as u16;
             let influence = grid.influence(center_x, center_y, width, target_owner, 1, 1234, &cfg);
-            assert!((1.0..=4.0).contains(&influence.capture_multiplier));
+            assert!((1.0..=12.25).contains(&influence.capture_multiplier));
             assert!(influence.priority_bonus > 0.0);
             min_multiplier = min_multiplier.min(influence.capture_multiplier);
             max_multiplier = max_multiplier.max(influence.capture_multiplier);
@@ -825,16 +825,14 @@ mod tests {
             structure_build_cost_gold(BuildingKind::City, 0, &cfg),
             city_base
         );
-        let at_24 = structure_build_cost_gold(BuildingKind::City, 24, &cfg);
-        assert!(at_24 < cap);
-        assert!(at_24 > city_base);
-
-        let mut previous = at_24;
-        for count in [25, 50, 100] {
+        let mut previous = city_base;
+        for count in [1, 3, 7, 14] {
             let cost = structure_build_cost_gold(BuildingKind::City, count, &cfg);
             assert!(cost > previous && cost < cap);
             previous = cost;
         }
+        assert_eq!(structure_build_cost_gold(BuildingKind::City, 15, &cfg), cap);
+        assert_eq!(structure_build_cost_gold(BuildingKind::City, 100, &cfg), cap);
     }
 
     #[test]
@@ -848,7 +846,7 @@ mod tests {
         ];
         for (kind, base) in cases {
             assert_eq!(structure_build_cost_gold(kind, 0, &cfg), base);
-            let expected = base * (1.0 + 0.1 * 101.0_f64.log2());
+            let expected = base * cfg.cost_scale_cap_multiplier;
             let actual = structure_build_cost_gold(kind, 100, &cfg);
             assert!(
                 (actual - expected).abs() < 1e-12,

@@ -369,6 +369,415 @@ html[data-locale-script="cjk"] .sow-control-dropdown__option {
   letter-spacing: normal;
 }
 
+/* ==========================================================================
+   Canonical Equipped-Skin Filigree & Shared Tactical Controls
+   Single source of truth across #sow-menu, #sow-hud, #sow-hud-dev-layer,
+   .sow-analytics-consent, #sow-story, and rich .sow-tooltip surfaces.
+   ========================================================================== */
+html[data-sow-skin]
+  :where(
+    .sow-menu__topbar,
+    .sow-menu__command,
+    .sow-menu__main-nav,
+    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
+    .sow-purchase-modal__copy,
+    .sow-hero-info__body,
+    .sow-profile__cover-overlay,
+    .sow-profile__achievements-laurel-card,
+    .sow-profile__overview-sidebar .sow-ranked__overview,
+    .sow-heroes__featured-copy,
+    .sow-store__featured,
+    .sow-store__bundle-card:not([class*="is-theme-"]),
+    .sow-campaign__featured-content,
+    .sow-menu__custom-card,
+    .sow-menu__queue-summary-card,
+    .sow-menu__queue-players-card,
+    .sow-ranked__map,
+    .sow-auth,
+    .sow-directive-card,
+    .sow-menu-whisper__card,
+    .sow-analytics-consent,
+    .sow-hud__nameplate,
+    .sow-hud__rail-card,
+    .sow-hud__dock-inner,
+    .sow-hud__sheet,
+    .sow-hud__dialog,
+    .sow-hud__building-card,
+    .sow-hud__hover-card,
+    .sow-hud__request-toast,
+    .sow-hud__notification,
+    .sow-hud__endgame-card,
+    .sow-story__dialog,
+    .sow-story__nearmiss-card,
+    .sow-tooltip[data-rich="true"] .sow-tooltip__surface
+  ) {
+  isolation: isolate;
+}
+
+html[data-sow-skin]
+  :where(
+    .sow-menu__topbar,
+    .sow-menu__command,
+    .sow-menu__main-nav,
+    .sow-profile__achievements-laurel-card,
+    .sow-profile__overview-sidebar .sow-ranked__overview,
+    .sow-store__featured,
+    .sow-store__bundle-card:not([class*="is-theme-"]),
+    .sow-campaign__featured-content,
+    .sow-menu__queue-summary-card,
+    .sow-menu__queue-players-card,
+    .sow-ranked__map,
+    .sow-hud__endgame-card,
+    .sow-story__nearmiss-card
+  ) {
+  position: relative;
+}
+
+html[data-sow-skin]
+  :where(
+    .sow-menu__topbar,
+    .sow-menu__command,
+    .sow-menu__main-nav,
+    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
+    .sow-purchase-modal__copy,
+    .sow-hero-info__body,
+    .sow-profile__cover-overlay,
+    .sow-profile__achievements-laurel-card,
+    .sow-profile__overview-sidebar .sow-ranked__overview,
+    .sow-heroes__featured-copy,
+    .sow-store__featured,
+    .sow-store__bundle-card:not([class*="is-theme-"]),
+    .sow-campaign__featured-content,
+    .sow-menu__custom-card,
+    .sow-menu__queue-summary-card,
+    .sow-menu__queue-players-card,
+    .sow-ranked__map,
+    .sow-auth,
+    .sow-directive-card,
+    .sow-menu-whisper__card,
+    .sow-analytics-consent,
+    .sow-hud__nameplate,
+    .sow-hud__rail-card,
+    .sow-hud__dock-inner,
+    .sow-hud__sheet,
+    .sow-hud__dialog,
+    .sow-hud__building-card,
+    .sow-hud__hover-card,
+    .sow-hud__request-toast,
+    .sow-hud__notification,
+    .sow-hud__endgame-card,
+    .sow-story__dialog,
+    .sow-story__nearmiss-card,
+    .sow-tooltip[data-rich="true"] .sow-tooltip__surface
+  )::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  background-image: var(--sow-skin-pattern);
+  background-repeat: repeat;
+  background-size: var(--sow-skin-pattern-size);
+  background-position: 0 0;
+  opacity: var(--sow-skin-pattern-opacity);
+  --sow-skin-mask-default: radial-gradient(
+    min(100%, 460px) 220px at 0% 0%,
+    #000 0%,
+    rgb(0 0 0 / 36%) 44%,
+    transparent 84%
+  );
+  -webkit-mask-image: var(--sow-skin-mask, var(--sow-skin-mask-default));
+  mask-image: var(--sow-skin-mask, var(--sow-skin-mask-default));
+}
+
+html[data-sow-skin][dir="rtl"]
+  :where(
+    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
+    .sow-purchase-modal__copy,
+    .sow-hero-info__body,
+    .sow-profile__cover-overlay,
+    .sow-profile__achievements-laurel-card,
+    .sow-profile__overview-sidebar .sow-ranked__overview,
+    .sow-heroes__featured-copy,
+    .sow-store__featured,
+    .sow-store__bundle-card:not([class*="is-theme-"]),
+    .sow-campaign__featured-content,
+    .sow-menu__custom-card,
+    .sow-menu__queue-summary-card,
+    .sow-menu__queue-players-card,
+    .sow-ranked__map,
+    .sow-auth,
+    .sow-directive-card,
+    .sow-menu-whisper__card,
+    .sow-analytics-consent,
+    .sow-hud__nameplate,
+    .sow-hud__rail-card,
+    .sow-hud__dock-inner,
+    .sow-hud__sheet,
+    .sow-hud__dialog,
+    .sow-hud__building-card,
+    .sow-hud__hover-card,
+    .sow-hud__request-toast,
+    .sow-hud__notification,
+    .sow-hud__endgame-card,
+    .sow-story__dialog,
+    .sow-story__nearmiss-card,
+    .sow-tooltip[data-rich="true"] .sow-tooltip__surface
+  ) {
+  --sow-skin-mask-default: radial-gradient(
+    min(100%, 460px) 220px at 100% 0%,
+    #000 0%,
+    rgb(0 0 0 / 36%) 44%,
+    transparent 84%
+  );
+}
+
+:where(.sow-menu__settings-controls, .sow-hud__sheet, .sow-hud__dev-sidebar) input[type="range"] {
+  --sow-range-height: 44px;
+  --sow-range-track-height: 12px;
+  --sow-range-track-radius: var(--sow-tactical-track-radius);
+  --sow-range-thumb-size: 32px;
+  --sow-range-thumb-radius: 50%;
+  --sow-range-thumb-mt: -10px;
+  --sow-range-thumb-border: 2px solid var(--sow-tactical-panel-base);
+  --sow-range-thumb-bg: var(--sow-control-accent);
+  --sow-range-thumb-hover-bg: var(--sow-control-accent-bright);
+  --sow-range-thumb-shadow: 0 2px 6px rgb(0 0 0 / 50%);
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: var(--sow-range-height);
+  margin: 0;
+  background: transparent;
+  cursor: grab;
+}
+
+:where(.sow-menu__settings-controls, .sow-hud__sheet, .sow-hud__dev-sidebar) input[type="range"]:active {
+  cursor: grabbing;
+}
+
+:where(.sow-menu__settings-controls, .sow-hud__sheet, .sow-hud__dev-sidebar)
+  input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: var(--sow-range-track-height);
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-range-track-radius);
+  background: var(
+    --sow-track,
+    linear-gradient(90deg, var(--sow-control-accent), var(--sow-control-accent-bright)) 0 0 /
+      var(--sow-slider-fill, var(--sow-music-fill, 0%)) 100% no-repeat,
+    var(--sow-tactical-track-bg)
+  );
+  box-shadow: var(--sow-tactical-track-shadow);
+  transition:
+    box-shadow 0.16s ease,
+    border-color 0.16s ease,
+    filter 0.16s ease;
+}
+
+:where(.sow-menu__settings-controls, .sow-hud__sheet, .sow-hud__dev-sidebar)
+  input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: var(--sow-range-track-height);
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-range-track-radius);
+  background: var(
+    --sow-track,
+    linear-gradient(90deg, var(--sow-control-accent), var(--sow-control-accent-bright)) 0 0 /
+      var(--sow-slider-fill, var(--sow-music-fill, 0%)) 100% no-repeat,
+    var(--sow-tactical-track-bg)
+  );
+  box-shadow: var(--sow-tactical-track-shadow);
+  transition:
+    box-shadow 0.16s ease,
+    border-color 0.16s ease,
+    filter 0.16s ease;
+}
+
+:where(.sow-menu__settings-controls, .sow-hud__sheet, .sow-hud__dev-sidebar)
+  input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--sow-range-thumb-size);
+  height: var(--sow-range-thumb-size);
+  margin-top: var(--sow-range-thumb-mt);
+  border: var(--sow-range-thumb-border);
+  border-radius: var(--sow-range-thumb-radius);
+  background: var(--sow-range-thumb-bg);
+  box-shadow: var(--sow-range-thumb-shadow);
+  cursor: grab;
+  transition:
+    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+:where(.sow-menu__settings-controls, .sow-hud__sheet, .sow-hud__dev-sidebar)
+  input[type="range"]::-moz-range-thumb {
+  width: var(--sow-range-thumb-size);
+  height: var(--sow-range-thumb-size);
+  border: var(--sow-range-thumb-border);
+  border-radius: var(--sow-range-thumb-radius);
+  background: var(--sow-range-thumb-bg);
+  box-shadow: var(--sow-range-thumb-shadow);
+  cursor: grab;
+  transition:
+    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+:where(.sow-menu__settings-controls, .sow-hud__sheet, .sow-hud__dev-sidebar)
+  input[type="range"]:hover::-webkit-slider-thumb,
+:where(.sow-menu__settings-controls, .sow-hud__sheet, .sow-hud__dev-sidebar)
+  input[type="range"]:hover::-moz-range-thumb {
+  background: var(--sow-range-thumb-hover-bg);
+}
+
+.sow-hud__switch {
+  --sow-switch-w: 56px;
+  --sow-switch-h: 32px;
+  --sow-switch-pad: 3px;
+  --sow-switch-knob: 24px;
+  --sow-switch-travel: 24px;
+  --sow-switch-knob-bg: #fff;
+  --sow-switch-checked-knob-bg: #fff;
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: var(--sow-switch-w);
+  height: var(--sow-switch-h);
+  margin: 0;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
+  background: var(--sow-tactical-track-bg);
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 55%);
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.sow-hud__switch::after {
+  content: "";
+  position: absolute;
+  inset-block-start: var(--sow-switch-pad);
+  inset-inline-start: var(--sow-switch-pad);
+  width: var(--sow-switch-knob);
+  height: var(--sow-switch-knob);
+  border-radius: 50%;
+  background: var(--sow-switch-knob-bg);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  transition:
+    transform 0.14s ease,
+    background-color 0.14s ease;
+}
+
+.sow-hud__switch:checked {
+  border-color: color-mix(in srgb, var(--sow-control-accent-bright) 70%, transparent);
+  background: linear-gradient(90deg, var(--sow-control-accent), var(--sow-control-accent-bright));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sow-control-accent) 40%, transparent);
+}
+
+.sow-hud__switch:checked::after {
+  transform: translateX(var(--sow-switch-travel));
+  background: var(--sow-switch-checked-knob-bg);
+}
+
+html[dir="rtl"] .sow-hud__switch:checked::after {
+  transform: translateX(calc(var(--sow-switch-travel) * -1));
+}
+
+.sow-hud__setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding-inline: 4px;
+  color: #f5f1e8;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.sow-hud__setting-row--slider {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding-block: 10px;
+}
+
+.sow-hud__setting-row--slider input[type="range"] {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.sow-control-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.sow-control-search__icon {
+  position: absolute;
+  inset-inline-start: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--sow-control-muted);
+  pointer-events: none;
+}
+
+.sow-control-search__icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.sow-control-search__input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-button-radius);
+  background: var(--sow-tactical-track-bg);
+  color: #f5f1e8;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sow-control-search > .sow-control-search__input {
+  padding-inline: 34px 12px;
+}
+
+.sow-control-search__input::placeholder {
+  color: var(--sow-control-muted);
+}
+
+.sow-control-search__input:hover {
+  border-color: color-mix(in srgb, var(--sow-control-accent) 32%, rgb(255 255 255 / 18%));
+}
+
+.sow-control-search__input:focus {
+  border-color: var(--sow-control-accent);
+  background: var(--sow-tactical-panel-base);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sow-control-accent) 28%, transparent);
+}
+
 .sow-analytics-consent {
   position: fixed;
   isolation: isolate;
@@ -858,6 +1267,7 @@ html[dir="rtl"] .sow-analytics-consent--game {
 
 .sow-tooltip__surface {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   gap: 6px;

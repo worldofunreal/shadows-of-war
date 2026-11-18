@@ -64,6 +64,8 @@ impl SowEngine {
                             .collect();
                         all_owned_buildings_covered = true;
                         let mut sam_site = None;
+                        const MAX_SAM_SITE_SEARCHES_PER_THINK: usize = 8;
+                        let mut sam_searches = 0usize;
                         for building in self.buildings.iter().filter(|b| b.owner_id == bot_id) {
                             let covered = sams.iter().any(|&(tile, level)| {
                                 crate::execution::sam::sam_covers_tile(
@@ -77,7 +79,8 @@ impl SowEngine {
                                 continue;
                             }
                             all_owned_buildings_covered = false;
-                            if sam_site.is_none() {
+                            if sam_site.is_none() && sam_searches < MAX_SAM_SITE_SEARCHES_PER_THINK {
+                                sam_searches += 1;
                                 sam_site = find_structure_site_near(
                                     &self.state.map,
                                     bot_id,
@@ -87,6 +90,11 @@ impl SowEngine {
                                     &mut self.placement_scratch,
                                     self.legacy_building_rules,
                                 );
+                                if sam_site.is_some() {
+                                    break;
+                                }
+                            } else if sam_searches >= MAX_SAM_SITE_SEARCHES_PER_THINK {
+                                break;
                             }
                         }
                         if let Some(sam_site) = sam_site {

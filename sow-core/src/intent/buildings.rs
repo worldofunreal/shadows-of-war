@@ -243,7 +243,9 @@ impl SowEngine {
         }
         self.building_aggregates_dirty = true;
         self.bot_sam_tiles_cache = None;
-        self.sea_lanes_dirty = true;
+        if b.kind == BuildingKind::Port {
+            self.sea_lanes_dirty = true;
+        }
         self.state.events.push(GameEvent::StructureUpgraded {
             id: b.id,
             tile_idx: b.tile_idx,
@@ -858,7 +860,7 @@ mod tests {
     }
 
     #[test]
-    fn upgrades_charge_the_agreed_fraction_of_equivalent_new_production() {
+    fn upgrades_charge_the_quoted_price_and_apply_hero_discounts() {
         let mut game = pacing_match();
         game.add_building(building(1, BuildingKind::City, 1));
         game.add_building(Building {
@@ -868,9 +870,7 @@ mod tests {
         game.state.player_mut(1).unwrap().gold = 1_000.0;
         let config = game.state.config.clone();
         let upgrade_cost = structure_upgrade_cost_gold(BuildingKind::Factory, 2, 1, &config);
-        let marginal = (1.45_f64 / 0.85).cbrt();
-        let expected = structure_build_cost_gold(BuildingKind::Factory, 1, &config) * marginal * 0.75;
-        assert!((upgrade_cost - expected).abs() < 1e-9);
+        assert_eq!(upgrade_cost, 105.0);
 
         let gold = game.state.player(1).unwrap().gold;
         game.apply_upgrade_structure_intent(1, 2);

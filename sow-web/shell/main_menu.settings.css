@@ -271,50 +271,19 @@
 }
 
 #sow-menu .sow-menu__settings-controls input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 36px;
-  margin: 0;
-  background: transparent;
+  --sow-slider-fill: var(--sow-music-fill, 80%);
+  --sow-range-height: 36px;
+  --sow-range-track-height: 16px;
+  --sow-range-thumb-size: 34px;
+  --sow-range-thumb-radius: 8px;
+  --sow-range-thumb-mt: -9px;
+  --sow-range-thumb-border: 2px solid var(--sow-control-accent-bright);
+  --sow-range-thumb-shadow:
+    0 4px 12px rgb(0 0 0 / 85%),
+    0 0 12px color-mix(in srgb, var(--sow-control-accent) 45%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 45%),
+    inset 0 -1px 0 rgb(0 0 0 / 70%);
   outline: none;
-  cursor: grab;
-}
-
-#sow-menu .sow-menu__settings-controls input[type="range"]:active {
-  cursor: grabbing;
-}
-
-#sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 16px;
-  border-radius: var(--sow-tactical-track-radius);
-  background:
-    linear-gradient(90deg, var(--sow-control-accent), var(--sow-control-accent-bright)) 0 0 /
-      var(--sow-slider-fill, var(--sow-music-fill, 80%)) 100% no-repeat,
-    var(--sow-tactical-track-bg);
-  border: 1px solid var(--sow-tactical-track-border);
-  box-shadow: var(--sow-tactical-track-shadow);
-  transition:
-    box-shadow 0.16s ease,
-    border-color 0.16s ease,
-    filter 0.16s ease;
-}
-
-#sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-track {
-  width: 100%;
-  height: 16px;
-  border-radius: var(--sow-tactical-track-radius);
-  background:
-    linear-gradient(90deg, var(--sow-control-accent), var(--sow-control-accent-bright)) 0 0 /
-      var(--sow-slider-fill, var(--sow-music-fill, 80%)) 100% no-repeat,
-    var(--sow-tactical-track-bg);
-  border: 1px solid var(--sow-tactical-track-border);
-  box-shadow: var(--sow-tactical-track-shadow);
-  transition:
-    box-shadow 0.16s ease,
-    border-color 0.16s ease,
-    filter 0.16s ease;
 }
 
 #sow-menu .sow-menu__settings-controls input[type="range"]:hover::-webkit-slider-runnable-track,
@@ -336,13 +305,6 @@
 }
 
 #sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 34px;
-  height: 34px;
-  margin-top: -9px;
-  border-radius: 8px;
-  border: 2px solid var(--sow-control-accent-bright);
   background:
     repeating-linear-gradient(
         90deg,
@@ -353,24 +315,9 @@
       )
       center / 13px 14px no-repeat,
     linear-gradient(145deg, #283344 0%, #10151e 100%);
-  box-shadow:
-    0 4px 12px rgb(0 0 0 / 85%),
-    0 0 12px color-mix(in srgb, var(--sow-control-accent) 45%, transparent),
-    inset 0 1px 0 rgb(255 255 255 / 45%),
-    inset 0 -1px 0 rgb(0 0 0 / 70%);
-  cursor: grab;
-  transition:
-    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    filter 0.16s ease;
 }
 
 #sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-thumb {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  border: 2px solid var(--sow-control-accent-bright);
   background:
     repeating-linear-gradient(
         90deg,
@@ -381,17 +328,6 @@
       )
       center / 13px 14px no-repeat,
     linear-gradient(145deg, #283344 0%, #10151e 100%);
-  box-shadow:
-    0 4px 12px rgb(0 0 0 / 85%),
-    0 0 12px color-mix(in srgb, var(--sow-control-accent) 45%, transparent),
-    inset 0 1px 0 rgb(255 255 255 / 45%),
-    inset 0 -1px 0 rgb(0 0 0 / 70%);
-  cursor: grab;
-  transition:
-    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    filter 0.16s ease;
 }
 
 #sow-menu .sow-menu__settings-controls input[type="range"]:hover::-webkit-slider-thumb,
@@ -417,22 +353,8 @@
   filter: brightness(1.15);
 }
 
-/* Elevate the mobile-style switches inside settings */
 #sow-menu .sow-menu__settings-switch-row {
   cursor: pointer;
-}
-
-#sow-menu .sow-menu__settings-controls .sow-hud__switch {
-  border: 1px solid rgb(255 255 255 / 16%);
-  background: var(--sow-tactical-track-bg);
-  box-shadow: inset 0 2px 4px rgb(0 0 0 / 55%);
-  cursor: pointer;
-}
-
-#sow-menu .sow-menu__settings-controls .sow-hud__switch:checked {
-  border-color: color-mix(in srgb, var(--sow-control-accent-bright) 70%, transparent);
-  background: linear-gradient(90deg, var(--sow-control-accent), var(--sow-control-accent-bright));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--sow-control-accent) 40%, transparent);
 }
 
 /* Dropdowns */
@@ -930,26 +852,12 @@
   }
 
   #sow-menu .sow-menu__settings-controls input[type="range"] {
-    height: 26px;
-  }
-
-  #sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-runnable-track,
-  #sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-track {
-    height: 12px;
-    border-radius: 6px;
-  }
-
-  #sow-menu .sow-menu__settings-controls input[type="range"]::-webkit-slider-thumb {
-    width: 26px;
-    height: 26px;
-    margin-top: -7px;
-    border-radius: 6px;
-  }
-
-  #sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-thumb {
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
+    --sow-range-height: 26px;
+    --sow-range-track-height: 12px;
+    --sow-range-track-radius: 6px;
+    --sow-range-thumb-size: 26px;
+    --sow-range-thumb-radius: 6px;
+    --sow-range-thumb-mt: -7px;
   }
 
   .sow-menu__settings-dropdown {
@@ -965,24 +873,11 @@
   }
 
   #sow-menu .sow-menu__settings-controls .sow-hud__switch {
-    width: 46px;
-    height: 26px;
-    border-radius: 13px;
-  }
-
-  #sow-menu .sow-menu__settings-controls .sow-hud__switch::after {
-    inset-block-start: 2px;
-    inset-inline-start: 2px;
-    width: 20px;
-    height: 20px;
-  }
-
-  #sow-menu .sow-menu__settings-controls .sow-hud__switch:checked::after {
-    transform: translateX(20px);
-  }
-
-  html[dir="rtl"] #sow-menu .sow-menu__settings-controls .sow-hud__switch:checked::after {
-    transform: translateX(-20px);
+    --sow-switch-w: 46px;
+    --sow-switch-h: 26px;
+    --sow-switch-pad: 2px;
+    --sow-switch-knob: 20px;
+    --sow-switch-travel: 20px;
   }
 
   .sow-menu__settings-account-deck {

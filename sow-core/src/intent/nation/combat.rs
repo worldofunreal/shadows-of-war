@@ -1464,11 +1464,11 @@ impl SowEngine {
         let Some(used) = self.bot_naval_slots_used.get(player_index).copied() else {
             return false;
         };
-        let port_levels = self
+        let port_slots = self
             .building_aggregates
             .get(player_index)
-            .map_or(0, |aggregate| aggregate.port_levels);
-        if used >= crate::building::cost::player_fleet_capacity_from_port_levels(port_levels) {
+            .map_or(0, |aggregate| aggregate.port_fleet_slots);
+        if used >= crate::building::cost::player_fleet_capacity_from_port_slots(port_slots) {
             return false;
         }
         if self.state.map.width == 0 || self.state.map.height == 0 {

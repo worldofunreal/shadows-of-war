@@ -23,6 +23,58 @@ impl SowEngine {
         let proposed_help = &self.help_calls_proposed;
         let emote_phase = self.state.phase.clone();
         let boats_in_use = self.boat_slots_used_by_player();
+        let max_pid = self
+            .state
+            .players
+            .iter()
+            .map(|p| usize::from(p.id))
+            .max()
+            .unwrap_or(0);
+        let mut nuke_available_by_player = vec![false; max_pid + 1];
+        let mut nuke_cooldown_by_player = vec![0u32; max_pid + 1];
+        let nuke_req_level = crate::game::NukeKind::AtomBomb.required_district_level();
+        for building in &self.buildings {
+            let pid = usize::from(building.owner_id);
+            if pid > max_pid
+                || building.under_construction
+                || !matches!(
+                    building.kind,
+                    crate::game::BuildingKind::Factory | crate::game::BuildingKind::Tower
+                )
+                || building.active_level() < nuke_req_level
+            {
+                continue;
+            }
+            let Some(state) = self.building_productions.get(&building.id) else {
+                continue;
+            };
+            if state.nuke_ready {
+                nuke_available_by_player[pid] = true;
+            }
+            if let Some(build) = state.arsenal_build
+                && build.kind == crate::game::CityArsenalKind::Nuke
+            {
+                let cur = &mut nuke_cooldown_by_player[pid];
+                if *cur == 0 || build.ticks_until_complete < *cur {
+                    *cur = build.ticks_until_complete;
+                }
+            }
+        }
+        let mut empowered_attack_by_player = vec![false; max_pid + 1];
+        for attack in &self.attacks {
+            let pid = usize::from(attack.owner_id);
+            if pid <= max_pid
+                && !empowered_attack_by_player[pid]
+                && crate::execution::combat::empowered_attack_applies(
+                    &self.state,
+                    attack.owner_id,
+                    attack.target_owner,
+                    attack.troops,
+                )
+            {
+                empowered_attack_by_player[pid] = true;
+            }
+        }
         let players = self
             .state
             .players
@@ -112,15 +164,10 @@ impl SowEngine {
                     can_retaliate: crate::diplomacy::can_retaliate_against(p),
                     traitor: p.traitor,
                     leader: p.leader,
-                    empowered_attack: self.attacks.iter().any(|a| {
-                        a.owner_id == p.id
-                            && crate::execution::combat::empowered_attack_applies(
-                                &self.state,
-                                p.id,
-                                a.target_owner,
-                                a.troops,
-                            )
-                    }),
+                    empowered_attack: empowered_attack_by_player
+                        .get(p.id as usize)
+                        .copied()
+                        .unwrap_or(false),
                     campaign_avatar: self.campaign_avatars.get(&p.id).cloned(),
                     is_campaign_faction: self.campaign_faction_ids.contains_key(&p.id),
                     skin_style: p.skin_style,
@@ -128,48 +175,19 @@ impl SowEngine {
                     deaths: p.deaths,
                     assists: p.assists,
                     boats_in_use: boats_in_use.get(p.id as usize).copied().unwrap_or_default(),
-                    boat_capacity: crate::building::cost::player_fleet_capacity_from_port_levels(
+                    boat_capacity: crate::building::cost::player_fleet_capacity_from_port_slots(
                         self.building_aggregates
                             .get(p.id as usize)
-                            .map_or(0, |aggregate| aggregate.port_levels),
+                            .map_or(0, |aggregate| aggregate.port_fleet_slots),
                     ),
                     nuke_available: p.alive
-                        && self.buildings.iter().any(|building| {
-                            building.owner_id == p.id
-                                && matches!(
-                                    building.kind,
-                                    crate::game::BuildingKind::Factory | crate::game::BuildingKind::Tower
-                                )
-                                && !building.under_construction
-                                && building.active_level()
-                                    >= crate::game::NukeKind::AtomBomb.required_district_level()
-                                && self
-                                    .building_productions
-                                    .get(&building.id)
-                                    .is_some_and(|state| state.nuke_ready)
-                        }),
-                    nuke_cooldown_ticks: self
-                        .buildings
-                        .iter()
-                        .filter(|building| {
-                            building.owner_id == p.id
-                                && matches!(
-                                    building.kind,
-                                    crate::game::BuildingKind::Factory | crate::game::BuildingKind::Tower
-                                )
-                                && !building.under_construction
-                                && building.active_level()
-                                    >= crate::game::NukeKind::AtomBomb.required_district_level()
-                        })
-                        .filter_map(|building| {
-                            self.building_productions.get(&building.id).and_then(|state| {
-                                state.arsenal_build.and_then(|build| {
-                                    (build.kind == crate::game::CityArsenalKind::Nuke)
-                                        .then_some(build.ticks_until_complete)
-                                })
-                            })
-                        })
-                        .min()
+                        && nuke_available_by_player
+                            .get(p.id as usize)
+                            .copied()
+                            .unwrap_or(false),
+                    nuke_cooldown_ticks: nuke_cooldown_by_player
+                        .get(p.id as usize)
+                        .copied()
                         .unwrap_or(0),
                     help_calls,
                     help_cooldown_ticks,

@@ -64,7 +64,7 @@ pub mod dev_config {
             Self {
                 thickness: 0.5,
                 darkness: 0.35,
-                shore_thickness: 0.0,
+                shore_thickness: 0.35,
                 shore_darkness: 1.0,
                 conquest_duration: 1.5,
                 territory_opacity: 0.588,

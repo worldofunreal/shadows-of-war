@@ -12,6 +12,7 @@ use std::{
 };
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
+static PERF_CAPTURE: AtomicBool = AtomicBool::new(cfg!(any(feature = "dev", debug_assertions)));
 
 /// Ring buffer of the last N sim-tick durations in microseconds.
 const CAP: usize = 128;
@@ -22,6 +23,9 @@ static RING: [AtomicUsize; CAP] = [const { AtomicUsize::new(0) }; CAP];
 static IDX: AtomicUsize = AtomicUsize::new(0);
 
 const STARTUP_WINDOW: Duration = Duration::from_secs(2);
+const ROLLING_FRAME_CAP: usize = 120;
+const ROLLING_TICK_CAP: usize = 60;
+const METRIC_COUNT: usize = 14;
 
 #[derive(Clone, Copy)]
 pub(crate) enum StartupMetric {
@@ -42,6 +46,23 @@ pub(crate) enum StartupMetric {
 }
 
 impl StartupMetric {
+    const ALL_NAMES: [&'static str; METRIC_COUNT] = [
+        "render_frame",
+        "update_sim",
+        "nameplate_sample",
+        "land_cache_rebuild",
+        "surface_acquire",
+        "gpu_wait",
+        "gpu_submit",
+        "world_render",
+        "map_update",
+        "ui_render",
+        "world_overlays",
+        "nameplate_render",
+        "menu_publish",
+        "text_draw",
+    ];
+
     const fn index(self) -> usize {
         match self {
             Self::RenderFrame => 0,
@@ -60,13 +81,73 @@ impl StartupMetric {
             Self::TextDraw => 13,
         }
     }
+}
 
+struct MetricRing {
+    samples: [u64; ROLLING_FRAME_CAP],
+    len: usize,
+    cursor: usize,
+}
+
+impl Default for MetricRing {
+    fn default() -> Self {
+        Self {
+            samples: [0; ROLLING_FRAME_CAP],
+            len: 0,
+            cursor: 0,
+        }
+    }
+}
+
+impl MetricRing {
+    #[inline]
+    fn push(&mut self, value_us: u64) {
+        self.samples[self.cursor] = value_us;
+        self.cursor = (self.cursor + 1) % ROLLING_FRAME_CAP;
+        if self.len < ROLLING_FRAME_CAP {
+            self.len += 1;
+        }
+    }
+
+    fn summary_ms(&self) -> serde_json::Value {
+        if self.len == 0 {
+            return serde_json::json!({ "samples": 0, "p50_ms": 0.0, "p95_ms": 0.0, "max_ms": 0.0 });
+        }
+        let mut sorted = self.samples[..self.len].to_vec();
+        let (p50, p95, max) = percentiles(&mut sorted);
+        serde_json::json!({
+            "samples": self.len,
+            "p50_ms": round2_ms(p50),
+            "p95_ms": round2_ms(p95),
+            "max_ms": round2_ms(max),
+        })
+    }
+}
+
+struct RollingPerfState {
+    frame_rings: [MetricRing; METRIC_COUNT],
+    tick_profiles: [sow_core::engine::TickProfile; ROLLING_TICK_CAP],
+    tick_len: usize,
+    tick_cursor: usize,
+    last_profile: Option<sow_core::engine::TickProfile>,
+}
+
+impl Default for RollingPerfState {
+    fn default() -> Self {
+        Self {
+            frame_rings: std::array::from_fn(|_| MetricRing::default()),
+            tick_profiles: [sow_core::engine::TickProfile::default(); ROLLING_TICK_CAP],
+            tick_len: 0,
+            tick_cursor: 0,
+            last_profile: None,
+        }
+    }
 }
 
 #[derive(Default)]
 struct StartupPerfWindow {
     started_at: Option<web_time::Instant>,
-    samples_us: [Vec<u64>; 14],
+    samples_us: [Vec<u64>; METRIC_COUNT],
     cache_prepare_cpu_us: u64,
     cache_prepare_wall_us: u64,
     cache_prepare_step_max_us: u64,
@@ -76,6 +157,108 @@ struct StartupPerfWindow {
 
 thread_local! {
     static STARTUP_PERF: RefCell<StartupPerfWindow> = RefCell::new(StartupPerfWindow::default());
+    static ROLLING_PERF: RefCell<RollingPerfState> = RefCell::new(RollingPerfState::default());
+}
+
+#[inline]
+fn round2_ms(us: u64) -> f64 {
+    ((us as f64) / 10.0).round() / 100.0
+}
+
+#[inline]
+pub fn perf_capture_enabled() -> bool {
+    PERF_CAPTURE.load(Ordering::Relaxed)
+}
+
+pub fn set_perf_capture(on: bool) {
+    PERF_CAPTURE.store(on, Ordering::Relaxed);
+    if !on {
+        return;
+    }
+    ROLLING_PERF.with(|state| {
+        *state.borrow_mut() = RollingPerfState::default();
+    });
+}
+
+pub(crate) fn record_tick_profile(profile: sow_core::engine::TickProfile) {
+    if !perf_capture_enabled() {
+        return;
+    }
+    ROLLING_PERF.with(|state| {
+        let mut state = state.borrow_mut();
+        let idx = state.tick_cursor;
+        state.tick_profiles[idx] = profile;
+        state.tick_cursor = (idx + 1) % ROLLING_TICK_CAP;
+        if state.tick_len < ROLLING_TICK_CAP {
+            state.tick_len += 1;
+        }
+        state.last_profile = Some(profile);
+    });
+}
+
+pub fn format_perf_report_json() -> String {
+    let capture_enabled = perf_capture_enabled();
+    ROLLING_PERF.with(|state| {
+        let state = state.borrow();
+        let mut frame = serde_json::Map::with_capacity(METRIC_COUNT);
+        for (i, &name) in StartupMetric::ALL_NAMES.iter().enumerate() {
+            frame.insert(name.to_string(), state.frame_rings[i].summary_ms());
+        }
+
+        let slice = &state.tick_profiles[..state.tick_len];
+        let phase_summary = |extract: fn(&sow_core::engine::TickProfile) -> u64| {
+            if slice.is_empty() {
+                return serde_json::json!({ "samples": 0, "p50_ms": 0.0, "p95_ms": 0.0, "max_ms": 0.0 });
+            }
+            let mut vals: Vec<u64> = slice.iter().map(extract).collect();
+            let (p50, p95, max) = percentiles(&mut vals);
+            serde_json::json!({
+                "samples": slice.len(),
+                "p50_ms": round2_ms(p50),
+                "p95_ms": round2_ms(p95),
+                "max_ms": round2_ms(max),
+            })
+        };
+
+        let sim = serde_json::json!({
+            "total": phase_summary(|p| p.total_us),
+            "income": phase_summary(|p| p.income_us),
+            "ai_think": phase_summary(|p| p.ai_think_us),
+            "construction": phase_summary(|p| p.construction_us),
+            "projectiles": phase_summary(|p| p.projectiles_us),
+            "sam": phase_summary(|p| p.sam_us),
+            "combat": phase_summary(|p| p.combat_us),
+            "sync_buildings": phase_summary(|p| p.sync_buildings_us),
+            "trade_ships": phase_summary(|p| p.trade_ships_us),
+            "fleets": phase_summary(|p| p.fleets_us),
+            "snapshot": phase_summary(|p| p.snapshot_us),
+        });
+
+        let counts = state.last_profile.map_or_else(
+            || serde_json::json!(null),
+            |p| {
+                serde_json::json!({
+                    "tick": p.tick,
+                    "alive_players": p.alive_players,
+                    "buildings": p.buildings,
+                    "ports": p.ports,
+                    "trade_ships": p.trade_ships,
+                    "warships": p.warships,
+                    "transports": p.transports,
+                    "attacks": p.attacks,
+                    "total_border_tiles": p.total_border_tiles,
+                })
+            },
+        );
+
+        serde_json::json!({
+            "capture_enabled": capture_enabled,
+            "frame": frame,
+            "sim": sim,
+            "counts": counts,
+        })
+        .to_string()
+    })
 }
 
 pub(crate) fn start_startup_perf_window(cache_build: Option<(u64, u64, u64)>) {
@@ -98,7 +281,14 @@ pub(crate) fn start_startup_perf_window(cache_build: Option<(u64, u64, u64)>) {
     });
 }
 
+#[inline]
 pub(crate) fn startup_perf_timer() -> Option<web_time::Instant> {
+    if perf_capture_enabled() {
+        return Some(web_time::Instant::now());
+    }
+    if !enabled() {
+        return None;
+    }
     STARTUP_PERF.with(|window| {
         let window = window.borrow();
         if !window.active {
@@ -112,6 +302,15 @@ pub(crate) fn startup_perf_timer() -> Option<web_time::Instant> {
 
 pub(crate) fn record_startup_perf(metric: StartupMetric, started_at: web_time::Instant) {
     let now = web_time::Instant::now();
+    let elapsed_us = now.duration_since(started_at).as_micros() as u64;
+    if perf_capture_enabled() {
+        ROLLING_PERF.with(|state| {
+            state.borrow_mut().frame_rings[metric.index()].push(elapsed_us);
+        });
+    }
+    if !enabled() {
+        return;
+    }
     STARTUP_PERF.with(|window| {
         let mut window = window.borrow_mut();
         let Some(window_started_at) = window.started_at else {
@@ -123,8 +322,7 @@ pub(crate) fn record_startup_perf(metric: StartupMetric, started_at: web_time::I
         if started_at >= window_started_at
             && started_at.duration_since(window_started_at) < STARTUP_WINDOW
         {
-            window.samples_us[metric.index()]
-                .push(now.duration_since(started_at).as_micros() as u64);
+            window.samples_us[metric.index()].push(elapsed_us);
         }
         if now.duration_since(window_started_at) >= STARTUP_WINDOW {
             report_startup_perf(&mut window);
@@ -217,6 +415,9 @@ fn percentiles(samples: &mut Vec<u64>) -> (u64, u64, u64) {
 
 pub fn init_enabled(on: bool) {
     ENABLED.store(on, Ordering::Relaxed);
+    if on {
+        PERF_CAPTURE.store(true, Ordering::Relaxed);
+    }
 }
 
 pub fn init_from_url() {

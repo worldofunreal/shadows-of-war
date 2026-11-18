@@ -673,6 +673,26 @@ impl WarpFleet {
         endpoints: (u32, u32),
         path: Vec<u32>,
     ) -> Self {
+        Self::new_with_shared_path(
+            id,
+            owner_id,
+            target_owner,
+            unit_type,
+            troops,
+            endpoints,
+            std::sync::Arc::new(path),
+        )
+    }
+
+    pub fn new_with_shared_path(
+        id: u64,
+        owner_id: u16,
+        target_owner: u16,
+        unit_type: crate::game::UnitType,
+        troops: f64,
+        endpoints: (u32, u32),
+        path: std::sync::Arc<Vec<u32>>,
+    ) -> Self {
         let (src_tile, dst_tile) = endpoints;
         let current_tile = path.first().copied().unwrap_or(src_tile);
         let path_cursor = if matches!(
@@ -695,7 +715,7 @@ impl WarpFleet {
             src_tile,
             dst_tile,
             retreat_dst: None,
-            path: std::sync::Arc::new(path),
+            path,
             path_cursor,
             movement_progress: 0.0,
             speed_bonus_percent: 0.0,
@@ -712,6 +732,11 @@ impl WarpFleet {
 
     /// Replace a route and discard fractional progress from the previous one.
     pub fn replace_path(&mut self, path: Vec<u32>) {
+        self.replace_path_arc(std::sync::Arc::new(path));
+    }
+
+    /// Replace a route with a shared `Arc<Vec<u32>>` without copying tile indices.
+    pub fn replace_path_arc(&mut self, path: std::sync::Arc<Vec<u32>>) {
         if let Some(&start) = path.first() {
             self.current_tile = start;
         }
@@ -728,7 +753,7 @@ impl WarpFleet {
                 0
             };
         self.movement_progress = 0.0;
-        self.path = std::sync::Arc::new(path);
+        self.path = path;
         self.eta_seconds_remaining = None;
     }
 

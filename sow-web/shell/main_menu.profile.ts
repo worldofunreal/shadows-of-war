@@ -1759,9 +1759,9 @@ function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
 
   const toolbar =
     "<div class='sow-profile__ach-toolbar' data-ach-toolbar>" +
-    "<div class='sow-profile__ach-search-wrap'>" +
-    "<span class='sow-profile__ach-search-icon' aria-hidden='true'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg></span>" +
-    "<input type='search' class='sow-profile__ach-search-input' placeholder='" +
+    "<div class='sow-profile__ach-search-wrap sow-control-search'>" +
+    "<span class='sow-profile__ach-search-icon sow-control-search__icon' aria-hidden='true'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg></span>" +
+    "<input type='search' class='sow-profile__ach-search-input sow-control-search__input' placeholder='" +
     esc(tText("profile.search_achievements", "Search achievements, heroes, or regions…")) +
     "' value='" +
     esc(menuUi.profileAchievementSearch || "") +

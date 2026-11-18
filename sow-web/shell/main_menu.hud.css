@@ -22,54 +22,9 @@
   --sow-dock-reserve: 88px;
 }
 
-/* Equipped territory skin filigree shared with the main menu across HUD tactical surfaces. */
-#sow-hud[data-skin]
-  :where(
-    .sow-hud__nameplate,
-    .sow-hud__rail-card,
-    .sow-hud__dock-inner,
-    .sow-hud__sheet,
-    .sow-hud__dialog,
-    .sow-hud__building-card,
-    .sow-hud__hover-card
-  ) {
-  isolation: isolate;
-}
-
-#sow-hud[data-skin]
-  :where(
-    .sow-hud__nameplate,
-    .sow-hud__rail-card,
-    .sow-hud__dock-inner,
-    .sow-hud__sheet,
-    .sow-hud__dialog,
-    .sow-hud__building-card,
-    .sow-hud__hover-card
-  )::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  overflow: hidden;
-  pointer-events: none;
-  background-image: var(--sow-skin-pattern);
-  background-repeat: repeat;
-  background-size: var(--sow-skin-pattern-size);
-  background-position: 0 0;
-  opacity: var(--sow-skin-pattern-opacity);
-  -webkit-mask-image: var(
-    --sow-hud-skin-mask,
-    linear-gradient(180deg, #000 0%, rgb(0 0 0 / 42%) 48%, transparent 90%)
-  );
-  mask-image: var(
-    --sow-hud-skin-mask,
-    linear-gradient(180deg, #000 0%, rgb(0 0 0 / 42%) 48%, transparent 90%)
-  );
-}
-
-#sow-hud[data-skin] .sow-hud__nameplate {
-  --sow-hud-skin-mask: radial-gradient(
+/* HUD-specific equipped-skin filigree masks (shared ::before engine lives in sow-controls.css). */
+html[data-sow-skin] .sow-hud__nameplate {
+  --sow-skin-mask: radial-gradient(
     120% 95% at 0% 0%,
     #000 0%,
     rgb(0 0 0 / 46%) 48%,
@@ -77,8 +32,8 @@
   );
 }
 
-html[dir="rtl"] #sow-hud[data-skin] .sow-hud__nameplate {
-  --sow-hud-skin-mask: radial-gradient(
+html[data-sow-skin][dir="rtl"] .sow-hud__nameplate {
+  --sow-skin-mask: radial-gradient(
     120% 95% at 100% 0%,
     #000 0%,
     rgb(0 0 0 / 46%) 48%,
@@ -86,8 +41,8 @@ html[dir="rtl"] #sow-hud[data-skin] .sow-hud__nameplate {
   );
 }
 
-#sow-hud[data-skin] .sow-hud__dock-inner {
-  --sow-hud-skin-mask: radial-gradient(
+html[data-sow-skin] .sow-hud__dock-inner {
+  --sow-skin-mask: radial-gradient(
     90% 110% at 50% 0%,
     #000 0%,
     rgb(0 0 0 / 45%) 52%,
@@ -95,12 +50,31 @@ html[dir="rtl"] #sow-hud[data-skin] .sow-hud__nameplate {
   );
 }
 
-#sow-hud[data-skin] :where(.sow-hud__sheet, .sow-hud__dialog) {
-  --sow-hud-skin-mask: linear-gradient(
+html[data-sow-skin] :where(.sow-hud__sheet, .sow-hud__dialog) {
+  --sow-skin-mask: linear-gradient(
     180deg,
     #000 0%,
     rgb(0 0 0 / 38%) 28%,
     transparent 68%
+  );
+}
+
+html[data-sow-skin] :where(.sow-hud__notification, .sow-hud__request-toast) {
+  --sow-skin-mask: linear-gradient(
+    90deg,
+    #000 0%,
+    rgb(0 0 0 / 40%) 42%,
+    transparent 86%
+  );
+}
+
+html[data-sow-skin][dir="rtl"]
+  :where(.sow-hud__notification, .sow-hud__request-toast) {
+  --sow-skin-mask: linear-gradient(
+    270deg,
+    #000 0%,
+    rgb(0 0 0 / 40%) 42%,
+    transparent 86%
   );
 }
 
@@ -1097,6 +1071,22 @@ html[dir="rtl"] #sow-hud-dev-layer {
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.sow-hud__icon-btn.sow-hud__exit-pill {
+  border-color: rgb(248 113 113 / 60%);
+  color: #fecaca;
+  background:
+    radial-gradient(
+      95% 85% at 50% 20%,
+      rgb(185 28 28 / 48%) 0%,
+      rgb(90 18 24 / 50%) 100%
+    ),
+    var(--sow-tactical-surface-compact-bg);
+  box-shadow:
+    inset 0 1px 0 rgb(254 202 202 / 16%),
+    var(--sow-surface-shadow),
+    0 0 10px rgb(239 68 68 / 18%);
+}
+
 .sow-hud__icon-btn.sow-hud__exit-pill::after {
   background: linear-gradient(
     180deg,
@@ -1154,19 +1144,19 @@ html[dir="rtl"] #sow-hud-dev-layer {
 
   .sow-hud__icon-btn.sow-hud__exit-pill:hover,
   .sow-hud__icon-btn[data-command="prompt_surrender"]:hover {
-    border-color: rgba(248, 113, 113, 0.78);
-    color: #fca5a5;
+    border-color: #f87171;
+    color: #fee2e2;
     background:
       radial-gradient(
         95% 85% at 50% 20%,
-        rgba(239, 68, 68, 0.24) 0%,
-        transparent 74%
+        rgb(220 38 38 / 72%) 0%,
+        rgb(127 29 29 / 64%) 100%
       ),
-      var(--sow-tactical-surface-card-bg);
+      var(--sow-tactical-surface-compact-bg);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 1px 0 rgb(254 202 202 / 24%),
       0 6px 18px rgba(0, 0, 0, 0.55),
-      0 0 14px rgba(239, 68, 68, 0.34);
+      0 0 18px rgb(239 68 68 / 48%);
   }
 
   .sow-hud__icon-btn:hover .sow-hud__action-icon {
@@ -1843,7 +1833,7 @@ html[dir="rtl"] #sow-hud-dev-layer {
   max-width: min(300px, calc(100vw - 110px));
   padding: 8px 12px;
   border: 1px solid var(--sow-tactical-surface-border);
-  border-inline-start: 2px solid var(--sow-gold-bright, #ffd54f);
+  border-inline-start: 2px solid var(--sow-gold-bright);
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
   background: var(--sow-panel-card);
@@ -2397,133 +2387,32 @@ html[dir="rtl"] #sow-hud-dev-layer {
   outline-offset: var(--sow-tactical-focus-offset);
 }
 
-/* Shared controls */
-.sow-hud__sheet input[type="range"],
-#sow-menu .sow-menu__settings-controls input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 48px;
-  margin: 0;
-  background: transparent;
-}
-.sow-hud__sheet input[type="range"]::-webkit-slider-runnable-track,
-#sow-menu
-  .sow-menu__settings-controls
-  input[type="range"]::-webkit-slider-runnable-track {
-  height: 12px;
-  border: 1px solid var(--sow-tactical-track-border);
-  border-radius: var(--sow-tactical-track-radius);
-  background: var(--sow-track, var(--sow-tactical-track-bg));
-  box-shadow: var(--sow-tactical-track-shadow);
-}
-.sow-hud__sheet input[type="range"]::-webkit-slider-thumb,
-#sow-menu
-  .sow-menu__settings-controls
-  input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 32px;
-  height: 32px;
-  margin-top: -10px;
-  border: 3px solid #10171c;
-  border-radius: 50%;
-  background: var(--sow-gold);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 50%);
-}
-.sow-hud__sheet input[type="range"]::-moz-range-track,
-#sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-track {
-  height: 12px;
-  border: 1px solid var(--sow-tactical-track-border);
-  border-radius: var(--sow-tactical-track-radius);
-  background: var(--sow-track, var(--sow-tactical-track-bg));
-  box-shadow: var(--sow-tactical-track-shadow);
-}
-.sow-hud__sheet input[type="range"]::-moz-range-thumb,
-#sow-menu .sow-menu__settings-controls input[type="range"]::-moz-range-thumb {
-  width: 26px;
-  height: 26px;
-  border: 3px solid #10171c;
-  border-radius: 50%;
-  background: var(--sow-gold);
-}
-
-.sow-hud__switch {
-  -webkit-appearance: none;
-  appearance: none;
-  position: relative;
-  flex: none;
-  width: 56px;
-  height: 32px;
-  margin: 0;
-  border-radius: 16px;
-  background: rgb(255 255 255 / 18%);
-  transition: background 0.12s;
-}
-.sow-hud__switch::after {
-  content: "";
-  position: absolute;
-  inset-block-start: 4px;
-  inset-inline-start: 4px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 0.12s;
-}
-.sow-hud__switch:checked {
-  background: var(--sow-gold);
-}
-.sow-hud__switch:checked::after {
-  transform: translateX(24px);
-}
-html[dir="rtl"] .sow-hud__switch:checked::after {
-  transform: translateX(-24px);
+/* Sheet controls (shared range/switch/row chrome lives in sow-controls.css) */
+.sow-hud__sheet input[type="range"] {
+  --sow-slider-fill: var(--sow-music-fill, 80%);
+  --sow-range-height: 48px;
 }
 
 /* Settings rows */
 .sow-hud__setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   min-height: 64px;
-  padding-inline: 4px;
-  color: #f5f1e8;
-  font-size: 16px;
-  cursor: pointer;
 }
 .sow-hud__setting-row + .sow-hud__setting-row {
   border-top: 1px solid rgb(255 255 255 / 8%);
 }
-.sow-hud__settings-section {
-  background: transparent;
-  border: 0;
-  padding: 0;
+.sow-hud__settings .sow-hud__settings-section {
+  padding: 4px 12px;
+  gap: 0;
 }
-.sow-hud__setting-row--slider,
 .sow-hud__setting-card--slider {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
   padding-block: 10px;
 }
-.sow-hud__setting-row--slider input[type="range"],
 .sow-hud__setting-card--slider input[type="range"] {
   width: 100%;
   flex: 0 0 auto;
-}
-.sow-hud__setting-card--slider
-  input[type="range"]::-webkit-slider-runnable-track {
-  background:
-    var(--sow-fill-construction-gradient) 0 0 /
-      var(--sow-slider-fill, var(--sow-music-fill, 80%)) 100% no-repeat,
-    var(--sow-tactical-track-bg);
-}
-.sow-hud__setting-card--slider input[type="range"]::-moz-range-track {
-  background:
-    var(--sow-fill-construction-gradient) 0 0 /
-      var(--sow-slider-fill, var(--sow-music-fill, 80%)) 100% no-repeat,
-    var(--sow-tactical-track-bg);
 }
 
 /* Rankings header & search */
@@ -2540,21 +2429,10 @@ html[dir="rtl"] .sow-hud__switch:checked::after {
   gap: 6px;
 }
 .sow-hud__leaderboard-search-wrap {
-  position: relative;
   flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  align-items: center;
 }
 .sow-hud__leaderboard-search-icon {
-  position: absolute;
   inset-inline-start: 10px;
-  width: 14px;
-  height: 14px;
-  display: grid;
-  place-items: center;
-  color: var(--sow-muted);
-  pointer-events: none;
   opacity: 0.75;
 }
 .sow-hud__leaderboard-search-icon .sow-hud__inline-icon,
@@ -2563,36 +2441,15 @@ html[dir="rtl"] .sow-hud__switch:checked::after {
   height: 14px;
 }
 .sow-hud__leaderboard-search {
-  width: 100%;
   height: 36px;
   min-height: 36px;
-  padding: 0 10px 0 30px;
-  border-radius: 8px;
-  border: 1px solid rgb(255 255 255 / 12%);
-  background: rgb(0 0 0 / 35%);
-  color: #fff;
-  font: 500 13px/1 var(--sow-ui-font, sans-serif);
-  outline: none;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
-  box-sizing: border-box;
-}
-html[dir="rtl"] .sow-hud__leaderboard-search {
-  padding: 0 30px 0 10px;
+  padding-block: 0;
+  padding-inline: 30px 10px;
+  font-size: 13px;
+  font-weight: 500;
 }
 .sow-hud__leaderboard-search::placeholder {
-  color: var(--sow-muted);
   opacity: 0.7;
-}
-.sow-hud__leaderboard-search:hover {
-  border-color: rgb(255 255 255 / 20%);
-}
-.sow-hud__leaderboard-search:focus {
-  border-color: color-mix(in srgb, var(--sow-gold) 65%, transparent);
-  background: rgb(0 0 0 / 50%);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sow-gold) 35%, transparent);
 }
 .sow-hud__leaderboard-header .sow-hud__sheet-btn {
   width: 38px;
@@ -2912,7 +2769,7 @@ html[dir="rtl"] .sow-hud__bot-badge {
   min-width: 0;
   min-height: 30px;
   padding: 4px 8px;
-  border: 1px solid rgb(238 194 104 / 20%);
+  border: 1px solid var(--sow-line);
   border-radius: 4px 8px 4px 4px;
   background: rgb(255 255 255 / 4%);
   color: var(--sow-muted);
@@ -2927,8 +2784,8 @@ html[dir="rtl"] .sow-hud__bot-badge {
     color 140ms ease;
 }
 .sow-hud__inbox-filter:hover {
-  border-color: rgb(238 194 104 / 45%);
-  color: #fff5d8;
+  border-color: var(--sow-tactical-surface-accent-border);
+  color: #f5f1e8;
 }
 .sow-hud__inbox-filter.is-active {
   border-color: var(--sow-gold-bright);
@@ -2950,7 +2807,7 @@ html[dir="rtl"] .sow-hud__bot-badge {
   font-variant-numeric: tabular-nums;
 }
 .sow-hud__inbox-filter.is-active .sow-hud__inbox-filter-count {
-  background: rgb(238 194 104 / 22%);
+  background: color-mix(in srgb, var(--sow-gold) 22%, transparent);
 }
 .sow-hud__inbox-body {
   display: block;
@@ -3029,7 +2886,7 @@ html[dir="rtl"] .sow-hud__bot-badge {
   min-inline-size: 0;
 }
 .sow-hud__request-name {
-  color: #fff5d8;
+  color: #f5f1e8;
   font-size: 17px;
   font-weight: 800;
   line-height: 1.2;
@@ -3055,7 +2912,7 @@ html[dir="rtl"] .sow-hud__bot-badge {
 .sow-hud__request-timer {
   flex: none;
   padding: 2px 6px;
-  border: 1px solid rgb(238 194 104 / 36%);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: 4px;
   background: rgb(255 255 255 / 5%);
   color: var(--sow-gold-bright);
@@ -3082,7 +2939,7 @@ html[dir="rtl"] .sow-hud__bot-badge {
   width: 100%;
   height: 100%;
   transform-origin: left center;
-  background: linear-gradient(90deg, var(--sow-gold), #ffe59e);
+  background: linear-gradient(90deg, var(--sow-gold), var(--sow-gold-bright));
   transition: transform 240ms linear;
 }
 html[dir="rtl"] .sow-hud__request-timer-fill {
@@ -3448,10 +3305,6 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
 
 /* Dev Tools */
 .sow-hud__dev-sidebar {
-  background: #141c23;
-  box-shadow:
-    0 16px 40px rgb(0 0 0 / 75%),
-    0 0 0 1px rgb(255 255 255 / 8%);
   z-index: 130;
   overscroll-behavior: contain;
 }
@@ -3471,7 +3324,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
   padding: 0 8px 0 10px;
   gap: 6px;
   border-bottom: 1px solid var(--sow-line);
-  background: #141c23;
+  background: var(--sow-panel-wash);
 }
 .sow-hud__dev-header .sow-hud__sheet-title-group {
   display: flex;
@@ -3499,7 +3352,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--sow-gold-bright, #ffd54f);
+  color: var(--sow-gold-bright);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -3530,7 +3383,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
 .sow-hud__dev-save-btn:hover {
   border-color: var(--sow-line);
   background: rgb(255 255 255 / 6%);
-  color: var(--sow-gold-bright, #ffd54f);
+  color: var(--sow-gold-bright);
 }
 .sow-hud__dev-save-btn.is-saved {
   color: #8bc34a;
@@ -3580,9 +3433,9 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
   display: grid;
   min-width: 170px;
   padding: 4px;
-  border: 1px solid var(--sow-line);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: 6px;
-  background: #10171d;
+  background: var(--sow-control-panel);
   box-shadow: 0 8px 24px rgb(0 0 0 / 60%);
 }
 .sow-hud__dev-menu[hidden] {
@@ -3604,7 +3457,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
 }
 .sow-hud__dev-menu button:active {
   background: var(--sow-gold);
-  color: #10171c;
+  color: var(--sow-button-primary-text);
 }
 
 .sow-hud__dev-category-bar {
@@ -3614,7 +3467,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
   gap: 8px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--sow-line);
-  background: #10171d;
+  background: color-mix(in srgb, var(--sow-tactical-panel-base) 88%, transparent);
 }
 .sow-hud__dev-category-label {
   display: flex;
@@ -3649,9 +3502,9 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
   height: 26px;
   margin: 0;
   padding: 0 24px 0 8px;
-  border: 1px solid var(--sow-line);
+  border: 1px solid var(--sow-tactical-track-border);
   border-radius: 4px;
-  background: #141c23;
+  background: var(--sow-tactical-track-bg);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
@@ -3662,8 +3515,8 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
     background-color 0.12s;
 }
 .sow-hud__dev-category-select:hover {
-  border-color: rgb(255 255 255 / 24%);
-  background: #18222a;
+  border-color: color-mix(in srgb, var(--sow-gold) 36%, rgb(255 255 255 / 22%));
+  background: var(--sow-button-dark-bg);
 }
 .sow-hud__dev-category-select:focus {
   border-color: var(--sow-gold);
@@ -3672,7 +3525,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
   border-color: color-mix(in srgb, var(--sow-gold) 60%, transparent);
 }
 .sow-hud__dev-category-select option {
-  background: #141c23;
+  background: var(--sow-control-panel);
   color: #f5f1e8;
   padding: 6px 8px;
 }
@@ -3692,7 +3545,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
   gap: 6px;
   padding: 4px 8px;
   border-bottom: 1px solid var(--sow-line);
-  background: #0d1419;
+  background: color-mix(in srgb, var(--sow-tactical-panel-base) 92%, transparent);
 }
 .sow-hud__dev-transport[hidden] {
   display: none;
@@ -3726,7 +3579,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
 }
 .sow-hud__dev-chip input:checked + span {
   border-color: var(--sow-gold);
-  background: color-mix(in srgb, var(--sow-gold) 20%, #141c23);
+  background: color-mix(in srgb, var(--sow-gold) 20%, var(--sow-tactical-panel-base));
   color: #fff;
 }
 
@@ -3747,27 +3600,13 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
 }
 .sow-hud__dev-search {
   flex: 1;
-  min-width: 0;
   height: 26px;
   margin: 0;
   padding: 0 8px;
-  border: 1px solid var(--sow-line);
   border-radius: 4px;
-  background: #141c23;
-  color: #fff;
   font-size: 11px;
-  font-family: inherit;
-  transition:
-    border-color 0.1s,
-    box-shadow 0.1s;
-}
-.sow-hud__dev-search:focus {
-  border-color: var(--sow-gold);
-  outline: none;
-  background: #18222a;
 }
 .sow-hud__dev-search::placeholder {
-  color: rgb(255 255 255 / 35%);
   font-size: 11px;
 }
 
@@ -3931,7 +3770,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 .sow-hud__dev-play.is-playing {
   background: var(--sow-gold);
-  color: #10171c;
+  color: var(--sow-button-primary-text);
 }
 .sow-hud__dev-section-reset {
   display: none;
@@ -3964,7 +3803,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 .sow-hud__dev-control[data-dirty="true"] {
   border-inline-start-color: var(--sow-gold);
-  background: rgb(255 180 50 / 3%);
+  background: color-mix(in srgb, var(--sow-gold) 5%, transparent);
 }
 .sow-hud__dev-control[data-warn="true"] .sow-hud__dev-label::after {
   content: " !";
@@ -4031,9 +3870,9 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   min-width: 0;
   height: 20px;
   padding: 0 4px;
-  border: 1px solid var(--sow-line);
+  border: 1px solid var(--sow-tactical-track-border);
   border-radius: 3px;
-  background: #0d1419;
+  background: var(--sow-tactical-track-bg);
   color: #fff;
   font-size: 11px;
   font-family: inherit;
@@ -4078,82 +3917,31 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 .sow-hud__dev-slide button:active {
   background: var(--sow-gold);
-  color: #10171c;
+  color: var(--sow-button-primary-text);
   border-color: var(--sow-gold);
 }
 
-/* Dev sidebar compact range sliders */
+/* Dev sidebar compact slider & switch sizing (shared base lives in sow-controls.css) */
 .sow-hud__dev-sidebar input[type="range"] {
-  height: 16px;
+  --sow-range-height: 16px;
+  --sow-range-track-height: 3px;
+  --sow-range-track-radius: var(--sow-tactical-track-radius-compact);
+  --sow-range-thumb-size: 12px;
+  --sow-range-thumb-mt: -4.5px;
+  --sow-range-thumb-shadow: 0 1px 3px rgb(0 0 0 / 60%);
 }
-.sow-hud__dev-sidebar input[type="range"]::-webkit-slider-runnable-track {
-  height: 3px;
-  border: 1px solid var(--sow-tactical-track-border);
-  border-radius: var(--sow-tactical-track-radius-compact);
-  background: var(--sow-track, var(--sow-tactical-track-bg));
-  box-shadow: var(--sow-tactical-track-shadow);
-}
-.sow-hud__dev-sidebar input[type="range"]::-webkit-slider-thumb {
-  width: 12px;
-  height: 12px;
-  margin-top: -4.5px;
-  border: 2px solid #141c23;
-  border-radius: 50%;
-  background: var(--sow-gold);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 60%);
-  cursor: pointer;
-  transition:
-    transform 0.1s,
-    background-color 0.1s;
-}
-.sow-hud__dev-sidebar input[type="range"]::-webkit-slider-thumb:hover {
+.sow-hud__dev-sidebar input[type="range"]:hover::-webkit-slider-thumb {
   transform: scale(1.15);
-  background: var(--sow-gold-bright, #ffd54f);
-}
-.sow-hud__dev-sidebar input[type="range"]::-moz-range-track {
-  height: 3px;
-  border: 1px solid var(--sow-tactical-track-border);
-  border-radius: var(--sow-tactical-track-radius-compact);
-  background: var(--sow-track, var(--sow-tactical-track-bg));
-  box-shadow: var(--sow-tactical-track-shadow);
-}
-.sow-hud__dev-sidebar input[type="range"]::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: 2px solid #141c23;
-  border-radius: 50%;
-  background: var(--sow-gold);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 60%);
-  cursor: pointer;
 }
 
-/* Dev sidebar compact switch */
 .sow-hud__dev-sidebar .sow-hud__switch {
-  width: 32px;
-  height: 18px;
-  border-radius: 9px;
-  background: rgb(255 255 255 / 16%);
-  border: 1px solid var(--sow-line);
-  cursor: pointer;
-}
-.sow-hud__dev-sidebar .sow-hud__switch::after {
-  inset-block-start: 2px;
-  inset-inline-start: 2px;
-  width: 12px;
-  height: 12px;
-  background: #ccc;
-  transition: transform 0.12s;
-}
-.sow-hud__dev-sidebar .sow-hud__switch:checked {
-  background: var(--sow-gold);
-  border-color: var(--sow-gold);
-}
-.sow-hud__dev-sidebar .sow-hud__switch:checked::after {
-  transform: translateX(14px);
-  background: #10171c;
-}
-html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
-  transform: translateX(-14px);
+  --sow-switch-w: 32px;
+  --sow-switch-h: 18px;
+  --sow-switch-pad: 2px;
+  --sow-switch-knob: 12px;
+  --sow-switch-travel: 14px;
+  --sow-switch-knob-bg: #ccc;
+  --sow-switch-checked-knob-bg: var(--sow-button-primary-text);
 }
 
 .sow-hud__dev-control--bool {
@@ -4199,7 +3987,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 .sow-hud__dev-seg input:checked + span {
   border-color: var(--sow-gold);
-  background: color-mix(in srgb, var(--sow-gold) 20%, #141c23);
+  background: color-mix(in srgb, var(--sow-gold) 20%, var(--sow-tactical-panel-base));
   color: #fff;
   font-weight: 600;
   box-shadow: inset 0 0 0 1px
@@ -4357,22 +4145,18 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   background:
     radial-gradient(
       ellipse at 50% 0%,
-      rgba(245, 197, 66, 0.14) 0%,
+      color-mix(in srgb, var(--sow-gold) 14%, transparent) 0%,
       transparent 60%
     ),
-    linear-gradient(
-      170deg,
-      rgba(20, 25, 34, 0.97) 0%,
-      rgba(9, 12, 17, 0.99) 100%
-    );
+    var(--sow-panel-card);
 }
 
 #sow-hud-endgame-modal .sow-hud__endgame-card[data-result="victory"] {
   border-color: color-mix(in srgb, var(--sow-gold) 58%, rgba(74, 222, 128, 0.45));
   box-shadow:
     var(--sow-tactical-modal-shadow),
-    0 0 48px rgba(245, 197, 66, 0.18),
-    inset 0 1px 0 rgba(255, 244, 196, 0.22);
+    0 0 48px color-mix(in srgb, var(--sow-gold) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 #sow-hud-endgame-modal .sow-hud__endgame-card[data-result="defeat"] {
@@ -4415,7 +4199,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   opacity: 0;
   background: repeating-conic-gradient(
     from 0deg,
-    rgba(255, 224, 130, 0.16) 0deg 8deg,
+    color-mix(in srgb, var(--sow-gold-bright) 16%, transparent) 0deg 8deg,
     transparent 8deg 28deg
   );
   -webkit-mask: radial-gradient(circle, #000 0%, transparent 66%);
@@ -4442,8 +4226,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   margin-top: -60px;
   border-radius: 50%;
   opacity: 0;
-  border: 2px solid rgba(255, 224, 130, 0.78);
-  box-shadow: 0 0 24px rgba(245, 197, 66, 0.45);
+  border: 2px solid color-mix(in srgb, var(--sow-gold-bright) 78%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--sow-gold) 45%, transparent);
 }
 
 #sow-hud-endgame-modal
@@ -4508,8 +4292,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   width: 58px;
   height: 36px;
   flex: 0 0 auto;
-  color: var(--sow-gold-bright, #ffe8a3);
-  filter: drop-shadow(0 4px 12px rgba(245, 197, 66, 0.35));
+  color: var(--sow-gold-bright);
+  filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--sow-gold) 35%, transparent));
 }
 
 #sow-hud-endgame-modal .sow-hud__endgame-emblem.is-defeat {
@@ -4829,7 +4613,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   background:
     radial-gradient(
       ellipse at 50% 0%,
-      rgba(245, 197, 66, 0.12) 0%,
+      color-mix(in srgb, var(--sow-gold) 12%, transparent) 0%,
       transparent 62%
     ),
     radial-gradient(
@@ -4837,11 +4621,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
       rgba(222, 133, 129, 0.08) 0%,
       transparent 54%
     ),
-    linear-gradient(
-      165deg,
-      rgba(22, 26, 33, 0.98) 0%,
-      rgba(10, 12, 16, 0.99) 100%
-    );
+    var(--sow-panel-card);
   box-shadow:
     var(--sow-tactical-modal-shadow),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -5399,7 +5179,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   left: calc(50% + var(--caret-offset-x, 0px));
   width: 10px;
   height: 10px;
-  background: rgb(18, 25, 30);
+  background: var(--sow-tactical-panel-base);
   pointer-events: none;
 }
 
@@ -5430,12 +5210,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   flex-shrink: 0;
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(240, 169, 43, 0.32);
+  border: 1px solid var(--sow-tactical-surface-accent-border-soft);
   border-radius: 8px;
   background: radial-gradient(
     circle at 50% 35%,
-    rgba(240, 169, 43, 0.22),
-    rgba(8, 12, 15, 0.85)
+    color-mix(in srgb, var(--sow-gold) 22%, transparent),
+    var(--sow-tactical-panel-base)
   );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
@@ -5485,8 +5265,8 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__building-card-level.is-upgradable {
-  border-color: rgba(240, 169, 43, 0.36);
-  background: rgba(240, 169, 43, 0.12);
+  border-color: var(--sow-tactical-surface-accent-border-soft);
+  background: color-mix(in srgb, var(--sow-gold) 12%, transparent);
   color: #f3ead8;
 }
 
@@ -5856,7 +5636,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__city-trait.is-rail {
-  border-color: rgba(240, 169, 43, 0.45);
+  border-color: var(--sow-tactical-surface-accent-border);
   color: var(--sow-gold-bright);
 }
 
@@ -5972,7 +5752,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__city-district-lv.is-building {
-  background: rgba(240, 169, 43, 0.2);
+  background: color-mix(in srgb, var(--sow-gold) 20%, transparent);
   color: var(--sow-gold-bright);
 }
 
@@ -6086,7 +5866,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 }
 
 .sow-hud__city-arsenal-btn:hover:not(.is-locked) {
-  border-color: rgba(240, 169, 43, 0.52);
+  border-color: var(--sow-tactical-surface-accent-border);
   filter: brightness(1.08);
 }
 
@@ -6101,7 +5881,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
 .sow-hud__city-arsenal-btn.active {
   border-color: var(--sow-gold-bright);
-  box-shadow: 0 0 0 1px rgba(240, 169, 43, 0.65);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sow-gold) 65%, transparent);
 }
 
 .sow-hud__city-arsenal-btn.is-cooling {
@@ -6304,13 +6084,6 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   font-size: 11px;
   font-weight: 600;
   color: #f87171;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sow-hud__placement-panel-reason.is-advisory {
-  color: #fbbf24;
 }
 
 .sow-hud__placement-panel-controls {
@@ -6765,12 +6538,12 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   border: 2px solid color-mix(in srgb, var(--sow-gold) 60%, transparent);
   background: radial-gradient(
     circle at center,
-    rgba(245, 197, 66, 0.15) 0%,
-    rgba(10, 12, 16, 0.95) 100%
+    color-mix(in srgb, var(--sow-gold) 15%, transparent) 0%,
+    var(--sow-tactical-panel-base) 100%
   );
   box-shadow:
     0 6px 20px rgba(0, 0, 0, 0.6),
-    0 0 14px rgba(245, 197, 66, 0.15);
+    0 0 14px color-mix(in srgb, var(--sow-gold) 15%, transparent);
 }
 
 .sow-hud__endgame-card[data-result="defeat"] .sow-hud__endgame-portrait-wrap {
@@ -6807,7 +6580,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   display: flex;
   align-items: center;
   gap: 14px;
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: var(--sow-gold-bright);
   font-family: var(--font-display, serif);
   font-size: clamp(34px, 5.5vw, 44px);
   font-weight: 900;
@@ -6818,7 +6591,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   paint-order: normal;
   text-shadow:
     0 3px 16px rgba(0, 0, 0, 0.7),
-    0 0 24px rgba(245, 197, 66, 0.25);
+    0 0 24px color-mix(in srgb, var(--sow-gold) 25%, transparent);
 }
 
 .sow-hud__exit-card .sow-hud__endgame-banner .sow-hud__inline-icon {
@@ -6826,7 +6599,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   width: 40px;
   height: 40px;
   object-fit: contain;
-  color: var(--sow-gold-bright, #ffe8a3);
+  color: var(--sow-gold-bright);
   vertical-align: 0;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
 }
@@ -6914,15 +6687,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   min-height: 108px;
   padding: 16px 8px;
   border-radius: var(--sow-tactical-surface-radius-compact, 10px);
-  background: linear-gradient(
-    180deg,
-    rgba(28, 34, 44, 0.7) 0%,
-    rgba(14, 17, 23, 0.85) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-top: 2px solid rgba(245, 197, 66, 0.45);
+  background: var(--sow-tactical-surface-subcard-bg);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top: 2px solid var(--sow-tactical-surface-accent-border);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    var(--sow-tactical-surface-highlight),
     0 6px 18px rgba(0, 0, 0, 0.4);
   transition:
     transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -6933,10 +6702,10 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 
 .sow-hud__exit-card .sow-hud__endgame-stat:hover {
   transform: translateY(-3px);
-  border-color: rgba(245, 197, 66, 0.65);
+  border-color: var(--sow-gold);
   box-shadow:
     0 10px 24px rgba(0, 0, 0, 0.55),
-    0 0 18px rgba(245, 197, 66, 0.2);
+    0 0 18px color-mix(in srgb, var(--sow-gold) 20%, transparent);
 }
 
 .sow-hud__exit-card .sow-hud__endgame-stat + .sow-hud__endgame-stat::before {
@@ -6977,7 +6746,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   letter-spacing: -0.01em;
   text-shadow:
     0 3px 12px rgba(0, 0, 0, 0.85),
-    0 0 16px rgba(245, 197, 66, 0.15);
+    0 0 16px color-mix(in srgb, var(--sow-gold) 15%, transparent);
 }
 
 .sow-hud__exit-card
@@ -7276,7 +7045,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius-compact);
   background: var(--sow-panel-card);
-  color: #fff5d8;
+  color: #f5f1e8;
   text-align: start;
   box-shadow:
     var(--sow-tactical-card-shadow),
@@ -7306,7 +7075,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   inset-block: 0;
   inset-inline-start: 0;
   width: 2px;
-  background: linear-gradient(transparent, #f4d28b, transparent);
+  background: linear-gradient(transparent, var(--sow-gold-bright), transparent);
   content: "";
 }
 
@@ -7341,11 +7110,11 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   place-items: center;
   width: 27px;
   height: 27px;
-  border: 1px solid rgb(255 223 153 / 75%);
+  border: 1px solid color-mix(in srgb, var(--sow-gold-bright) 75%, transparent);
   border-radius: 50%;
-  background: rgb(255 226 163 / 12%);
-  color: #ffe3a3;
-  filter: drop-shadow(0 0 5px rgb(255 215 130 / 45%));
+  background: color-mix(in srgb, var(--sow-gold) 14%, transparent);
+  color: var(--sow-gold-bright);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--sow-gold) 45%, transparent));
 }
 
 .sow-hud__notification-seal svg {
@@ -7383,9 +7152,9 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
   flex: 0 0 44px;
   width: 44px;
   height: 44px;
-  border: 1px solid rgb(238 194 104 / 74%);
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 74%, transparent);
   border-radius: 6px 6px 10px 4px;
-  background: #202629;
+  background: var(--sow-tactical-panel-base);
   box-shadow: 0 3px 10px rgb(0 0 0 / 32%);
   overflow: hidden;
 }
@@ -7749,7 +7518,7 @@ html[dir="rtl"] .sow-hud__dev-sidebar .sow-hud__switch:checked::after {
 #sow-hud .sow-hud__transfer-dir.is-want {
   border-color: var(--sow-line);
   background: rgb(255 255 255 / 6%);
-  color: #fff5d8;
+  color: #f5f1e8;
 }
 #sow-hud .sow-hud__transfer-dir.is-want::before {
   content: "↓ ";

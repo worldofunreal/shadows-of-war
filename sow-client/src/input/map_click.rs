@@ -327,25 +327,6 @@ impl SowApp {
             );
             return;
         }
-        if let Some(button) = self
-            .placement_controls()
-            .and_then(|controls| controls.button_at(x as f32, y as f32))
-        {
-            match button {
-                super::placement::PlacementButton::Confirm => {
-                    // A greyed confirm explains itself instead of doing nothing.
-                    if !self.building_placement_can_confirm()
-                        && let Some(reason) = self.building_placement_reason()
-                    {
-                        self.add_map_feedback(reason);
-                    }
-                    self.confirm_building_placement();
-                }
-                super::placement::PlacementButton::Cancel => self.clear_placement(),
-            }
-            return;
-        }
-
         let Some((col, row)) = self.mouse_to_tile(x, y) else {
             return;
         };
@@ -952,7 +933,6 @@ impl SowApp {
             Some(crate::ui::hud::state::BuildingPlacement {
                 kind,
                 tile_idx,
-                attempted_tile_idx: None,
                 pending: false,
             });
         self.confirm_building_placement();
@@ -1082,7 +1062,6 @@ impl SowApp {
         let tile_idx = tile.unwrap_or(requested_tile);
         if let Some(placement) = self.ui.app.hud_state.building_placement.as_mut() {
             placement.tile_idx = tile_idx;
-            placement.attempted_tile_idx = tile.filter(|&tile| tile != requested_tile).map(|_| requested_tile);
             if crate::web_canvas::has_mobile_pointer() {
                 let footprint = sow_core::building::BuildingFootprint::at(
                     placement.kind,
@@ -1156,7 +1135,6 @@ impl SowApp {
             && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
         {
             placement.tile_idx = tile;
-            placement.attempted_tile_idx = None;
             if crate::web_canvas::has_mobile_pointer() {
                 let footprint = sow_core::building::BuildingFootprint::at(
                     placement.kind,
@@ -1273,24 +1251,7 @@ impl SowApp {
         if self.campaign_building_max_level(placement.kind) < 1 {
             return Some(crate::ui::UiText::new("hud.campaign_unlock_required"));
         }
-        if let Some(shortfall) = self.building_gold_shortfall(placement.kind) {
-            return Some(shortfall);
-        }
-        let Some(tile) = placement
-            .attempted_tile_idx
-            .filter(|&tile| tile != placement.tile_idx)
-        else {
-            return None;
-        };
-        if let Err(key) = self.resolve_building_target(
-            placement.kind,
-            (tile % self.sim.map_w) as i32,
-            (tile / self.sim.map_w) as i32,
-        ) {
-            return Some(crate::ui::UiText::new(key));
-        }
-        (!self.building_footprint_is_visible(placement.kind, tile))
-            .then(|| crate::ui::UiText::new("hud.build_no_space"))
+        self.building_gold_shortfall(placement.kind)
     }
 
     fn building_placement_target_reason(
@@ -1710,23 +1671,6 @@ impl SowApp {
     }
 
     pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
-        self.select_building_kind_from(kind, None);
-    }
-
-    pub(crate) fn select_building_kind_from_pointer(&mut self, kind: sow_core::game::BuildingKind) {
-        let origin = if self.input.hover_pointer == crate::app::HoverPointer::Mouse {
-            self.mouse_to_tile(self.input.last_mouse_x, self.input.last_mouse_y)
-        } else {
-            None
-        };
-        self.select_building_kind_from(kind, origin);
-    }
-
-    fn select_building_kind_from(
-        &mut self,
-        kind: sow_core::game::BuildingKind,
-        origin: Option<(i32, i32)>,
-    ) {
         if self.ui.observing
             || self.ui.tutorial_camera_only
             || self.ui.app.phase != crate::ClientPhase::Playing
@@ -1764,11 +1708,10 @@ impl SowApp {
             return;
         }
         let zoom = self.input.camera_zoom.max(0.01);
-        let camera_center = (
+        let (origin_x, origin_y) = (
             ((self.input.screen_w * 0.5 - self.input.camera_x) / zoom) as i32,
             ((self.input.screen_h * 0.45 - self.input.camera_y) / zoom) as i32,
         );
-        let (origin_x, origin_y) = origin.unwrap_or(camera_center);
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let tutorial_site = if self.ui.tutorial_active
             && self.ui.tutorial_campaign.is_boudica()
@@ -1809,15 +1752,11 @@ impl SowApp {
         let requested_tile = requested_y as u32 * map_w + requested_x as u32;
         let site = tutorial_site.or_else(|| {
             self.visible_building_anchor_bounds(kind)
-                .and_then(|bounds| self.nearest_visible_structure_site(kind, origin_x, origin_y, bounds))
+                .and_then(|bounds| {
+                    self.nearest_visible_structure_site(kind, origin_x, origin_y, bounds)
+                })
         });
         let tile = site.unwrap_or(requested_tile);
-        let attempted_tile_idx = tutorial_site
-            .is_none()
-            .then_some(site)
-            .flatten()
-            .filter(|&site| site != requested_tile)
-            .map(|_| requested_tile);
         self.input.key_pan_up = false;
         self.input.key_pan_down = false;
         self.input.key_pan_left = false;
@@ -1825,7 +1764,6 @@ impl SowApp {
         self.ui.app.hud_state.building_placement = Some(crate::ui::hud::state::BuildingPlacement {
             kind,
             tile_idx: tile,
-            attempted_tile_idx,
             pending: false,
         });
         self.ui.app.hud_state.selected_nuke_kind = None;

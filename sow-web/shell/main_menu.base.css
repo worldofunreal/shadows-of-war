@@ -164,149 +164,28 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
   box-shadow: var(--sow-tactical-card-shadow);
 }
 
-/* Subtle equipped-skin filigree on menu chrome, modals, and panel surfaces without clipping protruding badges/pills. */
-:is(
-  #sow-menu[data-skin] :where(
-    .sow-menu__topbar,
-    .sow-menu__command,
-    .sow-menu__main-nav,
-    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
-    .sow-purchase-modal__copy,
-    .sow-hero-info__body,
-    .sow-profile__cover-overlay,
-    .sow-profile__achievements-laurel-card,
-    .sow-profile__overview-sidebar .sow-ranked__overview,
-    .sow-heroes__featured-copy,
-    .sow-store__featured,
-    .sow-store__bundle-card:not([class*="is-theme-"]),
-    .sow-campaign__featured-content,
-    .sow-menu__custom-card,
-    .sow-menu__queue-summary-card,
-    .sow-menu__queue-players-card,
-    .sow-ranked__map,
-    .sow-auth,
-    .sow-directive-card,
-    .sow-menu-whisper__card
-  ),
-  html[data-sow-skin] :where(.sow-analytics-consent)
-) {
-  isolation: isolate;
-}
-
-#sow-menu[data-skin] :where(
-  .sow-menu__topbar,
-  .sow-menu__command,
-  .sow-menu__main-nav,
-  .sow-profile__achievements-laurel-card,
-  .sow-profile__overview-sidebar .sow-ranked__overview,
-  .sow-store__featured,
-  .sow-store__bundle-card:not([class*="is-theme-"]),
-  .sow-campaign__featured-content,
-  .sow-menu__queue-summary-card,
-  .sow-menu__queue-players-card,
-  .sow-ranked__map
-) {
-  position: relative;
-}
-
-:is(
-  #sow-menu[data-skin] :where(
-    .sow-menu__topbar,
-    .sow-menu__command,
-    .sow-menu__main-nav,
-    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
-    .sow-purchase-modal__copy,
-    .sow-hero-info__body,
-    .sow-profile__cover-overlay,
-    .sow-profile__achievements-laurel-card,
-    .sow-profile__overview-sidebar .sow-ranked__overview,
-    .sow-heroes__featured-copy,
-    .sow-store__featured,
-    .sow-store__bundle-card:not([class*="is-theme-"]),
-    .sow-campaign__featured-content,
-    .sow-menu__custom-card,
-    .sow-menu__queue-summary-card,
-    .sow-menu__queue-players-card,
-    .sow-ranked__map,
-    .sow-auth,
-    .sow-directive-card,
-    .sow-menu-whisper__card
-  ),
-  html[data-sow-skin] :where(.sow-analytics-consent)
-)::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  overflow: hidden;
-  pointer-events: none;
-  background-image: var(--sow-skin-pattern);
-  background-repeat: repeat;
-  background-size: var(--sow-skin-pattern-size);
-  background-position: 0 0;
-  opacity: var(--sow-skin-pattern-opacity);
-  --sow-skin-mask-default: radial-gradient(
-    min(100%, 460px) 220px at 0% 0%,
-    #000 0%,
-    rgb(0 0 0 / 36%) 44%,
-    transparent 84%
-  );
-  -webkit-mask-image: var(--sow-skin-mask, var(--sow-skin-mask-default));
-  mask-image: var(--sow-skin-mask, var(--sow-skin-mask-default));
-}
-
-html[dir="rtl"] :is(
-  #sow-menu[data-skin] :where(
-    .sow-menu__modal:not(.sow-purchase-modal, .sow-hero-info),
-    .sow-purchase-modal__copy,
-    .sow-hero-info__body,
-    .sow-profile__cover-overlay,
-    .sow-profile__achievements-laurel-card,
-    .sow-profile__overview-sidebar .sow-ranked__overview,
-    .sow-heroes__featured-copy,
-    .sow-store__featured,
-    .sow-store__bundle-card:not([class*="is-theme-"]),
-    .sow-campaign__featured-content,
-    .sow-menu__custom-card,
-    .sow-menu__queue-summary-card,
-    .sow-menu__queue-players-card,
-    .sow-ranked__map,
-    .sow-auth,
-    .sow-directive-card,
-    .sow-menu-whisper__card
-  ),
-  html[data-sow-skin] :where(.sow-analytics-consent)
-) {
-  --sow-skin-mask-default: radial-gradient(
-    min(100%, 460px) 220px at 100% 0%,
-    #000 0%,
-    rgb(0 0 0 / 36%) 44%,
-    transparent 84%
-  );
-}
-
-#sow-menu[data-skin] .sow-menu__topbar {
+/* Menu-specific equipped-skin filigree mask orientations (base rule lives in sow-controls.css). */
+html[data-sow-skin] .sow-menu__topbar {
   --sow-skin-mask: linear-gradient(90deg, #000 0%, rgb(0 0 0 / 48%) 34%, transparent 72%);
 }
 
-html[dir="rtl"] #sow-menu[data-skin] .sow-menu__topbar {
+html[data-sow-skin][dir="rtl"] .sow-menu__topbar {
   --sow-skin-mask: linear-gradient(270deg, #000 0%, rgb(0 0 0 / 48%) 34%, transparent 72%);
 }
 
-#sow-menu[data-skin] .sow-menu__command {
+html[data-sow-skin] .sow-menu__command {
   --sow-skin-mask: radial-gradient(125% 90% at 0% 0%, #000 0%, rgb(0 0 0 / 38%) 46%, transparent 86%);
 }
 
-html[dir="rtl"] #sow-menu[data-skin] .sow-menu__command {
+html[data-sow-skin][dir="rtl"] .sow-menu__command {
   --sow-skin-mask: radial-gradient(125% 90% at 100% 0%, #000 0%, rgb(0 0 0 / 38%) 46%, transparent 86%);
 }
 
-#sow-menu[data-skin] .sow-menu__main-nav {
+html[data-sow-skin] .sow-menu__main-nav {
   --sow-skin-mask: linear-gradient(180deg, #000 0%, rgb(0 0 0 / 42%) 44%, transparent 88%);
 }
 
-#sow-menu[data-skin] :where(.sow-heroes__featured-copy, .sow-campaign__featured-content) {
+html[data-sow-skin] :where(.sow-heroes__featured-copy, .sow-campaign__featured-content) {
   --sow-skin-mask: radial-gradient(
     min(100%, 420px) 180px at 0% 100%,
     #000 0%,
@@ -315,7 +194,7 @@ html[dir="rtl"] #sow-menu[data-skin] .sow-menu__command {
   );
 }
 
-html[dir="rtl"] #sow-menu[data-skin] :where(.sow-heroes__featured-copy, .sow-campaign__featured-content) {
+html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign__featured-content) {
   --sow-skin-mask: radial-gradient(
     min(100%, 420px) 180px at 100% 100%,
     #000 0%,

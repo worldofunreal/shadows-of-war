@@ -541,14 +541,28 @@ impl SowApp {
             // Hero cards of launched attacks are announced while intents apply.
             let mut ability_events = take_ability_events(&mut e.state.events);
             let transfer_events = take_resource_transfer_events(&mut e.state.events);
-            e.tick();
+            let mut tick_profile = if crate::diag::perf_capture_enabled() {
+                let clock_origin = web_time::Instant::now();
+                Some(e.tick_profiled(|| clock_origin.elapsed().as_micros() as u64))
+            } else {
+                e.tick();
+                None
+            };
             self.sim.config.buildings_enabled = e.state.config.buildings_enabled;
             if observe_tutorial {
                 self.sim.tutorial_observation.observe_events(e, my_id);
                 self.sim.tutorial_observation.observe_sim(e, my_id);
             }
             e.state.events.extend(transfer_events);
-            let snap = e.build_snapshot();
+            let snap = if let Some(profile) = tick_profile.as_mut() {
+                let snap_start = web_time::Instant::now();
+                let snap = e.build_snapshot();
+                profile.snapshot_us = snap_start.elapsed().as_micros() as u64;
+                crate::diag::record_tick_profile(*profile);
+                snap
+            } else {
+                e.build_snapshot()
+            };
             let mut events = std::mem::take(&mut e.state.events);
             events.append(&mut lifecycle_events);
             events.append(&mut ability_events);

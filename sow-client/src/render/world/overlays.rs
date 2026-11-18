@@ -5,7 +5,7 @@ use crate::theme::dev_config::DevConfig;
 use sow_core::game::BuildingKind;
 use sow_core::protocol::SimSnapshot;
 use sow_render::text::NameplateStatusSprite;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use web_time::{Duration, Instant};
 
 const BUILDING_CULL_FLOOR: f32 = 0.25;
@@ -228,6 +228,10 @@ pub(crate) struct BuildingRenderCache {
     tick_rate_ms_bits: u32,
     buildings: Vec<RenderedBuilding>,
     clusters: HashMap<BuildingClusterKey, (f32, f32, usize)>,
+    city_tiles: HashSet<u32>,
+    under_construction_tiles: HashSet<u32>,
+    flash_tick: Option<u64>,
+    flash_tile_totals: HashMap<u32, (u8, u16, BuildingKind, u8)>,
 }
 
 impl BuildingRenderCache {
@@ -344,32 +348,36 @@ fn render_buildings(
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let my_id = sim.my_player_id.unwrap_or(0);
-    let mut tile_totals: HashMap<u32, (u8, u16, BuildingKind, u8)> = HashMap::new();
-    for building in &snapshot.buildings {
-        let active_level = building.active_level();
-        let entry = tile_totals.entry(building.tile_idx).or_insert((
-            0,
-            building.owner_id,
-            building.kind,
-            active_level,
-        ));
-        entry.0 = entry.0.saturating_add(active_level);
-        entry.1 = building.owner_id;
-        if building.kind != BuildingKind::City && active_level > 0 {
-            entry.2 = building.kind;
-            entry.3 = active_level;
-        }
-    }
-    for (tile_idx, (total_level, owner_id, celeb_kind, celeb_level)) in tile_totals {
-        if let Some(previous) = ui.building_levels_seen.insert(tile_idx, total_level)
-            && total_level > previous
-        {
-            ui.building_upgrade_flashes.insert(tile_idx, now);
-            if owner_id == my_id {
-                ui.building_celebrations
-                    .insert(tile_idx, (celeb_kind, celeb_level, now));
+    if ui.building_render_cache.flash_tick != Some(snapshot.tick) {
+        let tile_totals = &mut ui.building_render_cache.flash_tile_totals;
+        tile_totals.clear();
+        for building in &snapshot.buildings {
+            let active_level = building.active_level();
+            let entry = tile_totals.entry(building.tile_idx).or_insert((
+                0,
+                building.owner_id,
+                building.kind,
+                active_level,
+            ));
+            entry.0 = entry.0.saturating_add(active_level);
+            entry.1 = building.owner_id;
+            if building.kind != BuildingKind::City && active_level > 0 {
+                entry.2 = building.kind;
+                entry.3 = active_level;
             }
         }
+        for (&tile_idx, &(total_level, owner_id, celeb_kind, celeb_level)) in tile_totals.iter() {
+            if let Some(previous) = ui.building_levels_seen.insert(tile_idx, total_level)
+                && total_level > previous
+            {
+                ui.building_upgrade_flashes.insert(tile_idx, now);
+                if owner_id == my_id {
+                    ui.building_celebrations
+                        .insert(tile_idx, (celeb_kind, celeb_level, now));
+                }
+            }
+        }
+        ui.building_render_cache.flash_tick = Some(snapshot.tick);
     }
     ui.building_upgrade_flashes
         .retain(|_, started| now.duration_since(*started) < Duration::from_millis(300));
@@ -748,12 +756,12 @@ fn render_building_selection_focus(
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct PlacementPreviewColors {
-    fill: [f32; 4],
+    fill: Option<[f32; 4]>,
     line: [f32; 4],
     building: [f32; 4],
 }
 
-const PLACEMENT_CONFLICT_COLOR: [f32; 4] = [0.92, 0.12, 0.14, 0.42];
+const PLACEMENT_CONFLICT_RADIUS: u32 = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct PlacementFootprintGeometry {
@@ -785,19 +793,19 @@ fn placement_footprint_geometry(
 fn placement_preview_colors(site_valid: bool, can_confirm: bool) -> PlacementPreviewColors {
     if !site_valid {
         PlacementPreviewColors {
-            fill: [0.75, 0.10, 0.08, 0.58],
+            fill: None,
             line: [1.0, 0.55, 0.48, 1.0],
             building: [1.0, 0.28, 0.28, 0.94],
         }
     } else if can_confirm {
         PlacementPreviewColors {
-            fill: [0.035, 0.26, 0.06, 1.0],
+            fill: Some([0.035, 0.26, 0.06, 1.0]),
             line: [0.66, 0.97, 0.45, 1.0],
             building: [1.0, 1.0, 1.0, 0.94],
         }
     } else {
         PlacementPreviewColors {
-            fill: [0.32, 0.36, 0.38, 1.0],
+            fill: Some([0.32, 0.36, 0.38, 1.0]),
             line: [0.75, 0.80, 0.82, 1.0],
             building: [1.0, 1.0, 1.0, 0.94],
         }
@@ -824,9 +832,11 @@ fn render_building_footprint_fill(
     text: &mut TextRenderer,
     top_left: [f32; 2],
     size: [f32; 2],
-    fill: [f32; 4],
+    fill: Option<[f32; 4]>,
 ) {
-    text.push_rect(top_left, size, fill);
+    if let Some(fill) = fill {
+        text.push_rect(top_left, size, fill);
+    }
 }
 
 fn render_building_footprint_grid(
@@ -867,191 +877,55 @@ fn render_placement_conflicts(
     building_grid: &sow_core::building::BuildingGrid,
     kind: BuildingKind,
     owner_id: u16,
-    tile_x: u32,
-    tile_y: u32,
-    footprint: sow_core::building::BuildingFootprint,
-    camera: [f32; 2],
-    zoom: f32,
-    whole_footprint: bool,
-    skip_footprint: Option<sow_core::building::BuildingFootprint>,
-) {
-    for y in footprint.top..footprint.top + footprint.height as i32 {
-        for x in footprint.left..footprint.left + footprint.width as i32 {
-            if skip_footprint.is_some_and(|excluded| excluded.contains(x, y)) {
-                continue;
-            }
-            let conflict = whole_footprint
-                || !map.is_valid_coord(x, y)
-                || sow_core::building::validate_building_cell(
-                    kind,
-                    owner_id,
-                    map.owner_id(x as u32, y as u32),
-                    map.terrain[map.ref_id(x as u32, y as u32)].as_byte(),
-                )
-                .is_err()
-                || building_grid.iter_all_in_range(tile_x, tile_y, 3).any(|building| {
-                    sow_core::building::BuildingFootprint::at(
-                        building.kind,
-                        building.x,
-                        building.y,
-                    )
-                    .contains(x, y)
-                });
-            if conflict {
-                text.push_rect(
-                    [camera[0] + x as f32 * zoom, camera[1] + y as f32 * zoom],
-                    [zoom; 2],
-                    PLACEMENT_CONFLICT_COLOR,
-                );
-            }
-        }
-    }
-}
-
-fn render_rejected_placement_marker(
-    text: &mut TextRenderer,
-    map: &sow_core::map::GameMap,
-    building_grid: &sow_core::building::BuildingGrid,
-    kind: BuildingKind,
-    owner_id: u16,
-    tile_idx: u32,
-    suggested_tile_idx: u32,
+    anchor: [u32; 2],
     input: &InputState,
     sf: f32,
 ) {
-    let (tile_x, tile_y) = (tile_idx % map.width, tile_idx / map.width);
-    let error = sow_core::building::validate_structure_site(
-        map,
-        owner_id,
-        kind,
-        tile_idx,
-        building_grid,
-    )
-    .err();
-    let visible_bounds = crate::input::placement::visible_building_anchor_bounds(
-        kind,
-        map.width,
-        map.height,
-        [input.camera_x, input.camera_y],
-        [input.screen_w, input.screen_h],
-        input.camera_zoom,
-    );
-    let visible = visible_bounds.is_some_and(|(min_x, min_y, max_x, max_y)| {
-        (min_x..=max_x).contains(&(tile_x as i32))
-            && (min_y..=max_y).contains(&(tile_y as i32))
-    });
-    if error.is_none() && visible {
-        return;
-    }
-
+    let [tile_x, tile_y] = anchor;
+    let radius = PLACEMENT_CONFLICT_RADIUS;
     let zoom = input.camera_zoom;
-    let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
-    let geometry = placement_footprint_geometry(footprint, [input.camera_x, input.camera_y], zoom);
-    let metrics = placement_grid_metrics(zoom, sf);
-    let (suggested_x, suggested_y) = (
-        (suggested_tile_idx % map.width) as i32,
-        (suggested_tile_idx / map.width) as i32,
-    );
-    if metrics.draw_inner_grid {
-        render_placement_conflicts(
-            text,
-            map,
-            building_grid,
-            kind,
-            owner_id,
-            tile_x,
-            tile_y,
-            footprint,
-            [input.camera_x, input.camera_y],
-            zoom,
-            !visible || error == Some(sow_core::building::PlacementError::CoastRequired),
-            Some(sow_core::building::BuildingFootprint::at(
-                kind,
-                suggested_x as u32,
-                suggested_y as u32,
-            )),
-        );
+    // The widest existing footprint is a City. Its anchor can be outside a blocked cell.
+    let occupancy_radius = BuildingKind::City.footprint_dimensions().0 / 2;
+    for y in tile_y.saturating_sub(radius)..=tile_y.saturating_add(radius).min(map.height - 1) {
+        for x in tile_x.saturating_sub(radius)..=tile_x.saturating_add(radius).min(map.width - 1) {
+            let terrain = map.terrain[map.ref_id(x, y)].as_byte();
+            if sow_core::building::validate_building_cell(kind, owner_id, map.owner_id(x, y), terrain)
+                .is_ok()
+                && !building_grid
+                    .iter_all_in_range(x, y, occupancy_radius)
+                    .any(|building| {
+                        sow_core::building::BuildingFootprint::at(
+                            building.kind,
+                            building.x,
+                            building.y,
+                        )
+                        .contains(x as i32, y as i32)
+                    })
+            {
+                continue;
+            }
+
+            let distance = tile_x.abs_diff(x).max(tile_y.abs_diff(y));
+            let strength = 1.0 - 0.20 * distance as f32;
+            let fill = [0.58, 0.045, 0.06, 0.36 * strength];
+            let top_left = [
+                input.camera_x + x as f32 * zoom,
+                input.camera_y + y as f32 * zoom,
+            ];
+            if zoom >= 6.0 * sf {
+                text.push_rounded_rect(
+                    [top_left[0] + zoom * 0.5, top_left[1] + zoom * 0.5],
+                    [zoom - 1.25 * sf; 2],
+                    0.08,
+                    fill,
+                    [1.0, 0.29, 0.25, 0.55 * strength],
+                    sf,
+                );
+            } else {
+                text.push_rect(top_left, [zoom; 2], fill);
+            }
+        }
     }
-    render_building_footprint_grid(
-        text,
-        footprint,
-        geometry.top_left,
-        geometry.size,
-        zoom,
-        PlacementGridMetrics {
-            draw_inner_grid: false,
-            ..metrics
-        },
-        [1.0, 0.34, 0.30, 0.92],
-    );
-    let (dx, dy) = (suggested_x - tile_x as i32, suggested_y - tile_y as i32);
-    let controls = crate::input::placement::placement_controls(
-        kind,
-        suggested_tile_idx,
-        map.width,
-        [input.camera_x, input.camera_y],
-        zoom,
-        sf,
-    );
-    let clearance = |center: [f32; 2]| {
-        controls
-            .arrows
-            .iter()
-            .map(|(_, [x, y])| (center[0] - x).powi(2) + (center[1] - y).powi(2))
-            .chain(
-                [controls.cancel, controls.confirm]
-                    .iter()
-                    .map(|[x, y]| (center[0] - x).powi(2) + (center[1] - y).powi(2)),
-            )
-            .fold(f32::INFINITY, f32::min)
-    };
-    let edge_candidates = if dx.abs() >= dy.abs() && dx != 0 {
-        let x = input.camera_x
-            + if dx > 0 {
-                (footprint.left as f32 + 0.5) * zoom
-            } else {
-                (footprint.left as f32 + footprint.width as f32 - 0.5) * zoom
-            };
-        [
-            [x, input.camera_y + (footprint.top as f32 + 0.5) * zoom],
-            [
-                x,
-                input.camera_y + (footprint.top as f32 + footprint.height as f32 - 0.5) * zoom,
-            ],
-        ]
-    } else if dy != 0 {
-        let y = input.camera_y
-            + if dy > 0 {
-                (footprint.top as f32 + 0.5) * zoom
-            } else {
-                (footprint.top as f32 + footprint.height as f32 - 0.5) * zoom
-            };
-        [
-            [input.camera_x + (footprint.left as f32 + 0.5) * zoom, y],
-            [
-                input.camera_x + (footprint.left as f32 + footprint.width as f32 - 0.5) * zoom,
-                y,
-            ],
-        ]
-    } else {
-        [geometry.center; 2]
-    };
-    let cross_center = edge_candidates
-        .into_iter()
-        .max_by(|left, right| clearance(*left).total_cmp(&clearance(*right)))
-        .unwrap_or(geometry.center);
-    text.push_cross(
-        cross_center,
-        (zoom * 0.30).max(4.0 * sf),
-        [0.12, 0.01, 0.01, 0.95],
-        2.8 * sf,
-    );
-    text.push_cross(
-        cross_center,
-        (zoom * 0.30).max(4.0 * sf),
-        [1.0, 0.91, 0.78, 1.0],
-        1.3 * sf,
-    );
 }
 
 fn render_building_placement_preview(
@@ -1066,65 +940,61 @@ fn render_building_placement_preview(
         return;
     };
     let kind = placement.kind;
-    if sim.map_w == 0 || !input.camera_zoom.is_finite() || input.camera_zoom <= 0.0 {
-        return;
-    }
     let Some(engine) = sim.engine.as_ref() else {
         return;
     };
+    let map = &engine.state.map;
+    let zoom = input.camera_zoom;
+    if !zoom.is_finite()
+        || zoom <= 0.0
+        || placement.tile_idx >= map.width.saturating_mul(map.height)
+    {
+        return;
+    }
     let my_id = sim.my_player_id.unwrap_or(0);
-    let site_error = sow_core::building::validate_structure_site(
-        &engine.state.map,
+    let site_legal = sow_core::building::validate_structure_site(
+        map,
         my_id,
         kind,
         placement.tile_idx,
         &engine.building_grid,
     )
-    .err();
+    .is_ok();
+    let (tile_x, tile_y) = (
+        placement.tile_idx % map.width,
+        placement.tile_idx / map.width,
+    );
     let visible_bounds = crate::input::placement::visible_building_anchor_bounds(
         kind,
-        sim.map_w,
-        sim.map_h,
+        map.width,
+        map.height,
         [input.camera_x, input.camera_y],
         [input.screen_w, input.screen_h],
-        input.camera_zoom,
+        zoom,
     );
     let target_visible = visible_bounds.is_some_and(|(min_x, min_y, max_x, max_y)| {
-        (min_x..=max_x).contains(&((placement.tile_idx % sim.map_w) as i32))
-            && (min_y..=max_y).contains(&((placement.tile_idx / sim.map_w) as i32))
+        (min_x..=max_x).contains(&(tile_x as i32)) && (min_y..=max_y).contains(&(tile_y as i32))
     });
-    let site_valid = site_error.is_none() && target_visible;
-    let zoom = input.camera_zoom;
-    let (tile_x, tile_y) = (
-        placement.tile_idx % sim.map_w,
-        placement.tile_idx / sim.map_w,
-    );
+    let site_valid = site_legal && target_visible;
     let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
     let geometry = placement_footprint_geometry(footprint, [input.camera_x, input.camera_y], zoom);
     let center_px = geometry.center;
     let footprint_size_px = geometry.size;
     let footprint_top_left = geometry.top_left;
     let colors = placement_preview_colors(site_valid, can_confirm);
-    let metrics = placement_grid_metrics(zoom, sf);
-    let map = &engine.state.map;
+    let mut metrics = placement_grid_metrics(zoom, sf);
+    metrics.draw_inner_grid &= site_valid;
     render_building_footprint_fill(text, footprint_top_left, footprint_size_px, colors.fill);
-    if metrics.draw_inner_grid && !site_valid {
-        render_placement_conflicts(
-            text,
-            map,
-            &engine.building_grid,
-            kind,
-            my_id,
-            tile_x,
-            tile_y,
-            footprint,
-            [input.camera_x, input.camera_y],
-            zoom,
-            !target_visible
-                || site_error == Some(sow_core::building::PlacementError::CoastRequired),
-            None,
-        );
-    }
+    render_placement_conflicts(
+        text,
+        map,
+        &engine.building_grid,
+        kind,
+        my_id,
+        [tile_x, tile_y],
+        input,
+        sf,
+    );
     render_building_footprint_grid(
         text,
         footprint,
@@ -1134,22 +1004,6 @@ fn render_building_placement_preview(
         metrics,
         colors.line,
     );
-    if let Some(tile_idx) = placement
-        .attempted_tile_idx
-        .filter(|&tile_idx| tile_idx != placement.tile_idx)
-    {
-        render_rejected_placement_marker(
-            text,
-            map,
-            &engine.building_grid,
-            kind,
-            my_id,
-            tile_idx,
-            placement.tile_idx,
-            input,
-            sf,
-        );
-    }
     let dragging = input.building_drag_offset.is_some();
     let sprite_size = building_sprite_size(
         building_footprint_marker_size(kind, zoom / sf, BUILDING_MIN_MARKER_SIZE),
@@ -1167,20 +1021,6 @@ fn render_building_placement_preview(
     let sprite_center = [center_px[0], center_px[1] - lift];
     if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
         text.push_building_sprite(sprite_center, sprite_size, uv_rect, colors.building);
-    }
-    if !site_valid {
-        text.push_cross(
-            center_px,
-            (zoom * 0.30).max(4.0 * sf),
-            [0.12, 0.01, 0.01, 0.95],
-            2.8 * sf,
-        );
-        text.push_cross(
-            center_px,
-            (zoom * 0.30).max(4.0 * sf),
-            [1.0, 0.91, 0.78, 1.0],
-            1.3 * sf,
-        );
     }
     if kind == BuildingKind::Tower {
         let range_multiplier = engine
@@ -1292,6 +1132,8 @@ fn cached_buildings<'a>(
             tick_rate_ms,
             &mut cache.buildings,
             &mut cache.clusters,
+            &mut cache.city_tiles,
+            &mut cache.under_construction_tiles,
         );
         cache.buildings.sort_unstable_by(|a, b| {
             a.by.partial_cmp(&b.by)
@@ -1308,6 +1150,7 @@ fn cached_buildings<'a>(
     &cache.buildings
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_buildings(
     snapshot: &SimSnapshot,
     map_w: u32,
@@ -1316,17 +1159,24 @@ fn collect_buildings(
     tick_rate_ms: f32,
     out: &mut Vec<RenderedBuilding>,
     clusters: &mut HashMap<BuildingClusterKey, (f32, f32, usize)>,
+    city_tiles: &mut HashSet<u32>,
+    under_construction_tiles: &mut HashSet<u32>,
 ) {
     let map_w = map_w.max(1);
     out.clear();
     clusters.clear();
+    city_tiles.clear();
+    under_construction_tiles.clear();
     for building in &snapshot.buildings {
-        if building.kind != BuildingKind::City
-            && snapshot
-                .buildings
-                .iter()
-                .any(|c| c.tile_idx == building.tile_idx && c.kind == BuildingKind::City)
-        {
+        if building.kind == BuildingKind::City {
+            city_tiles.insert(building.tile_idx);
+        }
+        if building.under_construction {
+            under_construction_tiles.insert(building.tile_idx);
+        }
+    }
+    for building in &snapshot.buildings {
+        if building.kind != BuildingKind::City && city_tiles.contains(&building.tile_idx) {
             continue;
         }
         let tile_x = building.tile_idx % map_w;
@@ -1337,10 +1187,7 @@ fn collect_buildings(
         let has_active_city_build = building.kind == BuildingKind::City
             && (building.under_construction
                 || building.arsenal_build.is_some()
-                || snapshot
-                    .buildings
-                    .iter()
-                    .any(|b| b.tile_idx == building.tile_idx && b.under_construction));
+                || under_construction_tiles.contains(&building.tile_idx));
         let keep_local_progress = building.owner_id == my_id
             && (building.under_construction || has_active_city_build);
         if detail == BuildingDetail::Cluster && !keep_local_progress {

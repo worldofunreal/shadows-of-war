@@ -29,7 +29,7 @@ pub fn troop_income_per_second(
             * agg.city_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::City), Resource::Troops)
         + cfg.farm_troop_income
-            * agg.farm_income_level_weight
+            * agg.farm_troop_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Troops)
         + cfg.port_troop_income
             * agg.port_income_level_weight
@@ -72,7 +72,7 @@ pub fn gold_income_per_second(
             * leader.resource_bonus_multiplier(Source::District(District::Factory), Resource::Gold)
         + railway_gold_bonus_per_second(agg.railway_connections, cfg)
         + cfg.farm_gold_income
-            * agg.farm_income_level_weight
+            * agg.farm_gold_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Gold)
         + cfg.port_gold_income
             * agg.port_income_level_weight
@@ -115,7 +115,7 @@ pub fn imperial_standard_income(
     let multiplier = f64::from(percent) / 100.0;
     (
         cfg.factory_gold_income * agg.factory_income_level_weight * multiplier,
-        cfg.farm_troop_income * agg.farm_income_level_weight * multiplier,
+        cfg.farm_troop_income * agg.farm_troop_level_weight * multiplier,
     )
 }
 
@@ -189,20 +189,20 @@ mod tests {
     }
 
     #[test]
-    fn territory_generates_four_gold_per_second_per_1024_tiles() {
+    fn territory_generates_one_gold_per_game_second_per_1024_tiles() {
         let cfg = default_cfg();
         let agg = BuildingAggregate::default();
         assert_eq!(
             gold_income_per_second(128, agg, Leader::of("caesar"), &cfg),
-            cfg.gold_base_income + 0.5
+            cfg.gold_base_income + 0.125
         );
         assert_eq!(
             gold_income_per_second(1_024, agg, Leader::of("caesar"), &cfg),
-            cfg.gold_base_income + 4.0
+            cfg.gold_base_income + 1.0
         );
         assert_eq!(
             gold_income_per_second(10_240, agg, Leader::of("caesar"), &cfg),
-            cfg.gold_base_income + 40.0
+            cfg.gold_base_income + 10.0
         );
         assert_eq!(
             troop_income_per_second(400, agg, Leader::of("caesar"), &cfg),
@@ -240,11 +240,6 @@ mod tests {
         assert_eq!(cfg.max_troops_scale, 55.0);
         assert_eq!(cfg.territory_troop_tiles, 16);
         assert_eq!(cfg.territory_gold_tiles, 1_024);
-        assert_eq!(cfg.cost_city, 125.0);
-        assert_eq!(cfg.cost_tower, 100.0);
-        assert_eq!(cfg.cost_factory, 100.0);
-        assert_eq!(cfg.cost_port, 200.0);
-        assert_eq!(cfg.cost_farm, 175.0);
     }
 
     #[test]
@@ -296,7 +291,8 @@ mod tests {
         let cfg = default_cfg();
         let agg = BuildingAggregate {
             farm_levels: 2,
-            farm_income_level_weight: 4.75,
+            farm_troop_level_weight: 4.75,
+            farm_gold_level_weight: 4.75,
             port_income_level_weight: 4.75,
             ..Default::default()
         };
@@ -373,8 +369,8 @@ mod tests {
         );
         let agg = aggregates[1];
         assert_eq!(agg.farm_levels, 3);
-        assert!((agg.farm_income_level_weight - 3.5).abs() < 1e-12);
+        assert!((agg.farm_troop_level_weight - 4.5).abs() < 1e-12);
         assert_eq!(agg.port_levels, 4);
-        assert!((agg.port_income_level_weight - 8.125).abs() < 1e-12);
+        assert!((agg.port_income_level_weight - 14.0).abs() < 1e-12);
     }
 }

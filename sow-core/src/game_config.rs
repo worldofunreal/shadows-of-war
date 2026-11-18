@@ -21,7 +21,7 @@ fn default_troop_base_income() -> f64 {
 }
 
 fn default_cost_scale_cap_multiplier() -> f64 {
-    10.0
+    1.40
 }
 
 fn default_troop_upkeep_per_1000() -> f64 {
@@ -32,7 +32,7 @@ fn default_trade_ship_gold_income() -> f64 {
     48.0 / 21.0
 }
 fn default_territory_gold_amount() -> f64 {
-    4.0
+    1.0
 }
 fn default_territory_troop_amount() -> f64 {
     3.0
@@ -119,11 +119,11 @@ fn default_structure_upgrade_scale() -> f64 {
 }
 
 fn default_cost_farm() -> f64 {
-    175.0
+    100.0
 }
 
 fn default_cost_sam() -> f64 {
-    500.0
+    350.0
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -542,13 +542,13 @@ pub struct GameConfig {
     /// Gold cost to place a SAM battery.
     #[serde(default = "default_cost_sam")]
     pub cost_sam: f64,
-    /// Opening price for each economic building type with no owned levels.
+    /// Legacy opening-price field retained for saved configs.
     #[serde(default)]
     pub first_economic_structure_cost: Option<f64>,
     /// Scale tower strength and SAM firing rate with building level.
     #[serde(default)]
     pub progressive_defense_upgrades: bool,
-    /// Legacy field retained for saved configs; upgrades discount equivalent production by 25%.
+    /// Legacy upgrade-price field retained for saved configs.
     #[serde(default = "default_structure_upgrade_scale")]
     pub structure_upgrade_scale: f64,
     /// Max multiplier applied to structure base cost as count grows (cost plateaus at base × this).
@@ -693,7 +693,7 @@ impl Default for GameConfig {
 
             // Economy & Income Rates
             starting_troops: 5000.0,
-            starting_gold: 160.0,
+            starting_gold: 85.0,
             gold_base_income: 1.0 / NORMAL_GAME_SPEED,
             territory_gold_amount: default_territory_gold_amount(),
             territory_gold_tiles: default_territory_gold_tiles(),
@@ -725,16 +725,16 @@ impl Default for GameConfig {
             alliance_troop_income: default_alliance_troop_income(),
             trade_troop_income: default_trade_troop_income(),
             elimination_troop_bounty: default_elimination_troop_bounty(),
-            cost_city: 125.0,
-            cost_tower: 100.0,
-            cost_factory: 100.0,
-            cost_port: 200.0,
+            cost_city: 95.0,
+            cost_tower: 85.0,
+            cost_factory: 90.0,
+            cost_port: 105.0,
             cost_farm: default_cost_farm(),
             cost_sam: default_cost_sam(),
             first_economic_structure_cost: None,
-            progressive_defense_upgrades: false,
+            progressive_defense_upgrades: true,
             structure_upgrade_scale: default_structure_upgrade_scale(),
-            cost_scale_cap_multiplier: 10.0,
+            cost_scale_cap_multiplier: default_cost_scale_cap_multiplier(),
             nuke_cost: 500.0,
 
             player_leader: crate::player::Leader::default(),

@@ -172,7 +172,7 @@ type RingActionSlot = {
   type: "action";
   item: HudMapMenuItem;
   presentation:
-    | { state: string; key: string; status: string; disabled: boolean }
+    | { state: string; key: string; icon: string; disabled: boolean }
     | null
     | undefined;
 };
@@ -734,81 +734,88 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     sam: "sam-missile",
   };
 
+  const RING_GLYPH_OPEN =
+    '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">';
+
   const HUD_GLYPHS: Record<string, string> = {
     plus:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="10.5" cy="10.5" r="7" fill="currentColor" fill-opacity="0.1"/>' +
-      '<path d="M10.5 7.2v6.6M7.2 10.5h6.6"/>' +
-      '<path d="m15.8 15.8 4.7 4.7" stroke-width="2.5"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path stroke="none" d="M0 0h24v24H0z" fill="none"/>' +
+      '<path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/>' +
+      '<path d="M7 10l6 0"/>' +
+      '<path d="M10 7l0 6"/>' +
+      '<path d="M21 21l-6 -6"/>' +
       "</svg>",
     minus:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="10.5" cy="10.5" r="7" fill="currentColor" fill-opacity="0.1"/>' +
-      '<path d="M7.2 10.5h6.6"/>' +
-      '<path d="m15.8 15.8 4.7 4.7" stroke-width="2.5"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path stroke="none" d="M0 0h24v24H0z" fill="none"/>' +
+      '<path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/>' +
+      '<path d="M7 10l6 0"/>' +
+      '<path d="M21 21l-6 -6"/>' +
       "</svg>",
     home:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="12" cy="12" r="7" fill="currentColor" fill-opacity="0.1"/>' +
-      '<circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/>' +
-      '<path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+      '<path stroke="none" d="M0 0h24v24H0z" fill="none"/>' +
+      '<path d="M12.707 2.293l9 9c.63 .63 .184 1.707 -.707 1.707h-1v6a3 3 0 0 1 -3 3h-10a3 3 0 0 1 -3 -3v-6h-1c-.89 0 -1.337 -1.077 -.707 -1.707l9 -9a1 1 0 0 1 1.414 0m.793 8.707h-3a1.5 1.5 0 0 0 -1.5 1.5v3a1.5 1.5 0 0 0 1.5 1.5h3a1.5 1.5 0 0 0 1.5 -1.5v-3a1.5 1.5 0 0 0 -1.5 -1.5"/>' +
       "</svg>",
     zoom_in:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="10.5" cy="10.5" r="7" fill="currentColor" fill-opacity="0.1"/>' +
-      '<path d="M10.5 7.2v6.6M7.2 10.5h6.6"/>' +
-      '<path d="m15.8 15.8 4.7 4.7" stroke-width="2.5"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path stroke="none" d="M0 0h24v24H0z" fill="none"/>' +
+      '<path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/>' +
+      '<path d="M7 10l6 0"/>' +
+      '<path d="M10 7l0 6"/>' +
+      '<path d="M21 21l-6 -6"/>' +
       "</svg>",
     zoom_out:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="10.5" cy="10.5" r="7" fill="currentColor" fill-opacity="0.1"/>' +
-      '<path d="M7.2 10.5h6.6"/>' +
-      '<path d="m15.8 15.8 4.7 4.7" stroke-width="2.5"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path stroke="none" d="M0 0h24v24H0z" fill="none"/>' +
+      '<path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/>' +
+      '<path d="M7 10l6 0"/>' +
+      '<path d="M21 21l-6 -6"/>' +
       "</svg>",
     close: '<path d="M18 6 6 18M6 6l12 12"/>',
     inbox:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M6 9.5a6 6 0 0 1 12 0c0 5.2 2 6.8 2 6.8H4s2-1.6 2-6.8Z" fill="currentColor" fill-opacity="0.14"/>' +
-      '<path d="M10 19.2a2.2 2.2 0 0 0 4 0"/>' +
-      '<path d="M12 2.2v1.3"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="0 0 36 39" fill="currentColor" aria-hidden="true">' +
+      '<path d="M26.9474 14.6637C27.3732 15.5695 27.9073 16.266 28.5497 16.746C29.1885 17.226 29.7911 17.5183 30.3505 17.6266C30.9099 17.7348 31.4981 18.0416 32.1116 18.5468C32.7251 19.052 33.1906 19.7882 33.5118 20.7482C34.1 22.401 33.1112 24.5518 30.549 27.1935C27.9867 29.8351 24.6269 31.9282 20.4624 33.4764C16.0849 35.0246 12.126 35.6236 8.57499 35.2772C5.02753 34.9271 2.95969 33.9275 2.37146 32.2747C1.83735 30.8348 1.99614 29.3515 2.85143 27.8322C3.70671 26.3129 3.94489 24.8297 3.57319 23.3898C2.07914 18.2653 1.45121 14.2631 1.693 11.3833C1.93479 8.5035 3.43966 5.94125 6.21483 3.69658C6.90772 3.10835 7.29386 2.42989 7.37686 1.654C7.45626 0.881715 7.8424 0.358439 8.5389 0.091388C9.17766 -0.121531 9.79115 0.037256 10.3794 0.571359C10.9676 1.10546 11.7146 1.34364 12.6205 1.29312C16.1426 1.23899 18.7843 2.11953 20.5454 3.93476C22.3029 5.7536 24.4393 9.32631 26.9474 14.6637ZM19.5024 30.8348C21.8518 29.9795 23.9701 28.8463 25.8648 27.4317C27.7594 26.017 29.0946 24.8045 29.8669 23.7904C30.6392 22.7763 30.9748 22.1087 30.8666 21.7875C30.6536 21.1993 30.0004 20.759 28.907 20.4667C27.8135 20.1744 26.1571 20.1599 23.9449 20.427C21.7327 20.694 19.2354 21.3328 16.4602 22.3469C13.7392 23.3609 11.4295 24.523 9.53493 25.8294C7.64031 27.1357 6.38805 28.2581 5.77456 29.1928C5.16106 30.1274 4.93371 30.8348 5.09249 31.3147C5.20076 31.6359 5.86478 31.9282 7.09538 32.1953C8.32237 32.4623 10.1087 32.5165 12.4581 32.3541C14.8074 32.1917 17.1531 31.6864 19.5024 30.8348ZM17.0196 23.8698C17.2325 23.8156 17.514 23.7218 17.8604 23.5883C18.2069 23.4548 18.4342 23.3609 18.5425 23.3068L18.6219 23.3862C18.9972 24.4544 18.7698 25.5623 17.9398 26.7063C17.1134 27.8539 15.9261 28.6947 14.3779 29.2288C11.8157 30.1888 9.78754 30.0011 8.2935 28.6695C10.3758 26.8579 13.2845 25.2556 17.0196 23.8698Z"/>' +
       "</svg>",
     emote:
       '<path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.5-.7L4 20l1.4-3.6A7 7 0 0 1 4 12c0-4.1 3.6-7.5 8-7.5s8 3.1 8 7Z"/><path d="M9 11h.01M15 11h.01M9 14.5s1 1.5 3 1.5 3-1.5 3-1.5"/>',
     rankings:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M9.5 9.5h5V20h-5z" fill="currentColor" fill-opacity="0.2"/>' +
-      '<path d="M3.5 13.5h6V20h-6zM14.5 15h6v5h-6z" fill="currentColor" fill-opacity="0.1"/>' +
-      '<path d="m12 3 1.1 2.2 2.4.35-1.75 1.7.42 2.4L12 8.5l-2.17 1.15.42-2.4L8.5 5.55l2.4-.35L12 3Z" fill="currentColor" stroke="none"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="0 0 48 41" fill="currentColor" aria-hidden="true">' +
+      '<path d="M3.43115 14.2054L5.09646 35.0217H15.0883V14.2054H3.43115Z"/>' +
+      '<path d="M15.6436 1.71558C16.4762 12.2625 18.1415 33.6895 18.1415 35.0217H31.464L33.1293 1.71558H15.6436Z"/>' +
+      '<path d="M44.2317 20.034H33.4072V34.1891H42.5664L44.2317 20.034Z"/>' +
       "</svg>",
     leaderboard:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M9.5 9.5h5V20h-5z" fill="currentColor" fill-opacity="0.2"/>' +
-      '<path d="M3.5 13.5h6V20h-6zM14.5 15h6v5h-6z" fill="currentColor" fill-opacity="0.1"/>' +
-      '<path d="m12 3 1.1 2.2 2.4.35-1.75 1.7.42 2.4L12 8.5l-2.17 1.15.42-2.4L8.5 5.55l2.4-.35L12 3Z" fill="currentColor" stroke="none"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="0 0 48 41" fill="currentColor" aria-hidden="true">' +
+      '<path d="M3.43115 14.2054L5.09646 35.0217H15.0883V14.2054H3.43115Z"/>' +
+      '<path d="M15.6436 1.71558C16.4762 12.2625 18.1415 33.6895 18.1415 35.0217H31.464L33.1293 1.71558H15.6436Z"/>' +
+      '<path d="M44.2317 20.034H33.4072V34.1891H42.5664L44.2317 20.034Z"/>' +
       "</svg>",
     cup:
       '<svg class="sow-hud__action-icon" viewBox="0 0 36 34" fill="currentColor" aria-hidden="true">' +
       '<path fill-rule="evenodd" clip-rule="evenodd" d="M28.8428 0H7.44094V2.48287L1.02324 2.48287C0.45812 2.48287 0 2.94099 0 3.50611V14.129C0 18.63 5.02309 22.3338 9.95271 22.7191C11.571 24.453 14.4175 25.7125 16.951 26.2496V29.2936C14.5283 30.0377 10.2008 31.786 9.95271 33.6909H26.5792C26.3287 31.786 21.5603 30.0353 19.1328 29.2936V26.2496C21.6759 25.7125 24.6501 24.453 26.2708 22.7191C31.198 22.3338 36 18.63 36 14.129V3.50611C36 2.94099 35.5419 2.48287 34.9768 2.48287H28.8428V0ZM2.28495 4.68973H7.26755V14.7214C7.26755 16.701 7.77809 18.5842 8.67636 20.2796C4.94844 19.0924 2.28495 16.0339 2.28495 12.4553V4.68973ZM21.8016 16.925L18.0825 14.8756L14.3593 16.925L15.0702 12.5902L12.0599 9.52209L16.2189 8.88873L18.0825 4.94889L19.942 8.88873L24.101 9.52209L21.0927 12.5902L21.8016 16.925ZM27.328 20.5999C28.2311 18.8274 28.7489 16.8672 28.7489 14.7937V4.75441H33.7435V12.4264C33.7435 16.1664 31.068 19.3597 27.328 20.5999Z"/>' +
       "</svg>",
     search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+    // The main menu uses this gear. The match HUD uses the options glyph.
     settings:
       '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
       '<circle cx="12" cy="12" r="3.2" fill="currentColor" fill-opacity="0.18"/>' +
       '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>' +
       "</svg>",
     options:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="12" cy="12" r="3.2" fill="currentColor" fill-opacity="0.18"/>' +
-      '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>' +
+      '<svg class="sow-hud__action-icon" viewBox="70 135 860 775" fill="currentColor" aria-hidden="true">' +
+      '<path d="M341,205c22.61-2.97,45.75-.43,68,4c5.93-17.06,20.41-35.48,30-51c30.77,6.9,63.06,23.94,88.06,42.94c9.99,7.59,18.86,16.75,28.94,24.06c-2.72,13.76-24.17,40.64-32,54c6.35,9.77,13.98,18.47,19.98,28.53C557.54,330.24,564.77,353.8,572,379c8.03,1.11,55.3,6.03,58.86,9.19c3.64,3.22,3.43,16.65,3.46,21.41c.21,39.07-5.77,74.39-18.32,111.4c-22.08-1.42-44.14-5.63-66-9c-8.44,21.72-26.54,52.27-48,63c1.83,11.12,25.68,53.57,23,60c-.82,1.97-11.84,8.03-14.18,9.49C478.2,664.88,439.36,684.31,400,684c-4.9-11.59-22-44.37-22-55c-23.77,.37-45.47-1.93-69-4c-9.82,17.51-19.87,35.3-31,52c-43.13-8.12-85.06-41.51-115-72c4-10.54,31.11-47.38,31-53c-.04-2.19-17.99-25.01-20.55-29.44C160.3,499.79,151.48,475.94,147,450c-8.18-1.7-58.86-8.15-61.62-10.63c-1.35-1.21-1.87-11.53-2.05-13.79C80.34,387.45,88.66,341.76,109,309c8.84,.39,57.25,10.02,61,7c3.88-3.13,8.56-14.9,11.67-19.63C191.1,282.04,202.55,268.7,216,258c-2.51-8.07-23.64-52.49-22-57c.65-1.79,8.44-6.25,10.43-7.63C231.08,174.97,284.22,147.01,317,148c4.84,11.37,24,47.28,24,57ZM271,323c-15.23,6.47-25.38,27.19-31.26,41.66c-54.92,135.4,112.99,242.21,215.25,137.59c15.77-16.14,26.19-37.45,30.8-59.43C507.44,339.5,400.97,255.7,305.16,298.4C298.57,301.33,271,316.01,271,323Z"/>' +
+      '<path d="M549,715c-6.33-29.98-2.8-58.17,7-87c-11.93-9.74-24.22-19.09-36-29c8.75-30.05,40.88-63.94,67-80c8.2,6.7,24.51,23.56,33.74,26.75c.66,.22,43.57-18.73,56.26-20.75c.69-6.78,2.03-40.4,5.31-44.01c12.66-13.95,87.33,.43,103.69,9.01c-1.03,15.87-4,32.17-4,48c5.6,2.84,40.32,26.85,40.59,26.87c7.85,.64,34.03-16.81,42.41-20.87c20.65,19.28,52,60.93,52,90c-14.45,7.44-28.85,14.99-43,23c5.29,27.32,4.64,60.72-8,86c5.2,2.3,35.43,23.89,37,28c4.16,10.88-48.89,79.17-61.73,82.75c-3.33,.93-10.04-5.5-12.53-7.62c-5.73-4.87-19.87-19.01-26.47-20.86c-2.81-.78-10.77,4.98-13.47,6.54C775.83,839.27,760.29,847,745,847c-.36,6.01-3.06,46.71-6,49c-1.36,1.06-9.82,1.43-11.9,1.62c-30.36,2.78-64.84-2.67-92.1-16.62c1.76-15.65,3.69-31.31,5-47c-11.59-3.48-39.29-26.62-42-27c-6.81-.95-32.33,19.93-40.66,21.78c-11.7,2.61-42.65-64.85-45.99-76c-1.18-3.94-5.16-14.14-2.35-17.78c1.6-2.07,38.19-20,40-20Zm237-94c-11.04-14.65-26.67-23.97-44.02-29.4c-97.34-30.43-169.37,78.97-106.65,159.16c9.87,12.61,26.41,22.85,41.28,28.32C772.65,814.43,851.38,698.48,786,621Z"/>' +
       "</svg>",
     leave:
-      '<path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M16 16l4-4-4-4M20 12H9"/>',
+      '<path d="M13 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M11 16l4-4-4-4M15 12H3"/>',
     camera:
       '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
     tools:
       '<path d="M15 5a4.5 4.5 0 0 0-6 6.2L3.5 16.7a1.8 1.8 0 0 0 2.5 2.5L11.5 13.7A4.5 4.5 0 0 0 17.7 8L15 10.7l-2-2L15.7 6A4.5 4.5 0 0 0 15 5Z"/>',
     retreat: '<path d="M9 14 4 9l5-5M4 9h8a7 7 0 0 1 7 7v2"/>',
-    spawn: '<path d="M5 21V3m0 2h13l-3.2 4.5L18 14H5"/>',
+    spawn: '<path d="M5 21V4m1 1h12l-3 4 3 4H6"/>',
     attack:
       '<path d="m5 4 14 16M19 4 5 20M3 6l3-3 3 3M15 18l3 3 3-3M3 18l3 3 3-3M15 6l3-3 3 3"/>',
     fleet:
@@ -846,6 +853,63 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     globe:
       '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     solo: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    // Filled silhouettes for the command ring.
+    ring_attack:
+      RING_GLYPH_OPEN +
+      '<path fill-opacity=".72" transform="rotate(-45 12 12)" d="M12 1.5l2.5 4v3h-5v-3L12 1.5ZM8 15.5h8V18h-2.5v2h.5v2h-4v-2h.5v-2H8Z"/>' +
+      '<path transform="rotate(45 12 12)" d="M12 1.5l2.5 4v8H16V16h-2.5v4h.5v2h-4v-2h.5v-4H8v-2.5h1.5v-8L12 1.5Z"/>' +
+      "</svg>",
+    ring_fleet:
+      RING_GLYPH_OPEN +
+      '<path d="M12 2.5v10H4L12 2.5ZM2 14h20l-4 4.5H6L2 14Z"/>' +
+      '<path fill-opacity=".72" d="m14 5.5 5.5 7H14Z"/>' +
+      '<path d="M4 21c2.7 1.3 5.3-1.3 8 0s5.3-1.3 8 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+      "</svg>",
+    ring_nuke:
+      RING_GLYPH_OPEN +
+      '<path d="M16.75 20.23a9.5 9.5 0 0 1-9.5 0L10 15.46a4 4 0 0 0 4 0l2.75 4.77ZM2.5 12a9.5 9.5 0 0 1 4.75-8.23L10 8.54A4 4 0 0 0 8 12H2.5ZM16.75 3.77A9.5 9.5 0 0 1 21.5 12H16a4 4 0 0 0-2-3.46l2.75-4.77Z"/>' +
+      '<circle cx="12" cy="12" r="2.4"/>' +
+      "</svg>",
+    ring_alliance:
+      RING_GLYPH_OPEN +
+      '<path fill-opacity=".72" d="m1.75 9.75 3.5-5L8 6.75 4.5 12l-2.75-2.25Zm20.5 0-3.5-5L16 6.75 19.5 12l2.75-2.25Z"/>' +
+      '<path d="M8.8 7.65h2.1l-1.5 1.5a2.05 2.05 0 0 0 2.9 2.9l1.3-1.3 4.25 4.15-3.05 3.1a2 2 0 0 1-2.8 0L6 12.6l2.8-4.95Z"/>' +
+      '<path d="m10.45 10.1 2.2-2.25a1.6 1.6 0 0 1 1.4-.45l1.35.25 3.1 4.75-1.1.95-3.8-3.7-2.05 1.55a.8.8 0 0 1-1.1-1.1Z"/>' +
+      "</svg>",
+    ring_pending:
+      RING_GLYPH_OPEN +
+      '<path fill-rule="evenodd" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19ZM11 6h2v5.4l3.6 2.5-1.2 1.7L11 12.5V6Z"/>' +
+      "</svg>",
+    ring_send:
+      RING_GLYPH_OPEN +
+      '<path d="m12 2.5 6 6h-4.5v7h-3v-7H6l6-6Z"/>' +
+      '<path fill-opacity=".72" d="M3 15h2.5v4h13v-4H21v6.5H3Z"/>' +
+      "</svg>",
+    ring_request:
+      RING_GLYPH_OPEN +
+      '<path d="M10.5 2.5h3v7H18l-6 6-6-6h4.5v-7Z"/>' +
+      '<path fill-opacity=".72" d="M3 15h2.5v4h13v-4H21v6.5H3Z"/>' +
+      "</svg>",
+    ring_spawn:
+      RING_GLYPH_OPEN +
+      '<path d="M5 3h2.5v1h13L17 8.5l3.5 4.5h-13v6H12v2H3v-2h2V3Z"/>' +
+      "</svg>",
+    ring_build:
+      RING_GLYPH_OPEN +
+      '<path transform="rotate(35 12 12)" d="M4 5h11l4 3v3h-5l-2-2h-1v11a1.5 1.5 0 0 1-3 0V9H4V5Z"/>' +
+      "</svg>",
+    ring_upgrade:
+      RING_GLYPH_OPEN +
+      '<path d="m12 3 8 6v3.5l-8-6-8 6V9l8-6Zm0 9 8 6v3.5l-8-6-8 6V18l8-6Z"/>' +
+      "</svg>",
+    ring_emote:
+      RING_GLYPH_OPEN +
+      '<path fill-rule="evenodd" d="M8 3.5h8a6 6 0 0 1 6 6v3a6 6 0 0 1-6 6h-5l-5 3v-3.35a6 6 0 0 1-4-5.65v-3a6 6 0 0 1 6-6ZM8.5 8.25a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Zm7 0a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Zm-8 4.25h9a4.75 4.75 0 0 1-9 0Z"/>' +
+      "</svg>",
+    ring_pin:
+      RING_GLYPH_OPEN +
+      '<path transform="rotate(35 12 12)" d="M7 3h10v2.5h-1.5v5L18 13v2h-4.5v5L12 22l-1.5-2v-5H6v-2l2.5-2.5v-5H7V3Z"/>' +
+      "</svg>",
   };
 
   function transferPresetButtons(resource: string): string {
@@ -1903,7 +1967,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '" data-sow-tooltip="' +
       esc(SOW_t("menu.settings")) +
       '" data-sow-tooltip-placement="bottom">' +
-      hudIcon("settings", "sow-hud__action-icon") +
+      hudIcon("options", "sow-hud__action-icon") +
       "</button>" +
       '    <button class="sow-hud__icon-btn sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' +
       esc(SOW_t("hud.inbox")) +
@@ -2074,7 +2138,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "  </div>" +
       '  <div class="sow-hud__dev-search-bar">' +
       hudIcon("search", "sow-hud__dev-search-icon") +
-      '    <input class="sow-hud__dev-search" type="search" data-dev-search placeholder="Search" aria-label="Find shader setting">' +
+      '    <input class="sow-hud__dev-search sow-control-search__input" type="search" data-dev-search placeholder="Search" aria-label="Find shader setting">' +
       "  </div>" +
       '  <div class="sow-hud__sheet-body sow-hud__dev-body">' +
       '    <div class="sow-hud__dev-perf" id="sow-hud-dev-perf" role="group" aria-label="Frame cost switches" hidden></div>' +
@@ -2085,7 +2149,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '  <div class="sow-hud__sheet-header">' +
       '    <div class="sow-hud__sheet-title-group">' +
       '      <span class="sow-hud__sheet-title-badge" aria-hidden="true">' +
-      hudIcon("settings", "sow-hud__sheet-title-icon") +
+      hudIcon("options", "sow-hud__sheet-title-icon") +
       "      </span>" +
       '      <h3 class="sow-hud__sheet-title">' +
       SOW_t("menu.settings") +
@@ -2236,11 +2300,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       SOW_t("hud.rankings_title") +
       "      </h3>" +
       "    </div>" +
-      '    <div class="sow-hud__leaderboard-search-wrap">' +
-      '      <span class="sow-hud__leaderboard-search-icon" aria-hidden="true">' +
+      '    <div class="sow-hud__leaderboard-search-wrap sow-control-search">' +
+      '      <span class="sow-hud__leaderboard-search-icon sow-control-search__icon" aria-hidden="true">' +
       hudIcon("search", "sow-hud__inline-icon") +
       "</span>" +
-      '      <input class="sow-hud__leaderboard-search" id="sow-hud-lb-search" type="search" placeholder="' +
+      '      <input class="sow-hud__leaderboard-search sow-control-search__input" id="sow-hud-lb-search" type="search" placeholder="' +
       SOW_t("hud.search_rankings") +
       '" aria-label="' +
       SOW_t("hud.search_rankings") +
@@ -2885,54 +2949,54 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
   const mapActionLabels: Record<
     string,
-    { icon?: string; key: string; status?: string }
+    { icon?: string; key: string }
   > = {
-    emote: { icon: "emote", key: "hud.map_action_emote" },
-    spawn: { icon: "spawn", key: "hud.map_action_deploy" },
-    attack: { icon: "attack", key: "hud.map_action_attack" },
-    fleet: { icon: "fleet", key: "hud.map_action_fleet" },
-    send: { icon: "send", key: "hud.map_action_send" },
-    request: { icon: "request", key: "hud.map_action_request" },
-    request_allies: { icon: "request", key: "hud.map_action_request_allies" },
-    alliance: { status: "allied", key: "hud.map_action_alliance" },
+    emote: { icon: "ring_emote", key: "hud.map_action_emote" },
+    spawn: { icon: "ring_spawn", key: "hud.map_action_deploy" },
+    attack: { icon: "ring_attack", key: "hud.map_action_attack" },
+    fleet: { icon: "ring_fleet", key: "hud.map_action_fleet" },
+    send: { icon: "ring_send", key: "hud.map_action_send" },
+    request: { icon: "ring_request", key: "hud.map_action_request" },
+    request_allies: { icon: "ring_request", key: "hud.map_action_request_allies" },
+    alliance: { icon: "ring_alliance", key: "hud.map_action_alliance" },
     build_city: { key: "hud.map_action_city" },
     build_sam: { key: "hud.map_action_sam" },
-    upgrade_structure: { icon: "upgrade", key: "hud.map_action_upgrade" },
-    nuke: { icon: "nuke", key: "hud.map_action_nuke" },
+    upgrade_structure: { icon: "ring_upgrade", key: "hud.map_action_upgrade" },
+    nuke: { icon: "ring_nuke", key: "hud.map_action_nuke" },
   };
 
   const allianceActionLabels: Record<
     string,
-    { state: string; key: string; status: string; disabled: boolean }
+    { state: string; key: string; icon: string; disabled: boolean }
   > = {
     request: {
       state: "request",
       key: "hud.map_action_request_alliance",
-      status: "allied",
+      icon: "ring_alliance",
       disabled: false,
     },
     accept: {
       state: "accept",
       key: "hud.map_action_accept_alliance",
-      status: "allied",
+      icon: "ring_alliance",
       disabled: false,
     },
     pending: {
       state: "pending",
       key: "hud.map_action_alliance_pending",
-      status: "request",
+      icon: "ring_pending",
       disabled: true,
     },
     active: {
       state: "active",
       key: "hud.map_action_alliance_active",
-      status: "allied",
+      icon: "ring_alliance",
       disabled: true,
     },
     renew: {
       state: "renew",
       key: "hud.map_action_renew_alliance",
-      status: "allied",
+      icon: "ring_alliance",
       disabled: false,
     },
   };
@@ -3741,7 +3805,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       kind,
       tileIdx,
       canConfirm ? "1" : "0",
-      placement.adjusted ? "1" : "0",
       String(cost),
       reasonKey,
     ].join(":");
@@ -3764,9 +3827,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         escapeHudText(buildingTitle) +
         "</strong>" +
         (reason
-          ? '<span class="sow-hud__placement-panel-reason' +
-            (placement.adjusted && canConfirm ? " is-advisory" : "") +
-            '">' +
+          ? '<span class="sow-hud__placement-panel-reason">' +
             escapeHudText(reason) +
             "</span>"
           : '<span class="sow-hud__placement-panel-cost">' +
@@ -4204,7 +4265,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const slug = hudState?.hud?.player_art_slug;
     const face = document.createElement("span");
     face.className = "sow-hud__ring-face";
-    face.innerHTML = hudIcon("emote", "sow-hud__ring-icon");
+    face.innerHTML = hudIcon("ring_emote", "sow-hud__ring-icon");
     if (!FACE_EXPRESSIONS.includes(expression) || !slug) return face;
     const image = document.createElement("img");
     image.alt = "";
@@ -4224,17 +4285,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (slot.type === "clear") return ringFace("calm");
     const title = document.createElement("span");
     if (slot.type === "pin")
-      title.innerHTML = hudIcon("anchor", "sow-hud__ring-icon");
+      title.innerHTML = hudIcon("ring_pin", "sow-hud__ring-icon");
     else if (slot.type === "group")
       title.innerHTML = hudIcon(
-        slot.group === "emote" ? "emote" : "construction",
+        slot.group === "emote" ? "ring_emote" : "ring_build",
         "sow-hud__ring-icon",
       );
     else {
       const action = slot.item.action;
-      const label = mapActionLabels[action] || {};
-      const status =
-        (slot.presentation && slot.presentation.status) || label.status;
+      const icon =
+        slot.presentation?.icon || mapActionLabels[action]?.icon || "plus";
       let building =
         RING_BUILD_SLOTS[action] != null
           ? buildingIcon(
@@ -4249,9 +4309,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           mapMenu.building.level,
           "sow-hud__building-icon sow-hud__ring-icon",
         );
-      title.innerHTML = status
-        ? statusIcon(status, "sow-hud__ring-icon")
-        : building || hudIcon(label.icon || "plus", "sow-hud__ring-icon");
+      title.innerHTML = building || hudIcon(icon, "sow-hud__ring-icon");
     }
     return title;
   }
@@ -4330,7 +4388,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       hub.setAttribute("aria-label", SOW_t("hud.map_action_back"));
       hub.innerHTML =
         hudIcon(
-          mapMenuView === "emote" ? "emote" : "construction",
+          mapMenuView === "emote" ? "ring_emote" : "ring_build",
           "sow-hud__ring-icon",
         ) + '<span class="sow-hud__ring-back" aria-hidden="true"></span>';
     }
@@ -8066,15 +8124,23 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "is-reduced-motion",
       Boolean(hudState.settings && hudState.settings.reduced_motion),
     );
+    const explicitSkin =
+      hudState.selected_skin !== undefined
+        ? typeof hudState.selected_skin === "string"
+          ? hudState.selected_skin.trim()
+          : ""
+        : null;
     const activeSkin =
-      (typeof document !== "undefined" &&
-        document.documentElement &&
-        document.documentElement.dataset.sowSkin) ||
-      (typeof hudState.selected_skin === "string"
-        ? hudState.selected_skin.trim()
-        : "");
+      explicitSkin !== null
+        ? explicitSkin
+        : (typeof document !== "undefined" &&
+            document.documentElement &&
+            document.documentElement.dataset.sowSkin) ||
+          "";
     if (activeSkin) {
       if (hudRoot.dataset.skin !== activeSkin) hudRoot.dataset.skin = activeSkin;
+      if (hudDevLayer && hudDevLayer.dataset.skin !== activeSkin)
+        hudDevLayer.dataset.skin = activeSkin;
       if (
         typeof document !== "undefined" &&
         document.documentElement &&
@@ -8082,8 +8148,17 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       ) {
         document.documentElement.dataset.sowSkin = activeSkin;
       }
-    } else if (hudRoot.dataset.skin) {
-      delete hudRoot.dataset.skin;
+    } else {
+      if (hudRoot.dataset.skin) delete hudRoot.dataset.skin;
+      if (hudDevLayer && hudDevLayer.dataset.skin) delete hudDevLayer.dataset.skin;
+      if (
+        explicitSkin !== null &&
+        typeof document !== "undefined" &&
+        document.documentElement &&
+        document.documentElement.dataset.sowSkin
+      ) {
+        delete document.documentElement.dataset.sowSkin;
+      }
     }
     const devTools = hud.dev_tools;
     const showDevTools =
@@ -9602,20 +9677,44 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   document.addEventListener(
     "keydown",
     function (event) {
-      if (
-        !hudInitialized ||
-        (hudRoot && hudRoot.hidden) ||
-        !hudRefs ||
-        !hudRefs.transfer ||
-        hudRefs.transfer.classList.contains("hidden")
-      ) {
-        return;
-      }
+      if (!hudInitialized || hudRoot?.hidden || !hudRefs) return;
       if (betrayalOpen || activeHudPanel !== null) return;
       if (
         (hudRefs.surrender && !hudRefs.surrender.classList.contains("hidden")) ||
         (hudRefs.endgame && !hudRefs.endgame.classList.contains("hidden"))
       ) {
+        return;
+      }
+      if (!hudRefs.transfer || hudRefs.transfer.classList.contains("hidden")) {
+        if (
+          (event.code !== "Digit1" && event.code !== "Numpad1") ||
+          hudState?.phase !== "Playing" ||
+          event.defaultPrevented ||
+          event.isComposing ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey ||
+          event.shiftKey
+        ) {
+          return;
+        }
+        if (
+          event.target instanceof Element &&
+          event.target.closest(
+            "input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='slider'], [role='dialog'], [role='alertdialog']",
+          )
+        ) {
+          return;
+        }
+        const city = hudRefs.buildingButtons.find(
+          (button) => button.dataset.kind === "City",
+        );
+        if (!city || city.disabled || !city.getClientRects().length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat) return;
+        city.click();
+        document.getElementById("blade")?.focus({ preventScroll: true });
         return;
       }
       const action = resolveTransferHotkey(event);

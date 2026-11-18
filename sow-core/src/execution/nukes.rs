@@ -253,12 +253,17 @@ impl SowEngine {
         }
 
         // Destroy buildings in inner radius
+        let mut destroyed_port = false;
         self.buildings.retain(|b| {
             let bx = b.tile_idx % w;
             let by = b.tile_idx / w;
             let dx = bx as i64 - cx as i64;
             let dy = by as i64 - cy as i64;
-            dx * dx + dy * dy > inner_sq
+            let keep = dx * dx + dy * dy > inner_sq;
+            if !keep && b.kind == crate::game::BuildingKind::Port {
+                destroyed_port = true;
+            }
+            keep
         });
         let buildings = &self.buildings;
         self.building_productions
@@ -270,7 +275,9 @@ impl SowEngine {
         self.bot_sam_tiles_cache = None;
         self.defense_grid_dirty = true;
         self.render_defense_dirty = true;
-        self.sea_lanes_dirty = true;
+        if destroyed_port {
+            self.sea_lanes_dirty = true;
+        }
 
         self.state
             .events

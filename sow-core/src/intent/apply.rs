@@ -711,13 +711,18 @@ impl SowEngine {
                         let had_defense_post = self.buildings.iter().any(|b| {
                             b.owner_id == pid && b.kind == crate::game::BuildingKind::Tower
                         });
+                        let had_port = self.buildings.iter().any(|b| {
+                            b.owner_id == pid && b.kind == crate::game::BuildingKind::Port
+                        });
                         self.buildings.retain(|b| b.owner_id != pid);
                         let buildings = &self.buildings;
                         self.building_productions
                             .retain(|id, _| buildings.iter().any(|b| b.id == *id));
                         self.building_grid.mark_dirty();
                         self.building_aggregates_dirty = true;
-                        self.sea_lanes_dirty = true;
+                        if had_port {
+                            self.sea_lanes_dirty = true;
+                        }
                         if had_defense_post {
                             self.defense_grid_dirty = true;
                             self.render_defense_dirty = true;

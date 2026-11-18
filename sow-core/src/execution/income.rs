@@ -1,3 +1,4 @@
+use crate::building::BuildingAggregate;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
     alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
@@ -7,17 +8,39 @@ use crate::execution::income_rates::{
 use crate::game::GamePhase;
 
 impl SowEngine {
+    pub(crate) fn troop_capacity(
+        &self,
+        player: &crate::player::Player,
+        agg: BuildingAggregate,
+    ) -> f64 {
+        let tiles = f64::from(player.tile_count);
+        let half = tiles.sqrt();
+        let territory_weight = half * half.sqrt().sqrt();
+        let config = &self.state.config;
+        let mut capacity = config.max_troops_base
+            + territory_weight * config.max_troops_scale
+            + agg.city_income_level_weight
+                * config.city_max_troops
+                * player.leader.city_troop_capacity_multiplier()
+            + agg.district_capacity_level_weight * config.district_max_troops;
+        if player.player_type == crate::player::PlayerType::Bot {
+            capacity /= 1.5;
+        }
+        if let Some(cap) = player.max_troops_cap {
+            capacity = capacity.min(cap);
+        }
+        if let Some(cap) = self.campaign_assault_troop_caps.get(&player.id) {
+            capacity = cap.max(0.0);
+        }
+        capacity
+    }
+
     pub fn execute_income(&mut self) {
         if self.state.phase != GamePhase::Playing {
             return;
         }
 
         self.refresh_building_aggregates();
-
-        if self.sea_lanes_dirty {
-            crate::sea_lane::update_sea_lanes(self);
-            self.sea_lanes_dirty = false;
-        }
         let aggs = self.building_aggregates.clone();
 
         let config = self.state.config.clone();
@@ -36,12 +59,6 @@ impl SowEngine {
             let agg = aggs.get(player_id as usize).copied().unwrap_or_default();
             let safe_troops = self.state.players[idx].troops.max(0.0);
 
-            let t_f64 = tiles_owned as f64;
-            let t_half = t_f64.sqrt();
-            let t_quarter = t_half.sqrt();
-            let t_eighth = t_quarter.sqrt();
-            let max_troops_bonus = t_half * t_eighth;
-
             // Tribes (PlayerType::Bot) always eat the standard-bot handicap —
             // no id-based carve-out (that used to let a handful of "élite"
             // tribes dodge it by id%100, inverting the food chain).
@@ -54,21 +71,7 @@ impl SowEngine {
                 crate::execution::hero_effects::living_allies(&self.state, player_id),
             );
             let council_active = council_multiplier > 1.0;
-            let mut max_tr = config.max_troops_base
-                + max_troops_bonus * config.max_troops_scale
-                + agg.city_income_level_weight
-                    * config.city_max_troops
-                    * leader.city_troop_capacity_multiplier()
-                + agg.district_capacity_level_weight * config.district_max_troops;
-            if is_standard_bot {
-                max_tr /= 1.5;
-            }
-            if let Some(cap) = self.state.players[idx].max_troops_cap {
-                max_tr = max_tr.min(cap);
-            }
-            if let Some(cap) = self.campaign_assault_troop_caps.get(&player_id) {
-                max_tr = cap.max(0.0);
-            }
+            let max_tr = self.troop_capacity(&self.state.players[idx], agg);
             self.state.players[idx].max_troops = max_tr;
 
             let hero_gold = self.hero_gold_per_second(player_id);

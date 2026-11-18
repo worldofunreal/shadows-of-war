@@ -2,6 +2,8 @@ use crate::building::income_level_weight;
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GamePhase, ProjectileKind};
 use crate::game_config::GameConfig;
+use std::cmp::Reverse;
+use std::collections::HashSet;
 
 /// SAM steps per tick (fast interceptor).
 const SAM_STEPS_PER_TICK: u8 = 4;
@@ -17,6 +19,10 @@ pub fn sam_cooldown_ticks(level: u8, cfg: &GameConfig) -> u32 {
     } else {
         SAM_COOLDOWN_TICKS
     }
+}
+
+pub fn sam_salvo_size(level: u8) -> usize {
+    [0, 1, 3, 6, 10][usize::from(level.min(4))]
 }
 
 /// Base SAM range constant.
@@ -70,56 +76,43 @@ impl SowEngine {
             .collect();
 
         let mut sam_missiles = Vec::new();
+        let mut assigned = HashSet::new();
+        let mut candidates = Vec::new();
 
-        for (sam_id, sam_owner, sam_tile, level) in &sams {
-            // Check cooldown
-            if self.silo_cooldowns.get(sam_id).copied().unwrap_or(0) > 0 {
+        for (sam_id, sam_owner, sam_tile, level) in sams {
+            if self.silo_cooldowns.get(&sam_id).copied().unwrap_or(0) > 0 {
                 continue;
             }
 
-            let range_u32 = sam_range(*level) as u32;
-
-            // Find closest incoming nuke (not owned by us) within range
-            let mut best_target: Option<(u64, f32)> = None;
+            let range = sam_range(level) as u32;
+            candidates.clear();
             for proj in &self.projectiles {
-                if !proj.active {
+                let ProjectileKind::Nuke { level } = proj.kind else {
                     continue;
-                }
-                // Only intercept nukes, not SAM missiles or shells
-                let is_nuke = matches!(proj.kind, ProjectileKind::Nuke { .. });
-                if !is_nuke || proj.owner_id == *sam_owner {
-                    continue;
-                }
-
-                // Check if destination is within range of SAM
-                let dist = sam_tile_distance(*sam_tile, proj.dst_tile, width);
-                if dist > range_u32 {
-                    continue;
-                }
-
-                // Prioritize higher-level missiles
-                let priority = match proj.kind {
-                    ProjectileKind::Nuke { level } => 10.0 - level as f32,
-                    _ => 20.0,
                 };
-
-                let score = priority * 10000.0 + dist as f32;
-                if best_target.is_none_or(|(_, s)| score < s) {
-                    best_target = Some((proj.id, score));
+                if !proj.active
+                    || proj.owner_id == sam_owner
+                    || assigned.contains(&(sam_owner, proj.id))
+                {
+                    continue;
+                }
+                let distance = sam_tile_distance(sam_tile, proj.dst_tile, width);
+                if distance <= range {
+                    candidates.push((Reverse(level), distance, proj.id, proj.dst_tile));
                 }
             }
 
-            if let Some((target_id, _)) = best_target {
-                // Find the target projectile's destination
-                if let Some(target) = self.projectiles.iter().find(|p| p.id == target_id) {
-                    let id = self.state.next_projectile_id;
-                    self.state.next_projectile_id =
-                        self.state.next_projectile_id.wrapping_add(1).max(1);
-
-                    sam_missiles.push((id, *sam_owner, *sam_tile, target.dst_tile));
-                    self.silo_cooldowns
-                        .insert(*sam_id, sam_cooldown_ticks(*level, &self.state.config));
-                }
+            candidates.sort_unstable();
+            let shots = sam_salvo_size(level).min(candidates.len());
+            for &(_, _, target_id, target_tile) in &candidates[..shots] {
+                assigned.insert((sam_owner, target_id));
+                let id = self.state.next_projectile_id;
+                self.state.next_projectile_id = id.wrapping_add(1).max(1);
+                sam_missiles.push((id, sam_owner, sam_tile, target_tile));
+            }
+            if shots > 0 {
+                let interval = sam_cooldown_ticks(level, &self.state.config);
+                self.silo_cooldowns.insert(sam_id, interval * shots as u32);
             }
         }
 
@@ -144,7 +137,7 @@ impl SowEngine {
         }
 
         // Check SAM missile proximity to their targets → intercept (same tile = hit)
-        let mut intercepted_nukes = Vec::new();
+        let mut intercepted_nukes = HashSet::new();
         let mut intercepted_sams = Vec::new();
         for sam in &self.projectiles {
             if !sam.active || !matches!(sam.kind, ProjectileKind::SAMMissile) {
@@ -157,7 +150,10 @@ impl SowEngine {
                 .unwrap_or(sam.dst_tile);
 
             for nuke in &self.projectiles {
-                if !nuke.active || nuke.id == sam.id {
+                if !nuke.active
+                    || nuke.owner_id == sam.owner_id
+                    || intercepted_nukes.contains(&nuke.id)
+                {
                     continue;
                 }
                 let is_nuke = matches!(nuke.kind, ProjectileKind::Nuke { .. });
@@ -172,7 +168,7 @@ impl SowEngine {
 
                 // Intercept if on the same tile or within 1 hex neighbor
                 if sam_tile_distance(sam_tile, nuke_tile, width) <= 1 {
-                    intercepted_nukes.push(nuke.id);
+                    intercepted_nukes.insert(nuke.id);
                     intercepted_sams.push(sam.id);
                     break;
                 }

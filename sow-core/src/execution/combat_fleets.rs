@@ -15,20 +15,7 @@ impl SowEngine {
         let w = self.state.map.width;
         let finish_threshold = self.current_finish_threshold();
 
-        if self.building_aggregates_dirty {
-            let max_pid = self
-                .state
-                .players
-                .iter()
-                .map(|p| p.id as usize)
-                .max()
-                .unwrap_or(0);
-            self.building_aggregates = crate::building::aggregate_buildings_per_player(
-                self.buildings.iter().copied(),
-                max_pid,
-            );
-            self.building_aggregates_dirty = false;
-        }
+        self.refresh_building_aggregates();
 
         let held_target = self
             .campaign_assault
@@ -413,17 +400,20 @@ const WARSHIP_RELOAD_TICKS: u32 = 20;
 const WARSHIP_TARGET_SCAN_INTERVAL_TICKS: u64 = 10;
 const FLEET_SPATIAL_CELL: u32 = 16;
 
-struct ActiveNavalPort {
-    id: u64,
-    owner_id: u16,
-    tile_idx: u32,
-    water_tiles: Vec<u32>,
-    water_components: Vec<u32>,
-}
+type ActiveNavalPort = crate::engine::CachedNavalPort;
 
 impl SowEngine {
-    fn active_naval_ports(&self) -> Vec<ActiveNavalPort> {
-        self.buildings
+    fn active_naval_ports(&mut self) -> std::sync::Arc<Vec<ActiveNavalPort>> {
+        let fp = crate::engine::compute_port_fingerprint(
+            &self.buildings,
+            self.state.map.width,
+            self.water.components.len(),
+        );
+        if self.active_naval_ports_cache.valid && self.active_naval_ports_cache.fingerprint == fp {
+            return std::sync::Arc::clone(&self.active_naval_ports_cache.ports);
+        }
+        let ports: Vec<ActiveNavalPort> = self
+            .buildings
             .iter()
             .filter(|port| {
                 port.kind == crate::game::BuildingKind::Port
@@ -443,11 +433,17 @@ impl SowEngine {
                     id: port.id,
                     owner_id: port.owner_id,
                     tile_idx: port.tile_idx,
+                    active_level: port.active_level(),
                     water_tiles,
                     water_components,
                 }
             })
-            .collect()
+            .collect();
+        let arc = std::sync::Arc::new(ports);
+        self.active_naval_ports_cache.fingerprint = fp;
+        self.active_naval_ports_cache.ports = std::sync::Arc::clone(&arc);
+        self.active_naval_ports_cache.valid = true;
+        arc
     }
 
     fn update_warship_home_port(&mut self, index: usize, ports: &[ActiveNavalPort]) -> bool {
@@ -1110,22 +1106,35 @@ impl SowEngine {
     ) -> Option<(u64, u32, Vec<u32>)> {
         let width = self.state.map.width;
         let component = self.water.component_of(from);
+        if component == 0 || width == 0 {
+            return None;
+        }
         let (x, y) = (from % width, from / width);
+        let naval_ports = self.active_naval_ports();
         let mut candidates = Vec::new();
-        for port in self.buildings.iter().filter(|port| {
-            port.owner_id == owner_id
-                && port.kind == crate::game::BuildingKind::Port
-                && !port.under_construction
-                && port.active_level() >= 1
-                && docked_per_port.is_none_or(|docked| {
-                    docked.get(&port.id).copied().unwrap_or(0) < usize::from(port.active_level())
-                })
-        }) {
-            for shore in self.port_water_tiles(port.tile_idx) {
-                if self.water.component_of(shore) == component {
+        for port in naval_ports.iter() {
+            if port.owner_id != owner_id || !port.water_components.contains(&component) {
+                continue;
+            }
+            if let Some(docked) = docked_per_port
+                && docked.get(&port.id).copied().unwrap_or(0) >= usize::from(port.active_level)
+            {
+                continue;
+            }
+            // Pick only the single closest coastal water tile per port so unreachable ports
+            // cannot trigger up to 8 redundant A* searches.
+            if let Some((distance, shore)) = port
+                .water_tiles
+                .iter()
+                .copied()
+                .filter(|&shore| self.water.component_of(shore) == component)
+                .map(|shore| {
                     let distance = (shore % width).abs_diff(x) + (shore / width).abs_diff(y);
-                    candidates.push((distance, port.id, shore));
-                }
+                    (distance, shore)
+                })
+                .min()
+            {
+                candidates.push((distance, port.id, shore));
             }
         }
         candidates.sort_unstable();

@@ -1,7 +1,7 @@
 //! Deterministic hierarchical water routing over the map's exact 4-connected topology.
 
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::sync::Arc;
 
 use crate::map::GameMap;
@@ -12,6 +12,244 @@ const BASE_COST: u32 = COST_SCALE;
 const NAV_CLUSTER_SIZE: u32 = 32;
 const NO_REGION: u32 = u32::MAX;
 const CARDINAL_DELTAS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, -1), (0, 1)];
+const LOS_MIN_MAG_PASS1: u8 = 2;
+const LOS_MIN_MAG_PASS2: u8 = 3;
+const WATER_PATH_MEMO_MAX_ENTRIES: usize = 4_096;
+const WATER_PATH_MEMO_MAX_BYTES: usize = 12_000_000;
+
+#[inline]
+fn is_water_min_mag(map: &GameMap, tile: u32, min_magnitude: u8) -> bool {
+    map.terrain.get(tile as usize).is_some_and(|t| {
+        !t.is_land() && (t.as_byte() & MAGNITUDE_MASK) >= min_magnitude
+    })
+}
+
+/// Strictly 4-connected cardinal line-of-sight over water with depth >= `min_magnitude`.
+/// Matches `openfrontio`'s `SmoothingWaterTransformer.canSee` semantics so routes cut
+/// cleanly through open water away from shallow shorelines while staying cardinal.
+fn can_see_cardinal(map: &GameMap, from: u32, to: u32, min_magnitude: u8) -> bool {
+    let width = map.width;
+    if width == 0 {
+        return false;
+    }
+    if !is_water_min_mag(map, from, min_magnitude) || !is_water_min_mag(map, to, min_magnitude) {
+        return false;
+    }
+    let mut x = (from % width) as i32;
+    let mut y = (from / width) as i32;
+    let x1 = (to % width) as i32;
+    let y1 = (to / width) as i32;
+
+    let dx = (x1 - x).abs();
+    let dy = (y1 - y).abs();
+    let sx = if x < x1 { 1 } else { -1 };
+    let sy = if y < y1 { 1 } else { -1 };
+    let mut err = dx - dy;
+
+    let max_steps = (dx + dy + 2) as usize;
+    for _ in 0..=max_steps {
+        let tile = y as u32 * width + x as u32;
+        if !is_water_min_mag(map, tile, min_magnitude) {
+            return false;
+        }
+        if x == x1 && y == y1 {
+            return true;
+        }
+        let e2 = err * 2;
+        let move_x = e2 > -dy;
+        let move_y = e2 < dx;
+        if move_x && move_y {
+            let ix = x + sx;
+            let inter_x = y as u32 * width + ix as u32;
+            if is_water_min_mag(map, inter_x, min_magnitude) {
+                x = ix;
+                y += sy;
+                err = err - dy + dx;
+            } else {
+                let iy = y + sy;
+                let inter_y = iy as u32 * width + x as u32;
+                if !is_water_min_mag(map, inter_y, min_magnitude) {
+                    return false;
+                }
+                x += sx;
+                y = iy;
+                err = err + dx - dy;
+            }
+        } else {
+            if move_x {
+                x += sx;
+                err -= dy;
+            }
+            if move_y {
+                y += sy;
+                err += dx;
+            }
+        }
+    }
+    false
+}
+
+/// Trace the exact 4-connected cardinal water segment checked by [`can_see_cardinal`],
+/// appending every tile strictly after `from` up to and including `to`.
+fn trace_cardinal_los_after_start(
+    map: &GameMap,
+    from: u32,
+    to: u32,
+    min_magnitude: u8,
+    out: &mut Vec<u32>,
+) -> bool {
+    let width = map.width;
+    if width == 0 {
+        return false;
+    }
+    let start_len = out.len();
+    let mut x = (from % width) as i32;
+    let mut y = (from / width) as i32;
+    let x1 = (to % width) as i32;
+    let y1 = (to / width) as i32;
+
+    let dx = (x1 - x).abs();
+    let dy = (y1 - y).abs();
+    let sx = if x < x1 { 1 } else { -1 };
+    let sy = if y < y1 { 1 } else { -1 };
+    let mut err = dx - dy;
+
+    let max_steps = (dx + dy + 2) as usize;
+    for _ in 0..=max_steps {
+        if x == x1 && y == y1 {
+            return true;
+        }
+        let e2 = err * 2;
+        let move_x = e2 > -dy;
+        let move_y = e2 < dx;
+        if move_x && move_y {
+            let ix = x + sx;
+            let inter_x = y as u32 * width + ix as u32;
+            if is_water_min_mag(map, inter_x, min_magnitude) {
+                out.push(inter_x);
+                x = ix;
+                y += sy;
+                err = err - dy + dx;
+            } else {
+                let iy = y + sy;
+                let inter_y = iy as u32 * width + x as u32;
+                if !is_water_min_mag(map, inter_y, min_magnitude) {
+                    out.truncate(start_len);
+                    return false;
+                }
+                out.push(inter_y);
+                x += sx;
+                y = iy;
+                err = err + dx - dy;
+            }
+            let next_tile = y as u32 * width + x as u32;
+            if !is_water_min_mag(map, next_tile, min_magnitude) {
+                out.truncate(start_len);
+                return false;
+            }
+            out.push(next_tile);
+        } else {
+            if move_x {
+                x += sx;
+                err -= dy;
+            }
+            if move_y {
+                y += sy;
+                err += dx;
+            }
+            let next_tile = y as u32 * width + x as u32;
+            if !is_water_min_mag(map, next_tile, min_magnitude) {
+                out.truncate(start_len);
+                return false;
+            }
+            out.push(next_tile);
+        }
+    }
+    out.truncate(start_len);
+    false
+}
+
+fn los_smooth_cardinal(map: &GameMap, path: &[u32], min_magnitude: u8) -> Vec<u32> {
+    if path.len() <= 2 {
+        return path.to_vec();
+    }
+    let mut result = Vec::with_capacity(path.len());
+    result.push(path[0]);
+    let last_idx = path.len() - 1;
+    let mut current = 0usize;
+
+    while current < last_idx {
+        let mut farthest = current + 1;
+        if current + 2 <= last_idx && is_water_min_mag(map, path[current], min_magnitude) {
+            let mut lo = current + 2;
+            let mut hi = last_idx;
+            while lo <= hi {
+                let mid = (lo + hi) >> 1;
+                if can_see_cardinal(map, path[current], path[mid], min_magnitude) {
+                    farthest = mid;
+                    lo = mid + 1;
+                } else {
+                    hi = mid - 1;
+                }
+            }
+        }
+        if farthest > current + 1
+            && trace_cardinal_los_after_start(
+                map,
+                path[current],
+                path[farthest],
+                min_magnitude,
+                &mut result,
+            )
+        {
+            current = farthest;
+        } else {
+            current += 1;
+            result.push(path[current]);
+        }
+    }
+    result
+}
+
+/// Two-pass binary-search LOS smoother over the water interior of a route,
+/// preserving exact land shoreline endpoints and 4-connected cardinal steps.
+fn smooth_water_path(map: &GameMap, path: Vec<u32>) -> Vec<u32> {
+    if path.len() <= 3 {
+        return path;
+    }
+    let lead_land = map
+        .terrain
+        .get(path[0] as usize)
+        .is_some_and(|t| t.is_land());
+    let trail_land = map
+        .terrain
+        .get(*path.last().unwrap() as usize)
+        .is_some_and(|t| t.is_land());
+    let water_start = usize::from(lead_land);
+    let water_end = path.len().saturating_sub(usize::from(trail_land));
+    if water_end <= water_start + 2 {
+        return path;
+    }
+    let water = &path[water_start..water_end];
+    // Fast skip for synthetic test maps whose water tiles have magnitude 0.
+    if !water.iter().any(|&t| is_water_min_mag(map, t, LOS_MIN_MAG_PASS1)) {
+        return path;
+    }
+    let pass1 = los_smooth_cardinal(map, water, LOS_MIN_MAG_PASS1);
+    let pass2 = los_smooth_cardinal(map, &pass1, LOS_MIN_MAG_PASS2);
+    if !lead_land && !trail_land {
+        return pass2;
+    }
+    let mut out = Vec::with_capacity(pass2.len() + usize::from(lead_land) + usize::from(trail_land));
+    if lead_land {
+        out.push(path[0]);
+    }
+    out.extend(pass2);
+    if trail_land {
+        out.push(*path.last().unwrap());
+    }
+    out
+}
 
 #[inline]
 fn magnitude_penalty(magnitude: u8) -> u32 {
@@ -543,6 +781,30 @@ impl WaterAStar {
         }
 
         self.ensure_capacity(map);
+        // Fast path: direct open-water cardinal line-of-sight skips cluster A* completely.
+        if starts.len() == 1
+            && can_see_cardinal(map, starts[0], goal, LOS_MIN_MAG_PASS1)
+        {
+            let mut direct = Vec::with_capacity(
+                manhattan(
+                    starts[0] % map.width,
+                    starts[0] / map.width,
+                    goal % map.width,
+                    goal / map.width,
+                ) as usize
+                    + 1,
+            );
+            direct.push(starts[0]);
+            if trace_cardinal_los_after_start(
+                map,
+                starts[0],
+                goal,
+                LOS_MIN_MAG_PASS1,
+                &mut direct,
+            ) {
+                return Some(direct);
+            }
+        }
         let graph = Arc::clone(self.navigation_graph.as_ref()?);
         let (goal_regions, goal_count) = Self::goal_regions(&graph, map, goal);
         if goal_count == 0 {
@@ -557,7 +819,9 @@ impl WaterAStar {
             return None;
         }
         let Some(goal_region) = self.find_graph_route(&graph, map, starts, goals) else {
-            return self.find_tile_path(map, None, starts, goal);
+            return self
+                .find_tile_path(map, None, starts, goal)
+                .map(|p| smooth_water_path(map, p));
         };
 
         self.route_regions.clear();
@@ -575,24 +839,32 @@ impl WaterAStar {
             .last()
             .is_none_or(|&region| self.came_from[region as usize] >= 0)
         {
-            return self.find_tile_path(map, None, starts, goal);
+            return self
+                .find_tile_path(map, None, starts, goal)
+                .map(|p| smooth_water_path(map, p));
         }
         self.route_regions.reverse();
 
         let source_candidates =
             Self::start_tiles_in_region(&graph, map, starts, self.route_regions[0]);
         if source_candidates.is_empty() {
-            return self.find_tile_path(map, None, starts, goal);
+            return self
+                .find_tile_path(map, None, starts, goal)
+                .map(|p| smooth_water_path(map, p));
         }
         let source_water_tiles: Vec<u32> = source_candidates
             .iter()
             .map(|(_, water_tile)| *water_tile)
             .collect();
         let Some(&last_region) = self.route_regions.last() else {
-            return self.find_tile_path(map, None, starts, goal);
+            return self
+                .find_tile_path(map, None, starts, goal)
+                .map(|p| smooth_water_path(map, p));
         };
         let Some(goal_water) = Self::goal_tile_in_region(&graph, map, goal, last_region) else {
-            return self.find_tile_path(map, None, starts, goal);
+            return self
+                .find_tile_path(map, None, starts, goal)
+                .map(|p| smooth_water_path(map, p));
         };
 
         self.route_crossings.clear();
@@ -608,14 +880,71 @@ impl WaterAStar {
                 None => graph.edge_tiles(pair[0], pair[1], &source_water_tiles, goal_water),
             };
             let Some(crossing) = crossing else {
-                return self.find_tile_path(map, None, starts, goal);
+                return self
+                    .find_tile_path(map, None, starts, goal)
+                    .map(|p| smooth_water_path(map, p));
             };
             previous_water = Some(crossing.1);
             self.route_crossings.push(crossing);
         }
 
-        let mut path = Vec::with_capacity(self.route_regions.len().saturating_mul(8));
-        for index in 0..self.route_regions.len() {
+        let mut path = Vec::with_capacity(self.route_regions.len().saturating_mul(16));
+        let mut index = 0usize;
+        while index < self.route_regions.len() {
+            if index > 0 {
+                let current_water = self.route_crossings[index - 1].1;
+                if is_water_min_mag(map, current_water, LOS_MIN_MAG_PASS1) {
+                    // Try jumping directly to goal_water across open sea.
+                    if can_see_cardinal(map, current_water, goal_water, LOS_MIN_MAG_PASS1)
+                        && trace_cardinal_los_after_start(
+                            map,
+                            current_water,
+                            goal_water,
+                            LOS_MIN_MAG_PASS1,
+                            &mut path,
+                        )
+                    {
+                        break;
+                    }
+                    // Otherwise binary-search the farthest cluster crossing with open-water LOS.
+                    if index + 1 < self.route_crossings.len() {
+                        let mut lo = index + 1;
+                        let mut hi = self.route_crossings.len() - 1;
+                        let mut best_k = None;
+                        while lo <= hi {
+                            let mid = (lo + hi) >> 1;
+                            if can_see_cardinal(
+                                map,
+                                current_water,
+                                self.route_crossings[mid].0,
+                                LOS_MIN_MAG_PASS1,
+                            ) {
+                                best_k = Some(mid);
+                                lo = mid + 1;
+                            } else {
+                                if mid == 0 {
+                                    break;
+                                }
+                                hi = mid - 1;
+                            }
+                        }
+                        if let Some(k) = best_k
+                            && trace_cardinal_los_after_start(
+                                map,
+                                current_water,
+                                self.route_crossings[k].0,
+                                LOS_MIN_MAG_PASS1,
+                                &mut path,
+                            )
+                        {
+                            path.push(self.route_crossings[k].1);
+                            index = k + 1;
+                            continue;
+                        }
+                    }
+                }
+            }
+
             let region = self.route_regions[index];
             let previous_start = index
                 .checked_sub(1)
@@ -632,18 +961,24 @@ impl WaterAStar {
             let Some(segment) =
                 self.find_tile_path(map, Some((&graph, region)), segment_starts, segment_goal)
             else {
-                return self.find_tile_path(map, None, starts, goal);
+                return self
+                    .find_tile_path(map, None, starts, goal)
+                    .map(|p| smooth_water_path(map, p));
             };
             if index == 0 {
                 let Some(&source_water) = segment.first() else {
-                    return self.find_tile_path(map, None, starts, goal);
+                    return self
+                        .find_tile_path(map, None, starts, goal)
+                        .map(|p| smooth_water_path(map, p));
                 };
                 let Some(source_tile) = source_candidates
                     .iter()
                     .find(|(_, water_tile)| *water_tile == source_water)
                     .map(|(source_tile, _)| *source_tile)
                 else {
-                    return self.find_tile_path(map, None, starts, goal);
+                    return self
+                        .find_tile_path(map, None, starts, goal)
+                        .map(|p| smooth_water_path(map, p));
                 };
                 if source_tile != source_water {
                     path.push(source_tile);
@@ -655,11 +990,12 @@ impl WaterAStar {
             if index < self.route_crossings.len() {
                 path.push(self.route_crossings[index].1);
             }
+            index += 1;
         }
         if goal_water != goal {
             path.push(goal);
         }
-        Some(path)
+        Some(smooth_water_path(map, path))
     }
 
     fn find_tile_path(
@@ -803,10 +1139,97 @@ fn manhattan(x1: u32, y1: u32, x2: u32, y2: u32) -> u32 {
     x1.abs_diff(x2).saturating_add(y1.abs_diff(y2))
 }
 
-/// Shared scratch buffer for water A* (insert as `Resource` on the Bevy app).
+/// Deterministic bounded memo of single-source water paths keyed by `(start_tile, goal_tile)`.
+/// Terrain is static across a match, so repeating port-to-port trade voyages reuse the smoothed
+/// `Arc<Vec<u32>>` path in O(1) without re-running A* or copying tiles.
+#[derive(Default, Clone)]
+pub struct WaterPathMemo {
+    terrain_identity: usize,
+    width: u32,
+    height: u32,
+    terrain_len: usize,
+    entries: HashMap<(u32, u32), Option<Arc<Vec<u32>>>>,
+    order: VecDeque<(u32, u32)>,
+    live_bytes: usize,
+}
+
+impl WaterPathMemo {
+    fn entry_bytes(path: &Option<Arc<Vec<u32>>>) -> usize {
+        match path {
+            Some(p) => p.len().saturating_mul(std::mem::size_of::<u32>()).max(16),
+            None => 16,
+        }
+    }
+
+    fn sync_map(&mut self, map: &GameMap) {
+        let terrain_identity = map.terrain.as_ptr() as usize;
+        if self.terrain_identity != terrain_identity
+            || self.width != map.width
+            || self.height != map.height
+            || self.terrain_len != map.terrain.len()
+        {
+            self.entries.clear();
+            self.order.clear();
+            self.live_bytes = 0;
+            self.terrain_identity = terrain_identity;
+            self.width = map.width;
+            self.height = map.height;
+            self.terrain_len = map.terrain.len();
+        }
+    }
+
+    pub fn get(&mut self, map: &GameMap, start: u32, goal: u32) -> Option<Option<Arc<Vec<u32>>>> {
+        self.sync_map(map);
+        self.entries.get(&(start, goal)).cloned()
+    }
+
+    pub fn insert(&mut self, map: &GameMap, start: u32, goal: u32, value: Option<Arc<Vec<u32>>>) {
+        self.sync_map(map);
+        let key = (start, goal);
+        let bytes = Self::entry_bytes(&value);
+        if let Some(prev) = self.entries.insert(key, value) {
+            self.live_bytes = self.live_bytes.saturating_sub(Self::entry_bytes(&prev));
+            self.live_bytes = self.live_bytes.saturating_add(bytes);
+            return;
+        }
+        self.order.push_back(key);
+        self.live_bytes = self.live_bytes.saturating_add(bytes);
+        while self.entries.len() > WATER_PATH_MEMO_MAX_ENTRIES
+            || self.live_bytes > WATER_PATH_MEMO_MAX_BYTES
+        {
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
+            if let Some(removed) = self.entries.remove(&oldest) {
+                self.live_bytes = self.live_bytes.saturating_sub(Self::entry_bytes(&removed));
+            }
+        }
+    }
+}
+
+/// Shared scratch buffer for water A* and bounded port-to-port path memoization.
 #[derive(Default, Clone)]
 pub struct WaterPathfinderScratch {
     pub astar: WaterAStar,
+    pub memo: WaterPathMemo,
+}
+
+impl WaterPathfinderScratch {
+    /// Cached smoothed water route between two tiles. Returns a shared `Arc<Vec<u32>>` in O(1)
+    /// on repeated port-to-port queries.
+    pub fn find_path_cached(
+        &mut self,
+        map: &GameMap,
+        start: u32,
+        goal: u32,
+    ) -> Option<Arc<Vec<u32>>> {
+        if let Some(cached) = self.memo.get(map, start, goal) {
+            return cached;
+        }
+        let computed = self.astar.find_path(map, &[start], goal).map(Arc::new);
+        self.memo.insert(map, start, goal, computed.clone());
+        computed
+    }
 }
 
 /// Bresenham line rasterization on an offset hex grid. Returns a path from
