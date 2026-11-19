@@ -914,6 +914,18 @@ impl SowApp {
                     });
                 }
             }
+            MapMenuAction::UpgradeStructureMax => {
+                if let Some(building) =
+                    self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                        snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx)
+                    })
+                {
+                    self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructureTo {
+                        building_id: building.id,
+                        target_level: building.kind.max_level(),
+                    });
+                }
+            }
             MapMenuAction::Nuke => {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
             }
