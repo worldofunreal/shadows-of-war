@@ -34,7 +34,8 @@ const states = new WeakMap<HTMLImageElement, AnimationState>();
 /** The portrait an image was last asked to show when that portrait is a packed cell. */
 const atlasSources = new WeakMap<HTMLImageElement, string>();
 const imageLoads = new Map<string, Promise<HTMLImageElement>>();
-const MAX_CACHED_AVATAR_IMAGES = 512;
+const sheetLoads = new Map<string, Promise<HTMLImageElement>>();
+const MAX_CACHED_AVATAR_IMAGES = 256;
 let initialLoaderHasFinished = false;
 let initialLoaderReady: Promise<void> | null = null;
 
@@ -119,39 +120,89 @@ function cachedImage(source: string, load: () => Promise<HTMLImageElement>): Pro
     return promise;
 }
 
-function loadNetworkImage(source: string): Promise<HTMLImageElement> {
-    return cachedImage(source, () => {
-        if (typeof Image === "undefined") return Promise.reject(new Error("Image API unavailable"));
-        const image = new Image();
-        image.crossOrigin = "anonymous";
-        image.decoding = "async";
-        image.src = source;
-        return typeof image.decode === "function"
-            ? image.decode().then(() => image)
-            : typeof image.addEventListener === "function"
-              ? new Promise<HTMLImageElement>((resolve, reject) => {
-                    image.addEventListener("load", () => resolve(image), { once: true });
-                    image.addEventListener("error", () => reject(new Error("avatar image load failed")), {
-                        once: true,
-                    });
-                })
-              : Promise.resolve(image);
+function loadSheetImage(source: string): Promise<HTMLImageElement> {
+    const cached = sheetLoads.get(source);
+    if (cached) return cached;
+    const promise = loadRawNetworkImage(source);
+    sheetLoads.set(source, promise);
+    void promise.catch(() => {
+        if (sheetLoads.get(source) === promise) sheetLoads.delete(source);
     });
+    return promise;
+}
+
+function loadRawNetworkImage(source: string): Promise<HTMLImageElement> {
+    if (typeof Image === "undefined") return Promise.reject(new Error("Image API unavailable"));
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
+    image.src = source;
+    return typeof image.decode === "function"
+        ? image.decode().then(() => image)
+        : typeof image.addEventListener === "function"
+          ? new Promise<HTMLImageElement>((resolve, reject) => {
+                image.addEventListener("load", () => resolve(image), { once: true });
+                image.addEventListener("error", () => reject(new Error("avatar image load failed")), {
+                    once: true,
+                });
+            })
+          : Promise.resolve(image);
+}
+
+function loadNetworkImage(source: string): Promise<HTMLImageElement> {
+    return cachedImage(source, () => loadRawNetworkImage(source));
+}
+
+let sharedCropCanvas: HTMLCanvasElement | null = null;
+let cropQueueTail: Promise<unknown> = Promise.resolve();
+let cropBurstCount = 0;
+
+function encodeCanvasUrl(canvas: HTMLCanvasElement): Promise<string> {
+    if (
+        typeof canvas.toBlob === "function" &&
+        typeof URL !== "undefined" &&
+        typeof URL.createObjectURL === "function"
+    ) {
+        return new Promise<string>((resolve) => {
+            canvas.toBlob(
+                (blob) => {
+                    if (blob) {
+                        resolve(URL.createObjectURL(blob));
+                    } else {
+                        resolve(canvas.toDataURL("image/webp", 0.86));
+                    }
+                },
+                "image/webp",
+                0.86,
+            );
+        });
+    }
+    return Promise.resolve(canvas.toDataURL("image/webp", 0.86));
 }
 
 /** Copies one square cell out of a loaded sheet into an image the page shows like any portrait. */
-async function cropCell(sheet: HTMLImageElement, cell: AvatarCell): Promise<HTMLImageElement> {
-    const canvas = document.createElement("canvas");
-    canvas.width = cell.side;
-    canvas.height = cell.side;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("avatar canvas unavailable");
-    context.drawImage(sheet, cell.x, cell.y, cell.side, cell.side, 0, 0, cell.side, cell.side);
-    const cropped = new Image();
-    cropped.decoding = "async";
-    cropped.src = canvas.toDataURL("image/webp", 0.9);
-    if (typeof cropped.decode === "function") await cropped.decode();
-    return cropped;
+function cropCell(sheet: HTMLImageElement, cell: AvatarCell): Promise<HTMLImageElement> {
+    const job = cropQueueTail.then(async () => {
+        cropBurstCount += 1;
+        if (cropBurstCount % 4 === 0 && typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+            await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        }
+        const canvas = sharedCropCanvas || (sharedCropCanvas = document.createElement("canvas"));
+        if (canvas.width !== cell.side) canvas.width = cell.side;
+        if (canvas.height !== cell.side) canvas.height = cell.side;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("avatar canvas unavailable");
+        context.clearRect(0, 0, cell.side, cell.side);
+        context.drawImage(sheet, cell.x, cell.y, cell.side, cell.side, 0, 0, cell.side, cell.side);
+        const url = await encodeCanvasUrl(canvas);
+        const cropped = new Image();
+        cropped.decoding = "async";
+        cropped.src = url;
+        if (typeof cropped.decode === "function") await cropped.decode();
+        return cropped;
+    });
+    cropQueueTail = job.catch(() => undefined);
+    return job;
 }
 
 /** One stable browser-native image load shared by the radial and the map atlas bridge. */
@@ -160,7 +211,7 @@ export function loadAvatarImage(source: string): Promise<HTMLImageElement> {
     if (!cell) return loadNetworkImage(source);
     return cachedImage(source, async () => {
         await waitForInitialLoader();
-        return cropCell(await loadNetworkImage(cell.sheet.url), cell);
+        return cropCell(await loadSheetImage(cell.sheet.url), cell);
     });
 }
 
@@ -175,7 +226,7 @@ export async function loadAvatarBitmap(path: string, size: number): Promise<Imag
     let sx: number, sy: number, side: number;
     if (cell) {
         await waitForInitialLoader();
-        image = await loadNetworkImage(cell.sheet.url);
+        image = await loadSheetImage(cell.sheet.url);
         [sx, sy, side] = [cell.x, cell.y, cell.side];
     } else {
         image = await loadNetworkImage(source);

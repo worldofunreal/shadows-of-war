@@ -16,7 +16,8 @@ function positionDropdown(trigger: Element, menu: HTMLElement) {
     const edge = 8;
     const gap = 6;
     const maxHeight = Math.min(240, Math.max(40, viewportHeight - edge * 2));
-    const width = Math.max(0, Math.min(viewportWidth - edge * 2, rect.width));
+    const minWidth = parseFloat(getComputedStyle(menu).getPropertyValue("--sow-dropdown-min-width")) || 0;
+    const width = Math.max(0, Math.min(viewportWidth - edge * 2, Math.max(rect.width, minWidth)));
     const rtl = document.documentElement.dir === "rtl";
     let left = rtl ? rect.right - width : rect.left;
     left = Math.max(edge, Math.min(left, viewportWidth - width - edge));

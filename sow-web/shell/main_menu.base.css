@@ -115,12 +115,10 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 
 @keyframes sow-backdrop-shift {
   0% {
-    filter: brightness(0.92);
-    transform: scale(1.012);
+    transform: scale3d(1.012, 1.012, 1);
   }
   100% {
-    filter: brightness(1);
-    transform: scale(1);
+    transform: scale3d(1, 1, 1);
   }
 }
 
@@ -3405,5 +3403,25 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   .sow-menu-whisper__card,
   .is-whisper-target {
     animation: none !important;
+  }
+}
+
+/* Mobile tile-GPU optimization (e.g. Galaxy S9 / Adreno / Mali coarse-pointer devices):
+   avoid stacked multi-pass backdrop-filter readbacks on large scrolling/stage surfaces. */
+@media (hover: none) and (pointer: coarse) {
+  #sow-menu .sow-menu__command,
+  #sow-menu .sow-browser__header,
+  #sow-menu .sow-create__rail,
+  #sow-menu .sow-create__card,
+  #sow-menu .sow-create__footer,
+  #sow-menu .sow-menu__queue-panel,
+  #sow-menu .sow-profile__dossier,
+  #sow-menu .sow-profile__tabs-bar,
+  #sow-menu .sow-profile__card,
+  #sow-menu .sow-missions__card,
+  #sow-menu .sow-hero-info__drawer,
+  #sow-menu .sow-skin-picker__drawer {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 }

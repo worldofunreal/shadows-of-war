@@ -793,6 +793,41 @@
   animation: sow-screen-slot-cascade 310ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
 }
 
+@media (hover: none) and (pointer: coarse) {
+  #sow-menu .sow-menu__screen-stage.sow-screen-stage--sweeping::after {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+
+  #sow-menu
+    .sow-menu__screen-stage
+    > [data-screen-panel].sow-screen-panel--entering
+    :where(
+      .sow-menu__command,
+      .sow-heroes__featured,
+      .sow-profile__dossier,
+      .sow-store__featured,
+      .sow-campaign__header,
+      .sow-browser__header,
+      .sow-create__rail,
+      .sow-menu__queue-summary-card,
+      .sow-ranked__duel,
+      .sow-menu__leader-copy,
+      .sow-heroes__catalog,
+      .sow-profile__tabs-bar,
+      .sow-store__shelf,
+      .sow-campaign__spotlight,
+      .sow-browser__layout,
+      .sow-create__workspace,
+      .sow-menu__queue-players-card,
+      .sow-ranked__queue-footer,
+      .sow-profile__tab-panel,
+      .sow-campaign__episodes
+    ) {
+    animation: none !important;
+  }
+}
+
 #sow-menu[data-screen="browser"] .sow-menu__main,
 #sow-menu[data-screen="create"] .sow-menu__main,
 #sow-menu[data-screen="queue"] .sow-menu__main,

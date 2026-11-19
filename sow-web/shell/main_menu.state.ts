@@ -406,6 +406,7 @@ export interface MenuState {
 export interface HudAvatarIdentity {
     kind: "portrait" | "wilderness" | "fallback";
     slug?: string;
+    player_id?: number;
     expression?: "happy" | "calm" | "fear" | "angry";
     transition?: HudAvatarTransition | null;
 }

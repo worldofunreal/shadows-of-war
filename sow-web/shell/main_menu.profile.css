@@ -1596,6 +1596,8 @@
   border: 1px solid var(--sow-profile-line, var(--sow-tactical-surface-border, rgba(255, 255, 255, 0.1)));
   background: var(--sow-tactical-surface-card-bg);
   box-shadow: var(--sow-tactical-card-shadow);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
 }
 
 #sow-menu .sow-ach-hero-card.is-owned {
@@ -4381,6 +4383,8 @@ button.sow-heroes__rarity-tag:focus-visible {
   color: #fff;
   text-align: start;
   cursor: pointer;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 92px;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -4618,7 +4622,6 @@ button.sow-heroes__rarity-tag:focus-visible {
 
 @media (max-width: 340px) {
   #sow-menu[data-screen="heroes"] .sow-heroes__featured {
-    flex-basis: 260px;
     --skill-body: 12px;
     --skill-icon: 48px;
   }
@@ -4626,12 +4629,33 @@ button.sow-heroes__rarity-tag:focus-visible {
   .sow-heroes__featured-copy {
     padding: 10px 12px;
   }
+}
 
-  .sow-heroes__filters {
-    flex-wrap: wrap;
+@media (orientation: portrait) {
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured {
+    flex: 0 0 auto;
+    min-height: min-content;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    container-type: inline-size;
+    justify-content: space-between;
   }
-  .sow-heroes__search {
-    flex-basis: 100%;
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured picture {
+    inset-block-end: auto;
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured picture img {
+    object-fit: contain;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured-controls {
+    position: relative;
+    top: auto;
+    inset-inline-start: auto;
+    margin: 10px 10px 0;
   }
 }
 
@@ -4774,6 +4798,49 @@ button.sow-heroes__rarity-tag:focus-visible {
   text-align: center;
 }
 
+@media (max-width: 680px), (orientation: portrait) {
+  .sow-heroes__filters {
+    gap: 0;
+    border: 1px solid var(--sow-tactical-track-border);
+    border-radius: var(--sow-tactical-track-radius);
+    background: var(--sow-tactical-track-bg);
+    box-shadow: var(--sow-tactical-track-shadow);
+    --sow-dropdown-min-width: 224px;
+  }
+
+  .sow-heroes__search input {
+    padding-block: 0;
+    padding-inline: 35px 6px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .sow-heroes__filters > .sow-control-dropdown {
+    flex: 0 0 clamp(30px, 9vw, 40px);
+    width: auto;
+    min-width: 0;
+  }
+
+  .sow-heroes__filters .sow-control-dropdown__trigger {
+    justify-content: center;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .sow-heroes__filters .sow-control-dropdown__trigger[aria-expanded="true"],
+  .sow-heroes__filters .sow-control-dropdown__trigger:hover {
+    background: var(--sow-button-dark-bg);
+  }
+
+  .sow-heroes__filters [data-dropdown-label],
+  .sow-heroes__filters .sow-control-dropdown__chevron {
+    display: none;
+  }
+}
+
 @media (max-width: 680px) {
 
   #sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes {
@@ -4782,22 +4849,6 @@ button.sow-heroes__rarity-tag:focus-visible {
 
   .sow-heroes__featured-copy {
     padding: 14px 16px;
-  }
-
-  /* Narrow screens: search takes a full row; region and sort share the next one. */
-  #sow-menu[data-screen="heroes"] .sow-heroes__filters {
-    flex-wrap: wrap;
-  }
-  #sow-menu[data-screen="heroes"] .sow-heroes__search {
-    flex-basis: 100%;
-  }
-  #sow-menu[data-screen="heroes"] .sow-heroes__region,
-  #sow-menu[data-screen="heroes"] .sow-heroes__rarity-filter,
-  #sow-menu[data-screen="heroes"] .sow-heroes__status-filter,
-  #sow-menu[data-screen="heroes"] .sow-heroes__sort {
-    flex: 1 1 0;
-    width: auto;
-    min-width: 0;
   }
 
   #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy h2 {
@@ -4984,56 +5035,6 @@ button.sow-heroes__rarity-tag:focus-visible {
 
 @media (min-width: 681px) and (orientation: landscape) {
   /* Widescreen landscape bounds are unified in main_menu.layout.css */
-}
-
-/* Hero roster progress, filters, Store bio action, & Dossier Codex */
-.sow-heroes__roster-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sow-heroes__owned-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: #dbe6f2;
-  font-variant-numeric: tabular-nums;
-}
-
-.sow-heroes__playable-btn {
-  appearance: none;
-  font-family: inherit;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 5px 11px;
-  border-radius: 999px;
-  border: 1px solid var(--sow-tactical-track-border);
-  background: rgba(255, 255, 255, 0.04);
-  color: #b7c8d9;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.sow-heroes__playable-btn:hover {
-  border-color: var(--sow-tactical-surface-accent-border);
-  color: #fff4d1;
-}
-
-.sow-heroes__playable-btn.is-active {
-  background: color-mix(in srgb, var(--sow-tactical-accent) 18%, transparent);
-  border-color: var(--sow-control-accent);
-  color: var(--sow-gold-bright);
 }
 
 .sow-store__hero-inspect {

@@ -271,6 +271,7 @@ root.addEventListener(
     true,
 );
 root.addEventListener("pointerover", function (event) {
+    if (event.pointerType === "touch") return;
     const card = heroesAvatarCard(event);
     if (!card || card.classList.contains("is-selected")) return;
     if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
@@ -279,6 +280,7 @@ root.addEventListener("pointerover", function (event) {
     if (leader) preloadHeroesFeaturedArt(leader);
 });
 root.addEventListener("pointerout", function (event) {
+    if (event.pointerType === "touch") return;
     const card = heroesAvatarCard(event);
     if (!card) return;
     if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
@@ -549,11 +551,12 @@ function heroesRoster(leaders: MenuLeader[]) {
             menuUi.heroesRegionFilter === "all" || leader.region === menuUi.heroesRegionFilter;
         const matchesRarity =
             menuUi.heroesRarityFilter === "all" || leader.rarity === menuUi.heroesRarityFilter;
-        const matchesPlayable = !menuUi.heroesPlayableOnly || leader.available !== false;
         let matchesStatus = true;
         if (statusFilter !== "all") {
             const sum = summaryFor(leader);
-            if (statusFilter === "owned") {
+            if (statusFilter === "playable") {
+                matchesStatus = leader.available !== false;
+            } else if (statusFilter === "owned") {
                 matchesStatus = sum.ownershipStatus === "owned" || sum.ownershipStatus === "starter";
             } else if (statusFilter === "weekly_free") {
                 matchesStatus = sum.ownershipStatus === "weekly_free";
@@ -565,7 +568,7 @@ function heroesRoster(leaders: MenuLeader[]) {
                 matchesStatus = sum.unlockedCount < sum.totalCount && sum.nextPercent >= 25;
             }
         }
-        return matchesQuery && matchesRegion && matchesRarity && matchesPlayable && matchesStatus;
+        return matchesQuery && matchesRegion && matchesRarity && matchesStatus;
     });
 
     function leaderCost(leader: MenuLeader): number {
@@ -649,8 +652,10 @@ function heroesRoster(leaders: MenuLeader[]) {
     return active.concat(locked);
 }
 
-const HEROES_FILTER_ICON =
-    "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'/></svg>";
+function heroesFilterIcon(shape: string) {
+    return "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>" +
+        shape + "</svg>";
+}
 
 const HEROES_SORT_ICON =
     "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m3 16 4 4 4-4'/><path d='M7 20V4'/><path d='m21 8-4-4-4 4'/><path d='M17 4v16'/></svg>";
@@ -660,7 +665,7 @@ function renderHeroesRegionDropdown() {
         key: "heroes-region",
         label: SOW_t("heroes.filter_leaders_region"),
         name: "region",
-        icon: HEROES_FILTER_ICON,
+        icon: heroesFilterIcon("<circle cx='12' cy='12' r='9'/><ellipse cx='12' cy='12' rx='4' ry='9'/><path d='M3 12h18'/>"),
         value: menuUi.heroesRegionFilter,
         className: "sow-heroes__region" + (menuUi.heroesRegionFilter !== "all" ? " is-filtered" : ""),
         options: [
@@ -679,7 +684,7 @@ function renderHeroesRarityDropdown() {
         key: "heroes-rarity",
         label: SOW_t("heroes.rarity_filter"),
         name: "rarity",
-        icon: HEROES_FILTER_ICON,
+        icon: heroesFilterIcon("<path d='m12 3 9 7-9 11-9-11 9-7ZM3 10h18'/>"),
         value: menuUi.heroesRarityFilter || "all",
         className: "sow-heroes__rarity-filter" + (menuUi.heroesRarityFilter !== "all" ? " is-filtered" : ""),
         options: [
@@ -698,11 +703,12 @@ function renderHeroesStatusDropdown() {
         key: "heroes-status",
         label: tText("heroes.filter_status", "Filter by status"),
         name: "status",
-        icon: HEROES_FILTER_ICON,
+        icon: heroesFilterIcon("<rect x='4' y='5' width='16' height='14' rx='2'/><path d='m8 12 3 3 5-5'/>"),
         value: val,
         className: "sow-heroes__status-filter" + (val !== "all" ? " is-filtered" : ""),
         options: [
             { value: "all", label: tText("heroes.all_statuses", "All status"), shortLabel: tText("heroes.status_filter", "Status") },
+            { value: "playable", label: SOW_t("heroes.filter_playable") },
             { value: "owned", label: tText("heroes.status_owned", "Owned") },
             { value: "weekly_free", label: tText("heroes.status_weekly_free", "Weekly Free") },
             { value: "locked", label: tText("heroes.status_locked", "Locked") },
@@ -1350,14 +1356,6 @@ export function selectDropdown(key: string, value: string) {
     }
     if (key === "heroes-status") {
         menuUi.heroesStatusFilter = value || "all";
-        if (menuUi.heroesStatusFilter === "locked" && menuUi.heroesPlayableOnly) {
-            menuUi.heroesPlayableOnly = false;
-            const playableBtn = panel?.querySelector<HTMLElement>("[data-command='toggle_heroes_playable']");
-            if (playableBtn) {
-                playableBtn.classList.remove("is-active");
-                playableBtn.setAttribute("aria-pressed", "false");
-            }
-        }
         dropdown.classList.toggle("is-filtered", menuUi.heroesStatusFilter !== "all");
         syncDropdowns();
         refreshHeroesRoster(true);
@@ -1427,10 +1425,6 @@ export function renderHeroes() {
     // height='1920' below are correct on purpose.
     const featuredArt = heroesFeaturedArt(activeLeader.slug);
     const displayName = activeRandom ? randomLeaderName() : leaderDisplayName(activeLeader);
-    const allLeaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
-    const ownedCount = allLeaders.filter(function (l) {
-        return l.owned === true;
-    }).length;
     return (
         "<main class='sow-menu__main sow-menu__main--heroes' data-screen-panel='heroes'><section class='sow-menu__heroes-slot' aria-label='" +
         esc(SOW_t("menu.heroes")) +
@@ -1452,7 +1446,7 @@ export function renderHeroes() {
         (activeRandom ? "" : renderFeaturedTopControls()) +
         "</div>" +
         "</div>" +
-        "<picture><source media='(max-width: 900px), (orientation: portrait)' srcset='" +
+        "<picture><source media='(max-width: 900px), (orientation: portrait)' width='1920' height='1080' srcset='" +
         esc(featuredArt.band) +
         "'><img src='" +
         esc(featuredArt.column) +
@@ -1482,17 +1476,7 @@ export function renderHeroes() {
         "</div></div></section>" +
         "<section class='sow-heroes__roster' aria-label='" +
         esc(SOW_t("heroes.leader_list")) +
-        "'><div class='sow-heroes__section-head'><div class='sow-heroes__roster-meta'>" +
-        "<span class='sow-heroes__owned-badge' data-heroes-owned-count>" +
-        esc(SOW_t("heroes.owned_progress", { owned: ownedCount, total: allLeaders.length })) +
-        "</span>" +
-        "<button type='button' class='sow-heroes__playable-btn" +
-        (menuUi.heroesPlayableOnly ? " is-active" : "") +
-        "' data-command='toggle_heroes_playable' aria-pressed='" +
-        Boolean(menuUi.heroesPlayableOnly) +
-        "'>" +
-        esc(SOW_t("heroes.filter_playable")) +
-        "</button></div><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" +
+        "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" +
         esc(SOW_t("heroes.search_leaders")) +
         "</span><span class='sow-heroes__search-icon' aria-hidden='true'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg></span><input data-role='heroes-search' type='search' placeholder='" +
         esc(SOW_t("heroes.search_leader_civilization")) +

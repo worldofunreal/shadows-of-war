@@ -1436,7 +1436,18 @@ function syncMenuSkinTheme(state: MenuState | null): void {
     }
 }
 
-export function render() {
+function syncBladeCanvasVisibility() {
+    if (typeof document === "undefined") return;
+    const blade = document.getElementById("blade");
+    if (!blade) return;
+    const menuCoversViewport = !root.hidden && Boolean(menuUi.state && menuUi.state.phase === "MainMenu");
+    const desired = menuCoversViewport ? "hidden" : "";
+    if (blade.style.visibility !== desired) {
+        blade.style.visibility = desired;
+    }
+}
+
+export function render(precomputedKey?: string) {
     if (!menuUi.state) return;
     if (activeMenuPointerId !== null) {
         renderPending = true;
@@ -1562,7 +1573,8 @@ export function render() {
         if (nextScrollOwner) nextScrollOwner.scrollTop = scrollTop;
     }
     syncDropdowns();
-    menuUi.lastRenderKey = renderKey();
+    menuUi.lastRenderKey = precomputedKey !== undefined ? precomputedKey : renderKey();
+    syncBladeCanvasVisibility();
     updateLobbyViews();
 }
 
@@ -2885,7 +2897,7 @@ root.addEventListener("click", function (event) {
             menuUi.heroesSearchQuery = "";
             menuUi.heroesRegionFilter = "all";
             menuUi.heroesRarityFilter = "all";
-            menuUi.heroesPlayableOnly = false;
+            if (menuUi.heroesStatusFilter === "playable") menuUi.heroesStatusFilter = "all";
             menuUi.dropdownOpenKey = null;
             const navLeaderSelection = currentLeaderSelection();
             menuUi.tempSelectedLeader = navLeaderSelection.selected_leader;
@@ -3308,15 +3320,6 @@ root.addEventListener("click", function (event) {
         render();
         return;
     }
-    if (command === "toggle_heroes_playable") {
-        menuUi.heroesPlayableOnly = !menuUi.heroesPlayableOnly;
-        if (menuUi.heroesPlayableOnly && menuUi.heroesStatusFilter === "locked") {
-            menuUi.heroesStatusFilter = "all";
-        }
-        refreshHeroesRoster(false);
-        render();
-        return;
-    }
     if (command === "preview_leader") {
         const leaderId = target.dataset.leaderId || null;
         const leader = leaderById(leaderId);
@@ -3689,7 +3692,11 @@ root.addEventListener("click", function (event) {
             menuUi.heroesSearchQuery = "";
             menuUi.heroesRegionFilter = HERO_REGION_TARGETS[actionTarget] || "all";
             menuUi.heroesRarityFilter = HERO_RARITY_TARGETS[actionTarget] || "all";
-            menuUi.heroesPlayableOnly = actionTarget === "heroes_free_rotation";
+            if (actionTarget === "heroes_free_rotation") {
+                menuUi.heroesStatusFilter = "playable";
+            } else if (menuUi.heroesStatusFilter === "playable") {
+                menuUi.heroesStatusFilter = "all";
+            }
             menuUi.dropdownOpenKey = null;
             refreshHeroesRoster(true);
             render();
@@ -4747,10 +4754,11 @@ function handleMenuStateUpdate(raw: string, parsed: MenuState) {
     }
     const key = renderKey();
     if (key !== menuUi.lastRenderKey) {
-        render();
+        render(key);
     } else {
         syncMenuSkinTheme(menuUi.state);
         root.hidden = menuUi.state!.phase !== "MainMenu";
+        syncBladeCanvasVisibility();
         updateLobbyViews();
         updateDynamic();
     }

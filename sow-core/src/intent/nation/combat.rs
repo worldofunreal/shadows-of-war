@@ -155,6 +155,9 @@ fn campaign_attacks_players(
 
 impl SowEngine {
     pub(crate) fn naval_target_allowed(&self, attacker_id: u16, target_id: u16) -> bool {
+        if attacker_id == target_id {
+            return false;
+        }
         let respect_human_attack_grace = !self.state.player(attacker_id).is_some_and(is_real_human);
         self.ai_target_allowed_with_grace(attacker_id, target_id, None, respect_human_attack_grace)
             && !self.players_friendly(attacker_id, target_id)

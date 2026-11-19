@@ -66,7 +66,6 @@ interface MenuUi {
     heroesRegionFilter: string;
     heroesRarityFilter: string;
     heroesStatusFilter: string;
-    heroesPlayableOnly: boolean;
     heroesSort: string;
     dropdownOpenKey: string | null;
     authModalOpen: boolean;
@@ -159,7 +158,6 @@ export const menuUi: MenuUi = {
     heroesRegionFilter: "all",
     heroesRarityFilter: "all",
     heroesStatusFilter: "all",
-    heroesPlayableOnly: false,
     heroesSort: "alpha_asc",
     dropdownOpenKey: null,
     authModalOpen: false,

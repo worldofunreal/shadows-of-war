@@ -650,28 +650,31 @@ export function parseHeroAchievementId(
     return null;
 }
 
+let cachedUnlockedRawRef: unknown = null;
+let cachedUnlockedRawLen = -1;
+let cachedUnlockedSet: Set<string> | null = null;
+
 function buildUnlockedSetFromMenuState(): Set<string> | null {
     const raw = menuUi.state && menuUi.state.achievements;
     if (!Array.isArray(raw)) return null;
+    if (raw === cachedUnlockedRawRef && raw.length === cachedUnlockedRawLen && cachedUnlockedSet) {
+        return cachedUnlockedSet;
+    }
     const set = new Set<string>();
     for (let i = 0; i < raw.length; i++) {
         if (typeof raw[i] === "string") set.add(raw[i]);
     }
+    cachedUnlockedRawRef = raw;
+    cachedUnlockedRawLen = raw.length;
+    cachedUnlockedSet = set;
     return set;
 }
 
 function findLeaderBySlugOrName(key: string): MenuLeader | null {
     const norm = key.toLowerCase().trim();
-    const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
-    for (const l of leaders) {
-        if (
-            String(l.slug || "").toLowerCase() === norm ||
-            String(l.id || "").toLowerCase() === norm ||
-            String(l.name || "").toLowerCase() === norm
-        ) {
-            return l;
-        }
-    }
+    const map = buildLeaderLookupMap();
+    const matched = map.get(norm);
+    if (matched) return matched;
     const byId = leaderById(key);
     if (byId && String(byId.id || "").toLowerCase() !== "random") return byId;
     return null;
@@ -983,15 +986,25 @@ export function enrichAchievement(
     });
 }
 
+let cachedLeadersRef: unknown = null;
+let cachedLeadersLen = -1;
+let cachedLeaderLookupMap: Map<string, MenuLeader> | null = null;
+
 export function buildLeaderLookupMap(): Map<string, MenuLeader> {
-    const map = new Map<string, MenuLeader>();
     const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+    if (leaders === cachedLeadersRef && leaders.length === cachedLeadersLen && cachedLeaderLookupMap) {
+        return cachedLeaderLookupMap;
+    }
+    const map = new Map<string, MenuLeader>();
     for (const leader of leaders) {
         if (!leader) continue;
         if (leader.slug) map.set(String(leader.slug).toLowerCase(), leader);
         if (leader.id) map.set(String(leader.id).toLowerCase(), leader);
         if (leader.name) map.set(String(leader.name).toLowerCase(), leader);
     }
+    cachedLeadersRef = leaders;
+    cachedLeadersLen = leaders.length;
+    cachedLeaderLookupMap = map;
     return map;
 }
 
@@ -1003,6 +1016,18 @@ export function enrichAchievementsList(
     return list.map(function (ach) {
         return enrichAchievement(ach, { isOwnProfile, leaderMap });
     });
+}
+
+const heroAchievementSummaryCache = new Map<string, { sig: string; summary: HeroAchievementSummary }>();
+let heroSummaryCacheGenerationKey = "";
+
+function currentHeroSummaryGenerationKey(unlockedSet: Set<string> | null): string {
+    const lang =
+        (typeof document !== "undefined" && document.documentElement && document.documentElement.lang) ||
+        (typeof window !== "undefined" && typeof window.SOW_locale === "function" ? window.SOW_locale() : "") ||
+        "";
+    const unlockedCount = unlockedSet ? unlockedSet.size : -1;
+    return lang + "|" + unlockedCount;
 }
 
 export function computeHeroAchievementSummary(leader: MenuLeader): HeroAchievementSummary {
@@ -1034,6 +1059,39 @@ export function computeHeroAchievementSummary(leader: MenuLeader): HeroAchieveme
     const assists = Math.max(0, Number(stats.assists) || 0);
 
     const unlockedSet = buildUnlockedSetFromMenuState();
+    const genKey = currentHeroSummaryGenerationKey(unlockedSet);
+    if (genKey !== heroSummaryCacheGenerationKey) {
+        heroAchievementSummaryCache.clear();
+        heroSummaryCacheGenerationKey = genKey;
+    }
+    const leaderSig =
+        displayName +
+        "|" +
+        ownershipStatus +
+        "|" +
+        (leader.owned ? 1 : 0) +
+        "|" +
+        (leader.permanently_free ? 1 : 0) +
+        "|" +
+        matchesPlayed +
+        "|" +
+        wins +
+        "|" +
+        kills +
+        "|" +
+        deaths +
+        "|" +
+        assists +
+        "|" +
+        xp;
+    const cached = heroAchievementSummaryCache.get(slug);
+    if (cached && cached.sig === leaderSig) {
+        if (cached.summary.leader !== leader) {
+            cached.summary.leader = leader;
+        }
+        return cached.summary;
+    }
+
     const raw = buildHeroAchievementsForSlug(slug, displayName, {
         owned: Boolean(leader.owned) || Boolean(leader.permanently_free),
         matchesPlayed,
@@ -1043,7 +1101,7 @@ export function computeHeroAchievementSummary(leader: MenuLeader): HeroAchieveme
     const leaderMap = buildLeaderLookupMap();
     const enriched = raw.map((a) => enrichAchievement(a, { isOwnProfile: true, leaderMap }));
 
-    return summarizeEnrichedHeroAchievements(slug, leader, displayName, enriched, {
+    const summary = summarizeEnrichedHeroAchievements(slug, leader, displayName, enriched, {
         ownershipStatus,
         playable,
         matchesPlayed,
@@ -1053,6 +1111,8 @@ export function computeHeroAchievementSummary(leader: MenuLeader): HeroAchieveme
         assists,
         xp,
     });
+    heroAchievementSummaryCache.set(slug, { sig: leaderSig, summary });
+    return summary;
 }
 
 export function summarizeEnrichedHeroAchievements(
@@ -1178,7 +1238,7 @@ function renderAchievementBadgeIcon(ach: EnrichedAchievement): string {
         return (
             "<img " +
             avatarImageAttribute(asset("gameplay/avatars/" + heroArtSlug + ".webp")) +
-            " alt='' width='36' height='36' class='sow-profile__ach-hero-avatar' loading='lazy' />"
+            " alt='' width='36' height='36' class='sow-profile__ach-hero-avatar' loading='lazy' decoding='async' />"
         );
     }
     const category = ach.category || "commanders";
@@ -1506,7 +1566,7 @@ export function renderHeroMasteryProfileCard(
         "<header class='sow-ach-hero-card__head'>" +
         "<img " +
         avatarImageAttribute(avatarUrl) +
-        " alt='' width='48' height='48' class='sow-ach-hero-card__avatar' loading='lazy' />" +
+        " alt='' width='48' height='48' class='sow-ach-hero-card__avatar' loading='lazy' decoding='async' />" +
         "<div class='sow-ach-hero-card__id'>" +
         "<div class='sow-ach-hero-card__title-row'>" +
         "<strong>" +
