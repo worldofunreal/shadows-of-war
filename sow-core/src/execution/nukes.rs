@@ -5,6 +5,47 @@ use crate::game::{GamePhase, ProjectileKind, TerritoryChange};
 pub const SILO_COOLDOWN_TICKS: u32 = 90;
 
 impl SowEngine {
+    fn release_mirv_warheads(&mut self, carrier: u64, owner: u16, split: u32, target: u32) {
+        let width = self.state.map.width;
+        let height = self.state.map.height;
+        let x = target % width;
+        let y = target / width;
+        let mut targets = Vec::new();
+        for dy in y.saturating_sub(100)..=y.saturating_add(100).min(height - 1) {
+            for dx in x.saturating_sub(100)..=x.saturating_add(100).min(width - 1) {
+                if dx.abs_diff(x).pow(2) + dy.abs_diff(y).pow(2) > 10_000 {
+                    continue;
+                }
+                let defender = self.state.map.owner_id(dx, dy);
+                if defender != 0 && defender != owner && self.naval_target_allowed(owner, defender) {
+                    let tile = dy * width + dx;
+                    let score = crate::rng::stable_tile_sample(self.state.seed ^ carrier, owner, defender, u64::from(tile), 0);
+                    targets.push((score, tile));
+                }
+            }
+        }
+        targets.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+        for (_, tile) in targets.into_iter().take(350) {
+            let id = self.state.next_projectile_id;
+            self.state.next_projectile_id = id.wrapping_add(1).max(1);
+            self.projectiles.push(crate::game::Projectile {
+                id,
+                kind: ProjectileKind::Nuke { level: 4 },
+                owner_id: owner,
+                src_tile: split,
+                dst_tile: tile,
+                path: std::sync::Arc::new(crate::pathfinding::bresenham_line(split, tile, width)),
+                path_cursor: 0,
+                steps_per_tick: 2,
+                active: true,
+                source_fleet_id: None,
+                target_fleet_id: None,
+                damage: 0.0,
+                expires_at_tick: u64::MAX,
+            });
+        }
+    }
+
     pub fn execute_projectiles(&mut self) {
         if self.state.phase != GamePhase::Playing {
             return;
@@ -17,6 +58,12 @@ impl SowEngine {
             }
         });
         self.silo_cooldowns.retain(|_, cd| *cd > 0); // Advance all active projectiles
+        let tick = self.state.tick;
+        self.nuclear_reload.retain(|_, ready| {
+            ready.retain(|&deadline| deadline > tick);
+            !ready.is_empty()
+        });
+        let mut separations = Vec::new();
         let mut detonations = Vec::new();
         let mut shell_impacts = Vec::new();
         let fleet_targets: std::collections::HashMap<_, _> = self
@@ -83,6 +130,19 @@ impl SowEngine {
             }
 
             proj.path_cursor += proj.steps_per_tick as usize;
+            if proj.kind == ProjectileKind::SAMMissile {
+                proj.path_cursor = proj.path_cursor.min(proj.path.len().saturating_sub(1));
+                continue;
+            }
+
+            if proj.kind == (ProjectileKind::Nuke { level: 3 })
+                && proj.path_cursor >= proj.path.len() / 2
+            {
+                let split = proj.path.get(proj.path_cursor).copied().unwrap_or(proj.dst_tile);
+                separations.push((proj.id, proj.owner_id, split, proj.dst_tile));
+                proj.active = false;
+                continue;
+            }
 
             if proj.path_cursor >= proj.path.len() {
                 proj.path_cursor = proj.path.len().saturating_sub(1);
@@ -105,6 +165,9 @@ impl SowEngine {
 
         // Cleanup inactive projectiles
         self.projectiles.retain(|p| p.active);
+        for (id, owner, split, target) in separations {
+            self.release_mirv_warheads(id, owner, split, target);
+        }
 
         for (owner_id, source_id, target_id, target_owner, target_type, tile, damage) in
             shell_impacts
@@ -283,6 +346,7 @@ impl SowEngine {
         for id in destroyed_ids {
             self.building_productions.remove(&id);
             self.silo_cooldowns.remove(&id);
+            self.nuclear_reload.remove(&id);
             self.upgrade_targets.remove(&id);
         }
         self.building_grid.dirty = true;

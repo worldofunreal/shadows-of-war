@@ -2816,6 +2816,7 @@ html[dir="rtl"] .sow-hud__bot-badge {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  contain: layout style;
 }
 .sow-hud__inbox-list > .sow-hud__request-card {
   flex: 0 0 auto;
@@ -2872,6 +2873,7 @@ html[dir="rtl"] .sow-hud__bot-badge {
   gap: 10px;
   padding: 12px;
   min-inline-size: 0;
+  contain: layout style;
 }
 .sow-hud__request-identity {
   display: flex;
@@ -2940,7 +2942,31 @@ html[dir="rtl"] .sow-hud__bot-badge {
   height: 100%;
   transform-origin: left center;
   background: linear-gradient(90deg, var(--sow-gold), var(--sow-gold-bright));
-  transition: transform 240ms linear;
+  will-change: transform;
+}
+@keyframes sow-request-timer-drain-a {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes sow-request-timer-drain-b {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+#sow-hud.is-reduced-motion .sow-hud__request-timer-fill {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sow-hud__request-timer-fill {
+    animation: none !important;
+  }
 }
 html[dir="rtl"] .sow-hud__request-timer-fill {
   transform-origin: right center;
@@ -3073,6 +3099,7 @@ html[dir="rtl"] .sow-hud__request-timer-fill {
         20px
     )
   );
+  contain: layout style;
   --stack-offset-x: -16px;
   --stack-offset-y: 7px;
   --stack-offset-z: -42px;
@@ -3110,10 +3137,7 @@ html[dir="rtl"] .sow-hud__request-toasts {
     scale(calc(1 - var(--stack-i, 0) * 0.04));
   transition:
     transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease,
-    filter 220ms ease,
-    box-shadow 220ms ease;
-  will-change: transform, opacity;
+    opacity 220ms ease;
 }
 .sow-hud__request-toast.is-front {
   z-index: 25;
@@ -3121,20 +3145,23 @@ html[dir="rtl"] .sow-hud__request-toasts {
   cursor: pointer;
   box-shadow:
     var(--sow-tactical-card-shadow),
-    0 14px 32px rgb(0 0 0 / 52%),
-    0 0 22px color-mix(in srgb, var(--sow-gold) 18%, transparent),
+    0 12px 26px rgb(0 0 0 / 48%),
     var(--sow-tactical-surface-highlight);
 }
 .sow-hud__request-toast.is-stacked {
   pointer-events: none;
-  opacity: calc(1 - var(--stack-i, 0) * 0.06);
-  filter: brightness(calc(1 - var(--stack-i, 0) * 0.15));
+  opacity: calc(1 - var(--stack-i, 0) * 0.14);
+}
+html[data-sow-skin] .sow-hud__request-toast.is-stacked::before {
+  display: none;
 }
 .sow-hud__request-toast.is-entering {
+  will-change: transform, opacity;
   animation: sow-request-toast-enter 260ms cubic-bezier(0.22, 1, 0.36, 1)
     both;
 }
 .sow-hud__request-toast.is-leaving {
+  will-change: transform, opacity;
   pointer-events: none;
   z-index: 30;
 }
@@ -8302,16 +8329,25 @@ html[dir="rtl"] .sow-hud__dev-play::before {
           16px
       )
     );
-    --stack-offset-x: -12px;
+    --stack-offset-x: -10px;
     --stack-offset-y: 6px;
-    --stack-offset-z: -34px;
-    --stack-tilt-y: 3deg;
-    --stack-tilt-z: -0.45deg;
+    --stack-offset-z: 0px;
+    --stack-tilt-y: 0deg;
+    --stack-tilt-z: 0deg;
   }
   html[dir="rtl"] .sow-hud__request-toasts {
-    --stack-offset-x: 12px;
-    --stack-tilt-y: -3deg;
-    --stack-tilt-z: 0.45deg;
+    --stack-offset-x: 10px;
+    --stack-tilt-y: 0deg;
+    --stack-tilt-z: 0deg;
+  }
+  .sow-hud__request-toast-stack {
+    perspective: none;
+    transform-style: flat;
+  }
+  .sow-hud__request-toast.is-front {
+    box-shadow:
+      var(--sow-tactical-card-shadow),
+      0 8px 18px rgb(0 0 0 / 42%);
   }
   .sow-hud__request-toast {
     padding: 9px 10px 11px;
@@ -8754,22 +8790,32 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__right-rail {
         var(--sow-hud-toolbar-side-offset) * var(--sow-hud-density, 1) - 18px
     )
   );
-  --stack-offset-x: -12px;
+  --stack-offset-x: -8px;
   --stack-offset-y: 5px;
-  --stack-offset-z: -32px;
-  --stack-tilt-y: 3deg;
-  --stack-tilt-z: -0.4deg;
+  --stack-offset-z: 0px;
+  --stack-tilt-y: 0deg;
+  --stack-tilt-z: 0deg;
 }
 
 html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
-  --stack-offset-x: 12px;
-  --stack-tilt-y: -3deg;
-  --stack-tilt-z: 0.4deg;
+  --stack-offset-x: 8px;
+  --stack-tilt-y: 0deg;
+  --stack-tilt-z: 0deg;
+}
+
+#sow-hud[data-compact="true"] .sow-hud__request-toast-stack {
+  perspective: none;
+  transform-style: flat;
 }
 
 #sow-hud[data-compact="true"] .sow-hud__request-toast {
   padding: 7px 9px 9px;
   gap: 6px;
+}
+#sow-hud[data-compact="true"] .sow-hud__request-toast.is-front {
+  box-shadow:
+    var(--sow-tactical-card-shadow),
+    0 6px 14px rgb(0 0 0 / 38%);
 }
 
 #sow-hud[data-compact="true"] .sow-hud__request-toast-more {
@@ -8950,5 +8996,107 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
   }
   .sow-hud__exit-card .sow-hud__endgame-stat b {
     font-size: 10px;
+  }
+}
+
+.sow-hud__match-status {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sow-hud__territory-score,
+.sow-hud__match-clock {
+  color: #f7f3e8;
+  background: linear-gradient(180deg, #202832f5, #10151ef5);
+  border: 1px solid #ffffff32;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px #0007;
+}
+
+.sow-hud__territory-score {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px 8px 6px;
+}
+
+.sow-hud__territory-score[hidden],
+.sow-hud__match-clock[hidden] {
+  display: none;
+}
+
+.sow-hud__territory-side {
+  width: clamp(36px, 10vw, 66px);
+  text-align: center;
+  font-size: 13px;
+  color: var(--side-color);
+}
+
+.sow-hud__territory-side[data-side="Red"] { --side-color: #ff3333; }
+.sow-hud__territory-side[data-side="Blue"] { --side-color: #3380ff; }
+
+.sow-hud__territory-side b {
+  position: relative;
+}
+
+.sow-hud__territory-side.is-own b::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(100% + 3px);
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.sow-hud__territory-side i {
+  display: block;
+  height: 4px;
+  position: relative;
+  margin-top: 3px;
+  background: linear-gradient(to right, currentColor var(--territory-share), #fff2 var(--territory-share));
+  border-radius: 2px;
+}
+
+.sow-hud__territory-side i::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: var(--territory-goal);
+  width: 1px;
+  background: #fff9;
+}
+
+.sow-hud__match-clock {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.sow-hud__endgame-reason {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+@media (max-width: 800px) {
+  .sow-hud__match-status {
+    top: calc(var(--sow-player-panel-height) + 8px);
+  }
+
+  .sow-hud__territory-score {
+    gap: 5px;
+    padding: 3px 5px 4px;
+  }
+
+  .sow-hud__territory-side {
+    font-size: 11px;
   }
 }

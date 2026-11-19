@@ -2,7 +2,7 @@ use crate::commerce::owns_leader;
 use crate::leaders::Leader;
 
 /// First campaign mini-level launched for new players on first boot.
-pub const INTRO_EPISODE_ID: &str = "blitz_05";
+pub const INTRO_EPISODE_ID: &str = "boudica";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CampaignEpisode {

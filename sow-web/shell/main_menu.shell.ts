@@ -5058,6 +5058,8 @@ root.addEventListener("change", function (event) {
     }
     if (input instanceof HTMLInputElement && input.dataset.setting === "free_zoom_out")
         send("set_free_zoom_out", { value: input.checked });
+    if (input instanceof HTMLInputElement && input.dataset.setting === "show_match_clock")
+        send("set_show_match_clock", { value: input.checked });
     if (input instanceof HTMLInputElement && input.dataset.setting === "show_fps_ping")
         send("set_show_fps_ping", { value: input.checked });
     if (input instanceof HTMLInputElement && input.dataset.setting === "show_dev_tools")

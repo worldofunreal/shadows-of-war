@@ -1,0 +1,47 @@
+diff --git a/blade-graphics/Cargo.toml b/blade-graphics/Cargo.toml
+index 05a982c..e67f59c 100644
+--- a/blade-graphics/Cargo.toml
++++ b/blade-graphics/Cargo.toml
+@@ -121,6 +121,7 @@ libloading = { version = "0.8" }
+ wasm-bindgen = "0.2.83"
+ web-sys = { workspace = true, features = [
+     "HtmlCanvasElement",
++    "ImageBitmap",
+     "WebGl2RenderingContext",
+ ] }
+ js-sys = "0.3.60"
+diff --git a/blade-graphics/src/gles/web.rs b/blade-graphics/src/gles/web.rs
+index 854eaa4..5ca9b96 100644
+--- a/blade-graphics/src/gles/web.rs
++++ b/blade-graphics/src/gles/web.rs
+@@ -159,4 +159,30 @@ impl super::Context {
+     pub(super) fn lock(&self) -> &glow::Context {
+         &self.platform.glow
+     }
++
++    /// Copy a browser-decoded image into a 2D texture region without copying through WASM memory.
++    pub fn copy_image_bitmap_to_texture(
++        &self,
++        src: &web_sys::ImageBitmap,
++        dst: crate::TexturePiece,
++    ) -> Result<(), wasm_bindgen::JsValue> {
++        let dst = super::TexturePart::from(dst);
++        let format_desc = super::describe_texture_format(dst.format);
++        let gl = &self.platform.glow;
++        unsafe { gl.bind_texture(dst.target, Some(dst.raw)) };
++        let result = self
++            .platform
++            .webgl2
++            .tex_sub_image_2d_with_u32_and_u32_and_image_bitmap(
++                dst.target,
++                dst.mip_level as i32,
++                dst.origin[0] as i32,
++                dst.origin[1] as i32,
++                format_desc.external,
++                format_desc.data_type,
++                src,
++            );
++        unsafe { gl.bind_texture(dst.target, None) };
++        result
++    }
+ }

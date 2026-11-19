@@ -277,7 +277,26 @@ impl SowApp {
         }
     }
 
-    fn advance_endgame_sequence(&mut self, now: Instant) {
+    pub(crate) fn start_endgame_home(&mut self, snapshot: &sow_core::protocol::SimSnapshot, player_id: u16) {
+        let home = [Some(snapshot), self.sim.current_snapshot.as_ref()]
+            .into_iter()
+            .flatten()
+            .find_map(|snapshot| snapshot.players.iter().find(|player| {
+                player.id == player_id && player.alive && player.tile_count > 0
+            }))
+            .map(|player| (player.centroid_x, player.centroid_y));
+        let home = self.ui.nameplates.anchor_for(player_id)
+            .map(|[x, y]| (x, y))
+            .or(home)
+            .or_else(|| self.sim.latest_local_spawn.map(|(_, x, y)| (x as f32 + 0.5, y as f32 + 0.5)));
+        let Some(home) = home else { return };
+        self.start_camera_shot(vec![(home, 10.0)], crate::app::ENDGAME_REVEAL_DELAY_SECS, true);
+        if self.ui.app.settings_state.reduced_motion {
+            self.advance_camera(crate::app::ENDGAME_REVEAL_DELAY_SECS);
+        }
+    }
+
+    pub(super) fn advance_endgame_sequence(&mut self, now: Instant) {
         if self.ui.is_spectating {
             self.ui.endgame_sequence = None;
             return;
@@ -293,6 +312,9 @@ impl SowApp {
         {
             seq.revealed = true;
             let won = seq.won;
+            if !self.sim.config.tutorial && self.machinima_camera_active() {
+                self.advance_camera(crate::app::ENDGAME_REVEAL_DELAY_SECS);
+            }
             self.sfx.play_result(won);
             self.ui.trigger_viewport_alert(if won {
                 crate::app::ViewportAlertKind::Victory
@@ -320,7 +342,6 @@ impl SowApp {
             sync.time_remaining = (sync.time_remaining - dt).max(0.0);
         }
         if self.ui.app.phase == ClientPhase::Playing {
-            self.advance_endgame_sequence(now);
             self.sync_hud_player_state();
         }
 

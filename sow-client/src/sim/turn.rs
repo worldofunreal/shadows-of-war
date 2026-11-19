@@ -139,7 +139,7 @@ impl TutorialObservation {
                     sow_core::game::BuildingKind::Factory => "factories",
                     sow_core::game::BuildingKind::Port => "ports",
                     sow_core::game::BuildingKind::Farm => "farms",
-                    sow_core::game::BuildingKind::SAM => "sams",
+                    sow_core::game::BuildingKind::SAM | sow_core::game::BuildingKind::MissileSilo => "sams",
                 };
                 self.seen_buildings_by_kind
                     .entry(kind.to_string())
@@ -262,6 +262,7 @@ impl TutorialObservation {
                 sow_core::game::BuildingKind::Tower => "tower",
                 sow_core::game::BuildingKind::Port => "port",
                 sow_core::game::BuildingKind::SAM => "sam",
+                sow_core::game::BuildingKind::MissileSilo => "missile_silo",
             };
             let level = u64::from(building.active_level());
             self.faction_structure_levels
@@ -395,7 +396,7 @@ impl TutorialObservation {
                         sow_core::game::BuildingKind::Factory => "factories",
                         sow_core::game::BuildingKind::Port => "ports",
                         sow_core::game::BuildingKind::Farm => "farms",
-                        sow_core::game::BuildingKind::SAM => "sams",
+                        sow_core::game::BuildingKind::SAM | sow_core::game::BuildingKind::MissileSilo => "sams",
                     };
                     self.seen_buildings_by_kind
                         .entry(key.to_string())
@@ -661,6 +662,9 @@ impl SowApp {
                         seq.won = won;
                     }
                     None => {
+                        if !self.sim.config.tutorial {
+                            self.start_endgame_home(&snap, my_id);
+                        }
                         self.ui.endgame_sequence = Some(crate::app::EndgameSequence {
                             started_at: web_time::Instant::now(),
                             won,

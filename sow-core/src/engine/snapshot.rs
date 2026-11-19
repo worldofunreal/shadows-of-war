@@ -93,34 +93,19 @@ impl SowEngine {
         }
         let mut nuke_available_by_player = vec![false; max_pid + 1];
         let mut nuke_cooldown_by_player = vec![0u32; max_pid + 1];
-        let nuke_req_level = crate::game::NukeKind::AtomBomb.required_district_level();
         for building in &self.buildings {
             let pid = usize::from(building.owner_id);
-            if pid > max_pid
-                || building.under_construction
-                || !matches!(
-                    building.kind,
-                    crate::game::BuildingKind::Factory | crate::game::BuildingKind::Tower
-                )
-                || building.active_level() < nuke_req_level
-            {
+            if pid > max_pid || building.kind != crate::game::BuildingKind::MissileSilo {
                 continue;
             }
-            let Some(state) = self.building_productions.get(&building.id) else {
-                continue;
-            };
-            if state.nuke_ready {
-                nuke_available_by_player[pid] = true;
-            }
-            if let Some(build) = state.arsenal_build
-                && build.kind == crate::game::CityArsenalKind::Nuke
-            {
-                let cur = &mut nuke_cooldown_by_player[pid];
-                if *cur == 0 || build.ticks_until_complete < *cur {
-                    *cur = build.ticks_until_complete;
-                }
+            nuke_available_by_player[pid] |= self.nuclear_charges(building.id, building.active_level()) > 0;
+            let wait = self.nuclear_wait_ticks(building.id);
+            let current = &mut nuke_cooldown_by_player[pid];
+            if wait > 0 && (*current == 0 || wait < *current) {
+                *current = wait;
             }
         }
+
         let mut empowered_attack_by_player = vec![false; max_pid + 1];
         for attack in &self.attacks {
             let pid = usize::from(attack.owner_id);
@@ -293,21 +278,14 @@ impl SowEngine {
                 let has_anti_nuke = self.legacy_building_rules
                     && b.kind == crate::game::BuildingKind::City
                     && production.has_anti_nuke;
-                let nuke_producer = matches!(
-                    b.kind,
-                    crate::game::BuildingKind::Factory | crate::game::BuildingKind::Tower
-                ) && b.active_level() >= crate::game::NukeKind::AtomBomb.required_district_level();
-                let nuke_ready = nuke_producer && production.nuke_ready;
-                let arsenal_build = if nuke_producer || b.kind == crate::game::BuildingKind::Port {
+                let nuke_ready = b.kind == crate::game::BuildingKind::MissileSilo
+                    && self.nuclear_charges(b.id, b.active_level()) > 0;
+                let arsenal_build = if b.kind == crate::game::BuildingKind::Port {
                     production.arsenal_build
                 } else {
                     None
                 };
-                let sam_cooldown_ticks = if b.kind == crate::game::BuildingKind::SAM {
-                    self.silo_cooldowns.get(&b.id).copied().unwrap_or(0)
-                } else {
-                    0
-                };
+                let sam_cooldown_ticks = self.nuclear_wait_ticks(b.id);
                 let upgrade_target_level = self
                     .upgrade_targets
                     .get(&b.id)

@@ -238,7 +238,7 @@ pub(crate) fn building_sound_kind(
         sow_core::game::BuildingKind::Factory => sow_audio::BuildingSoundKind::Factory,
         sow_core::game::BuildingKind::Port => sow_audio::BuildingSoundKind::Port,
         sow_core::game::BuildingKind::Farm => sow_audio::BuildingSoundKind::Factory,
-        sow_core::game::BuildingKind::SAM => sow_audio::BuildingSoundKind::Tower,
+        sow_core::game::BuildingKind::SAM | sow_core::game::BuildingKind::MissileSilo => sow_audio::BuildingSoundKind::Tower,
     }
 }
 

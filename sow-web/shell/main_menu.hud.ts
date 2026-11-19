@@ -494,6 +494,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     reduced_motion: false,
     free_zoom_out: false,
     show_fps_ping: false,
+    show_match_clock: false,
     show_dev_tools: false,
     show_dev_tools_available: false,
   };
@@ -1975,6 +1976,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     hudRoot.innerHTML =
       "" +
       '<header class="sow-hud__topbar">' +
+      '<div class="sow-hud__match-status">' +
+      '<div class="sow-hud__territory-score" id="sow-hud-territory-score" hidden>' +
+      '<div class="sow-hud__territory-side" data-side="Red" role="group"><b></b><i aria-hidden="true"></i></div>' +
+      '<div class="sow-hud__territory-side" data-side="Blue" role="group"><b></b><i aria-hidden="true"></i></div>' +
+      '</div><span class="sow-hud__match-clock" id="sow-hud-match-clock" hidden></span></div>' +
       '  <div class="sow-hud__status-right">' +
       '    <button class="sow-hud__icon-btn sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' +
       esc(SOW_t("hud.leave")) +
@@ -2226,6 +2232,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '      <label class="sow-hud__setting-row sow-menu__settings-switch-row"><span class="sow-menu__settings-row-label">' +
       SOW_t("hud.show_fps_ping") +
       '</span><input class="sow-hud__switch" type="checkbox" role="switch" data-hud-setting="show_fps_ping"></label>' +
+      '<label class="sow-hud__setting-row"><span>' + esc(SOW_t("hud.show_match_clock")) +
+      '</span><input class="sow-hud__switch" type="checkbox" role="switch" data-hud-setting="show_match_clock"></label>' +
       (hudState &&
       hudState.settings &&
       hudState.settings.show_dev_tools_available
@@ -2520,7 +2528,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "  </section>" +
       "</div>" +
       '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-endgame-modal">' +
-      '  <section class="sow-hud__endgame-card" role="dialog" aria-modal="true" aria-labelledby="sow-hud-endgame-banner">' +
+      '  <section class="sow-hud__endgame-card" role="dialog" aria-modal="true" aria-labelledby="sow-hud-endgame-banner" aria-describedby="sow-hud-endgame-reason">' +
       '    <div class="sow-hud__endgame-fx" aria-hidden="true">' +
       '      <span class="sow-hud__endgame-rays"></span>' +
       '      <span class="sow-hud__endgame-shockwave"></span>' +
@@ -2551,6 +2559,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '        <h2 class="sow-hud__endgame-banner" id="sow-hud-endgame-banner">' +
       SOW_t("hud.defeat") +
       "</h2>" +
+      '<p class="sow-hud__endgame-reason" id="sow-hud-endgame-reason" hidden></p>' +
       "      </div>" +
       "    </div>" +
       "    " +
@@ -2959,6 +2968,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         send("set_reduced_motion", { value: input.checked });
       if (setting === "free_zoom_out")
         send("set_free_zoom_out", { value: input.checked });
+      if (setting === "show_match_clock")
+        send("set_show_match_clock", { value: input.checked });
       if (setting === "show_fps_ping")
         send("set_show_fps_ping", { value: input.checked });
       if (setting === "show_dev_tools") {
@@ -7440,16 +7451,41 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     requests: HudInboxRequest[],
     inboxOpen: boolean,
     hudScreen: HudScreenSize = cachedHudScreen(),
+    force = false,
   ): void {
     if (!hudRefs || !hudRefs.requestToasts || !hudRefs.requestToastStack) return;
-    if (inboxOpen) {
-      clearLeavingRequestToasts();
+    if (
+      !force &&
+      !inboxOpen &&
+      requests.length === 0 &&
+      requestToastDeck.entries.length === 0 &&
+      hudRefs.requestToastCards.length === 0 &&
+      leavingToastCards.size === 0 &&
+      lastRequestToastsVisible === false
+    ) {
+      return;
     }
     const maxVisible = resolveRequestToastMaxVisible(
       hudScreen.width,
       hudScreen.height,
       Boolean(hudRoot && hudRoot.dataset.compact === "true"),
     );
+    const inputKey =
+      String(window.SOW_LOCALE || "en") +
+      ":" +
+      requestToastStateVersion +
+      ":" +
+      (inboxOpen ? "1" : "0") +
+      ":" +
+      maxVisible;
+    if (!force && inputKey === requestToastRenderKey) {
+      return;
+    }
+    requestToastRenderKey = inputKey;
+
+    if (inboxOpen) {
+      clearLeavingRequestToasts();
+    }
     const nowMs = Date.now();
     const view = reconcileRequestToastDeck(
       requestToastDeck,
@@ -7466,18 +7502,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       requestToastExpiryTimer = window.setTimeout(
         function () {
           requestToastExpiryTimer = null;
+          requestToastStateVersion++;
           renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
         },
         Math.max(20, view.nextExpiryMs - nowMs),
       );
     }
+    const reducedMotion = isRequestToastReducedMotion();
     const existingByKey = new Map<string, RequestToastCardParts>();
     for (const card of hudRefs.requestToastCards) {
       existingByKey.set(card.requestKey, card);
     }
-    const numbers = new Intl.NumberFormat(window.SOW_LOCALE || "en", {
-      maximumFractionDigits: 0,
-    });
+    const numbers = view.visible.length > 0 ? getInboxNumberFormat() : null;
     const nextCards: RequestToastCardParts[] = [];
     const visibleKeys = new Set<string>();
     view.visible.forEach(function (entry: RequestToastEntry, index: number) {
@@ -7494,7 +7530,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         );
       }
       card.stackIndex = index;
-      patchInboxRequestCard(card, entry.request, numbers, nowMs);
+      patchInboxRequestCard(
+        card,
+        entry.request,
+        numbers!,
+        nowMs,
+        reducedMotion,
+      );
       card.element.dataset.stackIndex = String(index);
       card.element.style.setProperty("--stack-i", String(index));
       card.element.classList.toggle("is-front", index === 0);
@@ -7568,9 +7610,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       ":" +
       inboxFilter +
       ":" +
-      JSON.stringify(requests);
+      inboxDataVersion;
     if (renderKey === hudRefs.inboxRenderKey) return;
     const nowMs = Date.now();
+    const reducedMotion = isRequestToastReducedMotion();
     const previous = hudRefs.inboxRequests;
     const previousKeys = hudRefs.inboxRequestKeys;
     const focusedKey = previousKeys.find(function (key) {
@@ -7582,9 +7625,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     let totalCount = 0;
     let allianceCount = 0;
     let aidCount = 0;
-    const numbers = new Intl.NumberFormat(window.SOW_LOCALE || "en", {
-      maximumFractionDigits: 0,
-    });
+    const numbers = getInboxNumberFormat();
     requests.forEach(function (request) {
       if (!isValidInboxRequest(request)) return;
       const key = requestKey(request);
@@ -7598,7 +7639,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       }
       if (!matchesInboxFilter(request, inboxFilter)) return;
       const row = previous[key] || createInboxRequest(request, "inbox");
-      patchInboxRequestCard(row, request, numbers, nowMs);
+      patchInboxRequestCard(row, request, numbers, nowMs, reducedMotion);
       next[key] = row;
       keys.push(key);
     });
@@ -8251,6 +8292,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       leaderboardSyncRetryAtMs = 0;
       inboxFilter = "all";
       latestInboxRequests = [];
+      inboxDataVersion = 0;
+      pendingFreshInbox = false;
+      requestToastStateVersion = 0;
+      requestToastRenderKey = "";
+      lastRequestToastsVisible = null;
+      lastRequestToastsStackCount = -1;
+      lastAllianceInboxCount = -1;
       requestCountdowns.clear();
       resetRequestToastDeck(requestToastDeck);
       clearLeavingRequestToasts();
@@ -8569,19 +8617,23 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
     if (hudRefs!.inboxCount) {
       const currentInboxCount = Number(hud.inbox_count || 0);
-      hudRefs!.inboxCount.textContent = String(currentInboxCount);
-      hudRefs!.inboxCount.hidden = !currentInboxCount;
+      if (lastInboxCount !== currentInboxCount) {
+        hudRefs!.inboxCount.textContent = String(currentInboxCount);
+        hudRefs!.inboxCount.hidden = !currentInboxCount;
+        lastInboxCount = currentInboxCount;
+      }
+      const currentAllianceCount =
+        hud.alliance_inbox_count != null
+          ? Number(hud.alliance_inbox_count)
+          : currentInboxCount;
       if (
-        typeof lastInboxCount !== "undefined" &&
-        lastInboxCount >= 0 &&
-        currentInboxCount > lastInboxCount &&
+        lastAllianceInboxCount >= 0 &&
+        currentAllianceCount > lastAllianceInboxCount &&
         typeof triggerBellAnimation === "function"
       ) {
         triggerBellAnimation();
       }
-      if (typeof lastInboxCount !== "undefined") {
-        lastInboxCount = currentInboxCount;
-      }
+      lastAllianceInboxCount = currentAllianceCount;
     }
 
     // Hover Card
@@ -8758,6 +8810,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           motionInput.checked = Boolean(settings.reduced_motion);
         if (freeZoomInput && document.activeElement !== freeZoomInput)
           freeZoomInput.checked = Boolean(settings.free_zoom_out);
+        const clockInput = hudRefs!.settings.querySelector<HTMLInputElement>('[data-hud-setting="show_match_clock"]');
+        if (clockInput) clockInput.checked = settings.show_match_clock === true;
         if (fpsPingInput && document.activeElement !== fpsPingInput)
           fpsPingInput.checked = settings.show_fps_ping === true;
         if (devToolsInput && document.activeElement !== devToolsInput)
@@ -8765,12 +8819,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       }
     }
 
-    if (Array.isArray(hud.inbox)) {
+    if (pendingFreshInbox && Array.isArray(hud.inbox)) {
+      pendingFreshInbox = false;
       latestInboxRequests = hud.inbox;
+      inboxDataVersion++;
+      requestToastStateVersion++;
       syncRequestCountdowns(latestInboxRequests, requestCountdowns, Date.now());
-    } else if (Number(hud.inbox_count || 0) === 0) {
+    } else if (
+      Number(hud.inbox_count || 0) === 0 &&
+      latestInboxRequests.length > 0
+    ) {
       latestInboxRequests = [];
       requestCountdowns.clear();
+      inboxDataVersion++;
+      requestToastStateVersion++;
     }
 
     if (hudRefs!.inbox) {
@@ -8959,6 +9021,32 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     renderCombatOperations(hud.operations);
     renderMapFeedback(hud.map_feedback);
 
+    const territoryScore = document.getElementById("sow-hud-territory-score")!;
+    const teamScores = hud.team_leaderboard;
+    territoryScore.hidden = !Array.isArray(teamScores);
+    if (Array.isArray(teamScores)) {
+      territoryScore.style.setProperty("--territory-goal", String((hud.territory_goal ?? 0) * 100) + "%");
+      for (const child of territoryScore.children) {
+        const side = child as HTMLElement;
+        const team = side.dataset.side;
+        const share = Number(teamScores.find((entry: { team: string }) => entry.team === team)?.territory_pct ?? 0);
+        const own = hud.local_team === team;
+        const percent = Math.round(share * 100) + "%";
+        if (side.firstElementChild!.textContent !== percent) side.firstElementChild!.textContent = percent;
+        side.classList.toggle("is-own", own);
+        side.style.setProperty("--territory-share", String(share * 100) + "%");
+        const label = hud.local_team ? (own ? "own" : "rival") : team === "Red" ? "first" : "second";
+        side.setAttribute("aria-label", SOW_t("hud.territory_" + label, { percent }));
+      }
+    }
+    const matchClock = document.getElementById("sow-hud-match-clock")!;
+    const seconds = hud.match_clock_seconds;
+    matchClock.hidden = typeof seconds !== "number";
+    if (typeof seconds === "number") {
+      const time = String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
+      if (matchClock.textContent !== time) matchClock.textContent = time;
+    }
+
     // Leaderboard
     if (hudRefs!.leaderboard) {
       hudRefs!.leaderboard.classList.toggle("hidden", !leaderboardOpen);
@@ -9068,6 +9156,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           hudRefs!.endgamePortrait.alt =
             activeLeader.name || SOW_t("hud.leader_avatar");
         }
+        const reason = document.getElementById("sow-hud-endgame-reason")!;
+        reason.hidden = typeof hud.endgame_reason !== "string";
+        if (!reason.hidden) reason.textContent = SOW_t("endgame.reason_" + hud.endgame_reason);
         renderEndgameStats(hudRefs!.endgameStatValues, stats);
         const featuredSkin =
           window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest"
@@ -9090,7 +9181,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (hudRefs!.endgameObserve)
           hudRefs!.endgameObserve.classList.toggle(
             "hidden",
-            isWinner || Boolean(hud.winner_name),
+            isWinner || Boolean(hud.winner_name) || hud.endgame_reason === "no_winner",
           );
       }
     }
@@ -9182,6 +9273,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           pendingToastExitModes.set(card.requestKey, "dismiss");
         }
         if (dismissAllRequestToasts(requestToastDeck)) {
+          requestToastStateVersion++;
           renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
         }
       }
@@ -9365,6 +9457,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           const front = requestToastDeck.entries[0];
           if (front) pendingToastExitModes.set(front.key, "dismiss");
           if (dismissFrontRequestToast(requestToastDeck)) {
+            requestToastStateVersion++;
             renderRequestToasts(
               latestInboxRequests,
               activeHudPanel === "inbox",
@@ -9585,7 +9678,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             key,
             cmd.indexOf("accept_") === 0 ? "accept" : "dismiss",
           );
-          dismissRequestToastByKey(requestToastDeck, key);
+          if (dismissRequestToastByKey(requestToastDeck, key)) {
+            requestToastStateVersion++;
+          }
         }
         if (fromToast) {
           renderRequestToasts(latestInboxRequests, activeHudPanel === "inbox");
@@ -9645,7 +9740,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             target_player_id: request.requester_id,
           });
           pendingToastExitModes.set(key, exitMode);
-          dismissRequestToastByKey(requestToastDeck, key);
+          if (dismissRequestToastByKey(requestToastDeck, key)) {
+            requestToastStateVersion++;
+          }
         });
         if (!hasRemainingOutsideFilter && activeHudPanel === "inbox") {
           setHudPanel(null);
@@ -9655,7 +9752,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
       } else if (cmd === "open_inbox_from_toast") {
         clearLeavingRequestToasts();
-        dismissAllRequestToasts(requestToastDeck);
+        if (dismissAllRequestToasts(requestToastDeck)) {
+          requestToastStateVersion++;
+        }
         setHudPanel("inbox");
         renderHud();
       } else if (cmd === "cancel_betrayal") {
@@ -9783,6 +9882,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (hudState.phase === "Playing") {
       if (!previousHud) emoteTextKey = "";
       hudState.hud = hudState.hud || previousHud;
+      if (hudState.hud && Array.isArray(hudState.hud.inbox)) {
+        pendingFreshInbox = true;
+      } else if (
+        hudState.hud &&
+        previousHud &&
+        Array.isArray(previousHud.inbox) &&
+        (Number(hudState.hud.inbox_count || 0) > 0 || activeHudPanel === "inbox")
+      ) {
+        hudState.hud.inbox = previousHud.inbox;
+      }
       // Hover arrives on its own channel (SOW_hover_card_update), so keep the last one.
       if (hudState.hud && previousHud)
         hudState.hud.hovered = previousHud.hovered;
@@ -10177,6 +10286,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     leaderboardRenderKey = "";
     lastLeaderboardPlayersPayload = null;
     lastLeaderboardTeamsPayload = null;
+    cachedIntegerLocale = "";
+    cachedIntegerFormatter = null;
+    inboxDataVersion++;
+    requestToastStateVersion++;
+    requestToastRenderKey = "";
+    lastRequestToastsVisible = null;
+    lastRequestToastsStackCount = -1;
+    clearLeavingRequestToasts();
     if (hudRoot) hudRoot.replaceChildren();
     if (hudDevLayer && hudDevLayer.parentNode) {
       const freshDevLayer = hudDevLayer.cloneNode(false) as HTMLElement;

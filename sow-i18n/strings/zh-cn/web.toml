@@ -1155,6 +1155,11 @@ ends_in = "{time} 后结束"
 leader = "领袖"
 
 [hud]
+show_match_clock = "显示对局计时器（实验功能）"
+territory_own = "己方 · {percent}"
+territory_rival = "对方 · {percent}"
+territory_first = "队伍 1 · {percent}"
+territory_second = "队伍 2 · {percent}"
 build_placement = "放置建筑"
 build_confirm = "建造"
 build_details = "{cost} 金币 · {seconds}秒"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "已达到领土目标"
+reason_duel = "决斗以淘汰告终"
+reason_last_team = "最后保有领土的队伍"
+reason_last_player = "最后保有领土的玩家"
+reason_no_winner = "无人获胜"
+reason_eliminated = "你已被淘汰。对局仍在继续"
 reward_double_title = "双倍奖励"
 reward_double_body = "观看一段短视频，即可再次获得本场比赛的王冠和宝石。"
 reward_continue = "继续"

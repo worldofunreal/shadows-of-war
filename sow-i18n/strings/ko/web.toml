@@ -1155,6 +1155,11 @@ ends_in = "{time} 후 종료"
 leader = "지도자"
 
 [hud]
+show_match_clock = "경기 시간 표시 (실험 기능)"
+territory_own = "아군 · {percent}"
+territory_rival = "상대 · {percent}"
+territory_first = "팀 1 · {percent}"
+territory_second = "팀 2 · {percent}"
 build_placement = "건물 배치"
 build_confirm = "건설"
 build_details = "금 {cost} · {seconds}초"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "영토 목표 달성"
+reason_duel = "탈락으로 결투 종료"
+reason_last_team = "영토를 보유한 마지막 팀"
+reason_last_player = "영토를 보유한 마지막 플레이어"
+reason_no_winner = "승자 없음"
+reason_eliminated = "탈락했습니다. 경기는 계속됩니다"
 reward_double_title = "보상 두 배 받기"
 reward_double_body = "짧은 영상을 보면 이번 경기의 크라운과 보석을 한 번 더 받습니다."
 reward_continue = "계속"

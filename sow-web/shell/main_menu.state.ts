@@ -273,6 +273,7 @@ export interface MenuSettings {
     reduced_motion: boolean;
     free_zoom_out: boolean;
     show_fps_ping: boolean;
+    show_match_clock: boolean;
     show_dev_tools: boolean;
     show_dev_tools_available: boolean;
 }
@@ -786,6 +787,10 @@ export interface MenuHudPayload {
     players?: HudLeaderboardPlayer[];
     leaderboard?: HudLeaderboardPlayer[];
     team_leaderboard?: HudLeaderboardTeam[];
+    territory_goal?: number;
+    local_team?: "Red" | "Blue" | null;
+    match_clock_seconds?: number;
+    endgame_reason?: string;
     inbox?: HudInboxRequest[];
     transfer?: {
         target_id: number;

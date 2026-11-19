@@ -1155,6 +1155,11 @@ ends_in = "Berakhir dalam {time}"
 leader = "Pemimpin"
 
 [hud]
+show_match_clock = "Tampilkan waktu pertandingan (eksperimental)"
+territory_own = "Timmu · {percent}"
+territory_rival = "Lawan · {percent}"
+territory_first = "Tim 1 · {percent}"
+territory_second = "Tim 2 · {percent}"
 build_placement = "Tempatkan bangunan"
 build_confirm = "Bangun"
 build_details = "{cost} emas · {seconds} dtk"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "Target wilayah tercapai"
+reason_duel = "Duel berakhir dengan eliminasi"
+reason_last_team = "Tim terakhir yang memiliki wilayah"
+reason_last_player = "Pemain terakhir yang memiliki wilayah"
+reason_no_winner = "Tidak ada pemenang"
+reason_eliminated = "Kamu tereliminasi. Pertandingan berlanjut"
 reward_double_title = "Gandakan hadiahmu"
 reward_double_body = "Tonton video singkat untuk mendapatkan lagi mahkota dan permata dari pertandingan ini."
 reward_continue = "LANJUTKAN"

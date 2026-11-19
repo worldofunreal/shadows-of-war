@@ -26,7 +26,8 @@ pub fn structure_build_cost_gold(kind: BuildingKind, count: u32, cfg: &GameConfi
         BuildingKind::Factory => cfg.cost_factory,
         BuildingKind::Port => cfg.cost_port,
         BuildingKind::Farm => cfg.cost_farm,
-        BuildingKind::SAM => cfg.cost_sam,
+        BuildingKind::SAM => return if count == 0 { 1_000.0 } else { 2_000.0 },
+        BuildingKind::MissileSilo => return 667.0,
     };
     base_cost * ownership_cost_multiplier(count, cfg)
 }
@@ -48,7 +49,8 @@ pub fn structure_upgrade_cost_gold(
         BuildingKind::Factory => [105.0, 111.0, 117.0],
         BuildingKind::Port => [112.0, 172.0, 248.0],
         BuildingKind::Tower => [89.0, 124.0, 176.0],
-        BuildingKind::SAM => [220.0, 320.0, 455.0],
+        BuildingKind::SAM => return 2_000.0,
+        BuildingKind::MissileSilo => return 667.0,
     };
     let baseline = ownership_cost_multiplier(u32::from(target_level - 1), cfg);
     let scale = ownership_cost_multiplier(owned_levels, cfg) / baseline;

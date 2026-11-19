@@ -2041,7 +2041,7 @@ impl SowEngine {
                 BuildingKind::Factory => 15000.0 * (b.level as f64),
                 BuildingKind::Port => 10000.0 * (b.level as f64),
                 BuildingKind::Farm => 7000.0 * (b.level as f64),
-                BuildingKind::SAM => 4500.0 * (b.level as f64),
+                BuildingKind::SAM | BuildingKind::MissileSilo => 4500.0 * (b.level as f64),
             };
 
             let bx = b.tile_idx % self.state.map.width;

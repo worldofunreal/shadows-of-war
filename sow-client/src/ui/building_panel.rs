@@ -205,6 +205,7 @@ pub(crate) fn building_metrics(
                 "/s",
             ),
         ],
+        BuildingKind::MissileSilo => vec![BuildingMetric::new(Icon::Shield, level, "×", "")],
         BuildingKind::SAM => {
             let mut stats = vec![BuildingMetric::new(
                 Icon::Range,

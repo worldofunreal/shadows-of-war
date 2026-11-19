@@ -6,6 +6,7 @@ pub struct SettingsState {
     reduced_motion_is_explicit: bool,
     pub free_zoom_out: bool,
     pub show_fps_ping: bool,
+    pub show_match_clock: bool,
     pub show_dev_tools: bool,
 }
 
@@ -22,6 +23,7 @@ impl SettingsState {
     const FREE_ZOOM_OUT_KEY: &'static str = "sow_settings_v1_free_zoom_out";
     #[cfg(target_arch = "wasm32")]
     const SHOW_FPS_PING_KEY: &'static str = "sow_settings_v1_show_fps_ping";
+    const SHOW_MATCH_CLOCK_KEY: &'static str = "sow_settings_v1_show_match_clock";
     #[cfg(target_arch = "wasm32")]
     const SHOW_DEV_TOOLS_KEY: &'static str = "sow_settings_v1_show_dev_tools";
 
@@ -65,6 +67,12 @@ impl SettingsState {
                     .flatten()
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(settings.show_fps_ping);
+                settings.show_match_clock = storage
+                    .get_item(Self::SHOW_MATCH_CLOCK_KEY)
+                    .ok()
+                    .flatten()
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(settings.show_match_clock);
                 settings.show_dev_tools = storage
                     .get_item(Self::SHOW_DEV_TOOLS_KEY)
                     .ok()
@@ -107,6 +115,7 @@ impl SettingsState {
                 (Self::MUTE_ALL_KEY, self.mute_all.to_string()),
                 (Self::FREE_ZOOM_OUT_KEY, self.free_zoom_out.to_string()),
                 (Self::SHOW_FPS_PING_KEY, self.show_fps_ping.to_string()),
+                (Self::SHOW_MATCH_CLOCK_KEY, self.show_match_clock.to_string()),
                 (Self::SHOW_DEV_TOOLS_KEY, self.show_dev_tools.to_string()),
             ] {
                 if let Err(error) = storage.set_item(key, &value) {
@@ -136,6 +145,7 @@ impl Default for SettingsState {
             reduced_motion_is_explicit: false,
             free_zoom_out: true,
             show_fps_ping: false,
+            show_match_clock: false,
             show_dev_tools: false,
         }
     }

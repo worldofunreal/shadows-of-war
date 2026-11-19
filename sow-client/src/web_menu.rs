@@ -347,6 +347,9 @@ enum WebMenuCommand {
     SetShowFpsPing {
         value: bool,
     },
+    SetShowMatchClock {
+        value: bool,
+    },
     SetShowDevTools {
         value: bool,
     },
@@ -564,6 +567,9 @@ struct HudScalarKey {
     settings_reduced_motion: bool,
     settings_free_zoom_out: bool,
     settings_show_fps_ping: bool,
+    settings_show_match_clock: bool,
+    match_status_second: u64,
+    match_clock_seconds: Option<u64>,
     settings_show_dev_tools: bool,
     leaderboard_open: bool,
     leaderboard_publish_revision: u64,
@@ -1962,6 +1968,10 @@ impl SowApp {
                     self.ui.app.settings_state.show_fps_ping = value;
                     self.ui.app.settings_state.persist_local();
                 }
+                WebMenuCommand::SetShowMatchClock { value } => {
+                    self.ui.app.settings_state.show_match_clock = value;
+                    self.ui.app.settings_state.persist_local();
+                }
                 WebMenuCommand::SetCampaignAvatarExpressions {
                     expressions,
                     campaign_session_id,
@@ -2486,6 +2496,24 @@ fn endgame_stats_snapshot(app: &SowApp, player_id: u16) -> Option<[u64; 5]> {
         })
 }
 
+fn match_clock_seconds(app: &SowApp, snapshot: &sow_core::protocol::SimSnapshot) -> Option<u64> {
+    let config = &app.sim.config;
+    if config.tutorial
+        || !app.ui.app.settings_state.show_match_clock
+        || matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
+    {
+        return None;
+    }
+
+    let deployment_ticks = if config.random_spawn {
+        0
+    } else {
+        sow_core::game::deployment_phase_end_tick(config.tick_rate_ms)
+    };
+    let playing_ticks = snapshot.tick.saturating_sub(deployment_ticks);
+    Some((playing_ticks as f64 * f64::from(config.tick_rate_ms) / 1000.0) as u64)
+}
+
 fn hud_changed_and_update(app: &SowApp) -> bool {
     let hud = &app.ui.app.hud_state;
     let tutorial_active = app.ui.tutorial_active && app.net.is_offline;
@@ -2572,6 +2600,13 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
         settings_free_zoom_out: app.ui.app.settings_state.free_zoom_out,
         settings_show_fps_ping: app.ui.app.settings_state.show_fps_ping,
+        settings_show_match_clock: app.ui.app.settings_state.show_match_clock,
+        match_clock_seconds: snapshot.and_then(|snapshot| match_clock_seconds(app, snapshot)),
+        match_status_second: if matches!(app.sim.config.game_mode.as_str(), "Teams" | "PvE") {
+            (snapshot_tick as f64 * f64::from(app.sim.config.tick_rate_ms) / 1000.0) as u64
+        } else {
+            0
+        },
         settings_show_dev_tools: app.ui.app.settings_state.show_dev_tools,
         leaderboard_open: app.ui.show_leaderboard,
         leaderboard_publish_revision: app.ui.leaderboard_publish_revision,
@@ -3133,6 +3168,7 @@ fn tutorial_building_anchors(
                             sow_core::game::BuildingKind::Factory => "Factory",
                             sow_core::game::BuildingKind::Tower => "Tower",
                             sow_core::game::BuildingKind::Port => "Port",
+                            sow_core::game::BuildingKind::MissileSilo => "MissileSilo",
                             sow_core::game::BuildingKind::SAM => "SAM",
                         };
                         (
@@ -3881,6 +3917,7 @@ fn build_hover_payload(
             sow_core::game::BuildingKind::Tower => towers += 1,
             sow_core::game::BuildingKind::Farm => farms += 1,
             sow_core::game::BuildingKind::SAM => sams += 1,
+            sow_core::game::BuildingKind::MissileSilo => {}
         }
     }
     let mut payload = player_json(player, my_pid, snapshot.total_land_tiles, None);
@@ -4687,10 +4724,13 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             sow_core::game::BuildingKind::Factory => "Factory",
             sow_core::game::BuildingKind::Port => "Port",
             sow_core::game::BuildingKind::Farm => "Farm",
-            sow_core::game::BuildingKind::SAM => "SAM",
+            sow_core::game::BuildingKind::MissileSilo => "MissileSilo",
+                            sow_core::game::BuildingKind::SAM => "SAM",
         });
     let selected_nuke = hud.selected_nuke_kind.map(|kind| match kind {
         sow_core::game::NukeKind::AtomBomb => "AtomBomb",
+        sow_core::game::NukeKind::HydrogenBomb => "HydrogenBomb",
+        sow_core::game::NukeKind::MIRV => "MIRV",
     });
     let costs = &hud.building_costs;
     let (port_levels, city_level, trade_ships, transport_ships, warship_count) = snapshot
@@ -5105,6 +5145,33 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             .map(|player| player.name.as_str())
             .unwrap_or_default(),
     });
+    if match_over && !app.sim.config.tutorial {
+        if let Some(snapshot) = snapshot {
+            let reason = if let Some(winner) = snapshot.winner {
+                let winning_tiles: u32 = snapshot.players.iter().filter(|player| {
+                    player.alive && snapshot.winning_team.map_or(player.id == winner, |team| {
+                        player.team == Some(team)
+                    })
+                }).map(|player| player.tile_count).sum();
+                let threshold = (snapshot.total_land_tiles.max(1) as f32
+                    * app.sim.config.map_control_win_percentage).ceil() as u32;
+                if winning_tiles >= threshold {
+                    "territory"
+                } else if app.sim.config.ranked_1v1 {
+                    "duel"
+                } else if snapshot.winning_team.is_some() {
+                    "last_team"
+                } else {
+                    "last_player"
+                }
+            } else if matches!(snapshot.phase, sow_core::game::GamePhase::GameOver) {
+                "no_winner"
+            } else {
+                "eliminated"
+            };
+            payload["endgame_reason"] = serde_json::json!(reason);
+        }
+    }
     let endgame_stats = if match_over {
         endgame_stats_snapshot(app, my_pid).or(app.ui.manual_endgame_stats)
     } else {
@@ -5135,14 +5202,15 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     if let Some(snapshot) = snapshot {
         if app.ui.show_leaderboard && include_leaderboard {
             payload["leaderboard"] = build_leaderboard(snapshot, my_pid);
-            payload["team_leaderboard"] = if matches!(
-                app.sim.config.game_mode.as_str(),
-                "Teams" | "PvE"
-            ) {
-                build_team_leaderboard(snapshot)
-            } else {
-                serde_json::json!([])
-            };
+        }
+        if !app.sim.config.tutorial && matches!(app.sim.config.game_mode.as_str(), "Teams" | "PvE") {
+            payload["team_leaderboard"] = build_team_leaderboard(snapshot);
+            payload["territory_goal"] = serde_json::json!(app.sim.config.map_control_win_percentage);
+            payload["local_team"] = serde_json::json!(snapshot.players.iter()
+                .find(|player| player.id == my_pid).and_then(|player| player.team));
+        }
+        if let Some(seconds) = match_clock_seconds(app, snapshot) {
+            payload["match_clock_seconds"] = serde_json::json!(seconds);
         }
         let alliance_only = !hud.show_alliance_inbox;
         let has_rows = me.is_some_and(|player| {
@@ -5751,6 +5819,7 @@ fn settings_payload(app: &SowApp) -> serde_json::Value {
         "reduced_motion": settings.reduced_motion,
         "free_zoom_out": settings.free_zoom_out,
         "show_fps_ping": settings.show_fps_ping,
+        "show_match_clock": settings.show_match_clock,
         "show_dev_tools": settings.show_dev_tools,
         "show_dev_tools_available": cfg!(any(feature = "dev", debug_assertions)),
     })

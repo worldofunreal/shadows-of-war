@@ -245,7 +245,7 @@ pub enum DbEvent {
 
 impl PlayerProgress {
     pub fn is_first_game(&self) -> bool {
-        self.matches_played == 0 && !self.intro_completed.unwrap_or(false)
+        self.matches_played == 0 && !crate::campaign::CampaignId::intro_completed(self)
     }
 
     pub fn complete_intro(&mut self) {

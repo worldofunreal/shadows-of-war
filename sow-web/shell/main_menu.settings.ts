@@ -87,3 +87,10 @@ export function renderAdvisorTipsSettingRow() {
         "</label>"
     );
 }
+
+export function renderMatchClockSettingRow() {
+    return "<label class='sow-hud__setting-row sow-menu__settings-switch-row'>" +
+        "<span>" + esc(SOW_t("hud.show_match_clock")) + "</span>" +
+        "<input class='sow-hud__switch' type='checkbox' role='switch' data-setting='show_match_clock'" +
+        (menuUi.state?.settings?.show_match_clock ? " checked" : "") + "></label>";
+}

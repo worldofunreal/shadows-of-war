@@ -1155,6 +1155,11 @@ ends_in = "{time} içinde bitiyor"
 leader = "Lider"
 
 [hud]
+show_match_clock = "Maç süresini göster (deneysel)"
+territory_own = "Takımın · {percent}"
+territory_rival = "Rakip · {percent}"
+territory_first = "Takım 1 · {percent}"
+territory_second = "Takım 2 · {percent}"
 build_placement = "Binayı yerleştir"
 build_confirm = "İnşa et"
 build_details = "{cost} altın · {seconds} sn"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "Toprak hedefine ulaşıldı"
+reason_duel = "Düello elemeyle sonuçlandı"
+reason_last_team = "Toprağı olan son takım"
+reason_last_player = "Toprağı olan son oyuncu"
+reason_no_winner = "Kazanan yok"
+reason_eliminated = "Elendin. Maç devam ediyor"
 reward_double_title = "Ödüllerini ikiye katla"
 reward_double_body = "Bu maçın taçlarını ve mücevherlerini yeniden almak için kısa bir video izle."
 reward_continue = "DEVAM"

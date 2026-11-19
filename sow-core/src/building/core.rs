@@ -331,6 +331,7 @@ pub struct BuildingAggregate {
     pub port_fleet_slots: u32,
     pub farm_levels: u32,
     pub sam_levels: u32,
+    pub silo_levels: u32,
     pub farm_troop_level_weight: f64,
     pub farm_gold_level_weight: f64,
     pub port_income_level_weight: f64,
@@ -352,6 +353,7 @@ pub struct BuildingAggregate {
     pub count_port: u32,
     pub count_farm: u32,
     pub count_sam: u32,
+    pub count_silo: u32,
     /// Number of owned Factory stations connected to a City or Port over land.
     pub railway_connections: u32,
 }
@@ -366,6 +368,7 @@ impl BuildingAggregate {
             BuildingKind::Port => self.count_port,
             BuildingKind::Farm => self.count_farm,
             BuildingKind::SAM => self.count_sam,
+            BuildingKind::MissileSilo => self.count_silo,
         }
     }
 
@@ -379,6 +382,7 @@ impl BuildingAggregate {
             BuildingKind::Port => self.port_levels,
             BuildingKind::Farm => self.farm_levels,
             BuildingKind::SAM => self.sam_levels,
+            BuildingKind::MissileSilo => self.silo_levels,
         }
     }
 }
@@ -402,6 +406,7 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::Port => a.count_port += 1,
             BuildingKind::Farm => a.count_farm += 1,
             BuildingKind::SAM => a.count_sam += 1,
+            BuildingKind::MissileSilo => a.count_silo += 1,
         }
         let active_lvl = b.active_level();
         if active_lvl == 0 {
@@ -436,9 +441,8 @@ pub fn aggregate_buildings_per_player(
                 a.farm_troop_level_weight += farm_troop_level_weight(active_lvl);
                 a.farm_gold_level_weight += income_level_weight(active_lvl);
             }
-            BuildingKind::SAM => {
-                a.sam_levels += active_lvl as u32;
-            }
+            BuildingKind::SAM => a.sam_levels += u32::from(active_lvl),
+            BuildingKind::MissileSilo => a.silo_levels += u32::from(active_lvl),
         }
     }
     out

@@ -1,8 +1,38 @@
 use crate::engine::SowEngine;
-use crate::game::{BuildingKind, GamePhase, ProjectileKind};
+use crate::game::{BuildingKind, GamePhase, NukeKind, ProjectileKind};
 
 impl SowEngine {
+    #[cfg(test)]
     pub fn apply_launch_nuke_intent(&mut self, player_id: u16, target_tile: u32) {
+        self.launch_nuclear_weapon(player_id, NukeKind::AtomBomb, target_tile);
+    }
+
+    pub fn nuclear_price(&self, kind: NukeKind) -> f64 {
+        let launched = self.mirv_launches.values().copied().fold(0, u32::saturating_add);
+        kind.gold_cost(launched)
+    }
+
+    pub fn nuclear_charges(&self, building_id: u64, level: u8) -> u8 {
+        let used = self.nuclear_reload.get(&building_id).map_or(0, |ticks| {
+            ticks.iter().filter(|&&ready| ready > self.state.tick).count()
+        });
+        level.saturating_sub(used as u8)
+    }
+
+    pub fn nuclear_wait_ticks(&self, building_id: u64) -> u32 {
+        self.nuclear_reload.get(&building_id).into_iter().flatten()
+            .filter_map(|&ready| ready.checked_sub(self.state.tick).filter(|&left| left > 0))
+            .min().unwrap_or(0) as u32
+    }
+
+    pub fn spend_nuclear_charge(&mut self, building_id: u64) {
+        let tick = self.state.tick;
+        let reload = self.nuclear_reload.entry(building_id).or_default();
+        reload.retain(|&ready| ready > tick);
+        reload.push(tick.saturating_add(90));
+    }
+
+    pub fn launch_nuclear_weapon(&mut self, player_id: u16, kind: NukeKind, target_tile: u32) {
         if self.state.phase != GamePhase::Playing {
             return;
         }
@@ -12,7 +42,8 @@ impl SowEngine {
         let Some(player) = self.state.player(player_id) else {
             return;
         };
-        if !player.alive {
+        let cost = self.nuclear_price(kind);
+        if !player.alive || player.gold < cost {
             return;
         }
 
@@ -22,7 +53,7 @@ impl SowEngine {
             return;
         }
 
-        // Find the closest armed level-four Factory or Tower producer.
+        // Find the closest charged silo.
         let tx = (target_tile % w) as i32;
         let ty = (target_tile / w) as i32;
 
@@ -30,19 +61,14 @@ impl SowEngine {
             .buildings
             .iter()
             .filter(|b| {
-                matches!(b.kind, BuildingKind::Factory | BuildingKind::Tower)
+                b.kind == BuildingKind::MissileSilo
                     && b.owner_id == player_id
-                    && !b.under_construction
-                    && b.active_level() >= crate::game::NukeKind::AtomBomb.required_district_level()
-                    && self
-                        .building_productions
-                        .get(&b.id)
-                        .is_some_and(|state| state.nuke_ready)
+                    && self.nuclear_charges(b.id, b.active_level()) > 0
             })
             .min_by_key(|b| {
                 let bx = (b.tile_idx % w) as i32;
                 let by = (b.tile_idx / w) as i32;
-                (bx - tx).abs() + (by - ty).abs()
+                ((bx - tx).abs() + (by - ty).abs(), b.id)
             });
 
         let Some(silo) = best_silo else {
@@ -50,11 +76,16 @@ impl SowEngine {
         };
         let silo_id = silo.id;
         let silo_tile = silo.tile_idx;
-        let level = 1;
-
-        // Consume the armed nuke on launch (gold and build time were paid in production).
-        if let Some(state) = self.building_productions.get_mut(&silo_id) {
-            state.nuke_ready = false;
+        let level = match kind {
+            NukeKind::AtomBomb => 1,
+            NukeKind::HydrogenBomb => 2,
+            NukeKind::MIRV => 3,
+        };
+        self.state.player_mut(player_id).unwrap().gold -= cost;
+        self.spend_nuclear_charge(silo_id);
+        if kind == NukeKind::MIRV {
+            let count = self.mirv_launches.entry(player_id).or_default();
+            *count = count.saturating_add(1);
         }
 
         // Spawn projectile
@@ -75,7 +106,7 @@ impl SowEngine {
             dst_tile: target_tile,
             path,
             path_cursor: 0,
-            steps_per_tick: 1 + level,
+            steps_per_tick: 2,
             active: true,
             source_fleet_id: None,
             target_fleet_id: None,

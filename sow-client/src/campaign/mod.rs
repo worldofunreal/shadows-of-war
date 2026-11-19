@@ -79,7 +79,7 @@ impl CampaignId {
             || progress
                 .completed_episodes
                 .contains(sow_data::campaign::INTRO_EPISODE_ID)
-            || progress.completed_episodes.contains("boudica")
+            || progress.completed_episodes.contains("blitz_05")
     }
 
     pub fn is_completed(self, progress: &crate::player_progress::PlayerProgress) -> bool {

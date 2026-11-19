@@ -1155,6 +1155,11 @@ ends_in = "残り {time}"
 leader = "リーダー"
 
 [hud]
+show_match_clock = "試合時間を表示（試験機能）"
+territory_own = "味方チーム · {percent}"
+territory_rival = "相手チーム · {percent}"
+territory_first = "チーム1 · {percent}"
+territory_second = "チーム2 · {percent}"
 build_placement = "建物を配置"
 build_confirm = "建設"
 build_details = "金 {cost} · {seconds}秒"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "領土目標を達成"
+reason_duel = "脱落により決着"
+reason_last_team = "領土を持つ最後のチーム"
+reason_last_player = "領土を持つ最後のプレイヤー"
+reason_no_winner = "勝者なし"
+reason_eliminated = "あなたは脱落しました。試合は続きます"
 reward_double_title = "報酬を2倍にする"
 reward_double_body = "短い動画を見ると、この試合のクラウンとジェムをもう一度受け取れます。"
 reward_continue = "続ける"

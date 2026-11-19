@@ -108,7 +108,7 @@ fn paused_tutorial_progress(
                 sow_core::game::BuildingKind::Factory => "factories",
                 sow_core::game::BuildingKind::Port => "ports",
                 sow_core::game::BuildingKind::Tower => "towers",
-                sow_core::game::BuildingKind::SAM => "sams",
+                sow_core::game::BuildingKind::SAM | sow_core::game::BuildingKind::MissileSilo => "sams",
             };
             Some(
                 observation

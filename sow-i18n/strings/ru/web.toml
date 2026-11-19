@@ -1155,6 +1155,11 @@ ends_in = "Закончится через {time}"
 leader = "Лидер"
 
 [hud]
+show_match_clock = "Показывать время матча (экспериментально)"
+territory_own = "Ваша команда · {percent}"
+territory_rival = "Соперник · {percent}"
+territory_first = "Команда 1 · {percent}"
+territory_second = "Команда 2 · {percent}"
 build_placement = "Разместить здание"
 build_confirm = "Построить"
 build_details = "{cost} золота · {seconds} с"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "Цель по территории достигнута"
+reason_duel = "Дуэль завершилась выбыванием"
+reason_last_team = "Последняя команда с территорией"
+reason_last_player = "Последний игрок с территорией"
+reason_no_winner = "Никто не победил"
+reason_eliminated = "Вы выбыли. Матч продолжается"
 reward_double_title = "Удвойте награду"
 reward_double_body = "Посмотрите короткое видео, чтобы ещё раз получить короны и драгоценности за этот матч."
 reward_continue = "ПРОДОЛЖИТЬ"

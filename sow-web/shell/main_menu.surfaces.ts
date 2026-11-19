@@ -17,6 +17,7 @@ import { renderPublicPanel } from "./main_menu.lobbies.ts";
 import { render, renderSettingsPrivacySection } from "./main_menu.shell.ts";
 import {
     renderAdvisorTipsSettingRow,
+    renderMatchClockSettingRow,
     renderLocaleSettingRow,
     renderMusicSpectrum,
     renderSfxVolumeSettingRow,
@@ -307,6 +308,7 @@ export function renderSettings() {
         renderSfxVolumeSettingRow() +
         renderLocaleSettingRow() +
         renderAdvisorTipsSettingRow() +
+        renderMatchClockSettingRow() +
         "<label class='sow-hud__setting-row sow-menu__settings-switch-row'>" +
         "<span class='sow-menu__settings-row-label'>" +
         zoomSvg +
@@ -384,6 +386,7 @@ export function surfaceSettingsRenderKey(deleteBusy: boolean, deleteError: strin
         s?.sfx_volume == null ? 0.8 : s?.sfx_volume,
         Boolean(s?.free_zoom_out),
         Boolean(s?.show_fps_ping),
+        Boolean(s?.show_match_clock),
         Boolean(s?.show_dev_tools),
         Boolean(s?.show_dev_tools_available),
         Boolean(menuUi.state?.menu_tips_disabled),

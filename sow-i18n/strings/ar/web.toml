@@ -1155,6 +1155,11 @@ ends_in = "ينتهي خلال {time}"
 leader = "القائد"
 
 [hud]
+show_match_clock = "إظهار مؤقت المباراة (تجريبي)"
+territory_own = "فريقك · {percent}"
+territory_rival = "الخصم · {percent}"
+territory_first = "الفريق ١ · {percent}"
+territory_second = "الفريق ٢ · {percent}"
 build_placement = "وضع مبنى"
 build_confirm = "بناء"
 build_details = "{cost} ذهب · {seconds} ث"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "تحقق هدف السيطرة على الأراضي"
+reason_duel = "حُسمت المبارزة بالإقصاء"
+reason_last_team = "آخر فريق يسيطر على أراضٍ"
+reason_last_player = "آخر لاعب يسيطر على أراضٍ"
+reason_no_winner = "لم يفز أحد"
+reason_eliminated = "تم إقصاؤك. المباراة مستمرة"
 reward_double_title = "ضاعف مكافآتك"
 reward_double_body = "شاهد فيديو قصيرًا لتحصل مرة أخرى على تيجان وجواهر هذه المباراة."
 reward_continue = "متابعة"

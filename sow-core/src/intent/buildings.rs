@@ -570,18 +570,7 @@ impl SowEngine {
                     return;
                 }
             }
-            CityArsenalKind::Nuke => {
-                if !matches!(building.kind, BuildingKind::Factory | BuildingKind::Tower)
-                    || building.active_level() < crate::game::NukeKind::AtomBomb.required_district_level()
-                    || self
-                        .building_productions
-                        .get(&building_id)
-                        .is_some_and(|state| state.nuke_ready)
-                {
-                    return;
-                }
-            }
-            CityArsenalKind::AntiNuke => return,
+            CityArsenalKind::Nuke | CityArsenalKind::AntiNuke => return,
         }
 
         let queued_warships = self.building_productions.iter().filter(|(building_id, state)| {

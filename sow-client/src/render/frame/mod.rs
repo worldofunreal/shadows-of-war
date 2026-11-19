@@ -112,6 +112,9 @@ impl SowApp {
             .min(0.1);
         self.time.last_frame_time = now;
         self.advance_camera(dt);
+        if self.ui.app.phase == crate::ClientPhase::Playing {
+            self.advance_endgame_sequence(now);
+        }
 
         if self
             .ui

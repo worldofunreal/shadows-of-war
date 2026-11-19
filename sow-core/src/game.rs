@@ -39,23 +39,26 @@ pub enum BuildingKind {
     Port,
     Farm,
     SAM,
+    MissileSilo,
 }
 
 impl BuildingKind {
-    pub const ALL: [BuildingKind; 6] = [
+    pub const ALL: [BuildingKind; 7] = [
         BuildingKind::City,
         BuildingKind::Tower,
         BuildingKind::Factory,
         BuildingKind::Port,
         BuildingKind::Farm,
         BuildingKind::SAM,
+        BuildingKind::MissileSilo,
     ];
-    pub const NON_CITY: [BuildingKind; 5] = [
+    pub const NON_CITY: [BuildingKind; 6] = [
         BuildingKind::Tower,
         BuildingKind::Factory,
         BuildingKind::Port,
         BuildingKind::Farm,
         BuildingKind::SAM,
+        BuildingKind::MissileSilo,
     ];
     #[inline]
     pub const fn is_non_city(self) -> bool {
@@ -81,6 +84,7 @@ impl BuildingKind {
             BuildingKind::Port => "Port",
             BuildingKind::Farm => "Farm",
             BuildingKind::SAM => "SAM",
+            BuildingKind::MissileSilo => "MissileSilo",
         }
     }
 
@@ -96,6 +100,7 @@ impl BuildingKind {
             BuildingKind::Port => 30,
             BuildingKind::Farm => 25,
             BuildingKind::SAM => 90,
+            BuildingKind::MissileSilo => 100,
         }
     }
 }
@@ -112,23 +117,29 @@ pub enum UnitType {
 #[repr(u8)]
 pub enum NukeKind {
     AtomBomb,
+    HydrogenBomb,
+    MIRV,
 }
 
 impl NukeKind {
     pub const fn required_city_level(self) -> u8 {
         match self {
-            NukeKind::AtomBomb => BuildingKind::City.max_level(),
+            _ => BuildingKind::City.max_level(),
         }
     }
 
     pub const fn required_district_level(self) -> u8 {
         match self {
-            NukeKind::AtomBomb => 4,
+            _ => 4,
         }
     }
 
-    pub fn gold_cost(self, _prev_launches: u32) -> f64 {
-        0.0
+    pub fn gold_cost(self, previous_mirvs: u32) -> f64 {
+        match self {
+            Self::AtomBomb => 500.0,
+            Self::HydrogenBomb => 3_333.0,
+            Self::MIRV => 16_667.0 + f64::from(previous_mirvs) * 10_000.0,
+        }
     }
 }
 
@@ -171,12 +182,12 @@ pub enum ProjectileKind {
 
 /// Tiles cleared to wilderness (ownership wipe + building destruction).
 pub fn nuke_inner_radius(level: u8) -> u32 {
-    12 + (level.saturating_sub(1) as u32) * 10
+    if level == 2 { 80 } else { 12 }
 }
 
 /// Tiles receiving troop damage only (ownership unchanged).
 pub fn nuke_outer_radius(level: u8) -> u32 {
-    30 + (level.saturating_sub(1) as u32) * 25
+    match level { 2 => 100, 4 => 18, _ => 30 }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1765,6 +1765,11 @@ ends_in = "Ends in {time}"
 leader = "Leader"
 
 [hud]
+show_match_clock = "Show match timer (experimental)"
+territory_own = "Your team · {percent}"
+territory_rival = "Opponent · {percent}"
+territory_first = "Team 1 · {percent}"
+territory_second = "Team 2 · {percent}"
 build_placement = "Place building"
 build_confirm = "Build"
 build_details = "{cost} gold · {seconds}s"
@@ -2008,6 +2013,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "The territorial goal was reached"
+reason_duel = "The duel ended by elimination"
+reason_last_team = "Last team with territory"
+reason_last_player = "Last player with territory"
+reason_no_winner = "Nobody won"
+reason_eliminated = "You were eliminated. The match continues"
 reward_double_title = "Double your rewards"
 reward_double_body = "Watch a short video to receive this match's crowns and gems again."
 reward_continue = "CONTINUE"

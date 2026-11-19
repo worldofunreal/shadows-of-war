@@ -675,8 +675,8 @@ impl SowEngine {
                 self.apply_build_ship_intent(stamped.player_id, *target_tile, *kind);
             }
             GameplayIntent::MoveWarships { .. } => {}
-            GameplayIntent::LaunchNuke { target_tile, .. } => {
-                self.apply_launch_nuke_intent(stamped.player_id, *target_tile);
+            GameplayIntent::LaunchNuke { kind, target_tile } => {
+                self.launch_nuclear_weapon(stamped.player_id, *kind, *target_tile);
             }
             GameplayIntent::CityArsenal { tile_idx, kind } => {
                 self.apply_city_arsenal_intent(stamped.player_id, *tile_idx, *kind);

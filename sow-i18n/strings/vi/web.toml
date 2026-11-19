@@ -1155,6 +1155,11 @@ ends_in = "Kết thúc sau {time}"
 leader = "Thủ lĩnh"
 
 [hud]
+show_match_clock = "Hiện đồng hồ trận đấu (thử nghiệm)"
+territory_own = "Đội của bạn · {percent}"
+territory_rival = "Đối thủ · {percent}"
+territory_first = "Đội 1 · {percent}"
+territory_second = "Đội 2 · {percent}"
 build_placement = "Đặt công trình"
 build_confirm = "Xây dựng"
 build_details = "{cost} vàng · {seconds} giây"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "Đã đạt mục tiêu lãnh thổ"
+reason_duel = "Trận đấu tay đôi kết thúc do bị loại"
+reason_last_team = "Đội cuối cùng còn lãnh thổ"
+reason_last_player = "Người chơi cuối cùng còn lãnh thổ"
+reason_no_winner = "Không có người chiến thắng"
+reason_eliminated = "Bạn đã bị loại. Trận đấu vẫn tiếp tục"
 reward_double_title = "Nhân đôi phần thưởng"
 reward_double_body = "Xem một video ngắn để nhận lại vương miện và đá quý của trận này."
 reward_continue = "TIẾP TỤC"

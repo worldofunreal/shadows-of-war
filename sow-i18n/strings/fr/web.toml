@@ -1155,6 +1155,11 @@ ends_in = "Fin dans {time}"
 leader = "Chef"
 
 [hud]
+show_match_clock = "Afficher le chronomètre de partie (expérimental)"
+territory_own = "Votre équipe · {percent}"
+territory_rival = "Adversaire · {percent}"
+territory_first = "Équipe 1 · {percent}"
+territory_second = "Équipe 2 · {percent}"
 build_placement = "Placer un bâtiment"
 build_confirm = "Construire"
 build_details = "{cost} d’or · {seconds} s"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "Objectif territorial atteint"
+reason_duel = "Duel remporté par élimination"
+reason_last_team = "Dernière équipe avec du territoire"
+reason_last_player = "Dernier joueur avec du territoire"
+reason_no_winner = "Personne n’a gagné"
+reason_eliminated = "Vous avez été éliminé. La partie continue"
 reward_double_title = "Doublez vos récompenses"
 reward_double_body = "Regardez une courte vidéo pour recevoir à nouveau les couronnes et les gemmes de cette partie."
 reward_continue = "CONTINUER"

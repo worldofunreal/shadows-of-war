@@ -633,6 +633,8 @@ pub struct SowEngine {
     #[serde(skip)]
     pub campaign_pre_defeat_since: u64,
     pub projectiles: Vec<crate::game::Projectile>,
+    #[serde(default)]
+    pub nuclear_reload: std::collections::BTreeMap<u64, Vec<u64>>,
     pub silo_cooldowns: std::collections::HashMap<u64, u32>,
     /// Per-producer queues and armed nukes. The alias loads saved city-keyed queues.
     #[serde(default, alias = "city_arsenals")]
@@ -778,6 +780,7 @@ impl SowEngine {
             campaign_pre_defeat_pending: None,
             campaign_pre_defeat_since: 0,
             projectiles: Vec::new(),
+            nuclear_reload: Default::default(),
             silo_cooldowns: std::collections::HashMap::new(),
             building_productions: std::collections::HashMap::new(),
             upgrade_targets: std::collections::BTreeMap::new(),

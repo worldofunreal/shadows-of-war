@@ -660,6 +660,7 @@ pub(crate) fn structure_capture_label(kind: sow_core::game::BuildingKind) -> &'s
         BuildingKind::Farm => "FARM CAPTURED",
         BuildingKind::Tower => "TOWER CAPTURED",
         BuildingKind::SAM => "SAM CAPTURED",
+        BuildingKind::MissileSilo => "SILO CAPTURED",
     }
 }
 
@@ -672,6 +673,7 @@ pub(crate) fn structure_short_label(kind: sow_core::game::BuildingKind) -> &'sta
         BuildingKind::Farm => "FARM",
         BuildingKind::Tower => "TOWER",
         BuildingKind::SAM => "SAM",
+        BuildingKind::MissileSilo => "MissileSilo",
     }
 }
 
@@ -681,7 +683,7 @@ pub(crate) fn structure_capture_priority(kind: sow_core::game::BuildingKind) -> 
         BuildingKind::City => 6,
         BuildingKind::Port => 5,
         BuildingKind::Factory => 4,
-        BuildingKind::SAM => 3,
+        BuildingKind::SAM | BuildingKind::MissileSilo => 3,
         BuildingKind::Tower => 2,
         BuildingKind::Farm => 1,
     }

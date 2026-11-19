@@ -1155,6 +1155,11 @@ ends_in = "Matatapos sa {time}"
 leader = "Pinuno"
 
 [hud]
+show_match_clock = "Ipakita ang oras ng laban (eksperimental)"
+territory_own = "Koponan mo · {percent}"
+territory_rival = "Kalaban · {percent}"
+territory_first = "Koponan 1 · {percent}"
+territory_second = "Koponan 2 · {percent}"
 build_placement = "Ipuwesto ang gusali"
 build_confirm = "Magtayo"
 build_details = "{cost} ginto · {seconds}s"
@@ -1369,6 +1374,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "Naabot ang layunin sa teritoryo"
+reason_duel = "Natapos ang tunggalian sa eliminasyon"
+reason_last_team = "Huling koponang may teritoryo"
+reason_last_player = "Huling manlalarong may teritoryo"
+reason_no_winner = "Walang nanalo"
+reason_eliminated = "Eliminado ka. Tuloy ang laban"
 reward_double_title = "Doblehin ang gantimpala"
 reward_double_body = "Manood ng maikling video para muling makuha ang mga korona at hiyas ng larong ito."
 reward_continue = "MAGPATULOY"

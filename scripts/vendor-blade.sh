@@ -35,6 +35,7 @@ if [ "${SPARSE_ENABLED}" != "true" ] || [ "${SPARSE_PATHS}" != $'blade-graphics\
   git -C blade sparse-checkout set --no-cone blade-graphics blade-macros
 fi
 git -C blade checkout --quiet "${REV}"
+git -C blade apply "${ROOT}/scripts/blade-web-image-bitmap.patch"
 
 cp scripts/blade-web-workspace.toml blade/Cargo.toml
 # blade-macros only needs syn/proc-macro2/quote at runtime. Its upstream test

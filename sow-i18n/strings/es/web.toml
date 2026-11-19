@@ -1158,6 +1158,11 @@ ends_in = "Termina en {time}"
 leader = "Líder"
 
 [hud]
+show_match_clock = "Mostrar cronómetro de partida (experimental)"
+territory_own = "Tu equipo · {percent}"
+territory_rival = "Rival · {percent}"
+territory_first = "Equipo 1 · {percent}"
+territory_second = "Equipo 2 · {percent}"
 build_placement = "Colocar edificio"
 build_confirm = "Construir"
 build_details = "{cost} de oro · {seconds}s"
@@ -1402,6 +1407,12 @@ ability_notice = "{ability}"
 
 
 [endgame]
+reason_territory = "Se alcanzó el objetivo territorial"
+reason_duel = "El duelo se decidió por eliminación"
+reason_last_team = "Último equipo con territorio"
+reason_last_player = "Último jugador con territorio"
+reason_no_winner = "Nadie ganó"
+reason_eliminated = "Te eliminaron. La partida sigue"
 reward_double_title = "Duplica tus recompensas"
 reward_double_body = "Mira un video corto para recibir otra vez las coronas y gemas de esta partida."
 reward_continue = "CONTINUAR"

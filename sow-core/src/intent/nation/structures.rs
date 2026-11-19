@@ -37,7 +37,7 @@ pub(super) fn bot_structure_target_count(
             let val = ((city_equivalent as f64) * 0.45 * factor).floor() as u32;
             if factor > 0.4 { val.max(1) } else { val }
         }
-        BuildingKind::SAM => 0,
+        BuildingKind::SAM | BuildingKind::MissileSilo => 0,
     }
 }
 
