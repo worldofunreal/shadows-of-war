@@ -10,6 +10,7 @@ import {
     dismissAllRequestToasts,
     dismissFrontRequestToast,
     dismissRequestToastByKey,
+    isPopupEligibleRequest,
     isValidInboxRequest,
     readRequestCountdown,
     reconcileRequestToastDeck,
@@ -54,7 +55,7 @@ function resourceReq(
 }
 
 describe("request-toast-deck", () => {
-    test("groups duplicates and caps visible deck to 4 cards with overflow count", () => {
+    test("excludes gold/troop resource requests and help calls from popups while capping alliance deck to 4", () => {
         const state = createRequestToastDeckState();
         const countdowns = new Map<string, RequestCountdownRecord>();
         const requests = [
@@ -65,35 +66,40 @@ describe("request-toast-deck", () => {
             allianceReq(4),
             resourceReq(5, 0, 400),
             allianceReq(6),
+            allianceReq(7),
         ];
 
         const now = 10_000;
         syncRequestCountdowns(requests, countdowns, now);
+        // Countdowns still track Inbox-only resource requests smoothly.
+        expect(readRequestCountdown("resources:3", countdowns, now)?.remainingSeconds).toBe(30);
+
         const view = reconcileRequestToastDeck(state, requests, countdowns, now);
 
-        expect(view.totalPending).toBe(6);
+        expect(view.totalPending).toBe(5);
         expect(view.visible.length).toBe(MAX_REQUEST_TOAST_CARDS);
-        expect(view.overflowCount).toBe(2);
+        expect(view.overflowCount).toBe(1);
+        expect(view.visible.every((entry) => entry.request.kind === "alliance")).toBe(true);
     });
 
-    test("promotes next card on front dismiss and keeps request available in inbox", () => {
+    test("promotes next alliance card on front dismiss and keeps request available in inbox", () => {
         const state = createRequestToastDeckState();
         const countdowns = new Map<string, RequestCountdownRecord>();
-        const requests = [allianceReq(10), resourceReq(20, 100, 0)];
+        const requests = [allianceReq(10), resourceReq(20, 100, 0), allianceReq(30)];
 
         const now = 20_000;
         syncRequestCountdowns(requests, countdowns, now);
         let view = reconcileRequestToastDeck(state, requests, countdowns, now);
-        expect(view.visible.map((v) => v.key)).toEqual(["alliance:10", "resources:20"]);
+        expect(view.visible.map((v) => v.key)).toEqual(["alliance:10", "alliance:30"]);
 
         expect(dismissFrontRequestToast(state)).toBe(true);
         view = reconcileRequestToastDeck(state, requests, countdowns, now + 500);
-        expect(view.visible.map((v) => v.key)).toEqual(["resources:20"]);
+        expect(view.visible.map((v) => v.key)).toEqual(["alliance:30"]);
 
         // Does not re-pop dismissed card on subsequent server ticks while same request remains
         syncRequestCountdowns(requests, countdowns, now + 1000);
         view = reconcileRequestToastDeck(state, requests, countdowns, now + 1000);
-        expect(view.visible.map((v) => v.key)).toEqual(["resources:20"]);
+        expect(view.visible.map((v) => v.key)).toEqual(["alliance:30"]);
     });
 
     test("re-allows toast when same player sends a new request after the previous one clears", () => {
@@ -164,11 +170,12 @@ describe("request-toast-deck", () => {
         expect(nearEnd.expired).toBe(false);
     });
 
-    test("handles help call requests with 30s default TTL and help:<id> identity", () => {
+    test("keeps help call countdowns for Inbox while excluding resources and help from floating popups", () => {
         const state = createRequestToastDeckState();
         const countdowns = new Map<string, RequestCountdownRecord>();
         const helpReq = (requesterId: number, remainingSeconds = 29): HudInboxRequest => ({
             kind: "help",
+            call_id: 12,
             requester_id: requesterId,
             name: `Ally ${requesterId}`,
             avatar: { kind: "procedural", seed: requesterId },
@@ -179,22 +186,28 @@ describe("request-toast-deck", () => {
             pay_gold: 0,
             pay_troops: 0,
         });
+        const tradeReq: HudInboxRequest = {
+            ...resourceReq(8, 300, 100),
+            pay_gold: 150,
+            pay_troops: 0,
+        };
 
         expect(isValidInboxRequest(helpReq(5))).toBe(true);
+        expect(isPopupEligibleRequest(helpReq(5))).toBe(false);
+        expect(isPopupEligibleRequest(resourceReq(4, 100, 50))).toBe(false);
+        expect(isPopupEligibleRequest(tradeReq)).toBe(false);
+        expect(isPopupEligibleRequest(allianceReq(9))).toBe(true);
         expect(requestKey(helpReq(5))).toBe("help:5");
 
         const req = helpReq(5, 29);
-        syncRequestCountdowns([req], countdowns, 10_000);
+        syncRequestCountdowns([req, tradeReq], countdowns, 10_000);
         const countdown = readRequestCountdown("help:5", countdowns, 10_000)!;
         expect(countdown.remainingSeconds).toBe(29);
         expect(countdown.progress).toBeCloseTo(29 / 30, 2);
 
-        const view = reconcileRequestToastDeck(state, [req], countdowns, 10_000);
-        expect(view.visible.map((entry) => entry.key)).toEqual(["help:5"]);
-
-        dismissRequestToastByKey(state, "help:5");
-        const afterDismiss = reconcileRequestToastDeck(state, [req], countdowns, 10_100);
-        expect(afterDismiss.visible.length).toBe(0);
+        const view = reconcileRequestToastDeck(state, [req, tradeReq], countdowns, 10_000);
+        expect(view.visible.length).toBe(0);
+        expect(view.totalPending).toBe(0);
     });
 
     test("resolves viewport deck limits to 3 desktop, 2 compact horizontal, and 1 mobile", () => {
@@ -250,6 +263,7 @@ describe("request-toast-deck", () => {
         syncRequestCountdowns([helpCall], countdowns, 1000);
         const first = reconcileRequestToastDeck(state, [helpCall], countdowns, 1000, {
             maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+            filter: isValidInboxRequest,
         });
         expect(first.visible.length).toBe(1);
         const initialExpiry = first.visible[0].toastExpiresAtMs;
@@ -259,6 +273,7 @@ describe("request-toast-deck", () => {
         syncRequestCountdowns([tickedHelpCall], countdowns, 2000);
         const second = reconcileRequestToastDeck(state, [tickedHelpCall], countdowns, 2000, {
             maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+            filter: isValidInboxRequest,
         });
         expect(second.visible.length).toBe(1);
         expect(second.visible[0].toastExpiresAtMs).toBe(initialExpiry);
@@ -267,6 +282,7 @@ describe("request-toast-deck", () => {
         expect(dismissFrontRequestToast(state)).toBe(true);
         const afterDismiss = reconcileRequestToastDeck(state, [tickedHelpCall], countdowns, 2500, {
             maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+            filter: isValidInboxRequest,
         });
         expect(afterDismiss.visible.length).toBe(0);
 
@@ -275,27 +291,16 @@ describe("request-toast-deck", () => {
         syncRequestCountdowns([newCall], countdowns, 3000);
         const afterNewCall = reconcileRequestToastDeck(state, [newCall], countdowns, 3000, {
             maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
+            filter: isValidInboxRequest,
         });
         expect(afterNewCall.visible.length).toBe(1);
     });
 
-    test("evicted buried toasts do not resurrect once pushed past maxVisible (once and bye)", () => {
+    test("evicted buried alliance toasts do not resurrect once pushed past maxVisible (once and bye)", () => {
         const state = createRequestToastDeckState();
-        const countdowns = new Map();
-        const makeHelp = (id: number, callId: number) => ({
-            kind: "help" as const,
-            call_id: callId,
-            requester_id: id,
-            name: `Ally${id}`,
-            avatar: { kind: "fallback" as const },
-            active: true,
-            remaining_seconds: 25,
-            ttl_seconds: 30,
-            gold: 100,
-            troops: 200,
-        });
+        const countdowns = new Map<string, RequestCountdownRecord>();
 
-        const initial = [makeHelp(1, 1), makeHelp(2, 2), makeHelp(3, 3)];
+        const initial = [allianceReq(1), allianceReq(2), allianceReq(3)];
         syncRequestCountdowns(initial, countdowns, 1000);
         const v1 = reconcileRequestToastDeck(state, initial, countdowns, 1000, {
             maxVisible: DESKTOP_MAX_REQUEST_TOASTS,
@@ -303,7 +308,7 @@ describe("request-toast-deck", () => {
         expect(v1.visible.map((e) => e.request.requester_id)).toEqual([1, 2, 3]);
 
         // A 4th arrival pushes tail requester 3 past desktop limit (3): evicted permanently from toasts.
-        const withFourth = [...initial, makeHelp(4, 4)];
+        const withFourth = [...initial, allianceReq(4)];
         syncRequestCountdowns(withFourth, countdowns, 1500);
         const v2 = reconcileRequestToastDeck(state, withFourth, countdowns, 1500, {
             maxVisible: DESKTOP_MAX_REQUEST_TOASTS,

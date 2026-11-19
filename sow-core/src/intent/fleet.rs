@@ -133,6 +133,12 @@ impl SowEngine {
             && let Some(target) = self.state.player(target_owner)
             && player.team.is_some()
             && player.team == target.team
+            && !crate::diplomacy::same_team_betrayal_allows_combat(
+                self.state.config.game_mode == "Teams" && self.campaign_unlocks.is_none(),
+                player.team.is_some() && player.team == target.team,
+                crate::diplomacy::can_retaliate_against(player),
+                crate::diplomacy::can_retaliate_against(target),
+            )
         {
             return;
         }

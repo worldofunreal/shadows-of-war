@@ -1274,7 +1274,7 @@ mod tests {
             prebuilt_buildings: vec![(crate::game::BuildingKind::Farm, 1)],
         }];
         cfg.player_spawn = Some((8, 12));
-        let mut engine = crate::engine::initialize_match_engine_with_water(
+        let engine = crate::engine::initialize_match_engine_with_water(
             cfg,
             42,
             &[],

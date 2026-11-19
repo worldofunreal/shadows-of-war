@@ -101,6 +101,16 @@ pub fn can_retaliate_against(player: &Player) -> bool {
     player.betrayal_retaliation_ticks > 0
 }
 
+#[inline]
+pub fn same_team_betrayal_allows_combat(
+    teams_mode: bool,
+    same_team: bool,
+    attacker_can_retaliate: bool,
+    target_can_retaliate: bool,
+) -> bool {
+    teams_mode && same_team && (attacker_can_retaliate || target_can_retaliate)
+}
+
 /// Chaotic diplomats: well below 1% of typical bot id space.
 #[inline]
 pub fn is_chaotic_diplomat(bot_id: PlayerId) -> bool {
@@ -510,5 +520,14 @@ mod tests {
         requestor.traitor_tick = 10_000;
         assert!(should_reject_traitor_request(&requestor, 100, 50));
         assert!(!should_reject_traitor_request(&requestor, 100, 5));
+    }
+
+    #[test]
+    fn same_team_combat_requires_a_live_teams_betrayal_window() {
+        assert!(same_team_betrayal_allows_combat(true, true, false, true));
+        assert!(same_team_betrayal_allows_combat(true, true, true, false));
+        assert!(!same_team_betrayal_allows_combat(true, true, false, false));
+        assert!(!same_team_betrayal_allows_combat(true, false, true, false));
+        assert!(!same_team_betrayal_allows_combat(false, true, true, false));
     }
 }

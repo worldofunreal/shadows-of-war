@@ -479,6 +479,7 @@ export function accelerateChoreographyPlan(
     const firstLaunch = Math.max(vNow, Math.min(plan.launchPhaseStartMs, vNow + 36));
 
     let rewardCursor = firstLaunch;
+    let hasWave1 = false;
     let wave1MaxLaunch = vNow;
     let wave1MaxLand = vNow;
     let xpSettleAt = vNow;
@@ -486,6 +487,7 @@ export function accelerateChoreographyPlan(
 
     for (const stage of nextStages) {
         if (stage.kind === "leader" || stage.kind === "level") continue;
+        hasWave1 = true;
         if (stage.launchAtMs > vNow) {
             stage.launchAtMs = Math.min(stage.launchAtMs, rewardCursor);
             stage.landAtMs = stage.launchAtMs + stage.flyDurationMs;
@@ -510,10 +512,12 @@ export function accelerateChoreographyPlan(
         maxSettleAt = Math.max(maxSettleAt, stage.settleAtMs);
     }
 
-    let leaderCursor = Math.max(firstLaunch, wave1MaxLaunch + 48);
+    let leaderCursor = hasWave1 ? Math.max(firstLaunch, wave1MaxLaunch + 48) : firstLaunch;
+    let hasWave2 = false;
     let wave2MaxLaunch = wave1MaxLaunch;
     for (const stage of nextStages) {
         if (stage.kind !== "leader") continue;
+        hasWave2 = true;
         if (stage.launchAtMs > vNow) {
             stage.launchAtMs = Math.min(stage.launchAtMs, leaderCursor);
             stage.landAtMs = stage.launchAtMs + stage.flyDurationMs;
@@ -527,7 +531,12 @@ export function accelerateChoreographyPlan(
         maxSettleAt = Math.max(maxSettleAt, stage.settleAtMs);
     }
 
-    let levelCursor = Math.max(firstLaunch, wave1MaxLand, xpSettleAt, wave2MaxLaunch + 48);
+    let levelCursor = Math.max(
+        firstLaunch,
+        wave1MaxLand,
+        xpSettleAt,
+        hasWave2 ? wave2MaxLaunch + 48 : firstLaunch,
+    );
     for (const stage of nextStages) {
         if (stage.kind !== "level") continue;
         if (stage.launchAtMs > vNow) {

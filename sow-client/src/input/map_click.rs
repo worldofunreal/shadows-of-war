@@ -121,6 +121,9 @@ struct MapTarget {
     my_id: u16,
     is_allied: bool,
     is_teammate: bool,
+    is_betrayer: bool,
+    me_can_retaliate: bool,
+    team_betrayal_enabled: bool,
     has_alliance_request: bool,
     has_proposed_alliance: bool,
     is_in_renewal_window: bool,
@@ -167,7 +170,30 @@ impl MapTarget {
         self.owner == 0 || self.is_enemy()
     }
 
-    fn menu_actions(self, spawning: bool, can_attack: bool, can_fleet: bool) -> Vec<MapMenuAction> {
+    fn can_betray_teammate(self) -> bool {
+        self.is_teammate && self.team_betrayal_enabled
+    }
+
+    fn team_betrayal_open(self) -> bool {
+        sow_core::diplomacy::same_team_betrayal_allows_combat(
+            self.team_betrayal_enabled,
+            self.is_teammate,
+            self.me_can_retaliate,
+            self.is_betrayer,
+        )
+    }
+
+    fn needs_betrayal_confirmation(self) -> bool {
+        self.is_allied || (self.can_betray_teammate() && !self.team_betrayal_open())
+    }
+
+    fn menu_actions(
+        self,
+        spawning: bool,
+        can_attack: bool,
+        can_fleet: bool,
+        can_betray_fleet: bool,
+    ) -> Vec<MapMenuAction> {
         if spawning {
             return self
                 .is_land
@@ -203,10 +229,13 @@ impl MapTarget {
         if self.is_friendly() {
             actions.push(MapMenuAction::Send);
             actions.push(MapMenuAction::Request);
-            if self.is_allied && !self.is_teammate && self.is_land && can_attack {
+            if (self.can_betray_teammate() || (self.is_allied && !self.is_teammate))
+                && self.is_land
+                && can_attack
+            {
                 actions.push(MapMenuAction::Attack);
             }
-            if !self.is_teammate {
+            if can_betray_fleet || (!self.is_teammate && can_fleet) {
                 actions.push(MapMenuAction::Fleet);
             }
         } else {
@@ -633,10 +662,22 @@ impl SowApp {
                     && self
                         .fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
                         .is_ok()));
+        let can_betray_fleet = !spawning
+            && !campaign_fleet
+            && (target.can_betray_teammate() || (target.is_allied && !target.is_teammate))
+            && self.has_fleet_capacity(target.my_id)
+            && attack_troops_meet_minimum(
+                self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64,
+                self.sim.config.attack_cost_neutral,
+            )
+            && self
+                .fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Path)
+                .is_ok();
         let mut actions = target.menu_actions(
             spawning,
             target.is_land && self.can_attack(tile_idx, target.owner),
             can_fleet,
+            can_betray_fleet,
         );
         if campaign_fleet {
             actions.retain(|action| match action {
@@ -1486,7 +1527,7 @@ impl SowApp {
             }
             return false;
         }
-        if target.is_teammate {
+        if target.is_teammate && !target.can_betray_teammate() {
             return false;
         }
         let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
@@ -1501,13 +1542,17 @@ impl SowApp {
             target_owner: target.owner,
             troops: Some(troops),
         });
-        if target.is_allied {
-            self.ui.app.hud_state.show_betrayal_warning = Some((target.owner, intent));
-            return true;
-        }
-        if !target.is_attackable() || !self.can_attack(tile_idx, target.owner) {
+        if !target.is_attackable() && !target.is_allied && !target.can_betray_teammate() {
             self.add_map_feedback(crate::ui::UiText::new("hud.attack_out_of_range"));
             return false;
+        }
+        if !self.can_attack(tile_idx, target.owner) {
+            self.add_map_feedback(crate::ui::UiText::new("hud.attack_out_of_range"));
+            return false;
+        }
+        if target.needs_betrayal_confirmation() {
+            self.ui.app.hud_state.show_betrayal_warning = Some((target.owner, intent));
+            return true;
         }
         self.send_intent(intent)
     }
@@ -1520,15 +1565,26 @@ impl SowApp {
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
-        if target.is_teammate {
+        if target.is_teammate && !target.can_betray_teammate() {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_teammate"));
             return false;
         }
-        if target.is_allied {
+        let can_betray_allied = target.is_allied && !target.is_teammate;
+        if can_betray_allied
+            && self
+                .sim
+                .engine
+                .as_ref()
+                .is_some_and(|engine| engine.campaign_unlocks.is_some())
+        {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_alliance"));
             return false;
         }
-        if target.owner != 0 && !target.is_enemy() {
+        if target.owner != 0
+            && !target.is_enemy()
+            && !target.can_betray_teammate()
+            && !can_betray_allied
+        {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_own_target"));
             return false;
         }
@@ -1548,11 +1604,16 @@ impl SowApp {
             ));
             return false;
         }
-        self.send_intent(sow_core::protocol::GameplayIntent::LaunchFleet {
+        let intent = sow_core::protocol::GameplayIntent::LaunchFleet {
             target_tile: tile_idx,
             troops: Some(troops),
-        });
-        true
+        };
+        if target.needs_betrayal_confirmation() {
+            self.ui.app.hud_state.show_betrayal_warning = Some((target.owner, intent));
+            true
+        } else {
+            self.send_intent(intent)
+        }
     }
 
     fn open_transfer_from_tile(&mut self, tile_idx: u32, mode: TransferMode) -> bool {
@@ -1612,9 +1673,16 @@ impl SowApp {
         let me = snapshot.players.iter().find(|player| player.id == my_id);
         let other = snapshot.players.iter().find(|player| player.id == owner);
         let is_betrayer = other.is_some_and(|player| player.can_retaliate);
+        let me_can_retaliate = me.is_some_and(|player| player.can_retaliate);
         let is_teammate = me
             .zip(other)
             .is_some_and(|(me, other)| me.team.is_some() && me.team == other.team);
+        let team_betrayal_enabled = self.sim.config.game_mode == "Teams"
+            && self
+                .sim
+                .engine
+                .as_ref()
+                .is_some_and(|engine| engine.campaign_unlocks.is_none());
         let is_allied = me.is_some_and(|player| player.alliances.contains(&owner) && !is_betrayer);
         let has_alliance_request =
             me.is_some_and(|player| player.alliance_requests.contains(&owner));
@@ -1627,6 +1695,9 @@ impl SowApp {
             my_id,
             is_allied,
             is_teammate,
+            is_betrayer,
+            me_can_retaliate,
+            team_betrayal_enabled,
             has_alliance_request,
             has_proposed_alliance,
             is_in_renewal_window: sow_core::diplomacy::alliance_can_renew(

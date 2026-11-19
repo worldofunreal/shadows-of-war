@@ -384,18 +384,46 @@ impl SowApp {
                 snap.dirty_tiles = existing.dirty_tiles;
             }
         }
+        let team_betrayal_enabled = self.sim.config.game_mode == "Teams"
+            && self
+                .sim
+                .engine
+                .as_ref()
+                .is_some_and(|engine| engine.campaign_unlocks.is_none());
         retain_active_local_betrayal_owners(
             &mut self.ui.local_betrayal_owners,
             &snap.players,
             my_id,
+            team_betrayal_enabled,
         );
         if my_id != 0
             && snap
                 .players
                 .iter()
-                .any(|player| player.id == my_id && player.traitor)
+                .any(|player| {
+                    player.id == my_id
+                        && if team_betrayal_enabled {
+                            player.can_retaliate
+                        } else {
+                            player.traitor
+                        }
+                })
         {
             self.ui.local_betrayal_owners.insert(my_id);
+        }
+        if team_betrayal_enabled
+            && let Some(team) = snap
+                .players
+                .iter()
+                .find(|player| player.id == my_id)
+                .and_then(|player| player.team)
+        {
+            self.ui.local_betrayal_owners.extend(
+                snap.players
+                    .iter()
+                    .filter(|player| player.team == Some(team) && player.can_retaliate)
+                    .map(|player| player.id),
+            );
         }
     }
 
@@ -531,6 +559,7 @@ fn retain_active_local_betrayal_owners(
     owners: &mut std::collections::BTreeSet<u16>,
     players: &[sow_core::protocol::PlayerSnapshot],
     my_id: u16,
+    retaliation_only: bool,
 ) {
     if my_id == 0 {
         owners.clear();
@@ -539,7 +568,14 @@ fn retain_active_local_betrayal_owners(
     owners.retain(|owner_id| {
         players
             .iter()
-            .any(|player| player.id == *owner_id && player.traitor)
+            .any(|player| {
+                player.id == *owner_id
+                    && if retaliation_only {
+                        player.can_retaliate
+                    } else {
+                        player.traitor
+                    }
+            })
     });
 }
 

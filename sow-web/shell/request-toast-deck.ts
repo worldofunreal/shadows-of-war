@@ -73,6 +73,18 @@ export function createRequestToastDeckState(): RequestToastDeckState {
     };
 }
 
+const EMPTY_ENTRIES: RequestToastEntry[] = [];
+const EMPTY_DECK_VIEW: RequestToastDeckView = {
+    visible: EMPTY_ENTRIES,
+    overflowCount: 0,
+    totalPending: 0,
+    nextExpiryMs: null,
+};
+const scratchActiveKeys = new Set<string>();
+const scratchCurrentByKey = new Map<string, { request: HudInboxRequest; signature: string }>();
+const scratchActiveSignatures = new Set<string>();
+const scratchIncomingKeys = new Set<string>();
+
 export function isValidInboxRequest(request: HudInboxRequest | null | undefined): request is HudInboxRequest {
     return Boolean(
         request &&
@@ -80,6 +92,13 @@ export function isValidInboxRequest(request: HudInboxRequest | null | undefined)
             Number.isSafeInteger(request.requester_id) &&
             request.requester_id > 0,
     );
+}
+
+/** Floating toast popups are restricted to alliance proposals/renewals so aid requests stay quiet in Inbox. */
+export function isPopupEligibleRequest(
+    request: HudInboxRequest | null | undefined,
+): request is HudInboxRequest {
+    return Boolean(isValidInboxRequest(request) && request.kind === "alliance");
 }
 
 export function requestKey(request: HudInboxRequest): string {
@@ -120,12 +139,17 @@ export function syncRequestCountdowns(
     countdowns: Map<string, RequestCountdownRecord>,
     nowMs: number,
 ): void {
-    const activeKeys = new Set<string>();
-    for (const request of requests) {
+    if (requests.length === 0) {
+        if (countdowns.size > 0) countdowns.clear();
+        return;
+    }
+    scratchActiveKeys.clear();
+    for (let i = 0; i < requests.length; i++) {
+        const request = requests[i];
         if (!isValidInboxRequest(request)) continue;
         const key = requestKey(request);
-        if (activeKeys.has(key)) continue;
-        activeKeys.add(key);
+        if (scratchActiveKeys.has(key)) continue;
+        scratchActiveKeys.add(key);
         const remainingSecs = Number(request.remaining_seconds);
         if (!Number.isFinite(remainingSecs)) {
             countdowns.delete(key);
@@ -155,11 +179,12 @@ export function syncRequestCountdowns(
             });
         }
     }
-    for (const key of Array.from(countdowns.keys())) {
-        if (!activeKeys.has(key)) {
+    for (const key of countdowns.keys()) {
+        if (!scratchActiveKeys.has(key)) {
             countdowns.delete(key);
         }
     }
+    scratchActiveKeys.clear();
 }
 
 export function readRequestCountdown(
@@ -186,29 +211,51 @@ export function reconcileRequestToastDeck(
     requests: HudInboxRequest[],
     countdowns: Map<string, RequestCountdownRecord>,
     nowMs: number,
-    options: { inboxOpen?: boolean; toastTtlMs?: number; maxVisible?: number } = {},
+    options: {
+        inboxOpen?: boolean;
+        toastTtlMs?: number;
+        maxVisible?: number;
+        filter?: (request: HudInboxRequest) => boolean;
+    } = {},
 ): RequestToastDeckView {
-    const toastTtlMs = Math.max(1000, options.toastTtlMs ?? REQUEST_TOAST_TTL_MS);
-    const currentByKey = new Map<string, { request: HudInboxRequest; signature: string }>();
-    const activeSignatures = new Set<string>();
-    for (const request of requests) {
-        if (!isValidInboxRequest(request)) continue;
-        const key = requestKey(request);
-        if (currentByKey.has(key)) continue;
-        const sig = requestSignature(request);
-        currentByKey.set(key, { request, signature: sig });
-        activeSignatures.add(sig);
+    const filter = options.filter ?? isPopupEligibleRequest;
+    if (state.entries.length === 0 && requests.length === 0) {
+        if (state.knownSignatures.size > 0) state.knownSignatures.clear();
+        if (state.dismissedSignatures.size > 0) state.dismissedSignatures.clear();
+        return EMPTY_DECK_VIEW;
     }
 
-    for (const sig of Array.from(state.dismissedSignatures)) {
-        if (!activeSignatures.has(sig)) {
+    const toastTtlMs = Math.max(1000, options.toastTtlMs ?? REQUEST_TOAST_TTL_MS);
+    scratchCurrentByKey.clear();
+    scratchActiveSignatures.clear();
+    for (let i = 0; i < requests.length; i++) {
+        const request = requests[i];
+        if (!filter(request)) continue;
+        const key = requestKey(request);
+        if (scratchCurrentByKey.has(key)) continue;
+        const sig = requestSignature(request);
+        scratchCurrentByKey.set(key, { request, signature: sig });
+        scratchActiveSignatures.add(sig);
+    }
+
+    if (scratchCurrentByKey.size === 0 && state.entries.length === 0) {
+        if (state.knownSignatures.size > 0) state.knownSignatures.clear();
+        if (state.dismissedSignatures.size > 0) state.dismissedSignatures.clear();
+        scratchCurrentByKey.clear();
+        scratchActiveSignatures.clear();
+        return EMPTY_DECK_VIEW;
+    }
+
+    for (const sig of state.dismissedSignatures) {
+        if (!scratchActiveSignatures.has(sig)) {
             state.dismissedSignatures.delete(sig);
         }
     }
 
     const retained: RequestToastEntry[] = [];
-    for (const entry of state.entries) {
-        const live = currentByKey.get(entry.key);
+    for (let i = 0; i < state.entries.length; i++) {
+        const entry = state.entries[i];
+        const live = scratchCurrentByKey.get(entry.key);
         if (!live) continue;
         if (live.signature !== entry.signature) continue;
         if (state.dismissedSignatures.has(entry.signature)) continue;
@@ -223,7 +270,8 @@ export function reconcileRequestToastDeck(
     }
 
     const incoming: RequestToastEntry[] = [];
-    for (const [key, live] of currentByKey.entries()) {
+    scratchIncomingKeys.clear();
+    for (const [key, live] of scratchCurrentByKey.entries()) {
         const prevSig = state.knownSignatures.get(key);
         const isNewOrUpdated = !prevSig || prevSig !== live.signature;
         if (!isNewOrUpdated) continue;
@@ -238,6 +286,7 @@ export function reconcileRequestToastDeck(
             : toastTtlMs;
         if (requestRemainingMs <= 0) continue;
         const durationMs = Math.min(toastTtlMs, requestRemainingMs);
+        scratchIncomingKeys.add(key);
         incoming.push({
             key,
             signature: live.signature,
@@ -247,38 +296,48 @@ export function reconcileRequestToastDeck(
         });
     }
 
-    const incomingKeys = new Set(incoming.map((entry) => entry.key));
-    const filteredRetained = retained.filter((entry) => !incomingKeys.has(entry.key));
-    const combined = [...incoming, ...filteredRetained];
+    const combined: RequestToastEntry[] =
+        incoming.length > 0 ? incoming.slice() : [];
+    for (let i = 0; i < retained.length; i++) {
+        const entry = retained[i];
+        if (!scratchIncomingKeys.has(entry.key)) {
+            combined.push(entry);
+        }
+    }
+    scratchIncomingKeys.clear();
 
     state.knownSignatures.clear();
-    for (const [key, live] of currentByKey.entries()) {
+    for (const [key, live] of scratchCurrentByKey.entries()) {
         state.knownSignatures.set(key, live.signature);
     }
+    const totalPending = scratchCurrentByKey.size;
+    scratchCurrentByKey.clear();
+    scratchActiveSignatures.clear();
 
     const rawLimit = Number(options.maxVisible);
     const maxVisible = Number.isFinite(rawLimit)
         ? Math.max(1, Math.min(MAX_REQUEST_TOAST_CARDS, Math.floor(rawLimit)))
         : MAX_REQUEST_TOAST_CARDS;
-    const kept = combined.slice(0, maxVisible);
-    const evicted = combined.slice(maxVisible);
-    for (const entry of evicted) {
-        // Evicted overflow cards disappear from floating toasts ("once and bye") and stay in Inbox.
-        state.dismissedSignatures.add(entry.signature);
+    if (combined.length > maxVisible) {
+        for (let i = maxVisible; i < combined.length; i++) {
+            // Evicted overflow cards disappear from floating toasts ("once and bye") and stay in Inbox.
+            state.dismissedSignatures.add(combined[i].signature);
+        }
+        combined.length = maxVisible;
     }
-    state.entries = kept;
-    const visible = kept;
+    state.entries = combined;
     let nextExpiryMs: number | null = null;
-    for (const entry of state.entries) {
-        if (nextExpiryMs === null || entry.toastExpiresAtMs < nextExpiryMs) {
-            nextExpiryMs = entry.toastExpiresAtMs;
+    for (let i = 0; i < state.entries.length; i++) {
+        const expiresAt = state.entries[i].toastExpiresAtMs;
+        if (nextExpiryMs === null || expiresAt < nextExpiryMs) {
+            nextExpiryMs = expiresAt;
         }
     }
 
     return {
-        visible,
-        overflowCount: Math.max(0, currentByKey.size - visible.length),
-        totalPending: currentByKey.size,
+        visible: combined,
+        overflowCount: Math.max(0, totalPending - combined.length),
+        totalPending,
         nextExpiryMs,
     };
 }

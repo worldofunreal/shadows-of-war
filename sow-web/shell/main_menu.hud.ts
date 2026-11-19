@@ -115,6 +115,11 @@ type InboxRequestParts = PlayerIdentityParts & {
   accept: HTMLButtonElement;
   reject: HTMLButtonElement;
   requestKey: string;
+  patchedSignature: string;
+  lastTimerSeconds: number;
+  lastTimerUrgent: boolean | null;
+  countdownAnchorKey: string;
+  countdownAnimAlt: boolean;
 };
 type RequestToastCardParts = InboxRequestParts & {
   stackIndex: number;
@@ -282,8 +287,11 @@ type HudRefs = {
   transferStockGold: HTMLElement;
   transferIdentity: PlayerIdentityParts;
   betrayal: HTMLElement;
+  betrayalTitle: HTMLElement;
+  betrayalCopy: HTMLElement;
   betrayalTarget: HTMLElement;
   betrayalCancel: HTMLElement;
+  betrayalConfirmLabel: HTMLElement;
   betrayalReturnFocus: HTMLElement | null;
   betrayalIdentity: PlayerIdentityParts;
   surrender: HTMLElement;
@@ -416,6 +424,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   let notificationTimer: number | null = null;
   let bellRingTimer: number | null = null;
   let lastInboxCount = -1;
+  let lastAllianceInboxCount = -1;
+  let inboxDataVersion = 0;
+  let pendingFreshInbox = false;
+  let requestToastStateVersion = 0;
+  let requestToastRenderKey = "";
+  let lastRequestToastsVisible: boolean | null = null;
+  let lastRequestToastsStackCount = -1;
+  let cachedIntegerLocale = "";
+  let cachedIntegerFormatter: Intl.NumberFormat | null = null;
+  let visibilityListenerBound = false;
   const requestCountdowns = new Map<string, RequestCountdownRecord>();
   const requestToastDeck: RequestToastDeckState = createRequestToastDeckState();
   type RequestToastExitMode = "accept" | "dismiss" | "expire";
@@ -1752,8 +1770,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       transferStockGold: requiredHudElement("sow-hud-transfer-stock-gold"),
       transferIdentity: createPlayerIdentity(),
       betrayal: requiredHudElement("sow-hud-betrayal-modal"),
+      betrayalTitle: requiredHudElement("sow-hud-betrayal-title"),
+      betrayalCopy: requiredHudElement("sow-hud-betrayal-copy"),
       betrayalTarget: requiredHudElement("sow-hud-betrayal-target"),
       betrayalCancel: requiredHudElement("sow-hud-betrayal-cancel"),
+      betrayalConfirmLabel: requiredHudElement("sow-hud-betrayal-confirm-label"),
       betrayalReturnFocus: null,
       betrayalIdentity: createPlayerIdentity(),
       surrender: requiredHudElement("sow-hud-surrender-modal"),
@@ -2462,7 +2483,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       SOW_t("hud.keep_alliance") +
       '</button><button class="sow-hud__betrayal-confirm" id="sow-hud-betrayal-confirm" type="button" data-command="confirm_betrayal">' +
       statusIcon("traitor", "sow-hud__inline-icon") +
+      '<span id="sow-hud-betrayal-confirm-label">' +
       SOW_t("hud.attack") +
+      "</span>" +
       "</button></div>" +
       "  </section>" +
       "</div>" +
@@ -7007,31 +7030,85 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       accept: buttons[0],
       reject: buttons[1],
       requestKey: requestKey(request),
+      patchedSignature: "",
+      lastTimerSeconds: -1,
+      lastTimerUrgent: null,
+      countdownAnchorKey: "",
+      countdownAnimAlt: false,
     };
+  }
+
+  function getInboxNumberFormat(): Intl.NumberFormat {
+    const locale = String(window.SOW_LOCALE || "en");
+    if (!cachedIntegerFormatter || cachedIntegerLocale !== locale) {
+      cachedIntegerLocale = locale;
+      cachedIntegerFormatter = new Intl.NumberFormat(locale, {
+        maximumFractionDigits: 0,
+      });
+    }
+    return cachedIntegerFormatter;
   }
 
   function patchRequestCardCountdown(
     row: InboxRequestParts,
     key: string,
     nowMs: number,
+    reducedMotion = isRequestToastReducedMotion(),
   ): void {
     const countdown = readRequestCountdown(key, requestCountdowns, nowMs);
     if (!countdown) {
-      row.timer.hidden = true;
-      row.element.classList.remove("is-expiring");
-      row.progressFill.style.transform = "scaleX(1)";
+      if (!row.timer.hidden) row.timer.hidden = true;
+      if (row.lastTimerUrgent !== false) {
+        row.element.classList.remove("is-expiring");
+        row.lastTimerUrgent = false;
+      }
+      if (row.countdownAnchorKey !== "") {
+        row.countdownAnchorKey = "";
+        row.progressFill.style.animation = "none";
+        row.progressFill.style.transform = "scaleX(1)";
+      }
+      row.lastTimerSeconds = -1;
       return;
     }
-    const label = tWithFallback(
-      "hud.request_expires_in",
-      { seconds: String(countdown.remainingSeconds) },
-      countdown.remainingSeconds + "s",
-    );
-    if (row.timer.textContent !== label) row.timer.textContent = label;
-    row.timer.hidden = false;
-    row.element.classList.toggle("is-expiring", countdown.urgent);
-    row.progressFill.style.transform =
-      "scaleX(" + countdown.progress.toFixed(3) + ")";
+    if (row.lastTimerSeconds !== countdown.remainingSeconds) {
+      row.lastTimerSeconds = countdown.remainingSeconds;
+      const label = tWithFallback(
+        "hud.request_expires_in",
+        { seconds: String(countdown.remainingSeconds) },
+        countdown.remainingSeconds + "s",
+      );
+      if (row.timer.textContent !== label) row.timer.textContent = label;
+    }
+    if (row.timer.hidden) row.timer.hidden = false;
+    if (row.lastTimerUrgent !== countdown.urgent) {
+      row.lastTimerUrgent = countdown.urgent;
+      row.element.classList.toggle("is-expiring", countdown.urgent);
+    }
+    const record = requestCountdowns.get(key);
+    if (reducedMotion || !record) {
+      if (row.countdownAnchorKey !== "reduced") {
+        row.countdownAnchorKey = "reduced";
+        row.progressFill.style.animation = "none";
+      }
+      const nextScale = "scaleX(" + countdown.progress.toFixed(3) + ")";
+      if (row.progressFill.style.transform !== nextScale) {
+        row.progressFill.style.transform = nextScale;
+      }
+      return;
+    }
+    const anchorKey =
+      record.signature + ":" + Math.round(record.expiresAtMs) + ":" + record.ttlMs;
+    if (row.countdownAnchorKey !== anchorKey) {
+      row.countdownAnchorKey = anchorKey;
+      row.countdownAnimAlt = !row.countdownAnimAlt;
+      const elapsedMs = Math.max(0, record.ttlMs - countdown.remainingMs);
+      const animName = row.countdownAnimAlt
+        ? "sow-request-timer-drain-b"
+        : "sow-request-timer-drain-a";
+      row.progressFill.style.transform = "";
+      row.progressFill.style.animation =
+        animName + " " + record.ttlMs + "ms linear -" + elapsedMs + "ms 1 forwards";
+    }
   }
 
   function patchInboxRequestCard(
@@ -7039,10 +7116,53 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     request: HudInboxRequest,
     numbers: Intl.NumberFormat,
     nowMs: number,
+    reducedMotion = isRequestToastReducedMotion(),
   ): void {
     const key = requestKey(request);
+    const locale = String(window.SOW_LOCALE || "en");
+    const sig =
+      request.kind +
+      ":" +
+      request.requester_id +
+      ":" +
+      (request.is_renewal ? "1" : "0") +
+      ":" +
+      (request.call_id ?? 0) +
+      ":" +
+      (request.gold ?? 0) +
+      ":" +
+      (request.troops ?? 0) +
+      ":" +
+      (request.pay_gold ?? 0) +
+      ":" +
+      (request.pay_troops ?? 0) +
+      ":" +
+      (request.active === false ? "0" : "1") +
+      ":" +
+      (request.name || "") +
+      ":" +
+      (request.avatar
+        ? request.avatar.kind +
+          ":" +
+          (request.avatar.slug || "") +
+          ":" +
+          (request.avatar.player_id ?? "") +
+          ":" +
+          (request.avatar.expression || "") +
+          ":" +
+          avatarTransitionKey(request.avatar.transition)
+        : "") +
+      ":" +
+      locale;
+    if (row.patchedSignature === sig && row.requestKey === key) {
+      patchRequestCardCountdown(row, key, nowMs, reducedMotion);
+      return;
+    }
+    row.patchedSignature = sig;
     row.requestKey = key;
-    row.element.dataset.requestKey = key;
+    if (row.element.dataset.requestKey !== key) {
+      row.element.dataset.requestKey = key;
+    }
     const name = request.name || SOW_t("hud.player_name");
     renderPlayerIdentity(row, name, request.avatar);
     const values: Record<string, string> = { name: name };
@@ -7125,18 +7245,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       row.accept.disabled ? SOW_t("hud.action_unavailable") : null,
     );
     row.element.classList.toggle("is-inactive", row.accept.disabled);
-    patchRequestCardCountdown(row, key, nowMs);
+    patchRequestCardCountdown(row, key, nowMs, reducedMotion);
   }
 
   function syncAllRequestCountdowns(): void {
     if (!hudRefs) return;
     const nowMs = Date.now();
-    for (const key of hudRefs.inboxRequestKeys) {
-      const row = hudRefs.inboxRequests[key];
-      if (row) patchRequestCardCountdown(row, key, nowMs);
+    const reducedMotion = isRequestToastReducedMotion();
+    if (activeHudPanel === "inbox") {
+      for (const key of hudRefs.inboxRequestKeys) {
+        const row = hudRefs.inboxRequests[key];
+        if (row) patchRequestCardCountdown(row, key, nowMs, reducedMotion);
+      }
     }
     for (const card of hudRefs.requestToastCards) {
-      patchRequestCardCountdown(card, card.requestKey, nowMs);
+      patchRequestCardCountdown(card, card.requestKey, nowMs, reducedMotion);
     }
   }
 
@@ -7146,28 +7269,62 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       requestToastExpiryTimer = null;
     }
     if (requestCountdownTimer) {
-      window.clearInterval(requestCountdownTimer);
+      window.clearTimeout(requestCountdownTimer);
       requestCountdownTimer = null;
     }
   }
 
+  function nextCountdownDelayMs(nowMs: number): number | null {
+    if (!hudRefs || requestCountdowns.size === 0) return null;
+    let minDelay = Infinity;
+    const observeKey = function (key: string): void {
+      const record = requestCountdowns.get(key);
+      if (!record) return;
+      const remainingMs = Math.max(0, record.expiresAtMs - nowMs);
+      if (remainingMs <= 0) return;
+      const rem = remainingMs % 1000;
+      const delay = rem > 0 ? rem : 1000;
+      if (delay < minDelay) minDelay = delay;
+    };
+    if (activeHudPanel === "inbox") {
+      for (const key of hudRefs.inboxRequestKeys) observeKey(key);
+    }
+    for (const card of hudRefs.requestToastCards) observeKey(card.requestKey);
+    if (!Number.isFinite(minDelay)) return null;
+    return Math.max(80, Math.min(1050, Math.ceil(minDelay) + 15));
+  }
+
   function ensureRequestCountdownLoop(): void {
+    if (!visibilityListenerBound && typeof document !== "undefined") {
+      visibilityListenerBound = true;
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden && hudRefs) {
+          syncAllRequestCountdowns();
+          ensureRequestCountdownLoop();
+        } else if (document.hidden && requestCountdownTimer) {
+          window.clearTimeout(requestCountdownTimer);
+          requestCountdownTimer = null;
+        }
+      });
+    }
+    if (requestCountdownTimer) {
+      window.clearTimeout(requestCountdownTimer);
+      requestCountdownTimer = null;
+    }
+    const isHidden = typeof document !== "undefined" && document.hidden;
     const needsTick =
       Boolean(hudRefs) &&
+      !isHidden &&
       requestCountdowns.size > 0 &&
       (activeHudPanel === "inbox" || requestToastDeck.entries.length > 0);
-    if (!needsTick) {
-      if (requestCountdownTimer) {
-        window.clearInterval(requestCountdownTimer);
-        requestCountdownTimer = null;
-      }
-      return;
-    }
-    if (!requestCountdownTimer) {
-      requestCountdownTimer = window.setInterval(function () {
-        syncAllRequestCountdowns();
-      }, 250);
-    }
+    if (!needsTick) return;
+    const delayMs = nextCountdownDelayMs(Date.now());
+    if (delayMs === null) return;
+    requestCountdownTimer = window.setTimeout(function () {
+      requestCountdownTimer = null;
+      syncAllRequestCountdowns();
+      ensureRequestCountdownLoop();
+    }, delayMs);
   }
 
   function isRequestToastReducedMotion(): boolean {
@@ -7185,10 +7342,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   ): void {
     if (!hudRefs || !hudRefs.requestToasts) return;
     const visible = !inboxOpen && (visibleCount > 0 || leavingToastCards.size > 0);
-    hudRefs.requestToasts.hidden = !visible;
-    hudRefs.requestToasts.dataset.stackCount = String(visibleCount);
-    if (hudRoot) {
-      hudRoot.dataset.requestToastsVisible = String(visible);
+    if (lastRequestToastsVisible !== visible) {
+      lastRequestToastsVisible = visible;
+      hudRefs.requestToasts.hidden = !visible;
+      if (hudRoot) {
+        hudRoot.dataset.requestToastsVisible = String(visible);
+      }
+    }
+    if (lastRequestToastsStackCount !== visibleCount) {
+      lastRequestToastsStackCount = visibleCount;
+      hudRefs.requestToasts.dataset.stackCount = String(visibleCount);
     }
   }
 
@@ -8759,6 +8922,20 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       betrayalOpen = Boolean(betrayal);
       hudRefs!.betrayal.classList.toggle("hidden", !betrayalOpen);
       if (betrayal) {
+        hudRefs!.betrayalTitle.textContent = SOW_t(
+          betrayal.is_teammate ? "hud.betray_teammate" : "hud.break_alliance",
+        );
+        hudRefs!.betrayalCopy.textContent = SOW_t(
+          betrayal.is_teammate
+            ? "hud.betray_teammate_body"
+            : "hud.break_alliance_body",
+        );
+        hudRefs!.betrayalCancel.textContent = SOW_t(
+          betrayal.is_teammate ? "endgame.cancel" : "hud.keep_alliance",
+        );
+        hudRefs!.betrayalConfirmLabel.textContent = SOW_t(
+          betrayal.is_fleet ? "hud.map_action_fleet" : "hud.attack",
+        );
         renderPlayerIdentity(
           hudRefs!.betrayalIdentity,
           betrayal.ally_name,

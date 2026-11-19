@@ -2174,6 +2174,572 @@ function acknowledgeShownReceipts(accountId: string | null) {
     }
 }
 
+const REWARD_REVEAL_KEYFRAMES: Keyframe[] = [
+    { offset: 0, opacity: 0, transform: "translate3d(0, 24px, 0) scale(0.86)" },
+    { offset: 0.58, opacity: 1, transform: "translate3d(0, -4px, 0) scale(1.03)" },
+    { offset: 1, opacity: 1, transform: "translate3d(0, 0, 0) scale(1)" },
+];
+
+interface NumericChannel {
+    from: number;
+    to: number;
+    startMs: number;
+    durMs: number;
+    done: boolean;
+}
+
+interface ChoreographedStageOptions {
+    token: number;
+    stages: RewardStage[];
+    startValues: ProgressionValues;
+    targetValues: ProgressionValues;
+    stageClassName?: string;
+    impactPower?: number;
+    hasBanner?: boolean;
+    hasAudio?: boolean;
+    beforeStart?: (stageEl: HTMLElement) => void;
+    onComplete: (shown: boolean) => void;
+}
+
+function formatRewardCardText(stage: RewardStage, progress = 1): string {
+    if (stage.kind === "level") return SOW_t("profile.level", { level: stage.level });
+    if (stage.kind === "leader") return stage.label;
+    const eased = progress >= 1 ? 1 : 1 - Math.pow(1 - Math.max(0, progress), 3);
+    return "+" + Math.round(stage.amount * eased);
+}
+
+function runChoreographedStage(config: ChoreographedStageOptions) {
+    const { token, stages, startValues, targetValues } = config;
+    if (!stages.length) {
+        config.onComplete(true);
+        return;
+    }
+
+    const levelStages = stages.filter(function (s): s is Extract<RewardStage, { kind: "level" }> {
+        return s.kind === "level";
+    });
+    const startReq = xpForLevel(startValues.level);
+    const firstLevelCap = levelStages.length
+        ? Math.min(targetValues.xp, totalXpForLevel(levelStages[0].level))
+        : targetValues.xp;
+    const xpFillPct =
+        startReq > 0 ? Math.min(100, Math.max(0, ((firstLevelCap - startValues.xp) / startReq) * 100)) : 0;
+
+    let plan: RewardChoreographyPlan = planRewardChoreography(
+        stages.map(function (stage) {
+            return { kind: stage.kind, amount: stage.amount };
+        }),
+        {
+            xpFillPct,
+            levelsGained: levelStages.length,
+            hasBanner: Boolean(config.hasBanner),
+        },
+    );
+
+    const trackedAnims = new Set<Animation>();
+    const impactTimers = new Set<number>();
+    const impactEls = new Set<HTMLElement>();
+    const revealAnims: Array<Animation | null> = new Array(stages.length).fill(null);
+
+    let mode: RewardPlaybackMode = "normal";
+    let speed = 1;
+    let exitSpeed = 1;
+    let accelStartedRealMs = 0;
+    let virtualTime = 0;
+    let lastRealMs = performance.now();
+    let frameId = 0;
+    let stopped = false;
+    let exiting = false;
+    let exitElapsedMs = 0;
+    let exitAnim: Animation | null = null;
+    let geometryCaptured = false;
+    let stageRect: DOMRect | null = null;
+    let fromRects: Array<DOMRect | null> = [];
+    const toRects = new Map<string, DOMRect | null>();
+
+    const launched = new Array<boolean>(stages.length).fill(false);
+    const landed = new Array<boolean>(stages.length).fill(false);
+    const amountSettled = new Array<boolean>(stages.length).fill(false);
+
+    const displayed: ProgressionValues = Object.assign({}, startValues);
+    const xpTrack = root.querySelector<HTMLElement>(".sow-menu__xp-track");
+    let crownsChan: NumericChannel | null = null;
+    let gemsChan: NumericChannel | null = null;
+    let xpChan: (NumericChannel & { targetLevel: number }) | null = null;
+
+    function clearTrackedImpacts() {
+        impactTimers.forEach(function (timerId) {
+            window.clearTimeout(timerId);
+        });
+        impactTimers.clear();
+        impactEls.forEach(function (el) {
+            el.remove();
+        });
+        impactEls.clear();
+    }
+
+    function cancelTrackedAnims() {
+        trackedAnims.forEach(function (anim) {
+            try {
+                anim.cancel();
+            } catch {}
+        });
+        trackedAnims.clear();
+        if (exitAnim) {
+            try {
+                exitAnim.cancel();
+            } catch {}
+            exitAnim = null;
+        }
+    }
+
+    function registerStageCssAnims(rate: number) {
+        if (activeRewardStage && typeof activeRewardStage.getAnimations === "function") {
+            activeRewardStage.getAnimations({ subtree: true }).forEach(function (anim) {
+                if (anim === exitAnim) return;
+                trackedAnims.add(anim);
+                if (rate !== 1 && anim.playState !== "finished" && anim.playState !== "idle") {
+                    try {
+                        anim.playbackRate = rate;
+                    } catch {}
+                }
+            });
+        }
+        const progression = root.querySelector<HTMLElement>("[data-progression]");
+        if (progression && typeof progression.getAnimations === "function") {
+            progression.getAnimations({ subtree: true }).forEach(function (anim) {
+                if (rate !== 1 && anim.playState !== "finished" && anim.playState !== "idle") {
+                    try {
+                        anim.playbackRate = rate;
+                    } catch {}
+                }
+            });
+        }
+    }
+
+    function syncPlaybackRates(rate: number) {
+        trackedAnims.forEach(function (anim) {
+            if (anim === exitAnim) return;
+            if (anim.playState === "finished" || anim.playState === "idle") return;
+            try {
+                anim.playbackRate = rate;
+            } catch {}
+        });
+        registerStageCssAnims(rate);
+        if (exitAnim && exiting && exitAnim.playState !== "finished") {
+            try {
+                exitAnim.playbackRate = exitSpeed;
+            } catch {}
+        }
+    }
+
+    function finishRevealAnims() {
+        revealAnims.forEach(function (anim, index) {
+            if (anim) {
+                trackedAnims.delete(anim);
+                try {
+                    anim.finish();
+                    anim.cancel();
+                } catch {}
+                revealAnims[index] = null;
+            }
+            items[index]?.card.classList.remove("is-animating");
+        });
+    }
+
+    function captureBatchGeometry() {
+        if (geometryCaptured) return;
+        geometryCaptured = true;
+        finishRevealAnims();
+        stageRect = activeRewardStage ? activeRewardStage.getBoundingClientRect() : null;
+        fromRects = items.map(function (item) {
+            return item.card.getBoundingClientRect();
+        });
+        const selectors = new Set<string>();
+        stages.forEach(function (stage) {
+            if (stage.selector) selectors.add(stage.selector);
+        });
+        selectors.forEach(function (selector) {
+            const target = root.querySelector<HTMLElement>(selector);
+            toRects.set(selector, target ? target.getBoundingClientRect() : null);
+        });
+    }
+
+    function snapAllRevealTexts() {
+        items.forEach(function (item, idx) {
+            if (amountSettled[idx]) return;
+            const text = formatRewardCardText(item.stage, 1);
+            if (item.amount.textContent !== text) item.amount.textContent = text;
+            amountSettled[idx] = true;
+        });
+    }
+
+    function rebaseChannel(chan: NumericChannel | null, value: number, vNow: number, capMs: number) {
+        if (!chan || chan.done) return;
+        const remaining = Math.max(1, chan.startMs + chan.durMs - vNow);
+        chan.from = value;
+        chan.startMs = vNow;
+        chan.durMs = Math.min(remaining, capMs);
+    }
+
+    function rebaseActiveChannels(vNow: number) {
+        rebaseChannel(crownsChan, displayed.crowns, vNow, 180);
+        rebaseChannel(gemsChan, displayed.gems, vNow, 180);
+        const xpCap = levelStages.some(function (_s, idx) {
+            const stageIdx = stages.indexOf(levelStages[idx]);
+            return stageIdx >= 0 && landed[stageIdx];
+        })
+            ? 180
+            : 280;
+        rebaseChannel(xpChan, displayed.xp, vNow, xpCap);
+    }
+
+    function cleanupRunner() {
+        stopped = true;
+        if (frameId) {
+            cancelAnimationFrame(frameId);
+            frameId = 0;
+        }
+        xpTrack?.classList.remove("is-filling");
+        clearTrackedImpacts();
+        cancelTrackedAnims();
+        if (activeRewardRunner === runnerHandle) activeRewardRunner = null;
+    }
+
+    function finishImmediate() {
+        if (stopped) return;
+        cleanupRunner();
+        writeProgression(targetValues);
+        config.onComplete(true);
+    }
+
+    function abort() {
+        if (stopped) return;
+        cleanupRunner();
+        config.onComplete(false);
+    }
+
+    function onSkip() {
+        if (stopped || token !== rewardAnimationToken) return;
+        const nowReal = performance.now();
+        if (mode === "normal") {
+            mode = "accelerating";
+            accelStartedRealMs = nowReal;
+            activeRewardStage?.classList.add("is-accelerating");
+            snapAllRevealTexts();
+            if (!geometryCaptured) captureBatchGeometry();
+            const accel = accelerateChoreographyPlan(plan, virtualTime);
+            plan = accel.plan;
+            speed = accel.speed;
+            exitSpeed = accel.exitSpeed;
+            rebaseActiveChannels(virtualTime);
+            syncPlaybackRates(speed);
+            return;
+        }
+        if (mode === "accelerating" && nowReal - accelStartedRealMs >= 60) {
+            mode = "immediate";
+            finishImmediate();
+        }
+    }
+
+    const runnerHandle = {
+        cancel: function () {
+            if (stopped) return;
+            cleanupRunner();
+        },
+    };
+    activeRewardRunner = runnerHandle;
+
+    const items = createRewardStage(stages, onSkip, {
+        useWaapiReveal: typeof HTMLElement !== "undefined" && typeof HTMLElement.prototype.animate === "function",
+    });
+
+    if (activeRewardStage && config.stageClassName) {
+        activeRewardStage.classList.add(config.stageClassName);
+    }
+    if (activeRewardStage && config.beforeStart) {
+        config.beforeStart(activeRewardStage);
+    }
+    if (config.hasAudio) {
+        playCelebrationSound("fanfare");
+    }
+
+    items.forEach(function (item, idx) {
+        const timing = plan.stages[idx];
+        if (!timing || typeof item.card.animate !== "function") return;
+        item.card.classList.add("is-animating");
+        const anim = item.card.animate(REWARD_REVEAL_KEYFRAMES, {
+            duration: timing.revealDurationMs,
+            delay: timing.revealDelayMs,
+            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+            fill: "both",
+        });
+        trackedAnims.add(anim);
+        revealAnims[idx] = anim;
+    });
+    registerStageCssAnims(1);
+
+    function triggerArrival(index: number, stage: RewardStage, timing: (typeof plan.stages)[number], vNow: number) {
+        if (config.hasAudio) playCelebrationSound("impact");
+        const selector = stage.selector || "";
+        const power =
+            stage.kind === "level"
+                ? 1 + 0.25 * Math.max(0, levelStages.indexOf(stage))
+                : config.impactPower ?? 1;
+
+        if (selector) {
+            playRewardImpact(
+                selector,
+                stage.kind,
+                power,
+                stage.kind === "level" ? stage.level : undefined,
+                {
+                    layerRect: stageRect,
+                    toRect: toRects.get(selector) ?? null,
+                    playbackRate: mode === "accelerating" ? speed : 1,
+                    onMount: function (impactEl, lifetimeMs) {
+                        impactEls.add(impactEl);
+                        const scaledMs =
+                            mode === "accelerating"
+                                ? Math.max(120, Math.round(lifetimeMs / Math.min(speed, 4)))
+                                : lifetimeMs;
+                        const timerId = window.setTimeout(function () {
+                            impactTimers.delete(timerId);
+                            impactEls.delete(impactEl);
+                            impactEl.remove();
+                        }, scaledMs);
+                        impactTimers.add(timerId);
+                    },
+                },
+            );
+            pulseRewardCounter(selector, stage.kind === "level");
+        }
+
+        if (stage.kind === "laurels") {
+            displayed.laurels = targetValues.laurels;
+            return;
+        }
+        if (stage.kind === "leader") {
+            return;
+        }
+        if (stage.kind === "crowns") {
+            crownsChan = {
+                from: displayed.crowns,
+                to: targetValues.crowns,
+                startMs: vNow,
+                durMs: Math.max(1, timing.applyDurationMs),
+                done: false,
+            };
+            return;
+        }
+        if (stage.kind === "gems") {
+            gemsChan = {
+                from: displayed.gems,
+                to: targetValues.gems,
+                startMs: vNow,
+                durMs: Math.max(1, timing.applyDurationMs),
+                done: false,
+            };
+            return;
+        }
+        if (stage.kind === "xp") {
+            xpTrack?.classList.add("is-filling");
+            xpChan = {
+                from: displayed.xp,
+                to: firstLevelCap,
+                startMs: vNow,
+                durMs: Math.max(1, timing.applyDurationMs),
+                targetLevel: levelStages.length ? startValues.level : targetValues.level,
+                done: false,
+            };
+            return;
+        }
+        if (stage.kind === "level") {
+            const levelPos = levelStages.indexOf(stage);
+            const isFinal = levelPos === levelStages.length - 1;
+            const nextCap =
+                isFinal || levelPos < 0
+                    ? targetValues.xp
+                    : Math.min(targetValues.xp, totalXpForLevel(levelStages[levelPos + 1].level));
+            const fromXp = Math.max(displayed.xp, totalXpForLevel(stage.level));
+            displayed.level = stage.level;
+            displayed.xp = fromXp;
+            xpTrack?.classList.add("is-filling");
+            xpChan = {
+                from: fromXp,
+                to: nextCap,
+                startMs: vNow,
+                durMs: Math.max(1, timing.applyDurationMs),
+                targetLevel: stage.level,
+                done: false,
+            };
+        }
+    }
+
+    function stepFrame(now: number) {
+        if (stopped) return;
+        if (token !== rewardAnimationToken || root.hidden || document.visibilityState !== "visible") {
+            abort();
+            return;
+        }
+
+        const dt = Math.min(50, Math.max(0, now - lastRealMs));
+        lastRealMs = now;
+
+        if (!exiting) {
+            virtualTime += dt * speed;
+            const vNow = virtualTime;
+
+            // 1. Reveal card amount roll-ups
+            for (let i = 0; i < plan.stages.length; i++) {
+                if (amountSettled[i]) continue;
+                const s = plan.stages[i];
+                const item = items[i];
+                if (item.stage.kind === "level" || item.stage.kind === "leader") {
+                    amountSettled[i] = true;
+                    continue;
+                }
+                if (vNow >= s.countStartMs) {
+                    const p = s.countDurationMs > 0 ? Math.min(1, (vNow - s.countStartMs) / s.countDurationMs) : 1;
+                    const text = formatRewardCardText(item.stage, p);
+                    if (item.amount.textContent !== text) item.amount.textContent = text;
+                    if (p >= 1) amountSettled[i] = true;
+                }
+            }
+
+            // 2. Capture all layout rects in one batch right as launch phase opens
+            if (!geometryCaptured && vNow >= plan.launchPhaseStartMs) {
+                captureBatchGeometry();
+            }
+
+            // 3. Launch cards at scheduled stagger timestamps
+            for (let i = 0; i < plan.stages.length; i++) {
+                if (launched[i]) continue;
+                const s = plan.stages[i];
+                if (vNow < s.launchAtMs) continue;
+                launched[i] = true;
+                if (!geometryCaptured) captureBatchGeometry();
+                const item = items[i];
+                if (!amountSettled[i]) {
+                    const finalText = formatRewardCardText(item.stage, 1);
+                    if (item.amount.textContent !== finalText) item.amount.textContent = finalText;
+                    amountSettled[i] = true;
+                }
+                const rAnim = revealAnims[i];
+                if (rAnim) {
+                    trackedAnims.delete(rAnim);
+                    try {
+                        rAnim.finish();
+                        rAnim.cancel();
+                    } catch {}
+                    revealAnims[i] = null;
+                }
+                if (config.hasAudio) playCelebrationSound("fly");
+                const selector = item.stage.selector || "";
+                void flyRewardCard(
+                    { card: item.card, stage: { selector } },
+                    token,
+                    {
+                        duration: s.flyDurationMs,
+                        playbackRate: mode === "accelerating" ? speed : 1,
+                        fromRect: fromRects[i] ?? null,
+                        toRect: selector ? (toRects.get(selector) ?? null) : null,
+                        onCreateAnimation: function (anim) {
+                            trackedAnims.add(anim);
+                        },
+                    },
+                );
+            }
+
+            // 4. Trigger impacts & start value interpolation channels upon card arrival
+            let progressionDirty = false;
+            for (let i = 0; i < plan.stages.length; i++) {
+                if (!launched[i] || landed[i]) continue;
+                const s = plan.stages[i];
+                if (vNow < s.landAtMs) continue;
+                landed[i] = true;
+                items[i].card.style.visibility = "hidden";
+                triggerArrival(i, items[i].stage, s, vNow);
+                progressionDirty = true;
+            }
+
+            // 5. Advance active progression channels concurrently (merged cleanly into 1 DOM write)
+            for (const [key, chan] of [
+                ["crowns", crownsChan],
+                ["gems", gemsChan],
+            ] as const) {
+                if (!chan || chan.done) continue;
+                const p = Math.min(1, Math.max(0, (vNow - chan.startMs) / chan.durMs));
+                const eased = 1 - Math.pow(1 - p, 3);
+                displayed[key] = chan.from + (chan.to - chan.from) * eased;
+                if (p >= 1) {
+                    displayed[key] = chan.to;
+                    chan.done = true;
+                }
+                progressionDirty = true;
+            }
+            if (xpChan && !xpChan.done) {
+                const p = Math.min(1, Math.max(0, (vNow - xpChan.startMs) / xpChan.durMs));
+                const eased = 1 - Math.pow(1 - p, 3);
+                displayed.xp = xpChan.from + (xpChan.to - xpChan.from) * eased;
+                displayed.level = xpChan.targetLevel;
+                if (p >= 1) {
+                    displayed.xp = xpChan.to;
+                    displayed.level = xpChan.targetLevel;
+                    xpChan.done = true;
+                    const moreXpOrLevelPending = plan.stages.some(function (s, idx) {
+                        return !landed[idx] && (s.kind === "xp" || s.kind === "level");
+                    });
+                    if (!moreXpOrLevelPending) {
+                        xpTrack?.classList.remove("is-filling");
+                    }
+                }
+                progressionDirty = true;
+            }
+
+            if (progressionDirty) {
+                writeProgression(displayed);
+            }
+
+            // 6. Begin exit fade once every reward and level pulse has settled
+            if (vNow >= plan.exitAtMs) {
+                exiting = true;
+                exitElapsedMs = 0;
+                xpTrack?.classList.remove("is-filling");
+                writeProgression(targetValues);
+                if (activeRewardStage) {
+                    if (typeof activeRewardStage.animate === "function") {
+                        activeRewardStage.dataset.waapiExit = "true";
+                        exitAnim = activeRewardStage.animate([{ opacity: 1 }, { opacity: 0 }], {
+                            duration: plan.exitDurationMs,
+                            easing: "ease-in",
+                            fill: "forwards",
+                        });
+                        if (mode === "accelerating") {
+                            try {
+                                exitAnim.playbackRate = exitSpeed;
+                            } catch {}
+                        }
+                    } else {
+                        activeRewardStage.classList.add("is-exiting");
+                    }
+                }
+            }
+        } else {
+            const currentExitRate = mode === "accelerating" ? exitSpeed : 1;
+            exitElapsedMs += dt * currentExitRate;
+            if (exitElapsedMs >= plan.exitDurationMs) {
+                finishImmediate();
+                return;
+            }
+        }
+
+        frameId = requestAnimationFrame(stepFrame);
+    }
+
+    frameId = requestAnimationFrame(stepFrame);
+}
+
 function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     if (rewardAnimationRunning) return;
     rewardAnimationRunning = true;
@@ -2194,8 +2760,8 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     );
     const unlockedLeaderIds = Array.from(
         new Set(
-            receipts.reduce<string[]>(function (ids, receipt) {
-                return ids.concat(Array.isArray(receipt.unlocked_leaders) ? receipt.unlocked_leaders : []);
+            receipts.reduce<string[]>(function (acc, receipt) {
+                return acc.concat(Array.isArray(receipt.unlocked_leaders) ? receipt.unlocked_leaders : []);
             }, []),
         ),
     ).filter(function (id: string) {
@@ -2209,11 +2775,11 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             amount: 0,
             slug: slug,
             label: SOW_t("heroes.leader_unlocked", { name: name }),
+            selector: "[data-nav-screen='heroes']",
         };
     });
     const canonical = progressionFromState();
-    const target = canonical;
-    const startLevel = (displayedProgression || canonical).level;
+    const startValues = Object.assign({}, displayedProgression || canonical);
     const gainedLevels = new Set<number>();
     receipts.forEach(function (receipt) {
         if (Number.isSafeInteger(receipt.level_before) && Number.isSafeInteger(receipt.level_after)) {
@@ -2226,7 +2792,7 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             return Number.isSafeInteger(receipt.level_before);
         })
     ) {
-        for (let level = startLevel + 1; level <= target.level; level++) gainedLevels.add(level);
+        for (let level = startValues.level + 1; level <= canonical.level; level++) gainedLevels.add(level);
     }
     const levelStages: RewardStage[] = Array.from(gainedLevels)
         .sort(function (a, b) {
@@ -2251,19 +2817,9 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     ].filter(function (stage) {
         return stage.kind === "leader" || stage.amount > 0;
     });
-    let skipRequested = false;
-    let presentationPhase: "revealing" | "flying" | "progressing" | "waiting-leader" | "exiting" | null = null;
-    let currentStageIndex = 0;
-    let leaderTimer: number | null = null;
-    let exitTimer: number | null = null;
 
     function finish(shown: boolean) {
         if (token !== rewardAnimationToken || !menuUi.state || menuUi.state.account_id !== accountId) return;
-        if (leaderTimer !== null) window.clearTimeout(leaderTimer);
-        if (exitTimer !== null) window.clearTimeout(exitTimer);
-        leaderTimer = null;
-        exitTimer = null;
-        presentationPhase = null;
         rewardAnimationToken += 1;
         rewardAnimationRunning = false;
         removeRewardStage();
@@ -2280,177 +2836,30 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
         if (!offerRewardDouble(receipts, accountId)) maybePresentRewards();
     }
 
-    function complete(shown: boolean) {
-        if (!shown || !activeRewardStage) {
-            finish(shown);
-            return;
-        }
-        presentationPhase = "exiting";
-        activeRewardStage.classList.add("is-exiting");
-        exitTimer = window.setTimeout(function () {
-            exitTimer = null;
-            finish(true);
-        }, 240);
-    }
-
-    function skipPresentation() {
-        if (skipRequested || token !== rewardAnimationToken) return;
-        skipRequested = true;
-        removeRewardStage();
-        if (presentationPhase === "revealing") {
-            presentationPhase = null;
-            next(0);
-        } else if (presentationPhase === "waiting-leader") {
-            if (leaderTimer !== null) window.clearTimeout(leaderTimer);
-            leaderTimer = null;
-            presentationPhase = null;
-            next(currentStageIndex + 1);
-        } else if (presentationPhase === "exiting") {
-            if (exitTimer !== null) window.clearTimeout(exitTimer);
-            exitTimer = null;
-            presentationPhase = null;
-            finish(true);
-        }
-    }
-
-    function animateStage(index: number, stage: Extract<RewardStage, { selector: string }>) {
-        if (skipRequested && stage.kind === "laurels") {
-            const current = displayedProgression || progressionFromState();
-            writeProgression(Object.assign({}, current, { laurels: target.laurels }));
-            presentationPhase = null;
-            next(index + 1);
-            return;
-        }
-        const current = displayedProgression || progressionFromState();
-        const nextValues = Object.assign({}, current);
-        const oldLevel = nextValues.level;
-        if (stage.kind === "level") {
-            nextValues.level = Math.max(nextValues.level, stage.level);
-        } else {
-            nextValues[stage.kind] = target[stage.kind];
-            nextValues.level = levelFromXp(nextValues.xp);
-        }
-        presentationPhase = "progressing";
-        if (stage.kind === "level") {
-            const combo = levelStages.indexOf(stage);
-            pulseRewardCounter(stage.selector, true);
-            if (!skipRequested) playRewardImpact(stage.selector, "level", 1 + 0.3 * combo, stage.level);
-            window.setTimeout(function () {
-                if (token !== rewardAnimationToken) {
-                    finish(false);
-                    return;
-                }
-                next(index + 1);
-            }, 340);
-            return;
-        }
-        const req = xpForLevel(current.level);
-        const fillPct = req > 0 ? Math.min(100, ((nextValues.xp - current.xp) / req) * 100) : 0;
-        const levelsGained = Math.max(0, nextValues.level - oldLevel);
-        const duration =
-            stage.kind === "xp" ? Math.min(2400, 360 + fillPct * 4.4 + levelsGained * 450) : 380;
-        animateProgressionTo(nextValues, duration, token).then(function (shown) {
-            if (!shown) {
-                finish(false);
-                return;
-            }
-            pulseRewardCounter(stage.selector, false);
-            next(index + 1);
-        });
-    }
-
-    function next(index: number) {
-        if (token !== rewardAnimationToken || root.hidden || document.visibilityState !== "visible") {
-            finish(false);
-            return;
-        }
-        if (index >= stages.length) {
-            const latest = progressionFromState();
-            const current = displayedProgression || progressionFromState();
-            const changed =
-                latest.xp !== current.xp ||
-                latest.level !== current.level ||
-                latest.crowns !== current.crowns ||
-                latest.laurels !== current.laurels ||
-                latest.gems !== current.gems;
-            if (changed) {
-                presentationPhase = "progressing";
-                animateProgressionTo(latest, 900, token).then(complete);
-            }
-            else complete(true);
-            return;
-        }
-        currentStageIndex = index;
-        const item = items[index];
-        const stage = item.stage;
-        if (stage.kind === "leader") {
-            if (skipRequested) {
-                next(index + 1);
-                return;
-            }
-            presentationPhase = "waiting-leader";
-            leaderTimer = window.setTimeout(function () {
-                leaderTimer = null;
-                presentationPhase = null;
-                next(index + 1);
-            }, 900);
-            return;
-        }
-        if (skipRequested) {
-            animateStage(index, stage);
-            return;
-        }
-        presentationPhase = "flying";
-        flyRewardCard({ card: item.card, stage: stage }, token).then(function (arrived) {
-            if (!arrived) {
-                if (skipRequested) {
-                    animateStage(index, stage);
-                    return;
-                }
-                finish(false);
-                return;
-            }
-            if (skipRequested) {
-                animateStage(index, stage);
-                return;
-            }
-            if (stage.kind !== "level") playRewardImpact(stage.selector, stage.kind, 1);
-            animateStage(index, stage);
-        });
-    }
     if (reducedRewardMotion()) {
         if (!leaderStages.length) {
             finish(true);
             return;
         }
-        const staticItems = createRewardStage(stages, function () {
-            finish(true);
-        });
+        const staticItems = createRewardStage(
+            stages,
+            function () {
+                finish(true);
+            },
+            { useWaapiReveal: false },
+        );
         staticItems.forEach(function (item: RewardItem) {
-            item.amount.textContent =
-                item.stage.kind === "leader"
-                    ? item.stage.label
-                    : item.stage.kind === "level"
-                      ? SOW_t("profile.level", { level: item.stage.level })
-                      : "+" + item.stage.amount;
+            item.amount.textContent = formatRewardCardText(item.stage, 1);
         });
         return;
     }
-    if (!stages.length) {
-        finish(true);
-        return;
-    }
-    const items = createRewardStage(stages, function () {
-        skipPresentation();
-    });
-    presentationPhase = "revealing";
-    revealRewardAmounts(items, token, function () {
-        return skipRequested;
-    }).then(function (shown) {
-        if (skipRequested) return;
-        presentationPhase = null;
-        if (shown) next(0);
-        else finish(false);
+
+    runChoreographedStage({
+        token,
+        stages,
+        startValues,
+        targetValues: canonical,
+        onComplete: finish,
     });
 }
 
@@ -4024,6 +4433,57 @@ export interface MissionCelebrationOptions {
     doubledWithAd: boolean;
 }
 
+function attachMissionBanner(stageEl: HTMLElement, options: MissionCelebrationOptions) {
+    const cards = stageEl.querySelector(".sow-menu__reward-cards");
+    const banner = document.createElement("div");
+    banner.className = "sow-menu__mission-banner";
+    const categoryLabel =
+        options.category === "onboarding"
+            ? SOW_t("missions.tab_onboarding")
+            : options.category === "weekly"
+              ? SOW_t("missions.tab_weekly")
+              : SOW_t("missions.tab_daily");
+    banner.innerHTML =
+        "<div class='sow-menu__mission-banner-aura' aria-hidden='true'></div>" +
+        "<div class='sow-menu__mission-shockwave' aria-hidden='true'></div>" +
+        "<div class='sow-menu__mission-badge'>" +
+        "<div class='sow-menu__mission-badge-rays' aria-hidden='true'></div>" +
+        "<span class='sow-menu__mission-icon' aria-hidden='true'>" +
+        missionIconSvg(options.icon) +
+        "</span>" +
+        "</div>" +
+        "<div class='sow-menu__mission-kicker-wrap'>" +
+        "<span class='sow-menu__mission-kicker-wing' aria-hidden='true'></span>" +
+        "<div class='sow-menu__mission-kicker'>" +
+        esc(categoryLabel) +
+        " · " +
+        esc(SOW_t("missions.mission_completed") || "Misión Cumplida") +
+        "</div>" +
+        "<span class='sow-menu__mission-kicker-wing' aria-hidden='true'></span>" +
+        "</div>" +
+        "<div class='sow-menu__mission-title-box'>" +
+        "<h2 class='sow-menu__mission-title'>" +
+        esc(options.title) +
+        "</h2>" +
+        "<div class='sow-menu__mission-title-sheen' aria-hidden='true'></div>" +
+        "</div>" +
+        (options.description
+            ? "<p class='sow-menu__mission-desc'>" + esc(options.description) + "</p>"
+            : "") +
+        (options.doubledWithAd
+            ? "<div class='sow-menu__mission-doubled-badge'>" +
+              videoPlayIconSvg() +
+              " <span>" +
+              esc(SOW_t("missions.claim_doubled")) +
+              "</span></div>"
+            : "");
+    if (cards) {
+        stageEl.insertBefore(banner, cards);
+    } else {
+        stageEl.appendChild(banner);
+    }
+}
+
 export function runMissionRewardCelebration(options: MissionCelebrationOptions) {
     if (rewardAnimationRunning) return;
     rewardAnimationRunning = true;
@@ -4035,7 +4495,7 @@ export function runMissionRewardCelebration(options: MissionCelebrationOptions) 
     }
     render();
 
-    const stages: Extract<RewardStage, {selector:string}>[] = [];
+    const stages: RewardStage[] = [];
     if (options.crowns > 0) {
         stages.push({
             kind: "crowns",
@@ -4059,7 +4519,7 @@ export function runMissionRewardCelebration(options: MissionCelebrationOptions) 
     const startingProg = displayedProgression || baseline;
     writeProgression(startingProg);
 
-    function finish(shown: boolean) {
+    function finish(_shown: boolean) {
         if (token !== rewardAnimationToken) return;
         rewardAnimationToken += 1;
         rewardAnimationRunning = false;
@@ -4068,125 +4528,42 @@ export function runMissionRewardCelebration(options: MissionCelebrationOptions) 
         render();
     }
 
-    function complete(shown: boolean) {
-        if (!shown || !activeRewardStage) {
-            finish(shown);
-            return;
-        }
-        activeRewardStage.classList.add("is-exiting");
-        window.setTimeout(function () {
-            finish(true);
-        }, 240);
-    }
-
-    if (!stages.length) {
-        finish(true);
-        return;
-    }
-
-    const items = createRewardStage(stages, function () {
-        finish(true);
-    });
-
-    if (activeRewardStage) {
-        activeRewardStage.classList.add("sow-menu__reward-stage--mission");
-        const cards = activeRewardStage.querySelector(".sow-menu__reward-cards");
-        const banner = document.createElement("div");
-        banner.className = "sow-menu__mission-banner";
-        const categoryLabel =
-            options.category === "onboarding"
-                ? SOW_t("missions.tab_onboarding")
-                : options.category === "weekly"
-                ? SOW_t("missions.tab_weekly")
-                : SOW_t("missions.tab_daily");
-        banner.innerHTML =
-            "<div class='sow-menu__mission-banner-aura' aria-hidden='true'></div>" +
-            "<div class='sow-menu__mission-shockwave' aria-hidden='true'></div>" +
-            "<div class='sow-menu__mission-badge'>" +
-            "<div class='sow-menu__mission-badge-rays' aria-hidden='true'></div>" +
-            "<span class='sow-menu__mission-icon' aria-hidden='true'>" +
-            missionIconSvg(options.icon) +
-            "</span>" +
-            "</div>" +
-            "<div class='sow-menu__mission-kicker-wrap'>" +
-            "<span class='sow-menu__mission-kicker-wing' aria-hidden='true'></span>" +
-            "<div class='sow-menu__mission-kicker'>" +
-            esc(categoryLabel) +
-            " · " +
-            esc(SOW_t("missions.mission_completed") || "Misión Cumplida") +
-            "</div>" +
-            "<span class='sow-menu__mission-kicker-wing' aria-hidden='true'></span>" +
-            "</div>" +
-            "<div class='sow-menu__mission-title-box'>" +
-            "<h2 class='sow-menu__mission-title'>" +
-            esc(options.title) +
-            "</h2>" +
-            "<div class='sow-menu__mission-title-sheen' aria-hidden='true'></div>" +
-            "</div>" +
-            (options.description
-                ? "<p class='sow-menu__mission-desc'>" + esc(options.description) + "</p>"
-                : "") +
-            (options.doubledWithAd
-                ? "<div class='sow-menu__mission-doubled-badge'>" +
-                  videoPlayIconSvg() +
-                  " <span>" +
-                  esc(SOW_t("missions.claim_doubled")) +
-                  "</span></div>"
-                : "");
-        if (cards) {
-            activeRewardStage.insertBefore(banner, cards);
-        } else {
-            activeRewardStage.appendChild(banner);
-        }
-    }
-
-    playCelebrationSound("fanfare");
-
     if (reducedRewardMotion()) {
+        if (!stages.length) {
+            finish(true);
+            return;
+        }
+        const items = createRewardStage(
+            stages,
+            function () {
+                finish(true);
+            },
+            { useWaapiReveal: false },
+        );
+        if (activeRewardStage) {
+            activeRewardStage.classList.add("sow-menu__reward-stage--mission");
+            attachMissionBanner(activeRewardStage, options);
+        }
+        playCelebrationSound("fanfare");
         items.forEach(function (item) {
-            item.amount.textContent = "+" + item.stage.amount;
+            item.amount.textContent = formatRewardCardText(item.stage, 1);
         });
         return;
     }
 
-    function next(index: number) {
-        if (token !== rewardAnimationToken || root.hidden || document.visibilityState !== "visible") {
-            finish(false);
-            return;
-        }
-        if (index >= stages.length) {
-            animateProgressionTo(progressionFromState(), 900, token).then(complete);
-            return;
-        }
-        const item = items[index];
-        const stage = stages[index];
-        playCelebrationSound("fly");
-        flyRewardCard({ card: item.card, stage: stage }, token).then(function (arrived) {
-            if (!arrived) {
-                finish(false);
-                return;
-            }
-            playCelebrationSound("impact");
-            playRewardImpact(stage.selector, stage.kind, 1.2);
-            pulseRewardCounter(stage.selector, false);
-            const currentProg = displayedProgression || progressionFromState();
-            const nextValues = Object.assign({}, currentProg);
-            if (stage.kind === "crowns" || stage.kind === "gems") {
-                nextValues[stage.kind] = progressionFromState()[stage.kind];
-            }
-            animateProgressionTo(nextValues, 380, token).then(function (shownNext) {
-                if (!shownNext) {
-                    finish(false);
-                    return;
-                }
-                next(index + 1);
-            });
-        });
-    }
-
-    revealRewardAmounts(items, token).then(function (shown) {
-        if (shown) next(0);
-        else finish(false);
+    runChoreographedStage({
+        token,
+        stages,
+        startValues: startingProg,
+        targetValues: canonical,
+        stageClassName: "sow-menu__reward-stage--mission",
+        impactPower: 1.2,
+        hasBanner: true,
+        hasAudio: true,
+        beforeStart: function (stageEl) {
+            attachMissionBanner(stageEl, options);
+        },
+        onComplete: finish,
     });
 }
 

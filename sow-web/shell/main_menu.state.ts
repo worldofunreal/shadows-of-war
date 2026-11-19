@@ -758,6 +758,7 @@ export interface MenuHudPayload {
     fps: number | null;
     ping: number | null;
     inbox_count: number;
+    alliance_inbox_count?: number;
     leaderboard_open?: boolean;
     match_over: boolean;
     is_spectating: boolean;
@@ -800,7 +801,13 @@ export interface MenuHudPayload {
         /** Set when the panel addresses every ally at once (the self-click); the ally count. */
         all_allies?: number;
     } | null;
-    betrayal?: { ally_id: number; ally_name: string; ally_avatar: HudAvatarIdentity } | null;
+    betrayal?: {
+        ally_id: number;
+        ally_name: string;
+        ally_avatar: HudAvatarIdentity;
+        is_teammate?: boolean;
+        is_fleet?: boolean;
+    } | null;
     sync?: { [key: string]: string | number | boolean | null } | null;
     hovered?:
         | (HudLeaderboardPlayer & {

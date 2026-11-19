@@ -1412,6 +1412,49 @@ mod tests {
         (engine, landing)
     }
 
+    #[test]
+    fn teams_betrayal_allows_fleet_launch_only_during_retaliation() {
+        let mut state = GameState::new(9, 20, 8, GameConfig::default());
+        state.phase = crate::game::GamePhase::Playing;
+        state.config.game_mode = "Teams".to_string();
+        state.map.terrain.fill(MapTile::from_byte(0x20));
+        for id in [1, 2] {
+            let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+            player.team = Some(Team::Blue);
+            player.troops = 10_000.0;
+            state.register_player(player);
+        }
+        for (x, y, owner) in [(1, 2, 1), (12, 2, 2), (13, 2, 2)] {
+            state.map.terrain[(y * 20 + x) as usize] = MapTile::from_byte(0x80);
+            state.set_tile_owner(x, y, owner);
+        }
+        state.map.compute_shorelines();
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = SowEngine::new(state, water);
+        let launch = || crate::protocol::GameplayIntent::LaunchFleet {
+            target_tile: 2 * 20 + 12,
+            troops: Some(1_000.0),
+        };
+
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 1,
+            intent: launch(),
+        }]);
+        assert!(engine.fleets.is_empty());
+
+        engine
+            .state
+            .player_mut(1)
+            .unwrap()
+            .betrayal_retaliation_ticks = 1;
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 1,
+            intent: launch(),
+        }]);
+        assert_eq!(engine.fleets.len(), 1);
+        assert_eq!(engine.fleets[0].target_owner, 2);
+    }
+
     fn finish_invasion(engine: &mut SowEngine) {
         for _ in 0..200 {
             engine.state.tick += 1;

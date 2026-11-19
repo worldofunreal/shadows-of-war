@@ -529,7 +529,11 @@ thread_local! {
     /// Last tutorial pointer JSON handed to JS. The pointer follows the mouse, so it dedupes here.
     static LAST_TUTORIAL_POINTER: RefCell<String> = RefCell::new(String::new());
     static LAST_WEB_INBOX_PAYLOAD:
-        RefCell<Option<(u64, u16, serde_json::Value)>> = const { RefCell::new(None) };
+        RefCell<Option<(u64, u16, bool, u64, serde_json::Value)>> = const { RefCell::new(None) };
+    /// Tracks `(my_pid, inbox_open, active_signature, avatar_revision, had_rows)` so `publish_state`
+    /// only emits `hud["inbox"]` on actual request deltas instead of every troop/gold frame.
+    static LAST_PUBLISHED_INBOX: Cell<Option<(u16, bool, u64, u64, bool)>> =
+        const { Cell::new(None) };
 
 }
 
@@ -575,6 +579,7 @@ struct HudScalarKey {
     sync_open: bool,
     inbox_count: usize,
     inbox_signature: u64,
+    alliance_inbox_count: usize,
     help_cooldown_seconds: u32,
     notification_revision: u64,
     is_spectating: bool,
@@ -620,6 +625,8 @@ struct MyPlayerSummary {
     leader: sow_core::player::Leader,
     inbox_count: usize,
     inbox_signature: u64,
+    alliance_inbox_count: usize,
+    alliance_inbox_signature: u64,
     help_cooldown_seconds: u32,
     nuke_available: bool,
     nuke_cooldown_ticks: u32,
@@ -629,14 +636,29 @@ struct MyPlayerSummary {
     emote_pinned: bool,
 }
 
+fn hash_alliance_requests(
+    player: &sow_core::protocol::PlayerSnapshot,
+    hasher: &mut impl std::hash::Hasher,
+) {
+    use std::hash::Hash;
+    player.alliance_requests.len().hash(hasher);
+    for requester_id in &player.alliance_requests {
+        requester_id.hash(hasher);
+        player.alliances.contains(requester_id).hash(hasher);
+    }
+}
+
+fn player_alliance_inbox_signature(player: &sow_core::protocol::PlayerSnapshot) -> u64 {
+    use std::hash::Hasher;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hash_alliance_requests(player, &mut hasher);
+    hasher.finish()
+}
+
 fn player_inbox_signature(player: &sow_core::protocol::PlayerSnapshot) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    player.alliance_requests.len().hash(&mut hasher);
-    for requester_id in &player.alliance_requests {
-        requester_id.hash(&mut hasher);
-        player.alliances.contains(requester_id).hash(&mut hasher);
-    }
+    hash_alliance_requests(player, &mut hasher);
     player.resource_requests.len().hash(&mut hasher);
     for request in &player.resource_requests {
         request.requester.hash(&mut hasher);
@@ -692,6 +714,8 @@ fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<My
                         + player.resource_requests.len()
                         + player.help_calls.len(),
                     inbox_signature: player_inbox_signature(player),
+                    alliance_inbox_count: player.alliance_requests.len(),
+                    alliance_inbox_signature: player_alliance_inbox_signature(player),
                     nuke_available: player.nuke_available,
                     nuke_cooldown_ticks: player.nuke_cooldown_ticks,
                     boats_in_use: player.boats_in_use,
@@ -1646,10 +1670,11 @@ impl SowApp {
                         .clone()
                         .or_else(|| self.ui.app.hud_state.betrayal_warning_cached.clone());
                     if let Some((ally_id, intent)) = warning {
-                        self.send_intent(sow_core::protocol::GameplayIntent::BreakAlliance {
+                        if self.send_intent(sow_core::protocol::GameplayIntent::BreakAlliance {
                             target_player: ally_id,
-                        });
-                        self.send_intent(intent);
+                        }) {
+                            self.send_intent(intent);
+                        }
                     }
                     self.ui.app.hud_state.show_betrayal_warning = None;
                     self.ui.app.hud_state.betrayal_warning_cached = None;
@@ -1683,7 +1708,20 @@ impl SowApp {
                             .players
                             .iter()
                             .find(|player| player.id == target_player_id)?;
-                        if me.team.is_some() && me.team == target.team {
+                        let same_team = me.team.is_some() && me.team == target.team;
+                        let team_betrayal_open =
+                            sow_core::diplomacy::same_team_betrayal_allows_combat(
+                                self.sim.config.game_mode == "Teams"
+                                    && self
+                                        .sim
+                                        .engine
+                                        .as_ref()
+                                        .is_some_and(|engine| engine.campaign_unlocks.is_none()),
+                                same_team,
+                                me.can_retaliate,
+                                target.can_retaliate,
+                            );
+                        if same_team && !team_betrayal_open {
                             return None;
                         }
                         let incoming_troops = incoming_combat_troops(
@@ -1707,7 +1745,7 @@ impl SowApp {
                                     troops: Some(troops),
                                 },
                             ),
-                            me.alliances.contains(&target_player_id),
+                            me.alliances.contains(&target_player_id) && !target.can_retaliate,
                         ))
                     });
                     if let Some((intent, allied)) = counter_attack {
@@ -2491,7 +2529,16 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         app.ui.manual_endgame_stats
     };
     let inbox_count = me.map(|player| player.inbox_count).unwrap_or(0);
-    let inbox_signature = me.map(|player| player.inbox_signature).unwrap_or(0);
+    let alliance_inbox_count = me.map(|player| player.alliance_inbox_count).unwrap_or(0);
+    let inbox_signature = me
+        .map(|player| {
+            if hud.show_alliance_inbox {
+                player.inbox_signature
+            } else {
+                player.alliance_inbox_signature
+            }
+        })
+        .unwrap_or(0);
     let help_cooldown_seconds = me.map(|player| player.help_cooldown_seconds).unwrap_or(0);
     let zoom_floor = app.zoom_floor();
     let zoom_ceiling =
@@ -2535,6 +2582,7 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         sync_open: hud.sync_state.is_some(),
         inbox_count,
         inbox_signature,
+        alliance_inbox_count,
         help_cooldown_seconds,
         notification_revision: hud.notification_revision,
         is_spectating: app.ui.is_spectating,
@@ -3867,27 +3915,44 @@ fn cached_hover_payload(
 }
 
 fn cached_inbox_payload(
+    app: &SowApp,
     snapshot: &sow_core::protocol::SimSnapshot,
     my_pid: u16,
     tick_rate_ms: f64,
+    alliance_only: bool,
 ) -> serde_json::Value {
+    let avatar_rev = app.ui.nameplates.avatar_revision;
     LAST_WEB_INBOX_PAYLOAD.with(|cache| {
         let mut cache = cache.borrow_mut();
-        if let Some((tick, cached_pid, payload)) = cache.as_ref() {
-            if *tick == snapshot.tick && *cached_pid == my_pid {
+        if let Some((tick, cached_pid, cached_alliance_only, cached_avatar_rev, payload)) =
+            cache.as_ref()
+        {
+            if *tick == snapshot.tick
+                && *cached_pid == my_pid
+                && *cached_alliance_only == alliance_only
+                && *cached_avatar_rev == avatar_rev
+            {
                 return payload.clone();
             }
         }
-        let payload = build_inbox(snapshot, my_pid, tick_rate_ms);
-        *cache = Some((snapshot.tick, my_pid, payload.clone()));
+        let payload = build_inbox(app, snapshot, my_pid, tick_rate_ms, alliance_only);
+        *cache = Some((
+            snapshot.tick,
+            my_pid,
+            alliance_only,
+            avatar_rev,
+            payload.clone(),
+        ));
         payload
     })
 }
 
 fn build_inbox(
+    app: &SowApp,
     snapshot: &sow_core::protocol::SimSnapshot,
     my_pid: u16,
     tick_rate_ms: f64,
+    alliance_only: bool,
 ) -> serde_json::Value {
     let Some(me) = snapshot.players.iter().find(|player| player.id == my_pid) else {
         return serde_json::Value::Array(Vec::new());
@@ -3899,24 +3964,41 @@ fn build_inbox(
     };
     let alliance_ttl_seconds =
         f64::from(sow_core::diplomacy::ALLIANCE_REQUEST_TTL_TICKS) * tick_ms / 1000.0;
-    let resource_ttl_seconds =
-        f64::from(sow_core::diplomacy::RESOURCE_REQUEST_TTL_TICKS) * tick_ms / 1000.0;
-    let help_ttl_seconds =
-        f64::from(sow_core::diplomacy::HELP_CALL_TTL_TICKS) * tick_ms / 1000.0;
-    let mut requests = Vec::new();
+    let total_items = me.alliance_requests.len()
+        + if alliance_only {
+            0
+        } else {
+            me.resource_requests.len() + me.help_calls.len()
+        };
+    if total_items == 0 {
+        return serde_json::Value::Array(Vec::new());
+    }
+    let players_by_id: Option<HashMap<u16, &sow_core::protocol::PlayerSnapshot>> =
+        (total_items > 4).then(|| {
+            snapshot
+                .players
+                .iter()
+                .map(|player| (player.id, player))
+                .collect()
+        });
+    let find_player = |id: u16| -> Option<&sow_core::protocol::PlayerSnapshot> {
+        if let Some(map) = &players_by_id {
+            map.get(&id).copied()
+        } else {
+            snapshot.players.iter().find(|player| player.id == id)
+        }
+    };
+
+    let mut requests = Vec::with_capacity(total_items);
     for requester_id in &me.alliance_requests {
-        if let Some(requester) = snapshot
-            .players
-            .iter()
-            .find(|player| player.id == *requester_id)
-        {
+        if let Some(requester) = find_player(*requester_id) {
             let remaining_ticks = me
                 .alliance_request_timers
                 .get(requester_id)
                 .copied()
                 .unwrap_or(sow_core::diplomacy::ALLIANCE_REQUEST_TTL_TICKS);
             let remaining_seconds = f64::from(remaining_ticks) * tick_ms / 1000.0;
-            requests.push(serde_json::json!({
+            let mut row = serde_json::json!({
                 "kind": "alliance",
                 "requester_id": requester.id,
                 "name": &requester.name,
@@ -3925,60 +4007,64 @@ fn build_inbox(
                 "is_renewal": me.alliances.contains(requester_id),
                 "remaining_seconds": remaining_seconds,
                 "ttl_seconds": alliance_ttl_seconds,
-            }));
+            });
+            decorate_player_avatar(&mut row, requester, app);
+            requests.push(row);
         }
     }
-    for request in &me.resource_requests {
-        if let Some(requester) = snapshot
-            .players
-            .iter()
-            .find(|player| player.id == request.requester)
-        {
-            let remaining_seconds = f64::from(request.remaining_ticks) * tick_ms / 1000.0;
-            requests.push(serde_json::json!({
-                "kind": "resources",
-                "requester_id": requester.id,
-                "name": &requester.name,
-                "avatar": sow_core::player::avatar_identity(requester),
-                "active": requester.alive,
-                "remaining_seconds": remaining_seconds,
-                "ttl_seconds": resource_ttl_seconds,
-                "gold": request.gold,
-                "troops": request.troops,
-                "pay_gold": request.pay_gold,
-                "pay_troops": request.pay_troops,
-            }));
-        }
-    }
-    for call in &me.help_calls {
-        if let Some(caller) = snapshot
-            .players
-            .iter()
-            .find(|player| player.id == call.caller)
-        {
-            let remaining_seconds = f64::from(call.remaining_ticks) * tick_ms / 1000.0;
-            let mut avatar = serde_json::to_value(sow_core::player::avatar_identity(caller))
-                .unwrap_or_else(|_| serde_json::json!({ "kind": "fallback" }));
-            if let serde_json::Value::Object(ref mut map) = avatar {
-                map.insert(
-                    "expression".into(),
-                    serde_json::json!(sow_core::emote::AvatarExpression::Fear),
-                );
+    if !alliance_only {
+        let resource_ttl_seconds =
+            f64::from(sow_core::diplomacy::RESOURCE_REQUEST_TTL_TICKS) * tick_ms / 1000.0;
+        let help_ttl_seconds =
+            f64::from(sow_core::diplomacy::HELP_CALL_TTL_TICKS) * tick_ms / 1000.0;
+        for request in &me.resource_requests {
+            if let Some(requester) = find_player(request.requester) {
+                let remaining_seconds = f64::from(request.remaining_ticks) * tick_ms / 1000.0;
+                let mut row = serde_json::json!({
+                    "kind": "resources",
+                    "requester_id": requester.id,
+                    "name": &requester.name,
+                    "avatar": sow_core::player::avatar_identity(requester),
+                    "active": requester.alive,
+                    "remaining_seconds": remaining_seconds,
+                    "ttl_seconds": resource_ttl_seconds,
+                    "gold": request.gold,
+                    "troops": request.troops,
+                    "pay_gold": request.pay_gold,
+                    "pay_troops": request.pay_troops,
+                });
+                decorate_player_avatar(&mut row, requester, app);
+                requests.push(row);
             }
-            requests.push(serde_json::json!({
-                "kind": "help",
-                "call_id": call.call_id,
-                "requester_id": caller.id,
-                "name": &caller.name,
-                "avatar": avatar,
-                "active": caller.alive,
-                "remaining_seconds": remaining_seconds,
-                "ttl_seconds": help_ttl_seconds,
-                "gold": call.suggested_gold,
-                "troops": call.suggested_troops,
-                "pay_gold": 0.0,
-                "pay_troops": 0.0,
-            }));
+        }
+        for call in &me.help_calls {
+            if let Some(caller) = find_player(call.caller) {
+                let remaining_seconds = f64::from(call.remaining_ticks) * tick_ms / 1000.0;
+                let mut avatar = serde_json::to_value(sow_core::player::avatar_identity(caller))
+                    .unwrap_or_else(|_| serde_json::json!({ "kind": "fallback" }));
+                if let serde_json::Value::Object(ref mut map) = avatar {
+                    map.insert(
+                        "expression".into(),
+                        serde_json::json!(sow_core::emote::AvatarExpression::Fear),
+                    );
+                }
+                let mut row = serde_json::json!({
+                    "kind": "help",
+                    "call_id": call.call_id,
+                    "requester_id": caller.id,
+                    "name": &caller.name,
+                    "avatar": avatar,
+                    "active": caller.alive,
+                    "remaining_seconds": remaining_seconds,
+                    "ttl_seconds": help_ttl_seconds,
+                    "gold": call.suggested_gold,
+                    "troops": call.suggested_troops,
+                    "pay_gold": 0.0,
+                    "pay_troops": 0.0,
+                });
+                decorate_player_avatar(&mut row, caller, app);
+                requests.push(row);
+            }
         }
     }
     serde_json::Value::Array(requests)
@@ -4987,6 +5073,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
         "ping": app.net.current_ping_ms,
         "inbox_count": me.map(|player| player.inbox_count).unwrap_or(0),
+        "alliance_inbox_count": me.map(|player| player.alliance_inbox_count).unwrap_or(0),
         "leaderboard_open": app.ui.show_leaderboard,
         "match_over": match_over,
         "is_spectating": app.ui.is_spectating,
@@ -5057,22 +5144,54 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 serde_json::json!([])
             };
         }
-        if hud.show_alliance_inbox || me.is_some_and(|player| player.inbox_count > 0) {
-            payload["inbox"] = cached_inbox_payload(
-                snapshot,
-                my_pid,
-                f64::from(app.sim.config.tick_rate_ms),
-            );
-        } else {
-            payload["inbox"] = serde_json::json!([]);
+        let alliance_only = !hud.show_alliance_inbox;
+        let has_rows = me.is_some_and(|player| {
+            if alliance_only {
+                player.alliance_inbox_count > 0
+            } else {
+                player.inbox_count > 0
+            }
+        });
+        let active_sig = me.map_or(0, |player| {
+            if alliance_only {
+                player.alliance_inbox_signature
+            } else {
+                player.inbox_signature
+            }
+        });
+        let inbox_key = (
+            my_pid,
+            hud.show_alliance_inbox,
+            active_sig,
+            app.ui.nameplates.avatar_revision,
+            has_rows,
+        );
+        if LAST_PUBLISHED_INBOX.with(|last| last.get() != Some(inbox_key)) {
+            if has_rows {
+                payload["inbox"] = cached_inbox_payload(
+                    app,
+                    snapshot,
+                    my_pid,
+                    f64::from(app.sim.config.tick_rate_ms),
+                    alliance_only,
+                );
+            } else {
+                payload["inbox"] = serde_json::json!([]);
+            }
+            LAST_PUBLISHED_INBOX.with(|last| last.set(Some(inbox_key)));
         }
     }
-    append_player_dialog_payloads(&mut payload, snapshot, hud, my_pid);
+    let team_betrayal_enabled = app.sim.config.game_mode == "Teams"
+        && app
+            .sim
+            .engine
+            .as_ref()
+            .is_some_and(|engine| engine.campaign_unlocks.is_none());
+    append_player_dialog_payloads(&mut payload, snapshot, hud, my_pid, team_betrayal_enabled);
     if let Some(snapshot) = snapshot {
         let needs_map = payload["leaderboard"].as_array().is_some_and(|a| a.len() > 4)
             || payload["players"].as_array().is_some_and(|a| a.len() > 4)
-            || payload["operations"].as_array().is_some_and(|a| a.len() > 4)
-            || payload["inbox"].as_array().is_some_and(|a| a.len() > 4);
+            || payload["operations"].as_array().is_some_and(|a| a.len() > 4);
         let players_by_id: Option<HashMap<u16, &sow_core::protocol::PlayerSnapshot>> =
             needs_map.then(|| {
                 snapshot
@@ -5093,7 +5212,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             ("players", "id"),
             ("leaderboard", "id"),
             ("operations", "player_id"),
-            ("inbox", "requester_id"),
         ] {
             if let Some(rows) = payload[field].as_array_mut() {
                 for row in rows {
@@ -5184,6 +5302,7 @@ fn append_player_dialog_payloads(
     snapshot: Option<&sow_core::protocol::SimSnapshot>,
     hud: &crate::ui::hud::HudState,
     my_pid: u16,
+    team_betrayal_enabled: bool,
 ) {
     let players = snapshot
         .map(|snapshot| snapshot.players.as_slice())
@@ -5227,15 +5346,23 @@ fn append_player_dialog_payloads(
             "mode": hud.transfer_mode.map(crate::ui::hud::state::TransferMode::as_str),
         });
     }
-    if let Some((ally_id, _)) = hud
+    if let Some((ally_id, intent)) = hud
         .show_betrayal_warning
         .as_ref()
         .or(hud.betrayal_warning_cached.as_ref())
     {
+        let is_teammate = team_betrayal_enabled
+            && players
+                .iter()
+                .find(|player| player.id == my_pid)
+                .zip(players.iter().find(|player| player.id == *ally_id))
+                .is_some_and(|(me, target)| me.team.is_some() && me.team == target.team);
         payload["betrayal"] = serde_json::json!({
             "ally_id": ally_id,
             "ally_name": players.iter().find(|player| player.id == *ally_id).map(|player| player.name.as_str()).unwrap_or_default(),
             "ally_avatar": sow_core::player::avatar_identity_for_player_id(players, *ally_id),
+            "is_teammate": is_teammate,
+            "is_fleet": matches!(intent, sow_core::protocol::GameplayIntent::LaunchFleet { .. }),
         });
     }
 }
@@ -5557,6 +5684,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         LAST_HOVER_CARD.with(|last| last.borrow_mut().clear());
         LAST_TUTORIAL_POINTER.with(|last| last.borrow_mut().clear());
         LAST_WEB_INBOX_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
+        LAST_PUBLISHED_INBOX.with(|last| last.set(None));
         app.ui.show_leaderboard = false;
         app.ui.show_dev_sidebar = false;
         app.ui.app.hud_state.show_alliance_inbox = false;

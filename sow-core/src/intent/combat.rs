@@ -96,10 +96,18 @@ pub fn spawn_attack_for_fleet_arrival(
         || engine.state.player(target_owner).is_some_and(|target| {
             target.alive
                 && engine.state.player(owner_id).is_some_and(|owner| {
+                    let same_team = owner.team.is_some() && owner.team == target.team;
+                    let betrayal_open = crate::diplomacy::same_team_betrayal_allows_combat(
+                        engine.state.config.game_mode == "Teams"
+                            && engine.campaign_unlocks.is_none(),
+                        same_team,
+                        crate::diplomacy::can_retaliate_against(owner),
+                        crate::diplomacy::can_retaliate_against(target),
+                    );
                     scripted_assault
-                        || !(owner.alliances.contains(&target_owner)
-                            || target.alliances.contains(&owner_id)
-                            || (owner.team.is_some() && owner.team == target.team))
+                        || (!(owner.alliances.contains(&target_owner)
+                            || target.alliances.contains(&owner_id))
+                            && (!same_team || betrayal_open))
                 })
         });
     if !target_allowed || troops < engine.state.config.attack_cost_neutral || !troops.is_finite() {
@@ -202,6 +210,12 @@ impl SowEngine {
             && let Some(target) = self.state.player(target_owner)
             && player.team.is_some()
             && player.team == target.team
+            && !crate::diplomacy::same_team_betrayal_allows_combat(
+                self.state.config.game_mode == "Teams" && self.campaign_unlocks.is_none(),
+                player.team.is_some() && player.team == target.team,
+                crate::diplomacy::can_retaliate_against(player),
+                crate::diplomacy::can_retaliate_against(target),
+            )
         {
             return;
         }
@@ -387,6 +401,7 @@ mod tests {
     use crate::game_config::GameConfig;
     use crate::map::MapTile;
     use crate::player::Player;
+    use crate::protocol::{StampedIntent, Team};
     use crate::rng::NextIntExt;
     use crate::water_components::WaterComponents;
     use wyrand::WyRand;
@@ -535,5 +550,99 @@ mod tests {
         );
         assert!(!engine.attacks[0].landed);
         assert_eq!(engine.attacks[0].troops, 15_000.0);
+    }
+
+    #[test]
+    fn teams_betrayal_opens_reciprocal_combat_for_the_retaliation_window() {
+        let width = 8;
+        let mut game = GameState::new(77, width, width, GameConfig::default());
+        game.phase = GamePhase::Playing;
+        game.config.game_mode = "Teams".to_string();
+        game.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2] {
+            let mut player = Player::new_human(id, format!("P{id}"), [0.5; 3], &game.config);
+            player.team = Some(Team::Red);
+            player.troops = 20_000.0;
+            game.register_player(player);
+        }
+        game.set_tile_owner(2, 3, 1);
+        game.set_tile_owner(3, 3, 2);
+        let mut engine = crate::engine::SowEngine::new(game, WaterComponents::default());
+        let attack = |target_owner| {
+            crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
+                target_owner,
+                troops: Some(1_000.0),
+            })
+        };
+
+        engine.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: attack(2),
+        }]);
+        assert!(engine.attacks.is_empty());
+
+        engine.apply_intents(&[
+            StampedIntent {
+                player_id: 1,
+                intent: crate::protocol::GameplayIntent::BreakAlliance { target_player: 2 },
+            },
+            StampedIntent {
+                player_id: 1,
+                intent: attack(2),
+            },
+        ]);
+        assert_eq!(engine.attacks.len(), 1);
+        assert_eq!(
+            engine.state.player(1).unwrap().betrayal_retaliation_ticks,
+            crate::diplomacy::HUMAN_BETRAYAL_RETALIATION_TICKS
+        );
+
+        let troops_before_counterattack = engine.state.player(2).unwrap().troops;
+        engine.apply_intents(&[StampedIntent {
+            player_id: 2,
+            intent: attack(1),
+        }]);
+        assert!(engine.state.player(2).unwrap().troops < troops_before_counterattack);
+
+        engine
+            .state
+            .player_mut(1)
+            .unwrap()
+            .betrayal_retaliation_ticks = 0;
+        let troops_before = engine.state.player(2).unwrap().troops;
+        engine.apply_intents(&[StampedIntent {
+            player_id: 2,
+            intent: attack(1),
+        }]);
+        assert_eq!(engine.state.player(2).unwrap().troops, troops_before);
+    }
+
+    #[test]
+    fn team_betrayal_fleet_arrival_requires_an_active_retaliation_window() {
+        let width = 8;
+        let mut game = GameState::new(77, width, width, GameConfig::default());
+        game.phase = GamePhase::Playing;
+        game.config.game_mode = "Teams".to_string();
+        game.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2] {
+            let mut player = Player::new_human(id, format!("P{id}"), [0.5; 3], &game.config);
+            player.team = Some(Team::Red);
+            player.troops = 20_000.0;
+            game.register_player(player);
+        }
+        game.set_tile_owner(2, 3, 1);
+        game.set_tile_owner(3, 3, 2);
+        let mut engine = crate::engine::SowEngine::new(game, WaterComponents::default());
+
+        spawn_attack_for_fleet_arrival(&mut engine, 1, 2, 1_000.0, 9, false, 3 * width + 2);
+        assert_eq!(engine.attacks.len(), 0);
+
+        engine
+            .state
+            .player_mut(1)
+            .unwrap()
+            .betrayal_retaliation_ticks = 1;
+        spawn_attack_for_fleet_arrival(&mut engine, 1, 2, 1_000.0, 10, false, 3 * width + 2);
+        assert_eq!(engine.attacks.len(), 1);
     }
 }
