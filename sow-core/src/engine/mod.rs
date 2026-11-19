@@ -637,6 +637,9 @@ pub struct SowEngine {
     /// Per-producer queues and armed nukes. The alias loads saved city-keyed queues.
     #[serde(default, alias = "city_arsenals")]
     pub building_productions: std::collections::HashMap<u64, crate::building::CityArsenalState>,
+    /// Queued multi-level upgrade destination per `building_id` (already paid upfront).
+    #[serde(default)]
+    pub upgrade_targets: std::collections::BTreeMap<u64, u8>,
     pub mirv_launches: std::collections::HashMap<u16, u32>,
     /// Launch count by `(target player, tile)`; lookup-only during scoring.
     pub recent_nuke_targets: std::collections::HashMap<(u16, u32), u64>,
@@ -777,6 +780,7 @@ impl SowEngine {
             projectiles: Vec::new(),
             silo_cooldowns: std::collections::HashMap::new(),
             building_productions: std::collections::HashMap::new(),
+            upgrade_targets: std::collections::BTreeMap::new(),
             mirv_launches: std::collections::HashMap::new(),
             recent_nuke_targets: std::collections::HashMap::new(),
             mirv_cooldown_targets: std::collections::HashMap::new(),

@@ -65,6 +65,94 @@ pub fn structure_upgrade_duration_ticks(kind: BuildingKind, target_level: u8) ->
     crate::building::core::upgrade_duration_ticks(kind, target_level)
 }
 
+/// Cumulative cost and duration for upgrading one structure from `from_level` through
+/// `target_level` (inclusive), advancing `owned_levels` by `+1` on each step.
+pub fn structure_multi_upgrade_cost_and_ticks(
+    kind: BuildingKind,
+    from_level: u8,
+    target_level: u8,
+    mut owned_levels: u32,
+    free_lv2_tutorial: bool,
+    discount_pct: u32,
+    tutorial_half_time: bool,
+    cfg: &GameConfig,
+) -> Option<(f64, u32, bool)> {
+    if target_level <= from_level || target_level > kind.max_level() {
+        return None;
+    }
+    let discount_pct = discount_pct.min(100);
+    let mut total_cost = 0.0;
+    let mut total_ticks = 0u32;
+    let mut any_discounted = false;
+    for lvl in from_level.saturating_add(1)..=target_level {
+        let base_ticks = structure_upgrade_duration_ticks(kind, lvl);
+        let step_ticks = if tutorial_half_time {
+            (base_ticks / 2).max(1)
+        } else {
+            base_ticks
+        };
+        total_ticks = total_ticks.saturating_add(step_ticks);
+
+        if free_lv2_tutorial && kind == BuildingKind::City && lvl == 2 {
+            owned_levels = owned_levels.saturating_add(1);
+            continue;
+        }
+        let raw_cost = structure_upgrade_cost_gold(kind, lvl, owned_levels, cfg);
+        if !raw_cost.is_finite() {
+            return None;
+        }
+        let step_cost = if discount_pct > 0 && raw_cost > 0.0 {
+            any_discounted = true;
+            raw_cost * f64::from(100 - discount_pct) / 100.0
+        } else {
+            raw_cost
+        };
+        total_cost += step_cost;
+        owned_levels = owned_levels.saturating_add(1);
+    }
+    Some((total_cost, total_ticks, any_discounted))
+}
+
+/// Highest target level in `(from_level + 1)..=max_allowed_level` affordable with `gold`,
+/// returning `(target_level, cumulative_cost, total_ticks)`.
+pub fn structure_max_affordable_upgrade(
+    kind: BuildingKind,
+    from_level: u8,
+    max_allowed_level: u8,
+    owned_levels: u32,
+    free_lv2_tutorial: bool,
+    discount_pct: u32,
+    tutorial_half_time: bool,
+    gold: f64,
+    cfg: &GameConfig,
+) -> Option<(u8, f64, u32)> {
+    let cap = max_allowed_level.min(kind.max_level());
+    if cap <= from_level || !gold.is_finite() {
+        return None;
+    }
+    let mut best: Option<(u8, f64, u32)> = None;
+    for target in from_level.saturating_add(1)..=cap {
+        let Some((cost, ticks, _)) = structure_multi_upgrade_cost_and_ticks(
+            kind,
+            from_level,
+            target,
+            owned_levels,
+            free_lv2_tutorial,
+            discount_pct,
+            tutorial_half_time,
+            cfg,
+        ) else {
+            break;
+        };
+        if cost.is_finite() && gold + 1e-6 >= cost {
+            best = Some((target, cost, ticks));
+        } else {
+            break;
+        }
+    }
+    best
+}
+
 pub fn player_fleet_capacity(buildings: &[Building], player_id: u16) -> u32 {
     let slots = buildings
         .iter()

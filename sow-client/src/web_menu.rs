@@ -4013,6 +4013,12 @@ fn building_detail_payload(
             "cost": offer.cost,
             "seconds": offer.seconds,
             "enabled": offer.enabled,
+            "max": offer.max_offer.map(|max| serde_json::json!({
+                "target_level": max.target_level,
+                "cost": max.cost,
+                "seconds": max.seconds,
+                "is_cap_max": max.is_cap_max,
+            })),
         })
     });
     let tick_ms = f64::from(app.sim.config.tick_rate_ms);

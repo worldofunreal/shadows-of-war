@@ -263,6 +263,16 @@ pub(crate) struct UpgradeOffer {
     pub seconds: f64,
     /// False when gold is short; the button still answers a tap with the reason.
     pub enabled: bool,
+    /// Shown only when gold already covers two or more levels.
+    pub max_offer: Option<MaxUpgradeOffer>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MaxUpgradeOffer {
+    pub target_level: u8,
+    pub cost: f64,
+    pub seconds: f64,
+    pub is_cap_max: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -419,6 +429,22 @@ impl crate::app::SowApp {
                     next_level,
                 )),
                 enabled: cost.is_finite() && self.current_player_gold() >= cost,
+                max_offer: self.sim.engine.as_ref().and_then(|engine| {
+                    let cap = self
+                        .campaign_building_max_level(building.kind)
+                        .min(building.kind.max_level());
+                    let (target, total_cost, ticks) = engine.max_affordable_upgrade_level(
+                        building.id,
+                        self.current_player_gold(),
+                        cap,
+                    )?;
+                    (target > next_level).then(|| MaxUpgradeOffer {
+                        target_level: target,
+                        cost: total_cost,
+                        seconds: seconds(ticks),
+                        is_cap_max: target >= cap,
+                    })
+                }),
             }),
             remaining_seconds: None,
             progress: None,

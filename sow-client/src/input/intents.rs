@@ -52,7 +52,11 @@ fn paused_tutorial_intent_allowed(
                 _ => false,
             },
             Some(TutorialPausedAction::UpgradeUntilStarted) => {
-                matches!(intent, GameplayIntent::UpgradeStructure { .. })
+                matches!(
+                    intent,
+                    GameplayIntent::UpgradeStructure { .. }
+                        | GameplayIntent::UpgradeStructureTo { .. }
+                )
             }
             None => false,
         }
@@ -91,7 +95,9 @@ fn paused_tutorial_progress(
                     .map_or(0, |buildings| buildings.len() as u64),
             )
         }
-        GameplayIntent::UpgradeStructure { .. } => Some(observation.structure_upgrades),
+        GameplayIntent::UpgradeStructure { .. } | GameplayIntent::UpgradeStructureTo { .. } => {
+            Some(observation.structure_upgrades)
+        }
         _ => None,
     }
 }
@@ -219,7 +225,8 @@ impl SowApp {
                     now,
                 );
             }
-            sow_core::protocol::GameplayIntent::UpgradeStructure { building_id } => {
+            sow_core::protocol::GameplayIntent::UpgradeStructure { building_id }
+            | sow_core::protocol::GameplayIntent::UpgradeStructureTo { building_id, .. } => {
                 if self.sim.map_w > 0
                     && let Some(tile_idx) = self
                         .sim

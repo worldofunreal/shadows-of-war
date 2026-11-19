@@ -102,9 +102,7 @@ impl SowApp {
         self.ui.observing = false;
         self.ui.endgame_cache = None;
         self.ui.endgame_sequence = None;
-        self.ui.cascade_streak = 0;
-        self.ui.cascade_last_at = None;
-        self.ui.cascade_callouts.clear();
+        self.ui.reset_combat_feedback();
         self.sim.last_synced_cost_tick = None;
         self.sim.last_synced_hud_key = None;
         self.sim.fog_dirty = true;

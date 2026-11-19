@@ -595,14 +595,180 @@ pub struct AttackBadgeLabel {
     pub last_update: web_time::Instant,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CascadeCalloutKind {
+    Advance,
+    Capture,
+    Surge,
+    KillStreak,
+    MultiKill,
+}
+
 #[derive(Clone, Debug)]
 pub struct CascadeCallout {
     pub world_x: f32,
     pub world_y: f32,
     pub label: String,
     pub chain_step: u8,
-    pub is_surge: bool,
+    pub kind: CascadeCalloutKind,
+    pub icon: Option<sow_render::text::NameplateStatusSprite>,
+    pub ring_radius: f32,
     pub start_time: web_time::Instant,
+}
+
+#[derive(Clone, Debug)]
+pub struct CombatStreakTracker {
+    pub kill_streak: u16,
+    pub multi_kill_count: u8,
+    pub last_kill_at: Option<web_time::Instant>,
+    pub advance_tile_streak: u32,
+    pub advance_next_milestone: u32,
+    pub advance_last_at: Option<web_time::Instant>,
+}
+
+const MULTI_KILL_WINDOW_SECS: f32 = 6.5;
+const ADVANCE_STREAK_WINDOW_SECS: f32 = 4.5;
+const INITIAL_ADVANCE_MILESTONE: u32 = 20;
+
+impl Default for CombatStreakTracker {
+    fn default() -> Self {
+        Self {
+            kill_streak: 0,
+            multi_kill_count: 0,
+            last_kill_at: None,
+            advance_tile_streak: 0,
+            advance_next_milestone: INITIAL_ADVANCE_MILESTONE,
+            advance_last_at: None,
+        }
+    }
+}
+
+pub(crate) fn structure_capture_label(kind: sow_core::game::BuildingKind) -> &'static str {
+    use sow_core::game::BuildingKind;
+    match kind {
+        BuildingKind::City => "CITY CAPTURED",
+        BuildingKind::Factory => "FACTORY CAPTURED",
+        BuildingKind::Port => "PORT CAPTURED",
+        BuildingKind::Farm => "FARM CAPTURED",
+        BuildingKind::Tower => "TOWER CAPTURED",
+        BuildingKind::SAM => "SAM CAPTURED",
+    }
+}
+
+pub(crate) fn structure_short_label(kind: sow_core::game::BuildingKind) -> &'static str {
+    use sow_core::game::BuildingKind;
+    match kind {
+        BuildingKind::City => "CITY",
+        BuildingKind::Factory => "FACTORY",
+        BuildingKind::Port => "PORT",
+        BuildingKind::Farm => "FARM",
+        BuildingKind::Tower => "TOWER",
+        BuildingKind::SAM => "SAM",
+    }
+}
+
+pub(crate) fn structure_capture_priority(kind: sow_core::game::BuildingKind) -> u8 {
+    use sow_core::game::BuildingKind;
+    match kind {
+        BuildingKind::City => 6,
+        BuildingKind::Port => 5,
+        BuildingKind::Factory => 4,
+        BuildingKind::SAM => 3,
+        BuildingKind::Tower => 2,
+        BuildingKind::Farm => 1,
+    }
+}
+
+fn multi_kill_callout(count: u8) -> Option<(&'static str, u8)> {
+    match count {
+        0 | 1 => None,
+        2 => Some(("DOUBLE KILL!", 2)),
+        3 => Some(("TRIPLE KILL!", 4)),
+        4 => Some(("ULTRA KILL!", 6)),
+        _ => Some(("RAMPAGE!", 8)),
+    }
+}
+
+fn kill_streak_callout(streak: u16) -> Option<(&'static str, u8)> {
+    match streak {
+        0..=2 => None,
+        3 => Some(("KILLING SPREE!", 2)),
+        4 => Some(("DOMINATING!", 3)),
+        5 => Some(("MEGA KILL!", 4)),
+        6 => Some(("UNSTOPPABLE!", 5)),
+        7 => Some(("WICKED SICK!", 6)),
+        8 => Some(("MONSTER KILL!", 7)),
+        9 => Some(("GODLIKE!", 8)),
+        _ => Some(("BEYOND GODLIKE!", 8)),
+    }
+}
+
+fn next_advance_milestone(current: u32) -> u32 {
+    match current {
+        0..=19 => INITIAL_ADVANCE_MILESTONE,
+        20..=49 => 50,
+        50..=99 => 100,
+        m => m.saturating_mul(2),
+    }
+}
+
+impl CombatStreakTracker {
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    pub fn reset_kills(&mut self) {
+        self.kill_streak = 0;
+        self.multi_kill_count = 0;
+        self.last_kill_at = None;
+    }
+
+    pub fn record_kill(
+        &mut self,
+        now: web_time::Instant,
+    ) -> Option<(&'static str, u8, CascadeCalloutKind)> {
+        self.kill_streak = self.kill_streak.saturating_add(1);
+        let within_multi = self
+            .last_kill_at
+            .is_some_and(|last| now.duration_since(last).as_secs_f32() <= MULTI_KILL_WINDOW_SECS);
+        self.multi_kill_count = if within_multi {
+            self.multi_kill_count.saturating_add(1)
+        } else {
+            1
+        };
+        self.last_kill_at = Some(now);
+
+        if let Some((label, min_step)) = multi_kill_callout(self.multi_kill_count) {
+            return Some((label, min_step, CascadeCalloutKind::MultiKill));
+        }
+        kill_streak_callout(self.kill_streak)
+            .map(|(label, min_step)| (label, min_step, CascadeCalloutKind::KillStreak))
+    }
+
+    pub fn record_advance(&mut self, tiles_gained: u32, now: web_time::Instant) -> Option<u32> {
+        if tiles_gained == 0 {
+            return None;
+        }
+        let expired = self
+            .advance_last_at
+            .is_none_or(|last| now.duration_since(last).as_secs_f32() > ADVANCE_STREAK_WINDOW_SECS);
+        if expired {
+            self.advance_tile_streak = 0;
+            self.advance_next_milestone = INITIAL_ADVANCE_MILESTONE;
+        }
+        self.advance_tile_streak = self.advance_tile_streak.saturating_add(tiles_gained);
+        self.advance_last_at = Some(now);
+
+        if self.advance_next_milestone == 0 {
+            self.advance_next_milestone = INITIAL_ADVANCE_MILESTONE;
+        }
+        let mut crossed: Option<u32> = None;
+        while self.advance_tile_streak >= self.advance_next_milestone {
+            crossed = Some(self.advance_next_milestone);
+            self.advance_next_milestone = next_advance_milestone(self.advance_next_milestone);
+        }
+        crossed
+    }
 }
 
 pub struct UiState {
@@ -673,10 +839,11 @@ pub struct UiState {
     pub last_player_attack_flash_time: std::collections::HashMap<u16, web_time::Instant>,
     /// Screen vignette alert state.
     pub viewport_alert: Option<ViewportAlertState>,
-    /// Active cascade combo streak and floating world callouts (Conquest Blitz juice).
+    /// Active cascade combo streak and floating world callouts across all modes.
     pub cascade_streak: u8,
     pub cascade_last_at: Option<web_time::Instant>,
     pub cascade_callouts: Vec<CascadeCallout>,
+    pub combat_streaks: CombatStreakTracker,
 }
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
@@ -741,13 +908,27 @@ impl UiState {
         queue_alliance_celebration(&mut self.alliance_celebrations, a, b, now);
     }
 
+    pub(crate) fn reset_combat_feedback(&mut self) {
+        self.cascade_streak = 0;
+        self.cascade_last_at = None;
+        self.cascade_callouts.clear();
+        self.combat_streaks.reset();
+    }
+
+    pub(crate) fn reset_kill_streaks(&mut self) {
+        self.combat_streaks.reset_kills();
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn push_cascade_callout(
         &mut self,
         world_x: f32,
         world_y: f32,
-        custom_label: Option<String>,
+        label: String,
         chain_override: Option<u8>,
-        is_surge: bool,
+        kind: CascadeCalloutKind,
+        icon: Option<sow_render::text::NameplateStatusSprite>,
+        ring_radius: f32,
         now: web_time::Instant,
     ) -> u8 {
         let within_window = self
@@ -762,12 +943,6 @@ impl UiState {
         self.cascade_streak = step;
         self.cascade_last_at = Some(now);
 
-        let label = custom_label.unwrap_or_else(|| match step {
-            1 => "¡GOLPE TÁCTICO!".to_string(),
-            2 => "¡BRECHA! x2".to_string(),
-            3 => "¡ARRASA! x3".to_string(),
-            n => format!("¡IMPARABLE! x{n}"),
-        });
         if self.cascade_callouts.len() >= 8 {
             self.cascade_callouts.remove(0);
         }
@@ -776,10 +951,55 @@ impl UiState {
             world_y,
             label,
             chain_step: step,
-            is_surge,
+            kind,
+            icon,
+            ring_radius,
             start_time: now,
         });
         step
+    }
+
+    pub(crate) fn record_kill_callout(
+        &mut self,
+        wx: f32,
+        wy: f32,
+        now: web_time::Instant,
+    ) -> Option<u8> {
+        let (label, min_step, kind) = self.combat_streaks.record_kill(now)?;
+        let ring_radius = 36.0 + 6.0 * f32::from(min_step.min(5));
+        let step = self.push_cascade_callout(
+            wx,
+            wy - 1.35,
+            label.to_string(),
+            Some(min_step),
+            kind,
+            Some(sow_render::text::NameplateStatusSprite::Death),
+            ring_radius,
+            now,
+        );
+        Some(step)
+    }
+
+    pub(crate) fn record_territory_advance(
+        &mut self,
+        tiles_gained: u32,
+        wx: f32,
+        wy: f32,
+        now: web_time::Instant,
+    ) -> Option<u8> {
+        let milestone = self.combat_streaks.record_advance(tiles_gained, now)?;
+        let label = format!("+{milestone} TILES");
+        let step = self.push_cascade_callout(
+            wx,
+            wy,
+            label,
+            None,
+            CascadeCalloutKind::Advance,
+            None,
+            0.0,
+            now,
+        );
+        Some(step)
     }
 
     pub(crate) fn trigger_viewport_alert(&mut self, kind: ViewportAlertKind) {
@@ -984,4 +1204,100 @@ pub struct SowApp {
     #[cfg(target_arch = "wasm32")]
     pub boot_db_settled: bool,
     pub boot_campaign_pending: Option<String>,
+}
+
+#[cfg(test)]
+mod cascade_tests {
+    use super::*;
+    use web_time::Duration;
+
+    #[test]
+    fn kill_streak_and_multikill_escalate_cleanly() {
+        let mut tracker = CombatStreakTracker::default();
+        let t0 = web_time::Instant::now();
+
+        assert_eq!(tracker.record_kill(t0), None);
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(2)),
+            Some(("DOUBLE KILL!", 2, CascadeCalloutKind::MultiKill))
+        );
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(4)),
+            Some(("TRIPLE KILL!", 4, CascadeCalloutKind::MultiKill))
+        );
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(5)),
+            Some(("ULTRA KILL!", 6, CascadeCalloutKind::MultiKill))
+        );
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(6)),
+            Some(("RAMPAGE!", 8, CascadeCalloutKind::MultiKill))
+        );
+
+        // Spaced kill beyond multi-kill window falls back to total match kill streak tier.
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(20)),
+            Some(("UNSTOPPABLE!", 5, CascadeCalloutKind::KillStreak))
+        );
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(35)),
+            Some(("WICKED SICK!", 6, CascadeCalloutKind::KillStreak))
+        );
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(50)),
+            Some(("MONSTER KILL!", 7, CascadeCalloutKind::KillStreak))
+        );
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(65)),
+            Some(("GODLIKE!", 8, CascadeCalloutKind::KillStreak))
+        );
+        assert_eq!(
+            tracker.record_kill(t0 + Duration::from_secs(80)),
+            Some(("BEYOND GODLIKE!", 8, CascadeCalloutKind::KillStreak))
+        );
+
+        tracker.reset();
+        assert_eq!(tracker.kill_streak, 0);
+        assert_eq!(tracker.multi_kill_count, 0);
+        assert_eq!(tracker.record_kill(t0 + Duration::from_secs(90)), None);
+    }
+
+    #[test]
+    fn advance_milestones_batch_single_tick_jumps_and_reset_after_idle() {
+        let mut tracker = CombatStreakTracker::default();
+        let t0 = web_time::Instant::now();
+
+        assert_eq!(tracker.record_advance(12, t0), None);
+        assert_eq!(tracker.record_advance(8, t0 + Duration::from_secs(1)), Some(20));
+        // Crossing multiple thresholds in a single tick emits only the highest crossed milestone.
+        assert_eq!(tracker.record_advance(95, t0 + Duration::from_secs(2)), Some(100));
+        assert_eq!(tracker.record_advance(85, t0 + Duration::from_secs(3)), Some(200));
+
+        // Idle gap resets offensive push back to 20.
+        assert_eq!(tracker.record_advance(19, t0 + Duration::from_secs(10)), None);
+        assert_eq!(tracker.record_advance(1, t0 + Duration::from_secs(11)), Some(20));
+
+        tracker.reset_kills();
+        assert_eq!(tracker.kill_streak, 0);
+        assert!(tracker.last_kill_at.is_none());
+    }
+
+    #[test]
+    fn structure_labels_and_priorities_are_english_and_ordered() {
+        use sow_core::game::BuildingKind;
+        assert!(
+            structure_capture_priority(BuildingKind::City)
+                > structure_capture_priority(BuildingKind::Port)
+        );
+        assert!(
+            structure_capture_priority(BuildingKind::Port)
+                > structure_capture_priority(BuildingKind::Factory)
+        );
+        assert!(
+            structure_capture_priority(BuildingKind::Factory)
+                > structure_capture_priority(BuildingKind::Farm)
+        );
+        assert_eq!(structure_capture_label(BuildingKind::City), "CITY CAPTURED");
+        assert_eq!(structure_short_label(BuildingKind::Factory), "FACTORY");
+    }
 }

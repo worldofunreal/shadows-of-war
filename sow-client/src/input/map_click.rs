@@ -46,6 +46,7 @@ pub(crate) enum MapMenuAction {
     BuildFarm,
     BuildSam,
     UpgradeStructure,
+    UpgradeStructureMax,
     Nuke,
 }
 
@@ -80,6 +81,7 @@ impl MapMenuAction {
             Self::BuildFarm => "build_farm",
             Self::BuildSam => "build_sam",
             Self::UpgradeStructure => "upgrade_structure",
+            Self::UpgradeStructureMax => "upgrade_structure_max",
             Self::Nuke => "nuke",
         }
     }
@@ -819,6 +821,12 @@ impl SowApp {
             );
             return;
         }
+        if action == MapMenuAction::UpgradeStructureMax {
+            if menu.view == MapContextMenuView::BuildingDetails {
+                self.upgrade_structure_max(tile_idx);
+            }
+            return;
+        }
         // The panel stays open after an upgrade and shows the seconds left.
         let keep_building_panel_open = action == MapMenuAction::UpgradeStructure
             && self
@@ -1387,6 +1395,36 @@ impl SowApp {
             }
             _ => (None, None),
         }
+    }
+
+    fn upgrade_structure_max(&mut self, tile_idx: u32) {
+        let Some(building_id) = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx))
+            .map(|b| (b.id, b.kind))
+        else {
+            return;
+        };
+        let (id, kind) = building_id;
+        let cap = self
+            .campaign_building_max_level(kind)
+            .min(kind.max_level());
+        let gold = self.current_player_gold();
+        let Some((target_level, _, _)) = self
+            .sim
+            .engine
+            .as_ref()
+            .and_then(|engine| engine.max_affordable_upgrade_level(id, gold, cap))
+        else {
+            self.add_action_feedback("Need more gold.".to_string());
+            return;
+        };
+        self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructureTo {
+            building_id: id,
+            target_level,
+        });
     }
 
     fn launch_nuke_at(&mut self, kind: sow_core::game::NukeKind, tile_idx: u32) -> bool {

@@ -661,6 +661,16 @@ impl SowEngine {
             GameplayIntent::UpgradeStructure { building_id } => {
                 self.apply_upgrade_structure_intent(stamped.player_id, *building_id);
             }
+            GameplayIntent::UpgradeStructureTo {
+                building_id,
+                target_level,
+            } => {
+                self.apply_upgrade_structure_to_intent(
+                    stamped.player_id,
+                    *building_id,
+                    Some(*target_level),
+                );
+            }
             GameplayIntent::BuildShip { target_tile, kind } => {
                 self.apply_build_ship_intent(stamped.player_id, *target_tile, *kind);
             }
@@ -717,6 +727,8 @@ impl SowEngine {
                         self.buildings.retain(|b| b.owner_id != pid);
                         let buildings = &self.buildings;
                         self.building_productions
+                            .retain(|id, _| buildings.iter().any(|b| b.id == *id));
+                        self.upgrade_targets
                             .retain(|id, _| buildings.iter().any(|b| b.id == *id));
                         self.building_grid.mark_dirty();
                         self.building_aggregates_dirty = true;

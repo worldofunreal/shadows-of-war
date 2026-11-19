@@ -23,10 +23,10 @@ impl SowApp {
                 .iter()
                 .map(|attack| (attack.id, attack.troops))
                 .collect();
-            let old_buildings: HashMap<u64, bool> = existing
+            let old_buildings: HashMap<u64, (u16, bool)> = existing
                 .buildings
                 .iter()
-                .map(|building| (building.id, building.under_construction))
+                .map(|building| (building.id, (building.owner_id, building.under_construction)))
                 .collect();
             let old_attackers: HashSet<u16> = existing
                 .attacks
@@ -313,24 +313,56 @@ impl SowApp {
                 }
             }
 
-            // Play completion feedback for local structures.
+            // Play completion feedback for local structures and detect captured enemy structures in regular games.
+            let mut best_captured: Option<(sow_core::game::BuildingKind, u32)> = None;
+            let map_w = self.sim.map_w.max(1);
             for b_new in &snap.buildings {
-                if let Some(old_under_construction) = old_buildings.get(&b_new.id) {
+                if let Some(&(old_owner, old_under_construction)) = old_buildings.get(&b_new.id) {
                     // ponytail: only play building completion sound for the local player
-                    if *old_under_construction
+                    if old_under_construction
                         && !b_new.under_construction
                         && b_new.owner_id == my_id
                         && my_id != 0
                     {
-                        let wx = (b_new.tile_idx % self.sim.map_w) as f32 + 0.5;
-                        let wy = (b_new.tile_idx / self.sim.map_w) as f32 + 0.5;
+                        let wx = (b_new.tile_idx % map_w) as f32 + 0.5;
+                        let wy = (b_new.tile_idx / map_w) as f32 + 0.5;
                         self.sfx.play_completion(
                             now,
                             crate::building_sound_kind(b_new.kind),
                             self.spatial_sound_params(wx, wy),
                         );
                     }
+                    if !self.sim.config.tutorial
+                        && my_id != 0
+                        && old_owner != 0
+                        && old_owner != my_id
+                        && b_new.owner_id == my_id
+                    {
+                        let replace = best_captured.is_none_or(|(best_kind, _)| {
+                            crate::app::structure_capture_priority(b_new.kind)
+                                > crate::app::structure_capture_priority(best_kind)
+                        });
+                        if replace {
+                            best_captured = Some((b_new.kind, b_new.tile_idx));
+                        }
+                    }
                 }
+            }
+            if let Some((kind, tile_idx)) = best_captured {
+                let wx = (tile_idx % map_w) as f32 + 0.5;
+                let wy = (tile_idx / map_w) as f32 + 0.5;
+                let step = self.ui.push_cascade_callout(
+                    wx,
+                    wy,
+                    crate::app::structure_capture_label(kind).to_string(),
+                    None,
+                    crate::app::CascadeCalloutKind::Capture,
+                    None,
+                    28.0,
+                    now,
+                );
+                self.sfx
+                    .play_cascade(now, step, self.spatial_sound_params(wx, wy));
             }
 
             if self.ui.blast_scene.has_recent_detonations() {

@@ -104,6 +104,41 @@ pub(crate) fn render(
 
 const CASCADE_CALLOUT_DURATION: f32 = 1.65;
 const CASCADE_CALLOUT_FONT_SIZE: f32 = 19.0;
+const CASCADE_RING_DURATION: f32 = 0.48;
+
+fn cascade_callout_color(kind: crate::app::CascadeCalloutKind, chain_step: u8) -> [f32; 4] {
+    use crate::app::CascadeCalloutKind;
+    match kind {
+        CascadeCalloutKind::Advance => {
+            if chain_step >= 3 {
+                crate::rgb(56, 239, 125)
+            } else {
+                crate::rgb(103, 232, 249)
+            }
+        }
+        CascadeCalloutKind::Capture => crate::rgb(255, 209, 102),
+        CascadeCalloutKind::Surge => crate::rgb(56, 239, 125),
+        CascadeCalloutKind::KillStreak => match chain_step {
+            0..=3 => crate::rgb(255, 195, 0),
+            4..=6 => crate::rgb(255, 110, 64),
+            _ => crate::rgb(255, 59, 92),
+        },
+        CascadeCalloutKind::MultiKill => match chain_step {
+            0..=3 => crate::rgb(255, 145, 0),
+            4..=6 => crate::rgb(255, 72, 48),
+            _ => crate::rgb(255, 42, 85),
+        },
+    }
+}
+
+fn cascade_callout_kind_scale(kind: crate::app::CascadeCalloutKind) -> f32 {
+    use crate::app::CascadeCalloutKind;
+    match kind {
+        CascadeCalloutKind::Advance => 0.90,
+        CascadeCalloutKind::Capture | CascadeCalloutKind::Surge => 1.02,
+        CascadeCalloutKind::KillStreak | CascadeCalloutKind::MultiKill => 1.16,
+    }
+}
 
 fn render_cascade_callouts(
     text: &mut TextRenderer,
@@ -133,33 +168,77 @@ fn render_cascade_callouts(
         {
             return true;
         }
-        let step_boost = 1.0 + 0.12 * f32::from(callout.chain_step.saturating_sub(1).min(5));
+        let step_boost = 1.0 + 0.10 * f32::from(callout.chain_step.saturating_sub(1).min(5));
+        let kind_scale = cascade_callout_kind_scale(callout.kind);
         let alpha = (1.0 - progress * progress).clamp(0.0, 1.0);
-        let base_rgb = if callout.is_surge {
-            crate::rgb(56, 239, 125)
-        } else if callout.chain_step >= 3 {
-            crate::rgb(255, 110, 64)
-        } else {
-            crate::rgb(255, 214, 10)
-        };
+        let base_rgb = cascade_callout_color(callout.kind, callout.chain_step);
         let color = [base_rgb[0], base_rgb[1], base_rgb[2], alpha];
-        let font_size = CASCADE_CALLOUT_FONT_SIZE * step_boost * anim_scale * font_scale * sf;
+
+        if callout.ring_radius > 0.0
+            && elapsed < CASCADE_RING_DURATION
+            && text.remaining_instance_capacity() >= 1
+        {
+            let ring_t = (elapsed / CASCADE_RING_DURATION).clamp(0.0, 1.0);
+            let ring_screen = world_to_screen(callout.world_x, callout.world_y, input, sf);
+            text.push_ring(
+                [ring_screen[0] * sf, ring_screen[1] * sf],
+                callout.ring_radius * ring_t * sf,
+                [base_rgb[0], base_rgb[1], base_rgb[2], (1.0 - ring_t) * 0.85],
+                (2.6 * (1.0 - 0.4 * ring_t) * sf).max(1.0),
+            );
+        }
+
+        let font_size =
+            CASCADE_CALLOUT_FONT_SIZE * kind_scale * step_boost * anim_scale * font_scale * sf;
         let measure = text.measure_string(&callout.label, font_size, char_spacing);
-        let required = callout.label.chars().count().saturating_add(2);
+        let icon_extra = usize::from(callout.icon.is_some());
+        let required = callout.label.chars().count().saturating_add(2 + icon_extra);
         if text.remaining_instance_capacity() < required {
             return true;
         }
-        text.push_string(
-            &callout.label,
-            [
-                screen[0] * sf - measure.width * 0.5,
-                screen[1] * sf - measure.height * 0.35,
-            ],
-            font_size,
-            color,
-            dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
-            (0.0, char_spacing),
-        );
+
+        let center_x = screen[0] * sf;
+        let center_y = screen[1] * sf;
+        if let Some(sprite) = callout.icon {
+            let icon_diameter = font_size * 0.90;
+            let gap = 4.0 * sf;
+            let total_w = icon_diameter + gap + measure.width;
+            let row_left = center_x - total_w * 0.5;
+            let outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
+            if sprite == NameplateStatusSprite::Troops {
+                text.push_troop_icon(
+                    [row_left + icon_diameter * 0.5, center_y - measure.height * 0.05],
+                    icon_diameter * 0.5,
+                    alpha,
+                    outline,
+                );
+            } else {
+                text.push_icon(
+                    sprite,
+                    [row_left + icon_diameter * 0.5, center_y - measure.height * 0.05],
+                    icon_diameter * 0.5,
+                    [1.0, 1.0, 1.0, alpha],
+                    outline,
+                );
+            }
+            text.push_string(
+                &callout.label,
+                [row_left + icon_diameter + gap, center_y + measure.height * 0.35],
+                font_size,
+                color,
+                dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+                (0.0, char_spacing),
+            );
+        } else {
+            text.push_string(
+                &callout.label,
+                [center_x - measure.width * 0.5, center_y + measure.height * 0.35],
+                font_size,
+                color,
+                dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+                (0.0, char_spacing),
+            );
+        }
         true
     });
 }

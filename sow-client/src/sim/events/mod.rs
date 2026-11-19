@@ -52,6 +52,9 @@ impl SowApp {
     ) -> crate::player_progress::SessionDefeats {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
         let mut played_combat_this_tick = false;
+        let mut captured_enemy_tiles: u32 = 0;
+        let mut last_enemy_capture_pos: Option<(f32, f32)> = None;
+        let mut best_tutorial_capture: Option<(sow_core::game::BuildingKind, u8, u32)> = None;
         let now_instant = web_time::Instant::now();
         self.sfx.sync_server_phase(&snap.phase);
         self.sfx.begin_tick();
@@ -295,10 +298,16 @@ impl SowApp {
                     }
                 }
                 sow_core::game::GameEvent::TileCaptured {
+                    x,
+                    y,
                     new_owner,
                     previous_owner,
                     ..
                 } => {
+                    if my_id != 0 && new_owner == my_id && previous_owner != 0 {
+                        captured_enemy_tiles = captured_enemy_tiles.saturating_add(1);
+                        last_enemy_capture_pos = Some((x as f32 + 0.5, y as f32 + 0.5));
+                    }
                     self.handle_tile_captured(
                         my_id,
                         &mut played_combat_this_tick,
@@ -361,27 +370,21 @@ impl SowApp {
                     }
                 }
                 sow_core::game::GameEvent::StructureCaptured {
+                    kind,
                     new_owner,
                     tile_idx,
                     level,
                     ..
                 } => {
                     if new_owner == my_id && my_id != 0 && self.sim.config.tutorial {
-                        let map_w = self.sim.map_w.max(1);
-                        let wx = (tile_idx % map_w) as f32 + 0.5;
-                        let wy = (tile_idx / map_w) as f32 + 0.5;
-                        let bonus_troops = u32::from(level) * 120;
-                        let label = format!("+{} TROPAS!", crate::utils::format_number(bonus_troops as f64));
-                        let step = self.ui.push_cascade_callout(
-                            wx,
-                            wy,
-                            Some(label),
-                            None,
-                            false,
-                            now_instant,
-                        );
-                        self.sfx
-                            .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+                        let candidate = (kind, level, tile_idx);
+                        let replace = best_tutorial_capture.is_none_or(|(best_kind, _, _)| {
+                            crate::app::structure_capture_priority(kind)
+                                > crate::app::structure_capture_priority(best_kind)
+                        });
+                        if replace {
+                            best_tutorial_capture = Some(candidate);
+                        }
                     }
                 }
                 sow_core::game::GameEvent::NukeDetonated {
@@ -441,24 +444,20 @@ impl SowApp {
                     if player_id == my_id && my_id != 0 {
                         let wx = tile_x as f32 + 0.5;
                         let wy = tile_y as f32 + 0.5;
+                        let amount = crate::utils::format_number(bonus_troops as f64);
                         let label = if chain_step >= 2 {
-                            format!(
-                                "¡AVANCE TÁCTICO x{}! +{}",
-                                chain_step,
-                                crate::utils::format_number(bonus_troops as f64)
-                            )
+                            format!("+{amount} x{chain_step}")
                         } else {
-                            format!(
-                                "¡GOLPE TÁCTICO! +{}",
-                                crate::utils::format_number(bonus_troops as f64)
-                            )
+                            format!("+{amount}")
                         };
                         let step = self.ui.push_cascade_callout(
                             wx,
                             wy,
-                            Some(label),
+                            label,
                             Some(chain_step),
-                            true,
+                            crate::app::CascadeCalloutKind::Surge,
+                            Some(sow_render::text::NameplateStatusSprite::Troops),
+                            28.0,
                             now_instant,
                         );
                         self.sfx
@@ -469,6 +468,37 @@ impl SowApp {
                 }
                 _ => {}
             }
+        }
+        if let Some((kind, level, tile_idx)) = best_tutorial_capture {
+            let map_w = self.sim.map_w.max(1);
+            let wx = (tile_idx % map_w) as f32 + 0.5;
+            let wy = (tile_idx / map_w) as f32 + 0.5;
+            let bonus_troops = u32::from(level.max(1)) * 120;
+            let label = format!(
+                "{} +{}",
+                crate::app::structure_short_label(kind),
+                crate::utils::format_number(bonus_troops as f64)
+            );
+            let step = self.ui.push_cascade_callout(
+                wx,
+                wy,
+                label,
+                None,
+                crate::app::CascadeCalloutKind::Capture,
+                Some(sow_render::text::NameplateStatusSprite::Troops),
+                28.0,
+                now_instant,
+            );
+            self.sfx
+                .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+        }
+        if let Some((wx, wy)) = last_enemy_capture_pos
+            && let Some(step) =
+                self.ui
+                    .record_territory_advance(captured_enemy_tiles, wx, wy, now_instant)
+        {
+            self.sfx
+                .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
         }
         self.sfx.flush_tick(now_instant);
         turn_defeats

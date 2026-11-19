@@ -308,6 +308,12 @@ impl SowEngine {
                 } else {
                     0
                 };
+                let upgrade_target_level = self
+                    .upgrade_targets
+                    .get(&b.id)
+                    .copied()
+                    .filter(|&target| target > b.level)
+                    .unwrap_or(0);
                 crate::protocol::BuildingSnapshot {
                     id: b.id,
                     tile_idx: b.tile_idx,
@@ -320,6 +326,7 @@ impl SowEngine {
                     nuke_ready,
                     arsenal_build,
                     sam_cooldown_ticks,
+                    upgrade_target_level,
                 }
             })
             .collect();

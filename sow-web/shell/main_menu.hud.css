@@ -5357,6 +5357,11 @@ html[dir="rtl"] .sow-hud__dev-play::before {
     border-color 120ms ease;
 }
 
+.sow-hud__building-upgrade-btn.is-max-offer {
+  margin-top: 6px;
+  box-shadow: 0 0 0 1px rgba(255, 204, 92, 0.65), 0 0 14px rgba(255, 190, 60, 0.28);
+}
+
 .sow-hud__building-upgrade-btn:hover:not(.is-locked) {
   filter: brightness(1.06);
   box-shadow:

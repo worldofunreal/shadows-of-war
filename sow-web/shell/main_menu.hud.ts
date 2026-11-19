@@ -3292,7 +3292,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       timeEl.textContent = timeText;
     }
     const button = menu.querySelector<HTMLButtonElement>(
-      ".sow-hud__building-upgrade-btn",
+      ".sow-hud__building-upgrade-btn:not(.is-max-offer)",
     );
     if (button) {
       button.disabled = false;
@@ -3530,7 +3530,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         : underConstruction
           ? "constructing"
           : upgrade
-            ? "upgrade:" + upgrade.next_level
+            ? "upgrade:" + upgrade.next_level + ":" + (upgrade.max ? upgrade.max.target_level : 0)
             : "max",
       chips
         .map(function (chip) {
@@ -3587,7 +3587,32 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           "<b data-building-time></b>" +
           "</span>" +
           "</span>" +
-          "</button>"
+          "</button>" +
+          (upgrade.max
+            ? '<button type="button" class="sow-hud__building-upgrade-btn is-max-offer" data-map-action="upgrade_structure_max">' +
+              '<span class="sow-hud__building-upgrade-cta">' +
+              statusIcon("arrow-up", "sow-hud__building-upgrade-arrow") +
+              '<span class="sow-hud__building-upgrade-label">' +
+              escapeHudText(
+                upgrade.max.is_cap_max
+                  ? SOW_t("hud.map_action_upgrade_max")
+                  : "→",
+              ) +
+              " <em>Lv." +
+              upgrade.max.target_level +
+              "</em></span></span>" +
+              '<span class="sow-hud__building-upgrade-meta">' +
+              '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-cost">' +
+              hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
+              "<b>" +
+              Math.ceil(upgrade.max.cost) +
+              "</b></span>" +
+              '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-time">' +
+              statusIcon("clock", "sow-hud__building-upgrade-meta-icon") +
+              "<b>" +
+              Math.ceil(upgrade.max.seconds) +
+              "s</b></span></span></button>"
+            : "")
         : "";
 
       if (isCityFoundation || (!hasProductionPanel && underConstruction)) {

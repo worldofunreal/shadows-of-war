@@ -113,12 +113,14 @@ impl SowApp {
                 seed,
                 self.spatial_sound_params(wx, wy),
             );
-            if conqueror_id == my_id && self.sim.config.tutorial {
-                let step = self
-                    .ui
-                    .push_cascade_callout(wx, wy, None, None, false, now_instant);
+            if conqueror_id == my_id
+                && let Some(step) = self.ui.record_kill_callout(wx, wy, now_instant)
+            {
                 self.sfx
                     .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+            }
+            if player_id == my_id {
+                self.ui.reset_kill_streaks();
             }
         }
 

@@ -283,6 +283,7 @@ impl SowEngine {
         for id in destroyed_ids {
             self.building_productions.remove(&id);
             self.silo_cooldowns.remove(&id);
+            self.upgrade_targets.remove(&id);
         }
         self.building_grid.dirty = true;
         self.building_aggregates_dirty = true;

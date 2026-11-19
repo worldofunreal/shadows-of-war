@@ -313,6 +313,7 @@ impl SowApp {
                 cascade_streak: 0,
                 cascade_last_at: None,
                 cascade_callouts: Vec::new(),
+                combat_streaks: crate::app::CombatStreakTracker::default(),
             },
             sfx: crate::app::sfx::SfxDirector::default(),
             time: TimeState {

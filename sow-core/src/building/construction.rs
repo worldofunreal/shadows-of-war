@@ -29,6 +29,68 @@ impl SowEngine {
         }
     }
 
+    fn advance_queued_upgrade(&mut self, building_id: u64) {
+        let Some(target_level) = self.upgrade_targets.get(&building_id).copied() else {
+            return;
+        };
+        let Ok(idx) = self.buildings.binary_search_by_key(&building_id, |b| b.id) else {
+            self.upgrade_targets.remove(&building_id);
+            return;
+        };
+        let building = self.buildings[idx];
+        if building.under_construction {
+            return;
+        }
+        let next_level = building.level.saturating_add(1);
+        let owner_alive = self
+            .state
+            .player(building.owner_id)
+            .is_some_and(|player| player.alive);
+        let arsenal_busy = self
+            .building_productions
+            .get(&building_id)
+            .is_some_and(|state| state.arsenal_build.is_some());
+        if target_level <= building.level
+            || next_level > building.kind.max_level()
+            || !owner_alive
+            || arsenal_busy
+            || !self.campaign_allows_building(building.kind, next_level)
+        {
+            self.upgrade_targets.remove(&building_id);
+            return;
+        }
+
+        let upgrade_ticks = crate::building::structure_upgrade_duration_ticks(building.kind, next_level);
+        let ticks = if self.state.config.tutorial {
+            (upgrade_ticks / 2).max(1)
+        } else {
+            upgrade_ticks
+        };
+        let b = &mut self.buildings[idx];
+        b.level = next_level;
+        b.under_construction = true;
+        b.ticks_until_complete = ticks;
+        let b_tile = b.tile_idx;
+        let b_kind = b.kind;
+        if next_level >= target_level {
+            self.upgrade_targets.remove(&building_id);
+        }
+        if b_kind == BuildingKind::Tower {
+            self.defense_grid_dirty = true;
+        }
+        self.building_aggregates_dirty = true;
+        self.bot_sam_tiles_cache = None;
+        if b_kind == BuildingKind::Port {
+            self.sea_lanes_dirty = true;
+        }
+        self.state.events.push(GameEvent::StructureUpgraded {
+            id: building_id,
+            tile_idx: b_tile,
+            kind: b_kind,
+            level: next_level,
+        });
+    }
+
     /// Advance construction timers and emit [`GameEvent::StructureReady`].
     pub fn execute_construction(&mut self) {
         if self.state.phase != GamePhase::Playing {
@@ -85,6 +147,7 @@ impl SowEngine {
                 self.credit_city_upgrade_reinforcements(building);
             }
             self.hero_structure_ready(building);
+            self.advance_queued_upgrade(building.id);
         }
 
         let mut finished_production = Vec::new();

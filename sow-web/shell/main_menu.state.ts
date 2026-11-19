@@ -483,6 +483,12 @@ export interface HudBuildingUpgradeOffer {
     cost: number;
     seconds: number;
     enabled: boolean;
+    max?: {
+        target_level: number;
+        cost: number;
+        seconds: number;
+        is_cap_max: boolean;
+    } | null;
 }
 
 export interface HudBuildingConstruction {

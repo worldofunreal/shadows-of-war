@@ -1859,6 +1859,7 @@ impl SowEngine {
             }) && let Some(index) = self.siege_breach_target(owner, previous_owner, building)
             {
                 let demolished = self.buildings.remove(index);
+                self.upgrade_targets.remove(&demolished.id);
                 self.hero_claims.insert((owner, building.id, 0));
                 self.building_grid.mark_dirty();
                 self.building_aggregates_dirty = true;

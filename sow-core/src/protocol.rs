@@ -15,7 +15,8 @@ pub const GAMEPLAY_FORMAT_VERSION: u64 = 8;
 // 10: website authentication uses game-owned opaque sessions.
 // 11: the start message's GameConfig carries bot tuning (`ai`).
 // 12: city arsenal intent & snapshot state.
-pub const LIVE_PROTOCOL_VERSION: u64 = 12;
+// 13: queued multi-level upgrade target level (`UpgradeStructureTo`, `BuildingSnapshot::upgrade_target_level`).
+pub const LIVE_PROTOCOL_VERSION: u64 = 13;
 
 /// What two builds must share to play together. The public version is left out on
 /// purpose: a server, price or menu release must not lock out store and portal clients.
@@ -156,6 +157,11 @@ pub enum GameplayIntent {
     BuildingProduction {
         building_id: u64,
         kind: crate::game::CityArsenalKind,
+    },
+    /// Queue consecutive upgrades up to `target_level` (paid upfront, advanced per level).
+    UpgradeStructureTo {
+        building_id: u64,
+        target_level: u8,
     },
 }
 
@@ -665,6 +671,9 @@ pub struct BuildingSnapshot {
     pub arsenal_build: Option<crate::building::CityArsenalBuild>,
     #[serde(default)]
     pub sam_cooldown_ticks: u32,
+    /// Queued final target level when upgrading across multiple levels (`0` if none beyond `level`).
+    #[serde(default)]
+    pub upgrade_target_level: u8,
 }
 
 impl BuildingSnapshot {
@@ -675,6 +684,11 @@ impl BuildingSnapshot {
         } else {
             self.level
         }
+    }
+
+    #[inline]
+    pub fn reserved_level(&self) -> u8 {
+        self.level.max(self.upgrade_target_level)
     }
 }
 
