@@ -1401,6 +1401,29 @@ impl SowApp {
         self.post_profile_action("claim mission", "/profile/missions/claim", fields);
     }
 
+    pub(crate) fn claim_campaign_hero(&mut self, leader_id: &str) {
+        if !sow_data::campaign::ADVANCED_TACTICS_HERO_CHOICES.contains(&leader_id)
+            || self.progress.advanced_tactics_hero_claimed.is_some()
+        {
+            return;
+        }
+        let mut fields = serde_json::Map::new();
+        fields.insert(
+            "leader_id".into(),
+            serde_json::Value::String(leader_id.to_string()),
+        );
+        self.post_profile_action("claim campaign hero", "/profile/campaign/claim-hero", fields);
+    }
+
+    pub(crate) fn complete_campaign_replay(&mut self, episode_id: &str) {
+        let mut fields = serde_json::Map::new();
+        fields.insert(
+            "episode_id".into(),
+            serde_json::Value::String(episode_id.to_string()),
+        );
+        self.post_profile_action("campaign replay", "/profile/campaign-complete", fields);
+    }
+
     pub(crate) fn swap_mission(&mut self, mission_id: &str, ad_funded: bool) {
         let known = sow_data::missions::DAILY_MISSION_POOL
             .iter()

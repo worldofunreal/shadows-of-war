@@ -1,0 +1,61 @@
+{
+  "_comment": "Advanced Tactics III — Total War: Full Custom Bot Skirmish Graduation (africa, 956x1000).",
+  "map": "africa",
+  "player_spawn": [466, 128],
+  "player_color": "#f08c28",
+  "factions": [
+    {
+      "id": "outpost_alpha",
+      "name": "Atlas Vanguard",
+      "x": 452,
+      "y": 128,
+      "starting_troops": 1100,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d9534f",
+      "iq": 75,
+      "civ": "Raiders",
+      "leader": "Ragnar",
+      "avatar": "ragnar",
+      "can_attack_player": true,
+      "gold_loot_override": 260,
+      "troop_loot_bonus": 2200,
+      "prebuilt_buildings": [["Factory", 1]]
+    },
+    {
+      "id": "vanguard_keep",
+      "name": "Maghreb Pact",
+      "x": 440,
+      "y": 128,
+      "starting_troops": 2200,
+      "relation": "neutral",
+      "can_request_alliance": true,
+      "accepts_alliance_requests": true,
+      "color": "#3aa675",
+      "iq": 90,
+      "civ": "Kingdom",
+      "leader": "Musa",
+      "avatar": "musa",
+      "can_attack_player": false,
+      "prebuilt_buildings": [["Farm", 1], ["Port", 1]]
+    },
+    {
+      "id": "imperial_hegemon",
+      "name": "Imperial Hegemon",
+      "x": 424,
+      "y": 128,
+      "starting_troops": 5200,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#a83232",
+      "iq": 105,
+      "civ": "Citadel",
+      "leader": "Richard",
+      "avatar": "richard",
+      "can_attack_player": true,
+      "prebuilt_buildings": [["City", 1], ["Factory", 2], ["Tower", 1]]
+    }
+  ]
+}

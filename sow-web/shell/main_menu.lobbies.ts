@@ -293,7 +293,7 @@ export function renderHome() {
 export function campaignEpisodeHeroSlug(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "boudica";
-    if (id.startsWith("tactics_")) return "sun_tzu";
+    if (id.startsWith("tactics_") || id.startsWith("adv_tactics_")) return "sun_tzu";
     if (id.startsWith("blitz_")) return "caesar";
     if (id.startsWith("six_sky")) return "lady_six_sky";
     const prefixMatch = id.match(/^([a-z0-9_]+)_(?:ep\d+|\d+)$/);
@@ -308,10 +308,6 @@ export function campaignEpisodeHeroSlug(episodeId: string): string {
 const BLITZ_MAP_ROTATION = ["europe", "bajacalifornia", "southeastasia", "africa", "northamerica"];
 
 function blitzNodeNumber(episodeId: string): number | null {
-    if (episodeId === "tactics_01_expand") return 1;
-    if (episodeId === "tactics_02_ask_ally") return 2;
-    if (episodeId === "tactics_03_farm_vs_city") return 3;
-    if (episodeId === "tactics_04_factory_gold") return 4;
     const m = episodeId.match(/^blitz_(\d+)$/);
     return m ? Number(m[1]) : null;
 }
@@ -330,9 +326,11 @@ function blitzArchetypeTag(episodeId: string): { label: string; kind: string } |
 export function campaignEpisodeMapName(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "eastanglia";
-    if (id === "tactics_01_expand" || id === "tactics_03_farm_vs_city") return "europe";
-    if (id === "tactics_02_ask_ally") return "bajacalifornia";
-    if (id === "tactics_04_factory_gold") return "southeastasia";
+    if (id === "tactics_01_economy" || id === "tactics_03_amphibious") return "europe";
+    if (id === "tactics_02_defense") return "bajacalifornia";
+    if (id === "adv_tactics_01_naval") return "southeastasia";
+    if (id === "adv_tactics_02_atomic") return "northamerica";
+    if (id === "adv_tactics_03_skirmish") return "africa";
     const blitzMatch = id.match(/^blitz_(\d+)$/);
     if (blitzMatch) {
         const idx = Math.max(0, Number(blitzMatch[1]) - 5) % BLITZ_MAP_ROTATION.length;
@@ -345,7 +343,8 @@ export function campaignEpisodeMapName(episodeId: string): string {
 export function campaignEpisodeSagaId(episodeId: string): string {
     const id = String(episodeId || "").trim();
     if (id === "boudica") return "boudica";
-    if (id.startsWith("tactics_")) return "art_of_war";
+    if (id.startsWith("tactics_")) return "tactics";
+    if (id.startsWith("adv_tactics_")) return "advanced_tactics";
     if (id.startsWith("blitz_")) return "conquest_blitz";
     if (id.startsWith("six_sky")) return "six_sky";
     const prefixMatch = id.match(/^([a-z0-9_]+)_(?:ep\d+|\d+)$/);
@@ -355,7 +354,9 @@ export function campaignEpisodeSagaId(episodeId: string): string {
 export function campaignSagaTitle(sagaId: string): string {
     if (sagaId === "all") return SOW_t("lobbies.the_saga") || "The Saga";
     if (sagaId === "boudica") return SOW_t("lobbies.campaign_boudica_title") || "Rise of the Iceni";
-    if (sagaId === "art_of_war") return SOW_t("lobbies.campaign_art_of_war_title") || "Art of War";
+    if (sagaId === "tactics") return SOW_t("lobbies.campaign_tactics_title") || "Tactics";
+    if (sagaId === "advanced_tactics")
+        return SOW_t("lobbies.campaign_advanced_tactics_title") || "Advanced Tactics";
     if (sagaId === "conquest_blitz") return SOW_t("lobbies.campaign_blitz_title") || "Conquest Blitz";
     if (sagaId === "six_sky") {
         return leaderDisplayName(leaderById("lady_six_sky")) || "Lady Six Sky";
@@ -788,6 +789,76 @@ export function renderCampaign() {
         "</div>" +
         "</section>";
 
+    const heroChoicePool =
+        campaign && Array.isArray(campaign.hero_choice_pool) && campaign.hero_choice_pool.length
+            ? campaign.hero_choice_pool
+            : ["joan_of_arc", "lakshmibai", "alexander"];
+    const advCompleted = Boolean(campaign && campaign.advanced_tactics_completed);
+    const heroClaimed = (campaign && campaign.advanced_tactics_hero_claimed) || "";
+    const tacticsDone = Boolean(campaign && campaign.tactics_completed);
+    const rewardBanner =
+        activeSaga === "tactics" || (!tacticsDone && activeSaga === "all")
+            ? "<section class='sow-campaign__tier-banner'>" +
+              "<strong>" +
+              esc(SOW_t("lobbies.campaign_tactics_reward_title") || "Tactics Rewards") +
+              "</strong>" +
+              "<span>" +
+              esc(
+                  SOW_t("lobbies.campaign_tactics_reward_desc") ||
+                      "Unlocks Daily & Weekly Ops + Sun Tzu + Gems & Hero XP",
+              ) +
+              (tacticsDone ? " · ✓" : "") +
+              "</span></section>"
+            : activeSaga === "advanced_tactics" || advCompleted
+              ? "<section class='sow-campaign__reward-claim" +
+                (advCompleted && !heroClaimed ? " is-claimable" : "") +
+                "'>" +
+                "<div class='sow-campaign__reward-head'>" +
+                "<img class='sow-campaign__reward-skin' src='" +
+                esc(asset("gameplay/skins/imperial_vanguard.svg")) +
+                "' alt='' width='42' height='42'>" +
+                "<div><strong>" +
+                esc(SOW_t("lobbies.campaign_adv_reward_title") || "Advanced Tactics Grand Prize") +
+                "</strong><p>" +
+                esc(
+                    SOW_t("lobbies.campaign_adv_reward_desc") ||
+                        "Imperial Vanguard Skin + Grand Tactician Achievement + Choose 1 of 3 Common Heroes",
+                ) +
+                "</p></div></div>" +
+                "<div class='sow-campaign__hero-choices'>" +
+                heroChoicePool
+                    .map((slug) => {
+                        const leader = leaderById(slug);
+                        const name = leader ? leaderDisplayName(leader) : slug;
+                        const avatarSrc = asset("gameplay/avatars/" + leaderArtSlug(slug) + ".webp");
+                        const isChosen = heroClaimed === slug;
+                        const disabled = !advCompleted || Boolean(heroClaimed);
+                        return (
+                            "<button type='button' class='sow-campaign__hero-choice" +
+                            (isChosen ? " is-chosen" : "") +
+                            "' data-command='claim_campaign_hero' data-leader-id='" +
+                            esc(slug) +
+                            "'" +
+                            (disabled ? " disabled" : "") +
+                            "><img " +
+                            avatarImageAttribute(avatarSrc) +
+                            " alt='' width='32' height='32'><span>" +
+                            esc(name) +
+                            "</span><b>" +
+                            esc(
+                                isChosen
+                                    ? SOW_t("missions.claimed") || "Claimed"
+                                    : advCompleted && !heroClaimed
+                                      ? SOW_t("missions.claim") || "Claim"
+                                      : SOW_t("lobbies.locked") || "Locked",
+                            ) +
+                            "</b></button>"
+                        );
+                    })
+                    .join("") +
+                "</div></section>"
+              : "";
+
     return (
         "<main class='sow-menu__main sow-campaign' data-screen-panel='campaign'>" +
         "<header class='sow-campaign__intro'>" +
@@ -803,6 +874,9 @@ export function renderCampaign() {
         "</h1>" +
         "</div>" +
         "</header>" +
+        "<nav class='sow-campaign__sagas-nav'><div class='sow-campaign__sagas-rail'>" +
+        sagaTabsHtml +
+        "</div></nav>" +
         "<div class='sow-campaign__workspace'>" +
         featuredHtml +
         "<section class='sow-menu__battlefield sow-campaign__battlefield sow-campaign__roster'>" +
@@ -813,6 +887,7 @@ export function renderCampaign() {
         "</h2></div>" +
         continueButton +
         "</div>" +
+        rewardBanner +
         superchargerBar +
         "<div class='sow-campaign__episodes'>" +
         (filteredEpisodes.length

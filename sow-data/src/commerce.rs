@@ -27,7 +27,7 @@ const GEM_BUNDLES: [(&str, u64, u64); 3] = [
 // Original SOW cosmetic catalog. The style id is an internal renderer hint
 // (`apply_skin` in map.wgsl); the public id is the only value persisted in
 // player ownership. Every style must be a distinct pattern, not a recolor.
-const SKINS: [(&str, &str, u64, u8); 8] = [
+const SKINS: [(&str, &str, u64, u8); 9] = [
     ("ember_vein", "Ember Vein", 500, 1),
     ("storm_grid", "Storm Grid", 1_000, 2),
     ("royal_lattice", "Royal Lattice", 1_500, 3),
@@ -36,6 +36,7 @@ const SKINS: [(&str, &str, u64, u8); 8] = [
     ("shield_wall", "Shield Wall", 1_250, 6),
     ("war_banner", "War Banner", 1_250, 7),
     ("dragon_scale", "Dragon Scale", 2_000, 8),
+    ("imperial_vanguard", "Imperial Vanguard", 0, 9),
 ];
 
 /// Crowns per gem, the same exchange `Leader::price_gems` uses.
@@ -640,6 +641,7 @@ fn offer_items(kind: OfferKind) -> Vec<(String, u64, u64)> {
             .collect(),
         OfferKind::Skin => skins()
             .into_iter()
+            .filter(|skin| skin.cost_gems > 0)
             .map(|skin| (skin.id, skin.cost_gems, skin.cost_crowns))
             .collect(),
     }
@@ -1133,9 +1135,9 @@ mod tests {
     #[test]
     fn skins_are_original_and_have_stable_prices() {
         let all = skins();
-        assert_eq!(all.len(), 8);
+        assert_eq!(all.len(), 9);
         let styles = all.iter().map(|skin| skin.style).collect::<BTreeSet<_>>();
-        assert_eq!(styles, (1..=8).collect(), "each skin owns one distinct pattern");
+        assert_eq!(styles, (1..=9).collect(), "each skin owns one distinct pattern");
         assert!(all.iter().all(|skin| skin.cost_crowns == skin.cost_gems * CROWNS_PER_GEM));
         assert_eq!(
             skin_by_id("ember_vein").map(|skin| skin.cost_gems),

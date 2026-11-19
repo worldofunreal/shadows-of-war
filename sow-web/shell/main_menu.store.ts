@@ -1012,6 +1012,12 @@ function renderStoreSkinPromo(skin: MenuSkinOffer) {
               ">" +
               esc(SOW_t("store.equip")) +
               "</button>";
+    } else if (Number(skin.cost_gems) <= 0 && Number(skin.cost_crowns) <= 0) {
+        action =
+            "<div class='sow-store__buy-row'>" +
+            "<button class='sow-store__buy' type='button' data-command='open_campaign' data-saga-id='advanced_tactics'>" +
+            esc(SOW_t("lobbies.campaign_advanced_tactics_title") || "Advanced Tactics") +
+            "</button></div>";
     } else {
         action =
             "<div class='sow-store__buy-row'>" +

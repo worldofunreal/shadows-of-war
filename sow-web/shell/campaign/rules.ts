@@ -42,6 +42,10 @@ export const METRICS: Record<string, string> = {
     factory: "factories",
     port: "ports",
     tower: "towers",
+    sam: "sams",
+    warship_queue: "warship_queues",
+    nuke_queue: "nuke_queues",
+    nuke_armed: "nukes_armed",
     structure_upgrade: "structure_upgrades",
     structure_level: "structure_levels",
     city_upgrade: "city_upgrades",
@@ -82,6 +86,7 @@ export const STRUCTURE_LEVEL_LIMITS: Record<string, number> = {
     Factory: 4,
     Tower: 4,
     Port: 4,
+    SAM: 4,
 };
 export const CAMPAIGN_ACTIONS: readonly string[] = ["transport_fleet", "trade_ship", "warship", "nuke"];
 export const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS: Record<string, { kind: string; level: number } | null> =
@@ -107,6 +112,9 @@ export const BUILDING_METRIC_KINDS: Record<string, string> = {
     port: "Port",
     port_level: "Port",
     port_upgrade: "Port",
+    sam: "SAM",
+    sam_level: "SAM",
+    sam_upgrade: "SAM",
 };
 export function emptyCampaignUnlocks(): CampaignUnlocks {
     return { buildings: {}, actions: [] };
@@ -306,8 +314,14 @@ export function stepCampaignRequirements(step: CampaignStep): CampaignRecord[] {
     );
     uiTargets.forEach((target) => {
         if (target === "dock_city") addBuilding("City", 1);
-        if (target === "map_nuke" || target === "map_nuke_launch") addAction("nuke");
+        if (target === "dock_farm") addBuilding("Farm", 1);
+        if (target === "dock_factory") addBuilding("Factory", 1);
+        if (target === "dock_port") addBuilding("Port", 1);
+        if (target === "dock_tower") addBuilding("Tower", 1);
+        if (target === "dock_sam") addBuilding("SAM", 1);
+        if (target === "map_nuke" || target === "map_nuke_launch" || target === "factory_nuke") addAction("nuke");
         if (target === "map_fleet") addAction("transport_fleet");
+        if (target === "port_warship") addAction("warship");
     });
     return requirements;
 }
@@ -339,6 +353,15 @@ export const UI_TARGETS: Record<string, string> = {
     hud_center_camera: '#sow-hud [data-command="center_camera"]',
     hud_inbox: '#sow-hud [data-command="toggle_inbox"]',
     dock_city: '#sow-hud [data-command="select_building"][data-kind="City"]',
+    dock_factory: '#sow-hud [data-command="select_building"][data-kind="Factory"]',
+    dock_port: '#sow-hud [data-command="select_building"][data-kind="Port"]',
+    dock_tower: '#sow-hud [data-command="select_building"][data-kind="Tower"]',
+    dock_farm: '#sow-hud [data-command="select_building"][data-kind="Farm"]',
+    dock_sam: '#sow-hud [data-command="select_building"][data-kind="SAM"]',
+    hud_troops: "#sow-hud-nameplate-troops",
+    hud_troop_rate: "#sow-hud-nameplate-troop-rate",
+    hud_gold: "#sow-hud-nameplate-gold",
+    hud_gold_rate: "#sow-hud-nameplate-gold-rate",
     transfer_gold: "#sow-hud-transfer-gold",
     transfer_troops: "#sow-hud-transfer-troops",
     transfer_dir_troops: "#sow-hud-transfer-dir-troops",
@@ -356,6 +379,8 @@ export const UI_TARGETS: Record<string, string> = {
     map_nuke: '#sow-hud [data-map-action="nuke"]',
     map_build_city: '#sow-hud [data-map-action="build_city"]',
     map_nuke_launch: '#sow-hud [data-map-action="nuke"]',
+    port_warship: '#sow-hud [data-production-kind="Warship"]',
+    factory_nuke: '#sow-hud [data-production-kind="Nuke"], #sow-hud [data-command="select_nuke"]',
     map_back: "#sow-hud [data-map-back]",
     rankings: '#sow-hud [data-command="toggle_leaderboard"]',
     settings: '#sow-hud [data-command="toggle_settings"]',

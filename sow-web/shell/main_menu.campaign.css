@@ -1080,3 +1080,79 @@
   background: rgba(245, 158, 11, 0.25);
   color: #fde68a;
 }
+
+.sow-campaign__tier-banner,
+.sow-campaign__reward-claim {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(245, 197, 66, 0.08);
+  border: 1px solid rgba(245, 197, 66, 0.25);
+}
+
+.sow-campaign__reward-claim.is-claimable {
+  border-color: rgba(245, 158, 11, 0.72);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.2);
+}
+
+.sow-campaign__reward-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sow-campaign__reward-head p {
+  margin: 2px 0 0;
+  font-size: 0.74rem;
+  color: rgba(245, 241, 232, 0.76);
+}
+
+.sow-campaign__reward-skin {
+  border-radius: 8px;
+  border: 1px solid rgba(245, 197, 66, 0.45);
+  flex-shrink: 0;
+}
+
+.sow-campaign__hero-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sow-campaign__hero-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 20, 28, 0.78);
+  color: #f5f1e8;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sow-campaign__hero-choice img {
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.sow-campaign__hero-choice b {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: #fbbf24;
+}
+
+.sow-campaign__hero-choice:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.sow-campaign__hero-choice.is-chosen {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.16);
+}

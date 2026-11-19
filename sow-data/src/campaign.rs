@@ -36,9 +36,15 @@ impl CampaignEpisode {
 pub struct CampaignSeries {
     pub id: &'static str,
     pub episodes: &'static [&'static str],
-    /// Catalog id of the hero unlocked by finishing the series.
-    pub reward_leader_id: &'static str,
+    /// Catalog id of the hero unlocked by finishing the series, if fixed.
+    pub reward_leader_id: Option<&'static str>,
+    /// Exclusive cosmetic skin id unlocked by finishing the series.
+    pub reward_skin_id: Option<&'static str>,
+    /// Candidate Common heroes offered as a 1-of-N free reward upon completion.
+    pub hero_choice_pool: &'static [&'static str],
 }
+
+pub const ADVANCED_TACTICS_HERO_CHOICES: &[&str] = &["joan_of_arc", "lakshmibai", "alexander"];
 
 pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
     CampaignEpisode {
@@ -298,66 +304,98 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
         server_owned_tutorial: false,
     },
     CampaignEpisode {
-        id: "tactics_01_expand",
-        series_id: "art_of_war",
+        id: "tactics_01_economy",
+        series_id: "tactics",
         prerequisite: None,
         unlock_leader_id: None,
         advisor_id: "sun_tzu",
         map_id: "europe",
         map_width: 1000,
         map_height: 576,
-        title: "Island Strike",
-        subtitle: "Tactics I · Sun Tzu",
-        title_key: "lobbies.campaign_tactics_01_expand_title",
-        subtitle_key: "lobbies.campaign_tactics_01_expand_subtitle",
+        title: "Farm & Forge",
+        subtitle: "Tactics I · Economy & Buildings",
+        title_key: "lobbies.campaign_tactics_01_economy_title",
+        subtitle_key: "lobbies.campaign_tactics_01_economy_subtitle",
         marks_intro_completed: true,
         server_owned_tutorial: false,
     },
     CampaignEpisode {
-        id: "tactics_02_ask_ally",
-        series_id: "art_of_war",
-        prerequisite: Some("tactics_01_expand"),
+        id: "tactics_02_defense",
+        series_id: "tactics",
+        prerequisite: Some("tactics_01_economy"),
         unlock_leader_id: None,
         advisor_id: "sun_tzu",
         map_id: "bajacalifornia",
         map_width: 848,
         map_height: 1000,
-        title: "Friends with Gold",
-        subtitle: "Tactics II · Diplomacy & Aid",
-        title_key: "lobbies.campaign_tactics_02_ask_ally_title",
-        subtitle_key: "lobbies.campaign_tactics_02_ask_ally_subtitle",
+        title: "Hold the Line",
+        subtitle: "Tactics II · Towers & Troop Rate",
+        title_key: "lobbies.campaign_tactics_02_defense_title",
+        subtitle_key: "lobbies.campaign_tactics_02_defense_subtitle",
         marks_intro_completed: false,
         server_owned_tutorial: false,
     },
     CampaignEpisode {
-        id: "tactics_03_farm_vs_city",
-        series_id: "art_of_war",
-        prerequisite: Some("tactics_02_ask_ally"),
+        id: "tactics_03_amphibious",
+        series_id: "tactics",
+        prerequisite: Some("tactics_02_defense"),
         unlock_leader_id: None,
         advisor_id: "sun_tzu",
         map_id: "europe",
         map_width: 1000,
         map_height: 576,
-        title: "Bread or Barracks",
-        subtitle: "Tactics III · Farm vs City",
-        title_key: "lobbies.campaign_tactics_03_farm_vs_city_title",
-        subtitle_key: "lobbies.campaign_tactics_03_farm_vs_city_subtitle",
+        title: "Across the Strait",
+        subtitle: "Tactics III · Amphibious Assault",
+        title_key: "lobbies.campaign_tactics_03_amphibious_title",
+        subtitle_key: "lobbies.campaign_tactics_03_amphibious_subtitle",
         marks_intro_completed: false,
         server_owned_tutorial: false,
     },
     CampaignEpisode {
-        id: "tactics_04_factory_gold",
-        series_id: "art_of_war",
-        prerequisite: Some("tactics_03_farm_vs_city"),
+        id: "adv_tactics_01_naval",
+        series_id: "advanced_tactics",
+        prerequisite: Some("tactics_03_amphibious"),
         unlock_leader_id: None,
         advisor_id: "sun_tzu",
         map_id: "southeastasia",
         map_width: 1000,
         map_height: 592,
-        title: "Compound Coin",
-        subtitle: "Tactics IV · Factory Lv.4",
-        title_key: "lobbies.campaign_tactics_04_factory_gold_title",
-        subtitle_key: "lobbies.campaign_tactics_04_factory_gold_subtitle",
+        title: "Rule the Waves",
+        subtitle: "Advanced I · Port & Warship",
+        title_key: "lobbies.campaign_adv_tactics_01_naval_title",
+        subtitle_key: "lobbies.campaign_adv_tactics_01_naval_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "adv_tactics_02_atomic",
+        series_id: "advanced_tactics",
+        prerequisite: Some("adv_tactics_01_naval"),
+        unlock_leader_id: None,
+        advisor_id: "sun_tzu",
+        map_id: "northamerica",
+        map_width: 1000,
+        map_height: 516,
+        title: "Atomic Age",
+        subtitle: "Advanced II · Nukes & SAM",
+        title_key: "lobbies.campaign_adv_tactics_02_atomic_title",
+        subtitle_key: "lobbies.campaign_adv_tactics_02_atomic_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "adv_tactics_03_skirmish",
+        series_id: "advanced_tactics",
+        prerequisite: Some("adv_tactics_02_atomic"),
+        unlock_leader_id: None,
+        advisor_id: "sun_tzu",
+        map_id: "africa",
+        map_width: 956,
+        map_height: 1000,
+        title: "Total War",
+        subtitle: "Advanced III · Bot Skirmish",
+        title_key: "lobbies.campaign_adv_tactics_03_skirmish_title",
+        subtitle_key: "lobbies.campaign_adv_tactics_03_skirmish_subtitle",
         marks_intro_completed: false,
         server_owned_tutorial: false,
     },
@@ -429,14 +467,26 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
 
 pub const CAMPAIGN_SERIES: &[CampaignSeries] = &[
     CampaignSeries {
-        id: "art_of_war",
+        id: "tactics",
         episodes: &[
-            "tactics_01_expand",
-            "tactics_02_ask_ally",
-            "tactics_03_farm_vs_city",
-            "tactics_04_factory_gold",
+            "tactics_01_economy",
+            "tactics_02_defense",
+            "tactics_03_amphibious",
         ],
-        reward_leader_id: "sun_tzu",
+        reward_leader_id: Some("sun_tzu"),
+        reward_skin_id: None,
+        hero_choice_pool: &[],
+    },
+    CampaignSeries {
+        id: "advanced_tactics",
+        episodes: &[
+            "adv_tactics_01_naval",
+            "adv_tactics_02_atomic",
+            "adv_tactics_03_skirmish",
+        ],
+        reward_leader_id: None,
+        reward_skin_id: Some("imperial_vanguard"),
+        hero_choice_pool: ADVANCED_TACTICS_HERO_CHOICES,
     },
     CampaignSeries {
         id: "conquest_blitz",
@@ -445,22 +495,28 @@ pub const CAMPAIGN_SERIES: &[CampaignSeries] = &[
             "blitz_11", "blitz_12", "blitz_13", "blitz_14", "blitz_15", "blitz_16",
             "blitz_17", "blitz_18", "blitz_19", "blitz_20",
         ],
-        reward_leader_id: "caesar",
+        reward_leader_id: Some("caesar"),
+        reward_skin_id: None,
+        hero_choice_pool: &[],
     },
     CampaignSeries {
         id: "lady_six_sky",
         episodes: &["six_sky_ep1", "six_sky_ep2", "six_sky_ep3"],
-        reward_leader_id: "lady_six_sky",
+        reward_leader_id: Some("lady_six_sky"),
+        reward_skin_id: None,
+        hero_choice_pool: &[],
     },
 ];
 
 // Episodes are playable only when listed here. Six Sky ep1 also needs the hero
 // (see access_granted).
 pub const PUBLISHED_EPISODES: &[&str] = &[
-    "tactics_01_expand",
-    "tactics_02_ask_ally",
-    "tactics_03_farm_vs_city",
-    "tactics_04_factory_gold",
+    "tactics_01_economy",
+    "tactics_02_defense",
+    "tactics_03_amphibious",
+    "adv_tactics_01_naval",
+    "adv_tactics_02_atomic",
+    "adv_tactics_03_skirmish",
     "boudica",
     "blitz_05",
     "blitz_06",
@@ -507,16 +563,58 @@ pub fn access_granted(
     })
 }
 
-pub fn earned_leader(completed_episodes: &std::collections::BTreeSet<String>) -> Option<Leader> {
+pub fn tactics_completed(completed_episodes: &std::collections::BTreeSet<String>) -> bool {
     CAMPAIGN_SERIES
         .iter()
-        .find(|series| {
+        .find(|series| series.id == "tactics")
+        .is_some_and(|series| {
             series
                 .episodes
                 .iter()
                 .all(|id| completed_episodes.contains(*id))
         })
-        .map(|series| Leader::of(series.reward_leader_id))
+}
+
+pub fn advanced_tactics_completed(completed_episodes: &std::collections::BTreeSet<String>) -> bool {
+    CAMPAIGN_SERIES
+        .iter()
+        .find(|series| series.id == "advanced_tactics")
+        .is_some_and(|series| {
+            series
+                .episodes
+                .iter()
+                .all(|id| completed_episodes.contains(*id))
+        })
+}
+
+pub fn earned_skin_for_episode(
+    episode_id: &str,
+    completed_episodes: &std::collections::BTreeSet<String>,
+) -> Option<&'static str> {
+    CAMPAIGN_SERIES.iter().find_map(|series| {
+        (series.episodes.contains(&episode_id)
+            && series
+                .episodes
+                .iter()
+                .all(|id| completed_episodes.contains(*id)))
+        .then_some(series.reward_skin_id)
+        .flatten()
+    })
+}
+
+pub fn earned_leader(completed_episodes: &std::collections::BTreeSet<String>) -> Option<Leader> {
+    CAMPAIGN_SERIES
+        .iter()
+        .filter_map(|series| {
+            series
+                .episodes
+                .iter()
+                .all(|id| completed_episodes.contains(*id))
+                .then_some(series.reward_leader_id)
+                .flatten()
+        })
+        .next()
+        .map(Leader::of)
 }
 
 pub fn earned_leader_for_episode(
@@ -525,14 +623,17 @@ pub fn earned_leader_for_episode(
 ) -> Option<Leader> {
     CAMPAIGN_SERIES
         .iter()
-        .find(|series| {
-            series.episodes.contains(&episode_id)
+        .filter_map(|series| {
+            (series.episodes.contains(&episode_id)
                 && series
                     .episodes
                     .iter()
-                    .all(|id| completed_episodes.contains(*id))
+                    .all(|id| completed_episodes.contains(*id)))
+            .then_some(series.reward_leader_id)
+            .flatten()
         })
-        .map(|series| Leader::of(series.reward_leader_id))
+        .next()
+        .map(Leader::of)
 }
 
 #[cfg(test)]
@@ -576,10 +677,12 @@ mod tests {
             assert_eq!(episode.advisor().id(), episode.advisor_id);
         }
         for series in CAMPAIGN_SERIES {
-            assert_eq!(
-                Leader::of(series.reward_leader_id).id(),
-                series.reward_leader_id
-            );
+            if let Some(leader_id) = series.reward_leader_id {
+                assert_eq!(Leader::of(leader_id).id(), leader_id);
+            }
+            for choice_id in series.hero_choice_pool {
+                assert_eq!(Leader::of(choice_id).id(), *choice_id);
+            }
         }
     }
 

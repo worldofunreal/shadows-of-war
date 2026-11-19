@@ -222,6 +222,22 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
   height: var(--sow-topbar-avatar);
 }
 
+.sow-menu__portrait::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9px;
+  border: 2px solid #e9d5ff;
+  box-shadow: 0 0 18px rgb(217 181 255 / 90%);
+  opacity: 0;
+  transform: scale(0.88);
+  pointer-events: none;
+}
+
+.sow-menu__portrait.is-reward-hit::after {
+  animation: sow-compositor-flare 580ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
 .sow-menu__avatar {
   position: relative;
   display: block;
@@ -242,6 +258,20 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease;
+}
+
+.sow-menu__avatar::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid #fff6d8;
+  box-shadow:
+    0 0 18px rgb(255 211 106 / 95%),
+    inset 0 0 10px rgb(255 236 170 / 65%);
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
 }
 
 .sow-menu__avatar:hover {
@@ -357,6 +387,18 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
   color: var(--sow-gold-bright);
   cursor: pointer;
 }
+.sow-menu__level::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 5px;
+  border: 1.5px solid #fff6d8;
+  background: rgb(255 211 106 / 22%);
+  box-shadow: 0 0 14px rgb(255 211 106 / 95%);
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+}
 .sow-menu__level strong {
   font-size: 12px;
   line-height: 1;
@@ -365,6 +407,7 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
 }
 
 .sow-menu__xp-track {
+  --sow-xp-dir: 1;
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
@@ -379,19 +422,27 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
     0 1px 0 rgb(255 255 255 / 8%);
   transition: border-color 160ms ease;
 }
+html[dir="rtl"] .sow-menu__xp-track {
+  --sow-xp-dir: -1;
+}
 
 .sow-menu__xp-track i {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
-  width: 0;
+  width: 100%;
   border-radius: 2px;
   background: var(--sow-fill-xp-gradient);
   box-shadow:
     inset 0 1px 0 rgb(214 244 255 / 45%),
     0 0 8px rgb(46 168 232 / 38%),
     0 0 3px rgb(214 244 255 / 28%);
-  transition: width 160ms ease;
+  transform: translate3d(calc((var(--sow-xp-ratio, 0) - 1) * 100% * var(--sow-xp-dir)), 0, 0);
+  transition: transform 160ms ease;
+}
+
+.sow-menu__xp-track i[data-xp-empty="true"] {
+  box-shadow: none;
 }
 
 /* While XP counts up, a shine runs along the fill and its leading edge burns white. */
@@ -405,6 +456,7 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
 .sow-menu__xp-track.is-filling i,
 .sow-menu__nameplate.is-level-up .sow-menu__xp-track i {
   transition: none;
+  will-change: transform;
 }
 
 .sow-menu__xp-track i::before,
@@ -428,6 +480,13 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
   background: linear-gradient(to right, transparent, #fff);
   box-shadow: 0 0 6px #bfeaff;
 }
+html[dir="rtl"] .sow-menu__xp-track i::after {
+  background: linear-gradient(to left, transparent, #fff);
+}
+
+.sow-menu__xp-track i[data-xp-empty="true"]::after {
+  opacity: 0 !important;
+}
 
 .sow-menu__xp-track.is-filling i {
   overflow: hidden;
@@ -437,7 +496,7 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
   animation: sow-xp-shine 620ms linear infinite;
 }
 
-.sow-menu__xp-track.is-filling i::after {
+.sow-menu__xp-track.is-filling i:not([data-xp-empty="true"])::after {
   opacity: 1;
   animation: sow-xp-edge 180ms ease-in-out infinite alternate;
 }
@@ -462,22 +521,19 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
   animation: sow-xp-flash 560ms ease-out both;
 }
 
-.sow-menu__nameplate.is-level-up .sow-menu__avatar {
-  animation: sow-portrait-flare 900ms ease-out both;
-}
-
-.sow-menu__nameplate.is-level-up .sow-menu__level {
-  animation: sow-level-badge-flare 900ms ease-out both;
+.sow-menu__nameplate.is-level-up .sow-menu__avatar::after,
+.sow-menu__nameplate.is-level-up .sow-menu__level::after {
+  animation: sow-compositor-flare 760ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 
 @keyframes sow-xp-shine {
   from {
     opacity: 1;
-    transform: translateX(-100%);
+    transform: translate3d(-100%, 0, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(100%);
+    transform: translate3d(100%, 0, 0);
   }
 }
 @keyframes sow-xp-edge {
@@ -496,22 +552,14 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
     opacity: 0;
   }
 }
-@keyframes sow-portrait-flare {
-  from {
-    border-color: #fff6d8;
-    box-shadow:
-      0 0 0 2px rgb(255 211 106 / 90%),
-      0 0 22px rgb(255 211 106 / 95%),
-      inset 0 0 14px rgb(255 236 170 / 70%);
+@keyframes sow-compositor-flare {
+  0% {
+    opacity: 1;
+    transform: scale(1.08);
   }
-}
-@keyframes sow-level-badge-flare {
-  from {
-    border-color: #fff6d8;
-    background: #6b4a12;
-    box-shadow:
-      0 0 14px rgb(255 211 106 / 95%),
-      inset 0 0 6px rgb(255 236 170 / 80%);
+  100% {
+    opacity: 0;
+    transform: scale(1.01);
   }
 }
 
@@ -829,21 +877,27 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
     rgba(4, 6, 12, 0.9) 100%
   );
   content: "";
-  animation: sow-reward-curtain 260ms ease-out both;
+  animation: sow-reward-curtain 160ms ease-out both;
 }
 
-.sow-menu__reward-stage.is-exiting {
-  animation: sow-reward-stage-out 240ms ease-in both;
+.sow-menu__reward-stage.is-exiting:not([data-waapi-exit]) {
+  animation: sow-reward-stage-out 180ms ease-in both;
 }
 
 .sow-menu__reward-cards {
   position: relative;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   width: 100%;
+  max-width: min(100%, 1080px);
   align-items: center;
   justify-content: center;
-  gap: clamp(14px, 3vw, 28px);
+  gap: clamp(14px, 2.6vw, 26px);
+}
+
+.sow-menu__reward-cards.is-dense {
+  gap: clamp(10px, 1.8vw, 18px);
 }
 
 .sow-menu__reward-card {
@@ -866,8 +920,23 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
     0 0 40px var(--reward-glow),
     inset 0 1px rgba(255, 255, 255, 0.16);
   transform-origin: 50% 65%;
+  animation: sow-reward-card-reveal 360ms cubic-bezier(0.2, 1.24, 0.32, 1) both;
+}
+
+.sow-menu__reward-card[data-waapi-reveal] {
+  animation: none;
+}
+
+.sow-menu__reward-card.is-animating {
   will-change: transform, opacity;
-  animation: sow-reward-card-reveal 760ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+}
+
+.sow-menu__reward-cards.is-dense .sow-menu__reward-card {
+  width: min(21vw, 196px);
+  min-height: 202px;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
 }
 
 .sow-menu__reward-card--crowns,
@@ -916,6 +985,11 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
     inset 0 0 28px var(--reward-glow);
 }
 
+.sow-menu__reward-cards.is-dense .sow-menu__reward-medallion {
+  width: 116px;
+  height: 116px;
+}
+
 .sow-menu__reward-medallion::before {
   position: absolute;
   z-index: -1;
@@ -930,7 +1004,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
     transparent 69deg 360deg
   );
   content: "";
-  animation: sow-reward-rays 1800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: sow-reward-rays 950ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .sow-menu__reward-emblem {
@@ -949,6 +1023,17 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
     0 0 24px var(--reward-color);
 }
 
+.sow-menu__reward-cards.is-dense .sow-menu__reward-emblem {
+  width: 78px;
+  height: 78px;
+  font-size: 52px;
+}
+
+.sow-menu__reward-cards.is-dense .sow-menu__reward-card--leader .sow-menu__reward-emblem {
+  width: 88px;
+  height: 88px;
+}
+
 .sow-menu__reward-amount {
   position: relative;
   color: #fff;
@@ -962,6 +1047,18 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   white-space: nowrap;
 }
 
+.sow-menu__reward-cards.is-dense .sow-menu__reward-amount {
+  font-size: clamp(36px, 3.4vw, 48px);
+}
+
+.sow-menu__reward-cards.is-dense .sow-menu__reward-card--level .sow-menu__reward-amount {
+  font-size: clamp(19px, 2.2vw, 28px);
+}
+
+.sow-menu__reward-cards.is-dense .sow-menu__reward-card--leader .sow-menu__reward-amount {
+  font-size: clamp(15px, 1.8vw, 22px);
+}
+
 .sow-menu__reward-skip.sow-menu__icon-button {
   position: absolute;
   z-index: 2;
@@ -972,6 +1069,12 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   background: var(--sow-button-dark-bg);
   color: #fff;
   font-size: 30px;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.sow-menu__reward-stage.is-accelerating .sow-menu__reward-skip.sow-menu__icon-button {
+  opacity: 0.72;
+  transform: scale(0.94);
 }
 
 .sow-menu__ranked-result-card {
@@ -1075,25 +1178,15 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 @keyframes sow-reward-card-reveal {
   0% {
     opacity: 0;
-    transform: translateY(32px) scale(0.82, 0.88);
+    transform: translate3d(0, 24px, 0) scale(0.86);
   }
-  16% {
-    opacity: 0.75;
-    transform: translateY(40px) scale(0.73, 0.78);
-  }
-  52% {
+  58% {
     opacity: 1;
-    transform: translateY(-16px) scale(1.09, 0.92);
-  }
-  73% {
-    transform: translateY(5px) scale(0.95, 1.05);
-  }
-  88% {
-    transform: translateY(-3px) scale(1.025, 0.985);
+    transform: translate3d(0, -4px, 0) scale(1.03);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
@@ -1110,6 +1203,9 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 .sow-menu__reward-impact--crowns,
 .sow-menu__reward-impact--level {
   --fx-color: #ffd36a;
+}
+.sow-menu__reward-impact--leader {
+  --fx-color: #efc878;
 }
 .sow-menu__reward-impact--laurels {
   --fx-color: #d9b5ff;
@@ -1260,22 +1356,62 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   }
   .sow-menu__reward-card {
     width: min(100%, 340px);
-    min-height: 126px;
+    min-height: 118px;
     flex-direction: row;
-    gap: 18px;
+    gap: 16px;
     padding: 9px 16px;
   }
   .sow-menu__reward-medallion {
-    width: 108px;
-    height: 108px;
+    width: 96px;
+    height: 96px;
   }
   .sow-menu__reward-emblem {
-    width: 88px;
-    height: 88px;
-    font-size: 57px;
+    width: 76px;
+    height: 76px;
+    font-size: 52px;
   }
   .sow-menu__reward-amount {
-    font-size: clamp(40px, 12vw, 52px);
+    font-size: clamp(36px, 11vw, 48px);
+  }
+  .sow-menu__reward-cards.is-dense {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 390px;
+    gap: 9px;
+    align-items: stretch;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card {
+    width: 100%;
+    min-height: 118px;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 8px;
+    border-radius: 16px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: min(62%, 210px);
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-medallion {
+    width: 66px;
+    height: 66px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-emblem {
+    width: 46px;
+    height: 46px;
+    font-size: 32px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card--leader .sow-menu__reward-emblem {
+    width: 54px;
+    height: 54px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-amount {
+    font-size: clamp(22px, 6vw, 32px);
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card--level .sow-menu__reward-amount,
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card--leader .sow-menu__reward-amount {
+    font-size: clamp(14px, 3.8vw, 19px);
   }
 }
 
@@ -1300,6 +1436,32 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   .sow-menu__reward-amount {
     font-size: 42px;
   }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card {
+    width: min(17.5vw, 162px);
+    min-height: 142px;
+    padding: 10px;
+    gap: 6px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-medallion {
+    width: 76px;
+    height: 76px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-emblem {
+    width: 52px;
+    height: 52px;
+    font-size: 36px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card--leader .sow-menu__reward-emblem {
+    width: 60px;
+    height: 60px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-amount {
+    font-size: 30px;
+  }
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card--level .sow-menu__reward-amount,
+  .sow-menu__reward-cards.is-dense .sow-menu__reward-card--leader .sow-menu__reward-amount {
+    font-size: 16px;
+  }
 }
 
 [data-progression] [data-progression-xp-value],
@@ -1315,46 +1477,61 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 [data-progression] [data-progression-crowns-value].is-reward-value-hit,
 [data-progression] [data-progression-laurels-value].is-reward-value-hit,
 [data-progression] [data-progression-gems-value].is-reward-value-hit {
-  animation: sow-reward-value-impact 640ms cubic-bezier(0.22, 1.3, 0.36, 1) both;
+  animation: sow-reward-value-impact 520ms cubic-bezier(0.22, 1.3, 0.36, 1) both;
 }
 
 .sow-menu__level [data-progression-level-value].is-reward-level-up {
-  animation: sow-reward-level-pulse 900ms cubic-bezier(0.22, 1.3, 0.36, 1) both;
+  animation: sow-reward-level-pulse 760ms cubic-bezier(0.22, 1.3, 0.36, 1) both;
+}
+
+#sow-menu .sow-menu__main-nav-item.is-reward-hit > span {
+  animation: sow-nav-reward-hit 540ms cubic-bezier(0.22, 1.3, 0.36, 1) both;
+}
+
+@keyframes sow-nav-reward-hit {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  34% {
+    transform: translate3d(0, -4px, 0) scale(1.24);
+  }
+  66% {
+    transform: translate3d(0, 1px, 0) scale(0.94);
+  }
 }
 
 @keyframes sow-reward-value-impact {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
   36% {
     color: #fff8dc;
-    text-shadow: 0 0 18px rgba(255, 211, 106, 1);
-    transform: translateY(-3px) scale(1.5);
+    transform: translate3d(0, -3px, 0) scale(1.45);
   }
   64% {
-    transform: translateY(1px) scale(0.9);
+    transform: translate3d(0, 1px, 0) scale(0.92);
   }
   82% {
-    transform: translateY(-1px) scale(1.14);
+    transform: translate3d(0, -1px, 0) scale(1.12);
   }
 }
 
 @keyframes sow-reward-level-pulse {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
   34% {
     color: var(--sow-gold-bright);
-    text-shadow: 0 0 26px rgba(255, 211, 106, 1);
-    transform: translateY(-4px) scale(1.65) rotate(-4deg);
+    transform: translate3d(0, -4px, 0) scale(1.6) rotate(-4deg);
   }
   58% {
-    transform: translateY(1px) scale(0.9) rotate(2deg);
+    transform: translate3d(0, 1px, 0) scale(0.92) rotate(2deg);
   }
   78% {
-    transform: translateY(-1px) scale(1.17);
+    transform: translate3d(0, -1px, 0) scale(1.15);
   }
 }
 
@@ -1363,7 +1540,9 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   [data-progression] [data-progression-crowns-value].is-reward-value-hit,
   [data-progression] [data-progression-laurels-value].is-reward-value-hit,
   [data-progression] [data-progression-gems-value].is-reward-value-hit,
-  .sow-menu__level [data-progression-level-value].is-reward-level-up {
+  .sow-menu__level [data-progression-level-value].is-reward-level-up,
+  .sow-menu__portrait.is-reward-hit::after,
+  #sow-menu .sow-menu__main-nav-item.is-reward-hit > span {
     animation: none;
   }
 }
@@ -2588,6 +2767,8 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   [data-progression] [data-progression-laurels-value].is-reward-value-hit,
   [data-progression] [data-progression-gems-value].is-reward-value-hit,
   .sow-menu__level [data-progression-level-value].is-reward-level-up,
+  .sow-menu__portrait.is-reward-hit::after,
+  #sow-menu .sow-menu__main-nav-item.is-reward-hit > span,
   .sow-menu__reward-stage,
   .sow-menu__reward-stage::before,
   .sow-menu__reward-card,
@@ -2602,6 +2783,14 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   .sow-purchase-modal__spend i {
     animation: none;
   }
+}
+
+#sow-menu[data-reduced-motion="true"] .sow-menu__reward-stage,
+#sow-menu[data-reduced-motion="true"] .sow-menu__reward-stage::before,
+#sow-menu[data-reduced-motion="true"] .sow-menu__reward-card,
+#sow-menu[data-reduced-motion="true"] .sow-menu__reward-medallion::before,
+#sow-menu[data-reduced-motion="true"] .sow-menu__main-nav-item.is-reward-hit > span {
+  animation: none;
 }
 
 .sow-purchase-modal.is-reduced-motion,
@@ -3241,13 +3430,30 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   white-space: nowrap;
 }
 
-/* Non-intrusive floating Advisor Whisper & target highlight */
+/* Guided Advisor Spotlight & Floating Whisper */
+.sow-menu-whisper-spotlight {
+  position: fixed;
+  z-index: 40;
+  border-radius: 10px;
+  border: 1.5px solid var(--sow-tactical-accent-bright);
+  box-shadow:
+    0 0 0 9999px rgba(5, 10, 13, 0.62),
+    0 0 0 3px color-mix(in srgb, var(--sow-tactical-accent) 20%, transparent),
+    0 0 24px color-mix(in srgb, var(--sow-tactical-accent) 34%, transparent);
+  pointer-events: none;
+  transition: left 0.18s ease, top 0.18s ease, width 0.18s ease, height 0.18s ease;
+}
+
+.sow-menu-whisper-spotlight[hidden] {
+  display: none;
+}
+
 .sow-menu-whisper {
   position: fixed;
   right: 18px;
   bottom: 84px;
   width: min(312px, calc(100vw - 28px));
-  z-index: 42;
+  z-index: 44;
   pointer-events: none;
 }
 
@@ -3371,6 +3577,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 
 .is-whisper-target {
   position: relative;
+  z-index: 41;
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--sow-tactical-accent) 72%, transparent),
     0 0 18px color-mix(in srgb, var(--sow-tactical-accent) 32%, transparent) !important;

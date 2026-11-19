@@ -116,6 +116,9 @@ enum WebMenuCommand {
     CompleteCampaignEpisode {
         episode_id: String,
     },
+    ClaimCampaignHero {
+        leader_id: String,
+    },
     CreateGame {
         config: serde_json::Value,
         #[serde(default)]
@@ -1186,6 +1189,10 @@ impl SowApp {
                             Some(crate::ui::UiText::new("tutorial.unavailable"));
                         continue;
                     }
+                    let already_completed = self
+                        .progress
+                        .completed_episodes
+                        .contains(campaign.episode_id());
                     progress_dirty |= self.progress.complete_episode(campaign.episode_id());
                     if !campaign.is_server_owned_tutorial() {
                         self.progress.record_campaign_streak_win();
@@ -1194,7 +1201,10 @@ impl SowApp {
                     if progress_dirty {
                         self.save_local_progress();
                     }
-                    if self
+                    if already_completed {
+                        self.complete_campaign_replay(campaign.episode_id());
+                        self.begin_exit_to_main_menu();
+                    } else if self
                         .progress
                         .pending_campaign_completions
                         .contains(campaign.episode_id())
@@ -1321,6 +1331,9 @@ impl SowApp {
                     doubled_by_ad,
                 } => {
                     self.claim_mission_reward(&mission_id, doubled_by_ad);
+                }
+                WebMenuCommand::ClaimCampaignHero { leader_id } => {
+                    self.claim_campaign_hero(&leader_id);
                 }
                 WebMenuCommand::SwapMission {
                     mission_id,
@@ -3582,7 +3595,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
                 .collect()
         })
         .unwrap_or_default();
-    serde_json::json!({
+    let mut payload = serde_json::json!({
         "active": true,
         "episode_id": app.ui.tutorial_campaign.episode_id(),
         "campaign_session_id": app.ui.campaign_session_id,
@@ -3663,6 +3676,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "factories": observation.seen_buildings_by_kind.get("factories").map_or(0, |ids| ids.len()),
             "ports": observation.seen_buildings_by_kind.get("ports").map_or(0, |ids| ids.len()),
             "towers": observation.seen_buildings_by_kind.get("towers").map_or(0, |ids| ids.len()),
+            "sams": observation.seen_buildings_by_kind.get("sams").map_or(0, |ids| ids.len()),
             "ally_support_deliveries": observation.ally_support_deliveries,
             "support_deliveries_by_faction_id": support_deliveries_by_faction_id,
             "structure_upgrades": observation.structure_upgrades,
@@ -3687,7 +3701,19 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "elapsed_seconds": snapshot.tick as f64 * f64::from(app.sim.config.tick_rate_ms) / 1000.0,
         },
         "players": players,
-    })
+    });
+    if let Some(facts) = payload.get_mut("facts").and_then(|v| v.as_object_mut()) {
+        facts.insert(
+            "warship_queues".to_string(),
+            serde_json::json!(observation.warship_queues_started),
+        );
+        facts.insert(
+            "nuke_queues".to_string(),
+            serde_json::json!(observation.nuke_queues_started),
+        );
+        facts.insert("nukes_armed".to_string(), serde_json::json!(observation.nukes_armed));
+    }
+    payload
 }
 
 fn player_json(
@@ -5284,6 +5310,11 @@ fn campaign_payload(progress: &crate::player_progress::PlayerProgress) -> serde_
         .find(|episode| episode.is_unlocked(progress) && !episode.is_completed(progress));
     serde_json::json!({
         "tutorial_completed": CampaignId::intro_completed(progress),
+        "tactics_completed": sow_data::campaign::tactics_completed(&progress.completed_episodes),
+        "advanced_tactics_completed": sow_data::campaign::advanced_tactics_completed(&progress.completed_episodes),
+        "advanced_tactics_hero_claimed": progress.advanced_tactics_hero_claimed,
+        "hero_choice_pool": sow_data::campaign::ADVANCED_TACTICS_HERO_CHOICES,
+        "reward_skin_id": "imperial_vanguard",
         "conquest_streak": progress.conquest_streak,
         "best_conquest_streak": progress.best_conquest_streak,
         "supercharger_tier": progress.supercharger_tier(),
@@ -5827,6 +5858,12 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
     };
     let deal_salt =
         sow_data::missions::account_deal_salt(inputs.account_id.as_deref().unwrap_or(""));
+    let tactics_completed = sow_data::campaign::tactics_completed(&progress.completed_episodes);
+    let unlocked_level = if tactics_completed {
+        progress.level.max(sow_data::missions::WEEKLY_UNLOCK_LEVEL)
+    } else {
+        progress.level.max(1)
+    };
     sow_data::missions::sync_hands_for_periods(
         sow_data::missions::HandSyncState {
             records: &mut period_records,
@@ -5841,13 +5878,14 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         },
         epoch_day,
         rotation_period,
-        progress.level.max(1),
+        unlocked_level,
         deal_salt,
         Some(&playability),
     );
     let mission_stats = sow_data::missions::MissionStats {
         player_level: progress.level.max(1),
         tutorial_completed: CampaignId::intro_completed(progress),
+        tactics_completed,
         total_structures_built: progress.total_structures_built,
         matches_played: progress.matches_played,
         kills: progress.kills,

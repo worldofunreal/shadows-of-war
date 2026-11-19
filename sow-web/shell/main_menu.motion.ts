@@ -219,3 +219,400 @@ export const sowScreenMotion = (function () {
 
     return { show: show };
 })();
+
+export type RewardStageKind = "xp" | "crowns" | "gems" | "laurels" | "leader" | "level";
+
+export interface RewardChoreographyStageInput {
+    kind: RewardStageKind;
+    amount: number;
+}
+
+export interface RewardChoreographyOptions {
+    xpFillPct?: number;
+    levelsGained?: number;
+    hasBanner?: boolean;
+}
+
+export interface PlannedRewardStageTiming {
+    index: number;
+    kind: RewardStageKind;
+    revealDelayMs: number;
+    revealDurationMs: number;
+    countStartMs: number;
+    countDurationMs: number;
+    launchAtMs: number;
+    flyDurationMs: number;
+    landAtMs: number;
+    applyDurationMs: number;
+    settleAtMs: number;
+}
+
+export interface RewardChoreographyPlan {
+    stages: PlannedRewardStageTiming[];
+    curtainDurationMs: number;
+    revealEndMs: number;
+    launchPhaseStartMs: number;
+    exitAtMs: number;
+    exitDurationMs: number;
+    totalDurationMs: number;
+}
+
+export type RewardPlaybackMode = "normal" | "accelerating" | "immediate";
+
+export interface AcceleratedChoreographyResult {
+    plan: RewardChoreographyPlan;
+    speed: number;
+    exitSpeed: number;
+}
+
+export interface FlyArcPoint {
+    offset: number;
+    x: number;
+    y: number;
+    scale: number;
+    rotateDeg: number;
+    opacity: number;
+}
+
+function clampNumber(min: number, value: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+}
+
+function easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/**
+ * Builds a staggered, overlapping choreography timeline for post-match or mission rewards.
+ * Preserves order: server-confirmed rewards -> unlocked leaders -> each gained level (ascending).
+ */
+export function planRewardChoreography(
+    inputs: readonly RewardChoreographyStageInput[],
+    options: RewardChoreographyOptions = {},
+): RewardChoreographyPlan {
+    const curtainDurationMs = 160;
+    const count = inputs.length;
+    if (!count) {
+        return {
+            stages: [],
+            curtainDurationMs,
+            revealEndMs: 0,
+            launchPhaseStartMs: 0,
+            exitAtMs: 0,
+            exitDurationMs: 160,
+            totalDurationMs: 0,
+        };
+    }
+
+    const revealStaggerMs = count <= 1 ? 0 : Math.round(clampNumber(36, 210 / count, 54));
+    const revealDurationMs = 350;
+    const xpFillPct = clampNumber(0, Number(options.xpFillPct) || 0, 100);
+    const levelsGained = Math.max(0, Math.floor(Number(options.levelsGained) || 0));
+    const hasBanner = Boolean(options.hasBanner);
+    const hasLeader = inputs.some((s) => s.kind === "leader");
+
+    let lastReadyMs = 0;
+    const stages: PlannedRewardStageTiming[] = inputs.map((input, index) => {
+        const revealDelayMs = 40 + index * revealStaggerMs;
+        const isNumeric =
+            input.kind === "xp" ||
+            input.kind === "crowns" ||
+            input.kind === "gems" ||
+            input.kind === "laurels";
+        const countStartMs = revealDelayMs + 80;
+        const countDurationMs = isNumeric ? (count <= 2 ? 280 : 320) : 0;
+        const readyMs = Math.max(revealDelayMs + revealDurationMs, countStartMs + countDurationMs);
+        if (readyMs > lastReadyMs) lastReadyMs = readyMs;
+        return {
+            index,
+            kind: input.kind,
+            revealDelayMs,
+            revealDurationMs,
+            countStartMs,
+            countDurationMs,
+            launchAtMs: 0,
+            flyDurationMs: 0,
+            landAtMs: 0,
+            applyDurationMs: 0,
+            settleAtMs: 0,
+        };
+    });
+
+    if (hasBanner) {
+        lastReadyMs = Math.max(lastReadyMs, 520);
+    }
+    const revealHoldMs = (count === 1 ? 110 : count <= 3 ? 130 : 150) + (hasLeader ? 60 : 0);
+    const revealEndMs = lastReadyMs + revealHoldMs;
+    const launchPhaseStartMs = revealEndMs;
+
+    const rewardIndices: number[] = [];
+    const leaderIndices: number[] = [];
+    const levelIndices: number[] = [];
+    stages.forEach((stage, index) => {
+        if (stage.kind === "leader") leaderIndices.push(index);
+        else if (stage.kind === "level") levelIndices.push(index);
+        else rewardIndices.push(index);
+    });
+
+    const rewardStaggerMs =
+        rewardIndices.length <= 1
+            ? 0
+            : Math.round(clampNumber(64, 108 - rewardIndices.length * 8, 96));
+    const rewardFlyMs = 370;
+
+    let wave1LastLaunch = launchPhaseStartMs;
+    let wave1LastLand = launchPhaseStartMs;
+    let xpSettleAtMs = launchPhaseStartMs;
+    let lastSettleAtMs = launchPhaseStartMs;
+
+    rewardIndices.forEach((stageIdx, pos) => {
+        const stage = stages[stageIdx];
+        const launchAtMs = launchPhaseStartMs + pos * rewardStaggerMs;
+        const landAtMs = launchAtMs + rewardFlyMs;
+        let applyDurationMs = 0;
+        if (stage.kind === "crowns" || stage.kind === "gems") {
+            applyDurationMs = 260;
+        } else if (stage.kind === "xp") {
+            applyDurationMs = Math.round(
+                clampNumber(340, 320 + (xpFillPct / 100) * 280 + (levelsGained > 0 ? 120 : 0), 960),
+            );
+        }
+        const settleAtMs = landAtMs + applyDurationMs;
+        stage.launchAtMs = launchAtMs;
+        stage.flyDurationMs = rewardFlyMs;
+        stage.landAtMs = landAtMs;
+        stage.applyDurationMs = applyDurationMs;
+        stage.settleAtMs = settleAtMs;
+
+        wave1LastLaunch = Math.max(wave1LastLaunch, launchAtMs);
+        wave1LastLand = Math.max(wave1LastLand, landAtMs);
+        if (stage.kind === "xp") xpSettleAtMs = settleAtMs;
+        lastSettleAtMs = Math.max(lastSettleAtMs, settleAtMs);
+    });
+
+    let wave2LastLaunch = wave1LastLaunch;
+    if (leaderIndices.length) {
+        const leaderStart =
+            rewardIndices.length > 0
+                ? Math.max(launchPhaseStartMs + 140, wave1LastLaunch + 180)
+                : launchPhaseStartMs + 160;
+        const leaderStaggerMs = 115;
+        const leaderFlyMs = 390;
+        leaderIndices.forEach((stageIdx, pos) => {
+            const stage = stages[stageIdx];
+            const launchAtMs = leaderStart + pos * leaderStaggerMs;
+            const landAtMs = launchAtMs + leaderFlyMs;
+            const applyDurationMs = 120;
+            const settleAtMs = landAtMs + applyDurationMs;
+            stage.launchAtMs = launchAtMs;
+            stage.flyDurationMs = leaderFlyMs;
+            stage.landAtMs = landAtMs;
+            stage.applyDurationMs = applyDurationMs;
+            stage.settleAtMs = settleAtMs;
+
+            wave2LastLaunch = Math.max(wave2LastLaunch, launchAtMs);
+            lastSettleAtMs = Math.max(lastSettleAtMs, settleAtMs);
+        });
+    }
+
+    if (levelIndices.length) {
+        const levelAnchor = Math.max(
+            launchPhaseStartMs,
+            wave1LastLand,
+            xpSettleAtMs,
+            leaderIndices.length > 0 ? wave2LastLaunch + 120 : launchPhaseStartMs,
+        );
+        const levelStaggerMs = 145;
+        const levelFlyMs = 300;
+        levelIndices.forEach((stageIdx, pos) => {
+            const stage = stages[stageIdx];
+            const isFinalLevel = pos === levelIndices.length - 1;
+            const launchAtMs = levelAnchor + pos * levelStaggerMs;
+            const landAtMs = launchAtMs + levelFlyMs;
+            const applyDurationMs = isFinalLevel ? 340 : 210;
+            const settleAtMs = landAtMs + applyDurationMs;
+            stage.launchAtMs = launchAtMs;
+            stage.flyDurationMs = levelFlyMs;
+            stage.landAtMs = landAtMs;
+            stage.applyDurationMs = applyDurationMs;
+            stage.settleAtMs = settleAtMs;
+
+            lastSettleAtMs = Math.max(lastSettleAtMs, settleAtMs);
+        });
+    }
+
+    const exitAtMs = lastSettleAtMs + 90;
+    const exitDurationMs = 180;
+    return {
+        stages,
+        curtainDurationMs,
+        revealEndMs,
+        launchPhaseStartMs,
+        exitAtMs,
+        exitDurationMs,
+        totalDurationMs: exitAtMs + exitDurationMs,
+    };
+}
+
+/**
+ * Compresses remaining idle gaps and future stage launches on first skip so the
+ * choreography accelerates smoothly into early completion instead of snapping abruptly.
+ */
+export function accelerateChoreographyPlan(
+    plan: RewardChoreographyPlan,
+    virtualNowMs: number,
+    targetRealMs = 220,
+): AcceleratedChoreographyResult {
+    const vNow = Math.max(0, virtualNowMs);
+    if (!plan.stages.length || vNow >= plan.exitAtMs) {
+        return {
+            plan,
+            speed: 5.5,
+            exitSpeed: 1.5,
+        };
+    }
+
+    const nextStages = plan.stages.map((s) => Object.assign({}, s));
+    const rewardGap = 36;
+    const leaderGap = 48;
+    const levelGap = 56;
+    const firstLaunch = Math.max(vNow, Math.min(plan.launchPhaseStartMs, vNow + 36));
+
+    let rewardCursor = firstLaunch;
+    let wave1MaxLaunch = vNow;
+    let wave1MaxLand = vNow;
+    let xpSettleAt = vNow;
+    let maxSettleAt = vNow;
+
+    for (const stage of nextStages) {
+        if (stage.kind === "leader" || stage.kind === "level") continue;
+        if (stage.launchAtMs > vNow) {
+            stage.launchAtMs = Math.min(stage.launchAtMs, rewardCursor);
+            stage.landAtMs = stage.launchAtMs + stage.flyDurationMs;
+            rewardCursor = stage.launchAtMs + rewardGap;
+        }
+        if (stage.applyDurationMs > 0) {
+            const remainingApply = Math.max(0, stage.settleAtMs - Math.max(vNow, stage.landAtMs));
+            const capApply = stage.kind === "xp" ? 280 : 180;
+            if (remainingApply > capApply) {
+                const startApply = Math.max(vNow, stage.landAtMs);
+                stage.settleAtMs = startApply + capApply;
+                stage.applyDurationMs = Math.max(1, stage.settleAtMs - stage.landAtMs);
+            } else {
+                stage.settleAtMs = stage.landAtMs + stage.applyDurationMs;
+            }
+        } else {
+            stage.settleAtMs = stage.landAtMs;
+        }
+        wave1MaxLaunch = Math.max(wave1MaxLaunch, stage.launchAtMs);
+        wave1MaxLand = Math.max(wave1MaxLand, stage.landAtMs);
+        if (stage.kind === "xp") xpSettleAt = Math.max(xpSettleAt, stage.settleAtMs);
+        maxSettleAt = Math.max(maxSettleAt, stage.settleAtMs);
+    }
+
+    let leaderCursor = Math.max(firstLaunch, wave1MaxLaunch + 48);
+    let wave2MaxLaunch = wave1MaxLaunch;
+    for (const stage of nextStages) {
+        if (stage.kind !== "leader") continue;
+        if (stage.launchAtMs > vNow) {
+            stage.launchAtMs = Math.min(stage.launchAtMs, leaderCursor);
+            stage.landAtMs = stage.launchAtMs + stage.flyDurationMs;
+            stage.applyDurationMs = Math.min(stage.applyDurationMs, 70);
+            stage.settleAtMs = stage.landAtMs + stage.applyDurationMs;
+            leaderCursor = stage.launchAtMs + leaderGap;
+        } else {
+            stage.settleAtMs = Math.min(stage.settleAtMs, Math.max(vNow, stage.landAtMs) + 70);
+        }
+        wave2MaxLaunch = Math.max(wave2MaxLaunch, stage.launchAtMs);
+        maxSettleAt = Math.max(maxSettleAt, stage.settleAtMs);
+    }
+
+    let levelCursor = Math.max(firstLaunch, wave1MaxLand, xpSettleAt, wave2MaxLaunch + 48);
+    for (const stage of nextStages) {
+        if (stage.kind !== "level") continue;
+        if (stage.launchAtMs > vNow) {
+            stage.launchAtMs = Math.min(stage.launchAtMs, levelCursor);
+            stage.landAtMs = stage.launchAtMs + stage.flyDurationMs;
+            stage.applyDurationMs = Math.min(stage.applyDurationMs, 180);
+            stage.settleAtMs = stage.landAtMs + stage.applyDurationMs;
+            levelCursor = stage.launchAtMs + levelGap;
+        } else {
+            const remainingApply = Math.max(0, stage.settleAtMs - Math.max(vNow, stage.landAtMs));
+            if (remainingApply > 180) {
+                stage.settleAtMs = Math.max(vNow, stage.landAtMs) + 180;
+                stage.applyDurationMs = Math.max(1, stage.settleAtMs - stage.landAtMs);
+            }
+        }
+        maxSettleAt = Math.max(maxSettleAt, stage.settleAtMs);
+    }
+
+    const exitAtMs = Math.min(plan.exitAtMs, Math.max(vNow, maxSettleAt + 36));
+    const remainingVirtual = Math.max(1, exitAtMs - vNow);
+    const speed = clampNumber(5.5, remainingVirtual / Math.max(80, targetRealMs), 10);
+    // Keep the exit curtain fade readable (~115ms real time) even under high cascade speed.
+    const exitSpeed = 1.55;
+    const nextPlan: RewardChoreographyPlan = {
+        stages: nextStages,
+        curtainDurationMs: plan.curtainDurationMs,
+        revealEndMs: Math.min(plan.revealEndMs, firstLaunch),
+        launchPhaseStartMs: firstLaunch,
+        exitAtMs,
+        exitDurationMs: plan.exitDurationMs,
+        totalDurationMs: exitAtMs + plan.exitDurationMs,
+    };
+    return { plan: nextPlan, speed, exitSpeed };
+}
+
+/**
+ * Samples an analytically eased quadratic Bezier arc so WAAPI can run with linear
+ * segment interpolation (zero per-keyframe stutter and smooth playbackRate scaling).
+ */
+export function sampleFlyArcPoints(dx: number, dy: number, steps = 16): FlyArcPoint[] {
+    const safeSteps = Math.max(4, Math.floor(steps));
+    const bend = clampNumber(56, Math.hypot(dx, dy) * 0.18, 140);
+    const controlX = dx * 0.5 + (dx < 0 ? -bend * 0.55 : bend * 0.55);
+    const controlY = dy * 0.5 - bend;
+    const tiltDir = dx < 0 ? -1 : 1;
+
+    const points: FlyArcPoint[] = [
+        { offset: 0, x: 0, y: 0, scale: 1, rotateDeg: 0, opacity: 1 },
+        { offset: 0.08, x: 0, y: 5, scale: 1.055, rotateDeg: 0, opacity: 1 },
+    ];
+
+    for (let i = 1; i <= safeSteps; i++) {
+        const r = i / safeSteps;
+        const t = easeInOutCubic(r);
+        const inv = 1 - t;
+        const x = 2 * inv * t * controlX + t * t * dx;
+        const y = 2 * inv * t * controlY + t * t * dy + 5 * (1 - t);
+        const scale = 1.055 - 0.815 * t;
+        const rotateDeg = Math.sin(Math.PI * t) * 7 * tiltDir;
+        const opacity = t > 0.82 ? 1 - 0.42 * ((t - 0.82) / 0.18) : 1;
+        points.push({
+            offset: 0.08 + 0.92 * r,
+            x,
+            y,
+            scale,
+            rotateDeg,
+            opacity,
+        });
+    }
+    return points;
+}
+
+export function flyArcPointsToKeyframes(points: readonly FlyArcPoint[]): Keyframe[] {
+    return points.map((p) => ({
+        offset: p.offset,
+        transform:
+            "translate3d(" +
+            p.x.toFixed(2) +
+            "px," +
+            p.y.toFixed(2) +
+            "px,0) scale(" +
+            p.scale.toFixed(4) +
+            ") rotate(" +
+            p.rotateDeg.toFixed(2) +
+            "deg)",
+        opacity: Number(p.opacity.toFixed(4)),
+    }));
+}

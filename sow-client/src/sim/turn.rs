@@ -150,6 +150,49 @@ impl TutorialObservation {
                 }
             }
         }
+        let queued_warships = engine
+            .buildings
+            .iter()
+            .filter(|building| {
+                building.owner_id == my_id
+                    && engine.building_productions.get(&building.id).is_some_and(|p| {
+                        p.arsenal_build.is_some_and(|build| {
+                            build.kind == sow_core::game::CityArsenalKind::Warship
+                        })
+                    })
+            })
+            .count() as u64;
+        let warships_total = queued_warships
+            .saturating_add(self.seen_fleets_by_type.get("Warship").copied().unwrap_or(0));
+        self.warship_queues_started = self.warship_queues_started.max(warships_total);
+        let nukes_armed_now = engine
+            .buildings
+            .iter()
+            .filter(|building| {
+                building.owner_id == my_id
+                    && engine
+                        .building_productions
+                        .get(&building.id)
+                        .is_some_and(|p| p.nuke_ready)
+            })
+            .count() as u64;
+        self.nukes_armed = self.nukes_armed.max(nukes_armed_now);
+        let nukes_queued_now = engine
+            .buildings
+            .iter()
+            .filter(|building| {
+                building.owner_id == my_id
+                    && engine.building_productions.get(&building.id).is_some_and(|p| {
+                        p.arsenal_build
+                            .is_some_and(|build| build.kind == sow_core::game::CityArsenalKind::Nuke)
+                    })
+            })
+            .count() as u64;
+        self.nuke_queues_started = self.nuke_queues_started.max(
+            nukes_queued_now
+                .saturating_add(nukes_armed_now)
+                .saturating_add(self.seen_nukes.len() as u64),
+        );
         for (kind, key) in [
             (sow_core::game::BuildingKind::City, "city"),
             (sow_core::game::BuildingKind::Farm, "farm"),

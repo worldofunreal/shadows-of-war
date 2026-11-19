@@ -1,0 +1,43 @@
+{
+  "_comment": "Advanced Tactics II — Atomic Age: SAM Defense & AtomBomb Strikes (northamerica, 1000x516).",
+  "map": "northamerica",
+  "player_spawn": [529, 416],
+  "player_color": "#f08c28",
+  "factions": [
+    {
+      "id": "border_watch",
+      "name": "Iron Vanguard",
+      "x": 522,
+      "y": 420,
+      "starting_troops": 1600,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d9534f",
+      "iq": 80,
+      "civ": "Kingdom",
+      "leader": "William",
+      "avatar": "william",
+      "can_attack_player": false,
+      "gold_loot_override": 600,
+      "troop_loot_bonus": 2200
+    },
+    {
+      "id": "obsidian_citadel",
+      "name": "Obsidian Citadel",
+      "x": 590,
+      "y": 499,
+      "starting_troops": 6500,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#8b1e24",
+      "iq": 100,
+      "civ": "Citadel",
+      "leader": "Richard",
+      "avatar": "richard",
+      "can_attack_player": false,
+      "prebuilt_buildings": [["City", 1], ["Factory", 2]]
+    }
+  ]
+}

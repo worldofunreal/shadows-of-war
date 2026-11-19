@@ -85,6 +85,9 @@ pub struct TutorialObservation {
     pub seen_fleets: std::collections::HashSet<u64>,
     pub seen_fleets_by_type: std::collections::BTreeMap<String, u64>,
     pub seen_transport_fleets_by_faction_id: std::collections::BTreeMap<String, u64>,
+    pub warship_queues_started: u64,
+    pub nuke_queues_started: u64,
+    pub nukes_armed: u64,
     pub seen_structures: std::collections::HashSet<u64>,
     pub seen_buildings_by_kind: std::collections::BTreeMap<String, std::collections::HashSet<u64>>,
     pub owned_structures: std::collections::HashSet<u64>,
@@ -142,11 +145,16 @@ pub struct TutorialObservation {
 pub enum TutorialPausedAction {
     ExpandOnceThenResume,
     AttackOnceThenResume,
+    AttackRatioOnly,
     SendResourcesStayPaused,
     RequestResourcesStayPaused,
     RequestAllianceStayPaused,
     BuildUntilStarted,
     UpgradeUntilStarted,
+    TransportFleetUntilLaunched,
+    QueueWarshipUntilStarted,
+    QueueNukeUntilStarted,
+    LaunchNukeUntilFired,
 }
 
 #[derive(Default)]

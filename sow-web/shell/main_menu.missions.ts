@@ -226,7 +226,25 @@ export function isRewardedAdAvailable(): boolean {
 export function renderDirectiveCard(): string {
     const missions = resolveActiveMissions(menuUi.state);
     const directive = getActiveDirective(missions);
-    if (!directive) return "";
+    if (!directive) {
+        return (
+            "<section class='sow-directive-card sow-directive-card--empty' data-command='open_missions' role='button' tabindex='0' aria-label='" +
+            esc(SOW_t("missions.directive_view_all")) +
+            "'>" +
+            "<div class='sow-directive__footer'>" +
+            "<span class='sow-directive__title'>" +
+            esc(SOW_t("missions.directive_title")) +
+            "</span>" +
+            "<div class='sow-directive__actions'>" +
+            "<button class='sow-directive__btn-view' type='button' data-command='open_missions'>" +
+            esc(SOW_t("missions.directive_view_all")) +
+            arrowRightIconSvg() +
+            "</button>" +
+            "</div>" +
+            "</div>" +
+            "</section>"
+        );
+    }
 
     const readyToClaim = directive.completed && !directive.claimed;
     const pct = Math.min(100, Math.round((Math.min(directive.progress, directive.target) / directive.target) * 100));

@@ -324,6 +324,22 @@ export function createTutorialGuides(dependencies: TutorialGuideDependencies) {
         hud: CampaignRecord | null | undefined,
         guideFacts?: CampaignRecord,
     ): TutorialAnchor | null {
+        const anchor = resolveAnchorFor(step, hud, guideFacts);
+        if (anchor && step && step.dim_outside === true) {
+            anchor.dimOutside = true;
+            if (!Number.isFinite(Number(anchor.width))) {
+                anchor.width = 92;
+                anchor.height = 92;
+            }
+        }
+        return anchor;
+    }
+
+    function resolveAnchorFor(
+        step: CampaignStep,
+        hud: CampaignRecord | null | undefined,
+        guideFacts?: CampaignRecord,
+    ): TutorialAnchor | null {
         if (!step) return null;
         const tutorial = (hud && hud.tutorial) || {};
         const triggerType = step.trigger && step.trigger.type;

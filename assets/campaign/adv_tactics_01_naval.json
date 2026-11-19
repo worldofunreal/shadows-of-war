@@ -1,0 +1,44 @@
+{
+  "_comment": "Advanced Tactics I — Port, TradeShip & Warship (Borneo on southeastasia, 1000x592).",
+  "map": "southeastasia",
+  "player_spawn": [318, 438],
+  "player_color": "#f08c28",
+  "factions": [
+    {
+      "id": "river_corsairs",
+      "name": "Strait Corsairs",
+      "x": 360,
+      "y": 444,
+      "starting_troops": 1400,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d9534f",
+      "iq": 80,
+      "civ": "Corsairs",
+      "leader": "Caesar",
+      "avatar": "colonia_veterans",
+      "can_attack_player": false,
+      "gold_loot_override": 320,
+      "troop_loot_bonus": 2000,
+      "prebuilt_buildings": [["Port", 1]]
+    },
+    {
+      "id": "golden_syndicate",
+      "name": "Golden Syndicate",
+      "x": 378,
+      "y": 416,
+      "starting_troops": 4200,
+      "relation": "enemy",
+      "team": "Red",
+      "can_request_alliance": false,
+      "color": "#d49b27",
+      "iq": 95,
+      "civ": "Syndicate",
+      "leader": "Catherine",
+      "avatar": "catherine",
+      "can_attack_player": false,
+      "prebuilt_buildings": [["Factory", 2]]
+    }
+  ]
+}

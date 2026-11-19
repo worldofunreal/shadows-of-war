@@ -285,6 +285,13 @@ fn apply_skin(base: vec3<f32>, owner_id: u32, world_pos: vec2<f32>) -> vec3<f32>
         let rim = 1.0 - smoothstep_safe(0.0, globals.shader_params[__MAP_SKIN_SCALE_WIDTH__].x, abs(d - 0.5));
         let shade = clamp(d * 2.0, 0.0, 1.0) * 0.35;
         return mix(base, globals.shader_params[__MAP_SKIN_SCALE_TINT__].rgb, max(rim, shade) * globals.shader_params[__MAP_SKIN_SCALE_STRENGTH__].x);
+    } else if style == 9u {
+        // Imperial Vanguard: gilded interlocking chevrons reserved for Advanced Tactics mastery.
+        let p = world_pos * 0.14;
+        let chevron = abs(fract(p.y + abs(fract(p.x) - 0.5) * 1.4) - 0.5);
+        let stroke = smoothstep_safe(0.36, 0.48, chevron);
+        let accent = vec3<f32>(0.96, 0.78, 0.32);
+        return mix(base, accent, stroke * 0.32);
     }
     return base;
 }

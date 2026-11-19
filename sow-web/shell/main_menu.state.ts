@@ -100,6 +100,11 @@ export interface MenuCampaignEpisode {
 
 export interface MenuCampaign {
     tutorial_completed: boolean;
+    tactics_completed?: boolean;
+    advanced_tactics_completed?: boolean;
+    advanced_tactics_hero_claimed?: string | null;
+    hero_choice_pool?: string[];
+    reward_skin_id?: string | null;
     conquest_streak?: number;
     best_conquest_streak?: number;
     supercharger_tier?: number;

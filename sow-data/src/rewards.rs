@@ -56,6 +56,7 @@ pub struct AchievementTotals {
     pub empires_defeated: u64,
     pub tribes_defeated: u64,
     pub completed_episodes: u64,
+    pub advanced_tactics_completed: u64,
     pub owned_leaders_count: u64,
     pub owned_leaders: std::collections::BTreeSet<String>,
     pub leader_matches: std::collections::BTreeMap<String, u64>,
@@ -145,6 +146,9 @@ pub fn achievement_progress(id: &str, totals: &AchievementTotals) -> u64 {
     }
 
     // 4. Campaign
+    if id == "grand_tactician" {
+        return totals.advanced_tactics_completed;
+    }
     if id.starts_with("campaign_") {
         return totals.completed_episodes;
     }
@@ -380,6 +384,7 @@ pub fn all_achievements() -> &'static [AchievementDefinition] {
             AchievementDefinition { id: "campaign_15", category: "campaign", title: "Chronicles of War", description: "Complete 15 campaign episodes.", points: 100, target: 15 },
             AchievementDefinition { id: "campaign_25", category: "campaign", title: "Grand Campaigner", description: "Complete 25 campaign episodes.", points: 150, target: 25 },
             AchievementDefinition { id: "campaign_40", category: "campaign", title: "Master of History", description: "Complete 40 campaign episodes.", points: 250, target: 40 },
+            AchievementDefinition { id: "grand_tactician", category: "campaign", title: "Grand Tactician", description: "Complete the Advanced Tactics campaign.", points: 200, target: 3 },
         ]);
 
         // --- Laurels & Prestige ---

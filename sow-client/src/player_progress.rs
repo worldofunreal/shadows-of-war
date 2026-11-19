@@ -56,6 +56,8 @@ pub struct PlayerProgress {
     #[serde(default)]
     pub completed_episodes: std::collections::BTreeSet<String>,
     #[serde(default)]
+    pub advanced_tactics_hero_claimed: Option<String>,
+    #[serde(default)]
     pub pending_campaign_completions: std::collections::BTreeSet<String>,
     /// Server-created match receipts used only for main-menu presentation.
     #[serde(default)]

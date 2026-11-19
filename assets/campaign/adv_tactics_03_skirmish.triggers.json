@@ -1,0 +1,95 @@
+{
+  "version": 2,
+  "episode_id": "adv_tactics_03_skirmish",
+  "text_namespace": "tutorial.campaign_tactics_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 2600,
+    "starting_gold": 600
+  },
+  "entry": "at3_briefing",
+  "speakers": {
+    "sun_tzu": {
+      "name_key": "tutorial.campaign_tactics_sun_tzu",
+      "avatar": "sun_tzu",
+      "base_expression": {
+        "expression": "calm",
+        "after_expression": "happy",
+        "until": {
+          "type": "defeated",
+          "target": "imperial_hegemon"
+        }
+      }
+    },
+    "outpost_alpha": {
+      "name_key": "tutorial.campaign_tactics_adv3_alpha_name",
+      "faction": "outpost_alpha"
+    },
+    "vanguard_keep": {
+      "name_key": "tutorial.campaign_tactics_adv3_ally_name",
+      "faction": "vanguard_keep"
+    },
+    "imperial_hegemon": {
+      "name_key": "tutorial.campaign_tactics_adv3_boss_name",
+      "faction": "imperial_hegemon"
+    }
+  },
+  "steps": [
+    {
+      "id": "at3_briefing",
+      "type": "scene",
+      "speaker": "sun_tzu",
+      "presentation": "dialogue",
+      "show_title": true,
+      "title_key": "tutorial.campaign_tactics_adv3_brief_title",
+      "body_key": "tutorial.campaign_tactics_adv3_brief_body",
+      "pause_game": true,
+      "unlocks": {
+        "buildings": {
+          "City": 1,
+          "Farm": 4,
+          "Factory": 4,
+          "Tower": 4,
+          "Port": 4,
+          "SAM": 4
+        },
+        "actions": ["transport_fleet", "trade_ship", "warship", "nuke"]
+      },
+      "next": "at3_conquer_all"
+    },
+    {
+      "id": "at3_conquer_all",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_adv3_conquer_title",
+      "hint_key": "tutorial.campaign_tactics_adv3_conquer_hint",
+      "speaker": "sun_tzu",
+      "camera": {
+        "shot": "threat",
+        "to": "imperial_hegemon",
+        "seconds": 1.2
+      },
+      "trigger": {
+        "type": "defeated",
+        "target": "imperial_hegemon",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "imperial_hegemon"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "at3_victory"
+    },
+    {
+      "id": "at3_victory",
+      "type": "end",
+      "title_key": "tutorial.campaign_tactics_adv3_victory_title",
+      "body_key": "tutorial.campaign_tactics_adv3_victory_body",
+      "speaker": "sun_tzu",
+      "presentation": "chapter"
+    }
+  ]
+}

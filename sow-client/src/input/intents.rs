@@ -40,6 +40,7 @@ fn paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::RequestAllianceStayPaused) => {
                 matches!(intent, GameplayIntent::ProposeAlliance { .. })
             }
+            Some(TutorialPausedAction::AttackRatioOnly) => false,
             Some(TutorialPausedAction::BuildUntilStarted) => match intent {
                 GameplayIntent::BuildStructure { kind, .. } => matches!(
                     *kind,
@@ -48,6 +49,7 @@ fn paused_tutorial_intent_allowed(
                         | sow_core::game::BuildingKind::Factory
                         | sow_core::game::BuildingKind::Port
                         | sow_core::game::BuildingKind::Tower
+                        | sow_core::game::BuildingKind::SAM
                 ),
                 _ => false,
             },
@@ -57,6 +59,26 @@ fn paused_tutorial_intent_allowed(
                     GameplayIntent::UpgradeStructure { .. }
                         | GameplayIntent::UpgradeStructureTo { .. }
                 )
+            }
+            Some(TutorialPausedAction::TransportFleetUntilLaunched) => {
+                matches!(intent, GameplayIntent::LaunchFleet { .. })
+            }
+            Some(TutorialPausedAction::QueueWarshipUntilStarted) => matches!(
+                intent,
+                GameplayIntent::BuildingProduction {
+                    kind: sow_core::game::CityArsenalKind::Warship,
+                    ..
+                }
+            ),
+            Some(TutorialPausedAction::QueueNukeUntilStarted) => matches!(
+                intent,
+                GameplayIntent::BuildingProduction {
+                    kind: sow_core::game::CityArsenalKind::Nuke,
+                    ..
+                }
+            ),
+            Some(TutorialPausedAction::LaunchNukeUntilFired) => {
+                matches!(intent, GameplayIntent::LaunchNuke { .. })
             }
             None => false,
         }
@@ -98,6 +120,16 @@ fn paused_tutorial_progress(
         GameplayIntent::UpgradeStructure { .. } | GameplayIntent::UpgradeStructureTo { .. } => {
             Some(observation.structure_upgrades)
         }
+        GameplayIntent::LaunchFleet { .. } => Some(observation.seen_fleets.len() as u64),
+        GameplayIntent::BuildingProduction {
+            kind: sow_core::game::CityArsenalKind::Warship,
+            ..
+        } => Some(observation.warship_queues_started),
+        GameplayIntent::BuildingProduction {
+            kind: sow_core::game::CityArsenalKind::Nuke,
+            ..
+        } => Some(observation.nuke_queues_started),
+        GameplayIntent::LaunchNuke { .. } => Some(observation.seen_nukes.len() as u64),
         _ => None,
     }
 }
@@ -261,8 +293,16 @@ impl SowApp {
             let after = paused_tutorial_progress(&self.sim.tutorial_observation, &intent);
             let accepted = paused_tutorial_action_accepted(before, after);
             if accepted {
-                let resume_after_attack = self.ui.tutorial_paused_action
-                    == Some(TutorialPausedAction::AttackOnceThenResume);
+                let resume_after_attack = matches!(
+                    self.ui.tutorial_paused_action,
+                    Some(
+                        TutorialPausedAction::AttackOnceThenResume
+                            | TutorialPausedAction::TransportFleetUntilLaunched
+                            | TutorialPausedAction::QueueWarshipUntilStarted
+                            | TutorialPausedAction::QueueNukeUntilStarted
+                            | TutorialPausedAction::LaunchNukeUntilFired
+                    )
+                );
                 self.ui.tutorial_paused_action = None;
                 if resume_after_attack {
                     self.sim.paused = false;

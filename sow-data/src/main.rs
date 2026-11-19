@@ -360,6 +360,14 @@ struct EquipSkinRequest {
 }
 
 #[derive(Deserialize)]
+struct ClaimCampaignHeroRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    leader_id: String,
+}
+
+#[derive(Deserialize)]
 struct RevenueCatWebhookRequest {
     event: RevenueCatWebhookEvent,
 }
@@ -1965,6 +1973,7 @@ async fn main() {
         .route("/profile/tutorial-complete", post(handle_tutorial_complete))
         .route("/profile/match-result", post(match_exit::handle_result))
         .route("/profile/campaign-complete", post(handle_campaign_complete))
+        .route("/profile/campaign/claim-hero", post(handle_campaign_hero_claim))
         .route("/profile/leader-selection", post(handle_leader_selection))
         .route(
             "/profile/menu-guide-progress",
@@ -2820,6 +2829,45 @@ async fn handle_campaign_complete(
                 StatusCode::NOT_FOUND
             } else {
                 error!("campaign completion failed: {message}");
+                StatusCode::SERVICE_UNAVAILABLE
+            };
+            (status, Json(ErrorResponse { error: message })).into_response()
+        }
+    }
+}
+
+async fn handle_campaign_hero_claim(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<ClaimCampaignHeroRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    match state
+        .db
+        .claim_advanced_tactics_hero(&account_id, payload.leader_id.trim())
+        .await
+    {
+        Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
+        Err(error) => {
+            let message = error.to_string();
+            let status = if message.contains("invalid hero") {
+                StatusCode::BAD_REQUEST
+            } else if message.contains("first") || message.contains("already claimed") {
+                StatusCode::CONFLICT
+            } else if message.contains("account") || message.contains("Account not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                error!("campaign hero claim failed: {message}");
                 StatusCode::SERVICE_UNAVAILABLE
             };
             (status, Json(ErrorResponse { error: message })).into_response()

@@ -338,6 +338,7 @@ const GLOBAL_ACHIEVEMENTS: ProfileAchievement[] = [
     { id: "veteran_commander", category: "commanders", title: "Veteran Commander", description: "Complete 10 matches with commanders.", points: 50, target: 10, unlocked: false, progress: 0 },
     { id: "banner_collector", category: "commanders", title: "Banner Collector", description: "Command three different leaders.", points: 50, target: 3, unlocked: false, progress: 0 },
     { id: "leader_path", category: "commanders", title: "Leader Path", description: "Earn 1,000 leader experience.", points: 100, target: 1000, unlocked: false, progress: 0 },
+    { id: "grand_tactician", category: "campaign", title: "Grand Tactician", description: "Complete the Advanced Tactics campaign.", points: 200, target: 3, unlocked: false, progress: 0 },
 
     // Tiered Battles Matrix
     { id: "battles_3", category: "battles", title: "Vanguard", description: "Complete 3 matches.", points: 15, target: 3, unlocked: false, progress: 0 },

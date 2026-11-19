@@ -104,6 +104,7 @@ export function validateSteps(context: CampaignValidationContext) {
             "marker",
             "pause_game",
             "paused_action",
+            "dim_outside",
             "camera_only",
             "camera",
             "next",
@@ -131,6 +132,7 @@ export function validateSteps(context: CampaignValidationContext) {
             "marker",
             "pause_game",
             "paused_action",
+            "dim_outside",
             "camera_only",
             "camera",
             "next",
@@ -444,8 +446,17 @@ export function validateSteps(context: CampaignValidationContext) {
                 triggerType === "attack" &&
                 step.guide?.kind === "world" &&
                 step.guide.target === "nameplate";
+            const expandLesson =
+                triggerType === "territory" &&
+                step.guide?.kind === "world" &&
+                step.guide.target === "expand";
             const guidedLesson =
-                cameraLesson || allianceLesson || transferLesson || attackRatioLesson || attackLesson;
+                cameraLesson ||
+                allianceLesson ||
+                transferLesson ||
+                attackRatioLesson ||
+                attackLesson ||
+                expandLesson;
             const mayPause = constructionAction || upgradeAction || guidedLesson;
             if (step.pause_game === true && !mayPause)
                 issue(step, "pause_game", "Boudica pauses only while a guided action needs the player's attention.");
@@ -481,9 +492,19 @@ export function validateSteps(context: CampaignValidationContext) {
             } else if (step.paused_action === "request_resources_stay_paused") {
                 compatible = triggerType === "resource_request";
             } else if (step.paused_action === "build_until_started") {
-                compatible = ["city", "factory", "farm", "port", "tower"].includes(triggerType);
+                compatible = ["city", "factory", "farm", "port", "tower", "sam"].includes(triggerType);
             } else if (step.paused_action === "upgrade_until_started") {
                 compatible = triggerType === "structure_upgrade";
+            } else if (step.paused_action === "attack_ratio_only") {
+                compatible = triggerType === "ui" && step.trigger && step.trigger.action === "attack_ratio";
+            } else if (step.paused_action === "transport_fleet_until_launched") {
+                compatible = triggerType === "fleet";
+            } else if (step.paused_action === "queue_warship_until_started") {
+                compatible = ["warship_queue", "fleet"].includes(triggerType);
+            } else if (step.paused_action === "queue_nuke_until_started") {
+                compatible = ["nuke_queue", "nuke_armed"].includes(triggerType);
+            } else if (step.paused_action === "launch_nuke_until_fired") {
+                compatible = triggerType === "nuke";
             }
             if (step.paused_action === "request_alliance_stay_paused")
                 compatible = triggerType === "alliance_request";
@@ -813,7 +834,7 @@ export function validateSteps(context: CampaignValidationContext) {
                     if (trigger.action === "map_menu_open" && !(step.marker && step.marker.target))
                         issue(step, "marker", "Choose whose map menu must open.");
                 } else if (trigger.type === "building_selected") {
-                    if (!["City", "Farm", "Factory", "Tower", "Port"].includes(trigger.kind))
+                    if (!["City", "Farm", "Factory", "Tower", "Port", "SAM"].includes(trigger.kind))
                         issue(step, "trigger.kind", "Choose a supported building type.");
                 } else if (trigger.type === "structure_upgrade") {
                     if (!own(STRUCTURE_LEVEL_LIMITS, trigger.kind))
@@ -836,7 +857,7 @@ export function validateSteps(context: CampaignValidationContext) {
                             "Set how close the camera must be to the zoom target.",
                         );
                 } else if (trigger.type === "structure_level") {
-                    if (!["City", "Farm", "Factory", "Tower", "Port"].includes(trigger.kind))
+                    if (!["City", "Farm", "Factory", "Tower", "Port", "SAM"].includes(trigger.kind))
                         issue(step, "trigger.kind", "Choose a supported building type.");
                     else if (
                         !Number.isInteger(trigger.value) ||

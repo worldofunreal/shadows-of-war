@@ -1,0 +1,175 @@
+{
+  "version": 2,
+  "episode_id": "tactics_02_defense",
+  "text_namespace": "tutorial.campaign_tactics_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 2400,
+    "starting_gold": 400
+  },
+  "entry": "td_troop_rate",
+  "speakers": {
+    "sun_tzu": {
+      "name_key": "tutorial.campaign_tactics_sun_tzu",
+      "avatar": "sun_tzu",
+      "base_expression": {
+        "expression": "calm",
+        "after_expression": "happy",
+        "until": {
+          "type": "defeated",
+          "target": "cabo_tyrant"
+        }
+      }
+    },
+    "cape_raiders": {
+      "name_key": "tutorial.campaign_tactics_02_def_raiders_name",
+      "faction": "cape_raiders"
+    },
+    "cabo_tyrant": {
+      "name_key": "tutorial.campaign_tactics_02_def_tyrant_name",
+      "faction": "cabo_tyrant"
+    }
+  },
+  "steps": [
+    {
+      "id": "td_troop_rate",
+      "type": "scene",
+      "speaker": "sun_tzu",
+      "presentation": "dialogue",
+      "show_title": true,
+      "title_key": "tutorial.campaign_tactics_02_rate_title",
+      "body_key": "tutorial.campaign_tactics_02_rate_body",
+      "pause_game": true,
+      "unlocks": {
+        "buildings": {
+          "Tower": 2,
+          "Farm": 2,
+          "Factory": 2,
+          "City": 1
+        }
+      },
+      "next": "td_set_ratio"
+    },
+    {
+      "id": "td_set_ratio",
+      "type": "objective",
+      "attack_ratio_on_enter": 0.9,
+      "title_key": "tutorial.campaign_tactics_02_ratio_title",
+      "body_key": "tutorial.campaign_tactics_02_ratio_body",
+      "hint_key": "tutorial.campaign_tactics_02_ratio_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "dim_outside": true,
+      "paused_action": "attack_ratio_only",
+      "trigger": {
+        "type": "ui",
+        "action": "attack_ratio",
+        "value": 0.5,
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "attack_ratio",
+        "gesture": "drag"
+      },
+      "next": "td_pick_tower"
+    },
+    {
+      "id": "td_pick_tower",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_02_pick_tower_title",
+      "body_key": "tutorial.campaign_tactics_02_pick_tower_body",
+      "hint_key": "tutorial.campaign_tactics_02_pick_tower_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "dim_outside": true,
+      "trigger": {
+        "type": "ui",
+        "action": "dock_tower",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_tower",
+        "gesture": "tap"
+      },
+      "next": "td_build_tower"
+    },
+    {
+      "id": "td_build_tower",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_02_build_tower_title",
+      "hint_key": "tutorial.campaign_tactics_02_build_tower_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "dim_outside": true,
+      "paused_action": "build_until_started",
+      "trigger": {
+        "type": "tower",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "next": "td_wait_tower"
+    },
+    {
+      "id": "td_wait_tower",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_02_wait_tower_title",
+      "hint_key": "tutorial.campaign_tactics_02_wait_tower_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "Tower",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "next": "td_counterattack"
+    },
+    {
+      "id": "td_counterattack",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_02_crush_title",
+      "body_key": "tutorial.campaign_tactics_02_crush_body",
+      "hint_key": "tutorial.campaign_tactics_02_crush_hint",
+      "speaker": "sun_tzu",
+      "camera": {
+        "shot": "threat",
+        "to": "cabo_tyrant",
+        "seconds": 1
+      },
+      "trigger": {
+        "type": "defeated",
+        "target": "cabo_tyrant",
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "cabo_tyrant"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "td_victory"
+    },
+    {
+      "id": "td_victory",
+      "type": "end",
+      "title_key": "tutorial.campaign_tactics_02_def_victory_title",
+      "body_key": "tutorial.campaign_tactics_02_def_victory_body",
+      "speaker": "sun_tzu",
+      "presentation": "chapter"
+    }
+  ]
+}

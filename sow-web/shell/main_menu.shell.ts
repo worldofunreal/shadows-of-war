@@ -69,7 +69,15 @@ import {
     updateQueueRoster,
     updateRankedQueue,
 } from "./main_menu.lobbies.ts";
-import { sowScreenMotion } from "./main_menu.motion.ts";
+import {
+    accelerateChoreographyPlan,
+    flyArcPointsToKeyframes,
+    planRewardChoreography,
+    sampleFlyArcPoints,
+    sowScreenMotion,
+    type RewardChoreographyPlan,
+    type RewardPlaybackMode,
+} from "./main_menu.motion.ts";
 import {
     activeProfileEntry,
     bumpAchievementFlatLimit,
@@ -165,6 +173,9 @@ const rewardAnimationShown = new Set<string>();
 let rewardAckTimes: Record<string, number> = Object.create(null);
 export let rewardAnimationToken = 0;
 let activeRewardStage: HTMLElement | null = null;
+let activeRewardRunner: { cancel: () => void } | null = null;
+const rewardClassTimers = new WeakMap<HTMLElement, Record<string, number>>();
+const rewardClassSeq = new WeakMap<HTMLElement, Record<string, number>>();
 let rankedResultDismissedKey: string | null = null;
 let rankedStageKey: string | null = null;
 let rankedStageCleanup: (() => void) | null = null;
@@ -215,7 +226,7 @@ interface MenuMusicState {
 }
 
 type RewardStage =
-    | { kind: "leader"; amount: 0; slug: string; label: string }
+    | { kind: "leader"; amount: 0; slug: string; label: string; selector?: string }
     | { kind: "level"; amount: number; level: number; selector: string }
     | { kind: "xp" | "crowns" | "laurels" | "gems"; amount: number; selector: string };
 
@@ -994,9 +1005,11 @@ function renderTopbar() {
         levelXp.required +
         "' aria-valuenow='" +
         levelXp.current +
-        "'><i data-progression-xp-fill style='width:" +
-        levelXp.pct +
-        "%'></i><span class='sow-menu__xp-value' id='sow-menu-account-xp'><b data-progression-xp-value>" +
+        "'><i data-progression-xp-fill style='--sow-xp-ratio:" +
+        (levelXp.pct / 100).toFixed(4) +
+        "' data-xp-empty='" +
+        (levelXp.pct <= 0 ? "true" : "false") +
+        "'></i><span class='sow-menu__xp-value' id='sow-menu-account-xp'><b data-progression-xp-value>" +
         esc(levelXp.current + "/" + levelXp.required) +
         "</b><small>" +
         esc(SOW_t("menu.xp")) +
@@ -1647,7 +1660,9 @@ export function writeProgression(values: ProgressionValues) {
     const levelXp = headerXp(displayedProgression.xp, displayedProgression.level);
     if (xpValue) xpValue.textContent = levelXp.current + "/" + levelXp.required;
     if (xpFill) {
-        xpFill.style.width = levelXp.pct + "%";
+        const ratio = Math.max(0, Math.min(1, levelXp.pct / 100));
+        xpFill.style.setProperty("--sow-xp-ratio", ratio.toFixed(4));
+        xpFill.dataset.xpEmpty = ratio <= 0.0001 ? "true" : "false";
         xpFill.parentElement?.setAttribute("aria-valuemax", String(levelXp.required));
         xpFill.parentElement?.setAttribute("aria-valuenow", String(levelXp.current));
     }
@@ -1792,24 +1807,43 @@ function removeRewardStage() {
 }
 
 function cancelRewardAnimation() {
+    if (activeRewardRunner) {
+        const runner = activeRewardRunner;
+        activeRewardRunner = null;
+        runner.cancel();
+    }
     rewardAnimationToken += 1;
     rewardAnimationRunning = false;
     progressionAnimationTarget = null;
     removeRewardStage();
 }
 
-function createRewardStage(stages: RewardStage[], skip: () => void): RewardItem[] {
+interface CreateRewardStageOptions {
+    useWaapiReveal?: boolean;
+}
+
+function createRewardStage(
+    stages: RewardStage[],
+    skip: () => void,
+    options?: CreateRewardStageOptions,
+): RewardItem[] {
+    const useWaapiReveal = options?.useWaapiReveal === true && typeof HTMLElement !== "undefined";
     const layer = document.createElement("section");
     layer.className = "sow-menu__reward-stage";
     layer.setAttribute("role", "dialog");
     layer.setAttribute("aria-modal", "true");
     layer.setAttribute("aria-label", SOW_t("endgame.match_result"));
     const cards = document.createElement("div");
-    cards.className = "sow-menu__reward-cards";
+    cards.className = "sow-menu__reward-cards" + (stages.length >= 4 ? " is-dense" : "");
+    cards.dataset.rewardCount = String(stages.length);
     const items = stages.map(function (stage: RewardStage, index: number): RewardItem {
         const card = document.createElement("div");
         card.className = "sow-menu__reward-card sow-menu__reward-card--" + stage.kind;
-        card.style.animationDelay = 120 + index * 140 + "ms";
+        if (useWaapiReveal) {
+            card.dataset.waapiReveal = "true";
+        } else {
+            card.style.animationDelay = 40 + index * 48 + "ms";
+        }
         card.setAttribute("role", "group");
         const levelLabel = stage.kind === "level" ? SOW_t("profile.level", { level: stage.level }) : null;
         card.setAttribute(
@@ -1875,6 +1909,12 @@ function createRewardStage(stages: RewardStage[], skip: () => void): RewardItem[
             event.preventDefault();
             event.stopPropagation();
             skip();
+            return;
+        }
+        if ((event.key === " " || event.key === "Enter") && event.target !== close) {
+            event.preventDefault();
+            event.stopPropagation();
+            skip();
         }
     });
     layer.appendChild(cards);
@@ -1889,126 +1929,174 @@ function createRewardStage(stages: RewardStage[], skip: () => void): RewardItem[
     return items;
 }
 
-function revealRewardAmounts(
-    items: RewardItem[],
-    token: number,
-    shouldStop: () => boolean = function () {
-        return false;
-    },
-): Promise<boolean> {
-    const start = performance.now();
-    return new Promise<boolean>(function (resolve) {
-        function frame(now: number) {
-            if (
-                token !== rewardAnimationToken ||
-                root.hidden ||
-                document.visibilityState !== "visible" ||
-                shouldStop()
-            ) {
-                resolve(false);
-                return;
-            }
-            const elapsed = now - start;
-            items.forEach(function (item: RewardItem, index: number) {
-                const t = Math.max(0, Math.min(1, (elapsed - 300 - index * 140) / 650));
-                const value =
-                    item.stage.kind === "level"
-                        ? SOW_t("profile.level", { level: item.stage.level })
-                        : item.stage.kind === "leader"
-                          ? item.stage.label
-                          : "+" + Math.round(item.stage.amount * (1 - Math.pow(1 - t, 3)));
-                if (item.amount.textContent !== value) item.amount.textContent = value;
-            });
-            if (elapsed < 1450) requestAnimationFrame(frame);
-            else resolve(true);
-        }
-        requestAnimationFrame(frame);
-    });
+export interface FlyRewardCardOptions {
+    duration?: number;
+    playbackRate?: number;
+    fromRect?: DOMRect | null;
+    toRect?: DOMRect | null;
+    onCreateAnimation?: (animation: Animation) => void;
 }
 
-export function flyRewardCard(item: RewardFlyItem, token: number): Promise<boolean> {
-    const target = root.querySelector<HTMLElement>(item.stage.selector);
-    if (!target || typeof item.card.animate !== "function") {
-        item.card.style.visibility = "hidden";
-        return Promise.resolve(true);
+export function flyRewardCard(
+    item: RewardFlyItem,
+    token: number,
+    options?: FlyRewardCardOptions,
+): Promise<boolean> {
+    const opts = options || {};
+    let targetRect: DOMRect | null = opts.toRect ?? null;
+    if (targetRect === null && opts.toRect === undefined) {
+        const target = root.querySelector<HTMLElement>(item.stage.selector);
+        if (target) targetRect = target.getBoundingClientRect();
     }
-    const from = item.card.getBoundingClientRect();
-    const to = target.getBoundingClientRect();
-    const dx = to.left + to.width / 2 - from.left - from.width / 2;
-    const dy = to.top + to.height / 2 - from.top - from.height / 2;
-    const bend = Math.min(160, Math.max(70, Math.hypot(dx, dy) * 0.2));
-    const controlX = dx / 2 + (dx < 0 ? -bend * 0.6 : bend * 0.6);
-    const controlY = dy / 2 - bend;
-    // A short wind-up sells the launch before the card arcs into its counter.
-    const path: Keyframe[] = [
-        { offset: 0, transform: "translate3d(0,0,0) scale(1) rotate(0deg)", opacity: 1 },
-        { offset: 0.08, transform: "translate3d(0,8px,0) scale(1.07) rotate(0deg)", opacity: 1 },
-    ];
-    for (let i = 1; i <= 12; i++) {
-        const t = i / 12;
-        const inverse = 1 - t;
-        const x = 2 * inverse * t * controlX + t * t * dx;
-        const y = 2 * inverse * t * controlY + t * t * dy;
-        path.push({
-            offset: 0.08 + 0.92 * t,
-            transform:
-                "translate3d(" +
-                x +
-                "px," +
-                y +
-                "px,0) scale(" +
-                (1 - 0.82 * t) +
-                ") rotate(" +
-                Math.sin(Math.PI * t) * 8 +
-                "deg)",
-            opacity: 1 - 0.4 * Math.max(0, (t - 0.8) / 0.2),
+    if (typeof item.card.animate !== "function") {
+        item.card.style.visibility = "hidden";
+        return Promise.resolve(token === rewardAnimationToken);
+    }
+    if (!targetRect) {
+        if (opts.toRect === undefined) {
+            item.card.style.visibility = "hidden";
+            return Promise.resolve(token === rewardAnimationToken);
+        }
+        item.card.classList.add("is-animating");
+        return new Promise<boolean>(function (resolve) {
+            const motion = item.card.animate(
+                [
+                    { opacity: 1, transform: "translate3d(0,0,0) scale(1)" },
+                    { opacity: 0, transform: "translate3d(0,-12px,0) scale(0.9)" },
+                ],
+                {
+                    duration: Math.min(240, opts.duration ?? 220),
+                    easing: "ease-in",
+                    fill: "forwards",
+                },
+            );
+            if (opts.playbackRate && opts.playbackRate !== 1) motion.playbackRate = opts.playbackRate;
+            opts.onCreateAnimation?.(motion);
+            motion.onfinish = function () {
+                item.card.classList.remove("is-animating");
+                item.card.style.visibility = "hidden";
+                resolve(token === rewardAnimationToken);
+            };
+            motion.oncancel = function () {
+                item.card.classList.remove("is-animating");
+                resolve(false);
+            };
         });
     }
+    const from = opts.fromRect ?? item.card.getBoundingClientRect();
+    const dx = targetRect.left + targetRect.width / 2 - from.left - from.width / 2;
+    const dy = targetRect.top + targetRect.height / 2 - from.top - from.height / 2;
+    const path = flyArcPointsToKeyframes(sampleFlyArcPoints(dx, dy));
+    item.card.classList.add("is-animating");
     return new Promise<boolean>(function (resolve) {
         const motion = item.card.animate(path, {
-            duration: 600,
-            easing: "cubic-bezier(.45,0,.55,1)",
+            duration: opts.duration ?? 380,
+            easing: "linear",
             fill: "forwards",
         });
+        if (opts.playbackRate && opts.playbackRate !== 1) {
+            motion.playbackRate = opts.playbackRate;
+        }
+        opts.onCreateAnimation?.(motion);
         motion.onfinish = function () {
+            item.card.classList.remove("is-animating");
             item.card.style.visibility = "hidden";
             resolve(token === rewardAnimationToken);
         };
         motion.oncancel = function () {
+            item.card.classList.remove("is-animating");
             resolve(false);
         };
     });
 }
 
 function restartRewardClass(element: HTMLElement, className: string, duration: number) {
+    let timers = rewardClassTimers.get(element);
+    if (!timers) {
+        timers = Object.create(null) as Record<string, number>;
+        rewardClassTimers.set(element, timers);
+    }
+    let seqMap = rewardClassSeq.get(element);
+    if (!seqMap) {
+        seqMap = Object.create(null) as Record<string, number>;
+        rewardClassSeq.set(element, seqMap);
+    }
+    if (timers[className] != null) {
+        window.clearTimeout(timers[className]);
+        delete timers[className];
+    }
+    const nextSeq = (seqMap[className] || 0) + 1;
+    seqMap[className] = nextSeq;
+    const scheduleClear = function () {
+        timers![className] = window.setTimeout(function () {
+            if (seqMap![className] !== nextSeq) return;
+            delete timers![className];
+            element.classList.remove(className);
+        }, duration);
+    };
+    if (!element.classList.contains(className)) {
+        element.classList.add(className);
+        scheduleClear();
+        return;
+    }
     element.classList.remove(className);
-    void element.offsetWidth;
-    element.classList.add(className);
-    window.setTimeout(function () {
-        element.classList.remove(className);
-    }, duration);
+    if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(function () {
+            if (seqMap![className] !== nextSeq || !element.isConnected) return;
+            element.classList.add(className);
+            scheduleClear();
+        });
+    } else {
+        element.classList.add(className);
+        scheduleClear();
+    }
 }
 
 export function pulseRewardCounter(selector: string, levelUp: boolean) {
     if (reducedRewardMotion()) return;
     const counter = root.querySelector<HTMLElement>(selector);
     if (!counter) return;
-    restartRewardClass(counter, levelUp ? "is-reward-level-up" : "is-reward-value-hit", levelUp ? 900 : 640);
+    if (selector === ".sow-menu__portrait") {
+        restartRewardClass(counter, "is-reward-hit", 600);
+        return;
+    }
+    if (selector === "[data-nav-screen='heroes']") {
+        restartRewardClass(counter, "is-reward-hit", 560);
+        return;
+    }
+    restartRewardClass(counter, levelUp ? "is-reward-level-up" : "is-reward-value-hit", levelUp ? 780 : 540);
     // The plate around the counter answers too: its currency pill or XP track, or the whole nameplate on a level-up.
     const plate = counter.closest<HTMLElement>(
         levelUp ? ".sow-menu__nameplate" : ".sow-menu__currency, .sow-menu__xp-track",
     );
-    if (plate) restartRewardClass(plate, levelUp ? "is-level-up" : "is-reward-hit", levelUp ? 900 : 640);
+    if (plate) restartRewardClass(plate, levelUp ? "is-level-up" : "is-reward-hit", levelUp ? 780 : 540);
+}
+
+export interface PlayRewardImpactOptions {
+    layerRect?: DOMRect | null;
+    toRect?: DOMRect | null;
+    playbackRate?: number;
+    onMount?: (impactEl: HTMLElement, durationMs: number) => void;
 }
 
 // Arrival light is drawn on the reward layer, above its curtain, centered on the header destination.
-export function playRewardImpact(selector: string, kind: RewardStage["kind"], power: number, level?: number) {
+export function playRewardImpact(
+    selector: string,
+    kind: RewardStage["kind"],
+    power: number,
+    level?: number,
+    options?: PlayRewardImpactOptions,
+) {
     const layer = activeRewardStage;
     if (!layer || reducedRewardMotion()) return;
-    const target = root.querySelector<HTMLElement>(selector);
-    if (!target) return;
-    const box = layer.getBoundingClientRect();
-    const to = target.getBoundingClientRect();
+    const opts = options || {};
+    let to: DOMRect | null = opts.toRect ?? null;
+    if (to === null && opts.toRect === undefined) {
+        const target = root.querySelector<HTMLElement>(selector);
+        if (target) to = target.getBoundingClientRect();
+    }
+    if (!to) return;
+    const box = opts.layerRect ?? layer.getBoundingClientRect();
     const impact = document.createElement("span");
     impact.className = "sow-menu__reward-impact sow-menu__reward-impact--" + kind;
     impact.setAttribute("aria-hidden", "true");
@@ -2040,12 +2128,21 @@ export function playRewardImpact(selector: string, kind: RewardStage["kind"], po
         impact.appendChild(label);
     }
     layer.appendChild(impact);
-    window.setTimeout(
-        function () {
-            impact.remove();
-        },
-        levelUp ? 1300 : 800,
-    );
+    const lifetimeMs = levelUp ? 1300 : 800;
+    if (opts.playbackRate && opts.playbackRate !== 1 && typeof impact.getAnimations === "function") {
+        impact.getAnimations({ subtree: true }).forEach(function (anim) {
+            try {
+                anim.playbackRate = opts.playbackRate!;
+            } catch {}
+        });
+    }
+    if (opts.onMount) {
+        opts.onMount(impact, lifetimeMs);
+        return;
+    }
+    window.setTimeout(function () {
+        impact.remove();
+    }, lifetimeMs);
 }
 
 function acknowledgeShownReceipts(accountId: string | null) {
@@ -2810,8 +2907,18 @@ root.addEventListener("click", function (event) {
         menuUi.heroesOpen = false;
         menuUi.storeOpen = false;
         menuUi.campaignOpen = true;
+        if (target.dataset.sagaId) {
+            menuUi.selectedCampaignSaga = target.dataset.sagaId;
+        }
         render();
         updateHeroBackdrop("campaign");
+        return;
+    }
+    if (command === "claim_campaign_hero") {
+        const leaderId = target.dataset.leaderId;
+        if (leaderId) {
+            send("claim_campaign_hero", { leader_id: leaderId });
+        }
         return;
     }
     if (command === "close_campaign") {

@@ -223,7 +223,7 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         title_key: "missions.onboarding_tutorial_title",
         description_key: "missions.onboarding_tutorial_desc",
         crowns_reward: 40,
-        gems_reward: 0,
+        gems_reward: 1,
         target: 1,
         requirement: MissionRequirement::CompleteTutorial,
         icon: "shield",
@@ -239,7 +239,7 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         title_key: "missions.onboarding_baptism_title",
         description_key: "missions.onboarding_baptism_desc",
         crowns_reward: 40,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 2,
         requirement: MissionRequirement::PlayMatches { count: 2 },
         icon: "swords",
@@ -255,7 +255,7 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         title_key: "missions.onboarding_rotation_title",
         description_key: "missions.onboarding_rotation_desc",
         crowns_reward: 50,
-        gems_reward: 1,
+        gems_reward: 2,
         target: 2,
         requirement: MissionRequirement::PlayFreeRotationHero { count: 2 },
         icon: "rotation",
@@ -271,7 +271,7 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         title_key: "missions.onboarding_team_title",
         description_key: "missions.onboarding_team_desc",
         crowns_reward: 50,
-        gems_reward: 1,
+        gems_reward: 3,
         target: 2,
         requirement: MissionRequirement::PlayMode {
             mode: MatchMode::Teams,
@@ -290,15 +290,20 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         title_key: "missions.onboarding_empires_title",
         description_key: "missions.onboarding_empires_desc",
         crowns_reward: 60,
-        gems_reward: 1,
-        target: 3,
-        requirement: MissionRequirement::DefeatEmpires { count: 3 },
+        gems_reward: 4,
+        target: 1,
+        requirement: MissionRequirement::PeakTerritoryRank {
+            mode: Some(MatchMode::Ffa),
+            max_rank: 3,
+            min_contenders: 4,
+            count: 1,
+        },
         icon: "shield",
         order: 5,
         lane: 2,
         axis: PreferenceAxis::Onboarding,
-        tag: "defeat_empires",
-        action_target: MissionActionTarget::Pve,
+        tag: "ffa_top3",
+        action_target: MissionActionTarget::Battle,
     },
     MissionDefinition {
         id: "onboarding_6_victories",
@@ -306,7 +311,7 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         title_key: "missions.onboarding_victories_title",
         description_key: "missions.onboarding_victories_desc",
         crowns_reward: 80,
-        gems_reward: 2,
+        gems_reward: 6,
         target: 2,
         requirement: MissionRequirement::WinMatches { count: 2 },
         icon: "crown",
@@ -326,7 +331,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_ffa_survive_3m_title",
         description_key: "missions.daily_ffa_survive_3m_desc",
         crowns_reward: 30,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 1,
         requirement: MissionRequirement::SurviveInMode {
             mode: MatchMode::Ffa,
@@ -346,7 +351,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_ffa_top3_title",
         description_key: "missions.daily_ffa_top3_desc",
         crowns_reward: 35,
-        gems_reward: 1,
+        gems_reward: 3,
         target: 1,
         requirement: MissionRequirement::PeakTerritoryRank {
             mode: Some(MatchMode::Ffa),
@@ -367,7 +372,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_peak_first_title",
         description_key: "missions.daily_peak_first_desc",
         crowns_reward: 40,
-        gems_reward: 1,
+        gems_reward: 3,
         target: 1,
         requirement: MissionRequirement::PeakTerritoryRank {
             mode: None,
@@ -388,7 +393,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_team_game_title",
         description_key: "missions.daily_team_game_desc",
         crowns_reward: 25,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 2,
         requirement: MissionRequirement::PlayMode {
             mode: MatchMode::Teams,
@@ -407,7 +412,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_hnv_win_title",
         description_key: "missions.daily_hnv_win_desc",
         crowns_reward: 35,
-        gems_reward: 1,
+        gems_reward: 3,
         target: 1,
         requirement: MissionRequirement::WinMode {
             mode: MatchMode::Pve,
@@ -426,7 +431,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_ranked_3_title",
         description_key: "missions.daily_ranked_3_desc",
         crowns_reward: 35,
-        gems_reward: 1,
+        gems_reward: 3,
         target: 3,
         requirement: MissionRequirement::PlayRankedMatches { count: 3 },
         icon: "swords",
@@ -442,7 +447,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_ranked_victory_title",
         description_key: "missions.daily_ranked_victory_desc",
         crowns_reward: 35,
-        gems_reward: 1,
+        gems_reward: 4,
         target: 1,
         requirement: MissionRequirement::WinRankedMatches { count: 1 },
         icon: "crown",
@@ -459,7 +464,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_teams_epic_win_title",
         description_key: "missions.daily_teams_epic_win_desc",
         crowns_reward: 45,
-        gems_reward: 1,
+        gems_reward: 4,
         target: 1,
         requirement: MissionRequirement::WinWithConstraints {
             mode: Some(MatchMode::Teams),
@@ -480,7 +485,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_oceania_3_title",
         description_key: "missions.daily_oceania_3_desc",
         crowns_reward: 35,
-        gems_reward: 1,
+        gems_reward: 3,
         target: 3,
         requirement: MissionRequirement::PlayWithHeroConstraints {
             region: Some(Region::Oceania),
@@ -500,7 +505,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_europe_3_title",
         description_key: "missions.daily_europe_3_desc",
         crowns_reward: 30,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 3,
         requirement: MissionRequirement::PlayWithHeroConstraints {
             region: Some(Region::Europe),
@@ -520,7 +525,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_asia_3_title",
         description_key: "missions.daily_asia_3_desc",
         crowns_reward: 30,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 3,
         requirement: MissionRequirement::PlayWithHeroConstraints {
             region: Some(Region::Asia),
@@ -540,7 +545,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_americas_3_title",
         description_key: "missions.daily_americas_3_desc",
         crowns_reward: 30,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 3,
         requirement: MissionRequirement::PlayWithHeroConstraints {
             region: Some(Region::Americas),
@@ -560,7 +565,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_africa_3_title",
         description_key: "missions.daily_africa_3_desc",
         crowns_reward: 30,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 3,
         requirement: MissionRequirement::PlayWithHeroConstraints {
             region: Some(Region::Africa),
@@ -580,7 +585,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_common_win_title",
         description_key: "missions.daily_common_win_desc",
         crowns_reward: 30,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 1,
         requirement: MissionRequirement::WinWithConstraints {
             mode: None,
@@ -601,7 +606,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_rare_play_title",
         description_key: "missions.daily_rare_play_desc",
         crowns_reward: 25,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 2,
         requirement: MissionRequirement::PlayWithHeroConstraints {
             region: None,
@@ -621,7 +626,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_free_rotation_title",
         description_key: "missions.daily_free_rotation_desc",
         crowns_reward: 30,
-        gems_reward: 1,
+        gems_reward: 3,
         target: 2,
         requirement: MissionRequirement::PlayFreeRotationHero { count: 2 },
         icon: "rotation",
@@ -638,7 +643,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_build_structures_title",
         description_key: "missions.daily_build_structures_desc",
         crowns_reward: 25,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 6,
         requirement: MissionRequirement::BuildStructures { count: 6 },
         icon: "shield",
@@ -653,16 +658,16 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         category: MissionCategory::Daily,
         title_key: "missions.daily_defeat_empires_title",
         description_key: "missions.daily_defeat_empires_desc",
-        crowns_reward: 30,
-        gems_reward: 1,
-        target: 2,
-        requirement: MissionRequirement::DefeatEmpires { count: 2 },
+        crowns_reward: 40,
+        gems_reward: 3,
+        target: 1,
+        requirement: MissionRequirement::WinMatches { count: 1 },
         icon: "swords",
         order: 27,
         lane: 2,
         axis: PreferenceAxis::Combat,
         tag: "combat",
-        action_target: MissionActionTarget::Pve,
+        action_target: MissionActionTarget::Battle,
     },
     MissionDefinition {
         id: "daily_variety_2",
@@ -670,7 +675,7 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.daily_variety_2_title",
         description_key: "missions.daily_variety_2_desc",
         crowns_reward: 30,
-        gems_reward: 0,
+        gems_reward: 2,
         target: 2,
         requirement: MissionRequirement::DistinctHeroes { count: 2 },
         icon: "rotation",
@@ -690,7 +695,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.weekly_ranked_champion_title",
         description_key: "missions.weekly_ranked_champion_desc",
         crowns_reward: 120,
-        gems_reward: 3,
+        gems_reward: 10,
         target: 3,
         requirement: MissionRequirement::WinRankedMatches { count: 3 },
         icon: "crown",
@@ -706,7 +711,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.weekly_team_striker_title",
         description_key: "missions.weekly_team_striker_desc",
         crowns_reward: 105,
-        gems_reward: 2,
+        gems_reward: 6,
         target: 4,
         requirement: MissionRequirement::WinMode {
             mode: MatchMode::Teams,
@@ -725,7 +730,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.weekly_hnv_defender_title",
         description_key: "missions.weekly_hnv_defender_desc",
         crowns_reward: 110,
-        gems_reward: 2,
+        gems_reward: 6,
         target: 2,
         requirement: MissionRequirement::WinMode {
             mode: MatchMode::Pve,
@@ -744,7 +749,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.weekly_peak_first_2_title",
         description_key: "missions.weekly_peak_first_2_desc",
         crowns_reward: 115,
-        gems_reward: 3,
+        gems_reward: 8,
         target: 2,
         requirement: MissionRequirement::PeakTerritoryRank {
             mode: None,
@@ -766,7 +771,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.weekly_variety_heroes_title",
         description_key: "missions.weekly_variety_heroes_desc",
         crowns_reward: 95,
-        gems_reward: 2,
+        gems_reward: 6,
         target: 3,
         requirement: MissionRequirement::DistinctHeroes { count: 3 },
         icon: "rotation",
@@ -782,7 +787,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.weekly_legendary_3_title",
         description_key: "missions.weekly_legendary_3_desc",
         crowns_reward: 100,
-        gems_reward: 2,
+        gems_reward: 8,
         target: 3,
         requirement: MissionRequirement::PlayWithHeroConstraints {
             region: None,
@@ -803,7 +808,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.weekly_ffa_endurance_title",
         description_key: "missions.weekly_ffa_endurance_desc",
         crowns_reward: 95,
-        gems_reward: 2,
+        gems_reward: 6,
         target: 4,
         requirement: MissionRequirement::SurviveInMode {
             mode: MatchMode::Ffa,
@@ -823,7 +828,7 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         title_key: "missions.weekly_conqueror_title",
         description_key: "missions.weekly_conqueror_desc",
         crowns_reward: 100,
-        gems_reward: 2,
+        gems_reward: 8,
         target: 5,
         requirement: MissionRequirement::DefeatEmpires { count: 5 },
         icon: "swords",
@@ -1072,6 +1077,7 @@ fn resolve_pool_hand(
 pub struct MissionStats {
     pub player_level: u32,
     pub tutorial_completed: bool,
+    pub tactics_completed: bool,
     pub total_structures_built: u32,
     pub free_rotation_matches: u32,
     pub team_matches: u32,
@@ -1088,6 +1094,7 @@ pub struct MissionStats {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MatchMissionContext {
     pub player_level: u32,
+    pub tactics_completed: bool,
     pub mode: MatchMode,
     pub is_ranked: bool,
     pub used_free_rotation: bool,
@@ -1141,7 +1148,13 @@ pub fn evaluate_mission_progress(
 ) -> MissionView {
     let unlock_level = min_level_for_category(def.category);
     let effective_level = stats.player_level.max(1);
-    if effective_level < unlock_level {
+    let category_unlocked = match def.category {
+        MissionCategory::Onboarding => true,
+        MissionCategory::Daily | MissionCategory::Weekly => {
+            stats.tactics_completed || effective_level >= unlock_level
+        }
+    };
+    if !category_unlocked {
         return locked_mission_view(def);
     }
 
@@ -1549,7 +1562,11 @@ pub fn advance_missions_after_match_with_hands(
         }
     }
 
-    let effective_level = ctx.player_level.max(1);
+    let effective_level = if ctx.tactics_completed {
+        ctx.player_level.max(WEEKLY_UNLOCK_LEVEL)
+    } else {
+        ctx.player_level.max(1)
+    };
     if effective_level >= DAILY_UNLOCK_LEVEL {
         let daily_defs = active_defs_for_hand(
             DAILY_MISSION_POOL,
@@ -1610,7 +1627,11 @@ pub fn build_all_missions_view_with_hands(
         views.push(view);
     }
 
-    let effective_level = stats.player_level.max(1);
+    let effective_level = if stats.tactics_completed {
+        stats.player_level.max(WEEKLY_UNLOCK_LEVEL)
+    } else {
+        stats.player_level.max(1)
+    };
     let daily_defs = active_defs_for_hand(
         DAILY_MISSION_POOL,
         daily_mission_ids,
@@ -1661,7 +1682,7 @@ mod tests {
         let total_crowns: u64 = ONBOARDING_MISSIONS.iter().map(|m| m.crowns_reward).sum();
         let total_gems: u64 = ONBOARDING_MISSIONS.iter().map(|m| m.gems_reward).sum();
         assert_eq!(total_crowns, 320);
-        assert_eq!(total_gems, 5);
+        assert_eq!(total_gems, 18);
     }
 
     #[test]
@@ -1816,6 +1837,7 @@ mod tests {
             10,
             &MatchMissionContext {
                 player_level: 3,
+                tactics_completed: false,
                 mode: MatchMode::Teams,
                 is_ranked: false,
                 used_free_rotation: true,

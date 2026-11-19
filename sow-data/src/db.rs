@@ -371,6 +371,8 @@ pub struct PlayerProfile {
     #[serde(default)]
     pub completed_episodes: std::collections::BTreeSet<String>,
     #[serde(default)]
+    pub advanced_tactics_hero_claimed: Option<String>,
+    #[serde(default)]
     pub kills: u32,
     #[serde(default)]
     pub deaths: u32,
@@ -511,6 +513,7 @@ impl Default for PlayerProfile {
             preferred_leader: None,
             prefer_random_leader: false,
             completed_episodes: std::collections::BTreeSet::new(),
+            advanced_tactics_hero_claimed: None,
             kills: 0,
             deaths: 0,
             assists: 0,
@@ -656,6 +659,10 @@ impl PlayerProfile {
             empires_defeated: self.empires_defeated as u64,
             tribes_defeated: self.tribes_defeated as u64,
             completed_episodes: self.completed_episodes.len() as u64,
+            advanced_tactics_completed: ["adv_tactics_01_naval", "adv_tactics_02_atomic", "adv_tactics_03_skirmish"]
+                .iter()
+                .filter(|id| self.completed_episodes.contains(**id))
+                .count() as u64,
             owned_leaders_count: owned_set.len() as u64,
             owned_leaders: owned_set,
             leader_matches,
@@ -2051,14 +2058,15 @@ impl PlayerDb {
                 )
         });
         let tips_on = !account.profile.menu_tips_disabled;
+        let tactics_done = crate::campaign::tactics_completed(&account.profile.completed_episodes);
+        let unlocked_level = if tactics_done {
+            effective_level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
+        } else {
+            effective_level
+        };
         let enroll_welcome = tips_on
             && welcome_saved.is_none()
-            && account.profile.matches_played == 0
-            && account
-                .profile
-                .reward_receipts
-                .get("tutorial")
-                .is_some_and(|receipt| receipt.presented_at.is_none());
+            && account.profile.matches_played == 0;
         let enroll_post_match = tips_on
             && account.profile.matches_played >= 1
             && !account
@@ -2066,19 +2074,19 @@ impl PlayerDb {
                 .menu_guides
                 .contains_key("post_match_missions");
         let enroll_daily = tips_on
-            && effective_level >= crate::missions::DAILY_UNLOCK_LEVEL
+            && unlocked_level >= crate::missions::DAILY_UNLOCK_LEVEL
             && !account.profile.menu_guides.contains_key("daily_ops_unlock");
         let enroll_weekly = tips_on
-            && effective_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
+            && unlocked_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
             && account.profile.ranked_matches == 0
             && !account
                 .profile
                 .menu_guides
                 .contains_key("weekly_ranked_unlock");
-        let needs_hand_sync = (effective_level >= crate::missions::DAILY_UNLOCK_LEVEL
+        let needs_hand_sync = (unlocked_level >= crate::missions::DAILY_UNLOCK_LEVEL
             && (account.profile.daily_missions_day != epoch_day
                 || account.profile.daily_mission_ids.len() < 3))
-            || (effective_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
+            || (unlocked_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
                 && (account.profile.weekly_missions_period != rotation_period
                     || account.profile.weekly_mission_ids.len() < 3));
 
@@ -2112,11 +2120,6 @@ impl PlayerDb {
                     }
                 } else if !account.profile.menu_tips_disabled
                     && account.profile.matches_played == 0
-                    && account
-                        .profile
-                        .reward_receipts
-                        .get("tutorial")
-                        .is_some_and(|receipt| receipt.presented_at.is_none())
                 {
                     account
                         .profile
@@ -2127,6 +2130,13 @@ impl PlayerDb {
 
                 if !account.profile.menu_tips_disabled {
                     let level = account.profile.level.max(1);
+                    let unlocked_level = if crate::campaign::tactics_completed(
+                        &account.profile.completed_episodes,
+                    ) {
+                        level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
+                    } else {
+                        level
+                    };
                     if account.profile.matches_played >= 1
                         && !account
                             .profile
@@ -2139,7 +2149,7 @@ impl PlayerDb {
                         );
                         mutated = true;
                     }
-                    if level >= crate::missions::DAILY_UNLOCK_LEVEL
+                    if unlocked_level >= crate::missions::DAILY_UNLOCK_LEVEL
                         && !account.profile.menu_guides.contains_key("daily_ops_unlock")
                     {
                         account.profile.menu_guides.insert(
@@ -2148,7 +2158,7 @@ impl PlayerDb {
                         );
                         mutated = true;
                     }
-                    if level >= crate::missions::WEEKLY_UNLOCK_LEVEL
+                    if unlocked_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
                         && account.profile.ranked_matches == 0
                         && !account
                             .profile
@@ -2170,6 +2180,12 @@ impl PlayerDb {
                     gems: account.profile.gems,
                 };
                 let level = account.profile.level.max(1);
+                let unlocked_level =
+                    if crate::campaign::tactics_completed(&account.profile.completed_episodes) {
+                        level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
+                    } else {
+                        level
+                    };
                 let newly_dealt = crate::missions::sync_hands_for_periods(
                     crate::missions::HandSyncState {
                         records: &mut account.profile.missions_progress,
@@ -2184,7 +2200,7 @@ impl PlayerDb {
                     },
                     epoch_day,
                     rotation_period,
-                    level,
+                    unlocked_level,
                     deal_salt,
                     Some(&playability),
                 );
@@ -3499,6 +3515,22 @@ impl PlayerDb {
                         return;
                     }
                     if account.profile.completed_episodes.contains(episode.id) {
+                        // Rumble-style replayable hero XP & resource farming for single-player episodes.
+                        let target_leader = account
+                            .profile
+                            .preferred_leader
+                            .clone()
+                            .unwrap_or_else(|| episode.advisor().name().to_string());
+                        let replay_reward = crate::rewards::MatchReward {
+                            xp: 35,
+                            leader_xp: 60,
+                            crowns: 15,
+                            laurels: 0,
+                            gems: 0,
+                        };
+                        account.profile.apply_reward(&target_leader, replay_reward);
+                        account.profile.refresh_achievements();
+                        account.updated_at = now;
                         return;
                     }
                     if !crate::campaign::access_granted(
@@ -3517,10 +3549,18 @@ impl PlayerDb {
                     if episode.marks_intro_completed {
                         account.profile.intro_completed = true;
                     }
-                    let reward = crate::rewards::calculate(crate::rewards::RewardInput {
+                    let bonus_gems = match episode.id {
+                        "tactics_01_economy" | "tactics_02_defense" => 10,
+                        "tactics_03_amphibious" => 25,
+                        "adv_tactics_01_naval" | "adv_tactics_02_atomic" => 15,
+                        "adv_tactics_03_skirmish" => 35,
+                        _ => 0,
+                    };
+                    let mut reward = crate::rewards::calculate(crate::rewards::RewardInput {
                         tutorial: true,
                         ..Default::default()
                     });
+                    reward.gems = reward.gems.saturating_add(bonus_gems);
                     let receipt_id = format!("campaign:{}", episode.id);
                     let unlocked_leader = crate::campaign::earned_leader_for_episode(
                         episode.id,
@@ -3534,6 +3574,21 @@ impl PlayerDb {
                             .profile
                             .owned_leaders
                             .insert(crate::commerce::leader_id(leader).to_string());
+                    }
+                    if let Some(skin_id) = crate::campaign::earned_skin_for_episode(
+                        episode.id,
+                        &account.profile.completed_episodes,
+                    ) {
+                        account.profile.owned_skins.insert(skin_id.to_string());
+                    }
+                    if crate::campaign::tactics_completed(&account.profile.completed_episodes)
+                        && !account.profile.menu_tips_disabled
+                        && !account.profile.menu_guides.contains_key("daily_ops_unlock")
+                    {
+                        account.profile.menu_guides.insert(
+                            "daily_ops_unlock".to_string(),
+                            crate::profile::default_guide_progress_for_id("daily_ops_unlock"),
+                        );
                     }
                     account.profile.apply_reward_receipt(
                         &receipt_id,
@@ -3552,6 +3607,66 @@ impl PlayerDb {
                     account.updated_at = now;
                 },
             )
+            .await?;
+        if let Some(error) = failure {
+            return Err(error.into());
+        }
+        Ok(account)
+    }
+
+    pub async fn claim_advanced_tactics_hero(
+        &self,
+        account_id: &str,
+        leader_id: &str,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let leader_id = leader_id.trim();
+        if !crate::campaign::ADVANCED_TACTICS_HERO_CHOICES.contains(&leader_id) {
+            return Err("invalid hero selection".into());
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut failure = None;
+        let account = self
+            .update_account_atomic(account_id, &["campaign:advanced_tactics:hero"], |account| {
+                if account.kind != AccountKind::Human {
+                    failure = Some("campaign progress requires a human account");
+                    return;
+                }
+                if !crate::campaign::advanced_tactics_completed(&account.profile.completed_episodes)
+                {
+                    failure = Some("complete Advanced Tactics first");
+                    return;
+                }
+                if account.profile.advanced_tactics_hero_claimed.is_some() {
+                    failure = Some("reward hero already claimed");
+                    return;
+                }
+                let leader = crate::leaders::Leader::of(leader_id);
+                let canonical = crate::commerce::leader_id(leader).to_string();
+                let already_owned =
+                    crate::commerce::owns_leader(&account.profile.owned_leaders, leader);
+                account.profile.owned_leaders.insert(canonical.clone());
+                account.profile.advanced_tactics_hero_claimed = Some(canonical.clone());
+                let receipt_id = "campaign:advanced_tactics:hero";
+                account.profile.apply_reward_receipt(
+                    receipt_id,
+                    receipt_id,
+                    leader.name(),
+                    crate::rewards::MatchReward {
+                        gems: if already_owned { 150 } else { 0 },
+                        ..Default::default()
+                    },
+                    now,
+                );
+                if !already_owned
+                    && let Some(receipt) = account.profile.reward_receipts.get_mut(receipt_id)
+                {
+                    receipt.unlocked_leaders.push(canonical);
+                }
+                account.updated_at = now;
+            })
             .await?;
         if let Some(error) = failure {
             return Err(error.into());
@@ -3834,6 +3949,9 @@ impl PlayerDb {
         offer_id: Option<&str>,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let skin = crate::commerce::skin_by_id(requested_skin).ok_or("unknown skin")?;
+        if skin.cost_gems == 0 && skin.cost_crowns == 0 {
+            return Err("skin is unlocked through campaign mastery".into());
+        }
         let (list_price, use_gems) = match currency {
             "" | "gems" => (skin.cost_gems, true),
             "crowns" => (skin.cost_crowns, false),
@@ -4742,6 +4860,13 @@ impl PlayerDb {
                     gems: account.profile.gems,
                 };
                 let player_level = account.profile.level.max(1);
+                let tactics_completed =
+                    crate::campaign::tactics_completed(&account.profile.completed_episodes);
+                let unlocked_level = if tactics_completed {
+                    player_level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
+                } else {
+                    player_level
+                };
                 let newly_dealt = crate::missions::sync_hands_for_periods(
                     crate::missions::HandSyncState {
                         records: &mut account.profile.missions_progress,
@@ -4756,7 +4881,7 @@ impl PlayerDb {
                     },
                     epoch_day,
                     rotation_period,
-                    player_level,
+                    unlocked_level,
                     deal_salt,
                     Some(&playability),
                 );
@@ -4770,7 +4895,7 @@ impl PlayerDb {
                 }
 
                 let min_level = crate::missions::min_level_for_category(def.category);
-                if player_level < min_level {
+                if unlocked_level < min_level {
                     failure = Some(format!("mission locked until level {min_level}"));
                     return;
                 }
@@ -4842,6 +4967,7 @@ impl PlayerDb {
                 let stats = crate::missions::MissionStats {
                     player_level,
                     tutorial_completed,
+                    tactics_completed,
                     ..Default::default()
                 };
 
@@ -4926,8 +5052,14 @@ impl PlayerDb {
                 }
 
                 let player_level = account.profile.level.max(1);
+                let unlocked_level =
+                    if crate::campaign::tactics_completed(&account.profile.completed_episodes) {
+                        player_level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
+                    } else {
+                        player_level
+                    };
                 let min_level = crate::missions::min_level_for_category(old_def.category);
-                if player_level < min_level {
+                if unlocked_level < min_level {
                     failure = Some(format!("mission locked until level {min_level}"));
                     return;
                 }
@@ -4952,7 +5084,7 @@ impl PlayerDb {
                     },
                     epoch_day,
                     rotation_period,
-                    player_level,
+                    unlocked_level,
                     deal_salt,
                     Some(&playability),
                 );
@@ -6612,6 +6744,9 @@ fn apply_verified_participant_reward_to_account(
         Some(&playability),
         &crate::missions::MatchMissionContext {
             player_level,
+            tactics_completed: crate::campaign::tactics_completed(
+                &account.profile.completed_episodes,
+            ),
             mode: match_mode,
             is_ranked,
             used_free_rotation,

@@ -573,7 +573,8 @@
           "delay_ms": 0
         }
       ],
-      "body_key": "tutorial.campaign_boudica_attack_roman_outpost_body"
+      "body_key": "tutorial.campaign_boudica_attack_roman_outpost_body",
+      "dim_outside": true
     },
     {
       "id": "boudica_first_victory",
@@ -618,7 +619,10 @@
         "target": "expand",
         "gesture": "tap"
       },
-      "next": "boudica_first_contact"
+      "next": "boudica_first_contact",
+      "pause_game": true,
+      "dim_outside": true,
+      "paused_action": "expand_once_then_resume"
     },
     {
       "id": "boudica_zoom_out",
@@ -763,7 +767,8 @@
       },
       "pause_game": true,
       "camera_only": true,
-      "next": "boudica_choose_city"
+      "next": "boudica_choose_city",
+      "dim_outside": true
     },
     {
       "id": "boudica_first_contact",
@@ -814,7 +819,8 @@
       },
       "pause_game": true,
       "next": "boudica_transfer_choose",
-      "unavailable_next": "boudica_aid_kept"
+      "unavailable_next": "boudica_aid_kept",
+      "dim_outside": true
     },
     {
       "id": "boudica_transfer_choose",
@@ -837,7 +843,8 @@
       },
       "pause_game": true,
       "next": "boudica_transfer_send",
-      "unavailable_next": "boudica_aid_kept"
+      "unavailable_next": "boudica_aid_kept",
+      "dim_outside": true
     },
     {
       "id": "boudica_transfer_send",
@@ -859,7 +866,8 @@
       "pause_game": true,
       "paused_action": "send_resources_stay_paused",
       "next": "boudica_share_sent",
-      "unavailable_next": "boudica_aid_kept"
+      "unavailable_next": "boudica_aid_kept",
+      "dim_outside": true
     },
     {
       "id": "boudica_share_sent",
@@ -916,7 +924,8 @@
           "City": 1
         }
       },
-      "next": "boudica_build_city"
+      "next": "boudica_build_city",
+      "dim_outside": true
     },
     {
       "id": "boudica_build_city",
@@ -939,7 +948,8 @@
       },
       "pause_game": true,
       "paused_action": "build_until_started",
-      "next": "boudica_city_construction_wait"
+      "next": "boudica_city_construction_wait",
+      "dim_outside": true
     },
     {
       "id": "boudica_city_construction_wait",
@@ -992,7 +1002,8 @@
           "Tower": 1
         }
       },
-      "next": "boudica_structure_upgrade"
+      "next": "boudica_structure_upgrade",
+      "dim_outside": true
     },
     {
       "id": "boudica_structure_upgrade",
@@ -1015,7 +1026,8 @@
       },
       "pause_game": true,
       "paused_action": "build_until_started",
-      "next": "boudica_city_upgrade_wait"
+      "next": "boudica_city_upgrade_wait",
+      "dim_outside": true
     },
     {
       "id": "boudica_city_upgrade_wait",
@@ -1108,7 +1120,8 @@
       },
       "pause_game": true,
       "unavailable_next": "boudica_aid_kept",
-      "next": "boudica_alliance_request"
+      "next": "boudica_alliance_request",
+      "dim_outside": true
     },
     {
       "id": "boudica_alliance_request",
@@ -1133,7 +1146,8 @@
       "pause_game": true,
       "paused_action": "request_alliance_stay_paused",
       "unavailable_next": "boudica_aid_kept",
-      "next": "boudica_alliance_reply"
+      "next": "boudica_alliance_reply",
+      "dim_outside": true
     },
     {
       "id": "boudica_alliance_reply",
@@ -1539,7 +1553,9 @@
         "gesture": "drag"
       },
       "pause_game": true,
-      "next": "boudica_camulodunum"
+      "next": "boudica_camulodunum",
+      "dim_outside": true,
+      "paused_action": "attack_ratio_only"
     },
     {
       "id": "boudica_ninth_strike",
@@ -1626,7 +1642,8 @@
       },
       "pause_game": true,
       "next": "boudica_alliance_dobunni_request",
-      "unavailable_next": "boudica_alliance_corieltauvi_target"
+      "unavailable_next": "boudica_alliance_corieltauvi_target",
+      "dim_outside": true
     },
     {
       "id": "boudica_alliance_dobunni_request",
@@ -1650,7 +1667,8 @@
       "pause_game": true,
       "paused_action": "request_alliance_stay_paused",
       "next": "boudica_alliance_corieltauvi_target",
-      "unavailable_next": "boudica_alliance_corieltauvi_target"
+      "unavailable_next": "boudica_alliance_corieltauvi_target",
+      "dim_outside": true
     },
     {
       "id": "boudica_alliance_corieltauvi_target",
@@ -1672,7 +1690,8 @@
       },
       "pause_game": true,
       "next": "boudica_alliance_corieltauvi_request",
-      "unavailable_next": "boudica_alliance_catuvellauni_target"
+      "unavailable_next": "boudica_alliance_catuvellauni_target",
+      "dim_outside": true
     },
     {
       "id": "boudica_alliance_corieltauvi_request",
@@ -1696,7 +1715,8 @@
       "pause_game": true,
       "paused_action": "request_alliance_stay_paused",
       "next": "boudica_alliance_catuvellauni_target",
-      "unavailable_next": "boudica_alliance_catuvellauni_target"
+      "unavailable_next": "boudica_alliance_catuvellauni_target",
+      "dim_outside": true
     },
     {
       "id": "boudica_alliance_catuvellauni_target",
@@ -1718,7 +1738,8 @@
       },
       "pause_game": true,
       "next": "boudica_alliance_catuvellauni_request",
-      "unavailable_next": "boudica_final_battle_intro"
+      "unavailable_next": "boudica_final_battle_intro",
+      "dim_outside": true
     },
     {
       "id": "boudica_alliance_catuvellauni_request",
@@ -1742,7 +1763,8 @@
       "pause_game": true,
       "paused_action": "request_alliance_stay_paused",
       "next": "boudica_final_battle_intro",
-      "unavailable_next": "boudica_final_battle_intro"
+      "unavailable_next": "boudica_final_battle_intro",
+      "dim_outside": true
     },
     {
       "id": "boudica_final_battle_intro",

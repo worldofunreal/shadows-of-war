@@ -90,6 +90,7 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
     let lastMatchesPlayed: number | null = null;
     let wasInMainMenu = false;
     let whisperHost: HTMLElement | null = null;
+    let spotlightEl: HTMLElement | null = null;
     let highlightedTarget: Element | null = null;
     let lastRenderedKey = "";
 
@@ -129,6 +130,9 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
         clearHighlight();
         activeWhisper = null;
         lastRenderedKey = "";
+        if (spotlightEl) {
+            spotlightEl.hidden = true;
+        }
         if (whisperHost) {
             whisperHost.hidden = true;
             whisperHost.innerHTML = "";
@@ -289,6 +293,8 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
             if (!desc || isGuideTerminal(state, desc)) continue;
             if (desc.targetKey === "menu_heroes" && screen === "heroes") {
                 completeGuide(desc);
+            } else if (desc.targetKey === "menu_campaign" && screen === "campaign") {
+                completeGuide(desc);
             } else if (desc.targetKey === "menu_missions" && missionsOpen) {
                 completeGuide(desc);
             }
@@ -321,6 +327,37 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
         return el;
     }
 
+    function ensureSpotlightEl(menuEl: HTMLElement): HTMLElement {
+        if (spotlightEl && spotlightEl.parentElement === menuEl) return spotlightEl;
+        const existing = menuEl.querySelector<HTMLElement>(".sow-menu-whisper-spotlight");
+        if (existing) {
+            spotlightEl = existing;
+            return existing;
+        }
+        const el = document.createElement("div");
+        el.className = "sow-menu-whisper-spotlight";
+        el.setAttribute("aria-hidden", "true");
+        el.hidden = true;
+        menuEl.appendChild(el);
+        spotlightEl = el;
+        return el;
+    }
+
+    function positionSpotlight(menuEl: HTMLElement, targetEl: Element) {
+        const el = ensureSpotlightEl(menuEl);
+        const rect = targetEl.getBoundingClientRect();
+        if (!rect || rect.width <= 0 || rect.height <= 0) {
+            el.hidden = true;
+            return;
+        }
+        const pad = 6;
+        el.style.left = Math.round(rect.left - pad) + "px";
+        el.style.top = Math.round(rect.top - pad) + "px";
+        el.style.width = Math.round(rect.width + pad * 2) + "px";
+        el.style.height = Math.round(rect.height + pad * 2) + "px";
+        el.hidden = false;
+    }
+
     function targetSelectorFor(targetKey: string): string {
         return UI_TARGETS[targetKey] || "";
     }
@@ -350,7 +387,7 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
             facts.heroInfoOpen ||
             facts.authModalOpen ||
             facts.skinPickerOpen ||
-            String(facts.screen || "") !== "battle"
+            String(facts.screen || "") !== "home"
         ) {
             hideWhisper();
             return;
@@ -390,6 +427,7 @@ export function createMenuGuide(dependencies: MenuGuideDependencies): MenuGuideC
             targetEl.classList.add("is-whisper-target");
             highlightedTarget = targetEl;
         }
+        positionSpotlight(menuEl, targetEl);
 
         const host = ensureWhisperHost(menuEl);
         const renderKey = [candidate.guideId, title, hint, skipLabel, hideAllLabel].join("\0");
