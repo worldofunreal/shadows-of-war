@@ -61,11 +61,11 @@ impl SowEngine {
                     .copied()
                     .unwrap_or(proj.src_tile);
                 proj.dst_tile = target_tile;
-                proj.path = crate::pathfinding::bresenham_line(
+                proj.path = std::sync::Arc::new(crate::pathfinding::bresenham_line(
                     current_tile,
                     target_tile,
                     self.state.map.width,
-                );
+                ));
                 proj.path_cursor = (proj.steps_per_tick as usize).min(proj.path.len());
                 if proj.path_cursor >= proj.path.len() {
                     proj.active = false;
@@ -207,7 +207,10 @@ impl SowEngine {
         let y_max = (cy_i + outer as i32).min(h as i32 - 1) as u32;
 
         let mut troops_damage: Vec<(u16, f64)> = Vec::new();
+        let mut last_outer_owner: u16 = 0;
+        let mut last_outer_idx: usize = 0;
         let mut territory_changes = Vec::new();
+        let mut wiped_any_tile = false;
 
         for y in y_min..=y_max {
             for x in x_min..=x_max {
@@ -224,6 +227,7 @@ impl SowEngine {
                 if dist_sq <= inner_sq {
                     // Inner radius: wipe ownership
                     if tile_owner != 0 {
+                        wiped_any_tile = true;
                         let (_, change) = self.state.set_tile_owner_for_execution(x, y, 0);
                         if let Some(change) = change {
                             territory_changes.push(change);
@@ -234,10 +238,17 @@ impl SowEngine {
                     if tile_owner != 0 && tile_owner != owner_id {
                         let ratio = 1.0 - (dist_sq as f64 / outer_sq as f64);
                         let damage = ratio * 5.0;
-                        let entry = troops_damage.iter_mut().find(|(pid, _)| *pid == tile_owner);
-                        if let Some(e) = entry {
-                            e.1 += damage;
+                        if tile_owner == last_outer_owner {
+                            troops_damage[last_outer_idx].1 += damage;
+                        } else if let Some(pos) =
+                            troops_damage.iter().position(|(pid, _)| *pid == tile_owner)
+                        {
+                            troops_damage[pos].1 += damage;
+                            last_outer_owner = tile_owner;
+                            last_outer_idx = pos;
                         } else {
+                            last_outer_owner = tile_owner;
+                            last_outer_idx = troops_damage.len();
                             troops_damage.push((tile_owner, damage));
                         }
                     }
@@ -252,24 +263,27 @@ impl SowEngine {
             }
         }
 
-        // Destroy buildings in inner radius
+        // Destroy buildings in inner radius in O(B), removing only destroyed keys from O(1) maps.
         let mut destroyed_port = false;
+        let mut destroyed_ids: Vec<u64> = Vec::new();
         self.buildings.retain(|b| {
             let bx = b.tile_idx % w;
             let by = b.tile_idx / w;
             let dx = bx as i64 - cx as i64;
             let dy = by as i64 - cy as i64;
             let keep = dx * dx + dy * dy > inner_sq;
-            if !keep && b.kind == crate::game::BuildingKind::Port {
-                destroyed_port = true;
+            if !keep {
+                destroyed_ids.push(b.id);
+                if b.kind == crate::game::BuildingKind::Port {
+                    destroyed_port = true;
+                }
             }
             keep
         });
-        let buildings = &self.buildings;
-        self.building_productions
-            .retain(|id, _| buildings.iter().any(|b| b.id == *id));
-        self.silo_cooldowns
-            .retain(|id, _| buildings.iter().any(|b| b.id == *id));
+        for id in destroyed_ids {
+            self.building_productions.remove(&id);
+            self.silo_cooldowns.remove(&id);
+        }
         self.building_grid.dirty = true;
         self.building_aggregates_dirty = true;
         self.bot_sam_tiles_cache = None;
@@ -289,14 +303,16 @@ impl SowEngine {
                 owner_id,
             });
 
-        let mut eliminated = Vec::new();
-        for p in &self.state.players {
-            if p.alive && p.tile_count == 0 {
-                eliminated.push(p.id);
+        if wiped_any_tile {
+            let mut eliminated = Vec::new();
+            for p in &self.state.players {
+                if p.alive && p.tile_count == 0 {
+                    eliminated.push(p.id);
+                }
             }
-        }
-        for victim_id in eliminated {
-            self.eliminate_player(victim_id, owner_id, cx, cy, true);
+            for victim_id in eliminated {
+                self.eliminate_player(victim_id, owner_id, cx, cy, true);
+            }
         }
         territory_changes
     }
@@ -362,7 +378,7 @@ mod tests {
             owner_id: 1,
             src_tile: tile,
             dst_tile: tile,
-            path: vec![tile],
+            path: std::sync::Arc::new(vec![tile]),
             path_cursor: 0,
             steps_per_tick: 1,
             active: true,
@@ -401,5 +417,77 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn detonate_nuke_cleans_productions_and_silo_cooldowns_for_destroyed_buildings_only() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 64, 64, config.clone());
+        state.phase = GamePhase::Playing;
+        let mut p1 = Player::new_human(1, "Attacker".into(), [1.0, 0.0, 0.0], &config);
+        p1.alive = true;
+        p1.tile_count = 10;
+        let mut p2 = Player::new_human(2, "Defender".into(), [0.0, 0.0, 1.0], &config);
+        p2.alive = true;
+        p2.tile_count = 10;
+        state.register_player(p1);
+        state.register_player(p2);
+        for i in 0..64 * 64 {
+            state.map.terrain[i] = MapTile::from_byte(0b1000_0000);
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let inside_tile = 20 * 64 + 20;
+        let outside_tile = 60 * 64 + 60;
+        engine.buildings.push(crate::building::Building {
+            id: 101,
+            tile_idx: inside_tile,
+            owner_id: 2,
+            kind: crate::game::BuildingKind::Factory,
+            level: 4,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine.buildings.push(crate::building::Building {
+            id: 202,
+            tile_idx: outside_tile,
+            owner_id: 2,
+            kind: crate::game::BuildingKind::SAM,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine
+            .building_productions
+            .insert(101, crate::building::CityArsenalState { nuke_ready: true, ..Default::default() });
+        engine
+            .building_productions
+            .insert(202, crate::building::CityArsenalState { nuke_ready: true, ..Default::default() });
+        engine.silo_cooldowns.insert(101, 45);
+        engine.silo_cooldowns.insert(202, 45);
+
+        engine.projectiles.push(Projectile {
+            id: 1,
+            kind: ProjectileKind::Nuke { level: 1 },
+            owner_id: 1,
+            src_tile: inside_tile,
+            dst_tile: inside_tile,
+            path: std::sync::Arc::new(vec![inside_tile]),
+            path_cursor: 0,
+            steps_per_tick: 1,
+            active: true,
+            source_fleet_id: None,
+            target_fleet_id: None,
+            damage: 0.0,
+            expires_at_tick: u64::MAX,
+        });
+
+        engine.execute_projectiles();
+
+        assert!(!engine.buildings.iter().any(|b| b.id == 101));
+        assert!(engine.buildings.iter().any(|b| b.id == 202));
+        assert!(!engine.building_productions.contains_key(&101));
+        assert!(engine.building_productions.contains_key(&202));
+        assert!(!engine.silo_cooldowns.contains_key(&101));
+        assert_eq!(engine.silo_cooldowns.get(&202).copied(), Some(44));
     }
 }

@@ -61,7 +61,11 @@ impl SowEngine {
         let id = self.state.next_projectile_id;
         self.state.next_projectile_id = self.state.next_projectile_id.wrapping_add(1).max(1);
 
-        let path = crate::pathfinding::bresenham_line(silo_tile, target_tile, w);
+        let path = std::sync::Arc::new(crate::pathfinding::bresenham_line(
+            silo_tile,
+            target_tile,
+            w,
+        ));
 
         self.projectiles.push(crate::game::Projectile {
             id,

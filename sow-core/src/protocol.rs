@@ -721,7 +721,7 @@ pub struct ProjectileSnapshot {
     pub owner_id: u16,
     pub src_tile: u32,
     pub dst_tile: u32,
-    pub path: Vec<u32>,
+    pub path: std::sync::Arc<Vec<u32>>,
     pub path_cursor: usize,
     pub steps_per_tick: u8,
     #[serde(default)]

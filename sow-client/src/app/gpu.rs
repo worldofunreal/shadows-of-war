@@ -44,6 +44,9 @@ impl SowApp {
             if let Some(mut mr) = self.gfx.map_renderer.take() {
                 mr.destroy(render_ctx);
             }
+            if let Some(mut blast) = self.gfx.blast_renderer.take() {
+                blast.destroy(render_ctx);
+            }
             if let Some(mut mover) = self.gfx.mover_renderer.take() {
                 mover.destroy(render_ctx);
             }
@@ -107,6 +110,9 @@ impl Drop for SowApp {
         }
         if let Some(mut mr) = self.gfx.map_renderer.take() {
             mr.destroy(render_ctx);
+        }
+        if let Some(mut blast) = self.gfx.blast_renderer.take() {
+            blast.destroy(render_ctx);
         }
         if let Some(mut mover) = self.gfx.mover_renderer.take() {
             mover.destroy(render_ctx);

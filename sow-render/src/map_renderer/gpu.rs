@@ -1,7 +1,8 @@
 use super::cpu_prep::{
-    MapGlobals, PlayerColors, PlayerSkinStyles, compute_has_border, fill_terrain_buffer,
-    get_neighbors_8,
+    MapGlobals, PlayerColors, PlayerSkinStyles, compute_has_border, compute_has_border_with,
+    fill_terrain_buffer, get_neighbors_8,
 };
+use super::crater::CraterRevealQueue;
 use crate::context::RenderContext;
 use blade_graphics as gpu;
 use blade_macros::ShaderData;
@@ -42,6 +43,10 @@ pub struct MapRenderer {
     pub has_water_neighbor: Vec<bool>,
     pub decay_accumulator: f32,
     pub fade_decay_accumulator: f32,
+    crater_reveals: CraterRevealQueue,
+    revealed_scratch: Vec<u32>,
+    pack_stamp: Vec<u32>,
+    current_pack_stamp: u32,
 }
 
 const FLASH_ABILITY_BIT: u8 = 0x80;
@@ -214,7 +219,7 @@ impl MapRenderer {
             multisample_state: gpu::MultisampleState::default(),
         });
 
-        let chunk_h = 64;
+        let chunk_h = 32;
         let num_chunks = height.div_ceil(chunk_h);
 
         Self {
@@ -243,7 +248,31 @@ impl MapRenderer {
             has_water_neighbor,
             decay_accumulator: 0.0,
             fade_decay_accumulator: 0.0,
+            crater_reveals: CraterRevealQueue::new(),
+            revealed_scratch: Vec::new(),
+            pack_stamp: vec![0; total],
+            current_pack_stamp: 0,
         }
+    }
+
+    /// Queue an outward-expanding visual reveal for a newly detonated nuke crater.
+    /// Authoritative `self.owners` still updates immediately on the detonation tick.
+    pub fn enqueue_crater_reveal(
+        &mut self,
+        cx: u32,
+        cy: u32,
+        inner_radius: u32,
+        duration: f32,
+        now: web_time::Instant,
+    ) {
+        self.crater_reveals
+            .enqueue(cx, cy, inner_radius, duration, now, self.width, self.height);
+    }
+
+    /// Clear any active crater reveal animations.
+    pub fn clear_crater_reveals(&mut self) {
+        self.crater_reveals.clear();
+        self.revealed_scratch.clear();
     }
 
     /// Upload static terrain texture once. Call after creating the command encoder.
@@ -303,9 +332,11 @@ impl MapRenderer {
         let dst_ptr = self.owner_buffer.data();
         let slice = unsafe { std::slice::from_raw_parts_mut(dst_ptr as *mut u32, total_u32) };
 
-        // Helper: pack owner + flash + border/water/fog flags into the GPU buffer
+        // Helper: pack owner + flash + border/water/fog flags into the GPU buffer.
+        // Uses visual owners only while an expanding nuke crater is active (0 idle cost).
         let pack = |slice: &mut [u32],
                     owners: &[u16],
+                    crater_reveals: &CraterRevealQueue,
                     flash: &[u8],
                     fade: u8,
                     tile_idx: u32,
@@ -315,9 +346,21 @@ impl MapRenderer {
             let y = tile_idx / width;
             let dst = (y * u32_per_row + x) as usize;
 
-            let has_border = compute_has_border(tile_idx, owners, width, height);
+            let (owner, has_border) = if crater_reveals.is_active() {
+                (
+                    crater_reveals.visual_owner(tile_idx, owners, width),
+                    compute_has_border_with(
+                        tile_idx,
+                        |n| crater_reveals.visual_owner(n, owners, width),
+                        width,
+                        height,
+                    ),
+                )
+            } else {
+                (owners[i], compute_has_border(tile_idx, owners, width, height))
+            };
 
-            let mut val = owners[i] as u32 | ((flash[i] as u32) << 16);
+            let mut val = owner as u32 | ((flash[i] as u32) << 16);
             if has_border {
                 val |= 1 << 24;
             }
@@ -340,7 +383,15 @@ impl MapRenderer {
             }
             let old_owner = self.owners[i];
             if old_owner != dt.new_owner {
-                if conquest_involves_player(old_owner, dt.new_owner, my_player_id) {
+                let held_for_crater = self.crater_reveals.intercept_dirty_tile(
+                    dt.index,
+                    old_owner,
+                    dt.new_owner,
+                    width,
+                );
+                if !held_for_crater
+                    && conquest_involves_player(old_owner, dt.new_owner, my_player_id)
+                {
                     start_tile_flash(
                         &mut self.conquest_flash,
                         &mut self.flash_active,
@@ -351,6 +402,9 @@ impl MapRenderer {
                 self.owners[i] = dt.new_owner;
             }
         }
+        self.crater_reveals.finalize_pending();
+        self.crater_reveals
+            .advance(now, width, &mut self.revealed_scratch);
 
         // 1. Reset chunk tracking
         self.dirty_chunks.fill(false);
@@ -363,6 +417,7 @@ impl MapRenderer {
             force_full_upload || self.last_visible_blocks.len() != visible.blocks.len();
         {
             let owners = &self.owners;
+            let crater_reveals = &self.crater_reveals;
             let conquest_flash = &self.conquest_flash;
             let vision_fade = &mut self.vision_fade;
             let is_fading = &mut self.is_fading;
@@ -375,7 +430,15 @@ impl MapRenderer {
                     if current_fade < 255 {
                         vision_fade[i] = 255;
                         is_fading[i] = false;
-                        pack(slice, owners, conquest_flash, 255, tile_idx, has_water[i]);
+                        pack(
+                            slice,
+                            owners,
+                            crater_reveals,
+                            conquest_flash,
+                            255,
+                            tile_idx,
+                            has_water[i],
+                        );
                         let y = tile_idx / width;
                         dirty_chunks[(y / chunk_h) as usize] = true;
                         any_fade_changed = true;
@@ -424,6 +487,7 @@ impl MapRenderer {
                 pack(
                     slice,
                     &self.owners,
+                    &self.crater_reveals,
                     &self.conquest_flash,
                     fade,
                     tile_idx,
@@ -461,6 +525,7 @@ impl MapRenderer {
                 pack(
                     slice,
                     &self.owners,
+                    &self.crater_reveals,
                     &self.conquest_flash,
                     fade,
                     tile_idx,
@@ -487,6 +552,7 @@ impl MapRenderer {
             let vision_fade = &mut self.vision_fade;
             let is_fading = &mut self.is_fading;
             let owners = &self.owners;
+            let crater_reveals = &self.crater_reveals;
             let conquest_flash = &self.conquest_flash;
             let dirty_chunks = &mut self.dirty_chunks;
 
@@ -500,7 +566,15 @@ impl MapRenderer {
                 }
                 let f = vision_fade[i].saturating_sub(fade_decay_amount.min(255) as u8);
                 vision_fade[i] = f;
-                pack(slice, owners, conquest_flash, f, tile_idx, has_water[i]);
+                pack(
+                    slice,
+                    owners,
+                    crater_reveals,
+                    conquest_flash,
+                    f,
+                    tile_idx,
+                    has_water[i],
+                );
                 let y = tile_idx / width;
                 dirty_chunks[(y / chunk_h) as usize] = true;
                 fade_dirty = true;
@@ -512,44 +586,76 @@ impl MapRenderer {
             });
         }
 
-        // 5. Pack new dirty tiles and their neighbors
-        for dt in dirty_tiles {
-            let i = dt.index as usize;
-            if i >= total {
-                continue;
+        // 5. Pack new dirty tiles (skipping crater tiles still waiting for the blast front)
+        //    plus any crater tiles newly uncovered this frame, and their 8 neighbors.
+        //    Stamp tiles so interior cells touched by multiple neighbors pack at most once.
+        let mut any_tile_packed = false;
+        if !dirty_tiles.is_empty() || !self.revealed_scratch.is_empty() {
+            self.current_pack_stamp = self.current_pack_stamp.wrapping_add(1);
+            if self.current_pack_stamp == 0 {
+                self.pack_stamp.fill(0);
+                self.current_pack_stamp = 1;
             }
-            let fade = self.vision_fade[i];
-            pack(
-                slice,
-                &self.owners,
-                &self.conquest_flash,
-                fade,
-                dt.index,
-                self.has_water_neighbor[i],
-            );
-            let y = dt.index / width;
-            self.dirty_chunks[(y / chunk_h) as usize] = true;
-
-            // Also update and dirty all neighbors since their border status changes
-            let neighbors = get_neighbors_8(dt.index, width, height);
-            for &n_opt in &neighbors {
-                if let Some(n_idx) = n_opt {
-                    let n_fade = self.vision_fade[n_idx as usize];
+            let stamp = self.current_pack_stamp;
+            let pack_stamp = &mut self.pack_stamp;
+            let mut pack_with_neighbors = |tile_idx: u32, dirty_chunks: &mut [bool]| {
+                let i = tile_idx as usize;
+                if i >= total {
+                    return;
+                }
+                if pack_stamp[i] != stamp {
+                    pack_stamp[i] = stamp;
+                    let fade = self.vision_fade[i];
                     pack(
                         slice,
                         &self.owners,
+                        &self.crater_reveals,
                         &self.conquest_flash,
-                        n_fade,
-                        n_idx,
-                        self.has_water_neighbor[n_idx as usize],
+                        fade,
+                        tile_idx,
+                        self.has_water_neighbor[i],
                     );
-                    let n_y = n_idx / width;
-                    self.dirty_chunks[(n_y / chunk_h) as usize] = true;
+                    let y = tile_idx / width;
+                    dirty_chunks[(y / chunk_h) as usize] = true;
                 }
+
+                let neighbors = get_neighbors_8(tile_idx, width, height);
+                for &n_opt in &neighbors {
+                    if let Some(n_idx) = n_opt {
+                        let ni = n_idx as usize;
+                        if pack_stamp[ni] != stamp {
+                            pack_stamp[ni] = stamp;
+                            let n_fade = self.vision_fade[ni];
+                            pack(
+                                slice,
+                                &self.owners,
+                                &self.crater_reveals,
+                                &self.conquest_flash,
+                                n_fade,
+                                n_idx,
+                                self.has_water_neighbor[ni],
+                            );
+                            let n_y = n_idx / width;
+                            dirty_chunks[(n_y / chunk_h) as usize] = true;
+                        }
+                    }
+                }
+            };
+
+            for dt in dirty_tiles {
+                if self.crater_reveals.is_tile_held(dt.index, width) {
+                    continue;
+                }
+                pack_with_neighbors(dt.index, &mut self.dirty_chunks);
+                any_tile_packed = true;
+            }
+            for &tile_idx in &self.revealed_scratch {
+                pack_with_neighbors(tile_idx, &mut self.dirty_chunks);
+                any_tile_packed = true;
             }
         }
 
-        if dirty_tiles.is_empty() && !decay_dirty && !fade_dirty && !any_fade_changed {
+        if !any_tile_packed && !decay_dirty && !fade_dirty && !any_fade_changed {
             return;
         }
 

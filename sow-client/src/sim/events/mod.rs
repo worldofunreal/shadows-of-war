@@ -384,6 +384,53 @@ impl SowApp {
                             .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
                     }
                 }
+                sow_core::game::GameEvent::NukeDetonated {
+                    tile_x,
+                    tile_y,
+                    inner_radius,
+                    outer_radius,
+                    owner_id,
+                } => {
+                    let vfx_blasts =
+                        crate::theme::dev_config::DevConfig::with(|dev| dev.vfx_blasts);
+                    let reduced_motion = self.ui.app.settings_state.reduced_motion;
+                    let expand_dur = sow_render::crater_expand_duration(
+                        inner_radius,
+                        reduced_motion || !vfx_blasts,
+                    );
+                    if expand_dur > 0.0
+                        && let Some(ref mut mr) = self.gfx.map_renderer
+                    {
+                        mr.enqueue_crater_reveal(
+                            tile_x,
+                            tile_y,
+                            inner_radius,
+                            expand_dur,
+                            now_instant,
+                        );
+                    }
+                    if vfx_blasts {
+                        let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(1.0);
+                        self.ui.blast_scene.spawn_nuke_detonation(
+                            tile_x,
+                            tile_y,
+                            inner_radius,
+                            outer_radius,
+                            owner_id,
+                            self.sim.map_w,
+                            expand_dur,
+                            now_instant,
+                            reduced_motion,
+                            (
+                                self.input.camera_x,
+                                self.input.camera_y,
+                                self.input.camera_zoom,
+                            ),
+                            (self.input.screen_w, self.input.screen_h),
+                            sf,
+                        );
+                    }
+                }
                 sow_core::game::GameEvent::TacticalSurge {
                     player_id,
                     tile_x,

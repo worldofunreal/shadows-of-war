@@ -333,6 +333,20 @@ impl SowApp {
                 }
             }
 
+            if self.ui.blast_scene.has_recent_detonations() {
+                let surviving_ids: HashSet<u64> =
+                    snap.buildings.iter().map(|building| building.id).collect();
+                let vanished: Vec<_> = existing
+                    .buildings
+                    .iter()
+                    .filter(|building| !surviving_ids.contains(&building.id))
+                    .cloned()
+                    .collect();
+                self.ui
+                    .blast_scene
+                    .register_dying_buildings(&vanished, self.sim.map_w);
+            }
+
             if !existing.dirty_tiles.is_empty() {
                 existing.dirty_tiles.append(&mut snap.dirty_tiles);
                 snap.dirty_tiles = existing.dirty_tiles;

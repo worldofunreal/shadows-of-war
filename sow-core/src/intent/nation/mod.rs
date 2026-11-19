@@ -170,10 +170,44 @@ impl SowEngine {
         if any_structures || any_attacks {
             self.refresh_building_aggregates();
         }
+        let num_lookup = self.state.player_lookup.len();
+        let mut alive_warships_by_player: Vec<bool> = Vec::new();
+        let mut owned_warships_by_player: Vec<u32> = Vec::new();
+        let mut queued_warships_by_player: Vec<u32> = Vec::new();
         if any_attacks {
             self.refresh_bot_naval_slots_used();
             self.bot_naval_cursors
-                .resize(self.state.player_lookup.len(), Default::default());
+                .resize(num_lookup, Default::default());
+
+            alive_warships_by_player.resize(num_lookup, false);
+            owned_warships_by_player.resize(num_lookup, 0);
+            queued_warships_by_player.resize(num_lookup, 0);
+            for fleet in &self.fleets {
+                if fleet.unit_type == crate::game::UnitType::Warship {
+                    let pid = usize::from(fleet.owner_id);
+                    if pid < num_lookup {
+                        owned_warships_by_player[pid] =
+                            owned_warships_by_player[pid].saturating_add(1);
+                        if fleet.troops > 0.0 {
+                            alive_warships_by_player[pid] = true;
+                        }
+                    }
+                }
+            }
+            if !self.building_productions.is_empty() {
+                for b in &self.buildings {
+                    let pid = usize::from(b.owner_id);
+                    if pid < num_lookup
+                        && let Some(state) = self.building_productions.get(&b.id)
+                        && state.arsenal_build.is_some_and(|build| {
+                            build.kind == crate::game::CityArsenalKind::Warship
+                        })
+                    {
+                        queued_warships_by_player[pid] =
+                            queued_warships_by_player[pid].saturating_add(1);
+                    }
+                }
+            }
         }
 
         // ── Process all scheduled bots (no global cap) ─────
@@ -228,31 +262,14 @@ impl SowEngine {
 
             if slot.do_attack
                 && (self.legacy_building_rules || !structures::has_pending_build(&decisions, bot_id))
-                && !self.fleets.iter().any(|fleet| {
-                    fleet.owner_id == bot_id
-                        && fleet.unit_type == crate::game::UnitType::Warship
-                        && fleet.troops > 0.0
-                })
+                && !alive_warships_by_player
+                    .get(usize::from(bot_id))
+                    .copied()
+                    .unwrap_or(false)
                 && self.state.player(bot_id).is_some_and(|player| {
-                    let owned_warships = self
-                        .fleets
-                        .iter()
-                        .filter(|fleet| {
-                            fleet.owner_id == bot_id
-                                && fleet.unit_type == crate::game::UnitType::Warship
-                        })
-                        .count() as u32;
-                    let queued_warships = self
-                        .building_productions
-                        .iter()
-                        .filter(|(building_id, state)| {
-                            state.arsenal_build.is_some_and(|build| {
-                                build.kind == crate::game::CityArsenalKind::Warship
-                            }) && self.buildings.iter().any(|building| {
-                                building.id == **building_id && building.owner_id == bot_id
-                            })
-                        })
-                        .count() as u32;
+                    let pid = usize::from(bot_id);
+                    let owned_warships = owned_warships_by_player.get(pid).copied().unwrap_or(0);
+                    let queued_warships = queued_warships_by_player.get(pid).copied().unwrap_or(0);
                     let cost = if self.legacy_building_rules {
                         crate::game::UnitType::Warship
                             .gold_cost_with_owned_count_for_leader(owned_warships, player.leader)
@@ -264,9 +281,13 @@ impl SowEngine {
                             &self.state.config,
                         )
                     };
-                    player.gold >= cost
-                        && self.boat_slots_used(bot_id).saturating_add(queued_warships)
-                            < crate::building::player_fleet_capacity(&self.buildings, bot_id)
+                    let used_slots = self.bot_naval_slots_used.get(pid).copied().unwrap_or(0);
+                    let cap = crate::building::cost::player_fleet_capacity_from_port_slots(
+                        self.building_aggregates
+                            .get(pid)
+                            .map_or(0, |agg| agg.port_fleet_slots),
+                    );
+                    player.gold >= cost && used_slots.saturating_add(queued_warships) < cap
                 })
                 && self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
             {

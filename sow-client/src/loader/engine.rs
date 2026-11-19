@@ -57,6 +57,9 @@ impl SowApp {
             if let Some(mut mr) = self.gfx.map_renderer.take() {
                 mr.destroy(render_ctx);
             }
+            if let Some(mut blast) = self.gfx.blast_renderer.take() {
+                blast.destroy(render_ctx);
+            }
             if let Some(mut mover) = self.gfx.mover_renderer.take() {
                 mover.destroy(render_ctx);
             }
@@ -90,6 +93,7 @@ impl SowApp {
         self.ui.last_projectiles.clear();
         self.ui.last_projectile_snapshot_tick = None;
         self.ui.detonation_scratch.clear();
+        self.ui.blast_scene.clear();
         self.ui.border_flash_intensities.clear();
         self.ui.app.hud_state.building_placement = None;
         self.input.building_drag_offset = None;

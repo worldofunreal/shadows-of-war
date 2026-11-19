@@ -27,6 +27,7 @@ pub mod dev_config {
         pub vfx_screen_vignette: bool,
         pub vfx_holo_grid: bool,
         pub vfx_movers: bool,
+        pub vfx_blasts: bool,
         pub vfx_tutorial_highlight: bool,
         pub vfx_mover_trails: bool,
         pub vfx_click_markers: bool,
@@ -80,6 +81,7 @@ pub mod dev_config {
                 vfx_screen_vignette: false,
                 vfx_holo_grid: true,
                 vfx_movers: true,
+                vfx_blasts: true,
                 vfx_tutorial_highlight: true,
                 vfx_mover_trails: true,
                 vfx_click_markers: true,
@@ -160,6 +162,7 @@ pub mod dev_config {
                 "vfx_screen_vignette" => [bool_value(self.vfx_screen_vignette), 0.0, 0.0, 0.0],
                 "vfx_holo_grid" => [bool_value(self.vfx_holo_grid), 0.0, 0.0, 0.0],
                 "vfx_movers" => [bool_value(self.vfx_movers), 0.0, 0.0, 0.0],
+                "vfx_blasts" => [bool_value(self.vfx_blasts), 0.0, 0.0, 0.0],
                 "vfx_tutorial_highlight" => {
                     [bool_value(self.vfx_tutorial_highlight), 0.0, 0.0, 0.0]
                 }
@@ -212,6 +215,7 @@ pub mod dev_config {
                 "vfx_screen_vignette" => self.vfx_screen_vignette = value[0] != 0.0,
                 "vfx_holo_grid" => self.vfx_holo_grid = value[0] != 0.0,
                 "vfx_movers" => self.vfx_movers = value[0] != 0.0,
+                "vfx_blasts" => self.vfx_blasts = value[0] != 0.0,
                 "vfx_tutorial_highlight" => self.vfx_tutorial_highlight = value[0] != 0.0,
                 "vfx_mover_trails" => self.vfx_mover_trails = value[0] != 0.0,
                 "vfx_click_markers" => self.vfx_click_markers = value[0] != 0.0,

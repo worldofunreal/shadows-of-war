@@ -1292,7 +1292,11 @@ impl SowEngine {
             owner_id,
             src_tile,
             dst_tile,
-            path: crate::pathfinding::bresenham_line(src_tile, dst_tile, self.state.map.width),
+            path: std::sync::Arc::new(crate::pathfinding::bresenham_line(
+                src_tile,
+                dst_tile,
+                self.state.map.width,
+            )),
             path_cursor: 0,
             steps_per_tick: 3,
             active: true,

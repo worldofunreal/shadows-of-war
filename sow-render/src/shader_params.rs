@@ -413,6 +413,7 @@ pub static PARAMS: &[ParamDef] = &[
         true
     ),
     legacy_bool!("vfx_movers", "Mover sprites", "Movers", true),
+    legacy_bool!("vfx_blasts", "Nuke blasts & craters", "Movers", true),
     legacy_bool!(
         "vfx_tutorial_highlight",
         "Tutorial target highlight",
@@ -3366,6 +3367,7 @@ pub const PERF_SWITCHES: &[(&str, &[&str])] = &[
         "Effects",
         &[
             "vfx_conquer",
+            "vfx_blasts",
             "vfx_border_breathe",
             "vfx_energy_flow",
             "vfx_heartbeat",

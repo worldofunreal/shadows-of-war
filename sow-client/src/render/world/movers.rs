@@ -226,6 +226,13 @@ fn sample_nuke_arc(path: &NukeArcPath, progress: f32, samples: usize, out: &mut 
 }
 
 #[inline]
+fn adaptive_nuke_arc_samples(bounds: [f32; 4], camera_zoom: f32, max_samples: usize) -> usize {
+    let max_samples = max_samples.clamp(12, 512);
+    let arc_px = (bounds[2] - bounds[0]).hypot(bounds[3] - bounds[1]) * camera_zoom.max(0.01);
+    ((arc_px / 6.0).ceil() as usize).clamp(12, max_samples)
+}
+
+#[inline]
 fn in_viewport(sx: f32, sy: f32, min_sx: f32, min_sy: f32, max_sx: f32, max_sy: f32) -> bool {
     sx >= min_sx && sx <= max_sx && sy >= min_sy && sy <= max_sy
 }
@@ -242,6 +249,7 @@ fn locate_highlight_color(color: [f32; 4], intensity: f32) -> [f32; 4] {
 
 #[derive(Clone, Copy)]
 struct MoverSlot {
+    id: u64,
     prev_x: f32,
     prev_y: f32,
     curr_x: f32,
@@ -269,7 +277,9 @@ pub struct MoverScene {
     slots: Vec<MoverSlot>,
     trail_points: Vec<[f32; 2]>,
     arc_scratch: Vec<[f32; 2]>,
-    arc_paths: HashMap<u64, Vec<u32>>,
+    alive_scratch: HashSet<u64>,
+    dead_scratch: Vec<u64>,
+    arc_paths: HashMap<u64, std::sync::Arc<Vec<u32>>>,
     nuke_arcs: HashMap<u64, NukeArcPath>,
     player_colors: HashMap<u16, [f32; 3]>,
     last_snap_tick: u64,
@@ -297,6 +307,8 @@ impl MoverScene {
             slots: Vec::new(),
             trail_points: Vec::new(),
             arc_scratch: Vec::with_capacity(513),
+            alive_scratch: HashSet::new(),
+            dead_scratch: Vec::new(),
             arc_paths: HashMap::new(),
             nuke_arcs: HashMap::new(),
             player_colors: HashMap::new(),
@@ -365,7 +377,8 @@ impl MoverScene {
             self.player_colors.insert(player.id, rgb);
         }
 
-        let mut alive: HashSet<u64> = HashSet::new();
+        self.alive_scratch.clear();
+        let mut alive = std::mem::take(&mut self.alive_scratch);
 
         for fleet in &snap.fleets {
             let is_visible = !fog_of_war_enabled
@@ -403,13 +416,21 @@ impl MoverScene {
             }
         }
 
-        let dead: Vec<u64> = self
-            .id_to_idx
-            .keys()
-            .copied()
-            .filter(|id| !alive.contains(id))
-            .collect();
-        for id in dead {
+        let mut dead = std::mem::take(&mut self.dead_scratch);
+        dead.clear();
+        dead.extend(
+            self.id_to_idx
+                .keys()
+                .copied()
+                .filter(|id| !alive.contains(id)),
+        );
+        self.remove_dead_slots(&dead);
+        self.dead_scratch = dead;
+        self.alive_scratch = alive;
+    }
+
+    fn remove_dead_slots(&mut self, dead: &[u64]) {
+        for &id in dead {
             self.arc_paths.remove(&id);
             self.nuke_arcs.remove(&id);
             if let Some(idx) = self.id_to_idx.remove(&id) {
@@ -418,14 +439,8 @@ impl MoverScene {
                     let last = self.slots.len() - 1;
                     if rem != last {
                         self.slots.swap(rem, last);
-                        if let Some(moved_id) = self
-                            .id_to_idx
-                            .iter()
-                            .find(|(_, i)| **i as usize == last)
-                            .map(|(k, _)| *k)
-                        {
-                            self.id_to_idx.insert(moved_id, rem as u32);
-                        }
+                        let moved_id = self.slots[rem].id;
+                        self.id_to_idx.insert(moved_id, rem as u32);
                     }
                     self.slots.pop();
                 }
@@ -443,6 +458,7 @@ impl MoverScene {
         self.upsert_slot(
             building.id | (1u64 << 62),
             MoverSlot {
+                id: 0,
                 prev_x: x,
                 prev_y: y,
                 curr_x: x,
@@ -539,6 +555,7 @@ impl MoverScene {
         let trail_len = self.trail_points.len() as u32 - trail_start;
 
         let entry = MoverSlot {
+            id: 0,
             prev_x,
             prev_y,
             curr_x,
@@ -616,7 +633,7 @@ impl MoverScene {
                 )
             });
         } else {
-            self.arc_paths.insert(key, proj.path.clone());
+            self.arc_paths.insert(key, std::sync::Arc::clone(&proj.path));
         }
 
         let (trail_start, trail_len) = if is_nuke {
@@ -637,6 +654,7 @@ impl MoverScene {
         };
 
         let entry = MoverSlot {
+            id: 0,
             prev_x,
             prev_y,
             curr_x,
@@ -662,6 +680,7 @@ impl MoverScene {
     }
 
     fn upsert_slot(&mut self, id: u64, mut entry: MoverSlot) {
+        entry.id = id;
         if let Some(&idx) = self.id_to_idx.get(&id) {
             let old = &self.slots[idx as usize];
             entry.prev_x = old.curr_x;
@@ -913,7 +932,9 @@ impl MoverScene {
                         && params.camera_y + bounds[1] * params.camera_zoom
                             <= params.screen_h + trail_margin;
                     if arc_visible {
-                        sample_nuke_arc(path, progress, arc_samples, &mut arc_scratch);
+                        let effective_samples =
+                            adaptive_nuke_arc_samples(bounds, params.camera_zoom, arc_samples);
+                        sample_nuke_arc(path, progress, effective_samples, &mut arc_scratch);
                         if self.arc_visible(&arc_scratch, world_pos, params, trail_bounds) {
                             self.push_trail_segments(
                                 renderer,
@@ -1085,6 +1106,65 @@ impl MoverScene {
 impl Default for MoverScene {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_slot(id: u64) -> MoverSlot {
+        MoverSlot {
+            id,
+            prev_x: 0.0,
+            prev_y: 0.0,
+            curr_x: id as f32,
+            curr_y: 0.0,
+            path_progress_prev: 0.0,
+            path_progress_curr: 0.0,
+            size: 1.0,
+            color: [1.0; 4],
+            trail_color: [1.0; 4],
+            sprite: MoverSpriteId::AtomBomb,
+            trail_start: 0,
+            trail_len: 0,
+            is_fleet: false,
+            is_shell: false,
+            arc_trail: true,
+            is_owned_warship: false,
+            health_fraction: 1.0,
+            veterancy: 0,
+            warship_mode: None,
+            in_combat: false,
+        }
+    }
+
+    #[test]
+    fn adaptive_nuke_arc_samples_scales_down_on_far_zoom_and_caps_at_max() {
+        let bounds = [0.0, 0.0, 120.0, 0.0];
+        // Tiny on-screen arc (120 * 0.25 = 30px) clamps to 12 segments instead of 128.
+        assert_eq!(adaptive_nuke_arc_samples(bounds, 0.25, 128), 12);
+        // Medium on-screen arc (120 * 2.0 = 240px -> 40 segments).
+        assert_eq!(adaptive_nuke_arc_samples(bounds, 2.0, 128), 40);
+        // Zoomed close respects max_samples cap.
+        assert_eq!(adaptive_nuke_arc_samples(bounds, 10.0, 128), 128);
+    }
+
+    #[test]
+    fn swap_remove_dead_slots_keeps_id_to_idx_consistent_in_o1() {
+        let mut scene = MoverScene::new();
+        for id in 10..=14u64 {
+            scene.upsert_slot(id, dummy_slot(id));
+        }
+        scene.remove_dead_slots(&[10, 12]);
+        assert_eq!(scene.slots.len(), 3);
+        for id in [11u64, 13, 14] {
+            let idx = *scene.id_to_idx.get(&id).expect("surviving id present");
+            assert_eq!(scene.slots[idx as usize].id, id);
+            assert_eq!(scene.slots[idx as usize].curr_x, id as f32);
+        }
+        assert!(!scene.id_to_idx.contains_key(&10));
+        assert!(!scene.id_to_idx.contains_key(&12));
     }
 }
 

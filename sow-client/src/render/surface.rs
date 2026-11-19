@@ -51,6 +51,13 @@ impl SowApp {
                         ));
                         self.gfx.needs_first_upload = true;
                     }
+                    if let Some(mut old_blast) = self.gfx.blast_renderer.take() {
+                        old_blast.destroy(&render_ctx);
+                    }
+                    self.gfx.blast_renderer = Some(crate::render::gpu::BlastRenderer::new(
+                        &render_ctx.context,
+                        format,
+                    ));
                     if let Some(mut old_mover) = self.gfx.mover_renderer.take() {
                         old_mover.destroy(&render_ctx);
                     }

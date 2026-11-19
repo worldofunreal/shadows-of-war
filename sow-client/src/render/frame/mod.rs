@@ -150,6 +150,7 @@ impl SowApp {
             } else {
                 None
             };
+            let orig_camera = (self.input.camera_x, self.input.camera_y);
             let mut map_drawn = false;
             if self.gfx.map_renderer.is_some() {
                 // Upload map state on first frame or after each tick (runs during splash for loader step 2).
@@ -188,12 +189,22 @@ impl SowApp {
                 if draw_world {
                     // --- Layer 4: Track and Spawn Detonations ---
                     self.ui.detonation_scratch.clear();
+                    let current_time = web_time::Instant::now();
                     if let Some(snap) = &self.sim.current_snapshot {
                         if self.ui.last_projectile_snapshot_tick != Some(snap.tick) {
+                            let vfx_blasts =
+                                crate::theme::dev_config::DevConfig::with(|dev| dev.vfx_blasts);
+                            let tick_delta = self
+                                .ui
+                                .last_projectile_snapshot_tick
+                                .map(|prev| snap.tick.saturating_sub(prev))
+                                .unwrap_or(1)
+                                .max(1) as usize;
                             for (id, prev_proj) in &self.ui.last_projectiles {
                                 if !snap.projectiles.iter().any(|p| p.id == *id) {
                                     let at_end = prev_proj.path_cursor
                                         + (prev_proj.steps_per_tick as usize)
+                                            .saturating_mul(tick_delta)
                                         >= prev_proj.path_len;
                                     if at_end {
                                         let dst_x = (prev_proj.dst_tile % self.sim.map_w) as f32;
@@ -203,6 +214,26 @@ impl SowApp {
                                             dst_y,
                                             prev_proj.kind,
                                         ));
+                                    } else if vfx_blasts
+                                        && matches!(
+                                            prev_proj.kind,
+                                            sow_core::game::ProjectileKind::Nuke { .. }
+                                        )
+                                    {
+                                        let dst_x = prev_proj.dst_tile % self.sim.map_w;
+                                        let dst_y = prev_proj.dst_tile / self.sim.map_w;
+                                        let detonated_there = snap
+                                            .nuke_alerts
+                                            .iter()
+                                            .any(|a| a.tile_x == dst_x && a.tile_y == dst_y);
+                                        if !detonated_there {
+                                            // Nuke destroyed mid-flight by a SAM interceptor.
+                                            self.ui.blast_scene.spawn_sam_airburst(
+                                                prev_proj.current_tile,
+                                                self.sim.map_w,
+                                                current_time,
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -210,7 +241,6 @@ impl SowApp {
                     }
 
                     // Nuke impact sound
-                    let current_time = web_time::Instant::now();
                     for &(dx, dy, kind) in &self.ui.detonation_scratch {
                         if let sow_core::game::ProjectileKind::Nuke { level } = kind {
                             self.sfx.play_nuke_impact(
@@ -653,6 +683,15 @@ impl SowApp {
                         self.ui.viewport_alert = None;
                     }
 
+                    if dev.vfx_blasts {
+                        let shake = self.ui.blast_scene.camera_shake_offset(
+                            current_time,
+                            self.ui.app.settings_state.reduced_motion,
+                        );
+                        self.input.camera_x += shake[0];
+                        self.input.camera_y += shake[1];
+                    }
+
                     let globals = MapGlobals {
                         camera_pos: [self.input.camera_x, self.input.camera_y],
                         zoom: self.input.camera_zoom,
@@ -723,6 +762,49 @@ impl SowApp {
                         map_drawn = true;
                     }
 
+                    // ── GPU-instanced localized blasts (ground scorch + aerial FX) ──
+                    let blast_globals = crate::render::gpu::BlastGlobals {
+                        camera_pos: [self.input.camera_x, self.input.camera_y],
+                        zoom: self.input.camera_zoom,
+                        time: self.time.start_time.elapsed().as_secs_f32() % 1000.0,
+                        screen_size: [self.input.screen_w, self.input.screen_h],
+                        _pad: [0.0; 2],
+                    };
+                    if dev.vfx_blasts {
+                        if self.gfx.blast_renderer.is_none() {
+                            let surface_format = s.info().format;
+                            self.gfx.blast_renderer = Some(crate::render::gpu::BlastRenderer::new(
+                                &render_ctx.context,
+                                surface_format,
+                            ));
+                        }
+                        if let Some(blast_r) = self.gfx.blast_renderer.as_mut() {
+                            if self.ui.blast_scene.has_active() {
+                                let blast_pack = crate::render::world::blasts::BlastPackParams {
+                                    camera_x: self.input.camera_x,
+                                    camera_y: self.input.camera_y,
+                                    camera_zoom: self.input.camera_zoom,
+                                    screen_w: self.input.screen_w,
+                                    screen_h: self.input.screen_h,
+                                    fog_of_war: dev.fog_of_war,
+                                    my_player_id: my_id,
+                                    fog_visible: &self.sim.fog_visible,
+                                    now: current_time,
+                                };
+                                self.ui.blast_scene.pack_gpu(&blast_pack, blast_r);
+                                // Layer 1: scorched crater & cooling ember cracks UNDER movers.
+                                blast_r.draw_ground(
+                                    &mut render_ctx.command_encoder,
+                                    frame.texture_view(),
+                                    blast_globals,
+                                    &render_ctx.context,
+                                );
+                            } else {
+                                blast_r.begin_frame();
+                            }
+                        }
+                    }
+
                     crate::render::text_atlases::poll_arabic_font();
 
                     // ── GPU-instanced movers (boats, nukes, SAM) ─────────────
@@ -783,6 +865,19 @@ impl SowApp {
                             );
                         }
                     }
+
+                    // Layer 2: thermal flash, fireball front, Mach shockwave, embers, smoke &
+                    // SAM airbursts OVER movers and UNDER world nameplates.
+                    if dev.vfx_blasts
+                        && let Some(blast_r) = self.gfx.blast_renderer.as_ref()
+                    {
+                        blast_r.draw_air(
+                            &mut render_ctx.command_encoder,
+                            frame.texture_view(),
+                            blast_globals,
+                            &render_ctx.context,
+                        );
+                    }
                     });
                 }
             }
@@ -817,6 +912,8 @@ impl SowApp {
 
             let ui_render_started_at = crate::diag::startup_perf_timer();
             self.render_frame_ui_and_present(sf, frame, dt);
+            self.input.camera_x = orig_camera.0;
+            self.input.camera_y = orig_camera.1;
             if let Some(started_at) = ui_render_started_at {
                 crate::diag::record_startup_perf(
                     crate::diag::StartupMetric::UiRender,

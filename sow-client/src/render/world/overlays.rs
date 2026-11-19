@@ -491,6 +491,50 @@ fn render_buildings(
             );
         }
     }
+    // Render buildings destroyed by an active nuke until the outward shockwave crosses
+    // their tile, then flash incandescent white-orange for 80ms as they vaporize.
+    if dev.vfx_blasts {
+        for (building, world_x, world_y, flash_progress) in
+            ui.blast_scene.dying_buildings_for_render(now)
+        {
+            if dev.fog_of_war
+                && building.owner_id != my_id
+                && !sim.fog_visible.contains(building.tile_idx)
+            {
+                continue;
+            }
+            let center = world_to_screen(world_x, world_y, input, sf);
+            let marker_size = building_footprint_marker_size(building.kind, zoom_scaled, 0.0);
+            let level = building.level.max(1);
+            let mut sprite_size = building_sprite_size(marker_size, sf, level);
+            let half_width = sprite_size[0] * 0.5;
+            let half_height = sprite_size[1] * 0.5;
+            if center[0] + half_width < 0.0
+                || center[0] - half_width > screen_w
+                || center[1] + half_height < 0.0
+                || center[1] - half_height > screen_h
+            {
+                continue;
+            }
+            let tint = if let Some(ft) = flash_progress {
+                let swell = 1.0 + 0.25 * ft;
+                sprite_size = [sprite_size[0] * swell, sprite_size[1] * swell];
+                [1.0, 0.72 + 0.28 * (1.0 - ft), 0.35 * (1.0 - ft), 1.0 - ft]
+            } else if building.under_construction {
+                [1.0, 1.0, 1.0, 0.5]
+            } else {
+                [1.0, 1.0, 1.0, 1.0]
+            };
+            if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(building.kind, level) {
+                text.push_building_sprite(
+                    [center[0] * sf, center[1] * sf],
+                    sprite_size,
+                    uv_rect,
+                    tint,
+                );
+            }
+        }
+    }
     ui.building_upgrade_flashes = building_upgrade_flashes;
 }
 

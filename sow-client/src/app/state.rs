@@ -9,6 +9,7 @@ use web_time::{Duration, Instant};
 pub struct TrackedProjectile {
     pub kind: sow_core::game::ProjectileKind,
     pub dst_tile: u32,
+    pub current_tile: u32,
     pub path_cursor: usize,
     pub steps_per_tick: u8,
     pub path_len: usize,
@@ -16,15 +17,20 @@ pub struct TrackedProjectile {
 
 impl TrackedProjectile {
     pub fn from_snapshot(proj: &sow_core::protocol::ProjectileSnapshot) -> Self {
+        let current_tile = proj
+            .path
+            .get(proj.path_cursor.min(proj.path.len().saturating_sub(1)))
+            .copied()
+            .unwrap_or(proj.dst_tile);
         Self {
             kind: proj.kind,
             dst_tile: proj.dst_tile,
+            current_tile,
             path_cursor: proj.path_cursor,
             steps_per_tick: proj.steps_per_tick,
             path_len: proj.path.len(),
         }
     }
-
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -47,6 +53,7 @@ pub struct GraphicsState {
     pub surface: Option<blade_graphics::Surface>,
     pub render_ctx: Option<crate::render::gpu::RenderContext>,
     pub map_renderer: Option<crate::render::gpu::MapRenderer>,
+    pub blast_renderer: Option<crate::render::gpu::BlastRenderer>,
     pub mover_renderer: Option<crate::render::gpu::MoverRenderer>,
     pub text_renderer: Option<crate::render::gpu::TextRenderer>,
     /// The portrait each avatar atlas slot holds this match.
@@ -637,6 +644,7 @@ pub struct UiState {
     /// Client-side nuke silo cooldown tracking: building id → tick when ready.
     pub silo_cooldowns: std::collections::HashMap<u64, u64>,
     pub mover_scene: crate::render::world::movers::MoverScene,
+    pub blast_scene: crate::render::world::blasts::BlastScene,
     pub click_markers: Vec<ClickMarker>,
     pub attack_launch_notices: Vec<AttackLaunchNotice>,
     pub transport_target_markers: std::collections::HashMap<u64, TransportTargetMarker>,

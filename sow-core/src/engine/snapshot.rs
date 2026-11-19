@@ -30,6 +30,67 @@ impl SowEngine {
             .map(|p| usize::from(p.id))
             .max()
             .unwrap_or(0);
+
+        let mut alliance_reqs_by_target: std::collections::HashMap<
+            u16,
+            (Vec<u16>, std::collections::HashMap<u16, u32>),
+        > = std::collections::HashMap::new();
+        for prop in proposed {
+            let entry = alliance_reqs_by_target
+                .entry(prop.target)
+                .or_insert_with(|| (Vec::new(), std::collections::HashMap::new()));
+            entry.0.push(prop.proposer);
+            let remaining = crate::diplomacy::ALLIANCE_REQUEST_TTL_TICKS
+                .saturating_sub(tick.saturating_sub(prop.created_tick));
+            entry.1.insert(prop.proposer, remaining);
+        }
+
+        let mut resource_reqs_by_target: std::collections::HashMap<
+            u16,
+            Vec<crate::protocol::ResourceRequest>,
+        > = std::collections::HashMap::new();
+        for r in proposed_resources {
+            if self.resources_can_move(r.proposer, r.target) {
+                resource_reqs_by_target
+                    .entry(r.target)
+                    .or_default()
+                    .push(crate::protocol::ResourceRequest {
+                        requester: r.proposer,
+                        gold: r.gold,
+                        troops: r.troops,
+                        pay_gold: r.pay_gold,
+                        pay_troops: r.pay_troops,
+                        remaining_ticks: crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS
+                            .saturating_sub(tick.saturating_sub(r.created_tick)),
+                    });
+            }
+        }
+
+        let mut help_calls_by_target: std::collections::HashMap<
+            u16,
+            Vec<crate::protocol::HelpCall>,
+        > = std::collections::HashMap::new();
+        for h in proposed_help {
+            if self.resources_can_move(h.target, h.caller)
+                && let Some(target_player) = self.state.player(h.target)
+                && let Some(caller) = self.state.player(h.caller)
+            {
+                let caller_under_attack = self.is_player_under_attack(h.caller);
+                let (suggested_gold, suggested_troops) =
+                    crate::diplomacy::compute_help_aid(target_player, caller, caller_under_attack);
+                help_calls_by_target
+                    .entry(h.target)
+                    .or_default()
+                    .push(crate::protocol::HelpCall {
+                        caller: h.caller,
+                        call_id: h.call_id,
+                        suggested_gold,
+                        suggested_troops,
+                        remaining_ticks: crate::diplomacy::HELP_CALL_TTL_TICKS
+                            .saturating_sub(tick.saturating_sub(h.created_tick)),
+                    });
+            }
+        }
         let mut nuke_available_by_player = vec![false; max_pid + 1];
         let mut nuke_cooldown_by_player = vec![0u32; max_pid + 1];
         let nuke_req_level = crate::game::NukeKind::AtomBomb.required_district_level();
@@ -91,47 +152,11 @@ impl SowEngine {
 
                 let name = p.name.clone();
 
-                let mut alliance_requests = Vec::new();
-                let mut alliance_request_timers = std::collections::HashMap::new();
-                for prop in proposed.iter().filter(|prop| prop.target == p.id) {
-                    alliance_requests.push(prop.proposer);
-                    let remaining = crate::diplomacy::ALLIANCE_REQUEST_TTL_TICKS
-                        .saturating_sub(tick.saturating_sub(prop.created_tick));
-                    alliance_request_timers.insert(prop.proposer, remaining);
-                }
-
-                let resource_requests = proposed_resources
-                    .iter()
-                    .filter(|r| r.target == p.id && self.resources_can_move(r.proposer, r.target))
-                    .map(|r| crate::protocol::ResourceRequest {
-                        requester: r.proposer,
-                        gold: r.gold,
-                        troops: r.troops,
-                        pay_gold: r.pay_gold,
-                        pay_troops: r.pay_troops,
-                        remaining_ticks: crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS
-                            .saturating_sub(tick.saturating_sub(r.created_tick)),
-                    })
-                    .collect();
-
-                let help_calls = proposed_help
-                    .iter()
-                    .filter(|h| h.target == p.id && self.resources_can_move(h.target, h.caller))
-                    .filter_map(|h| {
-                        let caller = self.state.player(h.caller)?;
-                        let caller_under_attack = self.is_player_under_attack(h.caller);
-                        let (suggested_gold, suggested_troops) =
-                            crate::diplomacy::compute_help_aid(p, caller, caller_under_attack);
-                        Some(crate::protocol::HelpCall {
-                            caller: h.caller,
-                            call_id: h.call_id,
-                            suggested_gold,
-                            suggested_troops,
-                            remaining_ticks: crate::diplomacy::HELP_CALL_TTL_TICKS
-                                .saturating_sub(tick.saturating_sub(h.created_tick)),
-                        })
-                    })
-                    .collect();
+                let (alliance_requests, alliance_request_timers) = alliance_reqs_by_target
+                    .remove(&p.id)
+                    .unwrap_or_default();
+                let resource_requests = resource_reqs_by_target.remove(&p.id).unwrap_or_default();
+                let help_calls = help_calls_by_target.remove(&p.id).unwrap_or_default();
                 let help_cooldown_ticks = self.help_call_cooldown_remaining(p.id);
 
                 crate::protocol::PlayerSnapshot {
@@ -319,7 +344,7 @@ impl SowEngine {
                     owner_id: p.owner_id,
                     src_tile: p.src_tile,
                     dst_tile: p.dst_tile,
-                    path: p.path.clone(),
+                    path: std::sync::Arc::clone(&p.path),
                     path_cursor: p.path_cursor,
                     steps_per_tick: p.steps_per_tick,
                     source_fleet_id: p.source_fleet_id,

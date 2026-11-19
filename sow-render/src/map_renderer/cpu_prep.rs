@@ -96,14 +96,24 @@ pub(crate) fn get_neighbors_8(idx: u32, width: u32, height: u32) -> [Option<u32>
 }
 
 pub(crate) fn compute_has_border(idx: u32, owners: &[u16], width: u32, height: u32) -> bool {
-    let owner = owners[idx as usize];
+    compute_has_border_with(idx, |n| owners[n as usize], width, height)
+}
+
+#[inline]
+pub(crate) fn compute_has_border_with<F: Fn(u32) -> u16>(
+    idx: u32,
+    owner_at: F,
+    width: u32,
+    height: u32,
+) -> bool {
+    let owner = owner_at(idx);
     if owner == 0 {
         return false;
     }
     let neighbors = get_neighbors_8(idx, width, height);
     for &n_idx in &neighbors {
         if let Some(n) = n_idx {
-            if owners[n as usize] != owner {
+            if owner_at(n) != owner {
                 return true;
             }
         } else {

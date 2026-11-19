@@ -4,7 +4,7 @@ use blade_graphics as gpu;
 use bytemuck::{Pod, Zeroable};
 
 pub const MAX_SPRITE_INSTANCES: usize = 16_384;
-pub const MAX_TRAIL_SEGMENTS: usize = 32_768;
+pub const MAX_TRAIL_SEGMENTS: usize = 65_536;
 const VERTS_PER_QUAD: u32 = 6;
 
 #[repr(C)]

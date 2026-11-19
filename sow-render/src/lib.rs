@@ -1,3 +1,4 @@
+pub mod blast_renderer;
 pub mod context;
 pub mod map_renderer;
 pub mod mover_renderer;
@@ -6,6 +7,7 @@ pub mod shader_params;
 pub mod sprite_atlas;
 pub mod text;
 
+pub use blast_renderer::*;
 pub use context::*;
 pub use map_renderer::*;
 pub use mover_renderer::*;
