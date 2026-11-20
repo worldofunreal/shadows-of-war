@@ -25,7 +25,7 @@ use std::env;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, Semaphore, broadcast, mpsc};
@@ -454,6 +454,10 @@ async fn register_match_start(rc: &RelayCandidate) -> Result<(), String> {
         "metadata": {
             "replay_format": sow_core::protocol::GAMEPLAY_FORMAT_VERSION,
             "simulation_rules_id": sow_core::SIMULATION_RULES_ID,
+            "server_release_id": std::env::var("SOW_SERVER_RELEASE_ID")
+                .unwrap_or_else(|_| sow_core::protocol::gameplay_build_identity()),
+            "verifier_url": std::env::var("SOW_SERVER_HTTP_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:25566".to_string()),
             "map_sha256": map_sha256,
             "relay_worker_index": rc.worker_index,
             "relay_port": rc.relay_port,
@@ -883,8 +887,20 @@ fn ranked_bot_fields(account: &serde_json::Value) -> Result<(String, String, sow
 async fn allocate_match_id(next_id: &Mutex<u64>) -> Result<u64, String> {
     let mut next = next_id.lock().await;
     let id = *next;
+    if !lobby::match_id_is_reserved(id) {
+        return Err("match ID reservation exhausted".to_string());
+    }
     *next = next.checked_add(1).ok_or("match id space exhausted")?;
     Ok(id)
+}
+
+fn initial_lobbies_snapshot(games: &[ServerLobby]) -> Option<Vec<u8>> {
+    let message = sow_core::protocol::ServerMessage::LobbiesBroadcast(
+        ServerLobbiesBroadcastMessage {
+            lobbies: build_lobby_broadcast(games),
+        },
+    );
+    bincode::serialize(&message).ok()
 }
 
 async fn ranked_candidates(
@@ -1370,7 +1386,7 @@ async fn main() {
 
     let mut games: Vec<ServerLobby> = Vec::new();
     // Reward receipts and guide source IDs survive restarts; the match sequence must too.
-    let mut next_lobby_id = reqwest::Client::builder()
+    let match_id_reservation = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
         .expect("match ID client")
@@ -1386,12 +1402,19 @@ async fn main() {
         .expect("match ID recovery response")
         .json::<serde_json::Value>()
         .await
-        .expect("match ID recovery payload")
+        .expect("match ID recovery payload");
+    let mut next_lobby_id = match_id_reservation
         .get("next_match_id")
         .and_then(serde_json::Value::as_u64)
         .filter(|id| *id > 0)
         .expect("valid durable match ID seed");
-    log::info!("[matches] recovered next match ID {next_lobby_id}");
+    let reserved_through = match_id_reservation
+        .get("reserved_through")
+        .and_then(serde_json::Value::as_u64)
+        .filter(|end| *end >= next_lobby_id)
+        .expect("valid reserved match ID range");
+    lobby::set_match_id_range_end(reserved_through);
+    log::info!("[matches] reserved ID range {next_lobby_id}..={reserved_through}");
 
     let maps_root = map_catalog::maps_root();
     map_catalog::init(&maps_root);
@@ -1400,6 +1423,7 @@ async fn main() {
     master_tick(&mut games, &mut next_lobby_id, &mut retired_matchmaking_ids);
 
     let games_state = Arc::new(Mutex::new(games));
+    let accepting_new_lobbies = Arc::new(AtomicBool::new(true));
     let next_id_state = Arc::new(Mutex::new(next_lobby_id));
     let retired_matchmaking_ids_state = Arc::new(Mutex::new(retired_matchmaking_ids));
 
@@ -1828,6 +1852,13 @@ async fn main() {
                         }
 
                         ServerEvent::Leave { lobby_id, player_id, session_id } => {
+                            let current_session = games.iter().find(|lobby| lobby.id == lobby_id)
+                                .and_then(|lobby| lobby.players.iter().find(|player| player.player_id == player_id))
+                                .and_then(|player| player.session_id);
+                            if current_session != Some(session_id) {
+                                log::info!("[LOBBY] Ignoring stale leave lobby={lobby_id} player={player_id} session={session_id}");
+                                continue;
+                            }
                             let ranked_member = games.iter().find(|lobby| lobby.id == lobby_id
                                 && lobby.kind == sow_core::protocol::LobbyKind::Ranked1v1)
                                 .and_then(|lobby| lobby.players.iter().find(|member| {
@@ -1920,9 +1951,14 @@ async fn main() {
         max_connections,
         HANDSHAKE_TIMEOUT_SECS
     );
+    let server_release_id = std::env::var("SOW_SERVER_RELEASE_ID")
+        .unwrap_or_else(|_| sow_core::protocol::gameplay_build_identity());
+    let reconnect_url = std::env::var("SOW_SERVER_OWNER_WS_URL").unwrap_or_default();
+    let owner_maps_url = std::env::var("SOW_SERVER_MAPS_URL").unwrap_or_default();
 
     // HTTP server for maps and local editor tooling.
     let games_for_axum = Arc::clone(&games_state);
+    let accepting_new_lobbies_http = Arc::clone(&accepting_new_lobbies);
     let identity_state_http = identity_state.clone();
     let db_url_http = db_url.clone();
     let db_secret_http = db_secret.clone();
@@ -1936,6 +1972,7 @@ async fn main() {
         let root = maps_root.clone();
         let state = AppState {
             games: games_for_axum,
+            accepting_new_lobbies: accepting_new_lobbies_http,
             identity: identity_state_http,
             maps_root: root.clone(),
             db_url: db_url_http,
@@ -1948,6 +1985,9 @@ async fn main() {
             replay_http,
         };
         let catalog_route = axum::Router::new()
+            .route("/internal/generation-status", axum::routing::get(generation_status_handler))
+            .route("/internal/generation-drain", axum::routing::post(generation_drain_handler))
+            .route("/internal/generation-activate", axum::routing::post(generation_activate_handler))
             .route(
                 "/internal/match/result",
                 axum::routing::post(verification::handle_result)
@@ -2035,6 +2075,10 @@ async fn main() {
         let ranked_queue_tx_conn = ranked_queue_tx.clone();
         let db_url_conn = db_url.clone();
         let db_secret_conn = db_secret.clone();
+        let server_release_id = server_release_id.clone();
+        let reconnect_url = reconnect_url.clone();
+        let owner_maps_url = owner_maps_url.clone();
+        let accepting_new_lobbies_conn = Arc::clone(&accepting_new_lobbies);
         tokio::spawn(async move {
             let _connection_permit = permit;
             let session_id = next_session_id();
@@ -2074,20 +2118,19 @@ async fn main() {
             );
 
             let (direct_tx, mut direct_rx) = mpsc::channel::<Vec<u8>>(4096);
-
-            // Send immediate single-cast LobbiesBroadcast snapshot on connection so the home menu loads instantly
-            {
-                let games_guard = games_state_conn.lock().await;
-                let lobbies_info = build_lobby_broadcast(&games_guard);
-                let broadcast_msg = ServerLobbiesBroadcastMessage {
-                    lobbies: lobbies_info,
-                };
-                if let Ok(json) = bincode::serialize(
-                    &sow_core::protocol::ServerMessage::LobbiesBroadcast(broadcast_msg),
-                ) {
-                    let _ = direct_tx.try_send(json);
+            let initial_snapshot_sent = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let snapshot_flag = Arc::clone(&initial_snapshot_sent);
+            let snapshot_games = Arc::clone(&games_state_conn);
+            let snapshot_tx = direct_tx.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(250)).await;
+                if !snapshot_flag.swap(true, Ordering::Relaxed) {
+                    let games = snapshot_games.lock().await;
+                    if let Some(bytes) = initial_lobbies_snapshot(&games) {
+                        let _ = snapshot_tx.try_send(bytes);
+                    }
                 }
-            }
+            });
 
             let mut my_lobby_id: Option<u64> = None;
             let mut my_player_id: Option<u16> = None;
@@ -2102,9 +2145,45 @@ async fn main() {
                                     let data = msg.into_data();
 
                                     if let Ok(msg) = bincode::deserialize::<sow_core::protocol::ClientMessage>(&data) {
+                                        if !matches!(&msg, sow_core::protocol::ClientMessage::RequestServerOwner)
+                                            && !initial_snapshot_sent.swap(true, Ordering::Relaxed)
+                                        {
+                                            let games = games_state_conn.lock().await;
+                                            if let Some(bytes) = initial_lobbies_snapshot(&games) {
+                                                let _ = direct_tx.try_send(bytes);
+                                            }
+                                        }
                                         match msg {
+                                            sow_core::protocol::ClientMessage::RequestServerOwner => {
+                                                let owner = sow_core::protocol::ServerMessage::ServerOwner {
+                                                    release_id: server_release_id.clone(),
+                                                    gameplay_identity: sow_core::protocol::gameplay_build_identity(),
+                                                    reconnect_url: reconnect_url.clone(),
+                                                    maps_url: owner_maps_url.clone(),
+                                                };
+                                                if let Ok(bytes) = bincode::serialize(&owner) {
+                                                    let _ = direct_tx.try_send(bytes);
+                                                }
+                                                if !initial_snapshot_sent.swap(true, Ordering::Relaxed) {
+                                                    let games = games_state_conn.lock().await;
+                                                    if let Some(bytes) = initial_lobbies_snapshot(&games) {
+                                                        let _ = direct_tx.try_send(bytes);
+                                                    }
+                                                }
+                                            }
                                             sow_core::protocol::ClientMessage::JoinWithAuth { join, auth } => {
                                                 let payload = *join;
+                                                if payload.target_lobby_id.is_none()
+                                                    && !accepting_new_lobbies_conn.load(Ordering::Relaxed)
+                                                {
+                                                    let fail = sow_core::protocol::ServerJoinFailedMessage {
+                                                        reason: "SERVER_DRAINING".to_string(),
+                                                    };
+                                                    if let Ok(bytes) = bincode::serialize(&sow_core::protocol::ServerMessage::JoinFailed(fail)) {
+                                                        let _ = direct_tx.try_send(bytes);
+                                                    }
+                                                    continue;
+                                                }
                                                 let server_version = sow_core::protocol::gameplay_build_identity();
                                                 if payload.build_version != server_version {
                                                     log::warn!("Client version mismatch: expected {}, got {}", server_version, payload.build_version);
@@ -2373,13 +2452,16 @@ async fn main() {
                 let _ = ranked_queue_tx_conn.send(RankedQueueMessage::Cancel { account_id, session_id }).await;
             }
             if let (Some(l_id), Some(p_id)) = (my_lobby_id, my_player_id) {
-                let _ = ev_tx
-                    .send(ServerEvent::Leave {
-                        lobby_id: l_id,
-                        player_id: p_id,
-                        session_id,
-                    })
-                    .await;
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(30)).await;
+                    let _ = ev_tx
+                        .send(ServerEvent::Leave {
+                            lobby_id: l_id,
+                            player_id: p_id,
+                            session_id,
+                        })
+                        .await;
+                });
             }
         });
     }
@@ -2388,6 +2470,7 @@ async fn main() {
 #[derive(Clone)]
 struct AppState {
     games: Arc<Mutex<Vec<lobby::ServerLobby>>>,
+    accepting_new_lobbies: Arc<AtomicBool>,
     identity: identity::IdentityState,
     maps_root: PathBuf,
     db_url: String,
@@ -2395,6 +2478,38 @@ struct AppState {
     replay_verification: Arc<Semaphore>,
     verified_prefix: Arc<verification::Sessions>,
     replay_http: reqwest::Client,
+}
+
+async fn generation_status_handler(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> impl axum::response::IntoResponse {
+    let games = state.games.lock().await;
+    let occupied_lobbies = games.iter().filter(|lobby| {
+        lobby.players.iter().any(|player| player.session_id.is_some() && !player.is_internal_bot)
+    }).count();
+    let occupied_players = games.iter().map(|lobby| {
+        lobby.players.iter().filter(|player| player.session_id.is_some() && !player.is_internal_bot).count()
+    }).sum::<usize>();
+    let accepting_new_lobbies = state.accepting_new_lobbies.load(Ordering::Relaxed);
+    axum::response::Json(serde_json::json!({
+        "occupied_lobbies": occupied_lobbies,
+        "occupied_players": occupied_players,
+        "accepting_new_lobbies": accepting_new_lobbies
+    }))
+}
+
+async fn generation_drain_handler(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> impl axum::response::IntoResponse {
+    state.accepting_new_lobbies.store(false, Ordering::Relaxed);
+    axum::response::Json(serde_json::json!({"accepting_new_lobbies": false}))
+}
+
+async fn generation_activate_handler(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> impl axum::response::IntoResponse {
+    state.accepting_new_lobbies.store(true, Ordering::Relaxed);
+    axum::response::Json(serde_json::json!({"accepting_new_lobbies": true}))
 }
 
 #[derive(serde::Deserialize)]

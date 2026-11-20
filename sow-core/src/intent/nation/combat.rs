@@ -154,6 +154,48 @@ fn campaign_attacks_players(
 }
 
 impl SowEngine {
+    /// O(1) zero-allocation prize & defense estimate from pre-aggregated buildings.
+    #[inline(always)]
+    fn ai_capturable_structure_prize(&self, target_id: u16) -> (f64, u32) {
+        let Some(agg) = self.building_aggregates.get(usize::from(target_id)) else {
+            return (0.0, 0);
+        };
+        let prize = 45.0 * f64::from(agg.count_city)
+            + 25.0 * f64::from(agg.city_levels)
+            + 35.0 * f64::from(agg.count_factory)
+            + 20.0 * f64::from(agg.factory_levels)
+            + 30.0 * f64::from(agg.count_port)
+            + 15.0 * f64::from(agg.port_levels)
+            + 20.0 * f64::from(agg.count_farm)
+            + 10.0 * f64::from(agg.farm_levels);
+        (prize, agg.tower_levels)
+    }
+
+    /// O(1) zero-allocation prey score: prioritizes high tile+building yield per
+    /// effective defending troop, tribes as map food, and depleted/disconnected targets.
+    #[inline(always)]
+    fn ai_target_prey_score(&self, attacker_troops: f64, target_id: u16) -> f64 {
+        let Some(target) = self.state.player(target_id) else {
+            return -1.0;
+        };
+        let (prize_tiles, tower_levels) = self.ai_capturable_structure_prize(target_id);
+        let target_troops = target.troops.max(0.0);
+        let effective_troops =
+            target_troops.max(25.0) * (1.0 + 0.15 * f64::from(tower_levels));
+        let base_yield = (f64::from(target.tile_count.max(1)) + prize_tiles) / effective_troops;
+        let depletion = (1.0 - (target_troops / target.max_troops.max(1.0))).clamp(0.0, 1.0);
+        let mut mult = 1.0 + depletion;
+        if target.player_type == crate::player::PlayerType::Bot {
+            mult *= 2.25;
+        } else if prize_tiles == 0.0 || target_troops > attacker_troops * 0.65 {
+            mult *= 0.25;
+        }
+        if target.disconnected {
+            mult *= 1.35;
+        }
+        base_yield * mult
+    }
+
     pub(crate) fn naval_target_allowed(&self, attacker_id: u16, target_id: u16) -> bool {
         if attacker_id == target_id {
             return false;
@@ -995,19 +1037,44 @@ impl SowEngine {
                         .next_int(0, 3)
                         == 0;
                 let ghost_tribe_target = if ghost_tribe_bypass {
-                    attackable_targets
-                        .iter()
-                        .copied()
-                        .filter(|target_id| {
-                            self.state.player(*target_id).is_some_and(|target| {
-                                target.player_type == crate::player::PlayerType::Bot
+                    let mut best: Option<(u16, f64)> = None;
+                    for &target_id in &attackable_targets {
+                        if self.state.player(target_id).is_some_and(|target| {
+                            target.player_type == crate::player::PlayerType::Bot
+                        }) {
+                            let score = self.ai_target_prey_score(troops, target_id);
+                            if best.is_none_or(|(bid, bscore)| {
+                                score > bscore || (score == bscore && target_id < bid)
+                            }) {
+                                best = Some((target_id, score));
+                            }
+                        }
+                    }
+                    best.map(|(id, _)| id)
+                } else if policy.uses_tribe_bypass
+                    && !trigger_met
+                    && defender_target.is_none()
+                    && slot.ghost_retaliation.is_none()
+                    && campaign_target.is_none()
+                    && !assault_controls_attacks
+                {
+                    let mut best: Option<(u16, f64)> = None;
+                    for &target_id in &attackable_targets {
+                        let (prize_tiles, _) = self.ai_capturable_structure_prize(target_id);
+                        if prize_tiles > 0.0
+                            && self.state.player(target_id).is_some_and(|target| {
+                                target.troops.max(0.0) <= troops * 0.25
                             })
-                        })
-                        .min_by(|a, b| {
-                            let a_troops = self.state.player(*a).map_or(f64::MAX, |p| p.troops);
-                            let b_troops = self.state.player(*b).map_or(f64::MAX, |p| p.troops);
-                            a_troops.total_cmp(&b_troops).then_with(|| a.cmp(b))
-                        })
+                        {
+                            let score = self.ai_target_prey_score(troops, target_id);
+                            if best.is_none_or(|(bid, bscore)| {
+                                score > bscore || (score == bscore && target_id < bid)
+                            }) {
+                                best = Some((target_id, score));
+                            }
+                        }
+                    }
+                    best.map(|(id, _)| id)
                 } else {
                     None
                 };
@@ -1206,18 +1273,12 @@ impl SowEngine {
                 } else if !attackable_targets.is_empty() && troops >= max_troops * trigger_ratio {
                     let target_owner = if bot_iq >= 130 {
                         let mut best_target = attackable_targets[0];
-                        for &t_id in &attackable_targets {
-                            if let (Some(p_t), Some(p_b)) =
-                                (self.state.player(t_id), self.state.player(best_target))
-                            {
-                                let t_is_tribe = p_t.player_type == crate::player::PlayerType::Bot;
-                                let b_is_tribe = p_b.player_type == crate::player::PlayerType::Bot;
-
-                                if (t_is_tribe && !b_is_tribe)
-                                    || (t_is_tribe == b_is_tribe && p_t.troops < p_b.troops)
-                                {
-                                    best_target = t_id;
-                                }
+                        let mut best_score = self.ai_target_prey_score(troops, best_target);
+                        for &t_id in &attackable_targets[1..] {
+                            let score = self.ai_target_prey_score(troops, t_id);
+                            if score > best_score {
+                                best_score = score;
+                                best_target = t_id;
                             }
                         }
                         best_target
@@ -1311,10 +1372,7 @@ impl SowEngine {
                 // window applies everywhere (tribes are the map's food).
                 let is_team_game = self.state.config.game_mode != "FFA";
                 let ghost_tribe_subtrigger_attack = policy.uses_tribe_bypass
-                    && ghost_tribe_bypass
-                    && self.state.player(target_owner).is_some_and(|target| {
-                        target.player_type == crate::player::PlayerType::Bot
-                    });
+                    && ghost_tribe_target.is_some_and(|id| id == target_owner);
                 if !is_neutral
                     && !is_defending
                     && bot_iq >= 130
@@ -1347,12 +1405,22 @@ impl SowEngine {
                         || (affordable >= target_troops * 0.20 && target_troops < troops)
                     {
                         Some(affordable)
-                    } else if let Some(tribe_alt) = targets.iter().copied().find(|id| {
-                        self.state
-                            .player(*id)
-                            .map(|p| p.player_type == crate::player::PlayerType::Bot)
-                            .unwrap_or(false)
-                    }) {
+                    } else if let Some(tribe_alt) = {
+                        let mut best: Option<(u16, f64)> = None;
+                        for &id in &targets {
+                            if self
+                                .state
+                                .player(id)
+                                .is_some_and(|p| p.player_type == crate::player::PlayerType::Bot)
+                            {
+                                let score = self.ai_target_prey_score(troops, id);
+                                if best.is_none_or(|(_, bscore)| score > bscore) {
+                                    best = Some((id, score));
+                                }
+                            }
+                        }
+                        best.map(|(id, _)| id)
+                    } {
                         // Odds-locked player target (FFA): swing at a tribe
                         // neighbor instead of banking — the attrition war on
                         // tribes is always open, and picking a locked target
@@ -1780,7 +1848,7 @@ impl SowEngine {
                     continue;
                 }
 
-                let (category, strength) = if target_owner == 0 {
+                let (category, neg_prey_score) = if target_owner == 0 {
                     (0, 0.0)
                 } else {
                     let target = self.state.player(target_owner).unwrap();
@@ -1796,29 +1864,30 @@ impl SowEngine {
                         } else {
                             1
                         },
-                        target.troops.max(0.0),
+                        -self.ai_target_prey_score(troops, target_owner),
                     )
                 };
                 let distance = (source_tile % self.state.map.width)
                     .abs_diff(target_tile % self.state.map.width)
                     + (source_tile / self.state.map.width)
                         .abs_diff(target_tile / self.state.map.width);
+                let distance_band = distance / 8;
                 let is_better = chosen.is_none_or(
-                    |(best_category, best_distance, best_strength, best_tile, _, _)| {
+                    |(best_category, best_band, best_neg_score, best_tile, _, _)| {
                         category < best_category
                             || (category == best_category
-                                && (distance < best_distance
-                                    || (distance == best_distance
-                                        && (strength.total_cmp(&best_strength).is_lt()
-                                            || (strength == best_strength
+                                && (distance_band < best_band
+                                    || (distance_band == best_band
+                                        && (neg_prey_score.total_cmp(&best_neg_score).is_lt()
+                                            || (neg_prey_score == best_neg_score
                                                 && target_tile < best_tile)))))
                     },
                 );
                 if is_better {
                     chosen = Some((
                         category,
-                        distance,
-                        strength,
+                        distance_band,
+                        neg_prey_score,
                         target_tile,
                         target_owner,
                         send,

@@ -2313,6 +2313,10 @@ fn copy_portal_maps(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
         if map.is_file() {
             fs::copy(&map, out_dir.join("map.bin.br"))?;
         }
+        let custom_preview = entry.path().join("custom-preview.webp");
+        if custom_preview.is_file() {
+            fs::copy(&custom_preview, out_dir.join("custom-preview.webp"))?;
+        }
         let thumbnail = entry.path().join("thumbnail.webp");
         let preview = entry.path().join("preview.webp");
         if thumbnail.is_file() {
@@ -2407,7 +2411,7 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path, pipeline: &ArtPi
             .and_then(|map| map.get("source"))
             .and_then(|source| source.as_str());
 
-        if let (Some(frame), Some(source)) = (frame, source) {
+        let authored_frame = if let (Some(frame), Some(source)) = (frame, source) {
             let source_path = map_sources.join(source);
             if !rendered_sources.contains_key(&source_path) {
                 let rendered = sow_map::render_source_file(&source_path).map_err(|error| {
@@ -2420,16 +2424,42 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path, pipeline: &ArtPi
                 .expect("source inserted above");
             sow_map::write_rendered_source_thumbnail(rendered, frame, &raw_render)
                 .map_err(|error| anyhow::anyhow!("write {} thumbnail: {error}", dir.display()))?;
+            Some((rendered, frame))
         } else {
             sow_map::write_map_thumbnail(&map, &raw_render)
                 .map_err(|error| anyhow::anyhow!("write {} thumbnail: {error}", dir.display()))?;
-        }
+            None
+        };
         // Both derivatives come from the same fresh render, so portal compression never
         // compounds the map preview's lossy WebP encoding.
         let preview = dir.join("preview.webp");
         let thumbnail = dir.join("thumbnail.webp");
         pipeline.publish_image(&raw_render, &preview, "map_preview", None, None)?;
         pipeline.publish_image(&raw_render, &thumbnail, "map_thumbnail", None, None)?;
+
+        // Baja's world-atlas frame is too small for a detailed selector preview.
+        let custom_render = match authored_frame {
+            Some((rendered, frame)) if entry.file_name() != "bajacalifornia" => {
+                sow_map::sample_source_frame(rendered, frame)
+            }
+            _ => sow_map::render_terrain_image(map.width, map.height, &map.terrain),
+        };
+        let custom_render = image::DynamicImage::ImageRgba8(custom_render);
+        let custom_render = if custom_render.width().max(custom_render.height()) > 1024 {
+            custom_render.resize(1024, 1024, image::imageops::FilterType::Lanczos3)
+        } else {
+            custom_render
+        };
+        custom_render
+            .save(&raw_render)
+            .with_context(|| format!("render custom preview for {}", dir.display()))?;
+        pipeline.publish_image(
+            &raw_render,
+            &dir.join("custom-preview.webp"),
+            "map_custom_preview",
+            None,
+            None,
+        )?;
         fs::remove_file(raw_render)?;
     }
     Ok(())
@@ -2438,7 +2468,10 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path, pipeline: &ArtPi
 fn thumbnail_cache_bust(maps_root: &Path) -> Result<String> {
     let mut files = fs::read_dir(maps_root)?
         .filter_map(|entry| entry.ok())
-        .flat_map(|entry| ["thumbnail.webp", "preview.webp"].map(|name| entry.path().join(name)))
+        .flat_map(|entry| {
+            ["thumbnail.webp", "preview.webp", "custom-preview.webp"]
+                .map(|name| entry.path().join(name))
+        })
         .filter(|path| path.is_file())
         .collect::<Vec<_>>();
     files.sort();

@@ -3631,4 +3631,20 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
+  #sow-menu .sow-menu__reward-card {
+    box-shadow:
+      0 8px 20px rgba(0, 0, 0, 0.68),
+      0 0 16px var(--reward-glow),
+      inset 0 1px rgba(255, 255, 255, 0.14);
+  }
+  #sow-menu .sow-menu__reward-medallion {
+    box-shadow:
+      0 0 0 4px rgba(255, 255, 255, 0.04),
+      0 0 16px var(--reward-glow),
+      inset 0 0 12px var(--reward-glow);
+  }
+  #sow-menu .sow-menu__reward-medallion::before {
+    display: none;
+    animation: none;
+  }
 }

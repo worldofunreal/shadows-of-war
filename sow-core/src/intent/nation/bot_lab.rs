@@ -2746,8 +2746,9 @@ fn s16_checkpoint_decision_and_state_reference() {
     // Combat/build fingerprints include neutral-first Tribe targeting,
     // Ghost-only below-trigger Tribe attacks and equal elite economy priority.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 14_461_527_465_065_729_842),
-        (372, 5_634_585_296_377_643_087),
+        (250, 13_065_536_823_268_434_252),
+        (500, 8_113_756_389_922_810_381),
+        (677, 16_294_603_307_638_227_529),
     ];
     assert_eq!(
         checkpoints,
@@ -2771,15 +2772,10 @@ fn historical_s16_building_rules_keep_recorded_results() {
     // Historical buildings with current AI tuning and the linear 8-to-36 finish
     // threshold. Fingerprints include the AI policies noted above.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 8_041_180_051_744_791_537),
-        (500, 17_471_609_105_312_756_664),
-        (750, 12_487_642_550_425_394_505),
-        (1000, 1_428_277_517_039_172_483),
-        (1250, 6_553_211_344_018_676_035),
-        (1500, 250_236_741_886_633_545),
-        (1750, 11_964_597_755_233_964_231),
-        (2000, 6_008_221_631_658_316_717),
-        (2102, 237_313_664_713_283_067),
+        (250, 14_257_009_122_846_279_845),
+        (500, 17_739_874_350_524_378_082),
+        (750, 12_612_886_449_189_103_875),
+        (926, 13_774_546_949_458_673_770),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

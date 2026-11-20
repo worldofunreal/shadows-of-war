@@ -8,6 +8,7 @@
 struct BrowserViewport {
     width: f64,
     height: f64,
+    raw_device_pixel_ratio: f64,
     device_pixel_ratio: f64,
 }
 
@@ -24,6 +25,7 @@ fn read_browser_viewport() -> BrowserViewport {
         return BrowserViewport {
             width: 800.0,
             height: 600.0,
+            raw_device_pixel_ratio: 1.0,
             device_pixel_ratio: 1.0,
         };
     };
@@ -53,6 +55,7 @@ fn read_browser_viewport() -> BrowserViewport {
     BrowserViewport {
         width,
         height,
+        raw_device_pixel_ratio: raw_dpr,
         device_pixel_ratio: dpr,
     }
 }
@@ -72,7 +75,7 @@ fn browser_viewport() -> BrowserViewport {
     })
 }
 
-fn invalidate_viewport_cache() {
+pub(crate) fn invalidate_viewport_cache() {
     VIEWPORT_CACHE.with(|cache| cache.set(None));
 }
 
@@ -98,6 +101,15 @@ pub fn physical_viewport_size() -> (u32, u32) {
 
 pub fn device_pixel_ratio() -> f64 {
     browser_viewport().device_pixel_ratio
+}
+
+pub(crate) fn input_coordinate_scale() -> f64 {
+    let viewport = browser_viewport();
+    if viewport.raw_device_pixel_ratio > 0.0 {
+        viewport.device_pixel_ratio / viewport.raw_device_pixel_ratio
+    } else {
+        1.0
+    }
 }
 
 pub fn has_mobile_pointer() -> bool {

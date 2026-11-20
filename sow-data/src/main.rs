@@ -1923,6 +1923,7 @@ async fn main() {
             post(handle_event).layer(DefaultBodyLimit::max(MAX_ANALYTICS_REQUEST_BYTES)),
         )
         .route("/internal/match-id-seed", get(handle_match_id_seed))
+        .route("/internal/release-work/{release_id}", get(handle_release_work))
         .route("/profile", get(handle_get_profile))
         .route("/auth/playgames/exchange", post(handle_playgames_exchange))
         .route("/auth/playgames/consume", post(handle_playgames_consume))
@@ -3912,10 +3913,13 @@ async fn handle_match_id_seed(
         )
             .into_response();
     }
-    match state.db.next_match_id_seed() {
-        Ok(next_match_id) => (
+    match state.db.reserve_match_id_range() {
+        Ok((next_match_id, reserved_through)) => (
             StatusCode::OK,
-            Json(serde_json::json!({"next_match_id":next_match_id})),
+            Json(serde_json::json!({
+                "next_match_id": next_match_id,
+                "reserved_through": reserved_through
+            })),
         )
             .into_response(),
         Err(error) => {
@@ -3925,6 +3929,28 @@ async fn handle_match_id_seed(
                 Json(serde_json::json!({"error":"match IDs unavailable"})),
             )
                 .into_response()
+        }
+    }
+}
+
+async fn handle_release_work(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(release_id): Path<String>,
+) -> impl IntoResponse {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error":"Unauthorized"}))).into_response();
+    }
+    if release_id.is_empty() || release_id.len() > 128
+        || !release_id.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"invalid release id"}))).into_response();
+    }
+    match state.db.outstanding_release_matches(&release_id) {
+        Ok(outstanding_matches) => (StatusCode::OK, Json(serde_json::json!({"outstanding_matches": outstanding_matches}))).into_response(),
+        Err(error) => {
+            error!("release work status unavailable for {release_id}: {error}");
+            (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"release work status unavailable"}))).into_response()
         }
     }
 }

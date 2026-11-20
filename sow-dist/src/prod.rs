@@ -366,7 +366,12 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
     // simulation_rules_id, so a replacement verifier cannot process another version.
     // Keep relay-only deploys nonblocking; remove this backend drain only after
     // version-aware routing keeps each old immutable verifier alive through settlement.
-    let require_empty = plan.server || plan.database || plan.maps || plan.ops;
+    // The first generation-aware activation must drain once: the currently
+    // installed client/server cannot route a reconnect back to an owner.
+    let generation_routing_ready = !(plan.server || plan.maps || plan.ops)
+        || has_active_server_generation(&config)?;
+    let require_empty = plan.database || plan.ops
+        || ((plan.server || plan.maps) && !generation_routing_ready);
     let activate = || {
         println!("==> 6/8 Activate changed components only");
         // A first activation has no relay to pause and no matches to drain.
@@ -407,7 +412,7 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
     if let Err(error) = result {
         // A live match keeps its own process; a backend restore waits for an empty relay.
         let rollback = (|| -> Result<()> {
-            if opened_local && require_empty {
+            if opened_local && (plan.database || plan.ops) {
                 local.drain(&config, true)?;
                 let deadline = std::time::Instant::now() + std::time::Duration::from_secs(240);
                 loop {
@@ -437,6 +442,15 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
     retain_local_builds(paths)?;
     println!("✅ {} {} ready as {}", site::current().label(), release.version, release.id);
     Ok(())
+}
+
+fn has_active_server_generation(config: &Config) -> Result<bool> {
+    let marker = format!("{}/active-generation", site::current().release_root());
+    let result = output(
+        "ssh",
+        &[&config.control_host, &format!("sudo test -s {} && echo yes || echo no", shell_quote(&marker))],
+    )?;
+    Ok(result.trim() == "yes")
 }
 
 fn verify_ionos_runtime(config: &Config, release: &Release, plan: &ComponentPlan) -> Result<()> {
@@ -1486,6 +1500,10 @@ fn assemble_release(paths: &Paths, web: &Path, binaries: &Path, version: &str) -
         &paths.root.join("sow-dist/deploy/freebsd/snippets"),
         &work.join("ops/snippets"),
     )?;
+    copy_dir(
+        &paths.root.join("sow-dist/deploy/freebsd/periodic"),
+        &work.join("ops/periodic"),
+    )?;
     let (relay_component, relay_manifest) = package_relay(paths, binaries, &work)?;
 
     let nginx_source = paths
@@ -1730,15 +1748,19 @@ done"#
 
 fn maps_catalog_path_drift(config: &Config) -> Result<bool> {
     let expected = env_or("SOW_MAPS_CATALOG_PATH", "/var/db/sow/server/catalog.bin");
-    let remote = output(
-        "ssh",
-        &[
-            &config.control_host,
-            r#"for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do if sudo test -f "$f"; then sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{print $2}' "$f"; fi; done"#,
-        ],
-    )?;
-    let values = remote.lines().map(str::trim).collect::<Vec<_>>();
-    Ok(values.len() != 3 || values.iter().any(|value| *value != expected))
+    let expected = shell_quote(&expected);
+    let remote = format!(
+        r#"host=$(sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{{print substr($0,index($0,"=")+1)}}' __SITE_HOST_ETC__/sow.env)
+server=$(sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{{print substr($0,index($0,"=")+1)}}' __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env)
+database=$(sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{{print substr($0,index($0,"=")+1)}}' __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env)
+active=$(sudo cat __SITE_RELEASE_ROOT__/active-generation 2>/dev/null || true)
+if [ "$host" != {expected} ] || [ "$database" != {expected} ]; then echo drift
+elif [ -n "$active" ] && [ "$server" = "/var/db/sow/server/generations/$active/catalog.bin" ]; then echo clean
+elif [ -z "$active" ] && [ "$server" = {expected} ]; then echo clean
+else echo drift; fi"#,
+        expected = expected
+    );
+    Ok(output("ssh", &[&config.control_host, &remote])?.trim() == "drift")
 }
 
 fn auth_config_drift(config: &Config) -> Result<bool> {
@@ -1834,7 +1856,7 @@ fn activate_control_host(
     let target = format!("{}/{}", remote_releases(), release.id);
     let server_restart = plan.server || plan.maps || plan.ops;
     let db_restart = plan.database || plan.ops;
-    let nginx_reload = plan.ops;
+    let nginx_reload = plan.ops || server_restart;
     let runtime_env = plan.server || plan.database || plan.ops;
     let (db_secret_file, control_secret_file) = if runtime_env {
         let db_secret = env::var("SOW_DB_SECRET")?;
@@ -2034,7 +2056,7 @@ fi"#
         }
     }
     if resolver_update.is_empty() { resolver_update.push(':'); }
-    let config_files = "__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database";
+    let config_files = format!("__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database /usr/local/etc/nginx/{}sow-server-active-ws.map /usr/local/etc/nginx/{}sow-server-active-http.map {}/active-generation /usr/local/etc/periodic/hourly/530.sow-server-generations", site::current().map_prefix(), site::current().map_prefix(), site::current().release_root());
     let env_backups = if runtime_env {
         format!(r#"backup=$(sudo mktemp -d /tmp/sow-config-backup.XXXXXX)
 for f in {config_files}; do
@@ -2057,16 +2079,21 @@ fi"#)
 old=$(sudo readlink __SITE_RELEASE_ROOT__/current 2>/dev/null || true)
 target=__TARGET__
 stage=__STAGE__
+legacy_service=false
 backup=
 backup_ready=false
 rollback() {
     trap - EXIT
     set +e
     __ENV_RESTORE__
+    if [ -n "${previous_generation:-}" ] && [ -n "${http_map:-}" ]; then
+        old_http_port=$(sudo awk -F '"' -v id="$previous_generation" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
+        if [ -n "$old_http_port" ]; then curl -fsS --max-time 5 -X POST "http://__SITE_LOOPBACK__:$old_http_port/internal/generation-activate" >/dev/null 2>&1 || true; fi
+    fi
     sudo rm -f __SITE_RELEASE_ROOT__/current
     if [ -n "$old" ]; then sudo ln -s "$old" __SITE_RELEASE_ROOT__/current; fi
     if __DB_RESTART__; then sudo jexec __SITE_DATABASE_JAIL__ service sow_database restart || true; fi
-    if __SERVER_RESTART__; then sudo jexec __SITE_SERVER_JAIL__ service sow_server restart || true; fi
+    if __NGINX_RELOAD__; then sudo nginx -t >/dev/null 2>&1 && sudo service nginx reload >/dev/null 2>&1 || true; fi
     __SECRET_CLEANUP__
     exit 78
 }
@@ -2083,25 +2110,6 @@ else
     sudo chmod 0550 "$pending"/bin/*
     sudo mv "$pending" "$target"
 fi
-# Only a previous release has a running server and verifier checkpoints to retire.
-if __SERVER_RESTART__ && [ -n "$old" ]; then
-    sudo jexec __SITE_SERVER_JAIL__ service sow_server stop || rollback
-    if ! sudo jexec __SITE_SERVER_JAIL__ /bin/sh -s <<'ARCHIVE_SETTLED_STATES'
-set -eu
-. /usr/local/etc/sow/sow.env
-root=${SOW_VERIFIER_DIR:-$(dirname "$SOW_MAPS_CATALOG_PATH")/verified}
-archive="$root/retired_$(date +%s)"
-created=false
-for file in "$root"/*.checkpoint "$root"/*.checkpoint.previous; do
-    [ -f "$file" ] || continue
-    if [ "$created" = false ]; then mkdir -m 0700 "$archive"; created=true; fi
-    mv "$file" "$archive/"
-done
-ARCHIVE_SETTLED_STATES
-    then
-        rollback
-    fi
-fi
 __ENV_BACKUPS__
 sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_server" __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server
 sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_database" __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database
@@ -2109,6 +2117,13 @@ link="__SITE_RELEASE_ROOT__/.current.$$"
 sudo ln -s "releases/__ID__" "$link"
 sudo mv -hf "$link" __SITE_RELEASE_ROOT__/current
 if __NGINX_RELOAD__; then
+    sudo install -d -m 0755 /usr/local/etc/nginx
+    for suffix in active-ws active-http ws http; do
+        route_map="/usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-$suffix.map"
+        if ! sudo test -f "$route_map"; then
+            sudo install -o root -g wheel -m 0644 /dev/null "$route_map"
+        fi
+    done
     for f in "$target"/ops/conf.d/*; do
         [ -f "$f" ] || continue
         dest="/usr/local/etc/nginx/conf.d/$(basename "$f")"
@@ -2120,6 +2135,12 @@ if __NGINX_RELOAD__; then
         dest="/usr/local/etc/nginx/snippets/$(basename "$f")"
         if sudo test -f "$dest"; then sudo cp -p "$dest" "$dest.bak_$(date +%s)"; fi
         sudo install -o root -g wheel -m 0644 "$f" "$dest"
+    done
+    for f in "$target"/ops/periodic/hourly/*; do
+        [ -f "$f" ] || continue
+        dest="/usr/local/etc/periodic/hourly/$(basename "$f")"
+        sudo install -d -o root -g wheel -m 0755 /usr/local/etc/periodic/hourly
+        sudo install -o root -g wheel -m 0555 "$f" "$dest"
     done
     dest=/etc/periodic.conf.local
     if [ "$(sudo sysrc -n -f "$dest" weekly_certbot_enable 2>/dev/null || true)" != YES ] \
@@ -2134,7 +2155,6 @@ if __NGINX_RELOAD__; then
     fi
     sudo service cron onestatus >/dev/null 2>&1 || sudo service cron onestart
     sudo nginx -t || rollback
-    sudo service nginx reload || rollback
 fi
 __ENV_UPDATE__
 __AUTH_UPDATE__
@@ -2152,9 +2172,11 @@ if __DB_RESTART__; then
         sleep 1
     done
 fi
-if __SERVER_RESTART__; then sudo jexec __SITE_SERVER_JAIL__ service sow_server restart || rollback; fi
+__SERVER_ACTIVATE__
 if ! sudo jexec __SITE_DATABASE_JAIL__ service sow_database status >/dev/null 2>&1; then rollback; fi
-if ! sudo jexec __SITE_SERVER_JAIL__ service sow_server status >/dev/null 2>&1; then rollback; fi
+if __SERVER_RESTART__ && ! sudo jexec __SITE_SERVER_JAIL__ /usr/local/etc/rc.d/sow_server status_generation "$(sudo cat __SITE_RELEASE_ROOT__/active-generation)"; then rollback; fi
+if __NGINX_RELOAD__; then sudo service nginx reload || rollback; fi
+if [ "$legacy_service" = true ]; then sudo jexec __SITE_SERVER_JAIL__ service sow_server stop >/dev/null 2>&1 || true; fi
 __SECRET_CLEANUP__
 "#,
     );
@@ -2162,6 +2184,7 @@ __SECRET_CLEANUP__
         ("__TARGET__", shell_quote(&target)),
         ("__STAGE__", shell_quote(&stage)),
         ("__RELEASES__", shell_quote(&remote_releases())),
+        ("__SITE_MAP_PREFIX__", site::current().map_prefix().to_string()),
         ("__ID__", release.id.clone()),
         (
             "__DB_RESTART__",
@@ -2205,12 +2228,100 @@ __SECRET_CLEANUP__
             },
         ),
         ("__SECRET_CLEANUP__", secret_cleanup),
+        (
+            "__SERVER_ACTIVATE__",
+            if server_restart {
+                server_generation_activation(release)
+            } else {
+                ":".to_string()
+            },
+        ),
     ];
     for (token, value) in replacements {
         remote = remote.replace(token, &value);
     }
     run("ssh", &[&config.control_host, &remote], Some(&paths.root))
         .context("granular control-host activation failed")
+}
+
+fn server_generation_activation(release: &Release) -> String {
+    let script = r#"if __SERVER_RESTART__; then
+    id=__ID__
+    host=__HOST__
+    loopback=__LOOPBACK__
+    ws_map=/usr/local/etc/nginx/__PREFIX__sow-server-ws.map
+    http_map=/usr/local/etc/nginx/__PREFIX__sow-server-http.map
+    active_ws=/usr/local/etc/nginx/__PREFIX__sow-server-active-ws.map
+    active_http=/usr/local/etc/nginx/__PREFIX__sow-server-active-http.map
+    marker=__SITE_RELEASE_ROOT__/active-generation
+    previous_generation=$(sudo cat "$marker" 2>/dev/null || true)
+    if [ -z "$previous_generation" ]; then legacy_service=true; fi
+    if sudo grep -Fq "\"$id\"" "$ws_map"; then
+        ws_port=$(sudo awk -F '"' -v id="$id" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$ws_map")
+        http_port=$(sudo awk -F '"' -v id="$id" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
+        [ -n "$ws_port" ] && [ -n "$http_port" ] || rollback
+    else
+        ws_port=26600
+        while sudo grep -Eq "\"[^\"]+\"[[:space:]]+$ws_port;" "$ws_map" \
+            || sudo grep -Eq "\"[^\"]+\"[[:space:]]+$((ws_port + 1));" "$http_map" \
+            || sudo sockstat -4l | grep -Eq "[:.]$ws_port([[:space:]]|$)" \
+            || sudo sockstat -4l | grep -Eq "[:.]$((ws_port + 1))([[:space:]]|$)"; do
+            ws_port=$((ws_port + 2))
+            [ "$ws_port" -lt 65000 ] || rollback
+        done
+        http_port=$((ws_port + 1))
+    fi
+    generation_dir=/var/db/sow/server/generations/$id
+    env_file=/usr/local/etc/sow/generations/$id.env
+    sudo jexec __SITE_SERVER_JAIL__ install -d -o sowserver -g sow -m 0750 "$generation_dir/verified"
+    sudo jexec __SITE_SERVER_JAIL__ install -d -o root -g wheel -m 0750 /usr/local/etc/sow/generations
+    sudo jexec __SITE_SERVER_JAIL__ cp /usr/local/etc/sow/sow.env "$env_file"
+    sudo jexec __SITE_SERVER_JAIL__ sh -c 'printf "%s\n" \
+        "SOW_SERVER_RELEASE_ID=$1" \
+        "SOW_WS_LISTEN=$2:$3" \
+        "SOW_MAPS_HTTP_LISTEN=$2:$4" \
+        "SOW_SERVER_HTTP_URL=http://$2:$4" \
+        "SOW_MAPS_ROOT=/srv/sow/releases/$1/maps" \
+        "SOW_MAPS_CATALOG_PATH=/var/db/sow/server/generations/$1/catalog.bin" \
+        "SOW_VERIFIER_DIR=/var/db/sow/server/generations/$1/verified" \
+        "SOW_SERVER_OWNER_WS_URL=wss://$5/ws/release/$1/" \
+        "SOW_SERVER_MAPS_URL=https://$5/maps/release/$1/" >> "$6"' \
+        sh "$id" "$loopback" "$ws_port" "$http_port" "$host" "$env_file"
+    sudo jexec __SITE_SERVER_JAIL__ chmod 0600 "$env_file"
+    if ! sudo jexec __SITE_SERVER_JAIL__ /usr/local/etc/rc.d/sow_server status_generation "$id"; then
+        sudo jexec __SITE_SERVER_JAIL__ service sow_server start_generation "$id" "$env_file" "/srv/sow/releases/$id/bin/sow-server" || rollback
+    fi
+    i=0
+    until curl -fsS --max-time 5 "http://$loopback:$http_port/maps/catalog.bin" -o /tmp/sow-catalog-"$id" \
+        && [ -s /tmp/sow-catalog-"$id" ] \
+        && curl -fsS --max-time 5 "http://$loopback:$http_port/internal/generation-status" >/dev/null; do
+        i=$((i + 1))
+        if [ "$i" -ge 180 ]; then rm -f /tmp/sow-catalog-"$id"; rollback; fi
+        sleep 1
+    done
+    rm -f /tmp/sow-catalog-"$id"
+    if [ -n "$previous_generation" ] && [ "$previous_generation" != "$id" ]; then
+        old_http_port=$(sudo awk -F '"' -v id="$previous_generation" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
+        [ -n "$old_http_port" ] || rollback
+        curl -fsS --max-time 5 -X POST "http://$loopback:$old_http_port/internal/generation-drain" >/dev/null || rollback
+    fi
+    sudo sed -i '' "/\"$id\"/d" "$ws_map" "$http_map"
+    sudo sh -c 'printf "\"%s\" %s;\n" "$1" "$2" >> "$3"; printf "\"%s\" %s;\n" "$1" "$4" >> "$5"' sh "$id" "$ws_port" "$ws_map" "$http_port" "$http_map"
+    sudo sed -i '' "/\"$host\"/d" "$active_ws" "$active_http"
+    sudo sh -c 'printf "\"%s\" %s;\n" "$1" "$2" >> "$3"; printf "\"%s\" %s;\n" "$1" "$4" >> "$5"' sh "$host" "$ws_port" "$active_ws" "$http_port" "$active_http"
+    marker_tmp="$marker.$$"
+    printf '%s\n' "$id" | sudo tee "$marker_tmp" >/dev/null
+    sudo mv -f "$marker_tmp" "$marker"
+    sudo jexec __SITE_SERVER_JAIL__ install -o root -g wheel -m 0600 "$env_file" /usr/local/etc/sow/sow.env
+fi"#;
+    script
+        .replace("__ID__", &shell_quote(&release.id))
+        .replace("__HOST__", &shell_quote(site::current().host()))
+        .replace("__LOOPBACK__", &shell_quote(site::current().loopback()))
+        .replace("__PREFIX__", site::current().map_prefix())
+        .replace("__SITE_SERVER_JAIL__", site::current().server_jail())
+        .replace("__SITE_RELEASE_ROOT__", site::current().release_root())
+        .replace("__SERVER_RESTART__", "true")
 }
 
 fn stage_secret(host: &str, secret: &str, remote_path: &str) -> Result<()> {
@@ -2238,7 +2349,17 @@ fail() {
     exit 1
 }
 if ! sudo jexec __SITE_DATABASE_JAIL__ service sow_database status; then fail "database service is not running"; fi
-if ! sudo jexec __SITE_SERVER_JAIL__ service sow_server status; then fail "server service is not running"; fi
+active=$(sudo cat __SITE_RELEASE_ROOT__/active-generation 2>/dev/null || true)
+if [ -n "$active" ]; then
+    server_log=__SITE_LOG_DIR__/server_${active}.log
+    if ! sudo jexec __SITE_SERVER_JAIL__ /usr/local/etc/rc.d/sow_server status_generation "$active"; then fail "active server generation is not running"; fi
+    ws_port=$(sudo awk -F '"' -v host="__SITE_HOST__" '$2 == host { gsub(/[^0-9]/, "", $3); print $3; exit }' /usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-active-ws.map)
+    if [ -z "$ws_port" ] || ! sudo sockstat -4l | grep -q "__SITE_LOOPBACK__:$ws_port"; then fail "active websocket port is not listening"; fi
+else
+    server_log=__SITE_LOG_DIR__/server.log
+    if ! sudo jexec __SITE_SERVER_JAIL__ service sow_server status; then fail "server service is not running"; fi
+    if ! sudo sockstat -4l | grep -q '__SITE_LOOPBACK__:25564'; then fail "server websocket port is not listening"; fi
+fi
 i=0
 until curl -fsS --max-time 5 http://__SITE_LOOPBACK__:25585/healthz >/dev/null; do
     i=$((i+1))
@@ -2247,18 +2368,12 @@ until curl -fsS --max-time 5 http://__SITE_LOOPBACK__:25585/healthz >/dev/null; 
 done
 valkey_url=$(sudo awk -F= '$1=="SOW_VALKEY_URL"{print substr($0,index($0,"=")+1)}' __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env)
 if ! /usr/local/bin/valkey-cli -u "$valkey_url" ping | grep -q PONG; then fail "valkey ping failed"; fi
-j=0
-until sudo sockstat -4l | grep -q '__SITE_LOOPBACK__:25564'; do
-    j=$((j+1))
-    if [ "$j" -ge 180 ]; then fail "server websocket port timeout"; fi
-    sleep 1
-done
 "#,
     );
     if plan.server {
         checks.push_str(
             r#"
-bot_line=$(sudo tail -500 __SITE_LOG_DIR__/server.log | grep '\[BOT_POOL\].*installed with' | tail -1 || true)
+bot_line=$(sudo tail -500 "$server_log" | grep '\[BOT_POOL\].*installed with' | tail -1 || true)
 echo "  $bot_line"
 if ! printf '%s\n' "$bot_line" | grep -Eq 'installed with [1-9][0-9]* identities'; then
     fail "Ghost bot pool was not installed with identities"
@@ -2283,7 +2398,11 @@ sudo service cron onestatus >/dev/null
 /// and the rollback restores the previous release.
 fn verify_map_catalog(config: &Config, release: &Release) -> Result<()> {
     let expected = release_map_count(release)?;
-    let server_log = format!("{}/server.log", site::current().log_dir());
+    let server_log = format!(
+        "{}/server_{}.log",
+        site::current().log_dir(),
+        release.id
+    );
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
     loop {
         let lines = output(
@@ -2345,6 +2464,8 @@ fn retain_releases(config: &Config) -> Result<()> {
     let command = r#"set -eu
 current=$(sudo readlink __SITE_RELEASE_ROOT__/current)
 live=$(sudo jexec __SITE_SERVER_JAIL__ sh -c 'pids=$(pgrep -x sow-relay || true); if [ -n "$pids" ]; then procstat -b $pids; fi' | awk '{ path=$NF; prefix="/srv/sow/releases/"; suffix="/bin/sow-relay"; if (substr(path,1,length(prefix)) == prefix && substr(path,length(path)-length(suffix)+1) == suffix) print "__SITE_RELEASE_ROOT__/releases/" substr(path,length(prefix)+1,length(path)-length(prefix)-length(suffix)); }')
+server_live=$(sudo jexec __SITE_SERVER_JAIL__ sh -c 'pids=$(pgrep -x sow-server || true); if [ -n "$pids" ]; then procstat -b $pids; fi' | awk '{ path=$NF; prefix="/srv/sow/releases/"; suffix="/bin/sow-server"; if (substr(path,1,length(prefix)) == prefix && substr(path,length(path)-length(suffix)+1) == suffix) print "__SITE_RELEASE_ROOT__/releases/" substr(path,length(prefix)+1,length(path)-length(prefix)-length(suffix)); }')
+live=$(printf '%s\n%s\n' "$live" "$server_live")
 i=0
 for dir in $(sudo ls -dt __SITE_RELEASE_ROOT__/releases/* 2>/dev/null || true); do
     i=$((i+1))

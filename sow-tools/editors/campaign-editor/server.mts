@@ -194,14 +194,15 @@ function shellQuote(value) {
 // Water controls for one map; ranges match the sow-tools import-map-source flags.
 function waterArgs(water) {
   if (!water || typeof water !== "object") return null;
-  const { min_lake_tiles, min_island_pixels, smooth_coasts, water_level, connect_diagonals } = water;
+  const { min_lake_tiles, min_island_pixels, min_island_tiles = 0, smooth_coasts, water_level, connect_diagonals } = water;
   const count = (value) => Number.isInteger(value) && value >= 0 && value <= 1_000_000;
-  if (!count(min_lake_tiles) || !count(min_island_pixels)) return null;
+  if (!count(min_lake_tiles) || !count(min_island_pixels) || !count(min_island_tiles)) return null;
   if (typeof smooth_coasts !== "boolean" || typeof connect_diagonals !== "boolean") return null;
   if (typeof water_level !== "number" || !(water_level >= 0.05 && water_level <= 0.95)) return null;
   return [
     "--min-lake-tiles", String(min_lake_tiles),
     "--min-island-pixels", String(min_island_pixels),
+    "--min-island-tiles", String(min_island_tiles),
     "--water-level", String(water_level),
     ...(smooth_coasts ? ["--smooth-coasts"] : []),
     ...(connect_diagonals ? ["--connect-diagonals"] : []),

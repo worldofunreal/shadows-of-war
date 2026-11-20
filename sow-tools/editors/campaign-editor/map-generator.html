@@ -227,9 +227,11 @@
         <div class="hint">Higher widens rivers, lakes and bays. Needs smooth coasts.</div>
         <label class="check"><input id="connect-diagonals" type="checkbox" checked /> Keep rivers connected (boats can pass)</label>
         <label for="min-lake">Smallest lake kept (tiles)</label>
-        <input id="min-lake" type="number" min="0" max="1000000" step="50" value="400" />
+        <input id="min-lake" type="number" min="0" max="1000000" step="1" value="13" />
         <label for="min-island">Smallest island kept (world map pixels)</label>
         <input id="min-island" type="number" min="0" max="1000000" step="5" value="30" />
+        <label for="min-island-tiles">Smallest island kept (final map tiles)</label>
+        <input id="min-island-tiles" type="number" min="0" max="1000000" value="9" />
       </fieldset>
       <button id="generate" disabled>Generate locally</button>
       <button id="upload" disabled>Upload to server</button>

@@ -307,10 +307,6 @@ type HudRefs = {
   endgameBanner: HTMLElement;
   endgamePortrait: HTMLImageElement;
   endgameStatValues: HudEndgameRefs;
-  endgameStore: HTMLElement;
-  endgameStoreName: HTMLElement;
-  endgameStoreCopy: HTMLElement;
-  endgameStoreAction: HTMLElement;
   endgameObserve: HTMLButtonElement;
   mapMenu: HTMLElement;
   placementOverlay: HTMLElement;
@@ -1141,7 +1137,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     return String(Math.max(0, Math.trunc(Number(value) || 0)));
   }
 
-  function endgameStatsMarkup(prefix: string, count: number = 5): string {
+  function endgameStatsMarkup(prefix: string): string {
     let html =
       '<div class="sow-hud__endgame-stats" id="sow-hud-' + prefix + '-stats">';
     html +=
@@ -1150,7 +1146,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '" data-sow-tooltip="' +
       esc(SOW_t("endgame.stat_kills")) +
       '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
-      hudIcon("troops", "sow-hud__inline-icon") +
+      statusIcon("death", "sow-hud__inline-icon") +
       '</span><b id="sow-hud-' +
       prefix +
       '-kills">0</b></div>';
@@ -1160,7 +1156,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '" data-sow-tooltip="' +
       esc(SOW_t("endgame.stat_assists")) +
       '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
-      statusIcon("allied", "sow-hud__inline-icon") +
+      hudIcon("ring_alliance", "sow-hud__inline-icon") +
       '</span><b id="sow-hud-' +
       prefix +
       '-assists">0</b></div>';
@@ -1178,28 +1174,26 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '</span><b id="sow-hud-' +
       prefix +
       '-max-territory">0</b></div>';
-    if (count >= 5) {
-      html +=
-        '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-        esc(SOW_t("endgame.stat_gold_received")) +
-        '" data-sow-tooltip="' +
-        esc(SOW_t("endgame.stat_gold_received")) +
-        '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
-        hudIcon("gold", "sow-hud__inline-icon") +
-        '</span><b id="sow-hud-' +
-        prefix +
-        '-gold-received">0</b></div>';
-      html +=
-        '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
-        esc(SOW_t("endgame.stat_troops_received")) +
-        '" data-sow-tooltip="' +
-        esc(SOW_t("endgame.stat_troops_received")) +
-        '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
-        hudIcon("troops", "sow-hud__inline-icon") +
-        '</span><b id="sow-hud-' +
-        prefix +
-        '-troops-received">0</b></div>';
-    }
+    html +=
+      '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
+      esc(SOW_t("endgame.stat_gold_received")) +
+      '" data-sow-tooltip="' +
+      esc(SOW_t("endgame.stat_gold_received")) +
+      '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+      hudIcon("gold", "sow-hud__inline-icon") +
+      '</span><b id="sow-hud-' +
+      prefix +
+      '-gold-received">0</b></div>';
+    html +=
+      '      <div class="sow-hud__endgame-stat" role="group" aria-label="' +
+      esc(SOW_t("endgame.stat_troops_received")) +
+      '" data-sow-tooltip="' +
+      esc(SOW_t("endgame.stat_troops_received")) +
+      '" data-sow-tooltip-tone="gold"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">' +
+      hudIcon("ring_attack", "sow-hud__inline-icon") +
+      '</span><b id="sow-hud-' +
+      prefix +
+      '-troops-received">0</b></div>';
     html += "    </div>";
     return html;
   }
@@ -1802,10 +1796,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       endgameBanner: requiredHudElement("sow-hud-endgame-banner"),
       endgamePortrait: requiredHudImage("sow-hud-endgame-portrait"),
       endgameStatValues: endgameStatRefs("endgame"),
-      endgameStore: requiredHudElement("sow-hud-endgame-store"),
-      endgameStoreName: requiredHudElement("sow-hud-endgame-store-name"),
-      endgameStoreCopy: requiredHudElement("sow-hud-endgame-store-copy"),
-      endgameStoreAction: requiredHudElement("sow-hud-endgame-store-action"),
       endgameObserve: requiredHudButton("sow-hud-endgame-observe"),
       mapMenu: requiredHudElement("sow-hud-map-menu"),
       placementOverlay: requiredHudElement("sow-hud-placement-overlay"),
@@ -2560,7 +2550,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "      </div>" +
       "    </div>" +
       "    " +
-      endgameStatsMarkup("surrender", 3) +
+      endgameStatsMarkup("surrender") +
       '    <div class="sow-hud__endgame-actions">' +
       '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">' +
       SOW_t("endgame.cancel") +
@@ -2610,24 +2600,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "    </div>" +
       "    " +
       endgameStatsMarkup("endgame") +
-      '    <div class="sow-hud__endgame-store" id="sow-hud-endgame-store" aria-label="' +
-      SOW_t("store.featured_skin") +
-      '">' +
-      '      <span class="sow-hud__endgame-store-icon" aria-hidden="true">✦</span>' +
-      '      <span class="sow-hud__endgame-store-copy"><b id="sow-hud-endgame-store-name">' +
-      SOW_t("store.featured_skin") +
-      '</b><small id="sow-hud-endgame-store-copy">' +
-      SOW_t("store.original_cosmetic") +
-      "</small></span>" +
-      '      <button class="sow-hud__endgame-store-state" type="button" data-command="open_store" id="sow-hud-endgame-store-action">' +
-      SOW_t("hud.view_shop") +
-      "</button>" +
-      "    </div>" +
       '    <div class="sow-hud__endgame-actions">' +
       '      <button class="sow-hud__endgame-secondary hidden" type="button" data-command="continue_observing" id="sow-hud-endgame-observe"><span aria-hidden="true">◉</span> ' +
       SOW_t("hud.continue_observing") +
       "</button>" +
-      '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_endgame_leave"><span aria-hidden="true">⌂</span> ' +
+      '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_endgame_leave">' +
+      hudIcon("home", "sow-hud__inline-icon") +
+      " " +
       SOW_t("hud.back_to_menu") +
       "</button>" +
       "    </div>" +
@@ -9314,12 +9293,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           hudRefs!.surrenderTitle.textContent = tutorialActive
             ? SOW_t("endgame.leave_tutorial")
             : SOW_t("endgame.leave");
-        if (hudRefs!.surrenderStats)
-          hudRefs!.surrenderStats.classList.toggle("hidden", tutorialActive);
-        renderEndgameStats(
-          hudRefs!.surrenderStatValues,
-          hud.player_endgame_stats,
-        );
+        hudRefs!.surrenderStats?.classList.toggle("hidden", tutorialActive);
+        if (!tutorialActive)
+          renderEndgameStats(
+            hudRefs!.surrenderStatValues,
+            hud.player_endgame_stats,
+          );
         if (hudRefs!.surrenderPortrait) {
           setAvatarImage(
             hudRefs!.surrenderPortrait,
@@ -9382,24 +9361,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           });
         }
         renderEndgameStats(hudRefs!.endgameStatValues, stats);
-        const featuredSkin =
-          window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest"
-            ? null
-            : hud.featured_skin;
-        if (hudRefs!.endgameStore)
-          hudRefs!.endgameStore.classList.toggle("hidden", !featuredSkin);
-        if (featuredSkin) {
-          if (hudRefs!.endgameStoreName)
-            hudRefs!.endgameStoreName.textContent =
-              featuredSkin.name || SOW_t("store.featured_skin");
-          if (hudRefs!.endgameStoreCopy)
-            hudRefs!.endgameStoreCopy.textContent =
-              SOW_t("store.gems_count", {
-                amount: featuredSkin.cost_gems || 0,
-              }) +
-              " · " +
-              SOW_t("store.original_cosmetic");
-        }
         if (hudRefs!.endgameObserve)
           hudRefs!.endgameObserve.classList.toggle(
             "hidden",
@@ -10089,6 +10050,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           });
         }
       } else if (cmd === "prompt_surrender") {
+        if (hudState?.hud?.is_spectating) {
+          send("return_to_menu");
+          return;
+        }
         send("request_endgame_stats");
         surrenderModalOpen = true;
         renderHud();
@@ -10125,10 +10090,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         send("select_nuke", { kind: btn.dataset.kind || "AtomBomb" });
       } else if (cmd === "confirm_endgame_leave") {
         send("return_to_menu");
-      } else if (cmd === "open_store") {
-        if (window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest")
-          return;
-        send("return_to_menu", { destination: "store" });
       } else if (cmd === "continue_observing") {
         send("continue_observing");
       }

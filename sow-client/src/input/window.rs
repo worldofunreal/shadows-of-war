@@ -27,6 +27,7 @@ impl SowApp {
             }
             WindowEvent::SurfaceResized(size) => self.apply_surface_resize(size, false),
             WindowEvent::ScaleFactorChanged { .. } => {
+                crate::web_canvas::invalidate_viewport_cache();
                 if let Some(window) = self.gfx.window.as_ref() {
                     let viewport = crate::viewport::Viewport::measure(window.as_ref());
                     if viewport.wants_reconfigure(self) {
@@ -48,7 +49,10 @@ impl SowApp {
                 primary,
                 kind,
                 ..
-            } => self.handle_pointer_enter(kind, position.x, position.y, primary),
+            } => {
+                let scale = crate::web_canvas::input_coordinate_scale();
+                self.handle_pointer_enter(kind, position.x * scale, position.y * scale, primary)
+            }
             WindowEvent::PointerLeft { kind, .. } => self.handle_pointer_left(kind),
             WindowEvent::KeyboardInput { event, .. } => {
                 self.handle_key_event(event.state == ElementState::Pressed, event.physical_key)
@@ -59,20 +63,46 @@ impl SowApp {
                 position,
                 primary,
                 ..
-            } => self.handle_pointer_button(
-                state == ElementState::Pressed,
-                button,
-                position.x,
-                position.y,
-                primary,
-            ),
+            } => {
+                let scale = crate::web_canvas::input_coordinate_scale();
+                self.handle_pointer_button(
+                    state == ElementState::Pressed,
+                    button,
+                    position.x * scale,
+                    position.y * scale,
+                    primary,
+                )
+            }
             WindowEvent::PointerMoved {
                 source,
                 position,
                 primary,
                 ..
-            } => self.handle_pointer_move(source, position.x, position.y, primary),
-            WindowEvent::MouseWheel { delta, .. } => self.handle_wheel(delta),
+            } => {
+                let scale = crate::web_canvas::input_coordinate_scale();
+                self.handle_pointer_move(
+                    source,
+                    position.x * scale,
+                    position.y * scale,
+                    primary,
+                )
+            }
+            WindowEvent::MouseWheel {
+                delta: MouseScrollDelta::LineDelta(x, y),
+                ..
+            } => self.handle_wheel(MouseScrollDelta::LineDelta(x, y)),
+            WindowEvent::MouseWheel {
+                delta: MouseScrollDelta::PixelDelta(position),
+                ..
+            } => {
+                let scale = crate::web_canvas::input_coordinate_scale();
+                self.handle_wheel(MouseScrollDelta::PixelDelta(
+                    winit::dpi::PhysicalPosition::new(
+                        position.x * scale,
+                        position.y * scale,
+                    ),
+                ))
+            }
             _ => {}
         }
     }

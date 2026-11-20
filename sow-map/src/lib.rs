@@ -21,6 +21,7 @@ pub use image_pipeline::{ImagePipelineResult, generate_from_rgba, mobile_safe_di
 pub use thumbnail::{
     SourceFrame, THUMBNAIL_HEIGHT, THUMBNAIL_SIZE, THUMBNAIL_WIDTH, encode_square_thumbnail_webp,
     encode_terrain_tile, render_source_file, render_source_image, render_terrain_image,
+    sample_source_frame,
     terrain_preview_image, write_map_thumbnail, write_rendered_source_thumbnail,
     write_source_thumbnail, write_square_thumbnail, write_square_thumbnail_from_pixels,
     write_wide_thumbnail,

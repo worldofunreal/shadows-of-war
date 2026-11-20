@@ -874,43 +874,26 @@ window.SOW_flush_menu_commands = function () {
     while (pendingCommands.length) window.SOW_menu_command(pendingCommands.shift()!);
 };
 
-export function heroImage(leaderId?: unknown, variant?: string): string {
-    const selected = arguments.length === 0;
-    const selection = selected ? currentLeaderSelection() : null;
-    if (
-        selected &&
-        selection &&
-        selection.prefer_random_leader &&
-        menuUi.state &&
-        menuUi.state.phase === "MainMenu" &&
+export function selectedHeroBackdrop() {
+    const selection = currentLeaderSelection();
+    const leader = leaderById(selection && selection.selected_leader);
+    const inMenu =
+        menuUi.state?.phase === "MainMenu" &&
         menuUi.state.loader_job !== "EnterGame" &&
-        menuUi.state.loader_job !== "ExitGame"
-    ) {
-        window.SOW_prepareLeaderArt("random", menuUi.state.loader_job === "Boot" ? "low" : "high");
-        return leaderArtUrl("random");
+        menuUi.state.loader_job !== "ExitGame";
+    const slug = inMenu && selection?.prefer_random_leader ? "random" : leaderArtSlug(leader);
+    if (inMenu) {
+        window.SOW_prepareLeaderArt(slug, menuUi.state?.loader_job === "Boot" ? "low" : "high");
     }
-    const leader = arguments.length
-        ? leaderById(leaderId || "Caesar")
-        : leaderById(selection && selection.selected_leader);
-    if (
-        selected &&
-        menuUi.state &&
-        menuUi.state.phase === "MainMenu" &&
-        menuUi.state.loader_job !== "EnterGame" &&
-        menuUi.state.loader_job !== "ExitGame"
-    ) {
-        prepareLeaderArt(leader, menuUi.state.loader_job === "Boot" ? "low" : "high");
-    }
-    const artSlug = leaderArtSlug(leader);
-    if (variant) return leaderArtUrl(artSlug, variant);
-    return leaderArtUrl(artSlug);
+    return {
+        desktop: leaderArtUrl(slug, "desktop"),
+        mobile: leaderArtUrl(slug, "mobile"),
+    };
 }
 
-// OWNER DECISION: the profile identity banner always uses landscape art,
-// even on portrait screens. It is a wide banner; never use the viewport
-// default here or the tall image will be cropped into the profile header.
+// The profile identity banner always uses landscape art.
 export function profileHeroImage(leaderId: unknown): string {
-    return heroImage(leaderId, "desktop");
+    return leaderArtUrl(leaderArtSlug(leaderById(leaderId || "Caesar")), "desktop");
 }
 
 export function avatarImage(leaderId?: unknown): string {
@@ -926,7 +909,10 @@ export function avatarImage(leaderId?: unknown): string {
     return asset("gameplay/avatars/" + leaderArtSlug(leader) + ".webp");
 }
 
-export function lobbyThumb(lobby: Pick<MenuLobby, "map_name"> | null | undefined): string {
+export function lobbyThumb(
+    lobby: Pick<MenuLobby, "map_name"> | null | undefined,
+    image: "thumbnail.webp" | "custom-preview.webp" = "thumbnail.webp"
+): string {
     const base = String(window.SOW_MAPS_URL || "/maps").replace(/\/$/, "");
     const bust = String(window.SOW_MAPS_CACHE_BUST || window.SOW_BUILD_TS || "");
     const mapKey = String((lobby && lobby.map_name) || "world")
@@ -936,7 +922,7 @@ export function lobbyThumb(lobby: Pick<MenuLobby, "map_name"> | null | undefined
         base +
         "/" +
         encodeURIComponent(mapKey) +
-        "/thumbnail.webp" +
+        "/" + image +
         (bust ? "?v=" + encodeURIComponent(bust) : "")
     );
 }

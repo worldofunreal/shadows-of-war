@@ -7,7 +7,8 @@ use crate::profile::{
     public_handle, win_rate,
 };
 use crate::redb_store::{
-    MATCH_STARTS_TABLE, MATCHES_TABLE, PENDING_REPLAY_VERIFICATIONS_TABLE,
+    MATCH_ID_ALLOCATOR_TABLE, MATCH_STARTS_TABLE, MATCHES_TABLE,
+    PENDING_REPLAY_VERIFICATIONS_TABLE,
     PLAYER_MATCH_INDEX_TABLE, PUBLIC_PROFILES_TABLE, RANKED_BOTS_TABLE, SEASON_RATINGS_TABLE,
     SEASONS_TABLE, VERIFIED_VICTORY_BOARD_TABLE,
 };
@@ -5218,6 +5219,51 @@ impl PlayerDb {
         self.next_match_id_seed_in(&replay_directory())
     }
 
+    /// Reserve a unique lobby/match ID range for one server process. The write
+    /// transaction serializes concurrent starts, including across releases.
+    pub fn reserve_match_id_range(
+        &self,
+    ) -> Result<(u64, u64), Box<dyn std::error::Error + Send + Sync>> {
+        self.reserve_match_id_range_in(&replay_directory())
+    }
+
+    fn reserve_match_id_range_in(
+        &self,
+        replay_directory: &std::path::Path,
+    ) -> Result<(u64, u64), Box<dyn std::error::Error + Send + Sync>> {
+        const RANGE_SIZE: u64 = 1_000_000;
+        let db = self.redb_db.as_ref().ok_or("Redb database unavailable")?;
+        let write_txn = db.begin_write()?;
+        let mut maximum = max_replay_artifact_match_id(replay_directory)?
+            .max(read_match_id_high_water(replay_directory)?);
+        for definition in [MATCH_STARTS_TABLE, MATCHES_TABLE] {
+            let table = write_txn.open_table(definition)?;
+            for entry in table.iter()? {
+                let (key, _) = entry?;
+                if let Ok(id) = key.value().parse::<u64>() {
+                    maximum = maximum.max(id);
+                }
+            }
+        }
+        let mut allocator = write_txn.open_table(MATCH_ID_ALLOCATOR_TABLE)?;
+        let reserved_through = allocator
+            .get("high_water")?
+            .map(|value| value.value())
+            .unwrap_or(0);
+        let start = maximum
+            .max(reserved_through)
+            .checked_add(1)
+            .ok_or("match ID space exhausted")?;
+        let end = start
+            .checked_add(RANGE_SIZE - 1)
+            .ok_or("match ID space exhausted")?;
+        allocator.insert("high_water", end)?;
+        drop(allocator);
+        write_txn.commit()?;
+        record_match_id_high_water(replay_directory, end)?;
+        Ok((start, end))
+    }
+
     fn next_match_id_seed_in(
         &self,
         replay_directory: &std::path::Path,
@@ -5563,6 +5609,46 @@ impl PlayerDb {
                 }
         });
         Ok(jobs)
+    }
+
+    /// Number of matches whose verifier or reward handoff still belongs to a
+    /// server release. Used by deployment draining; a missing owner is not
+    /// counted so pre-routing records remain compatible.
+    pub fn outstanding_release_matches(
+        &self,
+        release_id: &str,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        use crate::profile::{MatchExitState, MatchStartRecord, MatchWorkRecord, ReplayVerificationStatus};
+        let db = self.redb_db.as_ref().ok_or("Redb database unavailable")?;
+        let txn = db.begin_read()?;
+        let starts = txn.open_table(MATCH_STARTS_TABLE)?;
+        let mut outstanding = std::collections::BTreeSet::new();
+        for entry in starts.iter()? {
+            let (key, value) = entry?;
+            let start: MatchStartRecord = serde_json::from_slice(value.value())?;
+            if start.metadata.get("server_release_id").and_then(serde_json::Value::as_str)
+                == Some(release_id)
+                && start.replay_status == ReplayVerificationStatus::Pending
+            {
+                outstanding.insert(key.value().to_owned());
+            }
+        }
+        let work = txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
+        for entry in work.iter()? {
+            let (_, value) = entry?;
+            let job: MatchWorkRecord = serde_json::from_slice(value.value())?;
+            if job.state != MatchExitState::Confirmed {
+                let match_id = job.work.match_id();
+                let start: Option<MatchStartRecord> = starts.get(match_id)?.map(|v| serde_json::from_slice(v.value())).transpose()?;
+                if start.is_some_and(|record| {
+                    record.metadata.get("server_release_id").and_then(serde_json::Value::as_str)
+                        == Some(release_id)
+                }) {
+                    outstanding.insert(match_id.to_owned());
+                }
+            }
+        }
+        Ok(outstanding.len())
     }
 
     /// All uncommitted calculations, including jobs deferred for a retry.
@@ -8174,6 +8260,29 @@ mod tests {
             restarted.next_match_id_seed_in(&replay_directory).unwrap(),
             9001
         );
+    }
+
+    #[test]
+    fn match_id_ranges_are_reserved_without_overlap() {
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("profile.redb")).unwrap(),
+        );
+        let replay_directory = std::sync::Arc::new(temp.path().join("replays"));
+        let reserve = || {
+            let metadata = metadata.clone();
+            let replay_directory = replay_directory.clone();
+            std::thread::spawn(move || {
+                PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata))
+                    .reserve_match_id_range_in(&replay_directory)
+                    .unwrap()
+            })
+        };
+        let first = reserve();
+        let second = reserve();
+        let ranges = [first.join().unwrap(), second.join().unwrap()];
+        assert_ne!(ranges[0].0, ranges[1].0);
+        assert!(ranges[0].1 < ranges[1].0 || ranges[1].1 < ranges[0].0);
     }
 
     #[test]

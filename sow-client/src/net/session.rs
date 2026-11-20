@@ -162,6 +162,9 @@ impl SowApp {
         crate::store_portals::left_room();
         self.net.is_offline = false;
         self.net.ws_url = self.net.orchestrator_url.clone();
+        self.net.lobby_owner_release_id = None;
+        self.net.lobby_owner_ws_url = None;
+        self.net.lobby_owner_reconnect_failures = 0;
         self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
         self.net.relay_handoff_done = false;
         self.clear_lobby_exit_state();

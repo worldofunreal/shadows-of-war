@@ -270,6 +270,8 @@ pub enum ClientMessage {
         through_turn: u64,
     },
     CancelRankedSearch,
+    /// Requests the immutable release route for this orchestrator connection.
+    RequestServerOwner,
 }
 
 /// Fields of an authenticated join.
@@ -344,6 +346,14 @@ pub enum ServerMessage {
         terminal_turn: u64,
     },
     RankedSearching { elapsed_secs: u32 },
+    /// Identifies this lobby owner's immutable server route. Sent at connect so
+    /// clients can reconnect to the same release after a transient WS loss.
+    ServerOwner {
+        release_id: String,
+        gameplay_identity: String,
+        reconnect_url: String,
+        maps_url: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -448,6 +458,24 @@ mod protocol_tests {
         };
         let bytes = bincode::serialize(&message).unwrap();
         assert_eq!(&bytes[..4], &12_u32.to_le_bytes());
+    }
+
+    #[test]
+    fn release_route_messages_are_appended_to_the_wire_protocol() {
+        assert_eq!(
+            &bincode::serialize(&ClientMessage::RequestServerOwner).unwrap()[..4],
+            &15_u32.to_le_bytes()
+        );
+        let owner = ServerMessage::ServerOwner {
+            release_id: "release".into(),
+            gameplay_identity: "identity".into(),
+            reconnect_url: "wss://example.test/ws/release/release/".into(),
+            maps_url: "https://example.test/maps/release/release/".into(),
+        };
+        assert_eq!(
+            &bincode::serialize(&owner).unwrap()[..4],
+            &14_u32.to_le_bytes()
+        );
     }
 }
 

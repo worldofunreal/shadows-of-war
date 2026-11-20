@@ -270,6 +270,17 @@ lossless = false
 max_bytes = 250000
 recipe_version = 2
 
+[profiles.map_custom_preview]
+format = "webp"
+max_width = 1024
+max_height = 1024
+quality = 72
+alpha = "strip"
+resample = "mitchell"
+lossless = false
+max_bytes = 250000
+recipe_version = 1
+
 [profiles.map_thumbnail]
 format = "webp"
 max_width = 256

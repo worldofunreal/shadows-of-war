@@ -62,6 +62,9 @@ impl SowApp {
                     self.ui.app.main_menu_state.is_connected = true;
                     self.ui.app.main_menu_state.is_connecting = false;
                     self.net.ws_connect_fail_backoff_ms = 400;
+                    if self.net.lobby_owner_ws_url.as_deref() == Some(url.as_str()) {
+                        self.net.lobby_owner_reconnect_failures = 0;
+                    }
                     if self.ws_on_relay() {
                         self.net.load_telemetry.mark_relay_connected();
                         if let (Some(lid), Some(pid)) =
@@ -83,9 +86,15 @@ impl SowApp {
                                 log::info!("Relay connection waiting for its ticket");
                             }
                         }
-                    } else if self.ui.app.phase == crate::ClientPhase::Playing {
-                        log::info!("Orchestrator reconnected while the relay session is active");
-                    } else if self.ui.app.main_menu_state.host_private_pending {
+                    } else {
+                        if let Ok(bytes) = bincode::serialize(
+                            &sow_core::protocol::ClientMessage::RequestServerOwner,
+                        ) {
+                            client.send(bytes);
+                        }
+                        if self.ui.app.phase == crate::ClientPhase::Playing {
+                            log::info!("Orchestrator reconnected while the relay session is active");
+                        } else if self.ui.app.main_menu_state.host_private_pending {
                         log::info!("Hosting private lobby from portal instant");
                         let join_msg = self.make_join_message(None, true, None, None);
                         if let Some(join_msg) = join_msg
@@ -103,7 +112,11 @@ impl SowApp {
                             && (self.progress_account_id.is_some() || self.net.is_offline)
                         {
                             log::info!("Joining lobby {} from portal invite", id);
-                            let join_msg = self.make_join_message(Some(id), false, None, None);
+                            let password = Some(
+                                self.ui.app.main_menu_state.custom_game_password.clone(),
+                            )
+                            .filter(|password| !password.is_empty());
+                            let join_msg = self.make_join_message(Some(id), false, None, password);
                             if let Some(join_msg) = join_msg
                                 && let Ok(json) = bincode::serialize(&join_msg)
                             {
@@ -148,6 +161,18 @@ impl SowApp {
                         self.net.ws_connect_not_before = now + Duration::from_millis(500);
                         crate::web_menu::wake_event_loop_after(500);
                     } else {
+                        if self.net.lobby_owner_ws_url.as_deref() == Some(url.as_str())
+                            && self.ui.app.main_menu_state.pending_join_lobby_id.is_some()
+                        {
+                            self.net.lobby_owner_reconnect_failures =
+                                self.net.lobby_owner_reconnect_failures.saturating_add(1);
+                            if self.net.lobby_owner_reconnect_failures >= 5 {
+                                log::warn!("[LOBBY] Owner release unreachable; checking active server for lobby closure");
+                                self.net.ws_url = self.net.orchestrator_url.clone();
+                                self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
+                                self.net.lobby_owner_reconnect_failures = 0;
+                            }
+                        }
                         self.net.ws_connect_fail_backoff_ms =
                             (self.net.ws_connect_fail_backoff_ms.saturating_mul(2)).min(30_000);
                         self.net.ws_connect_not_before =
@@ -244,6 +269,24 @@ impl SowApp {
                 log::info!(
                     "[CLIENT NET] Temporary game disconnect; awaiting relay decision while reconnecting"
                 );
+            } else if self.ui.app.main_menu_state.is_waiting
+                && let Some(lobby_id) = self.ui.app.main_menu_state.joined_lobby_id
+                && !self.net.relay_handoff_done
+            {
+                log::info!("[LOBBY] Reconnecting to owner of waiting lobby {lobby_id}");
+                self.ui.app.main_menu_state.pending_join_lobby_id = Some(lobby_id);
+                self.ui.app.main_menu_state.joined_lobby_id = None;
+                self.ui.app.main_menu_state.my_player_id = None;
+                self.sim.my_lobby_id = None;
+                self.sim.my_player_id = None;
+                self.join_waiting_for_identity = true;
+                self.net.lobby_owner_reconnect_failures = 0;
+                self.net.ws_url = self
+                    .net
+                    .lobby_owner_ws_url
+                    .clone()
+                    .unwrap_or_else(|| self.net.orchestrator_url.clone());
+                self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
             } else if self.ui.app.phase != ClientPhase::Splash {
                 log::info!("[CLIENT NET] Disconnected outside match; reconnecting to orchestrator");
                 self.net.ws_url = self.net.orchestrator_url.clone();

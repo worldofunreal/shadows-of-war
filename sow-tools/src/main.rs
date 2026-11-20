@@ -249,6 +249,10 @@ struct ImportMapSourceArgs {
     #[arg(long)]
     min_island_pixels: Option<usize>,
 
+    /// Land masses smaller than this many final map tiles become water
+    #[arg(long)]
+    min_island_tiles: Option<usize>,
+
     /// Trace smooth coasts when the source is enlarged
     #[arg(long)]
     smooth_coasts: bool,
@@ -312,6 +316,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         min_island_pixels: import
                             .min_island_pixels
                             .unwrap_or(defaults.min_island_pixels),
+                        min_island_tiles: import.min_island_tiles.unwrap_or(defaults.min_island_tiles),
                         smooth_coasts: import.smooth_coasts,
                         water_level: import.water_level.unwrap_or(defaults.water_level),
                         connect_diagonals: import.connect_diagonals,

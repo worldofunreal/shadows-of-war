@@ -43,7 +43,7 @@ sow_server_prestart()
 		;;
 	esac
 	export RUST_LOG
-	export SOW_DB_URL SOW_DB_SECRET SOW_WS_LISTEN SOW_MAPS_HTTP_LISTEN
+	export SOW_DB_URL SOW_DB_SECRET SOW_WS_LISTEN SOW_MAPS_HTTP_LISTEN SOW_SERVER_HTTP_URL
 	export SOW_SERVER_MAX_CONNECTIONS
 	export SOW_MAPS_ROOT SOW_MAPS_CATALOG_PATH SOW_RELAY_BIN
 	export SOW_RELAY_LISTEN_HOST SOW_RELAY_LOG_DIR
@@ -57,5 +57,84 @@ sow_server_prestart()
 		/usr/local/bin/valkey-cli -h 127.0.0.1 ping | grep -q PONG
 	fi
 }
+
+sow_server_generation_start()
+{
+	id="$2"
+	env_file="$3"
+	proc="$4"
+	case "$id" in
+	''|*[!A-Za-z0-9._-]*) echo "invalid server generation id" >&2; return 1 ;;
+	esac
+	[ -f "$env_file" ] && [ -x "$proc" ] || return 1
+	parent="/var/run/sow_server_${id}.pid"
+	child="/var/run/sow_server_${id}.child.pid"
+	if [ -f "$parent" ] && kill -0 "$(cat "$parent")" 2>/dev/null; then
+		echo "server generation $id already running" >&2
+		return 1
+	fi
+	set -a
+	. "$env_file"
+	set +a
+	: ${SOW_RELAY_LISTEN_HOST:="__SITE_LOOPBACK__"}
+	: ${SOW_PUBLIC_HOST:="__SITE_HOST__"}
+	: ${SOW_RELAY_LOG_DIR:="/var/log/sow"}
+	export SOW_PUBLIC_HOST
+	export RUST_LOG
+	export SOW_DB_URL SOW_DB_SECRET SOW_WS_LISTEN SOW_MAPS_HTTP_LISTEN SOW_SERVER_HTTP_URL
+	export SOW_SERVER_MAX_CONNECTIONS SOW_MAPS_ROOT SOW_MAPS_CATALOG_PATH SOW_MAPS_UPLOAD_ROOT
+	export SOW_RELAY_BIN SOW_RELAY_LISTEN_HOST SOW_RELAY_LOG_DIR
+	export SOW_RELAY_HOST SOW_RELAY_WORKERS SOW_RELAY_WORKER_COUNT
+	export SOW_RELAY_CONTROL_SECRET SOW_RELAY_MGMT_SCHEME SOW_RELAY_MGMT_RESOLVE_IP
+	export SOW_RELAY_MGMT_URL SOW_VERIFIER_DIR SOW_SERVER_RELEASE_ID
+	export SOW_SERVER_OWNER_WS_URL SOW_SERVER_MAPS_URL
+	case "${SOW_RELAY_LOG_DIR}" in
+	/var/log/sow|/var/log/sow/*) ;;
+	*) echo "SOW_RELAY_LOG_DIR must be under /var/log/sow" >&2; return 1 ;;
+	esac
+	install -d -o sowserver -g sow -m 0750 "${SOW_RELAY_LOG_DIR}"
+	install -d -o sowserver -g sow -m 0750 /var/db/sow/server
+	if [ -x /usr/local/bin/valkey-cli ]; then
+		/usr/local/bin/valkey-cli -h 127.0.0.1 ping | grep -q PONG || return 1
+	fi
+	/usr/sbin/daemon -P "$parent" -p "$child" -r -R 2 -H \
+		-o "/var/log/sow/server_${id}.log" -T "sow-server-${id}" -u sowserver "$proc"
+}
+
+sow_server_generation_stop()
+{
+	id="$2"
+	case "$id" in
+	''|*[!A-Za-z0-9._-]*) echo "invalid server generation id" >&2; return 1 ;;
+	esac
+	parent="/var/run/sow_server_${id}.pid"
+	child="/var/run/sow_server_${id}.child.pid"
+	[ -f "$parent" ] || return 0
+	pid=$(cat "$parent")
+	child_pid=$(cat "$child" 2>/dev/null || true)
+	kill -TERM "$pid" 2>/dev/null || true
+	i=0
+	while [ "$i" -lt 30 ]; do
+		if [ -n "$child_pid" ] && ! kill -0 "$child_pid" 2>/dev/null; then break; fi
+		sleep 1
+		i=$((i + 1))
+	done
+	if [ -n "$child_pid" ] && kill -0 "$child_pid" 2>/dev/null; then kill -KILL "$child_pid" 2>/dev/null || true; fi
+	rm -f "$parent" "$child"
+}
+
+if [ "$1" = "start_generation" ]; then
+	sow_server_generation_start "$@"
+	exit $?
+elif [ "$1" = "stop_generation" ]; then
+	sow_server_generation_stop "$@"
+	exit $?
+elif [ "$1" = "status_generation" ]; then
+	id="$2"
+	case "$id" in ''|*[!A-Za-z0-9._-]*) exit 1 ;; esac
+	pid_file="/var/run/sow_server_${id}.pid"
+	[ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null
+	exit $?
+fi
 
 run_rc_command "$1"

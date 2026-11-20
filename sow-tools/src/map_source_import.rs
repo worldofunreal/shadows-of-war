@@ -107,9 +107,10 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
     let water = &args.water;
     info.push_str(&format!(
-        "min_lake_tiles = {}\nmin_island_pixels = {}\nsmooth_coasts = {}\nwater_level = {}\nconnect_diagonals = {}\n",
+        "min_lake_tiles = {}\nmin_island_pixels = {}\nmin_island_tiles = {}\nsmooth_coasts = {}\nwater_level = {}\nconnect_diagonals = {}\n",
         water.min_lake_tiles,
         water.min_island_pixels,
+        water.min_island_tiles,
         water.smooth_coasts,
         water.water_level,
         water.connect_diagonals

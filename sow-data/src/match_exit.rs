@@ -35,6 +35,19 @@ fn replay_dir() -> PathBuf {
     PathBuf::from(std::env::var("SOW_REPLAY_DIR").unwrap_or_else(|_| "replays".to_string()))
 }
 
+fn verifier_url(start: &sow_data::profile::MatchStartRecord) -> String {
+    start
+        .metadata
+        .get("verifier_url")
+        .and_then(serde_json::Value::as_str)
+        .filter(|url| url.starts_with("http://") || url.starts_with("https://"))
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            std::env::var("SOW_SERVER_HTTP_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:25566".into())
+        })
+}
+
 fn progress_path(match_id: &str, sequence: u64) -> PathBuf {
     progress_path_in(&replay_dir(), match_id, sequence)
 }
@@ -577,8 +590,7 @@ async fn verify_progress(state: &AppState, work: &MatchWork) -> WorkResult<bool>
         }
         ReplayVerificationStatus::Pending => {}
     }
-    let base =
-        std::env::var("SOW_SERVER_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:25566".into());
+    let base = verifier_url(&start);
     let verifier_started = Instant::now();
     let response = state
         .replay_verification_client
@@ -758,8 +770,11 @@ async fn notify_result(
     state: &AppState,
     command: &sow_data::profile::MatchResultControl,
 ) -> WorkResult<bool> {
-    let base =
-        std::env::var("SOW_SERVER_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:25566".into());
+    let start = state
+        .db
+        .match_start_record(&command.match_id)?
+        .ok_or("trusted match registration unavailable")?;
+    let base = verifier_url(&start);
     let response = state
         .replay_verification_client
         .post(format!(
@@ -1182,7 +1197,8 @@ pub(super) async fn worker(
 
 #[cfg(test)]
 mod progress_rejection_tests {
-    use super::{invalid_verified_result, permanent_progress_rejection};
+    use super::{invalid_verified_result, permanent_progress_rejection, verifier_url};
+    use sow_data::profile::MatchStartRecord;
 
     #[test]
     fn only_deterministic_verifier_failures_reject_a_progress_stream() {
@@ -1209,5 +1225,14 @@ mod progress_rejection_tests {
         assert!(!invalid_verified_result(&std::io::Error::other(
             "database connection reset"
         )));
+    }
+
+    #[test]
+    fn match_verification_uses_the_server_recorded_at_match_start() {
+        let start = MatchStartRecord {
+            metadata: serde_json::json!({"verifier_url":"http://127.0.0.2:25666"}),
+            ..Default::default()
+        };
+        assert_eq!(verifier_url(&start), "http://127.0.0.2:25666");
     }
 }

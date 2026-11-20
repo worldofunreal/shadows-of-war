@@ -1,0 +1,44 @@
+#!/bin/sh
+
+set -eu
+
+site_release_root="__SITE_RELEASE_ROOT__"
+site_server_jail="__SITE_SERVER_JAIL__"
+site_loopback="__SITE_LOOPBACK__"
+prefix="__SITE_MAP_PREFIX__"
+ws_map="/usr/local/etc/nginx/${prefix}sow-server-ws.map"
+http_map="/usr/local/etc/nginx/${prefix}sow-server-http.map"
+active=$(cat "${site_release_root}/active-generation" 2>/dev/null || true)
+changed=0
+
+[ -s "$ws_map" ] && [ -s "$http_map" ] || exit 0
+
+while read -r id ws_port; do
+	case "$id" in ''|*[!A-Za-z0-9._-]*) continue ;; esac
+	[ "$id" = "$active" ] && continue
+	http_port=$(awk -F '"' -v id="$id" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
+	[ -n "$ws_port" ] && [ -n "$http_port" ] || continue
+	if ! jexec "$site_server_jail" /usr/local/etc/rc.d/sow_server status_generation "$id" >/dev/null 2>&1; then
+		continue
+	fi
+	lobby_status=$(curl -fsS --max-time 5 "http://${site_loopback}:${http_port}/internal/generation-status" 2>/dev/null || true)
+	occupied=$(printf '%s' "$lobby_status" | sed -n 's/.*"occupied_lobbies"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+	[ "$occupied" = 0 ] || continue
+	work_status=$(jexec "$site_server_jail" sh -c '
+		. /usr/local/etc/sow/sow.env
+		curl -fsS --max-time 10 -H "Authorization: Bearer $SOW_DB_SECRET" "$SOW_DB_URL/internal/release-work/$1"
+	' sh "$id" 2>/dev/null || true)
+	pending=$(printf '%s' "$work_status" | sed -n 's/.*"outstanding_matches"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+	[ "$pending" = 0 ] || continue
+	jexec "$site_server_jail" service sow_server stop_generation "$id" || continue
+	sed -i '' "/\"$id\"/d" "$ws_map" "$http_map"
+	jexec "$site_server_jail" rm -f "/usr/local/etc/sow/generations/$id.env"
+	jexec "$site_server_jail" rm -rf "/var/db/sow/server/generations/$id"
+	changed=1
+done <<EOF
+$(awk -F '"' '{ if ($2 != "") { port=$3; gsub(/[^0-9]/, "", port); print $2, port } }' "$ws_map")
+EOF
+
+if [ "$changed" = 1 ] && nginx -t >/dev/null 2>&1; then
+	service nginx reload >/dev/null 2>&1 || true
+fi

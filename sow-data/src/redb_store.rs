@@ -20,6 +20,8 @@ pub const SEASONS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("se
 pub const PUBLIC_PROFILES_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("public_profiles");
 pub const MATCH_STARTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("match_starts");
+pub const MATCH_ID_ALLOCATOR_TABLE: TableDefinition<&str, u64> =
+    TableDefinition::new("match_id_allocator");
 pub const PENDING_REPLAY_VERIFICATIONS_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("pending_replay_verifications");
 pub const VERIFIED_VICTORY_BOARD_TABLE: TableDefinition<&str, &[u8]> =
@@ -75,6 +77,7 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
     write_txn.open_table(SEASONS_TABLE)?;
     write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
     write_txn.open_table(MATCH_STARTS_TABLE)?;
+    write_txn.open_table(MATCH_ID_ALLOCATOR_TABLE)?;
     write_txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
     write_txn.open_table(VERIFIED_VICTORY_BOARD_TABLE)?;
     write_txn.open_table(PENDING_CRAZYGAMES_SCORES_TABLE)?;

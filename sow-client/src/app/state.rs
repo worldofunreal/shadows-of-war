@@ -249,6 +249,10 @@ pub struct NetState {
         crossbeam_channel::Receiver<(String, Result<sow_net::client::SowClient, String>)>,
     pub ws_url: String,
     pub orchestrator_url: String,
+    /// Owner pinned by the last orchestrator handshake for the current lobby.
+    pub lobby_owner_release_id: Option<String>,
+    pub lobby_owner_ws_url: Option<String>,
+    pub lobby_owner_reconnect_failures: u8,
     pub is_offline: bool,
     /// Idle orchestrator socket kept through an offline match; the menu return takes it back.
     pub parked_client: Option<sow_net::client::SowClient>,
@@ -655,32 +659,6 @@ impl Default for CombatStreakTracker {
             advance_next_milestone: INITIAL_ADVANCE_MILESTONE,
             advance_last_at: None,
         }
-    }
-}
-
-pub(crate) fn structure_capture_label(kind: sow_core::game::BuildingKind) -> &'static str {
-    use sow_core::game::BuildingKind;
-    match kind {
-        BuildingKind::City => "CITY CAPTURED",
-        BuildingKind::Factory => "FACTORY CAPTURED",
-        BuildingKind::Port => "PORT CAPTURED",
-        BuildingKind::Farm => "FARM CAPTURED",
-        BuildingKind::Tower => "TOWER CAPTURED",
-        BuildingKind::SAM => "SAM CAPTURED",
-        BuildingKind::MissileSilo => "SILO CAPTURED",
-    }
-}
-
-pub(crate) fn structure_short_label(kind: sow_core::game::BuildingKind) -> &'static str {
-    use sow_core::game::BuildingKind;
-    match kind {
-        BuildingKind::City => "CITY",
-        BuildingKind::Factory => "FACTORY",
-        BuildingKind::Port => "PORT",
-        BuildingKind::Farm => "FARM",
-        BuildingKind::Tower => "TOWER",
-        BuildingKind::SAM => "SAM",
-        BuildingKind::MissileSilo => "MissileSilo",
     }
 }
 

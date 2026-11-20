@@ -219,22 +219,15 @@
         img.src = url;
     }
 
-    function replaceLoaderPicture(
-        media: string | null,
-        mobileUrl: string | null,
-        preparedImage?: HTMLImageElement,
-    ) {
+    function replaceLoaderPicture(media: string, alternateUrl: string, preparedImage?: HTMLImageElement) {
         const picture = document.createElement("picture");
         picture.className = "splash-picture";
-        let image = preparedImage;
-        if (!image) {
-            const source = document.createElement("source");
-            source.id = "splash-mobile";
-            source.media = media!;
-            source.srcset = mobileUrl!;
-            picture.appendChild(source);
-            image = document.createElement("img");
-        }
+        const source = document.createElement("source");
+        source.id = "splash-mobile";
+        source.media = media;
+        source.srcset = alternateUrl;
+        picture.appendChild(source);
+        const image = preparedImage ?? document.createElement("img");
         image.id = "splash-bg";
         image.className = "splash-bg";
         image.alt = "";
@@ -329,7 +322,7 @@
         if (pendingLeaderArt && pendingLeaderArt.prepared === prepared && pendingLeaderArt.cycleId === cycleId)
             return;
         pendingLeaderArt = { prepared, cycleId };
-        prepared.promise.then(() => {
+        prepared.promise.then((ready) => {
             if (!pendingLeaderArt || pendingLeaderArt.prepared !== prepared || pendingLeaderArt.cycleId !== cycleId)
                 return;
             pendingLeaderArt = null;
@@ -342,7 +335,9 @@
                 leaderSlugForState(current) !== slug
             )
                 return;
-            if (prepared.ready && activeMatchArt !== prepared && preparedLeaderArt !== prepared) return;
+            if (!ready && prepared.url === leaderArtUrl(slug)) {
+                showBootSplash(slug + ":failed");
+            }
             const stillPending = syncLoaderArt(current);
             if (current.loader_done === true && !stillPending && cycleId !== null) finish(cycleId);
         });
@@ -411,28 +406,24 @@
         }
 
         const key = slug;
-        if (state.loader_job === "EnterGame") {
-            if (!activeMatchArt || activeMatchArt.slug !== slug) {
-                activeMatchArt =
-                    preparedLeaderArt && preparedLeaderArt.slug === slug ? preparedLeaderArt : null;
-            }
-        }
-
         if (loaderArtKey === key || loaderArtKey === key + ":failed") return null;
 
+        const url = leaderArtUrl(slug);
+        const matchArt = activeMatchArt?.slug === slug ? activeMatchArt : null;
         let prepared =
-            state.loader_job === "ExitGame" && activeMatchArt && activeMatchArt.slug === slug
-                ? activeMatchArt
-                : preparedLeaderArt && preparedLeaderArt.slug === slug
+            state.loader_job === "ExitGame" && matchArt?.url === url
+                ? matchArt
+                : preparedLeaderArt?.url === url
                   ? preparedLeaderArt
                   : null;
-        if (!prepared && state.loader_job === "EnterGame" && preparedLeaderArt && loaderArtKey !== key + ":unready") {
-            // The menu hero preview left another hero in the shared slot; the match loads the hero it started with.
-            // An empty or failed slot is not retried.
+        if (
+            !prepared && transition &&
+            (matchArt || (state.loader_job === "EnterGame" && preparedLeaderArt))
+        ) {
             prepareLeaderArt(slug);
-            prepared = preparedLeaderArt && preparedLeaderArt.slug === slug ? preparedLeaderArt : null;
-            activeMatchArt = prepared;
+            prepared = preparedLeaderArt;
         }
+        if (state.loader_job === "EnterGame") activeMatchArt = prepared;
         if (!prepared) {
             if (loaderArtKey !== key + ":unready") {
                 showBootSplash(key + ":unready");
@@ -449,14 +440,18 @@
         }
 
         const image = prepared.image;
-        const { picture } = replaceLoaderPicture(null, null, image);
+        const alternate = prepared.variant === "mobile" ? "desktop" : "mobile";
+        const media = alternate === "mobile" ? LEADER_ART_MEDIA : "(orientation: landscape)";
+        const { picture } = replaceLoaderPicture(media, leaderArtUrl(slug, alternate), image);
         loaderArtKey = key;
         const cycleId = loaderCycleId(state);
         image.onerror = function () {
             if (cycleId === null || activeLoaderCycleId !== cycleId || completedLoaderCycleId >= cycleId)
                 return;
-            if (preparedLeaderArt && preparedLeaderArt.image === image) preparedLeaderArt = null;
-            if (activeMatchArt && activeMatchArt.image === image) activeMatchArt = null;
+            if (image.currentSrc === image.src) {
+                if (preparedLeaderArt?.image === image) preparedLeaderArt = null;
+                if (activeMatchArt?.image === image) activeMatchArt = null;
+            }
             if (loaderArtKey === key && document.querySelector("#web-loader .splash-picture") === picture) {
                 showBootSplash(key + ":failed");
             }
@@ -558,6 +553,9 @@
         if (loaderText) {
             loaderText.style.fontSize = cfg.textSizePx + "px";
             loaderText.style.marginTop = cfg.textNudgePx + "px";
+        }
+        if (pendingLeaderArt && pendingLeaderArt.prepared.variant !== leaderArtVariant()) {
+            sync(latestLoaderState);
         }
     }
 

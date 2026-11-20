@@ -310,7 +310,7 @@ fn render_categorical(width: u32, height: u32, land: &[bool], magnitude: &[u8]) 
     out
 }
 
-fn sample_source_frame(source: &RgbaImage, frame: SourceFrame) -> RgbaImage {
+pub fn sample_source_frame(source: &RgbaImage, frame: SourceFrame) -> RgbaImage {
     let mut out = RgbaImage::from_pixel(frame.width, frame.height, image::Rgba(DEEP_OCEAN_RGBA));
     let source_width = source.width() as i64;
     let source_height = source.height() as i64;

@@ -373,14 +373,9 @@ export function campaignEpisodeHeroArt(heroSlug: string) {
     };
 }
 
-export function campaignHeroImage(episodeId?: string | null): string {
-    const id = episodeId || menuUi.selectedCampaignEpisode || "blitz_05";
-    const heroSlug = campaignEpisodeHeroSlug(id);
-    const compact =
-        typeof window.matchMedia === "function"
-            ? window.matchMedia("(max-width: 900px), (orientation: portrait)").matches
-            : window.innerWidth <= 900 || window.innerHeight >= window.innerWidth;
-    return leaderArtUrl(leaderArtSlug(heroSlug), compact ? "desktop" : "mobile");
+export function campaignBackdropArt() {
+    const episode = menuUi.selectedCampaignEpisode || "blitz_05";
+    return campaignEpisodeHeroArt(campaignEpisodeHeroSlug(episode));
 }
 
 export function updateCampaignSelection(episodeId: string): boolean {
@@ -1174,6 +1169,7 @@ export function renderCreate() {
     const isSp = menuUi.createOffline;
     const selectedMap = mapInfo(config.map_name || "world");
     const mapThumbUrl = lobbyThumb({ map_name: selectedMap.key });
+    const customPreviewUrl = lobbyThumb({ map_name: selectedMap.key }, "custom-preview.webp");
     const catalog = availableMapCatalog();
     const mapIndex = Math.max(
         0,
@@ -1507,10 +1503,10 @@ export function renderCreate() {
         "<section class='sow-menu__custom-card sow-create__map-panel'>" +
         "<div class='sow-menu__map-preview-wrap" +
         animClass +
-        "' data-create-map-stage style=\"background-image:url('" +
-        esc(mapThumbUrl) +
-        "')\">" +
+        "' data-create-map-stage>" +
         "<img class='sow-create__map-art' src='" +
+        esc(customPreviewUrl) +
+        "' data-map-preview-fallback='" +
         esc(mapThumbUrl) +
         "' alt='" +
         esc(formatMapName(selectedMap)) +

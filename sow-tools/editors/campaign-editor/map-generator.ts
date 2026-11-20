@@ -20,6 +20,7 @@
     connectDiagonalsInput = $<HTMLInputElement>("connect-diagonals"),
     minLakeInput = $<HTMLInputElement>("min-lake"),
     minIslandInput = $<HTMLInputElement>("min-island"),
+    minIslandTilesInput = $<HTMLInputElement>("min-island-tiles"),
     sourceInput = $<HTMLSelectElement>("source"),
     waterFields = $("water"),
     worldTab = $<HTMLButtonElement>("tab-world"),
@@ -224,6 +225,7 @@
       water: {
         min_lake_tiles: Number(minLakeInput.value),
         min_island_pixels: Number(minIslandInput.value),
+        min_island_tiles: Number(minIslandTilesInput.value),
         smooth_coasts: smoothCoastsInput.checked,
         water_level: Number(waterLevelInput.value),
         connect_diagonals: connectDiagonalsInput.checked,
@@ -309,7 +311,7 @@
     generate(name, false, false);
   });
 
-  for (const input of [smoothCoastsInput, waterLevelInput, connectDiagonalsInput, minLakeInput, minIslandInput, sizeInput]) {
+  for (const input of [smoothCoastsInput, waterLevelInput, connectDiagonalsInput, minLakeInput, minIslandInput, minIslandTilesInput, sizeInput]) {
     input.addEventListener("change", () => {
       showWaterLevel();
       scheduleRegenerate();

@@ -4167,7 +4167,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 
 .sow-hud__endgame-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   margin: 18px 0 12px;
   padding: 0;
@@ -4373,7 +4373,6 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 
 #sow-hud-endgame-modal .sow-hud__endgame-hero,
 #sow-hud-endgame-modal .sow-hud__endgame-stats,
-#sow-hud-endgame-modal .sow-hud__endgame-store,
 #sow-hud-endgame-modal .sow-hud__endgame-actions {
   position: relative;
   z-index: 1;
@@ -4473,12 +4472,8 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   animation-delay: 430ms;
 }
 
-#sow-hud-endgame-modal.is-entering .sow-hud__endgame-store {
-  animation: sow-endgame-rise-in 360ms cubic-bezier(0.16, 1, 0.3, 1) 460ms both;
-}
-
 #sow-hud-endgame-modal.is-entering .sow-hud__endgame-actions {
-  animation: sow-endgame-rise-in 360ms cubic-bezier(0.16, 1, 0.3, 1) 520ms both;
+  animation: sow-endgame-rise-in 360ms cubic-bezier(0.16, 1, 0.3, 1) 460ms both;
 }
 
 @keyframes sow-endgame-backdrop-in {
@@ -6328,8 +6323,6 @@ html[dir="rtl"] .sow-hud__dev-play::before {
     box-shadow: none !important;
   }
 }
-  transition: width 120ms linear;
-}
 
 .sow-hud__world-building-fill::after {
   content: "";
@@ -6668,7 +6661,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   font-weight: 900;
   letter-spacing: 0.05em;
   line-height: 1;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   -webkit-text-stroke: 0;
   paint-order: normal;
   text-shadow:
@@ -6677,9 +6670,9 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 
 .sow-hud__exit-card .sow-hud__endgame-banner .sow-hud__inline-icon {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
+  flex: 0 0 80px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
   color: var(--sow-gold-bright);
   vertical-align: 0;
@@ -6747,191 +6740,16 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 
 .sow-hud__endgame-stat b {
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   color: #f5f1e8;
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
-}
-
-.sow-hud__exit-card .sow-hud__endgame-stats {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 20px 0 0;
-  border-block: none;
-}
-
-.sow-hud__exit-card .sow-hud__endgame-stat {
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 108px;
-  padding: 16px 8px;
-  border-radius: var(--sow-tactical-surface-radius-compact, 10px);
-  background: var(--sow-tactical-surface-subcard-bg);
-  border: 1px solid var(--sow-tactical-surface-border);
-  border-top: 2px solid var(--sow-tactical-surface-accent-border);
-  box-shadow:
-    var(--sow-tactical-surface-highlight),
-    0 6px 18px rgba(0, 0, 0, 0.4);
-  transition:
-    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-color 160ms ease,
-    box-shadow 160ms ease;
-  cursor: default;
-}
-
-.sow-hud__exit-card .sow-hud__endgame-stat:hover {
-  transform: translateY(-3px);
-  border-color: var(--sow-gold);
-  box-shadow:
-    0 10px 24px rgba(0, 0, 0, 0.55),
-    0 0 18px color-mix(in srgb, var(--sow-gold) 20%, transparent);
-}
-
-.sow-hud__exit-card .sow-hud__endgame-stat + .sow-hud__endgame-stat::before {
-  display: none;
-}
-
-.sow-hud__exit-card .sow-hud__endgame-stat-icon {
-  order: 1;
-  display: grid;
-  place-items: center;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 34px;
-  border-radius: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-
-.sow-hud__exit-card .sow-hud__endgame-stat-icon svg,
-.sow-hud__exit-card .sow-hud__endgame-stat-icon img {
-  display: block;
-  width: 28px;
-  height: 28px;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.7));
-}
-
-.sow-hud__exit-card .sow-hud__endgame-stat b {
-  order: 2;
-  margin: 0;
-  color: #ffffff;
-  font-family: var(--font-display, serif);
-  font-size: clamp(30px, 4.2vw, 38px);
-  font-weight: 900;
+  text-overflow: ellipsis;
+  font-weight: 1000;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
-  white-space: nowrap;
-  letter-spacing: -0.01em;
-  text-shadow:
-    0 3px 12px rgba(0, 0, 0, 0.85),
-    0 0 16px color-mix(in srgb, var(--sow-gold) 15%, transparent);
-}
-
-.sow-hud__exit-card
-  .sow-hud__endgame-stat:nth-child(1)
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="Bajas"]
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="Kills"]
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="kills"]
-  .sow-hud__endgame-stat-icon {
-  color: #f87171;
-}
-
-.sow-hud__exit-card
-  .sow-hud__endgame-stat:nth-child(2)
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="Asistencias"]
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="Assists"]
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="assists"]
-  .sow-hud__endgame-stat-icon {
-  color: #38bdf8;
-}
-
-.sow-hud__exit-card
-  .sow-hud__endgame-stat:nth-child(3)
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="Territorio"]
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="Territory"]
-  .sow-hud__endgame-stat-icon,
-.sow-hud__exit-card
-  .sow-hud__endgame-stat[aria-label*="territory"]
-  .sow-hud__endgame-stat-icon {
-  color: #4ade80;
-}
-
-.sow-hud__endgame-store {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 22px;
-  padding: 11px 12px;
-  border: 1px solid var(--sow-line);
-  border-radius: 4px 7px 7px 4px;
-  background: rgb(255 255 255 / 3%);
-}
-
-.sow-hud__endgame-store-icon {
-  color: var(--sow-gold);
-  font-size: 18px;
-}
-
-.sow-hud__endgame-store-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-}
-
-.sow-hud__endgame-store-copy b {
-  color: #f5f1e8;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-}
-
-.sow-hud__endgame-store-copy small {
-  color: var(--sow-muted);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.sow-hud__endgame-store-state {
-  flex: 0 0 auto;
-  min-height: 36px;
-  padding: 8px 12px;
-  border: 1px solid var(--sow-button-dark-border);
-  border-radius: var(--sow-button-radius);
-  background: var(--sow-button-dark-bg);
-  box-shadow: var(--sow-button-dark-shadow);
-  color: var(--sow-gold-bright);
-  font-size: 9px;
-  font-weight: var(--sow-button-weight);
-  letter-spacing: var(--sow-button-tracking);
-  cursor: pointer;
-}
-
-.sow-hud__endgame-store-state:hover,
-.sow-hud__endgame-store-state:focus-visible {
-  border-color: var(--sow-button-primary-border);
-  background: var(--sow-button-primary-bg);
-  color: var(--sow-button-primary-text);
 }
 
 .sow-hud__endgame-actions {
@@ -7013,8 +6831,9 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 
 .sow-hud__exit-card .sow-hud__endgame-primary .sow-hud__inline-icon {
-  width: 18px;
-  height: 18px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
 }
 
 .sow-hud__endgame-primary:hover {
@@ -8314,36 +8133,18 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   }
   .sow-hud__exit-card .sow-hud__endgame-primary {
     font-size: 12px;
+    white-space: normal;
   }
   .sow-hud__exit-card .sow-hud__endgame-hero {
     gap: 12px;
   }
+  #sow-hud .sow-hud__exit-card .sow-hud__endgame-banner {
+    gap: 8px;
+    font-size: clamp(20px, 7vw, 34px);
+  }
   .sow-hud__exit-card .sow-hud__endgame-portrait-wrap {
     width: 68px;
     height: 68px;
-  }
-  .sow-hud__exit-card .sow-hud__endgame-stat {
-    min-height: 88px;
-    padding: 10px 4px;
-    gap: 6px;
-  }
-  .sow-hud__exit-card .sow-hud__endgame-stat-icon {
-    order: 1;
-    flex-basis: 26px;
-    width: 26px;
-    height: 26px;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-  }
-  .sow-hud__exit-card .sow-hud__endgame-stat-icon :is(svg, img) {
-    width: 22px;
-    height: 22px;
-  }
-  .sow-hud__exit-card .sow-hud__endgame-stat b {
-    order: 2;
-    font-size: 24px;
-    font-weight: 900;
   }
   .sow-hud__endgame-hero {
     gap: 12px;
@@ -9052,17 +8853,19 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
     width: 32px;
     height: 32px;
   }
-  .sow-hud__exit-card .sow-hud__endgame-stat {
+  .sow-hud__endgame-stat {
     gap: 2px;
     padding-inline: 1px;
   }
-  .sow-hud__exit-card .sow-hud__endgame-stat-icon,
-  .sow-hud__exit-card .sow-hud__endgame-stat-icon :is(svg, img) {
+
+  .sow-hud__endgame-stat-icon,
+  .sow-hud__endgame-stat-icon :is(svg, img) {
     flex-basis: 16px;
     width: 16px;
     height: 16px;
   }
-  .sow-hud__exit-card .sow-hud__endgame-stat b {
+
+  .sow-hud__endgame-stat b {
     font-size: 10px;
   }
 }

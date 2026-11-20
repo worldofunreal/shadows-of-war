@@ -4,10 +4,21 @@
 use sow_core::game_config::GameConfig;
 use sow_core::protocol::{LobbyInfo, LobbyKind, Team};
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
 
 pub const LOBBY_COUNTDOWN_SECS: f32 = 15.0;
 pub const TICK_SECS: f32 = 0.1;
+
+static MATCH_ID_RANGE_END: AtomicU64 = AtomicU64::new(u64::MAX);
+
+pub fn set_match_id_range_end(end: u64) {
+    MATCH_ID_RANGE_END.store(end, Ordering::Relaxed);
+}
+
+pub fn match_id_is_reserved(id: u64) -> bool {
+    id <= MATCH_ID_RANGE_END.load(Ordering::Relaxed)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LobbyPhase {
@@ -283,7 +294,11 @@ fn custom_game_config(host: GameConfig) -> GameConfig {
     config
 }
 
-fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: SpawnLobbyOpts) {
+fn spawn_waiting_lobby(
+    games: &mut Vec<ServerLobby>,
+    next_id: &mut u64,
+    opts: SpawnLobbyOpts,
+) -> Result<u64, &'static str> {
     let game_mode = opts.game_mode;
     let kind = opts.kind;
     let is_private = opts.is_private;
@@ -291,7 +306,10 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
     let password = opts.password;
     let host_name = opts.host_name;
     let id = *next_id;
-    *next_id += 1;
+    if !match_id_is_reserved(id) {
+        return Err("match ID reservation exhausted");
+    }
+    *next_id = next_id.checked_add(1).ok_or("match ID space exhausted")?;
     let (mut config, map_entry) = if let Some(host) = config_override {
         let mut c = custom_game_config(host);
         // Resolve map dimensions from catalog when host provides a config.
@@ -363,6 +381,7 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
         bot_fill_target: None,
         pending_bots: Vec::new(),
     });
+    Ok(id)
 }
 
 fn normalize_map_roster(
@@ -405,7 +424,7 @@ fn ensure_queue_depth(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
     static ROTATION: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     const MODES: &[&str] = &["FFA", "Teams", "PvE"];
     let idx = ROTATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % MODES.len();
-    spawn_waiting_lobby(
+    let _ = spawn_waiting_lobby(
         games,
         next_id,
         SpawnLobbyOpts {
@@ -525,9 +544,12 @@ fn resolve_join_target(requested: Option<u64>, games: &[ServerLobby]) -> Option<
     primary_matchmaking_lobby_id(games)
 }
 
-fn resolve_or_spawn_matchmaking_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64) -> u64 {
+fn resolve_or_spawn_matchmaking_lobby(
+    games: &mut Vec<ServerLobby>,
+    next_id: &mut u64,
+) -> Result<u64, &'static str> {
     if let Some(id) = resolve_join_target(None, games) {
-        return id;
+        return Ok(id);
     }
 
     log::info!("[JOIN] No Matchmaking lobby available, spawning one");
@@ -542,8 +564,7 @@ fn resolve_or_spawn_matchmaking_lobby(games: &mut Vec<ServerLobby>, next_id: &mu
             password: None,
             host_name: String::new(),
         },
-    );
-    games.last().unwrap().id
+    )
 }
 
 pub struct JoinPlayerOpts {
@@ -636,7 +657,8 @@ pub fn join_player(
                 password: password.clone(),
                 host_name: name.clone(),
             },
-        );
+        )
+        .map_err(str::to_owned)?;
         is_new_host = true;
         games.last().unwrap().id
     } else if host_config.is_some() && target_lobby_id.is_none() {
@@ -659,7 +681,8 @@ pub fn join_player(
                 password: password.clone(),
                 host_name: name.clone(),
             },
-        );
+        )
+        .map_err(str::to_owned)?;
         is_new_host = true;
         games.last().unwrap().id
     } else if let Some(req) = target_lobby_id {
@@ -675,7 +698,7 @@ pub fn join_player(
                     req,
                     name
                 );
-                resolve_or_spawn_matchmaking_lobby(games, next_id)
+                resolve_or_spawn_matchmaking_lobby(games, next_id).map_err(str::to_owned)?
             }
             None => {
                 log::warn!(
@@ -687,7 +710,7 @@ pub fn join_player(
             }
         }
     } else {
-        resolve_or_spawn_matchmaking_lobby(games, next_id)
+        resolve_or_spawn_matchmaking_lobby(games, next_id).map_err(str::to_owned)?
     };
 
     let lobby = games
@@ -740,6 +763,7 @@ pub fn join_player(
         let first_player_id = lobby.players.first().map(|first| first.player_id);
         let p = &mut lobby.players[existing_idx];
         p.tx = client_tx;
+        p.session_id = session_id;
         p.clan_tag = clan_tag;
         if p.leader.is_enabled() && !(random_leader && p.random_leader) {
             p.leader = leader;
@@ -1502,7 +1526,8 @@ mod name_tests {
                     password: None,
                     host_name: String::new(),
                 },
-            );
+            )
+            .expect("reserved lobby ID");
         }
 
         assert!(
@@ -1541,7 +1566,8 @@ mod name_tests {
                 password: None,
                 host_name: "Host".to_string(),
             },
-        );
+        )
+        .expect("reserved lobby ID");
 
         assert_eq!(games[0].config.max_players, 37);
         assert_eq!(games[0].config.bot_count, 11);
@@ -1558,7 +1584,8 @@ mod name_tests {
                 password: None,
                 host_name: "Host".to_string(),
             },
-        );
+        )
+        .expect("reserved lobby ID");
         assert_eq!(games[1].config.nation_count, 19);
         let rules = GameConfig::default();
         assert!(!games[0].config.tutorial);

@@ -14,6 +14,8 @@ pub struct WaterSettings {
     pub min_lake_tiles: usize,
     /// Land masses smaller than this many source pixels become water.
     pub min_island_pixels: usize,
+    /// Land masses smaller than this many final map tiles become water.
+    pub min_island_tiles: usize,
     /// When the source is enlarged, trace smooth coasts instead of square steps.
     pub smooth_coasts: bool,
     /// With smooth coasts: 0.5 follows the source; higher widens rivers, lakes and bays.
@@ -27,6 +29,7 @@ impl Default for WaterSettings {
         Self {
             min_lake_tiles: 16,
             min_island_pixels: 30,
+            min_island_tiles: 0,
             smooth_coasts: false,
             water_level: 0.5,
             connect_diagonals: false,
@@ -127,6 +130,9 @@ pub fn generate_with_water(
     };
     if water.connect_diagonals {
         connect_diagonal_water(&mut small);
+    }
+    if water.min_island_tiles > 1 {
+        remove_small_islands(&mut small, water.min_island_tiles);
     }
     remove_small_lakes(&mut small, water.min_lake_tiles);
     mark_ocean(&mut small);

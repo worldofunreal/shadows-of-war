@@ -20,7 +20,7 @@ import {
     currentScreen,
     esc,
     findLobby,
-    heroImage,
+    selectedHeroBackdrop,
     leaderById,
     leaderDisplayName,
     menuIcon,
@@ -47,7 +47,7 @@ import {
 } from "./main_menu.heroes.ts";
 import {
     campaignEpisodeSagaId,
-    campaignHeroImage,
+    campaignBackdropArt,
     cloneConfig,
     cycleCreateMap,
     joinedLobby,
@@ -1056,6 +1056,11 @@ function syncDisconnectNotice(nextState: MenuState) {
 function renderSystemNotice() {
     if (!menuUi.state || menuUi.state.phase !== "MainMenu") return "";
     const updateAvailable = menuUi.state.update_available === true;
+    const reloadSafe =
+        !menuUi.state.waiting &&
+        !menuUi.state.match_preparing &&
+        !menuUi.state.menu_return &&
+        pendingRewardReceipts().length === 0;
     const disconnected = !updateAvailable && disconnectNoticeVisible && !menuUi.state.connected;
     if (!updateAvailable && !disconnected) return "";
     const title = updateAvailable ? SOW_t("menu.version_update_title") : SOW_t("menu.connection_lost");
@@ -1078,7 +1083,9 @@ function renderSystemNotice() {
         esc(description) +
         "</p>" +
         "<div class='sow-menu__system-actions'>" +
-        "<button class='sow-menu__primary sow-menu__system-primary' type='button' data-command='system_notice_refresh'>" +
+        "<button class='sow-menu__primary sow-menu__system-primary' type='button' data-command='system_notice_refresh'" +
+        (updateAvailable && !reloadSafe ? " disabled" : "") +
+        ">" +
         esc(primaryLabel) +
         "</button>" +
         offlineAction +
@@ -1096,6 +1103,11 @@ function dismissDisconnectNotice() {
 
 function handleSystemNoticeCommand(command: string | undefined) {
     if (command === "system_notice_refresh") {
+        const state = menuUi.state;
+        if (
+            state?.update_available &&
+            (state.waiting || state.match_preparing || state.menu_return || pendingRewardReceipts().length > 0)
+        ) return true;
         window.location.reload();
         return true;
     }
@@ -1311,15 +1323,20 @@ function updateTopbar(): void {
 }
 
 function updateHeroBackdrop(screen: string): void {
-    const nextHero =
-        screen === "profile"
-            ? profileHeroImage(menuUi.profileData && menuUi.profileData.preferred_leader)
-            : screen === "campaign"
-              ? campaignHeroImage(menuUi.selectedCampaignEpisode)
-              : heroImage();
-    if (root.dataset.hero !== nextHero) {
-        root.style.setProperty("--sow-hero", 'url("' + nextHero + '")');
-        root.dataset.hero = nextHero;
+    let desktop: string;
+    let mobile: string;
+    if (screen === "profile") {
+        desktop = mobile = profileHeroImage(menuUi.profileData && menuUi.profileData.preferred_leader);
+    } else if (screen === "campaign") {
+        const { band, column } = campaignBackdropArt();
+        desktop = column;
+        mobile = band;
+    } else {
+        ({ desktop, mobile } = selectedHeroBackdrop());
+    }
+    for (const [property, url] of [["--sow-hero-desktop", desktop], ["--sow-hero-mobile", mobile]]) {
+        const value = 'url("' + url + '")';
+        if (root.style.getPropertyValue(property) !== value) root.style.setProperty(property, value);
     }
 }
 
@@ -2583,7 +2600,7 @@ function runChoreographedStage(config: ChoreographedStageOptions) {
             return;
         }
 
-        const dt = Math.min(50, Math.max(0, now - lastRealMs));
+        const dt = Math.min(120, Math.max(0, now - lastRealMs));
         lastRealMs = now;
 
         if (!exiting) {
@@ -3249,6 +3266,15 @@ export function scheduleLeaderPersist(preferRandom: boolean, leaderId: string | 
 window.addEventListener("pagehide", function () {
     flushLeaderPersist();
 });
+
+root.addEventListener("error", function (event) {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement)) return;
+    const fallback = image.dataset.mapPreviewFallback;
+    if (!fallback) return;
+    delete image.dataset.mapPreviewFallback;
+    image.src = fallback;
+}, true);
 
 root.addEventListener("click", function (event) {
     if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true);

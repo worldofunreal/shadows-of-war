@@ -163,7 +163,11 @@ usr/local/etc/nginx/snippets/security-headers.conf
 usr/local/etc/nginx/snippets/ssl-params.conf
 usr/local/etc/letsencrypt/renewal-hooks/deploy/50-sow-relay
 etc/periodic.conf.local
+usr/local/etc/periodic/hourly/530.sow-server-generations
 etc/rc.conf
+usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-active-ws.map
+usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-active-http.map
+__SITE_RELEASE_REL__/active-generation
 zroot/jails/__SITE_SERVER_JAIL__/etc/resolv.conf
 zroot/jails/__SITE_SERVER_JAIL__/usr/local/etc/sow/sow.env
 zroot/jails/__SITE_SERVER_JAIL__/usr/local/etc/sow/relay.env
@@ -243,7 +247,17 @@ if [ "$3" = yes ]; then
         sleep 1
     done
 fi
-if [ "$4" = yes ]; then attempt "server restart" jexec __SITE_SERVER_JAIL__ service sow_server restart; fi
+if [ "$4" = yes ]; then
+    active=$(cat __SITE_RELEASE_ROOT__/active-generation 2>/dev/null || true)
+    if [ -n "$active" ]; then
+        if ! jexec __SITE_SERVER_JAIL__ /usr/local/etc/rc.d/sow_server status_generation "$active"; then
+            echo "rollback: previous server generation $active is not running" >&2
+            failed=1
+        fi
+    else
+        attempt "server restart" jexec __SITE_SERVER_JAIL__ service sow_server restart
+    fi
+fi
 if [ "$5" = yes ]; then attempt "relay restart" jexec __SITE_SERVER_JAIL__ service sow_relay restart; fi
 [ -z "$failed" ]
 "#,

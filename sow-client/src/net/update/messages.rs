@@ -327,6 +327,27 @@ impl SowApp {
                         self.ui.app.main_menu_state.ranked_search_active = true;
                         self.ui.app.main_menu_state.ranked_search_elapsed_secs = elapsed_secs;
                     }
+                    ServerMessage::ServerOwner {
+                        release_id,
+                        gameplay_identity,
+                        reconnect_url,
+                        maps_url,
+                    } => {
+                        self.net.lobby_owner_release_id = Some(release_id);
+                        self.net.lobby_owner_ws_url = url::Url::parse(&reconnect_url)
+                            .ok()
+                            .filter(|url| matches!(url.scheme(), "ws" | "wss"))
+                            .map(|url| url.to_string())
+                            .filter(|url| !url.is_empty());
+                        if let Ok(url) = url::Url::parse(&maps_url)
+                            && matches!(url.scheme(), "http" | "https")
+                        {
+                            self.asset_config.maps_base = url.to_string();
+                        }
+                        if gameplay_identity != crate::get_build_version() {
+                            self.ui.update_available = true;
+                        }
+                    }
                     ServerMessage::LobbyClosed(closed) => {
                         if self.sim.my_lobby_id != Some(closed.lobby_id)
                             && self.ui.app.main_menu_state.joined_lobby_id != Some(closed.lobby_id)
@@ -415,6 +436,8 @@ impl SowApp {
                         }
                     }
                     ServerMessage::JoinFailed(fail) => {
+                        let reconnect_failed = self.ui.app.main_menu_state.is_waiting
+                            && self.ui.app.main_menu_state.pending_join_lobby_id.is_some();
                         self.ui.app.main_menu_state.ranked_matchup = None;
                         let reason_category = match fail.reason.as_str() {
                             "VERSION_MISMATCH" => "version_mismatch",
@@ -461,6 +484,17 @@ impl SowApp {
                         if version_mismatch {
                             menu.error_message = None;
                             menu.notice = None;
+                        } else if reconnect_failed {
+                            menu.error_message = None;
+                            menu.notice = Some(crate::LobbyNotice::HostLeft);
+                            menu.notice_at = None;
+                            self.net.ws_url = self.net.orchestrator_url.clone();
+                            menu.server_address = self.net.ws_url.clone();
+                            self.net.lobby_owner_release_id = None;
+                            self.net.lobby_owner_ws_url = None;
+                            self.net.lobby_owner_reconnect_failures = 0;
+                            self.net.client = None;
+                            menu.is_connected = false;
                         } else if fail.reason == "BANNED" {
                             menu.error_message = None;
                             menu.notice = Some(crate::LobbyNotice::Banned);
@@ -498,6 +532,7 @@ impl SowApp {
                         self.sim.my_player_id = Some(ack.player_id);
                         self.ui.app.main_menu_state.my_player_id = Some(ack.player_id);
                         self.ui.app.main_menu_state.joined_lobby_id = Some(ack.lobby_id);
+                        self.ui.app.main_menu_state.pending_join_lobby_id = None;
                         self.ui.app.main_menu_state.is_waiting = true;
                         self.ui.app.main_menu_state.go_home();
                         self.ui.app.main_menu_state.in_private_match = ack.is_private;
