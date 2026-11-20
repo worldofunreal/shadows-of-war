@@ -2,13 +2,19 @@ use crate::context::RenderContext;
 use blade_graphics as gpu;
 use bytemuck::{Pod, Zeroable};
 
-pub const MAX_BLAST_INSTANCES: usize = 64;
+pub const MAX_BLAST_INSTANCES: usize = 1024;
 const VERTS_PER_OCTAGON: u32 = 18;
 
 pub const BLAST_KIND_GROUND_SCORCH: f32 = 0.0;
 pub const BLAST_KIND_NUKE_AIR: f32 = 1.0;
 pub const BLAST_KIND_SAM_AIRBURST: f32 = 2.0;
 pub const BLAST_KIND_BUILDING_POP: f32 = 3.0;
+pub const BLAST_KIND_NUKE_TELEGRAPH: f32 = 4.0;
+pub const BLAST_KIND_NUKE_RETICLE: f32 = 5.0;
+pub const BLAST_KIND_NUKE_LAUNCH: f32 = 6.0;
+pub const BLAST_KIND_THERMAL_GLINT: f32 = 9.0;
+pub const BLAST_KIND_SALVO_BEACON: f32 = 8.0;
+pub const BLAST_KIND_MIRV_SPLIT: f32 = 7.0;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

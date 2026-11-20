@@ -10,6 +10,8 @@ pub struct TrackedProjectile {
     pub kind: sow_core::game::ProjectileKind,
     pub dst_tile: u32,
     pub current_tile: u32,
+    pub split_tile: u32,
+    pub owner_id: u16,
     pub path_cursor: usize,
     pub steps_per_tick: u8,
     pub path_len: usize,
@@ -26,6 +28,10 @@ impl TrackedProjectile {
             kind: proj.kind,
             dst_tile: proj.dst_tile,
             current_tile,
+            split_tile: proj.path.get((proj.path.len() / 2).next_multiple_of(
+                usize::from(proj.steps_per_tick.max(1))
+            )).copied().unwrap_or(proj.dst_tile),
+            owner_id: proj.owner_id,
             path_cursor: proj.path_cursor,
             steps_per_tick: proj.steps_per_tick,
             path_len: proj.path.len(),
@@ -824,9 +830,10 @@ pub struct UiState {
     pub is_spectating: bool,
     /// Cached once per turn from the snapshot: true when my player is dead or otherwise observing.
     pub observing: bool,
+    pub indicators: crate::render::world::indicators::TargetIndicators,
+    pub current_projectiles: std::collections::HashMap<u64, TrackedProjectile>,
     pub last_projectiles: std::collections::HashMap<u64, TrackedProjectile>,
     pub last_projectile_snapshot_tick: Option<u64>,
-    pub detonation_scratch: Vec<(f32, f32, sow_core::game::ProjectileKind)>,
     /// Cached endgame copy for panel fade-out (is_victory, title, subtitle).
     pub endgame_cache: Option<(bool, String, String)>,
     /// Delayed endgame reveal sequence (waits 1.25s for death animation before panel + result SFX).
@@ -834,8 +841,6 @@ pub struct UiState {
     /// One-time match-stat snapshot shown while confirming a manual exit.
     pub manual_endgame_stats: Option<[u64; 5]>,
 
-    /// Client-side nuke silo cooldown tracking: building id → tick when ready.
-    pub silo_cooldowns: std::collections::HashMap<u64, u64>,
     pub mover_scene: crate::render::world::movers::MoverScene,
     pub blast_scene: crate::render::world::blasts::BlastScene,
     pub click_markers: Vec<ClickMarker>,

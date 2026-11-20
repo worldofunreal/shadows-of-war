@@ -3232,28 +3232,6 @@ pub static PARAMS: &[ParamDef] = &[
         "MOVER_NUKE_ARC_SAMPLES"
     ),
     number!(
-        "mover.nuke.curve_min_samples",
-        "Nuclear curve minimum detail",
-        "Mover trails",
-        64.0,
-        8.0,
-        1024.0,
-        1.0,
-        "samples",
-        "MOVER_NUKE_CURVE_MIN"
-    ),
-    number!(
-        "mover.nuke.curve_max_samples",
-        "Nuclear curve maximum detail",
-        "Mover trails",
-        4096.0,
-        64.0,
-        8192.0,
-        1.0,
-        "samples",
-        "MOVER_NUKE_CURVE_MAX"
-    ),
-    number!(
         "mover.viewport_margin",
         "Mover draw margin",
         "Movers",
@@ -3266,7 +3244,8 @@ pub static PARAMS: &[ParamDef] = &[
     ),
 ];
 
-fn param_index() -> &'static std::collections::HashMap<&'static str, (&'static ParamDef, Option<usize>)> {
+fn param_index()
+-> &'static std::collections::HashMap<&'static str, (&'static ParamDef, Option<usize>)> {
     static INDEX: std::sync::OnceLock<
         std::collections::HashMap<&'static str, (&'static ParamDef, Option<usize>)>,
     > = std::sync::OnceLock::new();
@@ -3439,4 +3418,3 @@ pub fn prepare_shader(shader_prefix: &str, source: &str) -> String {
     }
     prepared
 }
-

@@ -92,7 +92,6 @@ impl SowApp {
         self.ui.app.main_menu_state.cached_map_key = None;
         self.ui.last_projectiles.clear();
         self.ui.last_projectile_snapshot_tick = None;
-        self.ui.detonation_scratch.clear();
         self.ui.blast_scene.clear();
         self.ui.border_flash_intensities.clear();
         self.ui.app.hud_state.building_placement = None;

@@ -23,6 +23,8 @@ enum BlastKind {
     NukeAir,
     SamAirburst,
     BuildingPop,
+    Launch,
+    Split,
 }
 
 impl BlastKind {
@@ -32,6 +34,8 @@ impl BlastKind {
             Self::GroundScorch => BLAST_KIND_GROUND_SCORCH,
             Self::NukeAir => BLAST_KIND_NUKE_AIR,
             Self::SamAirburst => BLAST_KIND_SAM_AIRBURST,
+            Self::Launch => sow_render::BLAST_KIND_NUKE_LAUNCH,
+            Self::Split => sow_render::BLAST_KIND_MIRV_SPLIT,
             Self::BuildingPop => BLAST_KIND_BUILDING_POP,
         }
     }
@@ -81,6 +85,7 @@ impl ActiveBlast {
                 let ease = 1.0 - (1.0 - t) * (1.0 - t);
                 self.outer_radius * (0.35 + 0.65 * ease)
             }
+            BlastKind::Launch | BlastKind::Split => self.outer_radius,
             BlastKind::BuildingPop => {
                 let t = (age / self.lifetime_secs.max(0.001)).clamp(0.0, 1.0);
                 let ease = 1.0 - (1.0 - t) * (1.0 - t);
@@ -128,6 +133,7 @@ pub struct BlastPackParams<'a> {
     pub screen_w: f32,
     pub screen_h: f32,
     pub fog_of_war: bool,
+    pub reduced_motion: bool,
     pub my_player_id: u16,
     pub fog_visible: &'a DenseBitSet,
     pub now: Instant,
@@ -275,13 +281,34 @@ impl BlastScene {
         );
     }
 
+    pub fn spawn_staging(&mut self, tile: u32, width: u32, owner: u16, split: bool, now: Instant) {
+        let (world_x, world_y) = super::movers::tile_to_world(tile, width.max(1));
+        let seed = self.alloc_seed();
+        Self::push_capped(
+            &mut self.air_blasts,
+            ActiveBlast {
+                world_x,
+                world_y,
+                tile_idx: tile,
+                owner_id: owner,
+                inner_radius: 1.0,
+                outer_radius: if split { 16.0 } else { 10.0 },
+                start_time: now,
+                expand_dur: 0.0,
+                lifetime_secs: if split { 0.55 } else { 0.42 },
+                kind: if split {
+                    BlastKind::Split
+                } else {
+                    BlastKind::Launch
+                },
+                seed,
+            },
+        );
+    }
+
     /// Match vanished buildings against this tick's nuke detonations so they remain
     /// intact for ~50–500ms until the expanding shockwave crosses their tile.
-    pub fn register_dying_buildings(
-        &mut self,
-        vanished: &[BuildingSnapshot],
-        map_w: u32,
-    ) {
+    pub fn register_dying_buildings(&mut self, vanished: &[BuildingSnapshot], map_w: u32) {
         if self.recent_detonations.is_empty() || map_w == 0 {
             self.recent_detonations.clear();
             return;
@@ -378,14 +405,21 @@ impl BlastScene {
     /// Advance timers, trigger wave-synced building pops, frustum-cull, and upload active
     /// ground & aerial blast instances into `renderer`.
     pub fn pack_gpu(&mut self, params: &BlastPackParams<'_>, renderer: &mut BlastRenderer) {
-        renderer.begin_frame();
         self.advance_dying_buildings(params.now);
 
         self.ground_blasts.retain(|b| {
-            params.now.saturating_duration_since(b.start_time).as_secs_f32() < b.lifetime_secs
+            params
+                .now
+                .saturating_duration_since(b.start_time)
+                .as_secs_f32()
+                < b.lifetime_secs
         });
         self.air_blasts.retain(|b| {
-            params.now.saturating_duration_since(b.start_time).as_secs_f32() < b.lifetime_secs
+            params
+                .now
+                .saturating_duration_since(b.start_time)
+                .as_secs_f32()
+                < b.lifetime_secs
         });
 
         if self.ground_blasts.is_empty() && self.air_blasts.is_empty() {
@@ -398,22 +432,45 @@ impl BlastScene {
         let view_min_y = -params.camera_y / zoom;
         let view_max_y = (params.screen_h - params.camera_y) / zoom;
 
-        for b in &self.ground_blasts {
-            if let Some(inst) = Self::build_gpu_instance(
-                b,
-                params,
-                (view_min_x, view_max_x, view_min_y, view_max_y),
-            ) {
-                renderer.push_ground(inst);
-            }
-        }
-        for b in &self.air_blasts {
-            if let Some(inst) = Self::build_gpu_instance(
-                b,
-                params,
-                (view_min_x, view_max_x, view_min_y, view_max_y),
-            ) {
-                renderer.push_air(inst);
+        let view = (view_min_x, view_max_x, view_min_y, view_max_y);
+        let viewport_area = params.screen_w * params.screen_h;
+        for (air, list) in [(false, &self.ground_blasts), (true, &self.air_blasts)] {
+            let mut budget = viewport_area * 0.10;
+            let mut occupied = [0u32; 24];
+            for b in list.iter().rev() {
+                let Some(mut inst) = Self::build_gpu_instance(b, params, view) else {
+                    continue;
+                };
+                let dense = list.len() > 8;
+                if dense || params.reduced_motion {
+                    inst.seed += 2.0;
+                }
+                if dense {
+                    let area = (inst.bound_radius * zoom * 2.0).powi(2).min(viewport_area);
+                    // Keep broad shock fronts while fill budget permits. Remaining epicenters
+                    // use a short thermal glint over the authoritative terrain reveal.
+                    if area > budget {
+                        let x = inst.world_pos[0] * zoom + params.camera_x;
+                        let y = inst.world_pos[1] * zoom + params.camera_y;
+                        let col = ((x * 32.0 / params.screen_w.max(1.0)) as usize).min(31);
+                        let row = ((y * 24.0 / params.screen_h.max(1.0)) as usize).min(23);
+                        if occupied[row] & (1 << col) != 0 {
+                            continue;
+                        }
+                        occupied[row] |= 1 << col;
+                        inst.bound_radius =
+                            inst.bound_radius.min(if air { 15.0 } else { 10.0 } / zoom);
+                        inst.kind = sow_render::BLAST_KIND_THERMAL_GLINT;
+                        inst.expand_dur = if air { 1.0 } else { 0.0 };
+                    } else {
+                        budget -= area;
+                    }
+                }
+                if air {
+                    renderer.push_air(inst);
+                } else {
+                    renderer.push_ground(inst);
+                }
             }
         }
     }
@@ -466,7 +523,10 @@ impl BlastScene {
         {
             return None;
         }
-        let age = params.now.saturating_duration_since(b.start_time).as_secs_f32();
+        let age = params
+            .now
+            .saturating_duration_since(b.start_time)
+            .as_secs_f32();
         if age >= b.lifetime_secs {
             return None;
         }
@@ -599,7 +659,10 @@ mod tests {
             (1280.0, 720.0),
             1.0,
         );
-        assert_eq!(scene.camera_shake_offset(t0 + Duration::from_millis(50), true), [0.0, 0.0]);
+        assert_eq!(
+            scene.camera_shake_offset(t0 + Duration::from_millis(50), true),
+            [0.0, 0.0]
+        );
         assert!(!scene.has_recent_detonations());
     }
 
@@ -657,6 +720,7 @@ mod tests {
             camera_zoom: 2.0,
             screen_w: 400.0,
             screen_h: 400.0,
+            reduced_motion: false,
             fog_of_war: false,
             my_player_id: 1,
             fog_visible: &fog,
@@ -664,7 +728,8 @@ mod tests {
         };
         let offscreen = BlastScene::build_gpu_instance(&blast, &params, (0.0, 200.0, 0.0, 200.0));
         assert!(offscreen.is_none());
-        let onscreen = BlastScene::build_gpu_instance(&blast, &params, (450.0, 550.0, 450.0, 550.0));
+        let onscreen =
+            BlastScene::build_gpu_instance(&blast, &params, (450.0, 550.0, 450.0, 550.0));
         assert!(onscreen.is_some());
     }
 }

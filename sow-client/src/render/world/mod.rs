@@ -1,4 +1,5 @@
 pub mod blasts;
+pub mod indicators;
 mod feedback;
 pub mod movers;
 pub(crate) mod nameplates;

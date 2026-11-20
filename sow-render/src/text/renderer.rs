@@ -3,9 +3,9 @@ use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::{AvatarAtlasTexture, FontAtlasTexture, TextAtlasImages};
 use crate::text::types::{
     KIND_ARC, KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_ICON,
-    KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE,
-    NameplateStatusSprite, OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle,
-    TextShaderData,
+    KIND_LANDING_BEACON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE,
+    KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle, TextGlobals, TextInstanceGpu,
+    TextPaintStyle, TextShaderData,
 };
 use blade_graphics as gpu;
 
@@ -928,6 +928,26 @@ impl TextRenderer {
         });
     }
 
+    /// A sonar sweep and compass bearings in one screen-aligned instance.
+    pub fn push_landing_beacon(
+        &mut self,
+        center: [f32; 2],
+        radius: f32,
+        phase: f32,
+        color: [f32; 4],
+    ) {
+        let (screen_pos, size, content_rect) = ring_geometry(center, radius);
+        self.push_inst(TextInstanceGpu {
+            screen_pos,
+            size,
+            content_rect,
+            uv_rect: [0.0, phase, 1.0, 1.0],
+            color,
+            kind: KIND_LANDING_BEACON,
+            ..bytemuck::Zeroable::zeroed()
+        });
+    }
+
     /// Push an anti-aliased clockwise arc with a normalized rotational phase.
     /// `rotation_phase` is measured in complete turns and wraps at 1.0.
     pub fn push_rotating_arc(
@@ -1250,4 +1270,3 @@ impl TextRenderer {
         self.status_atlas_tex.destroy(&render_ctx.context);
     }
 }
-

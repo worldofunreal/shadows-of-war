@@ -190,116 +190,51 @@ impl SowApp {
                 }
 
                 if draw_world {
-                    // --- Layer 4: Track and Spawn Detonations ---
-                    self.ui.detonation_scratch.clear();
                     let current_time = web_time::Instant::now();
-                    if let Some(snap) = &self.sim.current_snapshot {
-                        if self.ui.last_projectile_snapshot_tick != Some(snap.tick) {
-                            let vfx_blasts =
-                                crate::theme::dev_config::DevConfig::with(|dev| dev.vfx_blasts);
-                            let tick_delta = self
-                                .ui
-                                .last_projectile_snapshot_tick
-                                .map(|prev| snap.tick.saturating_sub(prev))
-                                .unwrap_or(1)
-                                .max(1) as usize;
-                            for (id, prev_proj) in &self.ui.last_projectiles {
-                                if !snap.projectiles.iter().any(|p| p.id == *id) {
-                                    let at_end = prev_proj.path_cursor
-                                        + (prev_proj.steps_per_tick as usize)
-                                            .saturating_mul(tick_delta)
-                                        >= prev_proj.path_len;
-                                    if at_end {
-                                        let dst_x = (prev_proj.dst_tile % self.sim.map_w) as f32;
-                                        let dst_y = (prev_proj.dst_tile / self.sim.map_w) as f32;
-                                        self.ui.detonation_scratch.push((
-                                            dst_x,
-                                            dst_y,
-                                            prev_proj.kind,
-                                        ));
-                                    } else if vfx_blasts
-                                        && matches!(
-                                            prev_proj.kind,
-                                            sow_core::game::ProjectileKind::Nuke { .. }
-                                        )
-                                    {
-                                        let dst_x = prev_proj.dst_tile % self.sim.map_w;
-                                        let dst_y = prev_proj.dst_tile / self.sim.map_w;
-                                        let detonated_there = snap
-                                            .nuke_alerts
-                                            .iter()
-                                            .any(|a| a.tile_x == dst_x && a.tile_y == dst_y);
-                                        if !detonated_there {
-                                            // Nuke destroyed mid-flight by a SAM interceptor.
-                                            self.ui.blast_scene.spawn_sam_airburst(
-                                                prev_proj.current_tile,
-                                                self.sim.map_w,
-                                                current_time,
-                                            );
-                                        }
-                                    }
+                    if let Some(snap) = &self.sim.current_snapshot
+                        && self.ui.last_projectile_snapshot_tick != Some(snap.tick)
+                    {
+                        use sow_core::game::ProjectileKind::Nuke;
+                        let effects = crate::theme::dev_config::DevConfig::with(|dev| dev.vfx_blasts);
+                        let width = self.sim.map_w.max(1);
+                        let elapsed_ticks = self.ui.last_projectile_snapshot_tick
+                            .map_or(1, |tick| snap.tick.saturating_sub(tick).max(1));
+                        self.ui.current_projectiles.clear();
+                        for p in &snap.projectiles {
+                            let Nuke { level } = p.kind else { continue };
+                            let new = self.ui.last_projectiles.remove(&p.id).is_none();
+                            if new && level != 4 && (p.path_cursor as u64) <= u64::from(p.steps_per_tick).saturating_mul(elapsed_ticks) {
+                                if effects {
+                                    self.ui.blast_scene.spawn_staging(p.src_tile, width, p.owner_id, false, current_time);
                                 }
+                                let (x, y) = crate::render::world::movers::tile_to_world(p.src_tile, width);
+                                self.sfx.play_nuke_launch(current_time, spatial_audio.params(x, y));
                             }
+                            self.ui.current_projectiles.insert(p.id, crate::app::TrackedProjectile::from_snapshot(p));
                         }
-                    }
-
-                    // Nuke impact sound
-                    for &(dx, dy, kind) in &self.ui.detonation_scratch {
-                        if let sow_core::game::ProjectileKind::Nuke { level } = kind {
-                            self.sfx.play_nuke_impact(
-                                current_time,
-                                level,
-                                spatial_audio.params(dx + 0.5, dy + 0.5),
-                            );
-                        }
-                    }
-
-                    // Detect new nuke launches and set client-side silo cooldowns
-                    if let Some(snap) = &self.sim.current_snapshot {
-                        let current_tick = snap.tick;
-                        const SILO_COOLDOWN_TICKS: u64 = 90;
-
-                        for proj in &snap.projectiles {
-                            if matches!(proj.kind, sow_core::game::ProjectileKind::Nuke { .. })
-                                && !self.ui.last_projectiles.contains_key(&proj.id)
-                            {
-                                let src_x = (proj.src_tile % self.sim.map_w) as f32 + 0.5;
-                                let src_y = (proj.src_tile / self.sim.map_w) as f32 + 0.5;
-                                self.sfx.play_nuke_launch(
-                                    current_time,
-                                    spatial_audio.params(src_x, src_y),
-                                );
-
-                                // New nuke — find source building by src_tile
-                                if let Some(b) = snap.buildings.iter().find(|b| {
-                                    b.kind == sow_core::game::BuildingKind::City
-                                        && b.tile_idx == proj.src_tile
-                                }) {
-                                    self.ui
-                                        .silo_cooldowns
-                                        .insert(b.id, current_tick + SILO_COOLDOWN_TICKS);
+                        let impacts: std::collections::HashSet<_> = snap.nuke_alerts.iter()
+                            .map(|a| (a.owner_id, a.tile_x, a.tile_y)).collect();
+                        for prev in self.ui.last_projectiles.values() {
+                            let Nuke { level } = prev.kind else { continue };
+                            if level == 3 {
+                                if effects {
+                                    self.ui.blast_scene.spawn_staging(prev.split_tile, width, prev.owner_id, true, current_time);
                                 }
+                                continue;
+                            }
+                            let x = prev.dst_tile % width;
+                            let y = prev.dst_tile / width;
+                            let could_have_arrived = prev.path_cursor.saturating_add(
+                                (prev.steps_per_tick as usize).saturating_mul(elapsed_ticks as usize)
+                            ) >= prev.path_len;
+                            if impacts.contains(&(prev.owner_id, x, y)) || (elapsed_ticks > 1 && could_have_arrived) {
+                                self.sfx.play_nuke_impact(current_time, level, spatial_audio.params(x as f32 + 0.5, y as f32 + 0.5));
+                            } else if effects {
+                                self.ui.blast_scene.spawn_sam_airburst(prev.current_tile, width, current_time);
                             }
                         }
-
-                        // Prune expired cooldowns
-                        self.ui
-                            .silo_cooldowns
-                            .retain(|_, expires| *expires > current_tick);
-                    }
-
-                    // Sync last_projectiles once per authoritative snapshot tick.
-                    if let Some(snap) = &self.sim.current_snapshot {
-                        if self.ui.last_projectile_snapshot_tick != Some(snap.tick) {
-                            self.ui.last_projectiles.clear();
-                            for proj in &snap.projectiles {
-                                self.ui.last_projectiles.insert(
-                                    proj.id,
-                                    crate::app::TrackedProjectile::from_snapshot(proj),
-                                );
-                            }
-                            self.ui.last_projectile_snapshot_tick = Some(snap.tick);
-                        }
+                        std::mem::swap(&mut self.ui.current_projectiles, &mut self.ui.last_projectiles);
+                        self.ui.last_projectile_snapshot_tick = Some(snap.tick);
                     }
 
                     crate::theme::dev_config::DevConfig::with(|dev| {
@@ -765,7 +700,7 @@ impl SowApp {
                         map_drawn = true;
                     }
 
-                    // ── GPU-instanced localized blasts (ground scorch + aerial FX) ──
+                    // ── GPU-instanced localized blasts and threat indicators ──
                     let blast_globals = crate::render::gpu::BlastGlobals {
                         camera_pos: [self.input.camera_x, self.input.camera_y],
                         zoom: self.input.camera_zoom,
@@ -773,16 +708,27 @@ impl SowApp {
                         screen_size: [self.input.screen_w, self.input.screen_h],
                         _pad: [0.0; 2],
                     };
-                    if dev.vfx_blasts {
+                    let reduced = self.ui.app.settings_state.reduced_motion;
+                    let selected = self.ui.app.hud_state.selected_nuke_kind;
+                    let dial_phase = self.ui.indicators.pointer_phase(&self.input, selected.is_some());
+                    let aim = selected.and_then(|kind|
+                        crate::render::world::indicators::Aim::at_pointer(
+                            kind, &self.sim, &self.input, reduced, dev.fog_of_war,
+                            dev.value("mover.nuke.arc_height")[0], dial_phase,
+                        )
+                    );
+                    let indicators = aim.is_some() || self.sim.current_snapshot.as_ref()
+                        .is_some_and(|snapshot| !snapshot.projectiles.is_empty());
+                    if dev.vfx_blasts || indicators {
                         if self.gfx.blast_renderer.is_none() {
                             let surface_format = s.info().format;
                             self.gfx.blast_renderer = Some(crate::render::gpu::BlastRenderer::new(
-                                &render_ctx.context,
-                                surface_format,
+                                &render_ctx.context, surface_format,
                             ));
                         }
                         if let Some(blast_r) = self.gfx.blast_renderer.as_mut() {
-                            if self.ui.blast_scene.has_active() {
+                            blast_r.begin_frame();
+                            if dev.vfx_blasts && self.ui.blast_scene.has_active() {
                                 let blast_pack = crate::render::world::blasts::BlastPackParams {
                                     camera_x: self.input.camera_x,
                                     camera_y: self.input.camera_y,
@@ -790,28 +736,31 @@ impl SowApp {
                                     screen_w: self.input.screen_w,
                                     screen_h: self.input.screen_h,
                                     fog_of_war: dev.fog_of_war,
+                                    reduced_motion: reduced,
                                     my_player_id: my_id,
                                     fog_visible: &self.sim.fog_visible,
                                     now: current_time,
                                 };
                                 self.ui.blast_scene.pack_gpu(&blast_pack, blast_r);
-                                // Layer 1: scorched crater & cooling ember cracks UNDER movers.
-                                blast_r.draw_ground(
-                                    &mut render_ctx.command_encoder,
-                                    frame.texture_view(),
-                                    blast_globals,
-                                    &render_ctx.context,
-                                );
-                            } else {
-                                blast_r.begin_frame();
                             }
+                            if let Some(snapshot) = &self.sim.current_snapshot {
+                                self.ui.indicators.pack(
+                                    &self.sim, snapshot, &self.input, dev.fog_of_war, reduced,
+                                    self.time.interp.linear_alpha(current_time), blast_r,
+                                );
+                            }
+                            if let Some(aim) = &aim { aim.ground(blast_r); }
+                            blast_r.draw_ground(
+                                &mut render_ctx.command_encoder,
+                                frame.texture_view(), blast_globals, &render_ctx.context,
+                            );
                         }
                     }
 
                     crate::render::text_atlases::poll_arabic_font();
 
                     // ── GPU-instanced movers (boats, nukes, SAM) ─────────────
-                    if dev.vfx_movers || dev.vfx_mover_trails {
+                    if dev.vfx_movers || dev.vfx_mover_trails || aim.is_some() {
                         if self.gfx.mover_renderer.is_none() {
                             let surface_format = s.info().format;
                             self.gfx.mover_renderer = Some(crate::render::gpu::MoverRenderer::new(
@@ -851,6 +800,7 @@ impl SowApp {
                                 &dev.shader_params,
                             );
                             self.ui.mover_scene.pack_gpu(&pack, mover_r);
+                            if let Some(aim) = &aim { aim.trajectory(mover_r); }
                             let mover_globals = crate::render::gpu::MoverGlobals {
                                 camera_pos: [self.input.camera_x, self.input.camera_y],
                                 zoom: self.input.camera_zoom,

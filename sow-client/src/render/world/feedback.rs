@@ -2,6 +2,7 @@ use crate::app::{InputState, SimState, TransportTargetMarker, UiState};
 use crate::death_nameplate::{
     GOLD_REWARD_DURATION, death_animation, death_icon, gold_reward_elapsed,
 };
+use crate::render::avatars::AvatarSlots;
 use crate::render::gpu::TextRenderer;
 use crate::render::motion::spring_overshoot;
 use crate::render::world::overlays::world_to_screen;
@@ -9,7 +10,6 @@ use crate::render::{dev_emoji_outline, dev_text_style};
 use crate::theme::dev_config::DevConfig;
 use sow_core::protocol::{AttackSnapshot, SimSnapshot};
 use sow_render::FontAtlas;
-use crate::render::avatars::AvatarSlots;
 use sow_render::text::{AVATAR_GOLD_SLOT, NameplateStatusSprite};
 use web_time::Instant;
 
@@ -209,7 +209,10 @@ fn render_cascade_callouts(
             let gap = 4.0 * sf;
             let total_w = icon_diameter + gap + measure.width;
             let row_left = center_x - total_w * 0.5;
-            let icon_center = [row_left + icon_diameter * 0.5, center_y - measure.height * 0.05];
+            let icon_center = [
+                row_left + icon_diameter * 0.5,
+                center_y - measure.height * 0.05,
+            ];
             let outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
             match icon {
                 crate::app::CascadeIcon::Status(NameplateStatusSprite::Troops) => {
@@ -237,7 +240,10 @@ fn render_cascade_callouts(
             }
             let _ = text.push_prepared_text(
                 prepared,
-                [row_left + icon_diameter + gap, center_y + measure.height * 0.35],
+                [
+                    row_left + icon_diameter + gap,
+                    center_y + measure.height * 0.35,
+                ],
                 font_size,
                 color,
                 dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
@@ -245,7 +251,10 @@ fn render_cascade_callouts(
         } else {
             let _ = text.push_prepared_text(
                 prepared,
-                [center_x - measure.width * 0.5, center_y + measure.height * 0.35],
+                [
+                    center_x - measure.width * 0.5,
+                    center_y + measure.height * 0.35,
+                ],
                 font_size,
                 color,
                 dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
@@ -452,24 +461,17 @@ fn render_transport_targets(
             return true;
         }
 
-        let pulse = (age * 2.7).sin() * 0.5 + 0.5;
-        let rotation = (age * TRANSPORT_TARGET_ROTATIONS_PER_SEC).fract();
-        let outer_radius = (24.0 + 3.0 * pulse) * sf;
-        let inner_radius = (16.0 + 2.0 * pulse) * sf;
+        let rotation = if ui.app.settings_state.reduced_motion {
+            0.125
+        } else {
+            (age * TRANSPORT_TARGET_ROTATIONS_PER_SEC).fract()
+        };
         let center_px = [center[0] * sf, center[1] * sf];
-        text.push_ring(
+        text.push_landing_beacon(
             center_px,
-            outer_radius,
-            [player_rgb[0], player_rgb[1], player_rgb[2], alpha * 0.48],
-            (2.5 * sf).max(1.0),
-        );
-        text.push_rotating_arc(
-            center_px,
-            inner_radius,
-            0.76,
+            25.0 * sf,
             rotation,
             [player_rgb[0], player_rgb[1], player_rgb[2], alpha],
-            (3.5 * sf).max(1.0),
         );
         if marker.eta_seconds.is_some() {
             let font_size = TRANSPORT_TARGET_ETA_FONT_SIZE * sf;
@@ -1045,4 +1047,3 @@ fn attack_badge_owner_and_text_color(
     };
     Some((attack.owner_id, text_color))
 }
-

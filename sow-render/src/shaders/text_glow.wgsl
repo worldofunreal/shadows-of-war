@@ -307,6 +307,25 @@ fn shade_icon(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(rgb, out_a);
 }
 
+// Landing site sonar. Keep the center quiet for the arrival countdown.
+fn shade_landing_beacon(in: VertexOutput) -> vec4<f32> {
+    let p = 2.0 * (in.local_uv - in.content_rect.xy) / (in.content_rect.zw-in.content_rect.xy) - 1.0;
+    let d = length(p);
+    let aa = max(fwidth(d),0.012);
+    let rim = 1.0 - smoothstep(aa, 2.0*aa, abs(d-0.89));
+    let bearing = atan2(p.y,p.x)/6.2831853 + 0.5;
+    let arc = fract(4.0*(bearing-in.uv_rect.y));
+    let brackets = smoothstep(0.015,0.08,arc)*(1.0-smoothstep(0.57,0.65,arc));
+    let sweep = fract(in.uv_rect.y-bearing);
+    let dial = smoothstep(0.42,0.52,d)*(1.0-smoothstep(0.85,0.89,d));
+    let echo = 1.0-smoothstep(aa,2.0*aa,abs(d-(0.43+0.43*fract(in.uv_rect.y*2.0))));
+    let marks = 1.0-smoothstep(0.023,0.060,min(abs(p.x),abs(p.y)));
+    let signal = max(rim*brackets,max(dial*(0.43*echo+0.66*exp(-12.0*sweep)), marks*smoothstep(0.76,0.84,d)*(1.0-smoothstep(0.94,1.0,d))));
+    let alpha = max(0.32*(1.0-smoothstep(0.87,0.94,d)),signal);
+    let tint = mix(in.color.rgb,vec3<f32>(0.63,0.98,1.0),0.55);
+    return vec4<f32>(mix(vec3<f32>(0.02,0.06,0.08),tint,clamp(signal/max(alpha,0.001),0.0,1.0)),alpha*in.color.a);
+}
+
 fn shade_text(in: VertexOutput) -> vec4<f32> {
     if (in.kind > 12.5) {
         return shade_icon(in);
@@ -320,6 +339,7 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
     if (in.kind > 9.5) {
         return shade_rounded_rect(in);
     }
+    if (in.kind > 8.5) { return shade_landing_beacon(in); }
     if (in.kind > 7.5) {
         return shade_arc(in);
     }

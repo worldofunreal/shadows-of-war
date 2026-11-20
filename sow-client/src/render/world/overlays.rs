@@ -82,33 +82,6 @@ pub(crate) fn render_overlays(
             render_buildings(text, snapshot, sim, ui, input, dev, sf, zoom_scaled, now);
         }
         render_building_placement_preview(text, sim, ui, input, sf, placement_can_confirm);
-        if let Some(kind) = ui.app.hud_state.selected_nuke_kind
-            && let Some(engine) = sim.engine.as_ref()
-        {
-            let zoom = input.camera_zoom.max(0.01);
-            let x = ((input.last_mouse_x as f32 - input.camera_x) / zoom).floor() as i32;
-            let y = ((input.last_mouse_y as f32 - input.camera_y) / zoom).floor() as i32;
-            let width = engine.state.map.width;
-            if x >= 0 && y >= 0 && (x as u32) < width && (y as u32) < engine.state.map.height {
-                let tile = y as u32 * width + x as u32;
-                if let Some(silo) = engine.ready_nuclear_silo(my_id, tile) {
-                    let at = [(x as f32 + 0.5) * zoom + input.camera_x,
-                              (y as f32 + 0.5) * zoom + input.camera_y];
-                    let radius = match kind {
-                        sow_core::game::NukeKind::AtomBomb => sow_core::game::nuke_outer_radius(1),
-                        sow_core::game::NukeKind::HydrogenBomb => sow_core::game::nuke_outer_radius(2),
-                        sow_core::game::NukeKind::MIRV => 1500,
-                    };
-                    text.push_ring(at, radius as f32 * zoom, [1.0, 0.3, 0.18, 0.75], 2.0 * sf);
-                    let source = [
-                        ((silo.tile_idx % width) as f32 + 0.5) * zoom + input.camera_x,
-                        ((silo.tile_idx / width) as f32 + 0.5) * zoom + input.camera_y,
-                    ];
-                    text.push_ring(source, (2.0 * zoom).max(10.0 * sf), [1.0, 0.78, 0.25, 0.85], 2.0 * sf);
-                }
-            }
-        }
-
         let nameplate_render_started_at = crate::diag::startup_perf_timer();
         super::nameplates::render_nameplates(
             text,
