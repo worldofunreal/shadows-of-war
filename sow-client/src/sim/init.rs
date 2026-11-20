@@ -53,7 +53,7 @@ impl SowApp {
         self.input.spawn_intent_rate.reset();
         self.ui.building_placement_cache = Default::default();
         self.ui.app.hud_state.building_placement = None;
-        self.input.building_drag_offset = None;
+        self.input.building_drag = None;
         self.sim.engine = Some(new_engine);
         self.time
             .interp

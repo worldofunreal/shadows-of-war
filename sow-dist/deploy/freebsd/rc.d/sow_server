@@ -45,7 +45,8 @@ sow_server_prestart()
 	export RUST_LOG
 	export SOW_DB_URL SOW_DB_SECRET SOW_WS_LISTEN SOW_MAPS_HTTP_LISTEN SOW_SERVER_HTTP_URL
 	export SOW_SERVER_MAX_CONNECTIONS
-	export SOW_MAPS_ROOT SOW_MAPS_CATALOG_PATH SOW_RELAY_BIN
+	export SOW_MAPS_ROOT SOW_MAPS_CATALOG_PATH SOW_MAPS_UPLOAD_ROOT SOW_RELAY_BIN
+	export SOW_VERIFIER_DIR SOW_SERVER_RELEASE_ID SOW_SERVER_OWNER_WS_URL SOW_SERVER_MAPS_URL
 	export SOW_RELAY_LISTEN_HOST SOW_RELAY_LOG_DIR
 	export SOW_RELAY_HOST SOW_RELAY_WORKERS SOW_RELAY_WORKER_COUNT
 	export SOW_RELAY_CONTROL_SECRET SOW_RELAY_MGMT_SCHEME SOW_RELAY_MGMT_RESOLVE_IP
@@ -97,7 +98,7 @@ sow_server_generation_start()
 	if [ -x /usr/local/bin/valkey-cli ]; then
 		/usr/local/bin/valkey-cli -h 127.0.0.1 ping | grep -q PONG || return 1
 	fi
-	/usr/sbin/daemon -P "$parent" -p "$child" -r -R 2 -H \
+	/usr/sbin/daemon -f -P "$parent" -p "$child" -r -R 2 -H \
 		-o "/var/log/sow/server_${id}.log" -T "sow-server-${id}" -u sowserver "$proc"
 }
 

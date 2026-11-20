@@ -2,16 +2,16 @@
   "_comment": "Conquest Blitz Node 12 (Flank) on southeastasia",
   "map": "southeastasia",
   "player_spawn": [
-    239,
-    146
+    382,
+    235
   ],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "allied_vanguard",
       "name": "Allied Vanguard",
-      "x": 244,
-      "y": 156,
+      "x": 390,
+      "y": 251,
       "starting_troops": 3500,
       "relation": "allied",
       "can_request_alliance": true,
@@ -27,8 +27,8 @@
     {
       "id": "outpost_alpha",
       "name": "Outpost Alpha",
-      "x": 252,
-      "y": 148,
+      "x": 403,
+      "y": 238,
       "starting_troops": 910,
       "relation": "enemy",
       "team": "Red",
@@ -51,8 +51,8 @@
     {
       "id": "vanguard_keep",
       "name": "Vanguard Keep",
-      "x": 260,
-      "y": 152,
+      "x": 415,
+      "y": 244,
       "starting_troops": 1540,
       "relation": "enemy",
       "team": "Red",
@@ -75,8 +75,8 @@
     {
       "id": "sector_boss",
       "name": "Sector 12 Warlord",
-      "x": 208,
-      "y": 136,
+      "x": 333,
+      "y": 219,
       "starting_troops": 4400,
       "relation": "enemy",
       "team": "Red",

@@ -71,6 +71,7 @@ import {
 } from "./main_menu.lobbies.ts";
 import {
     accelerateChoreographyPlan,
+    applyGpuPerfTier,
     flyArcPointsToKeyframes,
     planRewardChoreography,
     sampleFlyArcPoints,
@@ -78,6 +79,7 @@ import {
     type RewardChoreographyPlan,
     type RewardPlaybackMode,
 } from "./main_menu.motion.ts";
+applyGpuPerfTier();
 import {
     activeProfileEntry,
     bumpAchievementFlatLimit,
@@ -957,8 +959,7 @@ function renderTopbar() {
                 tag +
                 " class='sow-menu__currency sow-menu__" +
                 kind +
-                "'" +
-                (shop ? " type='button' data-command='main_nav' data-nav-screen='store'" : "") +
+                (shop ? " sow-control-crest' type='button' data-command='main_nav' data-nav-screen='store'" : "'") +
                 " data-sow-tooltip='" +
                 esc(String(amount)) +
                 "' data-sow-tooltip-title='" +
@@ -982,12 +983,12 @@ function renderTopbar() {
     return (
         "<header class='sow-menu__topbar' data-progression>" +
         "<div class='sow-menu__nameplate'>" +
-        "<span class='sow-menu__portrait'><button class='sow-menu__avatar' type='button' data-command='open_leader_picker' aria-label='" +
+        "<span class='sow-menu__portrait'><button class='sow-menu__avatar sow-control-crest' type='button' data-command='open_leader_picker' aria-label='" +
         esc(SOW_t("menu.select_leader")) +
         "' style=\"" +
         avatarBackgroundCss(avatarImage()) +
         "\"></button>" +
-        "<button class='sow-menu__level' type='button' data-command='open_profile' aria-label='" +
+        "<button class='sow-menu__level sow-control-crest' type='button' data-command='open_profile' aria-label='" +
         esc(SOW_t("profile.level", { level })) +
         "'><strong data-progression-level-value>" +
         esc(level) +
@@ -997,7 +998,7 @@ function renderTopbar() {
         "\" maxlength='16' aria-label='" +
         esc(SOW_t("menu.display_name")) +
         "'></label>" +
-        "<button class='sow-menu__progress' type='button' data-command='open_profile' aria-label='" +
+        "<button class='sow-menu__progress sow-control-crest' type='button' data-command='open_profile' aria-label='" +
         esc(SOW_t("menu.open_profile")) +
         "' aria-describedby='sow-menu-account-xp'><span class='sow-menu__xp-track' role='progressbar' aria-label='" +
         esc(SOW_t("menu.xp")) +
@@ -1016,10 +1017,10 @@ function renderTopbar() {
         "</small></span></span></button></div>" +
         "<div class='sow-menu__top-actions'>" +
         balances +
-        "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" +
+        "<button class='sow-menu__topbar-settings sow-control-crest' type='button' data-command='toggle_settings' aria-label='" +
         esc(SOW_t("menu.settings")) +
         "'>" +
-        menuIcon("settings") +
+        menuIcon("options") +
         "</button></div></header>"
     );
 }
@@ -1054,9 +1055,11 @@ function syncDisconnectNotice(nextState: MenuState) {
 }
 
 function renderSystemNotice() {
-    if (!menuUi.state || menuUi.state.phase !== "MainMenu") return "";
+    if (!menuUi.state) return "";
     const updateAvailable = menuUi.state.update_available === true;
+    if (menuUi.state.phase !== "MainMenu" && !updateAvailable) return "";
     const reloadSafe =
+        menuUi.state.phase === "MainMenu" &&
         !menuUi.state.waiting &&
         !menuUi.state.match_preparing &&
         !menuUi.state.menu_return &&
@@ -1106,7 +1109,7 @@ function handleSystemNoticeCommand(command: string | undefined) {
         const state = menuUi.state;
         if (
             state?.update_available &&
-            (state.waiting || state.match_preparing || state.menu_return || pendingRewardReceipts().length > 0)
+            (state.phase !== "MainMenu" || state.waiting || state.match_preparing || state.menu_return || pendingRewardReceipts().length > 0)
         ) return true;
         window.location.reload();
         return true;
@@ -2961,6 +2964,10 @@ function presentRankedResult(result: RankedResult) {
     };
     again.addEventListener("click", (event) => dismiss(event, true));
     close.addEventListener("click", (event) => dismiss(event));
+    layer.addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest("button")) return;
+        motion?.accelerate();
+    });
     layer.addEventListener("keydown", (event) => {
         if (event.key === "Escape") dismiss(event);
         if (event.key === "Tab") {

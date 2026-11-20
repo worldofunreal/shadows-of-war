@@ -1529,3 +1529,26 @@ html[dir="rtl"] .sow-analytics-consent--game {
   }
 }
 
+:root[data-sow-gpu-tier="low"] {
+  --sow-tactical-surface-blur: 0px;
+}
+
+:root[data-sow-gpu-tier="low"] .sow-analytics-consent,
+:root[data-sow-gpu-tier="low"] .sow-tooltip,
+:root[data-sow-gpu-tier="low"] .sow-control-dropdown__menu {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  :root {
+    --sow-tactical-surface-blur: 0px;
+  }
+  .sow-analytics-consent,
+  .sow-tooltip,
+  .sow-control-dropdown__menu {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+

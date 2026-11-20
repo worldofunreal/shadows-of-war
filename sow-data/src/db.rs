@@ -8286,6 +8286,50 @@ mod tests {
     }
 
     #[test]
+    fn release_work_retains_verification_and_unconfirmed_result_handoffs() {
+        use crate::profile::{
+            MatchExitState, MatchStartRecord, MatchWork, ReplayVerificationStatus,
+        };
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("profile.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1/0", None, Some(metadata.clone()));
+        let start = MatchStartRecord {
+            match_id: "991234567".into(),
+            player_ids: vec!["account".into()],
+            metadata: serde_json::json!({"server_release_id":"release-a"}),
+            replay_status: ReplayVerificationStatus::Pending,
+        };
+        let start_bytes = serde_json::to_vec(&start).unwrap();
+        let txn = metadata.begin_write().unwrap();
+        txn.open_table(crate::redb_store::MATCH_STARTS_TABLE)
+            .unwrap()
+            .insert(start.match_id.as_str(), start_bytes.as_slice())
+            .unwrap();
+        txn.commit().unwrap();
+        assert_eq!(db.outstanding_release_matches("release-a").unwrap(), 1);
+        assert_eq!(db.outstanding_release_matches("release-b").unwrap(), 0);
+
+        db.finish_match_verification("991234567", ReplayVerificationStatus::Verified)
+            .unwrap();
+        assert_eq!(db.outstanding_release_matches("release-a").unwrap(), 0);
+
+        let work = MatchWork::Progress {
+            match_id: "991234567".into(),
+            sequence: 0,
+            sha256: "a".repeat(64),
+            closing: true,
+        };
+        db.queue_match_work(work.clone()).unwrap();
+        assert_eq!(db.outstanding_release_matches("release-a").unwrap(), 1);
+        let mut confirmed = db.match_work(&work.key()).unwrap().unwrap();
+        confirmed.state = MatchExitState::Confirmed;
+        db.save_match_work(&confirmed).unwrap();
+        assert_eq!(db.outstanding_release_matches("release-a").unwrap(), 0);
+    }
+
+    #[test]
     fn match_id_seed_recovers_from_replay_files_and_survives_redb_restore() {
         let temp = tempfile::tempdir().unwrap();
         let directory = temp.path().join("replays");

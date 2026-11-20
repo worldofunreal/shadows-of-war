@@ -1,14 +1,14 @@
 {
   "_comment": "Tactics III — Amphibious Assault: TransportFleet across Irish Sea (europe, 1000x576).",
   "map": "europe",
-  "player_spawn": [222, 266],
+  "player_spawn": [355, 425],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "irish_bandits",
       "name": "Bog Raiders",
-      "x": 238,
-      "y": 256,
+      "x": 381,
+      "y": 409,
       "starting_troops": 700,
       "relation": "enemy",
       "team": "Red",
@@ -25,8 +25,8 @@
     {
       "id": "welsh_keep",
       "name": "Severn Watch",
-      "x": 305,
-      "y": 268,
+      "x": 488,
+      "y": 428,
       "starting_troops": 1800,
       "relation": "enemy",
       "team": "Red",

@@ -1,14 +1,14 @@
 {
   "_comment": "Advanced Tactics I — Port, TradeShip & Warship (Borneo on southeastasia, 1000x592).",
   "map": "southeastasia",
-  "player_spawn": [318, 438],
+  "player_spawn": [509, 704],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "river_corsairs",
       "name": "Strait Corsairs",
-      "x": 360,
-      "y": 444,
+      "x": 576,
+      "y": 714,
       "starting_troops": 1400,
       "relation": "enemy",
       "team": "Red",
@@ -26,8 +26,8 @@
     {
       "id": "golden_syndicate",
       "name": "Golden Syndicate",
-      "x": 378,
-      "y": 416,
+      "x": 605,
+      "y": 669,
       "starting_troops": 4200,
       "relation": "enemy",
       "team": "Red",

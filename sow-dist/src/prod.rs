@@ -155,27 +155,47 @@ struct RelayAdmissionPause<'a> {
     config: &'a Config,
     route: &'a relay::Control,
     paused: bool,
+    legacy_ws_port: Option<u16>,
 }
 
 impl<'a> RelayAdmissionPause<'a> {
     fn acquire(config: &'a Config, route: &'a relay::Control, require_empty: bool) -> Result<Self> {
         route.metrics(config)?;
-        let pause = Self { config, route, paused: true };
+        let legacy_server = require_empty && !has_active_server_generation(config)?;
+        let mut pause = Self {
+            config,
+            route,
+            paused: true,
+            legacy_ws_port: None,
+        };
         route.drain(config, true)?;
         if require_empty {
+            if legacy_server {
+                pause.legacy_ws_port = Some(pause_legacy_websockets(config)?);
+            }
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(900);
             loop {
                 let active = route.lobbies(config)?.len();
-                let pending = if active == 0 {
+                let legacy_sessions = if legacy_server {
+                    legacy_server_connections(config)?
+                } else {
+                    0
+                };
+                let generation_lobbies = if legacy_server {
+                    legacy_generation_lobbies(config)?
+                } else {
+                    0
+                };
+                let pending = if active == 0 && legacy_sessions == 0 && generation_lobbies == 0 {
                     match verify_no_pending_reward_calculations(config) {
                         Ok(()) => break,
                         Err(error) => error,
                     }
                 } else {
-                    anyhow::anyhow!("{active} active or closing matches remain")
+                    anyhow::anyhow!("{active} active/closing relay lobbies, {generation_lobbies} release lobbies and {legacy_sessions} legacy server connections remain")
                 };
                 if std::time::Instant::now() >= deadline {
-                    return Err(pending.context("timed out draining production matches"));
+                    return Err(pending.context("timed out waiting for the legacy server and its matches to empty"));
                 }
                 println!("  waiting for production drain: {pending:#}");
                 std::thread::sleep(std::time::Duration::from_secs(10));
@@ -189,8 +209,126 @@ impl<'a> RelayAdmissionPause<'a> {
             self.route.drain(self.config, false)?;
             self.paused = false;
         }
+        // Activation now owns the public WS route.
+        self.legacy_ws_port = None;
         Ok(())
     }
+}
+
+impl Drop for RelayAdmissionPause<'_> {
+    fn drop(&mut self) {
+        if let Some(port) = self.legacy_ws_port.take() {
+            let _ = set_legacy_ws_route(self.config, port);
+        }
+        if let Err(error) = self.resume() {
+            eprintln!("failed to restore relay matchmaking after deployment: {error:#}");
+        }
+    }
+}
+
+fn pause_legacy_websockets(config: &Config) -> Result<u16> {
+    let host = site::current().host();
+    let map_path = format!(
+        "/usr/local/etc/nginx/{}sow-server-active-ws.map",
+        site::current().map_prefix()
+    );
+    let command = format!(
+        r#"set -eu
+file={map_path}
+host={host}
+conf=/usr/local/etc/nginx/conf.d/__SITE_NGINX_CONF__
+legacy_proxy='proxy_pass http://__SITE_LOOPBACK__:25564;'
+paused_proxy='return 503; # sow legacy websocket drain'
+if sudo grep -Fq "$legacy_proxy" "$conf"; then
+    sudo sed -i '' "s|^[[:space:]]*$legacy_proxy[[:space:]]*$|        $paused_proxy|" "$conf"
+    if sudo nginx -t >/dev/null 2>&1 && sudo service nginx reload >/dev/null 2>&1; then
+        printf '%s\n' 25564
+        exit 0
+    fi
+    sudo sed -i '' "s|^[[:space:]]*$paused_proxy$|        $legacy_proxy|" "$conf"
+    sudo nginx -t >/dev/null 2>&1 && sudo service nginx reload >/dev/null 2>&1 || true
+    exit 1
+fi
+port=$(sudo awk -F '"' -v host="$host" '$2 == host {{ gsub(/[^0-9]/, "", $3); print $3; exit }}' "$file")
+[ -n "$port" ] || port=25564
+sudo sed -i '' "/\"$host\"/d" "$file"
+sudo sh -c 'printf "\"%s\" 0;\n" "$1" >> "$2"' sh "$host" "$file"
+if ! sudo nginx -t >/dev/null 2>&1 || ! sudo service nginx reload >/dev/null 2>&1; then
+    sudo sed -i '' "/\"$host\"/d" "$file"
+    sudo sh -c 'printf "\"%s\" %s;\n" "$1" "$2" >> "$3"' sh "$host" "$port" "$file"
+    sudo nginx -t >/dev/null 2>&1 && sudo service nginx reload >/dev/null 2>&1 || true
+    exit 1
+fi
+printf '%s\n' "$port""#,
+        map_path = shell_quote(&map_path),
+        host = shell_quote(host),
+    );
+    let port = output("ssh", &[&config.control_host, &command])?;
+    port.trim().parse().context("legacy websocket port was invalid")
+}
+
+fn set_legacy_ws_route(config: &Config, port: u16) -> Result<()> {
+    let command = format!(
+        r#"set -eu
+file=/usr/local/etc/nginx/{}sow-server-active-ws.map
+host={}
+conf=/usr/local/etc/nginx/conf.d/__SITE_NGINX_CONF__
+legacy_proxy='proxy_pass http://__SITE_LOOPBACK__:25564;'
+paused_proxy='return 503; # sow legacy websocket drain'
+if sudo grep -Fq "$paused_proxy" "$conf"; then
+    sudo sed -i '' "s|^[[:space:]]*$paused_proxy$|        $legacy_proxy|" "$conf"
+else
+    sudo sed -i '' "/\"$host\"/d" "$file"
+    sudo sh -c 'printf "\"%s\" %s;\n" "$1" "$2" >> "$3"' sh "$host" {port} "$file"
+fi
+sudo nginx -t >/dev/null
+sudo service nginx reload >/dev/null"#,
+        site::current().map_prefix(),
+        shell_quote(site::current().host()),
+        port = port,
+    );
+    run("ssh", &[&config.control_host, &command], None)
+}
+
+fn legacy_server_connections(config: &Config) -> Result<usize> {
+    let endpoint = shell_quote(&format!("{}:25564", site::current().loopback()));
+    let command = format!(
+        "sudo sockstat -4 -c -p 25564 | awk -v endpoint={endpoint} '$6 == endpoint {{ n++ }} END {{ print n + 0 }}'"
+    );
+    let count = output(
+        "ssh",
+        &[&config.control_host, &command],
+    )?;
+    count.trim().parse().context("legacy server connection count was invalid")
+}
+
+fn legacy_generation_lobbies(config: &Config) -> Result<usize> {
+    let command = r#"set -eu
+ws_map=/usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-ws.map
+http_map=/usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-http.map
+if ! sudo test -f "$ws_map" && ! sudo test -f "$http_map"; then
+    printf '%s\n' 0
+    exit 0
+fi
+sudo test -f "$ws_map" && sudo test -f "$http_map" || exit 1
+total=0
+while read -r id; do
+    case "$id" in ''|*[!A-Za-z0-9._-]*) continue ;; esac
+    if ! sudo jexec __SITE_SERVER_JAIL__ /usr/local/etc/rc.d/sow_server status_generation "$id" >/dev/null 2>&1; then continue; fi
+    port=$(sudo awk -F '"' -v id="$id" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
+    [ -n "$port" ] || exit 1
+    status=$(curl -fsS --max-time 5 "http://__SITE_LOOPBACK__:$port/internal/generation-status")
+    count=$(printf '%s' "$status" | sed -n 's/.*"occupied_lobbies"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p')
+    case "$count" in ''|*[!0-9]*) exit 1 ;; esac
+    total=$((total + count))
+done <<EOF
+$(sudo awk -F '"' '{ if ($2 != "") print $2 }' "$ws_map")
+EOF
+printf '%s\n' "$total""#;
+    output("ssh", &[&config.control_host, command])?
+        .trim()
+        .parse()
+        .context("release lobby count was invalid")
 }
 
 fn verify_no_pending_reward_calculations(config: &Config) -> Result<()> {
@@ -246,14 +384,6 @@ VERIFY_SAVED_ENGINES
 "#;
     run("ssh", &[&config.control_host, script], None)
         .context("backend update postponed: a saved match still requires its running verifier")
-}
-
-impl Drop for RelayAdmissionPause<'_> {
-    fn drop(&mut self) {
-        if let Err(error) = self.resume() {
-            eprintln!("failed to restore relay matchmaking after deployment: {error:#}");
-        }
-    }
 }
 
 pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, client_update: bool) -> Result<()> {
@@ -361,11 +491,9 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
 
     println!("==> 5/8 Stage release (no service mutation)");
     stage_release(&config, &release)?;
-    // Match relays are independent child processes and survive relay-control restarts.
-    // This broader drain protects backend replay settlement: each match pins its
-    // simulation_rules_id, so a replacement verifier cannot process another version.
-    // Keep relay-only deploys nonblocking; remove this backend drain only after
-    // version-aware routing keeps each old immutable verifier alive through settlement.
+    // Database/ops changes still drain until both generations are proven compatible.
+    // Server/maps-only changes use owner routing; the first activation drains the
+    // legacy process once because it has no release identity or lobby-status endpoint.
     // The first generation-aware activation must drain once: the currently
     // installed client/server cannot route a reconnect back to an owner.
     let generation_routing_ready = !(plan.server || plan.maps || plan.ops)
@@ -374,11 +502,17 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
         || ((plan.server || plan.maps) && !generation_routing_ready);
     let activate = || {
         println!("==> 6/8 Activate changed components only");
-        // A first activation has no relay to pause and no matches to drain.
-        let mut admission = (!fresh_site && (require_empty || plan.relay))
-            .then(|| RelayAdmissionPause::acquire(&config, &local, require_empty))
-            .transpose()?;
         let backup = relay::Backup::capture(&config)?;
+        let admission = (!fresh_site && (require_empty || plan.relay))
+            .then(|| RelayAdmissionPause::acquire(&config, &local, require_empty))
+            .transpose();
+        let mut admission = match admission {
+            Ok(admission) => admission,
+            Err(error) => {
+                backup.remove(&config)?;
+                return Err(error);
+            }
+        };
         let mut opened_local = false;
         let result = (|| -> Result<()> {
             if plan.relay {
@@ -1751,7 +1885,7 @@ fn maps_catalog_path_drift(config: &Config) -> Result<bool> {
     let expected = shell_quote(&expected);
     let remote = format!(
         r#"host=$(sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{{print substr($0,index($0,"=")+1)}}' __SITE_HOST_ETC__/sow.env)
-server=$(sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{{print substr($0,index($0,"=")+1)}}' __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env)
+server=$(sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{{v=substr($0,index($0,"=")+1)}} END{{print v}}' __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env)
 database=$(sudo awk -F= '$1=="SOW_MAPS_CATALOG_PATH"{{print substr($0,index($0,"=")+1)}}' __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env)
 active=$(sudo cat __SITE_RELEASE_ROOT__/active-generation 2>/dev/null || true)
 if [ "$host" != {expected} ] || [ "$database" != {expected} ]; then echo drift
@@ -1857,7 +1991,7 @@ fn activate_control_host(
     let server_restart = plan.server || plan.maps || plan.ops;
     let db_restart = plan.database || plan.ops;
     let nginx_reload = plan.ops || server_restart;
-    let runtime_env = plan.server || plan.database || plan.ops;
+    let runtime_env = plan.server || plan.database || plan.maps || plan.ops;
     let (db_secret_file, control_secret_file) = if runtime_env {
         let db_secret = env::var("SOW_DB_SECRET")?;
         let control_secret = env::var("SOW_RELAY_CONTROL_SECRET")?;
@@ -2176,7 +2310,11 @@ __SERVER_ACTIVATE__
 if ! sudo jexec __SITE_DATABASE_JAIL__ service sow_database status >/dev/null 2>&1; then rollback; fi
 if __SERVER_RESTART__ && ! sudo jexec __SITE_SERVER_JAIL__ /usr/local/etc/rc.d/sow_server status_generation "$(sudo cat __SITE_RELEASE_ROOT__/active-generation)"; then rollback; fi
 if __NGINX_RELOAD__; then sudo service nginx reload || rollback; fi
-if [ "$legacy_service" = true ]; then sudo jexec __SITE_SERVER_JAIL__ service sow_server stop >/dev/null 2>&1 || true; fi
+if [ "$legacy_service" = true ]; then
+    old_connections=$(sudo sockstat -4 -c -p 25564 | awk -v endpoint="__SITE_LOOPBACK__:25564" '$6 == endpoint { n++ } END { print n + 0 }')
+    [ "$old_connections" = 0 ] || rollback
+    sudo jexec __SITE_SERVER_JAIL__ service sow_server stop >/dev/null 2>&1 || true
+fi
 __SECRET_CLEANUP__
 "#,
     );
@@ -2240,7 +2378,11 @@ __SECRET_CLEANUP__
     for (token, value) in replacements {
         remote = remote.replace(token, &value);
     }
-    run("ssh", &[&config.control_host, &remote], Some(&paths.root))
+    let locked_remote = format!(
+        "sudo lockf -k /var/run/sow-server-generation.lock /bin/sh -c {}",
+        shell_quote(&remote)
+    );
+    run("ssh", &[&config.control_host, &locked_remote], Some(&paths.root))
         .context("granular control-host activation failed")
 }
 
@@ -2255,7 +2397,12 @@ fn server_generation_activation(release: &Release) -> String {
     active_http=/usr/local/etc/nginx/__PREFIX__sow-server-active-http.map
     marker=__SITE_RELEASE_ROOT__/active-generation
     previous_generation=$(sudo cat "$marker" 2>/dev/null || true)
-    if [ -z "$previous_generation" ]; then legacy_service=true; fi
+    if [ -z "$previous_generation" ]; then
+        legacy_service=true
+        sudo sed -i '' "/\"$host\"/d" "$active_ws"
+        sudo sh -c 'printf "\"%s\" 0;\n" "$1" >> "$2"' sh "$host" "$active_ws"
+        sudo nginx -t && sudo service nginx reload || rollback
+    fi
     if sudo grep -Fq "\"$id\"" "$ws_map"; then
         ws_port=$(sudo awk -F '"' -v id="$id" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$ws_map")
         http_port=$(sudo awk -F '"' -v id="$id" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
@@ -2273,9 +2420,11 @@ fn server_generation_activation(release: &Release) -> String {
     fi
     generation_dir=/var/db/sow/server/generations/$id
     env_file=/usr/local/etc/sow/generations/$id.env
+    sudo jexec __SITE_SERVER_JAIL__ install -d -o sowserver -g sow -m 0750 "$generation_dir"
     sudo jexec __SITE_SERVER_JAIL__ install -d -o sowserver -g sow -m 0750 "$generation_dir/verified"
     sudo jexec __SITE_SERVER_JAIL__ install -d -o root -g wheel -m 0750 /usr/local/etc/sow/generations
     sudo jexec __SITE_SERVER_JAIL__ cp /usr/local/etc/sow/sow.env "$env_file"
+    sudo jexec __SITE_SERVER_JAIL__ sh -c 'umask 077; grep -v -E "^(SOW_SERVER_RELEASE_ID|SOW_WS_LISTEN|SOW_MAPS_HTTP_LISTEN|SOW_SERVER_HTTP_URL|SOW_MAPS_ROOT|SOW_MAPS_CATALOG_PATH|SOW_VERIFIER_DIR|SOW_SERVER_OWNER_WS_URL|SOW_SERVER_MAPS_URL)=" "$1" > "$2" && mv "$2" "$1"' sh "$env_file" "$env_file.tmp"
     sudo jexec __SITE_SERVER_JAIL__ sh -c 'printf "%s\n" \
         "SOW_SERVER_RELEASE_ID=$1" \
         "SOW_WS_LISTEN=$2:$3" \
@@ -2474,7 +2623,11 @@ for dir in $(sudo ls -dt __SITE_RELEASE_ROOT__/releases/* 2>/dev/null || true); 
     if printf '%s\n' "$live" | grep -Fxq "$dir"; then continue; fi
     case "$dir" in __SITE_RELEASE_ROOT__/releases/*) sudo rm -rf -- "$dir";; esac
 done"#;
-    run("ssh", &[&config.control_host, command], None).context("release retention failed")
+    let locked_command = format!(
+        "sudo lockf -k /var/run/sow-server-generation.lock /bin/sh -c {}",
+        shell_quote(command)
+    );
+    run("ssh", &[&config.control_host, &locked_command], None).context("release retention failed")
 }
 
 /// Same rule as the server: keep the 5 newest local releases, and drop
@@ -2612,6 +2765,40 @@ mod map_catalog_gate_tests {
         assert_eq!(latest_map_catalog_entries(rebooted), None);
         let failed = "[SERVER-BOOT] build=2\n[x ERROR] Map catalog: failed to write /var/db/c\n";
         assert_eq!(latest_map_catalog_entries(failed), None);
+    }
+}
+
+#[cfg(test)]
+mod generation_activation_tests {
+    use super::{Release, server_generation_activation};
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    #[test]
+    fn generated_server_activation_script_is_rendered_and_valid_shell() {
+        let script = server_generation_activation(&Release {
+            id: "ptr-test-release".into(),
+            version: "test".into(),
+            dir: std::path::PathBuf::new(),
+        });
+        assert!(!script.contains("__SITE_"));
+        assert!(!script.contains("__ID__"));
+        assert!(!script.contains("__SERVER_RESTART__"));
+        assert!(script.contains("$5/ws/release/$1/"));
+        assert!(script.contains("$5/maps/release/$1/"));
+
+        let mut shell = Command::new("sh")
+            .arg("-n")
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        shell
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(script.as_bytes())
+            .unwrap();
+        assert!(shell.wait().unwrap().success());
     }
 }
 

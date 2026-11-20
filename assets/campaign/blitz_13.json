@@ -2,16 +2,16 @@
   "_comment": "Conquest Blitz Node 13 (EcoRush) on africa",
   "map": "africa",
   "player_spawn": [
-    466,
-    128
+    747,
+    205
   ],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "outpost_alpha",
       "name": "Outpost Alpha",
-      "x": 452,
-      "y": 128,
+      "x": 724,
+      "y": 205,
       "starting_troops": 955,
       "relation": "enemy",
       "team": "Red",
@@ -34,8 +34,8 @@
     {
       "id": "vanguard_keep",
       "name": "Vanguard Keep",
-      "x": 440,
-      "y": 128,
+      "x": 705,
+      "y": 205,
       "starting_troops": 1620,
       "relation": "enemy",
       "team": "Red",
@@ -58,8 +58,8 @@
     {
       "id": "sector_boss",
       "name": "Sector 13 Warlord",
-      "x": 424,
-      "y": 128,
+      "x": 679,
+      "y": 205,
       "starting_troops": 4600,
       "relation": "enemy",
       "team": "Red",

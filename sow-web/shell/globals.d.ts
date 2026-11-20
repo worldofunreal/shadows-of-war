@@ -60,7 +60,7 @@ declare global {
             hide: (immediate?: boolean) => void;
         };
         SOW_getAuthState?: () => SowAuthState;
-        SOW_hudIcon: (name: string) => string;
+        SOW_hudIcon: (name: string, cls?: string) => string;
         SOW_loadAvatarBitmap?: (path: string, size: number) => Promise<ImageBitmap>;
         SOW_loadTextAtlases: () => Promise<void>;
         SOW_INITIAL_LOADER_READY?: boolean;

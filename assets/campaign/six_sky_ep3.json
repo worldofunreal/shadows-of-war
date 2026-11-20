@@ -2,15 +2,15 @@
   "_comment": "six_sky_ep3: Six Sky episode 3 'Moon Goddess' (726-741 CE) — edited via tools/campaign-editor.",
   "map": "northamerica",
   "player_spawn": [
-    529,
-    416
+    846,
+    665
   ],
   "factions": [
     {
       "id": "moon_priestesses",
       "name": "Moon Priestesses",
-      "x": 532,
-      "y": 419,
+      "x": 851,
+      "y": 669,
       "starting_troops": 500,
       "relation": "allied",
       "color": "#4ca572",
@@ -21,8 +21,8 @@
     {
       "id": "k_ak_tiliw_guard",
       "name": "K'ak' Tiliw Guard",
-      "x": 524,
-      "y": 417,
+      "x": 838,
+      "y": 666,
       "starting_troops": 500,
       "relation": "allied",
       "color": "#a88c40",
@@ -33,8 +33,8 @@
     {
       "id": "sa_aal_veterans",
       "name": "Sa'aal Veterans",
-      "x": 534,
-      "y": 415,
+      "x": 854,
+      "y": 663,
       "starting_troops": 500,
       "relation": "allied",
       "color": "#8c59a8",
@@ -45,8 +45,8 @@
     {
       "id": "lamanai_fishers",
       "name": "Lamanai Fishers",
-      "x": 538,
-      "y": 417,
+      "x": 861,
+      "y": 666,
       "starting_troops": 500,
       "relation": "neutral",
       "color": "#40999e",
@@ -57,8 +57,8 @@
     {
       "id": "altun_ha_traders",
       "name": "Altun Ha Traders",
-      "x": 542,
-      "y": 415,
+      "x": 867,
+      "y": 663,
       "starting_troops": 500,
       "relation": "neutral",
       "color": "#b87366",
@@ -69,8 +69,8 @@
     {
       "id": "calakmul_honor_guard",
       "name": "Calakmul Honor Guard",
-      "x": 527,
-      "y": 420,
+      "x": 843,
+      "y": 671,
       "starting_troops": 1000,
       "relation": "enemy",
       "color": "#7380b8",
@@ -81,8 +81,8 @@
     {
       "id": "yaxchilan_allies",
       "name": "Yaxchilan Allies",
-      "x": 522,
-      "y": 421,
+      "x": 835,
+      "y": 672,
       "starting_troops": 1000,
       "relation": "enemy",
       "color": "#4ca572",
@@ -93,8 +93,8 @@
     {
       "id": "copan_delegation",
       "name": "Copan Delegation",
-      "x": 529,
-      "y": 429,
+      "x": 846,
+      "y": 685,
       "starting_troops": 1000,
       "relation": "enemy",
       "color": "#a88c40",
@@ -105,8 +105,8 @@
     {
       "id": "k_inichil_kab",
       "name": "K'inichil Kab",
-      "x": 536,
-      "y": 421,
+      "x": 858,
+      "y": 672,
       "starting_troops": 2500,
       "relation": "enemy",
       "color": "#8c59a8",
@@ -117,8 +117,8 @@
     {
       "id": "caracol_war_host",
       "name": "Caracol War Host",
-      "x": 530,
-      "y": 423,
+      "x": 848,
+      "y": 675,
       "starting_troops": 2500,
       "relation": "enemy",
       "color": "#40999e",
@@ -129,8 +129,8 @@
     {
       "id": "xunantunich_rebels",
       "name": "Xunantunich Rebels",
-      "x": 525,
-      "y": 424,
+      "x": 840,
+      "y": 677,
       "starting_troops": 2500,
       "relation": "enemy",
       "color": "#b87366",
@@ -141,8 +141,8 @@
     {
       "id": "tikal",
       "name": "Tikal",
-      "x": 534,
-      "y": 425,
+      "x": 854,
+      "y": 679,
       "starting_troops": 5000,
       "relation": "enemy",
       "color": "#7380b8",
@@ -153,8 +153,8 @@
     {
       "id": "tikal_vanguard",
       "name": "Tikal Vanguard",
-      "x": 539,
-      "y": 424,
+      "x": 862,
+      "y": 677,
       "starting_troops": 2500,
       "relation": "enemy",
       "color": "#4ca572",
@@ -165,8 +165,8 @@
     {
       "id": "quirigua",
       "name": "Quirigua",
-      "x": 535,
-      "y": 430,
+      "x": 856,
+      "y": 687,
       "starting_troops": 500,
       "relation": "neutral",
       "color": "#a88c40",
@@ -177,8 +177,8 @@
     {
       "id": "topoxte",
       "name": "Topoxte",
-      "x": 520,
-      "y": 426,
+      "x": 832,
+      "y": 681,
       "starting_troops": 500,
       "relation": "neutral",
       "color": "#8c59a8",

@@ -433,7 +433,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
         Some(color) => parse_campaign_color(color)?,
         None => PLAYER_COLOR,
     };
-    Some((factions, rf.player_spawn.unwrap_or((696, 45)), player_color))
+    Some((factions, rf.player_spawn.unwrap_or((1243, 80)), player_color))
 }
 
 pub fn parse_campaign_color(value: &str) -> Option<[f32; 3]> {

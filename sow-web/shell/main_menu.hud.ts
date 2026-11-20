@@ -9,6 +9,7 @@ import {
   setAvatarPortrait,
 } from "./avatar-presentation.ts";
 import { abilityIconMarkup, esc } from "./main_menu.core.ts";
+import { computeEndgameStatRollups } from "./main_menu.motion.ts";
 import { renderLocaleSettingRow } from "./main_menu.settings.ts";
 import {
   createRequestToastDeckState,
@@ -466,7 +467,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   const ring = {
     session: "",
     hot: -1,
-    slots: [] as (RingSlot | null)[],
+    slots: [] as RingSlot[],
     press: null as RingPress | null,
     hold: null as RingHold | null,
     holdConfirmed: false,
@@ -813,12 +814,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '<path fill-rule="evenodd" clip-rule="evenodd" d="M28.8428 0H7.44094V2.48287L1.02324 2.48287C0.45812 2.48287 0 2.94099 0 3.50611V14.129C0 18.63 5.02309 22.3338 9.95271 22.7191C11.571 24.453 14.4175 25.7125 16.951 26.2496V29.2936C14.5283 30.0377 10.2008 31.786 9.95271 33.6909H26.5792C26.3287 31.786 21.5603 30.0353 19.1328 29.2936V26.2496C21.6759 25.7125 24.6501 24.453 26.2708 22.7191C31.198 22.3338 36 18.63 36 14.129V3.50611C36 2.94099 35.5419 2.48287 34.9768 2.48287H28.8428V0ZM2.28495 4.68973H7.26755V14.7214C7.26755 16.701 7.77809 18.5842 8.67636 20.2796C4.94844 19.0924 2.28495 16.0339 2.28495 12.4553V4.68973ZM21.8016 16.925L18.0825 14.8756L14.3593 16.925L15.0702 12.5902L12.0599 9.52209L16.2189 8.88873L18.0825 4.94889L19.942 8.88873L24.101 9.52209L21.0927 12.5902L21.8016 16.925ZM27.328 20.5999C28.2311 18.8274 28.7489 16.8672 28.7489 14.7937V4.75441H33.7435V12.4264C33.7435 16.1664 31.068 19.3597 27.328 20.5999Z"/>' +
       "</svg>",
     search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
-    // The main menu uses this gear. The match HUD uses the options glyph.
-    settings:
-      '<svg class="sow-hud__action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="12" cy="12" r="3.2" fill="currentColor" fill-opacity="0.18"/>' +
-      '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>' +
-      "</svg>",
     options:
       '<svg class="sow-hud__action-icon" viewBox="70 135 860 775" fill="currentColor" aria-hidden="true">' +
       '<path d="M341,205c22.61-2.97,45.75-.43,68,4c5.93-17.06,20.41-35.48,30-51c30.77,6.9,63.06,23.94,88.06,42.94c9.99,7.59,18.86,16.75,28.94,24.06c-2.72,13.76-24.17,40.64-32,54c6.35,9.77,13.98,18.47,19.98,28.53C557.54,330.24,564.77,353.8,572,379c8.03,1.11,55.3,6.03,58.86,9.19c3.64,3.22,3.43,16.65,3.46,21.41c.21,39.07-5.77,74.39-18.32,111.4c-22.08-1.42-44.14-5.63-66-9c-8.44,21.72-26.54,52.27-48,63c1.83,11.12,25.68,53.57,23,60c-.82,1.97-11.84,8.03-14.18,9.49C478.2,664.88,439.36,684.31,400,684c-4.9-11.59-22-44.37-22-55c-23.77,.37-45.47-1.93-69-4c-9.82,17.51-19.87,35.3-31,52c-43.13-8.12-85.06-41.51-115-72c4-10.54,31.11-47.38,31-53c-.04-2.19-17.99-25.01-20.55-29.44C160.3,499.79,151.48,475.94,147,450c-8.18-1.7-58.86-8.15-61.62-10.63c-1.35-1.21-1.87-11.53-2.05-13.79C80.34,387.45,88.66,341.76,109,309c8.84,.39,57.25,10.02,61,7c3.88-3.13,8.56-14.9,11.67-19.63C191.1,282.04,202.55,268.7,216,258c-2.51-8.07-23.64-52.49-22-57c.65-1.79,8.44-6.25,10.43-7.63C231.08,174.97,284.22,147.01,317,148c4.84,11.37,24,47.28,24,57ZM271,323c-15.23,6.47-25.38,27.19-31.26,41.66c-54.92,135.4,112.99,242.21,215.25,137.59c15.77-16.14,26.19-37.45,30.8-59.43C507.44,339.5,400.97,255.7,305.16,298.4C298.57,301.33,271,316.01,271,323Z"/>' +
@@ -1106,8 +1101,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   }
 
   // The menu shares the same line icons (lock, dice, settings...).
-  window.SOW_hudIcon = function (name: string) {
-    return hudIcon(name, "sow-menu__inline-icon");
+  window.SOW_hudIcon = function (name: string, cls = "sow-menu__inline-icon") {
+    return hudIcon(name, cls);
   };
 
   function statusIcon(kind: string, cls?: string): string {
@@ -1214,6 +1209,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     };
   }
 
+  let endgameRollupActive = false;
+  let endgameRollupCancel: (() => void) | null = null;
+
   function renderEndgameStats(
     refs: HudEndgameRefs,
     stats: HudEndgameStats | null | undefined,
@@ -1230,6 +1228,67 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       refs.troopsReceived.textContent = formatEndgameCompact(
         stats.troops_received,
       );
+  }
+
+  function startEndgameStatRollup(
+    refs: HudEndgameRefs,
+    stats: HudEndgameStats | null | undefined,
+  ): void {
+    endgameRollupCancel?.();
+    const safeStats = stats || {};
+    const targets = [
+      Number(safeStats.kills) || 0,
+      Number(safeStats.assists) || 0,
+      Number(safeStats.max_territory) || 0,
+      Number(safeStats.gold_received) || 0,
+      Number(safeStats.troops_received) || 0,
+    ];
+    if (typeof window.requestAnimationFrame !== "function" || targets.every((v) => v <= 0)) {
+      renderEndgameStats(refs, safeStats);
+      return;
+    }
+    const baseDelayMs = 200;
+    const staggerMs = 45;
+    const durationMs = 280;
+    const totalMs = baseDelayMs + (targets.length - 1) * staggerMs + durationMs;
+    const started = performance.now();
+    let frameId = 0;
+    let stopped = false;
+    endgameRollupActive = true;
+
+    const writeValues = function (vals: number[]) {
+      if (refs.kills) refs.kills.textContent = formatEndgameExact(vals[0]);
+      if (refs.assists) refs.assists.textContent = formatEndgameExact(vals[1]);
+      if (refs.maxTerritory) refs.maxTerritory.textContent = formatEndgameCompact(vals[2]);
+      if (refs.goldReceived) refs.goldReceived.textContent = formatEndgameCompact(vals[3]);
+      if (refs.troopsReceived) refs.troopsReceived.textContent = formatEndgameCompact(vals[4]);
+    };
+
+    const stop = function (commitFinal: boolean) {
+      if (stopped) return;
+      stopped = true;
+      endgameRollupActive = false;
+      if (frameId) cancelAnimationFrame(frameId);
+      if (commitFinal) renderEndgameStats(refs, safeStats);
+      if (endgameRollupCancel === cancelFn) endgameRollupCancel = null;
+    };
+    const cancelFn = function () {
+      stop(false);
+    };
+    endgameRollupCancel = cancelFn;
+
+    const frame = function (now: number) {
+      if (stopped) return;
+      const elapsed = now - started;
+      if (elapsed >= totalMs) {
+        stop(true);
+        return;
+      }
+      writeValues(computeEndgameStatRollups(elapsed, targets, baseDelayMs, staggerMs, durationMs));
+      frameId = requestAnimationFrame(frame);
+    };
+    writeValues([0, 0, 0, 0, 0]);
+    frameId = requestAnimationFrame(frame);
   }
 
   function activateDeferredBuildingAtlases() {
@@ -4209,10 +4268,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
   }
 
-  // Command ring: six fixed 60° slots, clockwise from the top. An action keeps
-  // its slot in every context, so the ring never changes shape; actions that do
-  // not apply leave an empty notch. Submenus reuse the same six slots.
-  const RING_SLOTS = 6;
+  // Slot priorities preserve clockwise order from the top in each view.
   const RING_HOLD_MS = 600;
   const RING_HUB_RADIUS = 19;
   const RING_INNER_RADIUS = 21;
@@ -4268,8 +4324,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     mapMenu: HudMapMenu,
     items: HudMapMenuItem[],
     hud: HudRingState,
-  ): (RingSlot | null)[] {
-    const slots: (RingSlot | null)[] = new Array(RING_SLOTS).fill(null);
+  ): RingSlot[] {
+    const slots: RingSlot[] = [];
     if (mapMenuView === "emote") {
       (hud.emotes || []).forEach(function (definition) {
         const index = RING_EMOTE_SLOTS[definition.kind];
@@ -4278,7 +4334,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       });
       if (hud.emote_active) slots[4] = { type: "clear" };
       slots[5] = { type: "pin", enabled: Boolean(hud.emote_active) };
-      return slots;
+      return slots.filter(Boolean);
     }
     if (mapMenuView === "build") {
       items.forEach(function (item) {
@@ -4286,7 +4342,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (index != null)
           slots[index] = { type: "action", item: item, presentation: null };
       });
-      return slots;
+      return slots.filter(Boolean);
     }
     items.forEach(function (item) {
       if (RING_BUILD_SLOTS[item.action] != null)
@@ -4304,19 +4360,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         };
       }
     });
-    return slots;
+    return slots.filter(Boolean);
   }
 
-  function ringSlotIdentity(slot: RingSlot | null): string {
-    if (!slot) return "-";
+  function ringSlotIdentity(slot: RingSlot): string {
     if (slot.type === "action") return slot.item.action;
     if (slot.type === "group") return "group:" + slot.group;
     if (slot.type === "emote") return "emote:" + slot.definition.kind;
     return slot.type;
   }
 
-  function ringSlotAccent(slot: RingSlot | null): string {
-    if (slot && slot.type === "action")
+  function ringSlotAccent(slot: RingSlot): string {
+    if (slot.type === "action")
       return RING_ACCENTS[slot.item.action] || "gold";
     return "gold";
   }
@@ -4398,8 +4453,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     );
   }
 
-  function ringSectorMarkup(slot: RingSlot | null, index: number): string {
-    const span = 360 / RING_SLOTS;
+  function ringSectorMarkup(slot: RingSlot, index: number, span: number): string {
+    const largeArc = span > 180 ? "1" : "0";
     const start = index * span - span / 2 + 1.6;
     const end = index * span + span / 2 - 1.6;
     const wedge =
@@ -4409,7 +4464,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       RING_OUTER_RADIUS +
       " " +
       RING_OUTER_RADIUS +
-      " 0 0 1 " +
+      " 0 " +
+      largeArc +
+      " 1 " +
       ringPoint(end, RING_OUTER_RADIUS) +
       " L" +
       ringPoint(end, RING_INNER_RADIUS) +
@@ -4417,7 +4474,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       RING_INNER_RADIUS +
       " " +
       RING_INNER_RADIUS +
-      " 0 0 0 " +
+      " 0 " +
+      largeArc +
+      " 0 " +
       ringPoint(start, RING_INNER_RADIUS) +
       " Z";
     const rimRadius = RING_OUTER_RADIUS - 1.6;
@@ -4428,12 +4487,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       rimRadius +
       " " +
       rimRadius +
-      " 0 0 1 " +
+      " 0 " +
+      largeArc +
+      " 1 " +
       ringPoint(end - 1, rimRadius);
     return (
-      '<g class="sow-hud__ring-sector' +
-      (slot ? "" : " is-empty") +
-      '" data-slot="' +
+      '<g class="sow-hud__ring-sector" data-slot="' +
       index +
       '" data-accent="' +
       ringSlotAccent(slot) +
@@ -4441,13 +4500,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '<path class="sow-hud__ring-wedge" d="' +
       wedge +
       '"/>' +
-      (slot
-        ? '<path class="sow-hud__ring-rim" d="' +
-          rim +
-          '" pathLength="1"/><path class="sow-hud__ring-hold" d="' +
-          rim +
-          '" pathLength="1"/>'
-        : "") +
+      '<path class="sow-hud__ring-rim" d="' +
+      rim +
+      '" pathLength="1"/><path class="sow-hud__ring-hold" d="' +
+      rim +
+      '" pathLength="1"/>' +
       "</g>"
     );
   }
@@ -4508,6 +4565,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   function ringSlotButton(
     slot: RingSlot,
     index: number,
+    span: number,
     mapMenu: HudMapMenu,
     hud: HudRingState,
   ): HTMLButtonElement {
@@ -4517,15 +4575,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     button.dataset.slot = String(index);
     button.dataset.accent = ringSlotAccent(slot);
     button.setAttribute("role", "menuitem");
-    const angle = (((index * 360) / RING_SLOTS) * Math.PI) / 180;
+    const angle = (index * span * Math.PI) / 180;
     button.style.left =
       (50 + Math.sin(angle) * RING_ICON_RADIUS).toFixed(2) + "%";
     button.style.top =
       (50 - Math.cos(angle) * RING_ICON_RADIUS).toFixed(2) + "%";
-    button.style.setProperty(
-      "--slot-angle",
-      (index * 360) / RING_SLOTS + "deg",
-    );
+    button.style.setProperty("--slot-angle", index * span + "deg");
     button.style.setProperty("--slot-index", String(index));
     if (slot.type === "action") {
       button.dataset.mapAction = slot.item.action;
@@ -4627,7 +4682,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
   function buildRing(
     menu: HTMLElement,
-    slots: (RingSlot | null)[],
+    slots: RingSlot[],
     mapMenu: HudMapMenu,
     hud: HudRingState,
   ): void {
@@ -4641,6 +4696,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       document.createElement("strong"),
       document.createElement("small"),
     );
+    const span = 360 / slots.length;
     const radial = document.createElement("div");
     radial.className = "sow-hud__map-radial";
     radial.innerHTML =
@@ -4660,7 +4716,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "</defs>" +
       '<circle class="sow-hud__ring-bezel" cx="50" cy="50" r="49.5"/>' +
       '<circle class="sow-hud__ring-compass" cx="50" cy="50" r="48.2"/>' +
-      slots.map(ringSectorMarkup).join("") +
+      slots.map((slot, index) => ringSectorMarkup(slot, index, span)).join("") +
       '<circle class="sow-hud__ring-sheen" cx="50" cy="50" r="' +
       RING_OUTER_RADIUS +
       '" fill="url(#sow-ring-sheen)"/>' +
@@ -4671,7 +4727,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       (RING_HUB_RADIUS - 1.6).toFixed(1) +
       '"/></svg>';
     slots.forEach(function (slot, index) {
-      if (slot) radial.appendChild(ringSlotButton(slot, index, mapMenu, hud));
+      radial.appendChild(ringSlotButton(slot, index, span, mapMenu, hud));
     });
     radial.appendChild(ringHub(mapMenu));
     const tether = document.createElement("span");
@@ -4684,7 +4740,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   // ticking timer never rebuilds it and hover/focus survive.
   function patchRing(
     menu: HTMLElement,
-    slots: (RingSlot | null)[],
+    slots: RingSlot[],
     availableGold: number | undefined,
     targetAvatar: HudAvatarIdentity | null | undefined = undefined,
   ): void {
@@ -4735,7 +4791,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       }
     }
     slots.forEach(function (slot, index) {
-      if (!slot) return;
       const button = menu.querySelector<HTMLButtonElement>(
         '.sow-hud__ring-slot[data-slot="' + index + '"]',
       );
@@ -4814,7 +4869,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     unbounded: boolean,
   ): "hub" | number | null {
     const radial = menu.querySelector(".sow-hud__map-radial");
-    if (!radial) return null;
+    const count = ring.slots.length;
+    if (!radial || !count) return null;
     const rect = radial.getBoundingClientRect();
     if (!rect.width || !rect.height) return null;
     const dx = ((clientX - rect.left) / rect.width) * 100 - 50;
@@ -4823,7 +4879,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (distance <= RING_HUB_RADIUS) return "hub";
     if (!unbounded && distance > 50) return null;
     const angle = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
-    return Math.round(angle / (360 / RING_SLOTS)) % RING_SLOTS;
+    return Math.round(angle / (360 / count)) % count;
   }
 
   function ringSlotButtonAt(
@@ -4920,8 +4976,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     menu.classList.remove("is-building-card");
     delete menu.dataset.placement;
     const showRadial = Boolean(open && mapMenu && mapMenu.view === "radial");
-    menu.classList.toggle("hidden", !showRadial);
     if (!showRadial) {
+      menu.classList.add("hidden");
       if (menu.dataset.renderKey) menu.replaceChildren();
       menu.dataset.renderKey = "";
       delete menu.dataset.level;
@@ -4935,7 +4991,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (!mapMenu) return false;
     const hud: HudRingState = hudState?.hud || {};
     const session = String(mapMenu.session) + ":" + String(mapMenu.tile_idx);
-    if (ring.session !== session) {
+    const newSession = ring.session !== session;
+    if (newSession) {
       ring.session = session;
       menu.dataset.session = String(mapMenu.session);
       menu.dataset.tileIdx = String(mapMenu.tile_idx);
@@ -4948,9 +5005,26 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     const items = mapItems(mapMenu);
     let slots = ringSlots(mapMenu, items, hud);
-    if (mapMenuView !== "root" && !slots.some(Boolean)) {
+    if (mapMenuView !== "root" && !slots.length) {
       mapMenuView = "root";
       slots = ringSlots(mapMenu, items, hud);
+    }
+    menu.classList.toggle("hidden", !slots.length);
+    if (!slots.length) {
+      if (menu.dataset.renderKey) menu.replaceChildren();
+      menu.dataset.renderKey = "";
+      delete menu.dataset.level;
+      ring.slots = [];
+      ring.hot = -1;
+      ring.press = null;
+      ringHoldCancel(null);
+      return false;
+    }
+    const layout = slots.map(ringSlotIdentity).join(",");
+    if (!newSession && layout !== ring.slots.map(ringSlotIdentity).join(",")) {
+      ring.hot = -1;
+      ring.press = null;
+      ringHoldCancel(menu);
     }
     ring.slots = slots;
     const renderKey =
@@ -4967,7 +5041,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         mapMenu.building && mapMenu.building.level,
       ].join(":") +
       ":" +
-      slots.map(ringSlotIdentity).join(",");
+      layout;
     if (menu.dataset.renderKey !== renderKey) {
       buildRing(menu, slots, mapMenu, hud);
       menu.dataset.renderKey = renderKey;
@@ -8857,14 +8931,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
       }
       if (hudRefs!.deployFill) {
-        const pct = isDeploying
-          ? Math.max(
-              0,
-              Math.min(100, (spawnSecs / spawnDuration) * 100),
-            ).toFixed(1) + "%"
-          : "0%";
-        if (hudRefs!.deployFill.style.width !== pct) {
-          hudRefs!.deployFill.style.width = pct;
+        const ratio = isDeploying
+          ? Math.max(0, Math.min(1, spawnSecs / spawnDuration)).toFixed(4)
+          : "0";
+        if (hudRefs!.deployFill.dataset.barRatio !== ratio) {
+          hudRefs!.deployFill.dataset.barRatio = ratio;
+          hudRefs!.deployFill.style.setProperty("--sow-bar-ratio", ratio);
         }
       }
     }
@@ -9323,12 +9395,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const isWinner = Boolean(hud.is_winner);
     if (hudRefs!.endgame) {
       hudRefs!.endgame.classList.toggle("hidden", !isOver);
-      if (isOver && !wasEndgameOpen) {
+      const endgameJustOpened = isOver && !wasEndgameOpen;
+      if (endgameJustOpened) {
         hudRefs!.endgame.classList.remove("is-entering");
-        void hudRefs!.endgame.offsetWidth;
-        hudRefs!.endgame.classList.add("is-entering");
+        if (typeof window.requestAnimationFrame === "function") {
+          const modalEl = hudRefs!.endgame;
+          window.requestAnimationFrame(function () {
+            if (!modalEl.classList.contains("hidden")) modalEl.classList.add("is-entering");
+          });
+        } else {
+          hudRefs!.endgame.classList.add("is-entering");
+        }
       } else if (!isOver && wasEndgameOpen) {
         hudRefs!.endgame.classList.remove("is-entering");
+        endgameRollupCancel?.();
+        endgameRollupCancel = null;
       }
       wasEndgameOpen = isOver;
       if (isOver) {
@@ -9360,7 +9441,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             percent: 75,
           });
         }
-        renderEndgameStats(hudRefs!.endgameStatValues, stats);
+        if (endgameJustOpened && !Boolean(hudState?.settings?.reduced_motion)) {
+          startEndgameStatRollup(hudRefs!.endgameStatValues, stats);
+        } else if (!endgameRollupActive) {
+          renderEndgameStats(hudRefs!.endgameStatValues, stats);
+        }
         if (hudRefs!.endgameObserve)
           hudRefs!.endgameObserve.classList.toggle(
             "hidden",
@@ -10429,7 +10514,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           event.key,
         ) >= 0
       ) {
-        // Arrows walk the ring clockwise/counter-clockwise, skipping empty and blocked slots.
+        // Arrows walk the ring clockwise/counter-clockwise, skipping blocked slots.
         const choices = Array.from(
           menu.querySelectorAll<HTMLButtonElement>(
             ".sow-hud__ring-slot:not(:disabled)",

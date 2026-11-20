@@ -5075,6 +5075,7 @@ fn local_source_snapshot(paths: &Paths) -> Result<Vec<LocalFileStamp>> {
 fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
     if path == paths.root.join("assets/geo_entities.json")
         || path == paths.root.join("assets/maps/world/map.bin.br")
+        || path == paths.root.join("assets/maps/catalog.bin")
         || path == paths.root.join("assets/guides/menu.triggers.json")
     {
         return true;

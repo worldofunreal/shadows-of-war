@@ -2,16 +2,16 @@
   "_comment": "Conquest Blitz Node 16 (Cascade) on bajacalifornia",
   "map": "bajacalifornia",
   "player_spawn": [
-    643,
-    320
+    1028,
+    512
   ],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "outpost_alpha",
       "name": "Outpost Alpha",
-      "x": 628,
-      "y": 320,
+      "x": 1004,
+      "y": 512,
       "starting_troops": 1090,
       "relation": "enemy",
       "team": "Red",
@@ -34,8 +34,8 @@
     {
       "id": "vanguard_keep",
       "name": "Vanguard Keep",
-      "x": 616,
-      "y": 320,
+      "x": 985,
+      "y": 512,
       "starting_troops": 1860,
       "relation": "enemy",
       "team": "Red",
@@ -58,8 +58,8 @@
     {
       "id": "sector_boss",
       "name": "Sector 16 Warlord",
-      "x": 684,
-      "y": 320,
+      "x": 1094,
+      "y": 512,
       "starting_troops": 4560,
       "relation": "enemy",
       "team": "Red",

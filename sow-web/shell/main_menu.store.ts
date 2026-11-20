@@ -20,6 +20,7 @@ import { profileApi } from "./main_menu.profile.ts";
 import {
     animateProgressionTo,
     flyRewardCard,
+    playRewardImpact,
     progressionFromState,
     pulseRewardCounter,
     reducedRewardMotion,
@@ -27,6 +28,7 @@ import {
     rewardAnimationToken,
     writeProgression,
 } from "./main_menu.shell.ts";
+import { planStoreBurstStagger } from "./main_menu.motion.ts";
 import type {
     MenuGemBundle,
     MenuLeader,
@@ -408,13 +410,14 @@ function beginBundlePurchasePresentation(attempt: ExternalPurchaseAttempt) {
         }
         flyBundleToken(token, animationToken).then(function (arrived) {
             if (!arrived || !menuUi.purchaseModal || menuUi.purchaseModal.type !== "bundle") return;
-            animateProgressionTo(finalValues, 640, animationToken).then(function (shown) {
+            playRewardImpact("[data-progression-gems-value]", "gems", 1);
+            animateProgressionTo(finalValues, 460, animationToken).then(function (shown) {
                 if (!shown || !menuUi.purchaseModal || menuUi.purchaseModal.type !== "bundle") return;
                 menuUi.purchaseModal.gemPresented = true;
                 pulseRewardCounter("[data-progression-gems-value]", false);
             });
         });
-    }, 760);
+    }, 240);
 }
 
 function settleBundlePurchasePresentation() {
@@ -435,27 +438,43 @@ function settleBundlePurchasePresentation() {
 
 function flyBundleToken(token: HTMLElement, animationToken: number) {
     const rect = token.getBoundingClientRect();
-    const flyer = token.cloneNode(true) as HTMLElement;
-    flyer.className += " sow-purchase-modal__bundle-flyer";
-    flyer.style.cssText =
-        "position:fixed;z-index:30;left:" +
-        rect.left +
-        "px;top:" +
-        rect.top +
-        "px;width:" +
-        rect.width +
-        "px;height:" +
-        rect.height +
-        "px;margin:0;pointer-events:none;";
-    document.body.appendChild(flyer);
-    bundleFlightToken = flyer;
-    return flyRewardCard(
-        { card: flyer, stage: { selector: "[data-progression-gems-value]" } },
-        animationToken,
-    ).then(function (arrived) {
-        if (bundleFlightToken === flyer) bundleFlightToken = null;
-        flyer.remove();
-        return arrived;
+    const targetEl = root.querySelector<HTMLElement>("[data-progression-gems-value]");
+    const toRect = targetEl ? targetEl.getBoundingClientRect() : null;
+    const delays = planStoreBurstStagger(3, 55);
+    const flights = delays.map(function (delayMs, idx) {
+        const flyer = token.cloneNode(true) as HTMLElement;
+        flyer.className += " sow-purchase-modal__bundle-flyer";
+        flyer.style.cssText =
+            "position:fixed;z-index:30;left:" +
+            (rect.left + (idx - 1) * 6) +
+            "px;top:" +
+            (rect.top + (idx - 1) * 4) +
+            "px;width:" +
+            rect.width +
+            "px;height:" +
+            rect.height +
+            "px;margin:0;pointer-events:none;";
+        document.body.appendChild(flyer);
+        if (idx === 0) bundleFlightToken = flyer;
+        return new Promise<boolean>(function (resolve) {
+            const launch = function () {
+                flyRewardCard(
+                    { card: flyer, stage: { selector: "[data-progression-gems-value]" } },
+                    animationToken,
+                    { duration: 360, fromRect: rect, toRect },
+                ).then(function (arrived) {
+                    if (bundleFlightToken === flyer) bundleFlightToken = null;
+                    flyer.remove();
+                    resolve(arrived);
+                });
+            };
+            if (delayMs <= 0) launch();
+            else window.setTimeout(launch, delayMs);
+        });
+    });
+    return flights[0].then(function (firstArrived) {
+        void Promise.all(flights);
+        return firstArrived;
     });
 }
 

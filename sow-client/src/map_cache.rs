@@ -10,8 +10,33 @@ fn storage_key(map_key: &str) -> String {
     format!("{STORAGE_KEY_PREFIX}{}", maps::map_key(map_key))
 }
 
-fn validate_payload(bytes: &[u8]) -> bool {
-    maps::load_map_from_payload(bytes).is_ok()
+fn official_entry(key: &str) -> Option<&'static MapCatalogEntry> {
+    static CATALOG: std::sync::OnceLock<Vec<MapCatalogEntry>> = std::sync::OnceLock::new();
+    CATALOG
+        .get_or_init(|| {
+            sow_core::map_file::parse_catalog(sow_core::repo_asset_bytes!("maps/catalog.bin"))
+                .expect("bundled map catalog is valid")
+                .entries
+        })
+        .iter()
+        .find(|entry| entry.key == key)
+}
+
+fn validate_payload(key: &str, bytes: &[u8]) -> bool {
+    maps::load_map_from_payload(bytes).is_ok_and(|map| {
+        official_entry(key)
+            .is_none_or(|entry| (map.width, map.height) == (entry.width, entry.height))
+    })
+}
+
+pub(crate) fn download_url(base: &str, key: &str) -> String {
+    let base = base.trim_end_matches('/');
+    let mut url = format!("{base}/{key}/map.bin.br");
+    if let Some(entry) = official_entry(key) {
+        use std::fmt::Write;
+        let _ = write!(url, "?size={}x{}", entry.width, entry.height);
+    }
+    url
 }
 
 /// Load a previously cached map payload, if any.
@@ -23,7 +48,7 @@ pub fn load(map_key: &str) -> Option<Vec<u8>> {
         let storage = window.local_storage().ok()??;
         let stored = storage.get_item(&storage_key(&key)).ok()??;
         let bytes = base64_decode(&stored)?;
-        if validate_payload(&bytes) {
+        if validate_payload(&key, &bytes) {
             return Some(bytes);
         }
         let _ = storage.remove_item(&storage_key(&key));
@@ -33,11 +58,11 @@ pub fn load(map_key: &str) -> Option<Vec<u8>> {
 
 /// Store a map payload after a successful download or SP session.
 pub fn persist(map_key: &str, bytes: &[u8]) -> bool {
-    if !validate_payload(bytes) {
+    let key = maps::map_key(map_key);
+    if !validate_payload(&key, bytes) {
         log::warn!("map_cache: skip persist for invalid payload ({map_key})");
         return false;
     }
-    let key = maps::map_key(map_key);
     #[cfg(target_arch = "wasm32")]
     {
         let Some(window) = web_sys::window() else {

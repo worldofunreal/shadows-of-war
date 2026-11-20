@@ -275,10 +275,12 @@ impl SowApp {
                         .and_then(|s| s.buildings.iter().find(|b| b.id == *building_id))
                         .map(|b| b.tile_idx)
                 {
+                    let now = web_time::Instant::now();
+                    self.ui.building_action_pulses.insert(tile_idx, now);
                     let wx = (tile_idx % self.sim.map_w) as f32 + 0.5;
                     let wy = (tile_idx / self.sim.map_w) as f32 + 0.5;
                     self.sfx.play_upgrade_start(
-                        web_time::Instant::now(),
+                        now,
                         self.spatial_sound_params(wx, wy),
                     );
                 }

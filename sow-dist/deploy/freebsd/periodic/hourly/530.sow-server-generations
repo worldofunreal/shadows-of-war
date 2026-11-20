@@ -2,6 +2,10 @@
 
 set -eu
 
+if [ "${SOW_SERVER_GENERATION_LOCKED:-}" != 1 ]; then
+	exec lockf -k -t 0 /var/run/sow-server-generation.lock env SOW_SERVER_GENERATION_LOCKED=1 "$0"
+fi
+
 site_release_root="__SITE_RELEASE_ROOT__"
 site_server_jail="__SITE_SERVER_JAIL__"
 site_loopback="__SITE_LOOPBACK__"

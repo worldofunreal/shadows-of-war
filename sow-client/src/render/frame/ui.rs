@@ -199,7 +199,7 @@ impl SowApp {
             self.input.touch_pan_residual = (0.0, 0.0);
         }
         let pointer_gesture_active = self.input.is_pointer_gesture_active();
-        let is_building_drag = self.input.building_drag_offset.is_some();
+        let is_building_drag = self.input.building_drag.is_some();
         if pointer_gesture_active
             && !self.input.camera_focus_waiting_for_input_release
             && !is_building_drag
@@ -216,7 +216,7 @@ impl SowApp {
             } else if self.ui.app.hud_state.building_placement.is_some()
                 && crate::web_canvas::has_mobile_pointer()
             {
-                3.5
+                5.5
             } else {
                 12.0
             };

@@ -253,6 +253,14 @@ pub struct NetState {
     pub lobby_owner_release_id: Option<String>,
     pub lobby_owner_ws_url: Option<String>,
     pub lobby_owner_reconnect_failures: u8,
+    #[cfg(target_arch = "wasm32")]
+    pub published_version_tx: WakeSender<bool>,
+    #[cfg(target_arch = "wasm32")]
+    pub published_version_rx: crossbeam_channel::Receiver<bool>,
+    #[cfg(target_arch = "wasm32")]
+    pub published_version_checked_at: Option<web_time::Instant>,
+    #[cfg(target_arch = "wasm32")]
+    pub published_version_check_pending: bool,
     pub is_offline: bool,
     /// Idle orchestrator socket kept through an offline match; the menu return takes it back.
     pub parked_client: Option<sow_net::client::SowClient>,
@@ -315,7 +323,7 @@ pub struct InputState {
     pub map_context_menu_session: u64,
     /// Time of the last accepted right press; a repeat inside the lockout is ignored.
     pub last_right_press: Option<web_time::Instant>,
-    pub building_drag_offset: Option<(f32, f32)>,
+    pub building_drag: Option<BuildingDrag>,
     pub shift_pressed: bool,
     pub has_snapped_camera_to_spawn: bool,
     pub spawn_intent_rate: sow_core::spawn_rate_limit::SpawnIntentRateLimit,
@@ -338,7 +346,7 @@ pub struct InputState {
 impl InputState {
     pub fn is_pointer_gesture_active(&self) -> bool {
         self.dragging
-            || self.building_drag_offset.is_some()
+            || self.building_drag.is_some()
             || self.last_pinch_state.is_some()
             || !self.active_touches.is_empty()
     }
@@ -362,6 +370,18 @@ pub enum HoverPointer {
     Touch,
 }
 
+#[derive(Clone, Copy)]
+pub enum BuildingDrag {
+    Mouse {
+        offset: (f32, f32),
+    },
+    Touch {
+        anchor: (i32, i32),
+        pointer: (f64, f64),
+        zoom: f32,
+    },
+}
+
 pub struct MapPointerStart {
     pub started_at: web_time::Instant,
     pub x: f64,
@@ -380,6 +400,7 @@ pub struct MapContextMenu {
     pub building_kind: Option<sow_core::game::BuildingKind>,
     pub building_level: u8,
     pub building_under_construction: bool,
+    pub opened_at: web_time::Instant,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -834,6 +855,8 @@ pub struct UiState {
     pub(crate) building_placement_cache: crate::input::placement::BuildingPlacementCache,
     pub building_levels_seen: std::collections::HashMap<u32, u8>,
     pub building_upgrade_flashes: std::collections::HashMap<u32, web_time::Instant>,
+    pub building_action_pulses: std::collections::HashMap<u32, web_time::Instant>,
+    pub hovered_building: Option<(u32, web_time::Instant)>,
     pub building_celebrations:
         std::collections::HashMap<u32, (sow_core::game::BuildingKind, u8, web_time::Instant)>,
     pub last_resource_notice_tick: Option<u64>,

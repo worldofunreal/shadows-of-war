@@ -121,6 +121,77 @@ export function computeScreenTransitionVector(
     };
 }
 
+export type GpuPerfTier = "low" | "high";
+
+export interface GpuTierEnvironment {
+    coarsePointer?: boolean;
+    deviceMemory?: number;
+    hardwareConcurrency?: number;
+}
+
+/**
+ * Classifies devices with coarse touch pointers or constrained memory/CPU cores
+ * as low-end tile GPUs so CSS and WAAPI can skip multi-pass blur and heavy masks.
+ */
+export function detectLowEndGpuTier(env?: GpuTierEnvironment): GpuPerfTier {
+    const coarsePointer =
+        env?.coarsePointer !== undefined
+            ? env.coarsePointer
+            : typeof window !== "undefined" &&
+              typeof window.matchMedia === "function" &&
+              window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    if (coarsePointer) return "low";
+
+    const nav =
+        typeof navigator !== "undefined"
+            ? (navigator as Navigator & { deviceMemory?: number })
+            : undefined;
+    const deviceMemory = env?.deviceMemory !== undefined ? env.deviceMemory : nav?.deviceMemory;
+    if (typeof deviceMemory === "number" && Number.isFinite(deviceMemory) && deviceMemory > 0 && deviceMemory <= 4) {
+        return "low";
+    }
+
+    const hardwareConcurrency =
+        env?.hardwareConcurrency !== undefined ? env.hardwareConcurrency : nav?.hardwareConcurrency;
+    if (
+        typeof hardwareConcurrency === "number" &&
+        Number.isFinite(hardwareConcurrency) &&
+        hardwareConcurrency > 0 &&
+        hardwareConcurrency <= 4
+    ) {
+        return "low";
+    }
+
+    return "high";
+}
+
+let gpuTierBound = false;
+
+export function applyGpuPerfTier(): GpuPerfTier {
+    const tier = detectLowEndGpuTier();
+    if (typeof document !== "undefined" && document.documentElement) {
+        document.documentElement.dataset.sowGpuTier = tier;
+    }
+    if (!gpuTierBound && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        gpuTierBound = true;
+        const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
+        const onChange = function () {
+            if (typeof document !== "undefined" && document.documentElement) {
+                document.documentElement.dataset.sowGpuTier = detectLowEndGpuTier();
+            }
+        };
+        if (typeof mq.addEventListener === "function") mq.addEventListener("change", onChange);
+    }
+    return tier;
+}
+
+export function isLowEndGpuTier(): boolean {
+    if (typeof document !== "undefined" && document.documentElement?.dataset?.sowGpuTier) {
+        return document.documentElement.dataset.sowGpuTier === "low";
+    }
+    return detectLowEndGpuTier() === "low";
+}
+
 export const sowScreenMotion = (function () {
     function reducedMotion() {
         return (
@@ -211,10 +282,26 @@ export const sowScreenMotion = (function () {
             return;
         }
         stage.classList.remove("sow-screen-stage--sweeping");
-        void stage.offsetWidth;
-        stage.classList.add("sow-screen-stage--sweeping");
+        if (typeof stage.getAnimations === "function") {
+            stage.getAnimations().forEach(function (anim) {
+                if ((anim as CSSAnimation).animationName === "sow-stage-light-sweep") {
+                    try {
+                        anim.cancel();
+                    } catch {}
+                }
+            });
+        }
         next.classList.add("sow-screen-panel--entering");
         stage.appendChild(next);
+        if (!isLowEndGpuTier()) {
+            if (typeof window.requestAnimationFrame === "function") {
+                window.requestAnimationFrame(function () {
+                    if (next.isConnected) stage.classList.add("sow-screen-stage--sweeping");
+                });
+            } else {
+                stage.classList.add("sow-screen-stage--sweeping");
+            }
+        }
     }
 
     return { show: show };
@@ -624,4 +711,39 @@ export function flyArcPointsToKeyframes(points: readonly FlyArcPoint[]): Keyfram
             "deg)",
         opacity: Number(p.opacity.toFixed(4)),
     }));
+}
+
+/**
+ * Returns staggered launch offsets (ms) for multi-token store bundle gem bursts.
+ */
+export function planStoreBurstStagger(count: number, staggerMs = 55): number[] {
+    const safeCount = Math.max(0, Math.floor(count));
+    const safeStagger = Math.max(0, staggerMs);
+    const delays: number[] = [];
+    for (let i = 0; i < safeCount; i++) {
+        delays.push(i * safeStagger);
+    }
+    return delays;
+}
+
+/**
+ * Computes staggered easeOutCubic roll-up values for HUD endgame stat rows.
+ */
+export function computeEndgameStatRollups(
+    elapsedMs: number,
+    targets: readonly number[],
+    baseDelayMs = 200,
+    staggerMs = 45,
+    durationMs = 280,
+): number[] {
+    const safeDuration = Math.max(1, durationMs);
+    return targets.map(function (rawTarget, index) {
+        const target = Math.max(0, Math.round(Number(rawTarget) || 0));
+        if (target === 0) return 0;
+        const start = baseDelayMs + index * staggerMs;
+        if (elapsedMs <= start) return 0;
+        const t = Math.min(1, (elapsedMs - start) / safeDuration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        return Math.round(target * eased);
+    });
 }

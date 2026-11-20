@@ -1,4 +1,4 @@
-use crate::app::{MapContextMenu, MapContextMenuView, SowApp};
+use crate::app::{BuildingDrag, MapContextMenu, MapContextMenuView, SowApp};
 use crate::ui::hud::state::TransferMode;
 use serde::Deserialize;
 
@@ -601,6 +601,7 @@ impl SowApp {
             building_kind: building.map(|building| building.0),
             building_level: building.map_or(0, |building| building.1),
             building_under_construction: building.is_some_and(|building| building.2),
+            opened_at: web_time::Instant::now(),
         });
     }
 
@@ -1186,7 +1187,7 @@ impl SowApp {
         )
     }
 
-    /// Drag and tap snap to a visible foundation; rejected positions remain visible.
+    /// Snap to a nearby foundation; keep the requested tile when none is found.
     pub(crate) fn move_building_preview(&mut self, col: i32, row: i32) {
         let Some(placement) = self
             .ui
@@ -1203,7 +1204,11 @@ impl SowApp {
         }
         let (col, row) = (col.clamp(0, map_w as i32 - 1), row.clamp(0, map_h as i32 - 1));
         let requested_tile = row as u32 * map_w + col as u32;
-        let bounds = self.visible_building_anchor_bounds(placement.kind);
+        let bounds = if matches!(self.input.building_drag, Some(BuildingDrag::Touch { .. })) {
+            Some((0, 0, map_w as i32 - 1, map_h as i32 - 1))
+        } else {
+            self.visible_building_anchor_bounds(placement.kind)
+        };
         let Some(engine) = self.sim.engine.as_mut() else {
             return;
         };
@@ -1260,7 +1265,7 @@ impl SowApp {
             return;
         };
         let (dx, dy) = direction.offset();
-        self.input.building_drag_offset = None;
+        self.input.building_drag = None;
         if !crate::web_canvas::has_mobile_pointer() {
             let (width, height) = (self.sim.map_w, self.sim.map_h);
             if height == 0 {
@@ -1276,7 +1281,6 @@ impl SowApp {
             return;
         }
         let my_id = self.sim.my_player_id.unwrap_or(0);
-        let bounds = self.visible_building_anchor_bounds(placement.kind);
         let Some(engine) = self.sim.engine.as_mut() else {
             return;
         };
@@ -1292,19 +1296,14 @@ impl SowApp {
             .take_while(|&(nx, ny)| map.is_valid_coord(nx, ny))
             .map(|(nx, ny)| ny as u32 * map.width + nx as u32)
             .find(|&tile| {
-                let visible = bounds.is_some_and(|(min_x, min_y, max_x, max_y)| {
-                    (min_x..=max_x).contains(&((tile % map.width) as i32))
-                        && (min_y..=max_y).contains(&((tile / map.width) as i32))
-                });
-                visible
-                    && sow_core::building::validate_structure_site(
-                        map,
-                        my_id,
-                        placement.kind,
-                        tile,
-                        &engine.building_grid,
-                    )
-                    .is_ok()
+                sow_core::building::validate_structure_site(
+                    map,
+                    my_id,
+                    placement.kind,
+                    tile,
+                    &engine.building_grid,
+                )
+                .is_ok()
             });
         if let Some(tile) = next
             && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
@@ -1332,7 +1331,7 @@ impl SowApp {
         if !self.building_placement_can_confirm() {
             return;
         }
-        self.input.building_drag_offset = None;
+        self.input.building_drag = None;
         self.input.camera_focus_target = None;
         self.input.touch_pan_residual = (0.0, 0.0);
         self.input.target_zoom = self.input.camera_zoom;
@@ -1906,7 +1905,7 @@ impl SowApp {
         }
         self.ui.app.hud_state.building_placement = None;
         self.ui.app.hud_state.selected_nuke_kind = None;
-        self.input.building_drag_offset = None;
+        self.input.building_drag = None;
     }
 
     pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
@@ -2006,7 +2005,7 @@ impl SowApp {
             pending: false,
         });
         self.ui.app.hud_state.selected_nuke_kind = None;
-        self.input.building_drag_offset = None;
+        self.input.building_drag = None;
         self.input.touch_pan_residual = (0.0, 0.0);
         self.input.camera_focus_target = None;
         self.input.camera_focus_waiting_for_input_release = false;

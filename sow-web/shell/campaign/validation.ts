@@ -123,18 +123,18 @@ export function validate(
     if (roster) {
         knownFields(roster, ["_comment", "map", "player_spawn", "player_color", "factions"], null, "roster");
         const EPISODE_MAPS: Record<string, [string, number, number]> = {
-            tactics_01_expand: ["europe", 1000, 576],
-            tactics_02_ask_ally: ["bajacalifornia", 848, 1000],
-            tactics_03_farm_vs_city: ["europe", 1000, 576],
-            tactics_04_factory_gold: ["southeastasia", 1000, 592],
-            boudica: ["eastanglia", 896, 504],
+            tactics_01_expand: ["europe", 1600, 920],
+            tactics_02_ask_ally: ["bajacalifornia", 1356, 1600],
+            tactics_03_farm_vs_city: ["europe", 1600, 920],
+            tactics_04_factory_gold: ["southeastasia", 1600, 952],
+            boudica: ["eastanglia", 1600, 900],
         };
         const BLITZ_MAP_SPECS: [string, number, number][] = [
-            ["europe", 1000, 576],
-            ["bajacalifornia", 848, 1000],
-            ["southeastasia", 1000, 592],
-            ["africa", 956, 1000],
-            ["northamerica", 1000, 516],
+            ["europe", 1600, 920],
+            ["bajacalifornia", 1356, 1600],
+            ["southeastasia", 1600, 952],
+            ["africa", 1532, 1600],
+            ["northamerica", 1600, 824],
         ];
         const blitzMatch = definition.episode_id.match(/^blitz_(\d+)$/);
         const expectedMap =
@@ -142,7 +142,7 @@ export function validate(
             (blitzMatch
                 ? BLITZ_MAP_SPECS[Math.max(0, Number(blitzMatch[1]) - 5) % BLITZ_MAP_SPECS.length]
                 : /^six_sky_ep[123]$/.test(definition.episode_id)
-                  ? ["northamerica", 1000, 516]
+                  ? ["northamerica", 1600, 824]
                   : null);
         if (
             !object(roster) ||

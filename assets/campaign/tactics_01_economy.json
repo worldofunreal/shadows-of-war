@@ -1,14 +1,14 @@
 {
   "_comment": "Tactics I — Economy & Buildings: Farm vs Factory (Britain on europe, 1000x576).",
   "map": "europe",
-  "player_spawn": [337, 264],
+  "player_spawn": [539, 422],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "severn_raiders",
       "name": "Severn Raiders",
-      "x": 305,
-      "y": 268,
+      "x": 488,
+      "y": 428,
       "starting_troops": 1200,
       "relation": "enemy",
       "team": "Red",
@@ -26,8 +26,8 @@
     {
       "id": "iron_bastion",
       "name": "Iron Bastion",
-      "x": 319,
-      "y": 242,
+      "x": 510,
+      "y": 387,
       "starting_troops": 3600,
       "relation": "enemy",
       "team": "Red",

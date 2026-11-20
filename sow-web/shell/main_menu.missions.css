@@ -35,6 +35,38 @@
     animation: sow-directive-pulse 2.4s infinite ease-in-out;
 }
 
+:root[data-sow-gpu-tier="low"] .sow-directive-card,
+:root[data-sow-gpu-tier="low"] .sow-directive-card.is-ready {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    animation: none;
+}
+
+:root[data-sow-gpu-tier="low"] .sow-menu__mission-title-sheen {
+    mix-blend-mode: normal;
+    animation: sow-mission-sheen-sweep 1.8s ease-in-out 400ms 1 both;
+}
+
+:root[data-sow-gpu-tier="low"] .sow-menu__mission-banner-aura {
+    animation: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .sow-directive-card,
+    .sow-directive-card.is-ready {
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+        animation: none;
+    }
+    .sow-menu__mission-title-sheen {
+        mix-blend-mode: normal;
+        animation: sow-mission-sheen-sweep 1.8s ease-in-out 400ms 1 both;
+    }
+    .sow-menu__mission-banner-aura {
+        animation: none;
+    }
+}
+
 @keyframes sow-directive-pulse {
     0%, 100% {
         box-shadow: 0 0 10px color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent), var(--sow-tactical-card-shadow);

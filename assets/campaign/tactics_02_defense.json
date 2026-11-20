@@ -1,14 +1,14 @@
 {
   "_comment": "Tactics II — Defense Posts & Troop Growth Rate (Baja on bajacalifornia, 848x1000).",
   "map": "bajacalifornia",
-  "player_spawn": [608, 678],
+  "player_spawn": [972, 1085],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "cape_raiders",
       "name": "Cape Raiders",
-      "x": 616,
-      "y": 694,
+      "x": 985,
+      "y": 1110,
       "starting_troops": 1600,
       "relation": "enemy",
       "team": "Red",
@@ -25,8 +25,8 @@
     {
       "id": "cabo_tyrant",
       "name": "Cabo Tyrant",
-      "x": 622,
-      "y": 712,
+      "x": 995,
+      "y": 1139,
       "starting_troops": 3800,
       "relation": "enemy",
       "team": "Red",

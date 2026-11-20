@@ -96,7 +96,7 @@ impl SowApp {
         self.ui.blast_scene.clear();
         self.ui.border_flash_intensities.clear();
         self.ui.app.hud_state.building_placement = None;
-        self.input.building_drag_offset = None;
+        self.input.building_drag = None;
         self.ui.building_placement_cache = Default::default();
         self.ui.click_markers.clear();
         self.ui.transport_target_markers.clear();

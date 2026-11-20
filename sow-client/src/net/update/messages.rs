@@ -234,11 +234,7 @@ impl SowApp {
                             .get_assets_to_fetch(&self.ui.app.main_menu_state.lobbies);
 
                         for map_name in maps_to_fetch {
-                            let url = format!(
-                                "{}/{}/map.bin.br",
-                                maps_base.trim_end_matches('/'),
-                                map_name
-                            );
+                            let url = crate::map_cache::download_url(&maps_base, &map_name);
                             let tx = self.tasks.map_tx.clone();
                             let map_name_for_closure = map_name.clone();
                             let request = ehttp::Request::get(&url);
@@ -436,6 +432,24 @@ impl SowApp {
                         }
                     }
                     ServerMessage::JoinFailed(fail) => {
+                        if fail.reason == "SERVER_DRAINING" {
+                            log::info!("[LOBBY] Owner generation drained; retrying the request at the active server");
+                            self.net.ws_url = self.net.orchestrator_url.clone();
+                            self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
+                            self.ui.app.main_menu_state.is_connected = false;
+                            self.ui.app.main_menu_state.is_connecting = false;
+                            self.ui.app.main_menu_state.error_message = None;
+                            self.net.client = None;
+                            self.net.lobby_owner_release_id = None;
+                            self.net.lobby_owner_ws_url = None;
+                            self.net.lobby_owner_reconnect_failures = 0;
+                            self.net.ws_connect_fail_backoff_ms = 400;
+                            self.net.ws_connect_not_before =
+                                web_time::Instant::now() + web_time::Duration::from_millis(500);
+                            self.join_waiting_for_identity = true;
+                            crate::web_menu::wake_event_loop_after(500);
+                            break;
+                        }
                         let reconnect_failed = self.ui.app.main_menu_state.is_waiting
                             && self.ui.app.main_menu_state.pending_join_lobby_id.is_some();
                         self.ui.app.main_menu_state.ranked_matchup = None;
@@ -495,6 +509,7 @@ impl SowApp {
                             self.net.lobby_owner_reconnect_failures = 0;
                             self.net.client = None;
                             menu.is_connected = false;
+                            break;
                         } else if fail.reason == "BANNED" {
                             menu.error_message = None;
                             menu.notice = Some(crate::LobbyNotice::Banned);

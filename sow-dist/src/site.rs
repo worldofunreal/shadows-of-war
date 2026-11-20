@@ -314,8 +314,8 @@ mod tests {
         };
         let production = map_targets(Site::Production);
         let ptr = map_targets(Site::Ptr);
-        assert_eq!(production.len(), 3);
-        assert_eq!(ptr.len(), 3);
+        assert_eq!(production.len(), 7);
+        assert_eq!(ptr.len(), 7);
         assert!(production.iter().all(|name| !ptr.contains(name)));
     }
 }

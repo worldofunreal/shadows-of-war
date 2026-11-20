@@ -241,8 +241,8 @@ const pendingCommands: string[] = [];
 let pendingLeaderSelection: LeaderSelection | null = null;
 
 // Line icons live in main_menu.hud.ts (loaded after the menu, used at render time).
-export function menuIcon(name: string): string {
-    return window.SOW_hudIcon ? window.SOW_hudIcon(name) : "";
+export function menuIcon(name: string, cls?: string): string {
+    return window.SOW_hudIcon ? window.SOW_hudIcon(name, cls) : "";
 }
 
 export function esc(value: unknown): string {

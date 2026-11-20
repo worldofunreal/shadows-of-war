@@ -61,7 +61,7 @@
   let MAPW = 896,
     MAPH = 504;
   let terrain: Uint8Array | null = null; // Uint8Array length MAPW*MAPH, bit7 = land
-  let roster: Roster = { map: "eastanglia", player_spawn: [696, 45], player_color: PLAYER_COLOR, factions: [] };
+  let roster: Roster = { map: "eastanglia", player_spawn: [1243, 80], player_color: PLAYER_COLOR, factions: [] };
   let avatarCatalog: string[] = [];
   let entityCatalog: AtlasEntity[] | null = null;
   let atlasEntityPicker: ReturnType<AtlasEntityPickerApi["attach"]> | null = null;
@@ -1008,7 +1008,7 @@
     const result: Roster = {
       _comment: j._comment,
       map: j.map || "eastanglia",
-      player_spawn: j.player_spawn || [696, 45],
+      player_spawn: j.player_spawn || [1243, 80],
       player_color: j.player_color || PLAYER_COLOR,
       factions,
     };

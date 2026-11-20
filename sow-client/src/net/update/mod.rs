@@ -11,6 +11,50 @@ impl SowApp {
 
         #[cfg(target_arch = "wasm32")]
         {
+            while let Ok(update_available) = self.net.published_version_rx.try_recv() {
+                self.net.published_version_check_pending = false;
+                if update_available {
+                    self.ui.update_available = true;
+                }
+            }
+            if !self.net.published_version_check_pending
+                && self
+                    .net
+                    .published_version_checked_at
+                    .is_none_or(|checked| now.duration_since(checked) >= Duration::from_secs(60))
+            {
+                self.net.published_version_checked_at = Some(now);
+                if let Some(window) = web_sys::window()
+                    && let Ok(href) = window.location().href()
+                    && let Ok(page_url) = url::Url::parse(&href)
+                    && let Ok(manifest_url) = page_url.join("/game-manifest.json")
+                {
+                    let manifest_url = manifest_url.to_string();
+                    let local_build = js_sys::Reflect::get(
+                        &window,
+                        &wasm_bindgen::JsValue::from_str("SOW_BUILD_TS"),
+                    )
+                    .ok()
+                    .and_then(|value| value.as_string())
+                    .unwrap_or_default();
+                    let tx = self.net.published_version_tx.clone();
+                    let mut request = ehttp::Request::get(&manifest_url);
+                    request.headers.insert("Cache-Control", "no-cache");
+                    self.net.published_version_check_pending = true;
+                    ehttp::fetch(request, move |result| {
+                        let published = result.ok().and_then(|response| {
+                            serde_json::from_slice::<serde_json::Value>(&response.bytes)
+                                .ok()?
+                                .get("build_ts")?
+                                .as_str()
+                                .map(str::to_owned)
+                        });
+                        let update_available = published
+                            .is_some_and(|build| !local_build.is_empty() && build != local_build);
+                        let _ = tx.send(update_available);
+                    });
+                }
+            }
             let doc_visible = web_sys::window()
                 .and_then(|w| w.document())
                 .map(|d| d.visibility_state() == web_sys::VisibilityState::Visible)
@@ -95,28 +139,50 @@ impl SowApp {
                         if self.ui.app.phase == crate::ClientPhase::Playing {
                             log::info!("Orchestrator reconnected while the relay session is active");
                         } else if self.ui.app.main_menu_state.host_private_pending {
-                        log::info!("Hosting private lobby from portal instant");
-                        let join_msg = self.make_join_message(None, true, None, None);
-                        if let Some(join_msg) = join_msg
-                            && let Ok(json) = bincode::serialize(&join_msg)
-                        {
-                            client.send(json);
-                            self.ui.app.main_menu_state.host_private_pending = false;
-                            self.ui.app.main_menu_state.is_waiting = true;
-                        } else {
-                            self.join_waiting_for_identity = true;
-                        }
-                    } else if let Some(id) = self.ui.app.main_menu_state.pending_join_lobby_id {
-                        if self.ui.app.main_menu_state.is_waiting
+                            log::info!("Hosting private lobby from portal instant");
+                            let join_msg = self.make_join_message(None, true, None, None);
+                            if let Some(join_msg) = join_msg
+                                && let Ok(json) = bincode::serialize(&join_msg)
+                            {
+                                client.send(json);
+                                self.ui.app.main_menu_state.host_private_pending = false;
+                                self.ui.app.main_menu_state.is_waiting = true;
+                            } else {
+                                self.join_waiting_for_identity = true;
+                            }
+                        } else if let Some(id) = self.ui.app.main_menu_state.pending_join_lobby_id {
+                            if self.ui.app.main_menu_state.is_waiting
+                                && self.ui.app.main_menu_state.joined_lobby_id.is_none()
+                                && (self.progress_account_id.is_some() || self.net.is_offline)
+                            {
+                                log::info!("Joining lobby {} from portal invite", id);
+                                let password = Some(
+                                    self.ui.app.main_menu_state.custom_game_password.clone(),
+                                )
+                                .filter(|password| !password.is_empty());
+                                let join_msg = self.make_join_message(Some(id), false, None, password);
+                                if let Some(join_msg) = join_msg
+                                    && let Ok(json) = bincode::serialize(&join_msg)
+                                {
+                                    client.send(json);
+                                    self.join_waiting_for_identity = false;
+                                } else {
+                                    self.join_waiting_for_identity = true;
+                                }
+                            }
+                        } else if self.join_waiting_for_identity
+                            && self.ui.app.main_menu_state.is_waiting
                             && self.ui.app.main_menu_state.joined_lobby_id.is_none()
                             && (self.progress_account_id.is_some() || self.net.is_offline)
                         {
-                            log::info!("Joining lobby {} from portal invite", id);
-                            let password = Some(
-                                self.ui.app.main_menu_state.custom_game_password.clone(),
-                            )
-                            .filter(|password| !password.is_empty());
-                            let join_msg = self.make_join_message(Some(id), false, None, password);
+                            let join_msg = self.make_join_message(
+                                None,
+                                self.ui.app.main_menu_state.custom_game_is_private,
+                                (!self.join_matchmaking && !self.join_public_matchmaking)
+                                    .then(|| self.ui.app.main_menu_state.custom_game_config.clone()),
+                                Some(self.ui.app.main_menu_state.custom_game_password.clone())
+                                    .filter(|password| !password.is_empty()),
+                            );
                             if let Some(join_msg) = join_msg
                                 && let Ok(json) = bincode::serialize(&join_msg)
                             {
@@ -125,27 +191,6 @@ impl SowApp {
                             } else {
                                 self.join_waiting_for_identity = true;
                             }
-                        }
-                    } else if self.join_waiting_for_identity
-                        && self.ui.app.main_menu_state.is_waiting
-                        && self.ui.app.main_menu_state.joined_lobby_id.is_none()
-                        && (self.progress_account_id.is_some() || self.net.is_offline)
-                    {
-                        let join_msg = self.make_join_message(
-                            None,
-                            self.ui.app.main_menu_state.custom_game_is_private,
-                            (!self.join_matchmaking && !self.join_public_matchmaking)
-                                .then(|| self.ui.app.main_menu_state.custom_game_config.clone()),
-                            Some(self.ui.app.main_menu_state.custom_game_password.clone())
-                                .filter(|password| !password.is_empty()),
-                        );
-                        if let Some(join_msg) = join_msg
-                            && let Ok(json) = bincode::serialize(&join_msg)
-                        {
-                            client.send(json);
-                            self.join_waiting_for_identity = false;
-                        } else {
-                            self.join_waiting_for_identity = true;
                         }
                     }
                     self.net.client = Some(client);

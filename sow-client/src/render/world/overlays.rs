@@ -407,10 +407,28 @@ fn render_buildings(
         ui.building_render_cache.flash_tick = Some(snapshot.tick);
     }
     ui.building_upgrade_flashes
-        .retain(|_, started| now.duration_since(*started) < Duration::from_millis(300));
+        .retain(|_, started| now.duration_since(*started) < Duration::from_millis(420));
+    ui.building_action_pulses
+        .retain(|_, started| now.duration_since(*started) < Duration::from_millis(320));
     ui.building_celebrations
         .retain(|_, (_, _, started)| now.duration_since(*started) < Duration::from_millis(1600));
     let building_upgrade_flashes = std::mem::take(&mut ui.building_upgrade_flashes);
+    let building_action_pulses = std::mem::take(&mut ui.building_action_pulses);
+    let prev_hovered_building = ui.hovered_building;
+    let selected_menu = input
+        .map_context_menu
+        .filter(|menu| menu.view == MapContextMenuView::BuildingDetails);
+    let desktop_hover_world = (!crate::web_canvas::is_mobile_pointer()
+        && input.camera_zoom > 0.0
+        && input.last_mouse_x >= 0.0
+        && input.last_mouse_y >= 0.0)
+        .then(|| {
+            (
+                (input.last_mouse_x as f32 - input.camera_x) / input.camera_zoom,
+                (input.last_mouse_y as f32 - input.camera_y) / input.camera_zoom,
+            )
+        });
+    let mut new_hovered_tile: Option<u32> = None;
     let reduced_motion = ui.app.settings_state.reduced_motion;
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
@@ -447,15 +465,92 @@ fn render_buildings(
             1.0
         };
         let building_center = [center[0] * sf, center[1] * sf];
+        let mut sx = 1.0f32;
+        let mut sy = 1.0f32;
+        let mut lift_y = 0.0f32;
+        let mut sprite_tint = [1.0, 1.0, 1.0, alpha];
+        if let Some(tile_idx) = building.tile_idx {
+            if let Some((wx, wy)) = desktop_hover_world {
+                let (fw, fh) = building.kind.footprint_dimensions();
+                let hw = (fw as f32 * 0.5).max(1.2);
+                let hh = (fh as f32 * 0.5).max(1.2);
+                if (wx - building.bx).abs() <= hw && (wy - building.by).abs() <= hh {
+                    new_hovered_tile = Some(tile_idx);
+                }
+            }
+            if !reduced_motion {
+                // Desktop hover: gentle bubbly lift + subtle brightness.
+                if let Some((htile, hstart)) = prev_hovered_building
+                    && htile == tile_idx
+                    && new_hovered_tile == Some(tile_idx)
+                {
+                    let elapsed = now.duration_since(hstart).as_secs_f32();
+                    let t = (elapsed / 0.18).clamp(0.0, 1.0);
+                    let wobble = (-6.0 * t).exp() * (t * 16.0).sin();
+                    let s = 1.03 + 0.05 * wobble;
+                    sx *= s;
+                    sy *= s;
+                    lift_y -= 2.5 * sf * t;
+                    sprite_tint = [1.08, 1.08, 1.04, alpha];
+                }
+                // Queue 1: Selection — Disney squash & stretch + damped spring wobble.
+                if let Some(menu) = selected_menu
+                    && menu.tile_idx == tile_idx
+                {
+                    let elapsed = now.duration_since(menu.opened_at).as_secs_f32();
+                    let t = (elapsed / 0.38).clamp(0.0, 1.0);
+                    // Anticipation squash (t < 0.14) -> stretch & damped wobble.
+                    let env = (-6.5 * t).exp();
+                    let osc = (t * 22.0 - 0.6).sin();
+                    let stretch = env * osc * 0.16;
+                    sx *= 1.0 - stretch * 0.85;
+                    sy *= 1.0 + stretch;
+                    lift_y -= (stretch.max(0.0)) * building_size[1] * 0.12;
+                    sprite_tint = [1.14, 1.12, 1.04, alpha];
+                }
+                // Queue 2: Upgrade sent — anticipation squash then upward launch impulse.
+                if let Some(started) = building_action_pulses.get(&tile_idx) {
+                    let t = (now.duration_since(*started).as_secs_f32() / 0.32).clamp(0.0, 1.0);
+                    let env = (-5.5 * t).exp();
+                    let osc = (t * 18.0 - 0.8).sin();
+                    let stretch = env * osc * 0.20;
+                    sx *= 1.0 - stretch * 0.80;
+                    sy *= 1.0 + stretch;
+                    lift_y -= (stretch.max(0.0)) * building_size[1] * 0.18;
+                    text.push_status_sprite(
+                        NameplateStatusSprite::UpgradeSparkle,
+                        building_center,
+                        1.7 * marker_extent * sf * (0.45 + 0.45 * t),
+                        [0.45, 0.92, 1.0, (1.0 - t) * 0.85],
+                    );
+                }
+                // Queue 3: Upgrade completed — celebratory elastic double-bounce + golden flash.
+                if let Some(started) = building_upgrade_flashes.get(&tile_idx) {
+                    let t = (now.duration_since(*started).as_secs_f32() / 0.42).clamp(0.0, 1.0);
+                    let env = (-5.0 * t).exp();
+                    let osc = (t * 18.0).sin();
+                    let bounce = 1.0 + env * osc * 0.24;
+                    sx *= bounce;
+                    sy *= bounce;
+                    lift_y -= (env * osc).max(0.0) * building_size[1] * 0.16;
+                    let flash = (1.0 - t * 1.4).max(0.0);
+                    sprite_tint[0] += 0.32 * flash;
+                    sprite_tint[1] += 0.26 * flash;
+                    sprite_tint[2] += 0.08 * flash;
+                }
+            }
+        }
+        let animated_center = [building_center[0], building_center[1] + lift_y];
+        let animated_size = [building_size[0] * sx, building_size[1] * sy];
         // Every kind and level has art in assets/art/buildings (checked by tests).
         if let Some(uv_rect) =
             crate::render::gpu::building_sprite_uv(building.kind, building.level.max(1))
         {
             text.push_building_sprite(
-                building_center,
-                building_size,
+                animated_center,
+                animated_size,
                 uv_rect,
-                [1.0, 1.0, 1.0, alpha],
+                sprite_tint,
             );
         }
 
@@ -576,6 +671,10 @@ fn render_buildings(
         }
     }
     ui.building_upgrade_flashes = building_upgrade_flashes;
+    ui.building_action_pulses = building_action_pulses;
+    if new_hovered_tile != ui.hovered_building.map(|(t, _)| t) {
+        ui.hovered_building = new_hovered_tile.map(|t| (t, now));
+    }
 }
 
 pub(crate) fn building_at_pointer(
@@ -816,15 +915,35 @@ fn render_building_selection_focus(
 
     let colors = placement_preview_colors(true, true);
     let metrics = placement_grid_metrics(zoom, sf);
-    render_building_footprint_fill(text, geometry.top_left, geometry.size, colors.fill);
+    let elapsed = web_time::Instant::now()
+        .duration_since(menu.opened_at)
+        .as_secs_f32();
+    let expand_t = (elapsed / 0.16).clamp(0.0, 1.0);
+    let expand_scale = 0.92 + 0.08 * (1.0 - (1.0 - expand_t) * (1.0 - expand_t));
+    let breath = 0.72 + 0.28 * (elapsed * 4.0).sin().abs();
+    let scaled_size = [
+        geometry.size[0] * expand_scale,
+        geometry.size[1] * expand_scale,
+    ];
+    let scaled_top_left = [
+        geometry.center[0] - scaled_size[0] * 0.5,
+        geometry.center[1] - scaled_size[1] * 0.5,
+    ];
+    let line_color = [
+        colors.line[0],
+        colors.line[1],
+        colors.line[2],
+        colors.line[3] * breath,
+    ];
+    render_building_footprint_fill(text, scaled_top_left, scaled_size, colors.fill);
     render_building_footprint_grid(
         text,
         footprint,
-        geometry.top_left,
-        geometry.size,
+        scaled_top_left,
+        scaled_size,
         zoom,
         metrics,
-        colors.line,
+        line_color,
     );
 
     let snapshot_buildings = sim
@@ -1132,7 +1251,7 @@ fn render_building_placement_preview(
         metrics,
         colors.line,
     );
-    let dragging = input.building_drag_offset.is_some();
+    let dragging = input.building_drag.is_some();
     let sprite_size = building_sprite_size(
         building_footprint_marker_size(kind, zoom / sf, BUILDING_MIN_MARKER_SIZE),
         sf,

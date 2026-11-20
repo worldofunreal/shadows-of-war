@@ -2,16 +2,16 @@
   "_comment": "Conquest Blitz Node 9 (Tense) on northamerica",
   "map": "northamerica",
   "player_spawn": [
-    590,
-    499
+    944,
+    797
   ],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "outpost_alpha",
       "name": "Outpost Alpha",
-      "x": 576,
-      "y": 500,
+      "x": 922,
+      "y": 798,
       "starting_troops": 775,
       "relation": "enemy",
       "team": "Red",
@@ -34,8 +34,8 @@
     {
       "id": "vanguard_keep",
       "name": "Vanguard Keep",
-      "x": 568,
-      "y": 496,
+      "x": 909,
+      "y": 792,
       "starting_troops": 1300,
       "relation": "enemy",
       "team": "Red",
@@ -58,8 +58,8 @@
     {
       "id": "sector_boss",
       "name": "Sector 9 Warlord",
-      "x": 560,
-      "y": 488,
+      "x": 896,
+      "y": 779,
       "starting_troops": 4300,
       "relation": "enemy",
       "team": "Red",

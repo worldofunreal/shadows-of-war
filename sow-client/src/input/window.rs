@@ -1,4 +1,4 @@
-use crate::app::{HoverPointer, MapContextMenuView, MapPointerStart, SowApp};
+use crate::app::{BuildingDrag, HoverPointer, MapContextMenuView, MapPointerStart, SowApp};
 use crate::input::map_click::{TOUCH_HOLD_MS, is_quick_tap};
 use crate::{ClientPhase, camera_zoom_upper_bound};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, PointerKind, WindowEvent};
@@ -415,20 +415,36 @@ impl SowApp {
                         action_sent: dismisses_radial,
                     });
                 }
-                if build_tool_selected
-                    && (!is_touch || self.input.active_touches.len() == 1)
+                if (!is_touch || self.input.active_touches.len() == 1)
+                    && let Some(placement) = self.ui.app.hud_state.building_placement
                     && let Some(controls) = self.placement_controls()
                     && controls.grabs(x as f32, y as f32)
                 {
-                    self.input.building_drag_offset = Some((
-                        (x as f32 - controls.center[0]) / self.input.camera_zoom,
-                        (y as f32 - controls.center[1]) / self.input.camera_zoom,
-                    ));
+                    let zoom = self.input.camera_zoom;
+                    let drag = if is_touch && crate::web_canvas::has_mobile_pointer() {
+                        let width = self.sim.map_w.max(1);
+                        BuildingDrag::Touch {
+                            anchor: (
+                                (placement.tile_idx % width) as i32,
+                                (placement.tile_idx / width) as i32,
+                            ),
+                            pointer: (x, y),
+                            zoom,
+                        }
+                    } else {
+                        BuildingDrag::Mouse {
+                            offset: (
+                                (x as f32 - controls.center[0]) / zoom,
+                                (y as f32 - controls.center[1]) / zoom,
+                            ),
+                        }
+                    };
+                    self.input.building_drag = Some(drag);
                     self.input.touch_pan_residual = (0.0, 0.0);
                     self.input.dragging = false;
                 }
             } else {
-                let was_building_drag = self.input.building_drag_offset.is_some();
+                let was_building_drag = self.input.building_drag.is_some();
                 let Some(start) = self.finish_pointer_gesture() else {
                     if self.input.active_touches.is_empty() {
                         self.input.dragging = false;
@@ -558,11 +574,23 @@ impl SowApp {
                 );
             }
             self.input.last_pinch_state = Some((distance, cx, cy));
-        } else if let Some((offset_x, offset_y)) = self.input.building_drag_offset {
-            let col = ((x as f32 - self.input.camera_x) / self.input.camera_zoom - offset_x).round()
-                as i32;
-            let row = ((y as f32 - self.input.camera_y) / self.input.camera_zoom - offset_y).round()
-                as i32;
+        } else if let Some(drag) = self.input.building_drag {
+            let (col, row) = match drag {
+                BuildingDrag::Mouse { offset } => (
+                    ((x as f32 - self.input.camera_x) / self.input.camera_zoom - offset.0)
+                        .round() as i32,
+                    ((y as f32 - self.input.camera_y) / self.input.camera_zoom - offset.1)
+                        .round() as i32,
+                ),
+                BuildingDrag::Touch {
+                    anchor,
+                    pointer,
+                    zoom,
+                } => (
+                    (f64::from(anchor.0) + (x - pointer.0) / f64::from(zoom)).round() as i32,
+                    (f64::from(anchor.1) + (y - pointer.1) / f64::from(zoom)).round() as i32,
+                ),
+            };
             self.move_building_preview(col, row);
         } else if is_touch {
             let mut crossed_drag_threshold = false;
@@ -677,7 +705,7 @@ impl SowApp {
     }
 
     fn finish_pointer_gesture(&mut self) -> Option<MapPointerStart> {
-        self.input.building_drag_offset = None;
+        self.input.building_drag = None;
         self.input.map_pointer_start.take()
     }
 }

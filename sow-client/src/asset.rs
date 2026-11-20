@@ -39,11 +39,7 @@ impl SowApp {
             return;
         }
 
-        let url = format!(
-            "{}/{}/map.bin.br",
-            self.asset_config.maps_base.trim_end_matches('/'),
-            map_key
-        );
+        let url = crate::map_cache::download_url(&self.asset_config.maps_base, &map_key);
         let tx = self.tasks.map_tx.clone();
         let accumulated = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let total_bytes = std::sync::Arc::new(std::sync::Mutex::new(0usize));

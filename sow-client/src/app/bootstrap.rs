@@ -87,6 +87,8 @@ impl SowApp {
         }
         let (connect_tx_raw, connect_rx) = crossbeam_channel::unbounded();
         let connect_tx = WakeSender::new(connect_tx_raw);
+        let (published_version_tx_raw, published_version_rx) = crossbeam_channel::unbounded();
+        let published_version_tx = WakeSender::new(published_version_tx_raw);
 
         // Reconnect scheduling (idle drop / resume / failed handshake).
         let ws_connect_fail_backoff_ms: u64 = 400;
@@ -183,6 +185,14 @@ impl SowApp {
                 lobby_owner_release_id: None,
                 lobby_owner_ws_url: None,
                 lobby_owner_reconnect_failures: 0,
+                #[cfg(target_arch = "wasm32")]
+                published_version_tx,
+                #[cfg(target_arch = "wasm32")]
+                published_version_rx,
+                #[cfg(target_arch = "wasm32")]
+                published_version_checked_at: None,
+                #[cfg(target_arch = "wasm32")]
+                published_version_check_pending: false,
                 is_offline: false,
                 parked_client: None,
                 ws_connect_fail_backoff_ms,
@@ -235,7 +245,7 @@ impl SowApp {
                 map_context_menu,
                 map_context_menu_session,
                 last_right_press,
-                building_drag_offset: None,
+                building_drag: None,
                 shift_pressed: false,
                 has_snapped_camera_to_spawn,
                 spawn_intent_rate: sow_core::spawn_rate_limit::SpawnIntentRateLimit::default(),
@@ -303,6 +313,8 @@ impl SowApp {
                 ),
                 building_levels_seen: std::collections::HashMap::new(),
                 building_upgrade_flashes: std::collections::HashMap::new(),
+                building_action_pulses: std::collections::HashMap::new(),
+                hovered_building: None,
                 building_celebrations: std::collections::HashMap::new(),
                 last_resource_notice_tick: None,
                 border_flashes: Vec::new(),

@@ -1,14 +1,14 @@
 {
   "_comment": "Advanced Tactics III — Total War: Full Custom Bot Skirmish Graduation (africa, 956x1000).",
   "map": "africa",
-  "player_spawn": [466, 128],
+  "player_spawn": [747, 205],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "outpost_alpha",
       "name": "Atlas Vanguard",
-      "x": 452,
-      "y": 128,
+      "x": 724,
+      "y": 205,
       "starting_troops": 1100,
       "relation": "enemy",
       "team": "Red",
@@ -26,8 +26,8 @@
     {
       "id": "vanguard_keep",
       "name": "Maghreb Pact",
-      "x": 440,
-      "y": 128,
+      "x": 705,
+      "y": 205,
       "starting_troops": 2200,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -43,8 +43,8 @@
     {
       "id": "imperial_hegemon",
       "name": "Imperial Hegemon",
-      "x": 424,
-      "y": 128,
+      "x": 679,
+      "y": 205,
       "starting_troops": 5200,
       "relation": "enemy",
       "team": "Red",

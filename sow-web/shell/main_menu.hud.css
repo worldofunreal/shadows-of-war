@@ -1050,7 +1050,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
 }
 
 /* Luminous edge crest bar on tactical medallion buttons. */
-.sow-hud__icon-btn::after {
+.sow-hud__icon-btn::after,
+:where(.sow-control-crest)::after {
   content: "";
   position: absolute;
   inset-block: 24%;
@@ -1061,11 +1062,11 @@ html[dir="rtl"] #sow-hud-dev-layer {
     180deg,
     transparent,
     #fff6d6 25%,
-    var(--sow-gold-bright) 50%,
+    var(--sow-edge-accent, var(--sow-gold-bright)) 50%,
     #fff6d6 75%,
     transparent
   );
-  box-shadow: 0 0 8px var(--sow-gold);
+  box-shadow: 0 0 8px var(--sow-edge-accent, var(--sow-gold));
   opacity: 0;
   transform: scaleY(0.35);
   pointer-events: none;
@@ -1116,6 +1117,19 @@ html[dir="rtl"] #sow-hud-dev-layer {
     filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.sow-control-crest,
+.sow-control-crest :is(.sow-menu__inline-icon, .sow-menu__currency-icon) {
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sow-control-crest {
+  touch-action: manipulation;
+}
+
+.sow-control-crest:active {
+  transform: scale(0.97);
+}
+
 @media (hover: hover) {
   .sow-hud__icon-btn:hover,
   .sow-hud__icon-btn[data-command="toggle_settings"]:hover,
@@ -1140,7 +1154,8 @@ html[dir="rtl"] #sow-hud-dev-layer {
       0 0 14px color-mix(in srgb, var(--sow-gold) 34%, transparent);
   }
 
-  .sow-hud__icon-btn:hover::after {
+  .sow-hud__icon-btn:hover::after,
+  :where(.sow-control-crest:hover)::after {
     opacity: 0.65;
     transform: scaleY(0.75);
   }
@@ -1162,13 +1177,22 @@ html[dir="rtl"] #sow-hud-dev-layer {
       0 0 18px rgb(239 68 68 / 48%);
   }
 
-  .sow-hud__icon-btn:hover .sow-hud__action-icon {
+  .sow-hud__icon-btn:hover .sow-hud__action-icon,
+  .sow-control-crest:hover :is(.sow-menu__inline-icon, .sow-menu__currency-icon) {
     transform: translateY(-1px) scale(1.09);
+  }
+
+  .sow-hud__icon-btn:hover .sow-hud__action-icon {
     filter:
       brightness(1.08)
       drop-shadow(0 3px 5px rgba(0, 0, 0, 0.6))
       drop-shadow(0 0 8px color-mix(in srgb, currentColor 38%, transparent));
   }
+}
+
+:where(.sow-control-crest:focus-visible, .sow-control-crest:active)::after {
+  opacity: 0.85;
+  transform: scaleY(1);
 }
 
 .sow-hud__icon-btn.active,
@@ -2078,7 +2102,12 @@ html[dir="rtl"] #sow-hud-dev-layer {
   border-radius: inherit;
   background: var(--sow-fill-construction-gradient);
   box-shadow: var(--sow-fill-construction-shadow);
-  transition: width 100ms linear;
+  transform-origin: left center;
+  transform: scaleX(var(--sow-bar-ratio, 0));
+  will-change: transform;
+}
+html[dir="rtl"] .sow-hud__deploy-fill {
+  transform-origin: right center;
 }
 
 .sow-hud__deploy-fill::after {
@@ -4789,11 +4818,6 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
   opacity: 0;
-}
-
-.sow-hud__ring-sector.is-empty .sow-hud__ring-wedge {
-  fill: rgb(7 8 11 / 72%);
-  stroke: rgb(255 255 255 / 3%);
 }
 
 .sow-hud__ring-sector.is-hot .sow-hud__ring-wedge {
@@ -9228,4 +9252,48 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
   font-weight: 600;
   color: #f6d578;
   text-align: center;
+}
+
+:root[data-sow-gpu-tier="low"] #sow-hud *,
+:root[data-sow-gpu-tier="low"] #sow-hud *::before,
+:root[data-sow-gpu-tier="low"] #sow-hud *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-sow-gpu-tier="low"] #sow-hud-endgame-modal .sow-hud__endgame-rays {
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--sow-gold-bright) 18%, transparent) 0%,
+    transparent 64%
+  );
+  -webkit-mask: none;
+  mask: none;
+}
+
+:root[data-sow-gpu-tier="low"] #sow-hud .sow-hud__deploy-fill::after {
+  display: none;
+  animation: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  #sow-hud *,
+  #sow-hud *::before,
+  #sow-hud *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  #sow-hud-endgame-modal .sow-hud__endgame-rays {
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--sow-gold-bright) 18%, transparent) 0%,
+      transparent 64%
+    );
+    -webkit-mask: none;
+    mask: none;
+  }
+  #sow-hud .sow-hud__deploy-fill::after {
+    display: none;
+    animation: none;
+  }
 }

@@ -7,6 +7,14 @@
 # The `[recipes.<map>]` tables below keep provenance and artifact hashes for the
 # generated map library even though the binary map folders remain ignored.
 
+# Regional Big recipes use sow-tools import-map-source --size big
+# --min-lake-tiles 13 --min-island-pixels 30 --min-island-tiles 9.
+# Keep the published display name, spawn ordering and xx flags. Use the pinned
+# upstream info.json coordinates, or source_spawns where supplied, then apply
+# spawn_source_overrides. Paint source_land_rects on a working copy of the
+# pinned image before importing. Rectangles are [x, y, width, height] in source pixels.
+# Keep the existing rotation weights and official thumbnail frames.
+
 # This license block applies only to the OpenFront-derived image recipes in
 # this file. OSM-generated maps use their own source and license declaration.
 [map_license]
@@ -29,16 +37,20 @@ source_path = "../games/openfrontio/map-generator/assets/maps/africa/image.png"
 source_sha256 = "c57f74620177725e3fda55a771d877acc53ec6c1d7ff3a1059002ca4108a4cea"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 956
-target_height = 1000
+target_width = 1532
+target_height = 1600
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "d1de3a927ac4d3028361af4d267ce09906c92bf37b7dead33c0c8f4440a4ccc4"
-map_bin_br_sha256 = "30fb9e8483ea0d15c57a0060c83f38c4e4615c0831b2136f42a9c3f76c7eddb1"
+source_land_rects = [
+  { name = "Mayotte", rect = [1755, 1409, 6, 5], rgba = [190, 220, 140, 255] },
+]
+map_bin_sha256 = "66dcc2945acd5b5c3ad89b18564d931109f399c630e39efaa008b8538fbaef2d"
+map_bin_br_sha256 = "96e24a8297456cfdb1c4f9e6c411443129d1deae099e06af114cde6500d9020e"
 thumbnail_sha256 = "4e9de2c6be125d72a3a5ccc3503fcbe4653708d5d25d139e80e192a570dcf160"
 
 [recipes.asia]
@@ -47,16 +59,21 @@ source_path = "../games/openfrontio/map-generator/assets/maps/asia/image.png"
 source_sha256 = "02a46b7428d7206e8e362c3fc9c049d1168e86781468f70362c2c6aedc3afa30"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 1000
-target_height = 600
+target_width = 1600
+target_height = 960
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "4054636c58b1f41595798e006e5399e30798151bd52e500ecd02a80f8dc8e424"
-map_bin_br_sha256 = "1ed74bcb9388d42c4caf51db4c57688ff3909bea9623c80ecae76185c645af53"
+spawn_source_overrides = [
+  { name = "Philippines", x = 1239, y = 914 },
+  { name = "Somalia", x = 243, y = 1066 },
+]
+map_bin_sha256 = "4edc343e6874514a5caa20128512b0e35623529c825bea858a983f1fe968b64c"
+map_bin_br_sha256 = "f0d1821319061af9644e2b26ee869ba858399cd62c61cc5246c60414591dec87"
 thumbnail_sha256 = "fb6576ee72652247915ec874bb35f39373e6695cfcf47b1e21ec14a98da06dbd"
 
 [recipes.bajacalifornia]
@@ -65,16 +82,17 @@ source_path = "../games/openfrontio/map-generator/assets/maps/bajacalifornia/ima
 source_sha256 = "9fec6866a4e0a8c5faa80fdf068378d3679b46df3153a93f7e93bca62229d47c"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 848
-target_height = 1000
+target_width = 1356
+target_height = 1600
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "e724e2850c491536dd8ab0f526e48750be95d2c9c56e2a9f016f2a3132914f68"
-map_bin_br_sha256 = "b6cbe8ff430bb62bd76740852bc21ad8832a4405d2925a03534ed01734e15b9e"
+map_bin_sha256 = "61ffc6bdf2ecf8c18af87d7fa845165e71e8f4a58f511d21d0281934acc6fe6f"
+map_bin_br_sha256 = "a894503f19afca52d38211b68ca468142005bda116da41b2a11cbcf8e541adad"
 thumbnail_sha256 = "044cdc8daa9d2a8c7da8083a46ca6250497bcbfa71ff7f91da776a9311aca511"
 
 [recipes.eastanglia]
@@ -87,16 +105,32 @@ source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 source_origin_path = "../games/openfrontio/map-generator/assets/maps/britannia/image.png"
 source_frame = [704, 1450, 896, 504]
 reproducible = true
-target_width = 896
-target_height = 504
+target_width = 1600
+target_height = 900
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "deba2b64a2cbf2dde2649f9c9926700679b7e1a13ff5a7689c96cf526e4a75fc"
-map_bin_br_sha256 = "023dcc6a595fc74975945c5b80adb964666a17e056ed5d53e0b45cba436f4b4e"
+spawn_source_overrides = [
+  { name = "Pas-de-Calais", x = 836, y = 469 },
+  { name = "Powys", x = 198, y = 118 },
+]
+source_spawns = [
+  { name = "Pas-de-Calais", x = 835, y = 465 },
+  { name = "Devon", x = 163, y = 433 },
+  { name = "Norfolk", x = 696, y = 45 },
+  { name = "Powys", x = 198, y = 119 },
+  { name = "Suffolk", x = 703, y = 134 },
+  { name = "Hampshire", x = 444, y = 370 },
+  { name = "Camulodunum", x = 646, y = 230 },
+  { name = "Londinium", x = 576, y = 300 },
+  { name = "Verulamium", x = 536, y = 270 },
+]
+map_bin_sha256 = "d58ccc2af741505b6c41ad669a134c2466e19c72ce73c11b3a316bb87e650dbc"
+map_bin_br_sha256 = "246033254cfead110990a0f873007fd1cb02407eccf1e3f1b5ce3cf16bae0b5a"
 thumbnail_sha256 = "2cda02d707ebcebb06ba53156c834690ec4ffffb859c7eef69d50f90d4a42ac0"
 
 [recipes.eastasia]
@@ -105,16 +139,17 @@ source_path = "../games/openfrontio/map-generator/assets/maps/eastasia/image.png
 source_sha256 = "cb9510115ac2e8f79520163c9423fd523ad067a1a86d864a0b9ab6218dca0281"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 948
-target_height = 1000
+target_width = 1516
+target_height = 1600
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "a8d4ce6e545f13df3fc57aa859108393dcb4ef9c30cccd3f027fb2de21115157"
-map_bin_br_sha256 = "e838052047a3d2842f47e336f3ca6747c7d543931818c5fbf9d01aef5a0712e9"
+map_bin_sha256 = "9cd97fac78db01f19c7f1a4deb0e03b0f012720df43bae6d040776ffeea75197"
+map_bin_br_sha256 = "0f887f4220b61561541568b393164693d4029a938c5e8fecd2d36d8d07cbb712"
 thumbnail_sha256 = "e4150af309140e1af7ef76e9ad7fea502918d22f46703a6c45a5211ac465e692"
 
 [recipes.europe]
@@ -123,16 +158,17 @@ source_path = "../games/openfrontio/map-generator/assets/maps/europe/image.png"
 source_sha256 = "d9d793c06c62d1677683cd369e89b390dd24c23e3815c9049a38d91156c0da19"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 1000
-target_height = 576
+target_width = 1600
+target_height = 920
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "c2fa33e1e8812b76284eac474513724f84fd844007390f0534bb475fcbddf7ad"
-map_bin_br_sha256 = "787c968770ccaa98703ba7ce69ea43ff7258933dae4d54c0e59ac3b7aa694dde"
+map_bin_sha256 = "b337301e0b18fb7e5ddfe7b6710eb2f250ae004cf16ebf081e98fe17fa8829f2"
+map_bin_br_sha256 = "cde74cdd1038eb081acac4f95e73e66b51b030cbb0f7ada341c1714b4b9357ea"
 thumbnail_sha256 = "d1f7d5461b66592b404c21159ee658fee6e28a8e48d0f37b9b2e04f0e8ea76dd"
 
 [recipes.indiansubcontinent]
@@ -141,16 +177,20 @@ source_path = "../games/openfrontio/map-generator/assets/maps/indiansubcontinent
 source_sha256 = "ecd5b7dd4ba8d54692ce3840a93e71a454a693da00f44b218dbd47d26b5f08d3"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 900
-target_height = 1000
+target_width = 1440
+target_height = 1600
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "f7760ed0a4132ce4a1fd8b550b5602850c445ed4cabbc6bb4b150a62d759f215"
-map_bin_br_sha256 = "19ce2e9f17c9ba3712d2900cf261b4163d79c2d57dbccd352b78681464edf1cc"
+source_land_rects = [
+  { name = "Lakshadweep", rect = [629, 1565, 6, 5], rgba = [190, 216, 144, 255] },
+]
+map_bin_sha256 = "1dc67273e52d5ba801b010d6bb6d10da25c17781783197b15f69844c9ba94e73"
+map_bin_br_sha256 = "372a2e93191bceef2034c060e6cdf89195379f722f854b5a75bb576fb92861cc"
 thumbnail_sha256 = "eab3fa47b7125108172c036be3efe8f2691745784ca9f2d5a3925936764e1857"
 
 [recipes.mena]
@@ -159,16 +199,20 @@ source_path = "../games/openfrontio/map-generator/assets/maps/mena/image.png"
 source_sha256 = "c3a795af4683a5c50967e2682980d6cf2326db84fea83115ca6fb7ba85421a8a"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 1000
-target_height = 436
+target_width = 1600
+target_height = 700
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "c9e80b4efb3cb77d66879de498d7a47c59f2c92443e2b019d41fdcd408aabb9a"
-map_bin_br_sha256 = "2df15c656f2fc88aa66f7a7b2b64d989415cf468e9b6c962e57ecb53e3d879a4"
+spawn_source_overrides = [
+  { name = "Mauritania", x = 45, y = 675 },
+]
+map_bin_sha256 = "300445c1c87c566367cc1df03f2be47bb87072eb608591989104340370ce7b27"
+map_bin_br_sha256 = "9bbf66b52ce7ad6da0160706cebcab5acdb354ccce9719e971021e0f83b45dc6"
 thumbnail_sha256 = "bda8795322f7f172fb6565f43ef78c3f820d28168112b66aede08b0a5c3789e7"
 
 [recipes.middleeast]
@@ -177,16 +221,17 @@ source_path = "../games/openfrontio/map-generator/assets/maps/middleeast/image.p
 source_sha256 = "372210b5c4a0f9f713c04eefbe624ea41f1f418ea02bdeb4e00beb761a93077e"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 1000
-target_height = 936
+target_width = 1600
+target_height = 1496
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "f39b40c6a8b22b9b4a1c900e8296f296b578af185d17ed7e46ab2061568278f4"
-map_bin_br_sha256 = "4c63563e27aa39b8bf73916c95bbfecc74a7a740c9ade7d3c44d6e82b2567ef5"
+map_bin_sha256 = "cf5b25bc768273d16713a8471438197dd2d18ca6f65e4c61b207fc486401ec67"
+map_bin_br_sha256 = "814848f91cfac2ee3be62308d80dc299f1a1fc98ca55c01df506bbcdb7cb1a73"
 thumbnail_sha256 = "166198dde0d6ae49505b59a84a1d902245ff52b9d197dc24e9c2659217b27f90"
 
 [recipes.northamerica]
@@ -195,16 +240,21 @@ source_path = "../games/openfrontio/map-generator/assets/maps/northamerica/image
 source_sha256 = "4800b5ce30079c9da6dc3491c5344b1302b81c3e48ddcceedeb7b15c9fe85677"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 1000
-target_height = 516
+target_width = 1600
+target_height = 824
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "2f6a56cec2d617776d4ca125fd9a8b760d609336f9b3b852f194d5e81292869d"
-map_bin_br_sha256 = "6b1433ec36ee06102630902bcc1f2bebf26f4af4d681d9ad04dd79b9af913e55"
+source_land_rects = [
+  { name = "Cabo Verde", rect = [2717, 1261, 6, 6], rgba = [190, 204, 156, 255] },
+  { name = "Azores", rect = [2635, 838, 6, 6], rgba = [245, 245, 200, 255] },
+]
+map_bin_sha256 = "d4d98e8f4728aab42156276f445d62574b328d12764c9dc4e702df6d31ec7346"
+map_bin_br_sha256 = "304723a8d7ba09cdd508c419a1323fbc78434a3cd12f06d54c3fc726b32ed421"
 thumbnail_sha256 = "6660746a28bd48254a53cb55e91fa2cf9abae2c27099d3a15af6bec5c47d7d47"
 
 [recipes.oceania]
@@ -213,16 +263,22 @@ source_path = "../games/openfrontio/map-generator/assets/maps/oceania/image.png"
 source_sha256 = "23041db1e677e4cfe456c9a5a2a04eeae0487029e1fe78c7e4ff244af5b78d2c"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 1000
-target_height = 600
+target_width = 1600
+target_height = 960
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "1fb4c41c6ef3e75538c93ffa1289b40ef3f7b9030598a1ab72730f6e3f79eded"
-map_bin_br_sha256 = "7cfe367ea33520b058ac66e03cb7d5a7d06e10eac3b7d29e12a7e02beb16cddb"
+spawn_source_overrides = [
+  { name = "Timor Leste", x = 436, y = 409 },
+  { name = "Samoa", x = 1202, y = 474 },
+  { name = "Cook Islands", x = 1489, y = 524 },
+]
+map_bin_sha256 = "89eb490058f54a7ea4b0152ae1baf33f40cdcab0e4e824eadf0cb5c755f7e16b"
+map_bin_br_sha256 = "d019084b801ea3ed4a020aadeb1e758f2a24da504d75ddfb6497a07ebcf5a7bc"
 thumbnail_sha256 = "a1da8800ad0b52f9784233c9a653af72b51da39c561dfc0fd14535776300f259"
 
 [recipes.pangaea]
@@ -249,16 +305,20 @@ source_path = "../games/openfrontio/map-generator/assets/maps/southamerica/image
 source_sha256 = "b266863e72f070f4ade8142ebbf723de811adc3c46f5c583d03b331d0d143fb9"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 732
-target_height = 1000
+target_width = 1172
+target_height = 1600
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "69e2f717f6ad5baddfe402f008bfcfd899198ee9d07a258708facf0b4dfc6bda"
-map_bin_br_sha256 = "62912764e815b68646e08ea1450cf84fd77c75ef46b76a9fb485b4d67333fe36"
+spawn_source_overrides = [
+  { name = "Venezuela", x = 770, y = 464 },
+]
+map_bin_sha256 = "15d1a3bdd19d5fac2940b5150e633b9919a026e56d07d859fcda3543ca6a39c9"
+map_bin_br_sha256 = "932619fb9345f665ce37582db4c1a03b4a28c68c201f392e0b718e0112843990"
 thumbnail_sha256 = "4c5d300df9b255732e8dd72e1c1b132350a9ca43b6a93ac5d43443640300e8fc"
 
 [recipes.southeastasia]
@@ -267,16 +327,24 @@ source_path = "../games/openfrontio/map-generator/assets/maps/southeastasia/imag
 source_sha256 = "5de174a960db58bbb060e394c91ea23fa849535e8406349d3e5bbe1edf313f6b"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 1000
-target_height = 592
+target_width = 1600
+target_height = 952
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
-pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
+pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1/final-islands-v1"
 water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
-small_lake_policy = "remove-under-16-tiles"
+small_lake_policy = "remove-under-13-tiles"
+final_island_policy = "remove-under-9-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "48bbf0262f1c4c3a2c34c15561a165d94bf95c3b2b7ba747f9d6e11920454731"
-map_bin_br_sha256 = "71ccd3892b89b81c72c8f7be2cd5e7ad11a36eedfc7cce8736172a0fe1a09958"
+source_land_rects = [
+  { name = "Japan", rect = [2267, 17, 7, 6], rgba = [190, 206, 154, 255] },
+  { name = "Christmas Island", rect = [614, 1655, 6, 6], rgba = [210, 200, 160, 255] },
+]
+spawn_source_overrides = [
+  { name = "Palau", x = 1956, y = 820 },
+]
+map_bin_sha256 = "25215eff95b4fc726f35c7ea1a595db37c408c650ab3076ba13d366367b5f7be"
+map_bin_br_sha256 = "45804790e683c483e704747cb699bf6ba5f6282b8872d34a56f4b471f1f03bd0"
 thumbnail_sha256 = "a65b45cc3b1e6004d03721c989b97e2f96555ccff06b46a9b376f6b52661ca7b"
 
 [recipes.world]

@@ -213,7 +213,7 @@ export function renderRankedDuel(lobby: MenuLobby | null, loading = false): stri
 }
 
 export function animateRankResult(card: HTMLElement, result: import("./main_menu.state.ts").RankedResult,
-    reduced: () => boolean): { finish: () => void; cancel: () => void } {
+    reduced: () => boolean): { finish: () => void; accelerate: () => void; cancel: () => void } {
     const ladder = result.ladder || menuUi.rankedLadder;
     const score = card.querySelector<HTMLElement>("[data-rank-score]");
     const rank = card.querySelector<HTMLElement>("[data-rank-name]");
@@ -223,7 +223,9 @@ export function animateRankResult(card: HTMLElement, result: import("./main_menu
     const target = card.querySelector<HTMLElement>("[data-rank-target]");
     const remaining = card.querySelector<HTMLElement>("[data-rank-remaining]");
     let frameId = 0;
-    let started: number | null = null;
+    let lastNow: number | null = null;
+    let virtualElapsed = 0;
+    let speed = 1;
     let stopped = false;
     let lastStep = result.tier_before + (result.division_before || "");
     function write(value: number, final: boolean) {
@@ -237,9 +239,26 @@ export function animateRankResult(card: HTMLElement, result: import("./main_menu
             if (emblem) emblem.innerHTML = rankEmblem(tier, division);
             card.dataset.tier = rankTier(tier);
             if (key !== lastStep) {
-                card.classList.remove("is-division-hit");
-                void card.offsetWidth;
-                card.classList.add("is-division-hit");
+                if (typeof emblem?.animate === "function") {
+                    emblem.animate(
+                        [
+                            { transform: "scale(0.88)" },
+                            { transform: "scale(1.12)" },
+                            { transform: "scale(1)" },
+                        ],
+                        { duration: 340, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+                    );
+                }
+                if (typeof track?.animate === "function") {
+                    track.animate(
+                        [
+                            { transform: "scaleY(1)" },
+                            { transform: "scaleY(1.24)" },
+                            { transform: "scaleY(1)" },
+                        ],
+                        { duration: 260, easing: "ease-out" },
+                    );
+                }
             }
             lastStep = key;
         }
@@ -260,12 +279,27 @@ export function animateRankResult(card: HTMLElement, result: import("./main_menu
         cancelAnimationFrame(frameId);
         write(result.score_after, true);
     }
+    function accelerate() {
+        if (stopped || speed > 1) return;
+        speed = 5;
+        if (typeof card.getAnimations === "function") {
+            card.getAnimations({ subtree: true }).forEach(function (anim) {
+                if (anim.playState !== "finished") {
+                    try {
+                        anim.playbackRate = 5;
+                    } catch {}
+                }
+            });
+        }
+    }
     function frame(now: number) {
         if (stopped || !card.isConnected) return;
         if (reduced()) { finish(); return; }
-        if (started === null) started = now;
-        const elapsed = now - started;
-        const t = Math.max(0, Math.min(1, (elapsed - 360) / 800));
+        if (lastNow === null) lastNow = now;
+        const dt = Math.min(100, Math.max(0, now - lastNow));
+        lastNow = now;
+        virtualElapsed += dt * speed;
+        const t = Math.max(0, Math.min(1, (virtualElapsed - 360) / 800));
         const value = Math.round(result.score_before + (result.score_after - result.score_before) * (1 - Math.pow(1 - t, 3)));
         write(value, t === 1);
         if (t < 1) frameId = requestAnimationFrame(frame);
@@ -273,5 +307,5 @@ export function animateRankResult(card: HTMLElement, result: import("./main_menu
     }
     if (reduced()) finish();
     else { write(result.score_before, false); frameId = requestAnimationFrame(frame); }
-    return { finish, cancel() { stopped = true; cancelAnimationFrame(frameId); } };
+    return { finish, accelerate, cancel() { stopped = true; cancelAnimationFrame(frameId); } };
 }

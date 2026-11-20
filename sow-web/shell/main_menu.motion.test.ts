@@ -1,9 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
     accelerateChoreographyPlan,
+    computeEndgameStatRollups,
     computeScreenTransitionVector,
+    detectLowEndGpuTier,
     flyArcPointsToKeyframes,
     planRewardChoreography,
+    planStoreBurstStagger,
     sampleFlyArcPoints,
 } from "./main_menu.motion.ts";
 
@@ -193,5 +196,31 @@ describe("sampleFlyArcPoints", () => {
         const keyframes = flyArcPointsToKeyframes(points);
         expect(keyframes.length).toBe(points.length);
         expect(String(keyframes[0].transform)).toContain("translate3d(0.00px,0.00px,0)");
+    });
+});
+
+describe("detectLowEndGpuTier", () => {
+    it("classifies coarse pointers and low-memory or low-core devices as low", () => {
+        expect(detectLowEndGpuTier({ coarsePointer: true, deviceMemory: 8, hardwareConcurrency: 8 })).toBe("low");
+        expect(detectLowEndGpuTier({ coarsePointer: false, deviceMemory: 4, hardwareConcurrency: 8 })).toBe("low");
+        expect(detectLowEndGpuTier({ coarsePointer: false, deviceMemory: 8, hardwareConcurrency: 4 })).toBe("low");
+        expect(detectLowEndGpuTier({ coarsePointer: false, deviceMemory: 8, hardwareConcurrency: 8 })).toBe("high");
+    });
+});
+
+describe("planStoreBurstStagger & computeEndgameStatRollups", () => {
+    it("staggers store burst tokens evenly", () => {
+        expect(planStoreBurstStagger(3, 55)).toEqual([0, 55, 110]);
+        expect(planStoreBurstStagger(0, 55)).toEqual([]);
+    });
+
+    it("rolls up endgame stats in staggered order and settles at final targets", () => {
+        const targets = [12, 4, 1500, 2400, 800];
+        expect(computeEndgameStatRollups(100, targets)).toEqual([0, 0, 0, 0, 0]);
+        const mid = computeEndgameStatRollups(300, targets);
+        expect(mid[0]).toBeGreaterThan(0);
+        expect(mid[0]).toBeLessThan(12);
+        expect(mid[4]).toBe(0);
+        expect(computeEndgameStatRollups(1000, targets)).toEqual(targets);
     });
 });

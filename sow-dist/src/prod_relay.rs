@@ -238,6 +238,16 @@ ln -s "$(cat "$backup/current")" "$link"
 mv -hf "$link" __SITE_RELEASE_ROOT__/current
 attempt "nginx configuration test" nginx -t
 attempt "nginx reload" service nginx reload
+active=$(cat __SITE_RELEASE_ROOT__/active-generation 2>/dev/null || true)
+if [ -n "$active" ]; then
+    http_port=$(awk -F '"' -v id="$active" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' /usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-http.map)
+    if [ -n "$http_port" ]; then
+        attempt "previous server generation admission" curl --noproxy '*' -fsS --max-time 5 -o /dev/null -X POST "http://__SITE_LOOPBACK__:$http_port/internal/generation-activate"
+    else
+        echo "rollback: previous server generation has no HTTP route" >&2
+        failed=1
+    fi
+fi
 if [ "$3" = yes ]; then
     attempt "database restart" jexec __SITE_DATABASE_JAIL__ service sow_database restart
     i=0
@@ -438,7 +448,9 @@ probe() {
 code=$(probe "$dedicated"); test "$code" = 400 || fail "dedicated secret probe returned $code, want 400"
 code=$(probe "$general"); test "$code" = 401 || fail "general secret probe returned $code, want 401"
 code=$(probe ''); test "$code" = 401 || fail "empty secret probe returned $code, want 401"
-for retired in 25585/internal/match-legacy-journal/invalid 25566/internal/replay/verify/invalid; do
+http_port=$(awk -F '"' -v host="__SITE_HOST__" '$2 == host { gsub(/[^0-9]/, "", $3); print $3; exit }' /usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-active-http.map 2>/dev/null || true)
+[ -n "$http_port" ] || http_port=25566
+for retired in 25585/internal/match-legacy-journal/invalid "$http_port"/internal/replay/verify/invalid; do
     code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -X POST "http://__SITE_LOOPBACK__:$retired"); test "$code" = 404 || fail "retired route $retired returned $code, want 404"
 done
 listener=$(jexec __SITE_SERVER_JAIL__ sockstat -4l -p "$1" | awk '/sow-relay/ {print $6}'); test "$listener" = "__SITE_LOOPBACK__:$1" || fail "relay listener is '$listener'"

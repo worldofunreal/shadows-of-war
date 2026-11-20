@@ -2,16 +2,16 @@
   "_comment": "Conquest Blitz Node 5 (Boss) on europe",
   "map": "europe",
   "player_spawn": [
-    218,
-    269
+    349,
+    430
   ],
   "player_color": "#f08c28",
   "factions": [
     {
       "id": "outpost_alpha",
       "name": "Outpost Alpha",
-      "x": 232,
-      "y": 268,
+      "x": 371,
+      "y": 428,
       "starting_troops": 595,
       "relation": "enemy",
       "team": "Red",
@@ -34,8 +34,8 @@
     {
       "id": "vanguard_keep",
       "name": "Vanguard Keep",
-      "x": 240,
-      "y": 264,
+      "x": 384,
+      "y": 422,
       "starting_troops": 980,
       "relation": "enemy",
       "team": "Red",
@@ -58,8 +58,8 @@
     {
       "id": "sector_boss",
       "name": "Sector 5 Warlord",
-      "x": 252,
-      "y": 260,
+      "x": 403,
+      "y": 415,
       "starting_troops": 4060,
       "relation": "enemy",
       "team": "Red",

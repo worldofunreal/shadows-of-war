@@ -255,30 +255,22 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
     0 0 12px color-mix(in srgb, var(--sow-gold) 22%, transparent),
     inset 0 1px 0 rgb(255 255 255 / 14%);
   cursor: pointer;
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease;
 }
 
-.sow-menu__avatar::after {
+.sow-menu__nameplate.is-level-up .sow-menu__avatar::after {
   content: "";
   position: absolute;
+  width: auto;
   inset: -2px;
   border-radius: inherit;
   border: 2px solid #fff6d8;
+  background: none;
   box-shadow:
     0 0 18px rgb(255 211 106 / 95%),
     inset 0 0 10px rgb(255 236 170 / 65%);
   opacity: 0;
   transform: scale(0.96);
   pointer-events: none;
-}
-
-.sow-menu__avatar:hover {
-  border-color: var(--sow-gold-bright);
-  box-shadow:
-    0 0 0 2px rgb(9 10 13 / 88%),
-    0 0 16px color-mix(in srgb, var(--sow-gold) 48%, transparent);
 }
 
 .sow-menu__name {
@@ -354,6 +346,7 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
 
 /* The portrait owns the level; the text column owns a restrained, beveled XP track. */
 .sow-menu__progress {
+  position: relative;
   grid-column: 2;
   align-self: center;
   display: flex;
@@ -387,9 +380,10 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
   color: var(--sow-gold-bright);
   cursor: pointer;
 }
-.sow-menu__level::after {
+.sow-menu__nameplate.is-level-up .sow-menu__level::after {
   content: "";
   position: absolute;
+  width: auto;
   inset: -3px;
   border-radius: 5px;
   border: 1.5px solid #fff6d8;
@@ -420,7 +414,6 @@ html[data-sow-skin][dir="rtl"] :where(.sow-heroes__featured-copy, .sow-campaign_
   box-shadow:
     inset 0 1px 3px rgb(0 0 0 / 85%),
     0 1px 0 rgb(255 255 255 / 8%);
-  transition: border-color 160ms ease;
 }
 html[dir="rtl"] .sow-menu__xp-track {
   --sow-xp-dir: -1;
@@ -437,7 +430,8 @@ html[dir="rtl"] .sow-menu__xp-track {
     inset 0 1px 0 rgb(214 244 255 / 45%),
     0 0 8px rgb(46 168 232 / 38%),
     0 0 3px rgb(214 244 255 / 28%);
-  transform: translate3d(calc((var(--sow-xp-ratio, 0) - 1) * 100% * var(--sow-xp-dir)), 0, 0);
+  --sow-xp-position: translate3d(calc((var(--sow-xp-ratio, 0) - 1) * 100% * var(--sow-xp-dir)), 0, 0);
+  transform: var(--sow-xp-position);
   transition: transform 160ms ease;
 }
 
@@ -461,6 +455,7 @@ html[dir="rtl"] .sow-menu__xp-track {
 
 .sow-menu__xp-track i::before,
 .sow-menu__xp-track i::after {
+  --sow-xp-position: none;
   content: "";
   position: absolute;
   inset-block: 0;
@@ -603,10 +598,6 @@ html[dir="rtl"] .sow-menu__xp-track i::after {
   font-size: 0.82em;
 }
 
-.sow-menu__progress:hover .sow-menu__xp-track {
-  border-color: var(--sow-tactical-track-accent-border);
-}
-
 /* Drop only secondary decoration when the text column is narrow. */
 @container (max-width: 210px) {
   .sow-menu__name {
@@ -639,7 +630,7 @@ html[dir="rtl"] .sow-menu__xp-track i::after {
 #sow-menu[data-reduced-motion="true"] .sow-menu__topbar *::after {
   transition: none;
   animation: none;
-  transform: none;
+  transform: var(--sow-xp-position, none);
 }
 @media (prefers-reduced-motion: reduce) {
   #sow-menu .sow-menu__topbar *,
@@ -647,7 +638,7 @@ html[dir="rtl"] .sow-menu__xp-track i::after {
   #sow-menu .sow-menu__topbar *::after {
     transition: none;
     animation: none;
-    transform: none;
+    transform: var(--sow-xp-position, none);
   }
 }
 
@@ -655,6 +646,7 @@ html[dir="rtl"] .sow-menu__xp-track i::after {
 .sow-menu__currency {
   --sow-currency-rgb: 245 197 66;
   --sow-currency-tilt: -4deg;
+  --sow-edge-accent: rgb(var(--sow-currency-rgb));
   position: relative;
   isolation: isolate;
   display: inline-flex;
@@ -668,10 +660,10 @@ html[dir="rtl"] .sow-menu__xp-track i::after {
   padding: 0 6px;
   border: 1px solid rgb(var(--sow-currency-rgb) / 42%);
   border-top-color: rgb(var(--sow-currency-rgb) / 78%);
-  border-radius: 5px;
+  border-radius: var(--sow-tactical-surface-radius-compact);
   background:
-    linear-gradient(120deg, rgb(var(--sow-currency-rgb) / 14%), transparent 62%),
-    linear-gradient(180deg, #1d1f27, #0b0c10 56%, #11131a);
+    radial-gradient(ellipse at 18% 0%, rgb(var(--sow-currency-rgb) / 20%), transparent 76%),
+    var(--sow-tactical-surface-compact-bg);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 13%),
     inset 0 -2px 0 rgb(0 0 0 / 48%),
@@ -683,17 +675,6 @@ html[dir="rtl"] .sow-menu__xp-track i::after {
 .sow-menu__gems {
   --sow-currency-rgb: 196 133 255;
   --sow-currency-tilt: 5deg;
-}
-
-/* Clipping the light layer preserves the plate's silhouette without clipping the icon. */
-.sow-menu__currency::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  opacity: 0;
-  pointer-events: none;
 }
 
 .sow-menu__currency strong {
@@ -711,61 +692,6 @@ html[dir="rtl"] .sow-menu__xp-track i::after {
 
 button.sow-menu__currency {
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1.4),
-    border-color 150ms ease,
-    box-shadow 150ms ease;
-}
-
-@media (hover: hover) {
-  button.sow-menu__currency:hover {
-    transform: translateY(-1px);
-    border-color: rgb(var(--sow-currency-rgb) / 90%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 24%),
-      inset 0 -2px 0 rgb(0 0 0 / 40%),
-      0 0 12px rgb(var(--sow-currency-rgb) / 24%),
-      0 3px 7px rgb(0 0 0 / 45%);
-  }
-  button.sow-menu__currency:hover::after {
-    background: linear-gradient(
-        110deg,
-        transparent 28%,
-        rgb(var(--sow-currency-rgb) / 24%) 48%,
-        rgb(255 255 255 / 22%) 50%,
-        transparent 72%
-      )
-      left / 250% 100%;
-    animation: sow-currency-sheen 650ms ease-out both;
-  }
-  button.sow-menu__currency:hover .sow-menu__currency-icon {
-    transform: scale(1.12) rotate(var(--sow-currency-tilt));
-    filter: drop-shadow(0 0 5px rgb(var(--sow-currency-rgb) / 65%));
-  }
-}
-
-button.sow-menu__currency:focus-visible {
-  border-color: rgb(var(--sow-currency-rgb));
-  box-shadow:
-    0 0 10px rgb(var(--sow-currency-rgb) / 30%),
-    inset 0 1px 0 rgb(255 255 255 / 20%);
-}
-
-button.sow-menu__currency:active {
-  transform: translateY(1px) scale(0.97);
-  border-color: rgb(var(--sow-currency-rgb));
-  box-shadow:
-    inset 0 2px 5px rgb(0 0 0 / 75%),
-    0 0 9px rgb(var(--sow-currency-rgb) / 35%);
-}
-button.sow-menu__currency:active::after {
-  background: radial-gradient(ellipse at center, rgb(var(--sow-currency-rgb) / 55%), transparent 72%);
-  animation: sow-currency-press 300ms ease-out both;
-}
-button.sow-menu__currency:active .sow-menu__currency-icon {
-  transform: scale(0.94);
-  filter: drop-shadow(0 0 6px rgb(var(--sow-currency-rgb) / 75%));
 }
 
 /* A reward landing lights the plate from inside and kicks its icon. */
@@ -773,8 +699,16 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   border-color: rgb(var(--sow-currency-rgb));
 }
 .sow-menu__currency.is-reward-hit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: auto;
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0.5;
+  pointer-events: none;
   background: radial-gradient(ellipse at center, rgb(var(--sow-currency-rgb) / 75%), transparent 72%);
-  animation: sow-currency-press 560ms ease-out both;
+  animation: sow-currency-reward-flare 560ms ease-out both;
 }
 .sow-menu__currency.is-reward-hit .sow-menu__currency-icon {
   animation: sow-currency-icon-hit 560ms cubic-bezier(0.22, 1.3, 0.36, 1) both;
@@ -789,20 +723,7 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   }
 }
 
-@keyframes sow-currency-sheen {
-  0% {
-    opacity: 0;
-    background-position: 100% 0;
-  }
-  20% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    background-position: 0 0;
-  }
-}
-@keyframes sow-currency-press {
+@keyframes sow-currency-reward-flare {
   0% {
     opacity: 0.9;
     transform: scale(0.65);
@@ -819,38 +740,54 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   height: var(--sow-topbar-pill-icon);
   object-fit: contain;
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 65%));
-  transition:
-    transform 180ms ease,
-    filter 180ms ease;
   pointer-events: none;
 }
 
-#sow-menu .sow-menu__topbar .sow-menu__icon-button {
+.sow-menu__topbar-settings {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  color: #ece8de;
   flex: 0 0 auto;
   width: var(--sow-topbar-button);
   height: var(--sow-topbar-button);
   min-width: 0;
   min-height: 0;
-  border-color: var(--sow-tactical-surface-border);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border-soft);
   border-radius: var(--sow-tactical-surface-radius-compact);
-  background: var(--sow-tactical-surface-card-bg);
+  background:
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--sow-gold) 12%, transparent), transparent 75%),
+    var(--sow-tactical-surface-compact-bg);
   box-shadow: var(--sow-tactical-surface-compact-shadow);
 }
 
-#sow-menu .sow-menu__topbar .sow-menu__icon-button:hover {
-  border-color: var(--sow-gold);
-}
-
-#sow-menu .sow-menu__topbar .sow-menu__icon-button .sow-menu__inline-icon {
+.sow-menu__topbar-settings .sow-menu__inline-icon {
   width: 55%;
   height: 55%;
+}
+
+@media (hover: hover) {
+  .sow-menu__topbar-settings:hover {
+    color: var(--sow-gold-bright);
+  }
+
+  :is(.sow-menu__avatar, .sow-menu__topbar-settings, button.sow-menu__currency):hover {
+    border-color: var(--sow-edge-accent, var(--sow-gold-bright));
+  }
+
+  .sow-menu__progress:hover .sow-menu__xp-track {
+    border-color: var(--sow-tactical-track-accent-border);
+  }
 }
 
 .sow-menu__avatar:focus-visible,
 .sow-menu__level:focus-visible,
 .sow-menu__progress:focus-visible,
 .sow-menu__currency:focus-visible,
-#sow-menu .sow-menu__topbar .sow-menu__icon-button:focus-visible {
+.sow-menu__topbar-settings:focus-visible {
   outline: var(--sow-tactical-focus-outline);
   outline-offset: var(--sow-tactical-focus-offset);
 }
@@ -3615,6 +3552,48 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
 
 /* Mobile tile-GPU optimization (e.g. Galaxy S9 / Adreno / Mali coarse-pointer devices):
    avoid stacked multi-pass backdrop-filter readbacks on large scrolling/stage surfaces. */
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-menu__command,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-browser__header,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-create__rail,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-create__card,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-create__footer,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-menu__queue-panel,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-profile__dossier,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-profile__tabs-bar,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-profile__card,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-missions__card,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-hero-info__drawer,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-skin-picker__drawer,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-menu__modal,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-menu-whisper__card {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-menu__reward-card {
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.68),
+    0 0 16px var(--reward-glow),
+    inset 0 1px rgba(255, 255, 255, 0.14);
+}
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-menu__reward-medallion {
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.04),
+    0 0 16px var(--reward-glow),
+    inset 0 0 12px var(--reward-glow);
+}
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-menu__reward-medallion::before {
+  display: none;
+  animation: none;
+}
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-purchase-modal__art-image--skin,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-purchase-modal__visual--bundle .sow-purchase-modal__art-image--bundle,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-purchase-modal__bundle-flyer {
+  filter: none;
+}
+:root[data-sow-gpu-tier="low"] #sow-menu .is-whisper-target {
+  animation: none;
+}
+
 @media (hover: none) and (pointer: coarse) {
   #sow-menu .sow-menu__command,
   #sow-menu .sow-browser__header,
@@ -3627,7 +3606,9 @@ button.sow-menu__currency:active .sow-menu__currency-icon {
   #sow-menu .sow-profile__card,
   #sow-menu .sow-missions__card,
   #sow-menu .sow-hero-info__drawer,
-  #sow-menu .sow-skin-picker__drawer {
+  #sow-menu .sow-skin-picker__drawer,
+  #sow-menu .sow-menu__modal,
+  #sow-menu .sow-menu-whisper__card {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
