@@ -272,7 +272,14 @@ struct MoverSlot {
     in_combat: bool,
 }
 
+struct WarshipLaunchPulse {
+    center: [f32; 2],
+    owner_id: u16,
+    started: web_time::Instant,
+}
+
 pub struct MoverScene {
+    launch_pulses: Vec<WarshipLaunchPulse>,
     id_to_idx: HashMap<u64, u32>,
     slots: Vec<MoverSlot>,
     trail_points: Vec<[f32; 2]>,
@@ -316,7 +323,18 @@ impl MoverScene {
             last_curve_tuning: [0; 3],
             map_w: 1,
             located_fleet: None,
+            launch_pulses: Vec::new(),
         }
+    }
+
+    pub fn warship_launch_pulse(
+        &mut self,
+        center: [f32; 2],
+        owner_id: u16,
+        started: web_time::Instant,
+    ) {
+        self.launch_pulses.retain(|pulse| started.duration_since(pulse.started).as_secs_f32() < 0.6);
+        self.launch_pulses.push(WarshipLaunchPulse { center, owner_id, started });
     }
 
     pub fn highlight_fleet(&mut self, fleet_id: u64) {
@@ -801,6 +819,31 @@ impl MoverScene {
         let nuke_scale = setting("mover.nuke.scale", 1.0);
         let sam_scale = setting("mover.sam.scale", 1.0);
         renderer.begin_frame();
+        self.launch_pulses.retain(|pulse| pulse.started.elapsed().as_secs_f32() < 0.6);
+        if params.trails_enabled {
+            for pulse in &self.launch_pulses {
+                let sx = params.camera_x + pulse.center[0] * params.camera_zoom;
+                let sy = params.camera_y + pulse.center[1] * params.camera_zoom;
+                if !in_viewport(sx, sy, -24.0, -24.0, params.screen_w + 24.0, params.screen_h + 24.0) {
+                    continue;
+                }
+                let t = pulse.started.elapsed().as_secs_f32().min(0.6) / 0.6;
+                let radius = (9.0 + 13.0 * t) / params.camera_zoom.max(0.001);
+                let [r, g, b] = self.player_colors.get(&pulse.owner_id).copied().unwrap_or([1.0; 3]);
+                let point = |segment: usize| {
+                    let angle = std::f32::consts::TAU * segment as f32 / FLEET_LOCATE_RING_SEGMENTS as f32;
+                    [pulse.center[0] + angle.cos() * radius, pulse.center[1] + angle.sin() * radius]
+                };
+                for segment in 0..FLEET_LOCATE_RING_SEGMENTS {
+                    renderer.push_trail_segment(TrailSegmentGpu {
+                        p0: point(segment),
+                        p1: point(segment + 1),
+                        width: 2.0,
+                        color: [r, g, b, 0.85 * (1.0 - t)],
+                    });
+                }
+            }
+        }
         let mut arc_scratch = std::mem::take(&mut self.arc_scratch);
         let located_fleet = self.located_fleet.as_ref().and_then(|(fleet_id, started)| {
             let elapsed = started.elapsed().as_secs_f32();

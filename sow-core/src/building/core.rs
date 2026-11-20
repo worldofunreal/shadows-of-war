@@ -19,6 +19,9 @@ pub struct RailwayLink {
     pub horizontal_first: bool,
 }
 
+/// Maximum number of warships that can be queued at a single Port.
+pub const MAX_WARSHIP_QUEUE: usize = 5;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CityArsenalBuild {
     pub kind: CityArsenalKind,
@@ -28,19 +31,63 @@ pub struct CityArsenalBuild {
     pub warship_source_tile: Option<u32>,
     #[serde(default)]
     pub warship_target_tile: Option<u32>,
+    #[serde(default)]
+    pub paid_gold_bits: u64,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+impl CityArsenalBuild {
+    #[inline]
+    pub fn paid_gold(self) -> f64 {
+        f64::from_bits(self.paid_gold_bits)
+    }
+
+    #[inline]
+    pub fn set_paid_gold(&mut self, gold: f64) {
+        self.paid_gold_bits = gold.to_bits();
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CityArsenalState {
     pub has_anti_nuke: bool,
     pub nuke_ready: bool,
     pub arsenal_build: Option<CityArsenalBuild>,
+    #[serde(default)]
+    pub warship_queue: Vec<CityArsenalBuild>,
 }
 
 impl CityArsenalState {
     #[inline]
-    pub const fn is_building(self) -> bool {
-        self.arsenal_build.is_some()
+    pub fn is_building(&self) -> bool {
+        self.arsenal_build.is_some() || !self.warship_queue.is_empty()
+    }
+
+    #[inline]
+    pub fn warship_queue_len(&self) -> usize {
+        self.warship_queue.len()
+            + usize::from(
+                self.arsenal_build
+                    .is_some_and(|b| b.kind == CityArsenalKind::Warship),
+            )
+    }
+
+    #[inline]
+    pub fn active_warship_build(&self) -> Option<CityArsenalBuild> {
+        self.warship_queue.first().copied().or_else(|| {
+            self.arsenal_build
+                .filter(|b| b.kind == CityArsenalKind::Warship)
+        })
+    }
+
+    /// Migrates a legacy single-slot `arsenal_build` Warship into `warship_queue[0]`.
+    #[inline]
+    pub fn normalize_legacy_warship(&mut self) {
+        if let Some(build) = self.arsenal_build
+            && build.kind == CityArsenalKind::Warship
+        {
+            self.arsenal_build = None;
+            self.warship_queue.insert(0, build);
+        }
     }
 }
 

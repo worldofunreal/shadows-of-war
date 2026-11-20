@@ -4,7 +4,7 @@ use crate::game::BuildingKind;
 use crate::protocol::GameplayIntent;
 use crate::rng::NextIntExt;
 
-use super::profile::{AiSlot, BotDecision, BotDecisionKind};
+use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind};
 use super::structures::{
     PLACEMENT_ATTEMPTS, StructureCandidates, bot_structure_target_count, cheapest_gold_cost,
     resolve_farm_from_candidates, resolve_structure_from_candidates, stack_build_decision,
@@ -46,8 +46,8 @@ impl SowEngine {
                                 building.owner_id,
                             )
                             && !building.under_construction
-                            && matches!(building.kind, BuildingKind::Factory | BuildingKind::Tower)
-                            && building.active_level() >= 4
+                            && building.kind == BuildingKind::MissileSilo
+                            && building.active_level() > 0
                     });
                     let sam_defense_enabled = bot_iq >= 100
                         && has_enemy_nuclear_capability
@@ -118,6 +118,19 @@ impl SowEngine {
                                 return;
                             }
                         }
+                    }
+                    if matches!(slot.tier, AiTier::Ghost | AiTier::Nation)
+                        && bot_iq >= 100
+                        && agg.count_silo == 0
+                        && agg.ready_factory_count > 0
+                        && player_gold >= self.nuclear_price(crate::game::NukeKind::AtomBomb)
+                        && self.campaign_allows_building(BuildingKind::MissileSilo, 1)
+                        && self.buildings.iter().any(|building| {
+                            building.kind == BuildingKind::City
+                                && self.naval_target_allowed(bot_id, building.owner_id)
+                        })
+                    {
+                        return;
                     }
                     let economy_priority_gap = slot.policy().prioritizes_economy_buildings
                         && [BuildingKind::City, BuildingKind::Factory, BuildingKind::Farm]

@@ -199,12 +199,12 @@ impl SowEngine {
                     let pid = usize::from(b.owner_id);
                     if pid < num_lookup
                         && let Some(state) = self.building_productions.get(&b.id)
-                        && state.arsenal_build.is_some_and(|build| {
-                            build.kind == crate::game::CityArsenalKind::Warship
-                        })
                     {
-                        queued_warships_by_player[pid] =
-                            queued_warships_by_player[pid].saturating_add(1);
+                        let queued = state.warship_queue_len() as u32;
+                        if queued > 0 {
+                            queued_warships_by_player[pid] =
+                                queued_warships_by_player[pid].saturating_add(queued);
+                        }
                     }
                 }
             }
@@ -362,7 +362,7 @@ impl SowEngine {
                 && self
                     .building_productions
                     .get(&port.id)
-                    .is_none_or(|state| state.arsenal_build.is_none())
+                    .is_none_or(|state| !state.is_building())
         }) {
             let Some(spawn_tile) = crate::warp_fleet::coastal_warship_spawn_tile(
                 &self.state.map,

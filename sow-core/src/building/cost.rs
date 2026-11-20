@@ -26,7 +26,7 @@ pub fn structure_build_cost_gold(kind: BuildingKind, count: u32, cfg: &GameConfi
         BuildingKind::Factory => cfg.cost_factory,
         BuildingKind::Port => cfg.cost_port,
         BuildingKind::Farm => cfg.cost_farm,
-        BuildingKind::SAM => return if count == 0 { 1_000.0 } else { 2_000.0 },
+        BuildingKind::SAM => return cfg.cost_sam * if count == 0 { 1.0 } else { 2.0 },
         BuildingKind::MissileSilo => return 667.0,
     };
     base_cost * ownership_cost_multiplier(count, cfg)
@@ -49,7 +49,7 @@ pub fn structure_upgrade_cost_gold(
         BuildingKind::Factory => [105.0, 111.0, 117.0],
         BuildingKind::Port => [112.0, 172.0, 248.0],
         BuildingKind::Tower => [89.0, 124.0, 176.0],
-        BuildingKind::SAM => return 2_000.0,
+        BuildingKind::SAM => return cfg.cost_sam * 2.0,
         BuildingKind::MissileSilo => return 667.0,
     };
     let baseline = ownership_cost_multiplier(u32::from(target_level - 1), cfg);
@@ -282,7 +282,8 @@ mod tests {
             (BuildingKind::Factory, 90.0),
             (BuildingKind::Port, 105.0),
             (BuildingKind::Farm, 100.0),
-            (BuildingKind::SAM, 350.0),
+            (BuildingKind::SAM, 1_000.0),
+            (BuildingKind::MissileSilo, 667.0),
         ] {
             assert_eq!(structure_build_cost_gold(kind, 0, &cfg), expected);
         }
@@ -297,7 +298,8 @@ mod tests {
             (BuildingKind::Factory, [105.0, 111.0, 117.0]),
             (BuildingKind::Port, [112.0, 172.0, 248.0]),
             (BuildingKind::Tower, [89.0, 124.0, 176.0]),
-            (BuildingKind::SAM, [220.0, 320.0, 455.0]),
+            (BuildingKind::SAM, [2_000.0; 3]),
+            (BuildingKind::MissileSilo, [667.0; 3]),
         ] {
             for target_level in 2..=kind.max_level() {
                 let previous_owned_levels = u32::from(target_level - 1);
@@ -306,8 +308,12 @@ mod tests {
                 assert_eq!(upgrade, expected[usize::from(target_level - 2)]);
                 for owned_levels in [10, 100, 1_000] {
                     let cost = structure_upgrade_cost_gold(kind, target_level, owned_levels, &cfg);
-                    let scale = structure_build_cost_gold(kind, owned_levels, &cfg)
-                        / structure_build_cost_gold(kind, previous_owned_levels, &cfg);
+                    let scale = if matches!(kind, BuildingKind::SAM | BuildingKind::MissileSilo) {
+                        1.0
+                    } else {
+                        structure_build_cost_gold(kind, owned_levels, &cfg)
+                            / structure_build_cost_gold(kind, previous_owned_levels, &cfg)
+                    };
                     assert!((cost - upgrade * scale).abs() < 1e-9);
                 }
             }

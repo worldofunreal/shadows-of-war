@@ -604,7 +604,8 @@ export function renderCampaign() {
     });
 
     const totalCompleted = episodes.filter((e) => e.completed).length;
-    const activeSaga = menuUi.selectedCampaignSaga || "all";
+    const tacticsDone = Boolean(campaign && campaign.tactics_completed);
+    const activeSaga = menuUi.selectedCampaignSaga || (!tacticsDone ? "tactics" : "all");
 
     const filteredEpisodes =
         activeSaga === "all"
@@ -795,7 +796,6 @@ export function renderCampaign() {
             : ["joan_of_arc", "lakshmibai", "alexander"];
     const advCompleted = Boolean(campaign && campaign.advanced_tactics_completed);
     const heroClaimed = (campaign && campaign.advanced_tactics_hero_claimed) || "";
-    const tacticsDone = Boolean(campaign && campaign.tactics_completed);
     const rewardBanner =
         activeSaga === "tactics" || (!tacticsDone && activeSaga === "all")
             ? "<section class='sow-campaign__tier-banner'>" +

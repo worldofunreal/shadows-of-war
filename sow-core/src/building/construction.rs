@@ -152,6 +152,16 @@ impl SowEngine {
 
         let mut finished_production = Vec::new();
         for (&building_id, state) in &mut self.building_productions {
+            state.normalize_legacy_warship();
+            if let Some(build) = state.warship_queue.first_mut() {
+                if build.ticks_until_complete > 0 {
+                    build.ticks_until_complete -= 1;
+                }
+                if build.ticks_until_complete == 0 {
+                    let completed = state.warship_queue.remove(0);
+                    finished_production.push((building_id, completed));
+                }
+            }
             let Some(build) = &mut state.arsenal_build else {
                 continue;
             };

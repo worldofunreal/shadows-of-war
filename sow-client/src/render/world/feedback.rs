@@ -153,7 +153,8 @@ fn render_cascade_callouts(
     let screen_h = input.screen_h / sf;
     let font_scale = dev.font_size_scale.max(0.1);
     let char_spacing = dev.font_char_spacing.max(0.1);
-    ui.cascade_callouts.retain(|callout| {
+    let reduced_motion = ui.app.settings_state.reduced_motion;
+    ui.cascade_callouts.retain_mut(|callout| {
         let elapsed = now.duration_since(callout.start_time).as_secs_f32();
         let Some((progress, rise, anim_scale)) =
             floating_notice_animation(elapsed, CASCADE_CALLOUT_DURATION)
@@ -174,7 +175,8 @@ fn render_cascade_callouts(
         let base_rgb = cascade_callout_color(callout.kind, callout.chain_step);
         let color = [base_rgb[0], base_rgb[1], base_rgb[2], alpha];
 
-        if callout.ring_radius > 0.0
+        if !reduced_motion
+            && callout.ring_radius > 0.0
             && elapsed < CASCADE_RING_DURATION
             && text.remaining_instance_capacity() >= 1
         {
@@ -190,53 +192,63 @@ fn render_cascade_callouts(
 
         let font_size =
             CASCADE_CALLOUT_FONT_SIZE * kind_scale * step_boost * anim_scale * font_scale * sf;
-        let measure = text.measure_string(&callout.label, font_size, char_spacing);
+        let prepared = callout
+            .prepared_label
+            .get_or_insert_with(|| text.prepare_string(&callout.label, char_spacing, 0.0));
+        let measure = prepared.measure_at(font_size);
         let icon_extra = usize::from(callout.icon.is_some());
-        let required = callout.label.chars().count().saturating_add(2 + icon_extra);
+        let required = prepared.instance_count().saturating_add(2 + icon_extra);
         if text.remaining_instance_capacity() < required {
             return true;
         }
 
         let center_x = screen[0] * sf;
         let center_y = screen[1] * sf;
-        if let Some(sprite) = callout.icon {
-            let icon_diameter = font_size * 0.90;
+        if let Some(icon) = callout.icon {
+            let icon_diameter = font_size * 0.95;
             let gap = 4.0 * sf;
             let total_w = icon_diameter + gap + measure.width;
             let row_left = center_x - total_w * 0.5;
+            let icon_center = [row_left + icon_diameter * 0.5, center_y - measure.height * 0.05];
             let outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
-            if sprite == NameplateStatusSprite::Troops {
-                text.push_troop_icon(
-                    [row_left + icon_diameter * 0.5, center_y - measure.height * 0.05],
-                    icon_diameter * 0.5,
-                    alpha,
-                    outline,
-                );
-            } else {
-                text.push_icon(
-                    sprite,
-                    [row_left + icon_diameter * 0.5, center_y - measure.height * 0.05],
-                    icon_diameter * 0.5,
-                    [1.0, 1.0, 1.0, alpha],
-                    outline,
-                );
+            match icon {
+                crate::app::CascadeIcon::Status(NameplateStatusSprite::Troops) => {
+                    text.push_troop_icon(icon_center, icon_diameter * 0.5, alpha, outline);
+                }
+                crate::app::CascadeIcon::Status(sprite) => {
+                    text.push_icon(
+                        sprite,
+                        icon_center,
+                        icon_diameter * 0.5,
+                        [1.0, 1.0, 1.0, alpha],
+                        outline,
+                    );
+                }
+                crate::app::CascadeIcon::Building(kind) => {
+                    if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
+                        text.push_building_sprite(
+                            icon_center,
+                            [icon_diameter, icon_diameter],
+                            uv_rect,
+                            [1.0, 1.0, 1.0, alpha],
+                        );
+                    }
+                }
             }
-            text.push_string(
-                &callout.label,
+            let _ = text.push_prepared_text(
+                prepared,
                 [row_left + icon_diameter + gap, center_y + measure.height * 0.35],
                 font_size,
                 color,
                 dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
-                (0.0, char_spacing),
             );
         } else {
-            text.push_string(
-                &callout.label,
+            let _ = text.push_prepared_text(
+                prepared,
                 [center_x - measure.width * 0.5, center_y + measure.height * 0.35],
                 font_size,
                 color,
                 dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
-                (0.0, char_spacing),
             );
         }
         true

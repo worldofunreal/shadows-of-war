@@ -647,7 +647,7 @@ pub struct SowEngine {
     pub recent_nuke_targets: std::collections::HashMap<(u16, u32), u64>,
     pub mirv_cooldown_targets: std::collections::HashMap<u16, u64>,
     pub(crate) bot_route_cache: Vec<(PlayerId, u32, crate::warp_fleet::FleetRoute)>,
-    pub(crate) bot_sam_tiles_cache: Option<Vec<(u32, u16, u32)>>,
+    pub(crate) bot_sam_tiles_cache: Option<Vec<(u32, u16, u32, u64, u8)>>,
     pub(crate) bot_crown_leader: Option<u16>,
     pub(crate) ai_attack_index: Vec<Vec<usize>>,
     pub(crate) ai_attack_index_dirty: bool,

@@ -232,16 +232,13 @@ pub fn structure_footprint_touches_water(
 
 /// Shared per-cell rules also identify the exact conflicts in a selected foundation.
 pub fn validate_building_cell(
-    kind: BuildingKind,
+    _kind: BuildingKind,
     owner_id: u16,
     tile_owner: u16,
     terrain: u8,
 ) -> Result<(), PlacementError> {
     if owner_id == 0 || tile_owner != owner_id || terrain & 0x80 == 0 {
         return Err(PlacementError::OwnLand);
-    }
-    if kind == BuildingKind::Farm && terrain & 0x1f >= 10 {
-        return Err(PlacementError::LowlandRequired);
     }
     Ok(())
 }

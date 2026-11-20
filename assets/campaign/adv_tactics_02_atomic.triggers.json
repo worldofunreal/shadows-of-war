@@ -47,9 +47,15 @@
           "Tower": 4,
           "City": 1,
           "Farm": 2,
-          "Port": 2
+          "Port": 2,
+          "MissileSilo": 1
         },
-        "actions": ["transport_fleet", "trade_ship", "warship", "nuke"]
+        "actions": [
+          "transport_fleet",
+          "trade_ship",
+          "warship",
+          "nuke"
+        ]
       },
       "camera": {
         "shot": "approach",
@@ -95,20 +101,18 @@
     {
       "id": "at2_pick_factory",
       "type": "guide",
-      "title_key": "tutorial.campaign_tactics_adv2_pick_factory_title",
-      "body_key": "tutorial.campaign_tactics_adv2_pick_factory_body",
-      "hint_key": "tutorial.campaign_tactics_adv2_pick_factory_hint",
+      "title_key": "tutorial.campaign_tactics_adv2_silo_title",
       "speaker": "sun_tzu",
       "pause_game": true,
       "dim_outside": true,
       "trigger": {
         "type": "ui",
-        "action": "dock_factory",
+        "action": "dock_missile_silo",
         "scope": "step"
       },
       "guide": {
         "kind": "ui",
-        "target": "dock_factory",
+        "target": "dock_missile_silo",
         "gesture": "tap"
       },
       "next": "at2_build_factory"
@@ -116,14 +120,12 @@
     {
       "id": "at2_build_factory",
       "type": "objective",
-      "title_key": "tutorial.campaign_tactics_adv2_build_factory_title",
-      "hint_key": "tutorial.campaign_tactics_adv2_build_factory_hint",
+      "title_key": "tutorial.campaign_tactics_adv2_silo_title",
       "speaker": "sun_tzu",
-      "pause_game": true,
       "dim_outside": true,
-      "paused_action": "build_until_started",
       "trigger": {
-        "type": "factory",
+        "type": "structure_level",
+        "kind": "MissileSilo",
         "value": 1,
         "scope": "total"
       },
@@ -134,83 +136,6 @@
         "kind": "world",
         "target": "build_site",
         "gesture": "tap"
-      },
-      "next": "at2_upgrade_lv4"
-    },
-    {
-      "id": "at2_upgrade_lv4",
-      "type": "objective",
-      "title_key": "tutorial.campaign_tactics_adv2_lv4_title",
-      "body_key": "tutorial.campaign_tactics_adv2_lv4_body",
-      "hint_key": "tutorial.campaign_tactics_adv2_lv4_hint",
-      "speaker": "sun_tzu",
-      "trigger": {
-        "type": "structure_level",
-        "kind": "Factory",
-        "value": 4,
-        "scope": "total"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "upgrade_building",
-        "gesture": "tap"
-      },
-      "next": "at2_select_factory"
-    },
-    {
-      "id": "at2_select_factory",
-      "type": "guide",
-      "title_key": "tutorial.campaign_tactics_adv2_arm_select_title",
-      "hint_key": "tutorial.campaign_tactics_adv2_arm_select_hint",
-      "speaker": "sun_tzu",
-      "pause_game": true,
-      "dim_outside": true,
-      "trigger": {
-        "type": "building_selected",
-        "kind": "Factory",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "upgrade_building",
-        "gesture": "tap"
-      },
-      "next": "at2_arm_nuke"
-    },
-    {
-      "id": "at2_arm_nuke",
-      "type": "objective",
-      "title_key": "tutorial.campaign_tactics_adv2_arm_nuke_title",
-      "hint_key": "tutorial.campaign_tactics_adv2_arm_nuke_hint",
-      "speaker": "sun_tzu",
-      "pause_game": true,
-      "dim_outside": true,
-      "paused_action": "queue_nuke_until_started",
-      "trigger": {
-        "type": "nuke_queue",
-        "value": 1,
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "ui",
-        "target": "factory_nuke",
-        "gesture": "tap"
-      },
-      "next": "at2_wait_nuke"
-    },
-    {
-      "id": "at2_wait_nuke",
-      "type": "objective",
-      "title_key": "tutorial.campaign_tactics_adv2_wait_nuke_title",
-      "hint_key": "tutorial.campaign_tactics_adv2_wait_nuke_hint",
-      "speaker": "sun_tzu",
-      "trigger": {
-        "type": "nuke_armed",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
       },
       "next": "at2_open_nuke_target"
     },

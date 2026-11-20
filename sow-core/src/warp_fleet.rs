@@ -16,6 +16,7 @@ pub enum WarshipMode {
     Patrolling,
     Retreating,
     Docked,
+    Holding,
 }
 
 /// Authoritative warship lifecycle state. `troops` remains health for warships,

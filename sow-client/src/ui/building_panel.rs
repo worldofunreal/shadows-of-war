@@ -32,6 +32,7 @@ impl BuildingMetric {
             Icon::Shield => "shield",
             Icon::Range => "range",
             Icon::Radiation => "radiation",
+            Icon::Clock => "clock",
             _ => "upgrade-sparkle",
         }
     }
@@ -158,7 +159,7 @@ pub(crate) fn building_metrics(
                 leader.tower_range_multiplier(),
             ));
             let defense_weight = sow_core::building::tower_defense_weight(level as u8, config);
-            let mut stats = vec![
+            let stats = vec![
                 BuildingMetric::new(
                     Icon::Shield,
                     (defense_weight * config.tower_strength).clamp(0.0, 0.50)
@@ -175,14 +176,6 @@ pub(crate) fn building_metrics(
                 ),
                 BuildingMetric::new(Icon::Range, range, "", ""),
             ];
-            if level as u8 >= BuildingKind::Tower.max_level() {
-                stats.push(BuildingMetric {
-                    icon: Icon::Radiation,
-                    value: None,
-                    prefix: "",
-                    unit: "",
-                });
-            }
             stats
         }
         BuildingKind::Farm => vec![

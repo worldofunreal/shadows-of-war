@@ -81,7 +81,7 @@ pub(super) fn pick_stack_click_tile(
             || b.level.saturating_add(1) > max_level
             || building_productions
                 .get(&b.id)
-                .is_some_and(|state| state.arsenal_build.is_some())
+                .is_some_and(|state| state.is_building())
         {
             continue;
         }

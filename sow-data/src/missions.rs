@@ -76,6 +76,8 @@ impl PreferenceAxis {
 pub enum MissionActionTarget {
     #[default]
     Battle,
+    CampaignTactics,
+    CampaignAdvancedTactics,
     Ranked,
     HeroesOceania,
     HeroesEurope,
@@ -98,6 +100,13 @@ pub enum MissionActionTarget {
 #[serde(rename_all = "snake_case")]
 pub enum MissionRequirement {
     CompleteTutorial,
+    CompleteCampaignEpisode {
+        episode_id: &'static str,
+    },
+    CompleteCampaignSeries {
+        series_id: &'static str,
+        count: u32,
+    },
     BuildStructures {
         count: u32,
     },
@@ -223,7 +232,7 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         title_key: "missions.onboarding_tutorial_title",
         description_key: "missions.onboarding_tutorial_desc",
         crowns_reward: 40,
-        gems_reward: 1,
+        gems_reward: 3,
         target: 1,
         requirement: MissionRequirement::CompleteTutorial,
         icon: "shield",
@@ -231,66 +240,68 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         lane: 0,
         axis: PreferenceAxis::Onboarding,
         tag: "tutorial",
-        action_target: MissionActionTarget::Battle,
+        action_target: MissionActionTarget::CampaignTactics,
     },
     MissionDefinition {
-        id: "onboarding_2_baptism",
+        id: "onboarding_2_tactics_economy",
         category: MissionCategory::Onboarding,
-        title_key: "missions.onboarding_baptism_title",
-        description_key: "missions.onboarding_baptism_desc",
-        crowns_reward: 40,
-        gems_reward: 2,
-        target: 2,
-        requirement: MissionRequirement::PlayMatches { count: 2 },
-        icon: "swords",
+        title_key: "missions.onboarding_tactics_economy_title",
+        description_key: "missions.onboarding_tactics_economy_desc",
+        crowns_reward: 50,
+        gems_reward: 4,
+        target: 1,
+        requirement: MissionRequirement::CompleteCampaignEpisode {
+            episode_id: "tactics_01_economy",
+        },
+        icon: "tower",
         order: 2,
         lane: 0,
         axis: PreferenceAxis::Onboarding,
-        tag: "play_matches",
-        action_target: MissionActionTarget::Battle,
+        tag: "tactics_economy",
+        action_target: MissionActionTarget::CampaignTactics,
     },
     MissionDefinition {
-        id: "onboarding_3_rotation_hero",
+        id: "onboarding_3_tactics_mastery",
         category: MissionCategory::Onboarding,
-        title_key: "missions.onboarding_rotation_title",
-        description_key: "missions.onboarding_rotation_desc",
-        crowns_reward: 50,
-        gems_reward: 2,
-        target: 2,
-        requirement: MissionRequirement::PlayFreeRotationHero { count: 2 },
-        icon: "rotation",
-        order: 3,
-        lane: 1,
-        axis: PreferenceAxis::Onboarding,
-        tag: "free_rotation",
-        action_target: MissionActionTarget::HeroesFreeRotation,
-    },
-    MissionDefinition {
-        id: "onboarding_4_team_match",
-        category: MissionCategory::Onboarding,
-        title_key: "missions.onboarding_team_title",
-        description_key: "missions.onboarding_team_desc",
-        crowns_reward: 50,
-        gems_reward: 3,
-        target: 2,
-        requirement: MissionRequirement::PlayMode {
-            mode: MatchMode::Teams,
-            count: 2,
+        title_key: "missions.onboarding_tactics_mastery_title",
+        description_key: "missions.onboarding_tactics_mastery_desc",
+        crowns_reward: 80,
+        gems_reward: 8,
+        target: 3,
+        requirement: MissionRequirement::CompleteCampaignSeries {
+            series_id: "tactics",
+            count: 3,
         },
-        icon: "team",
+        icon: "swords",
+        order: 3,
+        lane: 0,
+        axis: PreferenceAxis::Onboarding,
+        tag: "tactics_series",
+        action_target: MissionActionTarget::CampaignTactics,
+    },
+    MissionDefinition {
+        id: "onboarding_4_public_arena",
+        category: MissionCategory::Onboarding,
+        title_key: "missions.onboarding_public_arena_title",
+        description_key: "missions.onboarding_public_arena_desc",
+        crowns_reward: 60,
+        gems_reward: 5,
+        target: 2,
+        requirement: MissionRequirement::PlayMatches { count: 2 },
+        icon: "globe",
         order: 4,
         lane: 0,
         axis: PreferenceAxis::Onboarding,
-        tag: "teams",
-        action_target: MissionActionTarget::Teams,
+        tag: "public_arena",
+        action_target: MissionActionTarget::Battle,
     },
     MissionDefinition {
         id: "onboarding_5_empires",
         category: MissionCategory::Onboarding,
         title_key: "missions.onboarding_empires_title",
         description_key: "missions.onboarding_empires_desc",
-        crowns_reward: 60,
-        gems_reward: 4,
+        crowns_reward: 75,
+        gems_reward: 6,
         target: 1,
         requirement: MissionRequirement::PeakTerritoryRank {
             mode: Some(MatchMode::Ffa),
@@ -303,23 +314,26 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         lane: 2,
         axis: PreferenceAxis::Onboarding,
         tag: "ffa_top3",
-        action_target: MissionActionTarget::Battle,
+        action_target: MissionActionTarget::Ffa,
     },
     MissionDefinition {
-        id: "onboarding_6_victories",
+        id: "onboarding_6_adv_tactics",
         category: MissionCategory::Onboarding,
-        title_key: "missions.onboarding_victories_title",
-        description_key: "missions.onboarding_victories_desc",
-        crowns_reward: 80,
-        gems_reward: 6,
-        target: 2,
-        requirement: MissionRequirement::WinMatches { count: 2 },
+        title_key: "missions.onboarding_adv_tactics_title",
+        description_key: "missions.onboarding_adv_tactics_desc",
+        crowns_reward: 120,
+        gems_reward: 12,
+        target: 3,
+        requirement: MissionRequirement::CompleteCampaignSeries {
+            series_id: "advanced_tactics",
+            count: 3,
+        },
         icon: "crown",
         order: 6,
         lane: 0,
         axis: PreferenceAxis::Onboarding,
-        tag: "wins",
-        action_target: MissionActionTarget::Battle,
+        tag: "advanced_tactics_series",
+        action_target: MissionActionTarget::CampaignAdvancedTactics,
     },
 ];
 
@@ -829,14 +843,14 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         description_key: "missions.weekly_conqueror_desc",
         crowns_reward: 100,
         gems_reward: 8,
-        target: 5,
-        requirement: MissionRequirement::DefeatEmpires { count: 5 },
+        target: 3,
+        requirement: MissionRequirement::WinMatches { count: 3 },
         icon: "swords",
         order: 47,
         lane: 2,
         axis: PreferenceAxis::Combat,
         tag: "combat",
-        action_target: MissionActionTarget::Pve,
+        action_target: MissionActionTarget::Battle,
     },
 ];
 
@@ -1078,6 +1092,9 @@ pub struct MissionStats {
     pub player_level: u32,
     pub tutorial_completed: bool,
     pub tactics_completed: bool,
+    pub tactics_01_completed: bool,
+    pub tactics_episodes_completed: u32,
+    pub adv_tactics_episodes_completed: u32,
     pub total_structures_built: u32,
     pub free_rotation_matches: u32,
     pub team_matches: u32,
@@ -1147,12 +1164,9 @@ pub fn evaluate_mission_progress(
     saved_progress: Option<&MissionRecord>,
 ) -> MissionView {
     let unlock_level = min_level_for_category(def.category);
-    let effective_level = stats.player_level.max(1);
     let category_unlocked = match def.category {
         MissionCategory::Onboarding => true,
-        MissionCategory::Daily | MissionCategory::Weekly => {
-            stats.tactics_completed || effective_level >= unlock_level
-        }
+        MissionCategory::Daily | MissionCategory::Weekly => stats.tactics_completed,
     };
     if !category_unlocked {
         return locked_mission_view(def);
@@ -1170,6 +1184,21 @@ pub fn evaluate_mission_progress(
             } else {
                 0
             }
+        }
+        MissionRequirement::CompleteCampaignEpisode { episode_id } => {
+            let done = (episode_id == "tactics_01_economy" && stats.tactics_01_completed)
+                || saved_progress
+                    .map(|r| r.completed || r.progress >= 1)
+                    .unwrap_or(false);
+            u32::from(done)
+        }
+        MissionRequirement::CompleteCampaignSeries { series_id, .. } => {
+            let series_count = match series_id {
+                "tactics" => stats.tactics_episodes_completed,
+                "advanced_tactics" => stats.adv_tactics_episodes_completed,
+                _ => 0,
+            };
+            series_count.max(saved_val)
         }
         MissionRequirement::DistinctHeroes { .. } => saved_progress
             .map(|r| r.progress.max(r.seen_keys.len() as u32))
@@ -1241,24 +1270,22 @@ pub fn sync_hands_for_periods(
     state: HandSyncState<'_>,
     epoch_day: u64,
     rotation_period: u64,
-    player_level: u32,
+    tactics_completed: bool,
     deal_salt: u64,
     playability: Option<&PlayabilityContext<'_>>,
 ) -> Vec<&'static MissionDefinition> {
-    let effective_level = player_level.max(1);
-    let target_daily_day = if effective_level >= DAILY_UNLOCK_LEVEL {
+    let target_daily_day = if tactics_completed {
         epoch_day
     } else {
         *state.daily_day
     };
-    let target_weekly_period = if effective_level >= WEEKLY_UNLOCK_LEVEL {
+    let target_weekly_period = if tactics_completed {
         rotation_period
     } else {
         *state.weekly_period
     };
-    let day_changed = effective_level >= DAILY_UNLOCK_LEVEL && *state.daily_day != epoch_day;
-    let week_changed =
-        effective_level >= WEEKLY_UNLOCK_LEVEL && *state.weekly_period != rotation_period;
+    let day_changed = tactics_completed && *state.daily_day != epoch_day;
+    let week_changed = tactics_completed && *state.weekly_period != rotation_period;
 
     sync_period_missions(
         state.records,
@@ -1280,7 +1307,7 @@ pub fn sync_hands_for_periods(
     }
 
     let mut newly_dealt = Vec::new();
-    if effective_level >= DAILY_UNLOCK_LEVEL {
+    if tactics_completed {
         newly_dealt.extend(resolve_pool_hand(
             DAILY_MISSION_POOL,
             state.daily_mission_ids,
@@ -1288,8 +1315,6 @@ pub fn sync_hands_for_periods(
             epoch_day ^ deal_salt,
             playability,
         ));
-    }
-    if effective_level >= WEEKLY_UNLOCK_LEVEL {
         newly_dealt.extend(resolve_pool_hand(
             WEEKLY_MISSION_POOL,
             state.weekly_mission_ids,
@@ -1367,7 +1392,9 @@ pub fn select_swap_replacement(
 
 fn match_delta_for_requirement(req: MissionRequirement, ctx: &MatchMissionContext) -> u32 {
     match req {
-        MissionRequirement::CompleteTutorial => 0,
+        MissionRequirement::CompleteTutorial
+        | MissionRequirement::CompleteCampaignEpisode { .. }
+        | MissionRequirement::CompleteCampaignSeries { .. } => 0,
         MissionRequirement::BuildStructures { .. } => ctx.structures_built,
         MissionRequirement::PlayFreeRotationHero { .. } => u32::from(ctx.used_free_rotation),
         MissionRequirement::PlayMode { mode, .. } => u32::from(ctx.mode == mode),
@@ -1543,7 +1570,7 @@ pub fn advance_missions_after_match_with_hands(
         },
         epoch_day,
         rotation_period,
-        ctx.player_level,
+        ctx.tactics_completed,
         deal_salt,
         playability,
     );
@@ -1562,12 +1589,7 @@ pub fn advance_missions_after_match_with_hands(
         }
     }
 
-    let effective_level = if ctx.tactics_completed {
-        ctx.player_level.max(WEEKLY_UNLOCK_LEVEL)
-    } else {
-        ctx.player_level.max(1)
-    };
-    if effective_level >= DAILY_UNLOCK_LEVEL {
+    if ctx.tactics_completed {
         let daily_defs = active_defs_for_hand(
             DAILY_MISSION_POOL,
             state.daily_mission_ids,
@@ -1580,9 +1602,7 @@ pub fn advance_missions_after_match_with_hands(
                 }
             }
         }
-    }
 
-    if effective_level >= WEEKLY_UNLOCK_LEVEL {
         let weekly_defs = active_defs_for_hand(
             WEEKLY_MISSION_POOL,
             state.weekly_mission_ids,
@@ -1627,18 +1647,13 @@ pub fn build_all_missions_view_with_hands(
         views.push(view);
     }
 
-    let effective_level = if stats.tactics_completed {
-        stats.player_level.max(WEEKLY_UNLOCK_LEVEL)
-    } else {
-        stats.player_level.max(1)
-    };
     let daily_defs = active_defs_for_hand(
         DAILY_MISSION_POOL,
         daily_mission_ids,
         deal_daily_hand_for_player(epoch_day, deal_salt, playability),
     );
     for def in &daily_defs {
-        if effective_level < DAILY_UNLOCK_LEVEL {
+        if !stats.tactics_completed {
             views.push(locked_mission_view(def));
         } else {
             let saved = saved_records.get(def.id);
@@ -1653,7 +1668,7 @@ pub fn build_all_missions_view_with_hands(
         deal_weekly_hand_for_player(period, deal_salt, playability),
     );
     for def in &weekly_defs {
-        if effective_level < WEEKLY_UNLOCK_LEVEL {
+        if !stats.tactics_completed {
             views.push(locked_mission_view(def));
         } else {
             let saved = saved_records.get(def.id);
@@ -1681,8 +1696,8 @@ mod tests {
         assert_eq!(ONBOARDING_MISSIONS.len(), 6);
         let total_crowns: u64 = ONBOARDING_MISSIONS.iter().map(|m| m.crowns_reward).sum();
         let total_gems: u64 = ONBOARDING_MISSIONS.iter().map(|m| m.gems_reward).sum();
-        assert_eq!(total_crowns, 320);
-        assert_eq!(total_gems, 18);
+        assert_eq!(total_crowns, 425);
+        assert_eq!(total_gems, 38);
     }
 
     #[test]
@@ -1759,6 +1774,8 @@ mod tests {
         let stats = MissionStats {
             player_level: 1,
             tutorial_completed: true,
+            tactics_01_completed: true,
+            tactics_episodes_completed: 1,
             ..Default::default()
         };
         let views = build_all_missions_view(&stats, &Default::default(), 100);
@@ -1768,7 +1785,13 @@ mod tests {
             .unwrap();
         assert!(first.completed);
         assert!(!first.claimed);
-        assert!(views.iter().find(|m| m.id == "onboarding_2_baptism").unwrap().locked);
+        assert!(
+            views
+                .iter()
+                .find(|m| m.id == "onboarding_2_tactics_economy")
+                .unwrap()
+                .locked
+        );
         assert!(views.iter().filter(|m| m.category == "daily").all(|m| m.locked));
         assert!(views.iter().filter(|m| m.category == "weekly").all(|m| m.locked));
 
@@ -1786,19 +1809,26 @@ mod tests {
         let views2 = build_all_missions_view(&stats, &saved, 100);
         let second = views2
             .iter()
-            .find(|m| m.id == "onboarding_2_baptism")
+            .find(|m| m.id == "onboarding_2_tactics_economy")
             .unwrap();
-        assert!(!second.completed);
+        assert!(second.completed);
         assert!(!second.locked);
-        assert!(views2.iter().find(|m| m.id == "onboarding_3_rotation_hero").unwrap().locked);
+        assert!(
+            views2
+                .iter()
+                .find(|m| m.id == "onboarding_3_tactics_mastery")
+                .unwrap()
+                .locked
+        );
     }
 
     #[test]
-    fn daily_and_weekly_unlock_by_level_and_reset_by_period() {
+    fn daily_and_weekly_unlock_strictly_by_tactics_and_reset_by_period() {
         let mut records = BTreeMap::new();
         let mut daily_day = 0;
         let mut weekly_period = 0;
 
+        // Even at level 5, Dailies and Weeklies stay locked while tactics_completed is false.
         advance_missions_after_match(
             &mut records,
             &mut daily_day,
@@ -1806,7 +1836,8 @@ mod tests {
             100,
             10,
             &MatchMissionContext {
-                player_level: 1,
+                player_level: 5,
+                tactics_completed: false,
                 mode: MatchMode::Teams,
                 is_ranked: false,
                 used_free_rotation: true,
@@ -1816,19 +1847,28 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert!(!records.contains_key("onboarding_2_baptism"));
         assert!(records.keys().all(|k| !k.starts_with("daily_")));
+        assert!(records.keys().all(|k| !k.starts_with("weekly_")));
 
-        records.insert(
-            "onboarding_1_tutorial".to_string(),
-            MissionRecord {
-                id: "onboarding_1_tutorial".to_string(),
-                progress: 1,
-                completed: true,
-                claimed: true,
-                ..Default::default()
-            },
-        );
+        // Claim first 3 onboarding steps so onboarding_4_public_arena is active.
+        for id in [
+            "onboarding_1_tutorial",
+            "onboarding_2_tactics_economy",
+            "onboarding_3_tactics_mastery",
+        ] {
+            records.insert(
+                id.to_string(),
+                MissionRecord {
+                    id: id.to_string(),
+                    progress: 3,
+                    completed: true,
+                    claimed: true,
+                    ..Default::default()
+                },
+            );
+        }
+
+        // Completing Tactics unlocks Dailies & Weeklies even at level 1.
         advance_missions_after_match(
             &mut records,
             &mut daily_day,
@@ -1836,8 +1876,8 @@ mod tests {
             100,
             10,
             &MatchMissionContext {
-                player_level: 3,
-                tactics_completed: false,
+                player_level: 1,
+                tactics_completed: true,
                 mode: MatchMode::Teams,
                 is_ranked: false,
                 used_free_rotation: true,
@@ -1853,13 +1893,13 @@ mod tests {
                 alive_seconds: 200,
             },
         );
-        assert_eq!(records["onboarding_2_baptism"].progress, 1);
+        assert_eq!(records["onboarding_4_public_arena"].progress, 1);
         assert!(records.keys().any(|k| k.starts_with("daily_")));
-        assert!(records.keys().all(|k| !k.starts_with("weekly_")));
+        assert!(records.keys().any(|k| k.starts_with("weekly_")));
 
         sync_period_missions(&mut records, &mut daily_day, &mut weekly_period, 101, 10);
         assert!(records.keys().all(|k| !k.starts_with("daily_")));
-        assert_eq!(records["onboarding_2_baptism"].progress, 1);
+        assert_eq!(records["onboarding_4_public_arena"].progress, 1);
     }
 
     #[test]
@@ -1902,6 +1942,7 @@ mod tests {
             None,
             &MatchMissionContext {
                 player_level: 5,
+                tactics_completed: true,
                 mode: MatchMode::Pve,
                 won: true,
                 leader_id: Some("boudica"),
@@ -1936,6 +1977,7 @@ mod tests {
                 None,
                 &MatchMissionContext {
                     player_level: 5,
+                    tactics_completed: true,
                     mode: MatchMode::Ffa,
                     leader_id: Some(leader),
                     peak_territory_rank: Some(2),

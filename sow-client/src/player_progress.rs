@@ -100,6 +100,10 @@ pub struct PlayerProgress {
     pub conquest_streak: u32,
     #[serde(default)]
     pub best_conquest_streak: u32,
+    #[serde(default)]
+    pub rampage_count: u32,
+    #[serde(default)]
+    pub best_match_conquest_streak: u16,
 }
 
 fn deserialize_leader<'de, D>(deserializer: D) -> Result<Option<Leader>, D::Error>

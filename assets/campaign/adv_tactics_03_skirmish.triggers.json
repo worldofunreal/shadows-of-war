@@ -49,6 +49,7 @@
           "City": 1,
           "Farm": 4,
           "Factory": 4,
+          "MissileSilo": 4,
           "Tower": 4,
           "Port": 4,
           "SAM": 4

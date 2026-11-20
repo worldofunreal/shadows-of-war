@@ -145,6 +145,16 @@ function missionActionTooltipAttrs(actionTarget: string | undefined, missionId?:
     }
     const labels: Record<string, { text: string; icon: string; tone: string }> = {
         battle: { text: SOW_t("lobbies.matchmaking"), icon: "play", tone: "gold" },
+        campaign_tactics: {
+            text: SOW_t("lobbies.campaign_tactics_title") || SOW_t("menu.campaign"),
+            icon: "play",
+            tone: "gold",
+        },
+        campaign_advanced_tactics: {
+            text: SOW_t("lobbies.campaign_advanced_tactics_title") || SOW_t("menu.campaign"),
+            icon: "play",
+            tone: "gold",
+        },
         ranked: { text: SOW_t("lobbies.ranked_1v1"), icon: "ranked", tone: "gold" },
         teams: { text: SOW_t("lobbies.teams_two"), icon: "play", tone: "gold" },
         pve: { text: SOW_t("lobbies.humans_vs_nations"), icon: "play", tone: "gold" },
@@ -369,11 +379,16 @@ export function renderMissionsModal(): string {
     const dailyTotal = missions.filter((m) => m.category === "daily");
     const dailyCompleted = dailyTotal.filter((m) => m.completed || m.claimed).length;
     const dailyLocked = dailyTotal.length > 0 && dailyTotal.every((m) => Boolean(m.locked));
-    const dailyUnlockLevel = dailyTotal[0]?.unlock_level || 3;
     const weeklyTotal = missions.filter((m) => m.category === "weekly");
     const weeklyCompleted = weeklyTotal.filter((m) => m.completed || m.claimed).length;
     const weeklyLocked = weeklyTotal.length > 0 && weeklyTotal.every((m) => Boolean(m.locked));
-    const weeklyUnlockLevel = weeklyTotal[0]?.unlock_level || 5;
+    const tacticsUnlockTooltip =
+        SOW_t("missions.unlock_after_tactics") ||
+        "Complete Tactics in Campaign to unlock Daily & Weekly Operations.";
+    const tacticsUnlockBadge =
+        SOW_t("missions.unlock_tactics_short") ||
+        SOW_t("lobbies.campaign_tactics_title") ||
+        "Tactics";
 
     let subtitle = SOW_t("missions.onboarding_subtitle");
     if (activeTab === "daily") {
@@ -406,16 +421,17 @@ export function renderMissionsModal(): string {
     const periodLocked =
         (activeTab === "daily" && dailyLocked) || (activeTab === "weekly" && weeklyLocked);
 
-    const lockBanner =
-        activeTab === "daily" && dailyLocked
-            ? "<div class='sow-missions__locked-banner'>" +
-              esc(SOW_t("missions.unlock_at_level").replace("{level}", String(dailyUnlockLevel))) +
-              "</div>"
-            : activeTab === "weekly" && weeklyLocked
-              ? "<div class='sow-missions__locked-banner'>" +
-                esc(SOW_t("missions.unlock_at_level").replace("{level}", String(weeklyUnlockLevel))) +
-                "</div>"
-              : "";
+    const lockBanner = periodLocked
+        ? "<div class='sow-missions__locked-banner'>" +
+          "<span>" +
+          esc(tacticsUnlockTooltip) +
+          "</span>" +
+          "<button class='sow-missions__btn-go' type='button' data-command='mission_action' data-action-target='campaign_tactics'>" +
+          esc(tacticsUnlockBadge) +
+          arrowRightIconSvg() +
+          "</button>" +
+          "</div>"
+        : "";
 
     const items = currentMissions.slice().sort(function (a, b) {
         return a.order - b.order;
@@ -437,10 +453,7 @@ export function renderMissionsModal(): string {
                       const lockLabel =
                           m.category === "onboarding"
                               ? SOW_t("missions.locked_prev_step")
-                              : SOW_t("missions.unlock_at_level").replace(
-                                    "{level}",
-                                    String(m.unlock_level || 3),
-                                );
+                              : tacticsUnlockTooltip;
                       actionHtml =
                           "<span class='sow-missions__locked-badge' tabindex='0' role='img' aria-label='" +
                           esc(lockLabel) +
@@ -655,7 +668,7 @@ export function renderMissionsModal(): string {
         "'" +
         (dailyLocked
             ? " data-sow-tooltip='" +
-              esc(SOW_t("missions.unlock_at_level").replace("{level}", String(dailyUnlockLevel))) +
+              esc(tacticsUnlockTooltip) +
               "' data-sow-tooltip-icon='lock' data-sow-tooltip-tone='gold' data-sow-tooltip-placement='bottom'"
             : "") +
         ">" +
@@ -665,8 +678,8 @@ export function renderMissionsModal(): string {
         (dailyLocked
             ? "<span class='sow-missions__tab-badge is-locked'>" +
               lockIconSvg(11) +
-              "<span>Lv " +
-              dailyUnlockLevel +
+              "<span>" +
+              esc(tacticsUnlockBadge) +
               "</span></span>"
             : "<span class='sow-missions__tab-badge'>" +
               dailyCompleted +
@@ -682,7 +695,7 @@ export function renderMissionsModal(): string {
         "'" +
         (weeklyLocked
             ? " data-sow-tooltip='" +
-              esc(SOW_t("missions.unlock_at_level").replace("{level}", String(weeklyUnlockLevel))) +
+              esc(tacticsUnlockTooltip) +
               "' data-sow-tooltip-icon='lock' data-sow-tooltip-tone='gold' data-sow-tooltip-placement='bottom'"
             : "") +
         ">" +
@@ -692,8 +705,8 @@ export function renderMissionsModal(): string {
         (weeklyLocked
             ? "<span class='sow-missions__tab-badge is-locked'>" +
               lockIconSvg(11) +
-              "<span>Lv " +
-              weeklyUnlockLevel +
+              "<span>" +
+              esc(tacticsUnlockBadge) +
               "</span></span>"
             : "<span class='sow-missions__tab-badge'>" +
               weeklyCompleted +

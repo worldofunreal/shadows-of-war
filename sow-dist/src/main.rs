@@ -259,6 +259,8 @@ struct ArtProfile {
     max_height: u32,
     quality: u32,
     alpha: String,
+    #[serde(default)]
+    alpha_quality: Option<u32>,
     resample: String,
     lossless: bool,
     #[serde(default)]
@@ -272,6 +274,7 @@ struct ArtProfile {
 struct ArtOptimizationConfig {
     version: u32,
     webp_method: u32,
+    webp_alpha_quality: u32,
     svgo_version: String,
     svg_max_bytes: u64,
     svg_recipe_version: u32,
@@ -306,7 +309,13 @@ impl ArtPipeline {
             .with_context(|| format!("read art optimization profiles: {}", config_path.display()))?;
         let config: ArtOptimizationConfig = toml::from_str(&config_text)
             .with_context(|| format!("parse art optimization profiles: {}", config_path.display()))?;
-        if config.version != 1 || config.webp_method > 6 || config.profiles.is_empty() || config.svg_max_bytes == 0 || config.svg_recipe_version == 0 {
+        if config.version != 1
+            || config.webp_method > 6
+            || config.webp_alpha_quality > 100
+            || config.profiles.is_empty()
+            || config.svg_max_bytes == 0
+            || config.svg_recipe_version == 0
+        {
             bail!("unsupported or empty art optimization profile set in {}", config_path.display());
         }
         for (name, profile) in &config.profiles {
@@ -314,10 +323,11 @@ impl ArtPipeline {
                 || profile.max_width == 0
                 || profile.max_height == 0
                 || profile.quality > 100
+                || profile.alpha_quality.is_some_and(|value| value > 100)
                 || profile.max_bytes == 0
                 || profile.recipe_version == 0
-                || profile.alpha != "preserve"
-                || !["lanczos", "point"].contains(&profile.resample.as_str())
+                || !["preserve", "strip"].contains(&profile.alpha.as_str())
+                || !["lanczos", "mitchell", "point"].contains(&profile.resample.as_str())
                 || profile.crop.as_deref().is_some_and(|crop| crop != "center_square")
                 || (profile.lossless && profile.format != "webp" && profile.format != "png")
             {
@@ -453,6 +463,12 @@ impl ArtPipeline {
                 let geometry = format!("{}x{}>", profile.max_width, profile.max_height);
                 magick.args(["-resize", geometry.as_str()]);
             }
+            if profile.alpha == "strip" {
+                magick.args(["-alpha", "off"]);
+            } else if output_format == "webp" && !profile.lossless {
+                // Zero out RGB under fully transparent pixels so WebP doesn't spend bits on invisible color.
+                magick.args(["-background", "black", "-alpha", "background"]);
+            }
             magick.arg("-strip");
             if output_format == "webp" {
                 let method = format!("webp:method={}", self.config.webp_method);
@@ -460,7 +476,16 @@ impl ArtPipeline {
                 if profile.lossless {
                     magick.args(["-define", "webp:lossless=true"]);
                 } else {
-                    magick.args(["-define", "webp:alpha-quality=100"]);
+                    let alpha_q = profile.alpha_quality.unwrap_or(self.config.webp_alpha_quality);
+                    let alpha_q_arg = format!("webp:alpha-quality={alpha_q}");
+                    magick.args([
+                        "-define",
+                        "webp:auto-filter=true",
+                        "-define",
+                        alpha_q_arg.as_str(),
+                        "-define",
+                        "webp:alpha-filtering=2",
+                    ]);
                 }
             } else {
                 magick.args([
@@ -476,6 +501,19 @@ impl ArtPipeline {
                 .with_context(|| format!("optimize image {} with ImageMagick", source.display()))?;
             if !status.success() {
                 bail!("ImageMagick failed to optimize {}", source.display());
+            }
+            if output_format == "png" {
+                if !profile.lossless {
+                    let _ = Command::new("pngquant")
+                        .args(["--quality", &format!("0-{quality}"), "--speed", "1", "--strip", "--force", "--output"])
+                        .arg(&temp)
+                        .arg(&temp)
+                        .status();
+                }
+                let _ = Command::new("oxipng")
+                    .args(["-o", "4", "--strip", "all", "--quiet"])
+                    .arg(&temp)
+                    .status();
             }
             fs::rename(&temp, &cache_file)?;
             cache_record = Some(self.write_image_cache_record(
@@ -576,6 +614,8 @@ impl ArtPipeline {
             "magick": self.magick_version,
             "optimization_version": self.config.version,
             "webp_method": self.config.webp_method,
+            "webp_alpha_quality": self.config.webp_alpha_quality,
+            "encoder_flags_version": 2,
         });
         Ok(hex::encode(Sha256::digest(serde_json::to_vec(&recipe)?)))
     }
@@ -818,10 +858,13 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
     if path.starts_with("gameplay/units/") {
         return Some(if ["trade-ship.webp", "transport-ship.webp", "warship.webp"].contains(&name.as_ref()) { "pixel_art" } else { "unit_icon" });
     }
-    if path == "gameplay/buildings/atlas.webp"
-        || path == "gameplay/icons/nameplate_status_atlas.webp"
-        || path == "gameplay/text/msdf-atlas-v3.webp"
-    {
+    if path == "gameplay/buildings/atlas.webp" {
+        return Some("atlas_buildings");
+    }
+    if path == "gameplay/icons/nameplate_status_atlas.webp" {
+        return Some("atlas_badges");
+    }
+    if path == "gameplay/text/msdf-atlas-v3.webp" {
         return Some("atlas_lossless");
     }
     if path.starts_with("site/media/") {
@@ -937,9 +980,13 @@ fn collect_art_preview_assets(root: &Path) -> Result<Vec<ArtPreviewAsset>> {
             push_preview_asset(&mut assets, entry.path().to_path_buf(), "map_preview", None);
         }
     }
-    for name in ["buildings-atlas.webp", "badges-atlas.webp"] {
+    for (name, profile) in [
+        ("buildings-atlas.webp", "atlas_buildings"),
+        ("badges-atlas.webp", "atlas_badges"),
+        ("msdf-atlas.webp", "atlas_lossless"),
+    ] {
         let source = root.join("assets/generated").join(name);
-        push_preview_asset(&mut assets, source, "atlas_lossless", None);
+        push_preview_asset(&mut assets, source, profile, None);
     }
     if let Some(source) = preview_source_named(&root.join("assets/site/media"), "game-war") {
         push_preview_asset(&mut assets, source, "video_poster", None);
@@ -1024,8 +1071,8 @@ const GENERATED_FILES: [(&str, &str); 4] = [
         "gameplay/icons/nameplate_status_atlas.webp",
     ),
 ];
-const PORTRAIT_PX: u32 = 192;
-const HERO_PORTRAIT_PX: u32 = 256;
+const PORTRAIT_PX: u32 = 128;
+const HERO_PORTRAIT_PX: u32 = 192;
 /// Landing shots (assets/site/media/<stem>.webp): until the owner drops a
 /// capture, each slot publishes current game art (dir, stem) so nothing stale shows.
 const SITE_STILLS: [(&str, (&str, &str)); 12] = [
@@ -1813,10 +1860,14 @@ fn pack_sprite_atlas(assets: &Path, pipeline: &ArtPipeline) -> Result<()> {
     let mut index_cells = serde_json::Map::new();
     for (sheet_index, sheet) in sheets.iter().enumerate() {
         let mut canvas = image::RgbaImage::new(sheet.width, sheet.height);
+        let mut has_transparency = false;
         for cell in &sheet.cells {
             let sprite = image::open(files[cell.key.as_str()])
                 .with_context(|| format!("read sprite {}", cell.key))?
                 .to_rgba8();
+            if sprite.pixels().any(|pixel| pixel.0[3] < 255) {
+                has_transparency = true;
+            }
             image::imageops::overlay(&mut canvas, &sprite, cell.x.into(), cell.y.into());
             index_cells.insert(
                 cell.key.clone(),
@@ -1824,9 +1875,17 @@ fn pack_sprite_atlas(assets: &Path, pipeline: &ArtPipeline) -> Result<()> {
             );
         }
         let raw = scratch.path().join(format!("sheet-{sheet_index}.png"));
-        canvas
-            .save(&raw)
-            .with_context(|| format!("write sprite sheet {}", sheet.path))?;
+        if has_transparency {
+            canvas
+                .save(&raw)
+                .with_context(|| format!("write sprite sheet {}", sheet.path))?;
+        } else {
+            // Strip unused alpha channel on opaque sheets so libwebp omits the ALPH chunk.
+            image::DynamicImage::ImageRgba8(canvas)
+                .into_rgb8()
+                .save(&raw)
+                .with_context(|| format!("write sprite sheet {}", sheet.path))?;
+        }
         let profile = if sheet.group == "abilities" { "ability_atlas" } else { "avatar_atlas" };
         pipeline.publish_image(&raw, &assets.join(&sheet.path), profile, None, None)?;
         index_sheets.push(serde_json::json!({
@@ -2022,7 +2081,7 @@ fn hero_expression_crop(
         &square,
         HERO_PORTRAIT_PX,
         HERO_PORTRAIT_PX,
-        image::imageops::FilterType::Triangle,
+        image::imageops::FilterType::CatmullRom,
     ))
 }
 
@@ -2181,8 +2240,10 @@ fn publish_portal_leaders(src: &Path, dst: &Path, pipeline: &ArtPipeline, leader
         } else {
             leaders.wide_profile
         };
+        let master = pipeline.root.join("assets/art/heroes").join(&name);
+        let source = if master.is_file() { master } else { entry.path() };
         pipeline.publish_image(
-            &entry.path(),
+            &source,
             &dst.join("shell/leaders").join(entry.file_name()),
             profile,
             None,
@@ -2252,8 +2313,11 @@ fn copy_portal_maps(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
         if map.is_file() {
             fs::copy(&map, out_dir.join("map.bin.br"))?;
         }
+        let thumbnail = entry.path().join("thumbnail.webp");
         let preview = entry.path().join("preview.webp");
-        if preview.is_file() {
+        if thumbnail.is_file() {
+            fs::copy(&thumbnail, out_dir.join("thumbnail.webp"))?;
+        } else if preview.is_file() {
             pipeline.publish_image(
                 &preview,
                 &out_dir.join("thumbnail.webp"),
@@ -6319,7 +6383,7 @@ shortArticle = true
         let mut pipeline = ArtPipeline::load(&root)?;
         pipeline.cache_root = temp.path().join("art-cache");
         pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
-        assert_eq!(image::image_dimensions(&destination)?, (192, 96));
+        assert_eq!(image::image_dimensions(&destination)?, (128, 64));
         assert_eq!(
             image::guess_format(&fs::read(&destination)?)?,
             image::ImageFormat::WebP
@@ -6350,7 +6414,7 @@ shortArticle = true
         pipeline.publish_image(&source, &destination, "avatar_portrait_192", None, None)?;
         assert_eq!(fs::read_dir(&cache_dir)?.count(), 3, "changed recipe invalidates its cache key");
         assert_eq!(fs::read_dir(&metadata_dir)?.count(), 3, "changed recipe gets new validation metadata");
-        assert_eq!(image::image_dimensions(&destination)?, (192, 96));
+        assert_eq!(image::image_dimensions(&destination)?, (128, 64));
         Ok(())
     }
 

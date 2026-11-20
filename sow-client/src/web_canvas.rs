@@ -44,11 +44,21 @@ fn read_browser_viewport() -> BrowserViewport {
                 .unwrap_or(600.0);
             (width, height)
         });
+    let raw_dpr = window.device_pixel_ratio();
+    let dpr = if is_mobile_pointer() {
+        raw_dpr.min(1.5)
+    } else {
+        raw_dpr
+    };
     BrowserViewport {
         width,
         height,
-        device_pixel_ratio: window.device_pixel_ratio(),
+        device_pixel_ratio: dpr,
     }
+}
+
+pub(crate) fn is_mobile_pointer() -> bool {
+    MOBILE_POINTER.with(|query| query.as_ref().is_some_and(|q| q.matches()))
 }
 
 fn browser_viewport() -> BrowserViewport {

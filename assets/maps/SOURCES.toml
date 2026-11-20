@@ -285,8 +285,8 @@ source_path = "../games/openfrontio/map-generator/assets/maps/world/image.png"
 source_sha256 = "f7fadf3d5b10929d5d4a3a667fa96fb4ba5de7fef153352de3fde8d9edd9ef05"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 reproducible = true
-target_width = 1000
-target_height = 500
+target_width = 1600
+target_height = 800
 pipeline = "sow-map::image_pipeline::generate_from_rgba"
 pipeline_revision = "nearest-input-v2/water-wins-v1/cardinal-runtime-v1"
 water_connectivity = "cardinal-4"
@@ -314,6 +314,6 @@ land_point_corrections = [
   { id = "frisii", lat = 53.2, lon = 5.8 },
   { id = "chauci", lat = 54.465840355712885, lon = 9.00368466377435 },
 ]
-map_bin_sha256 = "c59857a4493c48c5b02178c2a17a107d007bcac88a57024aecf0373b5d2eccd4"
-map_bin_br_sha256 = "136b8a223c44ab8ed8eec9fe5d814ea025ea37b9090ac67cd03eea405d7416bf"
+map_bin_sha256 = "7d9dbfbf574290e15e1e74349feeed97f43d173d4a95dabc2729cc533c05e2fe"
+map_bin_br_sha256 = "68119ddf7fac87fa62b7e0998a8cd053b750200d3d8ee577d2798274d8198512"
 thumbnail_sha256 = "32b7157610c622f6cb47c55ac3c0fb5a815e8b350a27027a6314ad7854dbb8b1"

@@ -87,6 +87,7 @@ export const STRUCTURE_LEVEL_LIMITS: Record<string, number> = {
     Tower: 4,
     Port: 4,
     SAM: 4,
+    MissileSilo: 4,
 };
 export const CAMPAIGN_ACTIONS: readonly string[] = ["transport_fleet", "trade_ship", "warship", "nuke"];
 export const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS: Record<string, { kind: string; level: number } | null> =
@@ -94,7 +95,7 @@ export const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS: Record<string, { kind: strin
         transport_fleet: null,
         trade_ship: Object.freeze({ kind: "Port", level: 1 }),
         warship: Object.freeze({ kind: "Port", level: 1 }),
-        nuke: Object.freeze({ kind: "Factory", level: STRUCTURE_LEVEL_LIMITS.Factory }),
+        nuke: Object.freeze({ kind: "MissileSilo", level: 1 }),
     });
 export const BUILDING_METRIC_KINDS: Record<string, string> = {
     city: "City",
@@ -318,6 +319,7 @@ export function stepCampaignRequirements(step: CampaignStep): CampaignRecord[] {
         if (target === "dock_factory") addBuilding("Factory", 1);
         if (target === "dock_port") addBuilding("Port", 1);
         if (target === "dock_tower") addBuilding("Tower", 1);
+        if (target === "dock_missile_silo") addBuilding("MissileSilo", 1);
         if (target === "dock_sam") addBuilding("SAM", 1);
         if (target === "map_nuke" || target === "map_nuke_launch" || target === "factory_nuke") addAction("nuke");
         if (target === "map_fleet") addAction("transport_fleet");
@@ -357,6 +359,7 @@ export const UI_TARGETS: Record<string, string> = {
     dock_port: '#sow-hud [data-command="select_building"][data-kind="Port"]',
     dock_tower: '#sow-hud [data-command="select_building"][data-kind="Tower"]',
     dock_farm: '#sow-hud [data-command="select_building"][data-kind="Farm"]',
+    dock_missile_silo: '#sow-hud [data-command="select_building"][data-kind="MissileSilo"]',
     dock_sam: '#sow-hud [data-command="select_building"][data-kind="SAM"]',
     hud_troops: "#sow-hud-nameplate-troops",
     hud_troop_rate: "#sow-hud-nameplate-troop-rate",

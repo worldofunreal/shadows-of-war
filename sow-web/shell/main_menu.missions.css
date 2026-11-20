@@ -679,6 +679,11 @@
 }
 
 .sow-missions__locked-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
     margin-bottom: 10px;
     padding: 8px 12px;
     border-radius: var(--sow-button-radius, 7px);

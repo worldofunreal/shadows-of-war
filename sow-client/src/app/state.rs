@@ -612,6 +612,12 @@ pub enum CascadeCalloutKind {
     MultiKill,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CascadeIcon {
+    Status(sow_render::text::NameplateStatusSprite),
+    Building(sow_core::game::BuildingKind),
+}
+
 #[derive(Clone, Debug)]
 pub struct CascadeCallout {
     pub world_x: f32,
@@ -619,9 +625,10 @@ pub struct CascadeCallout {
     pub label: String,
     pub chain_step: u8,
     pub kind: CascadeCalloutKind,
-    pub icon: Option<sow_render::text::NameplateStatusSprite>,
+    pub icon: Option<CascadeIcon>,
     pub ring_radius: f32,
     pub start_time: web_time::Instant,
+    pub prepared_label: Option<sow_render::text::PreparedText>,
 }
 
 #[derive(Clone, Debug)]
@@ -689,27 +696,37 @@ pub(crate) fn structure_capture_priority(kind: sow_core::game::BuildingKind) -> 
     }
 }
 
-fn multi_kill_callout(count: u8) -> Option<(&'static str, u8)> {
+fn multi_conquest_callout(count: u8) -> Option<(&'static str, u8)> {
     match count {
         0 | 1 => None,
-        2 => Some(("DOUBLE KILL!", 2)),
-        3 => Some(("TRIPLE KILL!", 4)),
-        4 => Some(("ULTRA KILL!", 6)),
+        2 => Some(("x2!", 2)),
+        3 => Some(("x3!", 4)),
+        4 => Some(("x4!", 6)),
         _ => Some(("RAMPAGE!", 8)),
     }
 }
 
-fn kill_streak_callout(streak: u16) -> Option<(&'static str, u8)> {
+fn conquest_streak_callout(
+    streak: u16,
+    gender: Option<sow_data::geo_entities::Gender>,
+) -> Option<(&'static str, u8)> {
+    use sow_data::geo_entities::Gender;
     match streak {
         0..=2 => None,
-        3 => Some(("KILLING SPREE!", 2)),
+        3 => Some(("UNSTOPPABLE!", 2)),
         4 => Some(("DOMINATING!", 3)),
-        5 => Some(("MEGA KILL!", 4)),
-        6 => Some(("UNSTOPPABLE!", 5)),
-        7 => Some(("WICKED SICK!", 6)),
-        8 => Some(("MONSTER KILL!", 7)),
-        9 => Some(("GODLIKE!", 8)),
-        _ => Some(("BEYOND GODLIKE!", 8)),
+        5 => Some((
+            match gender {
+                Some(Gender::Male) => "KING!",
+                Some(Gender::Female) => "QUEEN!",
+                None => "SOVEREIGN!",
+            },
+            4,
+        )),
+        6 => Some(("MYTHIC!", 5)),
+        7 => Some(("LEGEND!", 6)),
+        8 => Some(("DEITY!", 7)),
+        _ => Some(("RAMPAGE!", 8)),
     }
 }
 
@@ -735,6 +752,7 @@ impl CombatStreakTracker {
 
     pub fn record_kill(
         &mut self,
+        gender: Option<sow_data::geo_entities::Gender>,
         now: web_time::Instant,
     ) -> Option<(&'static str, u8, CascadeCalloutKind)> {
         self.kill_streak = self.kill_streak.saturating_add(1);
@@ -748,10 +766,10 @@ impl CombatStreakTracker {
         };
         self.last_kill_at = Some(now);
 
-        if let Some((label, min_step)) = multi_kill_callout(self.multi_kill_count) {
+        if let Some((label, min_step)) = multi_conquest_callout(self.multi_kill_count) {
             return Some((label, min_step, CascadeCalloutKind::MultiKill));
         }
-        kill_streak_callout(self.kill_streak)
+        conquest_streak_callout(self.kill_streak, gender)
             .map(|(label, min_step)| (label, min_step, CascadeCalloutKind::KillStreak))
     }
 
@@ -937,7 +955,7 @@ impl UiState {
         label: String,
         chain_override: Option<u8>,
         kind: CascadeCalloutKind,
-        icon: Option<sow_render::text::NameplateStatusSprite>,
+        icon: Option<CascadeIcon>,
         ring_radius: f32,
         now: web_time::Instant,
     ) -> u8 {
@@ -953,7 +971,7 @@ impl UiState {
         self.cascade_streak = step;
         self.cascade_last_at = Some(now);
 
-        if self.cascade_callouts.len() >= 8 {
+        if self.cascade_callouts.len() >= 4 {
             self.cascade_callouts.remove(0);
         }
         self.cascade_callouts.push(CascadeCallout {
@@ -965,6 +983,7 @@ impl UiState {
             icon,
             ring_radius,
             start_time: now,
+            prepared_label: None,
         });
         step
     }
@@ -973,9 +992,10 @@ impl UiState {
         &mut self,
         wx: f32,
         wy: f32,
+        gender: Option<sow_data::geo_entities::Gender>,
         now: web_time::Instant,
-    ) -> Option<u8> {
-        let (label, min_step, kind) = self.combat_streaks.record_kill(now)?;
+    ) -> Option<(u8, &'static str)> {
+        let (label, min_step, kind) = self.combat_streaks.record_kill(gender, now)?;
         let ring_radius = 36.0 + 6.0 * f32::from(min_step.min(5));
         let step = self.push_cascade_callout(
             wx,
@@ -983,11 +1003,11 @@ impl UiState {
             label.to_string(),
             Some(min_step),
             kind,
-            Some(sow_render::text::NameplateStatusSprite::Death),
+            Some(CascadeIcon::Status(sow_render::text::NameplateStatusSprite::Death)),
             ring_radius,
             now,
         );
-        Some(step)
+        Some((step, label))
     }
 
     pub(crate) fn record_territory_advance(
@@ -998,14 +1018,14 @@ impl UiState {
         now: web_time::Instant,
     ) -> Option<u8> {
         let milestone = self.combat_streaks.record_advance(tiles_gained, now)?;
-        let label = format!("+{milestone} TILES");
+        let label = format!("+{milestone}");
         let step = self.push_cascade_callout(
             wx,
             wy,
             label,
             None,
             CascadeCalloutKind::Advance,
-            None,
+            Some(CascadeIcon::Status(sow_render::text::NameplateStatusSprite::ArrowUp)),
             0.0,
             now,
         );
@@ -1223,53 +1243,64 @@ mod cascade_tests {
 
     #[test]
     fn kill_streak_and_multikill_escalate_cleanly() {
+        use sow_data::geo_entities::Gender;
         let mut tracker = CombatStreakTracker::default();
         let t0 = web_time::Instant::now();
 
-        assert_eq!(tracker.record_kill(t0), None);
+        assert_eq!(tracker.record_kill(Some(Gender::Female), t0), None);
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(2)),
-            Some(("DOUBLE KILL!", 2, CascadeCalloutKind::MultiKill))
+            tracker.record_kill(Some(Gender::Female), t0 + Duration::from_secs(2)),
+            Some(("x2!", 2, CascadeCalloutKind::MultiKill))
         );
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(4)),
-            Some(("TRIPLE KILL!", 4, CascadeCalloutKind::MultiKill))
+            tracker.record_kill(Some(Gender::Female), t0 + Duration::from_secs(4)),
+            Some(("x3!", 4, CascadeCalloutKind::MultiKill))
         );
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(5)),
-            Some(("ULTRA KILL!", 6, CascadeCalloutKind::MultiKill))
+            tracker.record_kill(Some(Gender::Female), t0 + Duration::from_secs(5)),
+            Some(("x4!", 6, CascadeCalloutKind::MultiKill))
         );
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(6)),
+            tracker.record_kill(Some(Gender::Female), t0 + Duration::from_secs(6)),
             Some(("RAMPAGE!", 8, CascadeCalloutKind::MultiKill))
         );
 
-        // Spaced kill beyond multi-kill window falls back to total match kill streak tier.
+        // Spaced kills beyond multi-conquest window fall back to streak ladder.
+        // Streak 5 on Male/Female/None resolves to KING! / QUEEN! / SOVEREIGN!.
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(20)),
-            Some(("UNSTOPPABLE!", 5, CascadeCalloutKind::KillStreak))
+            conquest_streak_callout(5, Some(Gender::Male)),
+            Some(("KING!", 4))
         );
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(35)),
-            Some(("WICKED SICK!", 6, CascadeCalloutKind::KillStreak))
+            conquest_streak_callout(5, Some(Gender::Female)),
+            Some(("QUEEN!", 4))
+        );
+        assert_eq!(conquest_streak_callout(5, None), Some(("SOVEREIGN!", 4)));
+
+        assert_eq!(
+            tracker.record_kill(Some(Gender::Female), t0 + Duration::from_secs(20)),
+            Some(("MYTHIC!", 5, CascadeCalloutKind::KillStreak))
         );
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(50)),
-            Some(("MONSTER KILL!", 7, CascadeCalloutKind::KillStreak))
+            tracker.record_kill(Some(Gender::Female), t0 + Duration::from_secs(35)),
+            Some(("LEGEND!", 6, CascadeCalloutKind::KillStreak))
         );
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(65)),
-            Some(("GODLIKE!", 8, CascadeCalloutKind::KillStreak))
+            tracker.record_kill(Some(Gender::Female), t0 + Duration::from_secs(50)),
+            Some(("DEITY!", 7, CascadeCalloutKind::KillStreak))
         );
         assert_eq!(
-            tracker.record_kill(t0 + Duration::from_secs(80)),
-            Some(("BEYOND GODLIKE!", 8, CascadeCalloutKind::KillStreak))
+            tracker.record_kill(Some(Gender::Female), t0 + Duration::from_secs(65)),
+            Some(("RAMPAGE!", 8, CascadeCalloutKind::KillStreak))
         );
 
         tracker.reset();
         assert_eq!(tracker.kill_streak, 0);
         assert_eq!(tracker.multi_kill_count, 0);
-        assert_eq!(tracker.record_kill(t0 + Duration::from_secs(90)), None);
+        assert_eq!(
+            tracker.record_kill(Some(Gender::Male), t0 + Duration::from_secs(90)),
+            None
+        );
     }
 
     #[test]
@@ -1307,7 +1338,5 @@ mod cascade_tests {
             structure_capture_priority(BuildingKind::Factory)
                 > structure_capture_priority(BuildingKind::Farm)
         );
-        assert_eq!(structure_capture_label(BuildingKind::City), "CITY CAPTURED");
-        assert_eq!(structure_short_label(BuildingKind::Factory), "FACTORY");
     }
 }

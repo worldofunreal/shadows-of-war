@@ -16,7 +16,8 @@ pub const GAMEPLAY_FORMAT_VERSION: u64 = 8;
 // 11: the start message's GameConfig carries bot tuning (`ai`).
 // 12: city arsenal intent & snapshot state.
 // 13: queued multi-level upgrade target level (`UpgradeStructureTo`, `BuildingSnapshot::upgrade_target_level`).
-pub const LIVE_PROTOCOL_VERSION: u64 = 13;
+// 14: queued warship production (`warship_queue`, `CancelWarshipQueue`, `BuildingProductionMax`) & `PatrolWarships`.
+pub const LIVE_PROTOCOL_VERSION: u64 = 14;
 
 /// What two builds must share to play together. The public version is left out on
 /// purpose: a server, price or menu release must not lock out store and portal clients.
@@ -157,6 +158,20 @@ pub enum GameplayIntent {
     BuildingProduction {
         building_id: u64,
         kind: crate::game::CityArsenalKind,
+    },
+    /// Queue as many production items as gold, capacity, and queue limit allow.
+    BuildingProductionMax {
+        building_id: u64,
+        kind: crate::game::CityArsenalKind,
+    },
+    /// Cancel a queued warship at `index` (`0` = currently building) and refund its paid gold.
+    CancelWarshipQueue {
+        building_id: u64,
+        index: u8,
+    },
+    /// Return selected warships to default patrolling around their current position.
+    PatrolWarships {
+        unit_ids: Vec<u64>,
     },
     /// Queue consecutive upgrades up to `target_level` (paid upfront, advanced per level).
     UpgradeStructureTo {
@@ -654,7 +669,7 @@ pub struct DirtyTile {
     pub new_owner: u16,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BuildingSnapshot {
     pub id: u64,
     pub tile_idx: u32,
@@ -669,6 +684,8 @@ pub struct BuildingSnapshot {
     pub nuke_ready: bool,
     #[serde(default)]
     pub arsenal_build: Option<crate::building::CityArsenalBuild>,
+    #[serde(default)]
+    pub warship_queue: Vec<crate::building::CityArsenalBuild>,
     #[serde(default)]
     pub sam_cooldown_ticks: u32,
     /// Queued final target level when upgrading across multiple levels (`0` if none beyond `level`).

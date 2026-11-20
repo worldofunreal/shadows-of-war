@@ -834,7 +834,7 @@ export function validateSteps(context: CampaignValidationContext) {
                     if (trigger.action === "map_menu_open" && !(step.marker && step.marker.target))
                         issue(step, "marker", "Choose whose map menu must open.");
                 } else if (trigger.type === "building_selected") {
-                    if (!["City", "Farm", "Factory", "Tower", "Port", "SAM"].includes(trigger.kind))
+                    if (!["City", "Farm", "Factory", "Tower", "Port", "SAM", "MissileSilo"].includes(trigger.kind))
                         issue(step, "trigger.kind", "Choose a supported building type.");
                 } else if (trigger.type === "structure_upgrade") {
                     if (!own(STRUCTURE_LEVEL_LIMITS, trigger.kind))
@@ -857,7 +857,7 @@ export function validateSteps(context: CampaignValidationContext) {
                             "Set how close the camera must be to the zoom target.",
                         );
                 } else if (trigger.type === "structure_level") {
-                    if (!["City", "Farm", "Factory", "Tower", "Port", "SAM"].includes(trigger.kind))
+                    if (!["City", "Farm", "Factory", "Tower", "Port", "SAM", "MissileSilo"].includes(trigger.kind))
                         issue(step, "trigger.kind", "Choose a supported building type.");
                     else if (
                         !Number.isInteger(trigger.value) ||

@@ -645,7 +645,7 @@ mod tests {
         map.terrain[farm_high] = MapTile::from_byte(0x80 | 10);
         assert_eq!(
             validate_structure_site(&map, 1, BuildingKind::Farm, farm_tile, &grid),
-            Err(PlacementError::LowlandRequired)
+            Ok(())
         );
         map.set_owner_id(8, 8, 2);
         assert_eq!(

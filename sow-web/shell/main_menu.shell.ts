@@ -4138,10 +4138,17 @@ root.addEventListener("click", function (event) {
         };
         SOWTooltip.hide(true);
 
-        if (missionId === "onboarding_1_tutorial") {
+        if (
+            missionId === "onboarding_1_tutorial" ||
+            actionTarget === "campaign_tactics" ||
+            actionTarget === "campaign_advanced_tactics"
+        ) {
             closeMissionPanels();
             menuUi.profileAccountId = null;
             menuUi.profileMatchDetail = null;
+            menuUi.selectedCampaignSaga =
+                actionTarget === "campaign_advanced_tactics" ? "advanced_tactics" : "tactics";
+            menuUi.selectedCampaignEpisode = "";
             menuUi.campaignOpen = true;
             render();
             updateHeroBackdrop("campaign");

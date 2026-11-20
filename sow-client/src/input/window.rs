@@ -182,7 +182,7 @@ impl SowApp {
             self.input.key_pan_right = false;
             return;
         }
-        if self.ui.app.hud_state.building_placement.is_some() && !self.ui.tutorial_camera_only {
+        if pressed && self.ui.app.hud_state.building_placement.is_some() && !self.ui.tutorial_camera_only {
             use super::placement::PlacementDirection;
             let direction = match code {
                 winit::keyboard::KeyCode::ArrowUp => Some(PlacementDirection::Up),
@@ -192,9 +192,7 @@ impl SowApp {
                 _ => None,
             };
             if let Some(direction) = direction {
-                if pressed {
-                    self.nudge_building_placement(direction);
-                }
+                self.nudge_building_placement(direction);
                 return;
             }
         }
@@ -251,9 +249,24 @@ impl SowApp {
         if code == winit::keyboard::KeyCode::Digit0 || code == winit::keyboard::KeyCode::Numpad0 {
             self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
         }
+        if code == winit::keyboard::KeyCode::KeyP
+            && !self.ui.app.hud_state.selected_warship_ids.is_empty()
+        {
+            self.patrol_selected_warships();
+        }
+        if code == winit::keyboard::KeyCode::KeyM
+            && !self.ui.app.hud_state.selected_warship_ids.is_empty()
+        {
+            self.toggle_warship_move_targeting();
+        }
         if code == winit::keyboard::KeyCode::Escape || code == winit::keyboard::KeyCode::KeyQ {
             self.clear_placement();
             self.close_map_context_menu();
+            if self.ui.app.hud_state.warship_move_targeting {
+                self.ui.app.hud_state.warship_move_targeting = false;
+            } else {
+                self.clear_warship_selection();
+            }
         }
     }
 
@@ -437,6 +450,14 @@ impl SowApp {
             {
                 self.clear_placement();
                 self.close_map_context_menu();
+            } else if self.ui.app.hud_state.warship_move_targeting {
+                self.ui.app.hud_state.warship_move_targeting = false;
+            } else if !self.ui.app.hud_state.selected_warship_ids.is_empty()
+                && let Some((col, row)) = self.mouse_to_tile(x, y)
+                && let tile_idx = (row * self.sim.map_w as i32 + col) as u32
+                && self.is_water_map_target(tile_idx)
+            {
+                self.move_selected_warships_to_tile(tile_idx);
             } else {
                 self.open_map_context_menu(x, y);
             }

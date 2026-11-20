@@ -20,6 +20,7 @@ pub struct HudNotification {
     pub priority: u8,
     pub group: Option<String>,
     pub sum_values: bool,
+    pub fleet_id: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -75,6 +76,8 @@ pub struct HudState {
     pub building_placement: Option<BuildingPlacement>,
     pub building_costs: [f64; 9],
     pub selected_nuke_kind: Option<sow_core::game::NukeKind>,
+    pub selected_warship_ids: Vec<u64>,
+    pub warship_move_targeting: bool,
     pub hud_notifications: VecDeque<HudNotification>,
     pub map_feedback: Option<HudMapFeedback>,
     pub notification_revision: u64,
@@ -108,6 +111,8 @@ impl Default for HudState {
             building_placement: None,
             building_costs: [0.0; 9],
             selected_nuke_kind: None,
+            selected_warship_ids: Vec::new(),
+            warship_move_targeting: false,
             hud_notifications: VecDeque::with_capacity(32),
             map_feedback: None,
             notification_revision: 0,
@@ -156,8 +161,22 @@ impl HudState {
             priority,
             group,
             sum_values,
+            fleet_id: None,
         });
         self.notification_revision = id;
+    }
+
+    pub fn push_warship_launch(&mut self, fleet_id: u64) {
+        self.push_notification_for_players(
+            UiText::new("hud.warship_ready"),
+            [None, None],
+            3,
+            None,
+            false,
+        );
+        if let Some(notice) = self.hud_notifications.back_mut() {
+            notice.fleet_id = Some(fleet_id);
+        }
     }
 
     pub fn clear_notifications(&mut self) {

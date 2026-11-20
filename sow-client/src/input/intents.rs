@@ -68,6 +68,9 @@ fn paused_tutorial_intent_allowed(
                 GameplayIntent::BuildingProduction {
                     kind: sow_core::game::CityArsenalKind::Warship,
                     ..
+                } | GameplayIntent::BuildingProductionMax {
+                    kind: sow_core::game::CityArsenalKind::Warship,
+                    ..
                 }
             ),
             Some(TutorialPausedAction::QueueNukeUntilStarted) => matches!(
@@ -108,7 +111,8 @@ fn paused_tutorial_progress(
                 sow_core::game::BuildingKind::Factory => "factories",
                 sow_core::game::BuildingKind::Port => "ports",
                 sow_core::game::BuildingKind::Tower => "towers",
-                sow_core::game::BuildingKind::SAM | sow_core::game::BuildingKind::MissileSilo => "sams",
+                sow_core::game::BuildingKind::SAM => "sams",
+                sow_core::game::BuildingKind::MissileSilo => "missile_silos",
             };
             Some(
                 observation
@@ -122,6 +126,10 @@ fn paused_tutorial_progress(
         }
         GameplayIntent::LaunchFleet { .. } => Some(observation.seen_fleets.len() as u64),
         GameplayIntent::BuildingProduction {
+            kind: sow_core::game::CityArsenalKind::Warship,
+            ..
+        }
+        | GameplayIntent::BuildingProductionMax {
             kind: sow_core::game::CityArsenalKind::Warship,
             ..
         } => Some(observation.warship_queues_started),

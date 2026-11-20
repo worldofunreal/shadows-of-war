@@ -354,10 +354,10 @@ impl SowApp {
                 let step = self.ui.push_cascade_callout(
                     wx,
                     wy,
-                    crate::app::structure_capture_label(kind).to_string(),
+                    "CAPTURED".to_string(),
                     None,
                     crate::app::CascadeCalloutKind::Capture,
-                    None,
+                    Some(crate::app::CascadeIcon::Building(kind)),
                     28.0,
                     now,
                 );

@@ -113,11 +113,34 @@ impl SowApp {
                 seed,
                 self.spatial_sound_params(wx, wy),
             );
-            if conqueror_id == my_id
-                && let Some(step) = self.ui.record_kill_callout(wx, wy, now_instant)
-            {
-                self.sfx
-                    .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+            if conqueror_id == my_id {
+                let leader_gender = snap
+                    .players
+                    .iter()
+                    .find(|p| p.id == my_id)
+                    .and_then(|me| me.leader.character().gender);
+                if let Some((step, title)) =
+                    self.ui
+                        .record_kill_callout(wx, wy, leader_gender, now_instant)
+                {
+                    self.sfx
+                        .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+                    let streak = self.ui.combat_streaks.kill_streak;
+                    if streak > self.progress.best_match_conquest_streak {
+                        self.progress.best_match_conquest_streak = streak;
+                    }
+                    if title == "RAMPAGE!" {
+                        self.progress.rampage_count = self.progress.rampage_count.saturating_add(1);
+                    }
+                    crate::store_portals::track_product_event_with(
+                        "conquest_streak_milestone",
+                        &serde_json::json!({
+                            "title": title,
+                            "streak": streak,
+                            "multi": self.ui.combat_streaks.multi_kill_count,
+                        }),
+                    );
+                }
             }
             if player_id == my_id {
                 self.ui.reset_kill_streaks();

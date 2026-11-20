@@ -122,18 +122,6 @@ pub enum NukeKind {
 }
 
 impl NukeKind {
-    pub const fn required_city_level(self) -> u8 {
-        match self {
-            _ => BuildingKind::City.max_level(),
-        }
-    }
-
-    pub const fn required_district_level(self) -> u8 {
-        match self {
-            _ => 4,
-        }
-    }
-
     pub fn gold_cost(self, previous_mirvs: u32) -> f64 {
         match self {
             Self::AtomBomb => 500.0,
@@ -275,6 +263,7 @@ pub enum NavalActionFailure {
     NoWaterPath,
     InsufficientGold,
     CapacityFull,
+    QueueFull,
     CampaignLocked,
 }
 
@@ -889,16 +878,13 @@ impl GameState {
 
 #[cfg(test)]
 mod naval_requirement_tests {
-    use super::{BuildingKind, NukeKind, UnitType};
+    use super::UnitType;
 
     #[test]
-    fn naval_and_nuclear_unlocks_share_the_canonical_levels() {
+    fn naval_builds_unlock_at_the_first_port_level() {
         assert_eq!(UnitType::TradeShip.required_port_level(), 1);
         assert_eq!(UnitType::Warship.required_port_level(), 1);
-        assert_eq!(
-            NukeKind::AtomBomb.required_city_level(),
-            BuildingKind::City.max_level()
-        );
+
     }
 
     #[test]

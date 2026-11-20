@@ -116,6 +116,9 @@ impl SowApp {
                         sow_core::game::NavalActionFailure::CapacityFull => {
                             crate::ui::UiText::new("hud.fleet_capacity_full")
                         }
+                        sow_core::game::NavalActionFailure::QueueFull => {
+                            crate::ui::UiText::new("hud.warship_queue_full")
+                        }
                         sow_core::game::NavalActionFailure::InsufficientGold => {
                             let available = snap
                                 .players
@@ -159,6 +162,22 @@ impl SowApp {
                         3,
                         None,
                         false,
+                    );
+                }
+                sow_core::game::GameEvent::WarshipSpawned { owner_id, fleet_id, tile }
+                    if my_id != 0 && owner_id == my_id =>
+                {
+                    let (x, y) = crate::render::world::movers::tile_to_world(
+                        tile, self.sim.map_w.max(1),
+                    );
+                    if !self.ui.app.settings_state.reduced_motion {
+                        self.ui.mover_scene.warship_launch_pulse([x, y], owner_id, now_instant);
+                    }
+                    self.ui.app.hud_state.push_warship_launch(fleet_id);
+                    self.sfx.play_completion(
+                        now_instant,
+                        sow_audio::BuildingSoundKind::Port,
+                        self.spatial_sound_params(x, y),
                     );
                 }
                 sow_core::game::GameEvent::NavalShot { owner_id, tile, .. } => {
@@ -456,7 +475,9 @@ impl SowApp {
                             label,
                             Some(chain_step),
                             crate::app::CascadeCalloutKind::Surge,
-                            Some(sow_render::text::NameplateStatusSprite::Troops),
+                            Some(crate::app::CascadeIcon::Status(
+                                sow_render::text::NameplateStatusSprite::Troops,
+                            )),
                             28.0,
                             now_instant,
                         );
@@ -474,18 +495,14 @@ impl SowApp {
             let wx = (tile_idx % map_w) as f32 + 0.5;
             let wy = (tile_idx / map_w) as f32 + 0.5;
             let bonus_troops = u32::from(level.max(1)) * 120;
-            let label = format!(
-                "{} +{}",
-                crate::app::structure_short_label(kind),
-                crate::utils::format_number(bonus_troops as f64)
-            );
+            let label = format!("+{}", crate::utils::format_number(bonus_troops as f64));
             let step = self.ui.push_cascade_callout(
                 wx,
                 wy,
                 label,
                 None,
                 crate::app::CascadeCalloutKind::Capture,
-                Some(sow_render::text::NameplateStatusSprite::Troops),
+                Some(crate::app::CascadeIcon::Building(kind)),
                 28.0,
                 now_instant,
             );

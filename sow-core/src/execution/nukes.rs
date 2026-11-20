@@ -10,22 +10,50 @@ impl SowEngine {
         let height = self.state.map.height;
         let x = target % width;
         let y = target / width;
-        let mut targets = Vec::new();
-        for dy in y.saturating_sub(100)..=y.saturating_add(100).min(height - 1) {
-            for dx in x.saturating_sub(100)..=x.saturating_add(100).min(width - 1) {
-                if dx.abs_diff(x).pow(2) + dy.abs_diff(y).pow(2) > 10_000 {
-                    continue;
-                }
-                let defender = self.state.map.owner_id(dx, dy);
-                if defender != 0 && defender != owner && self.naval_target_allowed(owner, defender) {
-                    let tile = dy * width + dx;
-                    let score = crate::rng::stable_tile_sample(self.state.seed ^ carrier, owner, defender, u64::from(tile), 0);
-                    targets.push((score, tile));
-                }
+        use crate::rng::NextIntExt;
+        let mut rng = wyrand::WyRand::new(self.state.seed ^ carrier);
+        let defender = self.state.map.owner_id(x, y);
+        if defender == 0 || !self.naval_target_allowed(owner, defender) {
+            return;
+        }
+        let mut targets = vec![target];
+        const RADIUS: i32 = 1500;
+        const MIN_SPREAD: u32 = 55;
+        let mut cells = std::collections::HashMap::<(u32, u32), Vec<u32>>::new();
+        cells.entry((x / MIN_SPREAD, y / MIN_SPREAD)).or_default().push(target);
+        for _ in 0..2_500 {
+            if targets.len() == 350 {
+                break;
+            }
+            let dx = rng.next_int(-RADIUS, RADIUS + 1);
+            let dy = rng.next_int(-RADIUS, RADIUS + 1);
+            if dx * dx + dy * dy > RADIUS * RADIUS {
+                continue;
+            }
+            let (Some(tx), Some(ty)) = (x.checked_add_signed(dx), y.checked_add_signed(dy)) else {
+                continue;
+            };
+            if tx >= width || ty >= height || defender == 0
+                || self.state.map.owner_id(tx, ty) != defender
+            {
+                continue;
+            }
+            let cell = (tx / MIN_SPREAD, ty / MIN_SPREAD);
+            let overlaps = (cell.1.saturating_sub(1)..=cell.1 + 1).any(|cy| {
+                (cell.0.saturating_sub(1)..=cell.0 + 1).any(|cx| {
+                    cells.get(&(cx, cy)).into_iter().flatten().any(|&tile| {
+                        tx.abs_diff(tile % width).pow(2) + ty.abs_diff(tile / width).pow(2)
+                            < MIN_SPREAD.pow(2)
+                    })
+                })
+            });
+            if !overlaps {
+                let tile = ty * width + tx;
+                targets.push(tile);
+                cells.entry(cell).or_default().push(tile);
             }
         }
-        targets.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-        for (_, tile) in targets.into_iter().take(350) {
+        for tile in targets {
             let id = self.state.next_projectile_id;
             self.state.next_projectile_id = id.wrapping_add(1).max(1);
             self.projectiles.push(crate::game::Projectile {

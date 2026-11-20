@@ -2048,7 +2048,6 @@ impl PlayerDb {
         let epoch_day = now / 86_400;
         let rotation_period = crate::commerce::rotation_period(now);
         let free_rotation = self.current_rotation_leaders_for_now(now);
-        let effective_level = account.profile.level.max(1);
         let welcome_saved = account.profile.menu_guides.get("welcome");
         let welcome_needs_norm = welcome_saved.is_some_and(|guide| {
             *guide
@@ -2059,11 +2058,6 @@ impl PlayerDb {
         });
         let tips_on = !account.profile.menu_tips_disabled;
         let tactics_done = crate::campaign::tactics_completed(&account.profile.completed_episodes);
-        let unlocked_level = if tactics_done {
-            effective_level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
-        } else {
-            effective_level
-        };
         let enroll_welcome = tips_on
             && welcome_saved.is_none()
             && account.profile.matches_played == 0;
@@ -2074,21 +2068,20 @@ impl PlayerDb {
                 .menu_guides
                 .contains_key("post_match_missions");
         let enroll_daily = tips_on
-            && unlocked_level >= crate::missions::DAILY_UNLOCK_LEVEL
+            && tactics_done
             && !account.profile.menu_guides.contains_key("daily_ops_unlock");
         let enroll_weekly = tips_on
-            && unlocked_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
+            && tactics_done
             && account.profile.ranked_matches == 0
             && !account
                 .profile
                 .menu_guides
                 .contains_key("weekly_ranked_unlock");
-        let needs_hand_sync = (unlocked_level >= crate::missions::DAILY_UNLOCK_LEVEL
+        let needs_hand_sync = tactics_done
             && (account.profile.daily_missions_day != epoch_day
-                || account.profile.daily_mission_ids.len() < 3))
-            || (unlocked_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
-                && (account.profile.weekly_missions_period != rotation_period
-                    || account.profile.weekly_mission_ids.len() < 3));
+                || account.profile.daily_mission_ids.len() < 3
+                || account.profile.weekly_missions_period != rotation_period
+                || account.profile.weekly_mission_ids.len() < 3);
 
         if !welcome_needs_norm
             && !enroll_welcome
@@ -2129,14 +2122,8 @@ impl PlayerDb {
                 }
 
                 if !account.profile.menu_tips_disabled {
-                    let level = account.profile.level.max(1);
-                    let unlocked_level = if crate::campaign::tactics_completed(
-                        &account.profile.completed_episodes,
-                    ) {
-                        level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
-                    } else {
-                        level
-                    };
+                    let tactics_done =
+                        crate::campaign::tactics_completed(&account.profile.completed_episodes);
                     if account.profile.matches_played >= 1
                         && !account
                             .profile
@@ -2149,7 +2136,7 @@ impl PlayerDb {
                         );
                         mutated = true;
                     }
-                    if unlocked_level >= crate::missions::DAILY_UNLOCK_LEVEL
+                    if tactics_done
                         && !account.profile.menu_guides.contains_key("daily_ops_unlock")
                     {
                         account.profile.menu_guides.insert(
@@ -2158,7 +2145,7 @@ impl PlayerDb {
                         );
                         mutated = true;
                     }
-                    if unlocked_level >= crate::missions::WEEKLY_UNLOCK_LEVEL
+                    if tactics_done
                         && account.profile.ranked_matches == 0
                         && !account
                             .profile
@@ -2179,13 +2166,8 @@ impl PlayerDb {
                     crowns: account.profile.crowns,
                     gems: account.profile.gems,
                 };
-                let level = account.profile.level.max(1);
-                let unlocked_level =
-                    if crate::campaign::tactics_completed(&account.profile.completed_episodes) {
-                        level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
-                    } else {
-                        level
-                    };
+                let tactics_done =
+                    crate::campaign::tactics_completed(&account.profile.completed_episodes);
                 let newly_dealt = crate::missions::sync_hands_for_periods(
                     crate::missions::HandSyncState {
                         records: &mut account.profile.missions_progress,
@@ -2200,7 +2182,7 @@ impl PlayerDb {
                     },
                     epoch_day,
                     rotation_period,
-                    unlocked_level,
+                    tactics_done,
                     deal_salt,
                     Some(&playability),
                 );
@@ -4862,11 +4844,6 @@ impl PlayerDb {
                 let player_level = account.profile.level.max(1);
                 let tactics_completed =
                     crate::campaign::tactics_completed(&account.profile.completed_episodes);
-                let unlocked_level = if tactics_completed {
-                    player_level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
-                } else {
-                    player_level
-                };
                 let newly_dealt = crate::missions::sync_hands_for_periods(
                     crate::missions::HandSyncState {
                         records: &mut account.profile.missions_progress,
@@ -4881,7 +4858,7 @@ impl PlayerDb {
                     },
                     epoch_day,
                     rotation_period,
-                    unlocked_level,
+                    tactics_completed,
                     deal_salt,
                     Some(&playability),
                 );
@@ -4894,9 +4871,15 @@ impl PlayerDb {
                     ));
                 }
 
-                let min_level = crate::missions::min_level_for_category(def.category);
-                if unlocked_level < min_level {
-                    failure = Some(format!("mission locked until level {min_level}"));
+                if matches!(
+                    def.category,
+                    crate::missions::MissionCategory::Daily
+                        | crate::missions::MissionCategory::Weekly
+                ) && !tactics_completed
+                {
+                    failure = Some(
+                        "complete Tactics to unlock daily and weekly missions".to_string(),
+                    );
                     return;
                 }
 
@@ -4952,7 +4935,20 @@ impl PlayerDb {
 
                 let tutorial_completed = account.profile.intro_completed
                     || account.profile.reward_receipts.contains_key("tutorial")
-                    || account.profile.completed_episodes.contains("tutorial");
+                    || account.profile.completed_episodes.contains("tutorial")
+                    || account.profile.completed_episodes.contains("boudica");
+                let tactics_01_completed = account
+                    .profile
+                    .completed_episodes
+                    .contains("tactics_01_economy");
+                let tactics_episodes_completed = crate::campaign::series_completed_count(
+                    "tactics",
+                    &account.profile.completed_episodes,
+                );
+                let adv_tactics_episodes_completed = crate::campaign::series_completed_count(
+                    "advanced_tactics",
+                    &account.profile.completed_episodes,
+                );
 
                 let record = account
                     .profile
@@ -4968,6 +4964,9 @@ impl PlayerDb {
                     player_level,
                     tutorial_completed,
                     tactics_completed,
+                    tactics_01_completed,
+                    tactics_episodes_completed,
+                    adv_tactics_episodes_completed,
                     ..Default::default()
                 };
 
@@ -5051,16 +5050,12 @@ impl PlayerDb {
                     return;
                 }
 
-                let player_level = account.profile.level.max(1);
-                let unlocked_level =
-                    if crate::campaign::tactics_completed(&account.profile.completed_episodes) {
-                        player_level.max(crate::missions::WEEKLY_UNLOCK_LEVEL)
-                    } else {
-                        player_level
-                    };
-                let min_level = crate::missions::min_level_for_category(old_def.category);
-                if unlocked_level < min_level {
-                    failure = Some(format!("mission locked until level {min_level}"));
+                let tactics_completed =
+                    crate::campaign::tactics_completed(&account.profile.completed_episodes);
+                if !tactics_completed {
+                    failure = Some(
+                        "complete Tactics to unlock daily and weekly missions".to_string(),
+                    );
                     return;
                 }
 
@@ -5084,7 +5079,7 @@ impl PlayerDb {
                     },
                     epoch_day,
                     rotation_period,
-                    unlocked_level,
+                    tactics_completed,
                     deal_salt,
                     Some(&playability),
                 );
@@ -8416,9 +8411,9 @@ mod tests {
             .claim_mission_reward(player, "onboarding_1_tutorial", false)
             .await
             .unwrap();
-        // 40 Crowns + 0 Gems added to 100 Crowns + 50 Gems
+        // 40 Crowns + 3 Gems added to 100 Crowns + 50 Gems
         assert_eq!(updated.profile.crowns, 140);
-        assert_eq!(updated.profile.gems, 50);
+        assert_eq!(updated.profile.gems, 53);
         let record = updated
             .profile
             .missions_progress
@@ -8432,37 +8427,30 @@ mod tests {
             .await;
         assert!(double_claim_err.is_err());
 
-        // 4. Claiming with doubled_by_ad: true doubles the reward using mission progress
+        // 4. Claiming with doubled_by_ad: true doubles the reward using completed campaign episode
         db.update_account_atomic(player, &[], |acc| {
-            acc.profile.missions_progress.insert(
-                "onboarding_2_baptism".to_string(),
-                crate::missions::MissionRecord {
-                    id: "onboarding_2_baptism".to_string(),
-                    progress: 2,
-                    completed: true,
-                    claimed: false,
-                    ..Default::default()
-                },
-            );
+            acc.profile
+                .completed_episodes
+                .insert("tactics_01_economy".to_string());
         })
         .await
         .unwrap();
 
         let doubled = db
-            .claim_mission_reward(player, "onboarding_2_baptism", true)
+            .claim_mission_reward(player, "onboarding_2_tactics_economy", true)
             .await
             .unwrap();
-        // onboarding_2_baptism gives 40 Crowns, 0 Gems * 2 = 80 Crowns, 0 Gems
-        // 140 + 80 = 220, 50 + 0 = 50
-        assert_eq!(doubled.profile.crowns, 220);
-        assert_eq!(doubled.profile.gems, 50);
+        // onboarding_2_tactics_economy gives 50 Crowns, 4 Gems * 2 = 100 Crowns, 8 Gems
+        // 140 + 100 = 240, 53 + 8 = 61
+        assert_eq!(doubled.profile.crowns, 240);
+        assert_eq!(doubled.profile.gems, 61);
         let rec2 = doubled
             .profile
             .missions_progress
-            .get("onboarding_2_baptism")
+            .get("onboarding_2_tactics_economy")
             .unwrap();
         assert!(rec2.claimed);
-        assert_eq!(rec2.progress, 2);
+        assert_eq!(rec2.progress, 1);
     }
 
     #[tokio::test]
@@ -8477,6 +8465,13 @@ mod tests {
         account.id = player.to_string();
         account.profile.xp = 500; // level 5
         account.profile.sync_level();
+        for ep in [
+            "tactics_01_economy",
+            "tactics_02_defense",
+            "tactics_03_amphibious",
+        ] {
+            account.profile.completed_episodes.insert(ep.to_string());
+        }
         db.insert_account_sync(account).unwrap();
 
         let ensured = db
@@ -8561,6 +8556,13 @@ mod tests {
         account.profile.matches_played = 1;
         account.profile.xp = 500;
         account.profile.sync_level();
+        for ep in [
+            "tactics_01_economy",
+            "tactics_02_defense",
+            "tactics_03_amphibious",
+        ] {
+            account.profile.completed_episodes.insert(ep.to_string());
+        }
         db.insert_account_sync(account).unwrap();
 
         // First onboarding check enrolls post_match_missions + daily/weekly guides.

@@ -1904,69 +1904,38 @@ impl SowEngine {
         let Some(player) = self.state.player(bot_id) else {
             return;
         };
-        let nuke_cost = crate::building::city_arsenal_cost_gold(
-            crate::game::CityArsenalKind::Nuke,
-            0,
-            player.leader,
-            &self.state.config,
-        );
-
-        if self.legacy_building_rules {
-            let has_silo = self.buildings.iter().any(|b| {
-                b.owner_id == bot_id
-                    && b.kind == BuildingKind::City
-                    && b.active_level() >= BuildingKind::City.max_level()
-                    && !b.under_construction
-                    && self.silo_cooldowns.get(&b.id).copied().unwrap_or(0) == 0
-            });
-            if !has_silo || player.gold < self.state.config.nuke_cost {
-                return;
-            }
-        } else {
-            let has_ready_nuke = self.buildings.iter().any(|b| {
-                b.owner_id == bot_id
-                    && matches!(b.kind, BuildingKind::Factory | BuildingKind::Tower)
-                    && !b.under_construction
-                    && b.active_level() >= 4
-                    && self.building_productions.get(&b.id).is_some_and(|s| s.nuke_ready)
-            });
-            if !has_ready_nuke {
-                if super::structures::has_pending_build(decisions, bot_id) {
-                    return;
-                }
-                if player.gold < nuke_cost {
-                    return;
-                }
-                let req = NukeKind::AtomBomb.required_district_level();
-                if let Some(producer_id) = self.buildings.iter().find_map(|producer| {
-                    if producer.owner_id != bot_id
-                        || producer.under_construction
-                        || !matches!(producer.kind, BuildingKind::Factory | BuildingKind::Tower)
-                        || producer.active_level() < req
-                        || !self.campaign_allows_building(producer.kind, req)
-                    {
-                        return None;
-                    }
-                    if self.building_productions.get(&producer.id).is_some_and(|state| {
-                        state.arsenal_build.is_some() || state.nuke_ready
-                    }) {
-                        return None;
-                    }
-                    Some(producer.id)
-                }) {
+        let gold = player.gold;
+        let home = player.home;
+        let nuke_cost = self.nuclear_price(NukeKind::AtomBomb);
+        let silo_cost = crate::building::structure_build_cost_gold(BuildingKind::MissileSilo, 0, &self.state.config);
+        self.refresh_building_grid();
+        let silos: Vec<_> = self.buildings.iter().filter(|b|
+            b.owner_id == bot_id && b.kind == BuildingKind::MissileSilo
+        ).collect();
+        if silos.is_empty() {
+            if gold >= silo_cost + nuke_cost
+                && self.campaign_allows_building(BuildingKind::MissileSilo, 1)
+                && !super::structures::has_pending_build(decisions, bot_id)
+                && let Some((x, y)) = home
+            {
+                self.refresh_building_grid();
+                if let Some(target_tile) = crate::building::find_structure_site_near(
+                    &self.state.map, bot_id, y * self.state.map.width + x,
+                    BuildingKind::MissileSilo, &self.building_grid, &mut self.placement_scratch,
+                    self.legacy_building_rules,
+                ) {
                     decisions.push(BotDecision {
-                        bot_id,
-                        kind: BotDecisionKind::Build,
-                        intent: GameplayIntent::BuildingProduction {
-                            building_id: producer_id,
-                            kind: crate::game::CityArsenalKind::Nuke,
-                        },
+                        bot_id, kind: BotDecisionKind::Build,
+                        intent: GameplayIntent::BuildStructure { kind: BuildingKind::MissileSilo, target_tile },
                     });
                 }
-                return;
             }
+            return;
         }
-        let kind = NukeKind::AtomBomb;
+        let charges: usize = silos.iter().map(|b| usize::from(self.nuclear_charges(b.id,b.active_level()))).sum();
+        if charges == 0 || gold < nuke_cost {
+            return;
+        }
 
         let leader = if let Some(leader) = self.bot_crown_leader {
             leader
@@ -2020,16 +1989,20 @@ impl SowEngine {
                         } else {
                             crate::execution::sam::sam_range(b.active_level()) as u32
                         };
-                        (b.tile_idx, b.owner_id, range)
+                        (b.tile_idx, b.owner_id, range, b.id, b.active_level())
                     })
                     .collect(),
             );
         }
         let shielded_cities = self.bot_sam_tiles_cache.as_ref().unwrap();
+        let silo_capacity: usize = silos.iter().map(|silo| usize::from(silo.level)).sum();
 
         // Find best structure to nuke
         let mut best_score = -1.0;
         let mut best_tile = 0;
+        let mut best_kind = NukeKind::AtomBomb;
+        let mut best_shots = 1;
+        let mut needs_more_charges = false;
 
         for b in &self.buildings {
             if b.owner_id != primary_target || b.under_construction {
@@ -2048,20 +2021,58 @@ impl SowEngine {
             let by = b.tile_idx / self.state.map.width;
 
             // SAM avoidance
-            let sam_covered = shielded_cities.iter().any(|&(sam_tile, sam_owner, range)| {
-                if sam_owner == bot_id || bot_alliances.contains(&sam_owner) {
-                    return false;
-                }
-                let (sx, sy) = (
-                    sam_tile % self.state.map.width,
-                    sam_tile / self.state.map.width,
-                );
-                (bx as i32 - sx as i32).abs().max((by as i32 - sy as i32).abs())
-                    <= range as i32
-            });
-            if sam_covered {
-                score -= 100000.0;
+            let covering: usize = shielded_cities.iter().filter(|&&(sam_tile, sam_owner, range, _, _)| {
+                sam_owner != bot_id && !bot_alliances.contains(&sam_owner)
+                    && crate::execution::sam::sam_tile_distance(b.tile_idx, sam_tile, self.state.map.width) <= range
+            }).map(|&(_, _, _, id, level)| usize::from(self.nuclear_charges(id, level))).sum();
+            let nearby = self.building_grid.iter_all_in_range(bx, by, 80).filter(|other| {
+                self.state.map.owner_id(other.x, other.y) == primary_target
+                    && other.x.abs_diff(bx).pow(2) + other.y.abs_diff(by).pow(2) <= 80 * 80
+            }).take(8).count();
+            let mut kind = NukeKind::AtomBomb;
+            let mut shots = covering + 1;
+            if covering > 0 && nearby >= 6 && gold >= self.nuclear_price(NukeKind::MIRV) {
+                kind = NukeKind::MIRV;
+                shots = 1;
+            } else if nearby >= 3 && gold >= self.nuclear_price(NukeKind::HydrogenBomb) * shots as f64 {
+                kind = NukeKind::HydrogenBomb;
             }
+            if gold < self.nuclear_price(kind) * shots as f64 {
+                continue;
+            }
+            if charges < shots {
+                needs_more_charges |= shots > silo_capacity;
+                continue;
+            }
+            if shots > 1 {
+                let width = self.state.map.width;
+                let mut launchers: Vec<_> = silos.iter().filter_map(|silo| {
+                    let ready = usize::from(self.nuclear_charges(silo.id, silo.active_level()));
+                    (ready > 0).then_some((
+                        (silo.tile_idx % width).abs_diff(bx) + (silo.tile_idx / width).abs_diff(by),
+                        silo.id,
+                        crate::execution::sam::sam_tile_distance(silo.tile_idx, b.tile_idx, width).div_ceil(2),
+                        ready,
+                    ))
+                }).collect();
+                launchers.sort_unstable();
+                let mut available = 0;
+                let mut earliest = u32::MAX;
+                let mut latest = 0;
+                for (_, _, eta, ready) in launchers {
+                    available += ready;
+                    earliest = earliest.min(eta);
+                    latest = latest.max(eta);
+                    if available >= shots {
+                        break;
+                    }
+                }
+                if latest.saturating_sub(earliest) > crate::execution::sam::SAM_COOLDOWN_TICKS / 2 {
+                    needs_more_charges = true;
+                    continue;
+                }
+            }
+            score += 3000.0 * nearby as f64;
 
             // Target dedup
             if let Some(&count) = self.recent_nuke_targets.get(&(primary_target, b.tile_idx)) {
@@ -2071,6 +2082,8 @@ impl SowEngine {
             if score > best_score {
                 best_score = score;
                 best_tile = b.tile_idx;
+                best_kind = kind;
+                best_shots = shots;
             }
         }
 
@@ -2079,16 +2092,23 @@ impl SowEngine {
                 .recent_nuke_targets
                 .entry((primary_target, best_tile))
                 .or_default() += 1;
-            decisions.push(BotDecision {
-                bot_id,
-                kind: BotDecisionKind::Attack,
-                intent: GameplayIntent::LaunchNuke {
-                    kind,
-                    target_tile: best_tile,
-                },
-            });
+            for _ in 0..best_shots {
+                decisions.push(BotDecision {
+                    bot_id,
+                    kind: BotDecisionKind::Attack,
+                    intent: GameplayIntent::LaunchNuke { kind: best_kind, target_tile: best_tile },
+                });
+            }
             let p_me = self.state.player_mut(bot_id).unwrap();
             p_me.iq_points -= 15.0; // Assume 15 points
+        } else if needs_more_charges
+            && !super::structures::has_pending_build(decisions, bot_id)
+            && let Some(upgrade) = super::structures::stack_build_decision(
+                self, bot_id, BuildingKind::MissileSilo, gold - nuke_cost,
+                BuildingKind::MissileSilo.max_level(),
+            )
+        {
+            decisions.push(upgrade);
         }
     }
 }

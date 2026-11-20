@@ -830,16 +830,18 @@ impl SowEngine {
             if let Some(target_index) = target_index {
                 let target_id = self.fleets[target_index].id;
                 if self.fleets[target_index].unit_type == crate::game::UnitType::TradeShip {
-                    self.pursue_or_capture_trade_ship(index, target_index);
+                    if mode == crate::warp_fleet::WarshipMode::Patrolling {
+                        self.pursue_or_capture_trade_ship(index, target_index);
+                    }
                 } else if !pending_transport_targets.contains(&target_id) {
                     self.fire_warship_shell(index, target_index);
                 }
             } else if home_port_available
-                && !is_retreating
+                && mode == crate::warp_fleet::WarshipMode::Patrolling
                 && self.fleets[index].path_cursor >= self.fleets[index].path.len()
             {
                 self.set_next_patrol_route(index);
-            } else if !home_port_available && !is_retreating {
+            } else if !home_port_available && !is_retreating && mode == crate::warp_fleet::WarshipMode::Patrolling {
                 self.fleets[index].dst_tile = current;
                 self.fleets[index].replace_path(Vec::new());
             }
@@ -930,6 +932,90 @@ impl SowEngine {
         .min(max_health);
         if let Some(state) = self.fleets[index].warship.as_mut() {
             state.docked_ticks = state.docked_ticks.saturating_add(1);
+        }
+    }
+
+    pub(crate) fn apply_move_warships_intent(
+        &mut self,
+        player_id: u16,
+        unit_ids: &[u64],
+        target_tile: u32,
+    ) {
+        if self.state.phase != crate::game::GamePhase::Playing
+            || unit_ids.is_empty()
+            || (target_tile as usize) >= self.state.map.terrain.len()
+            || !self.state.map.terrain[target_tile as usize].is_water()
+        {
+            return;
+        }
+        let tick = self.state.tick;
+        let target_comp = self.water.component_of(target_tile);
+        for index in 0..self.fleets.len() {
+            let fleet = &self.fleets[index];
+            if fleet.owner_id != player_id
+                || fleet.unit_type != crate::game::UnitType::Warship
+                || !unit_ids.contains(&fleet.id)
+            {
+                continue;
+            }
+            let current = fleet.current_tile;
+            if current != target_tile && self.water.component_of(current) != target_comp {
+                continue;
+            }
+            let path = if current == target_tile {
+                Vec::new()
+            } else {
+                let Some(path) = self
+                    .path_scratch
+                    .astar
+                    .find_path(&self.state.map, &[current], target_tile)
+                else {
+                    continue;
+                };
+                path
+            };
+            let fleet_mut = &mut self.fleets[index];
+            fleet_mut.retreating = false;
+            fleet_mut.dst_tile = target_tile;
+            fleet_mut.replace_path(path);
+            let state = fleet_mut.warship.get_or_insert_with(|| {
+                crate::warp_fleet::WarshipState::new(target_tile)
+            });
+            state.mode = crate::warp_fleet::WarshipMode::Holding;
+            state.patrol_tile = target_tile;
+            state.patrol_target = None;
+            state.target_fleet = None;
+            state.retreat_port_id = None;
+            state.manual_order_tick = tick;
+        }
+    }
+
+    pub(crate) fn apply_patrol_warships_intent(&mut self, player_id: u16, unit_ids: &[u64]) {
+        if self.state.phase != crate::game::GamePhase::Playing || unit_ids.is_empty() {
+            return;
+        }
+        let tick = self.state.tick;
+        for index in 0..self.fleets.len() {
+            let fleet = &mut self.fleets[index];
+            if fleet.owner_id != player_id
+                || fleet.unit_type != crate::game::UnitType::Warship
+                || !unit_ids.contains(&fleet.id)
+            {
+                continue;
+            }
+            let current = fleet.current_tile;
+            fleet.retreating = false;
+            fleet.dst_tile = current;
+            fleet.replace_path(Vec::new());
+            let state = fleet.warship.get_or_insert_with(|| {
+                crate::warp_fleet::WarshipState::new(current)
+            });
+            state.mode = crate::warp_fleet::WarshipMode::Patrolling;
+            state.patrol_tile = current;
+            state.patrol_target = None;
+            state.target_fleet = None;
+            state.retreat_port_id = None;
+            state.manual_order_tick = tick;
         }
     }
 

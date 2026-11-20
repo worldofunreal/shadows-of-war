@@ -1409,23 +1409,16 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().gold = 100_000_000.0;
         engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
 
-        // Give bot 1 a silo with an armed nuke
+        // Give bot 1 a silo with an available charge
         engine.buildings.push(crate::building::Building {
             id: 100,
             owner_id: 1,
             tile_idx: 0,
-            kind: crate::game::BuildingKind::City,
-            level: BuildingKind::City.max_level(),
+            kind: BuildingKind::MissileSilo,
+            level: 1,
             under_construction: false,
             ticks_until_complete: 0,
         });
-        engine.building_productions.insert(
-            100,
-            crate::building::CityArsenalState {
-                nuke_ready: true,
-                ..Default::default()
-            },
-        );
 
         // Give bot 2 a city
         engine.buildings.push(crate::building::Building {
@@ -1443,18 +1436,11 @@ mod bot_iq_alliance_tests {
             id: 102,
             owner_id: 2,
             tile_idx: 10,
-            kind: BuildingKind::Tower,
-            level: BuildingKind::Tower.max_level(),
+            kind: BuildingKind::SAM,
+            level: 1,
             under_construction: false,
             ticks_until_complete: 0,
         });
-        engine.building_productions.insert(
-            101,
-            crate::building::CityArsenalState {
-                has_anti_nuke: true,
-                ..Default::default()
-            },
-        );
 
         for _ in 0..30 {
             engine.state.tick += 1;
@@ -1493,23 +1479,16 @@ mod bot_iq_alliance_tests {
         }
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Bot;
 
-        // Give bot 1 a silo with an armed nuke
+        // Give bot 1 a silo with an available charge
         engine.buildings.push(crate::building::Building {
             id: 100,
             owner_id: 1,
             tile_idx: 0,
-            kind: crate::game::BuildingKind::City,
-            level: BuildingKind::City.max_level(),
+            kind: BuildingKind::MissileSilo,
+            level: 1,
             under_construction: false,
             ticks_until_complete: 0,
         });
-        engine.building_productions.insert(
-            100,
-            crate::building::CityArsenalState {
-                nuke_ready: true,
-                ..Default::default()
-            },
-        );
 
         // Give bot 2 a city
         engine.buildings.push(crate::building::Building {
@@ -1561,8 +1540,8 @@ mod bot_iq_alliance_tests {
                 id: 100,
                 owner_id: 1,
                 tile_idx: 0,
-                kind: BuildingKind::City,
-                level: BuildingKind::City.max_level(),
+                kind: BuildingKind::MissileSilo,
+                level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
             },
@@ -1585,13 +1564,6 @@ mod bot_iq_alliance_tests {
                 ticks_until_complete: 0,
             },
         ]);
-        engine.building_productions.insert(
-            100,
-            crate::building::CityArsenalState {
-                nuke_ready: true,
-                ..Default::default()
-            },
-        );
 
         let mut decisions = Vec::new();
         engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
@@ -1614,18 +1586,11 @@ mod bot_iq_alliance_tests {
             id: 100,
             owner_id: 1,
             tile_idx: 0,
-            kind: BuildingKind::City,
-            level: BuildingKind::City.max_level(),
+            kind: BuildingKind::MissileSilo,
+            level: 1,
             under_construction: false,
             ticks_until_complete: 0,
         });
-        engine.building_productions.insert(
-            100,
-            crate::building::CityArsenalState {
-                nuke_ready: true,
-                ..Default::default()
-            },
-        );
         engine.buildings.push(crate::building::Building {
             id: 101,
             owner_id: 2,

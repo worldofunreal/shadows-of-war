@@ -54,7 +54,7 @@ impl SowEngine {
         let mut spent = HashSet::new();
         let mut reserved = HashSet::new();
         let targets: std::collections::HashMap<_, _> = self.projectiles.iter()
-            .filter(|p| p.active && matches!(p.kind, ProjectileKind::Nuke { .. }))
+            .filter(|p| p.active && matches!(p.kind, ProjectileKind::Nuke { level } if level != 3))
             .map(|p| (p.id, p))
             .collect();
 
@@ -85,14 +85,16 @@ impl SowEngine {
             let mut candidates = Vec::new();
             for target in targets.values() {
                 if intercepted.contains(&target.id) || reserved.contains(&target.id)
-                    || !self.naval_target_allowed(battery.owner_id, target.owner_id)
+                    || battery.owner_id == target.owner_id
+                    || self.players_friendly(battery.owner_id, target.owner_id)
                 {
                     continue;
                 }
                 let ProjectileKind::Nuke { level } = target.kind else { continue };
                 let range = sam_range(battery.active_level()) as u32;
                 let stride = usize::from(target.steps_per_tick.max(1));
-                let future = target.path.iter().skip(target.path_cursor).step_by(stride);
+                let horizon = range.div_ceil(u32::from(SAM_STEPS_PER_TICK)) as usize;
+                let future = target.path.iter().skip(target.path_cursor).step_by(stride).take(horizon + 1);
                 if let Some((time, &tile)) = future.enumerate().find(|&(time, &tile)| {
                     let distance = sam_tile_distance(battery.tile_idx, tile, width);
                     distance <= range && distance.div_ceil(u32::from(SAM_STEPS_PER_TICK)) as usize == time
@@ -158,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn sam_spatial_targeting_prioritizes_higher_level_nukes_without_double_targeting() {
+    fn overlapping_sams_reserve_distinct_nukes() {
         let mut engine = test_sam_engine(512, 512);
         // Two Lv1 SAMs belonging to owner 1 at (100, 100) and (102, 100)
         for (id, x) in [(1, 100), (2, 102)] {
@@ -172,7 +174,7 @@ mod tests {
                 ticks_until_complete: 0,
             });
         }
-        // 20 enemy nukes so the dst_grid (>16) path is exercised:
+        // Twenty incoming targets approach along deterministic paths:
         // 19 Lv1 nukes at distance ~10..=28, and 1 Lv2 nuke at distance 40.
         for i in 0..19u32 {
             let dst = (100 + i) * 512 + (110 + i);
@@ -182,7 +184,7 @@ mod tests {
                 owner_id: 2,
                 src_tile: dst,
                 dst_tile: dst,
-                path: Arc::new(vec![dst]),
+                path: Arc::new(crate::pathfinding::bresenham_line(dst, dst + 24 * 512, 512)),
                 path_cursor: 0,
                 steps_per_tick: 2,
                 active: true,
@@ -199,7 +201,7 @@ mod tests {
             owner_id: 2,
             src_tile: prio_dst,
             dst_tile: prio_dst,
-            path: Arc::new(vec![prio_dst]),
+            path: Arc::new(crate::pathfinding::bresenham_line(prio_dst, 100 * 512 + 100, 512)),
             path_cursor: 0,
             steps_per_tick: 3,
             active: true,
@@ -211,20 +213,19 @@ mod tests {
 
         engine.execute_sam();
 
-        let sam_shots: Vec<u32> = engine
+        let sam_shots: Vec<u64> = engine
             .projectiles
             .iter()
             .filter(|p| matches!(p.kind, ProjectileKind::SAMMissile))
-            .map(|p| p.dst_tile)
+            .map(|p| p.target_fleet_id.unwrap())
             .collect();
         assert_eq!(sam_shots.len(), 2);
         // First SAM takes Lv2 nuke; second SAM must NOT double-target Lv2, picks closest Lv1.
-        assert_eq!(sam_shots[0], prio_dst);
-        assert_eq!(sam_shots[1], 100 * 512 + 110);
+        assert_eq!(sam_shots, [99, 1]);
     }
 
     #[test]
-    fn sam_missile_intercepts_lowest_proj_index_enemy_nuke_only() {
+    fn sam_missile_intercepts_its_assigned_projectile_only() {
         let mut engine = test_sam_engine(128, 128);
         let sam_tile = 32 * 128 + 32;
         let nuke_adj_1 = 32 * 128 + 33;
@@ -259,7 +260,7 @@ mod tests {
             steps_per_tick: SAM_STEPS_PER_TICK,
             active: true,
             source_fleet_id: None,
-            target_fleet_id: None,
+            target_fleet_id: Some(11),
             damage: 0.0,
             expires_at_tick: u64::MAX,
         });
@@ -267,6 +268,6 @@ mod tests {
         engine.execute_sam();
 
         let remaining_ids: Vec<u64> = engine.projectiles.iter().map(|p| p.id).collect();
-        assert_eq!(remaining_ids, vec![11, 12]);
+        assert_eq!(remaining_ids, vec![10, 12]);
     }
 }

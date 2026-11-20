@@ -507,10 +507,23 @@ export interface HudBuildingConstruction {
     is_city_foundation: boolean;
 }
 
+export interface HudWarshipQueueItem {
+    index: number;
+    remaining_seconds: number;
+    progress: number;
+    paid_gold: number;
+}
+
 export interface HudBuildingProduction {
     warship?: {
         campaign_unlocked: boolean;
         capacity_ok: boolean;
+        queue_len?: number;
+        queue_max?: number;
+        queue_full?: boolean;
+        queue?: HudWarshipQueueItem[];
+        max_count?: number;
+        max_cost?: number;
         cost: number;
         seconds: number;
         affordable: boolean;
@@ -622,6 +635,8 @@ export interface HudNotification {
     priority: number;
     group: string | null;
     sum_values: boolean;
+    fleet_id?: number | null;
+    fleet_available?: boolean;
     age_ms: number;
 }
 
@@ -709,6 +724,7 @@ export interface HudTutorial {
 }
 
 export interface MenuHudPayload {
+  nuclear_prices?: number[];
     camera_zoom_state: { current: number; floor: number; ceiling: number };
     gold: number;
     troops: number;
@@ -727,6 +743,11 @@ export interface MenuHudPayload {
     buildings_in_progress?: HudBuildingProgressItem[];
     building_celebrations?: HudBuildingCelebrationItem[];
     selected_nuke: string | null;
+    fleet_control?: {
+        selected_count: number;
+        mode: "patrolling" | "holding" | "retreating" | "docked" | "mixed";
+        move_targeting: boolean;
+    } | null;
     fleet_panel: {
         trade_ships: number;
         transport_ships: number;
@@ -736,7 +757,6 @@ export interface MenuHudPayload {
         city_level: number;
         trade_required_port_level: number;
         warship_required_port_level: number;
-        nuke_required_city_level: number;
         warship_cost: number;
         nuke_cost: number;
         nuke_available: boolean;

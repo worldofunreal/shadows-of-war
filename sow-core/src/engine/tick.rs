@@ -72,9 +72,9 @@ impl SowEngine {
         }
 
         for (building, old_owner) in transfers {
-            if let Some(state) = self.building_productions.get_mut(&building.id)
-            {
+            if let Some(state) = self.building_productions.get_mut(&building.id) {
                 state.arsenal_build = None;
+                state.warship_queue.clear();
             }
             if self.state.config.tutorial {
                 self.state.events.push(crate::game::GameEvent::StructureCaptured {

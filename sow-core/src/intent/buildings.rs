@@ -412,6 +412,150 @@ impl SowEngine {
         self.queue_building_production(player_id, building_id, kind, None);
     }
 
+    pub(super) fn apply_building_production_max_intent(
+        &mut self,
+        player_id: u16,
+        building_id: u64,
+        kind: CityArsenalKind,
+    ) {
+        if kind != CityArsenalKind::Warship {
+            self.queue_building_production(player_id, building_id, kind, None);
+            return;
+        }
+        let Some(gold) = self.state.player(player_id).map(|p| p.gold) else {
+            return;
+        };
+        let Some((count, _total_cost)) = self.max_affordable_warships(player_id, building_id, gold)
+        else {
+            // Trigger the canonical rejection event (CapacityFull, QueueFull, InsufficientGold, etc.)
+            self.queue_building_production(player_id, building_id, kind, None);
+            return;
+        };
+        for _ in 0..count {
+            if !self.queue_building_production(player_id, building_id, kind, None) {
+                break;
+            }
+        }
+    }
+
+    pub(super) fn apply_cancel_warship_queue_intent(
+        &mut self,
+        player_id: u16,
+        building_id: u64,
+        index: u8,
+    ) {
+        if self.state.phase != GamePhase::Playing || !self.state.config.buildings_enabled {
+            return;
+        }
+        let Some(building) = self.buildings.iter().find(|b| b.id == building_id) else {
+            return;
+        };
+        if building.owner_id != player_id || building.kind != BuildingKind::Port {
+            return;
+        }
+        let Some(state) = self.building_productions.get_mut(&building_id) else {
+            return;
+        };
+        state.normalize_legacy_warship();
+        let idx = usize::from(index);
+        if idx >= state.warship_queue.len() {
+            return;
+        }
+        let removed = state.warship_queue.remove(idx);
+        let refund = removed.paid_gold();
+        if refund.is_finite()
+            && refund > 0.0
+            && let Some(player_mut) = self.state.player_mut(player_id)
+        {
+            player_mut.gold += refund;
+        }
+    }
+
+    /// Computes how many warships can be queued at `building_id` given `gold`, capacity, and
+    /// per-port queue limits, returning `Some((count, total_cost))` if at least 1 fits.
+    pub fn max_affordable_warships(
+        &self,
+        player_id: u16,
+        building_id: u64,
+        gold: f64,
+    ) -> Option<(u8, f64)> {
+        if self.state.phase != GamePhase::Playing
+            || !self.state.config.buildings_enabled
+            || !self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
+        {
+            return None;
+        }
+        let player = self.state.player(player_id)?;
+        if !player.alive {
+            return None;
+        }
+        let building = self.buildings.iter().find(|b| b.id == building_id)?;
+        if building.owner_id != player_id
+            || building.under_construction
+            || building.kind != BuildingKind::Port
+            || building.active_level() < 1
+        {
+            return None;
+        }
+        crate::warp_fleet::coastal_warship_spawn_tile(
+            &self.state.map,
+            &self.water,
+            building.tile_idx,
+        )?;
+        let queue_len = self
+            .building_productions
+            .get(&building_id)
+            .map_or(0, crate::building::CityArsenalState::warship_queue_len);
+        let queue_room = crate::building::MAX_WARSHIP_QUEUE.saturating_sub(queue_len);
+        if queue_room == 0 {
+            return None;
+        }
+        let capacity = crate::building::player_fleet_capacity(&self.buildings, player_id);
+        let queued_total = self.queued_warships_for_player(player_id);
+        let cap_room = capacity.saturating_sub(self.boat_slots_used(player_id).saturating_add(queued_total));
+        let max_count = queue_room.min(cap_room as usize);
+        if max_count == 0 {
+            return None;
+        }
+        let active_warships = self
+            .fleets
+            .iter()
+            .filter(|f| f.owner_id == player_id && f.unit_type == UnitType::Warship)
+            .count() as u32;
+        let mut owned_so_far = active_warships.saturating_add(queued_total);
+        let mut remaining_gold = gold;
+        let mut total_cost = 0.0;
+        let mut count = 0u8;
+        for _ in 0..max_count {
+            let cost = city_arsenal_cost_gold(
+                CityArsenalKind::Warship,
+                owned_so_far,
+                player.leader,
+                &self.state.config,
+            );
+            if !cost.is_finite() || remaining_gold < cost {
+                break;
+            }
+            remaining_gold -= cost;
+            total_cost += cost;
+            owned_so_far = owned_so_far.saturating_add(1);
+            count = count.saturating_add(1);
+        }
+        (count > 0).then_some((count, total_cost))
+    }
+
+    fn queued_warships_for_player(&self, player_id: u16) -> u32 {
+        self.building_productions
+            .iter()
+            .filter(|(building_id, _)| {
+                self.buildings
+                    .iter()
+                    .any(|b| b.id == **building_id && b.owner_id == player_id)
+            })
+            .map(|(_, state)| state.warship_queue_len() as u32)
+            .sum()
+    }
+
     /// Old replays address a City tile; resolve their former co-located producer if present.
     pub(super) fn apply_city_arsenal_intent(
         &mut self,
@@ -486,15 +630,15 @@ impl SowEngine {
         building_id: u64,
         kind: CityArsenalKind,
         warship_route: Option<crate::warp_fleet::WarshipRoute>,
-    ) {
+    ) -> bool {
         if self.state.phase != GamePhase::Playing || !self.state.config.buildings_enabled {
-            return;
+            return false;
         }
         let Some(player) = self.state.player(player_id) else {
-            return;
+            return false;
         };
         if !player.alive {
-            return;
+            return false;
         }
         let leader = player.leader;
         let allowed = match kind {
@@ -513,20 +657,14 @@ impl SowEngine {
                     reason: NavalActionFailure::CampaignLocked,
                 });
             }
-            return;
+            return false;
         }
 
         let Some(building) = self.buildings.iter().find(|b| b.id == building_id).copied() else {
-            return;
+            return false;
         };
-        if building.owner_id != player_id
-            || building.under_construction
-            || self
-                .building_productions
-                .get(&building_id)
-                .is_some_and(|state| state.arsenal_build.is_some())
-        {
-            return;
+        if building.owner_id != player_id || building.under_construction {
+            return false;
         }
 
         match kind {
@@ -536,7 +674,7 @@ impl SowEngine {
                         player_id,
                         reason: NavalActionFailure::NoPort,
                     });
-                    return;
+                    return false;
                 }
                 if warship_route.is_none()
                     && crate::warp_fleet::coastal_warship_spawn_tile(
@@ -550,37 +688,33 @@ impl SowEngine {
                         player_id,
                         reason: NavalActionFailure::NoConnectedPort,
                     });
-                    return;
+                    return false;
+                }
+                let queue_len = self
+                    .building_productions
+                    .get(&building_id)
+                    .map_or(0, crate::building::CityArsenalState::warship_queue_len);
+                if queue_len >= crate::building::MAX_WARSHIP_QUEUE {
+                    self.state.events.push(GameEvent::NavalActionRejected {
+                        player_id,
+                        reason: NavalActionFailure::QueueFull,
+                    });
+                    return false;
                 }
                 let capacity = crate::building::player_fleet_capacity(&self.buildings, player_id);
-                let queued = self
-                    .building_productions
-                    .values()
-                    .filter(|state| {
-                        state
-                            .arsenal_build
-                            .is_some_and(|build| build.kind == CityArsenalKind::Warship)
-                    })
-                    .count() as u32;
+                let queued = self.queued_warships_for_player(player_id);
                 if self.boat_slots_used(player_id).saturating_add(queued) >= capacity {
                     self.state.events.push(GameEvent::NavalActionRejected {
                         player_id,
                         reason: NavalActionFailure::CapacityFull,
                     });
-                    return;
+                    return false;
                 }
             }
-            CityArsenalKind::Nuke | CityArsenalKind::AntiNuke => return,
+            CityArsenalKind::Nuke | CityArsenalKind::AntiNuke => return false,
         }
 
-        let queued_warships = self.building_productions.iter().filter(|(building_id, state)| {
-            state
-                .arsenal_build
-                .is_some_and(|build| build.kind == CityArsenalKind::Warship)
-                && self.buildings.iter().any(|building| {
-                    building.id == **building_id && building.owner_id == player_id
-                })
-        }).count() as u32;
+        let queued_warships = self.queued_warships_for_player(player_id);
         let owned_warships = (self
             .fleets
             .iter()
@@ -589,7 +723,7 @@ impl SowEngine {
             .saturating_add(queued_warships);
         let cost = city_arsenal_cost_gold(kind, owned_warships, leader, &self.state.config);
         let Some(player_mut) = self.state.player_mut(player_id) else {
-            return;
+            return false;
         };
         if player_mut.gold < cost || !cost.is_finite() {
             if kind == CityArsenalKind::Warship {
@@ -598,18 +732,24 @@ impl SowEngine {
                     reason: NavalActionFailure::InsufficientGold,
                 });
             }
-            return;
+            return false;
         }
         player_mut.gold = (player_mut.gold - cost).max(0.0);
 
         let duration = kind.duration_ticks();
-        self.building_productions.entry(building_id).or_default().arsenal_build = Some(CityArsenalBuild {
+        let mut build = CityArsenalBuild {
             kind,
             ticks_until_complete: duration,
             total_ticks: duration,
             warship_source_tile: warship_route.as_ref().map(|route| route.src_tile),
             warship_target_tile: warship_route.as_ref().map(|route| route.landing_tile),
-        });
+            paid_gold_bits: 0,
+        };
+        build.set_paid_gold(cost);
+        let entry = self.building_productions.entry(building_id).or_default();
+        entry.normalize_legacy_warship();
+        entry.warship_queue.push(build);
+        true
     }
 }
 
@@ -890,73 +1030,75 @@ mod tests {
         let highland = game.state.map.ref_id(12, 4);
         game.state.map.terrain[highland] = crate::map::MapTile::from_byte(0x80 | 10);
         game.apply_build_structure_intent(1, BuildingKind::Farm, unowned_tile);
-        game.apply_build_structure_intent(1, BuildingKind::Farm, highland as u32);
         assert_eq!(game.buildings.len(), 2);
 
-        game.apply_build_structure_intent(1, BuildingKind::Farm, empty_land_tile);
+        game.apply_build_structure_intent(1, BuildingKind::Farm, highland as u32);
         assert_eq!(game.buildings.len(), 3);
-        assert_eq!(game.buildings[2].tile_idx, empty_land_tile);
-        assert!(game.buildings[2].under_construction);
+        assert_eq!(game.buildings[2].tile_idx, highland as u32);
+
+        game.apply_build_structure_intent(1, BuildingKind::Farm, empty_land_tile);
+        assert_eq!(game.buildings.len(), 4);
+        assert_eq!(game.buildings[3].tile_idx, empty_land_tile);
+        assert!(game.buildings[3].under_construction);
 
         // Occupied foundations reject both another Farm and overlap with a City.
         game.apply_build_structure_intent(1, BuildingKind::Farm, empty_land_tile);
         game.apply_build_structure_intent(1, BuildingKind::Farm, city_a);
-        assert_eq!(game.buildings.len(), 3);
-
-        game.state.map.terrain[highland] = crate::map::MapTile::from_byte(0x80);
-        game.apply_build_structure_intent(1, BuildingKind::Farm, highland as u32);
         assert_eq!(game.buildings.len(), 4);
     }
 
     #[test]
-    fn nuclear_launches_require_a_finished_factory_at_the_minimum_level() {
+    fn nuclear_launches_require_ready_silo_charge_and_gold() {
+        use crate::game::NukeKind;
+        use crate::player::Player;
         let mut game = engine(false);
-        game.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Bot;
-        let required_level = crate::game::NukeKind::AtomBomb.required_district_level();
-        game.buildings.push(building(1, BuildingKind::Factory, required_level.saturating_sub(1)));
-        let gold = game.state.player(1).unwrap().gold;
-
+        let mut defender = Player::new_human(2, "Defender".into(), [0.0, 0.0, 1.0], &game.state.config);
+        defender.tile_count = 1;
+        game.state.register_player(defender);
+        game.state.map.set_owner_id(4, 0, 2);
+        game.state.player_mut(1).unwrap().gold = 1000.0;
+        game.add_building(building(1, BuildingKind::Factory, 4));
+        game.add_building(building(2, BuildingKind::Tower, 4));
         game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
-        game.apply_launch_nuke_intent(1, 4);
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert!(game.projectiles.is_empty());
-        assert_eq!(game.state.player(1).unwrap().gold, gold);
+        assert_eq!(game.state.player(1).unwrap().gold, 1000.0);
 
-        game.buildings[0].level = required_level;
-        game.buildings[0].under_construction = true;
-        game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
-        game.apply_launch_nuke_intent(1, 4);
+        let mut silo = building(3, BuildingKind::MissileSilo, 1);
+        silo.under_construction = true;
+        game.add_building(silo);
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert!(game.projectiles.is_empty());
-
-        game.buildings[0].under_construction = false;
-        game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
-        assert_eq!(
-            game.state.player(1).unwrap().gold,
-            gold - game.state.config.nuke_cost
-        );
-        game.apply_launch_nuke_intent(1, 4);
-        assert!(game.projectiles.is_empty());
-
-        for _ in 0..CityArsenalKind::Nuke.duration_ticks() {
-            game.execute_construction();
-        }
-        game.apply_launch_nuke_intent(1, 4);
+        game.buildings[2].under_construction = false;
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert_eq!(game.projectiles.len(), 1);
-        assert_eq!(
-            game.state.player(1).unwrap().gold,
-            gold - game.state.config.nuke_cost
-        );
-    }
+        assert_eq!(game.state.player(1).unwrap().gold, 500.0);
+        game.state.tick += 90;
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
+        assert_eq!(game.projectiles.len(), 2);
+        assert_eq!(game.state.player(1).unwrap().gold, 0.0);
 
-    #[test]
-    fn tower_nuclear_production_is_independent_of_a_city() {
-        let mut game = engine(false);
-        game.add_building(building(1, BuildingKind::Tower, 4));
-        game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
-        for _ in 0..CityArsenalKind::Nuke.duration_ticks() {
-            game.execute_construction();
-        }
-        game.apply_launch_nuke_intent(1, 4);
-        assert_eq!(game.projectiles.len(), 1);
+        let mut closer = building(4, BuildingKind::MissileSilo, 2);
+        closer.tile_idx = 3;
+        game.add_building(closer);
+        game.projectiles.clear();
+        game.state.player_mut(1).unwrap().gold = 20_000.0;
+        game.launch_nuclear_weapon(1, NukeKind::HydrogenBomb, 4);
+        assert_eq!(game.projectiles[0].src_tile, 3);
+        assert_eq!(game.projectiles[0].kind, crate::game::ProjectileKind::Nuke { level: 2 });
+        game.projectiles.clear();
+        game.state.tick += 5;
+        game.launch_nuclear_weapon(1, NukeKind::MIRV, 4);
+        assert_eq!(game.state.player(1).unwrap().gold, 0.0);
+        assert_eq!(game.nuclear_price(NukeKind::MIRV), 26_667.0);
+        assert_eq!(game.nuclear_charges(4, 2), 0);
+        game.execute_projectiles();
+        assert_eq!(game.projectiles[0].kind, crate::game::ProjectileKind::Nuke { level: 4 });
+        game.state.tick += 85;
+        assert_eq!(game.nuclear_charges(4, 2), 1);
+        game.state.tick += 5;
+        assert_eq!(game.nuclear_charges(4, 2), 2);
     }
 
     #[test]
@@ -1204,5 +1346,72 @@ mod tests {
         }
         assert_eq!(game.buildings[0].active_level(), 2);
         assert!(!game.buildings[0].under_construction);
+    }
+
+    #[test]
+    fn warship_queue_stacks_up_to_five_refunds_on_cancel_and_supports_max() {
+        let mut game = engine(false);
+        // Make tile 0 and 2 ocean water adjacent to port at tile 1 (5x5 map).
+        game.state.map.terrain[0] = crate::map::MapTile(0b0100_0000);
+        game.state.map.terrain[2] = crate::map::MapTile(0b0100_0000);
+        game.water = WaterComponents::compute(&game.state.map, |_| {});
+        game.buildings.push(Building {
+            tile_idx: 1,
+            ..building(1, BuildingKind::Port, 4)
+        });
+        // Add extra ports so fleet capacity >= 6 (base 0 + 6 port levels).
+        game.buildings.push(Building {
+            tile_idx: 6,
+            ..building(2, BuildingKind::Port, 4)
+        });
+        let start_gold = game.state.player(1).unwrap().gold;
+
+        // Queue 5 warships at port 1.
+        for _ in 0..5 {
+            game.apply_building_production_intent(1, 1, CityArsenalKind::Warship);
+        }
+        assert_eq!(game.building_productions.get(&1).unwrap().warship_queue_len(), 5);
+        let gold_after_5 = game.state.player(1).unwrap().gold;
+        assert!(gold_after_5 < start_gold);
+
+        // 6th fails with QueueFull.
+        game.state.events.clear();
+        game.apply_building_production_intent(1, 1, CityArsenalKind::Warship);
+        assert!(game.state.events.iter().any(|ev| matches!(
+            ev,
+            GameEvent::NavalActionRejected {
+                player_id: 1,
+                reason: NavalActionFailure::QueueFull
+            }
+        )));
+
+        // Cancelling index 2 refunds its exact paid gold.
+        let paid_idx2 = game.building_productions.get(&1).unwrap().warship_queue[2].paid_gold();
+        game.apply_cancel_warship_queue_intent(1, 1, 2);
+        assert_eq!(game.building_productions.get(&1).unwrap().warship_queue_len(), 4);
+        assert!((game.state.player(1).unwrap().gold - (gold_after_5 + paid_idx2)).abs() < 1e-9);
+
+        // Max fills remaining slot back to 5.
+        game.apply_building_production_max_intent(1, 1, CityArsenalKind::Warship);
+        assert_eq!(game.building_productions.get(&1).unwrap().warship_queue_len(), 5);
+
+        // Complete the first warship in queue, then test MoveWarships -> Holding & PatrolWarships -> Patrolling.
+        let dur = CityArsenalKind::Warship.duration_ticks();
+        for _ in 0..dur {
+            game.execute_construction();
+        }
+        assert_eq!(game.building_productions.get(&1).unwrap().warship_queue_len(), 4);
+        assert_eq!(game.fleets.len(), 1);
+        let fleet_id = game.fleets[0].id;
+        game.apply_move_warships_intent(1, &[fleet_id], 2);
+        assert_eq!(
+            game.fleets[0].warship.as_ref().unwrap().mode,
+            crate::warp_fleet::WarshipMode::Holding
+        );
+        game.apply_patrol_warships_intent(1, &[fleet_id]);
+        assert_eq!(
+            game.fleets[0].warship.as_ref().unwrap().mode,
+            crate::warp_fleet::WarshipMode::Patrolling
+        );
     }
 }

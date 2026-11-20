@@ -45,6 +45,7 @@ pub(crate) enum MapMenuAction {
     BuildPort,
     BuildFarm,
     BuildSam,
+    BuildMissileSilo,
     UpgradeStructure,
     UpgradeStructureMax,
     Nuke,
@@ -60,6 +61,7 @@ impl MapMenuAction {
             Self::BuildPort => Some(BuildingKind::Port),
             Self::BuildFarm => Some(BuildingKind::Farm),
             Self::BuildSam => Some(BuildingKind::SAM),
+            Self::BuildMissileSilo => Some(BuildingKind::MissileSilo),
             _ => None,
         }
     }
@@ -80,6 +82,7 @@ impl MapMenuAction {
             Self::BuildPort => "build_port",
             Self::BuildFarm => "build_farm",
             Self::BuildSam => "build_sam",
+            Self::BuildMissileSilo => "build_missile_silo",
             Self::UpgradeStructure => "upgrade_structure",
             Self::UpgradeStructureMax => "upgrade_structure_max",
             Self::Nuke => "nuke",
@@ -209,6 +212,7 @@ impl MapTarget {
                 MapMenuAction::BuildTower,
                 MapMenuAction::BuildFarm,
                 MapMenuAction::BuildSam,
+                MapMenuAction::BuildMissileSilo,
             ];
         }
         if self.owner == 0 {
@@ -371,6 +375,15 @@ impl SowApp {
         }
 
         let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
+        if self.ui.app.hud_state.warship_move_targeting
+            && !self.ui.app.hud_state.selected_warship_ids.is_empty()
+        {
+            if self.move_selected_warships_to_tile(tile_idx) {
+                return;
+            }
+            self.ui.app.hud_state.warship_move_targeting = false;
+            return;
+        }
         if let Some(kind) = self.ui.app.hud_state.selected_nuke_kind {
             self.launch_nuke_at(kind, tile_idx);
             return;
@@ -386,6 +399,9 @@ impl SowApp {
             .as_ref()
             .is_some_and(|snapshot| matches!(snapshot.phase, sow_core::game::GamePhase::Playing))
         {
+            if self.select_owned_warship(x, y) {
+                return;
+            }
             if self.select_owned_building(x, y) {
                 return;
             }
@@ -428,6 +444,88 @@ impl SowApp {
             return false;
         }
         self.attack_from_tile(tile_idx)
+    }
+
+    fn select_owned_warship(&mut self, x: f64, y: f64) -> bool {
+        let Some(fleet_id) = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+            crate::render::world::overlays::warship_at_pointer(
+                snapshot,
+                &self.sim,
+                &self.input,
+                x,
+                y,
+            )
+        }) else {
+            return false;
+        };
+        self.close_map_context_menu();
+        self.ui.app.hud_state.warship_move_targeting = false;
+        self.ui.app.hud_state.selected_warship_ids = vec![fleet_id];
+        true
+    }
+
+    pub(crate) fn move_selected_warships_to_tile(&mut self, tile_idx: u32) -> bool {
+        let unit_ids = self.live_selected_warship_ids();
+        if unit_ids.is_empty() {
+            self.ui.app.hud_state.warship_move_targeting = false;
+            return false;
+        }
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if target.is_land {
+            self.add_map_feedback(crate::ui::UiText::new("hud.fleet_invalid_target"));
+            return false;
+        }
+        self.ui.app.hud_state.warship_move_targeting = false;
+        self.send_intent(sow_core::protocol::GameplayIntent::MoveWarships {
+            unit_ids,
+            target_tile: tile_idx,
+        });
+        true
+    }
+
+    pub(crate) fn patrol_selected_warships(&mut self) {
+        let unit_ids = self.live_selected_warship_ids();
+        self.ui.app.hud_state.warship_move_targeting = false;
+        if unit_ids.is_empty() {
+            return;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::PatrolWarships { unit_ids });
+    }
+
+    pub(crate) fn toggle_warship_move_targeting(&mut self) {
+        if self.live_selected_warship_ids().is_empty() {
+            self.ui.app.hud_state.warship_move_targeting = false;
+            return;
+        }
+        self.close_map_context_menu();
+        self.ui.app.hud_state.warship_move_targeting =
+            !self.ui.app.hud_state.warship_move_targeting;
+    }
+
+    pub(crate) fn clear_warship_selection(&mut self) {
+        self.ui.app.hud_state.selected_warship_ids.clear();
+        self.ui.app.hud_state.warship_move_targeting = false;
+    }
+
+    fn live_selected_warship_ids(&mut self) -> Vec<u64> {
+        let my_id = self
+            .sim
+            .my_player_id
+            .unwrap_or(self.ui.app.hud_state.my_player_id);
+        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
+            return Vec::new();
+        };
+        self.ui.app.hud_state.selected_warship_ids.retain(|id| {
+            snapshot.fleets.iter().any(|f| {
+                f.id == *id
+                    && f.owner_id == my_id
+                    && f.unit_type == sow_core::game::UnitType::Warship
+                    && f.troops > 0.0
+            })
+        });
+        self.ui.app.hud_state.selected_warship_ids.clone()
     }
 
     fn select_owned_building(&mut self, x: f64, y: f64) -> bool {
@@ -732,6 +830,7 @@ impl SowApp {
                         MapMenuAction::BuildTower,
                         MapMenuAction::BuildFarm,
                         MapMenuAction::BuildSam,
+                MapMenuAction::BuildMissileSilo,
                     ] {
                         let Some(kind) = action.building_kind() else {
                             continue;
@@ -810,7 +909,7 @@ impl SowApp {
                         reason_key = Some("hud.campaign_unlock_required");
                         true
                     } else if !has_ready_nuke {
-                        reason_key = Some("hud.map_action_factory");
+                        reason_key = Some("hud.map_action_missilesilo");
                         reason_level = Some(4);
                         true
                     } else {
@@ -866,14 +965,12 @@ impl SowApp {
             if menu.view == MapContextMenuView::BuildingDetails {
                 self.upgrade_structure_max(tile_idx);
             }
+            self.close_map_context_menu();
             return;
         }
-        // The panel stays open after an upgrade and shows the seconds left.
-        let keep_building_panel_open = action == MapMenuAction::UpgradeStructure
-            && self
-                .input
-                .map_context_menu
-                .is_some_and(|menu| menu.view == MapContextMenuView::BuildingDetails);
+        // Close the panel after dispatching an upgrade so the map stays unobstructed
+        // for rapid follow-up upgrades on other buildings.
+        let keep_building_panel_open = false;
         if !self.map_menu_actions(tile_idx).contains(&action) {
             self.show_map_menu_unavailable(tile_idx);
             if !keep_building_panel_open {
@@ -940,6 +1037,9 @@ impl SowApp {
             }
             MapMenuAction::BuildFarm => {
                 self.start_building_from_map_menu(sow_core::game::BuildingKind::Farm, tile_idx);
+            }
+            MapMenuAction::BuildMissileSilo => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::MissileSilo, tile_idx);
             }
             MapMenuAction::BuildSam => {
                 self.start_building_from_map_menu(sow_core::game::BuildingKind::SAM, tile_idx);
@@ -1161,6 +1261,20 @@ impl SowApp {
         };
         let (dx, dy) = direction.offset();
         self.input.building_drag_offset = None;
+        if !crate::web_canvas::has_mobile_pointer() {
+            let (width, height) = (self.sim.map_w, self.sim.map_h);
+            if height == 0 {
+                return;
+            }
+            let x = (i64::from(placement.tile_idx % width) + i64::from(dx))
+                .clamp(0, i64::from(width - 1)) as u32;
+            let y = (i64::from(placement.tile_idx / width) + i64::from(dy))
+                .clamp(0, i64::from(height - 1)) as u32;
+            if let Some(preview) = self.ui.app.hud_state.building_placement.as_mut() {
+                preview.tile_idx = y * width + x;
+            }
+            return;
+        }
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let bounds = self.visible_building_anchor_bounds(placement.kind);
         let Some(engine) = self.sim.engine.as_mut() else {
@@ -1660,6 +1774,10 @@ impl SowApp {
         self.send_intent(intent)
     }
 
+    pub(super) fn is_water_map_target(&self, tile_idx: u32) -> bool {
+        self.map_target(tile_idx).is_some_and(|target| !target.is_land)
+    }
+
     fn map_target(&self, tile_idx: u32) -> Option<MapTarget> {
         let map = &self.sim.engine.as_ref()?.state.map;
         let map_len = map.width.checked_mul(map.height)?;
@@ -2105,30 +2223,39 @@ impl SowApp {
             sow_core::game::CityArsenalKind::Warship => {
                 producer.kind == sow_core::game::BuildingKind::Port && producer.active_level() >= 1
             }
-            sow_core::game::CityArsenalKind::Nuke => {
-                matches!(
-                    producer.kind,
-                    sow_core::game::BuildingKind::Factory | sow_core::game::BuildingKind::Tower
-                ) && producer.active_level() >= 4
-            }
-            sow_core::game::CityArsenalKind::AntiNuke => false,
+            sow_core::game::CityArsenalKind::Nuke | sow_core::game::CityArsenalKind::AntiNuke => false,
         };
-        if !qualifies
-            || producer.under_construction
-            || producer.arsenal_build.is_some()
-            || (kind == sow_core::game::CityArsenalKind::Nuke && producer.nuke_ready)
+        if !qualifies || producer.under_construction {
+            return;
+        }
+        let queue_len = producer
+            .warship_queue
+            .len()
+            .max(usize::from(producer.arsenal_build.is_some_and(|b| {
+                b.kind == sow_core::game::CityArsenalKind::Warship
+            })));
+        if kind == sow_core::game::CityArsenalKind::Warship
+            && queue_len >= sow_core::building::MAX_WARSHIP_QUEUE
         {
+            self.add_map_feedback(crate::ui::UiText::new("hud.warship_queue_full"));
             return;
         }
         let Some(player) = snapshot.players.iter().find(|p| p.id == owner_id) else {
             return;
         };
-        let queued_warships = snapshot.buildings.iter().filter(|building| {
-            building.owner_id == owner_id
-                && building.arsenal_build.is_some_and(|build| {
-                    build.kind == sow_core::game::CityArsenalKind::Warship
-                })
-        }).count() as u32;
+        let queued_warships: u32 = snapshot
+            .buildings
+            .iter()
+            .filter(|building| building.owner_id == owner_id)
+            .map(|building| {
+                building
+                    .warship_queue
+                    .len()
+                    .max(usize::from(building.arsenal_build.is_some_and(|build| {
+                        build.kind == sow_core::game::CityArsenalKind::Warship
+                    }))) as u32
+            })
+            .sum();
         if kind == sow_core::game::CityArsenalKind::Warship
             && player.boats_in_use.saturating_add(queued_warships) >= player.boat_capacity
         {
@@ -2166,6 +2293,37 @@ impl SowApp {
         });
     }
 
+    pub(crate) fn queue_building_production_max(
+        &mut self,
+        building_id: u64,
+        kind: sow_core::game::CityArsenalKind,
+    ) {
+        if kind != sow_core::game::CityArsenalKind::Warship {
+            self.queue_building_production(building_id, kind);
+            return;
+        }
+        if self.ui.observing
+            || self.ui.app.phase != crate::ClientPhase::Playing
+            || !self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Warship)
+        {
+            return;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::BuildingProductionMax {
+            building_id,
+            kind,
+        });
+    }
+
+    pub(crate) fn cancel_warship_queue(&mut self, building_id: u64, index: u8) {
+        if self.ui.observing || self.ui.app.phase != crate::ClientPhase::Playing {
+            return;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::CancelWarshipQueue {
+            building_id,
+            index,
+        });
+    }
+
     pub(crate) fn select_nuke_kind(&mut self, kind: sow_core::game::NukeKind) {
         if self
             .ui
@@ -2192,34 +2350,9 @@ impl SowApp {
             .sim
             .my_player_id
             .unwrap_or(self.ui.app.hud_state.my_player_id);
-        let legacy = self
-            .sim
-            .engine
-            .as_ref()
-            .is_some_and(|engine| engine.legacy_building_rules);
+        let cost = self.sim.engine.as_ref().map_or_else(|| kind.gold_cost(0), |engine| engine.nuclear_price(kind));
         let available = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            if legacy {
-                snapshot
-                    .players
-                    .iter()
-                    .find(|player| player.id == owner_id)
-                    .is_some_and(|player| {
-                        player.nuke_available && player.gold >= self.sim.config.nuke_cost
-                    })
-                    && snapshot.buildings.iter().any(|building| {
-                        building.owner_id == owner_id
-                            && building.kind == sow_core::game::BuildingKind::City
-                            && !building.under_construction
-                            && building.active_level() >= 1
-                    })
-            } else {
-                snapshot.buildings.iter().any(|building| {
-                    building.owner_id == owner_id
-                        && building.kind == sow_core::game::BuildingKind::City
-                        && !building.under_construction
-                        && building.nuke_ready
-                })
-            }
+            snapshot.players.iter().any(|player| player.id == owner_id && player.nuke_available && player.gold >= cost)
         });
         if !available {
             self.add_action_feedback("Nuke unavailable here.".to_string());

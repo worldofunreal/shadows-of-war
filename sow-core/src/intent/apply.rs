@@ -674,7 +674,15 @@ impl SowEngine {
             GameplayIntent::BuildShip { target_tile, kind } => {
                 self.apply_build_ship_intent(stamped.player_id, *target_tile, *kind);
             }
-            GameplayIntent::MoveWarships { .. } => {}
+            GameplayIntent::MoveWarships {
+                unit_ids,
+                target_tile,
+            } => {
+                self.apply_move_warships_intent(stamped.player_id, unit_ids, *target_tile);
+            }
+            GameplayIntent::PatrolWarships { unit_ids } => {
+                self.apply_patrol_warships_intent(stamped.player_id, unit_ids);
+            }
             GameplayIntent::LaunchNuke { kind, target_tile } => {
                 self.launch_nuclear_weapon(stamped.player_id, *kind, *target_tile);
             }
@@ -683,6 +691,12 @@ impl SowEngine {
             }
             GameplayIntent::BuildingProduction { building_id, kind } => {
                 self.apply_building_production_intent(stamped.player_id, *building_id, *kind);
+            }
+            GameplayIntent::BuildingProductionMax { building_id, kind } => {
+                self.apply_building_production_max_intent(stamped.player_id, *building_id, *kind);
+            }
+            GameplayIntent::CancelWarshipQueue { building_id, index } => {
+                self.apply_cancel_warship_queue_intent(stamped.player_id, *building_id, *index);
             }
             // INK TIDE lockstep input: never reaches the SoW engine — the
             // racer sim runs on the racer clients. Opaque to SoW.

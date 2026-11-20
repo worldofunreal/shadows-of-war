@@ -139,7 +139,8 @@ impl TutorialObservation {
                     sow_core::game::BuildingKind::Factory => "factories",
                     sow_core::game::BuildingKind::Port => "ports",
                     sow_core::game::BuildingKind::Farm => "farms",
-                    sow_core::game::BuildingKind::SAM | sow_core::game::BuildingKind::MissileSilo => "sams",
+                    sow_core::game::BuildingKind::SAM => "sams",
+                    sow_core::game::BuildingKind::MissileSilo => "missile_silos",
                 };
                 self.seen_buildings_by_kind
                     .entry(kind.to_string())
@@ -200,6 +201,7 @@ impl TutorialObservation {
             (sow_core::game::BuildingKind::Tower, "tower"),
             (sow_core::game::BuildingKind::Port, "port"),
             (sow_core::game::BuildingKind::SAM, "sam"),
+            (sow_core::game::BuildingKind::MissileSilo, "missile_silo"),
         ] {
             let level = engine
                 .buildings
@@ -396,7 +398,8 @@ impl TutorialObservation {
                         sow_core::game::BuildingKind::Factory => "factories",
                         sow_core::game::BuildingKind::Port => "ports",
                         sow_core::game::BuildingKind::Farm => "farms",
-                        sow_core::game::BuildingKind::SAM | sow_core::game::BuildingKind::MissileSilo => "sams",
+                        sow_core::game::BuildingKind::SAM => "sams",
+                    sow_core::game::BuildingKind::MissileSilo => "missile_silos",
                     };
                     self.seen_buildings_by_kind
                         .entry(key.to_string())

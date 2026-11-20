@@ -2,14 +2,9 @@ use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GamePhase, NukeKind, ProjectileKind};
 
 impl SowEngine {
-    #[cfg(test)]
-    pub fn apply_launch_nuke_intent(&mut self, player_id: u16, target_tile: u32) {
-        self.launch_nuclear_weapon(player_id, NukeKind::AtomBomb, target_tile);
-    }
-
     pub fn nuclear_price(&self, kind: NukeKind) -> f64 {
         let launched = self.mirv_launches.values().copied().fold(0, u32::saturating_add);
-        kind.gold_cost(launched)
+        kind.gold_cost(launched) * (self.state.config.nuke_cost / 500.0)
     }
 
     pub fn nuclear_charges(&self, building_id: u64, level: u8) -> u8 {
@@ -29,7 +24,33 @@ impl SowEngine {
         let tick = self.state.tick;
         let reload = self.nuclear_reload.entry(building_id).or_default();
         reload.retain(|&ready| ready > tick);
-        reload.push(tick.saturating_add(90));
+        reload.push(tick.saturating_add(u64::from(crate::execution::nukes::SILO_COOLDOWN_TICKS)));
+    }
+
+    pub fn ready_nuclear_silo(&self, player_id: u16, target_tile: u32) -> Option<crate::building::Building> {
+        let w = self.state.map.width;
+        if w == 0 || target_tile >= w.saturating_mul(self.state.map.height) {
+            return None;
+        }
+        let tx = target_tile % w;
+        let ty = target_tile / w;
+        let defender = self.state.map.owner_id(tx, ty);
+        if defender == 0 || !self.naval_target_allowed(player_id, defender) {
+            return None;
+        }
+        self
+            .buildings
+            .iter()
+            .filter(|b| {
+                b.kind == BuildingKind::MissileSilo
+                    && b.owner_id == player_id
+                    && self.nuclear_charges(b.id, b.active_level()) > 0
+            })
+            .min_by_key(|b| {
+                let bx = b.tile_idx % w;
+                let by = b.tile_idx / w;
+                (bx.abs_diff(tx) + by.abs_diff(ty), b.id)
+            }).copied()
     }
 
     pub fn launch_nuclear_weapon(&mut self, player_id: u16, kind: NukeKind, target_tile: u32) {
@@ -43,33 +64,12 @@ impl SowEngine {
             return;
         };
         let cost = self.nuclear_price(kind);
-        if !player.alive || player.gold < cost {
+        if !player.alive || !cost.is_finite() || cost < 0.0 || player.gold < cost {
             return;
         }
 
         let w = self.state.map.width;
-        let area = w.saturating_mul(self.state.map.height);
-        if target_tile >= area || w == 0 {
-            return;
-        }
-
-        // Find the closest charged silo.
-        let tx = (target_tile % w) as i32;
-        let ty = (target_tile / w) as i32;
-
-        let best_silo = self
-            .buildings
-            .iter()
-            .filter(|b| {
-                b.kind == BuildingKind::MissileSilo
-                    && b.owner_id == player_id
-                    && self.nuclear_charges(b.id, b.active_level()) > 0
-            })
-            .min_by_key(|b| {
-                let bx = (b.tile_idx % w) as i32;
-                let by = (b.tile_idx / w) as i32;
-                ((bx - tx).abs() + (by - ty).abs(), b.id)
-            });
+        let best_silo = self.ready_nuclear_silo(player_id, target_tile);
 
         let Some(silo) = best_silo else {
             return;

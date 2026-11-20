@@ -274,16 +274,21 @@ impl SowEngine {
             .buildings
             .iter()
             .map(|b| {
-                let production = self.building_productions.get(&b.id).copied().unwrap_or_default();
+                let mut production = self
+                    .building_productions
+                    .get(&b.id)
+                    .cloned()
+                    .unwrap_or_default();
+                production.normalize_legacy_warship();
                 let has_anti_nuke = self.legacy_building_rules
                     && b.kind == crate::game::BuildingKind::City
                     && production.has_anti_nuke;
                 let nuke_ready = b.kind == crate::game::BuildingKind::MissileSilo
                     && self.nuclear_charges(b.id, b.active_level()) > 0;
-                let arsenal_build = if b.kind == crate::game::BuildingKind::Port {
-                    production.arsenal_build
+                let (arsenal_build, warship_queue) = if b.kind == crate::game::BuildingKind::Port {
+                    (production.active_warship_build(), production.warship_queue)
                 } else {
-                    None
+                    (None, Vec::new())
                 };
                 let sam_cooldown_ticks = self.nuclear_wait_ticks(b.id);
                 let upgrade_target_level = self
@@ -303,6 +308,7 @@ impl SowEngine {
                     has_anti_nuke,
                     nuke_ready,
                     arsenal_build,
+                    warship_queue,
                     sam_cooldown_ticks,
                     upgrade_target_level,
                 }

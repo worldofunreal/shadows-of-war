@@ -123,7 +123,7 @@ fn default_cost_farm() -> f64 {
 }
 
 fn default_cost_sam() -> f64 {
-    350.0
+    1_000.0
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]

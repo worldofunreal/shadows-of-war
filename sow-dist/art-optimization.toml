@@ -1,190 +1,194 @@
 # Canonical distribution image recipes. Source files stay under assets/; sow-dist
 # writes derivatives to dist/.sow-state and applies the same profiles to packages.
 version = 1
-webp_method = 4
+webp_method = 6
+webp_alpha_quality = 80
 svgo_version = "4.1.0"
 svg_max_bytes = 1048576
 svg_recipe_version = 1
 
 [profiles.ability_icon]
 format = "webp"
+max_width = 96
+max_height = 96
+quality = 62
+alpha = "strip"
+resample = "mitchell"
+lossless = false
+max_bytes = 32768
+recipe_version = 3
+
+[profiles.avatar_portrait_192]
+format = "webp"
 max_width = 128
 max_height = 128
-quality = 75
+quality = 62
 alpha = "preserve"
-resample = "lanczos"
+resample = "mitchell"
 lossless = false
 max_bytes = 65536
 recipe_version = 2
 
-[profiles.avatar_portrait_192]
+[profiles.avatar_portrait_256]
 format = "webp"
 max_width = 192
 max_height = 192
-quality = 85
+quality = 65
 alpha = "preserve"
-resample = "lanczos"
+resample = "mitchell"
 lossless = false
-max_bytes = 131072
-recipe_version = 1
+max_bytes = 65536
+recipe_version = 2
 
-[profiles.avatar_portrait_256]
-format = "webp"
-max_width = 256
-max_height = 256
-quality = 85
-alpha = "preserve"
-resample = "lanczos"
-lossless = false
-max_bytes = 131072
-recipe_version = 1
-
-# CrazyGames avatar sheets: up to 2048 px square, holding many 192 or 256 px portraits.
+# CrazyGames avatar sheets: up to 2048 px square, holding many 128 or 192 px portraits.
 # Same quality as the loose portraits they replace.
 [profiles.avatar_atlas]
 format = "webp"
 max_width = 2048
 max_height = 2048
-quality = 85
+quality = 64
 alpha = "preserve"
-resample = "lanczos"
+resample = "mitchell"
 lossless = false
-max_bytes = 3145728
-recipe_version = 2
+max_bytes = 2097152
+recipe_version = 3
 
-# CrazyGames ability icon atlas: 128 px cells, same quality as the loose ability_icon files.
+# CrazyGames ability icon atlas: 96 px cells, same quality as the loose ability_icon files.
 [profiles.ability_atlas]
 format = "webp"
 max_width = 2048
 max_height = 2048
-quality = 75
-alpha = "preserve"
-resample = "lanczos"
+quality = 62
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 1048576
-recipe_version = 1
+max_bytes = 786432
+recipe_version = 2
 
 [profiles.fullbleed_wide]
 format = "webp"
-max_width = 1600
-max_height = 900
-quality = 75
-alpha = "preserve"
-resample = "lanczos"
+max_width = 1280
+max_height = 720
+quality = 60
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 400000
-recipe_version = 1
+max_bytes = 250000
+recipe_version = 2
 
 [profiles.fullbleed_tall]
 format = "webp"
-max_width = 900
-max_height = 1600
-quality = 75
-alpha = "preserve"
-resample = "lanczos"
-lossless = false
-max_bytes = 400000
-recipe_version = 1
-
-# CrazyGames hero scenes: between the web (1600x900) and Poki (960x540) sizes.
-[profiles.cg_leader_wide]
-format = "webp"
-max_width = 1280
-max_height = 720
-quality = 75
-alpha = "preserve"
-resample = "lanczos"
-lossless = false
-max_bytes = 300000
-recipe_version = 1
-
-[profiles.cg_leader_tall]
-format = "webp"
 max_width = 720
 max_height = 1280
-quality = 75
-alpha = "preserve"
-resample = "lanczos"
+quality = 60
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 300000
-recipe_version = 1
+max_bytes = 250000
+recipe_version = 2
 
-[profiles.poki_leader_wide]
+# CrazyGames hero scenes: between the web (1280x720) and Poki (800x450) sizes.
+[profiles.cg_leader_wide]
 format = "webp"
 max_width = 960
 max_height = 540
-quality = 70
-alpha = "preserve"
-resample = "lanczos"
+quality = 58
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 250000
-recipe_version = 1
+max_bytes = 200000
+recipe_version = 2
 
-[profiles.poki_leader_tall]
+[profiles.cg_leader_tall]
 format = "webp"
 max_width = 540
 max_height = 960
-quality = 70
-alpha = "preserve"
-resample = "lanczos"
+quality = 58
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 250000
-recipe_version = 1
+max_bytes = 200000
+recipe_version = 2
+
+[profiles.poki_leader_wide]
+format = "webp"
+max_width = 800
+max_height = 450
+quality = 55
+alpha = "strip"
+resample = "mitchell"
+lossless = false
+max_bytes = 160000
+recipe_version = 2
+
+[profiles.poki_leader_tall]
+format = "webp"
+max_width = 450
+max_height = 800
+quality = 55
+alpha = "strip"
+resample = "mitchell"
+lossless = false
+max_bytes = 160000
+recipe_version = 2
 
 [profiles.site_still_wide]
 format = "webp"
-max_width = 1600
-max_height = 900
-quality = 78
-alpha = "preserve"
-resample = "lanczos"
+max_width = 1280
+max_height = 720
+quality = 62
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 450000
-recipe_version = 1
+max_bytes = 280000
+recipe_version = 2
 
 [profiles.site_still_tall]
 format = "webp"
-max_width = 900
-max_height = 1600
-quality = 78
-alpha = "preserve"
-resample = "lanczos"
+max_width = 720
+max_height = 1280
+quality = 62
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 450000
-recipe_version = 1
+max_bytes = 280000
+recipe_version = 2
 
 [profiles.ui_icon_128]
 format = "webp"
-max_width = 128
-max_height = 128
-quality = 82
+max_width = 96
+max_height = 96
+quality = 68
 alpha = "preserve"
-resample = "lanczos"
+alpha_quality = 80
+resample = "mitchell"
 lossless = false
-max_bytes = 32768
-recipe_version = 1
+max_bytes = 24576
+recipe_version = 2
 
 [profiles.ui_icon_256]
 format = "webp"
-max_width = 256
-max_height = 256
-quality = 82
+max_width = 128
+max_height = 128
+quality = 68
 alpha = "preserve"
-resample = "lanczos"
+alpha_quality = 80
+resample = "mitchell"
 lossless = false
-max_bytes = 65536
-recipe_version = 1
+max_bytes = 32768
+recipe_version = 2
 
 [profiles.unit_icon]
 format = "webp"
-max_width = 128
-max_height = 128
-quality = 82
+max_width = 96
+max_height = 96
+quality = 68
 alpha = "preserve"
-resample = "lanczos"
+alpha_quality = 80
+resample = "mitchell"
 lossless = false
-max_bytes = 32768
-recipe_version = 1
+max_bytes = 24576
+recipe_version = 2
 
 [profiles.pixel_art]
 format = "webp"
@@ -195,6 +199,30 @@ alpha = "preserve"
 resample = "point"
 lossless = true
 max_bytes = 262144
+recipe_version = 1
+
+[profiles.atlas_buildings]
+format = "webp"
+max_width = 660
+max_height = 528
+quality = 72
+alpha = "preserve"
+alpha_quality = 80
+resample = "mitchell"
+lossless = false
+max_bytes = 200000
+recipe_version = 1
+
+[profiles.atlas_badges]
+format = "webp"
+max_width = 1728
+max_height = 64
+quality = 72
+alpha = "preserve"
+alpha_quality = 80
+resample = "mitchell"
+lossless = false
+max_bytes = 100000
 recipe_version = 1
 
 [profiles.atlas_lossless]
@@ -210,78 +238,79 @@ recipe_version = 1
 
 [profiles.loader_ui]
 format = "webp"
-max_width = 1032
-max_height = 256
-quality = 82
+max_width = 640
+max_height = 160
+quality = 68
 alpha = "preserve"
-resample = "lanczos"
+alpha_quality = 80
+resample = "mitchell"
 lossless = false
-max_bytes = 50000
-recipe_version = 1
+max_bytes = 32768
+recipe_version = 2
 
 [profiles.app_icon]
 format = "png"
 max_width = 512
 max_height = 512
-quality = 100
+quality = 90
 alpha = "preserve"
-resample = "lanczos"
-lossless = true
-max_bytes = 600000
-recipe_version = 1
+resample = "mitchell"
+lossless = false
+max_bytes = 250000
+recipe_version = 2
 
 [profiles.map_preview]
 format = "webp"
-max_width = 1600
-max_height = 900
-quality = 78
-alpha = "preserve"
-resample = "lanczos"
+max_width = 1024
+max_height = 576
+quality = 62
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 500000
-recipe_version = 1
+max_bytes = 250000
+recipe_version = 2
 
 [profiles.map_thumbnail]
 format = "webp"
 max_width = 256
 max_height = 144
-quality = 70
-alpha = "preserve"
-resample = "lanczos"
+quality = 58
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 65536
-recipe_version = 1
+max_bytes = 32768
+recipe_version = 2
 
 [profiles.video_poster]
 format = "webp"
-max_width = 1600
-max_height = 900
-quality = 80
-alpha = "preserve"
-resample = "lanczos"
+max_width = 1280
+max_height = 720
+quality = 62
+alpha = "strip"
+resample = "mitchell"
 lossless = false
-max_bytes = 450000
-recipe_version = 1
+max_bytes = 250000
+recipe_version = 2
 
 [profiles.guide_image]
 format = "webp"
-max_width = 1600
-max_height = 1600
-quality = 80
+max_width = 1200
+max_height = 1200
+quality = 64
 alpha = "preserve"
-resample = "lanczos"
+resample = "mitchell"
 lossless = false
-max_bytes = 450000
-recipe_version = 1
+max_bytes = 250000
+recipe_version = 2
 
 [profiles.poki_thumbnail]
 format = "png"
 max_width = 628
 max_height = 628
-quality = 100
+quality = 90
 alpha = "preserve"
-resample = "lanczos"
-lossless = true
+resample = "mitchell"
+lossless = false
 crop = "center_square"
-max_bytes = 750000
-recipe_version = 1
+max_bytes = 350000
+recipe_version = 2

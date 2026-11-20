@@ -10,7 +10,12 @@ use crate::text::types::{
 use blade_graphics as gpu;
 
 pub fn building_sprite_uv(kind: sow_core::game::BuildingKind, level: u8) -> Option<[f32; 4]> {
-    crate::text::building_atlas::uv_rect(kind, level)
+    let atlas_kind = if kind == sow_core::game::BuildingKind::MissileSilo {
+        sow_core::game::BuildingKind::Tower
+    } else {
+        kind
+    };
+    crate::text::building_atlas::uv_rect(atlas_kind, level)
 }
 
 pub const MAX_TEXT_GLYPHS: usize = 32_768;

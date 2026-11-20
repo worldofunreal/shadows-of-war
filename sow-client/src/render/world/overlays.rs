@@ -82,6 +82,33 @@ pub(crate) fn render_overlays(
             render_buildings(text, snapshot, sim, ui, input, dev, sf, zoom_scaled, now);
         }
         render_building_placement_preview(text, sim, ui, input, sf, placement_can_confirm);
+        if let Some(kind) = ui.app.hud_state.selected_nuke_kind
+            && let Some(engine) = sim.engine.as_ref()
+        {
+            let zoom = input.camera_zoom.max(0.01);
+            let x = ((input.last_mouse_x as f32 - input.camera_x) / zoom).floor() as i32;
+            let y = ((input.last_mouse_y as f32 - input.camera_y) / zoom).floor() as i32;
+            let width = engine.state.map.width;
+            if x >= 0 && y >= 0 && (x as u32) < width && (y as u32) < engine.state.map.height {
+                let tile = y as u32 * width + x as u32;
+                if let Some(silo) = engine.ready_nuclear_silo(my_id, tile) {
+                    let at = [(x as f32 + 0.5) * zoom + input.camera_x,
+                              (y as f32 + 0.5) * zoom + input.camera_y];
+                    let radius = match kind {
+                        sow_core::game::NukeKind::AtomBomb => sow_core::game::nuke_outer_radius(1),
+                        sow_core::game::NukeKind::HydrogenBomb => sow_core::game::nuke_outer_radius(2),
+                        sow_core::game::NukeKind::MIRV => 1500,
+                    };
+                    text.push_ring(at, radius as f32 * zoom, [1.0, 0.3, 0.18, 0.75], 2.0 * sf);
+                    let source = [
+                        ((silo.tile_idx % width) as f32 + 0.5) * zoom + input.camera_x,
+                        ((silo.tile_idx / width) as f32 + 0.5) * zoom + input.camera_y,
+                    ];
+                    text.push_ring(source, (2.0 * zoom).max(10.0 * sf), [1.0, 0.78, 0.25, 0.85], 2.0 * sf);
+                }
+            }
+        }
+
         let nameplate_render_started_at = crate::diag::startup_perf_timer();
         super::nameplates::render_nameplates(
             text,
@@ -432,6 +459,15 @@ fn render_buildings(
             );
         }
 
+        if building.kind == BuildingKind::MissileSilo {
+            text.push_status_sprite(
+                NameplateStatusSprite::Radiation,
+                building_center,
+                (marker_extent * sf).max(9.0 * sf),
+                [1.0, 0.78, 0.32, alpha],
+            );
+        }
+
         if building.detail == BuildingDetail::Full
             && let Some(tile_idx) = building.tile_idx
             && let Some(started) = building_upgrade_flashes.get(&tile_idx)
@@ -446,22 +482,26 @@ fn render_buildings(
             );
             if building.owner_id == my_id
                 && !reduced_motion
-                && celebration_budget >= BUILDING_CELEBRATION_OFFSETS.len()
+                && celebration_budget > 0
             {
-                let radius = marker_extent * sf * (0.3 + 0.55 * t);
-                let sparkle_size = (marker_extent * sf * 0.18).clamp(4.0 * sf, 14.0 * sf);
-                for offset in BUILDING_CELEBRATION_OFFSETS {
-                    text.push_status_sprite(
-                        NameplateStatusSprite::UpgradeSparkle,
-                        [
-                            center[0] * sf + offset[0] * radius,
-                            center[1] * sf + offset[1] * radius,
-                        ],
-                        2.0 * sparkle_size,
-                        [1.0, 0.84, 0.36, alpha * 0.9],
-                    );
+                let stride = if crate::web_canvas::is_mobile_pointer() { 2 } else { 1 };
+                let count = BUILDING_CELEBRATION_OFFSETS.len().div_ceil(stride);
+                if celebration_budget >= count {
+                    let radius = marker_extent * sf * (0.3 + 0.55 * t);
+                    let sparkle_size = (marker_extent * sf * 0.18).clamp(4.0 * sf, 14.0 * sf);
+                    for offset in BUILDING_CELEBRATION_OFFSETS.iter().step_by(stride) {
+                        text.push_status_sprite(
+                            NameplateStatusSprite::UpgradeSparkle,
+                            [
+                                center[0] * sf + offset[0] * radius,
+                                center[1] * sf + offset[1] * radius,
+                            ],
+                            2.0 * sparkle_size,
+                            [1.0, 0.84, 0.36, alpha * 0.9],
+                        );
+                    }
+                    celebration_budget -= count;
                 }
-                celebration_budget -= BUILDING_CELEBRATION_OFFSETS.len();
             }
         }
 
@@ -610,6 +650,50 @@ pub(crate) fn building_at_pointer(
         }
     }
     closest.map(|(_, tile_idx)| tile_idx)
+}
+
+pub(crate) fn warship_at_pointer(
+    snapshot: &SimSnapshot,
+    sim: &SimState,
+    input: &InputState,
+    x: f64,
+    y: f64,
+) -> Option<u64> {
+    let my_id = sim.my_player_id.unwrap_or(0);
+    let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    if my_id == 0 || sim.map_w == 0 || !input.camera_zoom.is_finite() || input.camera_zoom <= 0.0 {
+        return None;
+    }
+    let pointer_x = x as f32 / sf;
+    let pointer_y = y as f32 / sf;
+    let map_w = sim.map_w as usize;
+    let hit_radius_sq = 24.0_f32 * 24.0_f32;
+    let mut closest: Option<(f32, u64)> = None;
+
+    for fleet in &snapshot.fleets {
+        if fleet.owner_id != my_id
+            || fleet.unit_type != sow_core::game::UnitType::Warship
+            || fleet.troops <= 0.0
+        {
+            continue;
+        }
+        let tile = fleet.current_tile as usize;
+        let wx = (tile % map_w) as f32 + 0.5;
+        let wy = (tile / map_w) as f32 + 0.5;
+        let center = world_to_screen(wx, wy, input, sf);
+        let dx = pointer_x - center[0];
+        let dy = pointer_y - center[1];
+        let distance_sq = dx * dx + dy * dy;
+        if distance_sq > hit_radius_sq {
+            continue;
+        }
+        if closest.is_none_or(|(best_dist, best_id)| {
+            distance_sq < best_dist || (distance_sq == best_dist && fleet.id < best_id)
+        }) {
+            closest = Some((distance_sq, fleet.id));
+        }
+    }
+    closest.map(|(_, id)| id)
 }
 
 fn nearest_building_in_cluster(
