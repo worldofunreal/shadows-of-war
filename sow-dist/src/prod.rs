@@ -589,7 +589,7 @@ fn has_active_server_generation(config: &Config) -> Result<bool> {
 
 fn verify_ionos_runtime(config: &Config, release: &Release, plan: &ComponentPlan) -> Result<()> {
     verify_control_host(config, plan)?;
-    verify_map_catalog(config, release)?;
+    verify_map_catalog(config, release, plan)?;
     verify_control_certificates(config)?;
     verify_control_runtime_secret(config)?;
     if !plan.relay {
@@ -2545,13 +2545,13 @@ sudo service cron onestatus >/dev/null
 /// The live server must publish every map its release ships. A server that boots with an
 /// empty catalog still answers health checks but aborts every lobby, so the deploy fails here
 /// and the rollback restores the previous release.
-fn verify_map_catalog(config: &Config, release: &Release) -> Result<()> {
+///
+/// The log belongs to the running generation, not to this release: a web- or relay-only
+/// deploy keeps the previous generation, so keying the path by `release.id` looks for a log
+/// that is never written.
+fn verify_map_catalog(config: &Config, release: &Release, plan: &ComponentPlan) -> Result<()> {
     let expected = release_map_count(release)?;
-    let server_log = format!(
-        "{}/server_{}.log",
-        site::current().log_dir(),
-        release.id
-    );
+    let server_log = live_server_log(config, release, plan)?;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
     loop {
         let lines = output(
@@ -2576,6 +2576,51 @@ fn verify_map_catalog(config: &Config, release: &Release) -> Result<()> {
             None => bail!("server published no map catalog after its latest boot"),
         }
     }
+}
+
+/// Log of the server generation that is running now. A deploy that restarts the server must
+/// have made this release the active generation; otherwise the previous generation keeps
+/// serving and its log still proves the live catalog.
+fn live_server_log(config: &Config, release: &Release, plan: &ComponentPlan) -> Result<String> {
+    let marker = format!("{}/active-generation", site::current().release_root());
+    let active = output(
+        "ssh",
+        &[
+            &config.control_host,
+            &format!("sudo cat {} 2>/dev/null || true", shell_quote(&marker)),
+        ],
+    )?
+    .trim()
+    .to_string();
+    let restarted = plan.server || plan.maps || plan.ops;
+    if restarted && active.is_empty() {
+        bail!(
+            "server restarted but published no active generation for release {}",
+            release.id
+        );
+    }
+    if restarted && active != release.id {
+        bail!(
+            "active server generation is {active}; release {} was expected",
+            release.id
+        );
+    }
+    let log = if active.is_empty() {
+        format!("{}/server.log", site::current().log_dir())
+    } else {
+        format!("{}/server_{active}.log", site::current().log_dir())
+    };
+    let present = output(
+        "ssh",
+        &[
+            &config.control_host,
+            &format!("sudo test -f {} && echo yes || echo no", shell_quote(&log)),
+        ],
+    )?;
+    if present.trim() != "yes" {
+        bail!("no server log at {log} for the running server generation");
+    }
+    Ok(log)
 }
 
 /// Entry count from the newest `Map catalog:` line since the latest `SERVER-BOOT`. `None` when
