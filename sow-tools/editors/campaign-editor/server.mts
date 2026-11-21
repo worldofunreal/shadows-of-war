@@ -1082,6 +1082,7 @@ async function handle(req, res) {
 const previewScript = `<script>(function () {
   var map = new URLSearchParams(location.search).get("sow_preview_map");
   if (!map) return;
+  window.SOW_LOCAL_MAP_PREVIEW = true;
   try {
     var progress = JSON.parse(localStorage.getItem("sow_player_progress") || "null") || {
       xp: 0, level: 1, wins: 0, matches_played: 0, players_defeated: 0, empires_defeated: 0, tribes_defeated: 0

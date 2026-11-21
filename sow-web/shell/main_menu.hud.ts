@@ -126,6 +126,14 @@ type InboxRequestParts = PlayerIdentityParts & {
 type RequestToastCardParts = InboxRequestParts & {
   stackIndex: number;
 };
+type LeaderboardSortMode =
+  | "rank"
+  | "troops"
+  | "gold"
+  | "troop_rate"
+  | "gold_rate"
+  | "kills"
+  | "alpha";
 type LeaderboardRow = {
   card: HTMLElement;
   rank: HTMLElement;
@@ -413,7 +421,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   let leaderboardFilterQuery = "";
   let leaderboardTeamFilter: "all" | "Red" | "Blue" = "all";
   let leaderboardTypeFilter: "all" | "humans" | "bots" = "all";
-  let leaderboardSortMode: "rank" | "troops" | "kills" | "alpha" = "rank";
+  let leaderboardSortMode: LeaderboardSortMode = "rank";
   let leaderboardIs1v1 = false;
   let pendingCounterAttacks: Record<string, number> = Object.create(null);
   let lastLeaderboardTeams: HudLeaderboardTeam[] = [];
@@ -1632,8 +1640,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const onViewportChange = function () {
         const hudScreen = measureHudScreen();
         syncCompactHudBounds(hudScreen);
-        if (hudState && hudState.phase === "Playing" && hudState.hud)
+        if (hudState && hudState.phase === "Playing" && hudState.hud) {
+          const mapMenu = hudState.hud.map_menu;
+          if (mapMenu && mapMenu.open && mapMenu.view === "building_details")
+            renderMapMenu(mapMenu);
           renderPlacementPanel(hudState.hud.building_placement);
+        }
         renderNotifications([], false, hudScreen);
         if (
           hudRefs &&
@@ -1901,7 +1913,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   function compareLeaderboardPlayers(
     a: HudLeaderboardPlayer,
     b: HudLeaderboardPlayer,
-    mode: "rank" | "troops" | "kills" | "alpha",
+    mode: LeaderboardSortMode,
     is1v1: boolean,
   ): number {
     if (is1v1) {
@@ -1913,6 +1925,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     if (mode === "troops") {
       const diff = (b.troops || 0) - (a.troops || 0);
+      if (diff !== 0) return diff;
+    } else if (mode === "gold") {
+      const diff = (b.gold || 0) - (a.gold || 0);
+      if (diff !== 0) return diff;
+    } else if (mode === "troop_rate") {
+      const diff = (b.troop_rate || 0) - (a.troop_rate || 0);
+      if (diff !== 0) return diff;
+    } else if (mode === "gold_rate") {
+      const diff = (b.gold_rate || 0) - (a.gold_rate || 0);
       if (diff !== 0) return diff;
     } else if (mode === "kills") {
       const diff = (b.kills || 0) - (a.kills || 0);
@@ -1993,6 +2014,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         {
           value: "troops",
           label: SOW_t("hud.sort_troops") || "Troops",
+        },
+        {
+          value: "gold",
+          label: SOW_t("hud.sort_gold") || "Gold",
+        },
+        {
+          value: "troop_rate",
+          label: SOW_t("hud.sort_troop_rate") || "Troops/s",
+        },
+        {
+          value: "gold_rate",
+          label: SOW_t("hud.sort_gold_rate") || "Gold/s",
         },
         {
           value: "kills",
@@ -2433,7 +2466,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '  <div class="sow-hud__sheet-header sow-hud__inbox-header">' +
       '    <div class="sow-hud__sheet-title-group">' +
       '      <span class="sow-hud__sheet-title-badge" aria-hidden="true">' +
-      hudIcon("inbox", "sow-hud__sheet-title-icon") +
+      hudIcon("ring_request", "sow-hud__sheet-title-icon") +
       "      </span>" +
       '      <h3 class="sow-hud__sheet-title" id="sow-hud-inbox-title">' +
       SOW_t("hud.inbox") +
@@ -2535,12 +2568,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       SOW_t("hud.send") +
       "</span></button>" +
       '<button class="sow-hud__transfer-cta sow-hud__transfer-request" id="sow-hud-transfer-request" type="button" data-command="request_resources">' +
-      hudIcon("request", "sow-hud__cta-icon") +
+      hudIcon("ring_request", "sow-hud__cta-icon") +
       "<span>" +
       SOW_t("hud.request") +
       "</span></button>" +
       '<button class="sow-hud__transfer-cta sow-hud__transfer-trade" id="sow-hud-transfer-trade" type="button" data-command="offer_trade">' +
-      hudIcon("transfer", "sow-hud__cta-icon") +
+      hudIcon("ring_send", "sow-hud__cta-icon") +
       "<span>" +
       SOW_t("hud.trade") +
       "</span></button>" +
@@ -2992,8 +3025,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       );
       if (lbSortInput) {
         leaderboardSortMode =
-          (lbSortInput.value as "rank" | "troops" | "kills" | "alpha") ||
-          "rank";
+          (lbSortInput.value as LeaderboardSortMode) || "rank";
         const dropdown = lbSortInput.closest<HTMLElement>(
           ".sow-control-dropdown",
         );
@@ -3534,13 +3566,24 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const anchorRadius = Math.max(20, Number(bld && bld.anchor_radius) || 28);
     const card =
       menu.querySelector<HTMLElement>(".sow-hud__building-card") || menu;
+    const viewport = window.visualViewport;
+    const viewLeft = (viewport && viewport.offsetLeft) || 0;
+    const viewTop = (viewport && viewport.offsetTop) || 0;
+    const vw = (viewport && viewport.width) || window.innerWidth || 800;
+    const vh = (viewport && viewport.height) || window.innerHeight || 600;
+    const viewportWidth = vw + "px";
+    if (
+      menu.style.getPropertyValue("--sow-hud-building-card-viewport-width") !==
+      viewportWidth
+    ) {
+      menu.style.setProperty(
+        "--sow-hud-building-card-viewport-width",
+        viewportWidth,
+      );
+    }
     const width = card.offsetWidth || 232;
-    const height = card.offsetHeight || 114;
     const halfW = width * 0.5;
-    const halfH = height * 0.5;
-    const vw = window.innerWidth || 800;
-    const vh = window.innerHeight || 600;
-    let bottomLimit = vh - 96;
+    let bottomLimit = viewTop + vh - 96;
     if (
       hudRefs &&
       hudRefs.dock &&
@@ -3548,20 +3591,37 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       typeof hudRefs.dock.getBoundingClientRect === "function"
     ) {
       const dockRect = hudRefs.dock.getBoundingClientRect();
-      if (dockRect && dockRect.height > 0 && dockRect.top > 0) {
+      if (dockRect && dockRect.height > 0 && dockRect.top > viewTop) {
         bottomLimit = Math.min(bottomLimit, dockRect.top - 10);
       }
     }
+    const availableHeight = Math.max(0, Math.min(vh, bottomLimit - viewTop));
+    const viewportHeight = availableHeight + "px";
+    if (
+      menu.style.getPropertyValue("--sow-hud-building-card-viewport-height") !==
+      viewportHeight
+    ) {
+      menu.style.setProperty(
+        "--sow-hud-building-card-viewport-height",
+        viewportHeight,
+      );
+    }
+    const height = card.offsetHeight || Math.max(1, availableHeight - 20);
+    const halfH = height * 0.5;
     const gap = 10;
     const belowCenterY = anchorY + anchorRadius + gap + halfH;
     const aboveCenterY = anchorY - anchorRadius - gap - halfH;
     const placeBelow =
-      belowCenterY + halfH <= bottomLimit || aboveCenterY - halfH < 12;
+      belowCenterY + halfH <= bottomLimit ||
+      aboveCenterY - halfH < viewTop + 12;
     const rawCenterY = placeBelow ? belowCenterY : aboveCenterY;
-    const minX = halfW + 10;
-    const maxX = Math.max(minX, vw - halfW - 10);
-    const minY = halfH + 10;
-    const maxY = Math.max(minY, Math.min(vh - halfH - 10, bottomLimit - halfH));
+    const minX = viewLeft + halfW + 10;
+    const maxX = Math.max(minX, viewLeft + vw - halfW - 10);
+    const minY = viewTop + halfH + 10;
+    const maxY = Math.max(
+      minY,
+      Math.min(viewTop + vh - halfH - 10, bottomLimit - halfH),
+    );
     const left = Math.min(Math.max(anchorX, minX), maxX);
     const top = Math.min(Math.max(rawCenterY, minY), maxY);
     menu.style.left = left.toFixed(1) + "px";
@@ -4617,7 +4677,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         bindAvatarFallback(image);
         renderAvatarIdentity(image, emblem, mapMenu.target_avatar);
         hub.append(image, emblem);
-      } else hub.innerHTML = hudIcon("camera", "sow-hud__ring-icon");
+      } else hub.innerHTML = hudIcon("home", "sow-hud__ring-icon");
       const allianceStatus = document.createElement("span");
       allianceStatus.className = "sow-hud__ring-hub-status";
       allianceStatus.hidden = true;
@@ -5975,11 +6035,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (LEADERBOARD_TRADE_CUSTOM_SVG) {
       return LEADERBOARD_TRADE_CUSTOM_SVG;
     }
-    return hudIcon("transfer", cls || "sow-hud__btn-icon");
+    return hudIcon("ring_send", cls || "sow-hud__btn-icon");
   }
 
   function leaderboardGpsIcon(cls?: string): string {
-    return hudIcon("camera", cls || "sow-hud__btn-icon");
+    return hudIcon("home", cls || "sow-hud__btn-icon");
   }
 
   function leaderboardPlayerAvatar(
@@ -6067,6 +6127,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           player.rank,
           player.name,
           player.troops,
+          player.gold,
+          player.troop_rate,
+          player.gold_rate,
           player.kills,
           player.tile_count,
           player.territory_pct,
@@ -6314,6 +6377,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       index,
       displayName,
       player.troops,
+      player.gold,
+      player.troop_rate,
+      player.gold_rate,
       player.kills,
       leaderboardSortMode,
       player.tile_count,
@@ -6350,9 +6416,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       row.card.classList.remove("is-team-red", "is-team-blue");
     }
 
-    const displayRank = Number.isFinite(Number(player.rank))
-      ? Number(player.rank)
-      : index + 1;
+    const displayRank = index + 1;
     row.card.classList.toggle("is-top-1", displayRank === 1);
     row.card.classList.toggle("is-top-2", displayRank === 2);
     row.card.classList.toggle("is-top-3", displayRank === 3);
@@ -6366,21 +6430,24 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     );
     row.territory.textContent =
       Math.round((player.territory_pct || 0) * 100) + "%";
-    if (leaderboardSortMode === "kills") {
-      row.troops.innerHTML =
-        escapeHudText(String(player.kills || 0)) +
-        " " +
-        hudIcon("attack", "sow-hud__inline-icon");
-    } else {
-      row.troops.innerHTML =
-        escapeHudText(
-          player.troops > 1000
-            ? (player.troops / 1000).toFixed(1) + "k"
-            : Math.floor(player.troops),
-        ) +
-        " " +
-        hudIcon("troops", "sow-hud__inline-icon");
+    let statText =
+      player.troops > 1000
+        ? (player.troops / 1000).toFixed(1) + "k"
+        : String(Math.floor(player.troops));
+    let statIcon = hudIcon("troops", "sow-hud__inline-icon");
+    if (leaderboardSortMode === "gold") {
+      statText = formatHudMetric(player.gold);
+      statIcon = hudIcon("gold", "sow-hud__inline-icon");
+    } else if (leaderboardSortMode === "troop_rate") {
+      statText = formatHudRate(player.troop_rate);
+    } else if (leaderboardSortMode === "gold_rate") {
+      statText = formatHudRate(player.gold_rate);
+      statIcon = hudIcon("gold", "sow-hud__inline-icon");
+    } else if (leaderboardSortMode === "kills") {
+      statText = String(player.kills || 0);
+      statIcon = hudIcon("attack", "sow-hud__inline-icon");
     }
+    row.troops.innerHTML = escapeHudText(statText) + " " + statIcon;
     row.gpsBtn.dataset.playerId = String(player.id);
     row.transferBtn.dataset.playerId = String(player.id);
     row.transferBtn.hidden = !player.can_trade;
@@ -6664,19 +6731,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       );
     }
     if (key.indexOf("nuke") >= 0)
-      return hudIcon("nuke", "sow-hud__notification-icon");
+      return hudIcon("ring_nuke", "sow-hud__notification-icon");
     if (key.indexOf("betrayal") >= 0)
       return statusIcon("traitor", "sow-hud__notification-icon");
-    if (/attack|elimination/.test(key))
-      return hudIcon("attack", "sow-hud__notification-icon");
+    if (/elimination/.test(key))
+      return statusIcon("death", "sow-hud__notification-icon");
+    if (/attack/.test(key))
+      return hudIcon("ring_attack", "sow-hud__notification-icon");
     if (key.indexOf("fleet") >= 0 || key === "hud.warship_ready")
-      return hudIcon("fleet", "sow-hud__notification-icon");
-    if (key.indexOf("request") >= 0)
-      return hudIcon("inbox", "sow-hud__notification-icon");
+      return hudIcon("ring_fleet", "sow-hud__notification-icon");
     if (key.indexOf("alliance") >= 0)
-      return statusIcon("allied", "sow-hud__notification-icon");
+      return hudIcon("ring_alliance", "sow-hud__notification-icon");
+    if (key.indexOf("request") >= 0)
+      return hudIcon("ring_request", "sow-hud__notification-icon");
     if (key.indexOf("resource") >= 0)
-      return hudIcon("transfer", "sow-hud__notification-icon");
+      return hudIcon("ring_send", "sow-hud__notification-icon");
     if (/build|building|gold/.test(key))
       return hudIcon("tools", "sow-hud__notification-icon");
     return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v10M7 12h10"></path></svg>';
@@ -8957,7 +9026,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const selected = selectedBuilding === kind;
         button.disabled = false;
         const disabled = !affordable && !selected;
-        button.setAttribute("aria-disabled", "false");
+        const reason = mapActionReason(
+          { disabled: !affordable, cost: cost },
+          gold,
+        );
+        button.setAttribute("aria-disabled", String(Boolean(reason)));
         button.classList.toggle("is-unaffordable", disabled);
         button.classList.toggle("active", selected);
         button.setAttribute("aria-pressed", String(selected));
@@ -8965,10 +9038,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const label =
           button.dataset.label || button.getAttribute("aria-label") || kind;
         button.dataset.label = label;
-        const reason = mapActionReason(
-          { disabled: !affordable, cost: cost },
-          gold,
-        );
         const accessibleLabel = reason
           ? label + ". " + reason
           : costText
@@ -8997,10 +9066,42 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       nuclearStrip.querySelectorAll<HTMLButtonElement>("button").forEach(function (button) {
         const cost = Number(hud.nuclear_prices?.[Number(button.dataset.nuclearIndex)]);
         setTileCost(button, cost);
-        button.disabled = !hud.fleet_panel?.nuke_available || gold < cost;
+        const hasReadyNuke = Boolean(hud.fleet_panel?.nuke_available);
+        const hasNuclearCity = Boolean(hud.fleet_panel?.nuke_city_ready);
+        const affordable = Number.isFinite(cost) && gold >= cost;
+        const reason = !hasNuclearCity
+          ? SOW_t("hud.nuke_requires_city")
+          : !hasReadyNuke
+            ? SOW_t("hud.nuke_no_charges")
+            : affordable
+              ? ""
+              : SOW_t("hud.not_enough_gold", {
+                  cost: Math.ceil(cost).toLocaleString(),
+                  available: Math.floor(gold).toLocaleString(),
+                });
+        const label = SOW_t("hud.nuclear_" + String(button.dataset.kind).toLowerCase());
+        const costText = Number.isFinite(cost) && cost > 0
+          ? Math.floor(cost).toLocaleString() + "g"
+          : "";
+        const accessibleLabel = reason
+          ? label + ". " + reason
+          : costText
+            ? label + " " + costText
+            : label;
+        button.disabled = false;
+        button.classList.toggle("is-unaffordable", Boolean(reason));
         button.classList.toggle("active", hud.selected_nuke === button.dataset.kind);
         button.setAttribute("aria-pressed", String(hud.selected_nuke === button.dataset.kind));
-        button.setAttribute("aria-disabled", String(button.disabled));
+        button.setAttribute("aria-disabled", "false");
+        if (button.dataset.sowTooltipKey !== accessibleLabel) {
+          button.dataset.sowTooltipKey = accessibleLabel;
+          button.setAttribute("aria-label", accessibleLabel);
+          SOWTooltip.set(button, {
+            title: label,
+            text: reason || costText || undefined,
+            tone: reason ? "danger" : "gold",
+          });
+        }
       });
     }
     const fleetControlEl = document.getElementById("sow-hud-fleet-control");

@@ -105,6 +105,14 @@ impl SowEngine {
                 *current = wait;
             }
         }
+        for player_id in 0..=max_pid {
+            if !crate::building::player_has_nuclear_launch_city(
+                &self.buildings,
+                player_id as u16,
+            ) {
+                nuke_available_by_player[player_id] = false;
+            }
+        }
 
         let mut empowered_attack_by_player = vec![false; max_pid + 1];
         for attack in &self.attacks {

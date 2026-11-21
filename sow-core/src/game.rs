@@ -89,7 +89,10 @@ impl BuildingKind {
     }
 
     pub const fn max_level(self) -> u8 {
-        4
+        match self {
+            Self::City | Self::Tower | Self::Port => 7,
+            _ => 4,
+        }
     }
 
     pub fn construction_duration_ticks(self) -> u32 {
@@ -267,6 +270,13 @@ pub enum NavalActionFailure {
     CampaignLocked,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NuclearActionFailure {
+    CityRequirement,
+    NoReadySilo,
+    InsufficientGold,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum GameEvent {
     TileExpanded {
@@ -442,6 +452,11 @@ pub enum GameEvent {
         tile_y: u32,
         bonus_troops: u32,
         chain_step: u8,
+    },
+    NuclearActionRejected {
+        player_id: u16,
+        reason: NuclearActionFailure,
+        cost: f64,
     },
 }
 

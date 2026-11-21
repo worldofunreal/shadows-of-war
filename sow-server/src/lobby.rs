@@ -299,7 +299,9 @@ fn spawn_waiting_lobby(
     next_id: &mut u64,
     opts: SpawnLobbyOpts,
 ) -> Result<u64, &'static str> {
-    let game_mode = opts.game_mode;
+    let game_mode = sow_core::game_config::canonical_game_mode(&opts.game_mode)
+        .ok_or("Unsupported game mode")?
+        .to_string();
     let kind = opts.kind;
     let is_private = opts.is_private;
     let config_override = opts.config_override;
@@ -340,7 +342,7 @@ fn spawn_waiting_lobby(
     normalize_map_roster(&mut config, map_entry.as_ref());
 
     config.game_mode = game_mode.to_string();
-    if config.game_mode != "PvE" {
+    if !sow_core::game_config::is_coop_game_mode(&config.game_mode) {
         config.nation_count = 0;
     }
 
@@ -410,7 +412,7 @@ fn normalize_map_roster(
 
 /// Matchmaking queue depth: exactly ONE joinable lobby at a time. When it
 /// launches (or dies), the next one spawns and rotates to the next game mode,
-/// so over time a single slot cycles through FFA / Teams / PvE with a fresh map and
+/// so over time a single slot cycles through FFA / Teams / Coop with a fresh map and
 /// fresh randomized capacity and map-scaled neutral population each cycle.
 fn ensure_queue_depth(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
     let has_joinable = games.iter().any(|g| {
@@ -422,7 +424,7 @@ fn ensure_queue_depth(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
         return;
     }
     static ROTATION: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    const MODES: &[&str] = &["FFA", "Teams", "PvE"];
+    const MODES: &[&str] = &["FFA", "Teams", "Coop"];
     let idx = ROTATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % MODES.len();
     let _ = spawn_waiting_lobby(
         games,
@@ -599,8 +601,14 @@ pub fn join_player(
     let target_lobby_id = opts.target_lobby_id;
     let host_private = opts.host_private;
     let database_account_id = opts.database_account_id;
-    let host_config = opts.host_config;
+    let mut host_config = opts.host_config;
     let league_score = opts.league_score;
+    if let Some(config) = host_config.as_mut() {
+        let Some(mode) = sow_core::game_config::canonical_game_mode(&config.game_mode) else {
+            return Err("Unsupported custom game mode".to_string());
+        };
+        config.game_mode = mode.to_string();
+    }
     if !leader.is_enabled() {
         return Err("Selected hero is unavailable".to_string());
     }
@@ -608,14 +616,6 @@ pub fn join_player(
         !sow_core::game_config::is_supported_game_speed(config.global_speed_multiplier)
     }) {
         return Err("Unsupported custom game speed".to_string());
-    }
-    if host_config.as_ref().is_some_and(|config| {
-        !matches!(
-            config.game_mode.as_str(),
-            "FFA" | "Teams" | "PvE"
-        )
-    }) {
-        return Err("Unsupported custom game mode".to_string());
     }
     if host_config.as_ref().is_some_and(|config| {
         config
@@ -808,8 +808,8 @@ pub fn join_player(
     }
 
     // Teams mode: drop the joiner into whichever team is smaller (Red on a tie).
-    // PvE: every human joins Red (Bot Heroes are Blue, spawned engine-side).
-    let team = if lobby.game_mode == "PvE" {
+    // Co-op: every human joins Red (Bot Heroes are Blue, spawned engine-side).
+    let team = if sow_core::game_config::is_coop_game_mode(&lobby.game_mode) {
         Some(Team::Red)
     } else if lobby.game_mode == "Teams" {
         let reds = lobby
@@ -1514,7 +1514,7 @@ mod name_tests {
     fn matchmaking_capacity_stays_between_12_and_256() {
         let mut games = Vec::new();
         let mut next_id = 1;
-        for mode in ["FFA", "Teams", "PvE"] {
+        for mode in ["FFA", "Teams", "Coop"] {
             spawn_waiting_lobby(
                 &mut games,
                 &mut next_id,
@@ -1577,7 +1577,7 @@ mod name_tests {
             &mut games,
             &mut 2,
             SpawnLobbyOpts {
-                game_mode: "PvE".to_string(),
+                game_mode: "Coop".to_string(),
                 kind: LobbyKind::Custom,
                 is_private: false,
                 config_override: Some(config),

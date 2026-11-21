@@ -2186,11 +2186,16 @@ impl SowEngine {
                     .get(owner as usize)
                     .copied()
                     .unwrap_or_default();
-                let generated = cfg.per_tick(troop_income_per_second(
-                    player.tile_count,
-                    agg,
-                    player.leader,
-                    cfg,
+                let bot_multiplier = if player.player_type == crate::player::PlayerType::Bot {
+                    0.75
+                } else {
+                    1.0
+                };
+                let generated = cfg.per_tick(super::income_rates::diminishing_passive_income(
+                    troop_income_per_second(player.tile_count, agg, player.leader, cfg)
+                        * bot_multiplier,
+                    super::income_rates::TROOP_PASSIVE_FULL_RATE_CAP,
+                    super::income_rates::TROOP_PASSIVE_EXCESS_RATE,
                 ));
                 let wasted = (generated - (player.max_troops - player.troops).max(0.0)).max(0.0);
                 wasted / cfg.per_tick(1.0).max(f64::EPSILON) / f64::from(troops_per_gold)

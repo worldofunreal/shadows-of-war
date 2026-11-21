@@ -157,8 +157,10 @@ function missionActionTooltipAttrs(actionTarget: string | undefined, missionId?:
         },
         ranked: { text: SOW_t("lobbies.ranked_1v1"), icon: "ranked", tone: "gold" },
         teams: { text: SOW_t("lobbies.teams_two"), icon: "play", tone: "gold" },
-        pve: { text: SOW_t("lobbies.humans_vs_nations"), icon: "play", tone: "gold" },
-        hnv: { text: SOW_t("lobbies.humans_vs_nations"), icon: "play", tone: "gold" },
+        coop: { text: SOW_t("lobbies.coop"), icon: "play", tone: "gold" },
+        pve: { text: SOW_t("lobbies.coop"), icon: "play", tone: "gold" },
+        hvn: { text: SOW_t("lobbies.coop"), icon: "play", tone: "gold" },
+        hnv: { text: SOW_t("lobbies.coop"), icon: "play", tone: "gold" },
         ffa: { text: SOW_t("lobbies.free_for_all"), icon: "play", tone: "gold" },
     };
     const meta = labels[actionTarget] || {

@@ -240,7 +240,7 @@ impl SowEngine {
     }
 
     /// Real humans are protected during the opening grace period, except in
-    /// PvE and while disconnected. Campaign relations remain the
+    /// Co-op and while disconnected. Campaign relations remain the
     /// authority for scripted factions, and retaliation is always eligible.
     fn ai_target_allowed(
         &self,
@@ -274,7 +274,7 @@ impl SowEngine {
             return campaign_attacks_players(relation, override_attack, true);
         }
 
-        (self.state.config.game_mode == "PvE"
+        (crate::game_config::is_coop_game_mode(&self.state.config.game_mode)
             && self
                 .state
                 .player(attacker_id)
@@ -1947,6 +1947,9 @@ impl SowEngine {
             return;
         }
         if bot_iq < 100 {
+            return;
+        }
+        if !crate::building::player_has_nuclear_launch_city(&self.buildings, bot_id) {
             return;
         }
 

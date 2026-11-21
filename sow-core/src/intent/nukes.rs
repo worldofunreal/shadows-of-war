@@ -1,5 +1,5 @@
 use crate::engine::SowEngine;
-use crate::game::{BuildingKind, GamePhase, NukeKind, ProjectileKind};
+use crate::game::{BuildingKind, GamePhase, NuclearActionFailure, NukeKind, ProjectileKind};
 
 impl SowEngine {
     pub fn nuclear_price(&self, kind: NukeKind) -> f64 {
@@ -34,10 +34,6 @@ impl SowEngine {
         }
         let tx = target_tile % w;
         let ty = target_tile / w;
-        let defender = self.state.map.owner_id(tx, ty);
-        if defender == 0 || !self.naval_target_allowed(player_id, defender) {
-            return None;
-        }
         self
             .buildings
             .iter()
@@ -63,17 +59,42 @@ impl SowEngine {
         let Some(player) = self.state.player(player_id) else {
             return;
         };
+        if !player.alive {
+            return;
+        }
+        let player_gold = player.gold;
+        let w = self.state.map.width;
         let cost = self.nuclear_price(kind);
-        if !player.alive || !cost.is_finite() || cost < 0.0 || player.gold < cost {
+        let reported_cost = if cost.is_finite() && cost >= 0.0 {
+            cost
+        } else {
+            0.0
+        };
+        if !crate::building::player_has_nuclear_launch_city(&self.buildings, player_id) {
+            self.state.events.push(crate::game::GameEvent::NuclearActionRejected {
+                player_id,
+                reason: NuclearActionFailure::CityRequirement,
+                cost: reported_cost,
+            });
+            return;
+        }
+        let Some(silo) = self.ready_nuclear_silo(player_id, target_tile) else {
+            self.state.events.push(crate::game::GameEvent::NuclearActionRejected {
+                player_id,
+                reason: NuclearActionFailure::NoReadySilo,
+                cost: reported_cost,
+            });
+            return;
+        };
+        if !cost.is_finite() || cost < 0.0 || player_gold < cost {
+            self.state.events.push(crate::game::GameEvent::NuclearActionRejected {
+                player_id,
+                reason: NuclearActionFailure::InsufficientGold,
+                cost: reported_cost,
+            });
             return;
         }
 
-        let w = self.state.map.width;
-        let best_silo = self.ready_nuclear_silo(player_id, target_tile);
-
-        let Some(silo) = best_silo else {
-            return;
-        };
         let silo_id = silo.id;
         let silo_tile = silo.tile_idx;
         let level = match kind {

@@ -52,7 +52,7 @@ export type WowCategoryId =
     | "summary"
     | "general"
     | "pvp_combat"
-    | "pve_campaign"
+    | "coop_campaign"
     | "heroes_mastery"
     | "prestige"
     | "all";
@@ -428,7 +428,7 @@ const GLOBAL_ACHIEVEMENTS: ProfileAchievement[] = [
 export const WOW_PILLAR_ORDER: WowConcretePillar[] = [
     "general",
     "pvp_combat",
-    "pve_campaign",
+    "coop_campaign",
     "heroes_mastery",
     "prestige",
 ];
@@ -436,7 +436,7 @@ export const WOW_PILLAR_ORDER: WowConcretePillar[] = [
 export const WOW_SUBCATEGORIES: Record<WowConcretePillar, string[]> = {
     general: ["all", "battles", "victories", "vanguard"],
     pvp_combat: ["all", "slaying", "commanders_defeated", "conquest"],
-    pve_campaign: ["all", "campaign"],
+    coop_campaign: ["all", "campaign"],
     heroes_mastery: [
         "all",
         "region:europe",
@@ -473,7 +473,7 @@ export function wowCategoryTitle(cat: WowCategoryId): string {
     if (cat === "summary") return tText("profile.ach_cat_summary", "Summary");
     if (cat === "general") return tText("profile.ach_cat_general", "General & Career");
     if (cat === "pvp_combat") return tText("profile.ach_cat_pvp_combat", "PvP & Combat");
-    if (cat === "pve_campaign") return tText("profile.ach_cat_pve_campaign", "PvE & Campaign");
+    if (cat === "coop_campaign") return tText("profile.ach_cat_coop_campaign", "Co-op & Campaign");
     if (cat === "heroes_mastery") return tText("profile.ach_cat_heroes_mastery", "Heroes & Mastery");
     if (cat === "prestige") return tText("profile.ach_cat_prestige", "Prestige & Laurels");
     return tText("profile.ach_all", "All Codex");
@@ -966,7 +966,7 @@ export function enrichAchievement(
         wowCategory = "pvp_combat";
         wowSubcategory = "conquest";
     } else if (id.startsWith("campaign_") || achievement.category === "campaign") {
-        wowCategory = "pve_campaign";
+        wowCategory = "coop_campaign";
         wowSubcategory = "campaign";
     } else if (id.startsWith("skin_")) {
         wowCategory = "prestige";

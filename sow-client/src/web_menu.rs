@@ -18,7 +18,6 @@ use crate::UiAction;
 use crate::app::{HoverPointer, MapContextMenuView, SowApp, TutorialMarkerAction};
 use crate::campaign::CampaignId;
 
-const LEADERBOARD_LIMIT: usize = 100;
 const TUTORIAL_MAX_ZOOM: f32 = 10.0;
 
 #[derive(Debug, Deserialize)]
@@ -2650,7 +2649,9 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         settings_show_fps_ping: app.ui.app.settings_state.show_fps_ping,
         settings_show_match_clock: app.ui.app.settings_state.show_match_clock,
         match_clock_seconds: snapshot.and_then(|snapshot| match_clock_seconds(app, snapshot)),
-        match_status_second: if matches!(app.sim.config.game_mode.as_str(), "Teams" | "PvE") {
+        match_status_second: if app.sim.config.game_mode == "Teams"
+            || sow_core::game_config::is_coop_game_mode(&app.sim.config.game_mode)
+        {
             (snapshot_tick as f64 * f64::from(app.sim.config.tick_rate_ms) / 1000.0) as u64
         } else {
             0
@@ -3862,6 +3863,7 @@ fn player_json(
         "id": player.id,
         "name": &player.name,
         "troops": player.troops,
+        "gold": player.gold,
         "max_troops": player.max_troops,
         "tile_count": player.tile_count,
         "centroid_x": player.centroid_x,
@@ -3888,24 +3890,42 @@ fn player_json(
     payload
 }
 
-fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde_json::Value {
+fn build_leaderboard(
+    snapshot: &sow_core::protocol::SimSnapshot,
+    my_pid: u16,
+    engine: Option<&sow_core::engine::SowEngine>,
+) -> serde_json::Value {
     let mut players: Vec<&sow_core::protocol::PlayerSnapshot> = snapshot.players.iter().collect();
     players.sort_unstable_by(leaderboard_cmp);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_pid);
     // The trade button is offered only where the server would accept the transfer.
-    let mut payload = Vec::with_capacity(players.len().min(LEADERBOARD_LIMIT + 16));
-    for (index, player) in players.into_iter().enumerate() {
-        if index < LEADERBOARD_LIMIT
-            || player.player_type == sow_core::player::PlayerType::Human
-            || player.id == my_pid
-        {
-            let mut value =
-                player_json(player, my_pid, snapshot.total_land_tiles, Some(index + 1));
-            value["can_trade"] =
-                serde_json::json!(my_player.is_some_and(|me| me.can_trade_with(player)));
-            payload.push(value);
+    let mut payload = Vec::with_capacity(players.len());
+    let mut trade_ships = HashMap::<u16, u32>::new();
+    if let Some(engine) = engine {
+        for fleet in engine.fleets.iter().filter(|fleet| {
+            fleet.unit_type == sow_core::game::UnitType::TradeShip
+                && fleet.captured_trade_return.is_none()
+        }) {
+            *trade_ships.entry(fleet.owner_id).or_default() += 1;
         }
+    }
+    for (index, player) in players.into_iter().enumerate() {
+        let mut value =
+            player_json(player, my_pid, snapshot.total_land_tiles, Some(index + 1));
+        value["can_trade"] =
+            serde_json::json!(my_player.is_some_and(|me| me.can_trade_with(player)));
+        if let Some(rates) = engine.and_then(|engine| {
+            crate::sim::player_income_rates(
+                engine,
+                player.id,
+                trade_ships.get(&player.id).copied().unwrap_or_default(),
+            )
+        }) {
+            value["troop_rate"] = serde_json::json!(rates.troops_per_second);
+            value["gold_rate"] = serde_json::json!(rates.gold_per_second);
+        }
+        payload.push(value);
     }
     serde_json::Value::Array(payload)
 }
@@ -5254,6 +5274,12 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             }),
             "nuke_cost": app.sim.config.nuke_cost,
             "nuke_available": me.map(|player| player.nuke_available).unwrap_or(false),
+            "nuke_city_ready": app.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                sow_core::building::snapshot_has_nuclear_launch_city(
+                    &snapshot.buildings,
+                    my_pid,
+                )
+            }),
             "nuke_cooldown_ticks": me.map(|player| player.nuke_cooldown_ticks).unwrap_or(0),
             "military_used": me.map(|player| player.boats_in_use).unwrap_or(0),
             "military_capacity": me.map(|player| player.boat_capacity).unwrap_or(0),
@@ -5368,9 +5394,13 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
 
     if let Some(snapshot) = snapshot {
         if app.ui.show_leaderboard && include_leaderboard {
-            payload["leaderboard"] = build_leaderboard(snapshot, my_pid);
+            payload["leaderboard"] =
+                build_leaderboard(snapshot, my_pid, app.sim.engine.as_ref());
         }
-        if !app.sim.config.tutorial && matches!(app.sim.config.game_mode.as_str(), "Teams" | "PvE") {
+        if !app.sim.config.tutorial
+            && (app.sim.config.game_mode == "Teams"
+                || sow_core::game_config::is_coop_game_mode(&app.sim.config.game_mode))
+        {
             payload["team_leaderboard"] = build_team_leaderboard(snapshot);
             payload["territory_goal"] = serde_json::json!(app.sim.config.map_control_win_percentage);
             payload["local_team"] = serde_json::json!(snapshot.players.iter()

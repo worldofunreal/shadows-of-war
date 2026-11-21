@@ -269,8 +269,8 @@ impl SowEngine {
             if let Some(leader) = leader_override {
                 player.leader = leader;
             }
-            // Bot Heroes form the opposing team in PvE.
-            if config.game_mode == "PvE" {
+            // Bot Heroes form the opposing team in co-op.
+            if crate::game_config::is_coop_game_mode(&config.game_mode) {
                 player.team = Some(crate::protocol::Team::Blue);
             }
             player
@@ -538,7 +538,8 @@ impl SowEngine {
             let mut player = match s.player_type {
                 Some(crate::player::PlayerType::Nation) => {
                     let mut nation = Player::new_nation(bot_id, s.name.clone(), s.color, &config);
-                    if config.game_mode == "PvE" && s.team.is_none() {
+                    if crate::game_config::is_coop_game_mode(&config.game_mode) && s.team.is_none()
+                    {
                         nation.team = Some(crate::protocol::Team::Blue);
                     }
                     nation

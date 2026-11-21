@@ -12,6 +12,30 @@ use crate::geo_entities::{Rarity, Region};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub const COOP_GAME_MODE: &str = "Coop";
+
+pub fn is_coop_game_mode(mode: &str) -> bool {
+    mode.eq_ignore_ascii_case(COOP_GAME_MODE)
+        || mode.eq_ignore_ascii_case("Co-op")
+        || mode.eq_ignore_ascii_case("PvE")
+        || mode.eq_ignore_ascii_case("HumansVsNations")
+        || mode.eq_ignore_ascii_case("Humans vs Nations")
+        || mode.eq_ignore_ascii_case("hvn")
+        || mode.eq_ignore_ascii_case("hnv")
+}
+
+pub fn canonical_game_mode(mode: &str) -> Option<&'static str> {
+    if mode.eq_ignore_ascii_case("FFA") {
+        Some("FFA")
+    } else if mode.eq_ignore_ascii_case("Teams") {
+        Some("Teams")
+    } else if is_coop_game_mode(mode) {
+        Some(COOP_GAME_MODE)
+    } else {
+        None
+    }
+}
+
 pub const DAILY_UNLOCK_LEVEL: u32 = 3;
 pub const WEEKLY_UNLOCK_LEVEL: u32 = 5;
 pub const MAX_FREE_SWAPS_PER_PERIOD: u8 = 1;
@@ -23,8 +47,13 @@ pub enum MatchMode {
     #[default]
     Ffa,
     Teams,
-    #[serde(alias = "humans_vs_nations")]
-    Pve,
+    #[serde(
+        alias = "pve",
+        alias = "humans_vs_nations",
+        alias = "hvn",
+        alias = "hnv"
+    )]
+    Coop,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,8 +120,8 @@ pub enum MissionActionTarget {
     HeroesFreeRotation,
     HeroesAll,
     Teams,
-    #[serde(alias = "hnv")]
-    Pve,
+    #[serde(alias = "pve", alias = "hvn", alias = "hnv")]
+    Coop,
     Ffa,
 }
 
@@ -421,23 +450,23 @@ pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[
         action_target: MissionActionTarget::Teams,
     },
     MissionDefinition {
-        id: "daily_hnv_win",
+        id: "daily_coop_win",
         category: MissionCategory::Daily,
-        title_key: "missions.daily_hnv_win_title",
-        description_key: "missions.daily_hnv_win_desc",
+        title_key: "missions.daily_coop_win_title",
+        description_key: "missions.daily_coop_win_desc",
         crowns_reward: 35,
         gems_reward: 3,
         target: 1,
         requirement: MissionRequirement::WinMode {
-            mode: MatchMode::Pve,
+            mode: MatchMode::Coop,
             count: 1,
         },
         icon: "shield",
         order: 14,
         lane: 0,
         axis: PreferenceAxis::Mode,
-        tag: "hnv",
-        action_target: MissionActionTarget::Pve,
+        tag: "coop",
+        action_target: MissionActionTarget::Coop,
     },
     MissionDefinition {
         id: "daily_ranked_3",
@@ -739,23 +768,23 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
         action_target: MissionActionTarget::Teams,
     },
     MissionDefinition {
-        id: "weekly_hnv_defender",
+        id: "weekly_coop_defender",
         category: MissionCategory::Weekly,
-        title_key: "missions.weekly_hnv_defender_title",
-        description_key: "missions.weekly_hnv_defender_desc",
+        title_key: "missions.weekly_coop_defender_title",
+        description_key: "missions.weekly_coop_defender_desc",
         crowns_reward: 110,
         gems_reward: 6,
         target: 2,
         requirement: MissionRequirement::WinMode {
-            mode: MatchMode::Pve,
+            mode: MatchMode::Coop,
             count: 2,
         },
         icon: "shield",
         order: 42,
         lane: 0,
         axis: PreferenceAxis::Mode,
-        tag: "hnv",
-        action_target: MissionActionTarget::Pve,
+        tag: "coop",
+        action_target: MissionActionTarget::Coop,
     },
     MissionDefinition {
         id: "weekly_peak_first_2",
@@ -855,11 +884,61 @@ pub const WEEKLY_MISSION_POOL: &[MissionDefinition] = &[
 ];
 
 pub fn mission_by_id(id: &str) -> Option<&'static MissionDefinition> {
+    let id = canonical_mission_id(id);
     ONBOARDING_MISSIONS
         .iter()
         .chain(DAILY_MISSION_POOL.iter())
         .chain(WEEKLY_MISSION_POOL.iter())
         .find(|def| def.id == id)
+}
+
+pub fn canonical_mission_id(id: &str) -> &str {
+    match id {
+        "daily_hnv_win" => "daily_coop_win",
+        "weekly_hnv_defender" => "weekly_coop_defender",
+        _ => id,
+    }
+}
+
+fn migrate_legacy_mission_state(
+    records: &mut BTreeMap<String, MissionRecord>,
+    daily_ids: &mut [String],
+    daily_swapped_out: &mut BTreeSet<String>,
+    weekly_ids: &mut [String],
+    weekly_swapped_out: &mut BTreeSet<String>,
+) {
+    for id in daily_ids.iter_mut().chain(weekly_ids.iter_mut()) {
+        let canonical = canonical_mission_id(id);
+        if canonical != id {
+            *id = canonical.to_string();
+        }
+    }
+    for swapped_out in [daily_swapped_out, weekly_swapped_out] {
+        let canonical_ids: BTreeSet<String> = std::mem::take(swapped_out)
+            .into_iter()
+            .map(|id| canonical_mission_id(&id).to_string())
+            .collect();
+        *swapped_out = canonical_ids;
+    }
+    for (legacy, canonical) in [
+        ("daily_hnv_win", "daily_coop_win"),
+        ("weekly_hnv_defender", "weekly_coop_defender"),
+    ] {
+        if let Some(mut old_record) = records.remove(legacy) {
+            old_record.id = canonical.to_string();
+            if let Some(record) = records.get_mut(canonical) {
+                record.progress = record.progress.max(old_record.progress);
+                record.completed |= old_record.completed;
+                record.claimed |= old_record.claimed;
+                if record.claimed_at.is_none() {
+                    record.claimed_at = old_record.claimed_at;
+                }
+                record.seen_keys.extend(old_record.seen_keys);
+            } else {
+                records.insert(canonical.to_string(), old_record);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1274,6 +1353,13 @@ pub fn sync_hands_for_periods(
     deal_salt: u64,
     playability: Option<&PlayabilityContext<'_>>,
 ) -> Vec<&'static MissionDefinition> {
+    migrate_legacy_mission_state(
+        state.records,
+        state.daily_mission_ids,
+        state.daily_swapped_out_ids,
+        state.weekly_mission_ids,
+        state.weekly_swapped_out_ids,
+    );
     let target_daily_day = if tactics_completed {
         epoch_day
     } else {
@@ -1903,7 +1989,7 @@ mod tests {
     }
 
     #[test]
-    fn telemetry_distinct_heroes_hnv_separation_and_swap_work() {
+    fn telemetry_distinct_heroes_coop_separation_and_swap_work() {
         let mut records = BTreeMap::new();
         let mut daily_day = 20000;
         let mut daily_ids = vec![
@@ -1916,13 +2002,13 @@ mod tests {
         let mut weekly_period = 10;
         let mut weekly_ids = vec![
             "weekly_variety_heroes".to_string(),
-            "weekly_hnv_defender".to_string(),
+            "weekly_coop_defender".to_string(),
             "weekly_peak_first_2".to_string(),
         ];
         let mut weekly_swaps = 0u8;
         let mut weekly_out = BTreeSet::new();
 
-        // PvE match must NOT count as Teams even though team is present on PvE!
+        // Co-op must NOT count as Teams even though it assigns teams!
         // Also tests 2-contender guard on Top-3 FFA vs >=6 contender match.
         advance_missions_after_match_with_hands(
             HandSyncState {
@@ -1943,7 +2029,7 @@ mod tests {
             &MatchMissionContext {
                 player_level: 5,
                 tactics_completed: true,
-                mode: MatchMode::Pve,
+                mode: MatchMode::Coop,
                 won: true,
                 leader_id: Some("boudica"),
                 peak_territory_rank: Some(1),
@@ -1953,7 +2039,7 @@ mod tests {
             },
         );
         assert!(!records.contains_key("daily_team_game"));
-        assert_eq!(records["weekly_hnv_defender"].progress, 1);
+        assert_eq!(records["weekly_coop_defender"].progress, 1);
         assert_eq!(records["weekly_variety_heroes"].progress, 1);
         assert_eq!(records["weekly_peak_first_2"].progress, 1);
 

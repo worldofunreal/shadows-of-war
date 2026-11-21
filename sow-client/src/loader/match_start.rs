@@ -293,7 +293,10 @@ impl SowApp {
                 color: leader.filler_rgb(),
                 player_type: sow_core::player::PlayerType::Human,
                 team: config.player_team.or(match config.game_mode.as_str() {
-                    "Teams" | "PvE" => Some(sow_core::protocol::Team::Red),
+                    "Teams" => Some(sow_core::protocol::Team::Red),
+                    mode if sow_core::game_config::is_coop_game_mode(mode) => {
+                        Some(sow_core::protocol::Team::Red)
+                    }
                     _ => None,
                 }),
                 spawn_x: 0,

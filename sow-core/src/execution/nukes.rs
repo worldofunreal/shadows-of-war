@@ -12,10 +12,6 @@ impl SowEngine {
         let y = target / width;
         use crate::rng::NextIntExt;
         let mut rng = wyrand::WyRand::new(self.state.seed ^ carrier);
-        let defender = self.state.map.owner_id(x, y);
-        if defender == 0 || !self.naval_target_allowed(owner, defender) {
-            return;
-        }
         let mut targets = vec![target];
         const RADIUS: i32 = 1500;
         const MIN_SPREAD: u32 = 55;
@@ -33,9 +29,7 @@ impl SowEngine {
             let (Some(tx), Some(ty)) = (x.checked_add_signed(dx), y.checked_add_signed(dy)) else {
                 continue;
             };
-            if tx >= width || ty >= height || defender == 0
-                || self.state.map.owner_id(tx, ty) != defender
-            {
+            if tx >= width || ty >= height {
                 continue;
             }
             let cell = (tx / MIN_SPREAD, ty / MIN_SPREAD);

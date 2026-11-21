@@ -45,7 +45,7 @@
           "SAM": 2,
           "Factory": 4,
           "Tower": 4,
-          "City": 1,
+          "City": 4,
           "Farm": 2,
           "Port": 2,
           "MissileSilo": 1
@@ -135,6 +135,136 @@
       "guide": {
         "kind": "world",
         "target": "build_site",
+        "gesture": "tap"
+      },
+      "next": "at2_pick_city"
+    },
+    {
+      "id": "at2_pick_city",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_adv2_lv4_title",
+      "body_key": "tutorial.campaign_tactics_adv2_lv4_body",
+      "hint_key": "tutorial.campaign_tactics_adv2_lv4_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "dim_outside": true,
+      "trigger": {
+        "type": "ui",
+        "action": "dock_city",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_city",
+        "gesture": "tap"
+      },
+      "next": "at2_build_city"
+    },
+    {
+      "id": "at2_build_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_adv2_lv4_title",
+      "hint_key": "tutorial.campaign_tactics_adv2_lv4_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "dim_outside": true,
+      "paused_action": "build_until_started",
+      "trigger": {
+        "type": "city",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "next": "at2_wait_city"
+    },
+    {
+      "id": "at2_wait_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_adv2_lv4_title",
+      "hint_key": "tutorial.campaign_tactics_adv2_lv4_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "City",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "next": "at2_select_city"
+    },
+    {
+      "id": "at2_select_city",
+      "type": "guide",
+      "title_key": "tutorial.campaign_tactics_adv2_lv4_title",
+      "body_key": "tutorial.campaign_tactics_adv2_lv4_body",
+      "hint_key": "tutorial.campaign_tactics_adv2_lv4_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "dim_outside": true,
+      "trigger": {
+        "type": "building_selected",
+        "kind": "City",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
+      "next": "at2_upgrade_city"
+    },
+    {
+      "id": "at2_upgrade_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_adv2_lv4_title",
+      "hint_key": "tutorial.campaign_tactics_adv2_lv4_hint",
+      "speaker": "sun_tzu",
+      "pause_game": true,
+      "dim_outside": true,
+      "paused_action": "upgrade_until_started",
+      "trigger": {
+        "type": "structure_upgrade",
+        "kind": "City",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_structure",
+        "gesture": "tap"
+      },
+      "next": "at2_city_level_four"
+    },
+    {
+      "id": "at2_city_level_four",
+      "type": "objective",
+      "title_key": "tutorial.campaign_tactics_adv2_lv4_title",
+      "hint_key": "tutorial.campaign_tactics_adv2_lv4_hint",
+      "speaker": "sun_tzu",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "City",
+        "value": 4,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
         "gesture": "tap"
       },
       "next": "at2_open_nuke_target"

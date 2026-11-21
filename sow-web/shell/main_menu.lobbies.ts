@@ -55,8 +55,11 @@ function gameModeLabel(mode: string) {
     const keys: Record<string, string> = {
         FFA: "lobbies.free_for_all",
         Teams: "lobbies.teams_two",
-        PvE: "lobbies.humans_vs_nations",
-        HumansVsNations: "lobbies.humans_vs_nations",
+        Coop: "lobbies.coop",
+        PvE: "lobbies.coop",
+        HumansVsNations: "lobbies.coop",
+        hvn: "lobbies.coop",
+        hnv: "lobbies.coop",
         Matchmaking: "lobbies.matchmaking",
     };
     const key = keys[mode];
@@ -957,7 +960,7 @@ export function renderBrowser() {
 const CREATE_TACTICAL_ICONS: Record<string, string> = {
     ffa: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m14.5 17.5-11-11V3h3.5l11 11'/><path d='m13 19 6-6'/><path d='m16 16 4 4'/><path d='m19 21 2-2'/><path d='m9.5 17.5 11-11V3H17L6 14'/><path d='m11 19-6-6'/><path d='m8 16-4 4'/><path d='m5 21-2-2'/></svg>",
     teams: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z'/><path d='M12 4v17'/><path d='M5 10h14'/></svg>",
-    hvn: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14'/></svg>",
+    coop: "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14'/></svg>",
     vanilla:
         "<svg class='sow-create__svg-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 22s7-3.5 7-9.5V6l-7-3-7 3v6.5C5 18.5 12 22 12 22Z'/><path d='m9 12 2 2 4-4'/></svg>",
     terminator:
@@ -1054,7 +1057,7 @@ export function stepCreateSlider(field: string, delta: number) {
     } else if (field === "nation_count") {
         const maxNations = botLimit("nations", 129);
         const cur = draft.nation_count != null ? Number(draft.nation_count) : 0;
-        draft.nation_count = draft.game_mode === "PvE" ? Math.max(0, Math.min(maxNations, cur + delta)) : 0;
+        draft.nation_count = draft.game_mode === "Coop" ? Math.max(0, Math.min(maxNations, cur + delta)) : 0;
     } else if (field === "seed") {
         const cur = Number(draft.seed) || 42;
         draft.seed = Math.max(1, Math.min(9999, cur + delta));
@@ -1073,7 +1076,13 @@ function botLimit(role: keyof MenuState["bot_limits"], fallback: number) {
 }
 
 export function cloneConfig(): MenuCustomGameConfig {
-    return JSON.parse(JSON.stringify(menuUi.state!.custom_game_config || {}));
+    const config = JSON.parse(JSON.stringify(menuUi.state!.custom_game_config || {}));
+    if (["coop", "co-op", "pve", "humansvsnations", "humans vs nations", "hvn", "hnv"].includes(
+        String(config.game_mode || "").toLowerCase(),
+    )) {
+        config.game_mode = "Coop";
+    }
+    return config;
 }
 
 export function syncCreateDraft(form: HTMLFormElement) {
@@ -1122,7 +1131,7 @@ export function syncCreateDraft(form: HTMLFormElement) {
     ) {
         draft.map_roster_preset = selected.default_roster || null;
     }
-    if (draft.game_mode !== "PvE") {
+    if (draft.game_mode !== "Coop") {
         draft.nation_count = 0;
     }
 }
@@ -1186,12 +1195,12 @@ export function renderCreate() {
     const modeMeta: Record<string, { label: string; icon: string }> = {
         FFA: { label: SOW_t("lobbies.free_for_all"), icon: createTacticalIcon("ffa") },
         Teams: { label: SOW_t("lobbies.teams_two"), icon: createTacticalIcon("teams") },
-        PvE: { label: SOW_t("lobbies.hvn"), icon: createTacticalIcon("hvn") },
+        Coop: { label: SOW_t("lobbies.coop"), icon: createTacticalIcon("coop") },
     };
 
     const currentMode = config.game_mode || "FFA";
-    const isPveMode = currentMode === "PvE";
-    const modeOptionsHtml = ["FFA", "Teams", "PvE"]
+    const isCoopMode = currentMode === "Coop";
+    const modeOptionsHtml = ["FFA", "Teams", "Coop"]
         .map(function (mode) {
             const meta = modeMeta[mode] || { label: mode, icon: "" };
             const isSelected = currentMode === mode;
@@ -1435,7 +1444,7 @@ export function renderCreate() {
     const botCountPct = sliderFillPercent(botCountVal, 0, maxTribesLimit);
 
     const maxNationsLimit = botLimit("nations", 129);
-    const nationCountVal = isPveMode
+    const nationCountVal = isCoopMode
         ? config.nation_count != null
             ? Number(config.nation_count)
             : 0
@@ -1654,7 +1663,7 @@ export function renderCreate() {
         "</button>" +
         "</div>" +
         "</div>" +
-        (isPveMode
+        (isCoopMode
             ? "<div class='sow-menu__slider-field sow-create__force-row'>" +
               "<div class='sow-menu__slider-label sow-create__force-header'>" +
               "<span class='sow-create__force-title'>" +

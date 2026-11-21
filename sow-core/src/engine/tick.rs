@@ -503,7 +503,9 @@ impl SowEngine {
 
         if self.state.config.ranked_1v1 {
             self.check_ranked_duel_winner(win_threshold);
-        } else if self.state.config.game_mode == "Teams" || self.state.config.game_mode == "PvE" {
+        } else if self.state.config.game_mode == "Teams"
+            || crate::game_config::is_coop_game_mode(&self.state.config.game_mode)
+        {
             self.check_team_winner(win_threshold);
         } else {
             self.check_ffa_winner(win_threshold);
@@ -994,7 +996,7 @@ mod tests {
 
     #[test]
     fn simultaneous_victory_candidates_have_a_stable_winner() {
-        for mode in ["FFA", "Teams", "PvE"] {
+        for mode in ["FFA", "Teams", "Coop"] {
             for reverse in [false, true] {
                 let config = GameConfig {
                     game_mode: mode.into(),
@@ -1035,7 +1037,7 @@ mod tests {
         for (mode, ranked_1v1) in [
             ("FFA", false),
             ("Teams", false),
-            ("PvE", false),
+            ("Coop", false),
             ("FFA", true),
         ] {
             for (leading_tiles, expected_winner) in [(74, None), (75, Some(1))] {
@@ -1048,7 +1050,7 @@ mod tests {
                 let mut state = GameState::new(42, 10, 10, config.clone());
                 state.total_land_tiles = 99;
 
-                if mode == "Teams" || mode == "PvE" {
+                if mode == "Teams" || crate::game_config::is_coop_game_mode(mode) {
                     for (id, team, tiles) in [
                         (1, Team::Red, 40),
                         (3, Team::Red, leading_tiles - 40),
@@ -1077,7 +1079,7 @@ mod tests {
                     engine.state.winner, expected_winner,
                     "mode={mode}, ranked={ranked_1v1}, land={leading_tiles}"
                 );
-                if mode == "Teams" || mode == "PvE" {
+                if mode == "Teams" || crate::game_config::is_coop_game_mode(mode) {
                     assert_eq!(
                         engine.state.winning_team,
                         expected_winner.map(|_| Team::Red)
@@ -1135,7 +1137,7 @@ mod tests {
 
     #[test]
     fn tutorial_skips_automatic_victory_without_changing_normal_games() {
-        for game_mode in ["FFA", "Teams", "PvE"] {
+        for game_mode in ["FFA", "Teams", "Coop"] {
             // Map-control victory with an opponent, then last player/team below the threshold.
             for (red_tiles, blue_tiles) in [(70, 10), (10, 0)] {
                 for tutorial in [false, true] {

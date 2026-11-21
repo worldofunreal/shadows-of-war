@@ -119,18 +119,74 @@ impl SowEngine {
                             }
                         }
                     }
-                    if matches!(slot.tier, AiTier::Ghost | AiTier::Nation)
+                    let wants_nuclear_progression = matches!(slot.tier, AiTier::Ghost | AiTier::Nation)
                         && bot_iq >= 100
-                        && agg.count_silo == 0
-                        && agg.ready_factory_count > 0
-                        && player_gold >= self.nuclear_price(crate::game::NukeKind::AtomBomb)
                         && self.campaign_allows_building(BuildingKind::MissileSilo, 1)
+                        && self.campaign_allows_building(BuildingKind::City, 4)
                         && self.buildings.iter().any(|building| {
                             building.kind == BuildingKind::City
                                 && self.naval_target_allowed(bot_id, building.owner_id)
-                        })
-                    {
-                        return;
+                        });
+                    if wants_nuclear_progression {
+                        if !crate::building::player_has_nuclear_launch_city(&self.buildings, bot_id) {
+                            if super::structures::has_pending_build(decisions, bot_id) {
+                                return;
+                            }
+                            if let Some(upgrade) = stack_build_decision(
+                                self,
+                                bot_id,
+                                BuildingKind::City,
+                                player_gold,
+                                4,
+                            ) {
+                                if let Some(player) = self.state.player_mut(bot_id) {
+                                    player.iq_points -= build_cost;
+                                }
+                                decisions.push(upgrade);
+                                return;
+                            }
+                            if agg.count_city == 0 {
+                                let cost = structure_build_cost_gold(
+                                    BuildingKind::City,
+                                    agg.levels_of_kind(BuildingKind::City),
+                                    &self.state.config,
+                                );
+                                if player_gold >= cost
+                                    && !super::structures::has_pending_build(decisions, bot_id)
+                                    && let Some((x, y)) = self.state.player(bot_id).and_then(|p| p.home)
+                                {
+                                    self.refresh_building_grid();
+                                    if let Some(target_tile) = find_structure_site_near(
+                                        &self.state.map,
+                                        bot_id,
+                                        y * self.state.map.width + x,
+                                        BuildingKind::City,
+                                        &self.building_grid,
+                                        &mut self.placement_scratch,
+                                        self.legacy_building_rules,
+                                    ) {
+                                        if let Some(player) = self.state.player_mut(bot_id) {
+                                            player.iq_points -= build_cost;
+                                        }
+                                        decisions.push(BotDecision {
+                                            bot_id,
+                                            kind: BotDecisionKind::Build,
+                                            intent: GameplayIntent::BuildStructure {
+                                                kind: BuildingKind::City,
+                                                target_tile,
+                                            },
+                                        });
+                                        return;
+                                    }
+                                }
+                            }
+                            return;
+                        }
+                        if agg.count_silo == 0
+                            && player_gold >= self.nuclear_price(crate::game::NukeKind::AtomBomb)
+                        {
+                            return;
+                        }
                     }
                     let economy_priority_gap = slot.policy().prioritizes_economy_buildings
                         && [BuildingKind::City, BuildingKind::Factory, BuildingKind::Farm]

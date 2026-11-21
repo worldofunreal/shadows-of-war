@@ -215,11 +215,10 @@ impl Aim {
         };
         let id = sim.my_player_id.unwrap_or(0);
         let silo = engine.ready_nuclear_silo(id, tile).filter(|_| {
-            map.terrain[tile as usize].is_land()
-                && engine
-                    .state
-                    .player(id)
-                    .is_some_and(|p| p.alive && p.gold >= engine.nuclear_price(kind))
+            engine
+                .state
+                .player(id)
+                .is_some_and(|p| p.alive && p.gold >= engine.nuclear_price(kind))
                 && engine.campaign_allows_action(sow_core::campaign::CampaignAction::Nuke)
         });
         let mut target = marker(tile, map.width, level, zoom);

@@ -694,7 +694,7 @@ pub fn calculate(input: RewardInput) -> MatchReward {
 
 // Gem bonus per verified match (owner decision 2026-11): a small amount for
 // playing, more for a win, the most for the hardest win (public FFA). Teams,
-// HvN and Ranked 1v1 wins pay half of an FFA win.
+// Co-op and Ranked 1v1 wins pay half of an FFA win.
 // Gems are scarce on purpose: they pay about a third of the 2026-11 amounts.
 const GEMS_PLAYED: u64 = 0;
 const GEMS_PLAYED_WITH_DEFEATS: u64 = 0;
@@ -708,7 +708,7 @@ pub const GEMS_MIN_PLAYED_SECONDS: u32 = 300;
 pub struct GemInput<'a> {
     /// Match queue: "Matchmaking", "Custom" or "Ranked1v1".
     pub queue: &'a str,
-    /// Game mode: "FFA", "Teams" or "PvE".
+    /// Game mode: "FFA", "Teams" or "Coop".
     pub mode: &'a str,
     pub won: bool,
     pub players_defeated: u32,
@@ -791,7 +791,7 @@ mod tests {
         assert_eq!(match_gems(GemInput { won: true, ..played }), 3);
         assert_eq!(match_gems(GemInput { won: true, mode: "Teams", ..played }), 1);
         assert_eq!(
-            match_gems(GemInput { won: true, mode: "PvE", ..played }),
+            match_gems(GemInput { won: true, mode: "Coop", ..played }),
             1
         );
         assert_eq!(match_gems(GemInput { won: true, queue: "Ranked1v1", ..played }), 1);

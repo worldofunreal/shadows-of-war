@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub use sow_data::missions::{COOP_GAME_MODE, canonical_game_mode, is_coop_game_mode};
+
 fn default_seed() -> u64 {
     42
 }
@@ -55,7 +57,7 @@ fn default_farm_troop_income() -> f64 {
 }
 
 fn default_city_gold_income() -> f64 {
-    0.10 / NORMAL_GAME_SPEED
+    0.09 / NORMAL_GAME_SPEED
 }
 
 fn default_port_troop_income() -> f64 {
@@ -71,15 +73,15 @@ fn default_hero_district_troop_income() -> f64 {
 }
 
 fn default_farm_gold_income() -> f64 {
-    0.20 / NORMAL_GAME_SPEED
+    0.18 / NORMAL_GAME_SPEED
 }
 
 fn default_port_gold_income() -> f64 {
-    0.50 / NORMAL_GAME_SPEED
+    0.45 / NORMAL_GAME_SPEED
 }
 
 fn default_factory_gold_income() -> f64 {
-    0.85 / NORMAL_GAME_SPEED
+    0.80 / NORMAL_GAME_SPEED
 }
 
 /// Hero-specific gold earned per game second per weighted City level.
@@ -119,11 +121,11 @@ fn default_structure_upgrade_scale() -> f64 {
 }
 
 fn default_cost_farm() -> f64 {
-    100.0
+    105.0
 }
 
 fn default_cost_sam() -> f64 {
-    1_000.0
+    350.0
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -725,10 +727,10 @@ impl Default for GameConfig {
             alliance_troop_income: default_alliance_troop_income(),
             trade_troop_income: default_trade_troop_income(),
             elimination_troop_bounty: default_elimination_troop_bounty(),
-            cost_city: 95.0,
-            cost_tower: 85.0,
-            cost_factory: 90.0,
-            cost_port: 105.0,
+            cost_city: 100.0,
+            cost_tower: 70.0,
+            cost_factory: 95.0,
+            cost_port: 110.0,
             cost_farm: default_cost_farm(),
             cost_sam: default_cost_sam(),
             first_economic_structure_cost: None,

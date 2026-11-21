@@ -1033,16 +1033,17 @@ function normalizeWowCategory(raw: string | undefined): WowCategoryId {
     raw === "summary" ||
     raw === "general" ||
     raw === "pvp_combat" ||
-    raw === "pve_campaign" ||
+    raw === "coop_campaign" ||
     raw === "heroes_mastery" ||
     raw === "prestige" ||
     raw === "all"
   ) {
     return raw;
   }
+  if (raw === "pve_campaign") return "coop_campaign";
   if (raw === "battles" || raw === "victories") return "general";
   if (raw === "combat") return "pvp_combat";
-  if (raw === "campaign") return "pve_campaign";
+  if (raw === "campaign") return "coop_campaign";
   if (raw === "commanders") return "heroes_mastery";
   if (raw === "laurels") return "prestige";
   return "summary";

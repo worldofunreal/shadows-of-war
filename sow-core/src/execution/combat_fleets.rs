@@ -926,7 +926,8 @@ impl SowEngine {
             return;
         };
         let docked = docked_per_port.get(&port_id).copied().unwrap_or(1).max(1) as f64;
-        let repair_per_second = f64::from(port.active_level()) * 50.0 / docked;
+        let repair_per_second =
+            crate::building::port_repair_per_second(port.active_level()) / docked;
         self.fleets[index].troops = (self.fleets[index].troops
             + self.state.config.per_tick(repair_per_second))
         .min(max_health);
@@ -1203,7 +1204,8 @@ impl SowEngine {
                 continue;
             }
             if let Some(docked) = docked_per_port
-                && docked.get(&port.id).copied().unwrap_or(0) >= usize::from(port.active_level)
+                && docked.get(&port.id).copied().unwrap_or(0)
+                    >= crate::building::port_dock_capacity(port.active_level) as usize
             {
                 continue;
             }

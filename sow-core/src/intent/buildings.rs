@@ -1055,6 +1055,11 @@ mod tests {
         let mut defender = Player::new_human(2, "Defender".into(), [0.0, 0.0, 1.0], &game.state.config);
         defender.tile_count = 1;
         game.state.register_player(defender);
+        let mut ally = Player::new_human(3, "Ally".into(), [0.0, 1.0, 0.0], &game.state.config);
+        ally.tile_count = 1;
+        game.state.register_player(ally);
+        game.state.player_mut(1).unwrap().alliances.push(3);
+        game.state.player_mut(3).unwrap().alliances.push(1);
         game.state.map.set_owner_id(4, 0, 2);
         game.state.player_mut(1).unwrap().gold = 1000.0;
         game.add_building(building(1, BuildingKind::Factory, 4));
@@ -1063,6 +1068,24 @@ mod tests {
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert!(game.projectiles.is_empty());
         assert_eq!(game.state.player(1).unwrap().gold, 1000.0);
+        assert!(game.state.events.iter().any(|event| matches!(event,
+            crate::game::GameEvent::NuclearActionRejected {
+                player_id: 1,
+                reason: crate::game::NuclearActionFailure::CityRequirement,
+                ..
+            }
+        )));
+
+        game.add_building(building(7, BuildingKind::City, 4));
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
+        assert!(game.projectiles.is_empty());
+        assert!(game.state.events.iter().any(|event| matches!(event,
+            crate::game::GameEvent::NuclearActionRejected {
+                player_id: 1,
+                reason: crate::game::NuclearActionFailure::NoReadySilo,
+                ..
+            }
+        )));
 
         let mut silo = building(3, BuildingKind::MissileSilo, 1);
         silo.under_construction = true;
@@ -1070,9 +1093,34 @@ mod tests {
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert!(game.projectiles.is_empty());
         game.buildings[2].under_construction = false;
+        game.state.player_mut(1).unwrap().gold = 499.0;
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
+        assert!(game.projectiles.is_empty());
+        assert!(game.state.events.iter().any(|event| matches!(event,
+            crate::game::GameEvent::NuclearActionRejected {
+                player_id: 1,
+                reason: crate::game::NuclearActionFailure::InsufficientGold,
+                ..
+            }
+        )));
+        game.state.player_mut(1).unwrap().gold = 1000.0;
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
+        let city_idx = game.buildings.iter().position(|building| building.id == 7).unwrap();
+        game.buildings[city_idx].under_construction = true;
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert_eq!(game.projectiles.len(), 1);
+        assert_eq!(game.state.player(1).unwrap().gold, 500.0);
+        assert_eq!(game.nuclear_charges(3, 1), 0);
+        game.buildings[city_idx].under_construction = false;
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
+        assert_eq!(game.projectiles.len(), 1);
+        assert!(game.state.events.iter().any(|event| matches!(event,
+            crate::game::GameEvent::NuclearActionRejected {
+                player_id: 1,
+                reason: crate::game::NuclearActionFailure::NoReadySilo,
+                ..
+            }
+        )));
         assert_eq!(game.state.player(1).unwrap().gold, 500.0);
         game.state.tick += 90;
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
@@ -1099,6 +1147,69 @@ mod tests {
         assert_eq!(game.nuclear_charges(4, 2), 1);
         game.state.tick += 5;
         assert_eq!(game.nuclear_charges(4, 2), 2);
+
+        game.projectiles.clear();
+        game.state.player_mut(1).unwrap().gold = 1_000_000.0;
+        game.state.map.set_owner_id(1, 1, 1);
+        game.state.map.set_owner_id(2, 1, 3);
+        game.state.map.terrain[12] = crate::map::MapTile::from_byte(0);
+        game.add_building(building(5, BuildingKind::MissileSilo, 4));
+        game.add_building(building(6, BuildingKind::MissileSilo, 4));
+        for (kind, target) in [
+            (NukeKind::AtomBomb, 6),       // Own land
+            (NukeKind::AtomBomb, 4),       // Enemy land
+            (NukeKind::HydrogenBomb, 7),   // Allied land
+            (NukeKind::HydrogenBomb, 8),   // Neutral land
+            (NukeKind::HydrogenBomb, 12),  // Water
+            (NukeKind::MIRV, 12),          // Water
+        ] {
+            game.launch_nuclear_weapon(1, kind, target);
+        }
+        for target in [4, 6, 7, 8, 12] {
+            assert!(game.projectiles.iter().any(|projectile| projectile.dst_tile == target));
+        }
+        assert_eq!(
+            game.projectiles.iter().filter(|projectile| projectile.dst_tile == 12).count(),
+            2
+        );
+
+        let mut spread_game = engine(false);
+        spread_game.state.map = crate::map::GameMap::new(256, 256);
+        let mut spread_enemy = Player::new_human(
+            2,
+            "Spread target".into(),
+            [0.0, 0.0, 1.0],
+            &spread_game.state.config,
+        );
+        spread_enemy.tile_count = 1;
+        spread_game.state.register_player(spread_enemy);
+        let spread_target = 128 * 256 + 128;
+        spread_game.state.map.set_owner_id(128, 128, 2);
+        let mut spread_silo = building(1, BuildingKind::MissileSilo, 1);
+        spread_silo.tile_idx = spread_target;
+        spread_game.add_building(spread_silo);
+        let mut spread_city = building(2, BuildingKind::City, 4);
+        spread_city.tile_idx = spread_target - 1;
+        spread_game.add_building(spread_city);
+        spread_game.state.player_mut(1).unwrap().gold = 100_000.0;
+        spread_game.launch_nuclear_weapon(1, NukeKind::MIRV, spread_target);
+        spread_game.execute_projectiles();
+        let warheads: Vec<_> = spread_game
+            .projectiles
+            .iter()
+            .filter(|projectile| projectile.kind == crate::game::ProjectileKind::Nuke { level: 4 })
+            .collect();
+        assert!(warheads.len() > 1);
+        assert!(warheads.iter().any(|projectile| {
+            projectile.dst_tile != spread_target
+                && spread_game.state.map.owner_id(
+                    projectile.dst_tile % spread_game.state.map.width,
+                    projectile.dst_tile / spread_game.state.map.width,
+                ) != 2
+        }));
+        assert!(warheads
+            .iter()
+            .all(|projectile| projectile.dst_tile < 256 * 256));
     }
 
     #[test]

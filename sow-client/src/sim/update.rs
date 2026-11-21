@@ -1,6 +1,104 @@
 use crate::app::SowApp;
 use web_time::Instant;
 
+#[derive(Clone, Copy, Default)]
+pub(crate) struct PlayerIncomeRates {
+    pub troops_per_second: f64,
+    pub gold_per_second: f64,
+    pub hero_gold_per_second: f64,
+}
+
+pub(crate) fn player_income_rates(
+    engine: &sow_core::engine::SowEngine,
+    player_id: u16,
+    trade_ships: u32,
+) -> Option<PlayerIncomeRates> {
+    let player = engine.state.player(player_id)?;
+    if !player.alive || player.tile_count == 0 {
+        return Some(PlayerIncomeRates::default());
+    }
+
+    let config = &engine.state.config;
+    let aggregate = engine
+        .building_aggregates
+        .get(player_id as usize)
+        .copied()
+        .unwrap_or_default();
+    let (_, standards_troops) = sow_core::execution::income_rates::imperial_standard_income(
+        aggregate,
+        player.leader,
+        config,
+    );
+    let council_multiplier = sow_core::execution::income_rates::tafaifa_council_multiplier(
+        player.leader,
+        sow_core::execution::hero_effects::living_allies(&engine.state, player_id),
+    );
+    let bot_income_multiplier = if player.player_type == sow_core::player::PlayerType::Bot {
+        0.75
+    } else {
+        1.0
+    };
+    let troop_rate = (sow_core::execution::income_rates::troop_income_per_second(
+        player.tile_count,
+        aggregate,
+        player.leader,
+        config,
+    ) * council_multiplier
+        + sow_core::execution::income_rates::alliance_troops_per_second(
+            player.alliances.len(),
+            player.leader,
+            config,
+        )
+        + standards_troops)
+        * bot_income_multiplier
+        + sow_core::execution::income_rates::trade_troops_per_second(
+            trade_ships,
+            player.leader,
+            config,
+        );
+    let troop_rate = sow_core::execution::income_rates::diminishing_passive_income(
+        troop_rate,
+        sow_core::execution::income_rates::TROOP_PASSIVE_FULL_RATE_CAP,
+        sow_core::execution::income_rates::TROOP_PASSIVE_EXCESS_RATE,
+    ) * config.global_speed_multiplier;
+
+    let hero_gold_rate = engine.hero_gold_per_second(player_id);
+    let gold_rate = (sow_core::execution::income_rates::gold_income_per_second(
+        player.tile_count,
+        aggregate,
+        player.leader,
+        config,
+    ) * council_multiplier
+        + sow_core::execution::income_rates::alliance_gold_per_second(
+            player.alliances.len(),
+            player.leader,
+            config,
+        )) * bot_income_multiplier
+        + sow_core::execution::income_rates::trade_income_per_second(
+            trade_ships,
+            player.leader,
+            config,
+        )
+        + hero_gold_rate;
+    let credited_gold_rate = sow_core::execution::income_rates::diminishing_passive_income(
+        gold_rate,
+        sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
+        sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
+    );
+    let gold_rate_without_hero = sow_core::execution::income_rates::diminishing_passive_income(
+        gold_rate - hero_gold_rate,
+        sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
+        sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
+    );
+
+    Some(PlayerIncomeRates {
+        troops_per_second: troop_rate,
+        gold_per_second: credited_gold_rate * config.global_speed_multiplier,
+        hero_gold_per_second: (credited_gold_rate - gold_rate_without_hero)
+            * config.global_speed_multiplier,
+    })
+}
+
 impl SowApp {
     pub(crate) fn current_player_gold(&self) -> f64 {
         let player_id = self
@@ -392,74 +490,22 @@ impl SowApp {
             self.ui.observing = !player.alive && player.has_spawned;
 
             self.ui.app.hud_state.hero_income_rate = 0.0;
-            // Compute correct actual troop rate
             if let Some(e) = &self.sim.engine {
                 let my_pid = self.sim.my_player_id.unwrap_or(1);
-                let agg = e
-                    .building_aggregates
-                    .get(my_pid as usize)
-                    .copied()
-                    .unwrap_or_default();
                 let trade_ships = e
                     .fleets
                     .iter()
                     .filter(|fleet| {
                         fleet.owner_id == my_pid
                             && fleet.unit_type == sow_core::game::UnitType::TradeShip
+                            && fleet.captured_trade_return.is_none()
                     })
                     .count() as u32;
-                let (_, standards_troops) =
-                    sow_core::execution::income_rates::imperial_standard_income(
-                        agg,
-                        player.leader,
-                        &self.sim.config,
-                    );
-                let council_multiplier =
-                    sow_core::execution::income_rates::tafaifa_council_multiplier(
-                        player.leader,
-                        sow_core::execution::hero_effects::living_allies(&e.state, my_pid),
-                    );
-                self.ui.app.hud_state.troop_rate =
-                    (sow_core::execution::income_rates::troop_income_per_second(
-                        player.tile_count,
-                        agg,
-                        player.leader,
-                        &self.sim.config,
-                    ) * council_multiplier
-                        + sow_core::execution::income_rates::alliance_troops_per_second(
-                            player.alliances.len(),
-                            player.leader,
-                            &self.sim.config,
-                        )
-                        + sow_core::execution::income_rates::trade_troops_per_second(
-                            trade_ships,
-                            player.leader,
-                            &self.sim.config,
-                        )
-                        + standards_troops)
-                        * self.sim.config.global_speed_multiplier;
-                let hero_gold_ps = e.hero_gold_per_second(my_pid);
-                self.ui.app.hud_state.hero_income_rate =
-                    hero_gold_ps * self.sim.config.global_speed_multiplier;
-                self.ui.app.hud_state.gold_rate =
-                    (sow_core::execution::income_rates::gold_income_per_second(
-                        player.tile_count,
-                        agg,
-                        player.leader,
-                        &self.sim.config,
-                    ) * council_multiplier
-                        + sow_core::execution::income_rates::alliance_gold_per_second(
-                            player.alliances.len(),
-                            player.leader,
-                            &self.sim.config,
-                        )
-                        + sow_core::execution::income_rates::trade_income_per_second(
-                            trade_ships,
-                            player.leader,
-                            &self.sim.config,
-                        )
-                        + hero_gold_ps)
-                        * self.sim.config.global_speed_multiplier;
+                if let Some(rates) = player_income_rates(e, my_pid, trade_ships) {
+                    self.ui.app.hud_state.troop_rate = rates.troops_per_second;
+                    self.ui.app.hud_state.gold_rate = rates.gold_per_second;
+                    self.ui.app.hud_state.hero_income_rate = rates.hero_gold_per_second;
+                }
             }
         }
     }

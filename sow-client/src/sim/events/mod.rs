@@ -164,6 +164,40 @@ impl SowApp {
                         false,
                     );
                 }
+                sow_core::game::GameEvent::NuclearActionRejected {
+                    player_id,
+                    reason,
+                    cost,
+                } => {
+                    if player_id != my_id || my_id == 0 {
+                        continue;
+                    }
+                    let text = match reason {
+                        sow_core::game::NuclearActionFailure::CityRequirement => {
+                            crate::ui::UiText::new("hud.nuke_requires_city")
+                        }
+                        sow_core::game::NuclearActionFailure::NoReadySilo => {
+                            crate::ui::UiText::new("hud.nuke_no_charges")
+                        }
+                        sow_core::game::NuclearActionFailure::InsufficientGold => {
+                            let available = snap
+                                .players
+                                .iter()
+                                .find(|player| player.id == my_id)
+                                .map_or(0.0, |player| player.gold);
+                            crate::ui::UiText::new("hud.not_enough_gold")
+                                .with("cost", cost.ceil().to_string())
+                                .with("available", available.floor().to_string())
+                        }
+                    };
+                    self.ui.app.hud_state.push_notification_for_players(
+                        text,
+                        [Some(my_id), None],
+                        3,
+                        None,
+                        false,
+                    );
+                }
                 sow_core::game::GameEvent::WarshipSpawned { owner_id, fleet_id, tile }
                     if my_id != 0 && owner_id == my_id =>
                 {

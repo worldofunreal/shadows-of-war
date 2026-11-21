@@ -2,6 +2,20 @@ use crate::building::BuildingAggregate;
 use crate::game_config::GameConfig;
 use crate::player::Leader;
 
+pub const GOLD_PASSIVE_FULL_RATE_CAP: f64 = 20.0;
+pub const TROOP_PASSIVE_FULL_RATE_CAP: f64 = 1_000.0;
+pub const GOLD_PASSIVE_EXCESS_RATE: f64 = 0.15;
+pub const TROOP_PASSIVE_EXCESS_RATE: f64 = 0.18;
+
+/// Applies the Normal-speed threshold to a recurring rate expressed per game-second.
+#[inline]
+pub fn diminishing_passive_income(rate: f64, full_rate_cap: f64, excess_rate: f64) -> f64 {
+    let normal_rate = rate * crate::game_config::NORMAL_GAME_SPEED;
+    let credited_rate = normal_rate.min(full_rate_cap)
+        + (normal_rate - full_rate_cap).max(0.0) * excess_rate;
+    credited_rate / crate::game_config::NORMAL_GAME_SPEED
+}
+
 #[inline]
 fn territory_rate(tiles: u32, amount: f64, interval: u32) -> f64 {
     if interval == 0 {
@@ -40,7 +54,7 @@ pub fn troop_income_per_second(
         )
         + hero_only_income(
             leader.resource_bonus_hero_bonus(Source::District(District::Port), Resource::Troops),
-            cfg.hero_port_troop_income * agg.port_levels as f64,
+            cfg.hero_port_troop_income * agg.port_income_levels as f64,
         )
         + territory_rate(
             tiles_owned,
@@ -221,7 +235,7 @@ mod tests {
         assert!((gold_per_game_minute(cfg.gold_base_income) - 60.0 / crate::game_config::NORMAL_GAME_SPEED).abs() < 1e-9);
         assert!(
             (gold_per_game_minute(cfg.factory_gold_income)
-                - 60.0 * (0.85 / crate::game_config::NORMAL_GAME_SPEED))
+                - 60.0 * (0.80 / crate::game_config::NORMAL_GAME_SPEED))
                 .abs()
                 < 1e-9
         );
@@ -318,6 +332,7 @@ mod tests {
         let cfg = default_cfg();
         let agg = BuildingAggregate {
             port_levels: 4,
+            port_income_levels: 4,
             port_income_level_weight: 8.125,
             ..Default::default()
         };

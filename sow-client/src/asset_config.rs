@@ -10,6 +10,7 @@
 #[derive(Clone, Debug)]
 pub struct AssetConfig {
     pub maps_base: String,
+    pub local_map_preview: bool,
     pub assets_base: String,
     pub database_base: String,
 }
@@ -18,6 +19,10 @@ impl AssetConfig {
     /// Missing configuration panics — the client never guesses endpoints.
     pub fn resolve() -> Self {
         let maps_base = require_endpoint("SOW_MAPS_URL");
+        let local_map_preview = web_sys::window()
+            .and_then(|window| js_sys::Reflect::get(&window, &"SOW_LOCAL_MAP_PREVIEW".into()).ok())
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
         let assets_base = require_endpoint("SOW_ASSETS_URL");
         let database_base = require_endpoint("SOW_DATABASE_URL");
         log::info!(
@@ -28,6 +33,7 @@ impl AssetConfig {
         );
         Self {
             maps_base,
+            local_map_preview,
             assets_base,
             database_base,
         }

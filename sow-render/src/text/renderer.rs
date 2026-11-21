@@ -15,7 +15,7 @@ pub fn building_sprite_uv(kind: sow_core::game::BuildingKind, level: u8) -> Opti
     } else {
         kind
     };
-    crate::text::building_atlas::uv_rect(atlas_kind, level)
+    crate::text::building_atlas::uv_rect(atlas_kind, level.min(4))
 }
 
 pub const MAX_TEXT_GLYPHS: usize = 32_768;

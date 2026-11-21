@@ -212,6 +212,8 @@ export const sowScreenMotion = (function () {
     }
 
     function setInactive(panel: Element) {
+        const active = typeof document !== "undefined" ? document.activeElement : null;
+        if (active instanceof HTMLElement && panel.contains(active)) active.blur();
         panel.classList.remove("is-active", "sow-screen-panel--entering");
         panel.classList.add("sow-screen-panel--leaving");
         panel.setAttribute("aria-hidden", "true");
@@ -396,8 +398,6 @@ export function planRewardChoreography(
     const xpFillPct = clampNumber(0, Number(options.xpFillPct) || 0, 100);
     const levelsGained = Math.max(0, Math.floor(Number(options.levelsGained) || 0));
     const hasBanner = Boolean(options.hasBanner);
-    const hasLeader = inputs.some((s) => s.kind === "leader");
-
     let lastReadyMs = 0;
     const stages: PlannedRewardStageTiming[] = inputs.map((input, index) => {
         const revealDelayMs = 40 + index * revealStaggerMs;
@@ -428,7 +428,8 @@ export function planRewardChoreography(
     if (hasBanner) {
         lastReadyMs = Math.max(lastReadyMs, 520);
     }
-    const revealHoldMs = (count === 1 ? 110 : count <= 3 ? 130 : 150) + (hasLeader ? 60 : 0);
+    // Keep the complete set readable before the first card leaves.
+    const revealHoldMs = 1000;
     const revealEndMs = lastReadyMs + revealHoldMs;
     const launchPhaseStartMs = revealEndMs;
 
@@ -441,10 +442,7 @@ export function planRewardChoreography(
         else rewardIndices.push(index);
     });
 
-    const rewardStaggerMs =
-        rewardIndices.length <= 1
-            ? 0
-            : Math.round(clampNumber(64, 108 - rewardIndices.length * 8, 96));
+    const rewardStaggerMs = rewardIndices.length <= 1 ? 0 : 240;
     const rewardFlyMs = 370;
 
     let wave1LastLaunch = launchPhaseStartMs;
@@ -479,11 +477,8 @@ export function planRewardChoreography(
 
     let wave2LastLaunch = wave1LastLaunch;
     if (leaderIndices.length) {
-        const leaderStart =
-            rewardIndices.length > 0
-                ? Math.max(launchPhaseStartMs + 140, wave1LastLaunch + 180)
-                : launchPhaseStartMs + 160;
-        const leaderStaggerMs = 115;
+        const leaderStart = rewardIndices.length > 0 ? wave1LastLaunch + 64 : launchPhaseStartMs;
+        const leaderStaggerMs = 250;
         const leaderFlyMs = 390;
         leaderIndices.forEach((stageIdx, pos) => {
             const stage = stages[stageIdx];
@@ -507,9 +502,9 @@ export function planRewardChoreography(
             launchPhaseStartMs,
             wave1LastLand,
             xpSettleAtMs,
-            leaderIndices.length > 0 ? wave2LastLaunch + 120 : launchPhaseStartMs,
+            leaderIndices.length > 0 ? wave2LastLaunch + 64 : launchPhaseStartMs,
         );
-        const levelStaggerMs = 145;
+        const levelStaggerMs = 250;
         const levelFlyMs = 300;
         levelIndices.forEach((stageIdx, pos) => {
             const stage = stages[stageIdx];
@@ -528,7 +523,7 @@ export function planRewardChoreography(
         });
     }
 
-    const exitAtMs = lastSettleAtMs + 90;
+    const exitAtMs = lastSettleAtMs + 32;
     const exitDurationMs = 180;
     return {
         stages,

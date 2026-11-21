@@ -102,8 +102,7 @@ fn compute_city_visual_level(
         .unwrap_or(0)
 }
 
-/// Visual tier `0..=4` for a City on the map (`0` while the City base is still under construction,
-/// otherwise the City's own completed level `1..=4`).
+/// City map art uses its completed tier; levels above four reuse the level-four sprite.
 #[inline]
 pub fn city_visual_level(buildings: &[Building], tile_idx: u32) -> u8 {
     compute_city_visual_level(
@@ -305,8 +304,8 @@ impl Building {
 
 /// Tower range uses the same base, level increments, cap, and hero bonus in
 /// combat and every client range display.
-/// Widest reach a tower can have: its 20-tile cap times the strongest tower-range hero (Sun Tzu, 1.5x).
-pub(crate) const MAX_TOWER_REACH: u32 = 30;
+/// Widest reach a tower can have: its 24-tile cap times the strongest tower-range hero (Sun Tzu, 1.5x).
+pub(crate) const MAX_TOWER_REACH: u32 = 36;
 
 #[inline]
 pub fn tower_range_for_level(
@@ -318,13 +317,15 @@ pub fn tower_range_for_level(
         return 0;
     }
     let base = cfg.tower_range.round().clamp(0.0, 20.0) as i32;
-    let range = (base + i32::from(level.saturating_sub(1)) * 2).min(20);
+    let through_level_four = i32::from(level.saturating_sub(1).min(3)) * 2;
+    let late_upgrade_bonus = i32::from(level.saturating_sub(4)) * 4;
+    let range = (base + through_level_four + late_upgrade_bonus).min(24);
     (f64::from(range) * range_multiplier).round() as i32
 }
 
 /// Cumulative weights multiplying the configured level-one income rates.
 pub fn factory_gold_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 4.0, 8.3, 14.3][usize::from(level.min(4))]
+    [0.0, 1.0, 3.75, 7.4, 12.4][usize::from(level.min(4))]
 }
 
 pub fn farm_troop_level_weight(level: u8) -> f64 {
@@ -336,6 +337,12 @@ pub fn port_income_level_weight(level: u8) -> f64 {
 }
 
 pub fn city_upgrade_reinforcements(level: u8, base_capacity: f64) -> f64 {
+    match level {
+        5 => return 100_000.0,
+        6 => return 350_000.0,
+        7 => return 1_000_000.0,
+        _ => {}
+    }
     let share = match level {
         2 => 0.20,
         3 => 0.30,
@@ -347,7 +354,37 @@ pub fn city_upgrade_reinforcements(level: u8, base_capacity: f64) -> f64 {
 }
 
 pub fn tower_capture_weight(level: u8) -> f64 {
-    [0.0, 1.0, 1.70, 2.55, 3.75][usize::from(level.min(4))]
+    [0.0, 1.0, 1.70, 2.55, 3.75, 5.0, 7.0, 10.0][usize::from(level.min(7))]
+}
+
+pub fn player_has_nuclear_launch_city(buildings: &[Building], owner_id: u16) -> bool {
+    has_nuclear_launch_city(
+        buildings
+            .iter()
+            .map(|building| (building.owner_id, building.kind, building.active_level())),
+        owner_id,
+    )
+}
+
+pub fn snapshot_has_nuclear_launch_city(
+    buildings: &[crate::protocol::BuildingSnapshot],
+    owner_id: u16,
+) -> bool {
+    has_nuclear_launch_city(
+        buildings
+            .iter()
+            .map(|building| (building.owner_id, building.kind, building.active_level())),
+        owner_id,
+    )
+}
+
+fn has_nuclear_launch_city(
+    buildings: impl Iterator<Item = (u16, BuildingKind, u8)>,
+    owner_id: u16,
+) -> bool {
+    buildings.into_iter().any(|(owner, kind, level)| {
+        owner == owner_id && kind == BuildingKind::City && level >= 4
+    })
 }
 
 pub fn income_level_weight(level: u8) -> f64 {
@@ -386,6 +423,10 @@ pub struct BuildingAggregate {
     pub factory_income_level_weight: f64,
     /// Sum of 1.5x marginal level weights across active Cities.
     pub city_income_level_weight: f64,
+    /// City troop capacity continues growing beyond the level-four income cap.
+    pub city_capacity_level_weight: f64,
+    /// Port levels that can contribute to passive income, capped at level four each.
+    pub port_income_levels: u32,
     /// Shared small capacity bonus from completed non-City upgrades.
     pub district_capacity_level_weight: f64,
     pub has_completed_port: bool,
@@ -466,7 +507,8 @@ pub fn aggregate_buildings_per_player(
         match b.kind {
             BuildingKind::City => {
                 a.city_levels += active_lvl as u32;
-                a.city_income_level_weight += income_level_weight(active_lvl);
+                a.city_income_level_weight += income_level_weight(active_lvl.min(4));
+                a.city_capacity_level_weight += income_level_weight(active_lvl);
                 a.ready_city_count += 1;
             }
             BuildingKind::Tower => {
@@ -480,6 +522,7 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
                 a.port_income_level_weight += port_income_level_weight(active_lvl);
+                a.port_income_levels += u32::from(active_lvl.min(4));
                 a.port_fleet_slots += super::cost::port_fleet_slots(active_lvl);
                 a.has_completed_port = true;
             }

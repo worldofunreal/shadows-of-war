@@ -6,3 +6,5 @@ mod snapshot_fx;
 mod turn;
 mod update;
 pub(crate) mod visibility;
+
+pub(crate) use update::player_income_rates;

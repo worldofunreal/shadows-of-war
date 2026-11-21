@@ -19,7 +19,7 @@ pub fn roll(
 ) -> MatchmakingPopulation {
     let max_players = roll_human_capacity(game_mode, rng);
     let bot_count = GameConfig::max_tribe_bots();
-    // Public FFA/Teams stay Tribes-only; PvE Bot Heroes are resolved at start from human_side_players.
+    // Public FFA/Teams stay Tribes-only; Co-op Bot Heroes are resolved at start from human_side_players.
     let nation_count = 0;
 
     MatchmakingPopulation {
@@ -30,7 +30,7 @@ pub fn roll(
 }
 
 pub fn finalize_for_start(config: &mut GameConfig, human_side_players: u32) -> bool {
-    if config.game_mode != "PvE" {
+    if !sow_core::game_config::is_coop_game_mode(&config.game_mode) {
         return false;
     }
     config.nation_count = human_side_players;
@@ -120,14 +120,14 @@ mod tests {
     }
 
     #[test]
-    fn pve_starts_without_extra_nations_and_finalizes_to_human_roster() {
+    fn coop_starts_without_extra_nations_and_finalizes_to_human_roster() {
         let mut rng = StdRng::seed_from_u64(13);
-        let population = roll(Some(&map(420_244)), "PvE", &mut rng);
+        let population = roll(Some(&map(420_244)), "Coop", &mut rng);
         assert_eq!(population.bot_count, GameConfig::max_tribe_bots());
         assert_eq!(population.nation_count, 0);
 
         let mut config = GameConfig {
-            game_mode: "PvE".to_string(),
+            game_mode: "Coop".to_string(),
             bot_count: population.bot_count,
             nation_count: population.nation_count,
             ..Default::default()

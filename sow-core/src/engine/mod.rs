@@ -3230,7 +3230,7 @@ mod tests {
     }
 
     /// Regression: nations must NEVER carry a team in "Teams" mode (teams are
-    /// human-only), and must be Blue in "PvE". The old code force-
+    /// human-only), and must be Blue in "Coop". The old code force-
     /// assigned Red/Blue to nations alternating by index — that bug must not
     /// return.
     #[test]
@@ -3278,12 +3278,12 @@ mod tests {
                 p.team
             );
         }
-        // PvE: every nation is Blue.
-        for p in spawn_nations("PvE") {
+        // Co-op: every nation is Blue.
+        for p in spawn_nations("Coop") {
             assert_eq!(
                 p.team,
                 Some(crate::protocol::Team::Blue),
-                "PvE nation {} wrong team {:?}",
+                "Co-op nation {} wrong team {:?}",
                 p.id,
                 p.team
             );

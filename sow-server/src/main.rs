@@ -1724,7 +1724,7 @@ async fn main() {
                                     validated_external_count,
                                     player_tickets.len()
                                 );
-                                // Resolve the final PvE opponent count after ghosts and humans
+                                // Resolve the final Co-op opponent count after ghosts and humans
                                 // are known. Every client receives this same config.
                                 let human_side_players = roster_total as u32;
                                 if crate::matchmaking_population::finalize_for_start(
@@ -1732,7 +1732,7 @@ async fn main() {
                                     human_side_players,
                                 ) {
                                     log::info!(
-                                        "[PvE] Lobby {} autobalanced: human_side_players={} vs bot_heroes={}",
+                                        "[COOP] Lobby {} autobalanced: human_side_players={} vs bot_heroes={}",
                                         lobby.id, human_side_players, human_side_players
                                     );
                                 }

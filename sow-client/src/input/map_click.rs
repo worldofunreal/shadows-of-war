@@ -247,9 +247,6 @@ impl MapTarget {
                 actions.push(MapMenuAction::Attack);
             }
             actions.push(MapMenuAction::Fleet);
-            if self.is_land {
-                actions.push(MapMenuAction::Nuke);
-            }
         }
         if !self.is_teammate {
             actions.push(MapMenuAction::Alliance);
@@ -782,13 +779,15 @@ impl SowApp {
             actions.retain(|action| match action {
                 MapMenuAction::Fleet => self
                     .campaign_action_unlocked(sow_core::campaign::CampaignAction::TransportFleet),
-                MapMenuAction::Nuke => {
-                    self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Nuke)
-                }
                 _ => true,
             });
         }
+        let can_launch_nuke = !spawning
+            && self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Nuke);
         if target.owner != target.my_id || !target.is_land || spawning {
+            if can_launch_nuke {
+                actions.push(MapMenuAction::Nuke);
+            }
             return actions;
         }
 
@@ -846,6 +845,9 @@ impl SowApp {
             }
         }
         actions.push(MapMenuAction::RequestAllies);
+        if can_launch_nuke {
+            actions.push(MapMenuAction::Nuke);
+        }
         actions
     }
 
@@ -901,6 +903,12 @@ impl SowApp {
                     }
                 } else if action == MapMenuAction::Nuke {
                     let owner_id = self.sim.my_player_id.unwrap_or_default();
+                    let has_nuclear_city = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                        sow_core::building::snapshot_has_nuclear_launch_city(
+                            &snapshot.buildings,
+                            owner_id,
+                        )
+                    });
                     let has_ready_nuke = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
                         snapshot.players.iter().any(|player| {
                             player.id == owner_id && player.nuke_available
@@ -909,10 +917,12 @@ impl SowApp {
                     if !self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Nuke) {
                         reason_key = Some("hud.campaign_unlock_required");
                         true
-                    } else if !has_ready_nuke {
-                        reason_key = Some("hud.map_action_missilesilo");
-                        reason_level = Some(4);
+                    } else if !has_nuclear_city {
+                        reason_key = Some("hud.nuke_requires_city");
                         true
+                    } else if !has_ready_nuke {
+                        reason_key = Some("hud.nuke_no_charges");
+                        false
                     } else {
                         false
                     }
@@ -1594,10 +1604,7 @@ impl SowApp {
     }
 
     fn launch_nuke_at(&mut self, kind: sow_core::game::NukeKind, tile_idx: u32) -> bool {
-        let Some(target) = self.map_target(tile_idx) else {
-            return false;
-        };
-        if !target.is_land || !target.is_enemy() {
+        if self.map_target(tile_idx).is_none() {
             return false;
         }
         self.send_intent(sow_core::protocol::GameplayIntent::LaunchNuke {
@@ -2349,12 +2356,31 @@ impl SowApp {
             .sim
             .my_player_id
             .unwrap_or(self.ui.app.hud_state.my_player_id);
+        if !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            sow_core::building::snapshot_has_nuclear_launch_city(&snapshot.buildings, owner_id)
+        }) {
+            self.add_map_feedback(crate::ui::UiText::new("hud.nuke_requires_city"));
+            return;
+        }
         let cost = self.sim.engine.as_ref().map_or_else(|| kind.gold_cost(0), |engine| engine.nuclear_price(kind));
-        let available = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            snapshot.players.iter().any(|player| player.id == owner_id && player.nuke_available && player.gold >= cost)
-        });
-        if !available {
-            self.add_action_feedback("Nuke unavailable here.".to_string());
+        let Some(player) = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == owner_id))
+        else {
+            return;
+        };
+        if !player.nuke_available {
+            self.add_map_feedback(crate::ui::UiText::new("hud.nuke_no_charges"));
+            return;
+        }
+        if !cost.is_finite() || cost < 0.0 || player.gold < cost {
+            self.add_map_feedback(
+                crate::ui::UiText::new("hud.not_enough_gold")
+                    .with("cost", cost.ceil().to_string())
+                    .with("available", player.gold.floor().to_string()),
+            );
             return;
         }
         if self.ui.app.hud_state.building_placement.is_some() {

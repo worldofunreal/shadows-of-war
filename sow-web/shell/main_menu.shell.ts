@@ -1509,7 +1509,7 @@ export function render(precomputedKey?: string) {
             menuUi.createDraft.game_mode = pendingCreateMode;
             pendingCreateMode = null;
         }
-        if (menuUi.createDraft.game_mode !== "PvE") {
+        if (menuUi.createDraft.game_mode !== "Coop") {
             menuUi.createDraft.nation_count = 0;
         } else if (!menuUi.createDraft.nation_count) {
             menuUi.createDraft.nation_count = Math.min(Number(menuUi.state?.bot_limits?.nations) || 129, 8);
@@ -2501,7 +2501,12 @@ function runChoreographedStage(config: ChoreographedStageOptions) {
 
     items.forEach(function (item, idx) {
         const timing = plan.stages[idx];
-        if (!timing || typeof item.card.animate !== "function") return;
+        if (!timing) return;
+        if (typeof item.card.animate !== "function") {
+            item.card.style.animationDelay = timing.revealDelayMs + "ms";
+            item.card.style.animationDuration = timing.revealDurationMs + "ms";
+            return;
+        }
         item.card.classList.add("is-animating");
         const anim = item.card.animate(REWARD_REVEAL_KEYFRAMES, {
             duration: timing.revealDurationMs,
@@ -4064,9 +4069,9 @@ root.addEventListener("click", function (event) {
         const prevMode = menuUi.createDraft?.game_mode || "FFA";
         if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
         menuUi.createDraft.game_mode = mode;
-        if (mode !== "PvE") {
+        if (mode !== "Coop") {
             menuUi.createDraft.nation_count = 0;
-        } else if (prevMode !== "PvE" && !menuUi.createDraft.nation_count) {
+        } else if (prevMode !== "Coop" && !menuUi.createDraft.nation_count) {
             menuUi.createDraft.nation_count = Math.min(Number(menuUi.state?.bot_limits?.nations) || 129, 8);
         }
         render();
@@ -4187,8 +4192,10 @@ root.addEventListener("click", function (event) {
         };
         const CREATE_MODE_TARGETS: Record<string, string> = {
             teams: "Teams",
-            pve: "PvE",
-            hnv: "PvE",
+            coop: "Coop",
+            pve: "Coop",
+            hvn: "Coop",
+            hnv: "Coop",
             ffa: "FFA",
         };
         const closeMissionPanels = function () {
@@ -4252,9 +4259,9 @@ root.addEventListener("click", function (event) {
                 const prevMode = menuUi.createDraft?.game_mode || "FFA";
                 menuUi.createDraft = menuUi.createDraft || cloneConfig();
                 menuUi.createDraft.game_mode = createMode;
-                if (createMode !== "PvE") {
+                if (createMode !== "Coop") {
                     menuUi.createDraft.nation_count = 0;
-                } else if (prevMode !== "PvE" && !menuUi.createDraft.nation_count) {
+                } else if (prevMode !== "Coop" && !menuUi.createDraft.nation_count) {
                     menuUi.createDraft.nation_count = Math.min(Number(menuUi.state?.bot_limits?.nations) || 129, 8);
                 }
                 render();
@@ -4994,7 +5001,7 @@ root.addEventListener("submit", function (event) {
         event.preventDefault();
         syncCreateDraft(form);
         const config = menuUi.createDraft || cloneConfig();
-        if (config.game_mode !== "PvE") {
+        if (config.game_mode !== "Coop") {
             config.nation_count = 0;
         }
         if (menuUi.createOffline) {
@@ -5054,7 +5061,7 @@ root.addEventListener("input", function (event) {
                 const mp = Number(menuUi.createDraft.max_players) || 8;
                 const bc = menuUi.createDraft.bot_count != null ? Number(menuUi.createDraft.bot_count) : 128;
                 const nc =
-                    menuUi.createDraft.game_mode === "PvE"
+                    menuUi.createDraft.game_mode === "Coop"
                         ? menuUi.createDraft.nation_count != null
                             ? Number(menuUi.createDraft.nation_count)
                             : 0

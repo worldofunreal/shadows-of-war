@@ -69,13 +69,15 @@ describe("planRewardChoreography", () => {
         expect(plan.totalDurationMs).toBe(0);
     });
 
-    it("keeps single reward timing snappy without a fixed 1450ms reveal plateau", () => {
+    it("keeps a single reward readable before its flight", () => {
         const plan = planRewardChoreography([{ kind: "xp", amount: 120 }], { xpFillPct: 40 });
-        expect(plan.revealEndMs).toBeLessThan(650);
-        expect(plan.stages[0].countStartMs + plan.stages[0].countDurationMs).toBeLessThanOrEqual(
-            plan.launchPhaseStartMs,
+        const [xp] = plan.stages;
+        const readyAt = Math.max(
+            xp.revealDelayMs + xp.revealDurationMs,
+            xp.countStartMs + xp.countDurationMs,
         );
-        expect(plan.totalDurationMs).toBeLessThan(1650);
+        expect(xp.launchAtMs - readyAt).toBe(1000);
+        expect(plan.totalDurationMs - xp.settleAtMs).toBeLessThan(250);
     });
 
     it("overlaps multi-reward launches while keeping rewards -> leaders -> levels order", () => {
@@ -92,11 +94,9 @@ describe("planRewardChoreography", () => {
             { xpFillPct: 85, levelsGained: 2 },
         );
 
-        // Every numeric card completes its count-up before launchPhaseStartMs (even with 7 cards).
         for (const s of plan.stages) {
-            if (s.countDurationMs > 0) {
-                expect(s.countStartMs + s.countDurationMs).toBeLessThanOrEqual(plan.launchPhaseStartMs);
-            }
+            const readyAt = Math.max(s.revealDelayMs + s.revealDurationMs, s.countStartMs + s.countDurationMs);
+            expect(plan.launchPhaseStartMs - readyAt).toBeGreaterThanOrEqual(1000);
         }
 
         const xp = plan.stages[0];
@@ -122,8 +122,8 @@ describe("planRewardChoreography", () => {
         expect(lvl5.launchAtMs).toBeGreaterThan(lvl4.launchAtMs);
         expect(lvl5.applyDurationMs).toBeGreaterThan(lvl4.applyDurationMs);
 
-        // Whole 7-card mega sequence completes in ~2.6-3.1s instead of 10+s.
-        expect(plan.totalDurationMs).toBeLessThan(3200);
+        // Bound the cascade separately from the time reserved for reading.
+        expect(plan.totalDurationMs - plan.launchPhaseStartMs).toBeLessThan(2200);
     });
 });
 

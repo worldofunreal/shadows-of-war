@@ -175,6 +175,18 @@ mod bot_iq_alliance_tests {
         engine
     }
 
+    fn add_nuclear_city(engine: &mut SowEngine, id: u64, owner_id: u16, tile_idx: u32) {
+        engine.buildings.push(crate::building::Building {
+            id,
+            owner_id,
+            tile_idx,
+            kind: BuildingKind::City,
+            level: 4,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+    }
+
     fn attack_targets(decisions: &[crate::intent::nation::profile::BotDecision]) -> Vec<u16> {
         decisions
             .iter()
@@ -602,7 +614,7 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn disconnected_humans_are_targets_until_reconnect_and_humans_vs_nations_is_immediate() {
+    fn disconnected_humans_are_targets_until_reconnect_and_coop_is_immediate() {
         for tier in [AiTier::Ghost, AiTier::Nation, AiTier::Tribe] {
             let mut engine = human_target_engine(44, tier);
             engine.state.player_mut(2).unwrap().disconnected = true;
@@ -614,7 +626,7 @@ mod bot_iq_alliance_tests {
             engine.state.player_mut(2).unwrap().disconnected = false;
             assert!(attack_targets(&run_ai_attack(&mut engine, tier, &[2], false)).is_empty());
 
-            engine.state.config.game_mode = "PvE".into();
+            engine.state.config.game_mode = "Coop".into();
             let mode_attack = attack_targets(&run_ai_attack(&mut engine, tier, &[2], false));
             assert_eq!(mode_attack.contains(&2), tier == AiTier::Nation);
         }
@@ -1408,6 +1420,7 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().iq_points = 500.0;
         engine.state.player_mut(1).unwrap().gold = 100_000_000.0;
         engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
+        add_nuclear_city(&mut engine, 103, 1, 0);
 
         // Give bot 1 a silo with an available charge
         engine.buildings.push(crate::building::Building {
@@ -1478,6 +1491,7 @@ mod bot_iq_alliance_tests {
             ghost.is_ai_controlled = true;
         }
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Bot;
+        add_nuclear_city(&mut engine, 102, 1, 0);
 
         // Give bot 1 a silo with an available charge
         engine.buildings.push(crate::building::Building {
@@ -1532,6 +1546,7 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().iq_points = 500.0;
         engine.state.player_mut(1).unwrap().gold = 100_000_000.0;
         engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        add_nuclear_city(&mut engine, 103, 1, 0);
         engine.recent_nuke_targets.insert((2, 1), 2);
         engine.recent_nuke_targets.insert((3, 2), 90);
 
@@ -1581,6 +1596,7 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().iq_points = 500.0;
         engine.state.player_mut(1).unwrap().gold = 100_000_000.0;
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        add_nuclear_city(&mut engine, 102, 1, 0);
 
         engine.buildings.push(crate::building::Building {
             id: 100,

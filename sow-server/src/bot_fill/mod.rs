@@ -3,7 +3,7 @@
 //! ══════════════════════════════════════════════════════════════════════
 //! MENTAL MODEL — read this before touching ANYTHING in this module.
 //! ══════════════════════════════════════════════════════════════════════
-//! These are FICTIONAL HUMANS. Not PvE bots, not a daemon, not "the
+//! These are FICTIONAL HUMANS. Not opposing Co-op bots, not a daemon, not "the
 //! backfill". They are human players that don't exist, and they must look
 //! like it.
 //!
@@ -328,8 +328,8 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
             let (dummy_tx, _dummy_rx) = mpsc::channel::<Vec<u8>>(8);
 
             // Teams: drop the ghost into whichever team is smaller (Red on a tie),
-            // mirroring join_player. PvE: ghosts are human-side → Red.
-            let team = if g.game_mode == "PvE" {
+            // mirroring join_player. Co-op: ghosts are human-side → Red.
+            let team = if sow_core::game_config::is_coop_game_mode(&g.game_mode) {
                 Some(Team::Red)
             } else if g.game_mode == "Teams" {
                 let reds = g

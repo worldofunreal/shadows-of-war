@@ -429,6 +429,9 @@ export interface HudLeaderboardPlayer {
     id: number;
     name: string;
     troops: number;
+    gold?: number;
+    troop_rate?: number;
+    gold_rate?: number;
     max_troops: number;
     tile_count: number;
     centroid_x: number;
@@ -762,6 +765,7 @@ export interface MenuHudPayload {
         warship_cost: number;
         nuke_cost: number;
         nuke_available: boolean;
+        nuke_city_ready: boolean;
         nuke_cooldown_ticks: number;
         military_used: number;
         military_capacity: number;

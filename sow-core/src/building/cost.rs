@@ -26,8 +26,8 @@ pub fn structure_build_cost_gold(kind: BuildingKind, count: u32, cfg: &GameConfi
         BuildingKind::Factory => cfg.cost_factory,
         BuildingKind::Port => cfg.cost_port,
         BuildingKind::Farm => cfg.cost_farm,
-        BuildingKind::SAM => return cfg.cost_sam * if count == 0 { 1.0 } else { 2.0 },
-        BuildingKind::MissileSilo => return 667.0,
+        BuildingKind::SAM => cfg.cost_sam,
+        BuildingKind::MissileSilo => 375.0,
     };
     base_cost * ownership_cost_multiplier(count, cfg)
 }
@@ -43,18 +43,22 @@ pub fn structure_upgrade_cost_gold(
     if !(2..=kind.max_level()).contains(&target_level) {
         return f64::INFINITY;
     }
-    let prices = match kind {
-        BuildingKind::City => [102.0, 154.0, 218.0],
-        BuildingKind::Farm => [110.0, 162.0, 235.0],
-        BuildingKind::Factory => [105.0, 111.0, 117.0],
-        BuildingKind::Port => [112.0, 172.0, 248.0],
-        BuildingKind::Tower => [89.0, 124.0, 176.0],
-        BuildingKind::SAM => return cfg.cost_sam * 2.0,
-        BuildingKind::MissileSilo => return 667.0,
+    let prices: &[f64] = match kind {
+        BuildingKind::City => &[115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0],
+        BuildingKind::Farm => &[125.0, 190.0, 280.0],
+        BuildingKind::Factory => &[125.0, 165.0, 220.0],
+        BuildingKind::Port => &[130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0],
+        BuildingKind::Tower => &[100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0],
+        BuildingKind::SAM => &[250.0, 285.0, 325.0],
+        BuildingKind::MissileSilo => &[265.0, 305.0, 345.0],
     };
     let baseline = ownership_cost_multiplier(u32::from(target_level - 1), cfg);
     let scale = ownership_cost_multiplier(owned_levels, cfg) / baseline;
-    prices[usize::from(target_level - 2)] * scale
+    prices
+        .get(usize::from(target_level - 2))
+        .copied()
+        .unwrap_or(f64::INFINITY)
+        * scale
 }
 
 #[inline]
@@ -170,7 +174,16 @@ pub fn player_fleet_capacity_from_port_slots(port_slots: u32) -> u32 {
 }
 
 pub fn port_fleet_slots(active_level: u8) -> u32 {
-    [0, 1, 3, 6, 11][usize::from(active_level.min(4))]
+    [0, 1, 3, 6, 11, 20, 40, 80][usize::from(active_level.min(7))]
+}
+
+pub fn port_dock_capacity(active_level: u8) -> u32 {
+    [0, 1, 2, 3, 4, 6, 10, 16][usize::from(active_level.min(7))]
+}
+
+pub fn port_repair_per_second(active_level: u8) -> f64 {
+    [0.0, 50.0, 100.0, 150.0, 200.0, 400.0, 800.0, 1_600.0]
+        [usize::from(active_level.min(7))]
 }
 
 #[inline]
@@ -264,26 +277,26 @@ mod tests {
     }
 
     #[test]
-    fn every_building_has_three_upgrades_after_its_foundation() {
-        assert_eq!(BuildingKind::City.max_level(), 4);
-        assert!(
-            BuildingKind::NON_CITY
-                .into_iter()
-                .all(|kind| kind.max_level() == 4)
-        );
+    fn economy_buildings_have_seven_levels_and_other_buildings_have_four() {
+        for kind in [BuildingKind::City, BuildingKind::Tower, BuildingKind::Port] {
+            assert_eq!(kind.max_level(), 7);
+        }
+        for kind in [BuildingKind::Farm, BuildingKind::Factory, BuildingKind::SAM, BuildingKind::MissileSilo] {
+            assert_eq!(kind.max_level(), 4);
+        }
     }
 
     #[test]
     fn initial_building_prices_match_the_balance_table() {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
-            (BuildingKind::City, 95.0),
-            (BuildingKind::Tower, 85.0),
-            (BuildingKind::Factory, 90.0),
-            (BuildingKind::Port, 105.0),
-            (BuildingKind::Farm, 100.0),
-            (BuildingKind::SAM, 1_000.0),
-            (BuildingKind::MissileSilo, 667.0),
+            (BuildingKind::City, 100.0),
+            (BuildingKind::Tower, 70.0),
+            (BuildingKind::Factory, 95.0),
+            (BuildingKind::Port, 110.0),
+            (BuildingKind::Farm, 105.0),
+            (BuildingKind::SAM, 350.0),
+            (BuildingKind::MissileSilo, 375.0),
         ] {
             assert_eq!(structure_build_cost_gold(kind, 0, &cfg), expected);
         }
@@ -293,13 +306,13 @@ mod tests {
     fn every_upgrade_level_applies_ownership_growth_to_its_base_price() {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
-            (BuildingKind::City, [102.0, 154.0, 218.0]),
-            (BuildingKind::Farm, [110.0, 162.0, 235.0]),
-            (BuildingKind::Factory, [105.0, 111.0, 117.0]),
-            (BuildingKind::Port, [112.0, 172.0, 248.0]),
-            (BuildingKind::Tower, [89.0, 124.0, 176.0]),
-            (BuildingKind::SAM, [2_000.0; 3]),
-            (BuildingKind::MissileSilo, [667.0; 3]),
+            (BuildingKind::City, vec![115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0]),
+            (BuildingKind::Farm, vec![125.0, 190.0, 280.0]),
+            (BuildingKind::Factory, vec![125.0, 165.0, 220.0]),
+            (BuildingKind::Port, vec![130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0]),
+            (BuildingKind::Tower, vec![100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0]),
+            (BuildingKind::SAM, vec![250.0, 285.0, 325.0]),
+            (BuildingKind::MissileSilo, vec![265.0, 305.0, 345.0]),
         ] {
             for target_level in 2..=kind.max_level() {
                 let previous_owned_levels = u32::from(target_level - 1);
@@ -308,12 +321,8 @@ mod tests {
                 assert_eq!(upgrade, expected[usize::from(target_level - 2)]);
                 for owned_levels in [10, 100, 1_000] {
                     let cost = structure_upgrade_cost_gold(kind, target_level, owned_levels, &cfg);
-                    let scale = if matches!(kind, BuildingKind::SAM | BuildingKind::MissileSilo) {
-                        1.0
-                    } else {
-                        structure_build_cost_gold(kind, owned_levels, &cfg)
-                            / structure_build_cost_gold(kind, previous_owned_levels, &cfg)
-                    };
+                    let scale = structure_build_cost_gold(kind, owned_levels, &cfg)
+                        / structure_build_cost_gold(kind, previous_owned_levels, &cfg);
                     assert!((cost - upgrade * scale).abs() < 1e-9);
                 }
             }

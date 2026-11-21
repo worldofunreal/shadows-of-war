@@ -5256,12 +5256,25 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: 214px;
-  max-width: min(296px, calc(100vw - 24px));
+  min-width: min(
+    214px,
+    max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+  );
+  max-width: min(
+    296px,
+    max(0px, calc(100vw - 24px)),
+    max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+  );
   padding: 10px 12px;
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border);
   border-radius: var(--sow-tactical-surface-radius);
+  max-height: max(
+    0px,
+    calc(var(--sow-hud-building-card-viewport-height, 100vh) - 20px)
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--sow-panel-card);
   box-shadow: var(--sow-tactical-card-shadow);
   backdrop-filter: blur(var(--sow-tactical-surface-blur));
@@ -5570,7 +5583,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 
 .sow-hud__building-card.is-constructing {
-  min-width: 196px;
+  min-width: min(
+    196px,
+    max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+  );
   padding: 8px 10px;
 }
 
@@ -5641,8 +5657,15 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 
 @media (max-width: 720px) {
   .sow-hud__building-card {
-    min-width: 204px;
-    max-width: min(276px, calc(100vw - 20px));
+    min-width: min(
+      204px,
+      max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+    );
+    max-width: min(
+      276px,
+      max(0px, calc(100vw - 20px)),
+      max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+    );
     padding: 9px 10px;
     gap: 7px;
   }
@@ -5655,8 +5678,15 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 @media (max-height: 520px) and (orientation: landscape) {
   .sow-hud__building-card {
     gap: 5px;
-    min-width: 196px;
-    max-width: min(284px, calc(100vw - 24px));
+    min-width: min(
+      196px,
+      max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+    );
+    max-width: min(
+      284px,
+      max(0px, calc(100vw - 24px)),
+      max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+    );
     padding: 7px 9px;
     border-radius: 10px;
   }
@@ -5722,8 +5752,16 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 }
 
 .sow-hud__building-card.is-city-card {
-  width: min(328px, calc(100vw - 24px));
-  max-width: min(328px, calc(100vw - 24px));
+  width: min(
+    328px,
+    max(0px, calc(100vw - 24px)),
+    max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+  );
+  max-width: min(
+    328px,
+    max(0px, calc(100vw - 24px)),
+    max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+  );
   gap: 7px;
   padding: 10px 11px;
 }
@@ -6060,8 +6098,16 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 
 @media (max-width: 720px) {
   .sow-hud__building-card.is-city-card {
-    width: min(300px, calc(100vw - 16px));
-    max-width: min(300px, calc(100vw - 16px));
+    width: min(
+      300px,
+      max(0px, calc(100vw - 16px)),
+      max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+    );
+    max-width: min(
+      300px,
+      max(0px, calc(100vw - 16px)),
+      max(0px, calc(var(--sow-hud-building-card-viewport-width, 100vw) - 20px))
+    );
     padding: 8px 9px;
     gap: 6px;
   }

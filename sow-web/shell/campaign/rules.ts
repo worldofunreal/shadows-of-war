@@ -81,11 +81,11 @@ export const WORLD_TARGETS = [
     "upgrade_structure",
 ];
 export const STRUCTURE_LEVEL_LIMITS: Record<string, number> = {
-    City: 1,
+    City: 7,
     Farm: 4,
     Factory: 4,
-    Tower: 4,
-    Port: 4,
+    Tower: 7,
+    Port: 7,
     SAM: 4,
     MissileSilo: 4,
 };

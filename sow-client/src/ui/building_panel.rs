@@ -62,7 +62,8 @@ pub(crate) fn building_metrics(
         return Vec::new();
     }
     use sow_core::geo_entities::{District, Resource, Source};
-    let level_weight = sow_core::building::income_level_weight(level);
+    let level_weight = sow_core::building::income_level_weight(level.min(4));
+    let capacity_level_weight = sow_core::building::income_level_weight(level);
     let district_capacity = config.district_max_troops
         * sow_core::building::district_capacity_level_weight(level);
     let level = f64::from(level);
@@ -76,7 +77,9 @@ pub(crate) fn building_metrics(
             let mut metrics = vec![
                 BuildingMetric::new(
                     Icon::Troops,
-                    config.city_max_troops * level_weight * leader.city_troop_capacity_multiplier(),
+                    config.city_max_troops
+                        * capacity_level_weight
+                        * leader.city_troop_capacity_multiplier(),
                     "+",
                     " cap",
                 ),
@@ -110,6 +113,18 @@ pub(crate) fn building_metrics(
                     "+",
                     "",
                 ),
+                BuildingMetric::new(
+                    Icon::Boat,
+                    f64::from(sow_core::building::port_dock_capacity(level as u8)),
+                    "+",
+                    " docks",
+                ),
+                BuildingMetric::new(
+                    Icon::Shield,
+                    sow_core::building::port_repair_per_second(level as u8),
+                    "+",
+                    " heal/s",
+                ),
                 BuildingMetric::new(Icon::Speed, level, "+", "%"),
                 BuildingMetric::new(
                     Icon::Gold,
@@ -123,7 +138,7 @@ pub(crate) fn building_metrics(
                 BuildingMetric::new(
                     Icon::Troops,
                     (config.port_troop_income * weight * hero(District::Port, Resource::Troops)
-                        + config.hero_port_troop_income * level
+                        + config.hero_port_troop_income * level.min(4.0)
                             * hero_bonus(District::Port, Resource::Troops).unwrap_or(0.0))
                         * per_second,
                     "+",
@@ -250,6 +265,51 @@ pub(crate) fn upgrade_gains(
         .collect()
 }
 
+fn metric_income_rate(metrics: &[BuildingMetric], icon: Icon, speed: f64) -> f64 {
+    metrics
+        .iter()
+        .filter(|metric| metric.icon == icon && metric.unit == "/s")
+        .filter_map(|metric| metric.value)
+        .sum::<f64>()
+        / speed.max(f64::EPSILON)
+}
+
+fn apply_credited_income(
+    metrics: &mut [BuildingMetric],
+    gold_before_building: f64,
+    troops_before_building: f64,
+    rate_multiplier: f64,
+    speed: f64,
+) {
+    for metric in metrics {
+        let Some(value) = metric.value.filter(|_| metric.unit == "/s") else {
+            continue;
+        };
+        let (baseline, cap, excess) = match metric.icon {
+            Icon::Gold => (
+                gold_before_building,
+                sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
+                sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
+            ),
+            Icon::Troops => (
+                troops_before_building,
+                sow_core::execution::income_rates::TROOP_PASSIVE_FULL_RATE_CAP,
+                sow_core::execution::income_rates::TROOP_PASSIVE_EXCESS_RATE,
+            ),
+            _ => continue,
+        };
+        let contribution = value / speed.max(f64::EPSILON) * rate_multiplier;
+        let credited = sow_core::execution::income_rates::diminishing_passive_income(
+            baseline + contribution,
+            cap,
+            excess,
+        ) - sow_core::execution::income_rates::diminishing_passive_income(
+            baseline, cap, excess,
+        );
+        metric.value = Some(credited.max(0.0) * speed);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct UpgradeOffer {
     pub next_level: u8,
@@ -363,8 +423,92 @@ impl crate::app::SowApp {
             .unwrap_or_default();
         let config = &self.sim.config;
         let level = building.active_level();
-        let current = building_metrics(building.kind, level, leader, config);
+        let mut current = building_metrics(building.kind, level, leader, config);
         let seconds = |ticks: u32| f64::from(ticks) * config.tick_rate_ms as f64 / 1000.0;
+        let mut next = building_metrics(building.kind, level.saturating_add(1), leader, config);
+        if let Some(engine) = self.sim.engine.as_ref()
+            && let Some(player) = engine.state.player(my_id)
+        {
+            let agg = engine
+                .building_aggregates
+                .get(usize::from(my_id))
+                .copied()
+                .unwrap_or_default();
+            let trade_ships = engine
+                .fleets
+                .iter()
+                .filter(|fleet| {
+                    fleet.owner_id == my_id
+                        && fleet.unit_type == sow_core::game::UnitType::TradeShip
+                        && fleet.captured_trade_return.is_none()
+                })
+                .count() as u32;
+            let council = sow_core::execution::income_rates::tafaifa_council_multiplier(
+                leader,
+                sow_core::execution::hero_effects::living_allies(&engine.state, my_id),
+            );
+            let bot_multiplier = if player.player_type == sow_core::player::PlayerType::Bot {
+                0.75
+            } else {
+                1.0
+            };
+            let rate_multiplier = council * bot_multiplier;
+            let (_, standard_troops) =
+                sow_core::execution::income_rates::imperial_standard_income(agg, leader, config);
+            let gold_total = (sow_core::execution::income_rates::gold_income_per_second(
+                player.tile_count,
+                agg,
+                leader,
+                config,
+            ) * council
+                + sow_core::execution::income_rates::alliance_gold_per_second(
+                    player.alliances.len(),
+                    leader,
+                    config,
+                )) * bot_multiplier
+                + sow_core::execution::income_rates::trade_income_per_second(
+                    trade_ships, leader, config,
+                )
+                + engine.hero_gold_per_second(my_id);
+            let troops_total = (sow_core::execution::income_rates::troop_income_per_second(
+                player.tile_count,
+                agg,
+                leader,
+                config,
+            ) * council
+                + sow_core::execution::income_rates::alliance_troops_per_second(
+                    player.alliances.len(),
+                    leader,
+                    config,
+                )
+                + standard_troops)
+                * bot_multiplier
+                + sow_core::execution::income_rates::trade_troops_per_second(
+                    trade_ships, leader, config,
+                );
+            let gold_before_building = (gold_total
+                - metric_income_rate(&current, Icon::Gold, config.global_speed_multiplier)
+                    * rate_multiplier)
+            .max(0.0);
+            let troops_before_building = (troops_total
+                - metric_income_rate(&current, Icon::Troops, config.global_speed_multiplier)
+                    * rate_multiplier)
+            .max(0.0);
+            apply_credited_income(
+                &mut current,
+                gold_before_building,
+                troops_before_building,
+                rate_multiplier,
+                config.global_speed_multiplier,
+            );
+            apply_credited_income(
+                &mut next,
+                gold_before_building,
+                troops_before_building,
+                rate_multiplier,
+                config.global_speed_multiplier,
+            );
+        }
         if building.under_construction {
             let progress = crate::render::world::overlays::construction_progress(
                 building.kind,
@@ -395,7 +539,6 @@ impl crate::app::SowApp {
                 progress: None,
             });
         }
-        let next = building_metrics(building.kind, next_level, leader, config);
         let cost = self
             .map_menu_cost(
                 crate::input::map_click::MapMenuAction::UpgradeStructure,

@@ -338,7 +338,8 @@ impl SowApp {
                             .filter(|url| matches!(url.scheme(), "ws" | "wss"))
                             .map(|url| url.to_string())
                             .filter(|url| !url.is_empty());
-                        if let Ok(url) = url::Url::parse(&maps_url)
+                        if !self.asset_config.local_map_preview
+                            && let Ok(url) = url::Url::parse(&maps_url)
                             && matches!(url.scheme(), "http" | "https")
                         {
                             self.asset_config.maps_base = url.to_string();

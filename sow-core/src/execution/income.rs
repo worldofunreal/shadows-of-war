@@ -2,8 +2,10 @@ use crate::building::BuildingAggregate;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
     alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
-    imperial_standard_income, tafaifa_council_multiplier, trade_income_per_second,
-    trade_troops_per_second, troop_income_per_second,
+    diminishing_passive_income, imperial_standard_income, tafaifa_council_multiplier,
+    trade_income_per_second, trade_troops_per_second, troop_income_per_second,
+    GOLD_PASSIVE_EXCESS_RATE, GOLD_PASSIVE_FULL_RATE_CAP, TROOP_PASSIVE_EXCESS_RATE,
+    TROOP_PASSIVE_FULL_RATE_CAP,
 };
 use crate::game::GamePhase;
 
@@ -19,7 +21,7 @@ impl SowEngine {
         let config = &self.state.config;
         let mut capacity = config.max_troops_base
             + territory_weight * config.max_troops_scale
-            + agg.city_income_level_weight
+            + agg.city_capacity_level_weight
                 * config.city_max_troops
                 * player.leader.city_troop_capacity_multiplier()
             + agg.district_capacity_level_weight * config.district_max_troops;
@@ -45,6 +47,15 @@ impl SowEngine {
 
         let config = self.state.config.clone();
         let num_players = self.state.players.len();
+        let mut trade_ships_by_player = vec![0u32; aggs.len()];
+        for fleet in self.fleets.iter().filter(|fleet| {
+            fleet.unit_type == crate::game::UnitType::TradeShip
+                && fleet.captured_trade_return.is_none()
+        }) {
+            if let Some(count) = trade_ships_by_player.get_mut(usize::from(fleet.owner_id)) {
+                *count = count.saturating_add(1);
+            }
+        }
         for idx in 0..num_players {
             if !self.state.players[idx].alive {
                 continue;
@@ -66,6 +77,10 @@ impl SowEngine {
                 self.state.players[idx].player_type == crate::player::PlayerType::Bot;
 
             let leader = self.state.players[idx].leader;
+            let trade_ships = trade_ships_by_player
+                .get(usize::from(player_id))
+                .copied()
+                .unwrap_or_default();
             let council_multiplier = tafaifa_council_multiplier(
                 leader,
                 crate::execution::hero_effects::living_allies(&self.state, player_id),
@@ -100,19 +115,22 @@ impl SowEngine {
                 self.hero_income_active.remove(&player_id);
             }
 
-            let troop_ps = troop_income_per_second(tiles_owned, agg, leader, &config)
+            let bot_income_multiplier = if is_standard_bot { 0.75 } else { 1.0 };
+            let troop_ps = (troop_income_per_second(tiles_owned, agg, leader, &config)
                 * council_multiplier
                 + alliance_troops_per_second(
                     self.state.players[idx].alliances.len(),
                     leader,
                     &config,
                 )
-                + standards_troops;
-            let mut troop_income = config.per_tick(troop_ps);
-
-            if is_standard_bot {
-                troop_income *= 0.75;
-            }
+                + standards_troops)
+                * bot_income_multiplier
+                + trade_troops_per_second(trade_ships, leader, &config);
+            let troop_income = config.per_tick(diminishing_passive_income(
+                troop_ps,
+                TROOP_PASSIVE_FULL_RATE_CAP,
+                TROOP_PASSIVE_EXCESS_RATE,
+            ));
             let player = &mut self.state.players[idx];
             player.troops = safe_troops;
             player.troops = (safe_troops + troop_income).min(max_tr);
@@ -121,39 +139,27 @@ impl SowEngine {
                 player.troops_received += received_troops;
             }
 
-            let gold_ps = gold_income_per_second(tiles_owned, agg, leader, &config)
+            let gold_ps = (gold_income_per_second(tiles_owned, agg, leader, &config)
                 * council_multiplier
                 + alliance_gold_per_second(
                     self.state.players[idx].alliances.len(),
                     leader,
                     &config,
-                );
-            let mut gold_income = config.per_tick(gold_ps);
-
-            if is_standard_bot {
-                gold_income *= 0.75;
-            }
-            self.state.players[idx].credit_gold(gold_income + config.per_tick(hero_gold));
+                )) * bot_income_multiplier
+                + trade_income_per_second(trade_ships, leader, &config)
+                + hero_gold;
+            let gold_income = config.per_tick(diminishing_passive_income(
+                gold_ps,
+                GOLD_PASSIVE_FULL_RATE_CAP,
+                GOLD_PASSIVE_EXCESS_RATE,
+            ));
+            self.state.players[idx].credit_gold(gold_income);
 
             let iq_gain = config.per_tick(self.state.players[idx].iq as f64 / 100.0);
             self.state.players[idx].iq_points =
                 (self.state.players[idx].iq_points + iq_gain).min(500.0);
         }
 
-        for fleet in &self.fleets {
-            if fleet.unit_type == crate::game::UnitType::TradeShip
-                && fleet.captured_trade_return.is_none()
-                && let Some(player) = self.state.player_mut(fleet.owner_id)
-            {
-                player.credit_gold(config.per_tick(trade_income_per_second(
-                    1,
-                    player.leader,
-                    &config,
-                )));
-                let troops = config.per_tick(trade_troops_per_second(1, player.leader, &config));
-                player.credit_troops_capped(troops, player.max_troops);
-            }
-        }
     }
 }
 
