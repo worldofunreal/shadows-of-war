@@ -145,6 +145,7 @@ export interface MenuRewardReceipt {
     laurels: number;
     gems?: number;
     unlocked_leaders: string[];
+    unlocked_achievements?: string[];
     level_before?: number | null;
     level_after?: number | null;
     status: string;
@@ -735,6 +736,7 @@ export interface MenuHudPayload {
     attack_ratio: number;
     operations: HudCombatOperation[];
     spawn_timer_secs: number | null;
+    awaiting_players?: boolean;
     spawn_duration_secs?: number;
     has_spawned?: boolean;
     selected_building: string | null;
@@ -790,6 +792,7 @@ export interface MenuHudPayload {
     dev_tools: HudDevTools;
     is_winner: boolean;
     winner_name: string;
+    winning_team?: "Red" | "Blue" | null;
     featured_skin: { id: string; name: string; asset_path: string; cost_gems: number } | null;
     player_leader: string | null;
     /** The local hero's art slug (portrait and ability icon files are named by it, not by the hero id). */

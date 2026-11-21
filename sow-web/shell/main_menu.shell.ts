@@ -79,6 +79,10 @@ import {
     type RewardChoreographyPlan,
     type RewardPlaybackMode,
 } from "./main_menu.motion.ts";
+import {
+    getFullAchievementsCatalog,
+    type ProfileAchievement,
+} from "./main_menu.achievements.ts";
 applyGpuPerfTier();
 import {
     activeProfileEntry,
@@ -229,6 +233,7 @@ interface MenuMusicState {
 
 type RewardStage =
     | { kind: "leader"; amount: 0; slug: string; label: string; selector?: string }
+    | { kind: "achievement"; amount: 0; label: string; selector: string }
     | { kind: "level"; amount: number; level: number; selector: string }
     | { kind: "xp" | "crowns" | "laurels" | "gems"; amount: number; selector: string };
 
@@ -1203,8 +1208,10 @@ function renderFrame(screen: string) {
         "<div class='sow-menu__screen-stage' data-screen-stage>" +
         renderScreenPanel(screen) +
         "</div>" +
+        "<div class='sow-menu__nav-dock'>" +
         renderMainNav(screenNav(screen)) +
         renderMenuAttribution() +
+        "</div>" +
         "</div>" +
         renderPasswordModal() +
         renderProfileDetail()
@@ -1634,6 +1641,13 @@ function pendingRewardReceipts(): MenuRewardReceipt[] {
             typeof receipt.id === "string" &&
             /^campaign:[a-z][a-z0-9_]{0,63}$/.test(receipt.id) &&
             receipt.match_id === receipt.id;
+        // Store purchases record a presentation-only receipt for the
+        // achievements they unlocked; balances were already applied.
+        const purchaseApplied =
+            receipt &&
+            typeof receipt.id === "string" &&
+            receipt.id.indexOf("purchase:") === 0 &&
+            receipt.match_id === receipt.id;
         return (
             receipt &&
             receipt.id &&
@@ -1641,6 +1655,7 @@ function pendingRewardReceipts(): MenuRewardReceipt[] {
             !receipt.presented_at &&
             (tutorialApplied ||
                 campaignApplied ||
+                purchaseApplied ||
                 receipt.verification_status === "verified" ||
                 receipt.verification_status === "rejected")
         );
@@ -1868,7 +1883,7 @@ function createRewardStage(
         const levelLabel = stage.kind === "level" ? SOW_t("profile.level", { level: stage.level }) : null;
         card.setAttribute(
             "aria-label",
-            stage.kind === "leader"
+            stage.kind === "leader" || stage.kind === "achievement"
                 ? stage.label
                 : levelLabel ||
                       stage.amount +
@@ -1908,7 +1923,7 @@ function createRewardStage(
         const amount = document.createElement("strong");
         amount.className = "sow-menu__reward-amount";
         if (stage.kind !== "leader") amount.setAttribute("aria-hidden", "true");
-        amount.textContent = levelLabel || (stage.kind === "leader" ? stage.label : "+0");
+        amount.textContent = levelLabel || (stage.kind === "leader" || stage.kind === "achievement" ? stage.label : "+0");
         card.appendChild(medallion);
         card.appendChild(amount);
         cards.appendChild(card);
@@ -2223,7 +2238,7 @@ interface ChoreographedStageOptions {
 
 function formatRewardCardText(stage: RewardStage, progress = 1): string {
     if (stage.kind === "level") return SOW_t("profile.level", { level: stage.level });
-    if (stage.kind === "leader") return stage.label;
+    if (stage.kind === "leader" || stage.kind === "achievement") return stage.label;
     const eased = progress >= 1 ? 1 : 1 - Math.pow(1 - Math.max(0, progress), 3);
     return "+" + Math.round(stage.amount * eased);
 }
@@ -2798,6 +2813,28 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             selector: "[data-nav-screen='heroes']",
         };
     });
+    const achievementById = new Map<string, ProfileAchievement>();
+    for (const definition of getFullAchievementsCatalog()) achievementById.set(definition.id, definition);
+    const unlockedAchievementIds = Array.from(
+        new Set(
+            receipts.reduce<string[]>(function (acc, receipt) {
+                return acc.concat(
+                    Array.isArray(receipt.unlocked_achievements) ? receipt.unlocked_achievements : [],
+                );
+            }, []),
+        ),
+    ).filter(function (id: string) {
+        return /^[a-z][a-z0-9_]{0,63}$/.test(id);
+    });
+    const achievementStages: RewardStage[] = unlockedAchievementIds.map(function (id: string): RewardStage {
+        const definition = achievementById.get(id);
+        return {
+            kind: "achievement",
+            amount: 0,
+            label: (definition && definition.title) || id.replace(/_/g, " "),
+            selector: ".sow-menu__portrait",
+        };
+    });
     const canonical = progressionFromState();
     const startValues = Object.assign({}, displayedProgression || canonical);
     const gainedLevels = new Set<number>();
@@ -2834,8 +2871,9 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
         { kind: "laurels" as const, amount: totals.laurels, selector: ".sow-menu__portrait" },
         ...leaderStages,
         ...levelStages,
+        ...achievementStages,
     ].filter(function (stage) {
-        return stage.kind === "leader" || stage.amount > 0;
+        return stage.kind === "leader" || stage.kind === "achievement" || stage.amount > 0;
     });
 
     function finish(shown: boolean) {
@@ -2857,7 +2895,7 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     }
 
     if (reducedRewardMotion()) {
-        if (!leaderStages.length) {
+        if (!leaderStages.length && !achievementStages.length) {
             finish(true);
             return;
         }
@@ -3946,14 +3984,6 @@ root.addEventListener("click", function (event) {
     if (command === "open_offer_purchase") {
         const purchaseOfferId = target.dataset.offerId;
         if (purchaseOfferId) openOfferPurchase(purchaseOfferId, target.dataset.currency);
-        return;
-    }
-    if (command === "switch_store_tab") {
-        const storeTab = target.dataset.storeTab;
-        if (storeTab === "featured" || storeTab === "leaders" || storeTab === "skins") {
-            menuUi.storeTab = storeTab;
-            render();
-        }
         return;
     }
     if (command === "open_skin_picker") {

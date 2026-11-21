@@ -567,6 +567,7 @@ struct HudScalarKey {
     hero_income_rate: (i64, i8),
     attack_ratio: u32,
     spawn_timer_tenths: i32,
+    awaiting_players: bool,
     has_spawned: bool,
     selected_building: Option<crate::ui::hud::state::BuildingPlacement>,
     warship_count: u32,
@@ -2630,6 +2631,7 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
             .spawn_timer_secs
             .map(|secs| (secs.max(0.0) * 10.0).round() as i32)
             .unwrap_or(-1),
+        awaiting_players: hud.awaiting_players,
         has_spawned: me.is_some_and(|player| player.has_spawned),
         selected_building: hud.building_placement,
         warship_count,
@@ -4643,7 +4645,15 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     let map_menu =
         app.input
             .map_context_menu
-            .map(|menu| {
+            .and_then(|menu| {
+                let items = app.map_menu_items(menu.tile_idx);
+                if menu.view == MapContextMenuView::Radial && items.is_empty() {
+                    app.close_map_context_menu();
+                    return None;
+                }
+                Some((menu, items))
+            })
+            .map(|(menu, items)| {
                 let target_player_id = app
                     .gfx
                     .map_renderer
@@ -4693,8 +4703,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 } else {
                     None
                 };
-                let items = app
-                    .map_menu_items(menu.tile_idx)
+                let items = items
                     .into_iter()
                     .map(|item| {
                         serde_json::json!({
@@ -5016,10 +5025,15 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     })
                 })
                 .collect();
-            for city in snapshot.buildings.iter().filter(|b| {
-                b.owner_id == my_pid && b.kind == sow_core::game::BuildingKind::City
+            for building in snapshot.buildings.iter().filter(|b| {
+                b.owner_id == my_pid
+                    && matches!(
+                        b.kind,
+                        sow_core::game::BuildingKind::City | sow_core::game::BuildingKind::Port
+                    )
             }) {
-                let Some(arsenal) = city.arsenal_build else {
+                let Some(arsenal) = building.warship_queue.first().copied().or(building.arsenal_build)
+                else {
                     continue;
                 };
                 let total = arsenal.total_ticks.max(1);
@@ -5029,14 +5043,14 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 let progress =
                     (1.0 - f64::from(arsenal.ticks_until_complete) / f64::from(total))
                         .clamp(0.0, 1.0);
-                let visual_level = city.active_level();
-                let bx = (city.tile_idx % map_w) as f32 + 0.5;
-                let by = (city.tile_idx / map_w) as f32 + 0.5;
+                let visual_level = building.active_level();
+                let bx = (building.tile_idx % map_w) as f32 + 0.5;
+                let by = (building.tile_idx / map_w) as f32 + 0.5;
                 let [screen_x, screen_y] =
                     crate::render::world::overlays::building_screen_anchor_bottom(
                         bx,
                         by,
-                        sow_core::game::BuildingKind::City,
+                        building.kind,
                         visual_level,
                         &app.input,
                         screen_scale,
@@ -5046,7 +5060,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     && screen_y >= -60.0
                     && screen_y <= viewport_h + 100.0;
                 items.push(serde_json::json!({
-                    "tile_idx": city.tile_idx,
+                    "tile_idx": building.tile_idx,
                     "kind": arsenal_kind_str(arsenal.kind),
                     "level": 1,
                     "active_level": 0,
@@ -5212,6 +5226,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "attack_ratio": hud.attack_ratio,
         "operations": operations,
         "spawn_timer_secs": hud.spawn_timer_secs,
+        "awaiting_players": hud.awaiting_players,
         "spawn_duration_secs": sow_core::game::DEPLOYMENT_PHASE_DURATION_MS / 1000.0,
         "has_spawned": me.is_some_and(|player| player.has_spawned),
         "selected_building": selected_building,
@@ -5275,6 +5290,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "dev_tools": dev_tools_payload(app),
         "is_winner": is_winner,
         "winner_name": winner_name,
+        "winning_team": snapshot.and_then(|snapshot| snapshot.winning_team),
         "featured_skin": featured_skin.map(|skin| serde_json::json!({
             "id": skin.id,
             "name": skin.name,

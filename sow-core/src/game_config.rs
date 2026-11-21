@@ -809,14 +809,14 @@ mod tests {
         assert_eq!(config.ai.think_nation, AiTuning::default().think_nation);
         assert_eq!(GameConfig::with_overrides("{}").unwrap(), GameConfig::default());
 
-        assert_eq!(NORMAL_GAME_SPEED, 0.18);
+        assert_eq!(NORMAL_GAME_SPEED, 0.12);
         let expected = [
-            ("slowest", 0.072),
-            ("slow", 0.144),
-            ("normal", 0.18),
-            ("fast", 0.288),
-            ("fastest", 0.432),
-            ("turbo", 0.648),
+            ("slowest", 0.048),
+            ("slow", 0.096),
+            ("normal", 0.12),
+            ("fast", 0.192),
+            ("fastest", 0.288),
+            ("turbo", 0.432),
         ];
         for ((key, speed), (expected_key, expected_speed)) in
             GAME_SPEED_PRESETS.into_iter().zip(expected)

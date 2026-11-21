@@ -1,5 +1,6 @@
 import { rankEmblem, rankLabel } from "./main_menu.ranked.ts";
 import { avatarImageAttribute } from "./avatar-presentation.ts";
+import { zoomInputMode } from "./campaign/rules.ts";
 import type {
     HeroBioEntry,
     LocalizedText,
@@ -104,7 +105,6 @@ interface MenuUi {
     profileLastPhase: string | null;
     profileNavStack: { accountId: string; tab: string }[];
     storeOpen: boolean;
-    storeTab: "featured" | "leaders" | "skins";
     skinPickerOpen: boolean;
     heroInfoOpen: boolean;
     heroInfoTab: "overview" | "biography" | "achievements";
@@ -196,7 +196,6 @@ export const menuUi: MenuUi = {
     profileLastPhase: null,
     profileNavStack: [],
     storeOpen: false,
-    storeTab: "featured",
     skinPickerOpen: false,
     heroInfoOpen: false,
     heroInfoTab: "overview",
@@ -241,6 +240,19 @@ const pendingCommands: string[] = [];
 let pendingLeaderSelection: LeaderSelection | null = null;
 
 // Line icons live in main_menu.hud.ts (loaded after the menu, used at render time).
+export function browserZoomInputMode(): ReturnType<typeof zoomInputMode> {
+    const nav: Navigator & { userAgentData?: { mobile?: boolean; platform?: string } } =
+        window.navigator;
+    const data = nav.userAgentData;
+    return zoomInputMode({
+        androidTwa: window.SOW_isAndroidTwa?.(),
+        mobile: Boolean(data?.mobile),
+        userAgent: nav.userAgent,
+        platform: data?.platform || nav.platform,
+        maxTouchPoints: nav.maxTouchPoints,
+    });
+}
+
 export function menuIcon(name: string, cls?: string): string {
     return window.SOW_hudIcon ? window.SOW_hudIcon(name, cls) : "";
 }

@@ -202,6 +202,7 @@ impl SowApp {
                 last_ping_time,
                 load_telemetry: LoadTelemetry::default(),
                 relay_handoff_done: false,
+                game_ready_sent: false,
             },
             sim: SimState {
                 engine,

@@ -2944,7 +2944,10 @@ html[dir="rtl"] .leader-arrow {
     flex-direction: column;
     gap: 10px;
     width: auto;
-    max-height: calc(100dvh - 84px);
+    /* Alto del header sticky (100%) hasta el fondo del viewport, con 8px de aire
+       arriba y abajo para que el drawer llegue al borde inferior. */
+    height: calc(100dvh - 100% - 8px - max(8px, env(safe-area-inset-bottom)));
+    max-height: none;
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior: contain;
@@ -3116,7 +3119,7 @@ html[dir="rtl"] .leader-arrow {
     gap: 8px 12px;
     padding: 10px 4px 2px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    margin-top: 4px;
+    margin-top: auto;
   }
   .mobile-legal-links a {
     color: #64748b;
@@ -3135,6 +3138,29 @@ html[dir="rtl"] .leader-arrow {
     color: rgba(255, 255, 255, 0.18);
     font-size: 12px;
     user-select: none;
+  }
+  /* Atribución OpenFront (AGPL 7b) anclada al fondo del drawer, en su propio row. */
+  .mobile-attribution {
+    flex: 0 0 auto;
+    margin-top: 0;
+    padding-top: 8px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+  .mobile-attribution a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.18s ease;
+  }
+  .mobile-attribution a:hover,
+  .mobile-attribution a:focus-visible {
+    color: var(--orange);
   }
   .hero-actions .button {
     min-height: 48px;

@@ -938,44 +938,6 @@ function purchaseModalCost() {
     return leader ? (isGems ? leader.cost_gems : leader.cost_crowns) : 0;
 }
 
-function bundleBuyButton(bundle: MenuGemBundle) {
-    return canRenderProductPurchase(bundle.product_id)
-        ? storeProductButton(bundle.product_id, SOW_t("store.buy"))
-        : "";
-}
-
-function bundleBadge(bundle: MenuGemBundle, bundles: MenuGemBundle[]) {
-    const bonus = Number(bundle.bonus_percent) || 0;
-    if (!bonus) return "";
-    const best = bundles.every(function (other) {
-        return (Number(other.bonus_percent) || 0) <= bonus;
-    });
-    return (
-        "<small class='sow-store__bonus'>" +
-        esc(best ? SOW_t("store.best_value") : SOW_t("store.bonus_percent", { amount: bonus })) +
-        "</small>"
-    );
-}
-
-function renderStoreBundle(bundle: MenuGemBundle, _index: number, bundles: MenuGemBundle[]) {
-    const art = bundle.asset_path
-        ? asset(bundle.asset_path)
-        : asset("gameplay/store/gem_bundles/" + bundle.id + ".webp");
-    return (
-        "<article class='sow-store__bundle'><img class='sow-store__bundle-icon' src='" +
-        esc(art) +
-        "' alt='' aria-hidden='true' width='56' height='56' loading='lazy'><div><strong class='sow-store__bundle-price' aria-label='" +
-        esc(SOW_t("store.gems_count", { amount: bundle.gems })) +
-        "'>" +
-        renderCurrencyAmount(bundle.gems, "gem") +
-        "</strong>" +
-        bundleBadge(bundle, bundles) +
-        "</div>" +
-        bundleBuyButton(bundle) +
-        "</article>"
-    );
-}
-
 function renderSkinCurrencyButton(skin: MenuSkinOffer, currency: "gems" | "crowns") {
     const isGems = currency === "gems";
     const liveOffer = activeOfferForItem("skin", skin.id, currency);
@@ -1211,99 +1173,6 @@ function renderBundlesShowcaseSection(kindFilter?: "leader" | "skin") {
         cards +
         "</div>" +
         "</section>"
-    );
-}
-
-function renderStoreOffer(offer: MenuStoreOffer) {
-    const isSkin = offer.kind === "skin";
-    const skin = isSkin ? storeSkinById(offer.item_id) : null;
-    const leaderOffer = isSkin ? null : storeLeaderById(offer.item_id);
-    if (isSkin ? !skin : !leaderOffer) return "";
-    const leader = leaderOffer ? leaderById(leaderOffer.id) : null;
-    const name = skin ? skin.name : leaderDisplayName(leader);
-    const sublabel = skin ? SOW_t("store.territory_pattern") : leaderCivilization(leader);
-    const art = skin ? asset(skin.asset_path) : avatarImage(leaderOffer!.id);
-    const kind = offer.currency === "gems" ? "gem" : "crown";
-    const insufficient = storeBalance(offer.currency) < Number(offer.cost);
-    const disabled = insufficient || (menuUi.state && menuUi.state.store_busy) ? " disabled" : "";
-    const action = offerItemOwned(offer)
-        ? "<span class='sow-store__offer-state'>✓ " + esc(SOW_t("store.unlocked")) + "</span>"
-        : "<button class='sow-store__buy sow-store__buy--deal" +
-          (insufficient ? " sow-store__buy--insufficient" : "") +
-          "' type='button' data-command='open_offer_purchase' data-offer-id='" +
-          esc(offer.id) +
-          "'" +
-          disabled +
-          ">" +
-          "<s class='sow-store__list-price'>" +
-          esc(offer.base_cost) +
-          "</s> " +
-          renderCurrencyAmount(
-              offer.cost,
-              kind,
-              insufficient ? "sow-store__currency-amount--insufficient" : "",
-          ) +
-          "</button>";
-    const inspectAttr = leaderOffer
-        ? " data-command='open_hero_info' data-leader-id='" +
-          esc(leaderOffer.id) +
-          "' data-hero-info-tab='overview'"
-        : "";
-    const artTag = leaderOffer ? "button type='button'" : "div";
-    const artClose = leaderOffer ? "button" : "div";
-    return (
-        "<article class='sow-store__skin sow-store__offer sow-store__deal-card'>" +
-        "<" +
-        artTag +
-        " class='sow-store__skin-art" +
-        (isSkin ? "" : " sow-store__skin-art--leader sow-store__hero-inspect") +
-        "'" +
-        inspectAttr +
-        "><img src='" +
-        esc(art) +
-        "' alt='' width='96' height='96' loading='lazy'><b class='sow-store__discount'>-" +
-        esc(offer.discount_percent) +
-        "%</b></" +
-        artClose +
-        "><div class='sow-store__skin-body'>" +
-        "<div class='sow-store__deal-meta'>" +
-        "<span class='sow-store__deal-cadence'>" +
-        esc(offer.cadence === "weekly" ? SOW_t("store.weekly_offers") : SOW_t("store.daily_offers")) +
-        "</span>" +
-        "<span class='sow-store__deal-timer'>" +
-        esc(offerTimeLeft(offer.ends_at)) +
-        "</span>" +
-        "</div>" +
-        "<h3>" +
-        esc(name) +
-        "</h3><p>" +
-        esc(sublabel) +
-        "</p>" +
-        action +
-        "</div></article>"
-    );
-}
-
-function renderFlashDealsSection(kindFilter?: "leader" | "skin") {
-    const offers = storeOffers().filter(function (offer) {
-        return !kindFilter || offer.kind === kindFilter;
-    });
-    if (!offers.length) return "";
-    const cards = offers.map(renderStoreOffer).join("");
-    if (!cards) return "";
-    return (
-        "<section class='sow-store__section' aria-labelledby='sow-store-flash-deals'>" +
-        "<div class='sow-store__section-head'>" +
-        "<h2 id='sow-store-flash-deals'>" +
-        esc(SOW_t("store.featured_offers")) +
-        "</h2>" +
-        "<span>" +
-        esc(SOW_t("store.ends_in", { time: offerTimeLeft(offers[0].ends_at) })) +
-        "</span>" +
-        "</div>" +
-        "<div class='sow-store__skin-grid sow-store__deal-grid'>" +
-        cards +
-        "</div></section>"
     );
 }
 
@@ -1676,24 +1545,8 @@ export function resolvePurchaseModal() {
 
 export function renderStore() {
     const store = menuUi.state!.store || {};
-    const bundles = Array.isArray(store.gem_bundles) ? store.gem_bundles : [];
     const leaders = Array.isArray(store.leaders) ? store.leaders : [];
     const skins = Array.isArray(store.skins) ? store.skins : [];
-    const crowns = store.crowns || 0;
-    const gemsForSale = isAndroidTwa();
-    const activeTab = menuUi.storeTab || "featured";
-    const lockedLeadersCount = leaders.filter(function (offer) {
-        return !offer.owned && !offer.permanently_free && Number(offer.cost_crowns) > 0;
-    }).length;
-    const unownedSkinsCount = skins.filter(function (skin) {
-        return !skin.owned && Number(skin.cost_gems || skin.cost_crowns || 0) > 0;
-    }).length;
-    const featured = gemsForSale
-        ? bundles.find(function (bundle) {
-              return bundle.product_id === "sow_gems_2600";
-          }) || bundles[bundles.length - 1]
-        : null;
-    const featuredAction = featured ? bundleBuyButton(featured) : "";
     const restoreAction =
         isAndroidTwa() &&
         menuUi.state!.account_id &&
@@ -1704,92 +1557,18 @@ export function renderStore() {
               esc(SOW_t("store.restore_purchases")) +
               "</button>"
             : "";
-    const tabsHtml =
-        "<nav class='sow-store__tabs' aria-label='" +
-        esc(SOW_t("store.shop")) +
-        "'>" +
-        "<button type='button' class='sow-store__tab" +
-        (activeTab === "featured" ? " is-active" : "") +
-        "' data-command='switch_store_tab' data-store-tab='featured'>" +
-        esc(SOW_t("store.featured_offers")) +
-        "</button>" +
-        "<button type='button' class='sow-store__tab" +
-        (activeTab === "leaders" ? " is-active" : "") +
-        "' data-command='switch_store_tab' data-store-tab='leaders'>" +
-        esc(SOW_t("store.leaders")) +
-        (lockedLeadersCount > 0 ? " <b>" + esc(lockedLeadersCount) + "</b>" : "") +
-        "</button>" +
-        "<button type='button' class='sow-store__tab" +
-        (activeTab === "skins" ? " is-active" : "") +
-        "' data-command='switch_store_tab' data-store-tab='skins'>" +
-        esc(SOW_t("store.skins")) +
-        (unownedSkinsCount > 0 ? " <b>" + esc(unownedSkinsCount) + "</b>" : "") +
-        "</button>" +
-        "</nav>";
-
-    const featuredGemsHtml =
-        activeTab === "featured"
-            ? (featured
-                  ? "<article class='sow-store__featured'><div><p class='sow-store__eyebrow'>" +
-                    esc(SOW_t("store.kingdom_vault")) +
-                    "</p><h2>" +
-                    renderCurrencyAmount(featured.gems, "gem") +
-                    " " +
-                    esc(SOW_t("store.gems")) +
-                    "</h2><p>" +
-                    esc(SOW_t("store.build_next_army")) +
-                    "</p></div>" +
-                    featuredAction +
-                    "</article>"
-                  : "") +
-              (gemsForSale
-                  ? "<section class='sow-store__section' aria-labelledby='sow-store-gems'><div class='sow-store__section-head'><h2 id='sow-store-gems'>" +
-                    esc(SOW_t("store.gems")) +
-                    "</h2><button class='sow-store__link' type='button' data-command='main_nav' data-nav-screen='heroes'>" +
-                    esc(SOW_t("store.view_heroes")) +
-                    "</button></div><div class='sow-store__bundle-grid'>" +
-                    (bundles.map(renderStoreBundle).join("") ||
-                        "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") +
-                    "</div></section>"
-                  : "")
-            : "";
-
-    const tabBodyHtml =
-        activeTab === "leaders"
-            ? renderBundlesShowcaseSection("leader") +
-              renderFlashDealsSection("leader") +
-              renderHeroSection(leaders)
-            : activeTab === "skins"
-              ? renderBundlesShowcaseSection("skin") +
-                renderFlashDealsSection("skin") +
-                renderSkinsSection(skins)
-              : renderBundlesShowcaseSection() +
-                renderFlashDealsSection() +
-                featuredGemsHtml +
-                renderHeroSection(leaders) +
-                renderSkinsSection(skins);
+    const bodyHtml =
+        renderBundlesShowcaseSection() +
+        renderHeroSection(leaders) +
+        renderSkinsSection(skins);
 
     return (
         "<main class='sow-menu__main sow-menu__main--store' data-screen-panel='store'><section class='sow-menu__store-slot' data-store-slot aria-label='" +
         esc(SOW_t("store.shop")) +
         "'>" +
-        "<header class='sow-store__heading'><div class='sow-store__heading-copy'><p class='sow-store__eyebrow'>" +
-        esc(SOW_t("store.shop")) +
-        "</p><h1>" +
-        esc(SOW_t("store.featured_offers")) +
-        "</h1></div><div class='sow-store__balances'><span class='sow-store__balance--gems' aria-label='" +
-        esc(SOW_t("store.gems_count", { amount: store.gems || 0 })) +
-        "'>" +
-        renderCurrencyAmount(store.gems || 0, "gem") +
-        "</span><span class='sow-store__balance--crowns' aria-label='" +
-        esc(SOW_t("store.crowns_count", { amount: crowns })) +
-        "'>" +
-        renderCurrencyAmount(crowns, "crown") +
-        "</span></div></header>" +
-        tabsHtml +
         restoreAction +
         renderFeedback() +
-        tabBodyHtml +
+        bodyHtml +
         "</section></main>"
     );
 }

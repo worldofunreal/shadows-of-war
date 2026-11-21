@@ -2729,86 +2729,12 @@
   margin: 0 auto;
 }
 
-.sow-store__heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 8px 4px 18px;
-  border-bottom: 1px solid var(--sow-line);
-}
-
-.sow-store__eyebrow {
-  margin: 0 0 5px;
-  color: var(--sow-gold);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-}
-
-.sow-store__heading h1 {
-  margin: 0;
-  color: #fff;
-  font-size: clamp(30px, 4vw, 48px);
-  line-height: 0.95;
-  text-wrap: balance;
-}
-
-.sow-store__heading p:last-child {
-  margin: 7px 0 0;
-  color: var(--sow-muted);
-  font-size: 13px;
-}
-
-.sow-store__balances {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: end;
-  gap: 8px;
-}
-
-.sow-store__balances span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 1px solid var(--sow-line);
-  border-radius: 7px;
-  background: var(--sow-tactical-surface-subcard-bg);
-  color: #fff;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-
-.sow-store__balances b {
-  color: #f5c542;
-  font-size: 16px;
-}
-
-.sow-store__balances strong {
-  color: inherit;
-  font-size: 16px;
-}
-
 .sow-store__currency-icon {
   display: block;
   width: 22px;
   height: 22px;
   flex: 0 0 auto;
   object-fit: contain;
-}
-
-.sow-store__balance--crowns {
-  border-color: rgba(243, 177, 43, 0.42) !important;
-  color: #fde047 !important;
-}
-
-.sow-store__balances small {
-  color: var(--sow-muted);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
 }
 
 .sow-store__section {
@@ -2911,8 +2837,7 @@
   opacity: 0.55;
 }
 
-.sow-store__skin-grid,
-.sow-store__bundle-grid {
+.sow-store__skin-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -3043,12 +2968,6 @@
   font-size: 10px;
 }
 
-.sow-store__bundle small.sow-store__bonus {
-  color: #f3b12b;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
 .sow-store__skin .sow-store__buy,
 .sow-store__bundle .sow-store__buy {
   flex: 0 0 auto;
@@ -3071,75 +2990,7 @@
   outline-offset: var(--sow-tactical-focus-offset);
 }
 
-/* Store Category Tabs & LiveOps Bundle Showcase */
-.sow-store__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-  padding-bottom: 4px;
-}
-
-.sow-store__tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 6px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  background: rgba(15, 18, 25, 0.78);
-  color: rgba(255, 255, 255, 0.72);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease,
-    transform 150ms ease;
-}
-
-.sow-store__tab:hover {
-  border-color: var(--sow-tactical-surface-accent-border);
-  color: #fff;
-}
-
-.sow-store__tab.is-active {
-  border-color: var(--sow-tactical-accent);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--sow-tactical-accent) 24%, transparent),
-    color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent)
-  );
-  box-shadow: 0 0 16px color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent);
-  color: var(--sow-gold-bright);
-}
-
-.sow-store__tab b {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.sow-store__tab.is-active b {
-  background: color-mix(in srgb, var(--sow-tactical-accent) 28%, transparent);
-  color: var(--sow-gold-bright);
-}
-
+/* LiveOps bundle showcase */
 .sow-store__bundle-showcase {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
@@ -3403,13 +3254,6 @@ button.sow-store__bundle-chip:hover {
   background: rgba(16, 185, 129, 0.1);
 }
 
-.sow-store__deal-card {
-  border-color: var(--sow-tactical-surface-accent-border-soft);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--sow-tactical-accent) 8%, transparent), transparent 65%),
-    var(--sow-tactical-surface-subcard-bg);
-}
-
 .sow-store__skin.is-on-sale {
   border-color: var(--sow-tactical-surface-accent-border-soft);
 }
@@ -3440,42 +3284,6 @@ button.sow-store__bundle-chip:hover {
 .sow-store__buy--deal,
 .sow-store__bundle-buy {
   border-color: var(--sow-tactical-surface-accent-border);
-}
-
-/* The shop is a focused offer surface. Inventory discovery lives in Heroes. */
-.sow-store__featured {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  min-height: 150px;
-  margin-top: 18px;
-  padding: 24px;
-  border: 1px solid var(--sow-tactical-surface-border);
-  border-top-color: var(--sow-tactical-surface-accent-border);
-  border-radius: var(--sow-tactical-surface-radius-compact);
-  background:
-    linear-gradient(105deg, color-mix(in srgb, var(--sow-gold) 18%, transparent), transparent 70%),
-    var(--sow-tactical-surface-card-bg);
-  box-shadow: var(--sow-tactical-card-shadow);
-}
-
-.sow-store__featured h2 {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  color: #fff;
-  font-size: clamp(24px, 4vw, 36px);
-}
-
-.sow-store__featured h2 .sow-store__currency-icon {
-  width: 30px;
-  height: 30px;
-}
-.sow-store__featured p:last-child {
-  margin: 8px 0 0;
-  color: rgba(255, 255, 255, 0.72);
 }
 
 .sow-store__link,
@@ -3588,11 +3396,6 @@ button.sow-store__bundle-chip:hover {
 }
 
 @media (max-width: 520px) {
-  .sow-store__featured {
-    align-items: start;
-    flex-direction: column;
-    padding: 18px;
-  }
   .sow-store__promos {
     grid-template-columns: 1fr;
   }
@@ -3604,55 +3407,13 @@ button.sow-store__bundle-chip:hover {
     padding-inline: 0;
   }
 
-  .sow-store__heading {
-    align-items: start;
-    flex-direction: column;
-    gap: 12px;
-    padding-inline: 0;
-  }
-
-  .sow-store__balances {
-    justify-content: start;
-  }
-  .sow-store__skin-grid,
-  .sow-store__bundle-grid {
+  .sow-store__skin-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (orientation: landscape) and (max-height: 560px),
        (orientation: landscape) and (max-height: 680px) {
-  #sow-menu[data-screen="store"] .sow-store__heading {
-    padding: 4px 4px 10px;
-    gap: 12px;
-  }
-
-  #sow-menu[data-screen="store"] .sow-store__heading h1 {
-    font-size: clamp(20px, 3.2vh, 28px);
-  }
-
-  #sow-menu[data-screen="store"] .sow-store__heading p:last-child {
-    margin-top: 3px;
-    font-size: 11px;
-  }
-
-  #sow-menu[data-screen="store"] .sow-store__balances span {
-    min-height: 32px;
-    padding: 4px 8px;
-    font-size: 12px;
-    gap: 5px;
-  }
-
-  #sow-menu[data-screen="store"] .sow-store__balances b,
-  #sow-menu[data-screen="store"] .sow-store__balances strong {
-    font-size: 13px;
-  }
-
-  #sow-menu[data-screen="store"] .sow-store__balances .sow-store__currency-icon {
-    width: 17px;
-    height: 17px;
-  }
-
   #sow-menu[data-screen="store"] .sow-store__section {
     margin-top: 12px;
   }
@@ -3665,8 +3426,7 @@ button.sow-store__bundle-chip:hover {
     font-size: 13px;
   }
 
-  #sow-menu[data-screen="store"] .sow-store__skin-grid,
-  #sow-menu[data-screen="store"] .sow-store__bundle-grid {
+  #sow-menu[data-screen="store"] .sow-store__skin-grid {
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
     gap: 8px;
   }
@@ -5967,6 +5727,54 @@ button.sow-heroes__rarity-tag:focus-visible {
   }
   .sow-hero-info__body {
     padding: 12px 16px 16px;
+  }
+}
+
+/* Portrait hero selection: the buy buttons win over the progress ribbon. */
+@media (orientation: portrait) {
+  #sow-menu[data-screen="heroes"] .sow-heroes__ach-strip {
+    display: none;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured {
+    justify-content: flex-end;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured-controls {
+    position: absolute;
+    top: 8px;
+    inset-inline-start: 8px;
+    margin: 0;
+    gap: 4px;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__info {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    font-size: 17px;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__skins {
+    min-height: 28px;
+    padding: 0 9px;
+    font-size: 9.5px;
+    letter-spacing: 0.05em;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__featured-copy {
+    padding: 8px 12px;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-hero-briefing--selection {
+    gap: 5px;
+  }
+
+  #sow-menu[data-screen="heroes"] .sow-heroes__purchase-actions .sow-store__buy {
+    min-height: 34px;
+    padding: 5px 6px;
+    font-size: 10px;
   }
 }
 

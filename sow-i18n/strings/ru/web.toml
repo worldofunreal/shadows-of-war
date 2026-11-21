@@ -1357,6 +1357,7 @@ fleet_no_water_access = "У вашей территории нет выхода 
 fleet_no_landing_shore = "В месте назначения нет доступного берега."
 fleet_no_water_path = "До цели нет судоходного маршрута."
 warship_ready = "Боевой корабль готов"
+awaiting_players = "Ожидание загрузки остальных игроков…"
 warship_locate = "Найти"
 fleet_capacity_full = "Все места флота заняты."
 attack_incoming = "На вас напали! Приближаются силы: {count}."

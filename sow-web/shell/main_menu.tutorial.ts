@@ -1,4 +1,5 @@
 import { campaignBaseExpressions } from "./campaign/rules.ts";
+import { browserZoomInputMode } from "./main_menu.core.ts";
 // Campaign tutorial controller; shared guide calculations live in campaign/tutorial-guides.ts.
 import { createMenuGuide } from "./main_menu.menu-guide.ts";
 import {
@@ -365,7 +366,7 @@ interface TutorialRuntime {
         tr,
         hasText,
         stepTextKey,
-        zoomMode,
+        zoomMode: browserZoomInputMode,
     });
 
     function clearStepRevealTimer() {
@@ -548,19 +549,6 @@ interface TutorialRuntime {
     function stepTextKey(step: CampaignStep, suffix: string) {
         const namespace = runtime.definition && runtime.definition.text_namespace;
         return (typeof namespace === "string" ? namespace : "tutorial.") + step.id + suffix;
-    }
-
-    function zoomMode() {
-        const nav: Partial<Navigator> & { userAgentData?: { mobile?: boolean; platform?: string } } =
-            window.navigator || {};
-        const data = nav.userAgentData || {};
-        return window.SOWCampaign.zoomInputMode({
-            androidTwa: typeof window.SOW_isAndroidTwa === "function" && window.SOW_isAndroidTwa(),
-            mobile: Boolean(data.mobile),
-            userAgent: nav.userAgent || "",
-            platform: data.platform || nav.platform || "",
-            maxTouchPoints: nav.maxTouchPoints,
-        });
     }
 
     function fetchJson(path: string): Promise<CampaignRecord> {
@@ -1194,7 +1182,7 @@ interface TutorialRuntime {
                 : "";
         const facts = Object.assign({}, tutorial.facts || {}, {
             hover_events: runtime.hoverEvents,
-            touch_controls: zoomMode() === "pinch" ? 1 : 0,
+            touch_controls: browserZoomInputMode() === "pinch" ? 1 : 0,
             selected_building_kind: selectedBuildingKind,
             attack_ratio: Number(hud.attack_ratio),
             target_action_mode: tutorial.target_action_mode,

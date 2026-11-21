@@ -279,6 +279,8 @@ pub struct NetState {
     /// Set when the orchestrator handed us off to a game relay (Start carried
     /// relay_host). The loader uses this instead of string-matching ws_url.
     pub relay_handoff_done: bool,
+    /// Prevents sending the match-load completion frame more than once.
+    pub game_ready_sent: bool,
 }
 
 pub struct SimState {
@@ -377,15 +379,9 @@ pub enum HoverPointer {
 }
 
 #[derive(Clone, Copy)]
-pub enum BuildingDrag {
-    Mouse {
-        offset: (f32, f32),
-    },
-    Touch {
-        anchor: (i32, i32),
-        pointer: (f64, f64),
-        zoom: f32,
-    },
+pub struct BuildingDrag {
+    pub offset: (f32, f32),
+    pub mobile_touch: bool,
 }
 
 pub struct MapPointerStart {

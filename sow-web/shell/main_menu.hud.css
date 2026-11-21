@@ -1332,12 +1332,45 @@ html[dir="rtl"] #sow-hud-dev-layer {
   }
 }
 
+/* The wrapped nuclear row makes the dock taller; lift the rail panels with it
+   so they are not hidden behind the dock (and the building card above it). */
+@media (max-width: 640px) and (orientation: portrait) {
+  #sow-hud:has(#sow-hud-nuclear-strip[style*="flex"]) {
+    --sow-dock-reserve: 132px;
+  }
+}
+
 .sow-hud__buildings-strip {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   width: 100%;
+}
+
+.sow-hud__dock-hotkey {
+  display: none;
+}
+
+#sow-hud[data-dock-hotkeys] .sow-hud__dock-hotkey {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  min-inline-size: 18px;
+  min-block-size: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.48);
+  color: #fff2cf;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .sow-hud__building-btn {
@@ -5737,6 +5770,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   background: var(--sow-tactical-surface-subcard-bg);
 }
 
+.sow-hud__city-construction.is-idle {
+  visibility: hidden;
+}
+
 .sow-hud__city-construction .sow-hud__building-card-thumb {
   width: 28px;
   height: 28px;
@@ -6302,6 +6339,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   flex-shrink: 0;
 }
 
+.sow-hud__world-building-bar.is-stacked {
+  margin-top: 32px;
+}
+
 .sow-hud__world-building-art {
   width: 22px;
   height: 22px;
@@ -6761,6 +6802,12 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   width: 26px;
   height: 26px;
   object-fit: contain;
+}
+
+.sow-hud__endgame-stat-icon .sow-hud__inline-icon {
+  display: block;
+  width: 26px;
+  height: 26px;
 }
 
 .sow-hud__endgame-stat b {
@@ -8877,20 +8924,61 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
     width: 32px;
     height: 32px;
   }
+}
+
+/* En móvil la fila de stats pasa a 3 filas: 2 arriba, eliminaciones centradas
+   en la fila del medio y 2 abajo, con cifras e iconos más grandes. */
+@media (max-width: 599px) and (orientation: portrait) {
+  .sow-hud__endgame-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 0;
+    margin: 16px 0 10px;
+  }
+
   .sow-hud__endgame-stat {
-    gap: 3px;
-    padding-inline: 1px;
+    gap: 8px;
+    padding: 10px 6px;
+  }
+
+  .sow-hud__endgame-stat:first-child {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .sow-hud__endgame-stat:nth-child(2) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .sow-hud__endgame-stat:nth-child(3) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .sow-hud__endgame-stat:nth-child(4) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .sow-hud__endgame-stat:nth-child(5) {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .sow-hud__endgame-stat + .sow-hud__endgame-stat::before {
+    display: none;
+  }
+
+  .sow-hud__endgame-stat:nth-child(-n + 3) {
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--sow-gold) 18%, var(--sow-line));
   }
 
   .sow-hud__endgame-stat-icon,
-  .sow-hud__endgame-stat-icon :is(svg, img) {
-    flex-basis: 20px;
-    width: 20px;
-    height: 20px;
+  .sow-hud__endgame-stat-icon :is(svg, img, .sow-hud__inline-icon) {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
   }
 
   .sow-hud__endgame-stat b {
-    font-size: 14px;
+    font-size: 22px;
   }
 }
 
@@ -8912,6 +9000,28 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
   border: 1px solid #ffffff32;
   border-radius: 10px;
   box-shadow: 0 2px 10px #0007;
+}
+
+.sow-hud__awaiting-players {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: min(88vw, 380px);
+  padding: 6px 10px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #202832f5, #10151ef5);
+  box-shadow: 0 2px 10px #0007;
+  color: #f7f3e8;
+  font-size: clamp(11px, 2.8vw, 13px);
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  pointer-events: none;
+}
+
+.sow-hud__awaiting-players[hidden] {
+  display: none;
 }
 
 .sow-hud__territory-score {
@@ -9002,7 +9112,8 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
 /* ── Warship Queue & Max ─────────────────────────────────────────────────── */
 .sow-hud__warship-prod-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   align-items: stretch;
 }
@@ -9037,9 +9148,9 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
 
 .sow-hud__warship-queue {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
-  margin-top: 6px;
 }
 
 .sow-hud__warship-slot {
@@ -9060,6 +9171,8 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
 .sow-hud__warship-slot-art {
   width: 22px;
   height: 22px;
+  background-position: center;
+  background-repeat: no-repeat;
   opacity: 0.16;
   filter: grayscale(1);
 }

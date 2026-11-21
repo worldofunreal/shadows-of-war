@@ -157,6 +157,8 @@ impl SowApp {
                         self.ui.app.main_menu_state.joined_lobby_id = None;
                         self.ui.app.main_menu_state.wait_timer_secs = 0.0;
                         self.ui.app.hud_state.sync_state = None;
+                        self.ui.app.hud_state.awaiting_players = false;
+                        self.net.game_ready_sent = false;
                         if start_msg.my_player_id.is_some() {
                             self.sim.my_player_id = start_msg.my_player_id;
                         }
@@ -181,6 +183,7 @@ impl SowApp {
                         // `crate::diag::enabled()` if needed.
                         self.sim.turn_queue.push_back(turn_msg.turn);
                         self.ui.app.hud_state.sync_state = None;
+                        self.ui.app.hud_state.awaiting_players = false;
                     }
                     ServerMessage::SyncState(sync_msg) => {
                         self.ui.app.hud_state.sync_state = Some(sync_msg.clone());

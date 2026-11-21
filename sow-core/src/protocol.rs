@@ -272,6 +272,10 @@ pub enum ClientMessage {
     CancelRankedSearch,
     /// Requests the immutable release route for this orchestrator connection.
     RequestServerOwner,
+    /// Marks a relay client as able to report completion of its game loader.
+    GameLoading {},
+    /// Reports that the game engine and initial world are ready to play.
+    GameReady {},
 }
 
 /// Fields of an authenticated join.

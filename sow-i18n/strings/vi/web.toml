@@ -1357,6 +1357,7 @@ fleet_no_water_access = "Lãnh thổ của bạn không tiếp cận được v�
 fleet_no_landing_shore = "Không có bờ biển nào có thể tiếp cận tại điểm đến."
 fleet_no_water_path = "Không có tuyến đường thủy đến điểm đến."
 warship_ready = "Tàu chiến đã sẵn sàng"
+awaiting_players = "Đang chờ những người chơi khác tải xong…"
 warship_locate = "Định vị"
 fleet_capacity_full = "Tất cả chỗ của hạm đội đều đã dùng."
 attack_incoming = "Bạn đang bị tấn công! Lực lượng đang tới: {count}."

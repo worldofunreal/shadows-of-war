@@ -195,6 +195,8 @@ impl SowApp {
         self.sim.my_player_id = None;
         self.sim.relay_ticket = None;
         self.sim.relay_reconnect_ticket = None;
+        self.net.game_ready_sent = false;
+        self.ui.app.hud_state.awaiting_players = false;
     }
 
     /// Tear down the current match and use ExitGame only for an active game.

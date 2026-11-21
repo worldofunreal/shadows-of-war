@@ -594,7 +594,7 @@ impl PlayerProfile {
         let level_before = self.level;
         let laurels_before = self.laurels;
         self.apply_reward(leader, reward);
-        self.refresh_achievements();
+        let unlocked = self.refresh_achievements();
         self.playgames_sync_revision = self.playgames_sync_revision.saturating_add(1);
         self.reward_receipts.insert(
             receipt_id.to_string(),
@@ -609,6 +609,10 @@ impl PlayerProfile {
                     .saturating_add(self.laurels.saturating_sub(laurels_before)),
                 gems: reward.gems,
                 unlocked_leaders: Vec::new(),
+                unlocked_achievements: unlocked
+                    .iter()
+                    .map(|achievement| achievement.id.to_string())
+                    .collect(),
                 level_before: Some(level_before),
                 level_after: Some(self.level),
                 personal_closure_turn: None,
@@ -638,6 +642,8 @@ impl PlayerProfile {
                 owned_set.insert(name.clone());
             }
         }
+        let mut skins_set = self.owned_skins.clone();
+        skins_set.extend(self.purchased_skins.iter().cloned());
         crate::rewards::AchievementTotals {
             matches_played: self.matches_played as u64,
             wins: (self.verified_wins as u64).max(self.wins as u64),
@@ -666,6 +672,7 @@ impl PlayerProfile {
                 .count() as u64,
             owned_leaders_count: owned_set.len() as u64,
             owned_leaders: owned_set,
+            skins_owned: skins_set.len() as u64,
             leader_matches,
             leader_wins_map,
         }
@@ -676,33 +683,94 @@ impl PlayerProfile {
         crate::rewards::achievement_progress(id, &totals)
     }
 
-    /// Unlock achievements from server-owned aggregates. The set and laurel
-    /// total are updated together, so retries cannot pay an achievement twice.
-    pub fn refresh_achievements(&mut self) {
+    /// Unlock achievements from server-owned aggregates and pay their rewards.
+    /// The set, laurel total and any extra grant move together, so retries
+    /// cannot pay an achievement twice. Returns the definitions that unlocked
+    /// so the caller can present them. A reward that adds a hero or skin is
+    /// picked up by the next refresh when it changes another total.
+    pub fn refresh_achievements(&mut self) -> Vec<crate::rewards::AchievementDefinition> {
         let totals = self.achievement_totals();
-        for achievement in
-            crate::rewards::newly_unlocked_achievements(&totals, &self.unlocked_achievements)
-        {
+        let unlocked =
+            crate::rewards::newly_unlocked_achievements(&totals, &self.unlocked_achievements);
+        for achievement in &unlocked {
             self.unlocked_achievements
                 .insert(achievement.id.to_string());
             self.laurels = self.laurels.saturating_add(achievement.points);
+            let Some(reward) = crate::rewards::achievement_rewards(achievement.id) else {
+                continue;
+            };
+            self.crowns = self.crowns.saturating_add(reward.crowns);
+            self.gems = self.gems.saturating_add(reward.gems);
+            if let Some(hero_id) = reward.hero {
+                let leader = crate::leaders::Leader::of(hero_id);
+                if crate::commerce::owns_leader(&self.owned_leaders, leader) {
+                    self.gems = self
+                        .gems
+                        .saturating_add(crate::rewards::achievement_duplicate_gems(leader));
+                } else {
+                    self.owned_leaders
+                        .insert(crate::commerce::leader_id(leader).to_string());
+                }
+            }
+            if let Some(skin_id) = reward.skin {
+                self.owned_skins.insert(skin_id.to_string());
+            }
         }
+        unlocked
+    }
+
+    /// Refresh achievements after a store purchase and record a
+    /// presentation-only receipt for what unlocked. The purchase already
+    /// changed the balances, so only the refresh deltas are recorded.
+    fn refresh_achievements_for_purchase(&mut self, receipt_id: &str, created_at: u64) {
+        let crowns_before = self.crowns;
+        let gems_before = self.gems;
+        let laurels_before = self.laurels;
+        let unlocked = self.refresh_achievements();
+        if unlocked.is_empty() {
+            return;
+        }
+        self.reward_receipts.insert(
+            receipt_id.to_string(),
+            crate::profile::RewardReceipt {
+                id: receipt_id.to_string(),
+                match_id: receipt_id.to_string(),
+                crowns: self.crowns.saturating_sub(crowns_before),
+                gems: self.gems.saturating_sub(gems_before),
+                laurels: self.laurels.saturating_sub(laurels_before),
+                unlocked_achievements: unlocked
+                    .iter()
+                    .map(|achievement| achievement.id.to_string())
+                    .collect(),
+                level_before: Some(self.level),
+                level_after: Some(self.level),
+                created_at,
+                ..Default::default()
+            },
+        );
     }
 
     pub fn achievement_views(&self) -> Vec<crate::profile::AchievementView> {
         crate::rewards::all_achievements()
             .iter()
-            .map(|achievement| crate::profile::AchievementView {
-                id: achievement.id.to_string(),
-                category: achievement.category.to_string(),
-                title: achievement.title.to_string(),
-                description: achievement.description.to_string(),
-                points: achievement.points,
-                progress: self
-                    .achievement_progress(achievement.id)
-                    .min(achievement.target),
-                target: achievement.target,
-                unlocked: self.unlocked_achievements.contains(achievement.id),
+            .map(|achievement| {
+                let reward = crate::rewards::achievement_rewards(achievement.id);
+                crate::profile::AchievementView {
+                    id: achievement.id.to_string(),
+                    category: achievement.category.to_string(),
+                    title: achievement.title.to_string(),
+                    description: achievement.description.to_string(),
+                    points: achievement.points,
+                    progress: self
+                        .achievement_progress(achievement.id)
+                        .min(achievement.target),
+                    target: achievement.target,
+                    unlocked: self.unlocked_achievements.contains(achievement.id),
+                    reward_crowns: reward.map_or(0, |reward| reward.crowns),
+                    reward_gems: reward.map_or(0, |reward| reward.gems),
+                    reward_hero: reward.and_then(|reward| reward.hero).map(str::to_string),
+                    reward_skin: reward.and_then(|reward| reward.skin).map(str::to_string),
+                }
             })
             .collect()
     }
@@ -3746,6 +3814,7 @@ impl PlayerDb {
                         updated_at: now,
                     },
                 );
+                account.profile.refresh_achievements();
                 account.updated_at = now;
                 granted = true;
             })
@@ -3901,6 +3970,8 @@ impl PlayerDb {
                         account.profile.crowns -= cost;
                     }
                     account.profile.owned_leaders.insert(leader_id.clone());
+                    account.profile
+                        .refresh_achievements_for_purchase(&format!("purchase:{purchase_id}"), now);
                     account.profile.purchase_history.insert(
                         purchase_id.clone(),
                         PurchaseRecord {
@@ -3969,6 +4040,8 @@ impl PlayerDb {
                 } else {
                     *balance -= cost;
                     account.profile.owned_skins.insert(skin.id.clone());
+                    account.profile
+                        .refresh_achievements_for_purchase(&format!("purchase:{purchase_id}"), now);
                     account.profile.purchase_history.insert(
                         purchase_id.clone(),
                         PurchaseRecord {
@@ -4045,6 +4118,8 @@ impl PlayerDb {
                         account.profile.owned_skins.insert(id.clone());
                     }
                 }
+                account.profile
+                    .refresh_achievements_for_purchase(&format!("purchase:{purchase_id}"), now);
                 account.profile.purchase_history.insert(
                     purchase_id.clone(),
                     PurchaseRecord {
@@ -8503,6 +8578,70 @@ mod tests {
         profile.refresh_achievements();
         assert!(profile.unlocked_achievements.contains("laurel_hoard"));
         assert!(profile.laurels >= 100);
+    }
+
+    #[test]
+    fn skin_milestones_refresh_on_purchase_and_pay_gems() {
+        let mut profile = PlayerProfile::default();
+        profile.owned_skins.insert("ember_vein".to_string());
+        let unlocked = profile.refresh_achievements();
+        assert!(unlocked.iter().any(|achievement| achievement.id == "skin_1"));
+        assert!(profile.unlocked_achievements.contains("skin_1"));
+
+        for skin in ["storm_grid", "royal_lattice", "tidal_crest", "hex_bastion"] {
+            profile.owned_skins.insert(skin.to_string());
+        }
+        let gems_before = profile.gems;
+        profile.refresh_achievements();
+        assert!(profile.unlocked_achievements.contains("skin_5"));
+        assert_eq!(profile.gems, gems_before + 25);
+    }
+
+    #[test]
+    fn purchase_refresh_records_a_presentation_receipt() {
+        let mut profile = PlayerProfile::default();
+        profile.owned_skins.insert("ember_vein".to_string());
+        profile.refresh_achievements_for_purchase("purchase:in_game:skin:ember_vein", 7);
+        let receipt = profile
+            .reward_receipts
+            .get("purchase:in_game:skin:ember_vein")
+            .expect("purchase receipt recorded");
+        assert_eq!(
+            receipt.status,
+            crate::profile::RewardSettlementStatus::Applied
+        );
+        assert_eq!(receipt.laurels, 25);
+        assert!(receipt.unlocked_achievements.iter().any(|id| id == "skin_1"));
+
+        let mut quiet = PlayerProfile::default();
+        quiet.refresh_achievements_for_purchase("purchase:in_game:leader:none", 7);
+        assert!(quiet.reward_receipts.is_empty());
+    }
+
+    #[test]
+    fn match_receipt_carries_unlocked_achievements_for_presentation() {
+        let mut profile = PlayerProfile {
+            matches_played: 1,
+            ..Default::default()
+        };
+        profile.apply_reward_receipt(
+            "m1",
+            "m1",
+            "Caesar",
+            crate::rewards::MatchReward {
+                xp: 20,
+                leader_xp: 20,
+                ..Default::default()
+            },
+            1,
+        );
+        let receipt = profile.reward_receipts.get("m1").unwrap();
+        assert!(
+            receipt
+                .unlocked_achievements
+                .iter()
+                .any(|id| id == "first_command")
+        );
     }
 
     #[test]

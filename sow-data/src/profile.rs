@@ -48,6 +48,10 @@ pub struct RewardReceipt {
     pub gems: u64,
     #[serde(default)]
     pub unlocked_leaders: Vec<String>,
+    /// Achievements unlocked by this receipt's refresh, for presentation.
+    /// Older receipts omit the field and deserialize empty.
+    #[serde(default)]
+    pub unlocked_achievements: Vec<String>,
     /// Player level immediately before and after this receipt was applied.
     /// Older receipts omit these fields and deserialize as `None`.
     #[serde(default)]
@@ -295,6 +299,15 @@ pub struct AchievementView {
     pub progress: u64,
     pub target: u64,
     pub unlocked: bool,
+    /// Extra reward paid with this achievement, on top of its laurels.
+    #[serde(default)]
+    pub reward_crowns: u64,
+    #[serde(default)]
+    pub reward_gems: u64,
+    #[serde(default)]
+    pub reward_hero: Option<String>,
+    #[serde(default)]
+    pub reward_skin: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]

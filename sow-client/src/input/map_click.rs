@@ -1,4 +1,4 @@
-use crate::app::{BuildingDrag, MapContextMenu, MapContextMenuView, SowApp};
+use crate::app::{MapContextMenu, MapContextMenuView, SowApp};
 use crate::ui::hud::state::TransferMode;
 use serde::Deserialize;
 
@@ -1204,7 +1204,7 @@ impl SowApp {
         }
         let (col, row) = (col.clamp(0, map_w as i32 - 1), row.clamp(0, map_h as i32 - 1));
         let requested_tile = row as u32 * map_w + col as u32;
-        let bounds = if matches!(self.input.building_drag, Some(BuildingDrag::Touch { .. })) {
+        let bounds = if self.input.building_drag.is_some_and(|drag| drag.mobile_touch) {
             Some((0, 0, map_w as i32 - 1, map_h as i32 - 1))
         } else {
             self.visible_building_anchor_bounds(placement.kind)

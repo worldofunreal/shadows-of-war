@@ -457,6 +457,9 @@ fn ws_write_timeout_ms() -> u64 {
 
 /// Event channel capacity.
 const EVENT_CHANNEL: usize = 1024;
+const STARTUP_GRACE: Duration = Duration::from_secs(5);
+/// Allows the post-ticket loading marker to arrive before treating a client as legacy.
+const LEGACY_CLIENT_PROBE: Duration = Duration::from_millis(250);
 
 /// Liveness: relay-initiated WS ping period. Browsers auto-Pong at the WS
 /// layer; backfill/native clients Pong explicitly. A dead peer never does.
@@ -475,6 +478,14 @@ const LIVE_HISTORY_CAP: usize = 512;
 // ---- relay event plumbing ---------------------------------------------------
 
 enum RelayEvent {
+    GameLoading {
+        player_id: u16,
+        generation: u64,
+    },
+    GameReady {
+        player_id: u16,
+        generation: u64,
+    },
     Gameplay {
         player_id: u16,
         intent: GameplayIntent,
@@ -1325,6 +1336,12 @@ async fn tick_task(
     let mut spawn_rate_limits = HashMap::<u16, SpawnIntentRateLimit>::new();
     let mut total_ticks: u64 = 0;
     let mut total_intents: u64 = 0;
+    let mut game_loading_players = HashSet::new();
+    let mut game_ready_players = HashSet::new();
+    let mut first_game_ready_at = None;
+    let mut all_players_connected_at = None;
+    let mut game_started = false;
+    let mut startup_intents_saturated = false;
     // Lifecycle: a lobby is removed from the registry and its live turn history
     // dropped when the match ends (GameOver / all clients leave) OR when it
     // outlives the maximum match duration. Backfill bots play indefinitely, so
@@ -1340,11 +1357,50 @@ async fn tick_task(
     loop {
         tokio::select! {
             _ = ticker.tick() => {
-                let mut clients = state.clients.lock().await;
-                let active_relay_connections = clients.len();
-                let already_finalized = state.tracker.lock().unwrap().finalized();
-
                 let now = Instant::now();
+                let mut clients = state.clients.lock().await;
+                let already_finalized = state.tracker.lock().unwrap().finalized();
+                if !game_started {
+                    let expected_players = state.tracker.lock().unwrap().participants.len();
+                    let all_ready = game_ready_players.len() >= expected_players;
+                    if clients.len() >= expected_players {
+                        all_players_connected_at.get_or_insert(now);
+                    } else {
+                        all_players_connected_at = None;
+                    }
+                    let grace_elapsed = first_game_ready_at
+                        .is_some_and(|ready_at: Instant| ready_at.elapsed() >= STARTUP_GRACE);
+                    let legacy_fallback = game_loading_players.is_empty()
+                        && (all_players_connected_at
+                            .is_some_and(|connected_at: Instant| connected_at.elapsed() >= LEGACY_CLIENT_PROBE)
+                            || match_started.elapsed() >= STARTUP_GRACE);
+                    let timeout_fallback = match_started.elapsed() >= RECONNECT_GRACE;
+                    if end_requested || natural_end.is_some() || already_finalized || all_ready || grace_elapsed || legacy_fallback || timeout_fallback {
+                        game_started = true;
+                        let reason = if end_requested || natural_end.is_some() || already_finalized {
+                            "match closing"
+                        } else if all_ready {
+                            "all players ready"
+                        } else if grace_elapsed {
+                            "startup grace elapsed"
+                        } else if legacy_fallback {
+                            "legacy client fallback"
+                        } else {
+                            "startup timeout"
+                        };
+                        info!(
+                            "[relay] startup wait released lobby={} ready={} expected={} reason={}",
+                            state.id,
+                            game_ready_players.len(),
+                            expected_players,
+                            reason
+                        );
+                    } else {
+                        continue;
+                    }
+                }
+                let active_relay_connections = clients.len();
+
                 let ending = end_requested || match_started.elapsed().as_secs() >= max_match_secs;
                 let expired = if natural_end.is_some() { Vec::new() } else if ending {
                     state.tracker.lock().unwrap().participants.keys().copied().collect()
@@ -1479,6 +1535,31 @@ async fn tick_task(
             }
             Some(event) = ev_rx.recv() => {
                 match event {
+                    RelayEvent::GameLoading { player_id, generation } => {
+                        let clients = state.clients.lock().await;
+                        if clients.get(&player_id).is_some_and(|client| client.generation == generation)
+                            && state.tracker.lock().unwrap().participants.contains_key(&player_id)
+                        {
+                            game_loading_players.insert(player_id);
+                        }
+                    }
+                    RelayEvent::GameReady { player_id, generation } => {
+                        let clients = state.clients.lock().await;
+                        if clients.get(&player_id).is_some_and(|client| client.generation == generation)
+                            && state.tracker.lock().unwrap().participants.contains_key(&player_id)
+                        {
+                            game_loading_players.insert(player_id);
+                            game_ready_players.insert(player_id);
+                            first_game_ready_at.get_or_insert_with(Instant::now);
+                            info!(
+                                "[relay] player game-ready lobby={} player={} ready={} expected={}",
+                                state.id,
+                                player_id,
+                                game_ready_players.len(),
+                                state.expected_external_connections
+                            );
+                        }
+                    }
                     RelayEvent::EndMatch => { end_requested = true; }
                     RelayEvent::PrepareResult { player_id, generation } => {
                         let clients = state.clients.lock().await;
@@ -1540,6 +1621,13 @@ async fn tick_task(
                         if natural_end.is_some() && !matches!(intent,GameplayIntent::Resign | GameplayIntent::MarkDisconnected { .. }) { continue; }
                         if !admit_gameplay_intent(player_id, &intent, tick_number, tick_rate_ms as f32,
                             spawn_phase_end_tick, &mut spawn_rate_limits) { continue; }
+                        if !game_started && pending_intents.len() >= EVENT_CHANNEL {
+                            if !startup_intents_saturated {
+                                warn!("[relay] startup intent buffer full lobby={}; excess pre-start intents are ignored", state.id);
+                                startup_intents_saturated = true;
+                            }
+                            continue;
+                        }
                         pending_intents.push(StampedIntent { player_id, intent });
                     }
                     RelayEvent::VoluntaryLeave { player_id, generation, peer, reply } => {
@@ -1873,6 +1961,16 @@ async fn ws_task(
                                                 let _ = lobby.ev_tx.send(RelayEvent::PrepareResult { player_id,generation }).await;
                                                 result_hint_sent = true;
                                             }
+                                        }
+                                    }
+                                    ClientMessage::GameLoading {} => {
+                                        if let (Some(lobby), Some(pid)) = (&my_lobby, my_player_id) {
+                                            let _ = lobby.ev_tx.send(RelayEvent::GameLoading { player_id: pid, generation }).await;
+                                        }
+                                    }
+                                    ClientMessage::GameReady {} => {
+                                        if let (Some(lobby), Some(pid)) = (&my_lobby, my_player_id) {
+                                            let _ = lobby.ev_tx.send(RelayEvent::GameReady { player_id: pid, generation }).await;
                                         }
                                     }
                                     ClientMessage::ReadyWithTicket { lobby_id: l_id, player_id, ticket } => {

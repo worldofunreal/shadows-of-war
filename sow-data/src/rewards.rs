@@ -41,6 +41,40 @@ pub struct AchievementDefinition {
     pub target: u64,
 }
 
+/// Extra reward paid when an achievement unlocks, on top of its laurels.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AchievementReward {
+    pub crowns: u64,
+    pub gems: u64,
+    /// Catalog id of a hero granted by the achievement.
+    pub hero: Option<&'static str>,
+    /// Public id of a skin granted by the achievement.
+    pub skin: Option<&'static str>,
+}
+
+/// Reward table for achievements that pay more than laurels. Kept apart from
+/// the catalog so the ~1,600 literal definitions stay untouched.
+pub fn achievement_rewards(id: &str) -> Option<AchievementReward> {
+    match id {
+        "skin_5" => Some(AchievementReward {
+            gems: 25,
+            ..Default::default()
+        }),
+        "skin_9" => Some(AchievementReward {
+            gems: 50,
+            ..Default::default()
+        }),
+        _ => None,
+    }
+}
+
+/// Gems paid when an achievement grants a hero the player already owns:
+/// 22.5% of that hero's gem price. A duplicate is worth a fifth of the hero,
+/// never its full price.
+pub fn achievement_duplicate_gems(leader: crate::leaders::Leader) -> u64 {
+    leader.price_gems().saturating_mul(9) / 40
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AchievementTotals {
     pub matches_played: u64,
@@ -59,6 +93,7 @@ pub struct AchievementTotals {
     pub advanced_tactics_completed: u64,
     pub owned_leaders_count: u64,
     pub owned_leaders: std::collections::BTreeSet<String>,
+    pub skins_owned: u64,
     pub leader_matches: std::collections::BTreeMap<String, u64>,
     pub leader_wins_map: std::collections::BTreeMap<String, u64>,
 }
@@ -163,7 +198,12 @@ pub fn achievement_progress(id: &str, totals: &AchievementTotals) -> u64 {
         return totals.owned_leaders_count;
     }
 
-    // 7. Hero recruitments: recruit_{slug}
+    // 7. Skin collection milestones
+    if id.starts_with("skin_") {
+        return totals.skins_owned;
+    }
+
+    // 8. Hero recruitments: recruit_{slug}
     if let Some(slug) = id.strip_prefix("recruit_") {
         if totals.owned_leaders.contains(slug) {
             return 1;
@@ -181,13 +221,13 @@ pub fn achievement_progress(id: &str, totals: &AchievementTotals) -> u64 {
         return 0;
     }
 
-    // 8. Hero mastery battles: {slug}_mastery_{target}
+    // 9. Hero mastery battles: {slug}_mastery_{target}
     if let Some(idx) = id.find("_mastery_") {
         let slug = &id[..idx];
         return get_hero_matches(&totals.leader_matches, slug);
     }
 
-    // 9. Hero victories: {slug}_wins_{target}
+    // 10. Hero victories: {slug}_wins_{target}
     if let Some(idx) = id.find("_wins_") {
         let slug = &id[..idx];
         return get_hero_wins(&totals.leader_wins_map, slug);
@@ -406,6 +446,13 @@ pub fn all_achievements() -> &'static [AchievementDefinition] {
             AchievementDefinition { id: "roster_25", category: "commanders", title: "High Command", description: "Command or own 25 heroes.", points: 200, target: 25 },
             AchievementDefinition { id: "roster_50", category: "commanders", title: "Army of Legends", description: "Command or own 50 heroes.", points: 350, target: 50 },
             AchievementDefinition { id: "roster_80", category: "commanders", title: "Pantheon of War", description: "Command or own 80 heroes.", points: 1000, target: 80 },
+        ]);
+
+        // --- Skin Collection Milestones ---
+        list.extend_from_slice(&[
+            AchievementDefinition { id: "skin_1", category: "skins", title: "First Skin", description: "Acquire your first skin.", points: 25, target: 1 },
+            AchievementDefinition { id: "skin_5", category: "skins", title: "Skin Collector", description: "Acquire 5 skins.", points: 75, target: 5 },
+            AchievementDefinition { id: "skin_9", category: "skins", title: "Skin Connoisseur", description: "Acquire 9 skins.", points: 150, target: 9 },
         ]);
 
         // --- All 93 Heroes: Recruitment, Battles Mastery, and Victories ---
@@ -783,6 +830,49 @@ mod tests {
         assert_eq!(unlocked.iter().map(|item| item.points).sum::<u64>(), 10);
         let already_unlocked = ["first_command".to_string()].into_iter().collect();
         assert!(newly_unlocked_achievements(&totals, &already_unlocked).is_empty());
+    }
+
+    #[test]
+    fn skin_milestones_unlock_from_owned_skins_and_pay_currency() {
+        let totals = AchievementTotals {
+            skins_owned: 1,
+            ..Default::default()
+        };
+        let unlocked = newly_unlocked_achievements(&totals, &Default::default());
+        assert!(unlocked.iter().any(|item| item.id == "skin_1"));
+        assert_eq!(super::achievement_rewards("skin_1"), None);
+
+        let totals = AchievementTotals {
+            skins_owned: 5,
+            ..Default::default()
+        };
+        let unlocked = newly_unlocked_achievements(&totals, &Default::default());
+        assert!(unlocked.iter().any(|item| item.id == "skin_5"));
+        assert_eq!(
+            super::achievement_rewards("skin_5").map(|reward| reward.gems),
+            Some(25)
+        );
+
+        let totals = AchievementTotals {
+            skins_owned: 9,
+            ..Default::default()
+        };
+        let unlocked = newly_unlocked_achievements(&totals, &Default::default());
+        assert!(unlocked.iter().any(|item| item.id == "skin_9"));
+        assert_eq!(
+            super::achievement_rewards("skin_9").map(|reward| reward.gems),
+            Some(50)
+        );
+    }
+
+    #[test]
+    fn duplicate_hero_reward_is_a_fraction_of_the_hero_price() {
+        let leader = crate::leaders::Leader::all()
+            .find(|leader| leader.price_gems() > 0)
+            .expect("the catalog has a paid hero");
+        let gems = super::achievement_duplicate_gems(leader);
+        assert_eq!(gems, leader.price_gems() * 9 / 40);
+        assert!(gems < leader.price_gems());
     }
 
     #[test]

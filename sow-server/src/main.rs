@@ -2318,6 +2318,10 @@ async fn main() {
                                                 // Reconnect capabilities are valid only on the direct
                                                 // relay connection, never on the orchestrator socket.
                                             }
+                                            sow_core::protocol::ClientMessage::GameLoading {}
+                                            | sow_core::protocol::ClientMessage::GameReady {} => {
+                                                // Startup readiness is accepted only by the direct relay.
+                                            }
                                             sow_core::protocol::ClientMessage::MapDownloadProgress { lobby_id, player_id, progress } => {
                                                 if let (Some(l_id), Some(p_id)) = (my_lobby_id, my_player_id)
                                                     && lobby_id == l_id

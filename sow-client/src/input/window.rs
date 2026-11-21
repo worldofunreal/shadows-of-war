@@ -276,8 +276,18 @@ impl SowApp {
         {
             self.confirm_building_placement();
         }
-        if code == winit::keyboard::KeyCode::Digit0 || code == winit::keyboard::KeyCode::Numpad0 {
-            self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
+        #[cfg(not(target_arch = "wasm32"))]
+        match code {
+            winit::keyboard::KeyCode::Digit0 | winit::keyboard::KeyCode::Numpad0 => {
+                self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
+            }
+            winit::keyboard::KeyCode::Digit9 | winit::keyboard::KeyCode::Numpad9 => {
+                self.select_nuke_kind(sow_core::game::NukeKind::HydrogenBomb);
+            }
+            winit::keyboard::KeyCode::Digit8 | winit::keyboard::KeyCode::Numpad8 => {
+                self.select_nuke_kind(sow_core::game::NukeKind::MIRV);
+            }
+            _ => {}
         }
         if code == winit::keyboard::KeyCode::KeyP
             && !self.ui.app.hud_state.selected_warship_ids.is_empty()
@@ -387,7 +397,6 @@ impl SowApp {
                 }
                 self.input.dragging = !panel_button
                     && !self.machinima_camera_active()
-                    && (is_touch || !build_tool_selected)
                     && (self.ui.tutorial_camera_only
                         || self.ui.app.hud_state.selected_nuke_kind.is_none());
                 if !is_touch {
@@ -416,30 +425,17 @@ impl SowApp {
                     });
                 }
                 if (!is_touch || self.input.active_touches.len() == 1)
-                    && let Some(placement) = self.ui.app.hud_state.building_placement
                     && let Some(controls) = self.placement_controls()
                     && controls.grabs(x as f32, y as f32)
                 {
                     let zoom = self.input.camera_zoom;
-                    let drag = if is_touch && crate::web_canvas::has_mobile_pointer() {
-                        let width = self.sim.map_w.max(1);
-                        BuildingDrag::Touch {
-                            anchor: (
-                                (placement.tile_idx % width) as i32,
-                                (placement.tile_idx / width) as i32,
-                            ),
-                            pointer: (x, y),
-                            zoom,
-                        }
-                    } else {
-                        BuildingDrag::Mouse {
-                            offset: (
-                                (x as f32 - controls.center[0]) / zoom,
-                                (y as f32 - controls.center[1]) / zoom,
-                            ),
-                        }
-                    };
-                    self.input.building_drag = Some(drag);
+                    self.input.building_drag = Some(BuildingDrag {
+                        offset: (
+                            (x as f32 - controls.center[0]) / zoom,
+                            (y as f32 - controls.center[1]) / zoom,
+                        ),
+                        mobile_touch: is_touch && crate::web_canvas::has_mobile_pointer(),
+                    });
                     self.input.touch_pan_residual = (0.0, 0.0);
                     self.input.dragging = false;
                 }
@@ -523,9 +519,14 @@ impl SowApp {
         primary: bool,
     ) {
         if let winit::event::PointerSource::Touch { finger_id, .. } = source {
-            self.input
+            let previous = self.input
                 .active_touches
                 .insert(finger_id.into_raw() as u64, (x, y));
+            if previous == Some((x, y))
+                && self.input.building_drag.is_some_and(|drag| drag.mobile_touch)
+            {
+                return;
+            }
         }
         let is_touch = matches!(source, winit::event::PointerSource::Touch { .. });
         let touch_pan_scale = if self.ui.app.hud_state.building_placement.is_some() {
@@ -575,22 +576,12 @@ impl SowApp {
             }
             self.input.last_pinch_state = Some((distance, cx, cy));
         } else if let Some(drag) = self.input.building_drag {
-            let (col, row) = match drag {
-                BuildingDrag::Mouse { offset } => (
-                    ((x as f32 - self.input.camera_x) / self.input.camera_zoom - offset.0)
-                        .round() as i32,
-                    ((y as f32 - self.input.camera_y) / self.input.camera_zoom - offset.1)
-                        .round() as i32,
-                ),
-                BuildingDrag::Touch {
-                    anchor,
-                    pointer,
-                    zoom,
-                } => (
-                    (f64::from(anchor.0) + (x - pointer.0) / f64::from(zoom)).round() as i32,
-                    (f64::from(anchor.1) + (y - pointer.1) / f64::from(zoom)).round() as i32,
-                ),
-            };
+            // New finger movement can reach the map brought into view by camera follow.
+            let (offset_x, offset_y) = drag.offset;
+            let col = ((x as f32 - self.input.camera_x) / self.input.camera_zoom - offset_x)
+                .round() as i32;
+            let row = ((y as f32 - self.input.camera_y) / self.input.camera_zoom - offset_y)
+                .round() as i32;
             self.move_building_preview(col, row);
         } else if is_touch {
             let mut crossed_drag_threshold = false;
@@ -630,7 +621,6 @@ impl SowApp {
                 .map_pointer_start
                 .as_ref()
                 .is_some_and(|start| !start.is_touch)
-            && self.ui.app.hud_state.building_placement.is_none()
         {
             self.record_tutorial_camera_drag_if_moved(x, y);
             self.close_map_context_menu();

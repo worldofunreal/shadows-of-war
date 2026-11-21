@@ -20,6 +20,11 @@ export interface ProfileAchievement {
     progress: number;
     target: number;
     unlocked: boolean;
+    /** Extra reward paid with this achievement, on top of its laurels. */
+    reward_crowns?: number;
+    reward_gems?: number;
+    reward_hero?: string;
+    reward_skin?: string;
 }
 
 export interface AchievementProfileLeader {
@@ -413,6 +418,11 @@ const GLOBAL_ACHIEVEMENTS: ProfileAchievement[] = [
     { id: "roster_25", category: "commanders", title: "High Command", description: "Command or own 25 heroes.", points: 200, target: 25, unlocked: false, progress: 0 },
     { id: "roster_50", category: "commanders", title: "Army of Legends", description: "Command or own 50 heroes.", points: 350, target: 50, unlocked: false, progress: 0 },
     { id: "roster_80", category: "commanders", title: "Pantheon of War", description: "Command or own 80 heroes.", points: 1000, target: 80, unlocked: false, progress: 0 },
+
+    // Skin Collection Milestones
+    { id: "skin_1", category: "skins", title: "First Skin", description: "Acquire your first skin.", points: 25, target: 1, unlocked: false, progress: 0 },
+    { id: "skin_5", category: "skins", title: "Skin Collector", description: "Acquire 5 skins.", points: 75, target: 5, unlocked: false, progress: 0 },
+    { id: "skin_9", category: "skins", title: "Skin Connoisseur", description: "Acquire 9 skins.", points: 150, target: 9, unlocked: false, progress: 0 },
 ];
 
 export const WOW_PILLAR_ORDER: WowConcretePillar[] = [
@@ -438,7 +448,7 @@ export const WOW_SUBCATEGORIES: Record<WowConcretePillar, string[]> = {
         "kind:mastery",
         "kind:wins",
     ],
-    prestige: ["all", "laurels"],
+    prestige: ["all", "laurels", "skins"],
 };
 
 export function tText(key: string, fallback: string, values?: Record<string, unknown>): string {
@@ -792,6 +802,10 @@ export function resolveProfileAchievements(data: AchievementProfileInput): Profi
             target: target,
             progress: Math.min(target, progress),
             unlocked,
+            reward_crowns: srv ? srv.reward_crowns : undefined,
+            reward_gems: srv ? srv.reward_gems : undefined,
+            reward_hero: srv ? srv.reward_hero : undefined,
+            reward_skin: srv ? srv.reward_skin : undefined,
         });
     }
 
@@ -954,6 +968,9 @@ export function enrichAchievement(
     } else if (id.startsWith("campaign_") || achievement.category === "campaign") {
         wowCategory = "pve_campaign";
         wowSubcategory = "campaign";
+    } else if (id.startsWith("skin_")) {
+        wowCategory = "prestige";
+        wowSubcategory = "skins";
     } else if (id === "laurel_hoard" || id.startsWith("laurels_") || achievement.category === "laurels") {
         wowCategory = "prestige";
         wowSubcategory = "laurels";

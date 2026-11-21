@@ -8,7 +8,7 @@ import {
   setAvatarImage,
   setAvatarPortrait,
 } from "./avatar-presentation.ts";
-import { abilityIconMarkup, esc } from "./main_menu.core.ts";
+import { abilityIconMarkup, browserZoomInputMode, esc } from "./main_menu.core.ts";
 import { computeEndgameStatRollups } from "./main_menu.motion.ts";
 import { renderLocaleSettingRow } from "./main_menu.settings.ts";
 import {
@@ -242,6 +242,7 @@ type HudRefs = {
   deployTimer: HTMLElement;
   deployFill: HTMLElement;
   deployStatus: HTMLElement;
+  awaitingPlayers: HTMLElement;
   buildingsStrip: HTMLElement;
   worldProgressOverlay: HTMLElement;
   worldCelebrationsOverlay: HTMLElement;
@@ -825,7 +826,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
     tools:
       '<path d="M15 5a4.5 4.5 0 0 0-6 6.2L3.5 16.7a1.8 1.8 0 0 0 2.5 2.5L11.5 13.7A4.5 4.5 0 0 0 17.7 8L15 10.7l-2-2L15.7 6A4.5 4.5 0 0 0 15 5Z"/>',
-    retreat: '<path d="M9 14 4 9l5-5M4 9h8a7 7 0 0 1 7 7v2"/>',
+    retreat:
+      RING_GLYPH_OPEN +
+      '<path d="M9 3 2 10l7 7v-5h5a4 4 0 0 1 0 8h-3v3h3a7 7 0 0 0 0-14H9Z"/>' +
+      "</svg>",
     spawn: '<path d="M5 21V4m1 1h12l-3 4 3 4H6"/>',
     attack:
       '<path d="m5 4 14 16M19 4 5 20M3 6l3-3 3 3M15 18l3 3 3-3M3 18l3 3 3-3M15 6l3-3 3 3"/>',
@@ -1408,6 +1412,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (label && label.textContent !== text) label.textContent = text;
   }
 
+  function dockHotkey(hotkey: string | number): string {
+    return '<kbd class="sow-hud__dock-hotkey" aria-hidden="true">' + hotkey + "</kbd>";
+  }
+
   function leaderById(id: string | null | undefined): MenuLeader {
     const leaders =
       hudState && Array.isArray(hudState.leaders) ? hudState.leaders : [];
@@ -1768,6 +1776,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       deployTimer: requiredHudElement("sow-hud-deploy-timer"),
       deployFill: requiredHudElement("sow-hud-deploy-fill"),
       deployStatus: requiredHudElement("sow-hud-deploy-status"),
+      awaitingPlayers: requiredHudElement("sow-hud-awaiting-players"),
       buildingsStrip: requiredHudElement("sow-hud-buildings-strip"),
       worldProgressOverlay: requiredHudElement(
         "sow-hud-world-progress-overlay",
@@ -2014,6 +2023,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   function ensureHudDom() {
     if (!hudRoot || hudInitialized) return;
     hudInitialized = true;
+    hudRoot.toggleAttribute("data-dock-hotkeys", browserZoomInputMode() !== "pinch");
     emoteTextKey = "";
     const initialMusicVol =
       hudState && hudState.settings && hudState.settings.music_volume != null
@@ -2036,7 +2046,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '<div class="sow-hud__territory-score" id="sow-hud-territory-score" hidden>' +
       '<div class="sow-hud__territory-side" data-side="Red" role="group"><b></b><i aria-hidden="true"></i></div>' +
       '<div class="sow-hud__territory-side" data-side="Blue" role="group"><b></b><i aria-hidden="true"></i></div>' +
-      '</div><span class="sow-hud__match-clock" id="sow-hud-match-clock" hidden></span></div>' +
+      '</div><span class="sow-hud__match-clock" id="sow-hud-match-clock" hidden></span>' +
+      '<span class="sow-hud__awaiting-players" id="sow-hud-awaiting-players" role="status" aria-live="polite" hidden>' +
+      SOW_t("hud.awaiting_players") +
+      "</span></div>" +
       '  <div class="sow-hud__status-right">' +
       '    <button class="sow-hud__icon-btn sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' +
       esc(SOW_t("hud.leave")) +
@@ -2333,55 +2346,25 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "        </div>" +
       "      </div>" +
       '      <div class="sow-hud__buildings-strip" id="sow-hud-buildings-strip">' +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="City" aria-label="' +
-      SOW_t("hud.map_action_city") +
-      '">' +
-      buildingIcon("City") +
-      tileCost(true) +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Factory" aria-label="' +
-      SOW_t("hud.map_action_factory") +
-      '">' +
-      buildingIcon("Factory") +
-      tileCost(true) +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Port" aria-label="' +
-      SOW_t("hud.map_action_port") +
-      '">' +
-      buildingIcon("Port") +
-      tileCost(true) +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Tower" aria-label="' +
-      SOW_t("hud.map_action_tower") +
-      '">' +
-      buildingIcon("Tower") +
-      tileCost(true) +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Farm" aria-label="' +
-      SOW_t("hud.map_action_farm") +
-      '">' +
-      buildingIcon("Farm") +
-      tileCost(true) +
-      "</button>" +
-      '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="SAM" aria-label="' +
-      SOW_t("hud.map_action_sam") +
-      '">' +
-      buildingIcon("SAM") +
-      tileCost(true) +
-      "</button>" +
-      '<button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="MissileSilo" aria-label="' +
-      SOW_t("hud.map_action_missilesilo") +
-      '">' +
-      buildingIcon("MissileSilo") +
-      tileCost(true) +
-      "</button>" +
+      ["City", "Farm", "Factory", "Port", "Tower", "SAM", "MissileSilo"].map((kind, index) => {
+        const hotkey = index + 1;
+        return '<button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="' +
+          kind + '" aria-label="' + escapeHudText(SOW_t("hud.map_action_" + kind.toLowerCase())) +
+          '" aria-keyshortcuts="' + hotkey + '">' +
+          buildingIcon(kind) + tileCost(true) + dockHotkey(hotkey) + "</button>";
+      }).join("") +
       "</div>" +
       '<div class="sow-hud__buildings-strip" id="sow-hud-nuclear-strip" style="display:none">' +
-      ["AtomBomb", "HydrogenBomb", "MIRV"].map((kind, index) =>
+      [
+        ["AtomBomb", "0"],
+        ["HydrogenBomb", "9"],
+        ["MIRV", "8"],
+      ].map(([kind, hotkey], index) =>
         '<button type="button" class="sow-hud__building-btn" data-command="select_nuke" data-kind="' +
-        kind + '" data-nuclear-index="' + index + '">' +
-        escapeHudText(SOW_t("hud.nuclear_" + kind.toLowerCase())) +
-        tileCost(true) + "</button>"
+        kind + '" data-nuclear-index="' + index + '" aria-keyshortcuts="' + hotkey + '">' +
+        '<span class="sow-hud__nuclear-label">' +
+        escapeHudText(SOW_t("hud.nuclear_" + kind.toLowerCase())) + "</span>" +
+        tileCost(true) + dockHotkey(hotkey) + "</button>"
       ).join("") +
       "      </div>" +
       '<div class="sow-hud__fleet-control" id="sow-hud-fleet-control" style="display:none" role="region" aria-label="Warship">' +
@@ -3437,7 +3420,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     availableGold: number | undefined,
   ): void {
     const construction = building.construction;
-    if (
+    const warshipLoader = menu.querySelector<HTMLElement>("[data-port-warship-progress]");
+    if (warshipLoader) {
+      const activeWarship = building.production?.warship?.queue?.[0];
+      warshipLoader.classList.toggle("is-idle", !activeWarship);
+      if (activeWarship)
+        patchBuildingProgressBar(warshipLoader, activeWarship.remaining_seconds, activeWarship.progress);
+    } else if (
       construction ||
       building.under_construction ||
       building.remaining_seconds != null
@@ -3847,7 +3836,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const isArsenalBuild = Boolean(
           construction && (construction.kind === "Warship" || construction.kind === "Nuke"),
         );
-        const constructionHtml = isArsenalBuild && construction
+        const constructionHtml = production?.warship
+          ? '<div class="sow-hud__city-construction is-idle" data-port-warship-progress>' +
+            renderBuildingProgressBarMarkup("Warship", 1) +
+            "</div>"
+          : isArsenalBuild && construction
           ? '<div class="sow-hud__city-construction">' +
             renderBuildingProgressBarMarkup(
               construction.kind,
@@ -3886,8 +3879,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           "</div>" +
           constructionHtml +
           chipsHtml +
-          footerHtml +
-          productionHtml;
+          (production?.warship ? productionHtml + footerHtml : footerHtml + productionHtml);
       } else {
         const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
         const isMax = !upgrade && maxLevel > 0 && level >= maxLevel;
@@ -4099,11 +4091,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     return true;
   }
 
-  const activeProgressBars: Map<number, HTMLElement> = new Map();
+  const activeProgressBars: Map<string, HTMLElement> = new Map();
   const activeCelebrations: Set<string> = new Set();
 
   function renderWorldBuildingProgress(
     items: HudBuildingProgressItem[] | null | undefined,
+    openPortTile?: number,
   ): void {
     const overlay = hudRefs && hudRefs.worldProgressOverlay;
     if (!overlay) return;
@@ -4116,12 +4109,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       return;
     }
 
-    const currentTiles = new Set<number>();
+    const currentBars = new Set<string>();
+    const visibleTiles = new Set<number>();
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      if (item.kind === "Warship" && item.tile_idx === openPortTile) continue;
       const levelNum = Math.max(1, item.level);
-      currentTiles.add(item.tile_idx);
-      let bar = activeProgressBars.get(item.tile_idx);
+      const key = item.tile_idx + ":" + item.kind;
+      currentBars.add(key);
+      let bar = activeProgressBars.get(key);
       if (!bar) {
         bar = document.createElement("div");
         bar.className = "sow-hud__world-building-bar";
@@ -4141,7 +4137,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           '<b class="sow-hud__world-building-time" data-building-timer></b>' +
           "</div>";
         overlay.appendChild(bar);
-        activeProgressBars.set(item.tile_idx, bar);
+        activeProgressBars.set(key, bar);
       } else if (
         bar.dataset.kind !== item.kind ||
         bar.dataset.level !== String(levelNum)
@@ -4166,6 +4162,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         bar.style.display = nextDisplay;
       }
       if (visible) {
+        const stacked = visibleTiles.has(item.tile_idx);
+        bar.classList.toggle("is-stacked", stacked);
+        visibleTiles.add(item.tile_idx);
         const nextTransform =
           "translate3d(" +
           item.screen_x.toFixed(1) +
@@ -4179,10 +4178,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       }
     }
 
-    for (const [tile, el] of activeProgressBars.entries()) {
-      if (!currentTiles.has(tile)) {
+    for (const [key, el] of activeProgressBars.entries()) {
+      if (!currentBars.has(key)) {
         el.remove();
-        activeProgressBars.delete(tile);
+        activeProgressBars.delete(key);
       }
     }
   }
@@ -8138,7 +8137,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
   }
 
-  function createCombatOperationRow(): CombatOperationRow {
+  function createCombatOperationRow(kind: HudCombatOperation["kind"]): CombatOperationRow {
     const element = document.createElement("article");
     const portrait = document.createElement("img");
     const glyph = document.createElement("span");
@@ -8162,6 +8161,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     emblem.className = "sow-hud__operation-emblem sow-hud__notification-emblem";
     emblem.hidden = true;
     glyph.className = "sow-hud__operation-glyph";
+    glyph.innerHTML = hudIcon(kind === "fleet" ? "ring_fleet" : "ring_attack");
     copy.className = "sow-hud__operation-copy";
     name.className = "sow-hud__operation-name";
     details.className = "sow-hud__operation-details";
@@ -8263,7 +8263,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const key = operation.kind + ":" + operation.id;
       nextKeys.push(key);
       const row =
-        hudRefs!.combatOperationRows[key] || createCombatOperationRow();
+        hudRefs!.combatOperationRows[key] || createCombatOperationRow(operation.kind);
       const incoming = operation.direction === "incoming";
       const outgoing = operation.direction === "outgoing";
       const neutral = Boolean(operation.neutral);
@@ -8343,7 +8343,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           row.actions.appendChild(
             operationAction(
               "focus_world",
-              "camera",
+              "home",
               SOW_t("hud.center_camera"),
               operation,
             ),
@@ -8354,7 +8354,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           });
           const counterButton = operationAction(
             "counter_attack",
-            "attack",
+            "ring_attack",
             SOW_t("hud.map_action_attack"),
             counterOperation,
           );
@@ -8371,7 +8371,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           row.actions.appendChild(
             operationAction(
               "recall_fleet",
-              "transfer",
+              "retreat",
               SOW_t("hud.recall_transport"),
               operation,
             ),
@@ -8588,6 +8588,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     syncCompactHudDensity(hudScreen);
 
     const hud = hudState.hud;
+    hudRefs!.awaitingPlayers.hidden = !hud.awaiting_players;
     const settings = hudState.settings || DEFAULT_HUD_SETTINGS;
     const settingsOpen = activeHudPanel === "settings";
     const inboxOpen = activeHudPanel === "inbox";
@@ -9436,8 +9437,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const reason = document.getElementById("sow-hud-endgame-reason")!;
         reason.hidden = typeof hud.endgame_reason !== "string";
         if (!reason.hidden) {
+          const winner = hud.winning_team
+            ? SOW_t(
+                hud.winning_team === "Red"
+                  ? "hud.filter_red_team"
+                  : "hud.filter_blue_team",
+              )
+            : hud.winner_name || SOW_t("hud.victory");
           reason.textContent = SOW_t("endgame.reason_" + hud.endgame_reason, {
-            winner: hud.winner_name || SOW_t("hud.victory"),
+            winner,
             percent: 75,
           });
         }
@@ -9455,7 +9463,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     const mapMenuOpen = renderMapMenu(hud.map_menu);
     renderPlacementPanel(hud.building_placement);
-    renderWorldBuildingProgress(hud.buildings_in_progress);
+    const openBuilding = mapMenuOpen && hud.map_menu?.view === "building_details"
+      ? hud.map_menu.building
+      : null;
+    renderWorldBuildingProgress(
+      hud.buildings_in_progress,
+      openBuilding?.production?.warship ? hud.map_menu?.tile_idx : undefined,
+    );
     renderWorldBuildingCelebrations(hud.building_celebrations);
     const panelStates: Record<string, boolean> = {
       toggle_leaderboard: leaderboardOpen,
@@ -10308,23 +10322,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return;
       }
       if (!hudRefs.transfer || hudRefs.transfer.classList.contains("hidden")) {
-        const BUILDING_HOTKEY_KINDS: Record<string, string> = {
-          Digit1: "City",
-          Numpad1: "City",
-          Digit2: "Factory",
-          Numpad2: "Factory",
-          Digit3: "Port",
-          Numpad3: "Port",
-          Digit4: "Tower",
-          Numpad4: "Tower",
-          Digit5: "Farm",
-          Numpad5: "Farm",
-          Digit6: "SAM",
-          Numpad6: "SAM",
-        };
-        const targetKind = BUILDING_HOTKEY_KINDS[event.code];
+        const hotkey = /^(?:Digit|Numpad)([0-9])$/.exec(event.code)?.[1];
         if (
-          !targetKind ||
+          !hotkey ||
           hudState?.phase !== "Playing" ||
           event.defaultPrevented ||
           event.isComposing ||
@@ -10343,21 +10343,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         ) {
           return;
         }
-        const buildingBtn = hudRefs.buildingButtons.find(
-          (button) => button.dataset.kind === targetKind,
+        const targetButton = hudRoot?.querySelector<HTMLButtonElement>(
+          '.sow-hud__dock-actions button[aria-keyshortcuts="' + hotkey + '"]',
         );
         if (
-          !buildingBtn ||
-          buildingBtn.hidden ||
-          buildingBtn.disabled ||
-          !buildingBtn.getClientRects().length
+          !targetButton ||
+          targetButton.hidden ||
+          targetButton.disabled ||
+          !targetButton.getClientRects().length
         ) {
           return;
         }
         event.preventDefault();
         event.stopPropagation();
         if (event.repeat) return;
-        buildingBtn.click();
+        targetButton.click();
         return;
       }
       const action = resolveTransferHotkey(event);

@@ -126,6 +126,19 @@ impl SowApp {
                             {
                                 client.send(data);
                                 self.net.load_telemetry.mark_ready_sent();
+                                if let Ok(data) = bincode::serialize(
+                                    &sow_core::protocol::ClientMessage::GameLoading {},
+                                ) {
+                                    client.send(data);
+                                }
+                                if self.ui.app.phase == crate::ClientPhase::Playing
+                                    && let Ok(data) = bincode::serialize(
+                                        &sow_core::protocol::ClientMessage::GameReady {},
+                                    )
+                                {
+                                    client.send(data);
+                                    self.net.game_ready_sent = true;
+                                }
                             } else {
                                 log::info!("Relay connection waiting for its ticket");
                             }

@@ -24,7 +24,9 @@ const FLOATING_NOTICE_RISE: f32 = 6.5;
 const TRANSPORT_TARGET_FADE_IN_SECS: f32 = 0.2;
 const TRANSPORT_TARGET_FADE_OUT_SECS: f32 = 0.3;
 const TRANSPORT_TARGET_ROTATIONS_PER_SEC: f32 = 1.0;
-const TRANSPORT_TARGET_ETA_FONT_SIZE: f32 = 11.0;
+const TRANSPORT_TARGET_ETA_FONT_SIZE: f32 = 16.0;
+/// Extra SDF face dilation over the label style so the ETA digits read bold.
+const TRANSPORT_TARGET_ETA_BOLD_DILATE: f32 = 0.6;
 const TRANSPORT_IMPACT_DURATION_SECS: f32 = 0.62;
 const DEATH_NAMEPLATE_FONT_SIZE: f32 = 24.0;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
@@ -475,6 +477,8 @@ fn render_transport_targets(
         );
         if marker.eta_seconds.is_some() {
             let font_size = TRANSPORT_TARGET_ETA_FONT_SIZE * sf;
+            let mut style = dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]);
+            style.face_dilate += TRANSPORT_TARGET_ETA_BOLD_DILATE * sf;
             text.push_string(
                 &marker.eta_text,
                 [
@@ -488,7 +492,7 @@ fn render_transport_targets(
                 ],
                 font_size,
                 [1.0, 1.0, 1.0, alpha],
-                dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+                style,
                 (0.5, dev.font_char_spacing.max(0.1)),
             );
         }

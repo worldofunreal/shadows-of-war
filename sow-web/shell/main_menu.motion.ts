@@ -307,7 +307,7 @@ export const sowScreenMotion = (function () {
     return { show: show };
 })();
 
-export type RewardStageKind = "xp" | "crowns" | "gems" | "laurels" | "leader" | "level";
+export type RewardStageKind = "xp" | "crowns" | "gems" | "laurels" | "leader" | "level" | "achievement";
 
 export interface RewardChoreographyStageInput {
     kind: RewardStageKind;

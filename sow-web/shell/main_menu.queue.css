@@ -9,11 +9,12 @@
 }
 
 .sow-menu__queue-summary-card {
+  --sow-queue-card-pad: 20px;
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 20px;
+  padding: var(--sow-queue-card-pad);
   border-radius: var(--sow-tactical-surface-radius);
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border);
@@ -87,6 +88,35 @@
   letter-spacing: 0.1em;
   text-align: center;
   text-transform: uppercase;
+}
+
+/* Portrait: the countdown rides on the map hero instead of its own row, so the
+   lobby keeps the height for the roster. Landscape/desktop keep the row below. */
+@media (orientation: portrait) {
+  #sow-menu[data-screen="queue"]
+    .sow-menu__queue-summary-card
+    > [data-live-countdown] {
+    position: absolute;
+    top: calc(var(--sow-queue-card-pad) + 8px);
+    inset-inline-end: calc(var(--sow-queue-card-pad) + 8px);
+    z-index: 1;
+    box-sizing: border-box;
+    max-width: calc(100% - var(--sow-queue-card-pad) * 2 - 16px);
+    padding: 3px 9px;
+    border: 1px solid var(--sow-tactical-surface-accent-border-soft);
+    border-radius: 999px;
+    background: rgba(9, 10, 13, 0.82);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    line-height: 1.4;
+  }
+
+  #sow-menu[data-screen="queue"]
+    .sow-menu__queue-summary-card
+    > [data-live-countdown]:empty {
+    display: none;
+  }
 }
 
 .sow-menu__map-download-wrap {
@@ -488,21 +518,22 @@
     background: linear-gradient(180deg, transparent, rgba(8, 10, 14, 0.98) 24%);
   }
 
-  /* Lobby only, small portrait: compact text above the list. Map hero untouched. */
+  /* Lobby only, small portrait: compact text above the list. */
   #sow-menu[data-screen="queue"] .sow-menu__main--queue {
     overflow: hidden;
   }
 
-  #sow-menu[data-screen="queue"] .sow-menu__queue-countdown,
+  /* The live countdown rides on the map hero (see the portrait rule above);
+     only the secondary info rows leave to save height. */
   #sow-menu[data-screen="queue"] .sow-menu__queue-info-table [data-info="bots"],
   #sow-menu[data-screen="queue"] .sow-menu__queue-info-table [data-info="nations"] {
     display: none;
   }
 
-  /* Lobby only, small portrait: less air between map and buttons. Map hero untouched. */
+  /* Lobby only, small portrait: less air between map and buttons. */
   #sow-menu[data-screen="queue"] .sow-menu__queue-summary-card {
+    --sow-queue-card-pad: 12px;
     gap: 8px;
-    padding: 12px;
   }
 
   #sow-menu[data-screen="queue"] .sow-menu__queue-info-table {
