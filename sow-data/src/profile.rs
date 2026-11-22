@@ -48,6 +48,8 @@ pub struct RewardReceipt {
     pub gems: u64,
     #[serde(default)]
     pub unlocked_leaders: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unlocked_skin: Option<String>,
     /// Achievements unlocked by this receipt's refresh, for presentation.
     /// Older receipts omit the field and deserialize empty.
     #[serde(default)]

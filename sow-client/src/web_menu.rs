@@ -4627,8 +4627,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             placement.kind,
             placement.tile_idx,
             app.sim.map_w,
-            [app.input.camera_x, app.input.camera_y],
-            app.input.camera_zoom,
+            &app.input,
             screen_scale,
         );
         let cost = app.ui.app.hud_state.building_costs[placement.kind as usize];
@@ -6084,6 +6083,15 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
     let rotation_period =
         sow_data::commerce::rotation_period((js_sys::Date::now().max(0.0) / 1000.0) as u64);
     let visible_route = state.visible_route();
+    let identity = crate::store_portals::load_identity(&state.player_name);
+    let account_id = if identity.provider == "sow" {
+        identity
+            .external_id
+            .filter(|id| !id.is_empty())
+            .or_else(|| app.progress_account_id.clone())
+    } else {
+        app.progress_account_id.clone()
+    };
     MenuInputs {
         phase: app.ui.app.phase,
         loader_cycle_id: splash.cycle_id,
@@ -6142,7 +6150,7 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
         } else {
             Vec::new()
         },
-        account_id: app.progress_account_id.clone(),
+        account_id,
         profile_ready: app.profile_last_applied_request > 0,
         name_save_pending: app.pending_display_name.is_some(),
         quick_match_revision: app.quick_match_revision,

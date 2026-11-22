@@ -18,7 +18,8 @@ type Result<T> = std::result::Result<T, Failure>;
 fn failure(status: StatusCode, message: impl AsRef<str>) -> Failure {
     (status, Json(serde_json::json!({"error":message.as_ref()})))
 }
-fn unavailable(_: impl std::fmt::Display) -> Failure {
+fn unavailable(err: impl std::fmt::Display) -> Failure {
+    log::warn!("[auth] identity service unavailable: {err}");
     failure(
         StatusCode::SERVICE_UNAVAILABLE,
         "Identity service is temporarily unavailable",
@@ -61,9 +62,28 @@ fn email(value: &str) -> Result<String> {
 
 impl AuthService {
     async fn throttle(&self, key: &str, limit: u32, seconds: u32) -> Result<()> {
+        let script = redis::Script::new(
+            "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end; return n",
+        );
+        let rate_key = format!("auth:rate:{key}");
         let mut connection = self.db.get_connection().await.map_err(unavailable)?;
-        let count: u32 = redis::Script::new("local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end; return n")
-            .key(format!("auth:rate:{key}")).arg(seconds).invoke_async(&mut connection).await.map_err(unavailable)?;
+        let count: u32 = match script
+            .key(&rate_key)
+            .arg(seconds)
+            .invoke_async(&mut connection)
+            .await
+        {
+            Ok(count) => count,
+            Err(_) => {
+                let mut fresh = self.db.reset_connection().await.map_err(unavailable)?;
+                script
+                    .key(&rate_key)
+                    .arg(seconds)
+                    .invoke_async(&mut fresh)
+                    .await
+                    .map_err(unavailable)?
+            }
+        };
         if count > limit {
             return Err(failure(
                 StatusCode::TOO_MANY_REQUESTS,

@@ -391,6 +391,7 @@ impl SowApp {
                         self.sim.fog_visible = sow_core::bitset::DenseBitSet::new();
                         self.sim.fog_dirty = true;
                         self.sim.force_fog_upload = true;
+                        self.input.tabletop = None;
                         self.release_client_game_gpu();
                         if let Some(render_ctx) = self.gfx.render_ctx.as_mut()
                             && let Some(ref s) = self.gfx.surface

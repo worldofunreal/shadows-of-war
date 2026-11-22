@@ -23,6 +23,8 @@ const saving = new Set();
 let entityCatalogSaving = false;
 let mapRosterSaving = false;
 let mapGenerating = false;
+let mapGenerationMap = "";
+let mapGenerationProgress = "";
 let mapUploading = false;
 const mapSourcesDir = path.join(root, "assets/map_sources");
 const worldMapWebp = path.join(mapSourcesDir, "giantworldmap.webp");
@@ -287,15 +289,21 @@ function reloadServerMaps() {
   return runCommand("ssh", [uploadTarget.host, `curl -fsS -X POST -H @- ${mapReloadUrl}`], `Authorization: Bearer ${uploadToken}\n`);
 }
 
-function runCommand(command, args, stdin) {
+function runCommand(command, args, stdin, onOutput) {
   return new Promise((resolve) => {
     const child = spawn(command, args, { cwd: root, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => (stdout += chunk));
-    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      onOutput?.("stdout", chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+      onOutput?.("stderr", chunk);
+    });
     child.on("error", (error) => resolve({ code: 1, stdout, stderr: error.message }));
     child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
     if (stdin !== undefined) child.stdin.end(stdin);
@@ -486,6 +494,15 @@ async function handle(req, res) {
     const body = await fs.readFile(entityCatalogFile);
     const tag = etag(body);
     reply(res, 200, body, "application/json; charset=utf-8", { ETag: tag });
+    return;
+  }
+  if (req.method === "GET" && url.pathname === "/__map-generate-status") {
+    reply(
+      res,
+      200,
+      JSON.stringify({ active: mapGenerating, map: mapGenerationMap, progress: mapGenerationProgress }),
+      "application/json; charset=utf-8",
+    );
     return;
   }
   if (req.method === "POST" && url.pathname === "/__entities") {
@@ -866,6 +883,7 @@ async function handle(req, res) {
       return;
     }
     if (mapGenerating) {
+      console.warn(`[map-generator] rejected ${mapId}: another map generation is already running`);
       reply(res, 409, "A map generation is already running.");
       return;
     }
@@ -908,7 +926,16 @@ async function handle(req, res) {
       }
       const mapDir = path.join(mapsDir, mapId);
       if (existsSync(path.join(mapDir, "map.bin")) && request.force !== true) {
-        reply(res, 409, `assets/maps/${mapId} already exists. Confirm to replace it.`);
+        console.info(`[map-generator] ${mapId} already exists; waiting for replacement confirmation`);
+        reply(
+          res,
+          200,
+          JSON.stringify({
+            replace_required: true,
+            message: `assets/maps/${mapId} already exists. Replace it with this generated map?`,
+          }),
+          "application/json; charset=utf-8",
+        );
         return;
       }
       let args;
@@ -941,15 +968,30 @@ async function handle(req, res) {
           ...(request.draft === true ? ["--draft"] : []),
         ];
       }
+      mapGenerationMap = mapId;
+      mapGenerationProgress = "Starting map generation...\n";
+      console.log(`[map-generator] started ${mapId} (${source}, ${size})`);
       const output = await runCommand(process.env.CARGO || "cargo", [
         "run", "--quiet", "-p", "sow-tools", "--bin", "sow-tools", "--", ...args,
-      ]);
+      ], undefined, (stream, chunk) => {
+        const tagged = stream === "stderr" ? `[stderr] ${chunk}` : chunk;
+        mapGenerationProgress = (mapGenerationProgress + tagged).slice(-4000);
+      });
       if (output.code !== 0) {
-        reply(res, 500, output.stderr.trim() || "Could not generate the map.");
+        const diagnostics = [output.stdout.trim(), output.stderr.trim()].filter(Boolean).join("\n");
+        const message = `Map generation for ${mapId} failed (exit ${output.code}).\n${diagnostics || "No process output was captured."}`;
+        console.error(`[map-generator] ${message}`);
+        reply(res, 500, message);
         return;
       }
+      if (output.stderr.trim()) {
+        console.warn(`[map-generator] ${mapId} completed with diagnostics:\n${output.stderr.trim()}`);
+      }
       console.log(`  generated assets/maps/${mapId}`);
-      reply(res, 200, JSON.stringify({ saved: `assets/maps/${mapId}`, message: output.stdout.trim() }), "application/json; charset=utf-8");
+      const message = [output.stdout.trim(), output.stderr.trim() ? `Diagnostics:\n${output.stderr.trim()}` : ""]
+        .filter(Boolean)
+        .join("\n");
+      reply(res, 200, JSON.stringify({ saved: `assets/maps/${mapId}`, message }), "application/json; charset=utf-8");
     } finally {
       mapGenerating = false;
     }
@@ -1175,7 +1217,9 @@ const previewScript = `<script>(function () {
     var parsed = typeof state === "string" ? JSON.parse(state) : state;
     if (!parsed || parsed.phase !== "MainMenu" || !parsed.custom_game_config) return;
     started = true;
-    var config = Object.assign({}, parsed.custom_game_config, { map_name: map, bot_count: 0, nation_count: 0 });
+    // Keep one opposing tribe in the local preview so a single-player match
+    // does not immediately resolve as a victory with no enemies.
+    var config = Object.assign({}, parsed.custom_game_config, { map_name: map, bot_count: 1, nation_count: 0 });
     window.SOW_menu_command(JSON.stringify({ type: "start_single_player", config: config }));
   }
   Object.defineProperty(window, "SOW_onStateUpdate", {

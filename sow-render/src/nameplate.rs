@@ -10,6 +10,7 @@ const SPAWN_LOCAL_AREA: usize = SPAWN_LOCAL_SIDE * SPAWN_LOCAL_SIDE;
 const HUMAN_AVATAR_SCALE: f32 = 8.0;
 const BOT_AVATAR_SCALE: f32 = 6.0;
 const BADGE_AVATAR_RATIO: f32 = 0.43;
+const RANK_BADGE_SCALE: f32 = 1.75;
 const TROOPS_SCALE: f32 = 1.30;
 const NAMEPLATE_SIZE_DEADZONE: f32 = 0.2;
 
@@ -1435,6 +1436,7 @@ impl NameplateLayout {
         let badge_effect_padding = badge_effect_padding.max(0.0);
         let badge_clearance = BADGE_GAP + badge_effect_padding;
         let badge_half = badge_size * 0.5;
+        let rank_badge_half = badge_size * RANK_BADGE_SCALE * 0.5;
         let stack_step = badge_size + BADGE_STACK_GAP + badge_effect_padding * 2.0;
         let left_x = center.0[0] - avatar_radius - badge_half - badge_clearance;
         let right_x = center.0[0] + avatar_radius + badge_half + badge_clearance;
@@ -1447,7 +1449,7 @@ impl NameplateLayout {
             right_x,
             rank_center: ScreenPoint([
                 center.0[0],
-                avatar_center.0[1] - avatar_radius - badge_half - badge_clearance,
+                avatar_center.0[1] - avatar_radius - rank_badge_half - badge_clearance,
             ]),
             star_center: ScreenPoint([left_x, avatar_center.0[1]]),
             text_top: content_top + avatar_diameter + avatar_text_gap,
@@ -1613,23 +1615,14 @@ impl NameplateLayout {
             return;
         }
         if let Some(rank) = status.rank {
-            let (kind, tint) = match rank {
-                1 => (
-                    BadgeKind::Rank1,
-                    [250.0 / 255.0, 204.0 / 255.0, 21.0 / 255.0, 1.0],
-                ),
-                2 => (
-                    BadgeKind::Rank2,
-                    [203.0 / 255.0, 213.0 / 255.0, 225.0 / 255.0, 1.0],
-                ),
-                _ => (
-                    BadgeKind::Rank3,
-                    [217.0 / 255.0, 119.0 / 255.0, 6.0 / 255.0, 1.0],
-                ),
+            let kind = match rank {
+                1 => BadgeKind::Rank1,
+                2 => BadgeKind::Rank2,
+                _ => BadgeKind::Rank3,
             };
             let center = self.rank_center;
-            let size = self.badge_size;
-            self.add_badge(kind, center, size, tint);
+            let size = self.badge_size * RANK_BADGE_SCALE;
+            self.add_badge(kind, center, size, [1.0; 4]);
         }
         if status.is_me {
             let center = self.star_center;

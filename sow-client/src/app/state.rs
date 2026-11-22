@@ -312,6 +312,7 @@ pub struct SimState {
 }
 
 pub struct InputState {
+    pub tabletop: Option<std::sync::Arc<sow_render::map_renderer::Tabletop>>,
     pub camera_x: f32,
     pub camera_y: f32,
     pub camera_zoom: f32,
@@ -352,6 +353,28 @@ pub struct InputState {
 }
 
 impl InputState {
+    pub fn project_board(&self, point: [f32; 2]) -> [f32; 2] {
+        self.tabletop.as_ref().map_or(point, |table| table.project(point))
+    }
+
+    pub fn world_to_screen(&self, point: [f32; 2]) -> [f32; 2] {
+        let [x, y] = self.project_board(point);
+        [self.camera_x + x * self.camera_zoom, self.camera_y + y * self.camera_zoom]
+    }
+
+    pub fn screen_to_world(&self, [x, y]: [f32; 2]) -> [f32; 2] {
+        let point = [(x - self.camera_x) / self.camera_zoom, (y - self.camera_y) / self.camera_zoom];
+        self.tabletop.as_ref().map_or(point, |table| table.unproject(point))
+    }
+
+    pub fn board_y_scale(&self) -> f32 {
+        if self.tabletop.is_some() {
+            sow_render::map_renderer::TABLETOP_Y_SCALE
+        } else {
+            1.0
+        }
+    }
+
     pub fn is_pointer_gesture_active(&self) -> bool {
         self.dragging
             || self.building_drag.is_some()
@@ -943,6 +966,7 @@ impl UiState {
         self.cascade_last_at = None;
         self.cascade_callouts.clear();
         self.combat_streaks.reset();
+        self.blast_scene.clear();
     }
 
     pub(crate) fn reset_kill_streaks(&mut self) {

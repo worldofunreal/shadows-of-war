@@ -203,6 +203,14 @@ pub struct Projectile {
 }
 
 impl UnitType {
+    pub const fn naval_bounty_gold(self) -> f64 {
+        match self {
+            UnitType::TransportShip => 5.0,
+            UnitType::TradeShip => 10.0,
+            UnitType::Warship => 20.0,
+        }
+    }
+
     pub const fn required_port_level(self) -> u8 {
         match self {
             UnitType::TransportShip => 1,

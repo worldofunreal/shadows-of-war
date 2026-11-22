@@ -1,7 +1,7 @@
 {
   "atlas": "gameplay/buildings/atlas.webp",
-  "atlas_height": 528,
-  "atlas_width": 660,
+  "atlas_height": 660,
+  "atlas_width": 792,
   "cell_size": 128,
   "schema_version": 1,
   "sprites": {
@@ -37,6 +37,14 @@
         "width": 128,
         "x": 398,
         "y": 2
+      },
+      "5": {
+        "height": 128,
+        "sha256": "314e8c9c059af114b46c448f47c2f10ea7557233669216251782a87bc71e6f31",
+        "source": "city-5.png",
+        "width": 128,
+        "x": 530,
+        "y": 2
       }
     },
     "Factory": {
@@ -45,7 +53,7 @@
         "sha256": "fb9fdb9c6237ccf6b1ae69c8220d6ca824578427cb6e8fe1bcee4f159f2168f6",
         "source": "factory-1.webp",
         "width": 128,
-        "x": 530,
+        "x": 662,
         "y": 2
       },
       "2": {
@@ -79,15 +87,15 @@
         "sha256": "627d9bfde0f16cec59f0d8c1d8275cb2277baf9d1235708ddbb361262070fe7c",
         "source": "farm-1.webp",
         "width": 128,
-        "x": 134,
-        "y": 398
+        "x": 662,
+        "y": 266
       },
       "2": {
         "height": 128,
         "sha256": "e484b91077b8a9bb319a7c7b8ca2b776e3fb9c5870f85e2c00ee6a7be043527a",
         "source": "farm-2.webp",
         "width": 128,
-        "x": 266,
+        "x": 2,
         "y": 398
       },
       "3": {
@@ -95,7 +103,7 @@
         "sha256": "7feb2f58d68ecd1b3e8405813f4fcf131b1915821b8a9d1f42e1cc0248c8936a",
         "source": "farm-3.webp",
         "width": 128,
-        "x": 398,
+        "x": 134,
         "y": 398
       },
       "4": {
@@ -103,8 +111,42 @@
         "sha256": "5d37d255b304785ea9593b880d344807626d44bb2353a6fd4d06efd0d2f16fe1",
         "source": "farm-4.webp",
         "width": 128,
-        "x": 530,
+        "x": 266,
         "y": 398
+      }
+    },
+    "MissileSilo": {
+      "1": {
+        "height": 128,
+        "sha256": "ba1f1882c0f87dc1523bba471e5fb64304cbbdd0cbc488aca521903ae34f5064",
+        "source": "silo-1.png",
+        "width": 128,
+        "x": 134,
+        "y": 530
+      },
+      "2": {
+        "height": 128,
+        "sha256": "1f2f15a002e20dc59f7a6ee89ba52d7cd556a1662681945e53f6c0b33615e96d",
+        "source": "silo-2.png",
+        "width": 128,
+        "x": 266,
+        "y": 530
+      },
+      "3": {
+        "height": 128,
+        "sha256": "9ffcad0c28f211272b570c1054bd6724dfbf59d8c4edb2e07a82009a51e9789b",
+        "source": "silo-3.png",
+        "width": 128,
+        "x": 398,
+        "y": 530
+      },
+      "4": {
+        "height": 128,
+        "sha256": "314e8c9c059af114b46c448f47c2f10ea7557233669216251782a87bc71e6f31",
+        "source": "silo-4.png",
+        "width": 128,
+        "x": 530,
+        "y": 530
       }
     },
     "Port": {
@@ -129,16 +171,50 @@
         "sha256": "58c6481609e9d1d9cbf56d0cfa86c54270af199588053c3f249993201bc025ae",
         "source": "port-3.webp",
         "width": 128,
-        "x": 2,
-        "y": 266
+        "x": 662,
+        "y": 134
       },
       "4": {
         "height": 128,
         "sha256": "75fd0b4636eaf41e58960d35f2aa50b34006f53dd9f032e380fc45a733cc6ef3",
         "source": "port-4.webp",
         "width": 128,
-        "x": 134,
+        "x": 2,
         "y": 266
+      }
+    },
+    "SAM": {
+      "1": {
+        "height": 128,
+        "sha256": "ba1f1882c0f87dc1523bba471e5fb64304cbbdd0cbc488aca521903ae34f5064",
+        "source": "sam-1.png",
+        "width": 128,
+        "x": 398,
+        "y": 398
+      },
+      "2": {
+        "height": 128,
+        "sha256": "1f2f15a002e20dc59f7a6ee89ba52d7cd556a1662681945e53f6c0b33615e96d",
+        "source": "sam-2.png",
+        "width": 128,
+        "x": 530,
+        "y": 398
+      },
+      "3": {
+        "height": 128,
+        "sha256": "9ffcad0c28f211272b570c1054bd6724dfbf59d8c4edb2e07a82009a51e9789b",
+        "source": "sam-3.png",
+        "width": 128,
+        "x": 662,
+        "y": 398
+      },
+      "4": {
+        "height": 128,
+        "sha256": "314e8c9c059af114b46c448f47c2f10ea7557233669216251782a87bc71e6f31",
+        "source": "sam-4.png",
+        "width": 128,
+        "x": 2,
+        "y": 530
       }
     },
     "Tower": {
@@ -147,7 +223,7 @@
         "sha256": "c1003d307c19d3850f7baa735c7ed9fd008ca3a60fc763262ee2dae9a6a37360",
         "source": "tower-1.webp",
         "width": 128,
-        "x": 266,
+        "x": 134,
         "y": 266
       },
       "2": {
@@ -155,7 +231,7 @@
         "sha256": "31f002ebbf6439b22829b5fc4f1892790412d8a92105010bb17ba12016685ea0",
         "source": "tower-2.webp",
         "width": 128,
-        "x": 398,
+        "x": 266,
         "y": 266
       },
       "3": {
@@ -163,7 +239,7 @@
         "sha256": "d5ad86a63dee1138faf1fcbdad031e34b417e42ebbc731bb62ba6f9a2c5122fa",
         "source": "tower-3.webp",
         "width": 128,
-        "x": 530,
+        "x": 398,
         "y": 266
       },
       "4": {
@@ -171,8 +247,8 @@
         "sha256": "5beb36d29bd810cb4efc8488a0bbbb4970a8354216ab09f4dbb4726d211a6207",
         "source": "tower-4.webp",
         "width": 128,
-        "x": 2,
-        "y": 398
+        "x": 530,
+        "y": 266
       }
     }
   }

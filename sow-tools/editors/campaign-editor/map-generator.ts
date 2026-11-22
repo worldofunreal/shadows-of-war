@@ -292,35 +292,61 @@
   async function generate(name: string, force: boolean, draft: boolean): Promise<boolean> {
     generating = true;
     generateButton.disabled = true;
-    if (draft) setStatus("Updating the in-game view…");
-    else if (sourceInput.value === "osm") {
-      setStatus(
-        refreshOsmCacheInput.checked
+    const progressLabel = draft
+      ? "Updating the in-game view…"
+      : sourceInput.value === "osm"
+        ? refreshOsmCacheInput.checked
           ? "Refreshing OpenStreetMap data. This can take several minutes…"
-          : "Checking the local OpenStreetMap cache. Missing data downloads once, then is reused…",
-      );
-    } else setStatus("Generating…");
+          : "Checking the local OpenStreetMap cache. Missing data downloads once, then is reused…"
+        : "Generating…";
+    setStatus(progressLabel);
+    const progressTimer = window.setInterval(async () => {
+      if (!generating) return;
+      try {
+        const progressResponse = await fetch("/__map-generate-status", { cache: "no-store" });
+        if (!progressResponse.ok) return;
+        const progress = (await progressResponse.json()) as { active: boolean; map: string; progress: string };
+        if (generating && progress.active && progress.map === name && progress.progress.trim()) {
+          setStatus(`${progressLabel}\n${progress.progress.trimEnd()}`);
+        }
+      } catch {
+        // Keep the current status if a progress poll fails; the generation request still owns its result.
+      }
+    }, 1000);
     try {
       let response = await post(`/__map-generate?map=${encodeURIComponent(name)}`, requestBody(force, draft));
-      if (response.status === 409 && !force && confirm(`${await response.text()}\nReplace it?`)) {
-        response = await post(`/__map-generate?map=${encodeURIComponent(name)}`, requestBody(true, draft));
-      }
-      const text = await response.text();
+      let text = await response.text();
       if (!response.ok) {
-        setStatus(text || "Could not generate the map.", true);
+        setStatus(text || `Could not generate ${name}.`, true);
         return false;
       }
-      const { message } = JSON.parse(text);
+
+      let result = JSON.parse(text);
+      if (result.replace_required) {
+        if (!confirm(result.message)) {
+          setStatus(`Generation cancelled. Existing map '${name}' was kept.`);
+          return false;
+        }
+        response = await post(`/__map-generate?map=${encodeURIComponent(name)}`, requestBody(true, draft));
+        text = await response.text();
+        if (!response.ok) {
+          setStatus(text || `Could not replace ${name}.`, true);
+          return false;
+        }
+        result = JSON.parse(text);
+      }
+
       generatedName = name;
       generatedDraft = draft;
       uploadButton.disabled = false;
-      setStatus(`Saved assets/maps/${name} on this computer${draft ? " (draft)" : ""}.\n${message}`);
+      setStatus(`Saved assets/maps/${name} on this computer${draft ? " (draft)" : ""}.\n${result.message}`);
       reloadGameView(name);
       return true;
     } catch (error) {
       setStatus(String(error), true);
       return false;
     } finally {
+      window.clearInterval(progressTimer);
       generating = false;
       generateButton.disabled = crop === null;
       if (regeneratePending) {

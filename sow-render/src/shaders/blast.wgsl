@@ -482,10 +482,15 @@ fn shade_sam_airburst(
     return vec4<f32>(col, intensity);
 }
 
-// ── Kind 3: Wave-synced building vaporization pop ───────────────────────────
+// ── Kind 3: Wave-synced building demolition & structural shatter pop ────────
+//
+// `expand_dur` = structure tier (0.0 = standard, 1.0 = industrial/military, 2.0 = capital/nuclear)
+// `seed_in`    = fract: phase seed, >= 1.5: high-density / reduced-motion fast LOD
 
 fn shade_building_pop(
     local_pos: vec2<f32>,
+    bound_r: f32,
+    tier: f32,
     age: f32,
     lifetime: f32,
     seed_in: f32,
@@ -494,30 +499,76 @@ fn shade_building_pop(
     if dist_n > 1.0 {
         discard;
     }
+    let fast_lod = (seed_in >= 1.5) || (bound_r * globals.zoom < 18.0);
     let seed = fract(seed_in);
     let t = clamp(age / max(lifetime, 0.001), 0.0, 1.0);
     let ease = 1.0 - (1.0 - t) * (1.0 - t);
-    let ring_r = 0.12 + 0.82 * ease;
-    let ring = 1.0 - smoothstep(0.0, 0.22, abs(dist_n - ring_r));
-    let core = exp(-dist_n * dist_n * 12.0) * (1.0 - smoothstep(0.0, 0.55, t));
+    let ease3 = 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t);
+    let fade = 1.0 - t;
 
+    // 1. Billowing concrete/ash demolition dust ring (provides high-contrast dark halo on bright land).
+    let dust_r = 0.16 + 0.64 * ease;
+    let dust_w = 0.25 * (1.0 + 0.30 * t);
+    let dust_band = 1.0 - smoothstep(0.0, dust_w, abs(dist_n - dust_r));
+    let dust_a = dust_band * smoothstep(0.0, 0.14, t) * (1.0 - smoothstep(0.32, 1.0, t)) * 0.54;
+    let dust_warm = (1.0 - smoothstep(0.0, 0.48, t)) * 0.45;
+    let dust_col = mix(vec3<f32>(0.085, 0.08, 0.078), vec3<f32>(0.52, 0.20, 0.06), dust_warm);
+
+    // 2. Primary outward demolition shockwave ring + strategic secondary collapse ring.
+    let ring_r = 0.14 + 0.82 * ease3;
+    let ring_w = 0.16 * (1.0 - t * 0.42);
+    let ring = 1.0 - smoothstep(0.0, ring_w, abs(dist_n - ring_r));
+    var inner_ring = 0.0;
+    if tier > 0.5 {
+        let inner_r = 0.10 + 0.54 * ease;
+        inner_ring = (1.0 - smoothstep(0.0, ring_w * 0.9, abs(dist_n - inner_r))) * 0.72;
+    }
+
+    // 3. Radial ballistic structural shards & incandescent sparks.
     let ang = atan2(local_pos.y, local_pos.x);
-    let fleck_base = 0.5 + 0.5 * sin(ang * 6.0 + seed * 12.566);
-    let fleck_2 = fleck_base * fleck_base;
-    let flecks = fleck_2 * fleck_2 * fleck_base
-        * (1.0 - smoothstep(0.1, 0.95, dist_n))
-        * (1.0 - t);
+    let s1 = 0.5 + 0.5 * sin(ang * 8.0 + seed * 6.2831853);
+    let s2 = 0.5 + 0.5 * cos(ang * 13.0 - seed * 9.424778);
+    let s1_2 = s1 * s1;
+    var shards = s1_2 * s1_2 * (0.45 + 0.55 * s2 * s2)
+        * smoothstep(0.06, 0.22, dist_n)
+        * (1.0 - smoothstep(0.15, ring_r + 0.08, dist_n))
+        * (1.0 - smoothstep(0.0, 0.84, t));
+    if !fast_lod && shards > 0.01 {
+        let chunk = vnoise1(dist_n * 9.5 - ease3 * 4.8 + seed * 19.7);
+        shards *= smoothstep(0.24, 0.68, chunk) * 1.35;
+    }
 
-    let alpha = clamp((ring * 0.78 + flecks * 0.45) * (1.0 - t) + core * 1.05, 0.0, 1.0);
-    if alpha < 0.004 {
+    // 4. Demolition core flash transitioning to a cooling smoldering ember bed.
+    let flash_core = exp(-dist_n * dist_n * 14.0) * (1.0 - smoothstep(0.0, 0.44, t));
+    let ember_bed = exp(-dist_n * dist_n * 6.5) * (1.0 - smoothstep(0.20, 0.95, t)) * 0.48;
+    let core = flash_core + ember_bed;
+
+    let hot_a = clamp(
+        (ring * 0.86 + inner_ring + shards * 0.78) * fade + core * 1.12,
+        0.0,
+        1.0,
+    );
+    let total_a = clamp(hot_a + dust_a * (1.0 - hot_a), 0.0, 0.98);
+    if total_a < 0.004 {
         discard;
     }
-    let col = mix(
-        vec3<f32>(1.45, 0.42, 0.06),
-        vec3<f32>(2.0, 1.80, 0.95),
-        clamp(core + ring * 0.35, 0.0, 1.0),
+    let hot_base = select(
+        vec3<f32>(1.52, 0.44, 0.07),
+        vec3<f32>(1.72, 0.58, 0.12),
+        tier > 1.5,
     );
-    return vec4<f32>(col, alpha);
+    let hot_peak = select(
+        vec3<f32>(2.05, 1.82, 0.96),
+        vec3<f32>(2.20, 2.02, 1.32),
+        tier > 1.5,
+    );
+    let hot_col = mix(
+        hot_base,
+        hot_peak,
+        clamp(flash_core + ring * 0.42 + inner_ring * 0.35, 0.0, 1.0),
+    );
+    let rgb = (hot_col * hot_a + dust_col * dust_a * (1.0 - hot_a)) / max(total_a, 0.0001);
+    return vec4<f32>(rgb, total_a);
 }
 
 // ── Kind 4: In-Flight Nuke Destination Telegraph (drawn in ground pass) ─────
@@ -934,6 +985,113 @@ fn shade_mirv_split(
     return vec4<f32>(col, alpha);
 }
 
+// ── Kind 10: Sovereign Entity Elimination & Naval Sinking Burst (air pass) ──
+//
+// `inner_r`    = packed 18-bit entity RGB color ((r6 << 12) | (g6 << 6) | b6)
+// `expand_dur` = mode (0.0 = Tribe/Bot, 1.0 = Sovereign Player/Empire, 2.0 = Nuclear Kill, 3.0 = Naval Sunk)
+// `seed_in`    = fract: phase seed, >= 1.5: high-density / reduced-motion fast LOD
+
+fn unpack_rgb_f32(packed_in: f32) -> vec3<f32> {
+    let p = clamp(floor(packed_in + 0.5), 0.0, 262143.0);
+    let r = floor(p / 4096.0);
+    let rem = p - r * 4096.0;
+    let g = floor(rem / 64.0);
+    let b = rem - g * 64.0;
+    return clamp(vec3<f32>(r, g, b) / 63.0, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+fn shade_entity_death(
+    local_pos: vec2<f32>,
+    bound_r: f32,
+    packed_rgb: f32,
+    mode: f32,
+    age: f32,
+    lifetime: f32,
+    seed_in: f32,
+) -> vec4<f32> {
+    let dist_n = length(local_pos);
+    if dist_n > 1.0 {
+        discard;
+    }
+    let fast_lod = (seed_in >= 1.5) || (bound_r * globals.zoom < 20.0);
+    let seed = fract(seed_in);
+    let t = clamp(age / max(lifetime, 0.001), 0.0, 1.0);
+    let ease = 1.0 - (1.0 - t) * (1.0 - t);
+    let ease3 = 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t);
+    let fade = 1.0 - t;
+
+    let raw_faction = unpack_rgb_f32(packed_rgb);
+    let faction_col = max(raw_faction, vec3<f32>(0.22)) * 1.25;
+    let is_naval = mode > 2.5;
+    let is_nuke = mode > 1.5 && mode < 2.5;
+    let is_sovereign = mode > 0.5;
+
+    var accent_col = vec3<f32>(1.88, 1.32, 0.42);
+    if is_naval {
+        accent_col = vec3<f32>(1.40, 1.85, 2.15);
+    } else if is_nuke {
+        accent_col = vec3<f32>(2.15, 1.72, 0.36);
+    } else if is_sovereign {
+        accent_col = vec3<f32>(2.10, 1.58, 0.48);
+    }
+
+    // 1. Primary expanding sovereign shockwave ring + dark contrast halo.
+    let ring_r = 0.14 + 0.72 * ease3;
+    let ring_w = 0.13 * (1.0 - t * 0.42);
+    let ring_d = abs(dist_n - ring_r);
+    let outer_ring = 1.0 - smoothstep(0.0, ring_w, ring_d);
+    let halo_ring = (1.0 - smoothstep(0.0, ring_w * 2.0, ring_d)) * 0.52 * fade;
+
+    // 2. Segmented sovereign crown / naval ripple inner fracture ring.
+    let crown_r = 0.08 + 0.52 * ease;
+    let crown_d = abs(dist_n - crown_r);
+    var crown_ring = 0.0;
+    var rays = 0.0;
+    if crown_d < ring_w * 1.35 || (!fast_lod && dist_n < ring_r + 0.08) {
+        let ang = atan2(local_pos.y, local_pos.x);
+        let segs = select(8.0, 12.0, is_sovereign && !is_naval);
+        let cyc = fract(ang / 6.2831853 * segs + seed);
+        let dash = smoothstep(0.05, 0.15, cyc) * (1.0 - smoothstep(0.62, 0.72, cyc));
+        crown_ring = (1.0 - smoothstep(0.0, ring_w * 1.1, crown_d)) * dash * 0.82;
+
+        // 3. Radial emblem shatter rays & flying crystalline/ember shards.
+        let spoke_base = 0.5 + 0.5 * cos(ang * segs + seed * 6.2831853);
+        let spoke_2 = spoke_base * spoke_base;
+        rays = spoke_2 * spoke_2 * spoke_base
+            * smoothstep(0.06, 0.22, dist_n)
+            * (1.0 - smoothstep(0.18, ring_r + 0.06, dist_n))
+            * (1.0 - smoothstep(0.0, 0.78, t));
+        if !fast_lod && rays > 0.01 {
+            let shard_band = vnoise1(dist_n * 10.5 - ease3 * 5.2 + seed * 23.1);
+            rays *= smoothstep(0.22, 0.65, shard_band) * 1.4;
+        }
+    }
+
+    // 4. Fast implosion-to-explosion core flash + tactical elimination cross scar.
+    let core_flash = exp(-dist_n * dist_n * 15.0) * (1.0 - smoothstep(0.0, 0.46, t));
+    let cross_arm = min(abs(local_pos.x), abs(local_pos.y));
+    let cross_flare = (1.0 - smoothstep(0.0, 0.045, cross_arm))
+        * (1.0 - smoothstep(0.05, 0.58 * (1.0 - 0.35 * t), dist_n))
+        * (1.0 - smoothstep(0.0, 0.54, t))
+        * 0.85;
+
+    let hot_a = clamp(
+        (outer_ring * 0.90 + crown_ring + rays * 0.72) * fade + core_flash * 1.15 + cross_flare,
+        0.0,
+        1.0,
+    );
+    let total_a = clamp(max(hot_a, halo_ring), 0.0, 0.96);
+    if total_a < 0.004 {
+        discard;
+    }
+
+    let hot_mix = clamp(core_flash + cross_flare * 0.75 + outer_ring * 0.38, 0.0, 1.0);
+    let burst_col = mix(faction_col, accent_col, hot_mix);
+    let dark_halo = vec3<f32>(0.025, 0.03, 0.045);
+    let stroke_blend = clamp(hot_a / max(total_a, 0.0001), 0.0, 1.0);
+    return vec4<f32>(mix(dark_halo, burst_col, stroke_blend), total_a);
+}
+
 fn shade_blast(in: VertexOutput) -> vec4<f32> {
     let bound_r = in.radii_age.x;
     let inner_r = in.radii_age.y;
@@ -951,7 +1109,7 @@ fn shade_blast(in: VertexOutput) -> vec4<f32> {
     } else if kind < 2.5 {
         return shade_sam_airburst(in.local_pos, bound_r, age, lifetime, seed);
     } else if kind < 3.5 {
-        return shade_building_pop(in.local_pos, age, lifetime, seed);
+        return shade_building_pop(in.local_pos, bound_r, expand_dur, age, lifetime, seed);
     } else if kind < 4.5 {
         return shade_nuke_telegraph(in.local_pos, bound_r, inner_r, outer_r, age, expand_dur, lifetime, seed);
     } else if kind < 5.5 {
@@ -960,6 +1118,9 @@ fn shade_blast(in: VertexOutput) -> vec4<f32> {
         return shade_nuke_launch(in.local_pos, age, lifetime, seed);
     } else if kind < 7.5 {
         return shade_mirv_split(in.local_pos, age, lifetime, seed);
+    }
+    if kind > 9.5 {
+        return shade_entity_death(in.local_pos, bound_r, inner_r, expand_dur, age, lifetime, seed);
     }
     if kind > 8.5 {
         let t = clamp(age / max(lifetime,0.001),0.0,1.0);

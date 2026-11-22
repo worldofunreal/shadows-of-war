@@ -428,12 +428,10 @@ impl SowApp {
                     && let Some(controls) = self.placement_controls()
                     && controls.grabs(x as f32, y as f32)
                 {
-                    let zoom = self.input.camera_zoom;
+                    let [wx, wy] = self.input.screen_to_world([x as f32, y as f32]);
+                    let [cx, cy] = self.input.screen_to_world(controls.center);
                     self.input.building_drag = Some(BuildingDrag {
-                        offset: (
-                            (x as f32 - controls.center[0]) / zoom,
-                            (y as f32 - controls.center[1]) / zoom,
-                        ),
+                        offset: (wx - cx, wy - cy),
                         mobile_touch: is_touch && crate::web_canvas::has_mobile_pointer(),
                     });
                     self.input.touch_pan_residual = (0.0, 0.0);
@@ -578,10 +576,9 @@ impl SowApp {
         } else if let Some(drag) = self.input.building_drag {
             // New finger movement can reach the map brought into view by camera follow.
             let (offset_x, offset_y) = drag.offset;
-            let col = ((x as f32 - self.input.camera_x) / self.input.camera_zoom - offset_x)
-                .round() as i32;
-            let row = ((y as f32 - self.input.camera_y) / self.input.camera_zoom - offset_y)
-                .round() as i32;
+            let [world_x, world_y] = self.input.screen_to_world([x as f32, y as f32]);
+            let col = (world_x - offset_x).round() as i32;
+            let row = (world_y - offset_y).round() as i32;
             self.move_building_preview(col, row);
         } else if is_touch {
             let mut crossed_drag_threshold = false;

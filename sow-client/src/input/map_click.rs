@@ -1952,11 +1952,11 @@ impl SowApp {
             self.add_map_feedback(shortfall);
             return;
         }
-        let zoom = self.input.camera_zoom.max(0.01);
-        let (origin_x, origin_y) = (
-            ((self.input.screen_w * 0.5 - self.input.camera_x) / zoom) as i32,
-            ((self.input.screen_h * 0.45 - self.input.camera_y) / zoom) as i32,
-        );
+        let [origin_x, origin_y] = self.input.screen_to_world([
+            self.input.screen_w * 0.5,
+            self.input.screen_h * 0.45,
+        ]);
+        let (origin_x, origin_y) = (origin_x as i32, origin_y as i32);
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let tutorial_site = if self.ui.tutorial_active
             && self.ui.tutorial_campaign.is_boudica()

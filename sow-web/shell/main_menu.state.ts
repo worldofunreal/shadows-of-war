@@ -145,6 +145,7 @@ export interface MenuRewardReceipt {
     laurels: number;
     gems?: number;
     unlocked_leaders: string[];
+    unlocked_skin?: string;
     unlocked_achievements?: string[];
     goal_advances?: MenuGoalAdvance[];
     created_at?: number;

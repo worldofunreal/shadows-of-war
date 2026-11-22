@@ -70,6 +70,7 @@ impl SowApp {
         }
 
         let draw_world = self.should_draw_world();
+        self.sync_tabletop_view(draw_world);
         let spatial_audio = self.spatial_audio_ctx();
 
         if let Some(win) = self.gfx.window.as_ref() {
@@ -696,6 +697,7 @@ impl SowApp {
                             globals,
                             colors_struct,
                             skin_styles_struct,
+                            self.input.tabletop.is_some(),
                         );
                         map_drawn = true;
                     }
@@ -750,6 +752,9 @@ impl SowApp {
                                 );
                             }
                             if let Some(aim) = &aim { aim.ground(blast_r); }
+                            if let Some(tabletop) = self.input.tabletop.as_deref() {
+                                blast_r.project_tabletop(tabletop);
+                            }
                             blast_r.draw_ground(
                                 &mut render_ctx.command_encoder,
                                 frame.texture_view(), blast_globals, &render_ctx.context,
@@ -801,6 +806,9 @@ impl SowApp {
                             );
                             self.ui.mover_scene.pack_gpu(&pack, mover_r);
                             if let Some(aim) = &aim { aim.trajectory(mover_r); }
+                            if let Some(tabletop) = self.input.tabletop.as_deref() {
+                                mover_r.project_tabletop(tabletop);
+                            }
                             let mover_globals = crate::render::gpu::MoverGlobals {
                                 camera_pos: [self.input.camera_x, self.input.camera_y],
                                 zoom: self.input.camera_zoom,

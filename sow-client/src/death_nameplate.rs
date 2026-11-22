@@ -54,8 +54,10 @@ pub struct DeathNameplateAnimation {
     pub name: String,
     pub color: [f32; 4],
     pub avatar: AvatarIdentity,
+    pub casualties: Option<String>,
     pub reward: Option<DeathNameplateReward>,
     pub prepared_name: sow_render::text::PreparedText,
+    pub prepared_casualties: Option<sow_render::text::PreparedText>,
     pub prepared_reward: Option<sow_render::text::PreparedText>,
     pub text_style_key: Option<u32>,
 }
@@ -108,4 +110,3 @@ pub fn death_icon(by_nuke: bool) -> NameplateStatusSprite {
         NameplateStatusSprite::Death
     }
 }
-

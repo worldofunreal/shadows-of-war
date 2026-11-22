@@ -1280,6 +1280,9 @@ impl SowEngine {
     }
 
     fn pursue_or_capture_trade_ship(&mut self, warship_index: usize, target_index: usize) {
+        if self.fleets[target_index].captured_trade_return.is_some() {
+            return;
+        }
         let width = self.state.map.width;
         let from = self.fleets[warship_index].current_tile;
         let target_tile = self.fleets[target_index].current_tile;
@@ -1303,6 +1306,9 @@ impl SowEngine {
             captured.src_tile = target_tile;
             captured.dst_tile = port_water;
             captured.replace_path(path);
+            if let Some(player) = self.state.player_mut(owner_id) {
+                player.credit_gold(crate::game::UnitType::TradeShip.naval_bounty_gold());
+            }
             if let Some(state) = self.fleets[warship_index].warship.as_mut() {
                 state.record_progress(10);
                 state.target_fleet = None;
@@ -1455,6 +1461,69 @@ mod tests {
     use crate::warp_fleet::WarpFleet;
     use crate::water_components::WaterComponents;
     use std::collections::BinaryHeap;
+
+    #[test]
+    fn capturing_a_trade_ship_pays_its_bounty_once() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 32, 32, config.clone());
+        state.phase = crate::game::GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x20));
+        for (id, name) in [(1, "Attacker"), (2, "Merchant owner")] {
+            state.register_player(Player::new_human(id, name.into(), [1.0; 3], &config));
+        }
+        let port_tile = 10 * 32 + 10;
+        for y in 10..12 {
+            for x in 10..12 {
+                state.map.terrain[(y * 32 + x) as usize] = MapTile::from_byte(0x80);
+            }
+        }
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = SowEngine::new(state, water);
+        engine.buildings.push(crate::building::Building {
+            id: 1,
+            owner_id: 1,
+            tile_idx: port_tile,
+            kind: crate::game::BuildingKind::Port,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        let water_tile = 9 * 32 + 10;
+        engine.add_fleet(WarpFleet::new(
+            10,
+            1,
+            0,
+            UnitType::Warship,
+            UnitType::Warship.max_health(),
+            (water_tile, water_tile),
+            Vec::new(),
+        ));
+        engine.add_fleet(WarpFleet::new(
+            20,
+            2,
+            1,
+            UnitType::TradeShip,
+            UnitType::TradeShip.max_health(),
+            (water_tile, water_tile),
+            Vec::new(),
+        ));
+        let gold_before = engine.state.player(1).unwrap().gold;
+
+        engine.pursue_or_capture_trade_ship(0, 1);
+        engine.pursue_or_capture_trade_ship(0, 1);
+
+        assert_eq!(engine.state.player(1).unwrap().gold, gold_before + 10.0);
+        assert_eq!(engine.fleets[1].owner_id, 1);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::TradeShipCaptured { .. }))
+                .count(),
+            1
+        );
+    }
 
     fn invasion_in_transit(original_target: u16) -> (SowEngine, u32) {
         let mut state = GameState::new(9, 20, 8, GameConfig::default());

@@ -57,13 +57,8 @@ export function renderLeaderPurchase(leader?: MenuLeader | null) {
     const actions = portalUnlockButton(leader, "crowns") + portalUnlockButton(leader, "gems");
     return actions ? "<div class='sow-heroes__purchase-actions'>" + actions + "</div>" : "";
 }
-export function renderSkinsButton() {
-    return "";
-}
+export { renderSkinsButton, renderSkinPicker as renderSkinPickerModal } from "./main_menu.skins.ts";
 export function renderPurchaseModal() {
-    return "";
-}
-export function renderSkinPickerModal() {
     return "";
 }
 export function renderStore() {

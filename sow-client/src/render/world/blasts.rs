@@ -1,7 +1,8 @@
 use sow_core::bitset::DenseBitSet;
+use sow_core::game::BuildingKind;
 use sow_core::protocol::BuildingSnapshot;
 use sow_render::{
-    BLAST_KIND_BUILDING_POP, BLAST_KIND_GROUND_SCORCH, BLAST_KIND_NUKE_AIR,
+    BLAST_KIND_BUILDING_POP, BLAST_KIND_ENTITY_DEATH, BLAST_KIND_GROUND_SCORCH, BLAST_KIND_NUKE_AIR,
     BLAST_KIND_SAM_AIRBURST, BlastInstanceGpu, BlastRenderer, MAX_BLAST_INSTANCES,
     crater_front_fraction,
 };
@@ -11,11 +12,40 @@ const GROUND_SCORCH_LIFETIME_SECS: f32 = 5.5;
 const NUKE_AIR_LIFETIME_SECS: f32 = 2.35;
 const SAM_AIRBURST_LIFETIME_SECS: f32 = 0.48;
 const SAM_AIRBURST_RADIUS: f32 = 6.5;
-const BUILDING_POP_LIFETIME_SECS: f32 = 0.34;
-const BUILDING_POP_RADIUS: f32 = 3.2;
-const BUILDING_FLASH_SECS: f32 = 0.08;
+const BUILDING_POP_LIFETIME_SECS: f32 = 0.72;
+pub const BUILDING_COLLAPSE_SECS: f32 = 0.62;
+const ENTITY_DEATH_LIFETIME_SECS: f32 = 0.88;
 const CAMERA_SHAKE_DURATION_SECS: f32 = 0.30;
-const MAX_DYING_BUILDINGS: usize = 48;
+const MAX_DYING_BUILDINGS: usize = 256;
+
+#[inline]
+pub fn pack_rgb_f32(rgb: [f32; 3]) -> f32 {
+    let r = (rgb[0].clamp(0.0, 1.0) * 63.0).round() as u32;
+    let g = (rgb[1].clamp(0.0, 1.0) * 63.0).round() as u32;
+    let b = (rgb[2].clamp(0.0, 1.0) * 63.0).round() as u32;
+    ((r << 12) | (g << 6) | b) as f32
+}
+
+#[inline]
+fn building_demolition_tier_and_radius(kind: BuildingKind, level: u8) -> (f32, f32) {
+    let lvl = level.max(1) as f32;
+    match kind {
+        BuildingKind::City | BuildingKind::MissileSilo => (2.0, (6.8 + lvl * 0.85).min(10.5)),
+        BuildingKind::Port | BuildingKind::SAM | BuildingKind::Factory => {
+            (1.0, (5.6 + lvl * 0.65).min(8.5))
+        }
+        BuildingKind::Tower | BuildingKind::Farm => (0.0, (4.6 + lvl * 0.50).min(6.8)),
+    }
+}
+
+#[inline]
+fn building_footprint_world_center(kind: BuildingKind, tile_x: u32, tile_y: u32) -> (f32, f32) {
+    let fp = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
+    (
+        fp.left as f32 + fp.width as f32 * 0.5,
+        fp.top as f32 + fp.height as f32 * 0.5,
+    )
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BlastKind {
@@ -25,6 +55,7 @@ enum BlastKind {
     BuildingPop,
     Launch,
     Split,
+    EntityDeath,
 }
 
 impl BlastKind {
@@ -37,6 +68,7 @@ impl BlastKind {
             Self::Launch => sow_render::BLAST_KIND_NUKE_LAUNCH,
             Self::Split => sow_render::BLAST_KIND_MIRV_SPLIT,
             Self::BuildingPop => BLAST_KIND_BUILDING_POP,
+            Self::EntityDeath => BLAST_KIND_ENTITY_DEATH,
         }
     }
 }
@@ -86,10 +118,10 @@ impl ActiveBlast {
                 self.outer_radius * (0.35 + 0.65 * ease)
             }
             BlastKind::Launch | BlastKind::Split => self.outer_radius,
-            BlastKind::BuildingPop => {
+            BlastKind::BuildingPop | BlastKind::EntityDeath => {
                 let t = (age / self.lifetime_secs.max(0.001)).clamp(0.0, 1.0);
                 let ease = 1.0 - (1.0 - t) * (1.0 - t);
-                self.outer_radius * (0.40 + 0.60 * ease)
+                self.outer_radius * (0.38 + 0.62 * ease)
             }
         }
     }
@@ -107,16 +139,38 @@ pub struct RecentNukeDetonation {
     pub expand_dur: f32,
 }
 
-/// A building destroyed by a nuke, kept briefly visible until the outward-expanding
-/// shockwave front reaches its tile, then flashed incandescently and popped.
+/// A building destroyed by a nuke or combat demolition, kept visible until the outward-expanding
+/// shockwave front reaches its footprint, then animated through an impact flash, squash-stretch,
+/// ballistic shard shatter, and structural collapse.
 #[derive(Clone, Debug)]
 pub struct DyingBuilding {
     pub building: BuildingSnapshot,
     pub world_x: f32,
     pub world_y: f32,
     pub owner_id: u16,
+    pub blast_dir: [f32; 2],
+    pub spawn_time: Instant,
     pub trigger_at: Instant,
     pub popped: bool,
+    pub seed: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum DyingBuildingPhase {
+    /// Shockwave is approaching; `0.0..1.0` proximity factor drives pre-impact seismic tremor.
+    PreWave(f32),
+    /// Shockwave has struck; `0.0..1.0` progress through the 620ms impact flash, shatter & collapse.
+    Collapsing(f32),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DyingBuildingRender<'a> {
+    pub building: &'a BuildingSnapshot,
+    pub world_x: f32,
+    pub world_y: f32,
+    pub blast_dir: [f32; 2],
+    pub seed: f32,
+    pub phase: DyingBuildingPhase,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -282,7 +336,9 @@ impl BlastScene {
     }
 
     pub fn spawn_staging(&mut self, tile: u32, width: u32, owner: u16, split: bool, now: Instant) {
-        let (world_x, world_y) = super::movers::tile_to_world(tile, width.max(1));
+        let w = width.max(1);
+        let world_x = (tile % w) as f32 + 0.5;
+        let world_y = (tile / w) as f32 + 0.5;
         let seed = self.alloc_seed();
         Self::push_capped(
             &mut self.air_blasts,
@@ -306,23 +362,113 @@ impl BlastScene {
         );
     }
 
-    /// Match vanished buildings against this tick's nuke detonations so they remain
-    /// intact for ~50–500ms until the expanding shockwave crosses their tile.
-    pub fn register_dying_buildings(&mut self, vanished: &[BuildingSnapshot], map_w: u32) {
-        if self.recent_detonations.is_empty() || map_w == 0 {
+    /// Spawn a localized demolition shockwave & debris burst on an existing building (e.g. CityDenial downgrade).
+    pub fn spawn_building_demolition(
+        &mut self,
+        building: &BuildingSnapshot,
+        map_w: u32,
+        now: Instant,
+    ) {
+        if map_w == 0 {
+            return;
+        }
+        let bx = building.tile_idx % map_w;
+        let by = building.tile_idx / map_w;
+        let (world_x, world_y) = building_footprint_world_center(building.kind, bx, by);
+        let (tier, outer_radius) =
+            building_demolition_tier_and_radius(building.kind, building.active_level().max(1));
+        let seed = self.alloc_seed();
+        Self::push_capped(
+            &mut self.air_blasts,
+            ActiveBlast {
+                world_x,
+                world_y,
+                tile_idx: building.tile_idx,
+                owner_id: building.owner_id,
+                inner_radius: outer_radius * 0.48,
+                outer_radius,
+                start_time: now,
+                expand_dur: tier,
+                lifetime_secs: BUILDING_POP_LIFETIME_SECS,
+                kind: BlastKind::BuildingPop,
+                seed,
+            },
+        );
+    }
+
+    /// Spawn an entity elimination / sovereign collapse or naval sinking burst in the air pass.
+    /// `mode`: `0.0` = Tribe/Bot, `1.0` = Sovereign Player/Empire, `2.0` = Nuclear Kill, `3.0` = Naval Sunk.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_entity_death(
+        &mut self,
+        world_x: f32,
+        world_y: f32,
+        tile_idx: u32,
+        owner_id: u16,
+        rgb: [f32; 3],
+        mode: f32,
+        now: Instant,
+    ) {
+        let outer_radius = if mode > 2.5 {
+            8.0
+        } else if mode > 1.5 {
+            15.5
+        } else if mode > 0.5 {
+            13.5
+        } else {
+            9.5
+        };
+        let seed = self.alloc_seed();
+        Self::push_capped(
+            &mut self.air_blasts,
+            ActiveBlast {
+                world_x,
+                world_y,
+                tile_idx,
+                owner_id,
+                inner_radius: pack_rgb_f32(rgb),
+                outer_radius,
+                start_time: now,
+                expand_dur: mode,
+                lifetime_secs: ENTITY_DEATH_LIFETIME_SECS,
+                kind: BlastKind::EntityDeath,
+                seed,
+            },
+        );
+    }
+
+    /// Match vanished buildings against this tick's nuke detonations (or direct combat demolition)
+    /// so they remain intact until the shockwave crosses their footprint, then animate through
+    /// impact flash, squash-stretch, shard shatter, and structural collapse.
+    pub fn register_dying_buildings(
+        &mut self,
+        vanished: &[BuildingSnapshot],
+        map_w: u32,
+        now: Instant,
+        allow_non_nuke: bool,
+    ) {
+        if map_w == 0 || (self.recent_detonations.is_empty() && !allow_non_nuke) {
             self.recent_detonations.clear();
             return;
         }
         for b in vanished {
+            if b.kind != BuildingKind::City
+                && vanished
+                    .iter()
+                    .any(|other| other.kind == BuildingKind::City && other.tile_idx == b.tile_idx)
+            {
+                continue;
+            }
             let bx = b.tile_idx % map_w;
             let by = b.tile_idx / map_w;
-            let mut best_hit: Option<(Instant, u16)> = None;
+            let (world_x, world_y) = building_footprint_world_center(b.kind, bx, by);
+            let mut best_hit: Option<(Instant, Instant, u16, [f32; 2])> = None;
             for det in &self.recent_detonations {
                 let dx = bx as i64 - det.tile_x as i64;
                 let dy = by as i64 - det.tile_y as i64;
                 let dist_sq = dx * dx + dy * dy;
-                let r_sq = i64::from(det.inner_radius) * i64::from(det.inner_radius);
-                if dist_sq > r_sq {
+                let reach = i64::from(det.inner_radius) + 2;
+                if dist_sq > reach * reach {
                     continue;
                 }
                 let dist = (dist_sq as f32).sqrt();
@@ -332,46 +478,83 @@ impl BlastScene {
                     dist,
                     det.inner_radius as f32,
                 );
-                if best_hit.is_none_or(|(prev, _)| trigger_at < prev) {
-                    best_hit = Some((trigger_at, det.owner_id));
+                let vx = world_x - (det.tile_x as f32 + 0.5);
+                let vy = world_y - (det.tile_y as f32 + 0.5);
+                let vlen = vx.hypot(vy);
+                let dir = if vlen > 0.05 {
+                    [vx / vlen, vy / vlen]
+                } else {
+                    [0.0, -1.0]
+                };
+                if best_hit.is_none_or(|(prev, _, _, _)| trigger_at < prev) {
+                    best_hit = Some((trigger_at, det.start_time, det.owner_id, dir));
                 }
             }
-            if let Some((trigger_at, owner_id)) = best_hit {
+            let resolved = best_hit.or_else(|| {
+                allow_non_nuke.then(|| {
+                    let ang = ((b.id as u32).wrapping_mul(2654435761) as f32)
+                        * (std::f32::consts::TAU / 4_294_967_295.0);
+                    (now, now, b.owner_id, [ang.cos(), ang.sin()])
+                })
+            });
+            if let Some((trigger_at, spawn_time, owner_id, blast_dir)) = resolved {
+                let seed = self.alloc_seed();
                 if self.dying_buildings.len() >= MAX_DYING_BUILDINGS {
                     self.dying_buildings.remove(0);
                 }
                 self.dying_buildings.push(DyingBuilding {
                     building: b.clone(),
-                    world_x: bx as f32 + 0.5,
-                    world_y: by as f32 + 0.5,
+                    world_x,
+                    world_y,
                     owner_id,
+                    blast_dir,
+                    spawn_time,
                     trigger_at,
                     popped: false,
+                    seed,
                 });
             }
         }
         self.recent_detonations.clear();
     }
 
-    /// Active dying buildings for `overlays.rs` to draw before they finish popping.
-    /// Returns `(building, world_x, world_y, flash_progress)` where `flash_progress` is
-    /// `None` before the shockwave hits and `Some(0.0..1.0)` during the 80ms pop flash.
+    /// Active dying buildings for `overlays.rs` to draw through pre-wave tremor and post-impact collapse.
     pub fn dying_buildings_for_render(
         &self,
         now: Instant,
-    ) -> impl Iterator<Item = (&BuildingSnapshot, f32, f32, Option<f32>)> {
+    ) -> impl Iterator<Item = DyingBuildingRender<'_>> {
         self.dying_buildings.iter().filter_map(move |db| {
             if now < db.trigger_at {
-                Some((&db.building, db.world_x, db.world_y, None))
+                let total_wait = db
+                    .trigger_at
+                    .saturating_duration_since(db.spawn_time)
+                    .as_secs_f32()
+                    .max(0.001);
+                let elapsed = now
+                    .saturating_duration_since(db.spawn_time)
+                    .as_secs_f32();
+                let pre_t = (elapsed / total_wait).clamp(0.0, 1.0);
+                Some(DyingBuildingRender {
+                    building: &db.building,
+                    world_x: db.world_x,
+                    world_y: db.world_y,
+                    blast_dir: db.blast_dir,
+                    seed: db.seed,
+                    phase: DyingBuildingPhase::PreWave(pre_t),
+                })
             } else {
-                let flash_age = now.saturating_duration_since(db.trigger_at).as_secs_f32();
-                if flash_age < BUILDING_FLASH_SECS {
-                    Some((
-                        &db.building,
-                        db.world_x,
-                        db.world_y,
-                        Some((flash_age / BUILDING_FLASH_SECS).clamp(0.0, 1.0)),
-                    ))
+                let collapse_age = now.saturating_duration_since(db.trigger_at).as_secs_f32();
+                if collapse_age < BUILDING_COLLAPSE_SECS {
+                    Some(DyingBuildingRender {
+                        building: &db.building,
+                        world_x: db.world_x,
+                        world_y: db.world_y,
+                        blast_dir: db.blast_dir,
+                        seed: db.seed,
+                        phase: DyingBuildingPhase::Collapsing(
+                            (collapse_age / BUILDING_COLLAPSE_SECS).clamp(0.0, 1.0),
+                        ),
+                    })
                 } else {
                     None
                 }
@@ -405,6 +588,20 @@ impl BlastScene {
     /// Advance timers, trigger wave-synced building pops, frustum-cull, and upload active
     /// ground & aerial blast instances into `renderer`.
     pub fn pack_gpu(&mut self, params: &BlastPackParams<'_>, renderer: &mut BlastRenderer) {
+        self.pack_instances(params, |air, inst| {
+            if air {
+                renderer.push_air(inst);
+            } else {
+                renderer.push_ground(inst);
+            }
+        });
+    }
+
+    fn pack_instances(
+        &mut self,
+        params: &BlastPackParams<'_>,
+        mut push: impl FnMut(bool, BlastInstanceGpu),
+    ) {
         self.advance_dying_buildings(params.now);
 
         self.ground_blasts.retain(|b| {
@@ -434,21 +631,21 @@ impl BlastScene {
 
         let view = (view_min_x, view_max_x, view_min_y, view_max_y);
         let viewport_area = params.screen_w * params.screen_h;
-        for (air, list) in [(false, &self.ground_blasts), (true, &self.air_blasts)] {
-            let mut budget = viewport_area * 0.10;
+
+        // 1. Ground pass: scorched craters & cooling magma fissures.
+        {
+            let dense = self.ground_blasts.len() > 8;
+            let mut budget = viewport_area * 0.35;
             let mut occupied = [0u32; 24];
-            for b in list.iter().rev() {
+            for b in self.ground_blasts.iter().rev() {
                 let Some(mut inst) = Self::build_gpu_instance(b, params, view) else {
                     continue;
                 };
-                let dense = list.len() > 8;
                 if dense || params.reduced_motion {
                     inst.seed += 2.0;
                 }
                 if dense {
                     let area = (inst.bound_radius * zoom * 2.0).powi(2).min(viewport_area);
-                    // Keep broad shock fronts while fill budget permits. Remaining epicenters
-                    // use a short thermal glint over the authoritative terrain reveal.
                     if area > budget {
                         let x = inst.world_pos[0] * zoom + params.camera_x;
                         let y = inst.world_pos[1] * zoom + params.camera_y;
@@ -458,19 +655,120 @@ impl BlastScene {
                             continue;
                         }
                         occupied[row] |= 1 << col;
-                        inst.bound_radius =
-                            inst.bound_radius.min(if air { 15.0 } else { 10.0 } / zoom);
+                        inst.bound_radius = inst.bound_radius.min(10.0 / zoom);
                         inst.kind = sow_render::BLAST_KIND_THERMAL_GLINT;
-                        inst.expand_dur = if air { 1.0 } else { 0.0 };
+                        inst.expand_dur = 0.0;
                     } else {
                         budget -= area;
                     }
                 }
-                if air {
-                    renderer.push_air(inst);
-                } else {
-                    renderer.push_ground(inst);
+                push(false, inst);
+            }
+        }
+
+        // 2. Air pass: separate primary nuke blasts from secondary building/SAM pops and entity
+        //    deaths so building pops never starve or overwrite NukeAir fireballs, and draw
+        //    building pops + entity deaths ON TOP of NukeAir smoke.
+        if !self.air_blasts.is_empty() {
+            let mut nuke_count = 0usize;
+            let mut pop_count = 0usize;
+            let mut death_count = 0usize;
+            for b in &self.air_blasts {
+                match b.kind {
+                    BlastKind::NukeAir | BlastKind::Launch | BlastKind::Split => nuke_count += 1,
+                    BlastKind::BuildingPop | BlastKind::SamAirburst => pop_count += 1,
+                    BlastKind::EntityDeath => death_count += 1,
+                    BlastKind::GroundScorch => {}
                 }
+            }
+
+            // 2a. Primary nuke fireballs, shockwaves, launches & MIRV splits (base air layer).
+            let nuke_dense = nuke_count > 8;
+            let mut nuke_budget = viewport_area * 0.35;
+            let mut nuke_occupied = [0u32; 24];
+            for b in self.air_blasts.iter().rev() {
+                if !matches!(
+                    b.kind,
+                    BlastKind::NukeAir | BlastKind::Launch | BlastKind::Split
+                ) {
+                    continue;
+                }
+                let Some(mut inst) = Self::build_gpu_instance(b, params, view) else {
+                    continue;
+                };
+                if nuke_dense || params.reduced_motion {
+                    inst.seed += 2.0;
+                }
+                if nuke_dense && b.kind == BlastKind::NukeAir {
+                    let area = (inst.bound_radius * zoom * 2.0).powi(2).min(viewport_area);
+                    if area > nuke_budget {
+                        let x = inst.world_pos[0] * zoom + params.camera_x;
+                        let y = inst.world_pos[1] * zoom + params.camera_y;
+                        let col = ((x * 32.0 / params.screen_w.max(1.0)) as usize).min(31);
+                        let row = ((y * 24.0 / params.screen_h.max(1.0)) as usize).min(23);
+                        if nuke_occupied[row] & (1 << col) != 0 {
+                            continue;
+                        }
+                        nuke_occupied[row] |= 1 << col;
+                        inst.bound_radius = inst.bound_radius.min(15.0 / zoom);
+                        inst.kind = sow_render::BLAST_KIND_THERMAL_GLINT;
+                        inst.expand_dur = 1.0;
+                    } else {
+                        nuke_budget -= area;
+                    }
+                }
+                push(true, inst);
+            }
+
+            // 2b. Wave-synced building demolition pops & SAM airbursts (drawn over NukeAir).
+            let pop_dense = pop_count > 24;
+            let mut pop_budget = viewport_area * 0.06;
+            let mut pop_occupied = [0u32; 24];
+            for b in self.air_blasts.iter().rev() {
+                if !matches!(b.kind, BlastKind::BuildingPop | BlastKind::SamAirburst) {
+                    continue;
+                }
+                let Some(mut inst) = Self::build_gpu_instance(b, params, view) else {
+                    continue;
+                };
+                if pop_dense || params.reduced_motion {
+                    inst.seed += 2.0;
+                }
+                if pop_count > 48 {
+                    let area = (inst.bound_radius * zoom * 2.0).powi(2).min(viewport_area);
+                    if area > pop_budget {
+                        let x = inst.world_pos[0] * zoom + params.camera_x;
+                        let y = inst.world_pos[1] * zoom + params.camera_y;
+                        let col = ((x * 32.0 / params.screen_w.max(1.0)) as usize).min(31);
+                        let row = ((y * 24.0 / params.screen_h.max(1.0)) as usize).min(23);
+                        if pop_occupied[row] & (1 << col) != 0 {
+                            continue;
+                        }
+                        pop_occupied[row] |= 1 << col;
+                        inst.bound_radius = inst.bound_radius.min(16.0 / zoom);
+                    } else {
+                        pop_budget -= area;
+                    }
+                }
+                push(true, inst);
+            }
+
+            // 2c. Sovereign entity elimination & naval sinking bursts (top air layer).
+            let death_dense = death_count > 12;
+            for b in self.air_blasts.iter().rev() {
+                if b.kind != BlastKind::EntityDeath {
+                    continue;
+                }
+                let Some(mut inst) = Self::build_gpu_instance(b, params, view) else {
+                    continue;
+                };
+                if death_dense || params.reduced_motion {
+                    inst.seed += 2.0;
+                }
+                if death_dense {
+                    inst.bound_radius = inst.bound_radius.min(22.0 / zoom);
+                }
+                push(true, inst);
             }
         }
     }
@@ -483,10 +781,18 @@ impl BlastScene {
         for db in &mut self.dying_buildings {
             if !db.popped && now >= db.trigger_at {
                 db.popped = true;
-                newly_popped.push((db.world_x, db.world_y, db.building.tile_idx, db.owner_id));
+                newly_popped.push((
+                    db.world_x,
+                    db.world_y,
+                    db.building.tile_idx,
+                    db.owner_id,
+                    db.building.kind,
+                    db.building.active_level().max(1),
+                ));
             }
         }
-        for (world_x, world_y, tile_idx, owner_id) in newly_popped {
+        for (world_x, world_y, tile_idx, owner_id, kind, level) in newly_popped {
+            let (tier, outer_radius) = building_demolition_tier_and_radius(kind, level);
             let seed = self.alloc_seed();
             Self::push_capped(
                 &mut self.air_blasts,
@@ -495,10 +801,10 @@ impl BlastScene {
                     world_y,
                     tile_idx,
                     owner_id,
-                    inner_radius: BUILDING_POP_RADIUS * 0.5,
-                    outer_radius: BUILDING_POP_RADIUS,
+                    inner_radius: outer_radius * 0.48,
+                    outer_radius,
                     start_time: now,
-                    expand_dur: 0.0,
+                    expand_dur: tier,
                     lifetime_secs: BUILDING_POP_LIFETIME_SECS,
                     kind: BlastKind::BuildingPop,
                     seed,
@@ -507,7 +813,8 @@ impl BlastScene {
         }
         self.dying_buildings.retain(|db| {
             now < db.trigger_at
-                || now.saturating_duration_since(db.trigger_at).as_secs_f32() < BUILDING_FLASH_SECS
+                || now.saturating_duration_since(db.trigger_at).as_secs_f32()
+                    < BUILDING_COLLAPSE_SECS
         });
     }
 
@@ -530,7 +837,16 @@ impl BlastScene {
         if age >= b.lifetime_secs {
             return None;
         }
-        let bound_radius = b.bound_radius(age);
+        let zoom = params.camera_zoom.max(0.01);
+        let bound_radius = match b.kind {
+            BlastKind::EntityDeath => b
+                .bound_radius(age)
+                .max((26.0 / zoom).min(b.outer_radius * 3.2)),
+            BlastKind::BuildingPop => b
+                .bound_radius(age)
+                .max((13.0 / zoom).min(b.outer_radius * 2.2)),
+            _ => b.bound_radius(age),
+        };
         let (min_x, max_x, min_y, max_y) = view_bounds;
         if b.world_x + bound_radius < min_x
             || b.world_x - bound_radius > max_x
@@ -639,6 +955,12 @@ mod tests {
         let elapsed = hit.duration_since(t0).as_secs_f32();
         let front = inner * crater_front_fraction(elapsed / dur);
         assert!((front - 10.0).abs() < 0.05, "front={front}");
+
+        let packed = pack_rgb_f32([1.0, 0.5, 0.0]);
+        let p = packed.round() as u32;
+        assert_eq!(p >> 12, 63);
+        assert_eq!((p >> 6) & 63, 32);
+        assert_eq!(p & 63, 0);
     }
 
     #[test]
@@ -664,6 +986,65 @@ mod tests {
             [0.0, 0.0]
         );
         assert!(!scene.has_recent_detonations());
+
+        // When motion is allowed, vanished buildings register wave-synced PreWave -> Collapsing phases
+        // and deduplicate non-City sub-buildings sharing a City's tile.
+        scene.spawn_nuke_detonation(
+            50,
+            50,
+            22,
+            55,
+            1,
+            200,
+            0.45,
+            t0,
+            false,
+            (0.0, 0.0, 2.0),
+            (1280.0, 720.0),
+            1.0,
+        );
+        let city_tile = 50 * 200 + 60;
+        let vanished = vec![
+            BuildingSnapshot {
+                id: 1,
+                kind: BuildingKind::City,
+                tile_idx: city_tile,
+                owner_id: 2,
+                level: 2,
+                under_construction: false,
+                ticks_until_complete: 0,
+                has_anti_nuke: false,
+                nuke_ready: false,
+                arsenal_build: None,
+                warship_queue: Vec::new(),
+                sam_cooldown_ticks: 0,
+                upgrade_target_level: 0,
+            },
+            BuildingSnapshot {
+                id: 2,
+                kind: BuildingKind::Factory,
+                tile_idx: city_tile,
+                owner_id: 2,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+                has_anti_nuke: false,
+                nuke_ready: false,
+                arsenal_build: None,
+                warship_queue: Vec::new(),
+                sam_cooldown_ticks: 0,
+                upgrade_target_level: 0,
+            },
+        ];
+        scene.register_dying_buildings(&vanished, 200, t0, true);
+        let pre: Vec<_> = scene.dying_buildings_for_render(t0).collect();
+        assert_eq!(pre.len(), 1);
+        assert!(matches!(pre[0].phase, DyingBuildingPhase::PreWave(_)));
+        let mid: Vec<_> = scene
+            .dying_buildings_for_render(t0 + Duration::from_millis(350))
+            .collect();
+        assert_eq!(mid.len(), 1);
+        assert!(matches!(mid[0].phase, DyingBuildingPhase::Collapsing(_)));
     }
 
     #[test]
@@ -684,6 +1065,7 @@ mod tests {
             (800.0, 600.0),
             1.0,
         );
+        scene.spawn_entity_death(20.5, 20.5, 2020, 1, [0.9, 0.2, 0.2], 1.0, t0);
         for i in 0..(MAX_BLAST_INSTANCES + 8) {
             scene.spawn_sam_airburst(i as u32, 100, t0);
         }
@@ -694,6 +1076,13 @@ mod tests {
                 .iter()
                 .any(|b| b.kind == BlastKind::NukeAir),
             "primary nuke blast should survive SAM burst overflow"
+        );
+        assert!(
+            scene
+                .air_blasts
+                .iter()
+                .any(|b| b.kind == BlastKind::EntityDeath),
+            "entity death blast should survive SAM burst overflow"
         );
     }
 
@@ -731,5 +1120,173 @@ mod tests {
         let onscreen =
             BlastScene::build_gpu_instance(&blast, &params, (450.0, 550.0, 450.0, 550.0));
         assert!(onscreen.is_some());
+
+        // Far-zoom EntityDeath and direct non-nuke demolition building pops stay legible and advance cleanly.
+        let mut scene = BlastScene::new();
+        let tower = BuildingSnapshot {
+            id: 7,
+            kind: BuildingKind::Tower,
+            tile_idx: 2050,
+            owner_id: 2,
+            level: 3,
+            under_construction: false,
+            ticks_until_complete: 0,
+            has_anti_nuke: false,
+            nuke_ready: false,
+            arsenal_build: None,
+            warship_queue: Vec::new(),
+            sam_cooldown_ticks: 0,
+            upgrade_target_level: 0,
+        };
+        scene.register_dying_buildings(&[tower.clone()], 100, t0, true);
+        let immediate: Vec<_> = scene.dying_buildings_for_render(t0).collect();
+        assert_eq!(immediate.len(), 1);
+        assert!(matches!(
+            immediate[0].phase,
+            DyingBuildingPhase::Collapsing(_)
+        ));
+        scene.advance_dying_buildings(t0);
+        assert_eq!(scene.air_blasts.len(), 1);
+        assert_eq!(scene.air_blasts[0].kind, BlastKind::BuildingPop);
+
+        scene.spawn_building_demolition(&tower, 100, t0);
+        assert_eq!(scene.air_blasts.len(), 2);
+
+        scene.spawn_entity_death(50.5, 20.5, 2050, 2, [0.2, 0.8, 0.4], 1.0, t0);
+        let far_params = BlastPackParams {
+            camera_zoom: 0.25,
+            ..params
+        };
+        let death_inst = BlastScene::build_gpu_instance(
+            scene.air_blasts.last().unwrap(),
+            &far_params,
+            (0.0, 200.0, 0.0, 200.0),
+        )
+        .expect("onscreen entity death instance");
+        assert_eq!(death_inst.kind, BLAST_KIND_ENTITY_DEATH);
+        assert!(death_inst.bound_radius >= 13.5);
+
+        // Single nuke destroying 16 buildings must keep full NukeAir fireball at base of air layer
+        // and draw BuildingPop + EntityDeath instances on top without downgrading to ThermalGlint.
+        let mut strike_scene = BlastScene::new();
+        strike_scene.spawn_nuke_detonation(
+            50,
+            50,
+            22,
+            55,
+            1,
+            100,
+            0.35,
+            t0,
+            false,
+            (0.0, 0.0, 4.0),
+            (1280.0, 720.0),
+            1.0,
+        );
+        for i in 0..16u32 {
+            let mut b = tower.clone();
+            b.id = 100 + u64::from(i);
+            b.tile_idx = (46 + (i / 4) * 2) * 100 + (46 + (i % 4) * 2);
+            strike_scene.spawn_building_demolition(&b, 100, t0);
+        }
+        strike_scene.spawn_entity_death(52.5, 52.5, 5252, 2, [0.9, 0.2, 0.1], 2.0, t0);
+        let strike_params = BlastPackParams {
+            camera_x: 400.0,
+            camera_y: 160.0,
+            camera_zoom: 4.0,
+            screen_w: 1280.0,
+            screen_h: 720.0,
+            reduced_motion: false,
+            fog_of_war: false,
+            my_player_id: 1,
+            fog_visible: &fog,
+            now: t0 + Duration::from_millis(120),
+        };
+        let mut ground_out = Vec::new();
+        let mut air_out = Vec::new();
+        strike_scene.pack_instances(&strike_params, |air, inst| {
+            if air {
+                air_out.push(inst);
+            } else {
+                ground_out.push(inst);
+            }
+        });
+        assert_eq!(ground_out.len(), 1);
+        assert_eq!(ground_out[0].kind, BLAST_KIND_GROUND_SCORCH);
+        assert_eq!(air_out.len(), 18);
+        assert_eq!(air_out[0].kind, BLAST_KIND_NUKE_AIR);
+        assert!(air_out[0].bound_radius > 20.0);
+        assert!(air_out[0].seed < 1.5, "single nuke should not be forced to fast_lod");
+        assert!(
+            air_out[1..17]
+                .iter()
+                .all(|inst| inst.kind == BLAST_KIND_BUILDING_POP),
+            "building pops must render as BLAST_KIND_BUILDING_POP over NukeAir"
+        );
+        assert_eq!(air_out[17].kind, BLAST_KIND_ENTITY_DEATH);
+
+        // Dense MIRV saturation: 12 nukes + 100 buildings + 15 entity deaths stay bounded and
+        // preserve distinct BuildingPop and EntityDeath kinds on top of NukeAir/ThermalGlint.
+        let mut mirv_scene = BlastScene::new();
+        for i in 0..12u32 {
+            mirv_scene.spawn_nuke_detonation(
+                20 + (i % 4) * 18,
+                20 + (i / 4) * 18,
+                22,
+                55,
+                1,
+                100,
+                0.35,
+                t0,
+                false,
+                (0.0, 0.0, 4.0),
+                (1280.0, 720.0),
+                1.0,
+            );
+        }
+        for i in 0..100u32 {
+            let mut b = tower.clone();
+            b.id = 1000 + u64::from(i);
+            b.tile_idx = (10 + (i / 10) * 6) * 100 + (10 + (i % 10) * 6);
+            mirv_scene.spawn_building_demolition(&b, 100, t0);
+        }
+        for i in 0..15u32 {
+            let tx = 15 + (i % 5) * 12;
+            let ty = 15 + (i / 5) * 12;
+            mirv_scene.spawn_entity_death(
+                tx as f32 + 0.5,
+                ty as f32 + 0.5,
+                ty * 100 + tx,
+                2,
+                [0.8, 0.3, 0.2],
+                2.0,
+                t0,
+            );
+        }
+        ground_out.clear();
+        air_out.clear();
+        mirv_scene.pack_instances(&strike_params, |air, inst| {
+            if air {
+                air_out.push(inst);
+            } else {
+                ground_out.push(inst);
+            }
+        });
+        assert!(
+            air_out.iter().any(|inst| inst.kind == BLAST_KIND_NUKE_AIR),
+            "at least one full NukeAir shockwave must render under MIRV saturation"
+        );
+        let pop_instances: Vec<_> = air_out
+            .iter()
+            .filter(|inst| inst.kind == BLAST_KIND_BUILDING_POP)
+            .collect();
+        assert!(!pop_instances.is_empty() && pop_instances.len() < 100);
+        assert!(pop_instances.iter().all(|inst| inst.seed >= 1.5));
+        let death_instances: Vec<_> = air_out
+            .iter()
+            .filter(|inst| inst.kind == BLAST_KIND_ENTITY_DEATH)
+            .collect();
+        assert_eq!(death_instances.len(), 15);
+        assert!(death_instances.iter().all(|inst| inst.seed >= 1.5));
     }
 }

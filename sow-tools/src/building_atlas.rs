@@ -12,9 +12,16 @@ const UNIT_CELL_PX: u32 = 64;
 const BADGE_CELL_PX: u32 = 128;
 const GUTTER_PX: u32 = 2;
 const ART_MARGIN_PX: u32 = 2;
-/// Every building and level needs art: `assets/art/buildings/<kind>-<level>.webp`.
-const BUILDING_KINDS: [&str; 5] = ["City", "Factory", "Port", "Tower", "Farm"];
-const BUILDING_LEVELS: u8 = 4;
+/// Building art stem and available sprite levels in `assets/art/buildings`.
+const BUILDING_KINDS: [(&str, &str, u8); 7] = [
+    ("City", "city", 5),
+    ("Factory", "factory", 4),
+    ("Port", "port", 4),
+    ("Tower", "tower", 4),
+    ("Farm", "farm", 4),
+    ("SAM", "sam", 4),
+    ("MissileSilo", "silo", 4),
+];
 /// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.webp`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
 // ponytail: one 128px strip, 27 cells = 3456px; switch to a grid before it passes 4096px.
@@ -77,14 +84,32 @@ fn art_source(dir: &Path, stem: &str) -> Result<PathBuf, Box<dyn Error + Send + 
         })
 }
 
+fn building_art_source(
+    dir: &Path,
+    stem: &str,
+) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
+    for extension in ["webp", "png"] {
+        let path = dir.join(format!("{stem}.{extension}"));
+        if path.is_file() {
+            return Ok(path);
+        }
+    }
+    Err(format!(
+        "missing building art: {} or {}",
+        dir.join(format!("{stem}.webp")).display(),
+        dir.join(format!("{stem}.png")).display()
+    )
+    .into())
+}
+
 pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut entries = Vec::new();
     let mut metadata = Vec::new();
-    for kind in BUILDING_KINDS {
-        for level in 1..=BUILDING_LEVELS {
-            let source = art_source(
+    for (kind, art_stem, max_level) in BUILDING_KINDS {
+        for level in 1..=max_level {
+            let source = building_art_source(
                 &args.art_root.join("buildings"),
-                &format!("{}-{level}", kind.to_lowercase()),
+                &format!("{art_stem}-{level}"),
             )?;
             let bytes = fs::read(&source)?;
             let image = image::load_from_memory(&bytes)?.to_rgba8();
@@ -309,7 +334,10 @@ fn rust_registry(
             let Some((kind, raw_level)) = rect.name.split_once(':') else {
                 return Err("building atlas key must contain kind:level".into());
             };
-            if !matches!(kind, "City" | "Tower" | "Factory" | "Port" | "Farm") {
+            if !matches!(
+                kind,
+                "City" | "Tower" | "Factory" | "Port" | "Farm" | "SAM" | "MissileSilo"
+            ) {
                 return Err(format!("unknown building kind in atlas: {kind}").into());
             }
             let level: u8 = raw_level.parse()?;

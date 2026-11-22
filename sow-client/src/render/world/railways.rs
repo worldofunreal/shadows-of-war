@@ -257,11 +257,10 @@ pub(crate) fn render(
     let line_width = dev.railway_track_width.clamp(0.5, 6.0) * sf.max(0.01);
     let screen_w = input.screen_w;
     let screen_h = input.screen_h;
-    let camera = [input.camera_x, input.camera_y];
     for segment in &state.segments {
-        let a = world_screen(segment.a, camera, input.camera_zoom);
-        let corner = world_screen(segment.corner, camera, input.camera_zoom);
-        let b = world_screen(segment.b, camera, input.camera_zoom);
+        let a = input.world_to_screen(segment.a);
+        let corner = input.world_to_screen(segment.corner);
+        let b = input.world_to_screen(segment.b);
         if !route_in_view(a, corner, b, screen_w, screen_h, line_width * 2.0) {
             continue;
         }
@@ -283,9 +282,9 @@ pub(crate) fn render(
     let train_size = dev.train_size.clamp(3.0, 24.0) * sf.max(0.01);
     for train in &state.trains {
         let segment = &state.segments[train.edge];
-        let a = world_screen(segment.a, camera, input.camera_zoom);
-        let corner = world_screen(segment.corner, camera, input.camera_zoom);
-        let b = world_screen(segment.b, camera, input.camera_zoom);
+        let a = input.world_to_screen(segment.a);
+        let corner = input.world_to_screen(segment.corner);
+        let b = input.world_to_screen(segment.b);
         if !route_in_view(a, corner, b, screen_w, screen_h, train_size * 2.0) {
             continue;
         }
@@ -306,7 +305,7 @@ pub(crate) fn render(
         for gap in [0.0, train_size * 1.35, train_size * 2.7] {
             let (position, horizontal) =
                 train_position(segment, train.phase, gap / input.camera_zoom.max(0.01));
-            let center = world_screen(position, camera, input.camera_zoom);
+            let center = input.world_to_screen(position);
             let size = if horizontal {
                 [train_size * 1.2, train_size * 0.58]
             } else {
@@ -323,10 +322,6 @@ pub(crate) fn render(
             );
         }
     }
-}
-
-fn world_screen(point: [f32; 2], camera: [f32; 2], zoom: f32) -> [f32; 2] {
-    [camera[0] + point[0] * zoom, camera[1] + point[1] * zoom]
 }
 
 fn route_in_view(

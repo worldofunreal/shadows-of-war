@@ -104,6 +104,7 @@ pub async fn fetch_coastlines_tiled(
 
     let mut segments = Vec::new();
     let mut failed = 0usize;
+    let mut last_fetch_error = None;
 
     for (tile_index, (tile_min_lat, tile_min_lon, tile_max_lat, tile_max_lon)) in
         tiles.iter().enumerate()
@@ -119,7 +120,9 @@ pub async fn fetch_coastlines_tiled(
             Ok(j) => j,
             Err(e) => {
                 log::warn!("    coastline fetch failed: {e}");
+                eprintln!("Warning: coastline tile {} failed: {e}", tile_index + 1);
                 failed += 1;
+                last_fetch_error = Some(e.to_string());
                 continue;
             }
         };
@@ -144,9 +147,16 @@ pub async fn fetch_coastlines_tiled(
         segments.len(),
         failed
     );
-    if segments.is_empty() {
+    if segments.is_empty() && failed > 0 {
+        let detail = last_fetch_error
+            .map(|error| format!(" Last error: {error}."))
+            .unwrap_or_default();
         return Err(
-            "No coastline geometry from Overpass (timeouts or rate limits). Retry later.".into(),
+            format!(
+                "Could not retrieve coastline data: {failed}/{} Overpass tile request(s) failed.{detail} Check your connection or the Overpass service, then retry.",
+                tiles.len()
+            )
+            .into(),
         );
     }
 

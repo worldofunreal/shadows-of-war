@@ -22,6 +22,34 @@ fn tribe_ability_hero(
 }
 
 impl SowApp {
+    pub(crate) fn record_combat_kill_feedback(
+        &mut self,
+        wx: f32,
+        wy: f32,
+        gender: Option<sow_data::geo_entities::Gender>,
+        now_instant: web_time::Instant,
+    ) {
+        if let Some((step, title)) = self.ui.record_kill_callout(wx, wy, gender, now_instant) {
+            self.sfx
+                .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+            let streak = self.ui.combat_streaks.kill_streak;
+            if streak > self.progress.best_match_conquest_streak {
+                self.progress.best_match_conquest_streak = streak;
+            }
+            if title == "RAMPAGE!" {
+                self.progress.rampage_count = self.progress.rampage_count.saturating_add(1);
+            }
+            crate::store_portals::track_product_event_with(
+                "conquest_streak_milestone",
+                &serde_json::json!({
+                    "title": title,
+                    "streak": streak,
+                    "multi": self.ui.combat_streaks.multi_kill_count,
+                }),
+            );
+        }
+    }
+
     pub(crate) fn handle_player_eliminated(
         &mut self,
         snap: &SimSnapshot,
@@ -73,14 +101,41 @@ impl SowApp {
             .wrapping_add(elimination_x.wrapping_mul(1597334977))
             .wrapping_add(elimination_y.wrapping_mul(3512401961));
 
+        let [anim_x, anim_y] = self.ui.nameplates.anchor_for(player_id).unwrap_or([wx, wy]);
+        let color = victim
+            .map(crate::render::world::nameplates::player_color)
+            .unwrap_or([0.85, 0.85, 0.85, 1.0]);
+        if crate::theme::dev_config::DevConfig::with(|dev| dev.vfx_blasts) {
+            let map_w = self.sim.map_w.max(1);
+            let map_h = self.sim.map_h.max(1);
+            let tx = (anim_x.floor().max(0.0) as u32).min(map_w.saturating_sub(1));
+            let ty = (anim_y.floor().max(0.0) as u32).min(map_h.saturating_sub(1));
+            let tile_idx = ty.saturating_mul(map_w).saturating_add(tx);
+            let death_mode = if info.by_nuke {
+                2.0
+            } else if victim_type != sow_core::player::PlayerType::Bot
+                || victim.is_some_and(|p| p.is_campaign_faction)
+            {
+                1.0
+            } else {
+                0.0
+            };
+            let vis_owner = if show_animation { my_id } else { conqueror_id };
+            self.ui.blast_scene.spawn_entity_death(
+                anim_x,
+                anim_y,
+                tile_idx,
+                vis_owner,
+                [color[0], color[1], color[2]],
+                death_mode,
+                now_instant,
+            );
+        }
+
         if show_animation {
             let name = victim
                 .map(|p| sow_core::player::display_name(p.id, &p.name, p.player_type))
                 .unwrap_or_else(|| format!("Player {player_id}"));
-            let [anim_x, anim_y] = self.ui.nameplates.anchor_for(player_id).unwrap_or([wx, wy]);
-            let color = victim
-                .map(crate::render::world::nameplates::player_color)
-                .unwrap_or([0.85, 0.85, 0.85, 1.0]);
             let avatar = victim
                 .map(sow_core::player::avatar_identity)
                 .unwrap_or(sow_core::player::AvatarIdentity::Fallback);
@@ -99,8 +154,10 @@ impl SowApp {
                     name,
                     color,
                     avatar,
+                    casualties: None,
                     reward,
                     prepared_name: sow_render::text::PreparedText::default(),
+                    prepared_casualties: None,
                     prepared_reward: None,
                     text_style_key: None,
                 },
@@ -119,28 +176,7 @@ impl SowApp {
                     .iter()
                     .find(|p| p.id == my_id)
                     .and_then(|me| me.leader.character().gender);
-                if let Some((step, title)) =
-                    self.ui
-                        .record_kill_callout(wx, wy, leader_gender, now_instant)
-                {
-                    self.sfx
-                        .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
-                    let streak = self.ui.combat_streaks.kill_streak;
-                    if streak > self.progress.best_match_conquest_streak {
-                        self.progress.best_match_conquest_streak = streak;
-                    }
-                    if title == "RAMPAGE!" {
-                        self.progress.rampage_count = self.progress.rampage_count.saturating_add(1);
-                    }
-                    crate::store_portals::track_product_event_with(
-                        "conquest_streak_milestone",
-                        &serde_json::json!({
-                            "title": title,
-                            "streak": streak,
-                            "multi": self.ui.combat_streaks.multi_kill_count,
-                        }),
-                    );
-                }
+                self.record_combat_kill_feedback(wx, wy, leader_gender, now_instant);
             }
             if player_id == my_id {
                 self.ui.reset_kill_streaks();
@@ -187,4 +223,3 @@ impl SowApp {
         }
     }
 }
-

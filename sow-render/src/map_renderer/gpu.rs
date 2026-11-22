@@ -3,6 +3,8 @@ use super::cpu_prep::{
     fill_terrain_buffer, get_neighbors_8,
 };
 use super::crater::CraterRevealQueue;
+use super::tabletop::{Tabletop, TabletopVertex};
+use std::sync::Arc;
 use crate::context::RenderContext;
 use blade_graphics as gpu;
 use blade_macros::ShaderData;
@@ -14,6 +16,16 @@ struct MapShaderData {
     player_skin_styles: PlayerSkinStyles,
     terrain_texture: gpu::TextureView,
     owner_texture: gpu::TextureView,
+    skin_texture: gpu::TextureView,
+    skin_sampler: gpu::Sampler,
+}
+
+struct TabletopDraw {
+    projection: Arc<Tabletop>,
+    pipeline: gpu::RenderPipeline,
+    vertices: gpu::Buffer,
+    indices: gpu::Buffer,
+    index_count: u32,
 }
 
 pub struct MapRenderer {
@@ -23,7 +35,13 @@ pub struct MapRenderer {
     pub owner_texture: gpu::Texture,
     pub owner_view: gpu::TextureView,
     pub owner_buffer: gpu::Buffer,
+    skin_texture: gpu::Texture,
+    skin_view: gpu::TextureView,
+    skin_buffer: gpu::Buffer,
+    skin_sampler: gpu::Sampler,
     pub pipeline: gpu::RenderPipeline,
+    tabletop: Option<TabletopDraw>,
+    surface_format: gpu::TextureFormat,
     pub width: u32,
     pub height: u32,
     pub terrain: Vec<u8>,
@@ -51,6 +69,14 @@ pub struct MapRenderer {
 
 const FLASH_ABILITY_BIT: u8 = 0x80;
 const FLASH_INTENSITY_MASK: u8 = !FLASH_ABILITY_BIT;
+
+// Four 64px columns, padded to the upload row alignment.
+const SKIN_ATLAS_SIZE: gpu::Extent = gpu::Extent {
+    width: 256,
+    height: 64,
+    depth: 1,
+};
+const SKIN_ATLAS: &[u8; 256 * 64] = include_bytes!("territory_skins.r8");
 
 impl MapRenderer {
     pub fn new(
@@ -169,6 +195,42 @@ impl MapRenderer {
             memory: gpu::Memory::Upload,
         });
 
+        let skin_texture = context.create_texture(gpu::TextureDesc {
+            name: "territory_skins",
+            format: gpu::TextureFormat::R8Unorm,
+            size: SKIN_ATLAS_SIZE,
+            dimension: gpu::TextureDimension::D2,
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
+            external: None,
+        });
+        let skin_view = context.create_texture_view(
+            skin_texture,
+            gpu::TextureViewDesc {
+                name: "territory_skins_view",
+                format: gpu::TextureFormat::R8Unorm,
+                dimension: gpu::ViewDimension::D2,
+                subresources: &gpu::TextureSubresources::default(),
+            },
+        );
+        let skin_buffer = context.create_buffer(gpu::BufferDesc {
+            name: "territory_skins_upload",
+            size: SKIN_ATLAS.len() as u64,
+            memory: gpu::Memory::Upload,
+        });
+        unsafe {
+            std::ptr::copy_nonoverlapping(SKIN_ATLAS.as_ptr(), skin_buffer.data(), SKIN_ATLAS.len());
+        }
+        context.sync_buffer(skin_buffer, 0, skin_buffer.size());
+        let skin_sampler = context.create_sampler(gpu::SamplerDesc {
+            name: "territory_skins_sampler",
+            min_filter: gpu::FilterMode::Linear,
+            mag_filter: gpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
         // --- Shader & pipeline ---
         let source =
             crate::shader_params::prepare_shader("MAP_", include_str!("../shaders/map.wgsl"));
@@ -192,32 +254,7 @@ impl MapRenderer {
             "PlayerSkinStyles must match WGSL `struct PlayerSkinStyles` uniform layout"
         );
 
-        let layout = <MapShaderData as gpu::ShaderData>::layout();
-        // Fragment entry contract: Linear swapchains use `fs_main`; plain UNORM (wasm WebGL
-        // canvas) uses `fs_main_srgb`. Match on the Blade surface format.
-        let fragment_entry = if matches!(surface_format, gpu::TextureFormat::Rgba8Unorm) {
-            "fs_main_srgb"
-        } else {
-            "fs_main"
-        };
-        let pipeline = context.create_render_pipeline(gpu::RenderPipelineDesc {
-            name: "map_pipeline",
-            data_layouts: &[&layout],
-            vertex: shader.at("vs_main"),
-            vertex_fetches: &[],
-            primitive: gpu::PrimitiveState {
-                topology: gpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            fragment: Some(shader.at(fragment_entry)),
-            color_targets: &[gpu::ColorTargetState {
-                format: surface_format,
-                blend: None,
-                write_mask: gpu::ColorWrites::default(),
-            }],
-            multisample_state: gpu::MultisampleState::default(),
-        });
+        let pipeline = Self::pipeline(context, &shader, surface_format, "vs_main", &[]);
 
         let chunk_h = 32;
         let num_chunks = height.div_ceil(chunk_h);
@@ -229,7 +266,13 @@ impl MapRenderer {
             owner_texture,
             owner_view,
             owner_buffer,
+            skin_texture,
+            skin_view,
+            skin_buffer,
+            skin_sampler,
             pipeline,
+            tabletop: None,
+            surface_format,
             width,
             height,
             terrain: initial_terrain.to_vec(),
@@ -255,6 +298,81 @@ impl MapRenderer {
         }
     }
 
+    fn pipeline(
+        context: &gpu::Context,
+        shader: &gpu::Shader,
+        surface_format: gpu::TextureFormat,
+        vertex_entry: &str,
+        vertex_fetches: &[gpu::VertexFetchState<'_>],
+    ) -> gpu::RenderPipeline {
+        let layout = <MapShaderData as gpu::ShaderData>::layout();
+        // Fragment entry contract: Linear swapchains use `fs_main`; plain UNORM (wasm WebGL
+        // canvas) uses `fs_main_srgb`. Match on the Blade surface format.
+        let fragment_entry = if matches!(surface_format, gpu::TextureFormat::Rgba8Unorm) {
+            "fs_main_srgb"
+        } else {
+            "fs_main"
+        };
+        context.create_render_pipeline(gpu::RenderPipelineDesc {
+            name: "map_pipeline",
+            data_layouts: &[&layout],
+            vertex: shader.at(vertex_entry),
+            vertex_fetches,
+            primitive: gpu::PrimitiveState {
+                topology: gpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            fragment: Some(shader.at(fragment_entry)),
+            color_targets: &[gpu::ColorTargetState {
+                format: surface_format,
+                blend: None,
+                write_mask: gpu::ColorWrites::default(),
+            }],
+            multisample_state: gpu::MultisampleState::default(),
+        })
+    }
+
+    pub fn tabletop_projection(&mut self, context: &gpu::Context) -> Arc<Tabletop> {
+        let draw = self.tabletop.get_or_insert_with(|| {
+            let projection = Arc::new(Tabletop::new(self.width, self.height, &self.terrain));
+            let (vertices, indices) = projection.mesh();
+            let upload = |name, bytes: &[u8]| {
+                let buffer = context.create_buffer(gpu::BufferDesc {
+                    name,
+                    size: bytes.len() as u64,
+                    memory: gpu::Memory::Upload,
+                });
+                // Upload buffers are host-mapped by Blade.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.data().cast(), bytes.len());
+                }
+                context.sync_buffer(buffer, 0, buffer.size());
+                buffer
+            };
+            let source = crate::shader_params::prepare_shader("MAP_", include_str!("../shaders/map.wgsl"));
+            let shader = context.create_shader(gpu::ShaderDesc { source: &source, naga_module: None });
+            let pipeline = Self::pipeline(
+                context,
+                &shader,
+                self.surface_format,
+                "vs_tabletop",
+                &[gpu::VertexFetchState {
+                    layout: &<TabletopVertex as gpu::Vertex>::layout(),
+                    instanced: false,
+                }],
+            );
+            TabletopDraw {
+                projection,
+                pipeline,
+                vertices: upload("tabletop_vertices", bytemuck::cast_slice(&vertices)),
+                indices: upload("tabletop_indices", bytemuck::cast_slice(&indices)),
+                index_count: indices.len() as u32,
+            }
+        });
+        Arc::clone(&draw.projection)
+    }
+
     /// Queue an outward-expanding visual reveal for a newly detonated nuke crater.
     /// Authoritative `self.owners` still updates immediately on the detonation tick.
     pub fn enqueue_crater_reveal(
@@ -277,6 +395,7 @@ impl MapRenderer {
 
     /// Upload static terrain texture once. Call after creating the command encoder.
     pub fn upload_terrain(&self, encoder: &mut gpu::CommandEncoder) {
+        encoder.init_texture(self.skin_texture);
         let src_piece: gpu::BufferPiece = self.terrain_buffer.into();
         let dst_piece: gpu::TexturePiece = self.terrain_texture.into();
         let mut transfer = encoder.transfer("terrain_upload");
@@ -289,6 +408,12 @@ impl MapRenderer {
                 height: self.height,
                 depth: 1,
             },
+        );
+        transfer.copy_buffer_to_texture(
+            self.skin_buffer.into(),
+            SKIN_ATLAS_SIZE.width,
+            self.skin_texture.into(),
+            SKIN_ATLAS_SIZE,
         );
     }
 
@@ -721,6 +846,7 @@ impl MapRenderer {
         globals: MapGlobals,
         player_colors: PlayerColors,
         player_skin_styles: PlayerSkinStyles,
+        tabletop: bool,
     ) {
         let mut pass = encoder.render(
             "map_pass",
@@ -733,7 +859,8 @@ impl MapRenderer {
                 depth_stencil: None,
             },
         );
-        let mut rc = pass.with(&self.pipeline);
+        let tabletop = self.tabletop.as_ref().filter(|_| tabletop);
+        let mut rc = pass.with(tabletop.map_or(&self.pipeline, |draw| &draw.pipeline));
         rc.bind(
             0,
             &MapShaderData {
@@ -742,18 +869,34 @@ impl MapRenderer {
                 player_skin_styles,
                 terrain_texture: self.terrain_view,
                 owner_texture: self.owner_view,
+                skin_texture: self.skin_view,
+                skin_sampler: self.skin_sampler,
             },
         );
-        rc.draw(0, 3, 0, 1);
+        if let Some(draw) = tabletop {
+            rc.bind_vertex(0, draw.vertices.at(0));
+            rc.draw_indexed(draw.indices.at(0), gpu::IndexType::U32, draw.index_count, 0, 0, 1);
+        } else {
+            rc.draw(0, 3, 0, 1);
+        }
     }
 
     pub fn destroy(&mut self, render_ctx: &RenderContext) {
+        if let Some(mut draw) = self.tabletop.take() {
+            render_ctx.context.destroy_buffer(draw.vertices);
+            render_ctx.context.destroy_buffer(draw.indices);
+            render_ctx.context.destroy_render_pipeline(&mut draw.pipeline);
+        }
         render_ctx.context.destroy_texture_view(self.terrain_view);
         render_ctx.context.destroy_texture(self.terrain_texture);
         render_ctx.context.destroy_buffer(self.terrain_buffer);
         render_ctx.context.destroy_texture_view(self.owner_view);
         render_ctx.context.destroy_texture(self.owner_texture);
         render_ctx.context.destroy_buffer(self.owner_buffer);
+        render_ctx.context.destroy_texture_view(self.skin_view);
+        render_ctx.context.destroy_texture(self.skin_texture);
+        render_ctx.context.destroy_buffer(self.skin_buffer);
+        render_ctx.context.destroy_sampler(self.skin_sampler);
         render_ctx
             .context
             .destroy_render_pipeline(&mut self.pipeline);

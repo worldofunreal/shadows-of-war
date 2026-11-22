@@ -1,3 +1,5 @@
+use crate::app::InputState;
+
 #[derive(Clone, Copy)]
 pub struct PlacementQuery<'a> {
     pub kind: sow_core::game::BuildingKind,
@@ -43,18 +45,15 @@ pub(crate) fn visible_building_anchor_bounds(
     kind: sow_core::game::BuildingKind,
     map_w: u32,
     map_h: u32,
-    camera: [f32; 2],
-    screen: [f32; 2],
-    zoom: f32,
+    input: &InputState,
 ) -> Option<(i32, i32, i32, i32)> {
     let (width, height) = kind.footprint_dimensions();
-    let zoom = zoom.max(0.01);
-    let min_x = ((-camera[0] / zoom + width as f32 * 0.5).ceil() as i32).max(0);
-    let min_y = ((-camera[1] / zoom + height as f32 * 0.5).ceil() as i32).max(0);
-    let max_x = (((screen[0] - camera[0]) / zoom - width as f32 * 0.5).floor() as i32)
-        .min(map_w as i32 - 1);
-    let max_y = (((screen[1] - camera[1]) / zoom - height as f32 * 0.5).floor() as i32)
-        .min(map_h as i32 - 1);
+    let [left, top] = input.screen_to_world([0.0, 0.0]);
+    let [right, bottom] = input.screen_to_world([input.screen_w, input.screen_h]);
+    let min_x = ((left + width as f32 * 0.5).ceil() as i32).max(0);
+    let min_y = ((top + height as f32 * 0.5).ceil() as i32).max(0);
+    let max_x = ((right - width as f32 * 0.5).floor() as i32).min(map_w as i32 - 1);
+    let max_y = ((bottom - height as f32 * 0.5).floor() as i32).min(map_h as i32 - 1);
     (map_w > 0 && map_h > 0 && min_x <= max_x && min_y <= max_y)
         .then_some((min_x, min_y, max_x, max_y))
 }
@@ -63,18 +62,18 @@ pub(crate) fn placement_controls(
     kind: sow_core::game::BuildingKind,
     tile_idx: u32,
     map_w: u32,
-    camera: [f32; 2],
-    zoom: f32,
+    input: &InputState,
     sf: f32,
 ) -> PlacementControls {
     let map_w = map_w.max(1);
     let footprint =
         sow_core::building::BuildingFootprint::at(kind, tile_idx % map_w, tile_idx / map_w);
-    let center = [
-        camera[0] + (footprint.left as f32 + footprint.width as f32 * 0.5) * zoom,
-        camera[1] + (footprint.top as f32 + footprint.height as f32 * 0.5) * zoom,
-    ];
-    let grab_half = (footprint.width.max(footprint.height) as f32 * 0.5 * zoom).max(24.0 * sf);
+    let center = input.world_to_screen([
+        footprint.left as f32 + footprint.width as f32 * 0.5,
+        footprint.top as f32 + footprint.height as f32 * 0.5,
+    ]);
+    let grab_half = (footprint.width.max(footprint.height) as f32 * 0.5 * input.camera_zoom)
+        .max(24.0 * sf);
     let arrow_offset = grab_half + 20.0 * sf;
     PlacementControls {
         center,
@@ -115,9 +114,7 @@ impl crate::app::SowApp {
             kind,
             self.sim.map_w,
             self.sim.map_h,
-            [self.input.camera_x, self.input.camera_y],
-            [self.input.screen_w, self.input.screen_h],
-            self.input.camera_zoom,
+            &self.input,
         )
     }
 
@@ -145,8 +142,7 @@ impl crate::app::SowApp {
             placement.kind,
             placement.tile_idx,
             self.sim.map_w,
-            [self.input.camera_x, self.input.camera_y],
-            self.input.camera_zoom,
+            &self.input,
             crate::web_canvas::device_pixel_ratio() as f32,
         ))
     }

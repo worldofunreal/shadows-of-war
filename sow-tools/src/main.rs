@@ -498,6 +498,12 @@ async fn run_generate(
         refresh_osm_cache,
     )
     .await?;
+    if coastlines.segments.is_empty() {
+        return Err(
+            "OpenStreetMap returned no coastline for this area. This generator builds land from coastline geometry and cannot generate inland regions; use Map image or select an area that includes a coastline."
+                .into(),
+        );
+    }
 
     println!("Rasterizing landmass...");
     let (map_width, map_height, mut terrain_grid) = rasterizer::build_landmass_from_coastlines(

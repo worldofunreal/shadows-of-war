@@ -1,3 +1,4 @@
+import { renderSkinCard, renderSkinPicker, skinName } from "./main_menu.skins.ts";
 import {
     asset,
     avatarImage,
@@ -696,7 +697,7 @@ function computeBundleQuote(bundle: MenuStoreBundleOffer) {
             }
             items.push({
                 id: skin.id,
-                name: skin.name,
+                name: skinName(skin),
                 art: asset(skin.asset_path),
                 owned: owned,
                 baseCrowns: Number(skin.cost_crowns) || 0,
@@ -799,32 +800,10 @@ export function renderLeaderPurchase(leader: MenuLeader) {
     return leaderActions ? "<div class='sow-heroes__purchase-actions'>" + leaderActions + "</div>" : "";
 }
 
-// Entry button to open the global skin picker modal from the featured hero card.
-export function renderSkinsButton() {
-    return (
-        "<button class='sow-heroes__skins sow-store__buy' type='button' data-command='open_skin_picker'>" +
-        esc(SOW_t("store.skins")) +
-        "</button>"
-    );
-}
+export { renderSkinsButton } from "./main_menu.skins.ts";
 
 export function renderSkinPickerModal() {
-    if (!menuUi.skinPickerOpen) return "";
-    const skins = Array.isArray(menuUi.state!.store && menuUi.state!.store.skins)
-        ? menuUi.state!.store.skins
-        : [];
-    return (
-        "<div class='sow-menu__overlay' data-menu-overlay='skin-picker'><section class='sow-menu__modal sow-skin-picker' role='dialog' aria-modal='true' aria-label='" +
-        esc(SOW_t("store.skins")) +
-        "'><div class='sow-menu__modal-head'><h2>" +
-        esc(SOW_t("store.skins")) +
-        "</h2><button class='sow-menu__icon-button' type='button' data-command='close_skin_picker' aria-label='" +
-        esc(SOW_t("menu.close")) +
-        "'>×</button></div><div class='sow-store__skin-grid'>" +
-        (skins.map(renderStoreSkinPromo).join("") ||
-            "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") +
-        "</div></section></div>"
-    );
+    return renderSkinPicker(renderStoreSkinPromo);
 }
 
 export function openLeaderPurchase(leaderId: string, currency: string, storeOffer?: MenuStoreOffer | null) {
@@ -974,56 +953,24 @@ function renderStoreSkinPromo(skin: MenuSkinOffer) {
         : liveCrownOffer
           ? liveCrownOffer.discount_percent
           : 0;
-    let action;
-    const busyDisabled = menuUi.state && menuUi.state.store_busy ? " disabled" : "";
-    const isEquipped = Boolean(skin.owned && menuUi.state!.selected_skin === skin.id);
-    if (skin.owned) {
-        action = isEquipped
-            ? "<button class='sow-store__buy sow-store__buy--equipped' type='button' data-command='unequip_skin' data-skin-id='" +
-              esc(skin.id) +
-              "' aria-pressed='true'" +
-              busyDisabled +
-              "><span>" +
-              esc(SOW_t("store.equipped")) +
-              "</span><span aria-hidden='true'>×</span></button>"
-            : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" +
-              esc(skin.id) +
-              "' aria-pressed='false'" +
-              busyDisabled +
-              ">" +
-              esc(SOW_t("store.equip")) +
-              "</button>";
-    } else if (Number(skin.cost_gems) <= 0 && Number(skin.cost_crowns) <= 0) {
+    let action = "";
+    if (!skin.owned && skin.cost_gems <= 0 && skin.cost_crowns <= 0) {
+        const introReward = skin.id === "moon_rabbit";
         action =
             "<div class='sow-store__buy-row'>" +
-            "<button class='sow-store__buy' type='button' data-command='open_campaign' data-saga-id='advanced_tactics'>" +
-            esc(SOW_t("lobbies.campaign_advanced_tactics_title") || "Advanced Tactics") +
+            "<button class='sow-store__buy' type='button' data-command='open_campaign' data-saga-id='" +
+            (introReward ? "six_sky" : "advanced_tactics") + "'" +
+            (introReward ? " data-episode-id='six_sky_maya_01'" : "") + ">" +
+            esc(SOW_t(introReward ? "lobbies.campaign_six_sky_maya_01_title" : "lobbies.campaign_advanced_tactics_title")) +
             "</button></div>";
-    } else {
+    } else if (!skin.owned) {
         action =
             "<div class='sow-store__buy-row'>" +
             renderSkinCurrencyButton(skin, "gems") +
             (Number(skin.cost_crowns) > 0 ? renderSkinCurrencyButton(skin, "crowns") : "") +
             "</div>";
     }
-    return (
-        "<article class='sow-store__skin" +
-        (isEquipped ? " is-equipped" : "") +
-        (discountPct > 0 && !skin.owned ? " is-on-sale" : "") +
-        "'><div class='sow-store__skin-art'><img src='" +
-        esc(asset(skin.asset_path)) +
-        "' alt='' width='96' height='96' loading='lazy'>" +
-        (discountPct > 0 && !skin.owned
-            ? "<b class='sow-store__discount'>-" + esc(discountPct) + "%</b>"
-            : "") +
-        "</div><div class='sow-store__skin-body'><h3>" +
-        esc(skin.name) +
-        "</h3><p>" +
-        esc(SOW_t("store.territory_pattern")) +
-        "</p>" +
-        action +
-        "</div></article>"
-    );
+    return renderSkinCard(skin, action, discountPct);
 }
 
 function renderBundleCurrencyButton(
@@ -1332,7 +1279,7 @@ function renderPurchaseArt(
             "<img class='sow-purchase-modal__art-image sow-purchase-modal__art-image--skin' src='" +
             esc(asset(skin.asset_path)) +
             "' alt='" +
-            esc(skin.name) +
+            esc(skinName(skin)) +
             "' width='256' height='256'>";
     } else {
         const artSlug = leaderArtSlug(leader);
@@ -1392,7 +1339,7 @@ export function renderPurchaseModal() {
         : storeBundle
           ? storeBundle.title
           : skin
-            ? skin.name
+            ? skinName(skin)
             : leaderDisplayName(leader);
     const heading = bundle
         ? "<span class='sow-purchase-modal__bundle-amount sow-purchase-modal__price--gem'>" +

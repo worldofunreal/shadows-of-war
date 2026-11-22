@@ -103,13 +103,10 @@ impl SowApp {
     /// Film `keys` after the current view over `seconds`; any player camera input ends the shot.
     pub(crate) fn start_camera_shot(&mut self, keys: Vec<CameraKey>, seconds: f32, machinima: bool) {
         let zoom = self.input.camera_zoom;
-        let current = (
-            (
-                (self.input.screen_w * 0.5 - self.input.camera_x) / zoom,
-                (self.input.screen_h * 0.5 - self.input.camera_y) / zoom,
-            ),
-            zoom,
-        );
+        let [world_x, world_y] = self
+            .input
+            .screen_to_world([self.input.screen_w * 0.5, self.input.screen_h * 0.5]);
+        let current = ((world_x, world_y), zoom);
         self.input.has_snapped_camera_to_spawn = true;
         self.input.camera_focus_target = None;
         self.input.camera_focus_waiting_for_input_release = false;
@@ -155,10 +152,11 @@ impl SowApp {
                 let progress = shot.elapsed / shot.seconds;
                 let screen = (self.input.screen_w, self.input.screen_h);
                 let (center, zoom) = camera_shot_frame(&shot.keys, progress, screen);
+                let [board_x, board_y] = self.input.project_board([center.0, center.1]);
                 self.input.camera_zoom = zoom;
                 self.input.target_zoom = zoom;
-                self.input.camera_x = screen.0 * 0.5 - center.0 * zoom;
-                self.input.camera_y = screen.1 * 0.5 - center.1 * zoom;
+                self.input.camera_x = screen.0 * 0.5 - board_x * zoom;
+                self.input.camera_y = screen.1 * 0.5 - board_y * zoom;
                 self.clamp_camera_to_map();
                 if progress < 1.0 {
                     shot.left_at = (
@@ -220,14 +218,16 @@ impl SowApp {
             } else {
                 12.0
             };
+            let [board_x, board_y] = self.input.project_board([world_x, world_y]);
+            let board_h = (self.sim.map_h as f32 * self.input.board_y_scale()).ceil() as u32;
             let lerp = (1.0 - f32::exp(-rate * dt)).clamp(0.0, 1.0);
             let (camera, zoom, target) = focus_camera_step(
                 (self.input.camera_x, self.input.camera_y),
                 self.input.camera_zoom,
                 self.input.target_zoom,
-                (world_x, world_y),
+                (board_x, board_y),
                 (self.input.screen_w, self.input.screen_h),
-                (self.sim.map_w, self.sim.map_h),
+                (self.sim.map_w, board_h),
                 lerp,
             );
             self.input.camera_x = camera.0;
@@ -244,9 +244,9 @@ impl SowApp {
                     (self.input.camera_x, self.input.camera_y),
                     self.input.camera_zoom,
                     self.input.target_zoom,
-                    (world_x, world_y),
+                    (board_x, board_y),
                     (self.input.screen_w, self.input.screen_h),
-                    (self.sim.map_w, self.sim.map_h),
+                    (self.sim.map_w, board_h),
                     1.0,
                 );
                 self.input.camera_zoom = zoom;

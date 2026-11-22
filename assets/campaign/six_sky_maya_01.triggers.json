@@ -89,7 +89,14 @@
         "target": "target_action",
         "gesture": "tap",
         "show_label": false
-      }
+      },
+      "exchange": [
+        {
+          "speaker": "six_sky",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_01_celebrate"
+        }
+      ]
     },
     {
       "id": "six_sky_maya_01_end",

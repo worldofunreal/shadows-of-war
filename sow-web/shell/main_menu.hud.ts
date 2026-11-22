@@ -2338,7 +2338,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '      <label class="sow-hud__setting-row sow-menu__settings-switch-row"><span class="sow-menu__settings-row-label">' +
       SOW_t("hud.show_fps_ping") +
       '</span><input class="sow-hud__switch" type="checkbox" role="switch" data-hud-setting="show_fps_ping"></label>' +
-      '<label class="sow-hud__setting-row"><span>' + esc(SOW_t("hud.show_match_clock")) +
+      '      <label class="sow-hud__setting-row sow-menu__settings-switch-row"><span class="sow-menu__settings-row-label">' +
+      esc(SOW_t("hud.show_match_clock")) +
       '</span><input class="sow-hud__switch" type="checkbox" role="switch" data-hud-setting="show_match_clock"></label>' +
       (hudState &&
       hudState.settings &&
@@ -4680,6 +4681,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       } else hub.innerHTML = hudIcon("home", "sow-hud__ring-icon");
       const allianceStatus = document.createElement("span");
       allianceStatus.className = "sow-hud__ring-hub-status";
+      allianceStatus.setAttribute("role", "timer");
       allianceStatus.hidden = true;
       allianceStatus.append(
         document.createElement("strong"),
@@ -4720,11 +4722,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       );
       detail = "";
     } else {
-      const relation = SOW_t(
-        "hud.map_relation_" + (mapMenu.relation || "neutral"),
-      );
+      const relation =
+        mapMenu.relation === "teammate"
+          ? ""
+          : SOW_t("hud.map_relation_" + (mapMenu.relation || "neutral"));
       title = mapMenu.target_name || relation;
-      detail = title === relation ? "" : escapeHudText(relation);
+      detail = relation && title !== relation ? escapeHudText(relation) : "";
     }
     readout.dataset.state = slot
       ? ringSlotDisabled(slot)
@@ -4817,27 +4820,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         ".sow-hud__ring-hub-status",
       );
       if (allianceStatus) {
-        const fixed = mapMenu.relation === "teammate";
         const seconds = Number(mapMenu.alliance_remaining_seconds);
         const timed =
           mapMenu.relation === "ally" &&
           Number.isFinite(seconds) &&
           seconds > 0;
-        const display = fixed ? "fixed" : timed ? "countdown" : "none";
-        if (hub.dataset.allianceDisplay !== display)
-          hub.dataset.allianceDisplay = display;
-        const hidden = !fixed && !timed;
+        const hidden = !timed;
         if (allianceStatus.hidden !== hidden) allianceStatus.hidden = hidden;
-        const role = fixed ? "status" : "timer";
-        if (allianceStatus.getAttribute("role") !== role)
-          allianceStatus.setAttribute("role", role);
         const title = allianceStatus.querySelector("strong");
         const detail = allianceStatus.querySelector("small");
-        const titleText = fixed
-          ? SOW_t("hud.map_relation_teammate")
-          : timed
-            ? formatAllianceCountdown(seconds)
-            : "";
+        const titleText = timed ? formatAllianceCountdown(seconds) : "";
         if (title && title.textContent !== titleText)
           title.textContent = titleText;
         if (detail) {
@@ -5640,7 +5632,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '><div class="sow-hud__dev-head">' +
       name;
     if (def.kind === "number") {
-      const unit = ({ s: "s", "screen px": "px" } as Record<string, string>)[
+      const unit = ({ s: "s", "screen px": "px", "%": "%" } as Record<string, string>)[
         def.unit
       ];
       html +=
@@ -7023,10 +7015,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       window.matchMedia("(hover: none) and (pointer: coarse)").matches;
     const compact = coarsePointer && density < 1;
     // Measure before writing. The stack rects below are read after the writes they depend on.
+    const dockInnerEl =
+      hudRefs.dock &&
+      hudRefs.dock.querySelector<HTMLElement>(".sow-hud__dock-inner");
     let operationAnchorTop = window.innerHeight;
-    [hudRefs.dock].forEach(function (element) {
+    [dockInnerEl || hudRefs.dock].forEach(function (element) {
       if (!element || element.hidden || !element.getClientRects().length)
         return;
+      if (hudRefs!.dock && hudRefs!.dock.hidden) return;
       operationAnchorTop = Math.min(
         operationAnchorTop,
         element.getBoundingClientRect().top,
@@ -7062,7 +7058,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (operationAnchorTop < window.innerHeight) {
       setPropIfChanged(
         "--sow-hud-layout-operations-bottom",
-        Math.ceil(window.innerHeight - operationAnchorTop + 2) + "px",
+        Math.ceil(window.innerHeight - operationAnchorTop + 6) + "px",
       );
     } else {
       removePropIfPresent("--sow-hud-layout-operations-bottom");

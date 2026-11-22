@@ -557,7 +557,33 @@ impl Default for PlayerProfile {
     }
 }
 
+const INTRO_SKIN_RECEIPT: &str = "campaign:moon_rabbit";
+
 impl PlayerProfile {
+    fn needs_intro_skin(&self) -> bool {
+        self.completed_episodes.contains(crate::campaign::INTRO_EPISODE_ID)
+            && !self.owned_skins.contains(crate::commerce::INTRO_SKIN_ID)
+    }
+
+    fn grant_intro_skin(&mut self, now: u64) {
+        if !self.needs_intro_skin() {
+            return;
+        }
+        let skin_id = crate::commerce::INTRO_SKIN_ID.to_string();
+        self.owned_skins.insert(skin_id.clone());
+        self.reward_receipts
+            .entry(INTRO_SKIN_RECEIPT.to_string())
+            .or_insert_with(|| crate::profile::RewardReceipt {
+                id: INTRO_SKIN_RECEIPT.to_string(),
+                match_id: INTRO_SKIN_RECEIPT.to_string(),
+                unlocked_skin: Some(skin_id),
+                level_before: Some(self.level),
+                level_after: Some(self.level),
+                created_at: now,
+                ..Default::default()
+            });
+    }
+
     pub fn sync_level(&mut self) {
         self.level = crate::rewards::level_from_xp(self.xp);
     }
@@ -609,6 +635,7 @@ impl PlayerProfile {
                     .saturating_add(self.laurels.saturating_sub(laurels_before)),
                 gems: reward.gems,
                 unlocked_leaders: Vec::new(),
+                unlocked_skin: None,
                 unlocked_achievements: unlocked
                     .iter()
                     .map(|achievement| achievement.id.to_string())
@@ -951,7 +978,7 @@ pub struct PlayerDb {
     /// `AppState` construction changes) while still connecting lazily, and it
     /// caches *only* success — a transient connect failure is retried on the
     /// next call instead of poisoning the handle.
-    connection: std::sync::Arc<tokio::sync::OnceCell<redis::aio::MultiplexedConnection>>,
+    connection: std::sync::Arc<tokio::sync::RwLock<Option<redis::aio::MultiplexedConnection>>>,
     pub crazygames_api_key: Option<String>,
     pub redb_db: Option<std::sync::Arc<redb::Database>>,
 }
@@ -966,22 +993,25 @@ impl PlayerDb {
         info!("Successfully initialized Valkey database connector client.");
         Self {
             client,
-            connection: std::sync::Arc::new(tokio::sync::OnceCell::new()),
+            connection: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
             crazygames_api_key,
             redb_db,
         }
     }
 
     pub(crate) async fn get_connection(&self) -> Result<redis::aio::MultiplexedConnection, redis::RedisError> {
-        let connection = self
-            .connection
-            .get_or_try_init(|| async {
-                let connection = self.client.get_multiplexed_async_connection().await?;
-                info!("Established shared multiplexed Valkey connection.");
-                Ok::<_, redis::RedisError>(connection)
-            })
-            .await?;
-        Ok(connection.clone())
+        if let Some(conn) = self.connection.read().await.as_ref() {
+            return Ok(conn.clone());
+        }
+        self.reset_connection().await
+    }
+
+    pub(crate) async fn reset_connection(&self) -> Result<redis::aio::MultiplexedConnection, redis::RedisError> {
+        let mut guard = self.connection.write().await;
+        let connection = self.client.get_multiplexed_async_connection().await?;
+        info!("Established shared multiplexed Valkey connection.");
+        *guard = Some(connection.clone());
+        Ok(connection)
     }
 
     pub fn current_free_hero_rotation(
@@ -1023,7 +1053,8 @@ impl PlayerDb {
         &self,
         account_id: &str,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        self.load_account(account_id).await
+        let account = self.load_account(account_id).await?;
+        self.ensure_intro_skin(account).await
     }
 
     /// Return the server-owned current-season 1v1 rating, including its
@@ -2116,7 +2147,25 @@ impl PlayerDb {
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let account = self.ensure_starting_leader(account).await?;
         let account = self.ensure_welcome_grant(account).await?;
-        self.ensure_pending_tutorial_guide(account).await
+        let account = self.ensure_pending_tutorial_guide(account).await?;
+        self.ensure_intro_skin(account).await
+    }
+
+    async fn ensure_intro_skin(
+        &self,
+        account: PlayerAccount,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        if account.kind != AccountKind::Human || !account.profile.needs_intro_skin() {
+            return Ok(account);
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        self.update_account_atomic(&account.id, &[INTRO_SKIN_RECEIPT], |account| {
+            account.profile.grant_intro_skin(now);
+        })
+        .await
     }
 
     async fn ensure_pending_tutorial_guide(
@@ -3572,7 +3621,7 @@ impl PlayerDb {
         let account = self
             .update_account_atomic(
                 account_id,
-                &[&format!("campaign:{}", episode.id)],
+                &[&format!("campaign:{}", episode.id), INTRO_SKIN_RECEIPT],
                 |account| {
                     if account.kind != AccountKind::Human {
                         failure = Some("campaign progress requires a human account");
@@ -3613,6 +3662,7 @@ impl PlayerDb {
                     if episode.marks_intro_completed {
                         account.profile.intro_completed = true;
                     }
+                    account.profile.grant_intro_skin(now);
                     let bonus_gems = match episode.id {
                         "tactics_01_economy" | "tactics_02_defense" => 10,
                         "tactics_03_amphibious" => 25,

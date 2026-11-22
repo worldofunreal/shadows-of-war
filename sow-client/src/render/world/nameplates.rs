@@ -1,5 +1,5 @@
 //! Owns live/death avatar presentation.
-use super::overlays::world_to_screen_values;
+use super::overlays::world_to_screen;
 use crate::app::{InputState, SimState};
 use crate::render::avatars::AvatarSlots;
 use crate::render::gpu::TextRenderer;
@@ -44,7 +44,7 @@ const EMOTE_BUBBLE_TAIL_LENGTH_RATIO: f32 = 0.22;
 const EMOTE_BUBBLE_INNER_TAIL_WIDTH_RATIO: f32 = 0.23;
 const EMOTE_BUBBLE_INNER_TAIL_LENGTH_RATIO: f32 = 0.16;
 const EMOTE_BUBBLE_BODY_OFFSET_RATIO: f32 = 0.35;
-const STATUS_BADGE_COUNT: usize = 7;
+const STATUS_BADGE_COUNT: usize = 4;
 const STATUS_BADGE_ENTER_SECS: f32 = 0.52;
 const STATUS_BADGE_EXIT_SECS: f32 = 0.65;
 const STATUS_BADGE_EXIT_SCALE: [f32; 2] = [1.50, 1.42];
@@ -1251,7 +1251,6 @@ impl NameplateSystem {
         &mut self,
         snapshot: &SimSnapshot,
         my_id: u16,
-        leaderboard_top_three: [Option<u16>; 3],
         now: Instant,
         reduced_motion: bool,
     ) {
@@ -1262,18 +1261,11 @@ impl NameplateSystem {
         for &player_index in &self.order {
             let player = &snapshot.players[player_index];
             let other_me = my_player.filter(|me| me.id != player.id);
-            let rank = leaderboard_top_three
-                .iter()
-                .position(|id| *id == Some(player.id))
-                .map(|index| index + 1);
             let present = [
                 other_me.is_some_and(|me| me.alliance_requests.contains(&player.id)),
                 other_me.is_some_and(|me| me.alliances.contains(&player.id)),
                 player.traitor,
                 player.disconnected,
-                rank == Some(1),
-                rank == Some(2),
-                rank == Some(3),
             ];
             self.badge_animations.entry(player.id).or_default().observe(
                 present,
@@ -1385,7 +1377,7 @@ pub(super) fn render_nameplates(
     if let Some(started_at) = sample_started_at {
         crate::diag::record_startup_perf(crate::diag::StartupMetric::NameplateSample, started_at);
     }
-    system.observe_status_badges(snapshot, my_id, leaderboard_top_three, now, reduced_motion);
+    system.observe_status_badges(snapshot, my_id, now, reduced_motion);
     let active_ids = &system.active_ids;
     system
         .avatar_entries
@@ -1424,28 +1416,22 @@ pub(super) fn render_nameplates(
             continue;
         };
         let (center_world, land_bounds, spawn_settle_scale) = spawn_center_visual(state, now);
-        let center = ScreenPoint(world_to_screen_values(
+        let center = ScreenPoint(world_to_screen(
             center_world.0[0],
             center_world.0[1],
-            input.camera_x,
-            input.camera_y,
-            input.camera_zoom,
+            input,
             sf,
         ));
-        let land_min = ScreenPoint(world_to_screen_values(
+        let land_min = ScreenPoint(world_to_screen(
             land_bounds.0[0],
             land_bounds.0[1],
-            input.camera_x,
-            input.camera_y,
-            input.camera_zoom,
+            input,
             sf,
         ));
-        let land_max = ScreenPoint(world_to_screen_values(
+        let land_max = ScreenPoint(world_to_screen(
             land_bounds.0[2],
             land_bounds.0[3],
-            input.camera_x,
-            input.camera_y,
-            input.camera_zoom,
+            input,
             sf,
         ));
         if !nameplate_visible_after_viewport_and_fog(land_min, land_max, screen_w, screen_h, || {
@@ -2584,9 +2570,7 @@ fn status_badge_index(kind: BadgeKind) -> Option<usize> {
         BadgeKind::Allied => Some(1),
         BadgeKind::Traitor => Some(2),
         BadgeKind::Disconnected => Some(3),
-        BadgeKind::Rank1 => Some(4),
-        BadgeKind::Rank2 => Some(5),
-        BadgeKind::Rank3 => Some(6),
+        BadgeKind::Rank1 | BadgeKind::Rank2 | BadgeKind::Rank3 => None,
         BadgeKind::Star => None,
     }
 }
@@ -2597,9 +2581,6 @@ fn status_badge_kind(index: usize) -> BadgeKind {
         1 => BadgeKind::Allied,
         2 => BadgeKind::Traitor,
         3 => BadgeKind::Disconnected,
-        4 => BadgeKind::Rank1,
-        5 => BadgeKind::Rank2,
-        6 => BadgeKind::Rank3,
         _ => unreachable!("status badge index is bounded by STATUS_BADGE_COUNT"),
     }
 }
@@ -2625,7 +2606,17 @@ fn paint_prepared_nameplate(
             BadgeKind::Star => NameplateStatusSprite::You,
             BadgeKind::Disconnected => NameplateStatusSprite::Disconnected,
         };
-        text.push_status_sprite_scaled(sprite, badge.center, badge.size, badge.tint);
+        if matches!(badge.kind, BadgeKind::Rank1 | BadgeKind::Rank2 | BadgeKind::Rank3) {
+            text.push_icon(
+                sprite,
+                badge.center,
+                badge.size[0] * 0.5,
+                badge.tint,
+                plan.emoji_outline,
+            );
+        } else {
+            text.push_status_sprite_scaled(sprite, badge.center, badge.size, badge.tint);
+        }
     }
     if let Some(name) = plan.name {
         let _ = text.push_prepared_text(

@@ -38,9 +38,34 @@ impl SowApp {
         }
     }
 
+    pub(crate) fn sync_tabletop_view(&mut self, draw_world: bool) {
+        let enabled = draw_world && self.asset_config.local_map_preview && self.net.is_offline
+            && crate::theme::dev_config::DevConfig::with(|dev| dev.tabletop_view);
+        let projection = if enabled
+            && let Some(renderer) = self.gfx.map_renderer.as_mut()
+            && let Some(context) = self.gfx.render_ctx.as_ref()
+        {
+            Some(renderer.tabletop_projection(&context.context))
+        } else {
+            None
+        };
+        if self.input.tabletop.is_some() == projection.is_some() {
+            self.input.tabletop = projection;
+            return;
+        }
+        let center = [self.input.screen_w * 0.5, self.input.screen_h * 0.5];
+        let world = self.input.screen_to_world(center);
+        self.input.tabletop = projection;
+        let [x, y] = self.input.project_board(world);
+        self.input.camera_zoom = self.input.camera_zoom.max(self.zoom_floor());
+        self.input.target_zoom = self.input.camera_zoom;
+        self.input.camera_x = center[0] - x * self.input.camera_zoom;
+        self.input.camera_y = center[1] - y * self.input.camera_zoom;
+        self.clamp_camera_to_map();
+    }
+
     pub(crate) fn mouse_to_tile(&self, x: f64, y: f64) -> Option<(i32, i32)> {
-        let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
-        let world_y = (y as f32 - self.input.camera_y) / self.input.camera_zoom;
+        let [world_x, world_y] = self.input.screen_to_world([x as f32, y as f32]);
 
         let (col, row) = world_to_tile(world_x, world_y);
 
@@ -118,7 +143,7 @@ impl SowApp {
         }
         camera_zoom_lower_bound(
             self.input.screen_w,
-            self.input.screen_h,
+            self.input.screen_h / self.input.board_y_scale(),
             self.sim.map_w,
             self.sim.map_h,
         )
@@ -163,7 +188,7 @@ impl SowApp {
         }
         let z = self.input.camera_zoom;
         let mw = self.sim.map_w as f32 * z;
-        let mh = self.sim.map_h as f32 * z;
+        let mh = self.sim.map_h as f32 * z * self.input.board_y_scale();
         let sw = self.input.screen_w;
         let sh = self.input.screen_h;
         self.input.camera_x = clamp_camera_offset(sw, mw, self.input.camera_x);

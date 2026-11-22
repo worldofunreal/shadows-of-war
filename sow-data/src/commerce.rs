@@ -27,7 +27,9 @@ const GEM_BUNDLES: [(&str, u64, u64); 3] = [
 // Original SOW cosmetic catalog. The style id is an internal renderer hint
 // (`apply_skin` in map.wgsl); the public id is the only value persisted in
 // player ownership. Every style must be a distinct pattern, not a recolor.
-const SKINS: [(&str, &str, u64, u8); 9] = [
+pub const INTRO_SKIN_ID: &str = "moon_rabbit";
+
+const SKINS: [(&str, &str, u64, u8); 12] = [
     ("ember_vein", "Ember Vein", 500, 1),
     ("storm_grid", "Storm Grid", 1_000, 2),
     ("royal_lattice", "Royal Lattice", 1_500, 3),
@@ -37,6 +39,9 @@ const SKINS: [(&str, &str, u64, u8); 9] = [
     ("war_banner", "War Banner", 1_250, 7),
     ("dragon_scale", "Dragon Scale", 2_000, 8),
     ("imperial_vanguard", "Imperial Vanguard", 0, 9),
+    (INTRO_SKIN_ID, "Moon Rabbit", 0, 10),
+    ("war_ravens", "War Ravens", 750, 11),
+    ("heraldic_lions", "Heraldic Lions", 1_250, 12),
 ];
 
 /// Crowns per gem, the same exchange `Leader::price_gems` uses.
@@ -1135,9 +1140,9 @@ mod tests {
     #[test]
     fn skins_are_original_and_have_stable_prices() {
         let all = skins();
-        assert_eq!(all.len(), 9);
+        assert_eq!(all.len(), 12);
         let styles = all.iter().map(|skin| skin.style).collect::<BTreeSet<_>>();
-        assert_eq!(styles, (1..=9).collect(), "each skin owns one distinct pattern");
+        assert_eq!(styles, (1..=12).collect(), "each skin owns one distinct pattern");
         assert!(all.iter().all(|skin| skin.cost_crowns == skin.cost_gems * CROWNS_PER_GEM));
         assert_eq!(
             skin_by_id("ember_vein").map(|skin| skin.cost_gems),
@@ -1151,6 +1156,14 @@ mod tests {
             skin_by_id("royal_lattice").map(|skin| skin.cost_gems),
             Some(1_500)
         );
+        for (id, gems, style) in [
+            (INTRO_SKIN_ID, 0, 10),
+            ("war_ravens", 750, 11),
+            ("heraldic_lions", 1_250, 12),
+        ] {
+            let skin = skin_by_id(id).unwrap();
+            assert_eq!((skin.cost_gems, skin.style), (gems, style));
+        }
         assert_eq!(skin_style_for_id(Some("royal_lattice")), 3);
         assert_eq!(skin_style_for_id(Some("missing")), 0);
         let mut owned = BTreeSet::new();

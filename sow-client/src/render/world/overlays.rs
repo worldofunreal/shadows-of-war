@@ -21,30 +21,9 @@ const BUILDING_CELEBRATION_OFFSETS: [[f32; 2]; 4] =
 
 #[inline]
 pub(crate) fn world_to_screen(world_x: f32, world_y: f32, input: &InputState, sf: f32) -> [f32; 2] {
-    world_to_screen_values(
-        world_x,
-        world_y,
-        input.camera_x,
-        input.camera_y,
-        input.camera_zoom,
-        sf,
-    )
-}
-
-#[inline]
-pub(super) fn world_to_screen_values(
-    world_x: f32,
-    world_y: f32,
-    camera_x: f32,
-    camera_y: f32,
-    camera_zoom: f32,
-    sf: f32,
-) -> [f32; 2] {
+    let [x, y] = input.world_to_screen([world_x, world_y]);
     let sf = sf.max(0.01);
-    [
-        (camera_x + world_x * camera_zoom) / sf,
-        (camera_y + world_y * camera_zoom) / sf,
-    ]
+    [x / sf, y / sf]
 }
 
 pub(crate) fn render_overlays(
@@ -366,6 +345,8 @@ fn render_buildings(
                 entry.3 = active_level;
             }
         }
+        ui.building_levels_seen
+            .retain(|tile_idx, _| tile_totals.contains_key(tile_idx));
         for (&tile_idx, &(total_level, owner_id, celeb_kind, celeb_level)) in tile_totals.iter() {
             if let Some(previous) = ui.building_levels_seen.insert(tile_idx, total_level)
                 && total_level > previous
@@ -396,10 +377,8 @@ fn render_buildings(
         && input.last_mouse_x >= 0.0
         && input.last_mouse_y >= 0.0)
         .then(|| {
-            (
-                (input.last_mouse_x as f32 - input.camera_x) / input.camera_zoom,
-                (input.last_mouse_y as f32 - input.camera_y) / input.camera_zoom,
-            )
+            let [x, y] = input.screen_to_world([input.last_mouse_x as f32, input.last_mouse_y as f32]);
+            (x, y)
         });
     let mut new_hovered_tile: Option<u32> = None;
     let reduced_motion = ui.app.settings_state.reduced_motion;
@@ -599,47 +578,265 @@ fn render_buildings(
             );
         }
     }
-    // Render buildings destroyed by an active nuke until the outward shockwave crosses
-    // their tile, then flash incandescent white-orange for 80ms as they vaporize.
+    // Render buildings destroyed by an active nuke or demolition through pre-wave seismic tremor,
+    // impact squash-stretch & thermal flash, ballistic UV shard shatter, and structural collapse.
     if dev.vfx_blasts {
-        for (building, world_x, world_y, flash_progress) in
-            ui.blast_scene.dying_buildings_for_render(now)
-        {
+        let mut destruction_vfx_budget = 72usize;
+        for dying in ui.blast_scene.dying_buildings_for_render(now) {
+            let building = dying.building;
             if dev.fog_of_war
                 && building.owner_id != my_id
                 && !sim.fog_visible.contains(building.tile_idx)
             {
                 continue;
             }
-            let center = world_to_screen(world_x, world_y, input, sf);
-            let marker_size = building_footprint_marker_size(building.kind, zoom_scaled, 0.0);
-            let level = building.level.max(1);
-            let mut sprite_size = building_sprite_size(marker_size, sf, level);
-            let half_width = sprite_size[0] * 0.5;
-            let half_height = sprite_size[1] * 0.5;
-            if center[0] + half_width < 0.0
-                || center[0] - half_width > screen_w
-                || center[1] + half_height < 0.0
-                || center[1] - half_height > screen_h
+            let center = world_to_screen(dying.world_x, dying.world_y, input, sf);
+            let min_marker = if building.owner_id == my_id && building.under_construction {
+                BUILDING_MIN_MARKER_SIZE
+            } else {
+                0.0
+            };
+            let marker_size = building_footprint_marker_size(building.kind, zoom_scaled, min_marker);
+            let level = building.active_level().max(1);
+            let base_size = building_sprite_size(marker_size, sf, level);
+            let margin_w = (base_size[0] / sf) * 1.1 + 18.0;
+            let margin_h = (base_size[1] / sf) * 1.1 + 18.0;
+            if center[0] + margin_w < 0.0
+                || center[0] - margin_w > screen_w
+                || center[1] + margin_h < 0.0
+                || center[1] - margin_h > screen_h
             {
                 continue;
             }
-            let tint = if let Some(ft) = flash_progress {
-                let swell = 1.0 + 0.25 * ft;
-                sprite_size = [sprite_size[0] * swell, sprite_size[1] * swell];
-                [1.0, 0.72 + 0.28 * (1.0 - ft), 0.35 * (1.0 - ft), 1.0 - ft]
-            } else if building.under_construction {
-                [1.0, 1.0, 1.0, 0.5]
-            } else {
-                [1.0, 1.0, 1.0, 1.0]
+            let Some(uv_rect) = crate::render::gpu::building_sprite_uv(building.kind, level) else {
+                continue;
             };
-            if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(building.kind, level) {
-                text.push_building_sprite(
-                    [center[0] * sf, center[1] * sf],
-                    sprite_size,
-                    uv_rect,
-                    tint,
-                );
+            let base_center = [center[0] * sf, center[1] * sf];
+            let extent_px = base_size[0].max(base_size[1]).max(12.0 * sf);
+            let phase_ang = dying.seed * std::f32::consts::TAU;
+
+            match dying.phase {
+                crate::render::world::blasts::DyingBuildingPhase::PreWave(pre_t) => {
+                    let base_alpha = if building.under_construction { 0.5 } else { 1.0 };
+                    let (jitter, tint) = if reduced_motion {
+                        ([0.0, 0.0], [1.0, 1.0, 1.0, base_alpha])
+                    } else {
+                        let ramp = pre_t * pre_t;
+                        let amp = (1.8 * sf * ramp).min(extent_px * 0.14);
+                        let jx = (pre_t * 68.0 + phase_ang).sin() * amp;
+                        let jy = (pre_t * 79.0 - phase_ang * 1.3).cos() * amp;
+                        (
+                            [jx, jy],
+                            [
+                                1.0 + 0.35 * ramp,
+                                1.0 - 0.08 * ramp,
+                                1.0 - 0.32 * ramp,
+                                base_alpha,
+                            ],
+                        )
+                    };
+                    let pre_center = [base_center[0] + jitter[0], base_center[1] + jitter[1]];
+                    text.push_building_sprite(
+                        pre_center,
+                        base_size,
+                        uv_rect,
+                        tint,
+                    );
+                    if building.kind == BuildingKind::MissileSilo {
+                        let marker_extent = marker_size[0].max(marker_size[1]);
+                        text.push_status_sprite(
+                            NameplateStatusSprite::Radiation,
+                            pre_center,
+                            (marker_extent * sf).max(9.0 * sf),
+                            [1.0, 0.78, 0.32, base_alpha],
+                        );
+                    }
+                }
+                crate::render::world::blasts::DyingBuildingPhase::Collapsing(ct) => {
+                    let dir = dying.blast_dir;
+                    let perp = [-dir[1], dir[0]];
+                    let is_strategic = matches!(
+                        building.kind,
+                        BuildingKind::City
+                            | BuildingKind::MissileSilo
+                            | BuildingKind::Port
+                            | BuildingKind::SAM
+                    );
+
+                    // 1. Tactical structural destruction indicator reticle & warning pulse.
+                    if !reduced_motion
+                        && ct < 0.72
+                        && destruction_vfx_budget >= 3
+                        && text.remaining_instance_capacity() >= 6
+                    {
+                        let rt = (ct / 0.72).clamp(0.0, 1.0);
+                        let r_ease = 1.0 - (1.0 - rt) * (1.0 - rt);
+                        let ring_fade = (1.0 - rt) * (1.0 - rt * 0.35);
+                        let ring_r = extent_px * (0.42 + 0.88 * r_ease);
+                        let ring_col = if is_strategic {
+                            [1.0, 0.28, 0.12, 0.90 * ring_fade]
+                        } else {
+                            [1.0, 0.56, 0.16, 0.82 * ring_fade]
+                        };
+                        text.push_ring(
+                            base_center,
+                            ring_r,
+                            ring_col,
+                            (2.2 * (1.0 - 0.45 * rt) * sf).max(1.0),
+                        );
+                        if ct < 0.44 {
+                            let cross_t = (ct / 0.44).clamp(0.0, 1.0);
+                            text.push_cross(
+                                base_center,
+                                extent_px * (0.32 + 0.36 * cross_t),
+                                [1.0, 0.90, 0.52, (1.0 - cross_t) * 0.88],
+                                (1.8 * sf).max(1.0),
+                            );
+                        }
+                        destruction_vfx_budget -= 3;
+                    }
+
+                    // 2. Impact squash-stretch (ct < 0.18) -> buckling structural collapse (ct >= 0.18).
+                    if ct < 0.18 {
+                        let u = (ct / 0.18).clamp(0.0, 1.0);
+                        let (sx, sy, lift) = if reduced_motion {
+                            (1.0 + 0.12 * u, 1.0 + 0.12 * u, 0.0)
+                        } else if u < 0.42 {
+                            let s = u / 0.42;
+                            (1.0 + 0.34 * s, 1.0 - 0.28 * s, 0.08 * extent_px * s)
+                        } else {
+                            let s = (u - 0.42) / 0.58;
+                            (
+                                1.34 - 0.46 * s,
+                                0.72 + 0.52 * s,
+                                (0.08 - 0.24 * s) * extent_px,
+                            )
+                        };
+                        let kick = if reduced_motion {
+                            0.0
+                        } else {
+                            extent_px * 0.22 * u
+                        };
+                        let pos = [
+                            base_center[0] + dir[0] * kick,
+                            base_center[1] + dir[1] * kick + lift,
+                        ];
+                        text.push_building_sprite(
+                            pos,
+                            [base_size[0] * sx, base_size[1] * sy],
+                            uv_rect,
+                            [1.45, 1.24 - 0.22 * u, 0.92 - 0.45 * u, 1.0],
+                        );
+                    } else {
+                        let p = ((ct - 0.18) / 0.82).clamp(0.0, 1.0);
+                        let p_ease = 1.0 - (1.0 - p) * (1.0 - p);
+                        let core_alpha = (1.0 - p * p).clamp(0.0, 1.0);
+
+                        // Buckling foundation pancake collapse + charring from molten orange to soot.
+                        let sx = if reduced_motion {
+                            1.0 - 0.25 * p
+                        } else {
+                            0.92 + 0.26 * p_ease
+                        };
+                        let sy = if reduced_motion {
+                            1.0 - 0.25 * p
+                        } else {
+                            1.18 * (1.0 - 0.70 * p * p)
+                        };
+                        let drift = if reduced_motion {
+                            0.0
+                        } else {
+                            extent_px * (0.22 + 0.26 * p_ease)
+                        };
+                        let sink = if reduced_motion {
+                            0.0
+                        } else {
+                            base_size[1] * 0.34 * (p * p)
+                        };
+                        let vibration = if reduced_motion {
+                            0.0
+                        } else {
+                            (p * 42.0 + phase_ang).sin() * (1.0 - p) * 1.4 * sf
+                        };
+                        let char_mix = (p * 1.35).clamp(0.0, 1.0);
+                        let core_tint = [
+                            1.25 * (1.0 - char_mix) + 0.15 * char_mix,
+                            0.44 * (1.0 - char_mix) + 0.12 * char_mix,
+                            0.10 * (1.0 - char_mix) + 0.10 * char_mix,
+                            core_alpha,
+                        ];
+                        text.push_building_sprite(
+                            [
+                                base_center[0] + dir[0] * drift + perp[0] * vibration,
+                                base_center[1] + dir[1] * drift + sink,
+                            ],
+                            [base_size[0] * sx, base_size[1] * sy],
+                            uv_rect,
+                            core_tint,
+                        );
+
+                        // 3. Ballistic UV-split structural shatter shards (zero extra textures/passes).
+                        if !reduced_motion
+                            && extent_px >= 13.0 * sf
+                            && destruction_vfx_budget >= 3
+                            && text.remaining_instance_capacity() >= 4
+                        {
+                            let [u0, v0, u1, v1] = uv_rect;
+                            let du = u1 - u0;
+                            let dv = v1 - v0;
+                            let shards: [([f32; 4], [f32; 2], f32, f32); 3] = [
+                                // Upper-left roof/spire shard
+                                ([0.0, 0.0, 0.55, 0.56], [-0.85, -0.55], 0.62, 0.44),
+                                // Upper-right wall/tower shard
+                                ([0.45, 0.0, 1.0, 0.56], [0.90, -0.45], 0.58, 0.52),
+                                // Center superstructure chunk
+                                ([0.16, 0.36, 0.84, 0.92], [0.15, 0.75], 0.52, 0.36),
+                            ];
+                            let shard_fade = (1.0 - p).powi(2);
+                            for (i, (sub, spread, vel_scale, loft_scale)) in
+                                shards.iter().enumerate()
+                            {
+                                let shard_uv = [
+                                    u0 + du * sub[0],
+                                    v0 + dv * sub[1],
+                                    u0 + du * sub[2],
+                                    v0 + dv * sub[3],
+                                ];
+                                let phase_sign = if (i as f32 + dying.seed * 7.0) as i32 % 2 == 0 {
+                                    1.0
+                                } else {
+                                    -1.0
+                                };
+                                let vx = dir[0] * vel_scale + perp[0] * spread[0] * 0.52 * phase_sign;
+                                let vy = dir[1] * vel_scale + perp[1] * spread[1] * 0.45;
+                                let travel = extent_px * 1.15 * p_ease;
+                                // Ballistic parabola: initial upward loft followed by gravity drop.
+                                let gravity_y =
+                                    extent_px * (-loft_scale * p + 0.95 * loft_scale * p * p);
+                                let shrink = (1.0 - 0.48 * p).max(0.25);
+                                let shard_w = base_size[0] * (sub[2] - sub[0]) * shrink;
+                                let shard_h = base_size[1] * (sub[3] - sub[1]) * shrink;
+                                let heat = (1.0 - p * 1.25).clamp(0.0, 1.0);
+                                let shard_tint = [
+                                    0.22 + 1.25 * heat,
+                                    0.16 + 0.68 * heat * heat,
+                                    0.14 + 0.25 * heat * heat,
+                                    shard_fade * 0.94,
+                                ];
+                                text.push_building_sprite(
+                                    [
+                                        base_center[0] + vx * travel,
+                                        base_center[1] + vy * travel + gravity_y,
+                                    ],
+                                    [shard_w, shard_h],
+                                    shard_uv,
+                                    shard_tint,
+                                );
+                            }
+                            destruction_vfx_budget -= 3;
+                        }
+                    }
+                }
             }
         }
     }
@@ -674,8 +871,7 @@ pub(crate) fn building_at_pointer(
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let pointer_x = x as f32 / sf;
     let pointer_y = y as f32 / sf;
-    let pointer_world_x = (x as f32 - input.camera_x) / input.camera_zoom;
-    let pointer_world_y = (y as f32 - input.camera_y) / input.camera_zoom;
+    let [pointer_world_x, pointer_world_y] = input.screen_to_world([x as f32, y as f32]);
     let mut closest: Option<(f32, u32)> = None;
 
     for building in buildings {
@@ -883,7 +1079,7 @@ fn render_building_selection_focus(
     let tile_x = menu.tile_idx % sim.map_w;
     let tile_y = menu.tile_idx / sim.map_w;
     let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
-    let geometry = placement_footprint_geometry(footprint, [input.camera_x, input.camera_y], zoom);
+    let geometry = placement_footprint_geometry(footprint, input);
     let anchor_center = geometry.center;
 
     let colors = placement_preview_colors(true, true);
@@ -992,21 +1188,18 @@ struct PlacementFootprintGeometry {
 
 fn placement_footprint_geometry(
     footprint: sow_core::building::BuildingFootprint,
-    camera: [f32; 2],
-    zoom: f32,
+    input: &InputState,
 ) -> PlacementFootprintGeometry {
-    let top_left = [
-        camera[0] + footprint.left as f32 * zoom,
-        camera[1] + footprint.top as f32 * zoom,
-    ];
-    let size = [
-        footprint.width as f32 * zoom,
-        footprint.height as f32 * zoom,
-    ];
+    let left = footprint.left as f32;
+    let top = footprint.top as f32;
+    let center_world = [left + footprint.width as f32 * 0.5, top + footprint.height as f32 * 0.5];
+    let center = input.world_to_screen(center_world);
+    let top_y = input.world_to_screen([center_world[0], top])[1];
+    let bottom_y = input.world_to_screen([center_world[0], top + footprint.height as f32])[1];
     PlacementFootprintGeometry {
-        top_left,
-        center: [top_left[0] + size[0] * 0.5, top_left[1] + size[1] * 0.5],
-        size,
+        top_left: [input.camera_x + left * input.camera_zoom, top_y],
+        center,
+        size: [footprint.width as f32 * input.camera_zoom, bottom_y - top_y],
     }
 }
 
@@ -1128,10 +1321,7 @@ fn render_placement_conflicts(
             let distance = tile_x.abs_diff(x).max(tile_y.abs_diff(y));
             let strength = 1.0 - 0.20 * distance as f32;
             let fill = [0.58, 0.045, 0.06, 0.36 * strength];
-            let top_left = [
-                input.camera_x + x as f32 * zoom,
-                input.camera_y + y as f32 * zoom,
-            ];
+            let top_left = input.world_to_screen([x as f32, y as f32]);
             if zoom >= 6.0 * sf {
                 text.push_rounded_rect(
                     [top_left[0] + zoom * 0.5, top_left[1] + zoom * 0.5],
@@ -1188,16 +1378,14 @@ fn render_building_placement_preview(
         kind,
         map.width,
         map.height,
-        [input.camera_x, input.camera_y],
-        [input.screen_w, input.screen_h],
-        zoom,
+        input,
     );
     let target_visible = visible_bounds.is_some_and(|(min_x, min_y, max_x, max_y)| {
         (min_x..=max_x).contains(&(tile_x as i32)) && (min_y..=max_y).contains(&(tile_y as i32))
     });
     let site_valid = site_legal && target_visible;
     let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
-    let geometry = placement_footprint_geometry(footprint, [input.camera_x, input.camera_y], zoom);
+    let geometry = placement_footprint_geometry(footprint, input);
     let center_px = geometry.center;
     let footprint_size_px = geometry.size;
     let footprint_top_left = geometry.top_left;

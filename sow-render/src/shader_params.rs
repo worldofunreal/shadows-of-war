@@ -55,6 +55,40 @@ const BLEND_OPTIONS: &[ParamOption] = &[
     },
 ];
 
+const SKIN_TONE_OPTIONS: &[ParamOption] = &[
+    ParamOption {
+        label: "Original",
+        value: 0.0,
+    },
+    ParamOption {
+        label: "Dark",
+        value: 1.0,
+    },
+    ParamOption {
+        label: "Light",
+        value: 2.0,
+    },
+];
+
+const SKIN_BLEND_OPTIONS: &[ParamOption] = &[
+    ParamOption {
+        label: "Original",
+        value: 0.0,
+    },
+    ParamOption {
+        label: "Normal",
+        value: 1.0,
+    },
+    ParamOption {
+        label: "Multiply",
+        value: 2.0,
+    },
+    ParamOption {
+        label: "Overlay",
+        value: 3.0,
+    },
+];
+
 macro_rules! number {
     ($id:literal, $label:literal, $section:literal, $default:expr, $min:expr, $max:expr, $step:expr, $unit:literal, $token:literal) => {
         ParamDef {
@@ -201,6 +235,9 @@ macro_rules! legacy_bool {
 }
 macro_rules! selection {
     ($id:literal, $label:literal, $section:literal, $default:expr, $options:expr) => {
+        selection!($id, $label, $section, $default, $options, None)
+    };
+    ($id:literal, $label:literal, $section:literal, $default:expr, $options:expr, $token:expr) => {
         ParamDef {
             id: $id,
             label: $label,
@@ -212,7 +249,7 @@ macro_rules! selection {
             step: 1.0,
             unit: "",
             alpha: false,
-            shader_token: None,
+            shader_token: $token,
             options: $options,
         }
     };
@@ -490,6 +527,7 @@ pub static PARAMS: &[ParamDef] = &[
         "World text",
         true
     ),
+    legacy_bool!("tabletop_view", "Inclined tabletop (local map preview)", "Lighting", false),
     legacy_bool!("vfx_world_buildings", "World buildings", "World text", true),
     legacy_bool!("vfx_bot_avatars", "Bot avatars", "World text", true),
     legacy_bool!("vfx_nameplate_names", "Nameplate names", "World text", true),
@@ -844,6 +882,33 @@ pub static PARAMS: &[ParamDef] = &[
         0.01,
         "×",
         "MAP_LOCAL_BORDER"
+    ),
+    selection!(
+        "territory.skin.tone",
+        "Pattern tone",
+        "Skin patterns",
+        0.0,
+        SKIN_TONE_OPTIONS,
+        Some("MAP_SKIN_TONE")
+    ),
+    number!(
+        "territory.skin.opacity",
+        "Pattern opacity",
+        "Skin patterns",
+        100.0,
+        0.0,
+        100.0,
+        1.0,
+        "%",
+        "MAP_SKIN_OPACITY"
+    ),
+    selection!(
+        "territory.skin.blend",
+        "Pattern blend",
+        "Skin patterns",
+        0.0,
+        SKIN_BLEND_OPTIONS,
+        Some("MAP_SKIN_BLEND")
     ),
     flag!(
         "territory.skin.stripe.enabled",

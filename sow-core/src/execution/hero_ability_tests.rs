@@ -4702,6 +4702,7 @@ fn redesigned_income_stops_when_its_condition_ends_and_matches_the_hud_rate() {
 #[test]
 fn redesigned_veleda_prizes_survive_other_shells_in_the_same_batch() {
     let mut e = arena(64, 32, Leader::of("veleda"), Some(Leader::of("cleopatra")));
+    let gold_before = e.state.player(1).unwrap().gold;
     e.add_fleet(WarpFleet::new(
         1,
         2,
@@ -4731,6 +4732,7 @@ fn redesigned_veleda_prizes_survive_other_shells_in_the_same_batch() {
     e.execute_projectiles();
     assert_eq!(e.fleets[0].owner_id, 1);
     assert_eq!(e.fleets[0].troops, 250.0);
+    assert_eq!(e.state.player(1).unwrap().gold, gold_before + 20.0);
     assert_eq!(e.fleets[0].warship.as_ref().unwrap().veterancy, 0);
     assert!(
         !e.state

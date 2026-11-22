@@ -229,6 +229,7 @@ impl SowApp {
                 force_fog_upload: true,
             },
             input: InputState {
+                tabletop: None,
                 camera_x,
                 camera_y,
                 camera_zoom,

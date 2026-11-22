@@ -202,8 +202,7 @@ impl Aim {
         let engine = sim.engine.as_ref()?;
         let map = &engine.state.map;
         let zoom = input.camera_zoom.max(0.01);
-        let x = (input.last_mouse_x as f32 - input.camera_x) / zoom;
-        let y = (input.last_mouse_y as f32 - input.camera_y) / zoom;
+        let [x, y] = input.screen_to_world([input.last_mouse_x as f32, input.last_mouse_y as f32]);
         if x < 0.0 || y < 0.0 || x >= map.width as f32 || y >= map.height as f32 {
             return None;
         }

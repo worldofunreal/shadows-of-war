@@ -243,6 +243,11 @@ impl SowEngine {
                 }
             }
             let captured = sunk && self.hero_warship_prize(owner_id, target_index);
+            if (sunk || captured)
+                && let Some(attacker) = self.state.player_mut(owner_id)
+            {
+                attacker.credit_gold(target_type.naval_bounty_gold());
+            }
             let health_after = self.fleets[target_index].troops;
             self.state.events.push(crate::game::GameEvent::NavalImpact {
                 owner_id,
@@ -417,11 +422,140 @@ fn naval_players_friendly(state: &crate::game::GameState, first_id: u16, second_
 #[cfg(test)]
 mod tests {
     use super::SowEngine;
-    use crate::game::{GameEvent, GamePhase, GameState, Projectile, ProjectileKind};
+    use crate::game::{GameEvent, GamePhase, GameState, Projectile, ProjectileKind, UnitType};
     use crate::game_config::GameConfig;
     use crate::map::MapTile;
     use crate::player::Player;
+    use crate::protocol::Team;
+    use crate::warp_fleet::WarpFleet;
     use crate::water_components::WaterComponents;
+
+    fn shell_test_engine(
+        target_type: UnitType,
+        target_owner: u16,
+        damage: f64,
+        shots: u64,
+    ) -> SowEngine {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 32, 32, config.clone());
+        state.phase = GamePhase::Playing;
+        state.register_player(Player::new_human(1, "Attacker".into(), [1.0; 3], &config));
+        state.register_player(Player::new_human(2, "Defender".into(), [1.0; 3], &config));
+        state.register_player(Player::new_human(
+            3,
+            "Second attacker".into(),
+            [1.0; 3],
+            &config,
+        ));
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let tile = 10 * 32 + 10;
+        engine.add_fleet(WarpFleet::new(
+            10,
+            target_owner,
+            1,
+            target_type,
+            target_type.max_health(),
+            (tile, tile),
+            Vec::new(),
+        ));
+        for id in 0..shots {
+            engine.projectiles.push(Projectile {
+                id: id + 1,
+                kind: ProjectileKind::Shell,
+                owner_id: 1,
+                src_tile: tile,
+                dst_tile: tile,
+                path: std::sync::Arc::new(vec![tile]),
+                path_cursor: 0,
+                steps_per_tick: 1,
+                active: true,
+                source_fleet_id: Some(20),
+                target_fleet_id: Some(10),
+                damage,
+                expires_at_tick: 50,
+            });
+        }
+        engine
+    }
+
+    #[test]
+    fn warship_bounties_are_paid_once_for_sunk_transports_and_warships() {
+        for (target_type, expected_gold) in
+            [(UnitType::TransportShip, 5.0), (UnitType::Warship, 20.0)]
+        {
+            let mut engine = shell_test_engine(target_type, 2, 1_000.0, 2);
+            let gold_before = engine.state.player(1).unwrap().gold;
+            let received_before = engine.state.player(1).unwrap().gold_received;
+
+            engine.execute_projectiles();
+
+            let attacker = engine.state.player(1).unwrap();
+            assert_eq!(attacker.gold, gold_before + expected_gold);
+            assert_eq!(attacker.gold_received, received_before + expected_gold);
+            assert_eq!(engine.fleets[0].troops, 0.0);
+        }
+    }
+
+    #[test]
+    fn naval_bounty_requires_a_lethal_hit_on_an_enemy() {
+        let mut engine = shell_test_engine(UnitType::Warship, 2, 100.0, 1);
+        let gold_before = engine.state.player(1).unwrap().gold;
+        engine.execute_projectiles();
+        assert_eq!(engine.state.player(1).unwrap().gold, gold_before);
+        assert_eq!(engine.fleets[0].troops, 900.0);
+
+        for relation in ["self", "allied", "teammate"] {
+            let target_owner = if relation == "self" { 1 } else { 2 };
+            let mut engine = shell_test_engine(UnitType::Warship, target_owner, 1_000.0, 1);
+            match relation {
+                "allied" => engine.state.player_mut(1).unwrap().alliances.push(2),
+                "teammate" => {
+                    engine.state.player_mut(1).unwrap().team = Some(Team::Blue);
+                    engine.state.player_mut(2).unwrap().team = Some(Team::Blue);
+                }
+                _ => {}
+            }
+            let gold_before = engine.state.player(1).unwrap().gold;
+            let health_before = engine.fleets[0].troops;
+
+            engine.execute_projectiles();
+
+            assert_eq!(engine.state.player(1).unwrap().gold, gold_before);
+            assert_eq!(engine.fleets[0].troops, health_before);
+        }
+    }
+
+    #[test]
+    fn final_lethal_shell_owner_receives_the_warship_bounty() {
+        let mut engine = shell_test_engine(UnitType::Warship, 2, 625.0, 1);
+        let tile = 10 * 32 + 10;
+        engine.projectiles.push(Projectile {
+            id: 2,
+            kind: ProjectileKind::Shell,
+            owner_id: 3,
+            src_tile: tile,
+            dst_tile: tile,
+            path: std::sync::Arc::new(vec![tile]),
+            path_cursor: 0,
+            steps_per_tick: 1,
+            active: true,
+            source_fleet_id: Some(30),
+            target_fleet_id: Some(10),
+            damage: 625.0,
+            expires_at_tick: 50,
+        });
+        let attacker_one_gold = engine.state.player(1).unwrap().gold;
+        let attacker_two_gold = engine.state.player(3).unwrap().gold;
+
+        engine.execute_projectiles();
+
+        assert_eq!(engine.state.player(1).unwrap().gold, attacker_one_gold);
+        assert_eq!(
+            engine.state.player(3).unwrap().gold,
+            attacker_two_gold + 20.0
+        );
+        assert_eq!(engine.fleets[0].troops, 0.0);
+    }
 
     #[test]
     fn nuke_territory_loss_rechecks_and_annexes_a_sealed_region() {

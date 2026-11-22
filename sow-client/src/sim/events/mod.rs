@@ -227,7 +227,10 @@ impl SowApp {
                 }
                 sow_core::game::GameEvent::NavalImpact {
                     owner_id,
+                    target_owner,
                     tile,
+                    target_type,
+                    troops_lost,
                     sunk,
                     ..
                 } => {
@@ -258,6 +261,94 @@ impl SowApp {
                             cue_color: None,
                             start_time: now_instant,
                         });
+                    if sunk && crate::theme::dev_config::DevConfig::with(|dev| dev.vfx_blasts) {
+                        let victim_rgb = snap
+                            .players
+                            .iter()
+                            .find(|player| player.id == target_owner)
+                            .map(|player| {
+                                sow_core::player::player_territory_rgb(
+                                    player.player_type,
+                                    player.team,
+                                    player.color,
+                                    player.is_campaign_faction,
+                                )
+                            })
+                            .unwrap_or(color);
+                        self.ui.blast_scene.spawn_entity_death(
+                            x as f32 + 0.5,
+                            y as f32 + 0.5,
+                            tile,
+                            owner_id,
+                            victim_rgb,
+                            3.0,
+                            now_instant,
+                        );
+                    }
+                    if my_id != 0
+                        && owner_id == my_id
+                        && target_type == sow_core::game::UnitType::TransportShip
+                        && sunk
+                    {
+                        let target_player =
+                            snap.players.iter().find(|player| player.id == target_owner);
+                        let target = target_player
+                            .map(|player| {
+                                sow_core::player::display_name(
+                                    player.id,
+                                    &player.name,
+                                    player.player_type,
+                                )
+                            })
+                            .unwrap_or_else(|| format!("Player {target_owner}"));
+                        let color = target_player
+                            .map(crate::render::world::nameplates::player_color)
+                            .unwrap_or([0.85, 0.85, 0.85, 1.0]);
+                        let avatar = target_player
+                            .map(sow_core::player::avatar_identity)
+                            .unwrap_or(sow_core::player::AvatarIdentity::Fallback);
+                        crate::app::DeathNameplateAnimation::enqueue(
+                            &mut self.ui.death_nameplates,
+                            crate::app::DeathNameplateAnimation {
+                                world_x: x as f32 + 0.5,
+                                world_y: y as f32 + 0.5,
+                                curve_direction: if target_owner % 2 == 0 { 1.0 } else { -1.0 },
+                                start_time: now_instant,
+                                by_nuke: false,
+                                name: target,
+                                color,
+                                avatar,
+                                casualties: Some(format!(
+                                    "-{}",
+                                    crate::utils::format_number(troops_lost)
+                                )),
+                                reward: Some(crate::app::DeathNameplateReward {
+                                    amount: format!(
+                                        "+{}",
+                                        crate::utils::format_number(
+                                            target_type.naval_bounty_gold()
+                                        )
+                                    ),
+                                    is_assist: false,
+                                }),
+                                prepared_name: sow_render::text::PreparedText::default(),
+                                prepared_casualties: None,
+                                prepared_reward: None,
+                                text_style_key: None,
+                            },
+                        );
+                        let leader_gender = snap
+                            .players
+                            .iter()
+                            .find(|player| player.id == my_id)
+                            .and_then(|player| player.leader.character().gender);
+                        self.record_combat_kill_feedback(
+                            x as f32 + 0.5,
+                            y as f32 + 0.5,
+                            leader_gender,
+                            now_instant,
+                        );
+                    }
                     self.sfx.play_combat(
                         now_instant,
                         if sunk {
@@ -555,4 +646,3 @@ impl SowApp {
         turn_defeats
     }
 }
-

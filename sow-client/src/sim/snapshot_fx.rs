@@ -23,10 +23,19 @@ impl SowApp {
                 .iter()
                 .map(|attack| (attack.id, attack.troops))
                 .collect();
-            let old_buildings: HashMap<u64, (u16, bool)> = existing
+            let mut old_buildings: HashMap<u64, (u16, bool, u8)> = existing
                 .buildings
                 .iter()
-                .map(|building| (building.id, (building.owner_id, building.under_construction)))
+                .map(|building| {
+                    (
+                        building.id,
+                        (
+                            building.owner_id,
+                            building.under_construction,
+                            building.active_level(),
+                        ),
+                    )
+                })
                 .collect();
             let old_attackers: HashSet<u16> = existing
                 .attacks
@@ -316,8 +325,14 @@ impl SowApp {
             // Play completion feedback for local structures and detect captured enemy structures in regular games.
             let mut best_captured: Option<(sow_core::game::BuildingKind, u32)> = None;
             let map_w = self.sim.map_w.max(1);
+            let vfx_blasts = crate::theme::dev_config::DevConfig::with(|dev| dev.vfx_blasts);
+            let allow_demolition_vfx = vfx_blasts
+                && existing.phase == sow_core::game::GamePhase::Playing
+                && !self.ui.app.settings_state.reduced_motion;
             for b_new in &snap.buildings {
-                if let Some(&(old_owner, old_under_construction)) = old_buildings.get(&b_new.id) {
+                if let Some((old_owner, old_under_construction, old_active_level)) =
+                    old_buildings.remove(&b_new.id)
+                {
                     // ponytail: only play building completion sound for the local player
                     if old_under_construction
                         && !b_new.under_construction
@@ -331,6 +346,11 @@ impl SowApp {
                             crate::building_sound_kind(b_new.kind),
                             self.spatial_sound_params(wx, wy),
                         );
+                    }
+                    if allow_demolition_vfx && b_new.active_level() < old_active_level {
+                        self.ui
+                            .blast_scene
+                            .spawn_building_demolition(b_new, self.sim.map_w, now);
                     }
                     if !self.sim.config.tutorial
                         && my_id != 0
@@ -365,18 +385,41 @@ impl SowApp {
                     .play_cascade(now, step, self.spatial_sound_params(wx, wy));
             }
 
-            if self.ui.blast_scene.has_recent_detonations() {
-                let surviving_ids: HashSet<u64> =
-                    snap.buildings.iter().map(|building| building.id).collect();
-                let vanished: Vec<_> = existing
-                    .buildings
-                    .iter()
-                    .filter(|building| !surviving_ids.contains(&building.id))
-                    .cloned()
-                    .collect();
+            if !old_buildings.is_empty()
+                && (self.ui.blast_scene.has_recent_detonations() || allow_demolition_vfx)
+            {
+                let mut vanished = Vec::with_capacity(old_buildings.len());
+                for building in &existing.buildings {
+                    if !old_buildings.contains_key(&building.id) {
+                        continue;
+                    }
+                    if building.kind != sow_core::game::BuildingKind::City
+                        && snap.buildings.iter().any(|surviving| {
+                            surviving.kind == sow_core::game::BuildingKind::City
+                                && surviving.tile_idx == building.tile_idx
+                        })
+                    {
+                        if allow_demolition_vfx && !self.ui.blast_scene.has_recent_detonations() {
+                            self.ui.blast_scene.spawn_building_demolition(
+                                building,
+                                self.sim.map_w,
+                                now,
+                            );
+                        }
+                        continue;
+                    }
+                    vanished.push(building.clone());
+                }
+                self.ui.blast_scene.register_dying_buildings(
+                    &vanished,
+                    self.sim.map_w,
+                    now,
+                    allow_demolition_vfx,
+                );
+            } else if self.ui.blast_scene.has_recent_detonations() {
                 self.ui
                     .blast_scene
-                    .register_dying_buildings(&vanished, self.sim.map_w);
+                    .register_dying_buildings(&[], self.sim.map_w, now, false);
             }
 
             if !existing.dirty_tiles.is_empty() {

@@ -212,7 +212,7 @@
       <label for="source">Map source</label>
       <select id="source">
         <option value="image" selected>Map image (fast, works offline)</option>
-        <option value="osm">OpenStreetMap (detailed coastlines and rivers, slow)</option>
+        <option value="osm">OpenStreetMap (detailed coastlines and rivers; coastal areas only)</option>
       </select>
       <label for="size">Size (longest side in tiles)</label>
       <select id="size">
@@ -242,7 +242,7 @@
         <legend>OpenStreetMap water</legend>
         <div class="hint">Set a minimum of 0 to keep all lakes or islands. Only changes on Generate locally.</div>
         <label class="check"><input id="refresh-osm-cache" type="checkbox" /> Refresh downloaded OSM data</label>
-        <div class="hint">Data is saved in target/osm_cache/overpass_v2 and reused for the same OSM area across map names. Size and water settings do not trigger another download.</div>
+        <div class="hint">Coastlines, inland water and place names are saved in target/osm_cache/overpass_v2. The same OSM area reuses them across map names; size and water filters do not redownload them.</div>
         <label for="osm-min-lake">Smallest lake kept (tiles)</label>
         <input id="osm-min-lake" type="number" min="0" max="1000000" step="1" value="0" />
         <label for="osm-min-island-tiles">Smallest island kept (final map tiles)</label>

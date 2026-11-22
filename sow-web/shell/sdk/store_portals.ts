@@ -919,7 +919,7 @@
             if (identityRetryTimer) clearTimeout(identityRetryTimer);
             identityRetryTimer = null;
         }
-        emitAuthStateChange();
+        emitAuthStateChange(status === "ready");
     });
 
     function isSowIdentityHost() {
@@ -990,7 +990,7 @@
         if (window.SOW_IDENTITY_SESSION_STATUS === "retrying" && !(error && error.sessionRetryScheduled)) {
             scheduleIdentitySessionRetry();
         }
-        emitAuthStateChange();
+        emitAuthStateChange(false);
         throw error;
     }
 
@@ -1003,7 +1003,6 @@
         }
         window.sowAuth.setSession(data.session_token, data.account, data.refresh_token, data.expires_at);
         window.SOW_IDENTITY_SESSION_STATUS = "ready";
-        emitAuthStateChange();
         return readIdentitySession();
     }
 
@@ -1023,17 +1022,19 @@
                         error.status = 401;
                         throw error;
                     }
-                    await auth.ensureSession();
+                    await auth.ensureSession(identityProfileRefreshAttempted);
                 } else {
                     await auth.startAnonymous();
                     await auth.ensureSession();
                 }
                 if (generation !== identityRecoveryGeneration) return readIdentitySession();
-                window.SOW_IDENTITY_SESSION_STATUS = "ready";
+                if (window.SOW_IDENTITY_SESSION_STATUS !== "ready") {
+                    window.SOW_IDENTITY_SESSION_STATUS = "ready";
+                    emitAuthStateChange();
+                }
                 identityRetryDelay = 1000;
                 if (identityRetryTimer) clearTimeout(identityRetryTimer);
                 identityRetryTimer = null;
-                emitAuthStateChange();
                 return readIdentitySession();
             })
             .catch(function (error) {
@@ -1055,8 +1056,10 @@
         if (identityProfileRefreshAttempted) {
             const error = new Error("SOW identity rejected the profile retry; sign in again.");
             error.status = 401;
-            window.SOW_IDENTITY_SESSION_STATUS = "reauthentication_required";
-            emitAuthStateChange();
+            if (window.SOW_IDENTITY_SESSION_STATUS !== "reauthentication_required") {
+                window.SOW_IDENTITY_SESSION_STATUS = "reauthentication_required";
+                emitAuthStateChange(false);
+            }
             return Promise.reject(error);
         }
         identityProfileRefreshAttempted = true;
@@ -1066,11 +1069,13 @@
             .then(function (auth) { return auth.ensureSession(true); })
             .then(function () {
                 if (generation !== identityRecoveryGeneration) return readIdentitySession();
-                window.SOW_IDENTITY_SESSION_STATUS = "ready";
+                if (window.SOW_IDENTITY_SESSION_STATUS !== "ready") {
+                    window.SOW_IDENTITY_SESSION_STATUS = "ready";
+                    emitAuthStateChange();
+                }
                 identityRetryDelay = 1000;
                 if (identityRetryTimer) clearTimeout(identityRetryTimer);
                 identityRetryTimer = null;
-                emitAuthStateChange();
                 return readIdentitySession();
             })
             .catch(function (error) {
@@ -1137,8 +1142,8 @@
         });
     }
 
-    function emitAuthStateChange() {
-        window.SOW_AUTH_CHANGED = true;
+    function emitAuthStateChange(refreshProfile = true) {
+        if (refreshProfile) window.SOW_AUTH_CHANGED = true;
         refreshIdentityAccount();
         try {
             window.dispatchEvent(

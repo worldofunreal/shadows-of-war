@@ -660,14 +660,23 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             focusBefore.focus({ preventScroll: true });
         focusBefore = null;
     }
+    function stepHasContinueAction(step: CampaignRecord, line: CampaignRecord): boolean {
+        if (step.type === "end") return true;
+        if (step.type !== "scene") return false;
+        if (["dialogue", "chapter", "celebration"].includes(step.presentation || "")) return true;
+        if (line.title_key || step.title_key || line.body_key || step.body_key || step.lines)
+            return true;
+        return step.pause_game !== true;
+    }
     function focusAction() {
         if (!model) return;
+        const line = model.line || model.step;
         const target =
             model.step.type === "choice"
                 ? choices.querySelector<HTMLButtonElement>("button")
-                : model.step.pause_game
-                  ? dialog
-                  : continueButton;
+                : stepHasContinueAction(model.step, line)
+                  ? continueButton
+                  : dialog;
         (target || dialog).focus({ preventScroll: true });
     }
     function render(next: CampaignMachineView | null, context: CampaignRecord | null = null) {
@@ -698,7 +707,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         preparePortraits(model.definition);
         const step = model.step,
             line = model.line || step;
-        footer.hidden = step.type === "choice" || step.pause_game === true;
+        footer.hidden = step.type === "choice" || !stepHasContinueAction(step, line);
         const beatKey = JSON.stringify([step.id, model.state && model.state.line]);
         const beatChanged = Boolean(lastBeatKey && beatKey !== lastBeatKey);
         lastBeatKey = beatKey;
@@ -1239,8 +1248,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         } else if (
             (event.key === "Enter" || event.key === " ") &&
             doc.activeElement === dialog &&
-            model.step.type !== "choice" &&
-            !model.step.pause_game
+            !footer.hidden
         ) {
             event.preventDefault();
             continueButton.click();

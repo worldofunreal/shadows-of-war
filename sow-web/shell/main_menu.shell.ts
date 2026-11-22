@@ -1,3 +1,4 @@
+import { skinName } from "./main_menu.skins.ts";
 import { formatCompactNumber } from "./number-format.ts";
 import {
     avatarBackgroundCss,
@@ -2795,6 +2796,50 @@ function runChoreographedStage(config: ChoreographedStageOptions) {
     frameId = requestAnimationFrame(stepFrame);
 }
 
+function offerUnlockedSkin(receipts: MenuRewardReceipt[], done: () => void): boolean {
+    const skin = menuUi.state?.store?.skins?.find((item) =>
+        item.owned && receipts.some((receipt) => receipt.unlocked_skin === item.id),
+    );
+    if (!skin || !menuUi.state || menuUi.state.selected_skin === skin.id) return false;
+
+    const layer = document.createElement("div");
+    const skinId = skin.id;
+    const label = skinName(skin);
+    layer.dataset.skinReward = skinId;
+    layer.className = "sow-menu__overlay sow-menu__reward-double";
+    layer.innerHTML =
+        "<section class='sow-menu__modal' role='dialog' aria-modal='true' aria-label='" + esc(label) +
+        "'><h2>" + esc(label) + "</h2><div class='sow-store__skin-art'><img src='" +
+        esc(asset(skin.asset_path)) + "' alt='' width='96' height='96'></div>" +
+        "<div class='sow-menu__reward-double-actions'>" +
+        "<button class='sow-menu__secondary' type='button' data-skin-continue>" +
+        esc(SOW_t("endgame.reward_continue")) +
+        "</button><button class='sow-menu__secondary' type='button' data-skin-equip>" +
+        esc(SOW_t("store.equip")) + "</button></div></section>";
+    layer._shell = root.querySelector<HTMLElement>(".sow-menu__shell");
+    layer._shellWasInert = Boolean(layer._shell?.inert);
+    layer._restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (layer._shell) layer._shell.inert = true;
+    root.appendChild(layer);
+    activeRewardStage = layer;
+
+    function close(equip: boolean) {
+        if (equip) send("equip_skin", { skin_id: skinId });
+        done();
+    }
+    layer.querySelector("[data-skin-continue]")?.addEventListener("click", () => close(false));
+    const equip = layer.querySelector<HTMLButtonElement>("[data-skin-equip]");
+    equip?.addEventListener("click", () => close(true));
+    layer.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            event.stopPropagation();
+            close(false);
+        }
+    });
+    equip?.focus({ preventScroll: true });
+    return true;
+}
+
 function runRewardPresentation(receipts: MenuRewardReceipt[]) {
     if (rewardAnimationRunning) return;
     rewardAnimationRunning = true;
@@ -2900,17 +2945,20 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
         return stage.kind === "leader" || stage.kind === "achievement" || stage.amount > 0;
     });
 
-    function finish(shown: boolean) {
+    function finish(shown: boolean, skinPresented = false) {
         if (token !== rewardAnimationToken || !menuUi.state || menuUi.state.account_id !== accountId) return;
+        writeProgression(progressionFromState());
+        if (shown && !skinPresented) {
+            removeRewardStage();
+            if (offerUnlockedSkin(receipts, () => finish(true, true))) return;
+        }
         rewardAnimationToken += 1;
         rewardAnimationRunning = false;
         removeRewardStage();
         if (!shown) {
-            writeProgression(progressionFromState());
             if (document.visibilityState === "visible") maybePresentRewards();
             return;
         }
-        writeProgression(progressionFromState());
         ids.forEach(function (id) {
             rewardAnimationShown.add(id);
         });
@@ -3539,7 +3587,10 @@ function updateDynamic() {
     if (root.hidden) return;
     if (menuUi.storeOpen && typeof loadStoreCatalog === "function") loadStoreCatalog();
     ensureProgressionDisplay();
-    if (reducedRewardMotion() && (rewardAnimationRunning || progressionAnimationTarget)) {
+    if (
+        reducedRewardMotion() &&
+        (progressionAnimationTarget || (rewardAnimationRunning && !activeRewardStage?.dataset.skinReward))
+    ) {
         cancelRewardAnimation();
         writeProgression(progressionFromState());
     }
@@ -3755,6 +3806,9 @@ root.addEventListener("click", function (event) {
         menuUi.campaignOpen = true;
         if (target.dataset.sagaId) {
             menuUi.selectedCampaignSaga = target.dataset.sagaId;
+        }
+        if (target.dataset.episodeId) {
+            menuUi.selectedCampaignEpisode = target.dataset.episodeId;
         }
         render();
         updateHeroBackdrop("campaign");
@@ -4352,17 +4406,6 @@ root.addEventListener("click", function (event) {
         if (purchaseOfferId) openOfferPurchase(purchaseOfferId, target.dataset.currency);
         return;
     }
-    if (command === "open_skin_picker") {
-        menuUi.skinPickerOpen = true;
-        loadStoreCatalog();
-        render();
-        return;
-    }
-    if (command === "close_skin_picker") {
-        menuUi.skinPickerOpen = false;
-        render();
-        return;
-    }
     if (command === "confirm_purchase") {
         if (!menuUi.purchaseModal || menuUi.purchaseModal.submitted) return;
         menuUi.purchaseModal.submitted = true;
@@ -4405,20 +4448,28 @@ root.addEventListener("click", function (event) {
         render();
         return;
     }
-    if (command === "unlock_skin" || command === "equip_skin") {
+    if (command === "unlock_skin") {
         const skinId = target.dataset.skinId;
-        if (skinId && !(menuUi.state && menuUi.state.store_busy)) {
-            send(command, { skin_id: skinId });
-        }
-        return;
-    }
-    if (command === "unequip_skin") {
-        if (!(menuUi.state && menuUi.state.store_busy)) {
-            send("equip_skin", { skin_id: "" });
-        }
+        if (skinId && !menuUi.state?.store_busy) send("unlock_skin", { skin_id: skinId });
         return;
     }
     /* POKI_SHARED_STORE_UNLOCK_END */
+    if (command === "open_skin_picker") {
+        menuUi.skinPickerOpen = true;
+        loadStoreCatalog();
+        render();
+        return;
+    }
+    if (command === "close_skin_picker") {
+        menuUi.skinPickerOpen = false;
+        render();
+        return;
+    }
+    if (command === "equip_skin" || command === "unequip_skin") {
+        const skinId = command === "unequip_skin" ? "" : target.dataset.skinId;
+        if (skinId !== undefined && !menuUi.state?.store_busy) send("equip_skin", { skin_id: skinId });
+        return;
+    }
     if (command === "set_session_mode") {
         menuUi.createOffline = target.dataset.mode === "offline";
         render();

@@ -961,6 +961,7 @@ export function renderKey(): string {
                 receipt.crowns,
                 receipt.laurels,
                 receipt.unlocked_leaders,
+                receipt.unlocked_skin,
                 receipt.unlocked_achievements,
                 receipt.goal_advances,
                 receipt.created_at,

@@ -229,6 +229,16 @@ impl MoverRenderer {
         }
     }
 
+    pub fn project_tabletop(&mut self, tabletop: &crate::map_renderer::Tabletop) {
+        for sprite in &mut self.sprite_upload {
+            sprite.world_pos = tabletop.project(sprite.world_pos);
+        }
+        for trail in &mut self.trail_upload {
+            trail.p0 = tabletop.project(trail.p0);
+            trail.p1 = tabletop.project(trail.p1);
+        }
+    }
+
     pub fn draw(
         &mut self,
         encoder: &mut gpu::CommandEncoder,

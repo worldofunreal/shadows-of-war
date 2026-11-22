@@ -12,9 +12,10 @@ pub const BLAST_KIND_BUILDING_POP: f32 = 3.0;
 pub const BLAST_KIND_NUKE_TELEGRAPH: f32 = 4.0;
 pub const BLAST_KIND_NUKE_RETICLE: f32 = 5.0;
 pub const BLAST_KIND_NUKE_LAUNCH: f32 = 6.0;
-pub const BLAST_KIND_THERMAL_GLINT: f32 = 9.0;
-pub const BLAST_KIND_SALVO_BEACON: f32 = 8.0;
 pub const BLAST_KIND_MIRV_SPLIT: f32 = 7.0;
+pub const BLAST_KIND_SALVO_BEACON: f32 = 8.0;
+pub const BLAST_KIND_THERMAL_GLINT: f32 = 9.0;
+pub const BLAST_KIND_ENTITY_DEATH: f32 = 10.0;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -147,6 +148,12 @@ impl BlastRenderer {
         !self.ground_upload.is_empty()
     }
 
+    pub fn project_tabletop(&mut self, tabletop: &crate::map_renderer::Tabletop) {
+        for instance in self.ground_upload.iter_mut().chain(&mut self.air_upload) {
+            instance.world_pos = tabletop.project(instance.world_pos);
+        }
+    }
+
     pub fn has_air(&self) -> bool {
         !self.air_upload.is_empty()
     }
@@ -250,5 +257,30 @@ mod tests {
     fn blast_gpu_structs_match_expected_alignment() {
         assert_eq!(std::mem::size_of::<BlastGlobals>(), 32);
         assert_eq!(std::mem::size_of::<BlastInstanceGpu>(), 40);
+        assert_eq!(BLAST_KIND_ENTITY_DEATH, 10.0);
+        if let Ok(context) = unsafe {
+            gpu::Context::init(gpu::ContextDesc {
+                presentation: false,
+                ..Default::default()
+            })
+        } {
+            let shader = context.create_shader(gpu::ShaderDesc {
+                source: include_str!("shaders/blast.wgsl"),
+                naga_module: None,
+            });
+            assert_eq!(
+                std::mem::size_of::<BlastGlobals>(),
+                shader.get_struct_size("BlastGlobals") as usize,
+            );
+            for format in [
+                gpu::TextureFormat::Rgba8UnormSrgb,
+                gpu::TextureFormat::Rgba8Unorm,
+            ] {
+                let mut renderer = BlastRenderer::new(&context, format);
+                context.destroy_render_pipeline(&mut renderer.pipeline);
+                context.destroy_buffer(renderer.ground_buffer);
+                context.destroy_buffer(renderer.air_buffer);
+            }
+        }
     }
 }

@@ -1144,10 +1144,17 @@ fn site_media_ready(out: &Path) -> bool {
 /// used by the shell, the WASM client and the CDN. Unknown art fails the build so a
 /// dropped file can never sit unused or unpublished.
 fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Result<()> {
+    let building_sources = root.join("assets/art/buildings");
     for entry in walkdir::WalkDir::new(root.join("assets")) {
         let entry = entry?;
         let ext = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or_default();
-        if entry.file_type().is_file() && ["png", "jpg", "jpeg"].contains(&ext.to_ascii_lowercase().as_str()) {
+        let packed_building_png = entry.file_type().is_file()
+            && ext.eq_ignore_ascii_case("png")
+            && entry.path().parent() == Some(building_sources.as_path());
+        if entry.file_type().is_file()
+            && ["png", "jpg", "jpeg"].contains(&ext.to_ascii_lowercase().as_str())
+            && !packed_building_png
+        {
             bail!("source raster must be WebP: {}", entry.path().display());
         }
     }
@@ -5077,6 +5084,7 @@ fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
         || path == paths.root.join("assets/maps/world/map.bin.br")
         || path == paths.root.join("assets/maps/catalog.bin")
         || path == paths.root.join("assets/guides/menu.triggers.json")
+        || path == paths.root.join("sow-render/src/map_renderer/territory_skins.r8")
     {
         return true;
     }
