@@ -434,6 +434,141 @@
 
       <!-- SOW_SITE_TRAILER -->
 
+      <section class="landing-section ranked-leagues" id="ranked">
+        <div class="container">
+          <header class="section-head">
+            <p class="eyebrow" data-i18n="site.ranked_eyebrow">Ranked 1v1</p>
+            <h2>
+              <span data-i18n="site.ranked_heading">From stone</span>
+              <em data-i18n="site.ranked_heading_em">to empire.</em>
+            </h2>
+            <p data-i18n="site.ranked_summary">
+              Climb ten leagues from 0 to 10,000 points across eight cultural eras.
+            </p>
+          </header>
+
+          <article class="ranked-stage" data-ranked-stage data-culture="grandmaster" data-badge="grandmaster">
+            <div class="ranked-stage-pattern" aria-hidden="true"></div>
+            <div class="ranked-stage-emblem-wrap">
+              <div class="ranked-stage-glow" aria-hidden="true"></div>
+              <div
+                class="ranked-stage-badge"
+                data-ranked-stage-badge
+                role="img"
+                aria-label="Deity"
+              ></div>
+            </div>
+            <div class="ranked-stage-copy">
+              <div class="ranked-stage-meta">
+                <span class="ranked-stage-points" data-ranked-stage-range>9,000 – 10,000</span>
+                <span class="ranked-stage-rule" data-ranked-stage-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+              </div>
+              <h3 class="ranked-stage-title" data-ranked-stage-title data-i18n="ranked.tier_deity">Deity</h3>
+              <p class="ranked-stage-culture" data-ranked-stage-culture data-i18n="site.ranked_culture_grandmaster">Grandmaster · Imperial Dragon</p>
+              <p class="ranked-stage-lore" data-ranked-stage-lore data-i18n="site.ranked_lore_grandmaster">
+                Crown, golden clouds and dragon fire. Nothing stands above the emperor.
+              </p>
+              <div class="ranked-stage-progress" aria-hidden="true">
+                <div class="ranked-stage-track">
+                  <i data-ranked-stage-fill style="transform: scaleX(1)"></i>
+                </div>
+                <div class="ranked-stage-scale">
+                  <span>0</span>
+                  <span>5,000</span>
+                  <span>10,000</span>
+                </div>
+              </div>
+              <div class="ranked-stage-actions">
+                <a class="button ranked-stage-cta" href="/play/" data-i18n="site.ranked_play_cta">Play Ranked 1v1</a>
+              </div>
+            </div>
+          </article>
+
+          <div class="ranked-rail" role="tablist" aria-label="Ranked leagues" data-ranked-rail>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="nomad" data-culture="unranked" data-badge="unranked" data-range="0 – 999" data-fraction="0.08" data-safe="true">
+              <i class="ranked-rail-sprite" data-badge="unranked" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_nomad">Nomad</strong>
+              <small>0</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_unranked">Unranked · Raw Stone</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_unranked">Unpolished stone with no banner yet. Everything begins here.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+            </button>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="chieftain" data-culture="bronze" data-badge="bronze" data-range="1,000 – 1,999" data-fraction="0.18" data-safe="true">
+              <i class="ranked-rail-sprite" data-badge="bronze" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_chieftain">Chieftain</strong>
+              <small>1,000</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_bronze">Bronze · Egyptian Desert</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_bronze">Survive the scorching desert and carve your first monument in bronze.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+            </button>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="commander" data-culture="silver" data-badge="silver" data-range="2,000 – 2,999" data-fraction="0.28" data-safe="true">
+              <i class="ranked-rail-sprite" data-badge="silver" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_commander">Commander</strong>
+              <small>2,000</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_silver">Silver · Japanese Sakura</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_silver">Discipline, calm and precision. Steel blooms under cherry-blossom pressure.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+            </button>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="governor" data-culture="silver" data-badge="silver" data-range="3,000 – 3,999" data-fraction="0.38" data-safe="true">
+              <i class="ranked-rail-sprite" data-badge="silver" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_governor">Governor</strong>
+              <small>3,000</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_silver">Silver · Japanese Sakura</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_silver">Discipline, calm and precision. Steel blooms under cherry-blossom pressure.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+            </button>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="king" data-culture="gold" data-badge="gold" data-range="4,000 – 4,999" data-fraction="0.48" data-safe="true">
+              <i class="ranked-rail-sprite" data-badge="gold" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_king">King</strong>
+              <small>4,000</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_gold">Gold · Aztec Sun</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_gold">Sacred gold of the Mexica sun. You become the center every rival orbits.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+            </button>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="emperor" data-culture="gold" data-badge="gold" data-range="5,000 – 5,999" data-fraction="0.58" data-safe="false">
+              <i class="ranked-rail-sprite" data-badge="gold" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_emperor">Emperor</strong>
+              <small>5,000</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_gold">Gold · Aztec Sun</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_gold">Sacred gold of the Mexica sun. You become the center every rival orbits.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+            </button>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="sovereign" data-culture="platinum" data-badge="platinum" data-range="6,000 – 6,999" data-fraction="0.68" data-safe="false">
+              <i class="ranked-rail-sprite" data-badge="platinum" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_sovereign">Sovereign</strong>
+              <small>6,000</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_platinum">Platinum · Nordic Ice</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_platinum">Forged by fjords and northern storms. Winter only hardened your resolve.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+            </button>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="overlord" data-culture="diamond" data-badge="diamond" data-range="7,000 – 7,999" data-fraction="0.78" data-safe="false">
+              <i class="ranked-rail-sprite" data-badge="diamond" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_overlord">Overlord</strong>
+              <small>7,000</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_diamond">Diamond · Cyber Neon</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_diamond">Beyond stone and steel—you command pure speed, chrome and light.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+            </button>
+            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="immortal" data-culture="master" data-badge="master" data-range="8,000 – 8,999" data-fraction="0.88" data-safe="false">
+              <i class="ranked-rail-sprite" data-badge="master" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_immortal">Immortal</strong>
+              <small>8,000</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_master">Master · Arcane Citadel</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_master">Royal violet and ancient runes. You no longer climb ranks—you write legend.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+            </button>
+            <button type="button" class="ranked-rail-btn is-active" role="tab" aria-selected="true" data-ranked-pick data-tier="deity" data-culture="grandmaster" data-badge="grandmaster" data-range="9,000 – 10,000" data-fraction="1" data-safe="false">
+              <i class="ranked-rail-sprite" data-badge="grandmaster" aria-hidden="true"></i>
+              <strong data-ranked-pick-title data-i18n="ranked.tier_deity">Deity</strong>
+              <small>9,000+</small>
+              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_grandmaster">Grandmaster · Imperial Dragon</span>
+              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_grandmaster">Crown, golden clouds and dragon fire. Nothing stands above the emperor.</span>
+              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section class="landing-section closing" id="play">
         <picture class="closing-art" aria-hidden="true"
           ><source media="(max-width: 700px)" srcset="/assets/site/media/closing-mobile.webp" />

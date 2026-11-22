@@ -72,33 +72,27 @@ export function renderFeedback() {
 export function renderCommandPanel() {
     return (
         "" +
-        "<section class='sow-menu__command'>" +
+        "<section class='sow-menu__command sow-home__stage'>" +
         "<div class='sow-menu__home-public'>" +
         renderPublicPanel("home") +
+        "</div>" +
+        "<div class='sow-home__directive'>" +
         renderDirectiveCard() +
         "</div>" +
-        "<div class='sow-menu__home-actions'>" +
-        renderQuickMatchButton() +
-        "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" +
-        esc(SOW_t("menu.campaign")) +
-        " " +
+        "<div class='sow-menu__home-actions sow-home__dock'>" +
+        renderFeedback() +
+        "<div class='sow-home__secondary-modes'>" +
+        "<button class='sow-menu__secondary sow-home__mode-btn sow-home__campaign-btn' type='button' data-command='open_campaign'>" +
+        "<span class='sow-home__mode-icon' aria-hidden='true'>" +
         menuIcon("attack") +
+        "</span>" +
+        "<span class='sow-home__mode-label'>" +
+        esc(SOW_t("menu.campaign")) +
+        "</span>" +
         "</button>" +
         renderLobbyBrowserButton() +
-        "<form class='sow-menu__join' data-form='join'>" +
-        "<input name='code' inputmode='numeric' autocomplete='off' placeholder='" +
-        esc(SOW_t("menu.lobby_code")) +
-        "' aria-label='" +
-        esc(SOW_t("menu.lobby_code")) +
-        "'>" +
-        "<button type='submit'>" +
-        esc(SOW_t("menu.join")) +
-        "</button>" +
-        "</form>" +
-        "<button class='sow-menu__secondary' type='button' data-command='open_create'>" +
-        esc(SOW_t("menu.create_custom_game")) +
-        " <span>+</span></button>" +
-        renderFeedback() +
+        "</div>" +
+        renderQuickMatchButton() +
         "</div>" +
         "</section>"
     );

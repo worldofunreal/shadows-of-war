@@ -24,8 +24,8 @@ const BUILDING_KINDS: [(&str, &str, u8); 7] = [
 ];
 /// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.webp`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
-// ponytail: one 128px strip, 27 cells = 3456px; switch to a grid before it passes 4096px.
-pub const BADGES: [&str; 27] = [
+// ponytail: one 128px strip, 20 cells = 2560px; switch to a grid before it passes 4096px.
+pub const BADGES: [&str; 20] = [
     "request",
     "allied",
     "traitor",
@@ -39,14 +39,7 @@ pub const BADGES: [&str; 27] = [
     "troops",
     "death",
     "radiation",
-    "construction",
-    "hammer",
     "arrow-up",
-    "arrow-right",
-    "arrow-down",
-    "arrow-left",
-    "cancel",
-    "confirm",
     "gold",
     "boat",
     "clock",

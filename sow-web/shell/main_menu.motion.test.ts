@@ -60,6 +60,24 @@ describe("computeScreenTransitionVector", () => {
             expect(drillOut.leaveY).toBe("14px");
         }
     });
+
+    it("computes horizontal lateral tab slides between Custom Games hub tabs (browser <-> create)", () => {
+        const toCreate = computeScreenTransitionVector("browser", "create", true, false);
+        expect(toCreate.kind).toBe("lateral");
+        expect(toCreate.enterX).toBe("22px");
+        expect(toCreate.enterY).toBe("0px");
+        expect(toCreate.leaveX).toBe("-16px");
+
+        const toBrowser = computeScreenTransitionVector("create", "browser", true, false);
+        expect(toBrowser.kind).toBe("lateral");
+        expect(toBrowser.enterX).toBe("-22px");
+        expect(toBrowser.enterY).toBe("0px");
+        expect(toBrowser.leaveX).toBe("16px");
+
+        const toCreateRtl = computeScreenTransitionVector("browser", "create", true, true);
+        expect(toCreateRtl.enterX).toBe("-22px");
+        expect(toCreateRtl.leaveX).toBe("16px");
+    });
 });
 
 describe("planRewardChoreography", () => {

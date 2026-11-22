@@ -1789,16 +1789,12 @@ button.sow-menu__currency {
 }
 
 .sow-menu__home-public {
-  order: 0;
-  width: 100%;
-  margin-bottom: 12px;
-}
-
-.sow-menu__home-public {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  min-height: 0;
 }
 
 .sow-menu__home-public .sow-menu__public {
@@ -1808,48 +1804,286 @@ button.sow-menu__currency {
   overflow: visible;
 }
 
+.sow-home__directive {
+  width: 100%;
+  min-width: 0;
+}
+
 .sow-menu__home-actions {
-  order: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
   width: 100%;
+  min-width: 0;
 }
 
-.sow-menu__quick-match {
-  min-height: 58px;
-  padding-block: 10px;
-  border-color: rgba(253, 224, 71, 0.82);
+/* ─────────────────────────────────────────────────────────────
+   BATTLE (HOME) — OPEN TACTICAL STAGE
+   ───────────────────────────────────────────────────────────── */
+#sow-menu[data-screen="home"] .sow-menu__main,
+#sow-menu [data-screen-panel="home"].sow-menu__main {
+  display: grid;
+  grid-template-columns: clamp(276px, 28vw, 376px) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  column-gap: clamp(16px, 2.6vw, 40px);
+  row-gap: clamp(10px, 1.5vh, 14px);
+  align-items: start;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 2px;
+  box-sizing: border-box;
+}
+
+#sow-menu[data-screen="home"] .sow-menu__command.sow-home__stage,
+#sow-menu [data-screen-panel="home"] .sow-menu__command.sow-home__stage {
+  display: contents;
+}
+
+#sow-menu[data-screen="home"] .sow-menu__home-public,
+#sow-menu [data-screen-panel="home"] .sow-menu__home-public {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+}
+
+#sow-menu[data-screen="home"] .sow-home__directive,
+#sow-menu [data-screen-panel="home"] .sow-home__directive {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+#sow-menu[data-screen="home"] .sow-menu__battlefield,
+#sow-menu [data-screen-panel="home"] .sow-menu__battlefield {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-end;
+  align-self: stretch;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+}
+
+#sow-menu[data-screen="home"] .sow-menu__leader-copy,
+#sow-menu [data-screen-panel="home"] .sow-menu__leader-copy {
+  width: min(100%, 540px);
+  margin: 0 0 clamp(10px, 1.8vh, 18px);
+  text-align: end;
+  pointer-events: none;
+}
+
+#sow-menu[data-screen="home"] .sow-home__dock,
+#sow-menu [data-screen-panel="home"] .sow-home__dock {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  justify-self: end;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 10px;
+  width: auto;
+  max-width: 100%;
+  padding-bottom: 2px;
+}
+
+#sow-menu[data-screen="home"] .sow-home__dock > .sow-menu__status,
+#sow-menu [data-screen-panel="home"] .sow-home__dock > .sow-menu__status {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  inset-inline-end: 0;
+  max-width: min(440px, 88vw);
+  z-index: 4;
+}
+
+.sow-home__secondary-modes {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 0 0 auto;
+  gap: 10px;
+  width: auto;
+  max-width: 100%;
+}
+
+.sow-menu__secondary.sow-home__mode-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 9px;
+  width: auto;
+  min-width: max-content;
+  max-width: 100%;
+  min-height: 62px;
+  margin-top: 0;
+  padding: 10px 18px;
+  overflow: hidden;
+  border-radius: var(--sow-tactical-surface-radius-compact, 10px);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border-soft);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow:
+    var(--sow-tactical-card-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
+  color: var(--sow-button-dark-text);
+  font-size: 11.5px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  white-space: nowrap;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 180ms ease,
+    background-color 160ms ease;
+}
+
+.sow-menu__secondary.sow-home__mode-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--sow-tactical-surface-accent-border);
+  color: #fff;
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.48),
+    0 0 16px color-mix(in srgb, var(--sow-gold) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.sow-menu__secondary.sow-home__mode-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+
+.sow-home__mode-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sow-gold) 12%, rgba(255, 255, 255, 0.04));
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 28%, transparent);
+  color: var(--sow-gold-bright);
+  flex: 0 0 auto;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.sow-home__mode-btn:hover .sow-home__mode-icon {
+  transform: scale(1.06);
+  background: color-mix(in srgb, var(--sow-gold) 22%, rgba(255, 255, 255, 0.06));
+  border-color: var(--sow-gold);
+}
+
+.sow-home__mode-icon svg,
+.sow-home__mode-svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.sow-home__mode-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sow-menu__primary.sow-menu__quick-match {
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+  min-width: clamp(204px, 19vw, 252px);
+  width: auto;
+  max-width: 100%;
+  min-height: 64px;
+  padding: 10px 18px;
+  gap: 14px;
+  border-radius: var(--sow-tactical-surface-radius-compact, 10px);
+  border: 1px solid rgba(254, 240, 138, 0.86);
   background:
-    linear-gradient(135deg, rgba(255, 248, 214, 0.24) 0%, transparent 46%),
+    linear-gradient(135deg, rgba(255, 252, 230, 0.28) 0%, transparent 48%),
     var(--sow-button-primary-bg);
   box-shadow:
-    0 8px 24px rgba(245, 158, 11, 0.32),
-    inset 0 1px 0 rgba(255, 252, 235, 0.52),
-    inset 0 -2px 0 rgba(120, 53, 15, 0.42);
+    0 12px 30px rgba(245, 158, 11, 0.36),
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 253, 240, 0.62),
+    inset 0 -3px 0 rgba(120, 53, 15, 0.44);
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 160ms ease,
+    box-shadow 180ms ease;
 }
 
+.sow-menu__primary.sow-menu__quick-match:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow:
+    0 16px 36px rgba(245, 158, 11, 0.46),
+    0 6px 16px rgba(0, 0, 0, 0.56),
+    inset 0 1px 0 rgba(255, 253, 240, 0.78),
+    inset 0 -3px 0 rgba(120, 53, 15, 0.44);
+}
+
+.sow-menu__primary.sow-menu__quick-match:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+
+.sow-menu__quick-match-sheen {
+  position: absolute;
+  inset: -40% auto -40% -35%;
+  width: 44%;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.44) 50%,
+    transparent 100%
+  );
+  transform: translate3d(-140%, 0, 0) skewX(-20deg);
+  pointer-events: none;
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sow-menu__quick-match:hover .sow-menu__quick-match-sheen {
+  transform: translate3d(380%, 0, 0) skewX(-20deg);
+}
+
+.sow-menu__quick-match-copy,
 .sow-menu__quick-match > div {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 3px;
 }
 
+.sow-menu__quick-match-emblem {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
 .sow-menu__quick-match strong {
-  font-size: 12.5px;
+  font-size: 14px;
+  font-weight: 950;
   letter-spacing: 0.1em;
   color: #0b0c10;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.32);
 }
 
 .sow-menu__quick-match small {
-  color: rgba(14, 16, 22, 0.82);
-  font-size: 9.5px;
+  color: rgba(14, 16, 22, 0.84);
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.08em;
-}
-
-#sow-menu[data-screen="home"] .sow-menu__command {
-  justify-content: flex-start;
 }
 
 .sow-menu__eyebrow,
@@ -2996,51 +3230,51 @@ button.sow-menu__currency {
 }
 [data-tier="unranked"],
 [data-tier="nomad"] {
-  --rank-light: #e7c29d;
-  --rank-glow: #a66c46;
+  --rank-light: #a9a9a9;
+  --rank-glow: #6b6b6b;
 }
 [data-tier="bronze"],
 [data-tier="chieftain"] {
-  --rank-light: #efbe97;
-  --rank-glow: #c28353;
+  --rank-light: #e8c07a;
+  --rank-glow: #b87333;
 }
 [data-tier="silver"],
 [data-tier="commander"] {
-  --rank-light: #dce9fa;
-  --rank-glow: #859db8;
+  --rank-light: #e8ecef;
+  --rank-glow: #e87a9a;
 }
 [data-tier="governor"] {
-  --rank-light: #cfe4ff;
-  --rank-glow: #5b87c7;
+  --rank-light: #f7b8c4;
+  --rank-glow: #9aa3ad;
 }
 [data-tier="gold"],
 [data-tier="king"] {
-  --rank-light: #ffe09a;
-  --rank-glow: #d3a63e;
+  --rank-light: #f5c542;
+  --rank-glow: #e86a1c;
 }
 [data-tier="emperor"] {
-  --rank-light: #ffd180;
-  --rank-glow: #e07b39;
+  --rank-light: #ffd269;
+  --rank-glow: #c98a0a;
 }
 [data-tier="platinum"],
 [data-tier="sovereign"] {
-  --rank-light: #aefff1;
-  --rank-glow: #4fc5b5;
+  --rank-light: #d6eaf0;
+  --rank-glow: #3aa8a0;
 }
 [data-tier="diamond"],
 [data-tier="overlord"] {
-  --rank-light: #c1e6ff;
-  --rank-glow: #599fe7;
+  --rank-light: #00d4ff;
+  --rank-glow: #00a8e8;
 }
 [data-tier="master"],
 [data-tier="immortal"] {
-  --rank-light: #e6c0ff;
-  --rank-glow: #b775e5;
+  --rank-light: #b06ae8;
+  --rank-glow: #8e44ad;
 }
 [data-tier="grandmaster"],
 [data-tier="deity"] {
-  --rank-light: #ffe8a5;
-  --rank-glow: #ef9a58;
+  --rank-light: #ffc93c;
+  --rank-glow: #ff7a1a;
 }
 .sow-ranked__emblem {
   position: relative;
@@ -3052,10 +3286,18 @@ button.sow-menu__currency {
   vertical-align: middle;
   filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--rank-glow) 25%, transparent));
 }
-.sow-ranked__emblem img {
+.sow-ranked__emblem[data-tier="unranked"],
+.sow-ranked__emblem[data-tier="nomad"] {
+  filter: none;
+}
+.sow-ranked__emblem img,
+.sow-ranked__emblem .sow-ranked__badge-sprite {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
+  background-repeat: no-repeat;
+  background-size: 400% 200%;
 }
 .sow-ranked__emblem b {
   position: absolute;
@@ -3581,15 +3823,21 @@ button.sow-menu__currency {
 .sow-menu__rooms-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  line-height: 1;
   color: #6ce89c;
-  background: rgba(68, 198, 120, 0.16);
-  border: 1px solid rgba(108, 232, 156, 0.38);
+  background: rgba(68, 198, 120, 0.18);
+  border: 1px solid rgba(108, 232, 156, 0.48);
+  box-shadow: 0 0 10px rgba(68, 198, 120, 0.22);
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 /* Guided Advisor Spotlight & Floating Whisper */
@@ -3778,6 +4026,8 @@ button.sow-menu__currency {
 /* Mobile tile-GPU optimization (e.g. Galaxy S9 / Adreno / Mali coarse-pointer devices):
    avoid stacked multi-pass backdrop-filter readbacks on large scrolling/stage surfaces. */
 :root[data-sow-gpu-tier="low"] #sow-menu .sow-menu__command,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-home__mode-btn,
+:root[data-sow-gpu-tier="low"] #sow-menu .sow-directive-card,
 :root[data-sow-gpu-tier="low"] #sow-menu .sow-browser__header,
 :root[data-sow-gpu-tier="low"] #sow-menu .sow-create__rail,
 :root[data-sow-gpu-tier="low"] #sow-menu .sow-create__card,
@@ -3821,6 +4071,8 @@ button.sow-menu__currency {
 
 @media (hover: none) and (pointer: coarse) {
   #sow-menu .sow-menu__command,
+  #sow-menu .sow-home__mode-btn,
+  #sow-menu .sow-directive-card,
   #sow-menu .sow-browser__header,
   #sow-menu .sow-create__rail,
   #sow-menu .sow-create__card,

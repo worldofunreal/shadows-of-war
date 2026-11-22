@@ -24,8 +24,8 @@ const TIER_KEYS: Record<string, string> = {
     grandmaster: "grandmaster",
 };
 
-const TIER_EMBLEM_SVG: Record<string, string> = {
-    nomad: "bronze",
+const TIER_BADGE_SLOT: Record<string, string> = {
+    nomad: "unranked",
     chieftain: "bronze",
     commander: "silver",
     governor: "silver",
@@ -42,7 +42,18 @@ const TIER_EMBLEM_SVG: Record<string, string> = {
     diamond: "diamond",
     master: "master",
     grandmaster: "grandmaster",
-    unranked: "bronze",
+    unranked: "unranked",
+};
+
+const BADGE_GRID_POS: Record<string, [number, number]> = {
+    unranked: [0, 0],
+    bronze: [1, 0],
+    silver: [2, 0],
+    gold: [3, 0],
+    platinum: [0, 1],
+    diamond: [1, 1],
+    master: [2, 1],
+    grandmaster: [3, 1],
 };
 
 export function rankTier(tier?: string | null): string {
@@ -70,10 +81,25 @@ export function rankLabel(
 
 export function rankEmblem(tier?: string | null, division?: string | null): string {
     const key = rankTier(tier);
-    const svg = TIER_EMBLEM_SVG[key] || "bronze";
-    return "<span class='sow-ranked__emblem' data-tier='" + key + "' aria-hidden='true'><img src='" +
-        esc(asset("shell/ranked/" + svg + ".svg")) + "' alt='' width='160' height='160'>" +
-        (division ? "<b>" + esc(division) + "</b>" : "") + "</span>";
+    const slot = TIER_BADGE_SLOT[key] || "unranked";
+    const [col, row] = BADGE_GRID_POS[slot] || [0, 0];
+    const xPct = ((col / 3) * 100).toFixed(4);
+    const yPct = row * 100;
+    return (
+        "<span class='sow-ranked__emblem' data-tier='" +
+        key +
+        "' data-badge='" +
+        slot +
+        "' aria-hidden='true'><i class='sow-ranked__badge-sprite' style=\"background-image:url('" +
+        esc(asset("shell/ranked/badges.webp")) +
+        "');background-position:" +
+        xPct +
+        "% " +
+        yPct +
+        "%\"></i>" +
+        (division ? "<b>" + esc(division) + "</b>" : "") +
+        "</span>"
+    );
 }
 
 export function rankProgress(score: number, ladder?: RankedLadder | null) {

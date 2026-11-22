@@ -564,10 +564,55 @@ import { avatarPortraitPath, fillAvatarMarkup, setAvatarImage } from "../shell/a
   mapPrev?.addEventListener("click", () => selectMapIndex(activeMapIndex - 1));
   mapNext?.addEventListener("click", () => selectMapIndex(activeMapIndex + 1));
 
+  // Interactive Ranked 1v1 Cultural Leagues Showcase
+  const rankedStage = $("[data-ranked-stage]") as HTMLElement | null;
+  const rankedPicks = $$("[data-ranked-pick]") as HTMLButtonElement[];
+  const rankedStageBadge = $("[data-ranked-stage-badge]") as HTMLElement | null;
+  const rankedStageTitle = $("[data-ranked-stage-title]") as HTMLElement | null;
+  const rankedStageCulture = $("[data-ranked-stage-culture]") as HTMLElement | null;
+  const rankedStageLore = $("[data-ranked-stage-lore]") as HTMLElement | null;
+  const rankedStageRange = $("[data-ranked-stage-range]") as HTMLElement | null;
+  const rankedStageRule = $("[data-ranked-stage-rule]") as HTMLElement | null;
+  const rankedStageFill = $("[data-ranked-stage-fill]") as HTMLElement | null;
+  function selectRankedPick(pick: HTMLButtonElement) {
+    if (!rankedStage || !pick) return;
+    const culture = pick.dataset.culture || "grandmaster";
+    const badge = pick.dataset.badge || culture;
+    const range = pick.dataset.range || "";
+    const fraction = pick.dataset.fraction || "1";
+    const title = pick.querySelector("[data-ranked-pick-title]")?.textContent || "";
+    const cultureText = pick.querySelector("[data-ranked-pick-culture]")?.textContent || "";
+    const lore = pick.querySelector("[data-ranked-pick-lore]")?.textContent || "";
+    const rule = pick.querySelector("[data-ranked-pick-rule]")?.textContent || "";
+    rankedStage.dataset.culture = culture;
+    rankedStage.dataset.badge = badge;
+    if (rankedStageBadge) {
+      rankedStageBadge.dataset.badge = badge;
+      rankedStageBadge.setAttribute("aria-label", title);
+    }
+    if (rankedStageTitle) rankedStageTitle.textContent = title;
+    if (rankedStageCulture) rankedStageCulture.textContent = cultureText;
+    if (rankedStageLore) rankedStageLore.textContent = lore;
+    if (rankedStageRange) rankedStageRange.textContent = range;
+    if (rankedStageRule) rankedStageRule.textContent = rule;
+    if (rankedStageFill) rankedStageFill.style.transform = `scaleX(${fraction})`;
+    rankedPicks.forEach((btn) => {
+      const active = btn === pick;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", String(active));
+    });
+  }
+  rankedPicks.forEach((pick) => pick.addEventListener("click", () => selectRankedPick(pick)));
+  const initialRankedPick = rankedPicks.find((pick) => pick.classList.contains("is-active")) || rankedPicks[0];
+
   function refreshLocale() {
     updateLeader(activeLeaderIndex);
     filterLeaders();
     syncMotion();
+    if (initialRankedPick) {
+      const current = rankedPicks.find((pick) => pick.classList.contains("is-active")) || initialRankedPick;
+      selectRankedPick(current);
+    }
   }
   $$("[data-leader-total]").forEach((element) => {
     element.textContent = String(leaders.length);

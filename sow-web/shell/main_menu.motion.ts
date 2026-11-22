@@ -80,6 +80,21 @@ export function computeScreenTransitionVector(
                 leaveScale: "0.982",
             };
         }
+        if (
+            (fromKey === "browser" && toKey === "create") ||
+            (fromKey === "create" && toKey === "browser")
+        ) {
+            const tabDir = (toKey === "create" ? 1 : -1) * (isRtl ? -1 : 1);
+            return {
+                kind: "lateral",
+                enterX: `${tabDir * 22}px`,
+                enterY: "0px",
+                enterScale: "0.992",
+                leaveX: `${-tabDir * 16}px`,
+                leaveY: "0px",
+                leaveScale: "0.99",
+            };
+        }
         return {
             kind: "lateral",
             enterX: "0px",

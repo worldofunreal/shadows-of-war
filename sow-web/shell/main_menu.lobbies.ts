@@ -15,6 +15,7 @@ import {
     mapInfo,
     menuIcon,
     menuUi,
+    openCustomRoomsCount,
     renderHeroBriefing,
     root,
 } from "./main_menu.core.ts";
@@ -226,65 +227,267 @@ function makeLobbyCard(lobby: MenuLobby) {
     return card;
 }
 
-function syncLobbyList(container: HTMLElement, lobbies: MenuLobby[], emptyMessage: string) {
+const leavingCardTimers = new WeakMap<HTMLElement, number>();
+const pendingEmptyTimers = new WeakMap<HTMLElement, number>();
+const LOBBY_ENTER_STAGGER_MS = 32;
+const LOBBY_ENTER_STAGGER_CAP = 6;
+const LOBBY_EXIT_DURATION_MS = 210;
+
+function isLobbyMotionReduced(): boolean {
+    if (menuUi.state && menuUi.state.settings && menuUi.state.settings.reduced_motion) return true;
+    if (root && root.dataset && root.dataset.reducedMotion === "true") return true;
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+    return false;
+}
+
+function clearLeavingCardState(card: HTMLElement): void {
+    const timer = leavingCardTimers.get(card);
+    if (timer !== undefined) {
+        window.clearTimeout(timer);
+        leavingCardTimers.delete(card);
+    }
+    if (card.dataset.lobbyLeaving === "1") {
+        delete card.dataset.lobbyLeaving;
+        card.classList.remove("is-leaving");
+        card.dataset.command = "join_lobby";
+        card.removeAttribute("aria-hidden");
+        card.tabIndex = 0;
+    }
+}
+
+function clearPendingEmptyTimer(container: HTMLElement): void {
+    const timer = pendingEmptyTimers.get(container);
+    if (timer !== undefined) {
+        window.clearTimeout(timer);
+        pendingEmptyTimers.delete(container);
+    }
+}
+
+function renderEmptyState(
+    container: HTMLElement,
+    emptyMessage: string,
+    showCreateAction: boolean,
+    animate: boolean,
+): void {
+    clearPendingEmptyTimer(container);
+    container.classList.add("is-empty");
+    let empty = container.querySelector<HTMLElement>(".sow-menu__empty");
+    if (!empty) {
+        empty = document.createElement("div");
+        empty.className = "sow-menu__empty";
+        if (animate && showCreateAction) empty.classList.add("is-entering");
+        container.appendChild(empty);
+    }
+    if (showCreateAction) {
+        empty.classList.add("sow-browser__empty");
+        empty.innerHTML =
+            "<span class='sow-browser__empty-icon' aria-hidden='true'>" +
+            createTacticalIcon("map") +
+            "</span>" +
+            "<p class='sow-browser__empty-copy'>" +
+            esc(emptyMessage) +
+            "</p>" +
+            "<button class='sow-menu__primary sow-browser__empty-cta' type='button' data-command='open_create'>" +
+            createTacticalIcon("plus") +
+            " <span>" +
+            esc(SOW_t("menu.create_game")) +
+            "</span></button>";
+    } else {
+        empty.classList.remove("sow-browser__empty", "is-entering");
+        empty.textContent = emptyMessage;
+    }
+}
+
+function animateLobbyCardEnter(card: HTMLElement, orderIndex: number): void {
+    card.classList.remove("is-leaving");
+    card.style.setProperty(
+        "--sow-lobby-enter-delay",
+        `${Math.min(orderIndex, LOBBY_ENTER_STAGGER_CAP) * LOBBY_ENTER_STAGGER_MS}ms`,
+    );
+    card.classList.add("is-entering");
+    const onEnd = (event: Event) => {
+        if (event.target !== card) return;
+        card.removeEventListener("animationend", onEnd);
+        card.classList.remove("is-entering");
+        card.style.removeProperty("--sow-lobby-enter-delay");
+    };
+    card.addEventListener("animationend", onEnd);
+}
+
+function dismissLobbyCard(card: HTMLElement, reducedMotion: boolean, onSettled?: () => void): void {
+    if (reducedMotion || !card.isConnected) {
+        clearLeavingCardState(card);
+        card.remove();
+        onSettled?.();
+        return;
+    }
+    if (card.dataset.lobbyLeaving === "1") return;
+    card.dataset.lobbyLeaving = "1";
+    card.classList.remove("is-entering");
+    card.style.removeProperty("--sow-lobby-enter-delay");
+    delete card.dataset.command;
+    card.setAttribute("aria-hidden", "true");
+    card.tabIndex = -1;
+    card.classList.add("is-leaving");
+
+    const finish = () => {
+        card.removeEventListener("animationend", onAnimEnd);
+        const timer = leavingCardTimers.get(card);
+        if (timer !== undefined) {
+            window.clearTimeout(timer);
+            leavingCardTimers.delete(card);
+        }
+        if (card.dataset.lobbyLeaving !== "1") return;
+        delete card.dataset.lobbyLeaving;
+        card.remove();
+        onSettled?.();
+    };
+    const onAnimEnd = (event: Event) => {
+        if (event.target !== card) return;
+        finish();
+    };
+    card.addEventListener("animationend", onAnimEnd);
+    leavingCardTimers.set(card, window.setTimeout(finish, LOBBY_EXIT_DURATION_MS));
+}
+
+function syncLobbyList(
+    container: HTMLElement,
+    lobbies: MenuLobby[],
+    emptyMessage: string,
+    showCreateAction = false,
+) {
+    const reducedMotion = isLobbyMotionReduced();
     const cards: Record<string, HTMLElement> = Object.create(null);
     container.querySelectorAll<HTMLElement>("[data-lobby-card]").forEach(function (card) {
         const id = String(card.dataset.lobbyId);
         if (cards[id]) {
+            clearLeavingCardState(card);
             card.remove();
             return;
         }
         cards[id] = card;
     });
+
     if (!lobbies.length) {
-        Object.keys(cards).forEach(function (id) {
-            cards[id].remove();
-        });
-        let empty = container.querySelector(".sow-menu__empty");
-        if (!empty) {
-            empty = document.createElement("div");
-            empty.className = "sow-menu__empty";
-            container.appendChild(empty);
+        const expiring = Object.keys(cards);
+        if (!expiring.length || reducedMotion) {
+            expiring.forEach(function (id) {
+                clearLeavingCardState(cards[id]);
+                cards[id].remove();
+            });
+            renderEmptyState(container, emptyMessage, showCreateAction, !reducedMotion);
+            return;
         }
-        empty.textContent = emptyMessage;
+        const existingEmpty = container.querySelector(".sow-menu__empty");
+        if (existingEmpty) existingEmpty.remove();
+        let remaining = expiring.length;
+        clearPendingEmptyTimer(container);
+        const mountEmptyIfIdle = () => {
+            if (!container.isConnected) return;
+            if (container.querySelector("[data-lobby-card]")) return;
+            renderEmptyState(container, emptyMessage, showCreateAction, true);
+        };
+        pendingEmptyTimers.set(
+            container,
+            window.setTimeout(mountEmptyIfIdle, LOBBY_EXIT_DURATION_MS + 20),
+        );
+        expiring.forEach(function (id) {
+            dismissLobbyCard(cards[id], false, () => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    mountEmptyIfIdle();
+                }
+            });
+        });
         return;
     }
+
+    clearPendingEmptyTimer(container);
+    container.classList.remove("is-empty");
     const empty = container.querySelector(".sow-menu__empty");
     if (empty) empty.remove();
+
     const seen: Record<string, boolean> = Object.create(null);
+    let enterIndex = 0;
+    let cursor = container.firstElementChild;
     lobbies.forEach(function (lobby) {
         const id = String(lobby.id);
         if (seen[id]) return;
         seen[id] = true;
+        while (cursor && cursor.classList.contains("is-leaving")) {
+            cursor = cursor.nextElementSibling;
+        }
         let card = cards[id];
-        if (!card) card = makeLobbyCard(lobby);
+        const isNew = !card;
+        if (isNew) {
+            card = makeLobbyCard(lobby);
+        } else {
+            clearLeavingCardState(card);
+        }
         updateLobbyCard(card, lobby);
-        container.appendChild(card);
+        if (card !== cursor) {
+            container.insertBefore(card, cursor);
+        } else if (cursor) {
+            cursor = cursor.nextElementSibling;
+        }
+        if (isNew && !reducedMotion) {
+            animateLobbyCardEnter(card, enterIndex);
+            enterIndex += 1;
+        }
         delete cards[id];
     });
     Object.keys(cards).forEach(function (id) {
-        cards[id].remove();
+        dismissLobbyCard(cards[id], reducedMotion);
     });
 }
 
 export function updateLobbyViews() {
     const panel = activeScreenPanel() || root;
+    const openRooms = openCustomRoomsCount();
     panel.querySelectorAll<HTMLElement>("[data-lobby-list]").forEach(function (container) {
         const browser = container.dataset.lobbyList === "browser";
+        const hasSearch = browser && Boolean(menuUi.browserSearchQuery && menuUi.browserSearchQuery.trim());
         syncLobbyList(
             container,
             browser ? filteredBrowserLobbies() : publicLobbies(true),
-            browser ? SOW_t("lobbies.no_search_matches") : SOW_t("lobbies.no_active_lobbies"),
+            browser
+                ? hasSearch
+                    ? SOW_t("lobbies.no_search_matches")
+                    : SOW_t("lobbies.no_active_lobbies")
+                : SOW_t("lobbies.no_active_lobbies"),
+            browser && !hasSearch,
         );
     });
+    panel.querySelectorAll<HTMLElement>("[data-custom-hub-count]").forEach(function (badge) {
+        badge.textContent = String(openRooms);
+        badge.hidden = openRooms <= 0;
+    });
+    const browserBtn = panel.querySelector<HTMLElement>(".sow-menu__browser-btn");
+    if (browserBtn) {
+        let badge = browserBtn.querySelector<HTMLElement>("[data-custom-rooms-badge]");
+        if (openRooms > 0) {
+            if (!badge) {
+                badge = document.createElement("span");
+                badge.className = "sow-menu__rooms-badge";
+                badge.setAttribute("data-custom-rooms-badge", "");
+                browserBtn.appendChild(badge);
+            }
+            badge.textContent = String(openRooms);
+            badge.title = SOW_t("menu.open_rooms_count", { count: openRooms });
+        } else if (badge) {
+            badge.remove();
+        }
+    }
 }
 
 export function renderHome() {
     const leader = menuUi.state!.prefer_random_leader ? "random" : leaderById(menuUi.state!.selected_leader);
     return (
-        "<main class='sow-menu__main' data-screen-panel='home'>" +
+        "<main class='sow-menu__main sow-home' data-screen-panel='home'>" +
         renderCommandPanel() +
-        "<section class='sow-menu__battlefield'>" +
+        "<section class='sow-menu__battlefield sow-home__showcase'>" +
         "<div class='sow-menu__leader-copy'>" +
         renderHeroBriefing(leader, "home", "sow-home-selected") +
         "</div>" +
@@ -900,23 +1103,61 @@ export function renderCampaign() {
     );
 }
 
+function renderCustomHubTabs(activeTab: "browser" | "create"): string {
+    const openRooms = openCustomRoomsCount();
+    const isBrowser = activeTab === "browser";
+    const isCreate = activeTab === "create";
+    return (
+        "<div class='sow-custom-hub__tabs' role='tablist' aria-label='" +
+        esc(SOW_t("lobbies.custom_game")) +
+        "'>" +
+        "<button type='button' role='tab' aria-selected='" +
+        String(isBrowser) +
+        "' class='sow-custom-hub__tab" +
+        (isBrowser ? " is-active" : "") +
+        "' data-command='open_browser'>" +
+        createTacticalIcon("roster") +
+        "<span>" +
+        esc(SOW_t("lobbies.active_matches")).replace("\n", " ") +
+        "</span>" +
+        "<span class='sow-custom-hub__count' data-custom-hub-count" +
+        (openRooms > 0 ? "" : " hidden") +
+        ">" +
+        openRooms +
+        "</span>" +
+        "</button>" +
+        "<button type='button' role='tab' aria-selected='" +
+        String(isCreate) +
+        "' class='sow-custom-hub__tab sow-custom-hub__tab--create" +
+        (isCreate ? " is-active" : "") +
+        "' data-command='open_create'>" +
+        createTacticalIcon("plus") +
+        "<span>" +
+        esc(SOW_t("menu.create_game")) +
+        "</span>" +
+        "</button>" +
+        "</div>"
+    );
+}
+
 export function renderBrowser() {
     return (
-        "<main class='sow-menu__main sow-browser' data-screen-panel='browser'>" +
-        "<section class='sow-menu__command sow-browser__header'>" +
+        "<main class='sow-menu__main sow-browser sow-custom-hub' data-screen-panel='browser'>" +
+        "<section class='sow-menu__command sow-browser__header sow-custom-hub__header'>" +
         "<div class='sow-browser__title-bar'>" +
-        "<button class='sow-menu__secondary sow-browser__back-btn' type='button' data-command='close_overlay'>← " +
+        "<button class='sow-menu__secondary sow-browser__back-btn' type='button' data-command='close_overlay'>← <span>" +
         esc(SOW_t("lobbies.back")) +
-        "</button>" +
+        "</span></button>" +
         "<div class='sow-browser__titles'>" +
         "<p class='sow-menu__eyebrow'>" +
-        esc(SOW_t("menu.lobby_browser")) +
+        esc(SOW_t("lobbies.custom_game")) +
         "</p>" +
         "<h1>" +
         esc(SOW_t("lobbies.active_matches")).replace("\n", " ") +
         "</h1>" +
         "</div>" +
         "</div>" +
+        renderCustomHubTabs("browser") +
         "<div class='sow-browser__toolbar'>" +
         "<div class='sow-menu__browser-search'>" +
         "<span class='sow-browser__search-icon' aria-hidden='true'>" +
@@ -940,11 +1181,6 @@ export function renderBrowser() {
         esc(SOW_t("menu.join")) +
         "</button>" +
         "</form>" +
-        "<button class='sow-menu__primary sow-browser__create-btn' type='button' data-command='open_create'>" +
-        createTacticalIcon("plus") +
-        " <span>" +
-        esc(SOW_t("menu.create_custom_game")) +
-        "</span></button>" +
         "</div>" +
         renderFeedback() +
         "</section>" +
@@ -1455,8 +1691,8 @@ export function renderCreate() {
     const activeModeMeta = modeMeta[currentMode] || modeMeta.FFA;
 
     return (
-        "<main class='sow-menu__main sow-menu__main--custom sow-create' data-screen-panel='create'>" +
-        "<section class='sow-menu__command sow-create__rail'>" +
+        "<main class='sow-menu__main sow-menu__main--custom sow-create sow-custom-hub' data-screen-panel='create'>" +
+        "<section class='sow-menu__command sow-create__rail sow-custom-hub__header'>" +
         "<div class='sow-create__header-left'>" +
         "<button class='sow-menu__secondary sow-create__back-btn' type='button' data-command='close_overlay' aria-label='" +
         esc(SOW_t("lobbies.back")) +
@@ -1472,6 +1708,7 @@ export function renderCreate() {
         "</h1>" +
         "</div>" +
         "</div>" +
+        renderCustomHubTabs("create") +
         "<div class='sow-create__header-right'>" +
         "<div class='sow-menu__mode-switcher' role='tablist' aria-label='" +
         esc(SOW_t("lobbies.custom_game")) +
@@ -1495,13 +1732,6 @@ export function renderCreate() {
         esc(SOW_t("lobbies.online_lobby")) +
         "</span></button>" +
         "</div>" +
-        "<button type='button' class='sow-menu__secondary sow-create__campaign-shortcut' data-command='open_campaign' data-sow-tooltip='" +
-        esc(SOW_t("menu.campaign")) +
-        "' data-sow-tooltip-tone='gold'>" +
-        createTacticalIcon("campaign") +
-        " <span>" +
-        esc(SOW_t("menu.campaign")) +
-        "</span></button>" +
         "</div>" +
         "</section>" +
         "<section class='sow-menu__battlefield sow-create__workspace'>" +

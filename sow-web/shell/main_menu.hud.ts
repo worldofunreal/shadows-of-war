@@ -1,4 +1,5 @@
 import { formatCompactNumber as formatEndgameCompact } from "./number-format.ts";
+import { AudioCue, playUiCue, syncAudioSettings } from "./audio/index.ts";
 import {
   type AvatarExpression,
   avatarAssetUrl,
@@ -570,6 +571,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       send("toggle_leaderboard", { open: false });
     if (previous === "inbox" && next !== previous)
       send("toggle_inbox", { open: false });
+    if (previous !== next) {
+      playUiCue(next ? AudioCue.UiModalOpen : AudioCue.UiModalClose);
+    }
     activeHudPanel = next;
     if (next && devSidebarOpen) {
       devSidebarOpen = false;
@@ -740,14 +744,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     "troops",
     "death",
     "radiation",
-    "construction",
-    "hammer",
     "arrow-up",
-    "arrow-right",
-    "arrow-down",
-    "arrow-left",
-    "cancel",
-    "confirm",
     "gold",
     "boat",
     "clock",
@@ -2788,6 +2785,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (!(input instanceof HTMLInputElement)) return;
         const val = parseFloat(input.value);
         const ratio = val / 100.0;
+        const bucket = Math.round(val / 5);
+        if (input.dataset.lastTickBucket !== String(bucket)) {
+          input.dataset.lastTickBucket = String(bucket);
+          playUiCue(AudioCue.UiSliderTick, 0, ratio);
+        }
         const currentHud = hudState?.hud;
         updateArmyAllocation(currentHud?.troops, ratio);
         send("set_attack_ratio", { ratio: ratio });
@@ -3064,14 +3066,26 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const input = target.closest("[data-hud-setting]");
       if (!(input instanceof HTMLInputElement)) return;
       const setting = input.dataset.hudSetting;
-      if (setting === "mute_all") send("set_mute", { value: !input.checked });
+      if (setting === "mute_all") {
+        syncAudioSettings({ mute_all: !input.checked });
+        send("set_mute", { value: !input.checked });
+      }
       if (setting === "music_volume") {
+        const val = Number(input.value);
+        syncAudioSettings({ music_volume: val });
         syncHudSliderVisual(input, "#sow-hud-music-value");
-        send("set_music_volume", { value: Number(input.value) });
+        send("set_music_volume", { value: val });
       }
       if (setting === "sfx_volume") {
+        const val = Number(input.value);
+        syncAudioSettings({ sfx_volume: val });
         syncHudSliderVisual(input, "#sow-hud-sfx-value");
-        send("set_sfx_volume", { value: Number(input.value) });
+        const bucket = Math.round(val * 20);
+        if (input.dataset.lastTickBucket !== String(bucket)) {
+          input.dataset.lastTickBucket = String(bucket);
+          playUiCue(AudioCue.UiSliderTick, 0, val);
+        }
+        send("set_sfx_volume", { value: val });
       }
       if (setting === "reduced_motion")
         send("set_reduced_motion", { value: input.checked });
@@ -5037,6 +5051,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     delete menu.dataset.placement;
     const showRadial = Boolean(open && mapMenu && mapMenu.view === "radial");
     if (!showRadial) {
+      if (ring.session) {
+        playUiCue(AudioCue.UiRadialClose);
+      }
       menu.classList.add("hidden");
       if (menu.dataset.renderKey) menu.replaceChildren();
       menu.dataset.renderKey = "";
@@ -5053,6 +5070,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const session = String(mapMenu.session) + ":" + String(mapMenu.tile_idx);
     const newSession = ring.session !== session;
     if (newSession) {
+      playUiCue(AudioCue.UiRadialOpen);
       ring.session = session;
       menu.dataset.session = String(mapMenu.session);
       menu.dataset.tileIdx = String(mapMenu.tile_idx);
@@ -8190,9 +8208,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       if (age >= 3600) return;
       hadNewNotification = true;
       const createdAt = Date.now();
+      const prio = Math.max(0, Number(entry.priority) || 0);
+      playUiCue(AudioCue.UiToast, prio);
       const item = {
         entry: entry,
-        priority: Math.max(0, Number(entry.priority) || 0),
+        priority: prio,
         group: entry.group ? String(entry.group) : "event:" + id,
         sumValues: Boolean(entry.sum_values),
         expiresAt: createdAt + 3600 - age,

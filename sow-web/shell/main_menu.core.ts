@@ -270,11 +270,13 @@ export function renderQuickMatchButton(): string {
     const ranked = menuUi.rankedRating;
     const rankedLabel = rankLabel(ranked);
     return (
-        "<button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match'><div><strong>" +
+        "<button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match'>" +
+        "<span class='sow-menu__quick-match-sheen' aria-hidden='true'></span>" +
+        "<div class='sow-menu__quick-match-copy'><strong>" +
         esc(SOW_t("lobbies.ranked_1v1")) +
         "</strong><small data-ranked-current>" +
         esc(rankedLabel) +
-        "</small></div><span data-ranked-emblem>" +
+        "</small></div><span class='sow-menu__quick-match-emblem' data-ranked-emblem>" +
         rankEmblem(ranked?.tier || "Nomad", ranked?.division || null) +
         "</span></button>"
     );
@@ -287,22 +289,34 @@ export function openCustomRoomsCount(): number {
     }).length;
 }
 
+const CUSTOM_ROOMS_ICON_SVG =
+    "<svg class='sow-home__mode-svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+    "<rect x='3' y='3' width='7' height='7' rx='1.5'/>" +
+    "<rect x='14' y='3' width='7' height='7' rx='1.5'/>" +
+    "<rect x='3' y='14' width='7' height='7' rx='1.5'/>" +
+    "<path d='M17.5 14v7M14 17.5h7'/>" +
+    "</svg>";
+
 export function renderLobbyBrowserButton(): string {
     const openRooms = openCustomRoomsCount();
     const badge =
         openRooms > 0
-            ? "<span class='sow-menu__rooms-badge'>" +
+            ? "<span class='sow-menu__rooms-badge' data-custom-rooms-badge title='" +
               esc(SOW_t("menu.open_rooms_count", { count: openRooms })) +
+              "'>" +
+              openRooms +
               "</span>"
             : "";
     return (
-        "<button class='sow-menu__secondary sow-menu__browser-btn' type='button' data-command='open_browser'>" +
-        "<span>" +
-        esc(SOW_t("menu.lobby_browser")) +
+        "<button class='sow-menu__secondary sow-menu__browser-btn sow-home__mode-btn' type='button' data-command='open_browser'>" +
+        "<span class='sow-home__mode-icon' aria-hidden='true'>" +
+        CUSTOM_ROOMS_ICON_SVG +
         "</span>" +
-        "<span class='sow-menu__secondary-meta'>" +
+        "<span class='sow-home__mode-label'>" +
+        esc(SOW_t("lobbies.custom_game")) +
+        "</span>" +
         badge +
-        "<span>→</span></span></button>"
+        "</button>"
     );
 }
 

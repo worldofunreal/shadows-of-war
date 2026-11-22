@@ -19,9 +19,10 @@
 .sow-create__rail {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px 14px;
   padding: 10px 16px;
   min-height: 0;
   flex: 0 0 auto;
@@ -1185,8 +1186,9 @@
 
   #sow-menu[data-screen="create"] .sow-create__rail {
     flex-direction: row;
+    flex-wrap: wrap;
     padding: 5px 10px;
-    gap: 10px;
+    gap: 6px 10px;
   }
 
   .sow-create__title-group .sow-menu__eyebrow {

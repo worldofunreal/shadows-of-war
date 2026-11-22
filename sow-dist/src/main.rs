@@ -833,6 +833,9 @@ fn profile_for_distribution_path(path: &Path) -> Option<&'static str> {
     if path.starts_with("site-icons/") || path.starts_with("android/res/mipmap-") {
         return Some("app_icon");
     }
+    if path == "shell/ranked/badges.webp" {
+        return Some("ranked_badges_atlas");
+    }
     if path.starts_with("shell/brand/") || path.starts_with("shell/ranked/") || path.starts_with("gameplay/skins/") {
         return (name.ends_with(".svg")).then_some("svg");
     }
@@ -1042,14 +1045,13 @@ const ART_ICONS: [(&str, &str, &str, &str); 14] = [
     ),
 ];
 /// Art folders routed into the runtime asset tree.
-const ART_FOLDERS: [(&str, &str); 8] = [
+const ART_FOLDERS: [(&str, &str); 7] = [
     ("brand", "shell/brand"),
     ("ranked", "shell/ranked"),
     ("icons/abilities", "gameplay/icons/abilities"),
     ("loader", "shell/loader"),
     ("skins", "gameplay/skins"),
     ("music", "gameplay/music"),
-    ("sfx", "gameplay/sfx"),
     ("units", "gameplay/units"),
 ];
 const GAMEPLAY_UNIT_ART: [&str; 5] = [
@@ -1362,14 +1364,7 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         if dir == SPRITE_ABILITY_ART {
             continue; // published with the avatars below
         }
-        let source_dir = if dir == "sfx" && !art.join(dir).is_dir() {
-            root.join("assets/gameplay/sfx")
-        } else {
-            art.join(dir)
-        };
-        if dir == "sfx" && !source_dir.is_dir() {
-            continue;
-        }
+        let source_dir = art.join(dir);
         for file in fs::read_dir(&source_dir)
             .with_context(|| format!("read art folder {}", source_dir.display()))?
         {
@@ -1379,6 +1374,9 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
+            if dir == "ranked" && name.ends_with(".webp") {
+                continue; // packed into shell/ranked/badges.webp below
+            }
             let (relative, profile) = if dir == "units" {
                 (format!("{rel_dir}/{}.webp", file_stem(&file)), None)
             } else if dir == "brand" && name == "app-icon.webp" {
@@ -1389,6 +1387,14 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
             publish(&file, &relative, profile)?;
         }
     }
+    drop(publish);
+    pack_ranked_badges_sheet(&art.join("ranked"), out, pipeline, &mut produced)?;
+    let mut publish = |source: &Path, relative: &str, profile: Option<&str>| -> Result<()> {
+        let destination = out.join(relative);
+        pipeline.publish_asset(source, &destination, Path::new(relative), profile)?;
+        produced.insert(destination);
+        Ok(())
+    };
     // A fresh checkout may not have the packed atlases yet: `pack_art_atlases`
     // writes them and stages again, and fails if any is still missing.
     for (name, rel) in GENERATED_FILES {
@@ -1912,6 +1918,75 @@ fn pack_sprite_atlas(assets: &Path, pipeline: &ArtPipeline) -> Result<()> {
             fs::remove_dir_all(path)?;
         }
     }
+    Ok(())
+}
+
+const RANKED_BADGE_SLOTS: [&str; 8] = [
+    "unranked",
+    "bronze",
+    "silver",
+    "gold",
+    "platinum",
+    "diamond",
+    "master",
+    "grandmaster",
+];
+
+/// Packs the 8 source PNGs in `assets/art/ranked/` into a single 4×2 WebP
+/// spritesheet (`shell/ranked/badges.webp`, 512 px per badge) for every target.
+fn pack_ranked_badges_sheet(
+    ranked_art_dir: &Path,
+    out: &Path,
+    pipeline: &ArtPipeline,
+    produced: &mut std::collections::BTreeSet<PathBuf>,
+) -> Result<()> {
+    const CELL: u32 = 512;
+    const COLS: u32 = 4;
+    const ROWS: u32 = 2;
+    let destination = out.join("shell/ranked/badges.webp");
+    let mut source_hasher = Sha256::new();
+    let mut sources = Vec::with_capacity(RANKED_BADGE_SLOTS.len());
+    for stem in RANKED_BADGE_SLOTS {
+        let path = ranked_art_dir.join(format!("{stem}.webp"));
+        if !path.is_file() {
+            if pipeline.local_preview {
+                eprintln!("⚠ Missing ranked badge source {}", path.display());
+                return Ok(());
+            }
+            bail!("missing ranked badge source {}", path.display());
+        }
+        source_hasher.update(stem.as_bytes());
+        source_hasher.update(file_sha256(&path)?.as_bytes());
+        sources.push(path);
+    }
+    source_hasher.update(CELL.to_le_bytes());
+    let key = hex::encode(source_hasher.finalize());
+    let raw_sheet = pipeline.cache_root.join(format!("ranked-badges-{key}.png"));
+    if !raw_sheet.is_file() {
+        fs::create_dir_all(&pipeline.cache_root)?;
+        let mut canvas = image::RgbaImage::new(COLS * CELL, ROWS * CELL);
+        for (index, path) in sources.iter().enumerate() {
+            let col = (index as u32) % COLS;
+            let row = (index as u32) / COLS;
+            let icon = image::open(path)
+                .with_context(|| format!("open ranked badge {}", path.display()))?
+                .resize_exact(CELL, CELL, image::imageops::FilterType::Lanczos3)
+                .to_rgba8();
+            image::imageops::overlay(
+                &mut canvas,
+                &icon,
+                i64::from(col * CELL),
+                i64::from(row * CELL),
+            );
+        }
+        let temp = raw_sheet.with_extension(format!("{}.tmp.png", std::process::id()));
+        canvas
+            .save(&temp)
+            .with_context(|| format!("write ranked badges composite {}", raw_sheet.display()))?;
+        fs::rename(temp, &raw_sheet)?;
+    }
+    pipeline.publish_image(&raw_sheet, &destination, "ranked_badges_atlas", None, None)?;
+    produced.insert(destination);
     Ok(())
 }
 
@@ -4163,12 +4238,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         &paths.assets_gameplay.join("music"),
         &assets.join("gameplay/music"),
     )?;
-    if paths.assets_gameplay.join("sfx").is_dir() {
-        copy_dir(
-            &paths.assets_gameplay.join("sfx"),
-            &assets.join("gameplay/sfx"),
-        )?;
-    }
     if paths.assets_gameplay.join("bios").is_dir() {
         copy_dir(
             &paths.assets_gameplay.join("bios"),
@@ -4993,7 +5062,6 @@ impl Drop for LocalPreviewServer {
 }
 
 const LOCAL_WASM_CRATES: &[&str] = &[
-    "sow-audio",
     "sow-client",
     "sow-core",
     "sow-data",
@@ -5007,7 +5075,6 @@ fn local_watch_roots(paths: &Paths) -> Vec<PathBuf> {
         paths.root.join("Cargo.toml"),
         paths.root.join("Cargo.lock"),
         paths.root.join(".version"),
-        paths.root.join("sow-audio"),
         paths.root.join("sow-client"),
         paths.root.join("sow-core"),
         paths.root.join("sow-data"),
@@ -7121,6 +7188,78 @@ shortArticle = true
             total_bytes > 0 && total_bytes < 25_000_000,
             "unexpected total bios bundle size: {total_bytes}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn pack_ranked_badges_sheet_builds_4x2_webp_spritesheet_and_all_site_keys_exist() -> Result<()> {
+        let paths = Paths::discover()?;
+        let out = tempfile::tempdir()?;
+        let pipeline = ArtPipeline::load(&paths.root)?;
+        let mut produced = std::collections::BTreeSet::new();
+        pack_ranked_badges_sheet(&paths.root.join("assets/art/ranked"), out.path(), &pipeline, &mut produced)?;
+
+        let sheet = out.path().join("shell/ranked/badges.webp");
+        assert!(produced.contains(&sheet), "badges.webp must be registered in produced");
+        assert!(sheet.is_file(), "badges.webp missing");
+        let (w, h) = image::image_dimensions(&sheet)?;
+        assert_eq!((w, h), (2048, 1024), "badges.webp must be a 4x2 grid of 512px cells");
+        assert!(image_has_transparency(&sheet)?, "badges.webp must keep transparent margins");
+        let size = fs::metadata(&sheet)?.len();
+        assert!(size <= 524_288, "badges.webp exceeded 512 KiB budget: {size}");
+
+        for (_, code, _) in sow_i18n::Language::published_registry() {
+            let lang = match code {
+                "en" => sow_i18n::Language::English,
+                "es" => sow_i18n::Language::Spanish,
+                "fr" => sow_i18n::Language::French,
+                "de" => sow_i18n::Language::German,
+                "it" => sow_i18n::Language::Italian,
+                "tr" => sow_i18n::Language::Turkish,
+                "zh-CN" => sow_i18n::Language::SimplifiedChinese,
+                "ja" => sow_i18n::Language::Japanese,
+                "ko" => sow_i18n::Language::Korean,
+                "ar" => sow_i18n::Language::Arabic,
+                "ru" => sow_i18n::Language::Russian,
+                "vi" => sow_i18n::Language::Vietnamese,
+                "id" => sow_i18n::Language::Indonesian,
+                "fil" => sow_i18n::Language::Filipino,
+                "pt-BR" => sow_i18n::Language::BrazilianPortuguese,
+                other => bail!("unexpected language code {other}"),
+            };
+            let strings = sow_i18n::web(lang);
+            for key in [
+                "ranked_nav",
+                "ranked_eyebrow",
+                "ranked_heading",
+                "ranked_heading_em",
+                "ranked_summary",
+                "ranked_play_cta",
+                "ranked_rule_safe",
+                "ranked_rule_comp",
+                "ranked_culture_unranked",
+                "ranked_lore_unranked",
+                "ranked_culture_bronze",
+                "ranked_lore_bronze",
+                "ranked_culture_silver",
+                "ranked_lore_silver",
+                "ranked_culture_gold",
+                "ranked_lore_gold",
+                "ranked_culture_platinum",
+                "ranked_lore_platinum",
+                "ranked_culture_diamond",
+                "ranked_lore_diamond",
+                "ranked_culture_master",
+                "ranked_lore_master",
+                "ranked_culture_grandmaster",
+                "ranked_lore_grandmaster",
+            ] {
+                assert!(
+                    strings.site.values.get(key).is_some_and(|v| !v.trim().is_empty()),
+                    "locale {code} missing site.{key}"
+                );
+            }
+        }
         Ok(())
     }
 }

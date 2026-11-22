@@ -65,6 +65,18 @@ lossless = false
 max_bytes = 786432
 recipe_version = 2
 
+[profiles.ranked_badges_atlas]
+format = "webp"
+max_width = 2048
+max_height = 1024
+quality = 78
+alpha = "preserve"
+alpha_quality = 85
+resample = "mitchell"
+lossless = false
+max_bytes = 524288
+recipe_version = 1
+
 [profiles.fullbleed_wide]
 format = "webp"
 max_width = 1280
