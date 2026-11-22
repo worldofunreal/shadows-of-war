@@ -1,0 +1,101 @@
+{
+  "version": 2,
+  "episode_id": "six_sky_maya_02",
+  "text_namespace": "tutorial.campaign_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 1600,
+    "starting_gold": 2200
+  },
+  "entry": "six_sky_maya_02_open",
+  "speakers": {
+    "six_sky": {
+      "name": "Lady Six Sky",
+      "avatar": "six_sky"
+    },
+    "bital": {
+      "faction": "bital"
+    },
+    "dos_pilas": {
+      "faction": "dos_pilas"
+    },
+    "calakmul": {
+      "faction": "calakmul"
+    }
+  },
+  "steps": [
+    {
+      "id": "six_sky_maya_02_open",
+      "type": "scene",
+      "presentation": "dialogue",
+      "show_title": true,
+      "speaker": "six_sky",
+      "pause_game": true,
+      "title_key": "tutorial.campaign_six_sky_maya_02_open_title",
+      "body_key": "tutorial.campaign_six_sky_maya_02_open_body",
+      "next": "six_sky_maya_02_expand"
+    },
+    {
+      "id": "six_sky_maya_02_expand",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_02_expand_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_02_expand_hint",
+      "trigger": {
+        "type": "territory",
+        "value": 64,
+        "scope": "step"
+      },
+      "next": "six_sky_maya_02_attack",
+      "body_key": "tutorial.campaign_six_sky_maya_02_expand_body",
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "expand",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "pause_game": true,
+      "paused_action": "expand_once_then_resume",
+      "dim_outside": true
+    },
+    {
+      "id": "six_sky_maya_02_attack",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_02_attack_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_02_attack_hint",
+      "trigger": {
+        "type": "defeated",
+        "target": "bital",
+        "scope": "episode"
+      },
+      "next": "six_sky_maya_02_end",
+      "body_key": "tutorial.campaign_six_sky_maya_02_attack_body",
+      "marker": {
+        "target": "bital"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "exchange": [
+        {
+          "speaker": "bital",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_02_bital_threat"
+        }
+      ]
+    },
+    {
+      "id": "six_sky_maya_02_end",
+      "type": "end",
+      "speaker": "six_sky",
+      "presentation": "chapter",
+      "title_key": "tutorial.campaign_six_sky_maya_02_end_title",
+      "body_key": "tutorial.campaign_six_sky_maya_02_end_body"
+    }
+  ]
+}

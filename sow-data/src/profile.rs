@@ -52,6 +52,10 @@ pub struct RewardReceipt {
     /// Older receipts omit the field and deserialize empty.
     #[serde(default)]
     pub unlocked_achievements: Vec<String>,
+    /// Milestones advanced by the match phase that created this receipt.
+    /// Older receipts omit this field and deserialize empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub goal_advances: Vec<GoalAdvance>,
     /// Player level immediately before and after this receipt was applied.
     /// Older receipts omit these fields and deserialize as `None`.
     #[serde(default)]
@@ -77,6 +81,19 @@ pub struct RewardReceipt {
     /// Binds an applied match bonus to the exact server-verified participant result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verified_result_sha256: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GoalAdvance {
+    pub chain_id: String,
+    pub achievement_id: String,
+    #[serde(rename = "before")]
+    pub progress_before: u64,
+    #[serde(rename = "after")]
+    pub progress_after: u64,
+    #[serde(rename = "previous")]
+    pub previous_target: u64,
+    pub target: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1310,7 +1327,7 @@ mod tests {
     }
 
     #[test]
-    fn old_reward_receipts_load_without_level_or_closure_fields() {
+    fn old_reward_receipts_load_without_new_goal_progress_fields() {
         let receipt: RewardReceipt = serde_json::from_str(
             r#"{"id":"m1","match_id":"m1","xp":20,"leader_xp":20,"crowns":25,"laurels":0,"created_at":1}"#,
         )
@@ -1318,6 +1335,7 @@ mod tests {
         assert_eq!(receipt.level_before, None);
         assert_eq!(receipt.level_after, None);
         assert_eq!(receipt.personal_closure_turn, None);
+        assert!(receipt.goal_advances.is_empty());
     }
 }
 

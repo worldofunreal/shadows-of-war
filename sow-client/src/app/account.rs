@@ -37,27 +37,56 @@ fn apply_menu_return_profile(
                 )
             ))
         && context.match_id.as_deref().is_some_and(|match_id| {
-            cloud.reward_receipts.get(match_id).is_some_and(|receipt| {
-                receipt.id == match_id
-                    && receipt.match_id == match_id
-                    && matches!(
-                        receipt.status,
-                        sow_data::profile::RewardSettlementStatus::Applied
-                            | sow_data::profile::RewardSettlementStatus::Presented
-                    )
-                    && (!requires_verification
-                        || matches!(
-                            receipt.verification_status,
-                            Some(
-                                sow_data::profile::ReplayVerificationStatus::Verified
-                                    | sow_data::profile::ReplayVerificationStatus::Rejected
-                            )
-                        ))
-            })
+            let Some(receipt) = cloud.reward_receipts.get(match_id) else {
+                return false;
+            };
+            let applied = receipt.id == match_id
+                && receipt.match_id == match_id
+                && matches!(
+                    receipt.status,
+                    sow_data::profile::RewardSettlementStatus::Applied
+                        | sow_data::profile::RewardSettlementStatus::Presented
+                );
+            let verification_ready = if !requires_verification {
+                true
+            } else {
+                match receipt.verification_status {
+                    Some(sow_data::profile::ReplayVerificationStatus::Rejected) => true,
+                    Some(sow_data::profile::ReplayVerificationStatus::Verified) => {
+                        let bonus_id = format!("verified_bonus:{match_id}");
+                        cloud.reward_receipts.get(&bonus_id).is_some_and(|bonus| {
+                            bonus.id == bonus_id
+                                && bonus.match_id == match_id
+                                && bonus.verification_status
+                                    == Some(sow_data::profile::ReplayVerificationStatus::Verified)
+                                && matches!(
+                                    bonus.status,
+                                    sow_data::profile::RewardSettlementStatus::Applied
+                                        | sow_data::profile::RewardSettlementStatus::Presented
+                                )
+                        })
+                    }
+                    None | Some(sow_data::profile::ReplayVerificationStatus::Pending) => false,
+                }
+            };
+            applied && verification_ready
         });
     if ready {
         context.status = "confirmed".into();
-        context.receipt_ids = context.match_id.iter().cloned().collect();
+        context.receipt_ids = context
+            .match_id
+            .iter()
+            .flat_map(|match_id| {
+                let mut receipt_ids = vec![match_id.clone()];
+                if cloud.reward_receipts.get(match_id).is_some_and(|receipt| {
+                    receipt.verification_status
+                        == Some(sow_data::profile::ReplayVerificationStatus::Verified)
+                }) {
+                    receipt_ids.push(format!("verified_bonus:{match_id}"));
+                }
+                receipt_ids
+            })
+            .collect();
     }
     ready
 }
@@ -1828,3 +1857,78 @@ impl SowApp {
     }
 }
 
+#[cfg(test)]
+mod match_goal_return_tests {
+    use super::apply_menu_return_profile;
+    use crate::{app::state::MenuReturnContext, player_progress::PlayerProgress};
+    use sow_data::profile::{
+        MatchExitState, ReplayVerificationStatus, RewardReceipt, RewardSettlementStatus,
+    };
+
+    fn match_receipt(id: &str, match_id: &str, verified: bool) -> RewardReceipt {
+        RewardReceipt {
+            id: id.to_string(),
+            match_id: match_id.to_string(),
+            status: RewardSettlementStatus::Applied,
+            verification_status: verified.then_some(ReplayVerificationStatus::Verified),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn verified_menu_return_waits_for_and_acknowledges_both_match_receipts() {
+        let account_id = "0123456789abcdef0123456789abcdef";
+        let mut context = Some(MenuReturnContext {
+            account_id: Some(account_id.to_string()),
+            source: "multiplayer".into(),
+            match_id: Some("m1".into()),
+            status: "waiting".into(),
+            server_state: Some(MatchExitState::Confirmed),
+            ..Default::default()
+        });
+        let mut cloud = PlayerProgress::default();
+        cloud
+            .reward_receipts
+            .insert("m1".into(), match_receipt("m1", "m1", true));
+
+        assert!(!apply_menu_return_profile(&mut context, account_id, &cloud));
+        cloud.reward_receipts.insert(
+            "verified_bonus:m1".into(),
+            match_receipt("verified_bonus:m1", "m1", true),
+        );
+        assert!(apply_menu_return_profile(&mut context, account_id, &cloud));
+        let context = context.unwrap();
+        assert_eq!(context.status, "confirmed");
+        assert_eq!(
+            context.receipt_ids,
+            vec!["m1".to_string(), "verified_bonus:m1".to_string()]
+        );
+    }
+
+    #[test]
+    fn rejected_menu_return_keeps_only_the_participation_receipt() {
+        let account_id = "0123456789abcdef0123456789abcdef";
+        let mut context = Some(MenuReturnContext {
+            account_id: Some(account_id.to_string()),
+            source: "multiplayer".into(),
+            match_id: Some("m2".into()),
+            status: "waiting".into(),
+            server_state: Some(MatchExitState::Rejected),
+            ..Default::default()
+        });
+        let mut cloud = PlayerProgress::default();
+        cloud.reward_receipts.insert(
+            "m2".into(),
+            RewardReceipt {
+                id: "m2".into(),
+                match_id: "m2".into(),
+                status: RewardSettlementStatus::Applied,
+                verification_status: Some(ReplayVerificationStatus::Rejected),
+                ..Default::default()
+            },
+        );
+
+        assert!(apply_menu_return_profile(&mut context, account_id, &cloud));
+        assert_eq!(context.unwrap().receipt_ids, vec!["m2".to_string()]);
+    }
+}

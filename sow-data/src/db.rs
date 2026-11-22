@@ -613,6 +613,7 @@ impl PlayerProfile {
                     .iter()
                     .map(|achievement| achievement.id.to_string())
                     .collect(),
+                goal_advances: Vec::new(),
                 level_before: Some(level_before),
                 level_after: Some(self.level),
                 personal_closure_turn: None,
@@ -678,9 +679,21 @@ impl PlayerProfile {
         }
     }
 
-    fn achievement_progress(&self, id: &str) -> u64 {
-        let totals = self.achievement_totals();
-        crate::rewards::achievement_progress(id, &totals)
+    fn match_goal_counters_for_leader(&self, leader: &str) -> crate::rewards::MatchGoalCounters {
+        let leader_stats = self.leader_stats.get(leader);
+        crate::rewards::MatchGoalCounters {
+            matches_played: self.matches_played as u64,
+            wins: (self.verified_wins as u64).max(self.wins as u64),
+            hero_matches: leader_stats.map_or(0, |stats| stats.matches_played as u64),
+            hero_wins: leader_stats.map_or(0, |stats| {
+                (stats.verified_wins as u64).max(stats.wins as u64)
+            }),
+            kills: self.kills as u64,
+            assists: self.assists as u64,
+            players_defeated: self.players_defeated as u64,
+            empires_defeated: self.empires_defeated as u64,
+            tribes_defeated: self.tribes_defeated as u64,
+        }
     }
 
     /// Unlock achievements from server-owned aggregates and pay their rewards.
@@ -751,6 +764,7 @@ impl PlayerProfile {
     }
 
     pub fn achievement_views(&self) -> Vec<crate::profile::AchievementView> {
+        let totals = self.achievement_totals();
         crate::rewards::all_achievements()
             .iter()
             .map(|achievement| {
@@ -761,8 +775,7 @@ impl PlayerProfile {
                     title: achievement.title.to_string(),
                     description: achievement.description.to_string(),
                     points: achievement.points,
-                    progress: self
-                        .achievement_progress(achievement.id)
+                    progress: crate::rewards::achievement_progress(achievement.id, &totals)
                         .min(achievement.target),
                     target: achievement.target,
                     unlocked: self.unlocked_achievements.contains(achievement.id),
@@ -5013,17 +5026,25 @@ impl PlayerDb {
                 let tutorial_completed = account.profile.intro_completed
                     || account.profile.reward_receipts.contains_key("tutorial")
                     || account.profile.completed_episodes.contains("tutorial")
+                    || account
+                        .profile
+                        .completed_episodes
+                        .contains(crate::campaign::INTRO_EPISODE_ID)
                     || account.profile.completed_episodes.contains("boudica");
-                let tactics_01_completed = account
-                    .profile
-                    .completed_episodes
-                    .contains("tactics_01_economy");
                 let tactics_episodes_completed = crate::campaign::series_completed_count(
                     "tactics",
                     &account.profile.completed_episodes,
                 );
                 let adv_tactics_episodes_completed = crate::campaign::series_completed_count(
                     "advanced_tactics",
+                    &account.profile.completed_episodes,
+                );
+                let six_sky_maya_01_completed = account
+                    .profile
+                    .completed_episodes
+                    .contains("six_sky_maya_01");
+                let lady_six_sky_episodes_completed = crate::campaign::series_completed_count(
+                    "lady_six_sky",
                     &account.profile.completed_episodes,
                 );
 
@@ -5041,9 +5062,10 @@ impl PlayerDb {
                     player_level,
                     tutorial_completed,
                     tactics_completed,
-                    tactics_01_completed,
                     tactics_episodes_completed,
                     adv_tactics_episodes_completed,
+                    six_sky_maya_01_completed,
+                    lady_six_sky_episodes_completed,
                     ..Default::default()
                 };
 
@@ -6654,13 +6676,25 @@ fn apply_match_participation_to_account(
         }
         return;
     }
-    let effective_leader = account.profile.record_match_stats_with_leader(
+    let effective_leader = canonical_leader
+        .or_else(|| {
+            account
+                .profile
+                .preferred_leader
+                .as_deref()
+                .and_then(crate::rewards::canonical_leader_name)
+        })
+        .unwrap_or_else(|| "Caesar".to_string());
+    let goal_counters_before = account
+        .profile
+        .match_goal_counters_for_leader(&effective_leader);
+    account.profile.record_match_stats_with_leader(
         false,
         SessionDefeats::default(),
         0,
         0,
         0,
-        canonical_leader.as_deref(),
+        Some(&effective_leader),
     );
     if let Some(guide) = account.profile.menu_guides.get_mut("welcome") {
         *guide =
@@ -6673,8 +6707,16 @@ fn apply_match_participation_to_account(
         crate::rewards::calculate(crate::rewards::RewardInput::default()),
         now,
     );
+    let goal_counters_after = account
+        .profile
+        .match_goal_counters_for_leader(&effective_leader);
     if let Some(receipt) = account.profile.reward_receipts.get_mut(match_id) {
         receipt.verification_status = Some(ReplayVerificationStatus::Pending);
+        receipt.goal_advances = crate::rewards::participation_goal_advances(
+            &goal_counters_before,
+            &goal_counters_after,
+            &effective_leader,
+        );
     }
     account.updated_at = now;
 }
@@ -6794,19 +6836,19 @@ fn apply_verified_participant_reward_to_account(
         return Ok(true);
     }
 
-    let receipt = account
-        .profile
-        .reward_receipts
-        .get_mut(&result.match_id)
-        .ok_or_else(|| "invalid verified result: participation receipt is missing".to_string())?;
-    receipt.verification_status = Some(ReplayVerificationStatus::Verified);
-
     let leader = participant
         .leader
         .as_deref()
         .and_then(crate::rewards::canonical_leader_name)
         .or_else(|| account.profile.preferred_leader.clone())
         .unwrap_or_else(|| "Caesar".to_string());
+    let goal_counters_before = account.profile.match_goal_counters_for_leader(&leader);
+    let receipt = account
+        .profile
+        .reward_receipts
+        .get_mut(&result.match_id)
+        .ok_or_else(|| "invalid verified result: participation receipt is missing".to_string())?;
+    receipt.verification_status = Some(ReplayVerificationStatus::Verified);
     account.profile.players_defeated = account
         .profile
         .players_defeated
@@ -6845,9 +6887,16 @@ fn apply_verified_participant_reward_to_account(
     account
         .profile
         .apply_reward_receipt(&bonus_id, &result.match_id, &leader, bonus, now);
+    let goal_counters_after = account.profile.match_goal_counters_for_leader(&leader);
+    let goal_advances = crate::rewards::verified_goal_advances(
+        &goal_counters_before,
+        &goal_counters_after,
+        &leader,
+    );
     if let Some(receipt) = account.profile.reward_receipts.get_mut(&bonus_id) {
         receipt.verification_status = Some(ReplayVerificationStatus::Verified);
         receipt.verified_result_sha256 = Some(result_hash);
+        receipt.goal_advances = goal_advances;
     }
 
     account.profile.total_structures_built = account
@@ -7531,6 +7580,31 @@ mod tests {
                 participation.verification_status,
                 Some(ReplayVerificationStatus::Verified)
             );
+            assert!(
+                participation
+                    .goal_advances
+                    .iter()
+                    .any(|advance| advance.chain_id == "series:battles")
+            );
+            assert!(
+                bonus
+                    .goal_advances
+                    .iter()
+                    .any(|advance| advance.chain_id == "series:kills")
+            );
+            if account_id == bob {
+                assert!(
+                    !bonus
+                        .goal_advances
+                        .iter()
+                        .any(|advance| advance.chain_id == "series:victories")
+                );
+            }
+            if account_id == alice {
+                let unlock_count =
+                    participation.unlocked_achievements.len() + bonus.unlocked_achievements.len();
+                assert!(unlock_count >= 2);
+            }
             assert!(bonus.verified_result_sha256.is_some());
         }
 

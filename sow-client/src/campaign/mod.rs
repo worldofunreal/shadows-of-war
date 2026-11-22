@@ -5,9 +5,8 @@ use sow_core::game_config::ScriptedSpawn;
 use sow_core::player::Leader;
 use sow_core::protocol::{CampaignRelation, Team};
 
-/// Which scripted campaign the running tutorial match belongs to. Boudica is
-/// the first-run teaching intro; the Six Sky episodes are the retention chain
-/// that follows it.
+/// Which scripted campaign the running tutorial match belongs to. Lady Six Sky
+/// is the first-run teaching and onboarding campaign; Boudica remains replayable.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CampaignId(&'static sow_data::campaign::CampaignEpisode);
 
@@ -79,6 +78,7 @@ impl CampaignId {
             || progress
                 .completed_episodes
                 .contains(sow_data::campaign::INTRO_EPISODE_ID)
+            || progress.completed_episodes.contains("boudica")
             || progress.completed_episodes.contains("blitz_05")
     }
 
@@ -288,14 +288,20 @@ pub(crate) fn tutorial_camera_frame(
     screen_w: f32,
     screen_h: f32,
 ) -> Option<((f32, f32), f32)> {
-    if !config.tutorial || !campaign.is_boudica() {
+    if !config.tutorial
+        || (!campaign.is_boudica()
+            && campaign.episode_id() != sow_data::campaign::INTRO_EPISODE_ID)
+    {
         return None;
     }
     let (player_x, player_y) = config.player_spawn?;
-    let target = config
-        .scripted_spawns
-        .iter()
-        .find(|spawn| spawn.campaign_faction_id.as_deref() == Some("roman_outpost"))?;
+    let target = config.scripted_spawns.iter().find(|spawn| {
+        if campaign.is_boudica() {
+            spawn.campaign_faction_id.as_deref() == Some("roman_outpost")
+        } else {
+            spawn.campaign_relation == Some(sow_core::protocol::CampaignRelation::Enemy)
+        }
+    })?;
     let (center, zoom) = camera_frame(
         (player_x as f32 + 0.5, player_y as f32 + 0.5),
         (target.x as f32 + 0.5, target.y as f32 + 0.5),

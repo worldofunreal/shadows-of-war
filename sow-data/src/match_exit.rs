@@ -973,8 +973,17 @@ pub(super) async fn handle_result(
         let start = state.db.registered_human_participant(&request.match_id, &account_id)?;
         let ranked = start.metadata.get("kind").and_then(serde_json::Value::as_str)
             == Some("Ranked1v1");
+        let verified_bonus_id = format!("verified_bonus:{}", request.match_id);
         loop {
-            let account = state.db.account_with_events(&account_id, &[&request.match_id]).await?;
+            // Both phases form one match-progress summary. Request the bonus
+            // explicitly so older pending event batches cannot omit it.
+            let account = state
+                .db
+                .account_with_events(
+                    &account_id,
+                    &[request.match_id.as_str(), verified_bonus_id.as_str()],
+                )
+                .await?;
             if let Some(phase) = terminal(account.profile.reward_receipts.get(&request.match_id)) {
                 let ranked_result = if ranked {
                     state.db.ranked_match_result(&account_id, &request.match_id)?

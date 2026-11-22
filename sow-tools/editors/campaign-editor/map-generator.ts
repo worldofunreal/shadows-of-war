@@ -1,6 +1,21 @@
 (function () {
   "use strict";
   type Rect = [number, number, number, number];
+  type MapProfile = {
+    map: string;
+    source?: "image" | "osm";
+    frequency?: number;
+    size?: string;
+    min_lake_tiles?: number;
+    min_island_pixels?: number;
+    min_island_tiles?: number;
+    osm_min_lake_tiles?: number;
+    osm_min_island_tiles?: number;
+    osm_connect_diagonals?: boolean;
+    smooth_coasts?: boolean;
+    water_level?: number;
+    connect_diagonals?: boolean;
+  };
 
   const namePattern = /^[a-z][a-z0-9_]{0,63}$/;
 
@@ -8,6 +23,7 @@
     canvas = $<HTMLCanvasElement>("map"),
     ctx = canvas.getContext("2d") as CanvasRenderingContext2D,
     nameInput = $<HTMLInputElement>("name"),
+    profileInput = $<HTMLSelectElement>("profile"),
     sizeInput = $<HTMLSelectElement>("size"),
     frequencyInput = $<HTMLInputElement>("frequency"),
     cropLabel = $("crop-label"),
@@ -21,8 +37,13 @@
     minLakeInput = $<HTMLInputElement>("min-lake"),
     minIslandInput = $<HTMLInputElement>("min-island"),
     minIslandTilesInput = $<HTMLInputElement>("min-island-tiles"),
+    osmMinLakeInput = $<HTMLInputElement>("osm-min-lake"),
+    osmMinIslandInput = $<HTMLInputElement>("osm-min-island-tiles"),
+    osmConnectDiagonalsInput = $<HTMLInputElement>("osm-connect-diagonals"),
+    refreshOsmCacheInput = $<HTMLInputElement>("refresh-osm-cache"),
     sourceInput = $<HTMLSelectElement>("source"),
-    waterFields = $("water"),
+    imageWaterFields = $("water-image"),
+    osmWaterFields = $("water-osm"),
     worldTab = $<HTMLButtonElement>("tab-world"),
     gameTab = $<HTMLButtonElement>("tab-game"),
     worldView = $("view-world"),
@@ -46,6 +67,7 @@
   let viewHeight = 0;
   let dpr = 1;
   let generatedName = "";
+  let mapProfiles: MapProfile[] = [];
   let generatedDraft = false;
   let generating = false;
   let regeneratePending = false;
@@ -230,6 +252,12 @@
         water_level: Number(waterLevelInput.value),
         connect_diagonals: connectDiagonalsInput.checked,
       },
+      osm_water: {
+        min_lake_tiles: Number(osmMinLakeInput.value),
+        min_island_tiles: Number(osmMinIslandInput.value),
+        connect_diagonals: osmConnectDiagonalsInput.checked,
+      },
+      refresh_osm_cache: refreshOsmCacheInput.checked,
       force,
     });
   }
@@ -241,7 +269,9 @@
 
   // Water settings shape only the map image; OpenStreetMap coastlines come as they are.
   function showSource() {
-    waterFields.hidden = sourceInput.value === "osm";
+    const osm = sourceInput.value === "osm";
+    imageWaterFields.hidden = osm;
+    osmWaterFields.hidden = !osm;
   }
 
   async function post(path: string, body: string) {
@@ -263,8 +293,13 @@
     generating = true;
     generateButton.disabled = true;
     if (draft) setStatus("Updating the in-game view…");
-    else if (sourceInput.value === "osm") setStatus("Downloading OpenStreetMap data for this area. This can take several minutes…");
-    else setStatus("Generating…");
+    else if (sourceInput.value === "osm") {
+      setStatus(
+        refreshOsmCacheInput.checked
+          ? "Refreshing OpenStreetMap data. This can take several minutes…"
+          : "Checking the local OpenStreetMap cache. Missing data downloads once, then is reused…",
+      );
+    } else setStatus("Generating…");
     try {
       let response = await post(`/__map-generate?map=${encodeURIComponent(name)}`, requestBody(force, draft));
       if (response.status === 409 && !force && confirm(`${await response.text()}\nReplace it?`)) {
@@ -305,22 +340,123 @@
     }, 300);
   }
 
+  async function loadMapProfiles() {
+    const response = await fetch("/__map-profiles");
+    if (!response.ok) throw new Error(await response.text());
+    mapProfiles = (await response.json()) as MapProfile[];
+    for (const profile of mapProfiles) {
+      const hasWaterSettings = [
+        profile.min_lake_tiles,
+        profile.min_island_pixels,
+        profile.min_island_tiles,
+        profile.smooth_coasts,
+        profile.water_level,
+        profile.connect_diagonals,
+        profile.osm_min_lake_tiles,
+        profile.osm_min_island_tiles,
+        profile.osm_connect_diagonals,
+      ].some((value) => value !== undefined);
+      const details = [
+        profile.size,
+        profile.smooth_coasts === undefined ? null : profile.smooth_coasts ? "smooth coasts" : "square coasts",
+      ].filter(Boolean);
+      const option = document.createElement("option");
+      option.value = profile.map;
+      const summary = details.length
+        ? details.join(", ")
+        : hasWaterSettings
+          ? "water settings"
+          : "rotation only";
+      option.textContent = `${profile.map} · ${summary}`;
+      profileInput.append(option);
+    }
+  }
+
+  function applyMapProfile(profile: MapProfile) {
+    if (profile.size && ["small", "regular", "big", "huge"].includes(profile.size)) {
+      sizeInput.value = profile.size;
+    }
+    if (profile.frequency !== undefined) frequencyInput.value = String(profile.frequency);
+    if (profile.min_lake_tiles !== undefined) minLakeInput.value = String(profile.min_lake_tiles);
+    if (profile.min_island_pixels !== undefined) minIslandInput.value = String(profile.min_island_pixels);
+    if (profile.min_island_tiles !== undefined) minIslandTilesInput.value = String(profile.min_island_tiles);
+    if (profile.smooth_coasts !== undefined) smoothCoastsInput.checked = profile.smooth_coasts;
+    if (profile.water_level !== undefined) waterLevelInput.value = String(profile.water_level);
+    if (profile.connect_diagonals !== undefined) connectDiagonalsInput.checked = profile.connect_diagonals;
+    if (profile.osm_min_lake_tiles !== undefined) osmMinLakeInput.value = String(profile.osm_min_lake_tiles);
+    if (profile.osm_min_island_tiles !== undefined) osmMinIslandInput.value = String(profile.osm_min_island_tiles);
+    if (profile.osm_connect_diagonals !== undefined) osmConnectDiagonalsInput.checked = profile.osm_connect_diagonals;
+    if (profile.source) sourceInput.value = profile.source;
+    if (
+      profile.min_lake_tiles !== undefined ||
+      profile.min_island_pixels !== undefined ||
+      profile.min_island_tiles !== undefined ||
+      profile.smooth_coasts !== undefined ||
+      profile.water_level !== undefined ||
+      profile.connect_diagonals !== undefined ||
+      (profile.source === undefined &&
+        [profile.osm_min_lake_tiles, profile.osm_min_island_tiles, profile.osm_connect_diagonals].some(
+          (value) => value !== undefined,
+        ))
+    ) {
+      sourceInput.value = "image";
+    }
+    showSource();
+    showWaterLevel();
+    const hasGenerationSettings =
+      profile.size !== undefined ||
+      profile.min_lake_tiles !== undefined ||
+      profile.min_island_pixels !== undefined ||
+      profile.min_island_tiles !== undefined ||
+      profile.smooth_coasts !== undefined ||
+      profile.water_level !== undefined ||
+      profile.connect_diagonals !== undefined;
+    const hasOsmSettings =
+      profile.osm_min_lake_tiles !== undefined ||
+      profile.osm_min_island_tiles !== undefined ||
+      profile.osm_connect_diagonals !== undefined;
+    setStatus(
+      hasGenerationSettings || hasOsmSettings
+        ? `Loaded saved values from ${profile.map}. Controls not recorded for that map keep their current values.`
+        : `Only rotation weight is recorded for ${profile.map}. Its generation settings were not saved.`,
+    );
+    scheduleRegenerate();
+  }
+
+  profileInput.addEventListener("change", () => {
+    const profile = mapProfiles.find((item) => item.map === profileInput.value);
+    if (profile) applyMapProfile(profile);
+  });
+
   generateButton.addEventListener("click", () => {
     const name = validMapName();
     if (!name || !crop || generating) return;
     generate(name, false, false);
   });
 
-  for (const input of [smoothCoastsInput, waterLevelInput, connectDiagonalsInput, minLakeInput, minIslandInput, minIslandTilesInput, sizeInput]) {
+  for (const input of [smoothCoastsInput, waterLevelInput, connectDiagonalsInput, minLakeInput, minIslandInput, minIslandTilesInput, sizeInput, frequencyInput]) {
     input.addEventListener("change", () => {
+      profileInput.value = "";
       showWaterLevel();
       scheduleRegenerate();
     });
   }
   waterLevelInput.addEventListener("input", showWaterLevel);
+  sourceInput.addEventListener("change", () => {
+    profileInput.value = "";
+  });
+  for (const input of [osmMinLakeInput, osmMinIslandInput, osmConnectDiagonalsInput]) {
+    input.addEventListener("change", () => {
+      profileInput.value = "";
+    });
+  }
+  refreshOsmCacheInput.addEventListener("change", () => {
+    profileInput.value = "";
+  });
   showWaterLevel();
   sourceInput.addEventListener("change", showSource);
   showSource();
+  loadMapProfiles().catch((error) => setStatus(`Could not load saved map settings: ${String(error)}`, true));
 
   uploadButton.addEventListener("click", async () => {
     if (!generatedName || generating) return;

@@ -221,6 +221,53 @@ function isCropRect(crop) {
   );
 }
 
+function parseMapProfile(info) {
+  const raw = (key) => info.match(new RegExp(`^${key}\\s*=\\s*(.*?)\\s*$`, "m"))?.[1];
+  const integer = (key) => {
+    const value = raw(key);
+    return value && /^\d+$/.test(value) ? Number(value) : undefined;
+  };
+  const boolean = (key) => {
+    const value = raw(key);
+    return value === "true" ? true : value === "false" ? false : undefined;
+  };
+  const decimal = (key) => {
+    const value = raw(key);
+    return value && /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : undefined;
+  };
+  const quoted = (key) => {
+    const value = raw(key);
+    return value?.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : undefined;
+  };
+
+  return {
+    source: quoted("source"),
+    frequency: integer("frequency"),
+    size: quoted("size"),
+    min_lake_tiles: integer("min_lake_tiles"),
+    min_island_pixels: integer("min_island_pixels"),
+    min_island_tiles: integer("min_island_tiles"),
+    osm_min_lake_tiles: integer("osm_min_lake_tiles"),
+    osm_min_island_tiles: integer("osm_min_island_tiles"),
+    osm_connect_diagonals: boolean("osm_connect_diagonals"),
+    smooth_coasts: boolean("smooth_coasts"),
+    water_level: decimal("water_level"),
+    connect_diagonals: boolean("connect_diagonals"),
+  };
+}
+
+function osmWaterArgs(water) {
+  if (!water || typeof water !== "object") return null;
+  const { min_lake_tiles = 0, min_island_tiles = 0, connect_diagonals = false } = water;
+  const count = (value) => Number.isInteger(value) && value >= 0 && value <= 1_000_000;
+  if (!count(min_lake_tiles) || !count(min_island_tiles) || typeof connect_diagonals !== "boolean") return null;
+  return [
+    "--min-lake-tiles", String(min_lake_tiles),
+    "--min-island-tiles", String(min_island_tiles),
+    ...(connect_diagonals ? ["--connect-diagonals"] : []),
+  ];
+}
+
 // Crop rectangle (source pixels) to WGS84 [min_lon, min_lat, max_lon, max_lat], using the frame the atlas uses.
 async function cropBoundingBox(crop) {
   const manifest = JSON.parse(await fs.readFile(path.join(mapSourcesDir, "thumbnail_frames.json"), "utf8"));
@@ -510,6 +557,26 @@ async function handle(req, res) {
       .map((entry) => entry.name)
       .sort();
     reply(res, 200, JSON.stringify(maps), "application/json; charset=utf-8");
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/__map-profiles") {
+    const entries = await fs.readdir(mapsDir, { withFileTypes: true });
+    const profiles = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !mapId.test(entry.name)) continue;
+      if (
+        !existsSync(path.join(mapsDir, entry.name, "map.bin")) &&
+        !existsSync(path.join(mapsDir, entry.name, "map.bin.br"))
+      ) {
+        continue;
+      }
+      const info = await fs.readFile(path.join(mapsDir, entry.name, "info.toml"), "utf8").catch(() => null);
+      if (info === null) continue;
+      profiles.push({ map: entry.name, ...parseMapProfile(info) });
+    }
+    profiles.sort((a, b) => a.map.localeCompare(b.map));
+    reply(res, 200, JSON.stringify(profiles), "application/json; charset=utf-8");
     return;
   }
 
@@ -814,6 +881,7 @@ async function handle(req, res) {
       const { crop, size, frequency } = request;
       const source = request.source ?? "image";
       const water = waterArgs(request.water);
+      const osmWater = osmWaterArgs(request.osm_water);
       if (!isCropRect(crop)) {
         reply(res, 400, "Select an area on the map first.");
         return;
@@ -834,6 +902,10 @@ async function handle(req, res) {
         reply(res, 400, "Pick a map source: image or osm.");
         return;
       }
+      if (source === "osm" && !osmWater) {
+        reply(res, 400, "OpenStreetMap water settings are invalid: tile sizes must be whole numbers.");
+        return;
+      }
       const mapDir = path.join(mapsDir, mapId);
       if (existsSync(path.join(mapDir, "map.bin")) && request.force !== true) {
         reply(res, 409, `assets/maps/${mapId} already exists. Confirm to replace it.`);
@@ -851,6 +923,8 @@ async function handle(req, res) {
           "--name", mapId,
           "--size", size,
           "--frequency", String(frequency),
+          ...osmWater,
+          ...(request.refresh_osm_cache === true ? ["--refresh-osm-cache"] : []),
           ...(request.force === true ? ["--force"] : []),
         ];
       } else {

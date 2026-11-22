@@ -1,0 +1,308 @@
+{
+  "version": 2,
+  "episode_id": "six_sky_maya_08",
+  "text_namespace": "tutorial.campaign_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 3200,
+    "starting_gold": 3200
+  },
+  "entry": "six_sky_maya_08_open",
+  "speakers": {
+    "six_sky": {
+      "name": "Lady Six Sky",
+      "avatar": "six_sky"
+    },
+    "tikal": {
+      "faction": "tikal"
+    },
+    "dos_pilas": {
+      "faction": "dos_pilas"
+    },
+    "calakmul": {
+      "faction": "calakmul"
+    }
+  },
+  "steps": [
+    {
+      "id": "six_sky_maya_08_open",
+      "type": "scene",
+      "presentation": "dialogue",
+      "show_title": true,
+      "speaker": "six_sky",
+      "pause_game": true,
+      "title_key": "tutorial.campaign_six_sky_maya_08_open_title",
+      "body_key": "tutorial.campaign_six_sky_maya_08_open_body",
+      "next": "six_sky_maya_08_pick_silo"
+    },
+    {
+      "id": "six_sky_maya_08_pick_silo",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_08_silo_pick_title",
+      "body_key": "tutorial.campaign_six_sky_maya_08_silo_pick_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_silo_pick_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "unlocks": {
+        "buildings": {
+          "SAM": 2,
+          "Factory": 4,
+          "Tower": 4,
+          "City": 4,
+          "Farm": 2,
+          "Port": 2,
+          "MissileSilo": 1
+        },
+        "actions": [
+          "nuke"
+        ]
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_missile_silo",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_missile_silo",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "next": "six_sky_maya_08_build_silo"
+    },
+    {
+      "id": "six_sky_maya_08_build_silo",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_08_silo_build_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_silo_build_hint",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "MissileSilo",
+        "value": 1,
+        "scope": "total"
+      },
+      "next": "six_sky_maya_08_pick_city",
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap",
+        "show_label": false
+      }
+    },
+    {
+      "id": "six_sky_maya_08_pick_city",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_08_city_pick_title",
+      "body_key": "tutorial.campaign_six_sky_maya_08_city_pick_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_city_pick_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "trigger": {
+        "type": "ui",
+        "action": "dock_city",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_city",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "next": "six_sky_maya_08_build_city"
+    },
+    {
+      "id": "six_sky_maya_08_build_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_08_city_build_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_city_build_hint",
+      "trigger": {
+        "type": "city",
+        "value": 1,
+        "scope": "total"
+      },
+      "next": "six_sky_maya_08_wait_city",
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "pause_game": true,
+      "paused_action": "build_until_started",
+      "dim_outside": true
+    },
+    {
+      "id": "six_sky_maya_08_wait_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_08_city_wait_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_city_wait_hint",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "City",
+        "value": 1,
+        "scope": "total"
+      },
+      "next": "six_sky_maya_08_select_city",
+      "marker": {
+        "target": "player"
+      }
+    },
+    {
+      "id": "six_sky_maya_08_select_city",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_08_city_upgrade_title",
+      "body_key": "tutorial.campaign_six_sky_maya_08_city_upgrade_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_city_upgrade_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "trigger": {
+        "type": "building_selected",
+        "kind": "City",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "next": "six_sky_maya_08_upgrade_city"
+    },
+    {
+      "id": "six_sky_maya_08_upgrade_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_08_city_upgrade_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_city_upgrade_hint",
+      "trigger": {
+        "type": "structure_upgrade",
+        "kind": "City",
+        "value": 1,
+        "scope": "step"
+      },
+      "next": "six_sky_maya_08_city_level_four",
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_structure",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "pause_game": true,
+      "paused_action": "upgrade_until_started",
+      "dim_outside": true
+    },
+    {
+      "id": "six_sky_maya_08_city_level_four",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_08_city_wait_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_city_level_four_hint",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "City",
+        "value": 4,
+        "scope": "total"
+      },
+      "next": "six_sky_maya_08_open_target",
+      "marker": {
+        "target": "player"
+      }
+    },
+    {
+      "id": "six_sky_maya_08_open_target",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_08_target_title",
+      "body_key": "tutorial.campaign_six_sky_maya_08_target_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_target_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "marker": {
+        "target": "tikal"
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "map_menu_open",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "nameplate",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "next": "six_sky_maya_08_launch_nuke"
+    },
+    {
+      "id": "six_sky_maya_08_launch_nuke",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_08_nuke_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_nuke_hint",
+      "trigger": {
+        "type": "nuke",
+        "value": 1,
+        "scope": "step"
+      },
+      "next": "six_sky_maya_08_defeat_tikal",
+      "marker": {
+        "target": "tikal"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_nuke",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "pause_game": true,
+      "paused_action": "launch_nuke_until_fired",
+      "dim_outside": true
+    },
+    {
+      "id": "six_sky_maya_08_defeat_tikal",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_08_defeat_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_08_defeat_hint",
+      "trigger": {
+        "type": "defeated",
+        "target": "tikal",
+        "scope": "episode"
+      },
+      "next": "six_sky_maya_08_victory",
+      "body_key": "tutorial.campaign_six_sky_maya_08_defeat_body",
+      "marker": {
+        "target": "tikal"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "exchange": [
+        {
+          "speaker": "tikal",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_08_tikal_shock"
+        }
+      ]
+    },
+    {
+      "id": "six_sky_maya_08_victory",
+      "type": "end",
+      "speaker": "six_sky",
+      "presentation": "chapter",
+      "title_key": "tutorial.campaign_six_sky_maya_08_end_title",
+      "body_key": "tutorial.campaign_six_sky_maya_08_end_body"
+    }
+  ]
+}

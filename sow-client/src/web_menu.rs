@@ -6253,11 +6253,15 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
     let deal_salt =
         sow_data::missions::account_deal_salt(inputs.account_id.as_deref().unwrap_or(""));
     let tactics_completed = sow_data::campaign::tactics_completed(&progress.completed_episodes);
-    let tactics_01_completed = progress.completed_episodes.contains("tactics_01_economy");
     let tactics_episodes_completed =
         sow_data::campaign::series_completed_count("tactics", &progress.completed_episodes);
     let adv_tactics_episodes_completed = sow_data::campaign::series_completed_count(
         "advanced_tactics",
+        &progress.completed_episodes,
+    );
+    let six_sky_maya_01_completed = progress.completed_episodes.contains("six_sky_maya_01");
+    let lady_six_sky_episodes_completed = sow_data::campaign::series_completed_count(
+        "lady_six_sky",
         &progress.completed_episodes,
     );
     sow_data::missions::sync_hands_for_periods(
@@ -6282,9 +6286,10 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         player_level: progress.level.max(1),
         tutorial_completed: CampaignId::intro_completed(progress),
         tactics_completed,
-        tactics_01_completed,
         tactics_episodes_completed,
         adv_tactics_episodes_completed,
+        six_sky_maya_01_completed,
+        lady_six_sky_episodes_completed,
         total_structures_built: progress.total_structures_built,
         matches_played: progress.matches_played,
         kills: progress.kills,

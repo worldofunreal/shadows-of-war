@@ -1,5 +1,10 @@
 import { formatCompactNumber } from "./number-format.ts";
-import { avatarBackgroundCss, setAvatarBackground, setAvatarImage } from "./avatar-presentation.ts";
+import {
+    avatarBackgroundCss,
+    avatarImageAttribute,
+    setAvatarBackground,
+    setAvatarImage,
+} from "./avatar-presentation.ts";
 import { SOWTooltip } from "./sow-tooltip.ts";
 import {
     animateRankResult,
@@ -13,6 +18,7 @@ import {
 import menuFlowApi from "./main_menu.flow.ts";
 import {
     MAIN_NAV_ITEMS,
+    asset,
     avatarImage,
     computeMainNavIndices,
     currencyAsset,
@@ -22,6 +28,7 @@ import {
     findLobby,
     selectedHeroBackdrop,
     leaderById,
+    leaderArtSlug,
     leaderDisplayName,
     menuIcon,
     menuUi,
@@ -80,9 +87,19 @@ import {
     type RewardPlaybackMode,
 } from "./main_menu.motion.ts";
 import {
-    getFullAchievementsCatalog,
-    type ProfileAchievement,
+    enrichAchievement,
+    getAchievementDefinition,
 } from "./main_menu.achievements.ts";
+import {
+    hasHandledMatchGoalToast,
+    hasViewedMatchGoals,
+    latestMatchGoalSummary,
+    markMatchGoalToastHandled,
+    selectMatchGoalHighlights,
+    type MatchGoalAchievement,
+    type MatchGoalHighlight,
+    type MatchGoalSummary,
+} from "./main_menu.match-goals.ts";
 applyGpuPerfTier();
 import {
     activeProfileEntry,
@@ -186,6 +203,15 @@ let rankedResultDismissedKey: string | null = null;
 let rankedStageKey: string | null = null;
 let rankedStageCleanup: (() => void) | null = null;
 let rewardPresentationReady = false;
+let activeMatchGoalToast: HTMLElement | null = null;
+let matchGoalToastTimer: number | null = null;
+let matchGoalVisibilityHandler: (() => void) | null = null;
+const noMatchGoalReceipts: MenuRewardReceipt[] = [];
+let matchGoalSummaryCache: {
+    accountId: string;
+    receipts: MenuRewardReceipt[];
+    summary: MatchGoalSummary | null;
+} | null = null;
 let pendingCreateMode: string | null = null;
 const menuFlow = menuFlowApi.create();
 window.SOW_menu_flow = menuFlow;
@@ -1060,15 +1086,8 @@ function syncDisconnectNotice(nextState: MenuState) {
 }
 
 function renderSystemNotice() {
-    if (!menuUi.state) return "";
+    if (!menuUi.state || menuUi.state.phase !== "MainMenu") return "";
     const updateAvailable = menuUi.state.update_available === true;
-    if (menuUi.state.phase !== "MainMenu" && !updateAvailable) return "";
-    const reloadSafe =
-        menuUi.state.phase === "MainMenu" &&
-        !menuUi.state.waiting &&
-        !menuUi.state.match_preparing &&
-        !menuUi.state.menu_return &&
-        pendingRewardReceipts().length === 0;
     const disconnected = !updateAvailable && disconnectNoticeVisible && !menuUi.state.connected;
     if (!updateAvailable && !disconnected) return "";
     const title = updateAvailable ? SOW_t("menu.version_update_title") : SOW_t("menu.connection_lost");
@@ -1092,7 +1111,6 @@ function renderSystemNotice() {
         "</p>" +
         "<div class='sow-menu__system-actions'>" +
         "<button class='sow-menu__primary sow-menu__system-primary' type='button' data-command='system_notice_refresh'" +
-        (updateAvailable && !reloadSafe ? " disabled" : "") +
         ">" +
         esc(primaryLabel) +
         "</button>" +
@@ -1112,10 +1130,7 @@ function dismissDisconnectNotice() {
 function handleSystemNoticeCommand(command: string | undefined) {
     if (command === "system_notice_refresh") {
         const state = menuUi.state;
-        if (
-            state?.update_available &&
-            (state.phase !== "MainMenu" || state.waiting || state.match_preparing || state.menu_return || pendingRewardReceipts().length > 0)
-        ) return true;
+        if (state?.update_available && state.phase !== "MainMenu") return true;
         window.location.reload();
         return true;
     }
@@ -2818,11 +2833,15 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
             selector: "[data-nav-screen='heroes']",
         };
     });
-    const achievementById = new Map<string, ProfileAchievement>();
-    for (const definition of getFullAchievementsCatalog()) achievementById.set(definition.id, definition);
     const unlockedAchievementIds = Array.from(
         new Set(
             receipts.reduce<string[]>(function (acc, receipt) {
+                const matchReceipt =
+                    (receipt.id === receipt.match_id ||
+                        receipt.id === "verified_bonus:" + receipt.match_id) &&
+                    (receipt.verification_status === "verified" ||
+                        receipt.verification_status === "rejected");
+                if (matchReceipt) return acc;
                 return acc.concat(
                     Array.isArray(receipt.unlocked_achievements) ? receipt.unlocked_achievements : [],
                 );
@@ -2832,7 +2851,7 @@ function runRewardPresentation(receipts: MenuRewardReceipt[]) {
         return /^[a-z][a-z0-9_]{0,63}$/.test(id);
     });
     const achievementStages: RewardStage[] = unlockedAchievementIds.map(function (id: string): RewardStage {
-        const definition = achievementById.get(id);
+        const definition = getAchievementDefinition(id);
         return {
             kind: "achievement",
             amount: 0,
@@ -3112,6 +3131,333 @@ function offerRewardDouble(receipts: MenuRewardReceipt[], accountId: string | nu
     return true;
 }
 
+function currentMatchGoalSummary(): MatchGoalSummary | null {
+    const accountId = menuUi.state?.account_id || "";
+    if (!accountId) return null;
+    const receipts = menuUi.state?.reward_receipts || noMatchGoalReceipts;
+    if (
+        matchGoalSummaryCache &&
+        matchGoalSummaryCache.accountId === accountId &&
+        matchGoalSummaryCache.receipts === receipts
+    )
+        return matchGoalSummaryCache.summary;
+    const summary = latestMatchGoalSummary(receipts);
+    matchGoalSummaryCache = { accountId, receipts, summary };
+    return summary;
+}
+
+function matchGoalAchievementCatalog(summary: MatchGoalSummary): Map<string, MatchGoalAchievement> {
+    const ids = new Set(summary.unlockedIds);
+    summary.advances.forEach((advance) => ids.add(advance.achievement_id));
+    const catalog = new Map<string, MatchGoalAchievement>();
+    for (const id of ids) {
+        const definition = getAchievementDefinition(id);
+        if (!definition) continue;
+        const enriched = enrichAchievement(definition, { isOwnProfile: true });
+        catalog.set(id, {
+            id,
+            title: enriched.localizedTitle,
+            points: definition.points,
+            target: definition.target,
+            chainId: enriched.chainKey,
+        });
+    }
+    return catalog;
+}
+
+function matchGoalChainLabel(chainId: string): string {
+    if (chainId === "series:battles") return SOW_t("profile.ach_sub_battles");
+    if (chainId === "series:victories") return SOW_t("profile.ach_sub_victories");
+    if (chainId === "series:kills" || chainId === "series:assists")
+        return SOW_t("profile.ach_sub_slaying");
+    if (chainId === "series:players") return SOW_t("profile.ach_sub_commanders_defeated");
+    if (chainId === "series:empires" || chainId === "series:tribes")
+        return SOW_t("profile.ach_sub_conquest");
+    const [kind, slug] = chainId.split(":");
+    if (kind === "hero_mastery" || kind === "hero_wins") {
+        const leader = leaderById(slug);
+        const name = leader ? leaderDisplayName(leader) : slug.replace(/_/g, " ");
+        const category = SOW_t(
+            kind === "hero_mastery" ? "profile.ach_sub_mastery" : "profile.ach_sub_hero_wins",
+        );
+        return name + " · " + category;
+    }
+    return SOW_t("profile.achievements");
+}
+
+function dismissMatchGoalToast(): void {
+    if (matchGoalToastTimer !== null) window.clearTimeout(matchGoalToastTimer);
+    matchGoalToastTimer = null;
+    if (matchGoalVisibilityHandler) {
+        document.removeEventListener("visibilitychange", matchGoalVisibilityHandler);
+        matchGoalVisibilityHandler = null;
+    }
+    if (activeMatchGoalToast) {
+        activeMatchGoalToast.remove();
+        activeMatchGoalToast = null;
+    }
+}
+
+function goalToastRow(highlight: MatchGoalHighlight): string {
+    const { advance, achievement } = highlight;
+    const target = advance ? advance.target : highlight.target;
+    const before = advance ? advance.before : highlight.progressBefore;
+    const after = advance ? advance.after : highlight.progressAfter;
+    const previous = advance ? advance.previous : highlight.previousTarget;
+    const amount = Math.max(0, after - before);
+    const span = Math.max(1, target - previous);
+    const beforePct = Math.max(0, Math.min(100, ((before - previous) / span) * 100));
+    const afterPct = Math.max(beforePct, Math.min(100, ((after - previous) / span) * 100));
+    const count =
+        highlight.kind === "unlock"
+            ? "<span class='sow-match-goals-toast__unlocked'>" +
+              esc(SOW_t("profile.match_goals_unlocked")) +
+              "</span>"
+            : "<b class='sow-match-goals-toast__count'>" +
+              esc(formatCompactNumber(Math.min(after, target))) +
+              "/" +
+              esc(formatCompactNumber(target)) +
+              " <i>+" +
+              esc(formatCompactNumber(amount)) +
+              "</i></b>";
+    const heroSlug = /^hero_(?:mastery|wins):([a-z0-9_]+)$/.exec(highlight.chainId)?.[1];
+    const hero = heroSlug ? leaderById(heroSlug) : null;
+    const heroArt =
+        hero && heroSlug && hero.id.replace(/[^a-z0-9]/gi, "").toLowerCase() === heroSlug.replace(/[^a-z0-9]/gi, "").toLowerCase()
+            ? leaderArtSlug(hero)
+            : "";
+    const icon = /^[a-z0-9_]+$/.test(heroArt)
+        ? "<span class='sow-match-goals-toast__icon'><img " +
+          avatarImageAttribute(asset("gameplay/avatars/" + heroArt + ".webp")) +
+          " alt='' aria-hidden='true'></span>"
+        : "<span class='sow-match-goals-toast__icon sow-match-goals-toast__icon--generic' aria-hidden='true'>✦</span>";
+    return (
+        "<li><div class='sow-match-goals-toast__row'>" +
+        icon +
+        "<div><small>" +
+        esc(matchGoalChainLabel(highlight.chainId)) +
+        "</small><strong>" +
+        esc(achievement.title) +
+        "</strong></div>" +
+        count +
+        "</div><div class='sow-match-goals-toast__meter'><i style='width:" +
+        beforePct.toFixed(2) +
+        "%'></i><b style='inset-inline-start:" +
+        beforePct.toFixed(2) +
+        "%;width:" +
+        Math.max(0, afterPct - beforePct).toFixed(2) +
+        "%'></b></div></li>"
+    );
+}
+
+function toastOverlapsControl(toast: HTMLElement): boolean {
+    const rect = toast.getBoundingClientRect();
+    const controls = root.querySelectorAll<HTMLElement>(
+        "button, a[href], input, select, textarea, [role='button']",
+    );
+    for (const control of controls) {
+        if (toast.contains(control) || !control.getClientRects().length) continue;
+        const style = window.getComputedStyle(control);
+        if (style.visibility === "hidden" || style.display === "none") continue;
+        const other = control.getBoundingClientRect();
+        if (
+            Math.min(rect.right, other.right) - Math.max(rect.left, other.left) > 8 &&
+            Math.min(rect.bottom, other.bottom) - Math.max(rect.top, other.top) > 8
+        )
+            return true;
+    }
+    return false;
+}
+
+function placeMatchGoalToast(toast: HTMLElement, compactLandscape: boolean): boolean {
+    const dock = root.querySelector<HTMLElement>(".sow-menu__nav-dock");
+    const dockRect = dock?.getBoundingClientRect();
+    const dockAbove = dockRect && dockRect.height > 0 && dockRect.width > window.innerWidth * 0.65;
+    const bottom = dockAbove ? Math.max(12, window.innerHeight - dockRect.top + 10) : 18;
+    const header = root.querySelector<HTMLElement>(".sow-menu__topbar");
+    const top = (header?.getBoundingClientRect().bottom || 0) + 12;
+    const placements = dockAbove
+        ? [
+              { left: 14, right: "auto", top: "auto", bottom },
+              { left: "auto", right: 14, top: "auto", bottom },
+          ]
+        : [
+              { left: 14, right: "auto", top: "auto", bottom },
+              { left: "auto", right: 14, top: "auto", bottom },
+              { left: 14, right: "auto", top, bottom: "auto" },
+              { left: "auto", right: 14, top, bottom: "auto" },
+          ];
+    for (const placement of placements) {
+        toast.style.left = typeof placement.left === "number" ? placement.left + "px" : placement.left;
+        toast.style.right = typeof placement.right === "number" ? placement.right + "px" : placement.right;
+        toast.style.top = typeof placement.top === "number" ? placement.top + "px" : placement.top;
+        toast.style.bottom = typeof placement.bottom === "number" ? placement.bottom + "px" : placement.bottom;
+        if (!toastOverlapsControl(toast)) return true;
+    }
+    return !compactLandscape && !toastOverlapsControl(toast);
+}
+
+function showMatchGoalToast(
+    accountId: string,
+    summary: MatchGoalSummary,
+    highlights: MatchGoalHighlight[],
+): void {
+    dismissMatchGoalToast();
+    const compactLandscape =
+        window.matchMedia("(orientation: landscape) and (max-height: 680px)").matches;
+    const toast = document.createElement("section");
+    toast.className = "sow-match-goals-toast";
+    toast.dataset.accountId = accountId;
+    toast.dataset.matchId = summary.matchId;
+    toast.dataset.compactLandscape = String(compactLandscape);
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    toast.setAttribute("aria-atomic", "true");
+    toast.innerHTML =
+        "<header><strong>" +
+        esc(SOW_t("profile.match_goals_toast_title")) +
+        "</strong><button type='button' data-match-goals-dismiss aria-label='" +
+        esc(SOW_t("profile.match_goals_dismiss")) +
+        "'>×</button></header><ul>" +
+        highlights.map(goalToastRow).join("") +
+        "</ul><footer><button type='button' data-match-goals-review>" +
+        esc(
+            SOW_t("profile.match_goals_view", {
+                count: Math.max(summary.advances.length, summary.unlockedIds.length),
+            }),
+        ) +
+        "</button></footer><div class='sow-match-goals-toast__timer' aria-hidden='true'><i></i></div>";
+    toast.classList.add("is-paused");
+    root.appendChild(toast);
+    if (!placeMatchGoalToast(toast, compactLandscape)) {
+        toast.remove();
+        return;
+    }
+    activeMatchGoalToast = toast;
+
+    let remaining = 9_000;
+    let startedAt = 0;
+    let timer: number | null = null;
+    const timerBar = toast.querySelector<HTMLElement>(".sow-match-goals-toast__timer i");
+    if (timerBar) timerBar.style.animationDuration = remaining + "ms";
+    const pause = function () {
+        if (timer === null) return;
+        window.clearTimeout(timer);
+        timer = null;
+        matchGoalToastTimer = null;
+        remaining = Math.max(0, remaining - (performance.now() - startedAt));
+        toast.classList.add("is-paused");
+    };
+    const resume = function () {
+        if (
+            timer !== null ||
+            toast.matches(":hover") ||
+            toast.contains(document.activeElement) ||
+            document.visibilityState !== "visible"
+        )
+            return;
+        toast.classList.remove("is-paused");
+        startedAt = performance.now();
+        timer = window.setTimeout(() => dismissMatchGoalToast(), remaining);
+        matchGoalToastTimer = timer;
+    };
+    matchGoalVisibilityHandler = function () {
+        if (document.visibilityState === "visible") resume();
+        else pause();
+    };
+    toast.addEventListener("pointerenter", pause);
+    toast.addEventListener("pointerleave", resume);
+    toast.addEventListener("focusin", pause);
+    toast.addEventListener("focusout", function (event) {
+        if (!(event.relatedTarget instanceof Node) || !toast.contains(event.relatedTarget)) resume();
+    });
+    toast.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            dismissMatchGoalToast();
+        }
+    });
+    document.addEventListener("visibilitychange", matchGoalVisibilityHandler);
+    toast.querySelector<HTMLButtonElement>("[data-match-goals-dismiss]")?.addEventListener("click", () => {
+        dismissMatchGoalToast();
+    });
+    toast.querySelector<HTMLButtonElement>("[data-match-goals-review]")?.addEventListener("click", () => {
+        dismissMatchGoalToast();
+        openProfile(null);
+        menuUi.profileTab = "achievements";
+        render();
+        root.querySelector<HTMLElement>("#sow-profile-last-match-goals")?.focus({ preventScroll: true });
+    });
+    resume();
+}
+
+function maybePresentMatchGoalToast(): void {
+    const accountId = menuUi.state?.account_id;
+    const summary = currentMatchGoalSummary();
+    if (!accountId || !summary || hasHandledMatchGoalToast(accountId, summary.matchId)) return;
+    if (hasViewedMatchGoals(accountId, summary.matchId)) {
+        markMatchGoalToastHandled(accountId, summary.matchId);
+        return;
+    }
+    if (!menuFlow.canGuide()) return;
+
+    markMatchGoalToastHandled(accountId, summary.matchId);
+    const guideVisible = Boolean(root.querySelector(".sow-menu-whisper:not([hidden])"));
+    const directDestination = Boolean(
+        menuUi.state?.menu_return?.requested_screen &&
+            menuUi.state.menu_return.requested_screen !== "home",
+    );
+    if (
+        root.hidden ||
+        document.visibilityState !== "visible" ||
+        currentScreen() !== "home" ||
+        guideVisible ||
+        directDestination ||
+        activeRewardStage ||
+        rewardAnimationRunning ||
+        menuUi.profileOpen ||
+        menuUi.storeOpen ||
+        menuUi.heroesOpen ||
+        menuUi.campaignOpen ||
+        menuUi.settingsOpen ||
+        menuUi.authModalOpen ||
+        menuUi.missionsModalOpen ||
+        menuUi.purchaseModal
+    )
+        return;
+    const highlights = selectMatchGoalHighlights(summary, matchGoalAchievementCatalog(summary));
+    if (highlights.length) showMatchGoalToast(accountId, summary, highlights);
+}
+
+function syncMatchGoalProfileBadge(): void {
+    const accountId = menuUi.state?.account_id;
+    const summary = currentMatchGoalSummary();
+    const unseen = Boolean(
+        accountId &&
+            summary &&
+            (summary.advances.length || summary.unlockedIds.length) &&
+            !hasViewedMatchGoals(accountId, summary.matchId),
+    );
+    const button = root.querySelector<HTMLElement>(
+        ".sow-menu__main-nav-item[data-nav-screen='profile']",
+    );
+    if (!button) return;
+    button.classList.toggle("has-unseen-match-goals", unseen);
+    let marker = button.querySelector<HTMLElement>(".sow-menu__nav-marker");
+    if (!marker) {
+        marker = document.createElement("span");
+        marker.className = "sow-menu__nav-marker";
+        marker.setAttribute("aria-hidden", "true");
+        button.appendChild(marker);
+    }
+    marker.hidden = !unseen;
+    const label = SOW_t("menu.profile");
+    button.setAttribute(
+        "aria-label",
+        unseen ? label + ", " + SOW_t("profile.match_goals_new") : label,
+    );
+}
+
 function maybePresentRewards() {
     if (!menuUi.state) return;
     if (
@@ -3131,6 +3477,20 @@ function maybePresentRewards() {
     });
     const guide = window.SOW_menu_guide;
     if (guide) guide.update(menuUi.state, menuGuideFacts());
+    syncMatchGoalProfileBadge();
+    if (
+        activeMatchGoalToast &&
+        (activeMatchGoalToast.dataset.accountId !== menuUi.state.account_id ||
+            root.hidden ||
+            currentScreen() !== "home" ||
+            menuUi.profileOpen ||
+            menuUi.storeOpen ||
+            menuUi.settingsOpen ||
+            menuUi.authModalOpen ||
+            menuUi.missionsModalOpen ||
+            Boolean(root.querySelector(".sow-menu-whisper:not([hidden])")))
+    )
+        dismissMatchGoalToast();
     if (menuFlow.canPresent() && !rewardAnimationRunning && pending.length) {
         ensureProgressionDisplay();
         runRewardPresentation(pending);
@@ -3154,6 +3514,7 @@ function maybePresentRewards() {
         render();
         return;
     }
+    maybePresentMatchGoalToast();
 }
 
 function menuGuideFacts() {

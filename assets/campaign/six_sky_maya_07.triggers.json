@@ -1,0 +1,146 @@
+{
+  "version": 2,
+  "episode_id": "six_sky_maya_07",
+  "text_namespace": "tutorial.campaign_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 2500,
+    "starting_gold": 5000
+  },
+  "entry": "six_sky_maya_07_open",
+  "speakers": {
+    "six_sky": {
+      "name": "Lady Six Sky",
+      "avatar": "six_sky"
+    },
+    "dos_pilas": {
+      "faction": "dos_pilas"
+    },
+    "calakmul": {
+      "faction": "calakmul"
+    },
+    "yaxha": {
+      "faction": "yaxha"
+    }
+  },
+  "steps": [
+    {
+      "id": "six_sky_maya_07_open",
+      "type": "scene",
+      "presentation": "dialogue",
+      "show_title": true,
+      "speaker": "six_sky",
+      "pause_game": true,
+      "title_key": "tutorial.campaign_six_sky_maya_07_open_title",
+      "body_key": "tutorial.campaign_six_sky_maya_07_open_body",
+      "next": "six_sky_maya_07_transfer_target"
+    },
+    {
+      "id": "six_sky_maya_07_transfer_target",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_07_transfer_target_title",
+      "body_key": "tutorial.campaign_six_sky_maya_07_transfer_target_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_07_transfer_target_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "marker": {
+        "target": "dos_pilas"
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "map_menu_open",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "nameplate",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "next": "six_sky_maya_07_transfer_choose",
+      "unavailable_next": "six_sky_maya_07_empty_hands"
+    },
+    {
+      "id": "six_sky_maya_07_transfer_choose",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_07_transfer_choose_title",
+      "body_key": "tutorial.campaign_six_sky_maya_07_transfer_choose_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_07_transfer_choose_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "marker": {
+        "target": "dos_pilas"
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "map_transfer",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_transfer",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "next": "six_sky_maya_07_send_aid",
+      "unavailable_next": "six_sky_maya_07_empty_hands"
+    },
+    {
+      "id": "six_sky_maya_07_send_aid",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_07_transfer_send_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_07_transfer_send_hint",
+      "trigger": {
+        "type": "resource_transfer",
+        "recipient": "dos_pilas",
+        "value": 1,
+        "scope": "episode"
+      },
+      "next": "six_sky_maya_07_ally_reply",
+      "body_key": "tutorial.campaign_six_sky_maya_07_transfer_send_body",
+      "marker": {
+        "target": "dos_pilas"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "transfer_send",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "pause_game": true,
+      "paused_action": "send_resources_stay_paused",
+      "dim_outside": true,
+      "unavailable_next": "six_sky_maya_07_empty_hands"
+    },
+    {
+      "id": "six_sky_maya_07_ally_reply",
+      "type": "scene",
+      "exchange": [
+        {
+          "speaker": "dos_pilas",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_07_dos_pilas_reply"
+        }
+      ],
+      "next": "six_sky_maya_07_end"
+    },
+    {
+      "id": "six_sky_maya_07_end",
+      "type": "end",
+      "speaker": "six_sky",
+      "presentation": "chapter",
+      "title_key": "tutorial.campaign_six_sky_maya_07_end_title",
+      "body_key": "tutorial.campaign_six_sky_maya_07_end_body"
+    },
+    {
+      "id": "six_sky_maya_07_empty_hands",
+      "type": "end",
+      "speaker": "six_sky",
+      "presentation": "chapter",
+      "title_key": "tutorial.campaign_six_sky_maya_07_empty_title",
+      "body_key": "tutorial.campaign_six_sky_maya_07_empty_body"
+    }
+  ]
+}

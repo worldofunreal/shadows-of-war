@@ -98,6 +98,21 @@ pub struct AchievementTotals {
     pub leader_wins_map: std::collections::BTreeMap<String, u64>,
 }
 
+/// The small, phase-specific snapshot used to attach match progress without
+/// rebuilding the full achievement totals.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MatchGoalCounters {
+    pub matches_played: u64,
+    pub wins: u64,
+    pub hero_matches: u64,
+    pub hero_wins: u64,
+    pub kills: u64,
+    pub assists: u64,
+    pub players_defeated: u64,
+    pub empires_defeated: u64,
+    pub tribes_defeated: u64,
+}
+
 fn get_hero_matches(leader_matches: &std::collections::BTreeMap<String, u64>, slug: &str) -> u64 {
     if let Some(character) = crate::geo_entities::by_id(slug) {
         if let Some(hero) = &character.hero {
@@ -234,6 +249,193 @@ pub fn achievement_progress(id: &str, totals: &AchievementTotals) -> u64 {
     }
 
     0
+}
+
+#[derive(Clone, Copy)]
+struct GoalMilestone {
+    id: &'static str,
+    target: u64,
+}
+
+#[derive(Default)]
+struct GoalMilestoneIndex {
+    chains: std::collections::HashMap<String, Vec<GoalMilestone>>,
+    hero_by_leader: std::collections::HashMap<String, &'static str>,
+}
+
+fn goal_chain_for_achievement(id: &str) -> Option<String> {
+    let chain = match id {
+        "first_command" | "battle_hardened" => "series:battles",
+        "first_victory" | "victory_march" => "series:victories",
+        _ if id.starts_with("battles_") => "series:battles",
+        _ if id.starts_with("victories_") => "series:victories",
+        _ if id.starts_with("kills_") => "series:kills",
+        _ if id.starts_with("assists_") => "series:assists",
+        _ if id.starts_with("players_") => "series:players",
+        _ if id.starts_with("empires_") => "series:empires",
+        _ if id.starts_with("tribes_") => "series:tribes",
+        _ => {
+            if let Some(index) = id.find("_mastery_") {
+                return Some(format!("hero_mastery:{}", &id[..index]));
+            }
+            if let Some(index) = id.find("_wins_") {
+                return Some(format!("hero_wins:{}", &id[..index]));
+            }
+            return None;
+        }
+    };
+    Some(chain.to_string())
+}
+
+fn goal_milestone_index() -> &'static GoalMilestoneIndex {
+    static INDEX: std::sync::OnceLock<GoalMilestoneIndex> = std::sync::OnceLock::new();
+    INDEX.get_or_init(|| {
+        let mut index = GoalMilestoneIndex::default();
+        for achievement in all_achievements() {
+            if let Some(chain) = goal_chain_for_achievement(achievement.id) {
+                index.chains.entry(chain).or_default().push(GoalMilestone {
+                    id: achievement.id,
+                    target: achievement.target,
+                });
+            }
+        }
+        for milestones in index.chains.values_mut() {
+            milestones.sort_by(|left, right| {
+                left.target
+                    .cmp(&right.target)
+                    .then_with(|| left.id.cmp(right.id))
+            });
+        }
+        for character in crate::geo_entities::all() {
+            if let Some(hero) = &character.hero {
+                for name in [
+                    character.id.as_str(),
+                    character.name.as_str(),
+                    hero.name.as_str(),
+                ] {
+                    index
+                        .hero_by_leader
+                        .insert(name.to_ascii_lowercase(), character.id.as_str());
+                }
+            }
+        }
+        index
+    })
+}
+
+fn indexed_goal_advance(
+    index: &GoalMilestoneIndex,
+    chain_id: &str,
+    before: u64,
+    after: u64,
+) -> Option<crate::profile::GoalAdvance> {
+    if after <= before {
+        return None;
+    }
+    let milestones = index.chains.get(chain_id)?;
+    let next_index = milestones.partition_point(|milestone| milestone.target <= before);
+    if next_index == milestones.len() {
+        return None;
+    }
+    // When one receipt crosses multiple thresholds, use its highest crossed
+    // milestone as the row while the receipt retains every unlocked ID.
+    let reached_end = milestones.partition_point(|milestone| milestone.target <= after);
+    let selected_index = if reached_end > next_index {
+        reached_end - 1
+    } else {
+        next_index
+    };
+    let selected = milestones[selected_index];
+    let previous_target = selected_index
+        .checked_sub(1)
+        .map_or(0, |previous| milestones[previous].target);
+    Some(crate::profile::GoalAdvance {
+        chain_id: chain_id.to_string(),
+        achievement_id: selected.id.to_string(),
+        progress_before: before,
+        progress_after: after,
+        previous_target,
+        target: selected.target,
+    })
+}
+
+fn credited_hero_slug(index: &GoalMilestoneIndex, leader: &str) -> Option<&'static str> {
+    index
+        .hero_by_leader
+        .get(&leader.to_ascii_lowercase())
+        .copied()
+}
+
+/// Match participation changes only the overall battle chain and the credited
+/// hero's mastery chain. The indexed lookup avoids walking the full catalog.
+pub fn participation_goal_advances(
+    before: &MatchGoalCounters,
+    after: &MatchGoalCounters,
+    leader: &str,
+) -> Vec<crate::profile::GoalAdvance> {
+    let index = goal_milestone_index();
+    let mut advances = Vec::with_capacity(2);
+    if let Some(advance) = indexed_goal_advance(
+        index,
+        "series:battles",
+        before.matches_played,
+        after.matches_played,
+    ) {
+        advances.push(advance);
+    }
+    if let Some(slug) = credited_hero_slug(index, leader) {
+        let chain_id = format!("hero_mastery:{slug}");
+        if let Some(advance) =
+            indexed_goal_advance(index, &chain_id, before.hero_matches, after.hero_matches)
+        {
+            advances.push(advance);
+        }
+    }
+    advances
+}
+
+/// Verified match results add two victory counters and five combat counters.
+/// Each changed counter performs one binary search over its short milestone list.
+pub fn verified_goal_advances(
+    before: &MatchGoalCounters,
+    after: &MatchGoalCounters,
+    leader: &str,
+) -> Vec<crate::profile::GoalAdvance> {
+    let index = goal_milestone_index();
+    let mut advances = Vec::with_capacity(7);
+    for (chain_id, before_value, after_value) in [
+        ("series:victories", before.wins, after.wins),
+        ("series:kills", before.kills, after.kills),
+        ("series:assists", before.assists, after.assists),
+        (
+            "series:players",
+            before.players_defeated,
+            after.players_defeated,
+        ),
+        (
+            "series:empires",
+            before.empires_defeated,
+            after.empires_defeated,
+        ),
+        (
+            "series:tribes",
+            before.tribes_defeated,
+            after.tribes_defeated,
+        ),
+    ] {
+        if let Some(advance) = indexed_goal_advance(index, chain_id, before_value, after_value) {
+            advances.push(advance);
+        }
+    }
+    if let Some(slug) = credited_hero_slug(index, leader) {
+        let chain_id = format!("hero_wins:{slug}");
+        if let Some(advance) =
+            indexed_goal_advance(index, &chain_id, before.hero_wins, after.hero_wins)
+        {
+            advances.push(advance);
+        }
+    }
+    advances
 }
 
 /// Project server achievement awards without changing the caller's profile.
@@ -748,8 +950,8 @@ pub fn canonical_leader_name(value: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AchievementTotals, RewardInput, calculate, canonical_leader_name,
-        newly_unlocked_achievements,
+        AchievementTotals, MatchGoalCounters, RewardInput, calculate, canonical_leader_name,
+        newly_unlocked_achievements, participation_goal_advances, verified_goal_advances,
     };
 
     #[test]
@@ -775,6 +977,106 @@ mod tests {
         assert_eq!(win.leader_xp, 163);
         assert_eq!(win.crowns, 43);
         assert_eq!(win.laurels, 0);
+    }
+
+    #[test]
+    fn match_goal_progress_uses_only_changed_indexed_chains() {
+        let before = MatchGoalCounters {
+            matches_played: 2,
+            hero_matches: 2,
+            ..Default::default()
+        };
+        let after = MatchGoalCounters {
+            matches_played: 3,
+            hero_matches: 3,
+            ..Default::default()
+        };
+        let participation = participation_goal_advances(&before, &after, "Boudica");
+        assert_eq!(participation.len(), 2);
+        let battles = participation
+            .iter()
+            .find(|advance| advance.chain_id == "series:battles")
+            .unwrap();
+        assert_eq!(battles.achievement_id, "battles_3");
+        assert_eq!(battles.progress_before, 2);
+        assert_eq!(battles.progress_after, 3);
+        assert_eq!(battles.previous_target, 1);
+        assert_eq!(battles.target, 3);
+        let mastery = participation
+            .iter()
+            .find(|advance| advance.chain_id == "hero_mastery:boudica")
+            .unwrap();
+        assert_eq!(mastery.achievement_id, "boudica_mastery_3");
+
+        let before = MatchGoalCounters {
+            kills: 9,
+            assists: 9,
+            players_defeated: 4,
+            empires_defeated: 4,
+            tribes_defeated: 4,
+            ..Default::default()
+        };
+        let after = MatchGoalCounters {
+            wins: 1,
+            hero_wins: 1,
+            kills: 10,
+            assists: 10,
+            players_defeated: 5,
+            empires_defeated: 5,
+            tribes_defeated: 5,
+            ..Default::default()
+        };
+        let verified = verified_goal_advances(&before, &after, "Boudica");
+        assert_eq!(verified.len(), 7);
+        assert!(verified.iter().any(|advance| {
+            advance.chain_id == "series:victories" && advance.achievement_id == "first_victory"
+        }));
+        assert!(verified.iter().any(|advance| {
+            advance.chain_id == "hero_wins:boudica" && advance.achievement_id == "boudica_wins_1"
+        }));
+    }
+
+    #[test]
+    fn indexed_match_goal_records_chain_completion_and_stops_after_last_tier() {
+        let first = MatchGoalCounters::default();
+        let crossed_multiple = MatchGoalCounters {
+            matches_played: 25,
+            hero_matches: 25,
+            ..Default::default()
+        };
+        let advances = participation_goal_advances(&first, &crossed_multiple, "Boudica");
+        let battles = advances
+            .iter()
+            .find(|advance| advance.chain_id == "series:battles")
+            .unwrap();
+        assert_eq!(battles.achievement_id, "battles_25");
+        assert_eq!(battles.progress_before, 0);
+        assert_eq!(battles.progress_after, 25);
+        assert_eq!(battles.previous_target, 10);
+
+        let before = MatchGoalCounters {
+            matches_played: 500,
+            hero_matches: 500,
+            ..Default::default()
+        };
+        let completed = MatchGoalCounters {
+            matches_played: 1_000,
+            hero_matches: 1_000,
+            ..Default::default()
+        };
+        let advances = participation_goal_advances(&before, &completed, "Boudica");
+        assert_eq!(advances.len(), 2);
+        assert!(
+            advances
+                .iter()
+                .all(|advance| { advance.target == 1_000 && advance.previous_target == 500 })
+        );
+        let beyond = MatchGoalCounters {
+            matches_played: 1_001,
+            hero_matches: 1_001,
+            ..Default::default()
+        };
+        assert!(participation_goal_advances(&completed, &beyond, "Boudica").is_empty());
     }
 
     #[test]

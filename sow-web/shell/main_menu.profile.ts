@@ -10,6 +10,8 @@ import {
   WOW_PILLAR_ORDER,
   WOW_SUBCATEGORIES,
   enrichAchievementsList,
+  enrichAchievement,
+  getAchievementDefinition,
   getFullAchievementsCatalog,
   matchesAchievementFilters,
   renderAchievementCard,
@@ -26,6 +28,10 @@ import {
   type WowCategoryId,
   type WowConcretePillar,
 } from "./main_menu.achievements.ts";
+import {
+  latestMatchGoalSummary,
+  markMatchGoalsViewed,
+} from "./main_menu.match-goals.ts";
 import { levelFromXp } from "./main_menu.shell.ts";
 import { avatarImageAttribute, setAvatarImage } from "./avatar-presentation.ts";
 import {
@@ -1625,14 +1631,153 @@ export function refreshProfileAchievements() {
   }
 }
 
+function matchGoalChainLabel(chainId: string): string {
+  if (chainId === "series:battles") return SOW_t("profile.ach_sub_battles");
+  if (chainId === "series:victories") return SOW_t("profile.ach_sub_victories");
+  if (chainId === "series:kills" || chainId === "series:assists")
+    return SOW_t("profile.ach_sub_slaying");
+  if (chainId === "series:players")
+    return SOW_t("profile.ach_sub_commanders_defeated");
+  if (chainId === "series:empires" || chainId === "series:tribes")
+    return SOW_t("profile.ach_sub_conquest");
+  if (chainId === "series:laurels") return SOW_t("profile.ach_sub_laurels");
+  const [kind, slug] = chainId.split(":");
+  if (kind === "hero_mastery" || kind === "hero_wins") {
+    const leader = leaderById(slug);
+    const heroName = leader ? leaderDisplayName(leader) : slug.replace(/_/g, " ");
+    const category = SOW_t(
+      kind === "hero_mastery"
+        ? "profile.ach_sub_mastery"
+        : "profile.ach_sub_hero_wins",
+    );
+    return heroName + " · " + category;
+  }
+  return SOW_t("profile.achievements");
+}
+
+function latestMatchGoalsMarkup(
+  summary: ReturnType<typeof latestMatchGoalSummary>,
+  achievements: Map<string, EnrichedAchievement>,
+) {
+  if (!summary || (!summary.advances.length && !summary.unlockedIds.length)) return "";
+  const progressRows = summary.advances
+    .map(function (advance) {
+      const achievement = achievements.get(advance.achievement_id);
+      const title = achievement?.localizedTitle || advance.achievement_id.replace(/_/g, " ");
+      const chainLabel = matchGoalChainLabel(advance.chain_id);
+      const span = Math.max(1, advance.target - advance.previous);
+      const beforePct = Math.max(
+        0,
+        Math.min(100, ((advance.before - advance.previous) / span) * 100),
+      );
+      const afterPct = Math.max(
+        beforePct,
+        Math.min(100, ((advance.after - advance.previous) / span) * 100),
+      );
+      const visibleProgress = Math.min(advance.after, advance.target);
+      const amount = advance.after - advance.before;
+      return (
+        "<li class='sow-profile__match-goal-row'><div class='sow-profile__match-goal-copy'><div><strong>" +
+        esc(title) +
+        "</strong><small>" +
+        esc(chainLabel) +
+        "</small></div><b>" +
+        esc(profileStat(visibleProgress)) +
+        "/" +
+        esc(profileStat(advance.target)) +
+        " <span>+" +
+        esc(profileStat(amount)) +
+        "</span></b></div><div class='sow-profile__match-goal-meter' role='progressbar' aria-label='" +
+        esc(title) +
+        "' aria-valuemin='" +
+        esc(advance.previous) +
+        "' aria-valuemax='" +
+        esc(advance.target) +
+        "' aria-valuenow='" +
+        esc(visibleProgress) +
+        "'><i style='width:" +
+        beforePct.toFixed(2) +
+        "%'></i><b style='inset-inline-start:" +
+        beforePct.toFixed(2) +
+        "%;width:" +
+        Math.max(0, afterPct - beforePct).toFixed(2) +
+        "%'></b></div></li>"
+      );
+    })
+    .join("");
+  const unlockRows = summary.unlockedIds
+    .map(function (id) {
+      const achievement = achievements.get(id);
+      if (!achievement) return "";
+      return (
+        "<li><span aria-hidden='true'>✦</span><strong>" +
+        esc(achievement.localizedTitle) +
+        "</strong><small>+" +
+        esc(profileStat(achievement.points)) +
+        " " +
+        esc(SOW_t("profile.laurels")) +
+        "</small></li>"
+      );
+    })
+    .join("");
+  const unlocks = unlockRows
+    ? "<div class='sow-profile__match-goal-unlocks'><h4>" +
+      esc(SOW_t("profile.match_goals_unlocked")) +
+      "</h4><ul>" +
+      unlockRows +
+      "</ul></div>"
+    : "";
+  return (
+    "<section class='sow-profile__match-goals' aria-labelledby='sow-profile-last-match-goals'>" +
+    "<div class='sow-profile__match-goals-head'><h3 id='sow-profile-last-match-goals' tabindex='-1'>" +
+    esc(SOW_t("profile.match_goals_last_match")) +
+    "</h3><span>" +
+    esc(SOW_t("profile.match_goals_saved")) +
+    "</span></div>" +
+    (progressRows
+      ? "<ul class='sow-profile__match-goal-list'>" + progressRows + "</ul>"
+      : "<p class='sow-profile__match-goals-empty'>" +
+        esc(SOW_t("profile.match_goals_unlocked_only")) +
+        "</p>") +
+    unlocks +
+    "</section>"
+  );
+}
+
 function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
+  const isOwnProfile = Boolean(menuUi.state && data.account_id === menuUi.state.account_id);
+  const matchSummary = isOwnProfile
+    ? latestMatchGoalSummary(menuUi.state?.reward_receipts || [])
+    : null;
+  if (
+    matchSummary &&
+    (matchSummary.advances.length || matchSummary.unlockedIds.length) &&
+    menuUi.state?.account_id
+  ) {
+    markMatchGoalsViewed(menuUi.state.account_id, matchSummary.matchId);
+  }
+  const matchAchievementIds = new Set([
+    ...(matchSummary?.unlockedIds || []),
+    ...(matchSummary?.advances.map((advance) => advance.achievement_id) || []),
+  ]);
+  const matchAchievements = new Map<string, EnrichedAchievement>();
+  for (const id of matchAchievementIds) {
+    const profileAchievement = getAchievementDefinition(id);
+    if (profileAchievement) {
+      matchAchievements.set(
+        id,
+        enrichAchievement(profileAchievement, { isOwnProfile: true }),
+      );
+    }
+  }
+  const matchGoals = latestMatchGoalsMarkup(matchSummary, matchAchievements);
   if (!complete)
     return (
+      matchGoals +
       "<p class='sow-profile__empty'>" +
       esc(profileSnapshotError() || SOW_t("profile.loading_profile")) +
       "</p>"
     );
-  const isOwnProfile = Boolean(menuUi.state && data.account_id === menuUi.state.account_id);
   const rawAchievements = resolveProfileAchievements(data);
   const enriched = enrichAchievementsList(rawAchievements, isOwnProfile);
   const unlockedCount = enriched.filter((a) => a.unlocked).length;
@@ -1802,6 +1947,7 @@ function profileAchievementsMarkup(data: ProfileData, complete: boolean) {
     "</div>";
 
   return (
+    matchGoals +
     summaryDossier +
     "<div class='sow-profile__ach-layout'>" +
     "<aside class='sow-profile__ach-rail' data-ach-rail aria-label='" +

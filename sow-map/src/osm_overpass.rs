@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use sha2::{Digest, Sha256};
 
 use crate::osm_coast::CoastlineGeometry;
 use crate::osm_tiles::OSM_USER_AGENT;
@@ -16,6 +17,7 @@ const OVERPASS_SERVERS: [&str; 2] = [
 pub const TILE_LON_DEG: f64 = 15.0;
 pub const TILE_LAT_DEG: f64 = 10.0;
 const REQUEST_TIMEOUT_SECS: u64 = 180;
+const CACHE_DIR: &str = "target/osm_cache/overpass_v2";
 
 /// How many Overpass grid cells a bbox spans (15°×10° per cell).
 pub fn overpass_tile_count(min_lon: f64, min_lat: f64, max_lon: f64, max_lat: f64) -> usize {
@@ -84,7 +86,7 @@ pub async fn fetch_coastlines_tiled(
     scale: f64,
     map_width: u32,
     map_height: u32,
-    cache_name: Option<&str>,
+    refresh_cache: bool,
 ) -> Result<CoastlineGeometry, Box<dyn Error>> {
     let min_lon = bbox.min_lon;
     let min_lat = bbox.min_lat;
@@ -96,7 +98,6 @@ pub async fn fetch_coastlines_tiled(
         tiles.len()
     );
 
-    let cache_dir = cache_name.map(|n| PathBuf::from("target/osm_cache").join(n));
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .build()?;
@@ -113,16 +114,8 @@ pub async fn fetch_coastlines_tiled(
             tiles.len()
         );
 
-        if let Some(ref dir) = cache_dir
-            && let Some(cached) = load_coastline_cache(dir, tile_index)
-        {
-            log::info!("    loaded {} segments from cache", cached.segments.len());
-            segments.extend(cached.segments);
-            continue;
-        }
-
         let query = coastline_query(*tile_min_lat, *tile_min_lon, *tile_max_lat, *tile_max_lon);
-        let json = match run_overpass(&client, &query).await {
+        let json = match query_overpass_cached(&client, &query, "coastlines", refresh_cache).await {
             Ok(j) => j,
             Err(e) => {
                 log::warn!("    coastline fetch failed: {e}");
@@ -142,10 +135,6 @@ pub async fn fetch_coastlines_tiled(
         let extracted =
             crate::osm_coast::extract_coastlines(&json, bbox, scale, map_width, map_height);
         log::info!("    {} coastline segments", extracted.segments.len());
-
-        if let Some(ref dir) = cache_dir {
-            save_coastline_cache(dir, tile_index, &extracted)?;
-        }
 
         segments.extend(extracted.segments);
     }
@@ -171,6 +160,7 @@ pub async fn stamp_water_tiled(
     scale: f64,
     map_width: u32,
     map_height: u32,
+    refresh_cache: bool,
 ) -> Result<(), Box<dyn Error>> {
     let min_lon = bbox.min_lon;
     let min_lat = bbox.min_lat;
@@ -194,7 +184,7 @@ pub async fn stamp_water_tiled(
         );
 
         let query = water_query(*tile_min_lat, *tile_min_lon, *tile_max_lat, *tile_max_lon);
-        let json = match run_overpass(&client, &query).await {
+        let json = match query_overpass_cached(&client, &query, "inland water", refresh_cache).await {
             Ok(j) => j,
             Err(e) => {
                 eprintln!("    water fetch skipped: {e}");
@@ -230,6 +220,7 @@ pub async fn fetch_places(
     min_lat: f64,
     max_lon: f64,
     max_lat: f64,
+    refresh_cache: bool,
 ) -> Result<Value, Box<dyn Error>> {
     let tiles = tile_bboxes(min_lon, min_lat, max_lon, max_lat);
     let client = Client::builder()
@@ -242,26 +233,19 @@ pub async fn fetch_places(
         let query = format!(
             r#"[out:json][timeout:60];node["place"~"city|town|village|suburb|hamlet"]({tile_min_lat},{tile_min_lon},{tile_max_lat},{tile_max_lon});out body;"#
         );
-        for server in OVERPASS_SERVERS {
-            let res = client
-                .post(server)
-                .header("User-Agent", OSM_USER_AGENT)
-                .form(&[("data", &query)])
-                .send()
-                .await;
-            if let Ok(resp) = res
-                && resp.status().is_success()
-            {
-                let json: Value = resp.json().await?;
-                if let Some(elements) = json.get("elements").and_then(|e| e.as_array()) {
-                    for element in elements {
-                        let key = element_key(element);
-                        if seen.insert(key) {
-                            all_elements.push(element.clone());
-                        }
-                    }
+        let json = match query_overpass_cached(&client, &query, "place names", refresh_cache).await {
+            Ok(json) => json,
+            Err(error) => {
+                log::warn!("place names fetch failed: {error}");
+                continue;
+            }
+        };
+        if let Some(elements) = json.get("elements").and_then(|e| e.as_array()) {
+            for element in elements {
+                let key = element_key(element);
+                if seen.insert(key) {
+                    all_elements.push(element.clone());
                 }
-                break;
             }
         }
     }
@@ -323,6 +307,67 @@ async fn run_overpass(client: &Client, query: &str) -> Result<Value, Box<dyn Err
     Err(last_err.into())
 }
 
+async fn query_overpass_cached(
+    client: &Client,
+    query: &str,
+    label: &str,
+    refresh_cache: bool,
+) -> Result<Value, Box<dyn Error>> {
+    let path = cache_path(query);
+    if !refresh_cache
+        && let Ok(contents) = fs::read(&path)
+        && let Ok(json) = serde_json::from_slice::<Value>(&contents)
+        && valid_overpass_result(&json)
+    {
+        println!("Using cached OpenStreetMap {label} data.");
+        return Ok(json);
+    }
+
+    println!("Downloading OpenStreetMap {label} data...");
+    let json = run_overpass(client, query).await?;
+    if !valid_overpass_result(&json) {
+        return Err(format!("OpenStreetMap returned an incomplete {label} response").into());
+    }
+    if let Err(error) = save_cached_query(&path, &json) {
+        eprintln!("Could not save OpenStreetMap {label} cache: {error}");
+    }
+    Ok(json)
+}
+
+fn valid_overpass_result(json: &Value) -> bool {
+    let remark = json
+        .get("remark")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    json.get("elements").is_some_and(Value::is_array)
+        && !remark.contains("timed out")
+        && !remark.contains("runtime error")
+}
+
+fn cache_path(query: &str) -> PathBuf {
+    let digest = Sha256::digest(query.as_bytes());
+    PathBuf::from(CACHE_DIR).join(format!("{}.json", hex::encode(digest)))
+}
+
+fn save_cached_query(path: &PathBuf, json: &Value) -> Result<(), Box<dyn Error>> {
+    let parent = path.parent().ok_or("cache path has no parent")?;
+    fs::create_dir_all(parent)?;
+    let temp = path.with_extension(format!(
+        "{}.{}.tmp",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    fs::write(&temp, serde_json::to_vec(json)?)?;
+    if let Err(error) = fs::rename(&temp, path) {
+        let _ = fs::remove_file(&temp);
+        return Err(error.into());
+    }
+    Ok(())
+}
+
 fn element_key(element: &Value) -> (String, i64) {
     let elem_type = element
         .get("type")
@@ -331,23 +376,6 @@ fn element_key(element: &Value) -> (String, i64) {
         .to_string();
     let id = element.get("id").and_then(|i| i.as_i64()).unwrap_or(0);
     (elem_type, id)
-}
-
-fn load_coastline_cache(dir: &Path, tile_index: usize) -> Option<CoastlineGeometry> {
-    let path = dir.join(format!("coast_{tile_index:02}.json"));
-    let text = fs::read_to_string(path).ok()?;
-    serde_json::from_str(&text).ok()
-}
-
-fn save_coastline_cache(
-    dir: &Path,
-    tile_index: usize,
-    geo: &CoastlineGeometry,
-) -> Result<(), Box<dyn Error>> {
-    fs::create_dir_all(dir)?;
-    let path = dir.join(format!("coast_{tile_index:02}.json"));
-    fs::write(path, serde_json::to_string(geo)?)?;
-    Ok(())
 }
 
 #[cfg(test)]

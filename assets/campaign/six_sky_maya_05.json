@@ -1,0 +1,47 @@
+{
+  "_comment": "six_sky_maya_05: Lady Six Sky campaign in the Petén / Naranjo region; uses the northamerica campaign map.",
+  "map": "northamerica",
+  "player_spawn": [
+    846,
+    665
+  ],
+  "factions": [
+    {
+      "id": "dos_pilas",
+      "name": "Dos Pilas",
+      "x": 835,
+      "y": 671,
+      "starting_troops": 850,
+      "relation": "allied",
+      "color": "#a88c40",
+      "iq": 100,
+      "civ": "maya",
+      "leader": "caesar"
+    },
+    {
+      "id": "calakmul",
+      "name": "Calakmul / Kaanul",
+      "x": 858,
+      "y": 662,
+      "starting_troops": 450,
+      "relation": "allied",
+      "color": "#4ca572",
+      "iq": 100,
+      "civ": "maya",
+      "leader": "caesar"
+    },
+    {
+      "id": "bahlam_jol",
+      "name": "Bahlam Jol",
+      "x": 854,
+      "y": 678,
+      "starting_troops": 2450,
+      "relation": "enemy",
+      "color": "#40999e",
+      "iq": 105,
+      "civ": "maya",
+      "leader": "caesar"
+    }
+  ],
+  "player_color": "#f0902a"
+}

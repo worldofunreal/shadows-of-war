@@ -3663,11 +3663,13 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "ehttp",
+ "hex",
  "image",
  "log",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "sow-core",
 ]
 

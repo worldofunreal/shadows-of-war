@@ -2,7 +2,7 @@ use crate::commerce::owns_leader;
 use crate::leaders::Leader;
 
 /// First campaign mini-level launched for new players on first boot.
-pub const INTRO_EPISODE_ID: &str = "boudica";
+pub const INTRO_EPISODE_ID: &str = "six_sky_maya_01";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CampaignEpisode {
@@ -463,6 +463,134 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
         marks_intro_completed: false,
         server_owned_tutorial: false,
     },
+    CampaignEpisode {
+        id: "six_sky_maya_01",
+        series_id: "lady_six_sky",
+        prerequisite: None,
+        unlock_leader_id: None,
+        advisor_id: "lady_six_sky",
+        map_id: "northamerica",
+        map_width: 1600,
+        map_height: 824,
+        title: "Moonlit Arrival",
+        subtitle: "Naranjo, Petén · 682–693 CE",
+        title_key: "lobbies.campaign_six_sky_maya_01_title",
+        subtitle_key: "lobbies.campaign_six_sky_maya_01_subtitle",
+        marks_intro_completed: true,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "six_sky_maya_02",
+        series_id: "lady_six_sky",
+        prerequisite: Some("six_sky_maya_01"),
+        unlock_leader_id: None,
+        advisor_id: "lady_six_sky",
+        map_id: "northamerica",
+        map_width: 1600,
+        map_height: 824,
+        title: "A Crown for a Child",
+        subtitle: "Naranjo · 688–693 CE",
+        title_key: "lobbies.campaign_six_sky_maya_02_title",
+        subtitle_key: "lobbies.campaign_six_sky_maya_02_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "six_sky_maya_03",
+        series_id: "lady_six_sky",
+        prerequisite: Some("six_sky_maya_02"),
+        unlock_leader_id: None,
+        advisor_id: "lady_six_sky",
+        map_id: "northamerica",
+        map_width: 1600,
+        map_height: 824,
+        title: "Yellow Rabbit, Two Headlines",
+        subtitle: "Naranjo · 695 CE",
+        title_key: "lobbies.campaign_six_sky_maya_03_title",
+        subtitle_key: "lobbies.campaign_six_sky_maya_03_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "six_sky_maya_04",
+        series_id: "lady_six_sky",
+        prerequisite: Some("six_sky_maya_03"),
+        unlock_leader_id: None,
+        advisor_id: "lady_six_sky",
+        map_id: "northamerica",
+        map_width: 1600,
+        map_height: 824,
+        title: "Komkom Keeps Receipts",
+        subtitle: "Naranjo · 696 CE",
+        title_key: "lobbies.campaign_six_sky_maya_04_title",
+        subtitle_key: "lobbies.campaign_six_sky_maya_04_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "six_sky_maya_05",
+        series_id: "lady_six_sky",
+        prerequisite: Some("six_sky_maya_04"),
+        unlock_leader_id: None,
+        advisor_id: "lady_six_sky",
+        map_id: "northamerica",
+        map_width: 1600,
+        map_height: 824,
+        title: "Bahlam Jol Makes a Point",
+        subtitle: "Naranjo · 697 CE",
+        title_key: "lobbies.campaign_six_sky_maya_05_title",
+        subtitle_key: "lobbies.campaign_six_sky_maya_05_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "six_sky_maya_06",
+        series_id: "lady_six_sky",
+        prerequisite: Some("six_sky_maya_05"),
+        unlock_leader_id: None,
+        advisor_id: "lady_six_sky",
+        map_id: "northamerica",
+        map_width: 1600,
+        map_height: 824,
+        title: "Stela 24 Has a Version",
+        subtitle: "Ucanal · 698–702 CE",
+        title_key: "lobbies.campaign_six_sky_maya_06_title",
+        subtitle_key: "lobbies.campaign_six_sky_maya_06_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "six_sky_maya_07",
+        series_id: "lady_six_sky",
+        prerequisite: Some("six_sky_maya_06"),
+        unlock_leader_id: None,
+        advisor_id: "lady_six_sky",
+        map_id: "northamerica",
+        map_width: 1600,
+        map_height: 824,
+        title: "The Stones Go Quiet",
+        subtitle: "Naranjo · 714–726 CE",
+        title_key: "lobbies.campaign_six_sky_maya_07_title",
+        subtitle_key: "lobbies.campaign_six_sky_maya_07_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
+    CampaignEpisode {
+        id: "six_sky_maya_08",
+        series_id: "lady_six_sky",
+        prerequisite: Some("six_sky_maya_07"),
+        unlock_leader_id: None,
+        advisor_id: "lady_six_sky",
+        map_id: "northamerica",
+        map_width: 1600,
+        map_height: 824,
+        title: "Tikal: The Nuclear Footnote",
+        subtitle: "Alternate history · 744 CE",
+        title_key: "lobbies.campaign_six_sky_maya_08_title",
+        subtitle_key: "lobbies.campaign_six_sky_maya_08_subtitle",
+        marks_intro_completed: false,
+        server_owned_tutorial: false,
+    },
 ];
 
 pub const CAMPAIGN_SERIES: &[CampaignSeries] = &[
@@ -501,15 +629,23 @@ pub const CAMPAIGN_SERIES: &[CampaignSeries] = &[
     },
     CampaignSeries {
         id: "lady_six_sky",
-        episodes: &["six_sky_ep1", "six_sky_ep2", "six_sky_ep3"],
+        episodes: &[
+            "six_sky_maya_01",
+            "six_sky_maya_02",
+            "six_sky_maya_03",
+            "six_sky_maya_04",
+            "six_sky_maya_05",
+            "six_sky_maya_06",
+            "six_sky_maya_07",
+            "six_sky_maya_08",
+        ],
         reward_leader_id: Some("lady_six_sky"),
         reward_skin_id: None,
         hero_choice_pool: &[],
     },
 ];
 
-// Episodes are playable only when listed here. Six Sky ep1 also needs the hero
-// (see access_granted).
+// Episodes are playable only when listed here.
 pub const PUBLISHED_EPISODES: &[&str] = &[
     "tactics_01_economy",
     "tactics_02_defense",
@@ -534,9 +670,14 @@ pub const PUBLISHED_EPISODES: &[&str] = &[
     "blitz_18",
     "blitz_19",
     "blitz_20",
-    "six_sky_ep1",
-    "six_sky_ep2",
-    "six_sky_ep3",
+    "six_sky_maya_01",
+    "six_sky_maya_02",
+    "six_sky_maya_03",
+    "six_sky_maya_04",
+    "six_sky_maya_05",
+    "six_sky_maya_06",
+    "six_sky_maya_07",
+    "six_sky_maya_08",
 ];
 
 pub fn episode(id: &str) -> Option<&'static CampaignEpisode> {
@@ -580,10 +721,11 @@ pub fn series_completed_count(
         .unwrap_or(0)
 }
 
+/// Completion gate for the onboarding campaign and the Daily / Weekly Ops it unlocks.
 pub fn tactics_completed(completed_episodes: &std::collections::BTreeSet<String>) -> bool {
     CAMPAIGN_SERIES
         .iter()
-        .find(|series| series.id == "tactics")
+        .find(|series| series.id == "lady_six_sky")
         .is_some_and(|series| {
             series
                 .episodes
@@ -658,34 +800,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn six_sky_unlock_requires_hero_then_every_episode() {
-        assert_eq!(
-            episode("six_sky_ep2").unwrap().prerequisite,
-            Some("six_sky_ep1")
-        );
-        assert_eq!(
-            episode("six_sky_ep3").unwrap().prerequisite,
-            Some("six_sky_ep2")
-        );
-        assert!(episode_is_published("six_sky_ep1"));
-        assert!(episode_is_published("six_sky_ep2"));
-        assert!(episode_is_published("six_sky_ep3"));
+    fn six_sky_campaign_is_the_open_eight_episode_intro() {
+        assert_eq!(INTRO_EPISODE_ID, "six_sky_maya_01");
+        for number in 1..=8 {
+            let id = format!("six_sky_maya_{number:02}");
+            let expected = (number > 1).then(|| format!("six_sky_maya_{:02}", number - 1));
+            assert!(episode_is_published(&id));
+            assert_eq!(episode(&id).unwrap().prerequisite, expected.as_deref());
+        }
         assert_eq!(episode("unknown"), None);
         let empty = std::collections::BTreeSet::new();
-        let owned = std::collections::BTreeSet::from(["lady_six_sky".to_string()]);
-        assert!(!access_granted("six_sky_ep1", &empty, &empty));
-        assert!(access_granted("six_sky_ep1", &empty, &owned));
-        assert!(!access_granted("six_sky_ep2", &empty, &owned));
+        assert!(access_granted("six_sky_maya_01", &empty, &empty));
+        assert!(!access_granted("six_sky_maya_02", &empty, &empty));
         assert!(access_granted("boudica", &empty, &empty));
-        assert!(!access_granted("unknown", &empty, &owned));
+        assert!(!access_granted("unknown", &empty, &empty));
+        assert!(!episode_is_published("six_sky_ep1"));
+        assert!(episode("six_sky_ep1").is_some());
 
-        let mut completed = std::collections::BTreeSet::from(["six_sky_ep1".to_string()]);
+        let mut completed = std::collections::BTreeSet::new();
         assert_eq!(earned_leader(&completed), None);
-        completed.insert("six_sky_ep2".to_string());
+        for number in 1..=7 {
+            completed.insert(format!("six_sky_maya_{number:02}"));
+        }
+        assert!(!tactics_completed(&completed));
         assert_eq!(earned_leader(&completed), None);
-        completed.insert("six_sky_ep3".to_string());
+        completed.insert("six_sky_maya_08".to_string());
+        assert!(tactics_completed(&completed));
         assert_eq!(earned_leader(&completed), Some(Leader::of("lady_six_sky")));
-        assert!(access_granted("six_sky_ep2", &completed, &empty));
+        assert!(access_granted("six_sky_maya_02", &completed, &empty));
     }
 
     #[test]

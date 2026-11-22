@@ -13,7 +13,7 @@ USAGE:
 
 COMMANDS:
   (no args)            Fast-build and open the native Electron/WASM game
-  m, map                Serve the campaign editor locally on port 8777
+  m, map                Start or restart the local campaign editor on port 8777
   l, local              Build WASM + webroot and serve it locally on port 4173
   native                Fast-build and open the native Electron/WASM game
    p, prod              Run production build & deploy (WASM + FreeBSD backend and relay)
@@ -81,6 +81,34 @@ stop_local_preview() {
     unlink "${lock}" 2>/dev/null || true
   fi
   fuser -k -KILL "${port}/tcp" >/dev/null 2>&1 || true
+}
+
+map_editor_port() {
+  local port="$1"
+  shift
+  while (($#)); do
+    case "$1" in
+      --port|-p)
+        if (($# > 1)); then
+          printf '%s\n' "$2"
+          return 0
+        fi
+        ;;
+    esac
+    shift
+  done
+  printf '%s\n' "${port}"
+}
+
+stop_local_map_editor() {
+  local port="$1"
+  if [[ ! "${port}" =~ ^[0-9]{1,5}$ ]] || (( 10#${port} < 1 || 10#${port} > 65534 )); then
+    return 0
+  fi
+
+  local preview_port=$((10#${port} + 1))
+  fuser -k -KILL "${port}/tcp" >/dev/null 2>&1 || true
+  fuser -k -KILL "${preview_port}/tcp" >/dev/null 2>&1 || true
 }
 
 run_dist_process() {
@@ -235,6 +263,8 @@ case "${CMD}" in
       set -a; source "${ROOT}/sow-dist/.env"; set +a
     fi
     shift || true
+    editor_port="$(map_editor_port "${SOW_EDITOR_PORT:-8777}" "$@")"
+    stop_local_map_editor "${editor_port}"
     exec bun "${ROOT}/sow-tools/editors/campaign-editor/server.mts" "$@"
     ;;
   l|local)

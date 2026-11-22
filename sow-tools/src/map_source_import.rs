@@ -86,9 +86,8 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let thumb_path = out_dir.join("thumbnail.webp");
     match thumbnail_source {
-        Some(img) => {
-            sow_map::write_wide_thumbnail(&img, &thumb_path).map_err(|e| format!("thumbnail: {e}"))?
-        }
+        Some(img) => sow_map::write_wide_thumbnail(&img, &thumb_path)
+            .map_err(|e| format!("thumbnail: {e}"))?,
         None => write_placeholder_thumbnail(&map_file, &thumb_path)?,
     }
 
@@ -98,7 +97,9 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     let frequency = args
         .frequency
         .unwrap_or_else(|| read_info_json_frequency(&input));
-    let mut info = format!("# Written by sow-tools import-map-source\nfrequency = {frequency}\n");
+    let mut info = format!(
+        "# Written by sow-tools import-map-source\nsource = \"image\"\nfrequency = {frequency}\n"
+    );
     if let Some([x, y, w, h]) = args.crop {
         info.push_str(&format!("crop = [{x}, {y}, {w}, {h}]\n"));
     }
@@ -170,8 +171,10 @@ fn import_from_png(
         Some([x, y, w, h]) => {
             let inside = w > 0
                 && h > 0
-                && x.checked_add(w).is_some_and(|right| right <= original.width())
-                && y.checked_add(h).is_some_and(|bottom| bottom <= original.height());
+                && x.checked_add(w)
+                    .is_some_and(|right| right <= original.width())
+                && y.checked_add(h)
+                    .is_some_and(|bottom| bottom <= original.height());
             if !inside {
                 return Err(format!(
                     "crop {x},{y},{w},{h} is outside the {}x{} source image",
@@ -189,9 +192,8 @@ fn import_from_png(
     // water-aware downscale. Without a size preset, use the same
     // mobile-safe dimensions as the canonical image-map path.
     let (target_w, target_h) = match size {
-        Some(preset) => sow_core::maps::map_size_for_preset(preset, src_w, src_h).ok_or_else(|| {
-            format!("unknown size '{preset}' (use small, regular, big or huge)")
-        })?,
+        Some(preset) => sow_core::maps::map_size_for_preset(preset, src_w, src_h)
+            .ok_or_else(|| format!("unknown size '{preset}' (use small, regular, big or huge)"))?,
         None => sow_map::image_pipeline::mobile_safe_dims(src_w, src_h),
     };
     if target_w < 4

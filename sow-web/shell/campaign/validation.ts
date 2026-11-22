@@ -141,7 +141,7 @@ export function validate(
             EPISODE_MAPS[definition.episode_id] ??
             (blitzMatch
                 ? BLITZ_MAP_SPECS[Math.max(0, Number(blitzMatch[1]) - 5) % BLITZ_MAP_SPECS.length]
-                : /^six_sky_ep[123]$/.test(definition.episode_id)
+                : /^(?:six_sky_ep[123]|six_sky_maya_0[1-8])$/.test(definition.episode_id)
                   ? ["northamerica", 1600, 824]
                   : null);
         if (

@@ -280,7 +280,7 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         gems_reward: 4,
         target: 1,
         requirement: MissionRequirement::CompleteCampaignEpisode {
-            episode_id: "tactics_01_economy",
+            episode_id: "six_sky_maya_01",
         },
         icon: "tower",
         order: 2,
@@ -296,10 +296,10 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         description_key: "missions.onboarding_tactics_mastery_desc",
         crowns_reward: 80,
         gems_reward: 8,
-        target: 3,
+        target: 8,
         requirement: MissionRequirement::CompleteCampaignSeries {
-            series_id: "tactics",
-            count: 3,
+            series_id: "lady_six_sky",
+            count: 8,
         },
         icon: "swords",
         order: 3,
@@ -1171,9 +1171,10 @@ pub struct MissionStats {
     pub player_level: u32,
     pub tutorial_completed: bool,
     pub tactics_completed: bool,
-    pub tactics_01_completed: bool,
     pub tactics_episodes_completed: u32,
     pub adv_tactics_episodes_completed: u32,
+    pub six_sky_maya_01_completed: bool,
+    pub lady_six_sky_episodes_completed: u32,
     pub total_structures_built: u32,
     pub free_rotation_matches: u32,
     pub team_matches: u32,
@@ -1265,7 +1266,7 @@ pub fn evaluate_mission_progress(
             }
         }
         MissionRequirement::CompleteCampaignEpisode { episode_id } => {
-            let done = (episode_id == "tactics_01_economy" && stats.tactics_01_completed)
+            let done = (episode_id == "six_sky_maya_01" && stats.six_sky_maya_01_completed)
                 || saved_progress
                     .map(|r| r.completed || r.progress >= 1)
                     .unwrap_or(false);
@@ -1275,6 +1276,7 @@ pub fn evaluate_mission_progress(
             let series_count = match series_id {
                 "tactics" => stats.tactics_episodes_completed,
                 "advanced_tactics" => stats.adv_tactics_episodes_completed,
+                "lady_six_sky" => stats.lady_six_sky_episodes_completed,
                 _ => 0,
             };
             series_count.max(saved_val)
@@ -1860,8 +1862,8 @@ mod tests {
         let stats = MissionStats {
             player_level: 1,
             tutorial_completed: true,
-            tactics_01_completed: true,
-            tactics_episodes_completed: 1,
+            six_sky_maya_01_completed: true,
+            lady_six_sky_episodes_completed: 1,
             ..Default::default()
         };
         let views = build_all_missions_view(&stats, &Default::default(), 100);

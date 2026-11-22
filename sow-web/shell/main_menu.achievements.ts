@@ -644,6 +644,19 @@ export function getFullAchievementsCatalog(): ProfileAchievement[] {
     return list;
 }
 
+let fullAchievementIndex: Map<string, ProfileAchievement> | null = null;
+
+export function getAchievementDefinition(id: string): ProfileAchievement | null {
+    if (!fullAchievementIndex) {
+        fullAchievementIndex = new Map(
+            getFullAchievementsCatalog().map(function (achievement) {
+                return [achievement.id, achievement] as const;
+            }),
+        );
+    }
+    return fullAchievementIndex.get(id) || null;
+}
+
 export function parseHeroAchievementId(
     id: string,
 ): { slug: string; kind: "recruit" | "mastery" | "wins" } | null {

@@ -1,0 +1,103 @@
+{
+  "version": 2,
+  "episode_id": "six_sky_maya_03",
+  "text_namespace": "tutorial.campaign_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 3000,
+    "starting_gold": 2500
+  },
+  "entry": "six_sky_maya_03_open",
+  "speakers": {
+    "six_sky": {
+      "name": "Lady Six Sky",
+      "avatar": "six_sky"
+    },
+    "tikal_lord": {
+      "faction": "tikal_at_yellow_rabbit"
+    },
+    "dos_pilas": {
+      "faction": "dos_pilas"
+    },
+    "calakmul": {
+      "faction": "calakmul"
+    }
+  },
+  "steps": [
+    {
+      "id": "six_sky_maya_03_open",
+      "type": "scene",
+      "presentation": "dialogue",
+      "show_title": true,
+      "speaker": "six_sky",
+      "pause_game": true,
+      "title_key": "tutorial.campaign_six_sky_maya_03_open_title",
+      "body_key": "tutorial.campaign_six_sky_maya_03_open_body",
+      "next": "six_sky_maya_03_attack"
+    },
+    {
+      "id": "six_sky_maya_03_attack",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_03_attack_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_03_attack_hint",
+      "trigger": {
+        "type": "attack",
+        "target": "tikal_at_yellow_rabbit",
+        "value": 1,
+        "scope": "step"
+      },
+      "next": "six_sky_maya_03_defeat",
+      "body_key": "tutorial.campaign_six_sky_maya_03_attack_body",
+      "marker": {
+        "target": "tikal_at_yellow_rabbit"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "nameplate",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "camera": {
+        "shot": "approach",
+        "to": "tikal_at_yellow_rabbit",
+        "seconds": 1
+      },
+      "exchange": [
+        {
+          "speaker": "tikal_lord",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_03_tikal_threat"
+        }
+      ]
+    },
+    {
+      "id": "six_sky_maya_03_defeat",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_03_defeat_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_03_defeat_hint",
+      "trigger": {
+        "type": "defeated",
+        "target": "tikal_at_yellow_rabbit",
+        "scope": "episode"
+      },
+      "next": "six_sky_maya_03_end",
+      "marker": {
+        "target": "tikal_at_yellow_rabbit"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap",
+        "show_label": false
+      }
+    },
+    {
+      "id": "six_sky_maya_03_end",
+      "type": "end",
+      "speaker": "six_sky",
+      "presentation": "chapter",
+      "title_key": "tutorial.campaign_six_sky_maya_03_end_title",
+      "body_key": "tutorial.campaign_six_sky_maya_03_end_body"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "version": 2,
+  "episode_id": "six_sky_maya_01",
+  "text_namespace": "tutorial.campaign_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 1200,
+    "starting_gold": 1800
+  },
+  "entry": "six_sky_maya_01_open",
+  "speakers": {
+    "six_sky": {
+      "name": "Lady Six Sky",
+      "avatar": "six_sky"
+    },
+    "kinichil_kab": {
+      "faction": "kinichil_kab"
+    },
+    "dos_pilas": {
+      "faction": "dos_pilas"
+    },
+    "calakmul": {
+      "faction": "calakmul"
+    }
+  },
+  "steps": [
+    {
+      "id": "six_sky_maya_01_open",
+      "type": "scene",
+      "presentation": "dialogue",
+      "show_title": true,
+      "speaker": "six_sky",
+      "pause_game": true,
+      "title_key": "tutorial.campaign_six_sky_maya_01_open_title",
+      "body_key": "tutorial.campaign_six_sky_maya_01_open_body",
+      "next": "six_sky_maya_01_attack"
+    },
+    {
+      "id": "six_sky_maya_01_attack",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_01_attack_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_01_attack_hint",
+      "trigger": {
+        "type": "attack",
+        "target": "kinichil_kab",
+        "value": 1,
+        "scope": "step"
+      },
+      "next": "six_sky_maya_01_defeat",
+      "body_key": "tutorial.campaign_six_sky_maya_01_attack_body",
+      "marker": {
+        "target": "kinichil_kab"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "nameplate",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "camera": {
+        "shot": "approach",
+        "to": "kinichil_kab",
+        "seconds": 1
+      },
+      "exchange": [
+        {
+          "speaker": "kinichil_kab",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_01_kinichil_kab_threat"
+        }
+      ]
+    },
+    {
+      "id": "six_sky_maya_01_defeat",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_01_defeat_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_01_defeat_hint",
+      "trigger": {
+        "type": "defeated",
+        "target": "kinichil_kab",
+        "scope": "episode"
+      },
+      "next": "six_sky_maya_01_end",
+      "marker": {
+        "target": "kinichil_kab"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap",
+        "show_label": false
+      }
+    },
+    {
+      "id": "six_sky_maya_01_end",
+      "type": "end",
+      "speaker": "six_sky",
+      "presentation": "chapter",
+      "title_key": "tutorial.campaign_six_sky_maya_01_end_title",
+      "body_key": "tutorial.campaign_six_sky_maya_01_end_body"
+    }
+  ]
+}

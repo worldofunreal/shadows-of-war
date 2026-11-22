@@ -1,0 +1,192 @@
+{
+  "version": 2,
+  "episode_id": "six_sky_maya_04",
+  "text_namespace": "tutorial.campaign_",
+  "require_speaker_portraits": true,
+  "settings": {
+    "starting_troops": 2600,
+    "starting_gold": 3500
+  },
+  "entry": "six_sky_maya_04_open",
+  "speakers": {
+    "six_sky": {
+      "name": "Lady Six Sky",
+      "avatar": "six_sky"
+    },
+    "komkom": {
+      "faction": "komkom"
+    },
+    "dos_pilas": {
+      "faction": "dos_pilas"
+    },
+    "calakmul": {
+      "faction": "calakmul"
+    }
+  },
+  "steps": [
+    {
+      "id": "six_sky_maya_04_open",
+      "type": "scene",
+      "presentation": "dialogue",
+      "show_title": true,
+      "speaker": "six_sky",
+      "pause_game": true,
+      "title_key": "tutorial.campaign_six_sky_maya_04_open_title",
+      "body_key": "tutorial.campaign_six_sky_maya_04_open_body",
+      "next": "six_sky_maya_04_pick_factory"
+    },
+    {
+      "id": "six_sky_maya_04_pick_factory",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_04_factory_pick_title",
+      "body_key": "tutorial.campaign_six_sky_maya_04_factory_pick_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_pick_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "unlocks": {
+        "buildings": {
+          "Factory": 4,
+          "Farm": 2,
+          "City": 1
+        }
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_factory",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_factory",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "next": "six_sky_maya_04_build_factory"
+    },
+    {
+      "id": "six_sky_maya_04_build_factory",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_04_factory_build_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_build_hint",
+      "trigger": {
+        "type": "factory",
+        "value": 1,
+        "scope": "total"
+      },
+      "next": "six_sky_maya_04_wait_factory",
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "pause_game": true,
+      "paused_action": "build_until_started",
+      "dim_outside": true
+    },
+    {
+      "id": "six_sky_maya_04_wait_factory",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_04_factory_wait_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_wait_hint",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "Factory",
+        "value": 1,
+        "scope": "total"
+      },
+      "next": "six_sky_maya_04_select_factory",
+      "marker": {
+        "target": "player"
+      }
+    },
+    {
+      "id": "six_sky_maya_04_select_factory",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_title",
+      "body_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "trigger": {
+        "type": "building_selected",
+        "kind": "Factory",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "next": "six_sky_maya_04_upgrade_factory"
+    },
+    {
+      "id": "six_sky_maya_04_upgrade_factory",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_hint",
+      "trigger": {
+        "type": "structure_upgrade",
+        "kind": "Factory",
+        "value": 1,
+        "scope": "step"
+      },
+      "next": "six_sky_maya_04_attack",
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_structure",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "pause_game": true,
+      "paused_action": "upgrade_until_started",
+      "dim_outside": true
+    },
+    {
+      "id": "six_sky_maya_04_attack",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_04_attack_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_attack_hint",
+      "trigger": {
+        "type": "defeated",
+        "target": "komkom",
+        "scope": "episode"
+      },
+      "next": "six_sky_maya_04_end",
+      "body_key": "tutorial.campaign_six_sky_maya_04_attack_body",
+      "marker": {
+        "target": "komkom"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap",
+        "show_label": false
+      },
+      "exchange": [
+        {
+          "speaker": "komkom",
+          "emote": "threat",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_04_komkom_threat"
+        }
+      ]
+    },
+    {
+      "id": "six_sky_maya_04_end",
+      "type": "end",
+      "speaker": "six_sky",
+      "presentation": "chapter",
+      "title_key": "tutorial.campaign_six_sky_maya_04_end_title",
+      "body_key": "tutorial.campaign_six_sky_maya_04_end_body"
+    }
+  ]
+}

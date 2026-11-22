@@ -209,6 +209,22 @@ pub struct GenerateArgs {
     /// Size preset (small, regular, big or huge: longest side in tiles); overrides --scale
     #[arg(long, value_parser = parse_size)]
     pub size: Option<String>,
+
+    /// Fill inland water bodies smaller than this many map tiles; 0 keeps all lakes
+    #[arg(long, default_value_t = 0)]
+    pub min_lake_tiles: usize,
+
+    /// Remove land masses smaller than this many final map tiles; 0 keeps all islands
+    #[arg(long, default_value_t = 0)]
+    pub min_island_tiles: usize,
+
+    /// Open a tile where two water tiles touch only at a corner
+    #[arg(long, default_value_t = false)]
+    pub connect_diagonals: bool,
+
+    /// Refresh cached OpenStreetMap responses instead of reusing local data
+    #[arg(long, default_value_t = false)]
+    pub refresh_osm_cache: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -288,7 +304,10 @@ fn parse_crop(value: &str) -> Result<[u32; 4], String> {
 }
 
 fn parse_size(value: &str) -> Result<String, String> {
-    if sow_core::maps::MAP_SIZE_PRESETS.iter().any(|(name, _)| *name == value) {
+    if sow_core::maps::MAP_SIZE_PRESETS
+        .iter()
+        .any(|(name, _)| *name == value)
+    {
         Ok(value.to_string())
     } else {
         Err("expected small, regular, big or huge".to_string())
@@ -316,7 +335,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         min_island_pixels: import
                             .min_island_pixels
                             .unwrap_or(defaults.min_island_pixels),
-                        min_island_tiles: import.min_island_tiles.unwrap_or(defaults.min_island_tiles),
+                        min_island_tiles: import
+                            .min_island_tiles
+                            .unwrap_or(defaults.min_island_tiles),
                         smooth_coasts: import.smooth_coasts,
                         water_level: import.water_level.unwrap_or(defaults.water_level),
                         connect_diagonals: import.connect_diagonals,
@@ -383,6 +404,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 args.force,
                 args.frequency,
                 args.size.as_deref(),
+                args.min_lake_tiles,
+                args.min_island_tiles,
+                args.connect_diagonals,
+                args.refresh_osm_cache,
             )
             .await
         }
@@ -404,6 +429,10 @@ async fn run_generate(
     force: bool,
     frequency: u32,
     size: Option<&str>,
+    min_lake_tiles: usize,
+    min_island_tiles: usize,
+    connect_diagonals: bool,
+    refresh_osm_cache: bool,
 ) -> Result<(), Box<dyn Error>> {
     let parts: Vec<&str> = bbox.split(',').collect();
     if parts.len() != 4 {
@@ -461,8 +490,14 @@ async fn run_generate(
     let (map_width, map_height) =
         rasterizer::map_dimensions(min_lon, min_lat, max_lon, max_lat, scale);
 
-    let coastlines =
-        overpass::fetch_coastlines_tiled(bbox, scale, map_width, map_height, Some(name)).await?;
+    let coastlines = overpass::fetch_coastlines_tiled(
+        bbox,
+        scale,
+        map_width,
+        map_height,
+        refresh_osm_cache,
+    )
+    .await?;
 
     println!("Rasterizing landmass...");
     let (map_width, map_height, mut terrain_grid) = rasterizer::build_landmass_from_coastlines(
@@ -475,10 +510,54 @@ async fn run_generate(
     );
 
     println!("Stamping inland water (optional, tile-by-tile)...");
-    if let Err(e) =
-        overpass::stamp_water_tiled(&mut terrain_grid, bbox, scale, map_width, map_height).await
+    if let Err(e) = overpass::stamp_water_tiled(
+        &mut terrain_grid,
+        bbox,
+        scale,
+        map_width,
+        map_height,
+        refresh_osm_cache,
+    )
+    .await
     {
         eprintln!("Warning: inland water pass failed: {e}");
+    }
+
+    println!("Extracting place spawns...");
+    let places_data = overpass::fetch_places(
+        min_lon,
+        min_lat,
+        max_lon,
+        max_lat,
+        refresh_osm_cache,
+    )
+    .await?;
+    let mut spawns = poi_extractor::extract_bots(&places_data, bbox, scale, map_width, map_height);
+    if spawns.is_empty() {
+        eprintln!("Warning: no OSM place nodes; using land-grid fallback spawns");
+        spawns = poi_extractor::fallback_spawns_on_land(&terrain_grid, map_width, map_height, 16);
+    }
+    println!("Found {} spawn points", spawns.len());
+
+    if min_lake_tiles > 0 || min_island_tiles > 1 || connect_diagonals {
+        let protected_land: Vec<usize> = spawns
+            .iter()
+            .map(|spawn| (spawn.y * map_width + spawn.x) as usize)
+            .collect();
+        let mut terrain: Vec<u8> = terrain_grid.iter().map(|tile| tile.as_byte()).collect();
+        sow_map::image_pipeline::apply_map_water_settings(
+            &mut terrain,
+            map_width,
+            map_height,
+            min_lake_tiles,
+            min_island_tiles,
+            connect_diagonals,
+            &protected_land,
+        )?;
+        terrain_grid = terrain
+            .into_iter()
+            .map(sow_core::map::MapTile::from_byte)
+            .collect();
     }
 
     let land_count = terrain_grid.iter().filter(|t| t.is_land()).count();
@@ -492,15 +571,6 @@ async fn run_generate(
                 .into(),
         );
     }
-
-    println!("Extracting place spawns...");
-    let places_data = overpass::fetch_places(min_lon, min_lat, max_lon, max_lat).await?;
-    let mut spawns = poi_extractor::extract_bots(&places_data, bbox, scale, map_width, map_height);
-    if spawns.is_empty() {
-        eprintln!("Warning: no OSM place nodes; using land-grid fallback spawns");
-        spawns = poi_extractor::fallback_spawns_on_land(&terrain_grid, map_width, map_height, 16);
-    }
-    println!("Found {} spawn points", spawns.len());
 
     println!("Exporting...");
     exporter::export_map(ExportMapCtx {
@@ -519,10 +589,13 @@ async fn run_generate(
 
     // Same info.toml the image import writes, so the server's catalog reads this rotation weight.
     let maps_root = exporter::maps_root();
-    std::fs::write(
-        maps_root.join(name).join("info.toml"),
-        format!("# Written by sow-tools --bbox\nfrequency = {frequency}\n"),
-    )?;
+    let mut info = format!(
+        "# Written by sow-tools --bbox\nsource = \"osm\"\nfrequency = {frequency}\nosm_min_lake_tiles = {min_lake_tiles}\nosm_min_island_tiles = {min_island_tiles}\nosm_connect_diagonals = {connect_diagonals}\n"
+    );
+    if let Some(size) = size {
+        info.push_str(&format!("size = \"{size}\"\n"));
+    }
+    std::fs::write(maps_root.join(name).join("info.toml"), info)?;
     map_source_import::refresh_catalog(&maps_root)?;
 
     println!("Generation complete! Saved to assets/maps/{name}");

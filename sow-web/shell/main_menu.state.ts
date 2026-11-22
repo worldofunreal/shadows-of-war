@@ -146,11 +146,22 @@ export interface MenuRewardReceipt {
     gems?: number;
     unlocked_leaders: string[];
     unlocked_achievements?: string[];
+    goal_advances?: MenuGoalAdvance[];
+    created_at?: number;
     level_before?: number | null;
     level_after?: number | null;
     status: string;
     presented_at?: number | null;
     verification_status?: string;
+}
+
+export interface MenuGoalAdvance {
+    chain_id: string;
+    achievement_id: string;
+    before: number;
+    after: number;
+    previous: number;
+    target: number;
 }
 
 export interface MenuReturn {

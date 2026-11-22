@@ -128,13 +128,13 @@ pub fn generate_with_water(
     } else {
         downscale(&full, dst_w as usize, dst_h as usize)
     };
-    if water.connect_diagonals {
-        connect_diagonal_water(&mut small);
-    }
-    if water.min_island_tiles > 1 {
-        remove_small_islands(&mut small, water.min_island_tiles);
-    }
-    remove_small_lakes(&mut small, water.min_lake_tiles);
+    apply_topology_settings(
+        &mut small,
+        water.min_lake_tiles,
+        water.min_island_tiles,
+        water.connect_diagonals,
+        &[],
+    );
     mark_ocean(&mut small);
     let shoreline_waters = process_shore(&mut small);
     process_dist_to_land(&mut small, &shoreline_waters);
@@ -146,6 +146,63 @@ pub fn generate_with_water(
         map_data,
         num_land_tiles,
     })
+}
+
+/// Apply the image pipeline's shared water cleanup to an already rasterized map.
+/// Existing ocean flags distinguish sea from inland water before filtering.
+pub fn apply_map_water_settings(
+    map_data: &mut [u8],
+    width: u32,
+    height: u32,
+    min_lake_tiles: usize,
+    min_island_tiles: usize,
+    connect_diagonals: bool,
+    protected_land: &[usize],
+) -> Result<(), String> {
+    let expected = width as usize * height as usize;
+    if width == 0 || height == 0 || map_data.len() != expected {
+        return Err("map terrain dimensions do not match its tile data".into());
+    }
+
+    let mut terrain = Terrain::new(width as usize, height as usize);
+    for (i, byte) in map_data.iter().copied().enumerate() {
+        terrain.is_land[i] = byte & LAND_BIT != 0;
+        terrain.is_shore[i] = byte & SHORE_BIT != 0;
+        terrain.is_ocean[i] = byte & OCEAN_BIT != 0;
+        terrain.magnitude[i] = (byte & 0b0001_1111) as f32;
+    }
+    apply_topology_settings(
+        &mut terrain,
+        min_lake_tiles,
+        min_island_tiles,
+        connect_diagonals,
+        protected_land,
+    );
+    terrain.is_ocean.fill(false);
+    terrain.is_shore.fill(false);
+    mark_ocean(&mut terrain);
+    let shoreline_waters = process_shore(&mut terrain);
+    process_dist_to_land(&mut terrain, &shoreline_waters);
+    map_data.copy_from_slice(&pack(&terrain).0);
+    Ok(())
+}
+
+fn apply_topology_settings(
+    terrain: &mut Terrain,
+    min_lake_tiles: usize,
+    min_island_tiles: usize,
+    connect_diagonals: bool,
+    protected_land: &[usize],
+) {
+    if connect_diagonals {
+        connect_diagonal_water_protecting(terrain, protected_land);
+    }
+    if min_island_tiles > 1 {
+        remove_small_islands_protecting(terrain, min_island_tiles, protected_land);
+    }
+    if min_lake_tiles > 0 {
+        remove_small_lakes(terrain, min_lake_tiles);
+    }
 }
 
 fn classify_rgba_into(img: &RgbaImage, terrain: &mut Terrain) {
@@ -169,7 +226,8 @@ pub fn mobile_safe_dims(src_w: u32, src_h: u32) -> (u32, u32) {
     let w = src_w.max(1) as f64;
     let h = src_h.max(1) as f64;
     let pixel_factor = (maps::MOBILE_SAFE_MAX_PIXELS as f64 / (w * h)).sqrt();
-    let axis_factor = (maps::MOBILE_SAFE_MAX_AXIS as f64 / w).min(maps::MOBILE_SAFE_MAX_AXIS as f64 / h);
+    let axis_factor =
+        (maps::MOBILE_SAFE_MAX_AXIS as f64 / w).min(maps::MOBILE_SAFE_MAX_AXIS as f64 / h);
     let factor = pixel_factor.min(axis_factor).min(1.0);
     let dst_w = maps::align_map_dim((w * factor).floor() as u32);
     let dst_h = maps::align_map_dim((h * factor).floor() as u32);
@@ -211,6 +269,16 @@ fn flood_region(t: &Terrain, start: usize, want_land: bool, visited: &mut [bool]
 }
 
 fn remove_small_islands(t: &mut Terrain, min_size: usize) {
+    remove_small_islands_protecting(t, min_size, &[]);
+}
+
+fn remove_small_islands_protecting(t: &mut Terrain, min_size: usize, protected: &[usize]) {
+    let mut protected_mask = vec![false; t.is_land.len()];
+    for &i in protected {
+        if let Some(value) = protected_mask.get_mut(i) {
+            *value = true;
+        }
+    }
     let mut visited = vec![false; t.is_land.len()];
     let mut removed = 0usize;
     for start in 0..t.is_land.len() {
@@ -218,7 +286,7 @@ fn remove_small_islands(t: &mut Terrain, min_size: usize) {
             continue;
         }
         let region = flood_region(t, start, true, &mut visited);
-        if region.len() < min_size {
+        if region.len() < min_size && !region.iter().any(|&i| protected_mask[i]) {
             removed += 1;
             for &i in &region {
                 t.is_land[i] = false;
@@ -308,7 +376,18 @@ fn upscale_smooth(src: &Terrain, dst_w: usize, dst_h: usize, water_level: f32) -
 }
 
 /// Where two water tiles meet only at a corner, flood one of the land tiles between them.
+#[cfg(test)]
 fn connect_diagonal_water(t: &mut Terrain) {
+    connect_diagonal_water_protecting(t, &[]);
+}
+
+fn connect_diagonal_water_protecting(t: &mut Terrain, protected: &[usize]) {
+    let mut protected_mask = vec![false; t.is_land.len()];
+    for &i in protected {
+        if let Some(value) = protected_mask.get_mut(i) {
+            *value = true;
+        }
+    }
     let mut opened = 0usize;
     for y in 0..t.height.saturating_sub(1) {
         for x in 0..t.width.saturating_sub(1) {
@@ -324,7 +403,7 @@ fn connect_diagonal_water(t: &mut Terrain) {
             } else {
                 None
             };
-            if let Some(i) = open {
+            if let Some(i) = open.filter(|&i| !protected_mask[i]) {
                 t.is_land[i] = false;
                 t.magnitude[i] = 0.0;
                 opened += 1;
@@ -338,7 +417,7 @@ fn remove_small_lakes(t: &mut Terrain, min_size: usize) {
     let mut visited = vec![false; t.is_land.len()];
     let mut removed = 0usize;
     for start in 0..t.is_land.len() {
-        if visited[start] || t.is_land[start] {
+        if visited[start] || t.is_land[start] || t.is_ocean[start] {
             continue;
         }
         let region = flood_region(t, start, false, &mut visited);
@@ -502,7 +581,10 @@ mod tests {
 
         connect_diagonal_water(&mut t);
 
-        assert!(!t.is_land[1], "the corner between two water tiles must open");
+        assert!(
+            !t.is_land[1],
+            "the corner between two water tiles must open"
+        );
         assert!(t.is_land[2]);
     }
 
@@ -517,7 +599,11 @@ mod tests {
                 ..WaterSettings::default()
             };
             let result = generate_with_water(&img, Some((32, 32)), &water).expect("pipeline");
-            result.map_data.iter().filter(|b| **b & LAND_BIT == 0).count()
+            result
+                .map_data
+                .iter()
+                .filter(|b| **b & LAND_BIT == 0)
+                .count()
         };
         assert!(water_tiles(0.8) > water_tiles(0.2));
     }
