@@ -2310,7 +2310,7 @@ html[dir="rtl"] .sow-hud__deploy-fill {
   position: absolute;
   inset-inline: 0;
   bottom: 0;
-  z-index: 120;
+  z-index: 170;
   display: flex;
   flex-direction: column;
   inline-size: auto;
@@ -2391,12 +2391,16 @@ html[dir="rtl"] .sow-hud__deploy-fill {
     inset-inline: auto var(--sow-sheet-end);
     top: var(--sow-sheet-top);
     bottom: 12px;
-    width: 380px;
+    width: 396px;
     height: auto;
     padding-bottom: 0;
     border-bottom: 1px solid var(--sow-line);
     border-radius: 14px;
     animation-name: sow-hud-sheet-in-side;
+  }
+  .sow-hud__settings.sow-hud__sheet {
+    bottom: auto;
+    max-height: calc(100dvh - var(--sow-sheet-top) - 12px);
   }
   .sow-hud__leaderboard.sow-hud__sheet {
     width: min(540px, calc(100vw - var(--sow-sheet-end) - 16px));
@@ -2412,10 +2416,10 @@ html[dir="rtl"] .sow-hud__deploy-fill {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-height: 56px;
+  gap: 10px;
+  min-height: 52px;
   margin: 0;
-  padding: 4px 8px 4px 16px;
+  padding: 8px 10px 8px 14px;
   border-bottom: 1px solid var(--sow-line);
   background: linear-gradient(
     180deg,
@@ -2426,42 +2430,63 @@ html[dir="rtl"] .sow-hud__deploy-fill {
 .sow-hud__sheet-title-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
 }
+.sow-hud__sheet-title-badge {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 36%, rgb(255 255 255 / 12%));
+  background: color-mix(in srgb, var(--sow-gold) 12%, rgb(255 255 255 / 4%));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%);
+  color: var(--sow-gold-bright);
+}
 .sow-hud__sheet-title-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: block;
-  color: var(--sow-gold);
+  color: currentColor;
 }
 .sow-hud__sheet-title {
   flex: 1;
   min-width: 0;
   margin: 0;
-  color: var(--sow-gold);
-  font-size: 15px;
+  color: var(--sow-gold-bright);
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.08em;
+  line-height: 1.1;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sow-hud__close-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 .sow-hud__sheet-btn,
 .sow-hud__sheet .sow-hud__close-btn {
   display: grid;
   place-items: center;
   flex: none;
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   padding: 0;
   border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 10px;
+  border-radius: 9px;
   background: rgb(255 255 255 / 7%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%);
   color: #f5f1e8;
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
   transition:
@@ -2525,12 +2550,14 @@ html[dir="rtl"] .sow-hud__deploy-fill {
 /* Rankings header & search */
 .sow-hud__leaderboard-header {
   gap: 10px;
-  padding: 6px 8px 6px 14px;
+}
+.sow-hud__leaderboard-header .sow-hud__sheet-title-group {
+  flex: 0 1 auto;
 }
 .sow-hud__leaderboard-header .sow-hud__sheet-title {
   flex: 0 0 auto;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 15px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2557,14 +2584,6 @@ html[dir="rtl"] .sow-hud__deploy-fill {
 }
 .sow-hud__leaderboard-search::placeholder {
   opacity: 0.7;
-}
-.sow-hud__leaderboard-header .sow-hud__sheet-btn {
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  min-height: 38px;
-  font-size: 18px;
-  border-radius: 10px;
 }
 .sow-hud__leaderboard-empty {
   padding: 36px 16px;
@@ -2856,33 +2875,48 @@ html[dir="rtl"] .sow-hud__bot-badge {
 /* Inbox */
 .sow-hud__inbox-total {
   flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--sow-gold) 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sow-gold) 14%, rgb(255 255 255 / 5%));
   color: var(--sow-gold-bright);
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 800;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .sow-hud__inbox-filters {
   flex: none;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  align-items: stretch;
   gap: 6px;
-  padding: 10px 16px 2px;
+  padding: 10px 12px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sow-hud__inbox-filters::-webkit-scrollbar {
+  display: none;
 }
 .sow-hud__inbox-filter {
+  flex: 1 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   min-width: 0;
-  min-height: 30px;
-  padding: 4px 8px;
+  min-height: 32px;
+  padding: 4px 10px;
   border: 1px solid var(--sow-line);
-  border-radius: 4px 8px 4px 4px;
+  border-radius: 6px;
   background: rgb(255 255 255 / 4%);
   color: var(--sow-muted);
   cursor: pointer;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
   transition:
@@ -3439,7 +3473,7 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
 
 /* Dev Tools */
 .sow-hud__dev-sidebar {
-  z-index: 130;
+  z-index: 180;
   overscroll-behavior: contain;
 }
 @media (max-width: 899px) and (orientation: portrait) {
@@ -3472,8 +3506,10 @@ html[dir="rtl"] .sow-hud__request-toast.is-leaving-dismiss {
   place-items: center;
   width: 22px;
   height: 22px;
+  border: 0;
   border-radius: 4px;
   background: rgb(255 255 255 / 8%);
+  box-shadow: none;
   color: var(--sow-gold);
   flex: none;
 }
@@ -4212,6 +4248,127 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   color: #f2eee4;
 }
 
+/* Desktop Full View HUD Sheets: refined tactical card density & proportional header chrome */
+@media (min-width: 900px) and (min-height: 601px) {
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-header {
+    min-height: 50px;
+    padding: 7px 10px 7px 14px;
+  }
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-btn,
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__close-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-body {
+    padding: 10px 12px 14px;
+  }
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) input[type="range"] {
+    --sow-range-height: 32px;
+    --sow-range-track-height: 10px;
+    --sow-range-thumb-size: 24px;
+    --sow-range-thumb-mt: -7px;
+  }
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__switch {
+    --sow-switch-w: 46px;
+    --sow-switch-h: 26px;
+    --sow-switch-pad: 2px;
+    --sow-switch-knob: 20px;
+    --sow-switch-travel: 20px;
+  }
+
+  /* Settings: main-menu card rhythm on desktop */
+  .sow-hud__settings .sow-hud__settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+  }
+  .sow-hud__settings .sow-hud__setting-row {
+    min-height: 46px;
+    padding: 6px 12px;
+    gap: 10px;
+    font-size: 14px;
+    border: 1px solid rgb(255 255 255 / 7%);
+    border-radius: 9px;
+    background: rgb(255 255 255 / 3%);
+    transition:
+      border-color 140ms ease,
+      background-color 140ms ease;
+  }
+  .sow-hud__settings .sow-hud__setting-row + .sow-hud__setting-row {
+    border-top: 1px solid rgb(255 255 255 / 7%);
+  }
+  .sow-hud__settings .sow-hud__setting-row:hover {
+    border-color: color-mix(in srgb, var(--sow-gold) 28%, rgb(255 255 255 / 12%));
+    background: rgb(255 255 255 / 5%);
+  }
+  .sow-hud__settings .sow-hud__setting-card--slider {
+    gap: 5px;
+    padding: 8px 12px;
+  }
+  .sow-hud__settings .sow-menu__slider-label {
+    font-size: 11px;
+  }
+  .sow-hud__settings .sow-menu__slider-label b {
+    font-size: 12px;
+    padding: 2px 7px;
+  }
+  .sow-hud__settings .sow-menu__settings-dropdown {
+    flex: 0 1 172px;
+    width: min(100%, 172px);
+  }
+  .sow-hud__settings .sow-menu__settings-dropdown .sow-control-dropdown__trigger {
+    height: 34px;
+    min-height: 34px;
+    font-size: 12.5px;
+  }
+
+  /* Rankings: comfortable desktop density */
+  .sow-hud__leaderboard-search {
+    height: 34px;
+    min-height: 34px;
+  }
+  .sow-hud__leaderboard-toolbar {
+    padding: 6px 12px 8px;
+  }
+  .sow-hud__leaderboard-rows {
+    gap: 6px;
+  }
+  .sow-hud__player-card {
+    min-height: 46px;
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+  .sow-hud__player-avatar-wrap {
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
+  }
+
+  /* Inbox: crisp desktop card proportions */
+  .sow-hud__inbox-list {
+    gap: 8px;
+  }
+  .sow-hud__inbox-list > .sow-hud__request-card {
+    padding: 10px 12px 12px;
+    gap: 8px;
+  }
+  .sow-hud__inbox-list .sow-hud__request-name {
+    font-size: 15px;
+  }
+  .sow-hud__inbox-list .sow-hud__request-type {
+    font-size: 13px;
+  }
+  .sow-hud__inbox-list > .sow-hud__request-card .sow-hud__request-actions button {
+    min-block-size: 36px;
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 13.5px;
+  }
+}
+
 /* Compact Horizontal HUD Sheets (mobile landscape, short windows & embedded portals).
    Bottom-anchored tray matching mobile vertical ergonomics, with compact controls
    and multi-column grids where horizontal space allows. Pure CSS (zero per-frame JS). */
@@ -4249,15 +4406,28 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   /* Shared compact sheet chrome (Dev Tools already uses ultra-compact sizing) */
   .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-header {
     min-height: 40px;
-    padding: 3px 6px 3px 12px;
-    gap: 6px;
+    padding: 4px 6px 4px 10px;
+    gap: 8px;
+  }
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-title-group {
+    gap: 8px;
+  }
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-title-badge {
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
   }
   .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-title-icon {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
   }
   .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-title {
-    font-size: 13px;
+    font-size: 13.5px;
+  }
+  .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__close-icon {
+    width: 16px;
+    height: 16px;
   }
   .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__sheet-btn,
   .sow-hud__sheet:not(.sow-hud__dev-sidebar) .sow-hud__close-btn {
@@ -4374,7 +4544,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
 
   /* 3. Inbox: compact filters, bulk actions & request cards */
   .sow-hud__inbox-total {
-    font-size: 13px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 11px;
   }
   .sow-hud__inbox-filters {
     padding: 6px 10px 2px;
@@ -5006,7 +5179,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   --ring-size: clamp(216px, 58vmin, 272px);
   --ring-relation: var(--sow-muted);
   position: absolute;
-  z-index: 190;
+  z-index: 150;
   width: var(--ring-size);
   height: var(--ring-size);
   transform: translate(-50%, -50%);
@@ -7236,8 +7409,8 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   position: absolute;
   top: var(--sow-hud-notifications-top, 72px);
   left: 50%;
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
   width: min(360px, calc(100vw - 32px));
   transform: translateX(-50%);
   pointer-events: none;
@@ -7322,9 +7495,31 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   align-items: center;
   gap: 10px;
   min-height: 66px;
+  margin-bottom: 6px;
   padding: 9px 14px 9px 10px;
-  animation: sow-notification-arrive 260ms cubic-bezier(0.18, 0.75, 0.26, 1)
-    both;
+}
+
+.sow-hud__notification:last-child {
+  margin-bottom: 0;
+}
+
+.sow-hud__notification.is-entering {
+  will-change: transform, opacity;
+  animation: sow-notification-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sow-hud__notification.is-leaving {
+  will-change: transform, opacity;
+  pointer-events: none;
+  animation: sow-notification-leave 260ms cubic-bezier(0.22, 0.85, 0.45, 1) both;
+}
+
+html[dir="rtl"] .sow-hud__notification.is-entering {
+  animation-name: sow-notification-enter-rtl;
+}
+
+html[dir="rtl"] .sow-hud__notification.is-leaving {
+  animation-name: sow-notification-leave-rtl;
 }
 
 .sow-hud__notification[hidden] {
@@ -7477,6 +7672,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   grid-template-columns: 24px minmax(0, 1fr);
   gap: 8px;
   min-height: 46px;
+  margin-bottom: 0;
   padding: 8px 11px;
   opacity: 0;
   transform: translateY(-6px) scale(0.99);
@@ -7500,23 +7696,86 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   height: 23px;
 }
 
-#sow-hud[data-overlay-open="true"] .sow-hud__notifications {
-  z-index: 191;
-}
-
-@keyframes sow-notification-arrive {
+@keyframes sow-notification-enter {
   from {
     opacity: 0;
-    transform: translateY(-7px) scale(0.99);
+    transform: translate3d(-18px, -4px, 0) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
-#sow-hud.is-reduced-motion .sow-hud__notification {
+@keyframes sow-notification-enter-rtl {
+  from {
+    opacity: 0;
+    transform: translate3d(18px, -4px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes sow-notification-leave {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    max-height: 160px;
+    margin-bottom: 6px;
+  }
+  55% {
+    opacity: 0;
+    transform: translate3d(-22px, -2px, 0) scale(0.96);
+    max-height: 160px;
+    margin-bottom: 6px;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-22px, -2px, 0) scale(0.96);
+    max-height: 0;
+    min-height: 0;
+    padding-block: 0;
+    margin-bottom: 0;
+    border-width: 0;
+  }
+}
+
+@keyframes sow-notification-leave-rtl {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    max-height: 160px;
+    margin-bottom: 6px;
+  }
+  55% {
+    opacity: 0;
+    transform: translate3d(22px, -2px, 0) scale(0.96);
+    max-height: 160px;
+    margin-bottom: 6px;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(22px, -2px, 0) scale(0.96);
+    max-height: 0;
+    min-height: 0;
+    padding-block: 0;
+    margin-bottom: 0;
+    border-width: 0;
+  }
+}
+
+#sow-hud.is-reduced-motion .sow-hud__notification.is-entering,
+#sow-hud.is-reduced-motion .sow-hud__notification.is-leaving {
   animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sow-hud__notification.is-entering,
+  .sow-hud__notification.is-leaving {
+    animation: none;
+  }
 }
 .sow-hud__row-action {
   border: 1px solid var(--sow-button-dark-border);
@@ -7547,7 +7806,7 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   backdrop-filter: blur(var(--sow-tactical-surface-blur));
   -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
   pointer-events: auto;
-  z-index: 70;
+  z-index: 115;
   animation: sow-hud-sheet-in-side 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -7658,9 +7917,11 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   block-size: 1.75rem;
 }
 .sow-hud__dialog .sow-hud__close-btn {
-  flex: 0 0 2.75rem;
-  min-inline-size: 2.75rem;
-  min-block-size: 2.75rem;
+  flex: 0 0 2.25rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-inline-size: 2.25rem;
+  min-block-size: 2.25rem;
 }
 .sow-hud__dialog .sow-hud__betrayal-mark {
   flex-basis: 3.25rem;
@@ -8294,7 +8555,12 @@ html[dir="rtl"] .sow-hud__dev-play::before {
     left: 50%;
     transform: translateX(-50%);
     width: calc(100vw - 20px);
-    max-width: 480px;
+    max-width: none;
+  }
+  /* The nuclear dock rule is more specific; keep the full-width dock in portrait. */
+  .sow-hud__dock:has(#sow-hud-nuclear-strip[style*="flex"]) {
+    width: calc(100vw - 20px);
+    max-width: none;
   }
   .sow-hud__left-rail,
   .sow-hud__right-rail {
@@ -8369,7 +8635,11 @@ html[dir="rtl"] .sow-hud__dev-play::before {
     left: 50%;
     transform: translateX(-50%);
     width: calc(100vw - 16px);
-    max-width: 500px;
+    max-width: none;
+  }
+  .sow-hud__dock:has(#sow-hud-nuclear-strip[style*="flex"]) {
+    width: calc(100vw - 16px);
+    max-width: none;
   }
   .sow-hud__operations {
     bottom: var(
@@ -8870,8 +9140,8 @@ html[dir="rtl"] .sow-hud__dev-play::before {
     font-size: 10px;
   }
   #sow-hud[data-compact="true"] .sow-hud__notifications {
-    display: grid;
-    gap: 6px;
+    display: flex;
+    flex-direction: column;
     pointer-events: auto;
   }
   #sow-hud[data-compact="true"] .sow-hud__notifications {
@@ -9270,6 +9540,9 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
     --sow-dock-reserve: 88px;
   }
   .sow-hud__dock {
+    width: calc(100vw - 12px);
+  }
+  .sow-hud__dock:has(#sow-hud-nuclear-strip[style*="flex"]) {
     width: calc(100vw - 12px);
   }
   .sow-hud__dock-inner {

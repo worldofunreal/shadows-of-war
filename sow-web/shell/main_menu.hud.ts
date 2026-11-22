@@ -456,6 +456,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   let latestInboxRequests: HudInboxRequest[] = [];
   let activeNotifications: ActiveHudNotification[] = [];
   let notificationCards: HudNotificationCard[] = [];
+  const notificationCardsByKey = new Map<string, HudNotificationCard>();
+  const leavingNotificationCards = new Map<
+    string,
+    { parts: HudNotificationCard; timer: number | null }
+  >();
   let notificationLayoutFrame = 0;
   let notificationResizeObserver: ResizeObserver | null = null;
   let notificationMutationObserver: MutationObserver | null = null;
@@ -1736,9 +1741,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         inlineStartValue + "px",
       );
     notifications.classList.toggle("is-positioned", inlineStartValue != null);
-    const hasVisibleNotification = notificationCards.some(function (parts) {
-      return parts && parts.card && !parts.card.hidden;
-    });
+    const hasVisibleNotification =
+      notificationCards.some(function (parts) {
+        return parts && parts.card && !parts.card.hidden;
+      }) || leavingNotificationCards.size > 0;
     if (
       hasVisibleNotification &&
       !hudRoot!.classList.contains("is-reduced-motion")
@@ -2737,9 +2743,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     hudRefs.mapFeedback.setAttribute("aria-live", "polite");
     hudRefs.mapFeedback.hidden = true;
     hudRoot!.appendChild(hudRefs.mapFeedback);
-    notificationCards = Array.from({ length: 3 }, function () {
-      return createNotificationCard(hudRefs!.notifications, false);
+    notificationCards = [];
+    notificationCardsByKey.clear();
+    leavingNotificationCards.forEach(function (entry) {
+      if (entry.timer !== null) window.clearTimeout(entry.timer);
     });
+    leavingNotificationCards.clear();
     mapFeedbackCard = createNotificationCard(hudRefs.mapFeedback, true);
     observeNotificationLayout();
 
@@ -6776,13 +6785,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     parts.card.hidden = false;
     if (parts.renderKey === renderKey) return;
     parts.renderKey = renderKey;
+    const wasEntering = parts.card.classList.contains("is-entering");
     parts.card.className =
       "sow-hud__notification sow-hud__notification--premium" +
       (contextual ? " sow-hud__notification--contextual" : "") +
       (item.priority >= 4 ? " sow-hud__notification--urgent" : "") +
       (/resource_(received|sent)|ally_support/.test(key)
         ? " sow-hud__notification--support"
-        : "");
+        : "") +
+      (wasEntering ? " is-entering" : "");
     parts.seal.innerHTML = notificationIcon(key, entry.values || {});
     const primaryPlayerId =
       !contextual && avatars[0] && avatars[0].player_id != null
@@ -8038,6 +8049,101 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     window.SOW_triggerBellAlert = triggerBellAnimation;
   }
 
+  function syncNotificationsVisibleDataset(): void {
+    if (!hudRoot) return;
+    hudRoot.dataset.notificationsVisible = String(
+      notificationCardsByKey.size > 0 || leavingNotificationCards.size > 0,
+    );
+  }
+
+  function finalizeLeavingNotificationCard(key: string): void {
+    const entry = leavingNotificationCards.get(key);
+    if (!entry) return;
+    if (entry.timer !== null) window.clearTimeout(entry.timer);
+    leavingNotificationCards.delete(key);
+    clearNotificationCard(entry.parts);
+    entry.parts.card.remove();
+    syncNotificationsVisibleDataset();
+  }
+
+  function clearAllNotificationCards(): void {
+    if (notificationTimer) {
+      window.clearTimeout(notificationTimer);
+      notificationTimer = null;
+    }
+    leavingNotificationCards.forEach(function (entry) {
+      if (entry.timer !== null) window.clearTimeout(entry.timer);
+      clearNotificationCard(entry.parts);
+      entry.parts.card.remove();
+    });
+    leavingNotificationCards.clear();
+    notificationCardsByKey.forEach(function (parts) {
+      clearNotificationCard(parts);
+      parts.card.remove();
+    });
+    notificationCardsByKey.clear();
+    notificationCards = [];
+    syncNotificationsVisibleDataset();
+  }
+
+  function triggerNotificationEnterAnimation(el: HTMLElement): void {
+    if (isRequestToastReducedMotion()) {
+      el.classList.remove("is-entering");
+      return;
+    }
+    el.classList.remove("is-leaving");
+    el.classList.add("is-entering");
+    const onDone = function (event?: AnimationEvent): void {
+      if (
+        event &&
+        (event.target !== el ||
+          !event.animationName ||
+          event.animationName.indexOf("sow-notification-enter") !== 0)
+      ) {
+        return;
+      }
+      el.removeEventListener("animationend", onDone as EventListener);
+      el.classList.remove("is-entering");
+    };
+    el.addEventListener("animationend", onDone as EventListener);
+    window.setTimeout(function () {
+      el.classList.remove("is-entering");
+    }, 320);
+  }
+
+  function startLeavingNotificationCard(
+    key: string,
+    parts: HudNotificationCard,
+  ): void {
+    finalizeLeavingNotificationCard(key);
+    const el = parts.card;
+    el.classList.remove("is-entering");
+    if (isRequestToastReducedMotion()) {
+      clearNotificationCard(parts);
+      el.remove();
+      syncNotificationsVisibleDataset();
+      return;
+    }
+    el.classList.add("is-leaving");
+    const onDone = function (event?: AnimationEvent): void {
+      if (
+        event &&
+        (event.target !== el ||
+          !event.animationName ||
+          event.animationName.indexOf("sow-notification-leave") !== 0)
+      ) {
+        return;
+      }
+      el.removeEventListener("animationend", onDone as EventListener);
+      finalizeLeavingNotificationCard(key);
+    };
+    el.addEventListener("animationend", onDone as EventListener);
+    const timer = window.setTimeout(function () {
+      finalizeLeavingNotificationCard(key);
+    }, 340);
+    leavingNotificationCards.set(key, { parts, timer });
+  }
+
   function renderNotifications(
     entries: HudNotification[],
     forceRefresh: boolean,
@@ -8046,16 +8152,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (!hudRefs || !hudRefs.notifications || !Array.isArray(entries)) return;
     let changed = Boolean(forceRefresh);
     const now = Date.now();
-    const hasLaunchNotice =
-      entries.some((entry) => entry.fleet_id != null && entry.age_ms < 3600) ||
-      activeNotifications.some(({ entry, expiresAt }) =>
-        "fleet_id" in entry && entry.fleet_id != null && expiresAt > now);
     const compact = window.SOWCampaignView.isCompactViewport(
       hudRoot,
       hudScreen.width,
       hudScreen.height,
     );
-    const limit = compact ? (hasLaunchNotice ? 2 : 1) : 3;
+    const limit = compact ? 2 : 3;
     const unexpired = activeNotifications.filter(function (item) {
       return item.expiresAt > now;
     });
@@ -8169,21 +8271,59 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     if (hadNewNotification && typeof triggerBellAnimation === "function") {
       triggerBellAnimation();
     }
-    hudRoot!.dataset.notificationsVisible = String(
-      activeNotifications.length > 0,
-    );
-    if (!changed) return;
+    if (!changed) {
+      syncNotificationsVisibleDataset();
+      return;
+    }
     activeNotifications.sort(function (a, b) {
-      return b.priority - a.priority || a.createdAt - b.createdAt;
+      return (
+        b.priority - a.priority ||
+        a.createdAt - b.createdAt ||
+        Number(a.entry.id) - Number(b.entry.id)
+      );
     });
-    notificationCards.forEach(function (parts, index) {
-      const item = activeNotifications[index];
-      if (!item) {
-        clearNotificationCard(parts);
-        return;
+    const container = hudRefs.notifications;
+    const activeKeys = new Set<string>();
+    activeNotifications.forEach(function (item) {
+      activeKeys.add(item.group);
+    });
+    for (const [key, oldParts] of Array.from(notificationCardsByKey.entries())) {
+      if (!activeKeys.has(key)) {
+        notificationCardsByKey.delete(key);
+        startLeavingNotificationCard(key, oldParts);
+      }
+    }
+    const orderedActiveCards: HudNotificationCard[] = [];
+    activeNotifications.forEach(function (item) {
+      if (leavingNotificationCards.has(item.group)) {
+        finalizeLeavingNotificationCard(item.group);
+      }
+      let parts = notificationCardsByKey.get(item.group);
+      const isNew = !parts;
+      if (!parts) {
+        parts = createNotificationCard(container, false);
+        notificationCardsByKey.set(item.group, parts);
       }
       renderNotificationCard(parts, item, false);
+      if (isNew) {
+        triggerNotificationEnterAnimation(parts.card);
+      }
+      orderedActiveCards.push(parts);
     });
+    for (let i = orderedActiveCards.length - 1; i >= 0; i -= 1) {
+      const card = orderedActiveCards[i].card;
+      const nextActive =
+        i + 1 < orderedActiveCards.length ? orderedActiveCards[i + 1].card : null;
+      if (
+        card.parentNode !== container ||
+        (nextActive &&
+          !(card.compareDocumentPosition(nextActive) & Node.DOCUMENT_POSITION_FOLLOWING))
+      ) {
+        container.insertBefore(card, nextActive);
+      }
+    }
+    notificationCards = orderedActiveCards;
+    syncNotificationsVisibleDataset();
     if (notificationTimer) window.clearTimeout(notificationTimer);
     notificationTimer = null;
     if (activeNotifications.length) {
@@ -8638,7 +8778,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       activeNotifications = [];
       renderCombatOperations([]);
       pendingCounterAttacks = Object.create(null);
-      notificationCards.forEach(clearNotificationCard);
+      clearAllNotificationCards();
       notificationCursor = 0;
       mapFeedbackCursor = 0;
       clearMapFeedback();
