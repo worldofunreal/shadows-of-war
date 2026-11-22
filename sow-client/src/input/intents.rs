@@ -207,18 +207,71 @@ impl SowApp {
                     self.input.last_mouse_y as f32,
                 ],
             );
+            self.sfx.play_action_error(web_time::Instant::now());
             return false;
         }
         match &intent {
             sow_core::protocol::GameplayIntent::LaunchFleet { target_tile, .. } => {
                 let wx = (*target_tile % self.sim.map_w) as f32 + 0.5;
                 let wy = (*target_tile / self.sim.map_w) as f32 + 0.5;
+                let now = web_time::Instant::now();
                 self.ui.click_markers.push(crate::app::ClickMarker {
                     world_x: wx,
                     world_y: wy,
-                    start_time: web_time::Instant::now(),
+                    start_time: now,
                     kind: crate::app::ClickMarkerKind::TransportOrder,
                 });
+                self.sfx
+                    .play_transport_launch(now, self.spatial_sound_params(wx, wy));
+            }
+            sow_core::protocol::GameplayIntent::CancelAttack { .. } => {
+                self.sfx.play_attack_cancelled();
+            }
+            sow_core::protocol::GameplayIntent::RecallFleet { .. } => {
+                self.sfx.play_fleet_recall_or_scuttle(false);
+            }
+            sow_core::protocol::GameplayIntent::ScuttleFleet { .. } => {
+                self.sfx.play_fleet_recall_or_scuttle(true);
+            }
+            sow_core::protocol::GameplayIntent::MoveWarships { target_tile, .. } => {
+                let map_w = self.sim.map_w.max(1);
+                let wx = (*target_tile % map_w) as f32 + 0.5;
+                let wy = (*target_tile / map_w) as f32 + 0.5;
+                self.sfx.play_fleet_order(
+                    web_time::Instant::now(),
+                    false,
+                    Some(self.spatial_sound_params(wx, wy)),
+                );
+            }
+            sow_core::protocol::GameplayIntent::PatrolWarships { .. } => {
+                self.sfx
+                    .play_fleet_order(web_time::Instant::now(), true, None);
+            }
+            sow_core::protocol::GameplayIntent::BuildingProduction { kind, .. }
+            | sow_core::protocol::GameplayIntent::BuildingProductionMax { kind, .. } => {
+                let audio_kind = match kind {
+                    sow_core::game::CityArsenalKind::Warship => {
+                        crate::app::audio::ArsenalSoundKind::QueueWarship
+                    }
+                    sow_core::game::CityArsenalKind::Nuke => {
+                        crate::app::audio::ArsenalSoundKind::QueueNuke
+                    }
+                    sow_core::game::CityArsenalKind::AntiNuke => {
+                        crate::app::audio::ArsenalSoundKind::QueueAntiNuke
+                    }
+                };
+                self.sfx.play_arsenal_queued(audio_kind);
+            }
+            sow_core::protocol::GameplayIntent::CancelWarshipQueue { .. } => {
+                self.sfx
+                    .play_arsenal_queued(crate::app::audio::ArsenalSoundKind::Cancel);
+            }
+            sow_core::protocol::GameplayIntent::ExpressEmote { kind, .. } => {
+                self.sfx.play_emote(
+                    web_time::Instant::now(),
+                    crate::app::audio::emote_sound_code(*kind),
+                    None,
+                );
             }
             sow_core::protocol::GameplayIntent::Spawn { x, y } => {
                 let wx = *x as f32 + 0.5;

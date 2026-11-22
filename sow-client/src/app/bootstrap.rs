@@ -16,7 +16,6 @@ impl Default for SowApp {
 
 impl SowApp {
     pub fn new() -> Self {
-        crate::app::sfx::init_sfx_bank();
         // ── Simulation ──────────────────────────────────────────────────────────
         let map_w: u32 = 800;
         let map_h: u32 = 600;
@@ -39,11 +38,6 @@ impl SowApp {
         let asset_config = crate::AssetConfig::resolve();
         crate::store_portals::track_product_event("boot_start");
         let mut app = ClientApp::new();
-        sow_audio::set_master_volume(if app.settings_state.mute_all {
-            0.0
-        } else {
-            app.settings_state.sfx_volume
-        });
         crate::map_cache::hydrate_asset_maps(&mut app.asset_loader.maps);
 
         // ── Network State ───────────────────────────────────────────────────────

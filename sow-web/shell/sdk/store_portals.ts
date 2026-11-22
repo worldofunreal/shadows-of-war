@@ -106,15 +106,14 @@
         return /poki\.com/i.test(ref) || /poki-gdn\.com/i.test(ref);
     }
 
-    // Sound effects play through Web Audio inside WASM; page media elements
-    // alone do not cover them.
+    // Procedural SFX and UI cues play through Web Audio in TypeScript; page media
+    // elements alone do not cover them.
     function syncWasmAudio() {
-        if (typeof window.SOW_setPortalAudioMuted !== "function") {
-            return;
+        if (window.SOW_audio && typeof window.SOW_audio.syncPortalMute === "function") {
+            try {
+                window.SOW_audio.syncPortalMute();
+            } catch (e) {}
         }
-        try {
-            window.SOW_setPortalAudioMuted(!!(window.SOW_adPlaying || window.SOW_PORTAL_MUTE_AUDIO));
-        } catch (e) {}
     }
 
     function portalAdPause() {

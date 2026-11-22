@@ -1,4 +1,5 @@
 import { campaignBaseExpressions } from "./campaign/rules.ts";
+import { AudioCue, playUiCue } from "./audio/index.ts";
 import { browserZoomInputMode } from "./main_menu.core.ts";
 // Campaign tutorial controller; shared guide calculations live in campaign/tutorial-guides.ts.
 import { createMenuGuide } from "./main_menu.menu-guide.ts";
@@ -1546,7 +1547,10 @@ interface TutorialRuntime {
     function continueScene() {
         if (!runtime.machine) return;
         const step = runtime.machine.view().step;
-        if (runtime.machine.advance(null, step.id)) update(runtime.latestHud);
+        if (runtime.machine.advance(null, step.id)) {
+            playUiCue(AudioCue.UiCampaignStep);
+            update(runtime.latestHud);
+        }
     }
 
     function choose(choiceId: string) {
@@ -1574,6 +1578,7 @@ interface TutorialRuntime {
             if (!resolveReaction(model.reactionData, model.reactionTarget, answer, runtime.latestHud)) return;
         }
         if (runtime.machine.advance(choiceId, step.id)) {
+            playUiCue(AudioCue.UiCampaignStep);
             if (isDialogChoice) trackExperience("tutorial_dialog_choice");
             update(runtime.latestHud);
         }

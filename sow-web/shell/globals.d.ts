@@ -1,5 +1,6 @@
 import type { CampaignApi, CampaignViewApi } from "./campaign/types.ts";
 import type { SowTooltipSpec } from "./sow-tooltip.ts";
+import type { SowAudioPublicApi } from "./audio/types.ts";
 
 type DropdownOption = { value: string | number; label: string; shortLabel?: string };
 type DropdownConfig = {
@@ -104,7 +105,8 @@ declare global {
         SOW_portalRewardedAvailable?: () => boolean;
         SOW_portalRewardedBreak?: () => Promise<boolean>;
         CrazyGames?: { SDK?: { game?: { happytime?: () => void } } };
-        SOW_setPortalAudioMuted?: (muted: boolean) => void;
+        SOW_audio?: SowAudioPublicApi;
+        SOW_sfxFlush?: (batch: Float32Array) => void;
         SOW_analyticsTrack: (name: string, props?: unknown) => void;
         SOW_LOCALE: string;
         SOW_LOCALE_DEFAULT: string;

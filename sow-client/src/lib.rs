@@ -221,24 +221,29 @@ mod web_canvas;
 #[cfg(target_arch = "wasm32")]
 mod web_menu;
 
-pub(crate) fn player_sound_type(value: sow_core::player::PlayerType) -> sow_audio::PlayerSoundType {
+pub(crate) fn player_sound_type(
+    value: sow_core::player::PlayerType,
+) -> crate::app::audio::PlayerSoundType {
     match value {
-        sow_core::player::PlayerType::Human => sow_audio::PlayerSoundType::Human,
-        sow_core::player::PlayerType::Nation => sow_audio::PlayerSoundType::Nation,
-        sow_core::player::PlayerType::Bot => sow_audio::PlayerSoundType::Bot,
+        sow_core::player::PlayerType::Human => crate::app::audio::PlayerSoundType::Human,
+        sow_core::player::PlayerType::Nation => crate::app::audio::PlayerSoundType::Nation,
+        sow_core::player::PlayerType::Bot => crate::app::audio::PlayerSoundType::Bot,
     }
 }
 
 pub(crate) fn building_sound_kind(
     value: sow_core::game::BuildingKind,
-) -> sow_audio::BuildingSoundKind {
+) -> crate::app::audio::BuildingSoundKind {
     match value {
-        sow_core::game::BuildingKind::City => sow_audio::BuildingSoundKind::City,
-        sow_core::game::BuildingKind::Tower => sow_audio::BuildingSoundKind::Tower,
-        sow_core::game::BuildingKind::Factory => sow_audio::BuildingSoundKind::Factory,
-        sow_core::game::BuildingKind::Port => sow_audio::BuildingSoundKind::Port,
-        sow_core::game::BuildingKind::Farm => sow_audio::BuildingSoundKind::Factory,
-        sow_core::game::BuildingKind::SAM | sow_core::game::BuildingKind::MissileSilo => sow_audio::BuildingSoundKind::Tower,
+        sow_core::game::BuildingKind::City => crate::app::audio::BuildingSoundKind::City,
+        sow_core::game::BuildingKind::Tower => crate::app::audio::BuildingSoundKind::Tower,
+        sow_core::game::BuildingKind::Factory => crate::app::audio::BuildingSoundKind::Factory,
+        sow_core::game::BuildingKind::Port => crate::app::audio::BuildingSoundKind::Port,
+        sow_core::game::BuildingKind::Farm => crate::app::audio::BuildingSoundKind::Farm,
+        sow_core::game::BuildingKind::SAM => crate::app::audio::BuildingSoundKind::SAM,
+        sow_core::game::BuildingKind::MissileSilo => {
+            crate::app::audio::BuildingSoundKind::MissileSilo
+        }
     }
 }
 

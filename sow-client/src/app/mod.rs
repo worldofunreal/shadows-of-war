@@ -34,6 +34,7 @@ impl SowApp {
         if self.ui.app.phase != crate::ClientPhase::Playing {
             crate::web_menu::publish_state(self);
         }
+        self.sfx.flush_frame();
     }
 
     fn send_game_ready_if_needed(&mut self) {

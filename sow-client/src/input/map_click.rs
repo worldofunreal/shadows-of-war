@@ -1893,6 +1893,7 @@ impl SowApp {
                 self.input.last_mouse_y as f32,
             ]);
         self.ui.app.hud_state.push_map_feedback(text, position);
+        self.sfx.play_action_error(web_time::Instant::now());
     }
 
     pub(crate) fn clear_placement(&mut self) {
@@ -2389,7 +2390,9 @@ impl SowApp {
         let selected = &mut self.ui.app.hud_state.selected_nuke_kind;
         *selected = (*selected != Some(kind)).then_some(kind);
         self.ui.app.hud_state.building_placement = None;
-        if self.ui.app.hud_state.selected_nuke_kind.is_some() {
+        if let Some(armed) = self.ui.app.hud_state.selected_nuke_kind {
+            self.sfx
+                .play_nuke_armed(crate::app::audio::nuke_kind_level(armed));
             self.close_map_context_menu();
         }
     }

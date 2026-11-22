@@ -38,10 +38,11 @@
     }
 
     function syncWasmAudio() {
-        if (typeof window.SOW_setPortalAudioMuted !== "function") return;
-        try {
-            window.SOW_setPortalAudioMuted(!!(window.SOW_adPlaying || window.SOW_PORTAL_MUTE_AUDIO));
-        } catch {}
+        if (window.SOW_audio && typeof window.SOW_audio.syncPortalMute === "function") {
+            try {
+                window.SOW_audio.syncPortalMute();
+            } catch {}
+        }
     }
 
     function portalAdPause() {

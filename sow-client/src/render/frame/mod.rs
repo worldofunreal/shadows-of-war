@@ -209,7 +209,8 @@ impl SowApp {
                                     self.ui.blast_scene.spawn_staging(p.src_tile, width, p.owner_id, false, current_time);
                                 }
                                 let (x, y) = crate::render::world::movers::tile_to_world(p.src_tile, width);
-                                self.sfx.play_nuke_launch(current_time, spatial_audio.params(x, y));
+                                let [px, py] = self.input.project_board([x, y]);
+                                self.sfx.play_nuke_launch(current_time, level, spatial_audio.params(px, py));
                             }
                             self.ui.current_projectiles.insert(p.id, crate::app::TrackedProjectile::from_snapshot(p));
                         }
@@ -221,6 +222,9 @@ impl SowApp {
                                 if effects {
                                     self.ui.blast_scene.spawn_staging(prev.split_tile, width, prev.owner_id, true, current_time);
                                 }
+                                let (sx, sy) = crate::render::world::movers::tile_to_world(prev.split_tile, width);
+                                let [px, py] = self.input.project_board([sx, sy]);
+                                self.sfx.play_mirv_split(current_time, spatial_audio.params(px, py));
                                 continue;
                             }
                             let x = prev.dst_tile % width;
@@ -229,13 +233,20 @@ impl SowApp {
                                 (prev.steps_per_tick as usize).saturating_mul(elapsed_ticks as usize)
                             ) >= prev.path_len;
                             if impacts.contains(&(prev.owner_id, x, y)) || (elapsed_ticks > 1 && could_have_arrived) {
-                                self.sfx.play_nuke_impact(current_time, level, spatial_audio.params(x as f32 + 0.5, y as f32 + 0.5));
-                            } else if effects {
-                                self.ui.blast_scene.spawn_sam_airburst(prev.current_tile, width, current_time);
+                                let [px, py] = self.input.project_board([x as f32 + 0.5, y as f32 + 0.5]);
+                                self.sfx.play_nuke_impact(current_time, level, spatial_audio.params(px, py));
+                            } else {
+                                if effects {
+                                    self.ui.blast_scene.spawn_sam_airburst(prev.current_tile, width, current_time);
+                                }
+                                let (ix, iy) = crate::render::world::movers::tile_to_world(prev.current_tile, width);
+                                let [px, py] = self.input.project_board([ix, iy]);
+                                self.sfx.play_sam_intercept(current_time, spatial_audio.params(px, py));
                             }
                         }
                         std::mem::swap(&mut self.ui.current_projectiles, &mut self.ui.last_projectiles);
                         self.ui.last_projectile_snapshot_tick = Some(snap.tick);
+                        self.sfx.flush_frame();
                     }
 
                     crate::theme::dev_config::DevConfig::with(|dev| {

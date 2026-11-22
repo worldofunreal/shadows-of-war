@@ -316,6 +316,7 @@ impl SowApp {
                 self.advance_camera(crate::app::ENDGAME_REVEAL_DELAY_SECS);
             }
             self.sfx.play_result(won);
+            self.sfx.flush_frame();
             self.ui.trigger_viewport_alert(if won {
                 crate::app::ViewportAlertKind::Victory
             } else {

@@ -1,4 +1,5 @@
 import { renderSkinCard, renderSkinPicker, skinName } from "./main_menu.skins.ts";
+import { AudioCue, playUiCue } from "./audio/index.ts";
 import {
     asset,
     avatarImage,
@@ -483,6 +484,7 @@ function beginPurchaseSuccessReveal() {
     if (!menuUi.purchaseModal || menuUi.purchaseModal.phase !== "spending") return;
     if (reducedRewardMotion()) {
         menuUi.purchaseModal.phase = "success";
+        playUiCue(AudioCue.UiPurchaseSuccess);
         render();
         return;
     }
@@ -491,6 +493,7 @@ function beginPurchaseSuccessReveal() {
         purchaseSuccessTimer = null;
         if (!menuUi.purchaseModal || menuUi.purchaseModal.phase !== "spending") return;
         menuUi.purchaseModal.phase = "success";
+        playUiCue(AudioCue.UiPurchaseSuccess);
         render();
     }, 460);
 }

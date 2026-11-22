@@ -837,14 +837,6 @@ pub fn sow_perf_capture(enabled: bool) {
     crate::diag::set_perf_capture(enabled);
 }
 
-/// Portal bridges call this while an ad plays or the portal mutes the game.
-/// Sound effects run through Web Audio inside WASM, so muting page media
-/// elements alone would leave them audible.
-#[wasm_bindgen]
-pub fn sow_set_portal_audio_muted(muted: bool) {
-    sow_audio::set_host_muted(muted);
-}
-
 /// Called by the vanilla shell after the WASM module has initialized.
 #[wasm_bindgen]
 pub fn sow_menu_command(json: String) {
@@ -1457,11 +1449,6 @@ impl SowApp {
                 WebMenuCommand::SetMute { value } => {
                     self.ui.app.settings_state.mute_all = value;
                     self.ui.app.settings_state.persist_local();
-                    sow_audio::set_master_volume(if value {
-                        0.0
-                    } else {
-                        self.ui.app.settings_state.sfx_volume
-                    });
                 }
                 WebMenuCommand::SetMusicVolume { value } => {
                     let volume = value.clamp(0.0, 1.0);
@@ -1472,11 +1459,6 @@ impl SowApp {
                     let volume = value.clamp(0.0, 1.0);
                     self.ui.app.settings_state.sfx_volume = volume;
                     self.ui.app.settings_state.persist_local();
-                    sow_audio::set_master_volume(if self.ui.app.settings_state.mute_all {
-                        0.0
-                    } else {
-                        volume
-                    });
                 }
                 WebMenuCommand::SetReducedMotion { value } => {
                     self.ui.app.settings_state.set_reduced_motion(value);
@@ -1716,6 +1698,7 @@ impl SowApp {
                         if self.send_intent(sow_core::protocol::GameplayIntent::BreakAlliance {
                             target_player: ally_id,
                         }) {
+                            self.sfx.play_betrayal();
                             self.send_intent(intent);
                         }
                     }
@@ -1795,8 +1778,8 @@ impl SowApp {
                         if allied {
                             self.ui.app.hud_state.show_betrayal_warning =
                                 Some((target_player_id, intent));
-                        } else {
-                            self.send_intent(intent);
+                        } else if self.send_intent(intent) {
+                            self.sfx.play_counter_attack();
                         }
                     }
                 }

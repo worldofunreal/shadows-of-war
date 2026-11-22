@@ -61,6 +61,7 @@ impl SowApp {
         for event in events {
             match event {
                 sow_core::game::GameEvent::ResourceTransferred {
+                    sender_id,
                     receiver_id,
                     troops,
                     ..
@@ -68,6 +69,51 @@ impl SowApp {
                     self.ui
                         .nameplates
                         .animate_troop_change(receiver_id, troops, now_instant);
+                    if my_id != 0 {
+                        if receiver_id == my_id {
+                            self.sfx.play_resource_transfer(
+                                now_instant,
+                                crate::app::audio::ResourceSoundKind::Received,
+                            );
+                        } else if sender_id == my_id {
+                            self.sfx.play_resource_transfer(
+                                now_instant,
+                                crate::app::audio::ResourceSoundKind::Sent,
+                            );
+                        }
+                    }
+                }
+                sow_core::game::GameEvent::ResourceRequestSubmitted {
+                    proposer_id,
+                    target_id,
+                    ..
+                } => {
+                    if my_id != 0 && (proposer_id == my_id || target_id == my_id) {
+                        self.sfx.play_resource_transfer(
+                            now_instant,
+                            crate::app::audio::ResourceSoundKind::Requested,
+                        );
+                    }
+                }
+                sow_core::game::GameEvent::ResourceRequestRejected { requester_id, .. }
+                | sow_core::game::GameEvent::ResourceTransferRejected {
+                    sender_id: requester_id,
+                    ..
+                } => {
+                    if my_id != 0 && requester_id == my_id {
+                        self.sfx.play_resource_transfer(
+                            now_instant,
+                            crate::app::audio::ResourceSoundKind::Rejected,
+                        );
+                    }
+                }
+                sow_core::game::GameEvent::HelpCallSubmitted { caller_id } => {
+                    if my_id != 0 && caller_id != my_id {
+                        self.sfx.play_resource_transfer(
+                            now_instant,
+                            crate::app::audio::ResourceSoundKind::HelpCall,
+                        );
+                    }
                 }
                 sow_core::game::GameEvent::TransportShipLanded { owner_id, x, y } => {
                     let color = snap
@@ -95,6 +141,10 @@ impl SowApp {
                             cue_color: None,
                             start_time: now_instant,
                         });
+                    self.sfx.play_transport_landed(
+                        now_instant,
+                        self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5),
+                    );
                 }
                 sow_core::game::GameEvent::NavalActionRejected { player_id, reason } => {
                     if player_id != my_id || my_id == 0 {
@@ -163,6 +213,7 @@ impl SowApp {
                         None,
                         false,
                     );
+                    self.sfx.play_action_error(now_instant);
                 }
                 sow_core::game::GameEvent::NuclearActionRejected {
                     player_id,
@@ -197,6 +248,7 @@ impl SowApp {
                         None,
                         false,
                     );
+                    self.sfx.play_action_error(now_instant);
                 }
                 sow_core::game::GameEvent::WarshipSpawned { owner_id, fleet_id, tile }
                     if my_id != 0 && owner_id == my_id =>
@@ -208,19 +260,16 @@ impl SowApp {
                         self.ui.mover_scene.warship_launch_pulse([x, y], owner_id, now_instant);
                     }
                     self.ui.app.hud_state.push_warship_launch(fleet_id);
-                    self.sfx.play_completion(
+                    self.sfx.play_warship_spawned(
                         now_instant,
-                        sow_audio::BuildingSoundKind::Port,
                         self.spatial_sound_params(x, y),
                     );
                 }
                 sow_core::game::GameEvent::NavalShot { owner_id, tile, .. } => {
                     let x = tile % self.sim.map_w.max(1);
                     let y = tile / self.sim.map_w.max(1);
-                    self.sfx.play_combat(
+                    self.sfx.play_naval_shot(
                         now_instant,
-                        sow_audio::CombatSoundKind::NavalShot,
-                        1.0,
                         (u32::from(owner_id) << 16) ^ tile,
                         self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5),
                     );
@@ -349,19 +398,47 @@ impl SowApp {
                             now_instant,
                         );
                     }
-                    self.sfx.play_combat(
+                    self.sfx.play_naval_impact(
                         now_instant,
-                        if sunk {
-                            sow_audio::CombatSoundKind::NavalSink
-                        } else {
-                            sow_audio::CombatSoundKind::NavalImpact
-                        },
-                        1.0,
+                        sunk,
                         (u32::from(owner_id) << 16) ^ tile,
                         self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5),
                     );
                 }
-                sow_core::game::GameEvent::TradeShipCaptured { .. } => {}
+                sow_core::game::GameEvent::TradeShipCaptured {
+                    owner_id,
+                    target_owner,
+                    tile,
+                    ..
+                } => {
+                    if my_id != 0 && (owner_id == my_id || target_owner == my_id) {
+                        let map_w = self.sim.map_w.max(1);
+                        let wx = (tile % map_w) as f32 + 0.5;
+                        let wy = (tile / map_w) as f32 + 0.5;
+                        self.sfx.play_trade_captured(
+                            now_instant,
+                            owner_id == my_id,
+                            self.spatial_sound_params(wx, wy),
+                        );
+                    }
+                }
+                sow_core::game::GameEvent::TradeShipDelivered {
+                    owner_id,
+                    tile,
+                    gold,
+                    ..
+                } => {
+                    if my_id != 0 && owner_id == my_id {
+                        let map_w = self.sim.map_w.max(1);
+                        let wx = (tile % map_w) as f32 + 0.5;
+                        let wy = (tile / map_w) as f32 + 0.5;
+                        self.sfx.play_trade_delivered(
+                            now_instant,
+                            gold as f32,
+                            self.spatial_sound_params(wx, wy),
+                        );
+                    }
+                }
                 sow_core::game::GameEvent::AbilityTriggered {
                     owner_id,
                     tile,
@@ -412,6 +489,13 @@ impl SowApp {
                         Some(format!("ability:{owner_id}")),
                         false,
                     );
+                    let ability_spatial =
+                        tile.map(|(x, y)| self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5));
+                    self.sfx.play_hero_ability(
+                        now_instant,
+                        crate::app::audio::ability_cue_code(owner.leader.ability().cue()),
+                        ability_spatial,
+                    );
                 }
                 sow_core::game::GameEvent::PlayerEliminated {
                     player_id,
@@ -446,18 +530,23 @@ impl SowApp {
                     y,
                     new_owner,
                     previous_owner,
-                    ..
+                    troops,
                 } => {
                     if my_id != 0 && new_owner == my_id && previous_owner != 0 {
                         captured_enemy_tiles = captured_enemy_tiles.saturating_add(1);
                         last_enemy_capture_pos = Some((x as f32 + 0.5, y as f32 + 0.5));
                     }
                     self.handle_tile_captured(
+                        snap,
                         my_id,
+                        now_instant,
                         &mut played_combat_this_tick,
                         &combat::CaptureEventInfo {
+                            x,
+                            y,
                             new_owner,
                             previous_owner,
+                            troops,
                         },
                     );
                 }
@@ -511,6 +600,13 @@ impl SowApp {
                             .app
                             .hud_state
                             .push_notification_for_players(text, players, 3, None, false);
+                        if matches!(
+                            status,
+                            sow_core::game::AllianceRequestStatus::Rejected
+                                | sow_core::game::AllianceRequestStatus::Expired
+                        ) {
+                            self.sfx.play_alliance_ended(now_instant);
+                        }
                     }
                 }
                 sow_core::game::GameEvent::StructureCaptured {

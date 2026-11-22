@@ -3,6 +3,7 @@
  * in the order listed here. Portal builds (Poki, Jest) replace
  * main_menu.surfaces.ts with their own surface module; see sow-dist.
  */
+import "./audio/index.ts";
 import "./sow-i18n.ts";
 import "./sow-dropdown.ts";
 import "./sow-tooltip.ts";

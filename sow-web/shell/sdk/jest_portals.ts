@@ -245,8 +245,17 @@
         }
     }
 
+    function syncEngineAudio() {
+        if (window.SOW_audio && typeof window.SOW_audio.syncPortalMute === "function") {
+            try {
+                window.SOW_audio.syncPortalMute();
+            } catch {}
+        }
+    }
+
     function muteGameAudio() {
         window.SOW_PORTAL_MUTE_AUDIO = true;
+        syncEngineAudio();
         document.querySelectorAll("audio,video").forEach(function (el) {
             el.muted = true;
         });
@@ -254,6 +263,7 @@
 
     function unmuteGameAudio() {
         window.SOW_PORTAL_MUTE_AUDIO = false;
+        syncEngineAudio();
         if (window.SOW_adPlaying) return;
         document.querySelectorAll("audio,video").forEach(function (el) {
             el.muted = false;

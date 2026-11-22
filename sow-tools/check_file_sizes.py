@@ -39,7 +39,6 @@ CRATES: dict[str, set[Path]] = {
         ROOT / "sow-data" / "src" / "db.rs",
         ROOT / "sow-data" / "src" / "main.rs",
     },
-    "sow-audio": set(),
     "sow-map": set(),
     "sow-dist": {
         # CLI grew past 750 with the multi-worker relay deploy rework

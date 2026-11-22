@@ -14,7 +14,6 @@ default = []
 dev = []
 
 [dependencies]
-sow-audio = { workspace = true }
 sow-core = { workspace = true }
 sow-data = { workspace = true }
 sow-render = { workspace = true }

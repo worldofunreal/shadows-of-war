@@ -31,7 +31,7 @@ impl SowApp {
     ) {
         if let Some((step, title)) = self.ui.record_kill_callout(wx, wy, gender, now_instant) {
             self.sfx
-                .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+                .play_kill_streak(step, self.spatial_sound_params(wx, wy));
             let streak = self.ui.combat_streaks.kill_streak;
             if streak > self.progress.best_match_conquest_streak {
                 self.progress.best_match_conquest_streak = streak;

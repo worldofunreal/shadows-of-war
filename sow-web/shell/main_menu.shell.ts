@@ -1,4 +1,5 @@
 import { skinName } from "./main_menu.skins.ts";
+import { AudioCue, audioEngine, playUiCue, syncAudioSettings } from "./audio/index.ts";
 import { formatCompactNumber } from "./number-format.ts";
 import {
     avatarBackgroundCss,
@@ -458,17 +459,8 @@ function menuMusicPrepareSpectrum() {
         if (canvas) canvas.hidden = true;
         return;
     }
-    const AudioContextConstructor = window.AudioContext;
-    if (typeof AudioContextConstructor !== "function") {
-        menuMusic.spectrumUnavailable = true;
-        const canvas = menuMusicSpectrumCanvas();
-        if (canvas) canvas.hidden = true;
-        return;
-    }
-    let context: AudioContext;
-    try {
-        context = new AudioContextConstructor();
-    } catch {
+    const context = audioEngine.ensureContext();
+    if (!context) {
         menuMusic.spectrumUnavailable = true;
         const canvas = menuMusicSpectrumCanvas();
         if (canvas) canvas.hidden = true;
@@ -494,9 +486,7 @@ function menuMusicPrepareSpectrum() {
             menuMusic.spectrumPending = false;
             menuMusic.audioContext = null;
             menuMusic.spectrumUnavailable = true;
-            try {
-                void context.close();
-            } catch {}
+            // Shared AudioContext belongs to AudioEngine — never close it on spectrum failure.
             const canvas = menuMusicSpectrumCanvas();
             if (canvas) canvas.hidden = true;
         });
@@ -1516,9 +1506,16 @@ export function render(precomputedKey?: string) {
         menuUi.heroInfoOpen = false;
         menuUi.heroInfoLeaderId = null;
     }
-    const screenChanged = menuUi.previousScreen !== screen;
+    const prevScreen = menuUi.previousScreen;
+    const screenChanged = prevScreen !== screen;
     const sameScreen = !screenChanged;
-    if (screenChanged) menuUi.dropdownOpenKey = null;
+    if (screenChanged) {
+        menuUi.dropdownOpenKey = null;
+        if (prevScreen !== null && menuUi.state.phase === "MainMenu") {
+            const goingHome = screen === "home";
+            playUiCue(AudioCue.UiTabSwitch, goingHome ? 2 : 1);
+        }
+    }
     if (screen === "create" && menuUi.previousScreen !== "create") {
         menuUi.createDraft = cloneConfig();
         if (pendingCreateMode) {
@@ -3745,6 +3742,7 @@ root.addEventListener("click", function (event) {
     const purchaseOverlay = clickedElement.closest("[data-menu-overlay='purchase']");
     if (purchaseOverlay && clickedElement === purchaseOverlay) {
         if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
+        playUiCue(AudioCue.UiModalClose);
         if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
         else {
             menuUi.purchaseModal = null;
@@ -3755,12 +3753,14 @@ root.addEventListener("click", function (event) {
     }
     const skinPickerOverlay = clickedElement.closest("[data-menu-overlay='skin-picker']");
     if (skinPickerOverlay && clickedElement === skinPickerOverlay) {
+        playUiCue(AudioCue.UiModalClose);
         menuUi.skinPickerOpen = false;
         render();
         return;
     }
     const heroInfoOverlay = clickedElement.closest("[data-menu-overlay='hero-info']");
     if (heroInfoOverlay && clickedElement === heroInfoOverlay) {
+        playUiCue(AudioCue.UiModalClose);
         menuUi.heroInfoOpen = false;
         menuUi.heroInfoLeaderId = null;
         render();
@@ -3768,6 +3768,7 @@ root.addEventListener("click", function (event) {
     }
     const settingsOverlay = clickedElement.closest("[data-menu-overlay='settings']");
     if (settingsOverlay && clickedElement === settingsOverlay) {
+        playUiCue(AudioCue.UiModalClose);
         menuUi.settingsOpen = false;
         menuUi.signOutConfirmOpen = false;
         menuUi.dropdownOpenKey = null;
@@ -3776,6 +3777,7 @@ root.addEventListener("click", function (event) {
     }
     const missionsOverlay = clickedElement.closest("[data-menu-overlay='missions']");
     if (missionsOverlay && clickedElement === missionsOverlay) {
+        playUiCue(AudioCue.UiModalClose);
         menuUi.missionsModalOpen = false;
         render();
         return;
@@ -4467,7 +4469,10 @@ root.addEventListener("click", function (event) {
     }
     if (command === "equip_skin" || command === "unequip_skin") {
         const skinId = command === "unequip_skin" ? "" : target.dataset.skinId;
-        if (skinId !== undefined && !menuUi.state?.store_busy) send("equip_skin", { skin_id: skinId });
+        if (skinId !== undefined && !menuUi.state?.store_busy) {
+            playUiCue(AudioCue.UiHeroEquip);
+            send("equip_skin", { skin_id: skinId });
+        }
         return;
     }
     if (command === "set_session_mode") {
@@ -4537,11 +4542,13 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "open_missions") {
+        playUiCue(AudioCue.UiModalOpen);
         menuUi.missionsModalOpen = true;
         render();
         return;
     }
     if (command === "close_missions") {
+        playUiCue(AudioCue.UiModalClose);
         menuUi.missionsModalOpen = false;
         render();
         return;
@@ -4549,6 +4556,7 @@ root.addEventListener("click", function (event) {
     if (command === "switch_missions_tab") {
         const tab = target.dataset.missionsTab;
         if (tab === "onboarding" || tab === "daily" || tab === "weekly") {
+            playUiCue(AudioCue.UiTabSwitch, 1);
             menuUi.activeMissionsTab = tab;
             render();
         }
@@ -4818,6 +4826,7 @@ root.addEventListener("click", function (event) {
     }
     if (command === "set_leader") {
         if (send("set_leader", { leader_id: target.dataset.leaderId })) {
+            playUiCue(AudioCue.UiHeroEquip);
             menuUi.heroesOpen = false;
         }
         return;
@@ -4825,89 +4834,26 @@ root.addEventListener("click", function (event) {
     const payload: { lobby_id?: number; target_player_id?: number } = {};
     if (target.dataset.lobbyId) payload.lobby_id = Number(target.dataset.lobbyId);
     if (target.dataset.playerId) payload.target_player_id = Number(target.dataset.playerId);
+    const isPrimary =
+        command === "quick_match" ||
+        command === "join_matchmaking" ||
+        command === "start_private" ||
+        command === "create_game";
+    const isBack =
+        command.startsWith("close_") ||
+        command === "leave_lobby" ||
+        command === "cancel_sign_out";
+    playUiCue(AudioCue.UiClick, isPrimary ? 1 : isBack ? 2 : 0);
     send(command, payload);
 });
 
-function effectiveUiSfxVolume(): number {
-    const settings = menuUi.state?.settings;
-    if (settings?.mute_all || window.SOW_adPlaying || window.SOW_PORTAL_MUTE_AUDIO) return 0;
-    const raw = settings?.sfx_volume == null ? 0.8 : Number(settings.sfx_volume);
-    return Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0.8;
-}
-
 function playCelebrationSound(kind: "fanfare" | "fly" | "impact") {
-    try {
-        if (typeof window === "undefined") return;
-        const sfxVol = effectiveUiSfxVolume();
-        if (sfxVol <= 0) return;
-        const AudioCtx = window.AudioContext;
-        if (typeof AudioCtx !== "function") return;
-        if (!menuMusic.audioContext) {
-            menuMusic.audioContext = new AudioCtx();
-        }
-        const ctx = menuMusic.audioContext;
-        if (!ctx || typeof ctx.createOscillator !== "function") return;
-        if (ctx.state === "suspended") {
-            void ctx.resume();
-        }
-        const now = ctx.currentTime;
-        const masterGain = ctx.createGain();
-        masterGain.gain.setValueAtTime(sfxVol, now);
-        masterGain.connect(ctx.destination);
-        if (kind === "fanfare") {
-            const subOsc = ctx.createOscillator();
-            const subGain = ctx.createGain();
-            subOsc.type = "sine";
-            subOsc.frequency.setValueAtTime(90, now);
-            subOsc.frequency.exponentialRampToValueAtTime(42, now + 0.35);
-            subGain.gain.setValueAtTime(0.35, now);
-            subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
-            subOsc.connect(subGain);
-            subGain.connect(masterGain);
-            subOsc.start(now);
-            subOsc.stop(now + 0.4);
-
-            const notes = [261.63, 392.0, 523.25, 659.25, 783.99, 1046.5];
-            notes.forEach(function (freq, idx) {
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = idx < 2 ? "triangle" : "sine";
-                osc.frequency.setValueAtTime(freq, now + idx * 0.08);
-                gain.gain.setValueAtTime(0.001, now + idx * 0.08);
-                gain.gain.exponentialRampToValueAtTime(0.18, now + idx * 0.08 + 0.02);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.55);
-                osc.connect(gain);
-                gain.connect(masterGain);
-                osc.start(now + idx * 0.08);
-                osc.stop(now + idx * 0.08 + 0.58);
-            });
-        } else if (kind === "fly") {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(440, now);
-            osc.frequency.exponentialRampToValueAtTime(1100, now + 0.38);
-            gain.gain.setValueAtTime(0.08, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-            osc.connect(gain);
-            gain.connect(masterGain);
-            osc.start(now);
-            osc.stop(now + 0.42);
-        } else if (kind === "impact") {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = "triangle";
-            osc.frequency.setValueAtTime(1320, now);
-            osc.frequency.exponentialRampToValueAtTime(740, now + 0.22);
-            gain.gain.setValueAtTime(0.18, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
-            osc.connect(gain);
-            gain.connect(masterGain);
-            osc.start(now);
-            osc.stop(now + 0.28);
-        }
-    } catch {
-        // Safe ignore
+    if (kind === "fanfare") {
+        playUiCue(AudioCue.UiCelebrationFanfare);
+    } else if (kind === "fly") {
+        playUiCue(AudioCue.UiCelebrationFly);
+    } else if (kind === "impact") {
+        playUiCue(AudioCue.UiCelebrationImpact);
     }
 }
 
@@ -5497,8 +5443,16 @@ root.addEventListener("input", function (event) {
             menuUi.state.settings[setting] = val;
         }
         if (setting === "music_volume") {
+            syncAudioSettings({ music_volume: val });
             if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true, val);
             menuMusicSyncSpectrum();
+        } else if (setting === "sfx_volume") {
+            syncAudioSettings({ sfx_volume: val });
+            const bucket = Math.round(pct / 5);
+            if (input.dataset.lastTickBucket !== String(bucket)) {
+                input.dataset.lastTickBucket = String(bucket);
+                playUiCue(AudioCue.UiSliderTick, 0, val);
+            }
         }
     }
     if (input.name === "password" && input.closest("form[data-form='password']")) {
@@ -5668,8 +5622,15 @@ function handleMenuStateUpdate(raw: string, parsed: MenuState) {
         updateDynamic();
         return;
     }
+    const hadRankedMatchup = Boolean(menuUi.state?.ranked_matchup);
     menuUi.lastRaw = raw;
     menuUi.state = parsed;
+    if (menuUi.state?.settings) {
+        syncAudioSettings(menuUi.state.settings);
+    }
+    if (!hadRankedMatchup && menuUi.state?.ranked_matchup) {
+        playUiCue(AudioCue.UiMatchFound);
+    }
     if (
         !Number.isSafeInteger(menuUi.state!.loader_cycle_id) ||
         menuUi.state!.loader_cycle_id < latestLoaderCycleId

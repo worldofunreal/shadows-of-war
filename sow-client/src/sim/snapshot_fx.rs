@@ -86,11 +86,13 @@ impl SowApp {
                             self.ui.trigger_viewport_alert(
                                 crate::app::ViewportAlertKind::AllianceRequest,
                             );
+                            self.sfx.play_alliance_request(now);
                         }
                     }
                     for ally_id in &my_info_new.alliances {
                         let Some(old_ally) = my_info_old.alliances.iter().find(|id| *id == ally_id)
                         else {
+                            self.sfx.play_alliance_formed(now);
                             if let Some(ally) = snap.players.iter().find(|p| p.id == *ally_id) {
                                 notifications.push((
                                     crate::ui::UiText::new("hud.alliance_formed").with(
@@ -154,6 +156,7 @@ impl SowApp {
                         {
                             self.ui
                                 .trigger_viewport_alert(crate::app::ViewportAlertKind::Betrayal);
+                            self.sfx.play_betrayal();
                             notifications.push((
                                 crate::ui::UiText::new("hud.betrayal").with(
                                     "name",
@@ -172,6 +175,7 @@ impl SowApp {
                             && let Some(other_player) =
                                 snap.players.iter().find(|p| p.id == *ally_id)
                         {
+                            self.sfx.play_alliance_ended(now);
                             notifications.push((
                                 crate::ui::UiText::new("hud.alliance_ended").with(
                                     "name",
@@ -351,6 +355,10 @@ impl SowApp {
                         self.ui
                             .blast_scene
                             .spawn_building_demolition(b_new, self.sim.map_w, now);
+                        let wx = (b_new.tile_idx % map_w) as f32 + 0.5;
+                        let wy = (b_new.tile_idx / map_w) as f32 + 0.5;
+                        self.sfx
+                            .play_building_demolished(now, self.spatial_sound_params(wx, wy));
                     }
                     if !self.sim.config.tutorial
                         && my_id != 0
