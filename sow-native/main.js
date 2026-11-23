@@ -63,6 +63,9 @@ app.whenReady().then(() => {
       const fullPath = resolveSowPath(decodedPath);
 
       if (!fs.existsSync(fullPath)) {
+        if (liveRoot) {
+          console.error(`[sow:// 404] /${decodedPath} -> ${fullPath}`);
+        }
         return new Response('File not found', { status: 404 });
       }
 
@@ -73,7 +76,10 @@ app.whenReady().then(() => {
         return new Response(response.body, { status: response.status, headers });
       }
       return response;
-    } catch {
+    } catch (err) {
+      if (liveRoot) {
+        console.error(`[sow:// 500] ${request.url}:`, err);
+      }
       return new Response('Internal error', { status: 500 });
     }
   });
@@ -81,10 +87,12 @@ app.whenReady().then(() => {
   const iconPath = path.join(__dirname, 'icons', '128x128.png');
   let presetIndex = process.argv.includes('--mobile') ? 1 : 0;
   const initial = VIEWPORT_PRESETS[presetIndex];
+  const verifyBoot = process.env.SOW_DEV_VERIFY_BOOT === '1';
 
   const win = new BrowserWindow({
     width: initial.width,
     height: initial.height,
+    show: !verifyBoot,
     backgroundColor: '#0a0a0f',
     autoHideMenuBar: true,
     title: liveRoot ? `Shadows of War [DEV · ${initial.name}]` : 'Shadows of War',
@@ -97,10 +105,25 @@ app.whenReady().then(() => {
   });
 
   if (liveRoot) {
-    win.webContents.on('console-message', (event) => {
-      if (event.level >= 2) {
-        console.error(`[Electron console:${event.level}] ${event.message} (${event.sourceId}:${event.lineNumber})`);
+    win.webContents.on('console-message', (event, legacyLevel, legacyMsg, legacyLine, legacySrc) => {
+      const isDetails = event && typeof event.message === 'string';
+      const level = isDetails ? event.level : legacyLevel;
+      const message = isDetails ? event.message : legacyMsg;
+      const sourceId = isDetails ? event.sourceId : legacySrc;
+      const lineNumber = isDetails ? event.lineNumber : legacyLine;
+      const isErrOrWarn =
+        level === 'error' || level === 'warning' || (typeof level === 'number' && level >= 2);
+      if (isErrOrWarn || message.startsWith('[SOW')) {
+        const prefix = `[console:${level}]`;
+        const loc = sourceId ? ` (${sourceId}:${lineNumber})` : '';
+        (isErrOrWarn ? console.error : console.log)(`${prefix} ${message}${loc}`);
       }
+    });
+    win.webContents.on('did-fail-load', (_e, code, desc, validatedURL) => {
+      console.error(`[Electron did-fail-load] ${code} ${desc} (${validatedURL})`);
+    });
+    win.webContents.on('render-process-gone', (_e, details) => {
+      console.error(`[Electron render-process-gone]`, details);
     });
     const stampPath = path.join(webroot, '.reload-stamp');
     let reloadTimer = null;
@@ -144,7 +167,44 @@ app.whenReady().then(() => {
     }
   });
 
-  win.loadURL('sow://app/play/index.html');
+  const loadTarget = verifyBoot
+    ? 'sow://app/play/index.html?diag=1'
+    : 'sow://app/play/index.html';
+  win.loadURL(loadTarget);
+
+  if (verifyBoot) {
+    const start = Date.now();
+    const poll = setInterval(async () => {
+      if (win.isDestroyed()) {
+        clearInterval(poll);
+        return;
+      }
+      try {
+        const state = await win.webContents.executeJavaScript(`({
+          menuReady: !!window.SOW_MENU_READY,
+          loaderHidden: !document.getElementById('web-loader') || getComputedStyle(document.getElementById('web-loader')).display === 'none' || document.getElementById('web-loader').hidden,
+          hasWebgl2: typeof window.SOW_has_webgl2 === 'function' ? window.SOW_has_webgl2() : null,
+          mapsUrl: window.SOW_MAPS_URL || null,
+          assetsUrl: window.SOW_ASSETS_URL || null,
+        })`);
+        if (state.menuReady && state.loaderHidden) {
+          console.log(`[verify-boot] OK in ${Date.now() - start}ms`, JSON.stringify(state));
+          clearInterval(poll);
+          app.exit(0);
+        } else if (Date.now() - start > 15000) {
+          console.error(`[verify-boot] TIMEOUT after ${Date.now() - start}ms`, JSON.stringify(state));
+          clearInterval(poll);
+          app.exit(1);
+        }
+      } catch (err) {
+        if (Date.now() - start > 15000) {
+          console.error('[verify-boot] ERROR:', err);
+          clearInterval(poll);
+          app.exit(1);
+        }
+      }
+    }, 250);
+  }
 });
 
 app.on('window-all-closed', () => {

@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 const RELOCATION_RADIUS: u32 = 24;
 const FEAST_MIN_GIFT: f64 = 500.0;
-const CITY_FARM_FOUNDING_CLAIM: u8 = 3;
+const CITY_MILITARY_CAMP_FOUNDING_CLAIM: u8 = 3;
 
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -791,7 +791,7 @@ impl SowEngine {
                     ready(self.active_cities(owner).any(|city| {
                         !self
                             .hero_claims
-                            .contains(&(owner, city.id, CITY_FARM_FOUNDING_CLAIM))
+                            .contains(&(owner, city.id, CITY_MILITARY_CAMP_FOUNDING_CLAIM))
                             && self
                                 .hero_foundation_near(
                                     owner,
@@ -1571,7 +1571,7 @@ impl SowEngine {
             && !self.hero_claims.contains(&(
                 building.owner_id,
                 building.id,
-                CITY_FARM_FOUNDING_CLAIM,
+                CITY_MILITARY_CAMP_FOUNDING_CLAIM,
             ))
         {
             // City MilitaryCamp Founding now grants a separate MilitaryCamp on a legal nearby footprint.
@@ -1586,7 +1586,7 @@ impl SowEngine {
                 self.hero_claims.insert((
                     building.owner_id,
                     building.id,
-                    CITY_FARM_FOUNDING_CLAIM,
+                    CITY_MILITARY_CAMP_FOUNDING_CLAIM,
                 ));
                 self.found_hero_structure(building.owner_id, BuildingKind::MilitaryCamp, site);
             }

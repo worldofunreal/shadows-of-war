@@ -239,16 +239,29 @@ async function buildShell(
   const ts = String(Math.floor(Date.now() / 1000));
   const catalogVersion = readWebCatalogVersion();
 
+  const ptrHost = process.env.SOW_DEV_HOST || "ptr.shadowsofwar.io";
+  const portalBootJs = [
+    `window.SOW_WS_URL = "wss://${ptrHost}/ws/";`,
+    `window.SOW_MAPS_URL = "/maps";`,
+    `window.SOW_ASSETS_URL = "/assets";`,
+    `window.SOW_DATABASE_URL = "https://${ptrHost}/api";`,
+    `window.SOW_SOCIAL_SIGN_IN = false;`,
+  ].join(" ");
+
   let html = fs.readFileSync(path.join(SHELL_DIR, "index.html.template"), "utf8");
   html = html
     .replaceAll("<!-- __SOW_SOURCE_IDENTITY_SLOT__ -->", "")
     .replaceAll("<!-- __SOW_EXPERIENCE_EVENTS_SLOT__ -->", "")
     .replaceAll("<!-- __SOW_ANALYTICS_SCRIPT_SLOT__ -->", "")
     .replaceAll("<!-- __SOW_SERVICE_WORKER_SLOT__ -->", "")
+    .replaceAll(
+      "/* PORTAL_BOOT_SLOT: SOW_PORTAL / SOW_WS_URL overrides injected by sow-dist crazygames. */",
+      portalBootJs,
+    )
     .replaceAll("__VERSION__", "dev")
     .replaceAll("__SITE_ORIGIN__", "sow://app")
-    .replace("./__JS_FILE__", "../__JS_FILE__")
-    .replace("./__WASM_FILE__", "../__WASM_FILE__")
+    .replaceAll("./__JS_FILE__", "../__JS_FILE__")
+    .replaceAll("./__WASM_FILE__", "../__WASM_FILE__")
     .replaceAll("__JS_FILE__", wasmInfo.jsFile)
     .replaceAll("__WASM_FILE__", wasmInfo.wasmFile)
     .replaceAll("__BUILD_TS__", ts)
@@ -257,17 +270,17 @@ async function buildShell(
     .replaceAll("__SOW_LOCALE_CODES__", JSON.stringify(localeCodes))
     .replaceAll("__MAPS_CACHE_BUST__", ts)
     .replaceAll("__ASSETS_UI_BASE__", "/assets/shell/loader/")
-    .replace('href="./sow.svg"', 'href="../sow.svg"')
-    .replace('content="./icon-192.png"', 'content="../icon-192.png"')
-    .replace('href="./favicon.ico"', 'href="../favicon.ico"')
-    .replace('src="./loader.js"', 'src="../loader.js"')
-    .replace(`src="./sdk/store_portals.js?v=${ts}"`, `src="../sdk/store_portals.js?v=${ts}"`)
-    .replace("/* __INLINE_EXPERIENCE_EVENTS_JS__ */", expEventsJs.replaceAll("</script>", "<\\/script>"))
-    .replace("/* __INLINE_LOADER_JS__ */", `window.SOW_ASSET_TS = {};\n${loaderJs.replaceAll("</script>", "<\\/script>")}`)
-    .replace("/* __INLINE_MAIN_MENU_CSS__ */", menuCss)
+    .replaceAll('href="./sow.svg"', 'href="../sow.svg"')
+    .replaceAll('content="./icon-192.png"', 'content="../icon-192.png"')
+    .replaceAll('href="./favicon.ico"', 'href="../favicon.ico"')
+    .replaceAll('src="./loader.js"', 'src="../loader.js"')
+    .replaceAll(`src="./sdk/store_portals.js?v=${ts}"`, `src="../sdk/store_portals.js?v=${ts}"`)
+    .replace("/* __INLINE_EXPERIENCE_EVENTS_JS__ */", () => expEventsJs.replaceAll("</script>", "<\\/script>"))
+    .replace("/* __INLINE_LOADER_JS__ */", () => `window.SOW_ASSET_TS = {};\n${loaderJs.replaceAll("</script>", "<\\/script>")}`)
+    .replace("/* __INLINE_MAIN_MENU_CSS__ */", () => menuCss)
     .replace(
       "<script>/* __INLINE_MAIN_MENU_JS__ */</script>",
-      `<link rel="preload" href="./${menuFilename}" as="script">\n    <script src="./${menuFilename}"></script>`,
+      () => `<link rel="preload" href="./${menuFilename}" as="script">\n    <script src="./${menuFilename}"></script>`,
     );
 
   fs.writeFileSync(path.join(PLAY_DIR, "index.html"), html);

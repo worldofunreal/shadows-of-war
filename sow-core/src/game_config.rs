@@ -72,7 +72,7 @@ fn default_district_max_troops() -> f64 {
     250.0
 }
 
-fn default_hero_district_troop_income() -> f64 {
+fn default_hero_structure_troop_income() -> f64 {
     600.0
 }
 
@@ -522,10 +522,10 @@ pub struct GameConfig {
     #[serde(default = "default_hero_city_gold_income")]
     pub hero_city_gold_income: f64,
     /// Troop income per game second per TradingPost level, paid to Ramesses II only.
-    #[serde(default = "default_hero_district_troop_income", alias = "hero_factory_troop_income")]
+    #[serde(default = "default_hero_structure_troop_income", alias = "hero_factory_troop_income")]
     pub hero_trading_post_troop_income: f64,
     /// Troop income per game second per Port level, paid to Artemisia I only.
-    #[serde(default = "default_hero_district_troop_income")]
+    #[serde(default = "default_hero_structure_troop_income")]
     pub hero_port_troop_income: f64,
     /// Gold income per game second per active alliance, paid to Sālote Tupou III only.
     #[serde(default = "default_alliance_gold_income")]
@@ -732,8 +732,8 @@ impl Default for GameConfig {
             port_gold_income: default_port_gold_income(),
             port_troop_income: default_port_troop_income(),
             hero_city_gold_income: default_hero_city_gold_income(),
-            hero_trading_post_troop_income: default_hero_district_troop_income(),
-            hero_port_troop_income: default_hero_district_troop_income(),
+            hero_trading_post_troop_income: default_hero_structure_troop_income(),
+            hero_port_troop_income: default_hero_structure_troop_income(),
             alliance_gold_income: default_alliance_gold_income(),
             alliance_troop_income: default_alliance_troop_income(),
             trade_troop_income: default_trade_troop_income(),

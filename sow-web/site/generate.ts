@@ -192,7 +192,7 @@ export async function publish(
   const atlasVersion = buildingAtlas ? createHash("sha256")
     .update(await readFile(join(out, "assets/gameplay/buildings/atlas.webp")))
     .digest("hex").slice(0, 10) : "";
-  const buildingGuide = (locale: string) => {
+  const buildingGuide = (locale: string, translate: (key: string) => string) => {
     const copy = buildingPageText(locale);
     const format = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
     const lineTranslation: Record<string, string> = {
@@ -200,7 +200,7 @@ export async function publish(
       Port: "port", Tower: "tower", SAM: "sam", MissileSilo: "missilesilo",
     };
     const cards = BUILDING_KINDS.map((kind) => {
-      const lineName = t("hud.map_action_" + lineTranslation[kind]);
+      const lineName = translate("hud.map_action_" + lineTranslation[kind]);
       const sprite = buildingAtlas.sprites[kind]?.[1];
       const size = buildingAtlas.cell_size;
       const width = buildingAtlas.atlas_width;
@@ -223,9 +223,9 @@ export async function publish(
         const current = input.buildingEffects?.[kind]?.[index] ?? {};
         const previous = input.buildingEffects?.[kind]?.[index - 1] ?? {};
         const effects = Object.entries(current)
-          .filter(([key, value]) => copy.stats[key] && value > 0)
-          .map(([key, value]) => `<span><b>${escape(copy.stats[key])}</b> ${format.format(value)} <small>(+${format.format(Number(value) - Number(previous[key] ?? 0))} ${escape(copy.thisLevel)})</small></span>`)
-          .join(" · ");
+          .filter(([key, value]) => key !== "reinforcements" && copy.stats[key] && value > 0)
+          .map(([key, value]) => `<li><span>${escape(copy.stats[key])}</span><strong>${format.format(value)}</strong><small>+${format.format(Number(value) - Number(previous[key] ?? 0))} ${escape(copy.thisLevel)}</small></li>`)
+          .join("");
         const stepPrice = input.buildingPrices?.[kind]?.[index] ?? 0;
         const priceLabel = level === 1 ? copy.build : copy.upgrade;
         const reinforcement = Number(current.reinforcements ?? 0);
@@ -239,10 +239,10 @@ export async function publish(
             : kind === "City" && level === 6
               ? `<span class="building-guide-unlock">${escape(copy.industrial)}</span>`
               : "";
-        return `<tr><th scope="row">${icon}<span>${level}. ${escape(name)}</span></th><td>${escape(era)}</td><td><b>${escape(priceLabel)}:</b> ${format.format(stepPrice)}<small class="building-guide-cumulative">${escape(copy.invested)}: ${format.format(cumulativePrice)}</small></td></tr><tr><td colspan="3" class="building-guide-effects">${effects}${immediate}${unlocks}</td></tr>`;
+        return `<li class="building-tier-card"><article><header class="building-tier-heading"><span class="building-tier-level">N${level}</span>${icon}<span class="building-tier-title"><strong>${escape(name)}</strong><small>${escape(era)}</small></span></header><div class="building-tier-price"><span>${escape(priceLabel)}</span><strong>${format.format(stepPrice)} <small>gold</small></strong><small>${escape(copy.invested)}: ${format.format(cumulativePrice)}</small></div>${effects ? `<ul class="building-tier-effects">${effects}</ul>` : ""}${immediate || unlocks ? `<div class="building-tier-unlocks">${immediate}${unlocks}</div>` : ""}</article></li>`;
       }).join("");
-      const lineName = t("hud.map_action_" + lineTranslation[kind]);
-      return `<section id="${kind.toLowerCase()}"><h2>${escape(lineName)}</h2><p>${escape(buildingRole(kind, locale))}</p><table><thead><tr><th scope="col">${escape(copy.level)}</th><th scope="col">${escape(copy.era)}</th><th scope="col">${escape(copy.build)} / ${escape(copy.upgrade)} · ${escape(copy.invested)}</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+      const lineName = translate("hud.map_action_" + lineTranslation[kind]);
+      return `<section class="building-line-section" id="${kind.toLowerCase()}" aria-labelledby="building-title-${kind.toLowerCase()}"><header class="building-line-heading"><h2 id="building-title-${kind.toLowerCase()}">${escape(lineName)}</h2><p>${escape(buildingRole(kind, locale))}</p></header><ol class="building-tier-grid">${rows}</ol></section>`;
     }).join("");
     return `<nav class="building-directory" aria-label="${escape(copy.nav)}">${cards}</nav><p class="building-guide-note">${escape(copy.note)}</p><div class="building-guide">${sections}</div>`;
   };
@@ -375,7 +375,7 @@ export async function publish(
         const pageCopy = buildingPageText(code);
         description = pageCopy.note.slice(0, 155);
         html = templates.get(route)!
-          .replace('<div class="container" data-building-guide></div>', `<div class="container"><h1>${escape(t("site.buildings"))}</h1><p class="guide-lede">${escape(pageCopy.intro)}</p>${buildingGuide(code)}</div>`)
+          .replace('<div class="container" data-building-guide></div>', `<div class="container"><h1>${escape(t("site.buildings"))}</h1><p class="guide-lede">${escape(pageCopy.intro)}</p>${buildingGuide(code, t)}</div>`)
           .replace("<!-- BUILDINGS_FOOTER -->", footer);
       } else if (englishOnly.has(route)) {
         // English-only pages carry their own copy; the template is the source of
