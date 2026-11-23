@@ -1679,6 +1679,18 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         scheduleNotificationPlacement();
       };
       window.addEventListener("resize", onViewportChange, { passive: true });
+      window.addEventListener(
+        "orientationchange",
+        function () {
+          onViewportChange();
+          if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(function () {
+              onViewportChange();
+            });
+          }
+        },
+        { passive: true },
+      );
       if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", onViewportChange, {
           passive: true,
@@ -7053,6 +7065,31 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
   }
 
+  function syncMobileNuclearStripPlacement(mobileTop: boolean): void {
+    if (!hudRoot || !hudRefs) return;
+    const nuclearStrip = document.getElementById("sow-hud-nuclear-strip");
+    if (!nuclearStrip) return;
+    if (mobileTop) {
+      if (nuclearStrip.parentElement !== hudRoot) {
+        hudRoot.appendChild(nuclearStrip);
+      }
+      if (nuclearStrip.dataset.mobileTop !== "true") {
+        nuclearStrip.dataset.mobileTop = "true";
+      }
+    } else {
+      if (nuclearStrip.dataset.mobileTop) {
+        delete nuclearStrip.dataset.mobileTop;
+      }
+      const actions = hudRefs.dock?.querySelector<HTMLElement>(
+        ".sow-hud__dock-actions",
+      );
+      if (actions && nuclearStrip.parentElement !== actions) {
+        const afterBuildings = hudRefs.buildingsStrip?.nextSibling || null;
+        actions.insertBefore(nuclearStrip, afterBuildings);
+      }
+    }
+  }
+
   function syncCompactHudBounds(hudScreen = cachedHudScreen()) {
     if (!hudRoot || !hudRefs) return;
     const viewport = window.visualViewport;
@@ -7073,6 +7110,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       window.matchMedia &&
       window.matchMedia("(hover: none) and (pointer: coarse)").matches;
     const compact = coarsePointer && density < 1;
+    syncMobileNuclearStripPlacement(compact);
     // Measure before writing. The stack rects below are read after the writes they depend on.
     const dockInnerEl =
       hudRefs.dock &&
