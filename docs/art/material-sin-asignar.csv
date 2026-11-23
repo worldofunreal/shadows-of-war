@@ -83,14 +83,14 @@ ester regal,1,~/Downloads/leaders/ester_regal_portrait.jpg
 ester susa,1,~/Downloads/leaders/ester_queen_susa.jpg
 esther,1,~/Downloads/leaders/queen_esther_portrait_1.jpg
 esther susa,1,~/Downloads/leaders/queen_esther_susa_palace.jpg
-factory,4,~/Downloads/factory_1.png ; ~/Downloads/factory_2.png ; ~/Downloads/factory_3.png ; ~/Downloads/factory_4.png
-factory n1,1,~/Downloads/factory_n1.png
-factory n3,1,~/Downloads/factory_n3.png
-farm,4,~/Downloads/farm_1.png ; ~/Downloads/farm_2.png ; ~/Downloads/farm_3.png ; ~/Downloads/farm_4.png
-farm n1,1,~/Downloads/farm_n1.png
-farm n2,1,~/Downloads/farm_n2.png
-farm n3,1,~/Downloads/farm_n3.png
-farm n4,1,~/Downloads/farm_n4.png
+trading post legacy art,4,~/Downloads/factory_1.png ; ~/Downloads/factory_2.png ; ~/Downloads/factory_3.png ; ~/Downloads/factory_4.png
+trading post legacy art n1,1,~/Downloads/factory_n1.png
+trading post legacy art n3,1,~/Downloads/factory_n3.png
+military camp legacy art,4,~/Downloads/farm_1.png ; ~/Downloads/farm_2.png ; ~/Downloads/farm_3.png ; ~/Downloads/farm_4.png
+military camp legacy art n1,1,~/Downloads/farm_n1.png
+military camp legacy art n2,1,~/Downloads/farm_n2.png
+military camp legacy art n3,1,~/Downloads/farm_n3.png
+military camp legacy art n4,1,~/Downloads/farm_n4.png
 feathered sunrise,1,~/Downloads/leaders/feathered_warrior_sunrise.jpg
 fijian,2,~/Downloads/leaders/fijian_king_heroic.jpg ; ~/Downloads/leaders/fijian_warrior_king.jpg
 fijian coastal,1,~/Downloads/leaders/fijian_king_coastal.jpg
