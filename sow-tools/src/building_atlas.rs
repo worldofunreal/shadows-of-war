@@ -3,6 +3,7 @@ use image::imageops::FilterType;
 use image::{ImageBuffer, Rgba, RgbaImage};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use sow_core::game::BuildingKind;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,15 +13,16 @@ const UNIT_CELL_PX: u32 = 64;
 const BADGE_CELL_PX: u32 = 128;
 const GUTTER_PX: u32 = 2;
 const ART_MARGIN_PX: u32 = 2;
-/// Building art stem and available sprite levels in `assets/art/buildings`.
-const BUILDING_KINDS: [(&str, &str, u8); 7] = [
-    ("City", "city", 5),
-    ("Factory", "factory", 4),
-    ("Port", "port", 4),
-    ("Tower", "tower", 4),
-    ("Farm", "farm", 4),
-    ("SAM", "sam", 4),
-    ("MissileSilo", "silo", 4),
+const ART_ALPHA_CUTOFF: u8 = 8;
+/// Building art stems in `assets/art/buildings`.
+const BUILDING_KINDS: [(BuildingKind, &str); 7] = [
+    (BuildingKind::City, "city"),
+    (BuildingKind::Factory, "factory"),
+    (BuildingKind::Port, "port"),
+    (BuildingKind::Tower, "tower"),
+    (BuildingKind::Farm, "farm"),
+    (BuildingKind::SAM, "sam"),
+    (BuildingKind::MissileSilo, "silo"),
 ];
 /// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.webp`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
@@ -79,45 +81,86 @@ fn art_source(dir: &Path, stem: &str) -> Result<PathBuf, Box<dyn Error + Send + 
         })
 }
 
-fn building_art_source(
-    dir: &Path,
-    stem: &str,
-) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
-    for extension in ["webp", "png"] {
-        let path = dir.join(format!("{stem}.{extension}"));
-        if path.is_file() {
-            return Ok(path);
+fn building_art_source(dir: &Path, stem: &str) -> Option<PathBuf> {
+    ["webp", "png"]
+        .into_iter()
+        .map(|extension| dir.join(format!("{stem}.{extension}")))
+        .find(|path| path.is_file())
+}
+
+fn building_sheet_cells(
+    sheet: &RgbaImage,
+    levels: u8,
+) -> Result<Vec<RgbaImage>, Box<dyn Error + Send + Sync>> {
+    const COLUMNS: u32 = 4;
+    let (width, height) = sheet.dimensions();
+    let cell = width / COLUMNS;
+    if cell == 0 || width != cell * COLUMNS || height != cell * 2 || levels > 8 {
+        return Err("expected a 4x2 sheet of square slots with at most eight levels".into());
+    }
+    let visible = |x, y| sheet.get_pixel(x, y).0[3] > ART_ALPHA_CUTOFF;
+    for x in (1..COLUMNS).map(|column| column * cell) {
+        if (0..height).any(|y| visible(x - 1, y) && visible(x, y)) {
+            return Err(format!("art crosses the column boundary at x={x}").into());
         }
     }
-    Err(format!(
-        "missing building art: {} or {}",
-        dir.join(format!("{stem}.webp")).display(),
-        dir.join(format!("{stem}.png")).display()
-    )
-    .into())
+    // Use the closest transparent row so smoke and flags can sit above the nominal grid line.
+    let split = (0..=cell / 8)
+        .flat_map(|offset| [cell - offset, cell + offset])
+        .find(|&y| (0..width).all(|x| !visible(x, y)))
+        .ok_or("art overlaps between the two rows near the center of the sheet")?;
+    (0..u32::from(levels))
+        .map(|index| {
+            let (top, bottom) = if index < COLUMNS {
+                (0, split)
+            } else {
+                (split, height)
+            };
+            let frame =
+                image::imageops::crop_imm(sheet, index % COLUMNS * cell, top, cell, bottom - top)
+                    .to_image();
+            pixel_cell(&frame, BUILDING_CELL_PX)
+        })
+        .collect()
 }
 
 pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut entries = Vec::new();
     let mut metadata = Vec::new();
-    for (kind, art_stem, max_level) in BUILDING_KINDS {
-        for level in 1..=max_level {
-            let source = building_art_source(
-                &args.art_root.join("buildings"),
-                &format!("{art_stem}-{level}"),
-            )?;
-            let bytes = fs::read(&source)?;
-            let image = image::load_from_memory(&bytes)?.to_rgba8();
-            entries.push((
-                format!("{kind}:{level}"),
-                pixel_cell(&image, BUILDING_CELL_PX)?,
-            ));
+    let dir = args.art_root.join("buildings");
+    for (kind, stem) in BUILDING_KINDS {
+        let name = kind.as_str();
+        let mut add = |level, cell, source: &Path, digest| {
+            entries.push((format!("{name}:{level}"), cell));
             let filename = source
                 .file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            metadata.push((kind, level, filename, sha256(&bytes)));
+            metadata.push((name, level, filename, digest));
+        };
+        if let Some(source) = building_art_source(&dir, stem) {
+            let bytes = fs::read(&source)?;
+            let sheet = image::load_from_memory(&bytes)?.into_rgba8();
+            let frames = building_sheet_cells(&sheet, kind.max_level())
+                .map_err(|error| format!("{}: {error}", source.display()))?;
+            let digest = sha256(&bytes);
+            for (index, frame) in frames.into_iter().enumerate() {
+                add(index as u8 + 1, frame, &source, digest.clone());
+            }
+        } else {
+            for level in 1..=kind.max_level().min(4) {
+                let source = building_art_source(&dir, &format!("{stem}-{level}"))
+                    .ok_or_else(|| format!("missing sheet for {stem} or art for level {level}"))?;
+                let bytes = fs::read(&source)?;
+                let image = image::load_from_memory(&bytes)?.into_rgba8();
+                add(
+                    level,
+                    pixel_cell(&image, BUILDING_CELL_PX)?,
+                    &source,
+                    sha256(&bytes),
+                );
+            }
         }
     }
 
@@ -256,7 +299,7 @@ fn pixel_cell(source: &RgbaImage, cell_px: u32) -> Result<RgbaImage, Box<dyn Err
     let mut bounds = (source.width(), source.height(), 0, 0);
     let mut found = false;
     for (x, y, pixel) in source.enumerate_pixels() {
-        if pixel.0[3] <= 8 {
+        if pixel.0[3] <= ART_ALPHA_CUTOFF {
             continue;
         }
         found = true;

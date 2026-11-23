@@ -1,6 +1,6 @@
 {
   "atlas": "gameplay/buildings/atlas.webp",
-  "atlas_height": 660,
+  "atlas_height": 792,
   "atlas_width": 792,
   "cell_size": 128,
   "schema_version": 1,
@@ -8,111 +8,127 @@
     "City": {
       "1": {
         "height": 128,
-        "sha256": "8e1bd3a1ab7cc36be024714523ae09a43f5e94d6e68c94e791a6aced3bc3a0aa",
-        "source": "city-1.webp",
+        "sha256": "58c20703f3eea8d76a59f4118e7b46e56cbf347f238370c54e245a00f8c0e8d7",
+        "source": "city.png",
         "width": 128,
         "x": 2,
         "y": 2
       },
       "2": {
         "height": 128,
-        "sha256": "8be72726a42eeb020ec259f89f706b8c961c71287e7c48663592c393b8b61190",
-        "source": "city-2.webp",
+        "sha256": "58c20703f3eea8d76a59f4118e7b46e56cbf347f238370c54e245a00f8c0e8d7",
+        "source": "city.png",
         "width": 128,
         "x": 134,
         "y": 2
       },
       "3": {
         "height": 128,
-        "sha256": "5277a2651d36be2720225381441bc357fbe903e871e63459a7cf2b981217888b",
-        "source": "city-3.webp",
+        "sha256": "58c20703f3eea8d76a59f4118e7b46e56cbf347f238370c54e245a00f8c0e8d7",
+        "source": "city.png",
         "width": 128,
         "x": 266,
         "y": 2
       },
       "4": {
         "height": 128,
-        "sha256": "b6cae4be2fe3ef6598b6c57f645ea702035e26b7f577c5ec961059f9d28e1c04",
-        "source": "city-4.webp",
+        "sha256": "58c20703f3eea8d76a59f4118e7b46e56cbf347f238370c54e245a00f8c0e8d7",
+        "source": "city.png",
         "width": 128,
         "x": 398,
         "y": 2
       },
       "5": {
         "height": 128,
-        "sha256": "314e8c9c059af114b46c448f47c2f10ea7557233669216251782a87bc71e6f31",
-        "source": "city-5.png",
+        "sha256": "58c20703f3eea8d76a59f4118e7b46e56cbf347f238370c54e245a00f8c0e8d7",
+        "source": "city.png",
         "width": 128,
         "x": 530,
         "y": 2
+      },
+      "6": {
+        "height": 128,
+        "sha256": "58c20703f3eea8d76a59f4118e7b46e56cbf347f238370c54e245a00f8c0e8d7",
+        "source": "city.png",
+        "width": 128,
+        "x": 662,
+        "y": 2
+      },
+      "7": {
+        "height": 128,
+        "sha256": "58c20703f3eea8d76a59f4118e7b46e56cbf347f238370c54e245a00f8c0e8d7",
+        "source": "city.png",
+        "width": 128,
+        "x": 2,
+        "y": 134
       }
     },
     "Factory": {
       "1": {
         "height": 128,
-        "sha256": "fb9fdb9c6237ccf6b1ae69c8220d6ca824578427cb6e8fe1bcee4f159f2168f6",
-        "source": "factory-1.webp",
-        "width": 128,
-        "x": 662,
-        "y": 2
-      },
-      "2": {
-        "height": 128,
-        "sha256": "2ace45e8ac5f421e38914149dae51f607b8de627276eee21017e60f81547ad04",
-        "source": "factory-2.webp",
-        "width": 128,
-        "x": 2,
-        "y": 134
-      },
-      "3": {
-        "height": 128,
-        "sha256": "bad1d1d2b02161e95a1bcc9bcf6e639932601518650f79bbbde53b7eb932f8b4",
-        "source": "factory-3.webp",
+        "sha256": "36a97eee65ddc9c3d42752444c844807551db442a1e435a89cf737cefaf12652",
+        "source": "factory.png",
         "width": 128,
         "x": 134,
         "y": 134
       },
-      "4": {
+      "2": {
         "height": 128,
-        "sha256": "a8914e12aadc9054dbb2093f50c5e239e5f2878fa557d48d135e3cf17fc243e5",
-        "source": "factory-4.webp",
+        "sha256": "36a97eee65ddc9c3d42752444c844807551db442a1e435a89cf737cefaf12652",
+        "source": "factory.png",
         "width": 128,
         "x": 266,
+        "y": 134
+      },
+      "3": {
+        "height": 128,
+        "sha256": "36a97eee65ddc9c3d42752444c844807551db442a1e435a89cf737cefaf12652",
+        "source": "factory.png",
+        "width": 128,
+        "x": 398,
+        "y": 134
+      },
+      "4": {
+        "height": 128,
+        "sha256": "36a97eee65ddc9c3d42752444c844807551db442a1e435a89cf737cefaf12652",
+        "source": "factory.png",
+        "width": 128,
+        "x": 530,
         "y": 134
       }
     },
     "Farm": {
       "1": {
         "height": 128,
-        "sha256": "627d9bfde0f16cec59f0d8c1d8275cb2277baf9d1235708ddbb361262070fe7c",
-        "source": "farm-1.webp",
+        "sha256": "8521038724c997821b1d53107b17896a07c52213c1b58393618ce7fad7577ce1",
+        "source": "farm.png",
         "width": 128,
-        "x": 662,
-        "y": 266
+        "x": 530,
+        "y": 398
       },
       "2": {
         "height": 128,
-        "sha256": "e484b91077b8a9bb319a7c7b8ca2b776e3fb9c5870f85e2c00ee6a7be043527a",
-        "source": "farm-2.webp",
+        "sha256": "8521038724c997821b1d53107b17896a07c52213c1b58393618ce7fad7577ce1",
+        "source": "farm.png",
         "width": 128,
-        "x": 2,
+        "x": 662,
         "y": 398
       },
       "3": {
         "height": 128,
-        "sha256": "7feb2f58d68ecd1b3e8405813f4fcf131b1915821b8a9d1f42e1cc0248c8936a",
-        "source": "farm-3.webp",
+        "sha256": "8521038724c997821b1d53107b17896a07c52213c1b58393618ce7fad7577ce1",
+        "source": "farm.png",
         "width": 128,
-        "x": 134,
-        "y": 398
+        "x": 2,
+        "y": 530
       },
       "4": {
         "height": 128,
-        "sha256": "5d37d255b304785ea9593b880d344807626d44bb2353a6fd4d06efd0d2f16fe1",
-        "source": "farm-4.webp",
+        "sha256": "8521038724c997821b1d53107b17896a07c52213c1b58393618ce7fad7577ce1",
+        "source": "farm.png",
         "width": 128,
-        "x": 266,
-        "y": 398
+        "x": 134,
+        "y": 530
       }
     },
     "MissileSilo": {
@@ -121,65 +137,89 @@
         "sha256": "1295bf2bbf431c71251ad959f3cd67938f7f2019150f2245306efbb70b3599b8",
         "source": "silo-1.png",
         "width": 128,
-        "x": 134,
-        "y": 530
+        "x": 2,
+        "y": 662
       },
       "2": {
         "height": 128,
         "sha256": "6db3574cb19b27f6d3914feef7ce18cb60e8d1bd9622a13817948f1a3b8639db",
         "source": "silo-2.png",
         "width": 128,
-        "x": 266,
-        "y": 530
+        "x": 134,
+        "y": 662
       },
       "3": {
         "height": 128,
         "sha256": "228d2a669e3085d8b38abaa04b7183fcb74e4323e95479f0a41ad188d5f3b9a4",
         "source": "silo-3.png",
         "width": 128,
-        "x": 398,
-        "y": 530
+        "x": 266,
+        "y": 662
       },
       "4": {
         "height": 128,
         "sha256": "aa433dc899811166709de9059200740463637e9542f0275677d8b4a7e99564c6",
         "source": "silo-4.png",
         "width": 128,
-        "x": 530,
-        "y": 530
+        "x": 398,
+        "y": 662
       }
     },
     "Port": {
       "1": {
         "height": 128,
-        "sha256": "ef32188f2b716cb1e679b672fddaeee1f427fa31ff371d932b3f5bee4467fe5a",
-        "source": "port-1.png",
-        "width": 128,
-        "x": 398,
-        "y": 134
-      },
-      "2": {
-        "height": 128,
-        "sha256": "fca321ae3ea152b52640fffec70f1411d8250f126927ceeca8f9837b31c7a486",
-        "source": "port-2.webp",
-        "width": 128,
-        "x": 530,
-        "y": 134
-      },
-      "3": {
-        "height": 128,
-        "sha256": "c8ce7041aa6464077dd611b56a638e1733e2087bcd4b7315aae48e121d5f1621",
-        "source": "port-3.png",
+        "sha256": "af6df09489cf5f207641cf9d59e9b3626920aa9ab586d040d0b8c1f65d63b140",
+        "source": "port.png",
         "width": 128,
         "x": 662,
         "y": 134
       },
-      "4": {
+      "2": {
         "height": 128,
-        "sha256": "75fd0b4636eaf41e58960d35f2aa50b34006f53dd9f032e380fc45a733cc6ef3",
-        "source": "port-4.webp",
+        "sha256": "af6df09489cf5f207641cf9d59e9b3626920aa9ab586d040d0b8c1f65d63b140",
+        "source": "port.png",
         "width": 128,
         "x": 2,
+        "y": 266
+      },
+      "3": {
+        "height": 128,
+        "sha256": "af6df09489cf5f207641cf9d59e9b3626920aa9ab586d040d0b8c1f65d63b140",
+        "source": "port.png",
+        "width": 128,
+        "x": 134,
+        "y": 266
+      },
+      "4": {
+        "height": 128,
+        "sha256": "af6df09489cf5f207641cf9d59e9b3626920aa9ab586d040d0b8c1f65d63b140",
+        "source": "port.png",
+        "width": 128,
+        "x": 266,
+        "y": 266
+      },
+      "5": {
+        "height": 128,
+        "sha256": "af6df09489cf5f207641cf9d59e9b3626920aa9ab586d040d0b8c1f65d63b140",
+        "source": "port.png",
+        "width": 128,
+        "x": 398,
+        "y": 266
+      },
+      "6": {
+        "height": 128,
+        "sha256": "af6df09489cf5f207641cf9d59e9b3626920aa9ab586d040d0b8c1f65d63b140",
+        "source": "port.png",
+        "width": 128,
+        "x": 530,
+        "y": 266
+      },
+      "7": {
+        "height": 128,
+        "sha256": "af6df09489cf5f207641cf9d59e9b3626920aa9ab586d040d0b8c1f65d63b140",
+        "source": "port.png",
+        "width": 128,
+        "x": 662,
         "y": 266
       }
     },
@@ -189,31 +229,31 @@
         "sha256": "ba1f1882c0f87dc1523bba471e5fb64304cbbdd0cbc488aca521903ae34f5064",
         "source": "sam-1.png",
         "width": 128,
-        "x": 398,
-        "y": 398
+        "x": 266,
+        "y": 530
       },
       "2": {
         "height": 128,
         "sha256": "1f2f15a002e20dc59f7a6ee89ba52d7cd556a1662681945e53f6c0b33615e96d",
         "source": "sam-2.png",
         "width": 128,
-        "x": 530,
-        "y": 398
+        "x": 398,
+        "y": 530
       },
       "3": {
         "height": 128,
         "sha256": "9ffcad0c28f211272b570c1054bd6724dfbf59d8c4edb2e07a82009a51e9789b",
         "source": "sam-3.png",
         "width": 128,
-        "x": 662,
-        "y": 398
+        "x": 530,
+        "y": 530
       },
       "4": {
         "height": 128,
         "sha256": "314e8c9c059af114b46c448f47c2f10ea7557233669216251782a87bc71e6f31",
         "source": "sam-4.png",
         "width": 128,
-        "x": 2,
+        "x": 662,
         "y": 530
       }
     },
@@ -223,32 +263,32 @@
         "sha256": "c1003d307c19d3850f7baa735c7ed9fd008ca3a60fc763262ee2dae9a6a37360",
         "source": "tower-1.webp",
         "width": 128,
-        "x": 134,
-        "y": 266
+        "x": 2,
+        "y": 398
       },
       "2": {
         "height": 128,
         "sha256": "31f002ebbf6439b22829b5fc4f1892790412d8a92105010bb17ba12016685ea0",
         "source": "tower-2.webp",
         "width": 128,
-        "x": 266,
-        "y": 266
+        "x": 134,
+        "y": 398
       },
       "3": {
         "height": 128,
         "sha256": "2f3600a7c7679931fa8c86f52cb6733d6c4f3015ad902ac59589e825521f0d7a",
         "source": "tower-3.png",
         "width": 128,
-        "x": 398,
-        "y": 266
+        "x": 266,
+        "y": 398
       },
       "4": {
         "height": 128,
         "sha256": "294f9ebbe9c5eb1ad8bba29a9f8bd06e71c6398847091c9c96a6a6368f998ee9",
         "source": "tower-4.png",
         "width": 128,
-        "x": 530,
-        "y": 266
+        "x": 398,
+        "y": 398
       }
     }
   }

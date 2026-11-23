@@ -9,12 +9,12 @@
     {
       "id": "kinichil_kab",
       "name": "K’inichil Kab",
-      "x": 332,
-      "y": 457,
-      "starting_troops": 900,
+      "x": 316,
+      "y": 453,
+      "starting_troops": 120,
       "relation": "enemy",
       "color": "#bd6257",
-      "iq": 90,
+      "iq": 30,
       "civ": "maya",
       "leader": "caesar"
     }

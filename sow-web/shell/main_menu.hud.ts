@@ -1334,7 +1334,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const canonical =
       name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
     const atlas = art && art.sprites && art.sprites[canonical];
-    const sprite = atlas && atlas[String(Number(level) || 1)];
+    const sprite =
+      atlas &&
+      (atlas[String(Number(level) || 1)] ??
+        atlas[String(Object.keys(atlas).length)]);
     if (
       sprite &&
       art.cell_size > 0 &&

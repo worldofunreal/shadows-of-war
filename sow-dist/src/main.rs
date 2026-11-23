@@ -411,6 +411,12 @@ impl ArtPipeline {
         quality_override: Option<u32>,
     ) -> Result<()> {
         let profile = self.profile(profile_name)?;
+        // The building atlas and its manifest address the same pixel rectangles.
+        let exact_size = if profile_name == "atlas_buildings" {
+            Some(image::image_dimensions(source)?)
+        } else {
+            exact_size
+        };
         let output_format = profile.format.as_str();
         if destination.extension().and_then(|ext| ext.to_str()) != Some(output_format) {
             bail!(

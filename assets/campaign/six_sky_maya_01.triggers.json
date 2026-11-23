@@ -4,7 +4,7 @@
   "text_namespace": "tutorial.campaign_",
   "require_speaker_portraits": true,
   "settings": {
-    "starting_troops": 1200,
+    "starting_troops": 1500,
     "starting_gold": 1800
   },
   "entry": "six_sky_maya_01_open",
@@ -38,11 +38,41 @@
           "tutorial.campaign_six_sky_maya_01_poke_2"
         ]
       },
+      "next": "six_sky_maya_01_expand"
+    },
+    {
+      "id": "six_sky_maya_01_expand",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_01_expand_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_01_expand_hint",
+      "body_key": "tutorial.campaign_six_sky_maya_01_expand_body",
+      "trigger": {
+        "type": "contact",
+        "target": "kinichil_kab",
+        "scope": "episode"
+      },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true
+      },
+      "marker": {
+        "target": "kinichil_kab"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "expand",
+        "gesture": "tap",
+        "show_label": false
+      },
       "next": "six_sky_maya_01_attack"
     },
     {
       "id": "six_sky_maya_01_attack",
       "type": "objective",
+      "attack_ratio_on_enter": 0.75,
       "title_key": "tutorial.campaign_six_sky_maya_01_attack_title",
       "hint_key": "tutorial.campaign_six_sky_maya_01_attack_hint",
       "trigger": {
@@ -60,7 +90,7 @@
         "side": "auto",
         "flip_to_target": true,
         "nudge_key": "tutorial.campaign_six_sky_maya_01_attack_nudge",
-        "nudge_after_ms": 6000
+        "nudge_after_ms": 2500
       },
       "marker": {
         "target": "kinichil_kab"
