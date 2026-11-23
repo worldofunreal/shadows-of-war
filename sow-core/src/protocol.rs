@@ -11,13 +11,15 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 /// 6: buildings use kind-specific footprints.
 /// 7: ships are built toward a target tile instead of a named port.
 /// 8: city-centric structures and city arsenal.
-pub const GAMEPLAY_FORMAT_VERSION: u64 = 8;
+/// 9: `AttackIntent::target_tile` for directional attacks/expansion.
+pub const GAMEPLAY_FORMAT_VERSION: u64 = 9;
 // 10: website authentication uses game-owned opaque sessions.
 // 11: the start message's GameConfig carries bot tuning (`ai`).
 // 12: city arsenal intent & snapshot state.
 // 13: queued multi-level upgrade target level (`UpgradeStructureTo`, `BuildingSnapshot::upgrade_target_level`).
 // 14: queued warship production (`warship_queue`, `CancelWarshipQueue`, `BuildingProductionMax`) & `PatrolWarships`.
-pub const LIVE_PROTOCOL_VERSION: u64 = 14;
+// 15: directional `AttackIntent::target_tile`.
+pub const LIVE_PROTOCOL_VERSION: u64 = 15;
 
 /// What two builds must share to play together. The public version is left out on
 /// purpose: a server, price or menu release must not lock out store and portal clients.
@@ -30,11 +32,13 @@ pub fn gameplay_build_identity() -> String {
 
 // ─── Intents (Client → Server) ─────────────────────────────────────────────
 
-/// A player wants to attack/expand toward a tile owner.
+/// A player wants to attack/expand toward a tile owner, optionally biased toward `target_tile`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AttackIntent {
     pub target_owner: u16,
     pub troops: Option<f64>,
+    #[serde(default)]
+    pub target_tile: Option<u32>,
 }
 
 /// Attack or cancel — both are stamped and replayed in `Turn` for determinism.

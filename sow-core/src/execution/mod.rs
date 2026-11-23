@@ -55,6 +55,50 @@ impl PartialOrd for PrioritizedTile {
     }
 }
 
+/// Fixed-point unit vector scale for deterministic integer directional bias.
+pub const ATTACK_DIR_SCALE: i64 = 1024;
+/// Bounded angular priority penalty scale: 0° => 0, 90° => +W, 180° => +2*W.
+/// Bounded so BFS advancing (`tick * 4`) naturally widens the push without 1-tile DFS spikes.
+pub const DIRECTIONAL_ATTACK_WEIGHT: i64 = 64;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AttackFocus {
+    pub origin_x: i32,
+    pub origin_y: i32,
+    pub dir_x: i32,
+    pub dir_y: i32,
+}
+
+/// Deterministic integer angular penalty in `[0, 2 * DIRECTIONAL_ATTACK_WEIGHT]`.
+#[inline]
+pub fn directional_bias(focus: Option<AttackFocus>, x: u32, y: u32) -> i64 {
+    let Some(focus) = focus else {
+        return 0;
+    };
+    let vx = i64::from(x) - i64::from(focus.origin_x);
+    let vy = i64::from(y) - i64::from(focus.origin_y);
+    let len_sq = vx * vx + vy * vy;
+    if len_sq == 0 {
+        return 0;
+    }
+    let dx = i64::from(focus.dir_x);
+    let dy = i64::from(focus.dir_y);
+    let dir_sq = dx * dx + dy * dy;
+    if dir_sq == 0 {
+        return 0;
+    }
+    let dot = vx * dx + vy * dy;
+    let cos_sq_milli =
+        ((i128::from(dot) * i128::from(dot) * 1000) / (i128::from(len_sq) * i128::from(dir_sq)))
+            as i64;
+    let signed_cos_sq = if dot >= 0 {
+        cos_sq_milli
+    } else {
+        -cos_sq_milli
+    };
+    ((1000 - signed_cos_sq) * DIRECTIONAL_ATTACK_WEIGHT) / 1000
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct AttackExecution {
     pub id: u64,
@@ -72,6 +116,9 @@ pub struct AttackExecution {
     /// Cleared when landed troops merge with troops that did not land.
     #[serde(default)]
     pub landed: bool,
+    /// Optional directional focus from the player's tapped map tile.
+    #[serde(default)]
+    pub focus: Option<AttackFocus>,
 }
 
 impl AttackExecution {
@@ -80,6 +127,23 @@ impl AttackExecution {
     pub fn absorb_troops(&mut self, troops: f64, landed: bool) {
         self.troops += troops;
         self.landed &= landed;
+    }
+
+    /// Redirects this attack toward `new_focus` by swapping the exact directional delta
+    /// on already-queued frontier tiles and re-heapifying in linear time.
+    pub fn retarget_focus(&mut self, new_focus: AttackFocus) {
+        let old_focus = self.focus;
+        if old_focus == Some(new_focus) {
+            return;
+        }
+        let mut tiles = std::mem::take(&mut self.to_conquer).into_vec();
+        for tile in &mut tiles {
+            let delta = directional_bias(Some(new_focus), tile.x, tile.y)
+                - directional_bias(old_focus, tile.x, tile.y);
+            tile.priority = tile.priority.saturating_add(delta);
+        }
+        self.to_conquer = BinaryHeap::from(tiles);
+        self.focus = Some(new_focus);
     }
 
     /// Centroid of the queued frontier tiles (the attack's leading edge).
