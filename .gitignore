@@ -34,6 +34,8 @@ dump.rdb
 # Server map library (large binaries): assets/maps/
 assets/maps/*
 !assets/maps/world/
+!assets/maps/peten_clearing/
+!assets/maps/bital_pass/
 !assets/maps/catalog.bin
 !assets/maps/SOURCES.toml
 !assets/maps/NOTICE

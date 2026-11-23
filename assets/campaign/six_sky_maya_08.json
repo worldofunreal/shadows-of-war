@@ -1,46 +1,58 @@
 {
-  "_comment": "six_sky_maya_08: Lady Six Sky campaign in the Petén / Naranjo region; uses the northamerica campaign map.",
-  "map": "northamerica",
+  "_comment": "six_sky_maya_08: 744 CE alternate-history nuclear finale against Yik'in Chan K'awiil of Tikal (yucatan_peninsula).",
+  "map": "yucatan_peninsula",
   "player_spawn": [
-    846,
-    665
+    624,
+    904
   ],
   "factions": [
     {
       "id": "dos_pilas",
       "name": "Dos Pilas",
-      "x": 835,
-      "y": 671,
+      "x": 586,
+      "y": 944,
       "starting_troops": 650,
       "relation": "allied",
       "color": "#a88c40",
-      "iq": 100,
+      "iq": 90,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "itzamnaaj_kawiil",
+      "avatar": "itzamnaaj_kawiil",
+      "alliance_group": "kaanul"
     },
     {
       "id": "calakmul",
       "name": "Calakmul / Kaanul",
-      "x": 858,
-      "y": 662,
-      "starting_troops": 250,
+      "x": 602,
+      "y": 856,
+      "starting_troops": 350,
       "relation": "allied",
       "color": "#4ca572",
-      "iq": 100,
+      "iq": 90,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "yuknoom_took_kawiil",
+      "avatar": "yuknoom_took_kawiil",
+      "alliance_group": "kaanul"
     },
     {
       "id": "tikal",
       "name": "Tikal",
-      "x": 864,
-      "y": 675,
-      "starting_troops": 3600,
+      "x": 586,
+      "y": 892,
+      "starting_troops": 2600,
       "relation": "enemy",
+      "can_request_alliance": true,
       "color": "#8c59a8",
-      "iq": 115,
+      "iq": 95,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "yikin_chan_kawiil",
+      "avatar": "yikin_chan_kawiil",
+      "prebuilt_buildings": [
+        [
+          "City",
+          2
+        ]
+      ]
     }
   ],
   "player_color": "#f0902a"

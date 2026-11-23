@@ -482,7 +482,7 @@ pub struct GameConfig {
     // ==========================================
     /// City level-1 capacity; subsequent marginal levels grow by 1.5x.
     pub city_max_troops: f64,
-    /// Capacity from a district's first upgrade; subsequent upgrades grow by 1.5x.
+    /// Shared troop capacity from the first completed non-City building upgrade; each marginal level grows by 1.5x.
     #[serde(default = "default_district_max_troops")]
     pub district_max_troops: f64,
     /// Troop income per game second per weighted City level.

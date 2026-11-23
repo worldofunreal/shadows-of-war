@@ -6249,181 +6249,29 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   height: 26px;
 }
 
-.sow-hud__city-districts {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
 
-.sow-hud__city-district-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 5px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(8, 12, 16, 0.56);
-}
 
-.sow-hud__city-district-info {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
 
-.sow-hud__city-district-thumb {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  background: rgba(12, 17, 22, 0.9);
-}
 
-.sow-hud__city-district-art {
-  display: block;
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
-}
 
-.sow-hud__city-district-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
 
-.sow-hud__city-district-head {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
 
-.sow-hud__city-district-name {
-  color: #f8f2e4;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.sow-hud__city-district-lv {
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
-  color: #d6d0c4;
-  font-size: 10px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
 
-.sow-hud__city-district-lv.is-max {
-  background: rgba(65, 201, 126, 0.16);
-  color: #82f1b0;
-}
 
-.sow-hud__city-district-lv.is-building {
-  background: color-mix(in srgb, var(--sow-gold) 20%, transparent);
-  color: var(--sow-gold-bright);
-}
 
-.sow-hud__city-district-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
 
-.sow-hud__city-district-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: #e6dfd1;
-  font-size: 10.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
 
-.sow-hud__city-district-stat.is-preview {
-  color: #9be8ba;
-}
 
-.sow-hud__city-district-stat .sow-hud__building-stat-icon {
-  width: 11px;
-  height: 11px;
-}
 
-.sow-hud__city-district-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  flex-shrink: 0;
-  min-height: 30px;
-  padding: 4px 7px;
-  border: 1px solid var(--sow-button-primary-border);
-  border-radius: var(--sow-button-radius);
-  background: var(--sow-button-primary-bg);
-  color: var(--sow-button-primary-text);
-  font-size: 11.5px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: filter 120ms ease, transform 120ms ease;
-}
 
-.sow-hud__city-district-btn:hover:not(.is-locked):not(.is-max) {
-  filter: brightness(1.06);
-}
 
-.sow-hud__city-district-btn:active:not(.is-max) {
-  transform: translateY(1px);
-}
 
-.sow-hud__city-district-btn.is-discounted:not(.is-locked) {
-  box-shadow: 0 0 0 1px rgba(102, 232, 155, 0.48), var(--sow-button-primary-shadow);
-}
 
-.sow-hud__city-district-btn.is-locked,
-.sow-hud__city-district-btn.is-max {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(34, 41, 47, 0.92);
-  color: #b7b1a6;
-}
 
-.sow-hud__city-district-btn.is-max {
-  border-color: rgba(65, 201, 126, 0.32);
-  background: rgba(18, 42, 31, 0.85);
-  color: #82f1b0;
-  cursor: default;
-}
 
-.sow-hud__city-district-btn .sow-hud__building-upgrade-pill {
-  height: 21px;
-  padding: 0 5px;
-  font-size: 10.5px;
-}
 
-.sow-hud__city-district-btn.is-locked .sow-hud__building-upgrade-cost {
-  border-color: rgba(232, 93, 74, 0.45);
-  background: rgba(44, 16, 16, 0.78);
-  color: #ff9485;
-}
 
-.sow-hud__city-district-lock {
-  width: 14px;
-  height: 14px;
-}
 
 .sow-hud__city-arsenal-grid {
   display: grid;
@@ -6590,9 +6438,6 @@ html[dir="rtl"] .sow-hud__dev-play::before {
     font-size: 11px;
   }
 
-  .sow-hud__city-district-btn .sow-hud__building-upgrade-time {
-    display: none;
-  }
 }
 
 /* ==========================================================================

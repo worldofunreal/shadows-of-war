@@ -1,5 +1,5 @@
 # Published map library served at /maps/; `[recipes.<map>]` is the release allowlist.
-# Additional map folders here are gitignored; only `world/` is tracked as the seed map.
+# Generated map folders are gitignored except the world seed and the authored Petén campaign maps.
 # Map Generator outputs share this folder for local editing and are excluded from
 # release packages unless registered here; upload them through Campaign Studio.
 # Each folder carries info.toml with its weighted-rotation frequency
@@ -24,7 +24,7 @@ license_doc = "assets/maps/NOTICE"
 source = "https://github.com/openfrontio/OpenFrontIO/tree/f51f165b947a92cc683ade3a72c3800300e86e61/map-generator/assets"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 attribution = "OpenFront Inc. and Contributors"
-applies_to = "All recipes below and their map.bin, map.bin.br, and thumbnail.webp artifacts"
+applies_to = "OpenFront-derived recipes and their map.bin, map.bin.br, and thumbnail.webp artifacts"
 changes = "Cropped, corrected, classified, downscaled, filtered, packed, and rendered by Shadows of War."
 
 [world]
@@ -396,3 +396,29 @@ size = "small"
 map_bin_sha256 = "dcd482f8f32018da5dcb8b632cfd407a8232a0c4434da0d85fd81523ae3f1225"
 map_bin_br_sha256 = "82850f43c0a81bf226c9ccf6c1cd2241b9c5c19015bfce20dba30413e51e4101"
 thumbnail_sha256 = "27b174d5696b320621e7b7d4e10218fe29d58a2ce92d66356b5edc48f9455482"
+
+[recipes.peten_clearing]
+origin_kind = "original"
+source_path = "assets/map_sources/peten_clearing/image.png"
+source_sha256 = "6e4d3962bf68e2a389b0d36c06e56afe871506052485ea04f5bbdef04760e8c9"
+reproducible = true
+target_width = 176
+target_height = 100
+pipeline = "sow-tools import-map-source --input assets/map_sources/peten_clearing"
+terrain_art = "bun scripts/bake-peten-canopy.ts"
+map_bin_sha256 = "ed0dd07e196195fd28188c4c0254b640f6ba0150424eb9fdc2a59c421fed471c"
+map_bin_br_sha256 = "b9c9a99c63e6419255ac277ee7da3101633805793cd499ab5d335409683cb5d2"
+thumbnail_sha256 = "c29c1d7bd90dc29f8215036be125dca9d97559a77b3dd9fd80b4ea2743693519"
+
+[recipes.bital_pass]
+origin_kind = "original"
+source_path = "assets/map_sources/bital_pass/image.png"
+source_sha256 = "34c3f5e6278b7ab0e43b7683cfb03cbc0ab68cd57823a1c39acd7895254d03ea"
+reproducible = true
+target_width = 224
+target_height = 156
+pipeline = "sow-tools import-map-source --input assets/map_sources/bital_pass"
+terrain_art = "bun scripts/bake-peten-canopy.ts bital_pass"
+map_bin_sha256 = "ba80006fa65cbb3799d39d506b8672d98283f549b70599a638f1075b1a789ce7"
+map_bin_br_sha256 = "4b50cb2cc46050e8cf19af88e9977b0f6481f24a3912f5ebbc0a4a602a4483c0"
+thumbnail_sha256 = "6bbbb34ef0f5127142aaedc03d6f24acdeb5d178ae163494d035ea2e160f6a9c"

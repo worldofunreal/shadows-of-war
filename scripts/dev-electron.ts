@@ -80,7 +80,7 @@ function compileTs(entryRel: string): Promise<string> {
   });
 }
 
-function ensureWasm(): { jsFile: string; wasmFile: string } {
+function ensureWasm(rebuild = false): { jsFile: string; wasmFile: string } {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const rawWasm = path.join(ROOT, "target", "wasm32-unknown-unknown", "wasm-dev", "sow_client.wasm");
   const devJs = "sow_client_dev.js";
@@ -88,12 +88,12 @@ function ensureWasm(): { jsFile: string; wasmFile: string } {
   const devJsPath = path.join(OUT_DIR, devJs);
   const devWasmPath = path.join(OUT_DIR, devWasm);
 
-  const shouldCompileRust = forceWasm || (!fs.existsSync(rawWasm) && !findDistWebWasm());
+  const shouldCompileRust = rebuild || (!fs.existsSync(rawWasm) && !findDistWebWasm());
   if (shouldCompileRust) {
     console.log("==> Compiling uncompressed WASM (wasm-dev)...");
     const res = spawnSync(
       "cargo",
-      ["build", "--profile", "wasm-dev", "-p", "sow-client", "--target", "wasm32-unknown-unknown"],
+      ["build", "--profile", "wasm-dev", "-p", "sow-client", "--features", "dev", "--target", "wasm32-unknown-unknown"],
       {
         cwd: ROOT,
         stdio: "inherit",
@@ -110,7 +110,7 @@ function ensureWasm(): { jsFile: string; wasmFile: string } {
   if (fs.existsSync(rawWasm)) {
     const rawMtime = fs.statSync(rawWasm).mtimeMs;
     const outMtime = fs.existsSync(devWasmPath) ? fs.statSync(devWasmPath).mtimeMs : 0;
-    if (forceWasm || rawMtime > outMtime || !fs.existsSync(devJsPath)) {
+    if (shouldCompileRust || rawMtime > outMtime || !fs.existsSync(devJsPath)) {
       console.log("==> Running wasm-bindgen (uncompressed)...");
       const bindgen = spawnSync(
         "wasm-bindgen",
@@ -145,6 +145,29 @@ function findDistWebWasm(): { jsPath: string; wasmPath: string } | null {
   return { jsPath, wasmPath };
 }
 
+function deepMergeStrings(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...target };
+  for (const [k, v] of Object.entries(source)) {
+    const existing = out[k];
+    if (
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      existing &&
+      typeof existing === "object" &&
+      !Array.isArray(existing)
+    ) {
+      out[k] = deepMergeStrings(existing as Record<string, unknown>, v as Record<string, unknown>);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 function buildLocales(liveAssetsDir: string): string[] {
   fs.mkdirSync(LOCALES_OUT, { recursive: true });
   const distLocales = path.join(ROOT, "dist", "web", "locales");
@@ -152,32 +175,41 @@ function buildLocales(liveAssetsDir: string): string[] {
     for (const entry of fs.readdirSync(distLocales)) {
       const src = path.join(distLocales, entry);
       const dst = path.join(LOCALES_OUT, entry);
-      if (fs.statSync(src).isFile() && !fs.existsSync(dst)) {
+      if (fs.statSync(src).isFile()) {
         fs.copyFileSync(src, dst);
       }
     }
   }
+  const catalogVersion = Number(readWebCatalogVersion()) || 1;
   const codes = ["en", "es"];
   for (const code of codes) {
     const tomlPath = path.join(ROOT, "sow-i18n", "strings", code, "web.toml");
     if (!fs.existsSync(tomlPath)) continue;
     const parsed = Bun.TOML.parse(fs.readFileSync(tomlPath, "utf8")) as Record<string, unknown>;
+    const baseSrc = path.join(distLocales, code);
     const outPath = path.join(LOCALES_OUT, code);
     let base: Record<string, unknown> = {};
-    if (fs.existsSync(outPath)) {
+    if (fs.existsSync(baseSrc)) {
       try {
-        base = JSON.parse(fs.readFileSync(outPath, "utf8")) as Record<string, unknown>;
+        base = JSON.parse(fs.readFileSync(baseSrc, "utf8")) as Record<string, unknown>;
       } catch {
         base = {};
       }
     }
-    const merged: Record<string, unknown> = { ...base, ...parsed };
-    if (!merged.languages) {
-      merged.languages = [
+    const existingStrings =
+      base.strings && typeof base.strings === "object" && !Array.isArray(base.strings)
+        ? (base.strings as Record<string, unknown>)
+        : {};
+    const merged: Record<string, unknown> = {
+      schema: base.schema ?? 1,
+      version: base.version ?? catalogVersion,
+      locale: code,
+      languages: base.languages ?? [
         { code: "en", name: "English" },
         { code: "es", name: "Español" },
-      ];
-    }
+      ],
+      strings: deepMergeStrings(existingStrings, parsed),
+    };
     fs.writeFileSync(outPath, JSON.stringify(merged));
   }
   void liveAssetsDir;
@@ -202,7 +234,7 @@ async function buildShell(
   ]);
 
   fs.writeFileSync(path.join(SDK_OUT, "store_portals.js"), storePortalsJs);
-  for (const assetName of ["sow.svg", "icon-192.png", "favicon.ico"]) {
+  for (const assetName of ["sow.svg", "icon-192.png", "favicon.ico", "game-manifest.json"]) {
     const fromDist = path.join(ROOT, "dist", "web", assetName);
     const fromShell = path.join(ROOT, "assets", "art", "brand", assetName);
     const src = fs.existsSync(fromDist) ? fromDist : fromShell;
@@ -291,17 +323,68 @@ function touchReloadStamp() {
   fs.writeFileSync(path.join(OUT_DIR, ".reload-stamp"), String(Date.now()));
 }
 
+function ensureDevHeroAvatars(liveAssetsDir: string): void {
+  const heroesDir = path.join(ROOT, "assets", "art", "avatars", "heroes");
+  if (!fs.existsSync(heroesDir)) return;
+  const devAvatarsDir = path.join(OUT_DIR, "assets", "gameplay", "avatars");
+  const devExprDir = path.join(devAvatarsDir, "expressions");
+  const missing: { slug: string; src: string }[] = [];
+  for (const file of fs.readdirSync(heroesDir)) {
+    if (!file.endsWith(".webp")) continue;
+    const slug = file.slice(0, -".webp".length);
+    const liveCalm = path.join(liveAssetsDir, "gameplay", "avatars", `${slug}.webp`);
+    const devCalm = path.join(devAvatarsDir, `${slug}.webp`);
+    const srcPath = path.join(heroesDir, file);
+    if (fs.existsSync(liveCalm) && fs.statSync(srcPath).mtimeMs <= fs.statSync(liveCalm).mtimeMs) {
+      continue;
+    }
+    if (fs.existsSync(devCalm) && fs.statSync(srcPath).mtimeMs <= fs.statSync(devCalm).mtimeMs) {
+      continue;
+    }
+    missing.push({ slug, src: srcPath });
+  }
+  if (!missing.length) return;
+  fs.mkdirSync(devAvatarsDir, { recursive: true });
+  fs.mkdirSync(devExprDir, { recursive: true });
+  const py = `
+import os, sys, json
+from PIL import Image
+items = json.loads(sys.argv[1])
+avatars_dir, expr_dir = sys.argv[2], sys.argv[3]
+exprs = [("happy", 0, 0), ("calm", 1, 0), ("fear", 0, 1), ("angry", 1, 1)]
+for item in items:
+    im = Image.open(item["src"]).convert("RGBA")
+    w, h = im.size
+    hw, hh = w // 2, h // 2
+    inset = max(1, round(min(hw, hh) * 0.01))
+    for name, cx, cy in exprs:
+        box = (cx * hw + inset, cy * hh + inset, (cx + 1) * hw - inset, (cy + 1) * hh - inset)
+        q = im.crop(box)
+        s = min(q.size)
+        q = q.crop(((q.width - s) // 2, (q.height - s) // 2, (q.width + s) // 2, (q.height + s) // 2))
+        q = q.resize((192, 192), Image.Resampling.LANCZOS)
+        out = os.path.join(avatars_dir, f"{item['slug']}.webp") if name == "calm" else os.path.join(expr_dir, f"{item['slug']}_{name}.webp")
+        q.save(out, "WEBP", quality=88)
+`;
+  const res = spawnSync("python3", ["-c", py, JSON.stringify(missing), devAvatarsDir, devExprDir], {
+    stdio: "inherit",
+  });
+  if (res.status === 0) {
+    console.log(`✅ Staged ${missing.length} dev hero avatar set(s)`);
+  }
+}
+
 async function main() {
   const liveAssetsDir = findLiveAssetsDir();
-  let wasmInfo = ensureWasm();
+  ensureDevHeroAvatars(liveAssetsDir);
+  let wasmInfo = ensureWasm(forceWasm);
   let localeCodes = buildLocales(liveAssetsDir);
   await buildShell(wasmInfo, liveAssetsDir, localeCodes);
-  touchReloadStamp();
-
   if (dryRun) {
     console.log(`Dry run OK: ${PLAY_DIR}/index.html (WASM: ${wasmInfo.wasmFile})`);
     return;
   }
+  touchReloadStamp();
 
   const electronBin = resolveElectronBin();
   console.log(`==> Launching Electron 44 (${electronBin})`);
@@ -317,6 +400,7 @@ async function main() {
       ...process.env,
       ELECTRON_FORCE_IS_PACKAGED: "0",
       ELECTRON_IS_DEV: "1",
+      ELECTRON_DISABLE_SECURITY_WARNINGS: "true",
       SOW_WEBROOT: OUT_DIR,
       SOW_LIVE_ROOT: ROOT,
       SOW_LIVE_ASSETS: liveAssetsDir,
@@ -345,19 +429,7 @@ async function main() {
       pendingLocales = false;
       pendingShell = false;
       try {
-        if (doRust) {
-          console.log("==> Rust changed; compiling wasm-dev...");
-          const res = spawnSync(
-            "cargo",
-            ["build", "--profile", "wasm-dev", "-p", "sow-client", "--target", "wasm32-unknown-unknown"],
-            {
-              cwd: ROOT,
-              stdio: "inherit",
-              env: { ...process.env, RUSTFLAGS: "-C target-feature=-bulk-memory", CARGO_BUILD_JOBS: "4" },
-            },
-          );
-          if (res.status === 0) wasmInfo = ensureWasm();
-        }
+        if (doRust) wasmInfo = ensureWasm(true);
         if (doLocales) localeCodes = buildLocales(liveAssetsDir);
         if (doShell || doLocales) await buildShell(wasmInfo, liveAssetsDir, localeCodes);
         touchReloadStamp();

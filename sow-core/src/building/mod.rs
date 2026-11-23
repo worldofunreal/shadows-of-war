@@ -255,7 +255,7 @@ mod tests {
         }
         let mut grid = BuildingGrid::default();
         // Coastal City at (4, 16) covers x in 2..6 (touches water cols 0..2),
-        // and inland City at (12, 16) hosts non-coastal districts.
+        // and inland City at (12, 16) keeps separate inland structures away from the coast.
         grid.rebuild_from_pairs(w, h, &[(4, 16), (12, 16)]);
         for (kind, x, y) in [
             (BuildingKind::City, 12, 16),

@@ -799,6 +799,7 @@ async function handle(req, res) {
         try {
           await validatePair(episodeId, value, definition);
         } catch (error) {
+          console.warn(`[campaign-editor] rejected assets/campaign/${file}: ${error.message || "invalid campaign data"}`);
           reply(res, 400, error.message || "invalid campaign data");
           return;
         }
@@ -817,6 +818,7 @@ async function handle(req, res) {
         try {
           await validateSave(file, value);
         } catch (error) {
+          console.warn(`[campaign-editor] rejected assets/campaign/${file}: ${error.message || "invalid campaign data"}`);
           reply(res, 400, error.message || "invalid campaign data");
           return;
         }

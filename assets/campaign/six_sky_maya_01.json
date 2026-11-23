@@ -1,17 +1,17 @@
 {
-  "_comment": "six_sky_maya_01: Lady Six Sky vs K'inichil Kab 1v1 on the Petén / Belize–Guatemala border (yucatan_peninsula 520x800).",
-  "map": "yucatan_peninsula",
+  "_comment": "Lady Six Sky vs K’inichil Kab in a forest clearing in Petén.",
+  "map": "peten_clearing",
   "player_spawn": [
-    312,
-    452
+    80,
+    49
   ],
   "player_color": "#f0902a",
   "factions": [
     {
       "id": "kinichil_kab",
       "name": "K’inichil Kab",
-      "x": 324,
-      "y": 452,
+      "x": 92,
+      "y": 49,
       "starting_troops": 120,
       "relation": "enemy",
       "can_request_alliance": true,

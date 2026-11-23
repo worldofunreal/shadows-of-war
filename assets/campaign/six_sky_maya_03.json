@@ -1,46 +1,52 @@
 {
-  "_comment": "six_sky_maya_03: Lady Six Sky campaign in the Petén / Naranjo region; uses the northamerica campaign map.",
-  "map": "northamerica",
+  "_comment": "six_sky_maya_03: 695 CE Yellow Rabbit ambush vs Siyaj K'awiil of Tikal with Calakmul & Dos Pilas allies (yucatan_peninsula).",
+  "map": "yucatan_peninsula",
   "player_spawn": [
-    846,
-    665
+    624,
+    904
   ],
   "factions": [
     {
       "id": "dos_pilas",
       "name": "Dos Pilas",
-      "x": 835,
-      "y": 671,
+      "x": 586,
+      "y": 944,
       "starting_troops": 700,
       "relation": "allied",
       "color": "#a88c40",
-      "iq": 100,
+      "iq": 85,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "lady_six_sky",
+      "avatar": "itza",
+      "alliance_group": "kaanul"
     },
     {
       "id": "calakmul",
       "name": "Calakmul / Kaanul",
-      "x": 858,
-      "y": 662,
-      "starting_troops": 300,
+      "x": 602,
+      "y": 856,
+      "starting_troops": 450,
       "relation": "allied",
       "color": "#4ca572",
-      "iq": 100,
+      "iq": 85,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "yuknoom_yichaak_kahk",
+      "avatar": "yuknoom_yichaak_kahk",
+      "alliance_group": "kaanul"
     },
     {
       "id": "tikal_at_yellow_rabbit",
-      "name": "Tikal lord at Yellow Rabbit",
-      "x": 859,
-      "y": 678,
-      "starting_troops": 3100,
+      "name": "Siyaj K’awiil (Yellow Rabbit)",
+      "x": 600,
+      "y": 898,
+      "starting_troops": 1100,
       "relation": "enemy",
+      "can_request_alliance": true,
       "color": "#8c59a8",
-      "iq": 105,
+      "iq": 75,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "siyaj_kawiil",
+      "avatar": "siyaj_kawiil"
     }
   ],
   "player_color": "#f0902a"

@@ -22,11 +22,10 @@ fn official_entry(key: &str) -> Option<&'static MapCatalogEntry> {
         .find(|entry| entry.key == key)
 }
 
-fn validate_payload(key: &str, bytes: &[u8]) -> bool {
-    maps::load_map_from_payload(bytes).is_ok_and(|map| {
-        official_entry(key)
-            .is_none_or(|entry| (map.width, map.height) == (entry.width, entry.height))
-    })
+fn validate_payload(key: &str, bytes: &[u8]) -> Result<bool, sow_core::map_file::MapFileError> {
+    let map = maps::load_map_from_payload(bytes)?;
+    Ok(official_entry(key)
+        .is_none_or(|entry| (map.width, map.height) == (entry.width, entry.height)))
 }
 
 pub(crate) fn download_url(base: &str, key: &str) -> String {
@@ -48,7 +47,7 @@ pub fn load(map_key: &str) -> Option<Vec<u8>> {
         let storage = window.local_storage().ok()??;
         let stored = storage.get_item(&storage_key(&key)).ok()??;
         let bytes = base64_decode(&stored)?;
-        if validate_payload(&key, &bytes) {
+        if matches!(validate_payload(&key, &bytes), Ok(true)) {
             return Some(bytes);
         }
         let _ = storage.remove_item(&storage_key(&key));
@@ -57,11 +56,23 @@ pub fn load(map_key: &str) -> Option<Vec<u8>> {
 }
 
 /// Store a map payload after a successful download or SP session.
+///
+/// Structurally valid maps from another server release remain usable for the
+/// current session but are not cached against this build's local catalog.
 pub fn persist(map_key: &str, bytes: &[u8]) -> bool {
     let key = maps::map_key(map_key);
-    if !validate_payload(&key, bytes) {
-        log::warn!("map_cache: skip persist for invalid payload ({map_key})");
-        return false;
+    match validate_payload(&key, bytes) {
+        Err(error) => {
+            log::warn!("map_cache: skip invalid payload ({map_key}): {error}");
+            return false;
+        }
+        Ok(false) => {
+            log::debug!(
+                "map_cache: skip local persistence for map with dimensions that differ from this build ({map_key}); retaining it for this session"
+            );
+            return true;
+        }
+        Ok(true) => {}
     }
     #[cfg(target_arch = "wasm32")]
     {

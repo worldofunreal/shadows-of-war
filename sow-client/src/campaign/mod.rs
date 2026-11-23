@@ -293,6 +293,23 @@ pub(crate) fn tutorial_camera_frame(
     }
     let (player_x, player_y) = config.player_spawn?;
     let player_pt = (player_x as f32 + 0.5, player_y as f32 + 0.5);
+    if campaign.episode_id() == "six_sky_maya_02" {
+        // Introduce the two allies as well as B’ital before the camera follows the attack.
+        let ((left, top), (right, bottom)) = config.scripted_spawns.iter().fold(
+            (player_pt, player_pt),
+            |((left, top), (right, bottom)), spawn| {
+                let (x, y) = (spawn.x as f32 + 0.5, spawn.y as f32 + 0.5);
+                ((left.min(x), top.min(y)), (right.max(x), bottom.max(y)))
+            },
+        );
+        return Some(camera_frame(
+            (left - 7.0, top - 7.0),
+            (right + 7.0, bottom + 7.0),
+            (screen_w, screen_h),
+            (config.map_width, config.map_height),
+            0.0,
+        ));
+    }
     let target = config.scripted_spawns.iter().find(|spawn| {
         if campaign.is_boudica() {
             spawn.campaign_faction_id.as_deref() == Some("roman_outpost")
@@ -315,10 +332,13 @@ pub(crate) fn tutorial_camera_frame(
         config.map_width,
         config.map_height,
     );
-    Some((
-        center,
-        zoom.min(TUTORIAL_OPENING_MAX_TILE_CSS * dpr).max(min_zoom),
-    ))
+    // Petén opens wide enough to frame the groves around both starting territories.
+    let max_tile_css = if campaign == CampaignId::intro() {
+        13.5
+    } else {
+        TUTORIAL_OPENING_MAX_TILE_CSS
+    };
+    Some((center, zoom.min(max_tile_css * dpr).max(min_zoom)))
 }
 
 /// Center and zoom that fit two world points with margin. Tiles stay at least `min_tile_css`

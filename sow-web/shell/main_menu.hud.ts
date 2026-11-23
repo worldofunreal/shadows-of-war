@@ -466,10 +466,19 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   let activeNotifications: ActiveHudNotification[] = [];
   let notificationCards: HudNotificationCard[] = [];
   const notificationCardsByKey = new Map<string, HudNotificationCard>();
+  const notificationEnterAnimations = new WeakMap<
+    HTMLElement,
+    {
+      frame: number | null;
+      timer: number | null;
+      listener: EventListener | null;
+    }
+  >();
   const leavingNotificationCards = new Map<
     string,
     { parts: HudNotificationCard; timer: number | null }
   >();
+  let compactNotificationPending = false;
   let notificationLayoutFrame = 0;
   let notificationResizeObserver: ResizeObserver | null = null;
   let notificationMutationObserver: MutationObserver | null = null;
@@ -6761,6 +6770,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   }
 
   function clearNotificationCard(parts: HudNotificationCard): void {
+    clearNotificationEnterAnimation(parts.card);
     parts.card.hidden = true;
     parts.renderKey = "";
     parts.seal.innerHTML = "";
@@ -8162,6 +8172,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     syncNotificationsVisibleDataset();
   }
 
+  function finishLeavingNotificationCard(key: string): void {
+    finalizeLeavingNotificationCard(key);
+    if (compactNotificationPending && leavingNotificationCards.size === 0) {
+      compactNotificationPending = false;
+      renderNotifications([], true);
+    }
+  }
+
   function clearAllNotificationCards(): void {
     if (notificationTimer) {
       window.clearTimeout(notificationTimer);
@@ -8173,6 +8191,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       entry.parts.card.remove();
     });
     leavingNotificationCards.clear();
+    compactNotificationPending = false;
     notificationCardsByKey.forEach(function (parts) {
       clearNotificationCard(parts);
       parts.card.remove();
@@ -8182,29 +8201,71 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     syncNotificationsVisibleDataset();
   }
 
-  function triggerNotificationEnterAnimation(el: HTMLElement): void {
-    if (isRequestToastReducedMotion()) {
+  function clearNotificationEnterAnimation(el: HTMLElement): void {
+    const active = notificationEnterAnimations.get(el);
+    if (!active) {
       el.classList.remove("is-entering");
       return;
     }
+    if (active.frame !== null) window.cancelAnimationFrame(active.frame);
+    if (active.timer !== null) window.clearTimeout(active.timer);
+    if (active.listener) {
+      el.removeEventListener("animationend", active.listener);
+    }
+    notificationEnterAnimations.delete(el);
+    el.classList.remove("is-entering");
+  }
+
+  function triggerNotificationEnterAnimation(
+    el: HTMLElement,
+    restart = false,
+  ): void {
+    clearNotificationEnterAnimation(el);
+    if (isRequestToastReducedMotion()) {
+      return;
+    }
     el.classList.remove("is-leaving");
-    el.classList.add("is-entering");
-    const onDone = function (event?: AnimationEvent): void {
-      if (
-        event &&
-        (event.target !== el ||
-          !event.animationName ||
-          event.animationName.indexOf("sow-notification-enter") !== 0)
-      ) {
-        return;
-      }
-      el.removeEventListener("animationend", onDone as EventListener);
-      el.classList.remove("is-entering");
+    const start = function (): void {
+      el.classList.add("is-entering");
+      const active = {
+        frame: null as number | null,
+        timer: null as number | null,
+        listener: null as EventListener | null,
+      };
+      const onDone: EventListener = function (event): void {
+        const animation = event as AnimationEvent;
+        if (
+          animation.target !== el ||
+          !animation.animationName ||
+          animation.animationName.indexOf("sow-notification-enter") !== 0
+        ) {
+          return;
+        }
+        clearNotificationEnterAnimation(el);
+      };
+      active.listener = onDone;
+      active.timer = window.setTimeout(function () {
+        clearNotificationEnterAnimation(el);
+      }, 320);
+      notificationEnterAnimations.set(el, active);
+      el.addEventListener("animationend", onDone);
     };
-    el.addEventListener("animationend", onDone as EventListener);
-    window.setTimeout(function () {
-      el.classList.remove("is-entering");
-    }, 320);
+    if (!restart) {
+      start();
+      return;
+    }
+    const active = {
+      frame: null as number | null,
+      timer: null as number | null,
+      listener: null as EventListener | null,
+    };
+    active.frame = window.requestAnimationFrame(function () {
+      if (notificationEnterAnimations.get(el) !== active) return;
+      notificationEnterAnimations.delete(el);
+      if (!el.isConnected || el.hidden || isRequestToastReducedMotion()) return;
+      start();
+    });
+    notificationEnterAnimations.set(el, active);
   }
 
   function startLeavingNotificationCard(
@@ -8213,7 +8274,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   ): void {
     finalizeLeavingNotificationCard(key);
     const el = parts.card;
-    el.classList.remove("is-entering");
+    clearNotificationEnterAnimation(el);
     if (isRequestToastReducedMotion()) {
       clearNotificationCard(parts);
       el.remove();
@@ -8231,11 +8292,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         return;
       }
       el.removeEventListener("animationend", onDone as EventListener);
-      finalizeLeavingNotificationCard(key);
+      finishLeavingNotificationCard(key);
     };
     el.addEventListener("animationend", onDone as EventListener);
     const timer = window.setTimeout(function () {
-      finalizeLeavingNotificationCard(key);
+      finishLeavingNotificationCard(key);
     }, 340);
     leavingNotificationCards.set(key, { parts, timer });
   }
@@ -8253,7 +8314,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       hudScreen.width,
       hudScreen.height,
     );
-    const limit = compact ? 2 : 3;
+    const limit = compact ? 1 : 3;
+    const repeatedGroups = new Set<string>();
     const unexpired = activeNotifications.filter(function (item) {
       return item.expiresAt > now;
     });
@@ -8342,6 +8404,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         existing.sumValues = item.sumValues;
         existing.group = item.group;
         existing.totals = item.totals;
+        repeatedGroups.add(item.group);
         changed = true;
         return;
       }
@@ -8380,6 +8443,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         Number(a.entry.id) - Number(b.entry.id)
       );
     });
+    if (!compact || activeNotifications.length === 0) {
+      compactNotificationPending = false;
+    }
     const container = hudRefs.notifications;
     const activeKeys = new Set<string>();
     activeNotifications.forEach(function (item) {
@@ -8395,6 +8461,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     activeNotifications.forEach(function (item) {
       if (leavingNotificationCards.has(item.group)) {
         finalizeLeavingNotificationCard(item.group);
+        if (leavingNotificationCards.size === 0) {
+          compactNotificationPending = false;
+        }
+      }
+      if (compact && leavingNotificationCards.size > 0) {
+        compactNotificationPending = true;
+        return;
       }
       let parts = notificationCardsByKey.get(item.group);
       const isNew = !parts;
@@ -8405,6 +8478,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       renderNotificationCard(parts, item, false);
       if (isNew) {
         triggerNotificationEnterAnimation(parts.card);
+      } else if (repeatedGroups.has(item.group)) {
+        triggerNotificationEnterAnimation(parts.card, true);
       }
       orderedActiveCards.push(parts);
     });

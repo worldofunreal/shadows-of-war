@@ -899,7 +899,12 @@
       );
       return !rosterDirty;
     } catch (e) {
-      toast("Save failed: " + e.message);
+      const message = e instanceof Error ? e.message : String(e);
+      const status = document.getElementById("rosterStatus");
+      status.textContent = "Save failed: " + message;
+      status.className = "hint warn";
+      console.error(`[campaign-editor] ${episodeId} save failed:`, message);
+      toast("Save failed: " + message);
     } finally {
       rosterSaving = false;
     }

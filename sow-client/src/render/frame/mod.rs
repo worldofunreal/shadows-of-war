@@ -21,10 +21,14 @@ fn territory_blend_mode(
 fn map_shader_params(
     params: &[[f32; 4]; sow_render::shader_params::PARAM_CAPACITY],
     sf: f32,
+    has_terrain_art: bool,
 ) -> [[f32; 4]; sow_render::shader_params::PARAM_CAPACITY] {
     let mut params = *params;
     if let Some(slot) = sow_render::shader_params::shader_slot("border.tribe_zoom_cutoff") {
         params[slot][0] *= sf.max(0.01);
+    }
+    if let Some(slot) = sow_render::shader_params::shader_slot("land.peten_canopy") {
+        params[slot][0] = if has_terrain_art { 1.0 } else { 0.0 };
     }
     if let Some(slot) = sow_render::shader_params::shader_slot("lighting.direction") {
         let dir = params[slot];
@@ -642,6 +646,13 @@ impl SowApp {
                         self.input.camera_y += shake[1];
                     }
 
+                    let terrain_art: Option<&[u8]> = match self.sim.config.map_name.as_str() {
+                        "peten_clearing" => Some(include_bytes!("peten-canopy.png")),
+                        "bital_pass" => Some(include_bytes!("bital-pass.webp")),
+                        _ => None,
+                    };
+                    let terrain_art =
+                        terrain_art.filter(|_| dev.value("land.peten_canopy")[0] > 0.5);
                     let globals = MapGlobals {
                         camera_pos: [self.input.camera_x, self.input.camera_y],
                         zoom: self.input.camera_zoom,
@@ -699,9 +710,20 @@ impl SowApp {
                         preview_effect: preview_effect as f32,
                         preview_phase,
                         preview_time,
-                        shader_params: map_shader_params(&dev.shader_params, sf),
+                        shader_params: map_shader_params(
+                            &dev.shader_params,
+                            sf,
+                            terrain_art.is_some(),
+                        ),
                     };
-                    if let Some(mr) = self.gfx.map_renderer.as_ref() {
+                    if let Some(mr) = self.gfx.map_renderer.as_mut() {
+                        if let Some(terrain_art) = terrain_art {
+                            mr.load_terrain_art(
+                                &render_ctx.context,
+                                &mut render_ctx.command_encoder,
+                                terrain_art,
+                            );
+                        }
                         mr.draw(
                             &mut render_ctx.command_encoder,
                             frame.texture_view(),

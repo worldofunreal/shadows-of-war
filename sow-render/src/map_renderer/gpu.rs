@@ -6,6 +6,7 @@ use super::crater::CraterRevealQueue;
 use super::tabletop::{Tabletop, TabletopVertex};
 use std::sync::Arc;
 use crate::context::RenderContext;
+use crate::text::FontAtlasTexture;
 use blade_graphics as gpu;
 use blade_macros::ShaderData;
 
@@ -17,6 +18,7 @@ struct MapShaderData {
     terrain_texture: gpu::TextureView,
     owner_texture: gpu::TextureView,
     skin_texture: gpu::TextureView,
+    terrain_art_texture: gpu::TextureView,
     skin_sampler: gpu::Sampler,
 }
 
@@ -39,6 +41,7 @@ pub struct MapRenderer {
     skin_view: gpu::TextureView,
     skin_buffer: gpu::Buffer,
     skin_sampler: gpu::Sampler,
+    terrain_art: Option<FontAtlasTexture>,
     pub pipeline: gpu::RenderPipeline,
     tabletop: Option<TabletopDraw>,
     surface_format: gpu::TextureFormat,
@@ -270,6 +273,7 @@ impl MapRenderer {
             skin_view,
             skin_buffer,
             skin_sampler,
+            terrain_art: None,
             pipeline,
             tabletop: None,
             surface_format,
@@ -415,6 +419,27 @@ impl MapRenderer {
             self.skin_texture.into(),
             SKIN_ATLAS_SIZE,
         );
+    }
+
+    /// Upload the baked terrain art once for the lifetime of this map.
+    pub fn load_terrain_art(
+        &mut self,
+        context: &gpu::Context,
+        encoder: &mut gpu::CommandEncoder,
+        image_bytes: &[u8],
+    ) {
+        if self.terrain_art.is_some() {
+            return;
+        }
+        let texture = FontAtlasTexture::from_bytes(
+            context,
+            image_bytes,
+            "terrain_art",
+            gpu::TextureFormat::Rgba8Unorm,
+        );
+        encoder.init_texture(texture.texture);
+        texture.upload(encoder, context);
+        self.terrain_art = Some(texture);
     }
 
     /// Write dirty ownership tiles to the upload buffer and copy to GPU.
@@ -870,6 +895,10 @@ impl MapRenderer {
                 terrain_texture: self.terrain_view,
                 owner_texture: self.owner_view,
                 skin_texture: self.skin_view,
+                terrain_art_texture: self
+                    .terrain_art
+                    .as_ref()
+                    .map_or(self.terrain_view, |texture| texture.view),
                 skin_sampler: self.skin_sampler,
             },
         );
@@ -897,6 +926,9 @@ impl MapRenderer {
         render_ctx.context.destroy_texture(self.skin_texture);
         render_ctx.context.destroy_buffer(self.skin_buffer);
         render_ctx.context.destroy_sampler(self.skin_sampler);
+        if let Some(texture) = self.terrain_art.take() {
+            texture.destroy(&render_ctx.context);
+        }
         render_ctx
             .context
             .destroy_render_pipeline(&mut self.pipeline);

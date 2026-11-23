@@ -10,7 +10,7 @@ pub use sow_data::MAX_MATCH_PARTICIPANTS;
 /// Persisted turn recordings; changing live messages must not change this.
 /// 6: buildings use kind-specific footprints.
 /// 7: ships are built toward a target tile instead of a named port.
-/// 8: city-centric districts and city arsenal.
+/// 8: city-centric structures and city arsenal.
 pub const GAMEPLAY_FORMAT_VERSION: u64 = 8;
 // 10: website authentication uses game-owned opaque sessions.
 // 11: the start message's GameConfig carries bot tuning (`ai`).

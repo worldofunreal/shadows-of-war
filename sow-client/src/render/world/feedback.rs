@@ -28,18 +28,18 @@ const TRANSPORT_TARGET_ETA_FONT_SIZE: f32 = 16.0;
 /// Extra SDF face dilation over the label style so the ETA digits read bold.
 const TRANSPORT_TARGET_ETA_BOLD_DILATE: f32 = 0.6;
 const TRANSPORT_IMPACT_DURATION_SECS: f32 = 0.62;
-const DEATH_NAMEPLATE_FONT_SIZE: f32 = 13.0;
+const DEATH_NAMEPLATE_FONT_SIZE: f32 = 17.5;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
 const DEATH_NAMEPLATE_ARC_OFFSET: f32 = 0.75;
-const DEATH_NAMEPLATE_ICON_SIZE: f32 = 13.5;
+const DEATH_NAMEPLATE_ICON_SIZE: f32 = 18.0;
 const DEATH_NAMEPLATE_SCALE: f32 = 0.92;
-const DEATH_CASUALTY_ICON_SIZE: f32 = 10.0;
-const GOLD_REWARD_FONT_SIZE: f32 = 11.5;
-const GOLD_REWARD_COIN_SIZE: f32 = 13.5;
-const GOLD_REWARD_ASSIST_SIZE: f32 = 14.5;
+const DEATH_CASUALTY_ICON_SIZE: f32 = 13.5;
+const GOLD_REWARD_FONT_SIZE: f32 = 15.5;
+const GOLD_REWARD_COIN_SIZE: f32 = 18.0;
+const GOLD_REWARD_ASSIST_SIZE: f32 = 19.5;
 const GOLD_REWARD_SCALE: f32 = 0.9;
 const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.15;
-const DEATH_GOLD_ROW_GAP: f32 = 4.5;
+const DEATH_GOLD_ROW_GAP: f32 = 6.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 const OUTGOING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0; 4];
@@ -105,7 +105,7 @@ pub(crate) fn render(
     render_attack_launch_notices(text, ui, input, dev, sf, now);
 }
 
-const CASCADE_CALLOUT_FONT_SIZE: f32 = 10.5;
+const CASCADE_CALLOUT_FONT_SIZE: f32 = 14.2;
 
 fn cascade_callout_color(kind: crate::app::CascadeCalloutKind, chain_step: u8) -> [f32; 4] {
     use crate::app::CascadeCalloutKind;

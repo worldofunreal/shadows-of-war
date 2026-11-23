@@ -1,46 +1,52 @@
 {
-  "_comment": "six_sky_maya_04: Lady Six Sky campaign in the Petén / Naranjo region; uses the northamerica campaign map.",
-  "map": "northamerica",
+  "_comment": "six_sky_maya_04: 696 CE Komkom trade-and-raids campaign on the Belize River valley frontier (yucatan_peninsula).",
+  "map": "yucatan_peninsula",
   "player_spawn": [
-    846,
-    665
+    624,
+    904
   ],
   "factions": [
     {
       "id": "dos_pilas",
       "name": "Dos Pilas",
-      "x": 835,
-      "y": 671,
+      "x": 586,
+      "y": 944,
       "starting_troops": 700,
       "relation": "allied",
       "color": "#a88c40",
-      "iq": 100,
+      "iq": 85,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "lady_six_sky",
+      "avatar": "itza",
+      "alliance_group": "kaanul"
     },
     {
       "id": "calakmul",
       "name": "Calakmul / Kaanul",
-      "x": 858,
-      "y": 662,
+      "x": 602,
+      "y": 856,
       "starting_troops": 400,
       "relation": "allied",
       "color": "#4ca572",
-      "iq": 100,
+      "iq": 85,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "lady_six_sky",
+      "avatar": "lacandon",
+      "alliance_group": "kaanul"
     },
     {
       "id": "komkom",
       "name": "Komkom",
-      "x": 864,
-      "y": 668,
-      "starting_troops": 2100,
+      "x": 646,
+      "y": 912,
+      "starting_troops": 1150,
       "relation": "enemy",
+      "can_request_alliance": true,
       "color": "#7380b8",
-      "iq": 100,
+      "iq": 80,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "lady_six_sky",
+      "avatar": "chontal"
     }
   ],
   "player_color": "#f0902a"

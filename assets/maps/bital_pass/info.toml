@@ -1,0 +1,9 @@
+# Written by sow-tools import-map-source
+source = "image"
+frequency = 0
+min_lake_tiles = 16
+min_island_pixels = 30
+min_island_tiles = 0
+smooth_coasts = false
+water_level = 0.5
+connect_diagonals = false

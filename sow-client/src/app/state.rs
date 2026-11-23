@@ -694,8 +694,8 @@ pub struct PendingKillStreakSfx {
 
 const DEFAULT_CASCADE_CALLOUT_RISE: f32 = crate::death_nameplate::FLOATING_GOLD_RISE;
 pub const CASCADE_CALLOUT_DURATION: f32 = 1.65;
-const STREAK_SCREEN_OFFSET_Y_WITH_GOLD: f32 = 46.0;
-const STREAK_SCREEN_OFFSET_Y_NO_GOLD: f32 = 22.0;
+const STREAK_SCREEN_OFFSET_Y_WITH_GOLD: f32 = 62.0;
+const STREAK_SCREEN_OFFSET_Y_NO_GOLD: f32 = 30.0;
 
 #[derive(Clone, Debug)]
 pub struct CombatStreakTracker {
@@ -1110,7 +1110,7 @@ impl UiState {
         now: web_time::Instant,
     ) -> Option<(u8, &'static str, f32)> {
         let (label, min_step, kind) = self.combat_streaks.record_kill(gender, now)?;
-        let ring_radius = 20.0 + 3.0 * f32::from(min_step.min(5));
+        let ring_radius = 27.0 + 4.0 * f32::from(min_step.min(5));
         let delay_secs = crate::death_nameplate::streak_callout_delay(has_gold_reward);
         let initial_world_rise = if has_gold_reward {
             crate::death_nameplate::STREAK_INITIAL_RISE_WITH_GOLD

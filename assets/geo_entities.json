@@ -277,6 +277,156 @@
    "territory_color": "#bd6257"
   },
   {
+   "id": "siyaj_kawiil",
+   "name": "Siyaj K'awiil",
+   "entity": "Tikal at Yellow Rabbit",
+   "role": "nation",
+   "region": "americas",
+   "lat": 17.21,
+   "lon": -89.49,
+   "gender": "male",
+   "avatar": "siyaj_kawiil",
+   "hero": {
+    "enabled": false,
+    "rarity": "common",
+    "price_crowns": 500,
+    "name": "Siyaj K'awiil",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "smaller",
+     "percent": 25
+    },
+    "card": "sow-siyaj-kawiil",
+    "art_slug": "siyaj_kawiil"
+   },
+   "territory_color": "#8c59a8"
+  },
+  {
+   "id": "yuknoom_yichaak_kahk",
+   "name": "Yuknoom Yich'aak K'ahk'",
+   "entity": "Calakmul",
+   "role": "nation",
+   "region": "americas",
+   "lat": 18.10,
+   "lon": -89.81,
+   "gender": "male",
+   "avatar": "yuknoom_yichaak_kahk",
+   "hero": {
+    "enabled": false,
+    "rarity": "common",
+    "price_crowns": 500,
+    "name": "Yuknoom Yich'aak K'ahk'",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "smaller",
+     "percent": 25
+    },
+    "card": "sow-yuknoom-yichaak-kahk",
+    "art_slug": "yuknoom_yichaak_kahk"
+   },
+   "territory_color": "#4ca572"
+  },
+  {
+   "id": "itzamnaaj_bahlam",
+   "name": "Itzamnaaj Bahlam",
+   "entity": "Ucanal",
+   "role": "nation",
+   "region": "americas",
+   "lat": 16.98,
+   "lon": -89.36,
+   "gender": "male",
+   "avatar": "itzamnaaj_bahlam",
+   "hero": {
+    "enabled": false,
+    "rarity": "common",
+    "price_crowns": 500,
+    "name": "Itzamnaaj Bahlam",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "smaller",
+     "percent": 25
+    },
+    "card": "sow-itzamnaaj-bahlam",
+    "art_slug": "itzamnaaj_bahlam"
+   },
+   "territory_color": "#b85c48"
+  },
+  {
+   "id": "itzamnaaj_kawiil",
+   "name": "Itzamnaaj K'awiil",
+   "entity": "Dos Pilas",
+   "role": "nation",
+   "region": "americas",
+   "lat": 16.45,
+   "lon": -90.29,
+   "gender": "male",
+   "avatar": "itzamnaaj_kawiil",
+   "hero": {
+    "enabled": false,
+    "rarity": "common",
+    "price_crowns": 500,
+    "name": "Itzamnaaj K'awiil",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "smaller",
+     "percent": 25
+    },
+    "card": "sow-itzamnaaj-kawiil",
+    "art_slug": "itzamnaaj_kawiil"
+   },
+   "territory_color": "#a88c40"
+  },
+  {
+   "id": "yuknoom_took_kawiil",
+   "name": "Yuknoom Took' K'awiil",
+   "entity": "Calakmul",
+   "role": "nation",
+   "region": "americas",
+   "lat": 18.10,
+   "lon": -89.81,
+   "gender": "male",
+   "avatar": "yuknoom_took_kawiil",
+   "hero": {
+    "enabled": false,
+    "rarity": "common",
+    "price_crowns": 500,
+    "name": "Yuknoom Took' K'awiil",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "smaller",
+     "percent": 25
+    },
+    "card": "sow-yuknoom-took-kawiil",
+    "art_slug": "yuknoom_took_kawiil"
+   },
+   "territory_color": "#4ca572"
+  },
+  {
+   "id": "yikin_chan_kawiil",
+   "name": "Yik'in Chan K'awiil",
+   "entity": "Tikal",
+   "role": "nation",
+   "region": "americas",
+   "lat": 17.22,
+   "lon": -89.62,
+   "gender": "male",
+   "avatar": "yikin_chan_kawiil",
+   "hero": {
+    "enabled": false,
+    "rarity": "common",
+    "price_crowns": 500,
+    "name": "Yik'in Chan K'awiil",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "smaller",
+     "percent": 25
+    },
+    "card": "sow-yikin-chan-kawiil",
+    "art_slug": "yikin_chan_kawiil"
+   },
+   "territory_color": "#8c59a8"
+  },
+  {
    "id": "leonidas",
    "name": "Leonidas",
    "entity": "Sparta",

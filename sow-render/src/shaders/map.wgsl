@@ -68,6 +68,7 @@ var<uniform> player_skin_styles: PlayerSkinStyles;
 var terrain_texture: texture_2d<f32>;
 var owner_texture: texture_2d<u32>;
 var skin_texture: texture_2d<f32>;
+var terrain_art_texture: texture_2d<f32>;
 var skin_sampler: sampler;
 
 struct VertexOutput {
@@ -583,6 +584,9 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     // Evaluate terrain and territory blending in sRGB space (matching OpenFront's TerritoryPass),
     // then convert once to linear RGB before lighting, borders, and output.
     var base_srgb = clamp(terrain_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    if is_land && globals.shader_params[__MAP_PETEN_CANOPY__].x > 0.5 {
+        base_srgb = textureSampleLevel(terrain_art_texture, skin_sampler, in.world / globals.map_size, 0.0).rgb;
+    }
     var albedo_linear = vec3<f32>(0.0);
 
     if owner_id > 0u && is_land {

@@ -2079,7 +2079,7 @@
           selectField(
             "Building type",
             step.trigger.kind || "City",
-            ["City", "MilitaryCamp", "TradingPost", "Tower", "Port"],
+            ["City", "MilitaryCamp", "TradingPost", "Tower", "Port", "SAM", "MissileSilo"],
             function (value) {
               step.trigger.kind = value;
               markDirty();
@@ -2104,7 +2104,7 @@
           selectField(
             "Building type",
             step.trigger.kind || "City",
-            ["City", "MilitaryCamp", "TradingPost", "Tower", "Port"],
+            ["City", "MilitaryCamp", "TradingPost", "Tower", "Port", "SAM", "MissileSilo"],
             function (value) {
               step.trigger.kind = value;
               step.trigger.value = Math.min(Number(step.trigger.value || 1), structureLevelLimits[value]);

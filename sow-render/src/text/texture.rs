@@ -80,7 +80,6 @@ impl FontAtlasTexture {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_bytes(
         context: &gpu::Context,
         image_bytes: &[u8],

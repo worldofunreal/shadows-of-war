@@ -661,6 +661,13 @@ pub static PARAMS: &[ParamDef] = &[
         [190.0 / 255.0, 220.0 / 255.0, 138.0 / 255.0],
         "MAP_LAND_PLAINS"
     ),
+    flag!(
+        "land.peten_canopy",
+        "Selva de Petén",
+        "Terrain",
+        1.0,
+        "MAP_PETEN_CANOPY"
+    ),
     color!(
         "land.highlands.color",
         "Highlands",

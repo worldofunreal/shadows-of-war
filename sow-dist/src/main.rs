@@ -3541,32 +3541,57 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     let building_effects = BuildingKind::ALL.into_iter().map(|kind| {
         let tiers = (1..=kind.max_level()).map(|level| {
             let speed = config.global_speed_multiplier;
+            let troop_capacity = if kind.grants_building_troop_capacity() {
+                config.district_max_troops * building::district_capacity_level_weight(level)
+            } else {
+                0.0
+            };
             match kind {
                 BuildingKind::City => serde_json::json!({
                     "reserve": config.city_max_troops * building::income_level_weight(level),
                     "troops": config.city_troop_income * speed * building::income_level_weight(level.min(4)),
+                    "gold": config.city_gold_income * speed * building::income_level_weight(level.min(4)),
                     "reinforcements": building::city_upgrade_reinforcements(level, config.city_max_troops),
                 }),
                 BuildingKind::MilitaryCamp => serde_json::json!({
                     "troops": config.military_camp_troop_income * speed * building::military_camp_troop_level_weight(level),
-                    "capture": (building::camp_conquest_multiplier(config.camp_capture_base_points * building::camp_capture_level_weight(level)) - 1.0) * 100.0,
+                    "capture": (building::camp_conquest_multiplier(config.camp_capture_base_points.max(0.0) * building::camp_capture_level_weight(level)) - 1.0) * 100.0,
+                    "reserve": troop_capacity,
                 }),
                 BuildingKind::TradingPost => serde_json::json!({
                     "trade": config.trading_post_gold_income * speed * building::trading_post_gold_level_weight(level),
                     "travel": building::trading_post_gold_level_weight(level).sqrt(),
+                    "reserve": troop_capacity,
                 }),
                 BuildingKind::Tower => serde_json::json!({
                     "range": building::tower_range_for_level(level, &config, 1.0),
                     "resistance": building::tower_capture_weight(level),
+                    "defense": (building::tower_defense_weight(level, &config) * config.tower_strength).clamp(0.0, 0.50) * 100.0,
+                    "reserve": troop_capacity,
                 }),
                 BuildingKind::Port => serde_json::json!({
                     "fleet": building::port_fleet_slots(level),
                     "docks": building::port_dock_capacity(level),
                     "repair": building::port_repair_per_second(level),
+                    "speed": f64::from(level),
+                    "gold": config.port_gold_income * speed * building::port_income_level_weight(level),
+                    "troops": config.port_troop_income * speed * building::port_income_level_weight(level),
+                    "reserve": troop_capacity,
                 }),
-                BuildingKind::SAM => serde_json::json!({
-                    "range": sow_core::execution::sam::sam_range(level), "charges": level,
-                }),
+                BuildingKind::SAM => {
+                    let mut effects = serde_json::json!({
+                        "range": sow_core::execution::sam::sam_range(level),
+                        "charges": sow_core::execution::sam::sam_salvo_size(level),
+                        "reserve": troop_capacity,
+                    });
+                    if config.progressive_defense_upgrades {
+                        let cooldown = sow_core::execution::sam::sam_cooldown_ticks(level, &config);
+                        effects["fire_rate"] = serde_json::json!(
+                            60_000.0 / (f64::from(cooldown) * f64::from(config.tick_rate_ms))
+                        );
+                    }
+                    effects
+                }
                 BuildingKind::MissileSilo => serde_json::json!({ "charges": level }),
             }
         }).collect::<Vec<_>>();

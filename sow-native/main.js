@@ -44,6 +44,8 @@ function resolveSowPath(decodedPath) {
     if (decodedPath.startsWith('fonts/')) {
       return path.join(liveRoot, 'sow-web/site', decodedPath);
     }
+    const localOverride = path.join(webroot, decodedPath);
+    if (fs.existsSync(localOverride)) return localOverride;
     if (
       liveAssets &&
       (decodedPath.startsWith('assets/gameplay/') || decodedPath.startsWith('assets/shell/'))
@@ -101,16 +103,16 @@ app.whenReady().then(() => {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
+      backgroundThrottling: !verifyBoot,
     },
   });
 
   if (liveRoot) {
-    win.webContents.on('console-message', (event, legacyLevel, legacyMsg, legacyLine, legacySrc) => {
-      const isDetails = event && typeof event.message === 'string';
-      const level = isDetails ? event.level : legacyLevel;
-      const message = isDetails ? event.message : legacyMsg;
-      const sourceId = isDetails ? event.sourceId : legacySrc;
-      const lineNumber = isDetails ? event.lineNumber : legacyLine;
+    win.webContents.on('console-message', (event) => {
+      const level = event.level;
+      const message = event.message || '';
+      const sourceId = event.sourceId || '';
+      const lineNumber = event.lineNumber || 0;
       const isErrOrWarn =
         level === 'error' || level === 'warning' || (typeof level === 'number' && level >= 2);
       if (isErrOrWarn || message.startsWith('[SOW')) {
@@ -180,14 +182,20 @@ app.whenReady().then(() => {
         return;
       }
       try {
-        const state = await win.webContents.executeJavaScript(`({
-          menuReady: !!window.SOW_MENU_READY,
-          loaderHidden: !document.getElementById('web-loader') || getComputedStyle(document.getElementById('web-loader')).display === 'none' || document.getElementById('web-loader').hidden,
-          hasWebgl2: typeof window.SOW_has_webgl2 === 'function' ? window.SOW_has_webgl2() : null,
-          mapsUrl: window.SOW_MAPS_URL || null,
-          assetsUrl: window.SOW_ASSETS_URL || null,
-        })`);
-        if (state.menuReady && state.loaderHidden) {
+        const state = await win.webContents.executeJavaScript(`(() => {
+          const loader = document.getElementById('web-loader');
+          const style = loader ? getComputedStyle(loader) : null;
+          return {
+            menuReady: !!window.SOW_MENU_READY,
+            loaderReady: !!window.SOW_INITIAL_LOADER_READY,
+            loaderVisibility: style ? style.visibility : 'none',
+            loaderOpacity: style ? style.opacity : '0',
+            loaderText: loader ? (loader.querySelector('.loader-text')?.textContent || '').trim() : '',
+            hasTutorialModal: !!document.querySelector('.sow-tutorial-modal, .sow-campaign-dialog'),
+            hasCanvas: !!document.querySelector('canvas'),
+          };
+        })()`);
+        if (state.menuReady && state.loaderReady && state.loaderVisibility === 'hidden') {
           console.log(`[verify-boot] OK in ${Date.now() - start}ms`, JSON.stringify(state));
           clearInterval(poll);
           app.exit(0);

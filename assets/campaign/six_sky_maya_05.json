@@ -1,46 +1,52 @@
 {
-  "_comment": "six_sky_maya_05: Lady Six Sky campaign in the Petén / Naranjo region; uses the northamerica campaign map.",
-  "map": "northamerica",
+  "_comment": "six_sky_maya_05: 697 CE Bahlam Jol campaign teaching attack reserve discipline (yucatan_peninsula).",
+  "map": "yucatan_peninsula",
   "player_spawn": [
-    846,
-    665
+    624,
+    904
   ],
   "factions": [
     {
       "id": "dos_pilas",
       "name": "Dos Pilas",
-      "x": 835,
-      "y": 671,
+      "x": 586,
+      "y": 944,
       "starting_troops": 850,
       "relation": "allied",
       "color": "#a88c40",
-      "iq": 100,
+      "iq": 85,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "lady_six_sky",
+      "avatar": "itza",
+      "alliance_group": "kaanul"
     },
     {
       "id": "calakmul",
       "name": "Calakmul / Kaanul",
-      "x": 858,
-      "y": 662,
+      "x": 602,
+      "y": 856,
       "starting_troops": 450,
       "relation": "allied",
       "color": "#4ca572",
-      "iq": 100,
+      "iq": 85,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "lady_six_sky",
+      "avatar": "lacandon",
+      "alliance_group": "kaanul"
     },
     {
       "id": "bahlam_jol",
       "name": "Bahlam Jol",
-      "x": 854,
-      "y": 678,
-      "starting_troops": 2450,
+      "x": 646,
+      "y": 892,
+      "starting_troops": 1200,
       "relation": "enemy",
+      "can_request_alliance": true,
       "color": "#40999e",
-      "iq": 105,
+      "iq": 85,
       "civ": "maya",
-      "leader": "caesar"
+      "leader": "lady_six_sky",
+      "avatar": "k_iche"
     }
   ],
   "player_color": "#f0902a"

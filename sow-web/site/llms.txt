@@ -7,7 +7,7 @@ Key facts:
 - Platform: runs in any modern web browser; Android and iOS builds are in alpha testing.
 - Price: free to play. No account required — you can join a match without registering.
 - Publisher: World of Unreal (https://worldofunreal.com).
-- Match loop: hold tiles for gold and troops, convert land into districts, break the frontier, take the map.
+- Match loop: hold tiles for gold and troops, build on captured land, break the frontier, take the map.
 - Game modes: the matchmaking queue rotates through Free-For-All, Teams, and Co-op across the active world and regional maps.
 - Leaders: each historical leader grants one bonus — attack, expansion, gold, troops, or capacity.
 - Terrain matters: it punishes attackers, so frontier choices decide whether a push pays off.

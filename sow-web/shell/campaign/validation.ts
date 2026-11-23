@@ -128,7 +128,8 @@ export function validate(
             tactics_03_military_camp_vs_city: ["europe", 1600, 920],
             tactics_04_trading_post_gold: ["southeastasia", 1600, 952],
             boudica: ["eastanglia", 1600, 900],
-            six_sky_maya_01: ["yucatan_peninsula", 520, 800],
+            six_sky_maya_01: ["peten_clearing", 176, 100],
+            six_sky_maya_02: ["bital_pass", 224, 156],
         };
         const BLITZ_MAP_SPECS: [string, number, number][] = [
             ["europe", 1600, 920],
@@ -139,8 +140,8 @@ export function validate(
         ];
         const expectedMap =
             EPISODE_MAPS[definition.episode_id] ??
-            (/^six_sky_maya_0[2-8]$/.test(definition.episode_id)
-                ? ["northamerica", 1600, 824]
+            (/^six_sky_maya_0[1-8]$/.test(definition.episode_id)
+                ? ["yucatan_peninsula", 1040, 1600]
                 : null);
         if (
             !object(roster) ||
@@ -326,7 +327,7 @@ export function validate(
                     issue(
                         null,
                         "roster.factions.prebuilt_buildings",
-                        "Prebuilt buildings must be [kind, level 1–5] pairs.",
+                        "Prebuilt buildings must use levels valid for their building type.",
                     );
                 }
             }

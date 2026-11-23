@@ -23,7 +23,7 @@ pub enum WarshipMode {
 /// while it continues to mean transported troops for transports.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WarshipState {
-    /// Active Port district that owns this ship's patrol assignment.
+    /// Active Port building that owns this ship's patrol assignment.
     #[serde(default)]
     pub home_port_id: Option<u64>,
     pub patrol_tile: u32,
@@ -191,7 +191,7 @@ pub fn coastal_warship_spawn_tile(
     best_connected.or(best_any).map(|(_, tile)| tile)
 }
 
-/// Resolved route from an active Port district to a warship's initial patrol tile.
+/// Resolved route from an active Port building to a warship's initial patrol tile.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WarshipRoute {
     pub port_id: u64,
