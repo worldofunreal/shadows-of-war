@@ -128,6 +128,7 @@ export function validate(
             tactics_03_farm_vs_city: ["europe", 1600, 920],
             tactics_04_factory_gold: ["southeastasia", 1600, 952],
             boudica: ["eastanglia", 1600, 900],
+            six_sky_maya_01: ["yucatan_peninsula", 520, 800],
         };
         const BLITZ_MAP_SPECS: [string, number, number][] = [
             ["europe", 1600, 920],

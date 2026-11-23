@@ -266,13 +266,12 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             if (hostPokeAnimation) hostPokeAnimation.cancel();
             hostPokeAnimation = hostFigure.animate(
                 [
-                    { transform: "scale(1, 1) rotate(0deg)" },
-                    { transform: "scale(1.07, 0.92) translateY(6px) rotate(-3deg)", offset: 0.24 },
-                    { transform: "scale(0.95, 1.06) translateY(-10px) rotate(2.5deg)", offset: 0.56 },
-                    { transform: "scale(1.02, 0.98) translateY(2px) rotate(-1deg)", offset: 0.8 },
-                    { transform: "scale(1, 1) rotate(0deg)" },
+                    { transform: "scale(1) rotate(0deg)" },
+                    { transform: "scale(1.025, 0.98) translateY(3px) rotate(-1deg)", offset: 0.28 },
+                    { transform: "scale(0.99, 1.02) translateY(-5px) rotate(1deg)", offset: 0.62 },
+                    { transform: "scale(1) rotate(0deg)" },
                 ],
-                { duration: 420, easing: "cubic-bezier(.2,.9,.3,1)" },
+                { duration: 340, easing: "cubic-bezier(.2,.85,.3,1)" },
             );
             hostPokeAnimation.onfinish = () => {
                 hostPokeAnimation = null;
@@ -405,21 +404,21 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
                 const startY = enterKind === "pop_up" ? "32%" : "8%";
                 hostSwapAnimation = hostBox.animate(
                     [
-                        { opacity: 0, transform: `translate3d(${startX}, ${startY}, 0) scale(0.86)` },
-                        { opacity: 1, transform: "translate3d(0, -8px, 0) scale(1.04)", offset: 0.68 },
+                        { opacity: 0, transform: `translate3d(${startX}, ${startY}, 0) scale(0.94)` },
+                        { opacity: 1, transform: "translate3d(0, -3px, 0) scale(1.01)", offset: 0.72 },
                         { opacity: 1, transform: "translate3d(0, 0, 0) scale(1)" },
                     ],
-                    { duration: 460, easing: "cubic-bezier(.18, .88, .28, 1)" },
+                    { duration: 380, easing: "cubic-bezier(.2, .85, .3, 1)" },
                 );
                 if (firstAppearance) options.onHostCue?.("enter");
             } else if (spriteChanged) {
                 hostSwapAnimation = hostFigure.animate(
                     [
-                        { transform: "scale(0.92, 1.08) translateY(6px)" },
-                        { transform: "scale(1.06, 0.94) translateY(-6px)", offset: 0.45 },
+                        { transform: "scale(0.97, 1.02) translateY(3px)" },
+                        { transform: "scale(1.015, 0.99) translateY(-3px)", offset: 0.5 },
                         { transform: "scale(1, 1) translateY(0)" },
                     ],
-                    { duration: 300, easing: "cubic-bezier(.2, .85, .3, 1)" },
+                    { duration: 240, easing: "cubic-bezier(.2, .85, .3, 1)" },
                 );
             }
             if (hostSwapAnimation) {

@@ -1,40 +1,16 @@
 {
-  "_comment": "six_sky_maya_01: Lady Six Sky campaign in the Petén / Naranjo region; uses the northamerica campaign map.",
-  "map": "northamerica",
+  "_comment": "six_sky_maya_01: Lady Six Sky vs K'inichil Kab 1v1 on the Petén / Belize–Guatemala border (yucatan_peninsula 520x800).",
+  "map": "yucatan_peninsula",
   "player_spawn": [
-    846,
-    665
+    312,
+    452
   ],
   "factions": [
     {
-      "id": "dos_pilas",
-      "name": "Dos Pilas",
-      "x": 835,
-      "y": 671,
-      "starting_troops": 650,
-      "relation": "allied",
-      "color": "#a88c40",
-      "iq": 100,
-      "civ": "maya",
-      "leader": "caesar"
-    },
-    {
-      "id": "calakmul",
-      "name": "Calakmul / Kaanul",
-      "x": 858,
-      "y": 662,
-      "starting_troops": 450,
-      "relation": "allied",
-      "color": "#4ca572",
-      "iq": 100,
-      "civ": "maya",
-      "leader": "caesar"
-    },
-    {
       "id": "kinichil_kab",
       "name": "K’inichil Kab",
-      "x": 866,
-      "y": 664,
+      "x": 332,
+      "y": 457,
       "starting_troops": 900,
       "relation": "enemy",
       "color": "#bd6257",

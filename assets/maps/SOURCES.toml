@@ -385,3 +385,14 @@ land_point_corrections = [
 map_bin_sha256 = "7d9dbfbf574290e15e1e74349feeed97f43d173d4a95dabc2729cc533c05e2fe"
 map_bin_br_sha256 = "68119ddf7fac87fa62b7e0998a8cd053b750200d3d8ee577d2798274d8198512"
 thumbnail_sha256 = "32b7157610c622f6cb47c55ac3c0fb5a815e8b350a27027a6314ad7854dbb8b1"
+
+[recipes.yucatan_peninsula]
+origin_kind = "osm"
+reproducible = true
+target_width = 520
+target_height = 800
+bbox = [-92.49, 13.53, -87.11, 21.81]
+size = "small"
+map_bin_sha256 = "dcd482f8f32018da5dcb8b632cfd407a8232a0c4434da0d85fd81523ae3f1225"
+map_bin_br_sha256 = "82850f43c0a81bf226c9ccf6c1cd2241b9c5c19015bfce20dba30413e51e4101"
+thumbnail_sha256 = "27b174d5696b320621e7b7d4e10218fe29d58a2ce92d66356b5edc48f9455482"

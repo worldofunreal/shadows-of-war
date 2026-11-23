@@ -15,12 +15,6 @@
     },
     "kinichil_kab": {
       "faction": "kinichil_kab"
-    },
-    "dos_pilas": {
-      "faction": "dos_pilas"
-    },
-    "calakmul": {
-      "faction": "calakmul"
     }
   },
   "steps": [
@@ -87,6 +81,11 @@
           "speaker": "kinichil_kab",
           "emote": "threat",
           "emote_text_key": "tutorial.campaign_six_sky_maya_01_kinichil_kab_threat"
+        },
+        {
+          "speaker": "six_sky",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_01_six_sky_reply"
         }
       ]
     },

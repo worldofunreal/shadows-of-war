@@ -1760,29 +1760,26 @@
 }
 @keyframes host-idle-breathe {
   0%, 100% {
-    transform: translateY(0) scale(1) rotate(0deg);
+    transform: translateY(0) scale(1);
   }
   50% {
-    transform: translateY(-4px) scale(1.014, 1.02) rotate(0.7deg);
+    transform: translateY(-2px) scale(1.006, 1.01);
   }
 }
 @keyframes host-idle-point {
   0%, 100% {
-    transform: translate3d(0, 0, 0) rotate(0deg);
+    transform: translate3d(0, 0, 0);
   }
-  45% {
-    transform: translate3d(5px, -6px, 0) rotate(1.4deg) scale(1.02);
+  50% {
+    transform: translate3d(2px, -3px, 0);
   }
 }
 @keyframes host-idle-cheer {
   0%, 100% {
-    transform: translateY(0) scale(1, 1);
+    transform: translateY(0) scale(1);
   }
-  30% {
-    transform: translateY(-10px) scale(0.98, 1.03);
-  }
-  60% {
-    transform: translateY(2px) scale(1.03, 0.97);
+  50% {
+    transform: translateY(-5px) scale(1.01, 1.015);
   }
 }
 .sow-story__host-poke {
@@ -1849,6 +1846,9 @@
 }
 
 /* Speech-bubble dialog variant when full-body host is active */
+.sow-story.has-host.is-modal .sow-story__stage {
+  z-index: 2;
+}
 .sow-story.has-host.is-modal .sow-story__shade {
   background: radial-gradient(ellipse at 25% 75%, rgb(8 18 19 / 34%), rgb(5 10 13 / 78%));
 }
@@ -1910,11 +1910,11 @@
 }
 
 @media (max-width: 780px), (max-height: 560px) {
-  .sow-story__host-figure {
-    height: clamp(165px, 30svh, 250px);
+  .sow-story.has-host.is-modal .sow-story__host-figure {
+    height: clamp(300px, 56svh, 520px);
   }
   .sow-story__host[data-host-modal="false"] .sow-story__host-figure {
-    height: clamp(140px, 25svh, 210px);
+    height: clamp(160px, 28svh, 240px);
   }
   .sow-story.has-host.is-modal .sow-story__dialog {
     left: max(12px, var(--story-inset-left));
@@ -1923,7 +1923,8 @@
     max-width: none;
   }
   .sow-story.has-host.is-modal .sow-story__host {
-    bottom: clamp(160px, 32svh, 240px);
+    left: max(-12px, var(--story-inset-left));
+    bottom: clamp(110px, 20svh, 190px);
   }
   .sow-story__host-callout {
     margin-bottom: 34px;
