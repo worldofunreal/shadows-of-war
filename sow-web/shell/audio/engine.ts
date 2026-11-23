@@ -129,11 +129,12 @@ export class AudioEngine implements SowAudioPublicApi {
     private casinoReturn: GainNode | null = null;
 
     private muteAll = false;
-    private sfxVolume = 0.8;
-    private musicVolume = 0.8;
+    private sfxVolume = 0.6;
+    private musicVolume = 0.4;
     private tabHidden = false;
     private uiSeedCounter = 0x13572468;
     private readonly gate = new VoiceBudgetGate();
+    private readonly monitorNodes = new WeakSet<AudioNode>();
     private listenersInstalled = false;
 
     constructor() {
@@ -459,9 +460,51 @@ export class AudioEngine implements SowAudioPublicApi {
         );
     }
 
-    private renderTrigger(def: CueDefinition, trigger: CueTrigger, nowMs: number): void {
-        if (!this.ctx || !this.bank || !this.sfxBus || !this.uiBus) return;
-        if (!this.gate.admit(trigger.cue, def, nowMs)) return;
+    /**
+     * Studio audition hook used by local tools (`./sow m` Sound Studio).
+     * Triggers any cue with full control over subtype, spatial pan, distance gain,
+     * intensity, seed, and optional cooldown bypass. Returns estimated duration (sec),
+     * or `0` when suppressed (e.g. muted or blocked by cooldown gate).
+     */
+    audition(trigger: CueTrigger, options?: { bypassCooldown?: boolean }): number {
+        if (this.tabHidden || this.muteAll || this.sfxVolume <= 0.001 || this.isPortalMuted()) {
+            return 0;
+        }
+        const def = CUE_REGISTRY[trigger.cue];
+        if (!def) return 0;
+
+        const ctx = this.ensureContext();
+        if (!ctx) return 0;
+        if (ctx.state === "suspended") {
+            void ctx.resume().catch(() => {});
+        }
+
+        const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+        return this.renderTrigger(def, trigger, nowMs, Boolean(options?.bypassCooldown ?? true));
+    }
+
+    /**
+     * Taps the post-EQ, post-reverb, post-limiter `masterGain` into an external
+     * read-only monitor node (such as an `AnalyserNode` in Sound Studio).
+     */
+    connectMonitor(node: AudioNode): boolean {
+        const ctx = this.ensureContext();
+        if (!ctx || !this.masterGain) return false;
+        if (!this.monitorNodes.has(node)) {
+            this.masterGain.connect(node);
+            this.monitorNodes.add(node);
+        }
+        return true;
+    }
+
+    private renderTrigger(
+        def: CueDefinition,
+        trigger: CueTrigger,
+        nowMs: number,
+        bypassGate = false,
+    ): number {
+        if (!this.ctx || !this.bank || !this.sfxBus || !this.uiBus) return 0;
+        if (!bypassGate && !this.gate.admit(trigger.cue, def, nowMs)) return 0;
 
         const ctx = this.ctx;
         const bank = this.bank;
@@ -556,8 +599,10 @@ export class AudioEngine implements SowAudioPublicApi {
         try {
             def.synth(renderCtx, trigger);
             this.gate.record(def.category, nowMs + Math.ceil(maxDurationSec * 1000));
+            return maxDurationSec;
         } catch {
             // Never allow an audio error to disturb gameplay or UI loops.
+            return 0;
         }
     }
 }

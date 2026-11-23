@@ -47,7 +47,12 @@ export {
     siblingSlotRatio,
     suppressNextScreenSwitchSound,
 } from "./menu_sfx.ts";
-export { CATEGORY_VOICE_BUDGET, CUE_REGISTRY, MAX_TOTAL_VOICES } from "./registry.ts";
+export {
+    CATEGORY_VOICE_BUDGET,
+    CUE_REGISTRY,
+    MAX_TOTAL_VOICES,
+    type CueDefinition,
+} from "./registry.ts";
 
 /** Plays a procedural UI/UX micro-interaction cue through the shared engine. */
 export function playUiCue(cue: AudioCueId, subtype = 0, intensity = 0.5, pan = 0): void {

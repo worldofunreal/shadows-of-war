@@ -17,6 +17,8 @@
     "map-rosters.ts",
     "atlas-entity-picker.ts",
     "map-preview.ts",
-    "editor.ts"
+    "editor.ts",
+    "sound-catalog.ts",
+    "sound-studio.ts"
   ]
 }

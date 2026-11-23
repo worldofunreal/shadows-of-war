@@ -143,6 +143,7 @@ function staticFile(pathname) {
   if (pathname === "/tools/campaign-editor/map-rosters") return path.join(editorDir, "map-rosters.html");
   if (pathname === "/tools/campaign-editor/map-generator") return path.join(editorDir, "map-generator.html");
   if (pathname === "/tools/campaign-editor/map-manager") return path.join(editorDir, "map-manager.html");
+  if (pathname === "/tools/campaign-editor/sound-studio") return path.join(editorDir, "sound-studio.html");
   if (pathname === "/" || pathname === "/tools/campaign-editor" || pathname === "/tools/campaign-editor/") {
     return path.join(editorDir, "index.html");
   }
@@ -1296,6 +1297,7 @@ server.listen(port, "127.0.0.1", () => {
   console.log(`Map Rosters: http://127.0.0.1:${port}/tools/campaign-editor/map-rosters`);
   console.log(`Map Generator: http://127.0.0.1:${port}/tools/campaign-editor/map-generator`);
   console.log(`Custom Maps: http://127.0.0.1:${port}/tools/campaign-editor/map-manager`);
+  console.log(`Sound Studio: http://127.0.0.1:${port}/tools/campaign-editor/sound-studio`);
   console.log(`  Game preview for the map generator: http://127.0.0.1:${previewPort}/play/`);
   console.log("  Saving in the editor updates assets/campaign directly; refresh the local game to use them.");
   console.log("  Ctrl-C to stop.");

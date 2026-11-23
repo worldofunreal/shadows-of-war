@@ -9,8 +9,8 @@ const SFX_SVG =
 
 export function renderSfxVolumeSettingRow() {
     const settings = menuUi.state?.settings;
-    const raw = settings?.sfx_volume == null ? 0.8 : Number(settings.sfx_volume);
-    const vol = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0.8;
+    const raw = settings?.sfx_volume == null ? 0.6 : Number(settings.sfx_volume);
+    const vol = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0.6;
     const volPct = Math.round(vol * 100);
     return (
         "<label class='sow-hud__setting-row sow-hud__setting-row--slider'>" +

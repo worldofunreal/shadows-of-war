@@ -509,8 +509,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   };
   const DEFAULT_HUD_SETTINGS: MenuSettings = {
     mute_all: false,
-    music_volume: 0.8,
-    sfx_volume: 0.8,
+    music_volume: 0.4,
+    sfx_volume: 0.6,
     reduced_motion: false,
     free_zoom_out: false,
     show_fps_ping: false,
@@ -2071,14 +2071,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const initialMusicVol =
       hudState && hudState.settings && hudState.settings.music_volume != null
         ? Number(hudState.settings.music_volume)
-        : 0.8;
+        : 0.4;
     const initialMusicPct = Math.round(
       Math.max(0, Math.min(1, initialMusicVol)) * 100,
     );
     const initialSfxVol =
       hudState && hudState.settings && hudState.settings.sfx_volume != null
         ? Number(hudState.settings.sfx_volume)
-        : 0.8;
+        : 0.6;
     const initialSfxPct = Math.round(
       Math.max(0, Math.min(1, initialSfxVol)) * 100,
     );

@@ -70,13 +70,13 @@ pub struct MapRenderer {
 const FLASH_ABILITY_BIT: u8 = 0x80;
 const FLASH_INTENSITY_MASK: u8 = !FLASH_ABILITY_BIT;
 
-// Eight 64px columns (styles 10-17); the new animal silhouettes occupy 3-7.
+// Sixteen 64px columns hold the store silhouettes (styles 10-25).
 const SKIN_ATLAS_SIZE: gpu::Extent = gpu::Extent {
-    width: 512,
+    width: 1024,
     height: 64,
     depth: 1,
 };
-const SKIN_ATLAS: &[u8; 512 * 64] = include_bytes!("territory_skins.r8");
+const SKIN_ATLAS: &[u8; 1024 * 64] = include_bytes!("territory_skins.r8");
 
 impl MapRenderer {
     pub fn new(

@@ -183,7 +183,7 @@ export function renderMainNav(active: string | null | undefined) {
 
 export function renderSettings() {
     const settings = menuUi.state!.settings || {};
-    const vol = settings.music_volume == null ? 0.8 : settings.music_volume;
+    const vol = settings.music_volume == null ? 0.4 : settings.music_volume;
     const volPct = Math.round(vol * 100);
     const gearSvg =
         menuIcon("options", "sow-menu__settings-head-icon");
@@ -388,8 +388,8 @@ export function surfaceSettingsRenderKey(deleteBusy: boolean, deleteError: strin
             ? String((session.user as { email?: string }).email).trim()
             : "";
     return JSON.stringify([
-        s?.music_volume == null ? 0.8 : s?.music_volume,
-        s?.sfx_volume == null ? 0.8 : s?.sfx_volume,
+        s?.music_volume == null ? 0.4 : s?.music_volume,
+        s?.sfx_volume == null ? 0.6 : s?.sfx_volume,
         Boolean(s?.free_zoom_out),
         Boolean(s?.show_fps_ping),
         Boolean(s?.show_match_clock),

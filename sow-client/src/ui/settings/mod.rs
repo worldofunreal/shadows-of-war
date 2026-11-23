@@ -138,8 +138,8 @@ impl SettingsState {
 impl Default for SettingsState {
     fn default() -> Self {
         Self {
-            music_volume: 0.8,
-            sfx_volume: 0.8,
+            music_volume: 0.4,
+            sfx_volume: 0.6,
             mute_all: false,
             reduced_motion: false,
             reduced_motion_is_explicit: false,

@@ -312,11 +312,11 @@ function menuMusicVolume() {
     const raw =
         menuMusic.pendingVolume == null
             ? !settings || settings.music_volume == null
-                ? 0.8
+                ? 0.4
                 : settings.music_volume
             : menuMusic.pendingVolume;
     const value = Number(raw);
-    return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.8;
+    return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.4;
 }
 
 function menuMusicMuted() {

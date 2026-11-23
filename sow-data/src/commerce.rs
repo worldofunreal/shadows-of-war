@@ -29,7 +29,7 @@ const GEM_BUNDLES: [(&str, u64, u64); 3] = [
 // player ownership. Every style must be a distinct pattern, not a recolor.
 pub const INTRO_SKIN_ID: &str = "moon_rabbit";
 
-const SKINS: [(&str, &str, u64, u8); 17] = [
+const SKINS: [(&str, &str, u64, u8); 25] = [
     ("ember_vein", "Ember Vein", 500, 1),
     ("storm_grid", "Storm Grid", 1_000, 2),
     ("royal_lattice", "Royal Lattice", 1_500, 3),
@@ -42,12 +42,21 @@ const SKINS: [(&str, &str, u64, u8); 17] = [
     (INTRO_SKIN_ID, "Moon Rabbit", 0, 10),
     ("war_ravens", "War Ravens", 750, 11),
     ("heraldic_lions", "Heraldic Lions", 1_250, 12),
-    // New silhouettes (styles 13-17): the animal masks in territory_skins.r8.
+    // Animal silhouettes (styles 13-25): masks in territory_skins.r8.
     ("elephant", "Elephant", 150, 13),
     ("wolf", "Wolf", 150, 14),
     ("tiger", "Tiger", 150, 15),
     ("jaguar", "Jaguar", 150, 16),
     ("spider", "Spider", 150, 17),
+    // New silhouettes (styles 18-25), vectorized from the selected silhouettes.
+    ("octopus", "Abyssal Octopus", 150, 18),
+    ("shark", "Steel Shark", 150, 19),
+    ("butterfly", "Coral Butterfly", 150, 20),
+    ("hummingbird", "Turquoise Hummingbird", 150, 21),
+    ("stag", "Copper Stag", 150, 22),
+    ("chameleon", "Lime Chameleon", 150, 23),
+    ("boar", "Terracotta Boar", 150, 24),
+    ("serpent", "Olive Serpent", 150, 25),
 ];
 
 /// Crowns per gem, the same exchange `Leader::price_gems` uses.
@@ -1146,9 +1155,9 @@ mod tests {
     #[test]
     fn skins_are_original_and_have_stable_prices() {
         let all = skins();
-        assert_eq!(all.len(), 17);
+        assert_eq!(all.len(), 25);
         let styles = all.iter().map(|skin| skin.style).collect::<BTreeSet<_>>();
-        assert_eq!(styles, (1..=17).collect(), "each skin owns one distinct pattern");
+        assert_eq!(styles, (1..=25).collect(), "each skin owns one distinct pattern");
         assert!(all.iter().all(|skin| skin.cost_crowns == skin.cost_gems * CROWNS_PER_GEM));
         assert_eq!(
             skin_by_id("ember_vein").map(|skin| skin.cost_gems),
@@ -1166,12 +1175,21 @@ mod tests {
             (INTRO_SKIN_ID, 0, 10),
             ("war_ravens", 750, 11),
             ("heraldic_lions", 1_250, 12),
-            // New silhouettes (styles 13-17).
+            // Animal silhouettes (styles 13-17).
             ("elephant", 150, 13),
             ("wolf", 150, 14),
             ("tiger", 150, 15),
             ("jaguar", 150, 16),
             ("spider", 150, 17),
+            // Vectorized silhouettes (styles 18-25).
+            ("octopus", 150, 18),
+            ("shark", 150, 19),
+            ("butterfly", 150, 20),
+            ("hummingbird", 150, 21),
+            ("stag", 150, 22),
+            ("chameleon", 150, 23),
+            ("boar", 150, 24),
+            ("serpent", 150, 25),
         ] {
             let skin = skin_by_id(id).unwrap();
             assert_eq!((skin.cost_gems, skin.style), (gems, style));

@@ -247,6 +247,78 @@ img[data-skin-icon] {
   --sow-skin-icon-plate: var(--sow-tactical-accent);
 }
 
+:root[data-sow-skin="octopus"], img[data-skin-icon="octopus"] {
+  --sow-tactical-accent: #6366f1;
+  --sow-tactical-accent-bright: #c7d2fe;
+  --sow-skin-pattern-size: 38px 38px;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent-bright);
+}
+
+:root[data-sow-skin="shark"], img[data-skin-icon="shark"] {
+  --sow-tactical-accent: #657d91;
+  --sow-tactical-accent-bright: #d5e2ec;
+  --sow-skin-pattern-size: 40px 40px;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent-bright);
+}
+
+:root[data-sow-skin="butterfly"], img[data-skin-icon="butterfly"] {
+  --sow-tactical-accent: #fb7185;
+  --sow-tactical-accent-bright: #fecdd3;
+  --sow-skin-pattern-size: 38px 38px;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent-bright);
+}
+
+:root[data-sow-skin="hummingbird"], img[data-skin-icon="hummingbird"] {
+  --sow-tactical-accent: #14b8a6;
+  --sow-tactical-accent-bright: #99f6e4;
+  --sow-skin-pattern-size: 34px 34px;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent-bright);
+}
+
+:root[data-sow-skin="stag"], img[data-skin-icon="stag"] {
+  --sow-tactical-accent: #b87333;
+  --sow-tactical-accent-bright: #f0c49c;
+  --sow-skin-pattern-size: 38px 38px;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent-bright);
+}
+
+:root[data-sow-skin="chameleon"], img[data-skin-icon="chameleon"] {
+  --sow-tactical-accent: #84cc16;
+  --sow-tactical-accent-bright: #d9f99d;
+  --sow-skin-pattern-size: 36px 36px;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent-bright);
+}
+
+:root[data-sow-skin="boar"], img[data-skin-icon="boar"] {
+  --sow-tactical-accent: #c75c3c;
+  --sow-tactical-accent-bright: #ffba9b;
+  --sow-skin-pattern-size: 40px 40px;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent-bright);
+}
+
+:root[data-sow-skin="serpent"], img[data-skin-icon="serpent"] {
+  --sow-tactical-accent: #808000;
+  --sow-tactical-accent-bright: #d1d59c;
+  --sow-skin-pattern-size: 40px 40px;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent-bright);
+}
+
 html,
 body,
 body * {

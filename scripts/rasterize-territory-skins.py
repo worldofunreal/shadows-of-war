@@ -4,8 +4,7 @@ import subprocess
 
 root = Path(__file__).resolve().parents[1]
 
-# (style, svg name). Cells are style - 10; styles 13-17 (columns 3-7) are the
-# new animal silhouettes in assets/art/skins/.
+# (SVG name, style). Atlas cells are style - 10.
 SOURCES = [
     ("moon_rabbit", 10),
     ("war_ravens", 11),
@@ -15,8 +14,16 @@ SOURCES = [
     ("tiger", 15),
     ("jaguar", 16),
     ("spider", 17),
+    ("octopus", 18),
+    ("shark", 19),
+    ("butterfly", 20),
+    ("hummingbird", 21),
+    ("stag", 22),
+    ("chameleon", 23),
+    ("boar", 24),
+    ("serpent", 25),
 ]
-ATLAS_WIDTH = 512
+ATLAS_WIDTH = 1024
 
 atlas = bytearray(ATLAS_WIDTH * 64)
 for name, style in SOURCES:

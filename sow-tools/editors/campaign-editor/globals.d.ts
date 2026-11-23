@@ -38,3 +38,10 @@ type CampaignMachine = import("../../../sow-web/shell/campaign/types.ts").Campai
 type CampaignValidationReport = import("../../../sow-web/shell/campaign/types.ts").CampaignValidationReport;
 type CampaignStep = import("../../../sow-web/shell/campaign/types.ts").CampaignStep;
 type CampaignStepType = import("../../../sow-web/shell/campaign/types.ts").CampaignStepType;
+
+interface Window {
+  SOW_adPlaying?: boolean;
+  SOW_PORTAL_MUTE_AUDIO?: boolean;
+  SOW_audio?: import("../../../sow-web/shell/audio/types.ts").SowAudioPublicApi;
+  SOW_sfxFlush?: (batch: Float32Array) => void;
+}
