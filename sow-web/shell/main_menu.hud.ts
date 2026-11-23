@@ -1332,13 +1332,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
   function buildingIcon(kind: string, level?: number, cls?: string): string {
     const name = String(kind || "");
-    if (name === "MissileSilo")
-      return unitIcon("atom-bomb", cls || "sow-hud__building-icon");
-    if (name.toLowerCase() === "sam")
-      return unitIcon("sam-missile", cls || "sow-hud__building-icon");
     const art = window.SOW_BUILDING_ART;
+    const normalized = name.toLowerCase();
     const canonical =
-      name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+      normalized === "sam"
+        ? "SAM"
+        : normalized === "missilesilo"
+          ? "MissileSilo"
+          : name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
     const atlas = art && art.sprites && art.sprites[canonical];
     const sprite =
       atlas &&

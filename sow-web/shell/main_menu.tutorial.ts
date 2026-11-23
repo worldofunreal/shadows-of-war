@@ -95,6 +95,7 @@ interface TutorialRuntime {
     dialogueGoldSnapshot: number | null;
     nearMissOpen: boolean;
     nearMissNode: HTMLElement | null;
+    pendingNextEpisode: string | null;
 }
 
 (function () {
@@ -169,6 +170,7 @@ interface TutorialRuntime {
         dialogueGoldSnapshot: null as number | null,
         nearMissOpen: false,
         nearMissNode: null,
+        pendingNextEpisode: null,
     };
 
     function removeNearMissModal() {
@@ -682,7 +684,14 @@ interface TutorialRuntime {
                     runtime.latestHud.settings.reduced_motion,
                 );
             },
-            onContinue: continueScene,
+            onContinue: function () {
+                runtime.pendingNextEpisode = null;
+                continueScene();
+            },
+            onContinueNext: function (nextEpisodeId) {
+                runtime.pendingNextEpisode = nextEpisodeId;
+                continueScene();
+            },
             onChoice: choose,
             onFocus: focusMarker,
             onHostCue: function (kind) {
@@ -1780,7 +1789,14 @@ interface TutorialRuntime {
         const phase = state && state.phase;
         if (phase !== "MainMenu") menuGuide.pause();
         if (phase === "MainMenu" && runtime.lastPhase !== "MainMenu" && !(state && state.boot_campaign)) {
+            const nextEpisodeId = runtime.pendingNextEpisode;
+            runtime.pendingNextEpisode = null;
             reset();
+            if (nextEpisodeId) {
+                runtime.lastPhase = phase;
+                startEpisode(nextEpisodeId, false);
+                return;
+            }
         }
         runtime.lastPhase = phase;
         if (state && state.boot_campaign && runtime.bootEpisode !== state.boot_campaign)

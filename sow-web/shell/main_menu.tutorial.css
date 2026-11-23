@@ -297,6 +297,24 @@
   filter: brightness(1.08);
   transform: translateY(-1px);
 }
+.sow-story__skip-tutorial {
+  min-height: 46px;
+  padding: 12px 16px;
+  border: 1px solid var(--story-line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--story-muted);
+  font-size: clamp(12px, 1.8cqw, 14px) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em;
+  transition: color 150ms, border-color 150ms, background 150ms;
+}
+.sow-story__skip-tutorial:hover,
+.sow-story__skip-tutorial:focus-visible {
+  color: var(--story-text);
+  border-color: rgb(255 255 255 / 28%);
+  background: rgb(255 255 255 / 6%);
+}
 .sow-story__continue svg {
   width: 16px;
   height: 16px;

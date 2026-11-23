@@ -137,14 +137,11 @@ export function validate(
             ["africa", 1532, 1600],
             ["northamerica", 1600, 824],
         ];
-        const blitzMatch = definition.episode_id.match(/^blitz_(\d+)$/);
         const expectedMap =
             EPISODE_MAPS[definition.episode_id] ??
-            (blitzMatch
-                ? BLITZ_MAP_SPECS[Math.max(0, Number(blitzMatch[1]) - 5) % BLITZ_MAP_SPECS.length]
-                : /^(?:six_sky_ep[123]|six_sky_maya_0[1-8])$/.test(definition.episode_id)
-                  ? ["northamerica", 1600, 824]
-                  : null);
+            (/^six_sky_maya_0[2-8]$/.test(definition.episode_id)
+                ? ["northamerica", 1600, 824]
+                : null);
         if (
             !object(roster) ||
             typeof roster.map !== "string" ||

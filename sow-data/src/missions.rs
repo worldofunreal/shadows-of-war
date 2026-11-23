@@ -345,25 +345,6 @@ pub const ONBOARDING_MISSIONS: &[MissionDefinition] = &[
         tag: "ffa_top3",
         action_target: MissionActionTarget::Ffa,
     },
-    MissionDefinition {
-        id: "onboarding_6_adv_tactics",
-        category: MissionCategory::Onboarding,
-        title_key: "missions.onboarding_adv_tactics_title",
-        description_key: "missions.onboarding_adv_tactics_desc",
-        crowns_reward: 120,
-        gems_reward: 12,
-        target: 3,
-        requirement: MissionRequirement::CompleteCampaignSeries {
-            series_id: "advanced_tactics",
-            count: 3,
-        },
-        icon: "crown",
-        order: 6,
-        lane: 0,
-        axis: PreferenceAxis::Onboarding,
-        tag: "advanced_tactics_series",
-        action_target: MissionActionTarget::CampaignAdvancedTactics,
-    },
 ];
 
 pub const DAILY_MISSION_POOL: &[MissionDefinition] = &[

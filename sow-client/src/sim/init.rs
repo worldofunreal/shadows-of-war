@@ -78,9 +78,10 @@ impl SowApp {
             self.input.screen_h,
         );
         let focus = tutorial_frame.map_or(spawn_focus, |frame| frame.0);
-        self.input.camera_zoom = 0.5;
-        self.input.target_zoom =
+        let target_zoom =
             tutorial_frame.map_or(if config.tutorial { 8.0 } else { 0.5 }, |frame| frame.1);
+        self.input.camera_zoom = tutorial_frame.map_or(0.5, |frame| (frame.1 * 0.65).max(0.5));
+        self.input.target_zoom = target_zoom;
         self.input.camera_x = self.input.screen_w * 0.5 - focus.0 * self.input.camera_zoom;
         self.input.camera_y = self.input.screen_h * 0.5 - focus.1 * self.input.camera_zoom;
         self.sim.map_w = map_w;

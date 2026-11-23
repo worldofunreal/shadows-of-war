@@ -69,6 +69,7 @@ export interface CampaignViewOptions extends CampaignRecord {
     translate: (key: string) => string;
     asset: (path: string) => string;
     onDismiss?: () => void;
+    onContinueNext?: (episodeId: string) => void;
     onHostCue?: (kind: "enter" | "poke" | "celebrate" | "nudge") => void;
 }
 

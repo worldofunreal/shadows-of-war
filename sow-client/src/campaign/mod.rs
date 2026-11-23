@@ -280,7 +280,7 @@ struct RosterFile {
 
 /// Minimum tutorial approach size, in CSS pixels per tile, to keep focused nameplates readable.
 pub(crate) const TUTORIAL_MIN_TILE_CSS: f32 = 48.0;
-const TUTORIAL_OPENING_MAX_TILE_CSS: f32 = 30.0;
+const TUTORIAL_OPENING_MAX_TILE_CSS: f32 = 44.0;
 
 pub(crate) fn tutorial_camera_frame(
     campaign: CampaignId,
@@ -288,23 +288,22 @@ pub(crate) fn tutorial_camera_frame(
     screen_w: f32,
     screen_h: f32,
 ) -> Option<((f32, f32), f32)> {
-    if !config.tutorial
-        || (!campaign.is_boudica()
-            && campaign.episode_id() != sow_data::campaign::INTRO_EPISODE_ID)
-    {
+    if !config.tutorial {
         return None;
     }
     let (player_x, player_y) = config.player_spawn?;
+    let player_pt = (player_x as f32 + 0.5, player_y as f32 + 0.5);
     let target = config.scripted_spawns.iter().find(|spawn| {
         if campaign.is_boudica() {
             spawn.campaign_faction_id.as_deref() == Some("roman_outpost")
         } else {
             spawn.campaign_relation == Some(sow_core::protocol::CampaignRelation::Enemy)
         }
-    })?;
+    });
+    let target_pt = target.map_or(player_pt, |spawn| (spawn.x as f32 + 0.5, spawn.y as f32 + 0.5));
     let (center, zoom) = camera_frame(
-        (player_x as f32 + 0.5, player_y as f32 + 0.5),
-        (target.x as f32 + 0.5, target.y as f32 + 0.5),
+        player_pt,
+        target_pt,
         (screen_w, screen_h),
         (config.map_width, config.map_height),
         0.0,
