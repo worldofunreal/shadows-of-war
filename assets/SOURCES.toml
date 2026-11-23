@@ -30,8 +30,8 @@ placeholder_files = ["sitting_bull_desktop.webp", "sitting_bull_mobile.webp", "m
 [buildings]
 path = "assets/art/buildings/"
 source = "project_owner_supplied_and_twemoji_placeholder"
-license = "City, factory, port, and farm sheets and SAM and silo art: project-owner supplied; tower slots: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
-notes = "<kind>.png or .webp sheets have four columns and two rows with levels in left-to-right order. Keep visible pixels within the columns and leave a transparent gap between rows. City and port use levels 1–7; factory and farm use 1–4. Tower, SAM and silo still use <kind>-<level> files for levels 1–4. The sources are packed into assets/generated/buildings-atlas.webp for the map and HUD."
+license = "City, trading post, port, military camp, SAM and silo sheets: project-owner supplied; tower slots: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
+notes = "City, port, trading post and military camp sheets have four columns and two rows with levels ordered left to right, top row first. SAM and silo sheets have two columns and two rows for levels 1–4. Keep visible pixels within the columns and leave a transparent gap between rows. Tower uses individual files for levels 1–4; levels 5–8 use the highest available frame. The packer makes one atlas for the map and HUD."
 
 [units]
 path = "assets/art/units/"

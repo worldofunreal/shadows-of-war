@@ -4705,3 +4705,44 @@ html[dir="rtl"] .leader-arrow {
   }
 }
 
+
+.building-guide {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: start;
+  gap: 2rem;
+  margin-block-start: 2rem;
+}
+
+.building-guide section {
+  padding: 1rem;
+  border: 1px solid rgb(213 174 103 / 24%);
+  border-radius: .5rem;
+}
+
+.building-guide table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+}
+
+.building-guide th,
+.building-guide td {
+  text-align: start;
+  padding: .35rem;
+  border-block-end: 1px solid rgb(213 174 103 / 20%);
+}
+
+.building-guide-icon {
+  display: inline-block;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-inline-end: .35rem;
+  vertical-align: middle;
+  background-repeat: no-repeat;
+}
+
+.building-guide-effects {
+  font-size: .85rem;
+}

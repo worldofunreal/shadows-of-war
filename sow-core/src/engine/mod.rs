@@ -543,6 +543,12 @@ pub struct SowEngine {
     pub building_aggregates_dirty: bool,
     #[serde(default)]
     pub railway_links: Vec<crate::building::RailwayLink>,
+    #[serde(default)]
+    trade_stations: Vec<Building>,
+    #[serde(default)]
+    pub(crate) trade_delivery_queue: std::collections::BinaryHeap<std::cmp::Reverse<(u64, usize)>>,
+    #[serde(default)]
+    pub(crate) trade_last_delivery_tick: u64,
     /// Claims survive checkpoints; a recaptured city cannot mint another reward.
     #[serde(default)]
     pub(crate) hero_claims: std::collections::BTreeSet<(PlayerId, u64, u8)>,
@@ -689,11 +695,42 @@ impl SowEngine {
             .unwrap_or(0);
         self.building_aggregates =
             aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
-        self.railway_links = crate::building::populate_railway_connections(
-            &self.buildings,
-            &self.state,
-            &mut self.building_aggregates,
-        );
+        let stations = self.buildings.iter().filter_map(|building| {
+            use crate::game::BuildingKind::{City, Factory, Port};
+            let level = building.active_level();
+            if level == 0 || !matches!(building.kind, City | Factory | Port) {
+                return None;
+            }
+            Some(Building {
+                level: if building.kind == Factory { level } else { 1 },
+                under_construction: false,
+                ticks_until_complete: 0,
+                ..*building
+            })
+        });
+        if !stations.clone().eq(self.trade_stations.iter().copied()) {
+            let stations: Vec<_> = stations.collect();
+            let links = crate::building::populate_railway_connections(
+                &stations, &self.trade_stations, &self.state, &self.railway_links,
+            );
+            self.trade_stations = stations;
+            if links != self.railway_links {
+                self.railway_links = links;
+                self.trade_delivery_queue = self.railway_links.iter().enumerate().map(|(index, link)| {
+                    let period = u64::from(link.period_ticks);
+                    let earliest = self.state.tick.max(self.trade_last_delivery_tick.saturating_add(1));
+                    let elapsed = earliest.saturating_sub(link.opened_at).max(1);
+                    let next = link.opened_at + elapsed.div_ceil(period) * period;
+                    std::cmp::Reverse((next, index))
+                }).collect();
+            }
+        }
+        for link in &self.railway_links {
+            if let Some(aggregate) = self.building_aggregates.get_mut(usize::from(link.owner_id)) {
+                aggregate.land_trade_income_weight += link.weight();
+                aggregate.railway_connections += u32::from(!link.blocked);
+            }
+        }
         self.building_aggregates_dirty = false;
     }
 
@@ -735,6 +772,9 @@ impl SowEngine {
             building_aggregates: Vec::with_capacity(256),
             building_aggregates_dirty: true,
             railway_links: Vec::new(),
+            trade_stations: Vec::new(),
+            trade_delivery_queue: std::collections::BinaryHeap::new(),
+            trade_last_delivery_tick: 0,
             hero_claims: Default::default(),
             hero_income_active: Default::default(),
             sea_lanes_dirty: true,

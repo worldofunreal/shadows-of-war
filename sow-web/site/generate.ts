@@ -1,3 +1,4 @@
+import { BUILDING_KINDS, buildingLine } from "../shell/building-lines.ts";
 // Public-site publisher. Bun's native HTML rewriter keeps translation and URL
 // changes on parsed elements; all pages use the game's exported catalogs.
 import { createHash } from "node:crypto";
@@ -68,6 +69,8 @@ export async function publish(
     origin: string;
     biographies: { leaders: Record<string, Record<string, any>> };
     mapExplorer: string;
+    buildingPrices?: Record<string, number[]>;
+    buildingEffects?: Record<string, Record<string, number>[]>;
   },
   source = import.meta.dir,
 ) {
@@ -183,6 +186,52 @@ export async function publish(
       }),
     ),
   );
+  const buildingAtlas = routes.includes("buildings/")
+    ? JSON.parse(await read(join(out, "assets/gameplay/buildings/atlas.json")))
+    : null;
+  const atlasVersion = buildingAtlas ? createHash("sha256")
+    .update(await readFile(join(out, "assets/gameplay/buildings/atlas.webp")))
+    .digest("hex").slice(0, 10) : "";
+  const buildingGuide = (locale: string) => {
+    const es = locale.toLowerCase().startsWith("es");
+    const benefits: Record<string, [string, string]> = {
+      City: ["More troop capacity. High levels add immediate reinforcements.", "Más capacidad de tropas. Los niveles altos dan refuerzos inmediatos."],
+      Farm: ["More troops per second and faster conquest of occupied territory.", "Más tropas por segundo y conquistas más rápidas en territorio ocupado."],
+      Factory: ["Faster shipments and more gold per delivery. Rail transport starts at level 6.", "Envíos más rápidos y más oro por entrega. El ferrocarril empieza en nivel 6."],
+      Port: ["More fleet slots, docking and repair.", "Más plazas de flota, atraques y reparación."],
+      Tower: ["Stronger resistance to capture. Early levels also extend coverage.", "Más resistencia a la captura. Los primeros niveles también amplían la cobertura."],
+      SAM: ["An extra interception charge and wider coverage per level.", "Una carga de intercepción y más alcance por nivel."],
+      MissileSilo: ["An extra launch charge per level.", "Una carga de lanzamiento más por nivel."],
+    };
+    const statLabels: Record<string, [string, string]> = {
+      reserve: ["troop capacity", "de capacidad"], troops: ["troops/s", "tropas/s"],
+      reinforcements: ["reinforcements", "refuerzos"], capture: ["% conquest speed", "% de avance"],
+      trade: ["gold/s on an open route", "oro/s con ruta activa"], travel: ["× shipment speed", "× velocidad de envío"],
+      range: ["tiles of range", "tiles de alcance"], resistance: ["× capture resistance", "× resistencia a captura"],
+      fleet: ["fleet slots", "plazas de flota"], docks: ["docks", "atraques"],
+      repair: ["repair/s", "reparación/s"], charges: ["charges", "cargas"],
+    };
+    const format = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+    return '<div class="building-guide">' + BUILDING_KINDS.map((kind) => {
+      const sprites = buildingAtlas.sprites[kind];
+      const tiers = buildingLine(kind, locale);
+      const rows = tiers.map(({ name, era }, index) => {
+        const level = index + 1;
+        const sprite = sprites?.[level] ?? sprites?.[Object.keys(sprites).length];
+        const price = input.buildingPrices?.[kind]?.[index];
+        const size = buildingAtlas.cell_size;
+        const width = buildingAtlas.atlas_width;
+        const height = buildingAtlas.atlas_height;
+        const icon = sprite ? `<span aria-hidden="true" class="building-guide-icon" style="background-image:url('/assets/gameplay/buildings/atlas.webp?v=${atlasVersion}');background-size:${100 * width / size}% ${100 * height / size}%;background-position:${100 * sprite.x / (width - size)}% ${100 * sprite.y / (height - size)}%"></span>` : "";
+        const effects = Object.entries(input.buildingEffects?.[kind]?.[index] ?? {})
+          .filter(([key, value]) => statLabels[key] && value > 0)
+          .map(([key, value]) => escape(format.format(value) + " " + statLabels[key][es ? 1 : 0]))
+          .join(" · ");
+        return `<tr><th scope="row">${icon}<span>${level}. ${escape(name)}</span></th><td>${escape(era)}</td><td>${price == null ? "—" : format.format(price)}</td></tr><tr><td colspan="3" class="building-guide-effects">${effects}</td></tr>`;
+      }).join("");
+      return `<section id="${kind.toLowerCase()}"><h2>${escape(tiers[0].name)}</h2><p>${escape(benefits[kind][es ? 1 : 0])}</p><table><thead><tr><th scope="col">${es ? "Nivel" : "Level"}</th><th scope="col">${es ? "Era" : "Era"}</th><th scope="col">${es ? "Oro base" : "Base gold"}</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+    }).join("") + "</div>";
+  };
   const english = localPreview ? JSON.parse(await read(join(out, "locales", "en"))).strings : undefined;
   let count = 0;
   for (const language of languages) {
@@ -307,6 +356,16 @@ export async function publish(
         html = mapsTemplate
           .replace("<!-- MAP_EXPLORER -->", input.mapExplorer)
           .replace("<!-- MAPS_FOOTER -->", footer);
+      } else if (route === "buildings/") {
+        const es = code.toLowerCase().startsWith("es");
+        title = `${t("site.buildings")} | Shadows of War`;
+        description = es ? "Edificios, eras, beneficios y precios de mejora en Shadows of War." : "Building lines, eras, upgrade effects and costs in Shadows of War.";
+        const intro = es
+          ? "Tu ciudad terminada más alta fija la era. Las obras se construyen al menos un nivel por debajo de esa ciudad y cobran todos los niveles incluidos. Los asentamientos empiezan en N1. SAM y silo se desbloquean en la era Industrial."
+          : "Your highest completed city sets the era. New structures start one level below it and include the cost of each level. Settlements start at level 1. SAM batteries and missile silos unlock in the Industrial era.";
+        html = templates.get(route)!
+          .replace('<div class="container" data-building-guide></div>', `<div class="container"><h1>${escape(t("site.buildings"))}</h1><p class="guide-lede">${escape(intro)}</p>${buildingGuide(code)}</div>`)
+          .replace("<!-- BUILDINGS_FOOTER -->", footer);
       } else if (englishOnly.has(route)) {
         // English-only pages carry their own copy; the template is the source of
         // truth so no catalog entry has to exist in fifteen languages.

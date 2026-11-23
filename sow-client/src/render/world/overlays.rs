@@ -273,7 +273,9 @@ pub(crate) fn construction_progress(
     }
 
     if active_level == 0 {
-        let total_ticks = kind.construction_duration_ticks();
+        let total_ticks = (2..=target_level).fold(kind.construction_duration_ticks(), |ticks, level| {
+            ticks.saturating_add(sow_core::building::core::upgrade_duration_ticks(kind, level))
+        });
         return (total_ticks > 0)
             .then(|| 1.0 - (ticks_until_complete as f32 / total_ticks as f32).clamp(0.0, 1.0));
     }
@@ -304,7 +306,7 @@ fn building_visual_status(
     let progress = construction_progress(
         building.kind,
         active_level,
-        building.level,
+        building.reserved_level(),
         building.ticks_until_complete,
     )?;
     Some(BuildingVisualStatus {

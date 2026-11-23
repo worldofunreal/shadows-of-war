@@ -105,13 +105,9 @@ impl SowEngine {
                 *current = wait;
             }
         }
-        for player_id in 0..=max_pid {
-            if !crate::building::player_has_nuclear_launch_city(
-                &self.buildings,
-                player_id as u16,
-            ) {
-                nuke_available_by_player[player_id] = false;
-            }
+        let nuclear_city_level = crate::building::nuclear_city_level(self.campaign_unlocks.is_some());
+        for (available, aggregate) in nuke_available_by_player.iter_mut().zip(&self.building_aggregates) {
+            *available &= aggregate.highest_city_level >= nuclear_city_level;
         }
 
         let mut empowered_attack_by_player = vec![false; max_pid + 1];

@@ -70,7 +70,7 @@ impl SowEngine {
         } else {
             0.0
         };
-        if !crate::building::player_has_nuclear_launch_city(&self.buildings, player_id) {
+        if !crate::building::player_has_nuclear_launch_city(&self.buildings, player_id, self.campaign_unlocks.is_some()) {
             self.state.events.push(crate::game::GameEvent::NuclearActionRejected {
                 player_id,
                 reason: NuclearActionFailure::CityRequirement,

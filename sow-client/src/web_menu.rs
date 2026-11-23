@@ -4245,14 +4245,14 @@ fn building_detail_payload(
         let prog = crate::render::world::overlays::construction_progress(
             building.kind,
             building.active_level(),
-            building.level,
+            building.reserved_level(),
             building.ticks_until_complete,
         )
         .unwrap_or(0.0);
         Some(serde_json::json!({
             "kind": building.kind.as_str(),
             "active_level": building.active_level(),
-            "target_level": building.level.max(1),
+            "target_level": building.reserved_level().max(1),
             "remaining_seconds": rem_secs,
             "progress": prog,
             "is_city_foundation": building.kind == BuildingKind::City && building.active_level() == 0,
@@ -4624,6 +4624,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "pending": placement.pending,
             "can_confirm": placement_can_confirm,
             "kind": placement.kind.as_str(),
+            "level": app.building_foundation_level(placement.kind),
             "tile_idx": placement.tile_idx,
             "anchor_x": controls.center[0] / screen_scale,
             "anchor_y": controls.center[1] / screen_scale,
@@ -5017,7 +5018,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     serde_json::json!({
                         "tile_idx": building.tile_idx,
                         "kind": building.kind.as_str(),
-                        "level": building.level.max(1),
+                        "level": building.reserved_level().max(1),
                         "active_level": active_level,
                         "remaining_seconds": remaining_seconds,
                         "progress": progress,
@@ -5134,13 +5135,13 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 let progress = crate::render::world::overlays::construction_progress(
                     building.kind,
                     active_level,
-                    building.level,
+                    building.reserved_level(),
                     building.ticks_until_complete,
                 )
                 .unwrap_or(0.0);
                 serde_json::json!({
                     "kind": building.kind.as_str(),
-                    "level": building.level.max(1),
+                    "level": building.reserved_level().max(1),
                     "remaining_seconds": remaining_seconds,
                     "progress": progress,
                 })
@@ -5260,12 +5261,14 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 sow_core::building::snapshot_has_nuclear_launch_city(
                     &snapshot.buildings,
                     my_pid,
+                    app.sim.config.tutorial,
                 )
             }),
             "nuke_cooldown_ticks": me.map(|player| player.nuke_cooldown_ticks).unwrap_or(0),
             "military_used": me.map(|player| player.boats_in_use).unwrap_or(0),
             "military_capacity": me.map(|player| player.boat_capacity).unwrap_or(0),
         },
+        "building_levels": hud.building_foundation_levels,
         "nuclear_prices": ([
             sow_core::game::NukeKind::AtomBomb,
             sow_core::game::NukeKind::HydrogenBomb,

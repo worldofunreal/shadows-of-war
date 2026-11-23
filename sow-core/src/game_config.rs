@@ -52,6 +52,10 @@ fn default_city_troop_income() -> f64 {
     40.0 / NORMAL_GAME_SPEED
 }
 
+fn default_camp_capture_base_points() -> f64 {
+    3.0
+}
+
 fn default_farm_troop_income() -> f64 {
     60.0 / NORMAL_GAME_SPEED
 }
@@ -490,6 +494,8 @@ pub struct GameConfig {
     /// Troop income per game second per weighted Farm level.
     #[serde(default = "default_farm_troop_income")]
     pub farm_troop_income: f64,
+    #[serde(default = "default_camp_capture_base_points")]
+    pub camp_capture_base_points: f64,
     /// Gold income per game second added per weighted Farm level.
     #[serde(default = "default_farm_gold_income")]
     pub farm_gold_income: f64,
@@ -713,6 +719,7 @@ impl Default for GameConfig {
             city_troop_income: default_city_troop_income(),
             city_gold_income: default_city_gold_income(),
             farm_troop_income: default_farm_troop_income(),
+            camp_capture_base_points: default_camp_capture_base_points(),
             farm_gold_income: default_farm_gold_income(),
             tower_range: 6.0,
             tower_priority: 120.0,

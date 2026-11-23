@@ -17,10 +17,10 @@ const ART_ALPHA_CUTOFF: u8 = 8;
 /// Building art stems in `assets/art/buildings`.
 const BUILDING_KINDS: [(BuildingKind, &str); 7] = [
     (BuildingKind::City, "city"),
-    (BuildingKind::Factory, "factory"),
+    (BuildingKind::Factory, "trading-post"),
     (BuildingKind::Port, "port"),
     (BuildingKind::Tower, "tower"),
-    (BuildingKind::Farm, "farm"),
+    (BuildingKind::Farm, "military-camp"),
     (BuildingKind::SAM, "sam"),
     (BuildingKind::MissileSilo, "silo"),
 ];
@@ -91,17 +91,24 @@ fn building_art_source(dir: &Path, stem: &str) -> Option<PathBuf> {
 fn building_sheet_cells(
     sheet: &RgbaImage,
     levels: u8,
+    stem: &str,
 ) -> Result<Vec<RgbaImage>, Box<dyn Error + Send + Sync>> {
-    const COLUMNS: u32 = 4;
     let (width, height) = sheet.dimensions();
-    let cell = width / COLUMNS;
-    if cell == 0 || width != cell * COLUMNS || height != cell * 2 || levels > 8 {
-        return Err("expected a 4x2 sheet of square slots with at most eight levels".into());
+    let columns = if levels == 4 && width == height { 2 } else { 4 };
+    let rows = u32::from(levels).div_ceil(columns);
+    let cell = width / columns;
+    if cell == 0 || width != cell * columns || height != cell * rows || levels > 8 {
+        return Err("expected a 4x2 sheet, or a 2x2 sheet for four levels".into());
     }
     let visible = |x, y| sheet.get_pixel(x, y).0[3] > ART_ALPHA_CUTOFF;
-    for x in (1..COLUMNS).map(|column| column * cell) {
+    let mut camp_seam = false;
+    for x in (1..columns).map(|column| column * cell) {
         if (0..height).any(|y| visible(x - 1, y) && visible(x, y)) {
-            return Err(format!("art crosses the column boundary at x={x}").into());
+            if stem == "military-camp" && cell == 560 && x == 1680 {
+                camp_seam = true;
+            } else {
+                return Err(format!("art crosses the column boundary at x={x}").into());
+            }
         }
     }
     // Use the closest transparent row so smoke and flags can sit above the nominal grid line.
@@ -111,14 +118,29 @@ fn building_sheet_cells(
         .ok_or("art overlaps between the two rows near the center of the sheet")?;
     (0..u32::from(levels))
         .map(|index| {
-            let (top, bottom) = if index < COLUMNS {
+            let (top, bottom) = if index < columns {
                 (0, split)
             } else {
                 (split, height)
             };
-            let frame =
-                image::imageops::crop_imm(sheet, index % COLUMNS * cell, top, cell, bottom - top)
-                    .to_image();
+            let x = index % columns * cell;
+            let mut frame = if camp_seam && index == 7 {
+                image::imageops::crop_imm(sheet, 1630, top, width - 1630, bottom - top).to_image()
+            } else {
+                image::imageops::crop_imm(sheet, x, top, cell, bottom - top).to_image()
+            };
+            if camp_seam && matches!(index, 6 | 7) {
+                // Preserve the command center and the detached vehicles that overhang its cell.
+                let origin = if index == 7 { 1630 } else { x };
+                for (fx, fy, pixel) in frame.enumerate_pixels_mut() {
+                    let boundary = match top + fy {
+                        720..800 => 1630,
+                        840..860 => 1663,
+                        _ => 1680,
+                    };
+                    if (origin + fx >= boundary) != (index == 7) { *pixel = Rgba([0; 4]); }
+                }
+            }
             pixel_cell(&frame, BUILDING_CELL_PX)
         })
         .collect()
@@ -142,7 +164,7 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
         if let Some(source) = building_art_source(&dir, stem) {
             let bytes = fs::read(&source)?;
             let sheet = image::load_from_memory(&bytes)?.into_rgba8();
-            let frames = building_sheet_cells(&sheet, kind.max_level())
+            let frames = building_sheet_cells(&sheet, kind.max_level(), stem)
                 .map_err(|error| format!("{}: {error}", source.display()))?;
             let digest = sha256(&bytes);
             for (index, frame) in frames.into_iter().enumerate() {

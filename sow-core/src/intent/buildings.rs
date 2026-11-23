@@ -1,5 +1,5 @@
 use crate::building::{
-    Building, CityArsenalBuild, city_arsenal_cost_gold, structure_build_cost_gold,
+    Building, CityArsenalBuild, city_arsenal_cost_gold,
     structure_max_affordable_upgrade, structure_multi_upgrade_cost_and_ticks,
     structure_upgrade_cost_gold, validate_structure_site,
 };
@@ -7,6 +7,27 @@ use crate::engine::SowEngine;
 use crate::game::{BuildingKind, CityArsenalKind, GameEvent, GamePhase, NavalActionFailure, UnitType};
 
 impl SowEngine {
+    pub(crate) fn foundation_quote(
+        &self,
+        owner_id: u16,
+        kind: BuildingKind,
+    ) -> Option<(u8, f64, u32)> {
+        let city_level = self.building_aggregates.get(usize::from(owner_id))
+            .map_or(0, |aggregate| aggregate.highest_city_level);
+        let level = if self.campaign_unlocks.is_some() || self.legacy_building_rules {
+            1
+        } else {
+            kind.foundation_level(city_level)
+        };
+        if !self.campaign_allows_building(kind, level) {
+            return None;
+        }
+        let (cost, ticks) = crate::building::cost::structure_foundation_quote(
+            kind, level, self.reserved_kind_levels(owner_id, kind), &self.state.config,
+        )?;
+        Some((level, cost, ticks))
+    }
+
     /// Highest level currently owned or already paid/queued for `building`.
     #[inline]
     pub fn building_reserved_level(&self, building: Building) -> u8 {
@@ -184,9 +205,10 @@ impl SowEngine {
         if !player.alive {
             return;
         }
-        if !self.campaign_allows_building(kind, 1) {
+        self.refresh_building_aggregates();
+        let Some((level, cost, dur)) = self.foundation_quote(player_id, kind) else {
             return;
-        }
+        };
         let w = self.state.map.width;
         let area = w.saturating_mul(self.state.map.height);
         if area == 0 || target_tile >= area {
@@ -247,8 +269,6 @@ impl SowEngine {
             spawn_idx
         };
 
-        let count = self.reserved_kind_levels(player_id, kind);
-        let cost = structure_build_cost_gold(kind, count, &self.state.config);
         let Some(player_mut) = self.state.player_mut(player_id) else {
             return;
         };
@@ -259,29 +279,24 @@ impl SowEngine {
         player_mut.structures_built = player_mut.structures_built.saturating_add(1);
         let id = self.state.next_building_id;
         self.state.next_building_id = self.state.next_building_id.wrapping_add(1).max(1);
-        let base_dur = crate::building::structure_build_duration_ticks(kind);
-        let dur = if self.state.config.tutorial {
-            (base_dur / 2).max(1)
-        } else {
-            base_dur
-        };
-        let under = dur > 0;
-        let ticks = if under { dur } else { 0 };
+        if level > 1 {
+            self.upgrade_targets.insert(id, level);
+        }
         self.add_building(Building {
             id,
             owner_id: player_id,
             tile_idx: spawn_idx,
             kind,
             level: 1,
-            under_construction: under,
-            ticks_until_complete: ticks,
+            under_construction: true,
+            ticks_until_complete: dur,
         });
         self.state.events.push(GameEvent::StructureSpawned {
             id,
             owner_id: player_id,
             tile_idx: spawn_idx,
             kind,
-            level: 1,
+            level,
         });
     }
 
@@ -1076,7 +1091,7 @@ mod tests {
             }
         )));
 
-        game.add_building(building(7, BuildingKind::City, 4));
+        game.add_building(building(7, BuildingKind::City, crate::building::NUCLEAR_CITY_LEVEL));
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert!(game.projectiles.is_empty());
         assert!(game.state.events.iter().any(|event| matches!(event,

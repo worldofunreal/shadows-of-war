@@ -1949,7 +1949,7 @@ impl SowEngine {
         if bot_iq < 100 {
             return;
         }
-        if !crate::building::player_has_nuclear_launch_city(&self.buildings, bot_id) {
+        if !crate::building::player_has_nuclear_launch_city(&self.buildings, bot_id, self.campaign_unlocks.is_some()) {
             return;
         }
 
@@ -1979,7 +1979,8 @@ impl SowEngine {
         let gold = player.gold;
         let home = player.home;
         let nuke_cost = self.nuclear_price(NukeKind::AtomBomb);
-        let silo_cost = crate::building::structure_build_cost_gold(BuildingKind::MissileSilo, 0, &self.state.config);
+        let silo_cost = self.foundation_quote(bot_id, BuildingKind::MissileSilo)
+            .map_or(f64::INFINITY, |(_, cost, _)| cost);
         self.refresh_building_grid();
         let silos: Vec<_> = self.buildings.iter().filter(|b|
             b.owner_id == bot_id && b.kind == BuildingKind::MissileSilo

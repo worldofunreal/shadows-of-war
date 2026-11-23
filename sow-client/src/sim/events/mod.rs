@@ -223,7 +223,7 @@ impl SowApp {
                     }
                     let text = match reason {
                         sow_core::game::NuclearActionFailure::CityRequirement => {
-                            crate::ui::UiText::new("hud.nuke_requires_city")
+                            crate::ui::UiText::new(self.nuclear_city_requirement_key())
                         }
                         sow_core::game::NuclearActionFailure::NoReadySilo => {
                             crate::ui::UiText::new("hud.nuke_no_charges")

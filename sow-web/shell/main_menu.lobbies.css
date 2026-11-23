@@ -1,8 +1,23 @@
 /* Lobby domain: home/browser lists, join flow, and search. */
 
-.sow-menu__home-public .sow-menu__lobbies {
+#sow-menu .sow-menu__home-public .sow-menu__lobbies {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
   max-height: none;
   overflow: visible;
+}
+
+#sow-menu .sow-menu__home-public .sow-menu__lobby:not(.is-leaving) {
+  position: relative;
+  z-index: 1;
+}
+
+#sow-menu[data-screen="home"] .sow-menu__home-public .sow-menu__lobby.is-leaving,
+#sow-menu [data-screen-panel="home"] .sow-menu__home-public .sow-menu__lobby.is-leaving {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
 }
 
 .sow-menu__join {

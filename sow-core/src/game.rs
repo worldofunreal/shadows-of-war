@@ -90,8 +90,17 @@ impl BuildingKind {
 
     pub const fn max_level(self) -> u8 {
         match self {
-            Self::City | Self::Tower | Self::Port => 7,
-            _ => 4,
+            Self::SAM | Self::MissileSilo => 4,
+            _ => 8,
+        }
+    }
+
+    /// Zero means the structure is unavailable in the current era.
+    pub fn foundation_level(self, city_level: u8) -> u8 {
+        match self {
+            Self::City => 1,
+            Self::SAM | Self::MissileSilo => city_level.saturating_sub(5).min(3),
+            _ => city_level.saturating_sub(1).clamp(1, 7),
         }
     }
 

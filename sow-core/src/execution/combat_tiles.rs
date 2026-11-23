@@ -1745,6 +1745,11 @@ impl SowEngine {
                 * self.state.config.global_speed_multiplier;
             budget = budget.min(scaled_max_cap);
             budget *= pacing_multiplier(effective_troops, execution, &self.state);
+            if execution.target_owner != 0
+                && let Some(agg) = self.building_aggregates.get(usize::from(execution.owner_id))
+            {
+                budget *= crate::building::camp_conquest_multiplier(agg.camp_conquest_weight * self.state.config.camp_capture_base_points.max(0.0));
+            }
 
             // Hero expansion-speed abilities, after the cap so long fronts keep them.
             // Tribes are the bot players (not nations or humans).

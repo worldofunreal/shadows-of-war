@@ -1,3 +1,4 @@
+import { buildingLine } from "./building-lines.ts";
 import { formatCompactNumber as formatEndgameCompact } from "./number-format.ts";
 import {
   AudioCue,
@@ -1322,6 +1323,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         icon.style.backgroundImage = 'url("' + atlas + '")';
         icon.removeAttribute("data-sow-building-atlas");
       });
+  }
+
+  function buildingTierTitle(kind: string, level: number): string {
+    const tier = buildingLine(kind, window.SOW_LOCALE || "en")[Math.max(1, level) - 1];
+    return tier ? tier.name + " · " + tier.era : SOW_t("hud.map_action_" + kind.toLowerCase());
   }
 
   function buildingIcon(kind: string, level?: number, cls?: string): string {
@@ -3875,8 +3881,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           statusIcon("arrow-up", "sow-hud__building-upgrade-arrow") +
           '<span class="sow-hud__building-upgrade-label">' +
           escapeHudText(SOW_t("hud.map_action_upgrade")) +
-          " <em>Lv." +
-          upgrade.next_level +
+          " <em>" +
+          escapeHudText(buildingLine(kind, window.SOW_LOCALE || "en")[upgrade.next_level - 1]?.name || "Lv." + upgrade.next_level) +
           "</em></span>" +
           "</span>" +
           '<span class="sow-hud__building-upgrade-meta">' +
@@ -3925,7 +3931,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         menu.dataset.renderKey = "";
         return false;
       } else if (hasProductionPanel) {
-        const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
+        const buildingTitle = buildingTierTitle(kind, visualLevel);
         const traitsHtml =
           (building.coastal
             ? '<span class="sow-hud__city-trait is-coastal" title="Coastal">' +
@@ -3976,7 +3982,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           '<div class="sow-hud__city-badges">' +
           traitsHtml +
           '<span class="sow-hud__building-card-level' +
-          (visualLevel >= 4 ? " is-max" : "") +
+          (maxLevel > 0 && visualLevel >= maxLevel ? " is-max" : "") +
           '">Lv.' +
           visualLevel +
           "</span>" +
@@ -3987,7 +3993,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           chipsHtml +
           (production?.warship ? productionHtml + footerHtml : footerHtml + productionHtml);
       } else {
-        const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
+        const buildingTitle = buildingTierTitle(kind, level);
         const isMax = !upgrade && maxLevel > 0 && level >= maxLevel;
         const levelBadgeHtml = upgrade
           ? "Lv." +
@@ -4125,6 +4131,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
 
     const kind = String(placement.kind || "City");
+    const level = Math.max(1, Number(placement.level) || 1);
     const tileIdx =
       placement.tile_idx != null ? String(placement.tile_idx) : "0";
     const canConfirm = Boolean(placement.can_confirm);
@@ -4134,6 +4141,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const renderKey = [
       locale,
       kind,
+      level,
       tileIdx,
       canConfirm ? "1" : "0",
       String(cost),
@@ -4143,7 +4151,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     overlay.classList.remove("hidden");
 
     if (panel.dataset.renderKey !== renderKey) {
-      const buildingTitle = SOW_t("hud.map_action_" + kind.toLowerCase());
+      const buildingTitle = buildingTierTitle(kind, level);
       const reason = reasonKey ? SOW_t(reasonKey) : null;
       const cancelLabel = SOW_t("lobbies.cancel");
       const buildLabel = SOW_t("hud.build_confirm");
@@ -4151,7 +4159,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       panel.innerHTML =
         '<div class="sow-hud__placement-panel-head">' +
         '<span class="sow-hud__placement-panel-thumb" aria-hidden="true">' +
-        buildingIcon(kind, 1, "sow-hud__placement-panel-art") +
+        buildingIcon(kind, level, "sow-hud__placement-panel-art") +
         "</span>" +
         '<div class="sow-hud__placement-panel-identity">' +
         '<strong class="sow-hud__placement-panel-title">' +
@@ -9194,7 +9202,14 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const buildUnlocks = campaignUnlocks(hud);
       hudRefs!.buildingButtons.forEach(function (button) {
         const kind = button.dataset.kind || "";
-        const available = campaignAllowsBuilding(buildUnlocks, kind, 1);
+        const index = ["City", "Tower", "Factory", "Port", "Farm", "SAM", "MissileSilo"].indexOf(kind);
+        const level = hud.building_levels?.[index] ?? 1;
+        if (button.dataset.foundationLevel !== String(level)) {
+          button.dataset.foundationLevel = String(level);
+          const icon = button.querySelector(".sow-hud__building-icon");
+          if (icon) icon.outerHTML = buildingIcon(kind, Math.max(1, level));
+        }
+        const available = campaignAllowsBuilding(buildUnlocks, kind, Math.max(1, level));
         button.hidden = !available;
         button.style.display = available ? "" : "none";
         const cost = Number(buildingCosts[kind.toLowerCase()]);
@@ -9203,8 +9218,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const affordable = !hasCost || gold >= cost;
         const selected = selectedBuilding === kind;
         button.disabled = false;
-        const disabled = !affordable && !selected;
-        const reason = mapActionReason(
+        const disabled = level === 0 || (!affordable && !selected);
+        const reason = level === 0 ? SOW_t("hud.industrial_city_required") : mapActionReason(
           { disabled: !affordable, cost: cost },
           gold,
         );
@@ -9213,9 +9228,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         button.classList.toggle("active", selected);
         button.setAttribute("aria-pressed", String(selected));
         const costText = hasCost ? Math.floor(cost).toLocaleString() + "g" : "";
-        const label =
-          button.dataset.label || button.getAttribute("aria-label") || kind;
-        button.dataset.label = label;
+        const label = buildingTierTitle(kind, level);
         const accessibleLabel = reason
           ? label + ". " + reason
           : costText
@@ -9248,7 +9261,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const hasNuclearCity = Boolean(hud.fleet_panel?.nuke_city_ready);
         const affordable = Number.isFinite(cost) && gold >= cost;
         const reason = !hasNuclearCity
-          ? SOW_t("hud.nuke_requires_city")
+          ? SOW_t(campaignUnlocks(hud) ? "hud.nuke_requires_city" : "hud.industrial_city_required")
           : !hasReadyNuke
             ? SOW_t("hud.nuke_no_charges")
             : affordable

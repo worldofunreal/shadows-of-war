@@ -874,7 +874,7 @@ impl SowApp {
             .map(|action| {
                 let (cost, level) = self.map_menu_cost(action, tile_idx);
                 let mut reason_key = None;
-                let mut reason_level = None;
+                let reason_level = None;
                 let reason_seconds = None;
                 let mut reason_troops = None;
                 let campaign_fleet = action == MapMenuAction::Fleet
@@ -923,6 +923,7 @@ impl SowApp {
                         sow_core::building::snapshot_has_nuclear_launch_city(
                             &snapshot.buildings,
                             owner_id,
+                            self.sim.config.tutorial,
                         )
                     });
                     let has_ready_nuke = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
@@ -934,7 +935,7 @@ impl SowApp {
                         reason_key = Some("hud.campaign_unlock_required");
                         true
                     } else if !has_nuclear_city {
-                        reason_key = Some("hud.nuke_requires_city");
+                        reason_key = Some(self.nuclear_city_requirement_key());
                         true
                     } else if !has_ready_nuke {
                         reason_key = Some("hud.nuke_no_charges");
@@ -1471,11 +1472,22 @@ impl SowApp {
         None
     }
 
+    pub(crate) fn nuclear_city_requirement_key(&self) -> &'static str {
+        if self.sim.config.tutorial { "hud.nuke_requires_city" } else { "hud.industrial_city_required" }
+    }
+
+    pub(crate) fn building_foundation_level(&self, kind: sow_core::game::BuildingKind) -> u8 {
+        self.ui.app.hud_state.building_foundation_levels[kind as usize]
+    }
+
     /// One gold rule for the dock, hotkeys and the confirm button.
     fn building_gold_shortfall(
         &self,
         kind: sow_core::game::BuildingKind,
     ) -> Option<crate::ui::UiText> {
+        if self.building_foundation_level(kind) == 0 {
+            return Some(crate::ui::UiText::new(self.nuclear_city_requirement_key()));
+        }
         let cost = self.ui.app.hud_state.building_costs[kind as usize];
         (!cost.is_finite() || self.current_player_gold() < cost).then(|| {
             crate::ui::UiText::new("hud.need_gold").with("cost", crate::utils::format_number(cost))
@@ -1524,28 +1536,8 @@ impl SowApp {
         match action {
             MapMenuAction::Nuke => (None, None),
             action if let Some(kind) = action.building_kind() => {
-                let owner = self.sim.my_player_id.unwrap_or(0);
-                let count = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .map(|snapshot| {
-                        snapshot
-                            .buildings
-                            .iter()
-                            .filter(|building| building.owner_id == owner && building.kind == kind)
-                            .map(|building| building.level as u32)
-                            .sum()
-                    })
-                    .unwrap_or(0);
-                (
-                    Some(sow_core::building::cost::structure_build_cost_gold(
-                        kind,
-                        count,
-                        &self.sim.config,
-                    )),
-                    None,
-                )
+                let level = self.building_foundation_level(kind);
+                (Some(self.ui.app.hud_state.building_costs[kind as usize]).filter(|c| c.is_finite()), Some(level))
             }
             MapMenuAction::UpgradeStructure => {
                 let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
@@ -2189,13 +2181,7 @@ impl SowApp {
             self.add_map_feedback(crate::ui::UiText::new("hud.fleet_no_water_access"));
             return;
         }
-        let count: u32 = snapshot
-            .buildings
-            .iter()
-            .filter(|b| b.owner_id == owner_id && b.kind == kind)
-            .map(|b| u32::from(b.level))
-            .sum();
-        let cost = sow_core::building::structure_build_cost_gold(kind, count, &self.sim.config);
+        let cost = self.ui.app.hud_state.building_costs[kind as usize];
         if !cost.is_finite() || player_gold < cost {
             self.add_map_feedback(
                 crate::ui::UiText::new("hud.need_gold")
@@ -2384,9 +2370,9 @@ impl SowApp {
             .my_player_id
             .unwrap_or(self.ui.app.hud_state.my_player_id);
         if !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            sow_core::building::snapshot_has_nuclear_launch_city(&snapshot.buildings, owner_id)
+            sow_core::building::snapshot_has_nuclear_launch_city(&snapshot.buildings, owner_id, self.sim.config.tutorial)
         }) {
-            self.add_map_feedback(crate::ui::UiText::new("hud.nuke_requires_city"));
+            self.add_map_feedback(crate::ui::UiText::new(self.nuclear_city_requirement_key()));
             return;
         }
         let cost = self.sim.engine.as_ref().map_or_else(|| kind.gold_cost(0), |engine| engine.nuclear_price(kind));

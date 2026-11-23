@@ -314,24 +314,26 @@ impl SowApp {
         self.sim.last_synced_cost_tick = snap_tick;
 
         let my_player_id = self.sim.my_player_id.unwrap_or(1);
-        let buildings = self.sim.current_snapshot.as_ref().map(|s| &s.buildings);
-
-        for i in 0..self.ui.app.hud_state.building_costs.len() {
-            if let Some(&kind) = sow_core::game::BuildingKind::ALL.get(i) {
-                let count = if let Some(b_list) = buildings {
-                    b_list
-                        .iter()
-                        .filter(|b| b.owner_id == my_player_id && b.kind == kind)
-                        .map(|b| b.level as u32)
-                        .sum()
-                } else {
-                    0
-                };
-                self.ui.app.hud_state.building_costs[i] =
-                    sow_core::building::structure_build_cost_gold(kind, count, &self.sim.config);
-            } else {
-                self.ui.app.hud_state.building_costs[i] = self.sim.config.cost_city;
+        use sow_core::game::BuildingKind;
+        let mut counts = [0u32; BuildingKind::ALL.len()];
+        let mut city_level = 0;
+        if let Some(snapshot) = self.sim.current_snapshot.as_ref() {
+            for building in snapshot.buildings.iter().filter(|b| b.owner_id == my_player_id) {
+                counts[building.kind as usize] += u32::from(building.reserved_level());
+                if building.kind == BuildingKind::City {
+                    city_level = city_level.max(building.active_level());
+                }
             }
+        }
+
+        let campaign = self.sim.engine.as_ref().and_then(|engine| engine.campaign_unlocks.as_ref());
+        for kind in BuildingKind::ALL {
+            let level = if campaign.is_some() { 1 } else { kind.foundation_level(city_level) };
+            self.ui.app.hud_state.building_foundation_levels[kind as usize] = level;
+            self.ui.app.hud_state.building_costs[kind as usize] =
+                sow_core::building::cost::structure_foundation_quote(
+                    kind, level, counts[kind as usize], &self.sim.config,
+                ).map_or(f64::INFINITY, |(cost, _)| cost);
         }
     }
 

@@ -63,12 +63,6 @@ pub fn troop_income_per_second(
         ) * leader.resource_bonus_multiplier(Source::Territory, Resource::Troops)
 }
 
-/// Passive bonus gold per second for each connected Factory station in a City/Port rail network.
-#[inline]
-pub fn railway_gold_bonus_per_second(connections: u32, cfg: &GameConfig) -> f64 {
-    connections as f64 * cfg.factory_gold_income * 0.5
-}
-
 /// Per-game-second income before NPC handicap and `per_tick()` scaling.
 pub fn gold_income_per_second(
     tiles: u32,
@@ -81,13 +75,7 @@ pub fn gold_income_per_second(
         + cfg.city_gold_income
             * agg.city_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::City), Resource::Gold)
-        + cfg.factory_gold_income
-            * agg.factory_income_level_weight
-            * leader.resource_bonus_multiplier(Source::District(District::Factory), Resource::Gold)
-        + railway_gold_bonus_per_second(agg.railway_connections, cfg)
-        + cfg.farm_gold_income
-            * agg.farm_gold_level_weight
-            * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Gold)
+        + land_trade_gold_per_second(agg, leader, cfg)
         + cfg.port_gold_income
             * agg.port_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Port), Resource::Gold)
@@ -97,6 +85,12 @@ pub fn gold_income_per_second(
         )
         + territory_rate(tiles, cfg.territory_gold_amount, cfg.territory_gold_tiles)
             * leader.resource_bonus_multiplier(Source::Territory, Resource::Gold)
+}
+
+pub fn land_trade_gold_per_second(agg: BuildingAggregate, leader: Leader, cfg: &GameConfig) -> f64 {
+    use crate::geo_entities::{District, Resource, Source};
+    agg.land_trade_income_weight * cfg.factory_gold_income
+        * leader.resource_bonus_multiplier(Source::District(District::Factory), Resource::Gold)
 }
 
 /// Multiplier for the ordinary income owned by Nafanua's player. Alliance

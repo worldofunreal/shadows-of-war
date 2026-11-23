@@ -204,13 +204,13 @@ pub(crate) fn building_metrics(
                 "/s",
             ),
             BuildingMetric::new(
-                Icon::Gold,
-                config.farm_gold_income
-                    * level_weight
-                    * hero(District::Farm, Resource::Gold)
-                    * per_second,
+                Icon::Speed,
+                (sow_core::building::camp_conquest_multiplier(
+                    sow_core::building::camp_capture_level_weight(level as u8)
+                        * config.camp_capture_base_points.max(0.0),
+                ) - 1.0) * 100.0,
                 "+",
-                "/s",
+                "%",
             ),
         ],
         BuildingKind::MissileSilo => vec![BuildingMetric::new(Icon::Shield, level, "×", "")],
@@ -426,6 +426,15 @@ impl crate::app::SowApp {
         let mut current = building_metrics(building.kind, level, leader, config);
         let seconds = |ticks: u32| f64::from(ticks) * config.tick_rate_ms as f64 / 1000.0;
         let mut next = building_metrics(building.kind, level.saturating_add(1), leader, config);
+        let trade_route = if building.kind == BuildingKind::Factory {
+            snapshot.railway_links.binary_search_by_key(&building.id, |route| route.from_building_id)
+                .ok().map(|i| snapshot.railway_links[i]).filter(|route| !route.blocked)
+        } else { None };
+        if building.kind == BuildingKind::Factory && trade_route.is_none() {
+            for metrics in [&mut current, &mut next] {
+                metrics.retain(|metric| metric.icon != Icon::Gold);
+            }
+        }
         if let Some(engine) = self.sim.engine.as_ref()
             && let Some(player) = engine.state.player(my_id)
         {
@@ -509,11 +518,16 @@ impl crate::app::SowApp {
                 config.global_speed_multiplier,
             );
         }
+        if let Some(route) = trade_route
+            && let Some(rate) = current.iter().find(|metric| metric.icon == Icon::Gold).and_then(|metric| metric.value)
+        {
+            current.push(BuildingMetric::new(Icon::Gold, rate * seconds(route.period_ticks), "+", " / trip"));
+        }
         if building.under_construction {
             let progress = crate::render::world::overlays::construction_progress(
                 building.kind,
                 level,
-                building.level,
+                building.reserved_level(),
                 building.ticks_until_complete,
             );
             return Some(BuildingPanel {

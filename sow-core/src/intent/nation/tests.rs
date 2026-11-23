@@ -181,7 +181,7 @@ mod bot_iq_alliance_tests {
             owner_id,
             tile_idx,
             kind: BuildingKind::City,
-            level: 4,
+            level: crate::building::NUCLEAR_CITY_LEVEL,
             under_construction: false,
             ticks_until_complete: 0,
         });

@@ -42,7 +42,9 @@ impl SowEngine {
 
                 // Transfer ownership and drop any prepaid queued follow-up upgrades.
                 b.owner_id = new_owner;
-                self.upgrade_targets.remove(&b.id);
+                if b.active_level() != 0 {
+                    self.upgrade_targets.remove(&b.id);
+                }
                 transfers.push((*b, old_owner));
                 self.building_aggregates_dirty = true;
                 if kind == crate::game::BuildingKind::Port {

@@ -583,6 +583,7 @@ export interface HudBuildingPlacement {
     pending: boolean;
     can_confirm: boolean;
     kind?: string;
+    level?: number;
     tile_idx?: number;
     anchor_x?: number;
     anchor_y?: number;
@@ -783,6 +784,7 @@ export interface MenuHudPayload {
         military_capacity: number;
     };
     building_costs: Record<string, number>;
+    building_levels?: number[];
     emotes: {
         kind: string;
         expression: string;

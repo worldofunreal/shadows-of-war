@@ -2,7 +2,7 @@ use crate::building::BuildingAggregate;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
     alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
-    diminishing_passive_income, imperial_standard_income, tafaifa_council_multiplier,
+    diminishing_passive_income, imperial_standard_income, land_trade_gold_per_second, tafaifa_council_multiplier,
     trade_income_per_second, trade_troops_per_second, troop_income_per_second,
     GOLD_PASSIVE_EXCESS_RATE, GOLD_PASSIVE_FULL_RATE_CAP, TROOP_PASSIVE_EXCESS_RATE,
     TROOP_PASSIVE_FULL_RATE_CAP,
@@ -10,6 +10,37 @@ use crate::execution::income_rates::{
 use crate::game::GamePhase;
 
 impl SowEngine {
+    fn collect_land_trade(&mut self) -> Option<Vec<f64>> {
+        use std::cmp::Reverse;
+        let tick = self.state.tick;
+        self.trade_last_delivery_tick = tick;
+        let mut payments: Option<Vec<f64>> = None;
+        while let Some(&Reverse((due, index))) = self.trade_delivery_queue.peek() {
+            if due > tick { break; }
+            self.trade_delivery_queue.pop();
+            let Some(link) = self.railway_links.get_mut(index) else { continue };
+            let open = link.is_open(&self.state);
+            let owner = usize::from(link.owner_id);
+            if let Some(aggregate) = self.building_aggregates.get_mut(owner) {
+                if open == link.blocked {
+                    let previous_weight = link.weight();
+                    link.blocked = !open;
+                    aggregate.land_trade_income_weight += link.weight() - previous_weight;
+                    if open {
+                        aggregate.railway_connections += 1;
+                    } else {
+                        aggregate.railway_connections = aggregate.railway_connections.saturating_sub(1);
+                    }
+                } else if open {
+                    let gold = link.cargo_gold(&self.state.config);
+                    payments.get_or_insert_with(|| vec![0.0; self.building_aggregates.len()])[owner] += gold;
+                }
+            }
+            self.trade_delivery_queue.push(Reverse((tick + u64::from(link.period_ticks), index)));
+        }
+        payments
+    }
+
     pub(crate) fn troop_capacity(
         &self,
         player: &crate::player::Player,
@@ -43,6 +74,7 @@ impl SowEngine {
         }
 
         self.refresh_building_aggregates();
+        let deliveries = self.collect_land_trade();
         let aggs = self.building_aggregates.clone();
 
         let config = self.state.config.clone();
@@ -148,11 +180,22 @@ impl SowEngine {
                 )) * bot_income_multiplier
                 + trade_income_per_second(trade_ships, leader, &config)
                 + hero_gold;
-            let gold_income = config.per_tick(diminishing_passive_income(
+            let combined_rate = diminishing_passive_income(
                 gold_ps,
                 GOLD_PASSIVE_FULL_RATE_CAP,
                 GOLD_PASSIVE_EXCESS_RATE,
-            ));
+            );
+            let land_trade_rate = land_trade_gold_per_second(agg, leader, &config);
+            let scaled_trade_rate = land_trade_rate * council_multiplier * bot_income_multiplier;
+            let passive_rate = diminishing_passive_income(
+                gold_ps - scaled_trade_rate, GOLD_PASSIVE_FULL_RATE_CAP, GOLD_PASSIVE_EXCESS_RATE,
+            );
+            let delivered = deliveries.as_ref().and_then(|gold| gold.get(usize::from(player_id)))
+                .copied().unwrap_or(0.0);
+            let gold_income = config.per_tick(passive_rate) + if land_trade_rate > 0.0 {
+                delivered * (combined_rate - passive_rate).max(0.0)
+                    / (agg.land_trade_income_weight * config.factory_gold_income)
+            } else { 0.0 };
             self.state.players[idx].credit_gold(gold_income);
 
             let iq_gain = config.per_tick(self.state.players[idx].iq as f64 / 100.0);

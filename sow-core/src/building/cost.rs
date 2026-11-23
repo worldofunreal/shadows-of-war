@@ -44,11 +44,11 @@ pub fn structure_upgrade_cost_gold(
         return f64::INFINITY;
     }
     let prices: &[f64] = match kind {
-        BuildingKind::City => &[115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0],
-        BuildingKind::Farm => &[125.0, 190.0, 280.0],
-        BuildingKind::Factory => &[125.0, 165.0, 220.0],
-        BuildingKind::Port => &[130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0],
-        BuildingKind::Tower => &[100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0],
+        BuildingKind::City => &[115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0, 100_000.0],
+        BuildingKind::Farm => &[125.0, 190.0, 280.0, 360.0, 460.0, 590.0, 750.0],
+        BuildingKind::Factory => &[125.0, 165.0, 220.0, 295.0, 390.0, 520.0, 690.0],
+        BuildingKind::Port => &[130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0, 100_000.0],
+        BuildingKind::Tower => &[100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0, 80_000.0],
         BuildingKind::SAM => &[250.0, 285.0, 325.0],
         BuildingKind::MissileSilo => &[265.0, 305.0, 345.0],
     };
@@ -64,6 +64,28 @@ pub fn structure_upgrade_cost_gold(
 #[inline]
 pub fn structure_build_duration_ticks(kind: BuildingKind) -> u32 {
     kind.construction_duration_ticks().max(1)
+}
+
+pub fn structure_foundation_quote(
+    kind: BuildingKind,
+    level: u8,
+    owned_levels: u32,
+    cfg: &GameConfig,
+) -> Option<(f64, u32)> {
+    if !(1..=kind.max_level()).contains(&level) {
+        return None;
+    }
+    let mut cost = structure_build_cost_gold(kind, owned_levels, cfg);
+    let base_ticks = structure_build_duration_ticks(kind);
+    let mut ticks = if cfg.tutorial { (base_ticks / 2).max(1) } else { base_ticks };
+    if level > 1 {
+        let (upgrade_cost, upgrade_ticks, _) = structure_multi_upgrade_cost_and_ticks(
+            kind, 1, level, owned_levels.saturating_add(1), false, 0, cfg.tutorial, cfg,
+        )?;
+        cost += upgrade_cost;
+        ticks = ticks.saturating_add(upgrade_ticks);
+    }
+    cost.is_finite().then_some((cost, ticks))
 }
 
 #[inline]
@@ -174,16 +196,16 @@ pub fn player_fleet_capacity_from_port_slots(port_slots: u32) -> u32 {
 }
 
 pub fn port_fleet_slots(active_level: u8) -> u32 {
-    [0, 1, 3, 6, 11, 20, 40, 80][usize::from(active_level.min(7))]
+    [0, 1, 3, 6, 11, 20, 40, 80, 120][usize::from(active_level.min(8))]
 }
 
 pub fn port_dock_capacity(active_level: u8) -> u32 {
-    [0, 1, 2, 3, 4, 6, 10, 16][usize::from(active_level.min(7))]
+    [0, 1, 2, 3, 4, 6, 10, 16, 24][usize::from(active_level.min(8))]
 }
 
 pub fn port_repair_per_second(active_level: u8) -> f64 {
-    [0.0, 50.0, 100.0, 150.0, 200.0, 400.0, 800.0, 1_600.0]
-        [usize::from(active_level.min(7))]
+    [0.0, 50.0, 100.0, 150.0, 200.0, 400.0, 800.0, 1_600.0, 3_200.0]
+        [usize::from(active_level.min(8))]
 }
 
 #[inline]
@@ -277,11 +299,11 @@ mod tests {
     }
 
     #[test]
-    fn economy_buildings_have_seven_levels_and_other_buildings_have_four() {
-        for kind in [BuildingKind::City, BuildingKind::Tower, BuildingKind::Port] {
-            assert_eq!(kind.max_level(), 7);
+    fn building_lines_have_eight_levels_and_nuclear_structures_have_four() {
+        for kind in [BuildingKind::City, BuildingKind::Tower, BuildingKind::Port, BuildingKind::Farm, BuildingKind::Factory] {
+            assert_eq!(kind.max_level(), 8);
         }
-        for kind in [BuildingKind::Farm, BuildingKind::Factory, BuildingKind::SAM, BuildingKind::MissileSilo] {
+        for kind in [BuildingKind::SAM, BuildingKind::MissileSilo] {
             assert_eq!(kind.max_level(), 4);
         }
     }
@@ -306,11 +328,11 @@ mod tests {
     fn every_upgrade_level_applies_ownership_growth_to_its_base_price() {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
-            (BuildingKind::City, vec![115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0]),
-            (BuildingKind::Farm, vec![125.0, 190.0, 280.0]),
-            (BuildingKind::Factory, vec![125.0, 165.0, 220.0]),
-            (BuildingKind::Port, vec![130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0]),
-            (BuildingKind::Tower, vec![100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0]),
+            (BuildingKind::City, vec![115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0, 100_000.0]),
+            (BuildingKind::Farm, vec![125.0, 190.0, 280.0, 360.0, 460.0, 590.0, 750.0]),
+            (BuildingKind::Factory, vec![125.0, 165.0, 220.0, 295.0, 390.0, 520.0, 690.0]),
+            (BuildingKind::Port, vec![130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0, 100_000.0]),
+            (BuildingKind::Tower, vec![100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0, 80_000.0]),
             (BuildingKind::SAM, vec![250.0, 285.0, 325.0]),
             (BuildingKind::MissileSilo, vec![265.0, 305.0, 345.0]),
         ] {

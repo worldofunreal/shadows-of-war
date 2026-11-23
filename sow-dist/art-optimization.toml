@@ -217,13 +217,13 @@ recipe_version = 1
 format = "webp"
 max_width = 1024
 max_height = 1024
-quality = 72
+quality = 64
 alpha = "preserve"
 alpha_quality = 80
 resample = "mitchell"
 lossless = false
 max_bytes = 200000
-recipe_version = 2
+recipe_version = 4
 
 [profiles.atlas_badges]
 format = "webp"

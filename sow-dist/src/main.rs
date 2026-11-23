@@ -3475,9 +3475,10 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
     Ok(())
 }
 
-const PUBLIC_SITE_PAGES: [&str; 11] = [
+const PUBLIC_SITE_PAGES: [&str; 12] = [
     "index.html",
     "maps/index.html",
+    "buildings/index.html",
     "support/index.html",
     "privacy/index.html",
     "cookies/index.html",
@@ -3522,7 +3523,53 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     }).collect::<Vec<_>>();
     let biographies = public_leader_biographies(&paths.root)?;
     let mut metadata = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "origin": site::current().origin(), "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "localPreview": paths.is_local_preview() }))?;
+    let config = sow_core::game_config::GameConfig::default();
+    let building_prices = sow_core::game::BuildingKind::ALL.into_iter().map(|kind| {
+        let prices = (1..=kind.max_level()).map(|level| {
+            if level == 1 {
+                sow_core::building::structure_build_cost_gold(kind, 0, &config)
+            } else {
+                sow_core::building::structure_upgrade_cost_gold(kind, level, u32::from(level - 1), &config)
+            }
+        }).collect::<Vec<_>>();
+        (kind.as_str(), prices)
+    }).collect::<std::collections::BTreeMap<_, _>>();
+    use sow_core::{building, game::BuildingKind};
+    let building_effects = BuildingKind::ALL.into_iter().map(|kind| {
+        let tiers = (1..=kind.max_level()).map(|level| {
+            let speed = config.global_speed_multiplier;
+            match kind {
+                BuildingKind::City => serde_json::json!({
+                    "reserve": config.city_max_troops * building::income_level_weight(level),
+                    "troops": config.city_troop_income * speed * building::income_level_weight(level.min(4)),
+                    "reinforcements": building::city_upgrade_reinforcements(level, config.city_max_troops),
+                }),
+                BuildingKind::Farm => serde_json::json!({
+                    "troops": config.farm_troop_income * speed * building::farm_troop_level_weight(level),
+                    "capture": (building::camp_conquest_multiplier(config.camp_capture_base_points * building::camp_capture_level_weight(level)) - 1.0) * 100.0,
+                }),
+                BuildingKind::Factory => serde_json::json!({
+                    "trade": config.factory_gold_income * speed * building::factory_gold_level_weight(level),
+                    "travel": building::factory_gold_level_weight(level).sqrt(),
+                }),
+                BuildingKind::Tower => serde_json::json!({
+                    "range": building::tower_range_for_level(level, &config, 1.0),
+                    "resistance": building::tower_capture_weight(level),
+                }),
+                BuildingKind::Port => serde_json::json!({
+                    "fleet": building::port_fleet_slots(level),
+                    "docks": building::port_dock_capacity(level),
+                    "repair": building::port_repair_per_second(level),
+                }),
+                BuildingKind::SAM => serde_json::json!({
+                    "range": sow_core::execution::sam::sam_range(level), "charges": level,
+                }),
+                BuildingKind::MissileSilo => serde_json::json!({ "charges": level }),
+            }
+        }).collect::<Vec<_>>();
+        (kind.as_str(), tiers)
+    }).collect::<std::collections::BTreeMap<_, _>>();
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "origin": site::current().origin(), "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "buildingPrices": building_prices, "buildingEffects": building_effects, "localPreview": paths.is_local_preview() }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,

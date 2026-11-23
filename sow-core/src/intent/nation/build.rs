@@ -1,4 +1,4 @@
-use crate::building::{find_structure_site_near, structure_build_cost_gold};
+use crate::building::find_structure_site_near;
 use crate::engine::SowEngine;
 use crate::game::BuildingKind;
 use crate::protocol::GameplayIntent;
@@ -51,7 +51,7 @@ impl SowEngine {
                     });
                     let sam_defense_enabled = bot_iq >= 100
                         && has_enemy_nuclear_capability
-                        && self.campaign_allows_building(BuildingKind::SAM, 1);
+                        && self.foundation_quote(bot_id, BuildingKind::SAM).is_some();
                     let mut all_owned_buildings_covered = false;
                     if sam_defense_enabled {
                         let sams: Vec<_> = self.buildings.iter()
@@ -98,12 +98,9 @@ impl SowEngine {
                             }
                         }
                         if let Some(sam_site) = sam_site {
-                            let cost = structure_build_cost_gold(
-                                BuildingKind::SAM,
-                                agg.levels_of_kind(BuildingKind::SAM),
-                                &self.state.config,
-                            );
-                            if player_gold >= cost {
+                            if self.foundation_quote(bot_id, BuildingKind::SAM)
+                                .is_some_and(|(_, cost, _)| player_gold >= cost)
+                            {
                                 if let Some(player) = self.state.player_mut(bot_id) {
                                     player.iq_points -= build_cost;
                                 }
@@ -119,74 +116,33 @@ impl SowEngine {
                             }
                         }
                     }
+                    let nuclear_city_level = crate::building::nuclear_city_level(self.campaign_unlocks.is_some());
                     let wants_nuclear_progression = matches!(slot.tier, AiTier::Ghost | AiTier::Nation)
                         && bot_iq >= 100
+                        && agg.highest_city_level >= 4
                         && self.campaign_allows_building(BuildingKind::MissileSilo, 1)
-                        && self.campaign_allows_building(BuildingKind::City, 4)
+                        && self.campaign_allows_building(BuildingKind::City, nuclear_city_level)
                         && self.buildings.iter().any(|building| {
                             building.kind == BuildingKind::City
                                 && self.naval_target_allowed(bot_id, building.owner_id)
                         });
-                    if wants_nuclear_progression {
-                        if !crate::building::player_has_nuclear_launch_city(&self.buildings, bot_id) {
-                            if super::structures::has_pending_build(decisions, bot_id) {
-                                return;
-                            }
-                            if let Some(upgrade) = stack_build_decision(
-                                self,
-                                bot_id,
-                                BuildingKind::City,
-                                player_gold,
-                                4,
-                            ) {
-                                if let Some(player) = self.state.player_mut(bot_id) {
-                                    player.iq_points -= build_cost;
-                                }
-                                decisions.push(upgrade);
-                                return;
-                            }
-                            if agg.count_city == 0 {
-                                let cost = structure_build_cost_gold(
-                                    BuildingKind::City,
-                                    agg.levels_of_kind(BuildingKind::City),
-                                    &self.state.config,
-                                );
-                                if player_gold >= cost
-                                    && !super::structures::has_pending_build(decisions, bot_id)
-                                    && let Some((x, y)) = self.state.player(bot_id).and_then(|p| p.home)
-                                {
-                                    self.refresh_building_grid();
-                                    if let Some(target_tile) = find_structure_site_near(
-                                        &self.state.map,
-                                        bot_id,
-                                        y * self.state.map.width + x,
-                                        BuildingKind::City,
-                                        &self.building_grid,
-                                        &mut self.placement_scratch,
-                                        self.legacy_building_rules,
-                                    ) {
-                                        if let Some(player) = self.state.player_mut(bot_id) {
-                                            player.iq_points -= build_cost;
-                                        }
-                                        decisions.push(BotDecision {
-                                            bot_id,
-                                            kind: BotDecisionKind::Build,
-                                            intent: GameplayIntent::BuildStructure {
-                                                kind: BuildingKind::City,
-                                                target_tile,
-                                            },
-                                        });
-                                        return;
-                                    }
-                                }
-                            }
-                            return;
+                    if wants_nuclear_progression && agg.highest_city_level < nuclear_city_level
+                        && !super::structures::has_pending_build(decisions, bot_id)
+                        && let Some(upgrade) = stack_build_decision(
+                            self, bot_id, BuildingKind::City, player_gold, nuclear_city_level,
+                        )
+                    {
+                        if let Some(player) = self.state.player_mut(bot_id) {
+                            player.iq_points -= build_cost;
                         }
-                        if agg.count_silo == 0
-                            && player_gold >= self.nuclear_price(crate::game::NukeKind::AtomBomb)
-                        {
-                            return;
-                        }
+                        decisions.push(upgrade);
+                        return;
+                    }
+                    if wants_nuclear_progression && agg.count_silo == 0
+                        && self.foundation_quote(bot_id, BuildingKind::MissileSilo)
+                            .is_some_and(|(_, cost, _)| player_gold >= cost + self.nuclear_price(crate::game::NukeKind::AtomBomb))
+                    {
+                        return;
                     }
                     let economy_priority_gap = slot.policy().prioritizes_economy_buildings
                         && [BuildingKind::City, BuildingKind::Factory, BuildingKind::Farm]
@@ -231,21 +187,23 @@ impl SowEngine {
                                 std::cmp::Ordering::Greater
                             };
                         }
-                        let levels_a = agg.levels_of_kind(a);
-                        let levels_b = agg.levels_of_kind(b);
-                        let cost_a = structure_build_cost_gold(a, levels_a, &self.state.config);
-                        let cost_b = structure_build_cost_gold(b, levels_b, &self.state.config);
+                        let quote = |kind: BuildingKind| {
+                            let level = if self.campaign_unlocks.is_some() { 1 } else { kind.foundation_level(agg.highest_city_level) };
+                            crate::building::cost::structure_foundation_quote(kind, level, agg.levels_of_kind(kind), &self.state.config)
+                                .map_or(f64::INFINITY, |(value, _)| value)
+                        };
+                        let (cost_a, cost_b) = (quote(a), quote(b));
                         cost_a
                             .partial_cmp(&cost_b)
                             .unwrap_or(std::cmp::Ordering::Equal)
                     });
                     let decisions_before_building = decisions.len();
                     for kind in build_order {
-                        if !self.campaign_allows_building(kind, 1) {
+                        let Some((_, cost, _)) = self.foundation_quote(bot_id, kind) else { continue; };
+                        if kind == BuildingKind::Factory && agg.highest_city_level == 0 && !agg.has_completed_port {
                             continue;
                         }
                         let owned = agg.total_structures_of_kind(kind);
-                        let level_count = agg.levels_of_kind(kind);
                         let mut target_count =
                             bot_structure_target_count(kind, city_equivalent, bot_iq);
                         if kind == BuildingKind::Tower && bot_iq >= 110 {
@@ -268,7 +226,6 @@ impl SowEngine {
                         let structure_floor = player_tile_count / 800;
                         let under_structure_floor = all_structures < structure_floor;
                         let wants_new = owned < target_count || under_structure_floor;
-                        let cost = structure_build_cost_gold(kind, level_count, &self.state.config);
 
                         if !wants_new || is_density_high {
                             if let Some(d) = stack_build_decision(

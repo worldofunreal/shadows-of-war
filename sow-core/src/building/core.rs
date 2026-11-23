@@ -1,5 +1,4 @@
 use super::placement::{BuildingFootprint, hex_distance};
-use crate::execution::hero_effects::allied;
 use crate::game::{BuildingKind, CityArsenalKind, GameState};
 use crate::map::MapTile;
 use crate::rng::stable_tile_sample;
@@ -8,8 +7,6 @@ use std::collections::{HashMap, HashSet};
 
 /// Maximum Euclidean tile distance between eligible railway station buildings.
 pub const RAILWAY_LINK_DISTANCE: u32 = 36;
-/// Minimum active Factory level required to create a railway station node.
-pub const RAILWAY_REQUIRED_FACTORY_LEVEL: u8 = 2;
 pub const RAILWAY_MAX_CANDIDATES_PER_STATION: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +14,35 @@ pub struct RailwayLink {
     pub from_building_id: u64,
     pub to_building_id: u64,
     pub horizontal_first: bool,
+    pub from_tile: u32,
+    pub to_tile: u32,
+    pub owner_id: u16,
+    pub level: u8,
+    pub period_ticks: u32,
+    pub opened_at: u64,
+    pub blocked: bool,
+}
+
+impl RailwayLink {
+    pub fn cargo_gold(self, cfg: &crate::game_config::GameConfig) -> f64 {
+        cfg.per_tick(f64::from(self.period_ticks))
+            * cfg.factory_gold_income
+            * factory_gold_level_weight(self.level)
+    }
+
+    pub fn weight(self) -> f64 {
+        if self.blocked { 0.0 } else { factory_gold_level_weight(self.level) }
+    }
+
+    pub fn is_open(self, state: &GameState) -> bool {
+        let (w, h) = (state.map.width, state.map.height);
+        let (ax, ay) = ((self.from_tile % w) as i32, (self.from_tile / w) as i32);
+        let (bx, by) = ((self.to_tile % w) as i32, (self.to_tile / w) as i32);
+        let (cx, cy) = if self.horizontal_first { (bx, ay) } else { (ax, by) };
+        let owned = |tile: u32| state.map.owner_id(tile % w, tile / w) == self.owner_id;
+        railway_axis_is_land_with(ax, ay, cx, cy, w, h, Some(&owned))
+            && railway_axis_is_land_with(cx, cy, bx, by, w, h, Some(&owned))
+    }
 }
 
 /// Maximum number of warships that can be queued at a single Port.
@@ -325,11 +351,11 @@ pub fn tower_range_for_level(
 
 /// Cumulative weights multiplying the configured level-one income rates.
 pub fn factory_gold_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.75, 7.4, 12.4][usize::from(level.min(4))]
+    [0.0, 1.0, 3.75, 7.4, 12.4, 16.0, 21.0, 27.0, 34.0][usize::from(level.min(8))]
 }
 
 pub fn farm_troop_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.5, 8.0, 15.0][usize::from(level.min(4))]
+    [0.0, 1.0, 3.5, 8.0, 15.0, 18.0, 21.0, 24.0, 28.0][usize::from(level.min(8))]
 }
 
 pub fn port_income_level_weight(level: u8) -> f64 {
@@ -341,6 +367,7 @@ pub fn city_upgrade_reinforcements(level: u8, base_capacity: f64) -> f64 {
         5 => return 100_000.0,
         6 => return 350_000.0,
         7 => return 1_000_000.0,
+        8 => return 2_000_000.0,
         _ => {}
     }
     let share = match level {
@@ -354,36 +381,54 @@ pub fn city_upgrade_reinforcements(level: u8, base_capacity: f64) -> f64 {
 }
 
 pub fn tower_capture_weight(level: u8) -> f64 {
-    [0.0, 1.0, 1.70, 2.55, 3.75, 5.0, 7.0, 10.0][usize::from(level.min(7))]
+    [0.0, 1.0, 1.70, 2.55, 3.75, 5.0, 7.0, 10.0, 14.0][usize::from(level.min(8))]
 }
 
-pub fn player_has_nuclear_launch_city(buildings: &[Building], owner_id: u16) -> bool {
+pub const NUCLEAR_CITY_LEVEL: u8 = 6;
+
+pub fn nuclear_city_level(campaign: bool) -> u8 {
+    if campaign { 4 } else { NUCLEAR_CITY_LEVEL }
+}
+
+pub fn camp_capture_level_weight(level: u8) -> f64 {
+    if level == 0 { 0.0 } else { 1.25_f64.powi(i32::from(level.min(8) - 1)) }
+}
+
+pub fn camp_conquest_multiplier(points: f64) -> f64 {
+    1.0 + 0.25 * points / (25.0 + points)
+}
+
+pub fn player_has_nuclear_launch_city(buildings: &[Building], owner_id: u16, campaign: bool) -> bool {
     has_nuclear_launch_city(
         buildings
             .iter()
             .map(|building| (building.owner_id, building.kind, building.active_level())),
         owner_id,
+        campaign,
     )
 }
 
 pub fn snapshot_has_nuclear_launch_city(
     buildings: &[crate::protocol::BuildingSnapshot],
     owner_id: u16,
+    campaign: bool,
 ) -> bool {
     has_nuclear_launch_city(
         buildings
             .iter()
             .map(|building| (building.owner_id, building.kind, building.active_level())),
         owner_id,
+        campaign,
     )
 }
 
 fn has_nuclear_launch_city(
     buildings: impl Iterator<Item = (u16, BuildingKind, u8)>,
     owner_id: u16,
+    campaign: bool,
 ) -> bool {
     buildings.into_iter().any(|(owner, kind, level)| {
-        owner == owner_id && kind == BuildingKind::City && level >= 4
+        owner == owner_id && kind == BuildingKind::City && level >= nuclear_city_level(campaign)
     })
 }
 
@@ -408,6 +453,8 @@ pub fn district_capacity_level_weight(level: u8) -> f64 {
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct BuildingAggregate {
+    pub highest_city_level: u8,
+    pub camp_conquest_weight: f64,
     pub city_levels: u32,
     pub tower_levels: u32,
     pub factory_levels: u32,
@@ -444,6 +491,7 @@ pub struct BuildingAggregate {
     pub count_silo: u32,
     /// Number of owned Factory stations connected to a City or Port over land.
     pub railway_connections: u32,
+    pub land_trade_income_weight: f64,
 }
 
 impl BuildingAggregate {
@@ -506,6 +554,7 @@ pub fn aggregate_buildings_per_player(
         }
         match b.kind {
             BuildingKind::City => {
+                a.highest_city_level = a.highest_city_level.max(active_lvl);
                 a.city_levels += active_lvl as u32;
                 a.city_income_level_weight += income_level_weight(active_lvl.min(4));
                 a.city_capacity_level_weight += income_level_weight(active_lvl);
@@ -527,6 +576,7 @@ pub fn aggregate_buildings_per_player(
                 a.has_completed_port = true;
             }
             BuildingKind::Farm => {
+                a.camp_conquest_weight += camp_capture_level_weight(active_lvl);
                 a.farm_levels += active_lvl as u32;
                 a.farm_troop_level_weight += farm_troop_level_weight(active_lvl);
                 a.farm_gold_level_weight += income_level_weight(active_lvl);
@@ -538,170 +588,91 @@ pub fn aggregate_buildings_per_player(
     out
 }
 
-/// Builds the single railway graph used by passive income, the building panel and map rendering.
-/// Every edge includes a level-two Factory station; Cities and Ports are trade stations.
+/// One directed, land-only route per completed trading post.
 pub fn populate_railway_connections(
-    buildings: &[Building],
+    stations: &[Building],
+    previous_stations: &[Building],
     state: &GameState,
-    aggregates: &mut [BuildingAggregate],
+    previous: &[RailwayLink],
 ) -> Vec<RailwayLink> {
-    for agg in aggregates.iter_mut() {
-        agg.railway_connections = 0;
-    }
-    let map_w = state.map.width;
-    let map_h = state.map.height;
-    if map_w == 0 || map_h == 0 {
-        return Vec::new();
-    }
-    let total_tiles = u64::from(map_w) * u64::from(map_h);
-    let nodes: Vec<Building> = buildings
-        .iter()
-        .copied()
-        .filter(|building| {
-            let is_station = match building.kind {
-                BuildingKind::City | BuildingKind::Port => building.active_level() > 0,
-                BuildingKind::Factory => {
-                    building.active_level() >= RAILWAY_REQUIRED_FACTORY_LEVEL
-                }
-                _ => false,
-            };
-            is_station && u64::from(building.tile_idx) < total_tiles
-        })
-        .collect();
-    if nodes.len() < 2 {
-        return Vec::new();
-    }
-    let max_dist_sq = (RAILWAY_LINK_DISTANCE as i32) * (RAILWAY_LINK_DISTANCE as i32);
-    let terrain = Some(state.map.terrain.as_slice());
-    let mut grid: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
-    for (index, node) in nodes.iter().enumerate() {
-        let x = (node.tile_idx % map_w) as i32;
-        let y = (node.tile_idx / map_w) as i32;
-        grid.entry((x / RAILWAY_LINK_DISTANCE as i32, y / RAILWAY_LINK_DISTANCE as i32))
-            .or_default()
-            .push(index);
-    }
-    let mut offsets = (-1..=1)
-        .flat_map(|dy| (-1..=1).map(move |dx| (dx, dy)))
-        .collect::<Vec<_>>();
-    offsets.sort_by_key(|(dx, dy)| dx * dx + dy * dy);
-    let mut links = Vec::with_capacity(nodes.len());
-    let mut seen = HashSet::with_capacity(nodes.len());
-    for (index, node) in nodes.iter().enumerate() {
-        let ax = (node.tile_idx % map_w) as i32;
-        let ay = (node.tile_idx / map_w) as i32;
-        let cell = (ax / RAILWAY_LINK_DISTANCE as i32, ay / RAILWAY_LINK_DISTANCE as i32);
-        let mut checked = 0;
-        let mut best: Option<(usize, i32)> = None;
-        'cells: for (dx, dy) in &offsets {
-            let Some(candidates) = grid.get(&(cell.0 + dx, cell.1 + dy)) else {
-                continue;
-            };
-            for &other_index in candidates {
-                if other_index == index {
-                    continue;
-                }
-                checked += 1;
-                if checked > RAILWAY_MAX_CANDIDATES_PER_STATION {
-                    break 'cells;
-                }
-                let other = nodes[other_index];
-                if node.kind != BuildingKind::Factory && other.kind != BuildingKind::Factory {
-                    continue;
-                }
-                if node.owner_id != other.owner_id
-                    && !allied(state, node.owner_id, other.owner_id)
-                {
-                    continue;
-                }
-                let bx = (other.tile_idx % map_w) as i32;
-                let by = (other.tile_idx / map_w) as i32;
-                let distance_sq = (ax - bx).pow(2) + (ay - by).pow(2);
-                if distance_sq > max_dist_sq
-                    || best.is_some_and(|(_, best_distance)| distance_sq >= best_distance)
-                    || railway_route_is_land(ax, ay, bx, by, map_w, map_h, terrain).is_none()
-                {
-                    continue;
-                }
-                best = Some((other_index, distance_sq));
-            }
-        }
-        let Some((other_index, _)) = best else {
-            continue;
-        };
-        let other = nodes[other_index];
-        let (from, to) = if node.id < other.id {
-            (*node, other)
-        } else {
-            (other, *node)
-        };
-        if !seen.insert((from.id, to.id)) {
-            continue;
-        }
-        let from_x = (from.tile_idx % map_w) as i32;
-        let from_y = (from.tile_idx / map_w) as i32;
-        let to_x = (to.tile_idx % map_w) as i32;
-        let to_y = (to.tile_idx / map_w) as i32;
-        let Some(horizontal_first) =
-            railway_route_is_land(from_x, from_y, to_x, to_y, map_w, map_h, terrain)
-        else {
-            continue;
-        };
-        links.push(RailwayLink {
-            from_building_id: from.id,
-            to_building_id: to.id,
-            horizontal_first,
-        });
-    }
-    links.sort_by_key(|link| (link.from_building_id, link.to_building_id));
-
-    let indices: HashMap<_, _> = nodes
-        .iter()
-        .enumerate()
-        .map(|(index, node)| (node.id, index))
-        .collect();
-    let mut adjacency = vec![Vec::new(); nodes.len()];
-    for link in &links {
-        let (Some(&from), Some(&to)) = (
-            indices.get(&link.from_building_id),
-            indices.get(&link.to_building_id),
-        ) else {
-            continue;
-        };
-        adjacency[from].push(to);
-        adjacency[to].push(from);
-    }
-    let mut visited = vec![false; nodes.len()];
-    for start in 0..nodes.len() {
-        if visited[start] {
-            continue;
-        }
-        let mut component = Vec::new();
-        let mut stack = vec![start];
-        visited[start] = true;
-        while let Some(index) = stack.pop() {
-            component.push(index);
-            for &neighbor in &adjacency[index] {
-                if !visited[neighbor] {
-                    visited[neighbor] = true;
-                    stack.push(neighbor);
-                }
-            }
-        }
-        let has_trade_station = component.iter().any(|&index| {
-            matches!(nodes[index].kind, BuildingKind::City | BuildingKind::Port)
-        });
-        if !has_trade_station {
-            continue;
-        }
-        for index in component {
-            let factory = nodes[index];
-            if factory.kind == BuildingKind::Factory
-                && let Some(aggregate) = aggregates.get_mut(factory.owner_id as usize)
+    let (w, h) = (state.map.width, state.map.height);
+    if w == 0 || h == 0 { return Vec::new(); }
+    let radius = RAILWAY_LINK_DISTANCE as i32;
+    let cell_for = |building: Building| {
+        ((building.tile_idx % w) as i32 / radius, (building.tile_idx / w) as i32 / radius)
+    };
+    let mut dirty_cells = HashSet::new();
+    for (old, new) in [(previous_stations, stations), (stations, previous_stations)] {
+        for &station in old {
+            if new.binary_search_by_key(&station.id, |node| node.id).ok()
+                .is_some_and(|index| new[index] == station)
             {
-                aggregate.railway_connections = aggregate.railway_connections.saturating_add(1);
+                continue;
+            }
+            let (x, y) = cell_for(station);
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    dirty_cells.insert((station.owner_id, x + dx, y + dy));
+                }
             }
         }
+    }
+    let mut grid: HashMap<(u16, i32, i32), Vec<Building>> = HashMap::new();
+    for &node in stations.iter().filter(|node| node.kind != BuildingKind::Factory) {
+        let (x, y) = ((node.tile_idx % w) as i32, (node.tile_idx / w) as i32);
+        grid.entry((node.owner_id, x / radius, y / radius)).or_default().push(node);
+    }
+    let mut links = Vec::new();
+    for post in stations.iter().filter(|node| node.kind == BuildingKind::Factory) {
+        let (ax, ay) = ((post.tile_idx % w) as i32, (post.tile_idx / w) as i32);
+        let (gx, gy) = (ax / radius, ay / radius);
+        if !dirty_cells.contains(&(post.owner_id, gx, gy)) {
+            if let Ok(index) = previous.binary_search_by_key(&post.id, |route| route.from_building_id) {
+                links.push(previous[index]);
+            }
+            continue;
+        }
+        let mut checked = 0;
+        let mut best = None;
+        'cells: for (dx, dy) in [(0,0), (-1,0), (1,0), (0,-1), (0,1), (-1,-1), (1,-1), (-1,1), (1,1)] {
+            let Some(nodes) = grid.get(&(post.owner_id, gx + dx, gy + dy)) else { continue };
+            for &node in nodes {
+                checked += 1;
+                if checked > RAILWAY_MAX_CANDIDATES_PER_STATION { break 'cells; }
+                let (bx, by) = ((node.tile_idx % w) as i32, (node.tile_idx / w) as i32);
+                let distance = (ax - bx).pow(2) + (ay - by).pow(2);
+                if distance == 0 || distance > radius * radius
+                    || best.is_some_and(|(best_distance, best_id, _, _, _)| (distance, node.id) >= (best_distance, best_id))
+                { continue; }
+                let Some(horizontal_first) = railway_route_is_land(
+                    ax, ay, bx, by, w, h, Some(&state.map.terrain),
+                ) else { continue };
+                best = Some((distance, node.id, node.tile_idx, horizontal_first, (ax - bx).abs() + (ay - by).abs()));
+            }
+        }
+        let Some((_, to_building_id, to_tile, horizontal_first, distance)) = best else { continue };
+        let level = post.level;
+        let normal_seconds = (4.0 + f64::from(distance) * 0.25) / factory_gold_level_weight(level).sqrt();
+        let per_tick = state.config.per_tick(1.0).max(f64::EPSILON);
+        let period_ticks = (normal_seconds * crate::game_config::NORMAL_GAME_SPEED / per_tick)
+            .ceil().clamp(1.0, f64::from(u32::MAX)) as u32;
+        let mut link = RailwayLink {
+            from_building_id: post.id, to_building_id, horizontal_first,
+            from_tile: post.tile_idx, to_tile, owner_id: post.owner_id, level, period_ticks,
+            opened_at: state.tick, blocked: false,
+        };
+        if let Ok(index) = previous.binary_search_by_key(&post.id, |route| route.from_building_id) {
+            let former = previous[index];
+            link.opened_at = former.opened_at;
+            link.blocked = former.blocked;
+            if link != former {
+                link.opened_at = state.tick;
+                link.blocked = !link.is_open(state);
+            }
+        } else {
+            link.blocked = !link.is_open(state);
+        }
+        links.push(link);
     }
     links
 }
