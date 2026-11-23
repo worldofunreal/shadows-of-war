@@ -42,6 +42,7 @@ pub struct MapRenderer {
     skin_buffer: gpu::Buffer,
     skin_sampler: gpu::Sampler,
     terrain_art: Option<FontAtlasTexture>,
+    terrain_art_key: Option<String>,
     pub pipeline: gpu::RenderPipeline,
     tabletop: Option<TabletopDraw>,
     surface_format: gpu::TextureFormat,
@@ -68,6 +69,11 @@ pub struct MapRenderer {
     revealed_scratch: Vec<u32>,
     pack_stamp: Vec<u32>,
     current_pack_stamp: u32,
+}
+
+pub enum TerrainArt<'a> {
+    Embedded(&'a [u8]),
+    Downloaded(&'a image::RgbaImage),
 }
 
 const FLASH_ABILITY_BIT: u8 = 0x80;
@@ -274,6 +280,7 @@ impl MapRenderer {
             skin_buffer,
             skin_sampler,
             terrain_art: None,
+            terrain_art_key: None,
             pipeline,
             tabletop: None,
             surface_format,
@@ -421,25 +428,33 @@ impl MapRenderer {
         );
     }
 
-    /// Upload the baked terrain art once for the lifetime of this map.
+    /// Upload the baked terrain art once per map key.
     pub fn load_terrain_art(
         &mut self,
         context: &gpu::Context,
         encoder: &mut gpu::CommandEncoder,
-        image_bytes: &[u8],
+        key: &str,
+        art: TerrainArt<'_>,
     ) {
-        if self.terrain_art.is_some() {
+        if self.terrain_art.is_some() && self.terrain_art_key.as_deref() == Some(key) {
             return;
         }
-        let texture = FontAtlasTexture::from_bytes(
-            context,
-            image_bytes,
-            "terrain_art",
-            gpu::TextureFormat::Rgba8Unorm,
-        );
+        if let Some(previous) = self.terrain_art.take() {
+            previous.destroy(context);
+        }
+        let format = gpu::TextureFormat::Rgba8Unorm;
+        let texture = match art {
+            TerrainArt::Embedded(bytes) => {
+                FontAtlasTexture::from_bytes(context, bytes, "terrain_art", format)
+            }
+            TerrainArt::Downloaded(image) => {
+                FontAtlasTexture::from_rgba(context, image, "terrain_art", format)
+            }
+        };
         encoder.init_texture(texture.texture);
         texture.upload(encoder, context);
         self.terrain_art = Some(texture);
+        self.terrain_art_key = Some(key.to_string());
     }
 
     /// Write dirty ownership tiles to the upload buffer and copy to GPU.
@@ -929,6 +944,7 @@ impl MapRenderer {
         if let Some(texture) = self.terrain_art.take() {
             texture.destroy(&render_ctx.context);
         }
+        self.terrain_art_key = None;
         render_ctx
             .context
             .destroy_render_pipeline(&mut self.pipeline);

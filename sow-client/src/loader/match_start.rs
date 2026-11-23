@@ -269,6 +269,24 @@ impl SowApp {
                 .maps
                 .insert(map_id.clone(), payload);
         }
+        if tutorial && self.ui.tutorial_campaign.has_local_peten_map() {
+            let cached_for_map = self
+                .ui
+                .app
+                .asset_loader
+                .terrain_art
+                .as_ref()
+                .is_some_and(|(key, _)| key == &config.map_name);
+            if !cached_for_map {
+                self.ui.app.asset_loader.terrain_art = None;
+                self.start_terrain_art_download(
+                    config.map_name.clone(),
+                    (config.map_width * 8, config.map_height * 8),
+                );
+            }
+        } else {
+            self.ui.app.asset_loader.terrain_art = None;
+        }
 
         let start_msg = sow_core::protocol::ServerStartMessage {
             lobby_id: None,

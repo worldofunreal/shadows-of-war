@@ -171,6 +171,11 @@ fn spawn_sow_client_connect(
 pub enum MapDownloadEvent {
     CatalogReady(Vec<sow_core::maps::MapCatalogEntry>),
     MapReady(String, Vec<u8>),
+    TerrainArt {
+        session: u32,
+        map: String,
+        result: Result<image::RgbaImage, String>,
+    },
     /// Portal identity avatar (CrazyGames profile picture, arbitrary remote URL).
     PortalAvatarReady {
         bytes: Vec<u8>,

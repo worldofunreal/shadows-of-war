@@ -89,6 +89,15 @@ impl FontAtlasTexture {
         let img = image::load_from_memory(image_bytes)
             .expect("Failed to load atlas image")
             .to_rgba8();
+        Self::from_rgba(context, &img, name, format)
+    }
+
+    pub(crate) fn from_rgba(
+        context: &gpu::Context,
+        img: &image::RgbaImage,
+        name: &str,
+        format: gpu::TextureFormat,
+    ) -> Self {
         let (width, height) = img.dimensions();
         let bytes_per_row = width * 4;
         let total = (bytes_per_row * height) as usize;
@@ -100,7 +109,7 @@ impl FontAtlasTexture {
         });
         let dst = buffer.data();
         let slice = unsafe { std::slice::from_raw_parts_mut(dst, total) };
-        slice.copy_from_slice(&img);
+        slice.copy_from_slice(img.as_raw());
         context.sync_buffer(buffer, 0, buffer.size());
         let (texture, view) = Self::create_texture(context, name, format, width, height);
         Self {

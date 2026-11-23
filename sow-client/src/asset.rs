@@ -3,6 +3,41 @@ use crate::MapDownloadEvent;
 use crate::app::SowApp;
 
 impl SowApp {
+    pub(crate) fn start_terrain_art_download(&self, map: String, expected_dims: (u32, u32)) {
+        let base = self.asset_config.maps_base.trim_end_matches('/');
+        let version = crate::asset_config::AssetConfig::js_global("SOW_MAPS_CACHE_BUST")
+            .unwrap_or_default();
+        let url = if version.is_empty() {
+            format!("{base}/{map}/terrain.webp")
+        } else {
+            format!("{base}/{map}/terrain.webp?v={version}")
+        };
+        let request = ehttp::Request::get(url);
+        let session = self.ui.campaign_session_id;
+        let tx = self.tasks.map_tx.clone();
+        ehttp::fetch(request, move |response| {
+            let result = response.and_then(|res| {
+                if !res.ok {
+                    return Err(format!("HTTP {}", res.status));
+                }
+                use image::ImageDecoder;
+                let decoder = image::codecs::webp::WebPDecoder::new(std::io::Cursor::new(res.bytes))
+                    .map_err(|err| err.to_string())?;
+                if decoder.dimensions() != expected_dims {
+                    return Err(format!(
+                        "invalid dimensions {:?}, expected {:?}",
+                        decoder.dimensions(),
+                        expected_dims
+                    ));
+                }
+                image::DynamicImage::from_decoder(decoder)
+                    .map(image::DynamicImage::into_rgba8)
+                    .map_err(|err| err.to_string())
+            });
+            let _ = tx.send(MapDownloadEvent::TerrainArt { session, map, result });
+        });
+    }
+
     pub(crate) fn start_map_download(&mut self, map_name: String) {
         let map_key = crate::ui::asset_loader::AssetLoader::map_key(&map_name);
         let already_in_flight = self.ui.app.asset_loader.maps_in_flight.contains(&map_key);
@@ -214,6 +249,14 @@ impl SowApp {
                     match self.ui.app.asset_loader.ingest_portal_avatar_bytes(&bytes) {
                         Ok(()) => log::info!("Loaded portal identity avatar"),
                         Err(e) => log::warn!("Failed to ingest portal avatar: {e}"),
+                    }
+                }
+                MapDownloadEvent::TerrainArt { session, map, result } => {
+                    if session == self.ui.campaign_session_id {
+                        match result {
+                            Ok(image) => self.ui.app.asset_loader.terrain_art = Some((map, image)),
+                            Err(reason) => log::warn!("Terrain art unavailable for '{map}': {reason}"),
+                        }
                     }
                 }
                 MapDownloadEvent::PortalAvatarFailed { reason } => {

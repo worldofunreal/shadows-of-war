@@ -5674,6 +5674,7 @@ fn campaign_payload(progress: &crate::player_progress::PlayerProgress) -> serde_
             let unlocked = episode.is_unlocked(progress);
             serde_json::json!({
                 "id": episode.episode_id(),
+                "map_name": episode.map_id(),
                 "title": localized_text_payload(&episode.menu_title_text()),
                 "subtitle": localized_text_payload(&episode.menu_subtitle_text()),
                 "completed": completed,

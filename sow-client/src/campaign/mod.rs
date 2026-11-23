@@ -49,6 +49,10 @@ impl CampaignId {
         (self.0.map_width, self.0.map_height)
     }
 
+    pub fn has_local_peten_map(self) -> bool {
+        self.0.has_local_peten_map()
+    }
+
     pub fn menu_title(self) -> &'static str {
         self.0.title
     }
@@ -313,6 +317,8 @@ pub(crate) fn tutorial_camera_frame(
     let target = config.scripted_spawns.iter().find(|spawn| {
         if campaign.is_boudica() {
             spawn.campaign_faction_id.as_deref() == Some("roman_outpost")
+        } else if campaign.episode_id() == "six_sky_maya_07" {
+            spawn.campaign_faction_id.as_deref() == Some("dos_pilas")
         } else {
             spawn.campaign_relation == Some(sow_core::protocol::CampaignRelation::Enemy)
         }
@@ -335,6 +341,8 @@ pub(crate) fn tutorial_camera_frame(
     // Petén opens wide enough to frame the groves around both starting territories.
     let max_tile_css = if campaign == CampaignId::intro() {
         13.5
+    } else if campaign.has_local_peten_map() {
+        12.0
     } else {
         TUTORIAL_OPENING_MAX_TILE_CSS
     };

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src file: blob: data:;">
+  <title>Sow Spritesheet Viewer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="app-title">Sow Spritesheet Viewer</h1>
+    <button id="btn-open" type="button">Abrir spritesheet…</button>
+    <input type="file" id="file-input" accept="image/*" hidden>
+    <span id="file-name" class="muted">Sin spritesheet cargada</span>
+  </header>
+
+  <main id="workspace" tabindex="0">
+    <canvas id="preview"></canvas>
+    <canvas id="sheet-canvas"></canvas>
+  </main>
+
+  <footer class="toolbar">
+    <span class="toolbar-group">
+      Cuadrícula:
+      <input type="number" id="cols" min="1" max="999" value="1" class="num" aria-label="Columnas">
+      <span class="muted">×</span>
+      <input type="number" id="rows" min="1" max="999" value="1" class="num" aria-label="Filas">
+      <button id="btn-apply" type="button" title="Aplicar la cuadrícula editada">Aplicar</button>
+      <button id="btn-auto" type="button" title="Detectar cuadrícula de la spritesheet">Auto</button>
+      <button id="btn-swap" type="button" title="Intercambiar columnas y filas">Swap</button>
+    </span>
+    <span class="toolbar-group">
+      Celda: <span id="tile-size">—</span>
+    </span>
+    <span class="toolbar-group">
+      FPS:
+      <input type="range" id="fps-slider" min="1" max="120" step="1" value="12" aria-label="FPS">
+      <input type="number" id="fps-value" min="1" max="120" step="1" value="12" class="num" aria-label="FPS">
+    </span>
+    <span class="toolbar-group frame-controls">
+      <button id="btn-step-back" type="button" title="Frame anterior (←)">◀</button>
+      <button id="btn-play" type="button" title="Reproducir/Pausar (Espacio)">▶</button>
+      <button id="btn-step-fwd" type="button" title="Frame siguiente (→)">▶</button>
+      <span class="muted" id="frame-info">0 / 0</span>
+    </span>
+    <span class="muted" id="info-line">Sin spritesheet cargada.</span>
+  </footer>
+
+  <script src="grid.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

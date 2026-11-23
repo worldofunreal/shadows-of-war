@@ -1,0 +1,13 @@
+{
+  "name": "sow-sprites",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Visor de spritesheet animada (Electron): carga una hoja, detecta la cuadrícula y anima marco a marco.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^34.0.0"
+  }
+}

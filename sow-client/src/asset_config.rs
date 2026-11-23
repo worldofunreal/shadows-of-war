@@ -39,7 +39,7 @@ impl AssetConfig {
         }
     }
 
-    fn js_global(name: &str) -> Option<String> {
+    pub(crate) fn js_global(name: &str) -> Option<String> {
         let window = web_sys::window()?;
         let val = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str(name)).ok()?;
         val.as_string().filter(|s| !s.is_empty())
