@@ -72,7 +72,8 @@
   --sow-tactical-focus-offset: 2px;
   --sow-skin-pattern: none;
   --sow-skin-pattern-size: 40px 40px;
-  --sow-skin-pattern-opacity: 0;
+  --sow-skin-pattern-opacity: 0.065;
+  --sow-skin-svg-layer: , var(--sow-skin-artwork) 0 0 / var(--sow-skin-pattern-size) repeat;
   --sow-fill-army-gradient: linear-gradient(
     to top,
     #246e10 0%,
@@ -169,6 +170,81 @@
   --sow-skin-pattern-opacity: 0.06;
   --sow-skin-pattern-size: 32px 32px;
   --sow-skin-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%235cf29a' stroke-width='1.5'%3E%3Cpath d='M-16 0a16 16 0 0 0 32 0M16 0a16 16 0 0 0 32 0M0 16a16 16 0 0 0 32 0'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+:root[data-sow-skin="imperial_vanguard"] {
+  --sow-tactical-accent: #d9a441;
+  --sow-tactical-accent-bright: #f4d58d;
+  --sow-skin-pattern-size: 36px 36px;
+  --sow-skin-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M6 16l12-8 12 8M6 26l12-8 12 8' fill='none' stroke='%23f4d58d' stroke-width='2.5'/%3E%3C/svg%3E");
+}
+
+:root[data-sow-skin="war_ravens"] {
+  --sow-tactical-accent: #dd8a50;
+  --sow-tactical-accent-bright: #ffc69a;
+  --sow-skin-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M7 33 28 12m-16 17c-2-11 7-21 20-22 1 12-9 23-20 22Zm7-7v-6m0 6h6m-2-4v-5' fill='none' stroke='%23ffc69a' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+:root[data-sow-skin="moon_rabbit"] {
+  --sow-tactical-accent: #9d9cdd;
+  --sow-tactical-accent-bright: #dedfff;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+}
+
+:root[data-sow-skin="heraldic_lions"] {
+  --sow-tactical-accent: #ca9253;
+  --sow-tactical-accent-bright: #ffdaa6;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+}
+
+/* Use the catalog SVG as a stamp. Only opaque artwork needs its own UI pattern. */
+img[data-skin-icon] {
+  --sow-skin-icon-plate: transparent;
+  border-radius: 6px;
+  background-color: var(--sow-skin-icon-plate);
+  object-fit: contain;
+}
+
+:root[data-sow-skin="elephant"], img[data-skin-icon="elephant"] {
+  --sow-tactical-accent: #8caab6;
+  --sow-tactical-accent-bright: #d7eaf0;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent);
+}
+
+:root[data-sow-skin="wolf"], img[data-skin-icon="wolf"] {
+  --sow-tactical-accent: #72a2db;
+  --sow-tactical-accent-bright: #c7e2ff;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent);
+}
+
+:root[data-sow-skin="tiger"], img[data-skin-icon="tiger"] {
+  --sow-tactical-accent: #ec9c4f;
+  --sow-tactical-accent-bright: #ffdbab;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent);
+}
+
+:root[data-sow-skin="jaguar"], img[data-skin-icon="jaguar"] {
+  --sow-tactical-accent: #52ba9b;
+  --sow-tactical-accent-bright: #b9f0d8;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent);
+}
+
+:root[data-sow-skin="spider"], img[data-skin-icon="spider"] {
+  --sow-tactical-accent: #ba87d4;
+  --sow-tactical-accent-bright: #f0cef9;
+  --sow-skin-pattern-layer: var(--sow-skin-svg-layer);
+  --sow-skin-pattern-ink: var(--sow-tactical-accent-bright);
+  --sow-skin-icon-plate: var(--sow-tactical-accent);
 }
 
 html,
@@ -474,6 +550,7 @@ html[data-sow-skin]
   border-radius: inherit;
   overflow: hidden;
   pointer-events: none;
+  background-color: var(--sow-skin-pattern-ink, transparent);
   background-image: var(--sow-skin-pattern);
   background-repeat: repeat;
   background-size: var(--sow-skin-pattern-size);
@@ -485,8 +562,9 @@ html[data-sow-skin]
     rgb(0 0 0 / 36%) 44%,
     transparent 84%
   );
-  -webkit-mask-image: var(--sow-skin-mask, var(--sow-skin-mask-default));
-  mask-image: var(--sow-skin-mask, var(--sow-skin-mask-default));
+  --sow-skin-fade: var(--sow-skin-mask, var(--sow-skin-mask-default));
+  -webkit-mask-image: var(--sow-skin-fade);
+  mask: var(--sow-skin-fade) no-repeat intersect var(--sow-skin-pattern-layer, );
 }
 
 html[data-sow-skin][dir="rtl"]

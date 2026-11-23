@@ -1054,12 +1054,14 @@ const ART_FOLDERS: [(&str, &str); 7] = [
     ("music", "gameplay/music"),
     ("units", "gameplay/units"),
 ];
-const GAMEPLAY_UNIT_ART: [&str; 5] = [
+const GAMEPLAY_UNIT_ART: [&str; 7] = [
     "transport-ship.webp",
     "trade-ship.webp",
     "warship.webp",
     "atom-bomb.webp",
     "sam-missile.webp",
+    "hydrogen-bomb.webp",
+    "mirv.webp",
 ];
 /// Arabic shaping font for nameplates, published beside the text atlas.
 const ARABIC_FONT_PATH: &str = "gameplay/text/noto-sans-arabic-regular.ttf";
@@ -2269,7 +2271,6 @@ fn copy_poki_assets(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
     copy_dir(src, dst)?;
     for excluded in [
         "gameplay/store",
-        "gameplay/skins",
         "shell/brand",
         "site/media",
     ] {
@@ -6228,7 +6229,7 @@ mod tests {
             "gameplay/avatars/caesar.webp",
             "gameplay/buildings/atlas.webp",
             "gameplay/icons/abilities/caesar.webp",
-            "gameplay/skins/unused.webp",
+            "gameplay/skins/moon_rabbit.svg",
             "gameplay/store/unused.webp",
             "shell/brand/logo.webp",
             "shell/mobile-nav/battle.webp",
@@ -6254,6 +6255,7 @@ mod tests {
             "gameplay/avatars/caesar.webp",
             "gameplay/buildings/atlas.webp",
             "gameplay/icons/abilities/caesar.webp",
+            "gameplay/skins/moon_rabbit.svg",
             "shell/mobile-nav/battle.webp",
         ]
         .map(PathBuf::from)

@@ -28,15 +28,14 @@ import { renderDirectiveCard } from "./main_menu.missions.ts";
 export function renderCommandPanel() {
     return (
         "" +
-        "<section class='sow-menu__command sow-home__stage'>" +
+        "<section class='sow-menu__command sow-home__panel'>" +
         "<div class='sow-menu__home-public'>" +
         renderPublicPanel("home") +
         "</div>" +
         "<div class='sow-home__directive'>" +
         renderDirectiveCard() +
         "</div>" +
-        "<div class='sow-menu__home-actions sow-home__dock'>" +
-        renderFeedback() +
+        "<div class='sow-menu__home-actions'>" +
         "<div class='sow-home__secondary-modes'>" +
         "<button class='sow-menu__secondary sow-home__mode-btn sow-home__campaign-btn' type='button' data-command='open_campaign'>" +
         "<span class='sow-home__mode-icon' aria-hidden='true'>" +
@@ -48,9 +47,12 @@ export function renderCommandPanel() {
         "</button>" +
         renderLobbyBrowserButton() +
         "</div>" +
-        renderQuickMatchButton() +
+        renderFeedback() +
         "</div>" +
-        "</section>"
+        "</section>" +
+        "<div class='sow-home__ranked-dock'>" +
+        renderQuickMatchButton() +
+        "</div>"
     );
 }
 

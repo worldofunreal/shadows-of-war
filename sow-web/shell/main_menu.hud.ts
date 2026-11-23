@@ -1,5 +1,12 @@
 import { formatCompactNumber as formatEndgameCompact } from "./number-format.ts";
-import { AudioCue, playUiCue, syncAudioSettings } from "./audio/index.ts";
+import {
+  AudioCue,
+  BuildingModeSubtype,
+  installSurfaceHoverPressAudio,
+  MenuSfx,
+  playUiCue,
+  syncAudioSettings,
+} from "./audio/index.ts";
 import {
   type AvatarExpression,
   avatarAssetUrl,
@@ -2393,12 +2400,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "</div>" +
       '<div class="sow-hud__buildings-strip" id="sow-hud-nuclear-strip" style="display:none">' +
       [
-        ["AtomBomb", "0"],
-        ["HydrogenBomb", "9"],
-        ["MIRV", "8"],
-      ].map(([kind, hotkey], index) =>
+        ["AtomBomb", "0", "atom-bomb"],
+        ["HydrogenBomb", "9", "hydrogen-bomb"],
+        ["MIRV", "8", "mirv"],
+      ].map(([kind, hotkey, iconName], index) =>
         '<button type="button" class="sow-hud__building-btn" data-command="select_nuke" data-kind="' +
         kind + '" data-nuclear-index="' + index + '" aria-keyshortcuts="' + hotkey + '">' +
+        unitIcon(iconName, "sow-hud__building-icon") +
         '<span class="sow-hud__nuclear-label">' +
         escapeHudText(SOW_t("hud.nuclear_" + kind.toLowerCase())) + "</span>" +
         tileCost(true) + dockHotkey(hotkey) + "</button>"
@@ -3067,7 +3075,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       if (!(input instanceof HTMLInputElement)) return;
       const setting = input.dataset.hudSetting;
       if (setting === "mute_all") {
+        if (!input.checked) MenuSfx.toggleSwitch(false);
         syncAudioSettings({ mute_all: !input.checked });
+        if (input.checked) MenuSfx.toggleSwitch(true);
         send("set_mute", { value: !input.checked });
       }
       if (setting === "music_volume") {
@@ -3087,15 +3097,24 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         }
         send("set_sfx_volume", { value: val });
       }
-      if (setting === "reduced_motion")
+      if (setting === "reduced_motion") {
+        MenuSfx.toggleSwitch(input.checked);
         send("set_reduced_motion", { value: input.checked });
-      if (setting === "free_zoom_out")
+      }
+      if (setting === "free_zoom_out") {
+        MenuSfx.toggleSwitch(input.checked);
         send("set_free_zoom_out", { value: input.checked });
-      if (setting === "show_match_clock")
+      }
+      if (setting === "show_match_clock") {
+        MenuSfx.toggleSwitch(input.checked);
         send("set_show_match_clock", { value: input.checked });
-      if (setting === "show_fps_ping")
+      }
+      if (setting === "show_fps_ping") {
+        MenuSfx.toggleSwitch(input.checked);
         send("set_show_fps_ping", { value: input.checked });
+      }
       if (setting === "show_dev_tools") {
+        MenuSfx.toggleSwitch(input.checked);
         if (!input.checked) {
           devSidebarOpen = false;
         }
@@ -8209,7 +8228,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       hadNewNotification = true;
       const createdAt = Date.now();
       const prio = Math.max(0, Number(entry.priority) || 0);
-      playUiCue(AudioCue.UiToast, prio);
+      if (entry.key !== "hud.ability_notice") playUiCue(AudioCue.UiToast, prio);
       const item = {
         entry: entry,
         priority: prio,
@@ -9983,6 +10002,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (mapBack) {
           const fromGroup = mapMenuView;
           mapMenuView = "root";
+          if (fromGroup === "build") {
+            playUiCue(AudioCue.BuildingModeEnter, BuildingModeSubtype.Exit);
+          }
           renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
           const groupSlot = mapMenu.querySelector<HTMLElement>(
             '[data-map-group="' + fromGroup + '"]',
@@ -9991,6 +10013,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         } else if (mapGroup) {
           mapMenuView =
             mapGroup.dataset.mapGroup === "emote" ? "emote" : "build";
+          if (mapMenuView === "build") {
+            playUiCue(AudioCue.BuildingModeEnter, BuildingModeSubtype.Enter);
+          }
           renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
           const firstChoice = mapMenu.querySelector<HTMLButtonElement>(
             ".sow-hud__ring-slot:not(:disabled)",
@@ -10450,6 +10475,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         send("continue_observing");
       }
     }
+    installSurfaceHoverPressAudio(hudRoot);
     hudRoot.addEventListener("click", handleHudClick);
     hudDevLayer!.addEventListener("click", handleHudClick);
     bindRingInput();

@@ -1,225 +1,228 @@
 /**
- * Nuclear Arsenal & SAM Air-Defense Procedural Recipes.
+ * Nuclear Arsenal & SAM Air-Defense Procedural Recipes (`nukes.ts`).
  *
- * Acoustic Identity:
- *   Multi-stage physical sound design with strict headroom discipline:
- *     - `NukeArmed`:    Tactical silo lock & warning hum scaled by warhead class
- *     - `NukeLaunch`:   Rocket ignition crack + rising jet roar + distant warning sweep
- *     - `MirvSplit`:    High-altitude pneumatic separation pop + diverging whistle cluster
- *     - `SamIntercept`: Crisp mid-air flak/airburst crack (no ground sub-boom)
- *     - `NukeImpact`:   Sub-drop shockwave + saturated crack + brown-noise thunder + reverb tail,
- *                       distinctly weighted for Atom (1), Hydrogen (2), and MIRV warhead (4).
+ * Acoustic Identity (Blockbuster Cinema / Modern Tactical Warfare):
+ *   - `NukeArmed`:    Guarded master-arm brass toggle + ominous subterranean brass
+ *                     power hum + escalating targeting lock pulses per warhead class.
+ *   - `NukeLaunch`:   Silo blast-door release + tube-driven rocket ignition punch +
+ *                     wide stereo crackling afterburner roar + air-raid brass swell.
+ *   - `MirvSplit`:    Stratospheric pyrotechnic bolt crack + 4 stereo-scattered
+ *                     atmospheric reentry warhead trails (`L → R`).
+ *   - `SamIntercept`: Crisp high-altitude flak crack + metallic shrapnel spray.
+ *   - `NukeImpact`:   5-stage Hollywood shockwave (`playCinematicBlast`) scaling from
+ *                     tight MIRV strike to earth-shaking double-shock Hydrogen detonation.
  */
 
 import {
+    playBuffer,
     playFilteredNoise,
     playFmTone,
-    playSubDrop,
     playTone,
     vary,
     type VoiceRenderCtx,
 } from "../dsp.ts";
+import {
+    playBrassEnsemble,
+    playCasinoChime,
+    playCinematicBlast,
+    playSteelImpact,
+    playTaikoHit,
+} from "../instruments.ts";
 import { NukeAudioLevel, type CueTrigger } from "../types.ts";
 
-/** `NukeArmed` — Silo safety disarm & targeting lock (`subtype`: 1=Atom, 2=Hydrogen, 3=MIRV). */
+/** `NukeArmed` — Master-arm safety switch flip + subterranean hum (`subtype`: 1=Atom, 2=Hydrogen, 3=MIRV). */
 export function synthNukeArmed(v: VoiceRenderCtx, t: CueTrigger): void {
     const level = Math.round(t.subtype) || NukeAudioLevel.Atom;
-    const base = level === NukeAudioLevel.Hydrogen ? 293.66 : level === NukeAudioLevel.MirvCarrier ? 246.94 : 349.23;
+    const isHydro = level === NukeAudioLevel.Hydrogen;
+    const isMirv = level === NukeAudioLevel.MirvCarrier;
 
-    // Mechanical safety toggle click
-    playFilteredNoise(v, {
-        color: "white",
-        attack: 0.002,
-        decay: 0.03,
-        gain: 0.14,
-        filterType: "bandpass",
-        filterFreq: 3100,
-        filterQ: 2.5,
+    // Guarded nuclear toggle flip + heavy bunker latch
+    playBuffer(v, { buffer: v.bank.brassLatch[1], rate: 1.05, gain: 0.44, wetSend: 0.22 });
+    playBuffer(v, { buffer: v.bank.brassLatch[0], delay: 0.032, rate: 1.32, gain: 0.28 });
+
+    // Ominous subterranean silo power swell
+    playBrassEnsemble(v, {
+        freq: isMirv ? 110.0 : isHydro ? 130.81 : 146.83,
+        delay: 0.015,
+        attack: 0.04,
+        hold: 0.08,
+        decay: 0.36,
+        gain: 0.34,
+        brightness: 0.85,
+        goldenHall: false,
     });
 
-    // Tactical lock tone(s)
-    const pulses = level === NukeAudioLevel.MirvCarrier ? 3 : level === NukeAudioLevel.Hydrogen ? 2 : 1;
+    // Escalating crisp telemetry target-lock pings
+    const pulses = isMirv ? 3 : isHydro ? 2 : 1;
+    const baseHz = isMirv ? 659.25 : isHydro ? 739.99 : 880.0;
     for (let i = 0; i < pulses; i++) {
         playFmTone(v, {
-            carrierFreq: base * (1 + i * 0.12),
-            carrierFreqEnd: base * (1.15 + i * 0.14),
+            carrierFreq: baseHz * (1 + i * 0.14),
+            carrierFreqEnd: baseHz * (1.12 + i * 0.14),
             modRatio: 2.0,
-            modIndex: 0.7,
-            delay: 0.02 + i * 0.065,
-            attack: 0.004,
-            decay: 0.11,
-            gain: 0.17,
+            modIndex: 0.42,
+            delay: 0.025 + i * 0.072,
+            attack: 0.003,
+            decay: 0.12,
+            gain: 0.18,
+            pan: pulses > 1 ? -0.3 + (0.6 * i) / (pulses - 1) : 0,
+            shimmerSend: 0.34,
         });
     }
 }
 
-/** `NukeLaunch` — Booster ignition + filtered thruster roar + distant klaxon sweep. */
+/** `NukeLaunch` — Silo blast-door release + booster ignition punch + crackling stereo thrust roar. */
 export function synthNukeLaunch(v: VoiceRenderCtx, t: CueTrigger): void {
     const level = Math.round(t.subtype) || NukeAudioLevel.Atom;
     const heavy = level === NukeAudioLevel.Hydrogen || level === NukeAudioLevel.MirvCarrier;
     const drive = v.createWarmDrive();
     drive.connect(v.out);
 
-    // Silo ignition thump
-    playSubDrop(v, heavy ? 115 : 135, 36, heavy ? 0.32 : 0.24, heavy ? 0.42 : 0.34, 0, drive);
+    // Blast door unlock + silo ignition kick
+    playSteelImpact(v, { heavy: true, pitch: 0.72, gain: 0.36, wetSend: 0.4 });
+    playTaikoHit(v, { heavy: true, pitch: heavy ? 0.76 : 0.88, delay: 0.01, gain: heavy ? 0.66 : 0.54, wetSend: 0.5 });
 
-    // Ascending rocket thrust roar
+    // Crackling stereo rocket engine roar sweeping skyward
     playFilteredNoise(v, {
-        color: "pink",
-        attack: 0.025,
-        decay: heavy ? 0.65 : 0.48,
-        gain: heavy ? 0.32 : 0.26,
+        color: "crackle",
+        delay: 0.015,
+        attack: 0.028,
+        decay: heavy ? 0.88 : 0.65,
+        gain: heavy ? 0.54 : 0.44,
         filterType: "bandpass",
-        filterFreq: 320,
-        filterFreqEnd: heavy ? 2100 : 1650,
-        filterQ: 1.1,
+        filterFreq: 340,
+        filterFreqEnd: heavy ? 2450 : 1850,
+        filterQ: 0.9,
+        wetSend: 0.52,
         dest: drive,
     });
 
-    // Subtle rising launch siren harmonic
-    playTone(v, {
-        type: "triangle",
-        freq: heavy ? 220 : 280,
-        freqEnd: heavy ? 520 : 620,
-        delay: 0.04,
-        attack: 0.04,
-        decay: heavy ? 0.46 : 0.34,
-        gain: 0.14,
-        filterType: "lowpass",
-        filterFreq: 1400,
+    // Dramatic rising air-raid brass tension swell
+    playBrassEnsemble(v, {
+        freq: heavy ? 174.61 : 220.0,
+        freqEnd: heavy ? 261.63 : 329.63,
+        delay: 0.05,
+        attack: 0.06,
+        hold: 0.08,
+        decay: heavy ? 0.62 : 0.46,
+        gain: 0.32,
+        brightness: 1.12,
+        goldenHall: false,
     });
-
-    if (v.wet) {
-        playFilteredNoise(v, {
-            color: "brown",
-            delay: 0.05,
-            attack: 0.04,
-            decay: 0.55,
-            gain: 0.2,
-            filterType: "lowpass",
-            filterFreq: 520,
-            dest: v.wet,
-        });
-    }
 }
 
-/** `MirvSplit` — High-altitude carrier separation + diverging warhead whistles. */
+/** `MirvSplit` — Stratospheric pyrotechnic carrier separation + 4 stereo-panned diving warhead trails. */
 export function synthMirvSplit(v: VoiceRenderCtx, _t: CueTrigger): void {
-    // Pneumatic separation crack
-    playFilteredNoise(v, {
-        color: "white",
-        attack: 0.002,
-        decay: 0.09,
-        gain: 0.28,
-        filterType: "bandpass",
-        filterFreq: 2200,
-        filterFreqEnd: 780,
-        filterQ: 1.4,
-    });
-    playSubDrop(v, 180, 62, 0.16, 0.28);
+    // High-altitude pyrotechnic bolt crack + metallic fairing shed
+    playCinematicBlast(v, { scale: 0.52, tailSec: 0.28, gain: 0.48 });
+    playSteelImpact(v, { heavy: false, pitch: 1.38, delay: 0.008, gain: 0.34, wetSend: 0.42 });
 
-    // 4 staggered descending micro-whistles simulating warhead dispersal
+    // 4 diverging atmospheric reentry trails fanning across L -> R
+    const pans = [-0.68, -0.24, 0.24, 0.68];
     for (let i = 0; i < 4; i++) {
-        const startHz = vary(v.rng, 1480 - i * 110, 0.08);
+        const delay = 0.03 + i * 0.044;
+        const startHz = vary(v.rng, 1680 - i * 130, 0.07);
+        // Atmospheric drag air-whistle (high-Q resonant noise + subtle harmonic glide — never raw NES blip!)
+        playFilteredNoise(v, {
+            color: "parchment",
+            delay,
+            attack: 0.012,
+            decay: 0.28,
+            gain: 0.24,
+            filterType: "bandpass",
+            filterFreq: startHz * 1.4,
+            filterFreqEnd: startHz * 0.42,
+            filterQ: 4.2,
+            pan: pans[i],
+            wetSend: 0.44,
+        });
         playTone(v, {
+            wave: v.bank.choirWave,
             type: "sine",
             freq: startHz,
-            freqEnd: startHz * 0.42,
-            delay: 0.025 + i * 0.042,
-            attack: 0.006,
-            decay: 0.22,
-            gain: 0.11,
+            freqEnd: startHz * 0.38,
+            delay,
+            attack: 0.01,
+            decay: 0.24,
+            gain: 0.08,
+            pan: pans[i],
+            wetSend: 0.38,
         });
     }
 }
 
-/** `SamIntercept` — Sharp high-altitude airburst flash (dry crack + metallic shrapnel). */
+/** `SamIntercept` — Razor-sharp high-altitude flak airburst + shattering metallic shrapnel spray. */
 export function synthSamIntercept(v: VoiceRenderCtx, _t: CueTrigger): void {
-    // Clean flak crack without heavy ground-shaking sub
+    const drive = v.createWarmDrive();
+    drive.connect(v.out);
+
+    // Blinding crisp high-altitude flak crack (clean sky punch, zero muddy sub-boom)
     playFilteredNoise(v, {
-        color: "white",
-        attack: 0.002,
-        decay: 0.13,
-        gain: 0.3,
-        filterType: "bandpass",
-        filterFreq: vary(v.rng, 1850, 0.15),
-        filterFreqEnd: 620,
-        filterQ: 1.3,
+        color: "crackle",
+        attack: 0.0015,
+        decay: 0.16,
+        gain: 0.52,
+        filterType: "highpass",
+        filterFreq: 520,
+        filterFreqEnd: 240,
+        wetSend: 0.42,
+        dest: drive,
     });
-    playFmTone(v, {
-        carrierFreq: vary(v.rng, 680, 0.12),
-        carrierFreqEnd: 240,
-        modRatio: 2.71,
-        modIndex: 2.2,
-        modIndexEnd: 0.15,
-        attack: 0.002,
-        decay: 0.14,
-        gain: 0.2,
+    playTaikoHit(v, { heavy: false, pitch: 1.38, gain: 0.38, rimCrack: 0.85, wetSend: 0.35 });
+
+    // Shattering missile casing shrapnel across stereo
+    playSteelImpact(v, { heavy: false, pitch: 1.32, delay: 0.006, gain: 0.38, pan: -0.32, wetSend: 0.46 });
+    playSteelImpact(v, { heavy: false, pitch: 1.54, delay: 0.022, gain: 0.26, pan: 0.36, wetSend: 0.48 });
+
+    // Subtle crisp defensive confirmation glint so intercepting feels rewarding!
+    playCasinoChime(v, {
+        freq: 1174.66,
+        delay: 0.03,
+        decay: 0.24,
+        gain: 0.15,
+        sparkle: 0.6,
+        shimmerSend: 0.45,
     });
-    playSubDrop(v, 190, 78, 0.09, 0.2);
 }
 
 /**
- * `NukeImpact` — Multi-stage nuclear detonation scaled by warhead class.
- * `subtype`: 1 = AtomBomb, 2 = HydrogenBomb (massive), 4 = MIRV warhead (punchy/tight).
+ * `NukeImpact` — 5-stage Hollywood nuclear detonation scaled by warhead class.
+ * `subtype`: 1 = AtomBomb, 2 = HydrogenBomb (massive double-shock), 4 = MIRV warhead (tight brutal punch).
  */
 export function synthNukeImpact(v: VoiceRenderCtx, t: CueTrigger): void {
     const level = Math.round(t.subtype) || NukeAudioLevel.Atom;
     const isHydro = level === NukeAudioLevel.Hydrogen;
     const isMirv = level === NukeAudioLevel.MirvWarhead;
-    const drive = v.createWarmDrive();
-    drive.connect(v.out);
 
-    // Stage 1: Initial flash crack (white noise transient)
-    playFilteredNoise(v, {
-        color: "white",
-        attack: 0.002,
-        decay: isHydro ? 0.14 : 0.09,
-        gain: isHydro ? 0.42 : isMirv ? 0.3 : 0.36,
-        filterType: "bandpass",
-        filterFreq: vary(v.rng, isHydro ? 1400 : 1800, 0.14),
-        filterFreqEnd: 320,
-        filterQ: 0.9,
-        dest: drive,
+    playCinematicBlast(v, {
+        scale: isHydro ? 1.42 : isMirv ? 0.78 : 1.08,
+        tailSec: isHydro ? 1.55 : isMirv ? 0.64 : 1.08,
+        doubleShock: isHydro,
+        gain: isHydro ? 0.9 : isMirv ? 0.68 : 0.8,
     });
 
-    // Stage 2: Physical shockwave sub-drop
-    playSubDrop(
-        v,
-        vary(v.rng, isHydro ? 96 : isMirv ? 112 : 104, 0.06),
-        isHydro ? 22 : isMirv ? 32 : 26,
-        isHydro ? 0.85 : isMirv ? 0.38 : 0.62,
-        isHydro ? 0.62 : isMirv ? 0.46 : 0.54,
-        0,
-        drive,
-    );
-
-    // Stage 3: Expanding pressure thunder (brown noise rumble)
-    playFilteredNoise(v, {
-        color: "brown",
-        delay: 0.025,
-        attack: 0.02,
-        decay: isHydro ? 1.35 : isMirv ? 0.55 : 0.95,
-        gain: isHydro ? 0.48 : isMirv ? 0.32 : 0.4,
-        filterType: "lowpass",
-        filterFreq: isHydro ? 680 : 820,
-        filterFreqEnd: 95,
-        dest: drive,
+    // Superheated steel/shockwave tear at detonation core
+    playSteelImpact(v, {
+        heavy: true,
+        pitch: isHydro ? 0.58 : isMirv ? 0.92 : 0.72,
+        delay: 0.005,
+        gain: isHydro ? 0.42 : 0.28,
+        wetSend: 0.6,
     });
 
-    // Stage 4: Fallout debris / atmospheric hiss tail into reverb
-    if (v.wet) {
-        playFilteredNoise(v, {
-            color: "pink",
+    // Cinema apocalyptic low brass drone resonance under Hydrogen & Atom blasts
+    if (!isMirv) {
+        playBrassEnsemble(v, {
+            freq: isHydro ? 73.42 : 98.0, // D2 / G2 seismic dark horn
+            freqEnd: isHydro ? 55.0 : 73.42,
             delay: 0.06,
-            attack: 0.05,
-            decay: isHydro ? 1.15 : isMirv ? 0.42 : 0.78,
-            gain: isHydro ? 0.32 : isMirv ? 0.18 : 0.24,
-            filterType: "bandpass",
-            filterFreq: 520,
-            filterFreqEnd: 180,
-            filterQ: 0.8,
-            dest: v.wet,
+            attack: 0.08,
+            hold: 0.14,
+            decay: isHydro ? 1.25 : 0.82,
+            gain: isHydro ? 0.38 : 0.26,
+            brightness: 0.68,
+            width: 0.55,
+            goldenHall: false,
         });
     }
 }

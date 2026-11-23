@@ -3,8 +3,24 @@ from pathlib import Path
 import subprocess
 
 root = Path(__file__).resolve().parents[1]
-atlas = bytearray(256 * 64)
-for column, name in enumerate(("moon_rabbit", "war_ravens", "heraldic_lions")):
+
+# (style, svg name). Cells are style - 10; styles 13-17 (columns 3-7) are the
+# new animal silhouettes in assets/art/skins/.
+SOURCES = [
+    ("moon_rabbit", 10),
+    ("war_ravens", 11),
+    ("heraldic_lions", 12),
+    ("elephant", 13),
+    ("wolf", 14),
+    ("tiger", 15),
+    ("jaguar", 16),
+    ("spider", 17),
+]
+ATLAS_WIDTH = 512
+
+atlas = bytearray(ATLAS_WIDTH * 64)
+for name, style in SOURCES:
+    column = style - 10
     svg = root / "assets" / "art" / "skins" / f"{name}.svg"
     png = subprocess.check_output(["rsvg-convert", "-w", "56", "-h", "56", svg])
     if name == "war_ravens":
@@ -18,7 +34,7 @@ for column, name in enumerate(("moon_rabbit", "war_ravens", "heraldic_lions")):
     )
     assert len(mask) == 56 * 56
     for row in range(56):
-        offset = (row + 4) * 256 + column * 64 + 4
+        offset = (row + 4) * ATLAS_WIDTH + column * 64 + 4
         atlas[offset:offset + 56] = mask[row * 56:(row + 1) * 56]
 
 (root / "sow-render" / "src" / "map_renderer" / "territory_skins.r8").write_bytes(atlas)

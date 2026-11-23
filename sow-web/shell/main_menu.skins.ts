@@ -1,9 +1,35 @@
-import { asset, esc, menuUi } from "./main_menu.core.ts";
-import type { MenuSkinOffer } from "./main_menu.state.ts";
+import { asset, esc, menuUi, root } from "./main_menu.core.ts";
+import type { MenuSkinOffer, MenuState } from "./main_menu.state.ts";
 
 export function skinName(skin: MenuSkinOffer) {
     const key = "store.skin_" + skin.id;
     return window.SOW_hasText?.(key) ? SOW_t(key) : skin.name;
+}
+
+export function skinIconAttributes(id: string, url: string): string {
+    return "src='" + esc(url) + "' data-skin-icon='" + esc(id) + "'";
+}
+
+export function syncMenuSkinTheme(state: MenuState | null): void {
+    const skin = state?.store?.skins?.find((item) => item.owned && item.id === state.selected_skin);
+    const html = document.documentElement;
+    const hud = document.getElementById("sow-hud");
+    if (skin) {
+        root.dataset.skin = skin.id;
+        if (hud) hud.dataset.skin = skin.id;
+        if (html.dataset.sowSkin !== skin.id) {
+            const url = new URL(asset(skin.asset_path), document.baseURI).href;
+            html.style.setProperty("--sow-skin-artwork", `url(${JSON.stringify(url)})`);
+            html.dataset.sowSkin = skin.id;
+        }
+    } else {
+        delete root.dataset.skin;
+        if (hud) delete hud.dataset.skin;
+        if (html.dataset.sowSkin !== undefined) {
+            delete html.dataset.sowSkin;
+            html.style.removeProperty("--sow-skin-artwork");
+        }
+    }
 }
 
 export function renderSkinsButton() {
@@ -28,8 +54,8 @@ export function renderSkinCard(skin: MenuSkinOffer, lockedAction = "", discount 
     return (
         "<article class='sow-store__skin" + (equipped ? " is-equipped" : "") +
         (discountBadge ? " is-on-sale" : "") +
-        "'><div class='sow-store__skin-art'><img src='" + esc(asset(skin.asset_path)) +
-        "' alt='' width='96' height='96' loading='lazy'>" +
+        "'><div class='sow-store__skin-art'><img " + skinIconAttributes(skin.id, asset(skin.asset_path)) +
+        " alt='' width='96' height='96' loading='lazy'>" +
         (discountBadge ? "<b class='sow-store__discount'>-" + discount + "%</b>" : "") +
         "</div><div class='sow-store__skin-body'><h3>" + esc(skinName(skin)) +
         "</h3><p>" + esc(SOW_t("store.territory_pattern")) + "</p>" + action + "</div></article>"

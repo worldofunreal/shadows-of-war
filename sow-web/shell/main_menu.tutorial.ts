@@ -685,6 +685,12 @@ interface TutorialRuntime {
             onContinue: continueScene,
             onChoice: choose,
             onFocus: focusMarker,
+            onHostCue: function (kind) {
+                if (kind === "enter") playUiCue(AudioCue.UiModalOpen, 0, 0.35);
+                else if (kind === "poke") playUiCue(AudioCue.UiClick, 0, 0.4);
+                else if (kind === "nudge") playUiCue(AudioCue.UiToast, 0, 0.35);
+                else if (kind === "celebrate") playUiCue(AudioCue.Victory, 0, 0.45);
+            },
         });
     }
 

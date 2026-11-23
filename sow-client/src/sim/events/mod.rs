@@ -1,4 +1,3 @@
-mod combat;
 mod elimination;
 
 fn ability_is_visible_to_player(owner_id: u16, affected: &[u16], my_id: u16) -> bool {
@@ -51,7 +50,6 @@ impl SowApp {
         my_id: u16,
     ) -> crate::player_progress::SessionDefeats {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
-        let mut played_combat_this_tick = false;
         let mut captured_enemy_tiles: u32 = 0;
         let mut last_enemy_capture_pos: Option<(f32, f32)> = None;
         let mut best_tutorial_capture: Option<(sow_core::game::BuildingKind, u8, u32)> = None;
@@ -476,26 +474,10 @@ impl SowApp {
                                 start_time: now_instant,
                             });
                     }
-                    // The notice shows the hero's icon and its own ability name.
-                    let hero = sow_core::commerce::leader_id(owner.leader).to_string();
-                    self.ui.app.hud_state.push_notification_for_players(
-                        crate::ui::UiText::new("hud.ability_notice")
-                            .with("hero", hero.clone())
-                            .with("hero_art", owner.leader.art_slug())
-                            .with("ability_key", format!("site.leader_{hero}_ability"))
-                            .with("description_key", format!("site.leader_{hero}_description")),
-                        [Some(owner_id), (my_id != owner_id).then_some(my_id)],
-                        3,
-                        Some(format!("ability:{owner_id}")),
-                        false,
-                    );
-                    let ability_spatial =
-                        tile.map(|(x, y)| self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5));
-                    self.sfx.play_hero_ability(
-                        now_instant,
-                        crate::app::audio::ability_cue_code(owner.leader.ability().cue()),
-                        ability_spatial,
-                    );
+                    self.ui
+                        .app
+                        .hud_state
+                        .push_ability_notice(owner_id, my_id, owner.leader, now_instant);
                 }
                 sow_core::game::GameEvent::PlayerEliminated {
                     player_id,
@@ -530,25 +512,12 @@ impl SowApp {
                     y,
                     new_owner,
                     previous_owner,
-                    troops,
+                    ..
                 } => {
                     if my_id != 0 && new_owner == my_id && previous_owner != 0 {
                         captured_enemy_tiles = captured_enemy_tiles.saturating_add(1);
                         last_enemy_capture_pos = Some((x as f32 + 0.5, y as f32 + 0.5));
                     }
-                    self.handle_tile_captured(
-                        snap,
-                        my_id,
-                        now_instant,
-                        &mut played_combat_this_tick,
-                        &combat::CaptureEventInfo {
-                            x,
-                            y,
-                            new_owner,
-                            previous_owner,
-                            troops,
-                        },
-                    );
                 }
                 sow_core::game::GameEvent::AllianceRequestLifecycle {
                     proposer_id,
@@ -730,13 +699,10 @@ impl SowApp {
             self.sfx
                 .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
         }
-        if let Some((wx, wy)) = last_enemy_capture_pos
-            && let Some(step) =
-                self.ui
-                    .record_territory_advance(captured_enemy_tiles, wx, wy, now_instant)
-        {
-            self.sfx
-                .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
+        if let Some((wx, wy)) = last_enemy_capture_pos {
+            let _ = self
+                .ui
+                .record_territory_advance(captured_enemy_tiles, wx, wy, now_instant);
         }
         self.sfx.flush_tick(now_instant);
         turn_defeats

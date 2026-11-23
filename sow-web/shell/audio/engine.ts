@@ -1,24 +1,31 @@
 /**
- * Procedural Audio Engine — Single Shared Web Audio Mastering Graph & Voice Scheduler.
+ * Procedural Audio Engine — Studio Mastering Graph & Zero-Copy Voice Scheduler.
  *
- * SIGNAL GRAPH
+ * STUDIO SIGNAL GRAPH
+ * ===================
+ *   [Spatial SFX Voice] ─► airLPF ─► StereoPanner ─► sfxBus ─► sfxToneEQ ────────┐
+ *   [UI / UX Voice]     ───────────────────────────► uiBus  ─► uiToneEQ  ────────┤
+ *   [Menu Music Decks]  ───────────────────────────► musicBus ───────────────────┼─► GlueCompressor ─► SoftLimiter ─► masterGain ─► destination
+ *   [Arena Sends]       ─► Convolver (0.85 s) ─────► arenaReturn  ───────────────┤
+ *   [Golden Hall Sends] ─► Convolver (1.65 s) ─────► casinoReturn ───────────────┘
+ *
+ * TONE SHAPING
  * ============
- *   [Spatial SFX Voice] ─► airLPF ─► StereoPanner ─► sfxBus (sfx_volume) ──┐
- *   [UI / HUD Voice]    ───────────────────────────► uiBus  (sfx_volume) ──┼─► DynamicsCompressor ─► masterGain ─► destination
- *   [Menu Music Decks]  ───────────────────────────► musicBus (music_vol) ─┘
- *   [Wet Sends]         ─► ConvolverNode (0.38s IR) ─► reverbBus (0.32) ───┘
+ * - `sfxToneEQ`: HPF 28 Hz (clears sub mud) → +2.6 dB @ 105 Hz (laptop/mobile chest punch)
+ *   → -1.8 dB @ 320 Hz (removes boxy plastic mids) → +2.2 dB @ 4.8 kHz (crisp air).
+ * - `uiToneEQ`:  HPF 55 Hz → +1.8 dB @ 2.6 kHz (wood/stone/glass tactile clarity)
+ *   → +2.8 dB @ 6.5 kHz (luxury Supercell / casino sparkle).
+ * - `SoftLimiter`: Transparent soft-ceiling WaveShaper keeps dense battles & jackpot
+ *   cascades loud, warm, and broadcast-clean with zero digital clipping.
  *
  * PERFORMANCE GUARANTEES
  * ======================
- * 1. `flushWasmBatch(Float32Array)` reads the zero-copy linear memory slice directly
- *    with a plain index loop — no intermediate arrays, no JSON, no string keys.
- * 2. Active voice tracking uses a small flat expiration table (`activeVoices`) pruned
- *    on demand — zero `setTimeout` churn per sound.
- * 3. When the browser tab is hidden (`visibilitychange`), master gain smoothly ramps
- *    to 0 and incoming gameplay batches are discarded so returning to the tab never
- *    causes a wall of buffered combat sounds.
+ * 1. `flushWasmBatch(Float32Array)` reads WASM linear memory directly with a plain index
+ *    loop — zero intermediate arrays, zero JSON, zero string keys.
+ * 2. Active voice tracking uses a flat expiration table pruned on demand — zero `setTimeout`.
+ * 3. Hidden tabs (`visibilitychange`) smoothly mute and discard queued batches.
  * 4. Portal ad-breaks (`SOW_adPlaying`) and portal mute (`SOW_PORTAL_MUTE_AUDIO`)
- *    silence `masterGain` directly without overwriting the player's saved settings.
+ *    silence `masterGain` directly without overwriting saved player preferences.
  */
 
 import {
@@ -107,7 +114,7 @@ export class VoiceBudgetGate {
 }
 
 export class AudioEngine implements SowAudioPublicApi {
-    readonly version = 1;
+    readonly version = 2;
 
     private ctx: AudioContext | null = null;
     private bank: AudioResourceBank | null = null;
@@ -116,8 +123,10 @@ export class AudioEngine implements SowAudioPublicApi {
     private sfxBus: GainNode | null = null;
     private uiBus: GainNode | null = null;
     private musicBus: GainNode | null = null;
-    private reverbConvolver: ConvolverNode | null = null;
-    private reverbReturn: GainNode | null = null;
+    private arenaConvolver: ConvolverNode | null = null;
+    private arenaReturn: GainNode | null = null;
+    private casinoConvolver: ConvolverNode | null = null;
+    private casinoReturn: GainNode | null = null;
 
     private muteAll = false;
     private sfxVolume = 0.8;
@@ -172,7 +181,29 @@ export class AudioEngine implements SowAudioPublicApi {
         return this.gate.count(typeof performance !== "undefined" ? performance.now() : Date.now());
     }
 
-    /** Lazily creates the single shared `AudioContext`, master limiter, buses, and noise/IR bank. */
+    /** Builds a series biquad tone-shaping strip (`head -> ... -> dest`). */
+    private buildEqStrip(
+        ctx: AudioContext,
+        stages: readonly { type: BiquadFilterType; freq: number; q?: number; gain?: number }[],
+        dest: AudioNode,
+    ): AudioNode {
+        let head: AudioNode | null = null;
+        let prev: AudioNode | null = null;
+        for (const s of stages) {
+            const f = ctx.createBiquadFilter();
+            f.type = s.type;
+            f.frequency.value = s.freq;
+            if (s.q != null) f.Q.value = s.q;
+            if (s.gain != null) f.gain.value = s.gain;
+            if (!head) head = f;
+            if (prev) prev.connect(f);
+            prev = f;
+        }
+        if (prev) prev.connect(dest);
+        return head ?? dest;
+    }
+
+    /** Lazily creates the single shared `AudioContext`, mastering chain, dual IRs, and foley bank. */
     ensureContext(): AudioContext | null {
         if (this.ctx) return this.ctx;
         if (typeof window === "undefined" || typeof window.AudioContext !== "function") {
@@ -189,45 +220,94 @@ export class AudioEngine implements SowAudioPublicApi {
             }
         }
 
+        const bank = new AudioResourceBank(ctx);
+
+        // Master broadcast glue compressor
         const compressor = ctx.createDynamicsCompressor();
-        compressor.threshold.value = -10;
-        compressor.knee.value = 14;
-        compressor.ratio.value = 4.5;
-        compressor.attack.value = 0.004;
-        compressor.release.value = 0.14;
+        compressor.threshold.value = -12;
+        compressor.knee.value = 12;
+        compressor.ratio.value = 3.6;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.115;
+
+        // Protective warm soft-ceiling limiter (prevents harsh digital clip on stacked climaxes)
+        const softLimiter = ctx.createWaveShaper();
+        softLimiter.curve = bank.softLimiterCurve;
+        softLimiter.oversample = "2x";
 
         const masterGain = ctx.createGain();
         masterGain.gain.value = this.effectiveMasterGain();
 
+        // Bus 1: Gameplay SFX -> Studio Punch & Air EQ -> Compressor
         const sfxBus = ctx.createGain();
         sfxBus.gain.value = this.sfxVolume;
+        const sfxEqIn = this.buildEqStrip(
+            ctx,
+            [
+                { type: "highpass", freq: 28, q: 0.7 },
+                { type: "peaking", freq: 105, q: 0.9, gain: 2.6 },
+                { type: "peaking", freq: 320, q: 1.1, gain: -1.8 },
+                { type: "highshelf", freq: 4800, gain: 2.2 },
+            ],
+            compressor,
+        );
+        sfxBus.connect(sfxEqIn);
 
+        // Bus 2: UI / UX -> Tactile Presence & Casino Sparkle EQ -> Compressor
         const uiBus = ctx.createGain();
         uiBus.gain.value = this.sfxVolume;
+        const uiEqIn = this.buildEqStrip(
+            ctx,
+            [
+                { type: "highpass", freq: 55, q: 0.7 },
+                { type: "peaking", freq: 2600, q: 0.85, gain: 1.8 },
+                { type: "highshelf", freq: 6500, gain: 2.8 },
+            ],
+            compressor,
+        );
+        uiBus.connect(uiEqIn);
 
+        // Bus 3: Menu Music (passes transparently into master glue)
         const musicBus = ctx.createGain();
         musicBus.gain.value = this.musicVolume;
+        musicBus.connect(compressor);
 
-        const bank = new AudioResourceBank(ctx);
-
-        let convolver: ConvolverNode | null = null;
-        let reverbReturn: GainNode | null = null;
+        // Dual stereo convolution spaces: Fortress Arena (0.85 s) + Golden Casino Hall (1.65 s)
+        let arenaConvolver: ConvolverNode | null = null;
+        let arenaReturn: GainNode | null = null;
+        let casinoConvolver: ConvolverNode | null = null;
+        let casinoReturn: GainNode | null = null;
         try {
-            convolver = ctx.createConvolver();
-            convolver.buffer = bank.reverbImpulse;
-            reverbReturn = ctx.createGain();
-            reverbReturn.gain.value = this.sfxVolume * 0.34;
-            convolver.connect(reverbReturn);
-            reverbReturn.connect(compressor);
+            arenaConvolver = ctx.createConvolver();
+            arenaConvolver.buffer = bank.arenaImpulse;
+            arenaReturn = ctx.createGain();
+            arenaReturn.gain.value = this.sfxVolume * 0.56;
+            const arenaHp = ctx.createBiquadFilter();
+            arenaHp.type = "highpass";
+            arenaHp.frequency.value = 135;
+            arenaConvolver.connect(arenaHp);
+            arenaHp.connect(arenaReturn);
+            arenaReturn.connect(compressor);
+
+            casinoConvolver = ctx.createConvolver();
+            casinoConvolver.buffer = bank.casinoHallImpulse;
+            casinoReturn = ctx.createGain();
+            casinoReturn.gain.value = this.sfxVolume * 0.54;
+            const casinoHp = ctx.createBiquadFilter();
+            casinoHp.type = "highpass";
+            casinoHp.frequency.value = 210;
+            casinoConvolver.connect(casinoHp);
+            casinoHp.connect(casinoReturn);
+            casinoReturn.connect(compressor);
         } catch {
-            convolver = null;
-            reverbReturn = null;
+            arenaConvolver = null;
+            arenaReturn = null;
+            casinoConvolver = null;
+            casinoReturn = null;
         }
 
-        sfxBus.connect(compressor);
-        uiBus.connect(compressor);
-        musicBus.connect(compressor);
-        compressor.connect(masterGain);
+        compressor.connect(softLimiter);
+        softLimiter.connect(masterGain);
         masterGain.connect(ctx.destination);
 
         this.ctx = ctx;
@@ -237,8 +317,10 @@ export class AudioEngine implements SowAudioPublicApi {
         this.sfxBus = sfxBus;
         this.uiBus = uiBus;
         this.musicBus = musicBus;
-        this.reverbConvolver = convolver;
-        this.reverbReturn = reverbReturn;
+        this.arenaConvolver = arenaConvolver;
+        this.arenaReturn = arenaReturn;
+        this.casinoConvolver = casinoConvolver;
+        this.casinoReturn = casinoReturn;
         return ctx;
     }
 
@@ -291,8 +373,11 @@ export class AudioEngine implements SowAudioPublicApi {
         if (this.musicBus) {
             this.musicBus.gain.setTargetAtTime(this.musicVolume, now, ramp);
         }
-        if (this.reverbReturn) {
-            this.reverbReturn.gain.setTargetAtTime(this.sfxVolume * 0.34, now, ramp);
+        if (this.arenaReturn) {
+            this.arenaReturn.gain.setTargetAtTime(this.sfxVolume * 0.56, now, ramp);
+        }
+        if (this.casinoReturn) {
+            this.casinoReturn.gain.setTargetAtTime(this.sfxVolume * 0.54, now, ramp);
         }
     }
 
@@ -305,8 +390,8 @@ export class AudioEngine implements SowAudioPublicApi {
         const target = this.sfxVolume;
         this.sfxBus.gain.cancelScheduledValues(now);
         this.sfxBus.gain.setValueAtTime(target, now);
-        this.sfxBus.gain.linearRampToValueAtTime(target * 0.68, now + 0.03);
-        this.sfxBus.gain.exponentialRampToValueAtTime(Math.max(0.001, target), now + 0.42);
+        this.sfxBus.gain.linearRampToValueAtTime(target * 0.65, now + 0.028);
+        this.sfxBus.gain.exponentialRampToValueAtTime(Math.max(0.001, target), now + 0.46);
     }
 
     /**
@@ -356,7 +441,6 @@ export class AudioEngine implements SowAudioPublicApi {
         if (!ctx) return;
         if (ctx.state === "suspended") {
             void ctx.resume().catch(() => {});
-            // Allow first click that unlocks context to still schedule smoothly
         }
 
         this.uiSeedCounter = (this.uiSeedCounter + 0x9e3779b9) >>> 0;
@@ -387,11 +471,11 @@ export class AudioEngine implements SowAudioPublicApi {
 
         // Per-voice output chain: [voiceGain] -> (optional airLPF -> StereoPanner) -> targetBus
         const voiceGain = ctx.createGain();
-        voiceGain.gain.setValueAtTime(clamp(def.gain * perspective.dryGain, 0.001, 1.25), now);
+        voiceGain.gain.setValueAtTime(clamp(def.gain * perspective.dryGain, 0.001, 1.3), now);
 
         let tail: AudioNode = voiceGain;
         if (def.spatial) {
-            if (perspective.airCutoffHz < 14500) {
+            if (perspective.airCutoffHz < 15000) {
                 const airFilter = ctx.createBiquadFilter();
                 airFilter.type = "lowpass";
                 airFilter.frequency.setValueAtTime(perspective.airCutoffHz, now);
@@ -408,32 +492,61 @@ export class AudioEngine implements SowAudioPublicApi {
         }
         tail.connect(targetBus);
 
-        // Optional reverb wet send for spatial depth & fanfares
+        // Lazy dual spatial reverb sends (only allocated when a recipe actually sends to them)
+        const arenaConvolver = this.arenaConvolver;
+        const casinoConvolver = this.casinoConvolver;
         let wetGain: GainNode | null = null;
-        if (this.reverbConvolver && perspective.reverbSend > 0.01) {
-            wetGain = ctx.createGain();
-            wetGain.gain.setValueAtTime(clamp(def.gain * perspective.reverbSend, 0.001, 0.55), now);
-            wetGain.connect(this.reverbConvolver);
-        }
+        let shimmerGain: GainNode | null = null;
 
         if (def.priority === "critical" && def.category !== "ui") {
             this.triggerCriticalDuck(now);
         }
 
         let maxDurationSec = 0.08;
+        const spatialWidthScale = def.spatial ? 0.55 : 1.0;
+
         const renderCtx: VoiceRenderCtx = {
             ctx,
             now,
             bank,
             rng: createRng(trigger.seed || 1),
             out: voiceGain,
-            wet: wetGain,
+            get wet(): GainNode | null {
+                if (!arenaConvolver) return null;
+                if (!wetGain) {
+                    wetGain = ctx.createGain();
+                    const arenaSend = def.spatial
+                        ? 0.38 + (1 - perspective.dryGain) * 0.44
+                        : 0.48;
+                    wetGain.gain.setValueAtTime(clamp(def.gain * arenaSend, 0.05, 0.9), now);
+                    wetGain.connect(arenaConvolver);
+                }
+                return wetGain;
+            },
+            get shimmer(): GainNode | null {
+                if (!casinoConvolver) return null;
+                if (!shimmerGain) {
+                    shimmerGain = ctx.createGain();
+                    const hallSend = def.spatial ? 0.58 * perspective.dryGain : 0.72;
+                    shimmerGain.gain.setValueAtTime(clamp(def.gain * hallSend, 0.05, 0.85), now);
+                    shimmerGain.connect(casinoConvolver);
+                }
+                return shimmerGain;
+            },
             perspective,
             createWarmDrive: () => {
                 const shaper = ctx.createWaveShaper();
                 shaper.curve = bank.warmCurve;
                 shaper.oversample = "2x";
                 return shaper;
+            },
+            createPanNode: (panOffset: number, dest?: AudioNode) => {
+                const target = dest ?? voiceGain;
+                if (typeof ctx.createStereoPanner !== "function") return target;
+                const p = ctx.createStereoPanner();
+                p.pan.setValueAtTime(clamp(panOffset * spatialWidthScale, -0.92, 0.92), now);
+                p.connect(target);
+                return p;
             },
             registerDuration: (seconds: number) => {
                 if (seconds > maxDurationSec) maxDurationSec = seconds;

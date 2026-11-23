@@ -28,7 +28,9 @@ pub enum AudioCue {
     AttackOrder = 1,
     AttackStalled = 2,
     UnderAttack = 3,
+    #[allow(dead_code)]
     LandExpand = 4,
+    #[allow(dead_code)]
     LandCombat = 5,
     CounterAttack = 6,
     AttackCancelled = 7,
@@ -68,7 +70,6 @@ pub enum AudioCue {
     AllianceEnded = 33,
     Betrayal = 34,
     ResourceTransfer = 35,
-    HeroAbility = 36,
     Emote = 37,
 
     // ── Match Lifecycle & Outcomes (38–41) ─────────────────────────────
@@ -76,17 +77,11 @@ pub enum AudioCue {
     ActionError = 39,
     Victory = 40,
     Defeat = 41,
-}
 
-/// Opponent archetype for land combat clashes (matches `CombatAudioSubtype` in TS).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum CombatSoundKind {
-    Wilderness = 0,
-    Tribe = 1,
-    Nation = 2,
-    Human = 3,
-    Counter = 4,
+    // ── Building Workflow Extensions (57–59, matching TS `types.ts`) ───
+    BuildingUpgradeProgress = 57,
+    BuildingModeEnter = 58,
+    BuildingSelect = 59,
 }
 
 /// Player archetype for elimination cues (matches TS `PlayerEliminated` subtype).
@@ -221,21 +216,6 @@ impl SowApp {
     pub(crate) fn spatial_sound_params(&self, wx: f32, wy: f32) -> SpatialSoundParams {
         let [px, py] = self.input.project_board([wx, wy]);
         self.spatial_audio_ctx().params(px, py)
-    }
-}
-
-pub(crate) fn ability_cue_code(cue: sow_core::geo_entities::Cue) -> u8 {
-    use sow_core::geo_entities::Cue;
-    match cue {
-        Cue::Strength => 0,
-        Cue::Conquest => 1,
-        Cue::Income => 2,
-        Cue::Tower => 3,
-        Cue::City => 4,
-        Cue::Losses => 5,
-        Cue::Alliance => 6,
-        Cue::Retreat => 7,
-        Cue::Naval => 8,
     }
 }
 

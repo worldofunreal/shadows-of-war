@@ -1,5 +1,13 @@
-import { skinName } from "./main_menu.skins.ts";
-import { AudioCue, audioEngine, playUiCue, syncAudioSettings } from "./audio/index.ts";
+import { skinIconAttributes, skinName, syncMenuSkinTheme } from "./main_menu.skins.ts";
+import {
+    AudioCue,
+    audioEngine,
+    consumeScreenSwitchSoundSuppression,
+    installSurfaceHoverPressAudio,
+    MenuSfx,
+    playUiCue,
+    syncAudioSettings,
+} from "./audio/index.ts";
 import { formatCompactNumber } from "./number-format.ts";
 import {
     avatarBackgroundCss,
@@ -1444,44 +1452,6 @@ function syncScreenPanel(screen: string, screenChanged: boolean) {
     next.classList.add("is-active");
 }
 
-const KNOWN_SKIN_IDS = new Set([
-    "ember_vein",
-    "storm_grid",
-    "royal_lattice",
-    "tidal_crest",
-    "hex_bastion",
-    "shield_wall",
-    "war_banner",
-    "dragon_scale",
-]);
-
-function activeEquippedSkinId(state: MenuState | null): string | null {
-    if (!state) return null;
-    const skinId = typeof state.selected_skin === "string" ? state.selected_skin.trim() : "";
-    if (!skinId || !KNOWN_SKIN_IDS.has(skinId)) return null;
-    const skins = state.store && Array.isArray(state.store.skins) ? state.store.skins : null;
-    if (skins && skins.length && !skins.some((skin) => skin.id === skinId && skin.owned)) return null;
-    return skinId;
-}
-
-function syncMenuSkinTheme(state: MenuState | null): void {
-    const skinId = activeEquippedSkinId(state);
-    const hudEl = typeof document !== "undefined" ? document.getElementById("sow-hud") : null;
-    if (skinId) {
-        root.dataset.skin = skinId;
-        if (hudEl) hudEl.dataset.skin = skinId;
-        if (typeof document !== "undefined" && document.documentElement) {
-            document.documentElement.dataset.sowSkin = skinId;
-        }
-    } else {
-        delete root.dataset.skin;
-        if (hudEl) delete hudEl.dataset.skin;
-        if (typeof document !== "undefined" && document.documentElement) {
-            delete document.documentElement.dataset.sowSkin;
-        }
-    }
-}
-
 function syncBladeCanvasVisibility() {
     if (typeof document === "undefined") return;
     const blade = document.getElementById("blade");
@@ -1512,8 +1482,12 @@ export function render(precomputedKey?: string) {
     if (screenChanged) {
         menuUi.dropdownOpenKey = null;
         if (prevScreen !== null && menuUi.state.phase === "MainMenu") {
-            const goingHome = screen === "home";
-            playUiCue(AudioCue.UiTabSwitch, goingHome ? 2 : 1);
+            if (!consumeScreenSwitchSoundSuppression()) {
+                const goingHome = screen === "home";
+                playUiCue(AudioCue.UiTabSwitch, goingHome ? 2 : 1);
+            }
+        } else {
+            consumeScreenSwitchSoundSuppression();
         }
     }
     if (screen === "create" && menuUi.previousScreen !== "create") {
@@ -2806,8 +2780,8 @@ function offerUnlockedSkin(receipts: MenuRewardReceipt[], done: () => void): boo
     layer.className = "sow-menu__overlay sow-menu__reward-double";
     layer.innerHTML =
         "<section class='sow-menu__modal' role='dialog' aria-modal='true' aria-label='" + esc(label) +
-        "'><h2>" + esc(label) + "</h2><div class='sow-store__skin-art'><img src='" +
-        esc(asset(skin.asset_path)) + "' alt='' width='96' height='96'></div>" +
+        "'><h2>" + esc(label) + "</h2><div class='sow-store__skin-art'><img " +
+        skinIconAttributes(skin.id, asset(skin.asset_path)) + " alt='' width='96' height='96'></div>" +
         "<div class='sow-menu__reward-double-actions'>" +
         "<button class='sow-menu__secondary' type='button' data-skin-continue>" +
         esc(SOW_t("endgame.reward_continue")) +
@@ -3735,6 +3709,8 @@ root.addEventListener("error", function (event) {
     image.src = fallback;
 }, true);
 
+installSurfaceHoverPressAudio(root);
+
 root.addEventListener("click", function (event) {
     if (menuUi.state && menuUi.state.phase === "MainMenu") syncMenuMusic(menuUi.state, true);
     const clickedElement = event.target instanceof Element ? event.target : null;
@@ -3787,7 +3763,10 @@ root.addEventListener("click", function (event) {
     const target = targetElement;
     const command = target.dataset.command;
     if (!command) return;
-    if (handleSystemNoticeCommand(command)) return;
+    if (handleSystemNoticeCommand(command)) {
+        MenuSfx.modalClose();
+        return;
+    }
     const experienceEvent = (
         {
             open_campaign: "menu_campaign_open",
@@ -3800,6 +3779,7 @@ root.addEventListener("click", function (event) {
         window.SOW_trackExperienceEvent({ name: experienceEvent });
     }
     if (command === "open_campaign") {
+        MenuSfx.battleSubmenu();
         menuUi.profileOpen = false;
         menuUi.profileAccountId = null;
         menuUi.profileMatchDetail = null;
@@ -3819,11 +3799,13 @@ root.addEventListener("click", function (event) {
     if (command === "claim_campaign_hero") {
         const leaderId = target.dataset.leaderId;
         if (leaderId) {
+            MenuSfx.purchaseConfirm();
             send("claim_campaign_hero", { leader_id: leaderId });
         }
         return;
     }
     if (command === "close_campaign") {
+        MenuSfx.back();
         menuUi.campaignOpen = false;
         render();
         updateHeroBackdrop(currentScreen());
@@ -3832,6 +3814,7 @@ root.addEventListener("click", function (event) {
     if (command === "select_campaign_episode") {
         const episodeId = target.dataset.episodeId;
         if (episodeId) {
+            MenuSfx.heroBrowse("available", target);
             menuUi.selectedCampaignEpisode = episodeId;
             if (!updateCampaignSelection(episodeId)) render();
             updateHeroBackdrop("campaign");
@@ -3841,6 +3824,7 @@ root.addEventListener("click", function (event) {
     if (command === "select_campaign_saga") {
         const sagaId = target.dataset.sagaId || "all";
         if (menuUi.selectedCampaignSaga !== sagaId) {
+            MenuSfx.infoTab(target);
             menuUi.selectedCampaignSaga = sagaId;
             const campaign = menuUi.state && menuUi.state.campaign;
             const episodes = campaign && Array.isArray(campaign.episodes) ? campaign.episodes : [];
@@ -3862,6 +3846,7 @@ root.addEventListener("click", function (event) {
     if (command === "start_campaign_episode") {
         const episodeId = target.dataset.episodeId;
         if (!episodeId) return;
+        MenuSfx.battleLaunch();
         menuUi.campaignOpen = false;
         if (typeof window.SOW_startCampaignEpisode === "function") {
             window.SOW_startCampaignEpisode(episodeId);
@@ -3948,10 +3933,12 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "retry_ranked_board") {
+        MenuSfx.click();
         loadRankedLeaderboard(true);
         return;
     }
     if (command === "quick_match") {
+        MenuSfx.battleLaunch();
         flushLeaderPersist();
         target.setAttribute("disabled", "");
         menuUi.profileOpen = menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
@@ -3959,6 +3946,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "open_profile") {
+        if (menuUi.profileOpen) MenuSfx.click();
         menuUi.storeOpen = false;
         menuUi.heroesOpen = false;
         menuUi.campaignOpen = false;
@@ -3966,6 +3954,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "close_profile") {
+        MenuSfx.back();
         if (popProfileNav()) return;
         menuUi.profileOpen = false;
         menuUi.storeOpen = false;
@@ -3980,12 +3969,15 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "back_to_my_profile") {
+        MenuSfx.back();
         menuUi.profileNavStack = [];
         openProfile(menuUi.profileOwnId || (menuUi.state && menuUi.state.account_id) || null);
         return;
     }
     if (command === "profile_tab") {
-        menuUi.profileTab = target.dataset.profileTab || "overview";
+        const nextTab = target.dataset.profileTab || "overview";
+        if (menuUi.profileTab !== nextTab) MenuSfx.infoTab(target);
+        menuUi.profileTab = nextTab;
         render();
         if (menuUi.profileTab === "history") {
             const historyEntry = activeProfileEntry();
@@ -4004,6 +3996,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "profile_achievement_filter") {
+        MenuSfx.filterChip(target);
         const nextCat = target.dataset.achievementFilter || "summary";
         menuUi.profileAchievementFilter = nextCat;
         menuUi.profileAchievementSubcategory = "all";
@@ -4019,6 +4012,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "profile_achievement_subcategory") {
+        MenuSfx.filterChip(target);
         menuUi.profileAchievementSubcategory = target.dataset.achievementSubcategory || "all";
         resetAchievementFlatLimit();
         refreshProfileAchievements();
@@ -4026,22 +4020,26 @@ root.addEventListener("click", function (event) {
     }
     if (command === "profile_achievement_toggle_playable") {
         menuUi.profileAchievementPlayableOnly = !menuUi.profileAchievementPlayableOnly;
+        MenuSfx.toggleSwitch(menuUi.profileAchievementPlayableOnly);
         resetAchievementFlatLimit();
         refreshProfileAchievements();
         return;
     }
     if (command === "profile_achievement_view_mode") {
+        MenuSfx.filterChip(target);
         menuUi.profileAchievementViewMode = target.dataset.viewMode === "grid" ? "grid" : "chains";
         resetAchievementFlatLimit();
         refreshProfileAchievements();
         return;
     }
     if (command === "profile_achievement_show_more") {
+        MenuSfx.click();
         bumpAchievementFlatLimit();
         refreshProfileAchievements();
         return;
     }
     if (command === "profile_achievement_clear") {
+        MenuSfx.back();
         menuUi.profileAchievementSearch = "";
         menuUi.profileAchievementStatus = "all";
         menuUi.profileAchievementTier = "all";
@@ -4054,6 +4052,7 @@ root.addEventListener("click", function (event) {
         const chainKey = target.dataset.chainKey;
         const tierId = target.dataset.tierId;
         if (!chainKey || !tierId) return;
+        MenuSfx.filterChip(target);
         menuUi.profileAchievementSelectedTiers[chainKey] = tierId;
         refreshProfileAchievements();
         return;
@@ -4081,14 +4080,17 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "load_profile_more") {
+        MenuSfx.click();
         loadMoreProfileHistory();
         return;
     }
     if (command === "load_victory_more") {
+        MenuSfx.click();
         loadVictoryLeaderboard(true);
         return;
     }
     if (command === "retry_profile") {
+        MenuSfx.click();
         invalidateProfileCache(menuUi.profileAccountId);
         menuUi.profileSnapshotLoading = false;
         menuUi.profileHistoryLoading = false;
@@ -4100,6 +4102,7 @@ root.addEventListener("click", function (event) {
         const matchId = target.dataset.matchId;
         const detailEntry = activeProfileEntry();
         if (!matchId || !detailEntry || menuUi.profileDetailLoading) return;
+        MenuSfx.modalOpen();
         if (detailEntry.details[matchId]) {
             menuUi.profileDetailId = matchId;
             menuUi.profileDetailError = "";
@@ -4156,6 +4159,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "close_match") {
+        MenuSfx.modalClose();
         menuUi.profileMatchDetail = null;
         menuUi.profileDetailError = "";
         menuUi.profileDetailId = null;
@@ -4165,6 +4169,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "open_report") {
+        MenuSfx.modalOpen();
         menuUi.reportOpen = true;
         menuUi.reportTarget = target.dataset.accountId || menuUi.profileAccountId;
         menuUi.reportSent = false;
@@ -4172,6 +4177,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "cancel_report") {
+        MenuSfx.modalClose();
         menuUi.reportOpen = false;
         menuUi.reportTarget = null;
         render();
@@ -4179,12 +4185,14 @@ root.addEventListener("click", function (event) {
     }
     if (command === "request_delete") {
         if (!menuUi.settingsOpen || !selfCreds() || deleteBusy) return;
+        MenuSfx.modalOpen();
         menuUi.deleteArmed = true;
         deleteError = "";
         render();
         return;
     }
     if (command === "cancel_delete") {
+        MenuSfx.modalClose();
         menuUi.deleteArmed = false;
         deleteError = "";
         render();
@@ -4257,17 +4265,21 @@ root.addEventListener("click", function (event) {
     if (command === "toggle_dropdown") {
         const dropdownKey = target.dataset.dropdownKey;
         if (!dropdownKey) return;
-        setDropdownOpen(dropdownKey, menuUi.dropdownOpenKey !== dropdownKey, target);
+        const opening = menuUi.dropdownOpenKey !== dropdownKey;
+        MenuSfx.filterChip(target);
+        setDropdownOpen(dropdownKey, opening, target);
         return;
     }
     if (command === "select_dropdown") {
         const dropdownKey = target.dataset.dropdownKey;
         const optionValue = target.dataset.dropdownOptionValue;
         if (!dropdownKey || optionValue == null) return;
+        MenuSfx.filterChip(target);
         selectDropdown(dropdownKey, optionValue);
         return;
     }
     if (command === "open_hero_info") {
+        MenuSfx.modalOpen();
         const requestedId = target.dataset.leaderId || null;
         const rawTab = target.dataset.heroInfoTab;
         const requestedTab =
@@ -4297,12 +4309,17 @@ root.addEventListener("click", function (event) {
             rawTab === "biography" || rawTab === "achievements" || rawTab === "overview"
                 ? rawTab
                 : "overview";
+        if (menuUi.heroInfoTab !== tab) {
+            const tabRatio = tab === "overview" ? 0 : tab === "biography" ? 0.5 : 1;
+            MenuSfx.infoTab(tabRatio);
+        }
         menuUi.heroInfoTab = tab;
         if (tab === "biography") void ensureHeroBiosLoaded();
         render();
         return;
     }
     if (command === "hero_info_ach_category") {
+        MenuSfx.filterChip(target);
         const cat = target.dataset.heroAchCategory;
         menuUi.heroInfoAchCategory =
             cat === "recruit" || cat === "mastery" || cat === "victories" ? cat : "all";
@@ -4310,6 +4327,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "hero_info_ach_status") {
+        MenuSfx.filterChip(target);
         const status = target.dataset.heroAchStatus;
         menuUi.heroInfoAchStatus =
             status === "in_progress" || status === "unlocked" || status === "locked" ? status : "all";
@@ -4317,6 +4335,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "hero_info_ach_sort") {
+        MenuSfx.filterChip(target);
         const sort = target.dataset.heroAchSort;
         menuUi.heroInfoAchSort =
             sort === "closest" || sort === "points" ? sort : "tier";
@@ -4324,6 +4343,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "close_hero_info") {
+        MenuSfx.modalClose();
         menuUi.heroInfoOpen = false;
         menuUi.heroInfoLeaderId = null;
         render();
@@ -4332,6 +4352,12 @@ root.addEventListener("click", function (event) {
     if (command === "preview_leader") {
         const leaderId = target.dataset.leaderId || null;
         const leader = leaderById(leaderId);
+        const alreadyActive = !menuUi.tempSelectedRandom && menuUi.tempSelectedLeader === leaderId;
+        if (alreadyActive) {
+            MenuSfx.filterChip(target);
+        } else {
+            MenuSfx.heroBrowse(leader && leader.available === false ? "locked" : "available", target);
+        }
         const persistSelection = !!leaderId && leader.available !== false;
         if (persistSelection) stageLeaderSelection(false, leaderId);
         menuUi.tempSelectedLeader = leaderId;
@@ -4344,6 +4370,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "preview_random_leader") {
+        MenuSfx.heroBrowse("random", target);
         stageLeaderSelection(true, null);
         menuUi.tempSelectedLeader = null;
         menuUi.tempSelectedRandom = true;
@@ -4354,6 +4381,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "confirm_random_leader") {
+        MenuSfx.heroEquip();
         flushLeaderPersist();
         menuUi.heroesOpen = false;
         menuUi.heroesSearchQuery = "";
@@ -4364,6 +4392,7 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "confirm_leader") {
+        MenuSfx.heroEquip();
         flushLeaderPersist();
         menuUi.heroesOpen = false;
         menuUi.heroesSearchQuery = "";
@@ -4381,8 +4410,10 @@ root.addEventListener("click", function (event) {
         if (!leaderId || (menuUi.state && menuUi.state.store_busy)) return;
         const key = leaderId + ":" + currency;
         if (menuUi.portalUnlockConfirm !== key) {
+            MenuSfx.purchaseOpen();
             menuUi.portalUnlockConfirm = key;
         } else {
+            MenuSfx.purchaseConfirm();
             menuUi.portalUnlockConfirm = null;
             menuUi.tempSelectedLeader = leaderId;
             menuUi.tempSelectedRandom = false;
@@ -4410,6 +4441,7 @@ root.addEventListener("click", function (event) {
     }
     if (command === "confirm_purchase") {
         if (!menuUi.purchaseModal || menuUi.purchaseModal.submitted) return;
+        MenuSfx.purchaseConfirm();
         menuUi.purchaseModal.submitted = true;
         if (menuUi.purchaseModal.type === "leader") {
             if (!(menuUi.state && menuUi.state.store_busy)) {
@@ -4442,6 +4474,8 @@ root.addEventListener("click", function (event) {
     }
     if (command === "cancel_purchase") {
         if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
+        if (menuUi.purchaseModal && menuUi.purchaseModal.phase === "success") MenuSfx.confirm();
+        else MenuSfx.modalClose();
         if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
         else {
             menuUi.purchaseModal = null;
@@ -4452,17 +4486,22 @@ root.addEventListener("click", function (event) {
     }
     if (command === "unlock_skin") {
         const skinId = target.dataset.skinId;
-        if (skinId && !menuUi.state?.store_busy) send("unlock_skin", { skin_id: skinId });
+        if (skinId && !menuUi.state?.store_busy) {
+            MenuSfx.purchaseConfirm();
+            send("unlock_skin", { skin_id: skinId });
+        }
         return;
     }
     /* POKI_SHARED_STORE_UNLOCK_END */
     if (command === "open_skin_picker") {
+        MenuSfx.modalOpen();
         menuUi.skinPickerOpen = true;
         loadStoreCatalog();
         render();
         return;
     }
     if (command === "close_skin_picker") {
+        MenuSfx.modalClose();
         menuUi.skinPickerOpen = false;
         render();
         return;
@@ -4470,12 +4509,14 @@ root.addEventListener("click", function (event) {
     if (command === "equip_skin" || command === "unequip_skin") {
         const skinId = command === "unequip_skin" ? "" : target.dataset.skinId;
         if (skinId !== undefined && !menuUi.state?.store_busy) {
-            playUiCue(AudioCue.UiHeroEquip);
+            if (command === "unequip_skin") playUiCue(AudioCue.UiClick, 2);
+            else playUiCue(AudioCue.UiHeroEquip);
             send("equip_skin", { skin_id: skinId });
         }
         return;
     }
     if (command === "set_session_mode") {
+        MenuSfx.infoTab(target);
         menuUi.createOffline = target.dataset.mode === "offline";
         render();
         return;
@@ -4483,6 +4524,7 @@ root.addEventListener("click", function (event) {
     if (command === "set_create_mode") {
         const mode = target.dataset.mode;
         if (!mode) return;
+        MenuSfx.filterChip(target);
         const prevMode = menuUi.createDraft?.game_mode || "FFA";
         if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
         menuUi.createDraft.game_mode = mode;
@@ -4497,29 +4539,34 @@ root.addEventListener("click", function (event) {
     if (command === "set_create_diff") {
         const difficulty = target.dataset.diff;
         if (!difficulty) return;
+        MenuSfx.filterChip(target);
         if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
         menuUi.createDraft.bot_difficulty = difficulty;
         render();
         return;
     }
     if (command === "set_create_spawn") {
+        MenuSfx.filterChip(target);
         if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
         menuUi.createDraft.random_spawn = target.dataset.spawn === "true";
         render();
         return;
     }
     if (command === "set_create_private") {
+        MenuSfx.filterChip(target);
         menuUi.createPrivate = target.dataset.private === "true";
         render();
         return;
     }
     if (command === "randomize_seed") {
+        MenuSfx.tactileStep();
         if (!menuUi.createDraft) menuUi.createDraft = cloneConfig();
         menuUi.createDraft.seed = Math.floor(Math.random() * 9999) + 1;
         render();
         return;
     }
     if (command === "cycle_create_map") {
+        MenuSfx.tactileStep();
         cycleCreateMap(Number(target.dataset.dir) || 1);
         render();
         return;
@@ -4527,6 +4574,7 @@ root.addEventListener("click", function (event) {
     if (command === "select_create_map") {
         const mapKey = target.dataset.mapKey;
         if (mapKey) {
+            MenuSfx.tactileStep();
             selectCreateMap(mapKey);
             render();
         }
@@ -4536,6 +4584,7 @@ root.addEventListener("click", function (event) {
         const field = target.dataset.field;
         const step = Number(target.dataset.step) || 0;
         if (field && step) {
+            playUiCue(AudioCue.UiSliderTick, 0, step > 0 ? 0.68 : 0.34);
             stepCreateSlider(field, step);
             render();
         }
@@ -4556,7 +4605,7 @@ root.addEventListener("click", function (event) {
     if (command === "switch_missions_tab") {
         const tab = target.dataset.missionsTab;
         if (tab === "onboarding" || tab === "daily" || tab === "weekly") {
-            playUiCue(AudioCue.UiTabSwitch, 1);
+            if (menuUi.activeMissionsTab !== tab) MenuSfx.infoTab(target);
             menuUi.activeMissionsTab = tab;
             render();
         }
@@ -4565,6 +4614,7 @@ root.addEventListener("click", function (event) {
     if (command === "claim_mission") {
         const missionId = target.dataset.missionId;
         if (missionId) {
+            MenuSfx.purchaseConfirm();
             claimMission(missionId, false);
         }
         return;
@@ -4572,6 +4622,7 @@ root.addEventListener("click", function (event) {
     if (command === "claim_mission_double") {
         const missionId = target.dataset.missionId;
         if (missionId) {
+            MenuSfx.purchaseConfirm();
             claimMission(missionId, true);
         }
         return;
@@ -4579,6 +4630,7 @@ root.addEventListener("click", function (event) {
     if (command === "request_swap_mission") {
         const missionId = target.dataset.missionId;
         if (missionId) {
+            MenuSfx.filterChip(target);
             requestSwapMission(missionId, target.dataset.ad === "true");
         }
         return;
@@ -4586,15 +4638,18 @@ root.addEventListener("click", function (event) {
     if (command === "confirm_swap_mission") {
         const missionId = target.dataset.missionId;
         if (missionId) {
+            MenuSfx.tactileStep();
             confirmSwapMission(missionId, target.dataset.ad === "true");
         }
         return;
     }
     if (command === "cancel_swap_mission") {
+        MenuSfx.back();
         cancelSwapMission();
         return;
     }
     if (command === "mission_action") {
+        MenuSfx.battleSubmenu();
         const missionId = target.dataset.missionId || "";
         const actionTarget = target.dataset.actionTarget || "battle";
         const HERO_REGION_TARGETS: Record<string, string> = {
@@ -4728,6 +4783,8 @@ root.addEventListener("click", function (event) {
     }
     if (command === "toggle_settings") {
         menuUi.settingsOpen = !menuUi.settingsOpen;
+        if (menuUi.settingsOpen) MenuSfx.modalOpen();
+        else MenuSfx.modalClose();
         if (!menuUi.settingsOpen) {
             menuUi.signOutConfirmOpen = false;
             menuUi.deleteArmed = false;
@@ -4739,11 +4796,13 @@ root.addEventListener("click", function (event) {
     }
     /* POKI_SHARED_AUTH_ACTIONS_BEGIN */
     if (command === "close_auth") {
+        MenuSfx.modalClose();
         menuUi.authModalOpen = false;
         render();
         return;
     }
     if (command === "auth_change_email") {
+        MenuSfx.back();
         menuUi.authOtpSent = false;
         menuUi.authCode = "";
         menuUi.authError = "";
@@ -4752,14 +4811,17 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "auth_resend") {
+        MenuSfx.click();
         requestAuthOtp();
         return;
     }
     if (command === "identity_provider") {
+        MenuSfx.confirm();
         if (typeof window.SOW_startIdentityOAuth === "function") window.SOW_startIdentityOAuth(target.dataset.provider);
         return;
     }
     if (command === "sign_in") {
+        MenuSfx.modalOpen();
         if (isAndroidTwa()) {
             send(command);
         } else {
@@ -4772,16 +4834,19 @@ root.addEventListener("click", function (event) {
         return;
     }
     if (command === "sign_out") {
+        MenuSfx.modalOpen();
         menuUi.signOutConfirmOpen = true;
         render();
         return;
     }
     if (command === "cancel_sign_out") {
+        MenuSfx.modalClose();
         menuUi.signOutConfirmOpen = false;
         render();
         return;
     }
     if (command === "confirm_sign_out") {
+        MenuSfx.back();
         menuUi.signOutConfirmOpen = false;
         if (isAndroidTwa()) send("sign_out");
         else if (typeof window.SOW_signOutIdentity === "function") window.SOW_signOutIdentity();
@@ -4789,12 +4854,14 @@ root.addEventListener("click", function (event) {
     }
     /* POKI_SHARED_AUTH_ACTIONS_END */
     if (command === "close_password") {
+        MenuSfx.modalClose();
         menuUi.passwordLobbyId = null;
         menuUi.passwordDraft = "";
         render();
         return;
     }
     if (command === "copy_lobby_code") {
+        MenuSfx.tactileStep();
         const lobbyCode = String(target.dataset.lobbyId || "");
         if (navigator.clipboard && lobbyCode) {
             navigator.clipboard
@@ -4816,17 +4883,19 @@ root.addEventListener("click", function (event) {
     if (command === "join_lobby") {
         const selectedLobby = findLobby(Number(target.dataset.lobbyId));
         if (selectedLobby && selectedLobby.has_password) {
+            MenuSfx.modalOpen();
             menuUi.passwordLobbyId = selectedLobby.id;
             menuUi.passwordDraft = "";
             render();
         } else {
+            MenuSfx.battleLaunch();
             send("join_lobby", { lobby_id: Number(target.dataset.lobbyId) });
         }
         return;
     }
     if (command === "set_leader") {
         if (send("set_leader", { leader_id: target.dataset.leaderId })) {
-            playUiCue(AudioCue.UiHeroEquip);
+            MenuSfx.heroEquip();
             menuUi.heroesOpen = false;
         }
         return;
@@ -4834,16 +4903,24 @@ root.addEventListener("click", function (event) {
     const payload: { lobby_id?: number; target_player_id?: number } = {};
     if (target.dataset.lobbyId) payload.lobby_id = Number(target.dataset.lobbyId);
     if (target.dataset.playerId) payload.target_player_id = Number(target.dataset.playerId);
-    const isPrimary =
+    if (command === "open_browser" || command === "open_create") {
+        MenuSfx.battleSubmenu();
+    } else if (
         command === "quick_match" ||
         command === "join_matchmaking" ||
         command === "start_private" ||
-        command === "create_game";
-    const isBack =
+        command === "create_game"
+    ) {
+        MenuSfx.battleLaunch();
+    } else if (
         command.startsWith("close_") ||
         command === "leave_lobby" ||
-        command === "cancel_sign_out";
-    playUiCue(AudioCue.UiClick, isPrimary ? 1 : isBack ? 2 : 0);
+        command === "cancel_sign_out"
+    ) {
+        MenuSfx.back();
+    } else {
+        MenuSfx.click();
+    }
     send(command, payload);
 });
 
@@ -5223,6 +5300,7 @@ root.addEventListener("keydown", function (event) {
     }
     if (event.key === "Escape" && menuUi.settingsOpen) {
         event.preventDefault();
+        MenuSfx.modalClose();
         if (menuUi.signOutConfirmOpen) {
             menuUi.signOutConfirmOpen = false;
             render();
@@ -5239,6 +5317,7 @@ root.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && menuUi.purchaseModal) {
         event.preventDefault();
         if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
+        MenuSfx.modalClose();
         if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
         else {
             menuUi.purchaseModal = null;
@@ -5249,6 +5328,7 @@ root.addEventListener("keydown", function (event) {
     }
     if (event.key === "Escape" && (menuUi.skinPickerOpen || menuUi.heroInfoOpen)) {
         event.preventDefault();
+        MenuSfx.modalClose();
         menuUi.skinPickerOpen = false;
         menuUi.heroInfoOpen = false;
         menuUi.heroInfoLeaderId = null;
@@ -5256,6 +5336,7 @@ root.addEventListener("keydown", function (event) {
         return;
     }
     if (event.key === "Escape" && menuUi.profileMatchDetail) {
+        MenuSfx.modalClose();
         menuUi.profileMatchDetail = null;
         render();
         return;
@@ -5345,6 +5426,7 @@ root.addEventListener("submit", function (event) {
     }
     if (form.dataset.form === "join") {
         event.preventDefault();
+        MenuSfx.battleLaunch();
         const code = (form.elements.namedItem("code") as HTMLInputElement).value.trim();
         send("join_code", { code: code });
     }
@@ -5352,11 +5434,13 @@ root.addEventListener("submit", function (event) {
         event.preventDefault();
         menuUi.passwordDraft = (form.elements.namedItem("password") as HTMLInputElement).value;
         if (menuUi.passwordLobbyId != null && menuUi.passwordDraft) {
+            MenuSfx.battleLaunch();
             send("join_with_password", { lobby_id: menuUi.passwordLobbyId, password: menuUi.passwordDraft });
         }
     }
     if (form.dataset.form === "create") {
         event.preventDefault();
+        MenuSfx.battleLaunch();
         syncCreateDraft(form);
         const config = menuUi.createDraft || cloneConfig();
         if (config.game_mode !== "Coop") {
@@ -5412,6 +5496,11 @@ root.addEventListener("input", function (event) {
             const pct =
                 max > min ? Math.max(0, Math.min(100, Math.round(((cur - min) / (max - min)) * 100))) : 0;
             input.style.setProperty("--sow-slider-fill", pct + "%");
+            const bucket = Math.round(pct / 5);
+            if (input.dataset.lastTickBucket !== String(bucket)) {
+                input.dataset.lastTickBucket = String(bucket);
+                playUiCue(AudioCue.UiSliderTick, 0, pct / 100);
+            }
         }
         if (menuUi.createDraft) {
             const totalBadge = createForm.querySelector<HTMLElement>("[data-create-total-forces] b");
@@ -5498,6 +5587,9 @@ root.addEventListener("change", function (event) {
             menuUi.state.settings[setting] = val;
         }
         send(setting === "sfx_volume" ? "set_sfx_volume" : "set_music_volume", { value: val });
+    }
+    if (input instanceof HTMLInputElement && input.type === "checkbox" && input.dataset.setting) {
+        MenuSfx.toggleSwitch(input.checked);
     }
     if (input instanceof HTMLInputElement && input.dataset.setting === "free_zoom_out")
         send("set_free_zoom_out", { value: input.checked });

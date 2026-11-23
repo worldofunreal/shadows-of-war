@@ -1819,16 +1819,15 @@ button.sow-menu__currency {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   BATTLE (HOME) — OPEN TACTICAL STAGE
+   BATTLE (HOME) — COMMAND PANEL + HERO STAGE + RANKED CTA
    ───────────────────────────────────────────────────────────── */
 #sow-menu[data-screen="home"] .sow-menu__main,
 #sow-menu [data-screen-panel="home"].sow-menu__main {
   display: grid;
-  grid-template-columns: clamp(276px, 28vw, 376px) minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  column-gap: clamp(16px, 2.6vw, 40px);
-  row-gap: clamp(10px, 1.5vh, 14px);
-  align-items: start;
+  grid-template-columns: clamp(296px, 28vw, 384px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  column-gap: clamp(20px, 3.2vw, 56px);
+  align-items: stretch;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -1836,28 +1835,28 @@ button.sow-menu__currency {
   box-sizing: border-box;
 }
 
-#sow-menu[data-screen="home"] .sow-menu__command.sow-home__stage,
-#sow-menu [data-screen-panel="home"] .sow-menu__command.sow-home__stage {
-  display: contents;
+#sow-menu[data-screen="home"] .sow-menu__command.sow-home__panel,
+#sow-menu [data-screen-panel="home"] .sow-menu__command.sow-home__panel {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-content: flex-start;
+  gap: 10px;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 18px;
 }
 
 #sow-menu[data-screen="home"] .sow-menu__home-public,
 #sow-menu [data-screen-panel="home"] .sow-menu__home-public {
-  grid-column: 1;
-  grid-row: 1;
   margin: 0;
-}
-
-#sow-menu[data-screen="home"] .sow-home__directive,
-#sow-menu [data-screen-panel="home"] .sow-home__directive {
-  grid-column: 1;
-  grid-row: 2;
 }
 
 #sow-menu[data-screen="home"] .sow-menu__battlefield,
 #sow-menu [data-screen-panel="home"] .sow-menu__battlefield {
   grid-column: 2;
-  grid-row: 1 / 4;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -1872,69 +1871,54 @@ button.sow-menu__currency {
 #sow-menu[data-screen="home"] .sow-menu__leader-copy,
 #sow-menu [data-screen-panel="home"] .sow-menu__leader-copy {
   width: min(100%, 540px);
-  margin: 0 0 clamp(10px, 1.8vh, 18px);
+  margin: 0 0 calc(66px + clamp(14px, 2.2vh, 22px));
   text-align: end;
   pointer-events: none;
 }
 
-#sow-menu[data-screen="home"] .sow-home__dock,
-#sow-menu [data-screen-panel="home"] .sow-home__dock {
-  grid-column: 1 / -1;
-  grid-row: 4;
+#sow-menu[data-screen="home"] .sow-home__ranked-dock,
+#sow-menu [data-screen-panel="home"] .sow-home__ranked-dock {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
   justify-self: end;
+  z-index: 2;
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: stretch;
   justify-content: flex-end;
-  gap: 10px;
   width: auto;
   max-width: 100%;
   padding-bottom: 2px;
 }
 
-#sow-menu[data-screen="home"] .sow-home__dock > .sow-menu__status,
-#sow-menu [data-screen-panel="home"] .sow-home__dock > .sow-menu__status {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  inset-inline-end: 0;
-  max-width: min(440px, 88vw);
-  z-index: 4;
-}
-
 .sow-home__secondary-modes {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: stretch;
-  flex: 0 0 auto;
-  gap: 10px;
-  width: auto;
-  max-width: 100%;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .sow-menu__secondary.sow-home__mode-btn {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  gap: 9px;
-  width: auto;
-  min-width: max-content;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
-  min-height: 62px;
+  min-height: 48px;
   margin-top: 0;
-  padding: 10px 18px;
+  padding: 8px 14px;
   overflow: hidden;
   border-radius: var(--sow-tactical-surface-radius-compact, 10px);
   border: 1px solid var(--sow-tactical-surface-border);
   border-top-color: var(--sow-tactical-surface-accent-border-soft);
-  background: var(--sow-tactical-surface-card-bg);
+  background: var(--sow-button-dark-bg);
   box-shadow:
-    var(--sow-tactical-card-shadow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(var(--sow-tactical-surface-blur));
-  -webkit-backdrop-filter: blur(var(--sow-tactical-surface-blur));
+    var(--sow-button-dark-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   color: var(--sow-button-dark-text);
   font-size: 11.5px;
   font-weight: 850;
@@ -1948,18 +1932,29 @@ button.sow-menu__currency {
     background-color 160ms ease;
 }
 
+.sow-menu__secondary.sow-home__mode-btn.sow-home__campaign-btn {
+  border-inline-start: 3px solid var(--sow-gold);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--sow-gold) 10%, transparent) 0%, transparent 56%),
+    var(--sow-button-dark-bg);
+}
+
 .sow-menu__secondary.sow-home__mode-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   border-color: var(--sow-tactical-surface-accent-border);
   color: #fff;
   box-shadow:
-    0 12px 26px rgba(0, 0, 0, 0.48),
-    0 0 16px color-mix(in srgb, var(--sow-gold) 18%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    0 10px 22px rgba(0, 0, 0, 0.45),
+    0 0 14px color-mix(in srgb, var(--sow-gold) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .sow-menu__secondary.sow-home__mode-btn:active:not(:disabled) {
   transform: translateY(0) scale(0.985);
+}
+
+.sow-menu__secondary.sow-home__mode-btn .sow-menu__rooms-badge {
+  margin-inline-start: auto;
 }
 
 .sow-home__mode-icon {
@@ -3759,13 +3754,14 @@ button.sow-menu__currency {
     box-shadow: 0 0 18px var(--rank-glow, #e0ba78);
   }
 }
-@media (max-height: 550px) and (orientation: landscape) {
+@media (orientation: landscape) {
   .sow-menu__ranked-result-card {
-    width: min(92vw, 740px);
-    grid-template-columns: 160px 1fr;
-    gap: 8px 24px;
-    padding: 18px 26px;
+    width: min(92vw, 720px);
+    grid-template-columns: 184px minmax(0, 1fr);
+    gap: 10px 26px;
+    padding: clamp(20px, 3vw, 28px) clamp(22px, 3.5vw, 32px);
     text-align: start;
+    align-self: center;
   }
   .sow-ranked__result-pedestal {
     grid-column: 1;
@@ -3773,11 +3769,11 @@ button.sow-menu__currency {
     align-self: center;
   }
   .sow-ranked__result-seal {
-    width: 132px;
-    height: 132px;
+    width: 152px;
+    height: 152px;
   }
   .sow-ranked__result-seal .sow-ranked__emblem {
-    width: 132px;
+    width: 152px;
   }
   .sow-menu__ranked-result-card > :not(.sow-ranked__result-pedestal) {
     grid-column: 2;
@@ -3793,6 +3789,18 @@ button.sow-menu__currency {
   }
   .sow-menu__ranked-result-card .sow-ranked__actions {
     margin-top: 4px;
+  }
+}
+@media (max-height: 550px) and (orientation: landscape) {
+  .sow-menu__ranked-result-card {
+    grid-template-columns: 156px minmax(0, 1fr);
+    gap: 8px 22px;
+    padding: 16px 24px;
+  }
+  .sow-ranked__result-seal,
+  .sow-ranked__result-seal .sow-ranked__emblem {
+    width: 128px;
+    height: 128px;
   }
 }
 [data-reduced-motion="true"] .sow-ranked__search-halo,

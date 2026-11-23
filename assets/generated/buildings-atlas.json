@@ -118,7 +118,7 @@
     "MissileSilo": {
       "1": {
         "height": 128,
-        "sha256": "ba1f1882c0f87dc1523bba471e5fb64304cbbdd0cbc488aca521903ae34f5064",
+        "sha256": "1295bf2bbf431c71251ad959f3cd67938f7f2019150f2245306efbb70b3599b8",
         "source": "silo-1.png",
         "width": 128,
         "x": 134,
@@ -126,7 +126,7 @@
       },
       "2": {
         "height": 128,
-        "sha256": "1f2f15a002e20dc59f7a6ee89ba52d7cd556a1662681945e53f6c0b33615e96d",
+        "sha256": "6db3574cb19b27f6d3914feef7ce18cb60e8d1bd9622a13817948f1a3b8639db",
         "source": "silo-2.png",
         "width": 128,
         "x": 266,
@@ -134,7 +134,7 @@
       },
       "3": {
         "height": 128,
-        "sha256": "9ffcad0c28f211272b570c1054bd6724dfbf59d8c4edb2e07a82009a51e9789b",
+        "sha256": "228d2a669e3085d8b38abaa04b7183fcb74e4323e95479f0a41ad188d5f3b9a4",
         "source": "silo-3.png",
         "width": 128,
         "x": 398,
@@ -142,7 +142,7 @@
       },
       "4": {
         "height": 128,
-        "sha256": "314e8c9c059af114b46c448f47c2f10ea7557233669216251782a87bc71e6f31",
+        "sha256": "aa433dc899811166709de9059200740463637e9542f0275677d8b4a7e99564c6",
         "source": "silo-4.png",
         "width": 128,
         "x": 530,
@@ -152,23 +152,23 @@
     "Port": {
       "1": {
         "height": 128,
-        "sha256": "fca321ae3ea152b52640fffec70f1411d8250f126927ceeca8f9837b31c7a486",
-        "source": "port-1.webp",
+        "sha256": "ef32188f2b716cb1e679b672fddaeee1f427fa31ff371d932b3f5bee4467fe5a",
+        "source": "port-1.png",
         "width": 128,
         "x": 398,
         "y": 134
       },
       "2": {
         "height": 128,
-        "sha256": "10d21c0d00fa7f8a524f350ad5c98e53ab8a20bce769b88fbef9331c2ebd26dd",
-        "source": "port-2.webp",
+        "sha256": "c8ce7041aa6464077dd611b56a638e1733e2087bcd4b7315aae48e121d5f1621",
+        "source": "port-2.png",
         "width": 128,
         "x": 530,
         "y": 134
       },
       "3": {
         "height": 128,
-        "sha256": "58c6481609e9d1d9cbf56d0cfa86c54270af199588053c3f249993201bc025ae",
+        "sha256": "fca321ae3ea152b52640fffec70f1411d8250f126927ceeca8f9837b31c7a486",
         "source": "port-3.webp",
         "width": 128,
         "x": 662,
@@ -236,16 +236,16 @@
       },
       "3": {
         "height": 128,
-        "sha256": "d5ad86a63dee1138faf1fcbdad031e34b417e42ebbc731bb62ba6f9a2c5122fa",
-        "source": "tower-3.webp",
+        "sha256": "2f3600a7c7679931fa8c86f52cb6733d6c4f3015ad902ac59589e825521f0d7a",
+        "source": "tower-3.png",
         "width": 128,
         "x": 398,
         "y": 266
       },
       "4": {
         "height": 128,
-        "sha256": "5beb36d29bd810cb4efc8488a0bbbb4970a8354216ab09f4dbb4726d211a6207",
-        "source": "tower-4.webp",
+        "sha256": "294f9ebbe9c5eb1ad8bba29a9f8bd06e71c6398847091c9c96a6a6368f998ee9",
+        "source": "tower-4.png",
         "width": 128,
         "x": 530,
         "y": 266

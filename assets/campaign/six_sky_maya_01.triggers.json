@@ -33,6 +33,17 @@
       "pause_game": true,
       "title_key": "tutorial.campaign_six_sky_maya_01_open_title",
       "body_key": "tutorial.campaign_six_sky_maya_01_open_body",
+      "host": {
+        "sprite": "six_sky_pose",
+        "enter": "slide_left",
+        "idle": "breathe",
+        "side": "left",
+        "interactive": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_01_poke_1",
+          "tutorial.campaign_six_sky_maya_01_poke_2"
+        ]
+      },
       "next": "six_sky_maya_01_attack"
     },
     {
@@ -48,6 +59,15 @@
       },
       "next": "six_sky_maya_01_defeat",
       "body_key": "tutorial.campaign_six_sky_maya_01_attack_body",
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true,
+        "nudge_key": "tutorial.campaign_six_sky_maya_01_attack_nudge",
+        "nudge_after_ms": 6000
+      },
       "marker": {
         "target": "kinichil_kab"
       },
@@ -81,6 +101,13 @@
         "scope": "episode"
       },
       "next": "six_sky_maya_01_end",
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "cheer",
+        "side": "auto",
+        "flip_to_target": true
+      },
       "marker": {
         "target": "kinichil_kab"
       },
@@ -103,6 +130,18 @@
       "type": "end",
       "speaker": "six_sky",
       "presentation": "chapter",
+      "host": {
+        "sprite": "six_sky_celebrate",
+        "enter": "pop_up",
+        "idle": "cheer",
+        "side": "left",
+        "interactive": true,
+        "confetti": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_01_poke_1",
+          "tutorial.campaign_six_sky_maya_01_poke_2"
+        ]
+      },
       "title_key": "tutorial.campaign_six_sky_maya_01_end_title",
       "body_key": "tutorial.campaign_six_sky_maya_01_end_body"
     }

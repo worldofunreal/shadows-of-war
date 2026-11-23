@@ -9,10 +9,12 @@ pub enum MoverSpriteId {
     Warship = 2,
     AtomBomb = 3,
     SamMissile = 4,
+    HydrogenBomb = 5,
+    Mirv = 6,
 }
 
 impl MoverSpriteId {
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = 7;
     pub const ATLAS_CELL: u32 = 64;
 
     pub fn uv_rect(self) -> [f32; 4] {

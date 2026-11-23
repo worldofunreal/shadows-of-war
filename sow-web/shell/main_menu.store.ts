@@ -1,5 +1,5 @@
-import { renderSkinCard, renderSkinPicker, skinName } from "./main_menu.skins.ts";
-import { AudioCue, playUiCue } from "./audio/index.ts";
+import { renderSkinCard, renderSkinPicker, skinIconAttributes, skinName } from "./main_menu.skins.ts";
+import { AudioCue, MenuSfx, playUiCue } from "./audio/index.ts";
 import {
     asset,
     avatarImage,
@@ -817,13 +817,11 @@ export function openLeaderPurchase(leaderId: string, currency: string, storeOffe
     const cost = resolvedOffer
         ? resolvedOffer.cost
         : offer && (isGems ? offer.cost_gems : offer.cost_crowns);
-    if (
-        !offer ||
-        offer.owned ||
-        (menuUi.state && menuUi.state.store_busy) ||
-        storeBalance(isGems ? "gems" : "crowns") < Number(cost || 0)
-    )
+    if (!offer || offer.owned || (menuUi.state && menuUi.state.store_busy)) return;
+    if (storeBalance(isGems ? "gems" : "crowns") < Number(cost || 0)) {
+        MenuSfx.purchaseDenied();
         return;
+    }
     menuUi.state!.error = null;
     const offerId = resolvedOffer ? resolvedOffer.id : undefined;
     menuUi.purchaseIntent = { type: "leader", leaderId: offer.id, offerId: offerId };
@@ -835,6 +833,7 @@ export function openLeaderPurchase(leaderId: string, currency: string, storeOffe
         phase: "confirm",
         submitted: false,
     };
+    MenuSfx.purchaseOpen();
     trackStoreEvent("store_buy_tap", "leader", offer.id, isGems ? "gems" : "crowns");
     render();
 }
@@ -845,13 +844,11 @@ export function openSkinPurchase(skinId: string, currency: string, storeOffer?: 
     const resolvedOffer =
         storeOffer || (skin ? activeOfferForItem("skin", skin.id, isGems ? "gems" : "crowns") : null);
     const cost = resolvedOffer ? resolvedOffer.cost : skin && (isGems ? skin.cost_gems : skin.cost_crowns);
-    if (
-        !skin ||
-        skin.owned ||
-        (menuUi.state && menuUi.state.store_busy) ||
-        storeBalance(isGems ? "gems" : "crowns") < Number(cost || 0)
-    )
+    if (!skin || skin.owned || (menuUi.state && menuUi.state.store_busy)) return;
+    if (storeBalance(isGems ? "gems" : "crowns") < Number(cost || 0)) {
+        MenuSfx.purchaseDenied();
         return;
+    }
     menuUi.state!.error = null;
     const offerId = resolvedOffer ? resolvedOffer.id : undefined;
     menuUi.purchaseIntent = { type: "skin", skinId: skin.id, offerId: offerId };
@@ -863,6 +860,7 @@ export function openSkinPurchase(skinId: string, currency: string, storeOffer?: 
         phase: "confirm",
         submitted: false,
     };
+    MenuSfx.purchaseOpen();
     trackStoreEvent("store_buy_tap", "skin", skin.id, isGems ? "gems" : "crowns");
     render();
 }
@@ -873,12 +871,11 @@ export function openOfferPurchase(offerId: string, currency?: string) {
         const quote = computeBundleQuote(bundleOffer);
         const isGems = currency === "gems";
         const cost = isGems ? quote.costGems : quote.costCrowns;
-        if (
-            quote.allOwned ||
-            (menuUi.state && menuUi.state.store_busy) ||
-            storeBalance(isGems ? "gems" : "crowns") < cost
-        )
+        if (quote.allOwned || (menuUi.state && menuUi.state.store_busy)) return;
+        if (storeBalance(isGems ? "gems" : "crowns") < cost) {
+            MenuSfx.purchaseDenied();
             return;
+        }
         menuUi.state!.error = null;
         menuUi.purchaseIntent = {
             type: "store_bundle",
@@ -891,6 +888,7 @@ export function openOfferPurchase(offerId: string, currency?: string) {
             phase: "confirm",
             submitted: false,
         };
+        MenuSfx.purchaseOpen();
         trackStoreEvent("store_buy_tap", "bundle", bundleOffer.id, isGems ? "gems" : "crowns");
         render();
         return;
@@ -1015,9 +1013,9 @@ function renderStoreBundleOfferCard(bundle: MenuStoreBundleOffer) {
                 "<span class='sow-store__bundle-portrait" +
                 (isSkin ? " is-skin" : "") +
                 (item.owned ? " is-owned" : "") +
-                "'><img src='" +
-                esc(item.art) +
-                "' alt='" +
+                "'><img " +
+                (isSkin ? skinIconAttributes(item.id, item.art) : "src='" + esc(item.art) + "'") +
+                " alt='" +
                 esc(item.name) +
                 "' width='72' height='72' loading='lazy'>" +
                 (item.owned ? "<i class='sow-store__bundle-owned-check'>✓</i>" : "") +
@@ -1258,9 +1256,11 @@ function renderPurchaseArt(
                     return (
                         "<span class='sow-store__bundle-portrait" +
                         (storeBundle.kind === "skin" ? " is-skin" : "") +
-                        "'><img src='" +
-                        esc(item.art) +
-                        "' alt='" +
+                        "'><img " +
+                        (storeBundle.kind === "skin"
+                            ? skinIconAttributes(item.id, item.art)
+                            : "src='" + esc(item.art) + "'") +
+                        " alt='" +
                         esc(item.name) +
                         "' width='88' height='88'></span>"
                     );
@@ -1279,9 +1279,9 @@ function renderPurchaseArt(
     } else if (skin) {
         visualClass = " sow-purchase-modal__visual--skin";
         art =
-            "<img class='sow-purchase-modal__art-image sow-purchase-modal__art-image--skin' src='" +
-            esc(asset(skin.asset_path)) +
-            "' alt='" +
+            "<img class='sow-purchase-modal__art-image sow-purchase-modal__art-image--skin' " +
+            skinIconAttributes(skin.id, asset(skin.asset_path)) +
+            " alt='" +
             esc(skinName(skin)) +
             "' width='256' height='256'>";
     } else {
@@ -1488,6 +1488,7 @@ export function resolvePurchaseModal() {
         if (menuUi.state) menuUi.state.error = null;
         beginPurchaseSuccessReveal();
     } else if (menuUi.state && !menuUi.state.store_busy && menuUi.state.error) {
+        MenuSfx.purchaseDenied();
         menuUi.purchaseModal.submitted = false;
         menuUi.purchaseIntent = null;
     }
@@ -1531,6 +1532,7 @@ export function beginStorePurchase(productId: string | undefined) {
         if (!menuUi.state!.account_id || typeof window.SOW_requestAndroidPurchase !== "function") {
             abandonExternalPurchaseAttempt(productId);
             menuUi.state!.error = SOW_t("store.store_unavailable");
+            MenuSfx.purchaseDenied();
             render();
             return false;
         }
@@ -1540,9 +1542,11 @@ export function beginStorePurchase(productId: string | undefined) {
             menuUi.storeCheckoutBusy = false;
             abandonExternalPurchaseAttempt(productId);
             menuUi.state!.error = SOW_t("store.android_checkout_unavailable");
+            MenuSfx.purchaseDenied();
             render();
         } else {
             menuUi.storeCheckoutRequestId = requestId;
+            MenuSfx.purchaseConfirm();
             trackStoreEvent("store_checkout_open", "gem_pack", productId, "usd");
             render();
         }
@@ -1551,6 +1555,7 @@ export function beginStorePurchase(productId: string | undefined) {
     // Only the Android app sells gem packs; there is no web checkout.
     abandonExternalPurchaseAttempt(productId);
     menuUi.state!.error = SOW_t("store.store_unavailable");
+    MenuSfx.purchaseDenied();
     render();
     return false;
 }
@@ -1568,8 +1573,10 @@ export function beginStoreRestore() {
     if (!requestId) {
         menuUi.storeCheckoutBusy = false;
         menuUi.state!.error = SOW_t("store.android_restore_unavailable");
+        MenuSfx.purchaseDenied();
     } else {
         menuUi.storeCheckoutRequestId = requestId;
+        MenuSfx.purchaseConfirm();
     }
     render();
 }

@@ -280,7 +280,7 @@ fn apply_skin(base: vec3<f32>, owner_id: u32, world_pos: vec2<f32>, motif_pixels
     if style == 0u || globals.shader_params[__MAP_SKIN_OPACITY__].x <= 0.0 {
         return base;
     }
-    if style >= 10u && style <= 12u {
+    if style >= 10u && style <= 17u {
         if motif_pixels <= 4.0 {
             return base;
         }
@@ -293,7 +293,7 @@ fn apply_skin(base: vec3<f32>, owner_id: u32, world_pos: vec2<f32>, motif_pixels
         }
         // Keep the bilinear footprint inside this atlas cell.
         let texel = vec2<f32>(f32(style - 10u) * 64.0, 0.0) + 0.5 + motif * 63.0;
-        let mask = textureSampleLevel(skin_texture, skin_sampler, texel / vec2<f32>(256.0, 64.0), 0.0).r;
+        let mask = textureSampleLevel(skin_texture, skin_sampler, texel / vec2<f32>(512.0, 64.0), 0.0).r;
         let visibility = smoothstep(4.0, 10.0, motif_pixels);
         return compose_skin(base, style, vec3<f32>(0.0), mask * 0.42 * visibility);
     }

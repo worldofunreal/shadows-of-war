@@ -1,6 +1,8 @@
 use crate::ui::UiText;
-use std::collections::VecDeque;
-use web_time::Instant;
+use std::collections::{HashMap, VecDeque};
+use web_time::{Duration, Instant};
+
+const ABILITY_NOTICE_INTERVAL: Duration = Duration::from_secs(8);
 
 #[derive(Clone, Debug)]
 pub struct SelectedTileInfo {
@@ -80,6 +82,7 @@ pub struct HudState {
     pub selected_warship_ids: Vec<u64>,
     pub warship_move_targeting: bool,
     pub hud_notifications: VecDeque<HudNotification>,
+    last_ability_notices: HashMap<u16, Instant>,
     pub map_feedback: Option<HudMapFeedback>,
     pub notification_revision: u64,
     pub show_ask_panel: Option<u16>,
@@ -116,6 +119,7 @@ impl Default for HudState {
             selected_warship_ids: Vec::new(),
             warship_move_targeting: false,
             hud_notifications: VecDeque::with_capacity(32),
+            last_ability_notices: HashMap::new(),
             map_feedback: None,
             notification_revision: 0,
             show_ask_panel: None,
@@ -168,6 +172,36 @@ impl HudState {
         self.notification_revision = id;
     }
 
+    pub(crate) fn push_ability_notice(
+        &mut self,
+        owner_id: u16,
+        viewer_id: u16,
+        leader: sow_core::player::Leader,
+        now: Instant,
+    ) {
+        if self
+            .last_ability_notices
+            .get(&owner_id)
+            .is_some_and(|last| now.duration_since(*last) < ABILITY_NOTICE_INTERVAL)
+        {
+            return;
+        }
+        self.last_ability_notices.insert(owner_id, now);
+
+        let hero = sow_core::commerce::leader_id(leader);
+        self.push_notification_for_players(
+            UiText::new("hud.ability_notice")
+                .with("hero", hero)
+                .with("hero_art", leader.art_slug())
+                .with("ability_key", format!("site.leader_{hero}_ability"))
+                .with("description_key", format!("site.leader_{hero}_description")),
+            [Some(owner_id), (viewer_id != owner_id).then_some(viewer_id)],
+            3,
+            Some(format!("ability:{owner_id}")),
+            false,
+        );
+    }
+
     pub fn push_warship_launch(&mut self, fleet_id: u64) {
         self.push_notification_for_players(
             UiText::new("hud.warship_ready"),
@@ -183,6 +217,7 @@ impl HudState {
 
     pub fn clear_notifications(&mut self) {
         self.hud_notifications.clear();
+        self.last_ability_notices.clear();
         self.map_feedback = None;
         self.notification_revision = self.notification_revision.wrapping_add(1);
     }

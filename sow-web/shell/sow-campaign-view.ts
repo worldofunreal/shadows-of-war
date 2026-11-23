@@ -105,6 +105,16 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         nudgeTimer = 0;
     let homeGuideAnimation: Animation | null = null,
         homeGuideAnimationStep: string | null = null;
+    let hostNudgeTimer = 0,
+        hostPokeTimer = 0,
+        hostNudgeStepId: string | null = null,
+        hostNudgeFired = false,
+        lastHostStepId: string | null = null,
+        lastHostSprite: string | null = null,
+        lastHostConfettiStepId: string | null = null,
+        hostPokeIndex = 0,
+        hostSwapAnimation: Animation | null = null,
+        hostPokeAnimation: Animation | null = null;
     root.classList.add("sow-story");
     root.classList.toggle("has-guide-skip", Boolean(options.guideSkipLabel));
     root.innerHTML =
@@ -126,6 +136,13 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         '-hint"></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
         '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
         '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
+        '<div class="sow-story__stage" hidden>' +
+        '<div class="sow-story__confetti" aria-hidden="true"></div>' +
+        '<div class="sow-story__host" data-host-side="left" data-host-idle="none">' +
+        '<div class="sow-story__host-poke" role="status" aria-live="polite" hidden></div>' +
+        '<div class="sow-story__host-figure"><span class="sow-story__host-shadow" aria-hidden="true"></span><img class="sow-story__host-sprite" alt="" draggable="false"></div>' +
+        '<div class="sow-story__host-callout" role="status" aria-live="polite" hidden><p class="sow-story__host-callout-text"></p></div>' +
+        "</div></div>" +
         '<button class="sow-story__guide-skip" type="button" data-story-guide-skip hidden></button>' +
         '<div class="sow-story__gesture" data-tutorial-hand hidden><span class="sow-story__ripple" aria-hidden="true"></span><span class="sow-story__hand" aria-hidden="true"><img alt="" draggable="false"></span><span class="sow-story__zoom" aria-hidden="true"><span class="sow-story__zoom-fingers"><i></i><i></i><b></b></span><span class="sow-story__zoom-wheel"></span></span><span class="sow-story__pan-keys" aria-hidden="true"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" role="status" aria-live="polite" aria-atomic="true" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><span class="sow-story__distance-tile" aria-hidden="true"></span><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><span class="sow-story__distance-target" aria-hidden="true">⌖</span><b class="sow-story__zoom-target"></b></span></span></div>';
     const find = <T extends Element = HTMLElement>(selector: string): T => root.querySelector<T>(selector)!;
@@ -199,7 +216,237 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         if (homeGuideAnimationStep !== null) gesture.style.opacity = "";
         homeGuideAnimationStep = null;
     }
+    function clearHostState() {
+        if (hostNudgeTimer) {
+            clearTimeout(hostNudgeTimer);
+            hostNudgeTimer = 0;
+        }
+        if (hostPokeTimer) {
+            clearTimeout(hostPokeTimer);
+            hostPokeTimer = 0;
+        }
+        if (hostSwapAnimation) {
+            hostSwapAnimation.cancel();
+            hostSwapAnimation = null;
+        }
+        if (hostPokeAnimation) {
+            hostPokeAnimation.cancel();
+            hostPokeAnimation = null;
+        }
+        hostNudgeStepId = null;
+        hostNudgeFired = false;
+        lastHostStepId = null;
+        lastHostSprite = null;
+        lastHostConfettiStepId = null;
+        hostPoke.hidden = true;
+        hostCallout.hidden = true;
+        hostConfetti.replaceChildren();
+        stage.hidden = true;
+        root.classList.remove("has-host");
+    }
+    function spawnHostConfetti() {
+        hostConfetti.replaceChildren();
+        const colors = ["#f5c249", "#48c78e", "#ff6b6b", "#7ce8ff", "#fff1bd"];
+        for (let i = 0; i < 18; i++) {
+            const spark = doc.createElement("i");
+            const angle = (-115 + (i / 17) * 140 + ((i % 3) - 1) * 8) * (Math.PI / 180);
+            const dist = 110 + (i % 4) * 48;
+            spark.style.setProperty("--cx", Math.round(Math.cos(angle) * dist) + "px");
+            spark.style.setProperty("--cy", Math.round(Math.sin(angle) * dist - 40) + "px");
+            spark.style.setProperty("--cr", ((i % 2 === 0 ? 1 : -1) * (140 + i * 24)) + "deg");
+            spark.style.setProperty("--cd", (i * 22) + "ms");
+            spark.style.setProperty("--cc", colors[i % colors.length]);
+            hostConfetti.appendChild(spark);
+        }
+    }
+    function triggerHostPoke(hostConfig: CampaignRecord) {
+        if (!model || !hostConfig || hostConfig.interactive !== true) return;
+        const reducedMotion = reducedMotionActive();
+        if (!reducedMotion && typeof hostFigure.animate === "function") {
+            if (hostPokeAnimation) hostPokeAnimation.cancel();
+            hostPokeAnimation = hostFigure.animate(
+                [
+                    { transform: "scale(1, 1) rotate(0deg)" },
+                    { transform: "scale(1.07, 0.92) translateY(6px) rotate(-3deg)", offset: 0.24 },
+                    { transform: "scale(0.95, 1.06) translateY(-10px) rotate(2.5deg)", offset: 0.56 },
+                    { transform: "scale(1.02, 0.98) translateY(2px) rotate(-1deg)", offset: 0.8 },
+                    { transform: "scale(1, 1) rotate(0deg)" },
+                ],
+                { duration: 420, easing: "cubic-bezier(.2,.9,.3,1)" },
+            );
+            hostPokeAnimation.onfinish = () => {
+                hostPokeAnimation = null;
+            };
+        }
+        const pokeKeys = Array.isArray(hostConfig.poke_keys) ? hostConfig.poke_keys : [];
+        if (pokeKeys.length) {
+            const key = String(pokeKeys[hostPokeIndex % pokeKeys.length] || "");
+            hostPokeIndex++;
+            const lineText = t(key);
+            if (lineText) {
+                setText(hostPoke, lineText);
+                hostPoke.hidden = false;
+                if (hostPokeTimer) clearTimeout(hostPokeTimer);
+                hostPokeTimer = setTimeout(() => {
+                    hostPokeTimer = 0;
+                    hostPoke.hidden = true;
+                }, 3200);
+            }
+        }
+        options.onHostCue?.("poke");
+    }
+    function renderHost(
+        step: CampaignStep,
+        modal: boolean,
+        context: CampaignRecord,
+        reducedMotion: boolean,
+    ): boolean {
+        const hostConfig = step && step.host && typeof step.host === "object" ? step.host : null;
+        if (!hostConfig || !hostConfig.sprite) {
+            clearHostState();
+            return false;
+        }
+        const spriteSrc = options.asset("campaign/sprites/" + hostConfig.sprite + ".webp");
+        const stepChanged = lastHostStepId !== step.id;
+        const spriteChanged = lastHostSprite !== hostConfig.sprite;
+        const firstAppearance = lastHostStepId === null;
+        root.classList.add("has-host");
+        stage.hidden = false;
+        if (hostSprite.getAttribute("src") !== spriteSrc) hostSprite.src = spriteSrc;
+
+        let side: "left" | "right" = hostConfig.side === "right" ? "right" : "left";
+        let flipToTarget = false;
+        const anchor = context && context.anchor;
+        if (
+            !modal &&
+            anchor &&
+            Number.isFinite(Number(anchor.x)) &&
+            (hostConfig.side === "auto" || hostConfig.flip_to_target === true)
+        ) {
+            const onLeftHalf = Number(anchor.x) < root.clientWidth * 0.45;
+            if (hostConfig.side === "auto") side = onLeftHalf ? "right" : "left";
+            if (hostConfig.flip_to_target === true) flipToTarget = side === "right";
+        }
+        hostBox.dataset.hostSide = side;
+        hostBox.dataset.hostModal = modal ? "true" : "false";
+        hostBox.dataset.hostIdle = reducedMotion ? "none" : String(hostConfig.idle || "breathe");
+        hostBox.dataset.hostInteractive = modal && hostConfig.interactive === true ? "true" : "false";
+        hostBox.dataset.hostFlip = flipToTarget ? "true" : "false";
+
+        if (stepChanged) {
+            lastHostStepId = step.id;
+            hostPoke.hidden = true;
+            if (hostPokeTimer) {
+                clearTimeout(hostPokeTimer);
+                hostPokeTimer = 0;
+            }
+            if (hostNudgeTimer) {
+                clearTimeout(hostNudgeTimer);
+                hostNudgeTimer = 0;
+            }
+            hostNudgeStepId = step.id;
+            hostNudgeFired = false;
+        }
+
+        if (!modal) {
+            const calloutKey =
+                hostNudgeFired && hostConfig.nudge_key
+                    ? hostConfig.nudge_key
+                    : step.hint_key || step.body_key || step.title_key;
+            const calloutText = context.hintOverride || t(calloutKey);
+            setText(hostCalloutText, calloutText);
+            hostCallout.hidden = !calloutText;
+            hostCallout.classList.toggle("is-nudged", hostNudgeFired);
+            if (
+                hostConfig.nudge_key &&
+                !hostNudgeFired &&
+                !hostNudgeTimer &&
+                hostNudgeStepId === step.id
+            ) {
+                const delay = Number(hostConfig.nudge_after_ms) || 6000;
+                hostNudgeTimer = setTimeout(() => {
+                    hostNudgeTimer = 0;
+                    if (destroyed || root.hidden || !model || model.step.id !== step.id) return;
+                    hostNudgeFired = true;
+                    const nudgeText = t(hostConfig.nudge_key);
+                    if (nudgeText) {
+                        setText(hostCalloutText, nudgeText);
+                        hostCallout.hidden = false;
+                        hostCallout.classList.add("is-nudged");
+                    }
+                    if (!reducedMotion && typeof hostFigure.animate === "function") {
+                        hostFigure.animate(
+                            [
+                                { transform: "translateY(0)" },
+                                { transform: "translateY(-14px) scale(1.04)", offset: 0.35 },
+                                { transform: "translateY(0)", offset: 0.65 },
+                                { transform: "translateY(-8px)", offset: 0.82 },
+                                { transform: "translateY(0)" },
+                            ],
+                            { duration: 520, easing: "cubic-bezier(.2,.8,.3,1)" },
+                        );
+                    }
+                    options.onHostCue?.("nudge");
+                }, delay);
+            }
+        } else {
+            hostCallout.hidden = true;
+            hostCallout.classList.remove("is-nudged");
+        }
+
+        if ((firstAppearance || spriteChanged || stepChanged) && !reducedMotion && typeof hostBox.animate === "function") {
+            const enterKind = firstAppearance
+                ? hostConfig.enter || "slide_left"
+                : hostConfig.enter || "swap_pop";
+            if (hostSwapAnimation) hostSwapAnimation.cancel();
+            if (firstAppearance || enterKind === "slide_left" || enterKind === "slide_right" || enterKind === "pop_up") {
+                const startX =
+                    enterKind === "slide_left" ? "-42%" : enterKind === "slide_right" ? "42%" : "0%";
+                const startY = enterKind === "pop_up" ? "32%" : "8%";
+                hostSwapAnimation = hostBox.animate(
+                    [
+                        { opacity: 0, transform: `translate3d(${startX}, ${startY}, 0) scale(0.86)` },
+                        { opacity: 1, transform: "translate3d(0, -8px, 0) scale(1.04)", offset: 0.68 },
+                        { opacity: 1, transform: "translate3d(0, 0, 0) scale(1)" },
+                    ],
+                    { duration: 460, easing: "cubic-bezier(.18, .88, .28, 1)" },
+                );
+                if (firstAppearance) options.onHostCue?.("enter");
+            } else if (spriteChanged) {
+                hostSwapAnimation = hostFigure.animate(
+                    [
+                        { transform: "scale(0.92, 1.08) translateY(6px)" },
+                        { transform: "scale(1.06, 0.94) translateY(-6px)", offset: 0.45 },
+                        { transform: "scale(1, 1) translateY(0)" },
+                    ],
+                    { duration: 300, easing: "cubic-bezier(.2, .85, .3, 1)" },
+                );
+            }
+            if (hostSwapAnimation) {
+                const activeAnim = hostSwapAnimation;
+                activeAnim.onfinish = () => {
+                    if (hostSwapAnimation === activeAnim) hostSwapAnimation = null;
+                };
+            }
+        }
+        lastHostSprite = hostConfig.sprite;
+
+        if (hostConfig.confetti === true && lastHostConfettiStepId !== step.id) {
+            lastHostConfettiStepId = step.id;
+            if (!reducedMotion) spawnHostConfetti();
+            options.onHostCue?.("celebrate");
+        }
+        return true;
+    }
     const spotlight = find(".sow-story__spotlight");
+    const stage = find(".sow-story__stage"),
+        hostConfetti = find(".sow-story__confetti"),
+        hostBox = find(".sow-story__host"),
+        hostFigure = find(".sow-story__host-figure"),
+        hostSprite = find<HTMLImageElement>(".sow-story__host-sprite"),
+        hostPoke = find(".sow-story__host-poke"),
+        hostCallout = find(".sow-story__host-callout"),
+        hostCalloutText = find(".sow-story__host-callout-text");
     const view = doc.defaultView;
     let portraitFrame = 0,
         guideStepId = "",
@@ -275,6 +522,16 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
     function preparePortraits(definition: CampaignDefinition) {
         if (preparedDefinitions.has(definition)) return;
         preparedDefinitions.add(definition);
+        (definition.steps || []).forEach((item) => {
+            const sprite = item && item.host && typeof item.host.sprite === "string" ? item.host.sprite : "";
+            if (sprite)
+                portraitImage(
+                    options.asset("campaign/sprites/" + sprite + ".webp"),
+                    item.speaker || "host",
+                    item.id,
+                    definition.episode_id,
+                );
+        });
         const roster = typeof options.roster === "function" ? options.roster() : options.roster;
         (Object.entries(definition.speakers || {}) as [string, CampaignRecord][]).forEach(
             ([key, character]) => {
@@ -697,6 +954,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
             cameraTracking = false;
             compactStatusVisible = false;
             clearHomeGuideAnimation();
+            clearHostState();
             gesture.classList.remove("is-following", "is-camera-following", "is-status", "is-compact");
             clearNudge();
             clearGuideMetric();
@@ -739,7 +997,9 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         root.dataset.stepId = step.id;
         root.dataset.stepType = step.type;
         const cameraCue = isCameraCue(step);
-        objective.hidden = modal || context.hideObjective === true || compactViewport || cameraCue;
+        const hasHost = renderHost(step, modal, context, reducedMotion);
+        objective.hidden =
+            modal || hasHost || context.hideObjective === true || compactViewport || cameraCue;
         dialog.setAttribute("role", "dialog");
         dialog.setAttribute("aria-modal", "true");
         dialog.setAttribute(
@@ -826,7 +1086,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
                     ? (actor.avatar_transition as AvatarExpressionTransition)
                     : null;
             const reducedSource = portraitSource(transition ? transition.to : expression);
-            if (modal && speakerName)
+            if (modal && speakerName && !hasHost)
                 showPortrait(
                     avatar,
                     speakerKey || model.reactionTarget || "unknown",
@@ -1175,7 +1435,15 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
     function click(event: MouseEvent) {
         event.stopPropagation();
         if (!model) return;
-        const button = (event.target as Element).closest("button");
+        const targetEl = event.target as Element | null;
+        if (targetEl && targetEl.closest(".sow-story__host-figure")) {
+            if (model.step && model.step.host && model.step.host.interactive === true) {
+                event.preventDefault();
+                triggerHostPoke(model.step.host);
+            }
+            return;
+        }
+        const button = targetEl && targetEl.closest("button");
         if (!button || !root.contains(button)) return;
         event.preventDefault();
         if (event.timeStamp - lastAction < 220) return;
@@ -1267,6 +1535,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         destroy() {
             releaseFocus();
             clearHomeGuideAnimation();
+            clearHostState();
             clearNudge();
             clearGuideMetric();
             destroyed = true;

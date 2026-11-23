@@ -49,12 +49,14 @@ pub const BADGES: [&str; 20] = [
 ];
 /// Map movers, `assets/art/units/<name>.webp`, packed 4x2 in sow-render
 /// `MoverSpriteId` order (embedded in the game, never published).
-const UNITS: [&str; 5] = [
+const UNITS: [&str; 7] = [
     "transport-ship",
     "trade-ship",
     "warship",
     "atom-bomb",
     "sam-missile",
+    "hydrogen-bomb",
+    "mirv",
 ];
 const UNIT_COLUMNS: u32 = 4;
 /// Runtime URLs the pipeline publishes the generated atlases under.

@@ -337,9 +337,9 @@ impl SowApp {
                 if let Some((old_owner, old_under_construction, old_active_level)) =
                     old_buildings.remove(&b_new.id)
                 {
-                    // ponytail: only play building completion sound for the local player
+                    // Queued levels stay under construction while active_level advances.
                     if old_under_construction
-                        && !b_new.under_construction
+                        && (!b_new.under_construction || b_new.active_level() > old_active_level)
                         && b_new.owner_id == my_id
                         && my_id != 0
                     {
@@ -527,6 +527,51 @@ impl SowApp {
                 Some(format!("nuke:{}:{victim_id}", alert.owner_id)),
                 false,
             );
+        }
+    }
+
+    /// Emits a single cozy artisan work tick while one or more local upgrades are active.
+    pub(crate) fn update_upgrade_progress_sfx(&mut self, now: web_time::Instant) {
+        if self.ui.app.phase != crate::ClientPhase::Playing
+            || self.sim.paused
+            || self.ui.observing
+            || self.sim.map_w == 0
+        {
+            return;
+        }
+        let Some(my_id) = self.sim.my_player_id.filter(|id| *id != 0) else {
+            return;
+        };
+        let Some(snap) = self.sim.current_snapshot.as_ref() else {
+            return;
+        };
+        if !matches!(snap.phase, sow_core::game::GamePhase::Playing) {
+            return;
+        }
+        let zoom = self.input.camera_zoom.max(0.001);
+        let center_wx = (self.input.screen_w * 0.5 - self.input.camera_x) / zoom;
+        let center_wy = (self.input.screen_h * 0.5 - self.input.camera_y) / zoom;
+        let map_w = self.sim.map_w;
+
+        let mut best: Option<(f32, sow_core::game::BuildingKind, f32, f32)> = None;
+        for b in &snap.buildings {
+            if b.owner_id != my_id || !b.under_construction || b.level <= 1 {
+                continue;
+            }
+            let wx = (b.tile_idx % map_w) as f32 + 0.5;
+            let wy = (b.tile_idx / map_w) as f32 + 0.5;
+            let [px, py] = self.input.project_board([wx, wy]);
+            let dx = px - center_wx;
+            let dy = py - center_wy;
+            let dist_sq = dx * dx + dy * dy;
+            if best.is_none_or(|(best_dist, ..)| dist_sq < best_dist) {
+                best = Some((dist_sq, b.kind, wx, wy));
+            }
+        }
+        if let Some((_, kind, wx, wy)) = best {
+            let spatial = self.spatial_sound_params(wx, wy);
+            self.sfx
+                .update_upgrade_progress(now, Some((crate::building_sound_kind(kind), spatial)));
         }
     }
 }

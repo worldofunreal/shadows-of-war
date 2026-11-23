@@ -1,297 +1,310 @@
 /**
- * Naval Warfare, Amphibious Transport & Maritime Trade Recipes.
+ * Naval Warfare, Amphibious Transport & Maritime Trade Recipes (`naval.ts`).
  *
- * Acoustic Identity:
- *   Band-passed pink-noise water sweeps, crisp powder-crack warship cannons with
- *   warm saturation, metallic hull strikes, low-pass sinking bubbles, sonar helm
- *   pings, and sparkling D6 modal coin chimes for maritime trade.
+ * Acoustic Identity (Boom Beach / Rise of Kingdoms / Luxury Maritime):
+ *   - Real 54-bubble Minnaert `waterSplash` surf & plumes (never flat noise hiss).
+ *   - Broadsides punch with tube-driven gunpowder crackle (`playCinematicBlast`)
+ *     and oak deck recoil.
+ *   - Warships announce with deep stereo dry-dock brass foghorns & anchor steel.
+ *   - Maritime trade deliveries shower players with physical gold coin cascades
+ *     (`playCoinShower`) and crystalline celesta chimes.
  */
 
 import {
     clamp,
+    playBuffer,
     playFilteredNoise,
     playFmTone,
-    playModalHit,
-    playSubDrop,
     playTone,
     vary,
     type VoiceRenderCtx,
 } from "../dsp.ts";
+import {
+    playBrassEnsemble,
+    playCasinoChime,
+    playCinematicBlast,
+    playCoinShower,
+    playHarpPluck,
+    playLiquidSplash,
+    playSteelImpact,
+    playTactilePop,
+    playTaikoHit,
+} from "../instruments.ts";
 import { FleetOrderSubtype, type CueTrigger } from "../types.ts";
 
-/** `TransportLaunch` — Short bosun/nautical whistle + hull sliding into water. */
+/** `TransportLaunch` — Hull timber splash into water + authentic breathy nautical bosun whistle. */
 export function synthTransportLaunch(v: VoiceRenderCtx, _t: CueTrigger): void {
-    // Hull water splash
-    playFilteredNoise(v, {
-        color: "pink",
-        attack: 0.01,
-        decay: 0.22,
-        gain: 0.22,
-        filterType: "bandpass",
-        filterFreq: vary(v.rng, 680, 0.15),
-        filterFreqEnd: 1450,
-        filterQ: 1.8,
+    playBuffer(v, {
+        buffer: v.bank.woodThock[1],
+        rate: vary(v.rng, 0.88, 0.06),
+        gain: 0.34,
+        wetSend: 0.24,
     });
-    // Crisp maritime whistle sweep
-    const f0 = vary(v.rng, 880, 0.04);
+    playLiquidSplash(v, { delay: 0.01, decay: 0.36, pitch: 1.04, gain: 0.36, heavy: false });
+
+    // Breathy maritime bosun pipe (warm breath chiff + harmonic whistle sweep, never bare sine)
+    const f0 = vary(v.rng, 987.77, 0.03); // B5
     playTone(v, {
+        wave: v.bank.choirWave,
         type: "sine",
         freq: f0,
-        freqEnd: f0 * 1.24,
-        delay: 0.012,
-        attack: 0.015,
+        freqEnd: f0 * 1.19,
+        delay: 0.02,
+        attack: 0.016,
+        hold: 0.02,
         decay: 0.14,
-        gain: 0.13,
+        gain: 0.14,
+        filterType: "bandpass",
+        filterFreq: 1400,
+        filterQ: 1.4,
+        shimmerSend: 0.28,
+    });
+    playFilteredNoise(v, {
+        color: "parchment",
+        delay: 0.018,
+        attack: 0.014,
+        decay: 0.12,
+        gain: 0.1,
+        filterType: "bandpass",
+        filterFreq: f0 * 1.1,
+        filterFreqEnd: f0 * 1.35,
+        filterQ: 4.5,
     });
 }
 
-/** `TransportLanded` — Keel beaching thump on shore + receding wave wash. */
+/** `TransportLanded` — Heavy wooden keel beaching on wet sand + receding surf wash. */
 export function synthTransportLanded(v: VoiceRenderCtx, _t: CueTrigger): void {
-    playSubDrop(v, vary(v.rng, 138, 0.08), 58, 0.11, 0.26);
-    playFilteredNoise(v, {
-        color: "pink",
-        delay: 0.01,
-        attack: 0.008,
-        decay: 0.2,
-        gain: 0.18,
-        filterType: "bandpass",
-        filterFreq: 1350,
-        filterFreqEnd: 460,
-        filterQ: 1.3,
+    playTaikoHit(v, { heavy: false, pitch: 0.94, gain: 0.38, rimCrack: 0.35 });
+    playBuffer(v, {
+        buffer: v.bank.woodThock[1],
+        delay: 0.005,
+        rate: vary(v.rng, 0.76, 0.06),
+        gain: 0.42,
+        wetSend: 0.24,
     });
+    playLiquidSplash(v, { delay: 0.015, decay: 0.32, pitch: 0.92, gain: 0.28, heavy: false });
 }
 
 /**
- * `FleetOrder` — Clean naval helm / sonar confirmation.
- * `subtype`: 0 = Move, 1 = Patrol (dual ping).
+ * `FleetOrder` — Machined brass ship-engine telegraph latch + crisp bridge bell/sonar ping.
+ * `subtype`: 0 = Move, 1 = Patrol (dual telegraph confirmation).
  */
 export function synthFleetOrder(v: VoiceRenderCtx, t: CueTrigger): void {
     const patrol = Math.round(t.subtype) === FleetOrderSubtype.Patrol;
-    const base = vary(v.rng, 659.25, 0.025);
-    playFmTone(v, {
-        carrierFreq: base,
-        carrierFreqEnd: patrol ? base : base * 1.18,
-        modRatio: 2.0,
-        modIndex: 0.45,
-        attack: 0.004,
-        decay: 0.15,
-        gain: 0.16,
+    playTactilePop(v, {
+        material: "brass",
+        pitch: 1.05,
+        gain: 0.34,
+        shimmerSend: 0.18,
+    });
+    const base = vary(v.rng, 739.99, 0.015); // F#5
+    playCasinoChime(v, {
+        freq: base,
+        delay: 0.012,
+        decay: 0.26,
+        gain: 0.24,
+        sparkle: 0.35,
+        pan: patrol ? -0.2 : 0,
     });
     if (patrol) {
-        playFmTone(v, {
-            carrierFreq: base * 1.25,
-            modRatio: 2.0,
-            modIndex: 0.4,
-            delay: 0.1,
-            attack: 0.004,
-            decay: 0.16,
-            gain: 0.14,
+        playBuffer(v, {
+            buffer: v.bank.brassLatch[0],
+            delay: 0.095,
+            rate: 1.22,
+            gain: 0.24,
+            pan: 0.22,
+        });
+        playCasinoChime(v, {
+            freq: 880.0, // A5
+            delay: 0.105,
+            decay: 0.3,
+            gain: 0.24,
+            sparkle: 0.45,
+            pan: 0.24,
         });
     }
 }
 
 /**
- * `FleetRecallOrScuttle` — Recall bridge bell vs. voluntary scuttling sink.
- * `subtype`: 0 = Recall, 1 = Scuttle.
+ * `FleetRecallOrScuttle` — Twin bronze ship's bridge bells (`0`) vs. hull-breach scuttle (`1`).
  */
 export function synthFleetRecallOrScuttle(v: VoiceRenderCtx, t: CueTrigger): void {
     const scuttle = Math.round(t.subtype) === FleetOrderSubtype.Scuttle;
     if (!scuttle) {
-        // Dual descending bridge bell
-        playModalHit(v, {
-            baseFreq: 783.99,
-            ratios: [1, 2.01, 2.98],
-            gains: [0.65, 0.25, 0.1],
-            decay: 0.18,
-            gain: 0.18,
-        });
-        playModalHit(v, {
-            baseFreq: 587.33,
-            ratios: [1, 2.01, 2.98],
-            gains: [0.65, 0.25, 0.1],
-            decay: 0.22,
-            delay: 0.09,
-            gain: 0.16,
-        });
+        // Authentic twin ship's brass bells
+        playBuffer(v, { buffer: v.bank.brassLatch[0], rate: 0.95, gain: 0.22 });
+        playCasinoChime(v, { freq: 880.0, delay: 0.006, decay: 0.34, gain: 0.28, sparkle: 0.4, pan: -0.18 });
+        playCasinoChime(v, { freq: 587.33, delay: 0.105, decay: 0.42, gain: 0.28, sparkle: 0.35, pan: 0.18 });
         return;
     }
-    // Scuttle: muffled hull breach + descending water bubbles
-    playSubDrop(v, 110, 38, 0.24, 0.3);
-    playFilteredNoise(v, {
-        color: "brown",
-        attack: 0.015,
-        decay: 0.32,
-        gain: 0.22,
-        filterType: "bandpass",
-        filterFreq: 520,
-        filterFreqEnd: 170,
-        filterQ: 3.0,
-    });
-}
-
-/** `WarshipSpawned` — Deep dry-dock brass horn + heavy hull launch splash. */
-export function synthWarshipSpawned(v: VoiceRenderCtx, _t: CueTrigger): void {
-    const horn = vary(v.rng, 146.83, 0.02); // D3
-    playTone(v, {
-        type: "sawtooth",
-        freq: horn,
-        freqEnd: horn * 0.99,
-        attack: 0.035,
-        decay: 0.42,
-        gain: 0.22,
-        filterType: "lowpass",
-        filterFreq: 620,
-        filterFreqEnd: 280,
-        filterQ: 2.0,
-    });
-    playTone(v, {
-        type: "triangle",
-        freq: horn * 1.5,
-        delay: 0.03,
-        attack: 0.025,
-        decay: 0.36,
-        gain: 0.14,
-        filterType: "lowpass",
-        filterFreq: 900,
-    });
-    playFilteredNoise(v, {
-        color: "pink",
+    // Scuttle: deep muffled hull breach + tearing steel + foaming underwater bubbles
+    playTaikoHit(v, { heavy: true, pitch: 0.78, gain: 0.46, wetSend: 0.38 });
+    playBuffer(v, {
+        buffer: v.bank.steelClash[1],
         delay: 0.02,
-        attack: 0.012,
-        decay: 0.28,
-        gain: 0.2,
-        filterType: "bandpass",
-        filterFreq: 750,
-        filterFreqEnd: 380,
-        filterQ: 1.2,
+        rate: 0.82,
+        rateEnd: 0.46,
+        gain: 0.34,
+        wetSend: 0.36,
     });
+    playLiquidSplash(v, { delay: 0.03, decay: 0.52, pitch: 0.76, gain: 0.44, heavy: true });
 }
 
-/** `NavalShot` — Crisp deck cannon bark with warm saturation and rotated perspective. */
+/** `WarshipSpawned` — Colossal dry-dock brass foghorn + anchor steel + heavy hull launch splash. */
+export function synthWarshipSpawned(v: VoiceRenderCtx, _t: CueTrigger): void {
+    // Deep stereo dry-dock battleship horn (D3 + low octave reinforcement)
+    playBrassEnsemble(v, {
+        freq: 146.83, // D3
+        freqEnd: 144.5,
+        attack: 0.045,
+        hold: 0.12,
+        decay: 0.62,
+        gain: 0.48,
+        brightness: 0.92,
+        width: 0.46,
+        goldenHall: false,
+    });
+    playBrassEnsemble(v, {
+        freq: 220.0, // A3 harmonic fifth
+        delay: 0.04,
+        attack: 0.04,
+        hold: 0.08,
+        decay: 0.5,
+        gain: 0.26,
+        brightness: 1.05,
+        goldenHall: false,
+    });
+    // Heavy anchor chain & steel hull clank
+    playSteelImpact(v, { heavy: true, pitch: 0.86, delay: 0.015, gain: 0.26, wetSend: 0.36 });
+    // Massive dry-dock hull launch splash
+    playLiquidSplash(v, { delay: 0.025, decay: 0.48, pitch: 0.84, gain: 0.42, heavy: true });
+}
+
+/** `NavalShot` — Boom Beach / AAA deck cannon broadside with powder crack & timber recoil. */
 export function synthNavalShot(v: VoiceRenderCtx, _t: CueTrigger): void {
-    const drive = v.createWarmDrive();
-    drive.connect(v.out);
-
-    // Powder crack transient
-    playFilteredNoise(v, {
-        color: "white",
-        attack: 0.002,
-        decay: 0.055,
+    playCinematicBlast(v, {
+        scale: vary(v.rng, 0.46, 0.1),
+        tailSec: 0.24,
+        gain: 0.52,
+    });
+    // Crisp wooden gun-carriage deck recoil
+    playBuffer(v, {
+        buffer: v.bank.woodThock[1],
+        delay: 0.008,
+        rate: vary(v.rng, 0.86, 0.08),
         gain: 0.28,
-        filterType: "bandpass",
-        filterFreq: vary(v.rng, 1950, 0.22),
-        filterFreqEnd: 620,
-        filterQ: 1.1,
-        dest: drive,
     });
-    // Cannon barrel thump
-    const kick = vary(v.rng, 185, 0.11);
-    playSubDrop(v, kick, kick * 0.28, 0.14, 0.38, 0, drive);
 }
 
-/** `NavalImpact` — Metallic hull strike + sea spray splash. */
+/** `NavalImpact` — Cannonball crunching forged steel hull + sea-spray plume. */
 export function synthNavalImpact(v: VoiceRenderCtx, _t: CueTrigger): void {
-    const metalFreq = vary(v.rng, 340, 0.15);
-    playFmTone(v, {
-        carrierFreq: metalFreq,
-        carrierFreqEnd: metalFreq * 0.72,
-        modRatio: 1.57,
-        modIndex: 2.2,
-        modIndexEnd: 0.2,
-        attack: 0.002,
-        decay: 0.14,
-        gain: 0.22,
+    playSteelImpact(v, {
+        heavy: true,
+        pitch: vary(v.rng, 0.98, 0.14),
+        gain: 0.44,
+        wetSend: 0.34,
     });
-    playFilteredNoise(v, {
-        color: "pink",
-        delay: 0.01,
-        attack: 0.004,
-        decay: 0.18,
-        gain: 0.2,
-        filterType: "bandpass",
-        filterFreq: vary(v.rng, 1650, 0.18),
-        filterFreqEnd: 520,
-        filterQ: 1.5,
+    playBuffer(v, {
+        buffer: v.bank.woodThock[1],
+        delay: 0.006,
+        rate: vary(v.rng, 0.78, 0.1),
+        gain: 0.28,
+    });
+    playLiquidSplash(v, {
+        delay: 0.014,
+        decay: 0.32,
+        pitch: vary(v.rng, 1.02, 0.1),
+        gain: 0.34,
+        heavy: false,
     });
 }
 
-/** `NavalSink` — Water-muffled magazine blast + groaning steel plunge + bubbles. */
+/** `NavalSink` — Magazine blast + groaning twisted hull plunge + huge water plume. */
 export function synthNavalSink(v: VoiceRenderCtx, _t: CueTrigger): void {
-    const drive = v.createWarmDrive();
-    drive.connect(v.out);
-
-    playSubDrop(v, vary(v.rng, 130, 0.08), 34, 0.36, 0.44, 0, drive);
-    playFilteredNoise(v, {
-        color: "brown",
-        attack: 0.008,
-        decay: 0.42,
-        gain: 0.3,
-        filterType: "lowpass",
-        filterFreq: 920,
-        filterFreqEnd: 160,
-        dest: drive,
+    playCinematicBlast(v, { scale: 0.72, tailSec: 0.56, gain: 0.62 });
+    // Groaning collapsing iron hull bending downward
+    playBuffer(v, {
+        buffer: v.bank.steelClash[1],
+        delay: 0.045,
+        rate: vary(v.rng, 0.84, 0.07),
+        rateEnd: 0.42,
+        gain: 0.44,
+        wetSend: 0.48,
     });
-    // Metallic groan descending
-    playFmTone(v, {
-        carrierFreq: vary(v.rng, 240, 0.08),
-        carrierFreqEnd: 92,
-        modRatio: 1.38,
-        modIndex: 1.9,
-        modIndexEnd: 0.3,
-        delay: 0.05,
-        decay: 0.34,
-        gain: 0.18,
-    });
-    // Plume splash tail
-    playFilteredNoise(v, {
-        color: "pink",
-        delay: 0.06,
-        attack: 0.02,
-        decay: 0.36,
-        gain: 0.18,
-        filterType: "bandpass",
-        filterFreq: 1100,
-        filterFreqEnd: 320,
-        filterQ: 2.2,
-    });
+    // Towering sea plume & bubbles
+    playLiquidSplash(v, { delay: 0.055, decay: 0.62, pitch: 0.78, gain: 0.48, heavy: true });
 }
 
-/** `TradeDelivered` — Bright golden treasury chime when a trade ship docks. */
+/** `TradeDelivered` — Pure Casino Gold Treasury arrival! Pier knock + stereo gold coin shower + celesta! */
 export function synthTradeDelivered(v: VoiceRenderCtx, t: CueTrigger): void {
     const richness = clamp(t.intensity, 0.2, 1.0);
-    const notes = [1174.66, 1396.91, 1760.0]; // D6, F6, A6
-    const count = richness > 0.65 ? 3 : 2;
-    for (let i = 0; i < count; i++) {
-        playModalHit(v, {
-            baseFreq: vary(v.rng, notes[i], 0.012),
-            ratios: [1, 2.02, 3.12],
-            gains: [0.62, 0.26, 0.12],
-            decay: 0.18 + i * 0.04,
-            delay: i * 0.055,
-            gain: 0.14 + richness * 0.05,
+    // Warm timber dock arrival tap
+    playTactilePop(v, { material: "wood", pitch: 1.04, popBend: 1.15, gain: 0.24 });
+
+    // Real physical spinning gold coin cascade!
+    playCoinShower(v, {
+        count: richness > 0.7 ? 5 : richness > 0.4 ? 4 : 3,
+        delay: 0.012,
+        spacing: 0.038,
+        pitch: 1.06,
+        pitchClimb: 0.055,
+        gain: 0.28 + richness * 0.1,
+        spread: 0.58,
+    });
+
+    // Radiant D Major9 celesta & harp treasury gleam
+    const notes = richness > 0.6 ? [739.99, 1174.66, 1479.98] : [880.0, 1174.66];
+    notes.forEach((freq, i) => {
+        playCasinoChime(v, {
+            freq,
+            delay: 0.02 + i * 0.052,
+            decay: 0.38 + i * 0.06,
+            gain: 0.22 + richness * 0.06,
+            sparkle: 0.75,
+            pan: -0.25 + i * 0.25,
+            shimmerSend: 0.62,
+        });
+    });
+    if (richness > 0.55) {
+        playHarpPluck(v, {
+            freq: 587.33,
+            delay: 0.01,
+            decay: 0.48,
+            gain: 0.2,
+            shimmerSend: 0.52,
         });
     }
 }
 
-/** `TradeCaptured` — Boarding clash (`subtype`: 1 = you captured prize, 0 = enemy raided you). */
+/** `TradeCaptured` — Corsair boarding clash (`subtype`: 1 = won gold prize, 0 = raided by enemy). */
 export function synthTradeCaptured(v: VoiceRenderCtx, t: CueTrigger): void {
     const wonPrize = t.subtype >= 1;
-    playFmTone(v, {
-        carrierFreq: wonPrize ? 587.33 : 329.63,
-        carrierFreqEnd: wonPrize ? 880.0 : 220.0,
-        modRatio: 1.5,
-        modIndex: 1.2,
-        attack: 0.004,
-        decay: 0.18,
-        gain: 0.2,
-    });
-    playFilteredNoise(v, {
-        color: "pink",
-        attack: 0.004,
-        decay: 0.14,
-        gain: 0.14,
-        filterType: "bandpass",
-        filterFreq: 1300,
-        filterFreqEnd: 580,
-    });
+    playSteelImpact(v, { heavy: false, pitch: wonPrize ? 1.18 : 0.88, gain: 0.32, wetSend: 0.3 });
+    playLiquidSplash(v, { delay: 0.01, decay: 0.24, pitch: 1.08, gain: 0.24, heavy: false });
+
+    if (wonPrize) {
+        // Exciting captured treasure burst!
+        playCoinShower(v, {
+            count: 4,
+            delay: 0.025,
+            spacing: 0.036,
+            pitch: 1.1,
+            pitchClimb: 0.05,
+            gain: 0.3,
+            spread: 0.55,
+        });
+        playCasinoChime(v, { freq: 1174.66, delay: 0.04, decay: 0.42, gain: 0.26, sparkle: 0.8 });
+    } else {
+        // Tense raided brass warning drop
+        playFmTone(v, {
+            carrierFreq: 311.13,
+            carrierFreqEnd: 207.65,
+            modRatio: 1.5,
+            modIndex: 1.1,
+            delay: 0.02,
+            decay: 0.24,
+            gain: 0.22,
+            wetSend: 0.32,
+        });
+    }
 }

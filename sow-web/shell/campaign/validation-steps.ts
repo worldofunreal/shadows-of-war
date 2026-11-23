@@ -69,6 +69,7 @@ export function validateSteps(context: CampaignValidationContext) {
             "exchange",
             "unavailable_next",
             "campaign_accept_alliance_on_enter",
+            "host",
         ],
         choice: [
             "id",
@@ -88,6 +89,7 @@ export function validateSteps(context: CampaignValidationContext) {
             "pause_game",
             "wait_before",
             "unlocks",
+            "host",
         ],
         objective: [
             "id",
@@ -116,6 +118,7 @@ export function validateSteps(context: CampaignValidationContext) {
             "exchange",
             "unavailable_next",
             "campaign_accept_alliance_on_enter",
+            "host",
         ],
         guide: [
             "id",
@@ -144,6 +147,7 @@ export function validateSteps(context: CampaignValidationContext) {
             "exchange",
             "unavailable_next",
             "campaign_accept_alliance_on_enter",
+            "host",
         ],
         end: [
             "id",
@@ -156,6 +160,7 @@ export function validateSteps(context: CampaignValidationContext) {
             "attack_ratio_on_enter",
             "pause_game",
             "unlocks",
+            "host",
         ],
     };
 
@@ -553,6 +558,58 @@ export function validateSteps(context: CampaignValidationContext) {
             !["happy", "calm", "fear", "angry"].includes(step.portrait_expression)
         )
             issue(step, "portrait_expression", "Choose a portrait expression: happy, calm, fear or angry.");
+        if (own(step, "host")) {
+            const h = step.host;
+            if (!object(h) || Array.isArray(h)) {
+                issue(step, "host", "Host must be an object.");
+            } else {
+                knownFields(
+                    h,
+                    [
+                        "sprite",
+                        "enter",
+                        "idle",
+                        "side",
+                        "flip_to_target",
+                        "interactive",
+                        "confetti",
+                        "nudge_key",
+                        "nudge_after_ms",
+                        "poke_keys",
+                    ],
+                    step,
+                    "host",
+                );
+                if (typeof h.sprite !== "string" || !/^[a-z][a-z0-9_]{1,63}$/.test(h.sprite))
+                    issue(step, "host.sprite", "Host sprite must be a valid snake_case slug.");
+                if (own(h, "enter") && !["slide_left", "slide_right", "pop_up", "swap_pop"].includes(h.enter))
+                    issue(step, "host.enter", "Unsupported host enter animation.");
+                if (own(h, "idle") && !["breathe", "point_bob", "cheer", "none"].includes(h.idle))
+                    issue(step, "host.idle", "Unsupported host idle animation.");
+                if (own(h, "side") && !["left", "right", "auto"].includes(h.side))
+                    issue(step, "host.side", "Host side must be left, right, or auto.");
+                for (const flag of ["flip_to_target", "interactive", "confetti"] as const) {
+                    if (own(h, flag) && typeof h[flag] !== "boolean")
+                        issue(step, "host." + flag, `Host ${flag} must be a boolean.`);
+                }
+                if (own(h, "nudge_key")) text(step, "host.nudge_key", h.nudge_key, true);
+                if (
+                    own(h, "nudge_after_ms") &&
+                    (!Number.isInteger(h.nudge_after_ms) || h.nudge_after_ms < 1500 || h.nudge_after_ms > 30000)
+                )
+                    issue(step, "host.nudge_after_ms", "Host nudge_after_ms must be 1500–30000.");
+                if (own(h, "poke_keys")) {
+                    if (!Array.isArray(h.poke_keys) || !h.poke_keys.length)
+                        issue(step, "host.poke_keys", "Host poke_keys must be a non-empty list.");
+                    else
+                        h.poke_keys.forEach((key: unknown) => {
+                            if (typeof key !== "string")
+                                issue(step, "host.poke_keys", "Each poke key must be a text key.");
+                            else text(step, "host.poke_keys", key, true);
+                        });
+                }
+            }
+        }
         text(step, "continue_key", step.continue_key, false);
         checkEmote(step, step, "");
         if (own(step, "exchange")) {

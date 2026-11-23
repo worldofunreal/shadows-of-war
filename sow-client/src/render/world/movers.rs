@@ -589,7 +589,11 @@ impl MoverScene {
 
         let (sprite, size, trail_color) = match proj.kind {
             ProjectileKind::Nuke { level } => {
-                let sprite = MoverSpriteId::AtomBomb;
+                let sprite = match level {
+                    3.. => MoverSpriteId::Mirv,
+                    2 => MoverSpriteId::HydrogenBomb,
+                    _ => MoverSpriteId::AtomBomb,
+                };
                 let tc = if level >= 3 {
                     [1.0, 0.667, 0.0, 0.95]
                 } else if level == 2 {
@@ -925,7 +929,9 @@ impl MoverScene {
                 MoverSpriteId::TransportShip => transport_scale,
                 MoverSpriteId::TradeShip => trade_ship_scale,
                 MoverSpriteId::Warship => warship_scale,
-                MoverSpriteId::AtomBomb => projectile_scale * nuke_scale,
+                MoverSpriteId::AtomBomb | MoverSpriteId::HydrogenBomb | MoverSpriteId::Mirv => {
+                    projectile_scale * nuke_scale
+                }
                 MoverSpriteId::SamMissile => projectile_scale * sam_scale,
             };
             let mut sprite_size = slot.size * scale * class_scale;
@@ -933,7 +939,9 @@ impl MoverScene {
                 MoverSpriteId::TransportShip => min_transport_px,
                 MoverSpriteId::TradeShip => min_trade_ship_px,
                 MoverSpriteId::Warship => min_warship_px,
-                MoverSpriteId::AtomBomb => min_nuke_px,
+                MoverSpriteId::AtomBomb | MoverSpriteId::HydrogenBomb | MoverSpriteId::Mirv => {
+                    min_nuke_px
+                }
                 MoverSpriteId::SamMissile if slot.is_shell => min_sam_px * SHELL_SPRITE_SCALE,
                 MoverSpriteId::SamMissile => min_sam_px,
             };

@@ -104,6 +104,19 @@ export const AudioCue = {
     UiCelebrationFanfare: 54,
     UiCelebrationFly: 55,
     UiCelebrationImpact: 56,
+
+    // ── Building Workflow Extensions (57–59, shared with Rust) ─────────
+    BuildingUpgradeProgress: 57,
+    BuildingModeEnter: 58,
+    BuildingSelect: 59,
+
+    // ── Subtle AAA Menu, Battle & Hero Micro-Interactions (60–65, TS) ──
+    UiHover: 60,
+    UiPress: 61,
+    UiHeroBrowse: 62,
+    UiInfoTab: 63,
+    UiPurchaseAction: 64,
+    UiBattleLaunch: 65,
 } as const;
 
 export type AudioCueId = (typeof AudioCue)[keyof typeof AudioCue];
@@ -117,6 +130,55 @@ export const BuildingAudioKind = {
     Farm: 4,
     SAM: 5,
     MissileSilo: 6,
+} as const;
+
+/** Building placement mode transition subtypes for `BuildingModeEnter`. */
+export const BuildingModeSubtype = {
+    Enter: 0,
+    Switch: 1,
+    Exit: 2,
+} as const;
+
+/** Subtypes for subtle menu hover cues (`UiHover`). */
+export const UiHoverSubtype = {
+    Standard: 0,
+    Primary: 1,
+    Card: 2,
+} as const;
+
+/** Subtypes for mechanical pointer-down press cues (`UiPress`). */
+export const UiPressSubtype = {
+    Standard: 0,
+    Primary: 1,
+    Soft: 2,
+} as const;
+
+/** Subtypes for Hero roster browsing (`UiHeroBrowse`). */
+export const UiHeroBrowseSubtype = {
+    Available: 0,
+    Locked: 1,
+    Random: 2,
+} as const;
+
+/** Subtypes for intimate dossier tabs, pills, and switches (`UiInfoTab`). */
+export const UiInfoTabSubtype = {
+    Tab: 0,
+    Chip: 1,
+    Switch: 2,
+} as const;
+
+/** Subtypes for Hero/Store purchase lifecycle (`UiPurchaseAction`). */
+export const UiPurchaseActionSubtype = {
+    Open: 0,
+    Confirm: 1,
+    Denied: 2,
+} as const;
+
+/** Subtypes for Battle submenus, match launches, and map/seed controls (`UiBattleLaunch`). */
+export const UiBattleLaunchSubtype = {
+    Submenu: 0,
+    Launch: 1,
+    TactileStep: 2,
 } as const;
 
 /** Opponent archetype codes for `LandCombat` and `PlayerEliminated`. */

@@ -8,13 +8,11 @@
 //!      into a reusable `pending: Vec<f32>` buffer.
 //!   4. Flushes the entire frame's cues in a single zero-copy FFI call (`flush_frame`).
 
-use std::collections::HashMap;
-
 use sow_core::game::GamePhase;
 use web_time::{Duration, Instant};
 
 use crate::app::audio::{
-    AUDIO_EVENT_STRIDE, ArsenalSoundKind, AudioCue, BuildingSoundKind, CombatSoundKind,
+    AUDIO_EVENT_STRIDE, ArsenalSoundKind, AudioCue, BuildingSoundKind,
     PlayerSoundType, ResourceSoundKind, SpatialSoundParams, flush_audio_batch, spatial_pan_gain,
 };
 
@@ -22,6 +20,8 @@ const DEPLOY_GAP: Duration = Duration::from_millis(160);
 const ATTACK_ORDER_GAP: Duration = Duration::from_millis(130);
 const ATTACK_STALLED_GAP: Duration = Duration::from_millis(600);
 const PLACEMENT_GAP: Duration = Duration::from_millis(180);
+const UPGRADE_PROGRESS_GAP: Duration = Duration::from_millis(950);
+const BUILDING_SELECT_GAP: Duration = Duration::from_millis(100);
 const COMPLETION_GAP: Duration = Duration::from_millis(320);
 const UNDER_ATTACK_GAP: Duration = Duration::from_secs(7);
 const ELIMINATION_GAP: Duration = Duration::from_millis(550);
@@ -31,7 +31,6 @@ const FLEET_GAP: Duration = Duration::from_millis(180);
 const TRADE_GAP: Duration = Duration::from_millis(450);
 const DIPLOMACY_GAP: Duration = Duration::from_millis(350);
 const EMOTE_GAP: Duration = Duration::from_millis(320);
-const ABILITY_GAP: Duration = Duration::from_millis(450);
 
 #[derive(Clone, Copy)]
 struct PendingElimination {
@@ -69,6 +68,8 @@ pub(crate) struct SfxDirector {
     last_attack_order: Option<Instant>,
     last_attack_stalled: Option<Instant>,
     last_placement: Option<Instant>,
+    last_upgrade_progress: Option<Instant>,
+    last_building_select: Option<Instant>,
     last_completion: Option<Instant>,
     last_demolition: Option<Instant>,
     last_under_attack: Option<Instant>,
@@ -84,9 +85,7 @@ pub(crate) struct SfxDirector {
     last_trade: Option<Instant>,
     last_diplomacy: Option<Instant>,
     last_emote: Option<Instant>,
-    last_ability: Option<Instant>,
     last_error: Option<Instant>,
-    last_combat: HashMap<CombatSoundKind, Instant>,
     pending_elimination: Option<PendingElimination>,
     under_attack_active: bool,
     result_played: bool,
@@ -106,6 +105,8 @@ impl Default for SfxDirector {
             last_attack_order: None,
             last_attack_stalled: None,
             last_placement: None,
+            last_upgrade_progress: None,
+            last_building_select: None,
             last_completion: None,
             last_demolition: None,
             last_under_attack: None,
@@ -121,9 +122,7 @@ impl Default for SfxDirector {
             last_trade: None,
             last_diplomacy: None,
             last_emote: None,
-            last_ability: None,
             last_error: None,
-            last_combat: HashMap::new(),
             pending_elimination: None,
             under_attack_active: false,
             result_played: false,
@@ -255,40 +254,6 @@ impl SfxDirector {
             severity.clamp(0.15, 1.0),
             None,
         );
-    }
-
-    pub(crate) fn play_land_combat(
-        &mut self,
-        now: Instant,
-        kind: CombatSoundKind,
-        troops: f32,
-        seed: u32,
-        spatial: SpatialSoundParams,
-    ) {
-        if !self.playing_allowed() {
-            return;
-        }
-        let gap = match kind {
-            CombatSoundKind::Wilderness => Duration::from_millis(320),
-            CombatSoundKind::Tribe => Duration::from_millis(340),
-            CombatSoundKind::Nation => Duration::from_millis(420),
-            CombatSoundKind::Human => Duration::from_millis(480),
-            CombatSoundKind::Counter => Duration::from_millis(360),
-        };
-        if !self
-            .last_combat
-            .get(&kind)
-            .is_none_or(|last| now.duration_since(*last) >= gap)
-        {
-            return;
-        }
-        self.last_combat.insert(kind, now);
-        let intensity = (troops / 4000.0).clamp(0.15, 1.0).sqrt();
-        if kind == CombatSoundKind::Wilderness {
-            self.push_spatial(AudioCue::LandExpand, 0, spatial, intensity, Some(seed));
-        } else {
-            self.push_spatial(AudioCue::LandCombat, kind as u8, spatial, intensity, Some(seed));
-        }
     }
 
     pub(crate) fn play_counter_attack(&mut self) {
@@ -509,7 +474,28 @@ impl SfxDirector {
         if !self.playing_allowed() || !Self::open_gap(&mut self.last_placement, now, PLACEMENT_GAP) {
             return;
         }
+        self.last_upgrade_progress = Some(now);
         self.push_spatial(AudioCue::BuildingUpgrade, 0, spatial, 0.85, None);
+    }
+
+    pub(crate) fn update_upgrade_progress(&mut self, now: Instant, active: Option<(BuildingSoundKind, SpatialSoundParams)>) {
+        let Some((kind, spatial)) = active else { return };
+        if !self.playing_allowed() || !Self::open_gap(&mut self.last_upgrade_progress, now, UPGRADE_PROGRESS_GAP) {
+            return;
+        }
+        self.push_spatial(AudioCue::BuildingUpgradeProgress, kind as u8, spatial, 0.7, None);
+    }
+
+    pub(crate) fn play_building_mode(&mut self, subtype: u8) {
+        if self.playing_allowed() {
+            self.push_ui(AudioCue::BuildingModeEnter, subtype, 0.85, None);
+        }
+    }
+
+    pub(crate) fn play_building_select(&mut self, now: Instant, kind: BuildingSoundKind, spatial: SpatialSoundParams) {
+        if self.playing_allowed() && Self::open_gap(&mut self.last_building_select, now, BUILDING_SELECT_GAP) {
+            self.push_spatial(AudioCue::BuildingSelect, kind as u8, spatial, 0.85, None);
+        }
     }
 
     pub(crate) fn play_completion(
@@ -633,22 +619,6 @@ impl SfxDirector {
             return;
         }
         self.push_ui(AudioCue::ResourceTransfer, kind as u8, 0.8, None);
-    }
-
-    pub(crate) fn play_hero_ability(
-        &mut self,
-        now: Instant,
-        family: u8,
-        spatial: Option<SpatialSoundParams>,
-    ) {
-        if !self.playing_allowed() || !Self::open_gap(&mut self.last_ability, now, ABILITY_GAP) {
-            return;
-        }
-        if let Some(s) = spatial {
-            self.push_spatial(AudioCue::HeroAbility, family, s, 0.85, None);
-        } else {
-            self.push_ui(AudioCue::HeroAbility, family, 0.85, None);
-        }
     }
 
     pub(crate) fn play_emote(

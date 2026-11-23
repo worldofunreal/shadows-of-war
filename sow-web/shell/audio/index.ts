@@ -18,12 +18,19 @@ export {
     AUDIO_EVENT_STRIDE,
     AudioCue,
     BuildingAudioKind,
+    BuildingModeSubtype,
     CombatAudioSubtype,
     EmoteAudioKind,
     FleetOrderSubtype,
     MatchPhaseAudioKind,
     NukeAudioLevel,
     ResourceAudioSubtype,
+    UiBattleLaunchSubtype,
+    UiHeroBrowseSubtype,
+    UiHoverSubtype,
+    UiInfoTabSubtype,
+    UiPressSubtype,
+    UiPurchaseActionSubtype,
     type AudioCategory,
     type AudioCueId,
     type AudioPriority,
@@ -33,6 +40,13 @@ export {
 } from "./types.ts";
 
 export { audioEngine, AudioEngine, VoiceBudgetGate } from "./engine.ts";
+export {
+    consumeScreenSwitchSoundSuppression,
+    installSurfaceHoverPressAudio,
+    MenuSfx,
+    siblingSlotRatio,
+    suppressNextScreenSwitchSound,
+} from "./menu_sfx.ts";
 export { CATEGORY_VOICE_BUDGET, CUE_REGISTRY, MAX_TOTAL_VOICES } from "./registry.ts";
 
 /** Plays a procedural UI/UX micro-interaction cue through the shared engine. */

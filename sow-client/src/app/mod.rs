@@ -34,6 +34,7 @@ impl SowApp {
         if self.ui.app.phase != crate::ClientPhase::Playing {
             crate::web_menu::publish_state(self);
         }
+        self.update_upgrade_progress_sfx(now);
         self.sfx.flush_frame();
     }
 

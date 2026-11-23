@@ -568,6 +568,9 @@ impl SowApp {
     }
 
     fn set_map_context_menu(&mut self, x: f64, y: f64, tile_idx: u32, view: MapContextMenuView) {
+        let already_selected = self.input.map_context_menu.is_some_and(|prev| {
+            prev.view == MapContextMenuView::BuildingDetails && prev.tile_idx == tile_idx
+        });
         let session = self.input.map_context_menu_session.wrapping_add(1);
         self.input.map_context_menu_session = session;
         let building = (view == MapContextMenuView::BuildingDetails)
@@ -589,6 +592,19 @@ impl SowApp {
                     })
             })
             .flatten();
+        if view == MapContextMenuView::BuildingDetails
+            && !already_selected
+            && let Some((kind, _, _)) = building
+            && self.sim.map_w > 0
+        {
+            let wx = (tile_idx % self.sim.map_w) as f32 + 0.5;
+            let wy = (tile_idx / self.sim.map_w) as f32 + 0.5;
+            self.sfx.play_building_select(
+                web_time::Instant::now(),
+                crate::building_sound_kind(kind),
+                self.spatial_sound_params(wx, wy),
+            );
+        }
         self.input.map_context_menu = Some(MapContextMenu {
             x: x as f32,
             y: y as f32,
@@ -1897,6 +1913,10 @@ impl SowApp {
     }
 
     pub(crate) fn clear_placement(&mut self) {
+        self.clear_placement_inner(true);
+    }
+
+    fn clear_placement_inner(&mut self, emit_exit_sfx: bool) {
         if self
             .ui
             .app
@@ -1910,6 +1930,9 @@ impl SowApp {
             self.input.camera_focus_target = None;
             self.input.touch_pan_residual = (0.0, 0.0);
             self.input.target_zoom = self.input.camera_zoom;
+            if emit_exit_sfx {
+                self.sfx.play_building_mode(2);
+            }
         }
         self.ui.app.hud_state.building_placement = None;
         self.ui.app.hud_state.selected_nuke_kind = None;
@@ -2003,6 +2026,7 @@ impl SowApp {
                 })
         });
         let tile = site.unwrap_or(requested_tile);
+        let was_building_mode = self.ui.app.hud_state.building_placement.is_some();
         self.input.key_pan_up = false;
         self.input.key_pan_down = false;
         self.input.key_pan_left = false;
@@ -2012,6 +2036,8 @@ impl SowApp {
             tile_idx: tile,
             pending: false,
         });
+        self.sfx
+            .play_building_mode(u8::from(was_building_mode));
         self.ui.app.hud_state.selected_nuke_kind = None;
         self.input.building_drag = None;
         self.input.touch_pan_residual = (0.0, 0.0);
@@ -2385,7 +2411,7 @@ impl SowApp {
             return;
         }
         if self.ui.app.hud_state.building_placement.is_some() {
-            self.clear_placement();
+            self.clear_placement_inner(false);
         }
         let selected = &mut self.ui.app.hud_state.selected_nuke_kind;
         *selected = (*selected != Some(kind)).then_some(kind);
