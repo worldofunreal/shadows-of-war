@@ -123,6 +123,8 @@ pub const KIND_BUILDING_SPRITE: f32 = 11.0;
 pub const KIND_STATUS_SPRITE: f32 = 12.0;
 /// Badge-atlas art drawn with the emoji outline and shadow.
 pub const KIND_ICON: f32 = 13.0;
+/// Procedural tactical ground selection / hover ghost ring (StarCraft-style glow + segmented arcs).
+pub const KIND_SELECTION_RING: f32 = 14.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameplateStatusSprite {
     Request,

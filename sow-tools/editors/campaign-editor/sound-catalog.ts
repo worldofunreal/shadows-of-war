@@ -118,16 +118,20 @@ const CUE_META: Partial<Record<AudioCueId, RawCueMeta>> = {
     burstIntervalMs: 260,
   },
   [AudioCue.AttackOrder]: {
-    description: "Tap/clic para atacar: expansión neutral o asalto hostil (rediseñado sin kick/bop).",
+    description:
+      "Tap/clic para atacar: 4 arquetipos (Wilderness, Tribe, Nation, Human) + variación única por objetivo + combo ascendente en taps rápidos.",
     recipeFile: "recipes/combat.ts",
     defaultIntensity: 0.65,
-    burstIntervalMs: 145,
-    burstCount: 5,
+    burstIntervalMs: 170,
     variants: [
-      { label: "Neutral (expansión)", subtype: 0, intensity: 0.45 },
-      { label: "Neutral (fuerte)", subtype: 0, intensity: 0.9 },
-      { label: "Hostil (asalto)", subtype: 1, intensity: 0.5 },
-      { label: "Hostil (alto compromiso)", subtype: 1, intensity: 0.92 },
+      { label: "Wilderness · A", subtype: (0 << 2) | CombatAudioSubtype.Wilderness, intensity: 0.55 },
+      { label: "Wilderness · B", subtype: (3 << 2) | CombatAudioSubtype.Wilderness, intensity: 0.7 },
+      { label: "Tribe · A", subtype: (1 << 2) | CombatAudioSubtype.Tribe, intensity: 0.65 },
+      { label: "Tribe · B", subtype: (5 << 2) | CombatAudioSubtype.Tribe, intensity: 0.75 },
+      { label: "Nation · A", subtype: (2 << 2) | CombatAudioSubtype.Nation, intensity: 0.7 },
+      { label: "Nation · B", subtype: (6 << 2) | CombatAudioSubtype.Nation, intensity: 0.85 },
+      { label: "Human · A", subtype: (0 << 2) | CombatAudioSubtype.Human, intensity: 0.75 },
+      { label: "Human · B", subtype: (4 << 2) | CombatAudioSubtype.Human, intensity: 0.9 },
     ],
   },
   [AudioCue.AttackStalled]: {

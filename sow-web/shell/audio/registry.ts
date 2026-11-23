@@ -427,7 +427,8 @@ export const CUE_REGISTRY: Record<AudioCueId, CueDefinition> = {
         category: "diplomacy",
         priority: "foreground",
         spatial: true,
-        cooldownMs: 450,
+        // Rust gates this cue per owner so independent players do not suppress each other.
+        cooldownMs: 0,
         gain: 0.82,
     },
     [AudioCue.Emote]: {

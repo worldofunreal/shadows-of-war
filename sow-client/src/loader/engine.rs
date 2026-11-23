@@ -103,12 +103,15 @@ impl SowApp {
         self.ui.transport_target_snapshot_tick = None;
         self.ui.transport_impacts.clear();
         self.ui.death_nameplates.clear();
+        self.ui.reset_combat_feedback();
         self.ui.attack_badge_labels.clear();
         self.ui.attack_badge_style_key = None;
         self.ui.attack_badge_cache_tick = None;
         self.ui.attack_badge_active_ids.clear();
         self.ui.nameplates.reset();
         self.ui.building_render_cache = Default::default();
+        self.ui.hovered_building = None;
+        self.ui.prev_hovered_building = None;
         self.ui.railway_render_state.reset();
         self.ui.show_leaderboard = false;
         self.ui.show_dev_sidebar = false;

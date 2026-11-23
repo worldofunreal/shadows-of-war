@@ -3,9 +3,9 @@ use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::{AvatarAtlasTexture, FontAtlasTexture, TextAtlasImages};
 use crate::text::types::{
     KIND_ARC, KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_ICON,
-    KIND_LANDING_BEACON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE,
-    KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle, TextGlobals, TextInstanceGpu,
-    TextPaintStyle, TextShaderData,
+    KIND_LANDING_BEACON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SELECTION_RING, KIND_SPRITE,
+    KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle, TextGlobals,
+    TextInstanceGpu, TextPaintStyle, TextShaderData,
 };
 use blade_graphics as gpu;
 
@@ -183,42 +183,40 @@ fn prepared_text_bounds(
     bounds[0].is_finite().then_some(bounds)
 }
 
-fn outlined_geometry(
+fn outlined_geometry_scaled(
     screen_pos: [f32; 2],
-    half_size: f32,
+    half_size: [f32; 2],
     outline: OutlineStyle,
 ) -> ([f32; 2], [f32; 2], [f32; 4]) {
-    let content_half = half_size.max(0.0);
     let padding = outline.effect_padding();
-    let quad_half = content_half + padding;
-    let diameter = quad_half * 2.0;
-    let content_min = if diameter > 0.0 {
-        padding / diameter
-    } else {
-        0.0
-    };
+    let quad_half_x = half_size[0].max(0.0) + padding;
+    let quad_half_y = half_size[1].max(0.0) + padding;
+    let width = quad_half_x * 2.0;
+    let height = quad_half_y * 2.0;
+    let content_min_x = if width > 0.0 { padding / width } else { 0.0 };
+    let content_min_y = if height > 0.0 { padding / height } else { 0.0 };
     (
-        [screen_pos[0] - quad_half, screen_pos[1] - quad_half],
-        [diameter; 2],
+        [screen_pos[0] - quad_half_x, screen_pos[1] - quad_half_y],
+        [width, height],
         [
-            content_min,
-            content_min,
-            1.0 - content_min,
-            1.0 - content_min,
+            content_min_x,
+            content_min_y,
+            1.0 - content_min_x,
+            1.0 - content_min_y,
         ],
     )
 }
 
-fn outlined_instance(
+fn outlined_instance_scaled(
     uv_rect: [f32; 4],
     screen_pos: [f32; 2],
-    half_size: f32,
+    half_size: [f32; 2],
     tint: [f32; 4],
     outline: OutlineStyle,
     underlay_softness: f32,
     kind: f32,
 ) -> TextInstanceGpu {
-    let (screen_pos, size, content_rect) = outlined_geometry(screen_pos, half_size, outline);
+    let (screen_pos, size, content_rect) = outlined_geometry_scaled(screen_pos, half_size, outline);
     TextInstanceGpu {
         screen_pos,
         size,
@@ -879,7 +877,19 @@ impl TextRenderer {
         tint: [f32; 4],
         outline: OutlineStyle,
     ) {
-        self.push_inst(outlined_instance(
+        self.push_icon_scaled(sprite, screen_pos, [half_size; 2], tint, outline);
+    }
+
+    /// Push art from `assets/art/icons` with independent X/Y half-extents for squash & stretch.
+    pub fn push_icon_scaled(
+        &mut self,
+        sprite: NameplateStatusSprite,
+        screen_pos: [f32; 2],
+        half_size: [f32; 2],
+        tint: [f32; 4],
+        outline: OutlineStyle,
+    ) {
+        self.push_inst(outlined_instance_scaled(
             sprite.uv_rect(),
             screen_pos,
             half_size,
@@ -945,6 +955,48 @@ impl TextRenderer {
             color,
             kind: KIND_LANDING_BEACON,
             ..bytemuck::Zeroable::zeroed()
+        });
+    }
+
+    /// Tactical glowing ground selection or desktop hover ghost ring in one batched quad.
+    /// `radius` is `[rx, ry]` in physical pixels (supports tabletop perspective ellipses).
+    /// `mode`: `0.0` = ghost hover, `1.0` = selected; `phase`: outer arc rotation in turns;
+    /// `pulse`: subtle breath `0..1`; `acquire`: selection lock-on sweep `0..1`;
+    /// `core_glow`: `[core_r, core_g, core_b, glow_intensity]`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn push_selection_ring(
+        &mut self,
+        center: [f32; 2],
+        radius: [f32; 2],
+        mode: f32,
+        phase: f32,
+        pulse: f32,
+        acquire: f32,
+        color: [f32; 4],
+        core_glow: [f32; 4],
+    ) {
+        let rx = radius[0].max(0.0);
+        let ry = radius[1].max(0.0);
+        if !rx.is_finite() || !ry.is_finite() || rx <= 0.5 || ry <= 0.5 || color[3] <= 0.001 {
+            return;
+        }
+        self.push_inst(TextInstanceGpu {
+            screen_pos: [center[0] - rx, center[1] - ry],
+            size: [rx * 2.0, ry * 2.0],
+            uv_rect: [
+                mode.clamp(0.0, 1.0),
+                clamp_arc_phase(phase),
+                pulse.clamp(0.0, 1.0),
+                acquire.clamp(0.0, 1.0),
+            ],
+            content_rect: [0.0, 0.0, 1.0, 1.0],
+            color,
+            outline_color: core_glow,
+            face_dilate: 0.0,
+            outline_thickness: 0.0,
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_SELECTION_RING,
         });
     }
 

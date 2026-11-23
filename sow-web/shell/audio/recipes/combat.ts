@@ -64,116 +64,217 @@ export function synthDeployTroops(v: VoiceRenderCtx, _t: CueTrigger): void {
     });
 }
 
+const ATTACK_COMBO_WINDOW_SEC = 1.25;
+let lastAttackOrderCtxSec = -10;
+let attackComboStep = 0;
+
 /**
- * `AttackOrder` — Fresh, crisp kinetic tap-to-attack (ZERO heavy kick/bop!).
- * Designed to feel airy, tactile, modern, and genuinely pleasing across rapid taps:
- *   - Neutral expansion (`subtype == 0`): polished jade/slate contact snap + silk air flick
- *     + delicate high-passed Karplus-Strong harp harmonic rotating across D Major9.
- *   - Hostile assault (`subtype >= 1`): surgical kinetic arrow/blade air-zip + bright
- *     high-passed forged steel glint + crisp machined brass trigger (scaled by commitment).
- * `intensity`: player's attack ratio commitment [0.05..1.0].
+ * `AttackOrder` — Layered Foley-to-Harmony tap-to-attack (inspired by `UiHeroEquip`
+ * and `LandCombat` Human/Nation, with ZERO boomy sub-bass so rapid tapping stays crisp).
+ *
+ * Bit-packed `subtype` (`(targetVariant << 2) | archetype`):
+ *   - `archetype` (`0..3`):
+ *       `0` Wilderness — agile jade/wood pop + silk flick + harp/celesta shimmer
+ *       `1` Tribe      — taut carved-wood rim crack + bronze latch + tribal pentatonic snap
+ *       `2` Nation     — disciplined forged steel + brassLatch[1] + tight royal brass accent
+ *       `3` Human      — exhilarating dual stereo steel riposte (L→R) + brass lock + PvP glint
+ *   - `targetVariant` (`0..7`): stable per-target timbre & root color so each opponent
+ *     (and each wilderness sector) has a distinct, recognizable signature.
+ *   - Live combo: consecutive taps within `1.25s` climb `D Major9` (`comboStep 0..7`).
  */
 export function synthAttackOrder(v: VoiceRenderCtx, t: CueTrigger): void {
-    const hostile = t.subtype >= 1;
+    const rawSub = Math.max(0, Math.round(t.subtype));
+    const archetype = rawSub & 0x03;
+    const targetVariant = rawSub >= 4 ? (rawSub >> 2) & 0x07 : Math.floor(v.rng() * 8);
     const commit = clamp(t.intensity, 0.15, 1.0);
-    const perspective = Math.floor(v.rng() * 4);
 
-    if (!hostile) {
-        // Neutral expansion tap: jade token flick + airy kinetic brush + glassy harp harmonic
-        const clickRates = [1.14, 1.24, 1.34, 1.18];
+    // Live combo progression across rapid consecutive taps
+    const ctxNow = v.ctx.currentTime;
+    const dt = ctxNow - lastAttackOrderCtxSec;
+    if (dt > 0.01 && dt <= ATTACK_COMBO_WINDOW_SEC) {
+        attackComboStep = Math.min(7, attackComboStep + 1);
+    } else if (dt > ATTACK_COMBO_WINDOW_SEC || dt < 0) {
+        attackComboStep = 0;
+    }
+    lastAttackOrderCtxSec = ctxNow;
+
+    const comboScale = [587.33, 659.25, 739.99, 880.0, 987.77, 1174.66, 1318.51, 1479.98]; // D5..F#6
+    const comboRatio = attackComboStep / 7;
+    // Per-target unique harmonic & pitch signature (0..7)
+    const targetPitchBias = 0.92 + targetVariant * 0.024;
+    const targetNote = comboScale[(targetVariant + attackComboStep) % comboScale.length];
+    const flip = (Math.floor(v.rng() * 2) + attackComboStep) % 2 === 0 ? 1 : -1;
+
+    if (archetype === CombatAudioSubtype.Wilderness) {
+        // 0 · Wilderness: crisp carved wood/stone contact + airy flick + joyful D Major9 combo chime
+        const woodIdx = targetVariant % 3;
         playBuffer(v, {
-            buffer: v.bank.stoneClick[0],
-            rate: vary(v.rng, clickRates[perspective], 0.04),
-            decay: 0.036,
-            gain: 0.24 + commit * 0.08,
+            buffer: woodIdx === 0 ? v.bank.stoneClick[0] : v.bank.woodThock[woodIdx],
+            rate: vary(v.rng, 1.08 * targetPitchBias + comboRatio * 0.12, 0.03),
+            decay: 0.042,
+            gain: 0.25 + commit * 0.08,
             filterType: "highpass",
-            filterFreq: 980,
+            filterFreq: 420,
             shimmerSend: 0.16,
         });
-
-        // Short directional silk air flick (imparts crisp forward map momentum)
         playFilteredNoise(v, {
             color: "parchment",
             delay: 0.002,
-            attack: 0.004,
-            decay: 0.052 + commit * 0.025,
-            gain: 0.14 + commit * 0.08,
+            attack: 0.003,
+            decay: 0.048,
+            gain: 0.12 + commit * 0.06,
             filterType: "bandpass",
-            filterFreq: vary(v.rng, 1650, 0.12),
-            filterFreqEnd: vary(v.rng, 3550, 0.1),
+            filterFreq: 1600 * targetPitchBias,
+            filterFreqEnd: 3400 * targetPitchBias,
             filterQ: 1.5,
-            shimmerSend: 0.2,
+            pan: flip * 0.12,
         });
-
-        // Fresh crystalline Karplus-Strong harp harmonic rotating gently across D Major9
-        const harmonicPool = [587.33, 659.25, 739.99, 880.0]; // D5, E5, F#5, A5
         playBuffer(v, {
             buffer: v.bank.harpPluck,
-            delay: 0.005,
-            rate: clamp(vary(v.rng, harmonicPool[perspective], 0.008) / 293.6648, 0.5, 3.8),
-            decay: 0.16 + commit * 0.06,
-            gain: 0.17 + commit * 0.08,
+            delay: 0.007,
+            rate: clamp(vary(v.rng, targetNote, 0.006) / 293.6648, 0.5, 4.2),
+            decay: 0.15 + commit * 0.05,
+            gain: 0.17 + commit * 0.07 + comboRatio * 0.05,
             filterType: "highpass",
-            filterFreq: 440,
-            pan: perspective % 2 === 0 ? -0.14 : 0.14,
+            filterFreq: 420,
+            pan: -flip * 0.14,
+            shimmerSend: 0.34,
+        });
+        if (attackComboStep >= 2) {
+            playCasinoChime(v, {
+                freq: targetNote,
+                delay: 0.014,
+                decay: 0.16,
+                gain: 0.075 + comboRatio * 0.055,
+                sparkle: 0.35 + comboRatio * 0.25,
+                shimmerSend: 0.38,
+            });
+        }
+        return;
+    }
+
+    if (archetype === CombatAudioSubtype.Tribe) {
+        // 1 · Tribe: taut wood-and-hide rim snap + mechanical bronze latch + tribal pentatonic accent
+        const woodIdx = (targetVariant % 2) + 1; // woodThock[1] or [2]
+        playBuffer(v, {
+            buffer: v.bank.woodThock[woodIdx],
+            rate: vary(v.rng, 0.98 * targetPitchBias + comboRatio * 0.1, 0.04),
+            decay: 0.068,
+            gain: 0.34 + commit * 0.1,
+            filterType: "highpass",
+            filterFreq: 190, // tight chest punch, zero boomy sub mud
+            wetSend: 0.22,
+        });
+        playBuffer(v, {
+            buffer: v.bank.woodThock[2],
+            delay: 0.011,
+            rate: vary(v.rng, 1.38 * targetPitchBias, 0.05),
+            decay: 0.036,
+            gain: 0.22 + commit * 0.08,
+            filterType: "highpass",
+            filterFreq: 760,
+            pan: flip * 0.22,
+        });
+        playBuffer(v, {
+            buffer: v.bank.brassLatch[targetVariant % 2],
+            delay: 0.016,
+            rate: vary(v.rng, 1.06 + comboRatio * 0.16, 0.04),
+            decay: 0.048,
+            gain: 0.2 + commit * 0.08,
+            shimmerSend: 0.18,
+        });
+        playCasinoChime(v, {
+            freq: targetNote * 0.75,
+            delay: 0.02,
+            decay: 0.14,
+            gain: 0.09 + comboRatio * 0.06,
+            sparkle: 0.28 + comboRatio * 0.2,
+            shimmerSend: 0.28,
+        });
+        return;
+    }
+
+    if (archetype === CombatAudioSubtype.Nation) {
+        // 2 · Nation: compact UiHeroEquip-inspired disciplined steel + brassLatch + tight brass lock
+        playBuffer(v, {
+            buffer: v.bank.woodThock[2],
+            rate: vary(v.rng, 1.15 * targetPitchBias, 0.04),
+            decay: 0.042,
+            gain: 0.22 + commit * 0.07,
+            filterType: "highpass",
+            filterFreq: 260,
+        });
+        playSteelImpact(v, {
+            heavy: false,
+            pitch: vary(v.rng, 1.06 * targetPitchBias + comboRatio * 0.12, 0.05),
+            delay: 0.005,
+            gain: 0.22 + commit * 0.08,
+            wetSend: 0.22,
+        });
+        playBuffer(v, {
+            buffer: v.bank.brassLatch[1],
+            delay: 0.013,
+            rate: vary(v.rng, 0.98 + targetVariant * 0.03 + comboRatio * 0.12, 0.03),
+            decay: 0.055,
+            gain: 0.26 + commit * 0.08,
+            shimmerSend: 0.2,
+        });
+        // Tight royal brass harmonic accent (high-passed cleanly so it never muddies rapid taps)
+        const brassNotes = [293.66, 329.63, 369.99, 440.0]; // D4, E4, F#4, A4
+        const brassFreq = brassNotes[(targetVariant + Math.floor(attackComboStep / 2)) % brassNotes.length];
+        playBrassEnsemble(v, {
+            freq: brassFreq,
+            delay: 0.02,
+            attack: 0.014,
+            hold: 0.016,
+            decay: 0.13 + commit * 0.04,
+            gain: 0.16 + commit * 0.06,
+            brightness: 1.2 + comboRatio * 0.25,
+            goldenHall: true,
+        });
+        playCasinoChime(v, {
+            freq: targetNote,
+            delay: 0.024,
+            decay: 0.18,
+            gain: 0.1 + comboRatio * 0.06,
+            sparkle: 0.45,
             shimmerSend: 0.36,
         });
         return;
     }
 
-    // Hostile assault tap: surgical kinetic arrow/blade flick — sharp, sleek, zero drum kick!
-    playFilteredNoise(v, {
-        color: "parchment",
-        attack: 0.003,
-        decay: 0.058 + commit * 0.032,
-        gain: 0.2 + commit * 0.1,
-        filterType: "bandpass",
-        filterFreq: vary(v.rng, 1350, 0.12),
-        filterFreqEnd: vary(v.rng, 4500, 0.1),
-        filterQ: 1.6,
-        pan: perspective % 2 === 0 ? -0.18 : 0.18,
-        shimmerSend: 0.18,
+    // 3 · Human (PvP): exhilarating dual stereo steel riposte (L→R) + brass lock + combo sparkle!
+    playSteelImpact(v, {
+        heavy: false,
+        pitch: vary(v.rng, 1.1 * targetPitchBias + comboRatio * 0.12, 0.05),
+        gain: 0.24 + commit * 0.09,
+        pan: -0.34 * flip,
+        wetSend: 0.24,
     });
-
-    // Bright high-passed forged steel blade-flick glint (clean above 1.2 kHz — zero low mud)
-    const steelRates = [1.28, 1.42, 1.2, 1.52];
     playBuffer(v, {
-        buffer: v.bank.steelClash[0],
-        delay: 0.003,
-        rate: vary(v.rng, steelRates[perspective], 0.05),
-        decay: 0.072 + commit * 0.03,
-        gain: 0.22 + commit * 0.11,
-        filterType: "highpass",
-        filterFreq: 1220,
-        pan: perspective % 2 === 0 ? 0.16 : -0.16,
-        wetSend: 0.26,
-    });
-
-    // Precision machined brass kinetic trigger detent
-    playBuffer(v, {
-        buffer: v.bank.brassLatch[0],
-        delay: 0.005,
-        rate: vary(v.rng, 1.12 + commit * 0.24, 0.04),
+        buffer: v.bank.brassLatch[targetVariant % 2],
+        delay: 0.008,
+        rate: vary(v.rng, 1.12 + comboRatio * 0.16, 0.03),
         decay: 0.048,
-        gain: 0.22 + commit * 0.1,
-        filterType: "highpass",
-        filterFreq: 780,
-        shimmerSend: 0.18,
+        gain: 0.24 + commit * 0.08,
+        shimmerSend: 0.22,
     });
-
-    // High-commitment push adds a crisp heroic upper harp glint (A5 / D6)
-    if (commit >= 0.55) {
-        playBuffer(v, {
-            buffer: v.bank.harpPluck,
-            delay: 0.01,
-            rate: clamp((perspective % 2 === 0 ? 880.0 : 1174.66) / 293.6648, 0.5, 4.0),
-            decay: 0.18,
-            gain: 0.13 + (commit - 0.55) * 0.12,
-            filterType: "highpass",
-            filterFreq: 680,
-            shimmerSend: 0.42,
-        });
-    }
+    playSteelImpact(v, {
+        heavy: false,
+        pitch: vary(v.rng, 1.3 * targetPitchBias + comboRatio * 0.15, 0.05),
+        delay: 0.024,
+        gain: 0.2 + commit * 0.08,
+        pan: 0.36 * flip,
+        wetSend: 0.28,
+    });
+    playCasinoChime(v, {
+        freq: targetNote,
+        delay: 0.028,
+        decay: 0.2,
+        gain: 0.13 + commit * 0.06 + comboRatio * 0.06,
+        sparkle: 0.55 + comboRatio * 0.25,
+        shimmerSend: 0.42,
+    });
 }
 
 /** `AttackStalled` — Muted shield-wall halt, heavy wood crunch, and descending dark horn sigh. */

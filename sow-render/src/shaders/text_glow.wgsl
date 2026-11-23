@@ -326,7 +326,89 @@ fn shade_landing_beacon(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(mix(vec3<f32>(0.02,0.06,0.08),tint,clamp(signal/max(alpha,0.001),0.0,1.0)),alpha*in.color.a);
 }
 
+// Tactical ground selection / hover ghost ring (KIND_SELECTION_RING = 14.0).
+// Single-quad procedural SDF: incandescent inner ring, 6 rotating outer segmented
+// arcs, diagonal lock-on ticks, soft inward ground pool and radial neon bloom.
+fn shade_selection_ring(in: VertexOutput) -> vec4<f32> {
+    let p = in.local_uv * 2.0 - vec2<f32>(1.0, 1.0);
+    let d = length(p);
+    // Compute derivatives in uniform control flow before any early return.
+    let aa = max(fwidth(d) * 1.15, 0.004);
+    if (d >= 1.0) {
+        return vec4<f32>(0.0);
+    }
+
+    let mode = clamp(in.uv_rect.x, 0.0, 1.0);
+    let phase = in.uv_rect.y;
+    let pulse = clamp(in.uv_rect.z, 0.0, 1.0);
+    let acquire = clamp(in.uv_rect.w, 0.0, 1.0);
+
+    let r_main = 0.70;
+    let r_outer = 0.84;
+    let dist_main = abs(d - r_main);
+    let dist_outer = abs(d - r_outer);
+
+    // Primary luminous ring with bright incandescent core.
+    let w_main = mix(0.017, 0.024, mode) + aa * 0.45;
+    let ring_main = 1.0 - smoothstep(w_main - aa, w_main + aa, dist_main);
+    let ring_core = 1.0 - smoothstep(w_main * 0.36 - aa * 0.5, w_main * 0.36 + aa * 0.7, dist_main);
+
+    // Outer concentric 6-segment tactical arcs (analytical angular AA avoids atan2 seam).
+    let tau = 6.28318530718;
+    let norm_ang = atan2(p.y, p.x) / tau + 0.5;
+    let seg_count = 6.0;
+    let seg_pos = fract((norm_ang - phase) * seg_count);
+    let seg_edge = abs(seg_pos - 0.5);
+    let ang_aa = max(aa / (max(d, 0.25) * tau) * seg_count * 1.4, 0.012);
+    let seg_half = mix(0.31, 0.37, mode);
+    let seg_mask = 1.0 - smoothstep(seg_half - ang_aa, seg_half + ang_aa, seg_edge);
+    let w_outer = mix(0.014, 0.022, mode) + aa * 0.35;
+    let outer_ring = (1.0 - smoothstep(w_outer - aa, w_outer + aa, dist_outer)) * seg_mask;
+    let outer_core = (1.0 - smoothstep(w_outer * 0.38 - aa * 0.5, w_outer * 0.38 + aa * 0.6, dist_outer)) * seg_mask;
+
+    // Four 45-degree inner tactical lock-on ticks (Cartesian symmetry, active when selected).
+    let diag = min(abs(p.x - p.y), abs(p.x + p.y)) * 0.70710678;
+    let tick_w = 0.017 + aa * 0.45;
+    let tick_line = 1.0 - smoothstep(tick_w - aa, tick_w + aa, diag);
+    let tick_rad = smoothstep(0.57 - aa, 0.57 + aa, d) * (1.0 - smoothstep(0.68 - aa, 0.68 + aa, d));
+    let ticks = tick_line * tick_rad * mode;
+
+    // Volumetric neon glow + inward ground aura + lock-on acquisition ripple.
+    let edge_fade = 1.0 - smoothstep(0.92, 1.0, d);
+    let glow_tight = exp(-14.0 * dist_main);
+    let glow_soft = exp(-5.8 * dist_main) * edge_fade;
+    let inner_pool = smoothstep(0.16, r_main, d) * (1.0 - smoothstep(r_main, r_main + 0.06, d));
+    let inner_aura = inner_pool * inner_pool * mix(0.16, 0.32, mode);
+    let outer_glow = exp(-18.0 * dist_outer) * seg_mask * mix(0.28, 0.46, mode) * edge_fade;
+    let sweep_r = mix(0.46, 0.93, 1.0 - acquire);
+    let sweep_ring = exp(-22.0 * abs(d - sweep_r)) * acquire * 0.85 * edge_fade;
+
+    let breath = 1.0 + (0.10 * pulse + 0.35 * acquire) * mode;
+    let glow_strength = max(in.outline_color.a, 0.0);
+    let lit = clamp(ring_main * 1.05 + outer_ring * 0.90 + ticks * 0.92, 0.0, 1.0);
+    let core = clamp(ring_core * 0.85 + outer_core * 0.48 + ticks * 0.45 + sweep_ring * 0.50, 0.0, 1.0);
+    let bloom = (glow_tight * 0.50 + glow_soft * 0.24 + inner_aura + outer_glow + sweep_ring) * glow_strength * breath;
+
+    // Subtle dark contrast rim behind the main ring keeps bright highlights crisp over light terrain.
+    let rim_shadow = (1.0 - smoothstep(w_main + 0.026, w_main + 0.052, dist_main)) * (1.0 - ring_main) * 0.28 * mode;
+    let energy_a = clamp(max(lit, bloom), 0.0, 1.0);
+    let combined_a = clamp(max(energy_a, rim_shadow), 0.0, 1.0) * edge_fade;
+    let out_a = combined_a * in.color.a * globals.shader_params[__TEXT_OPACITY__].x;
+    if (out_a <= 0.001) {
+        return vec4<f32>(0.0);
+    }
+
+    let energy_rgb = mix(in.color.rgb, in.outline_color.rgb, clamp(core + acquire * 0.35, 0.0, 1.0))
+        * (1.0 + 0.25 * core * mode + 0.45 * acquire);
+    let shadow_weight = clamp((rim_shadow * (1.0 - energy_a)) / max(combined_a, 0.001), 0.0, 0.65);
+    let final_rgb = mix(energy_rgb, vec3<f32>(0.02, 0.04, 0.05), shadow_weight);
+    return vec4<f32>(final_rgb, out_a);
+}
+
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 13.5) {
+        return shade_selection_ring(in);
+    }
     if (in.kind > 12.5) {
         return shade_icon(in);
     }

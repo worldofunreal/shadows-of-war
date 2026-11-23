@@ -1,10 +1,10 @@
 use crate::app::{InputState, SimState, TransportTargetMarker, UiState};
 use crate::death_nameplate::{
-    GOLD_REWARD_DURATION, death_animation, death_icon, gold_reward_elapsed,
+    FLOATING_GOLD_RISE, GOLD_REWARD_DURATION, death_animation, death_icon, gold_reward_elapsed,
 };
 use crate::render::avatars::AvatarSlots;
 use crate::render::gpu::TextRenderer;
-use crate::render::motion::spring_overshoot;
+use crate::render::motion::{cascade_callout_motion, spring_overshoot};
 use crate::render::world::overlays::world_to_screen;
 use crate::render::{dev_emoji_outline, dev_text_style};
 use crate::theme::dev_config::DevConfig;
@@ -20,7 +20,7 @@ const CLICK_MARKER_DURATION: f32 = 0.16;
 const NAVAL_ORDER_MARKER_DURATION: f32 = 0.58;
 const ATTACK_LAUNCH_NOTICE_DURATION: f32 = 1.5;
 const ATTACK_LAUNCH_NOTICE_FONT_SIZE: f32 = 14.0;
-const FLOATING_NOTICE_RISE: f32 = 6.5;
+const FLOATING_NOTICE_RISE: f32 = FLOATING_GOLD_RISE;
 const TRANSPORT_TARGET_FADE_IN_SECS: f32 = 0.2;
 const TRANSPORT_TARGET_FADE_OUT_SECS: f32 = 0.3;
 const TRANSPORT_TARGET_ROTATIONS_PER_SEC: f32 = 1.0;
@@ -28,18 +28,18 @@ const TRANSPORT_TARGET_ETA_FONT_SIZE: f32 = 16.0;
 /// Extra SDF face dilation over the label style so the ETA digits read bold.
 const TRANSPORT_TARGET_ETA_BOLD_DILATE: f32 = 0.6;
 const TRANSPORT_IMPACT_DURATION_SECS: f32 = 0.62;
-const DEATH_NAMEPLATE_FONT_SIZE: f32 = 24.0;
+const DEATH_NAMEPLATE_FONT_SIZE: f32 = 13.0;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
 const DEATH_NAMEPLATE_ARC_OFFSET: f32 = 0.75;
-const DEATH_NAMEPLATE_ICON_SIZE: f32 = 24.0;
+const DEATH_NAMEPLATE_ICON_SIZE: f32 = 13.5;
 const DEATH_NAMEPLATE_SCALE: f32 = 0.92;
-const DEATH_CASUALTY_ICON_SIZE: f32 = 18.0;
-const GOLD_REWARD_FONT_SIZE: f32 = 22.0;
-const GOLD_REWARD_COIN_SIZE: f32 = 26.0;
-const GOLD_REWARD_ASSIST_SIZE: f32 = 28.0;
+const DEATH_CASUALTY_ICON_SIZE: f32 = 10.0;
+const GOLD_REWARD_FONT_SIZE: f32 = 11.5;
+const GOLD_REWARD_COIN_SIZE: f32 = 13.5;
+const GOLD_REWARD_ASSIST_SIZE: f32 = 14.5;
 const GOLD_REWARD_SCALE: f32 = 0.9;
-const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.2;
-const DEATH_GOLD_ROW_GAP: f32 = 8.0;
+const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.15;
+const DEATH_GOLD_ROW_GAP: f32 = 4.5;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 const OUTGOING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0; 4];
@@ -105,9 +105,7 @@ pub(crate) fn render(
     render_attack_launch_notices(text, ui, input, dev, sf, now);
 }
 
-const CASCADE_CALLOUT_DURATION: f32 = 1.65;
-const CASCADE_CALLOUT_FONT_SIZE: f32 = 19.0;
-const CASCADE_RING_DURATION: f32 = 0.48;
+const CASCADE_CALLOUT_FONT_SIZE: f32 = 10.5;
 
 fn cascade_callout_color(kind: crate::app::CascadeCalloutKind, chain_step: u8) -> [f32; 4] {
     use crate::app::CascadeCalloutKind;
@@ -138,8 +136,8 @@ fn cascade_callout_kind_scale(kind: crate::app::CascadeCalloutKind) -> f32 {
     use crate::app::CascadeCalloutKind;
     match kind {
         CascadeCalloutKind::Advance => 0.90,
-        CascadeCalloutKind::Capture | CascadeCalloutKind::Surge => 1.02,
-        CascadeCalloutKind::KillStreak | CascadeCalloutKind::MultiKill => 1.16,
+        CascadeCalloutKind::Capture | CascadeCalloutKind::Surge => 1.00,
+        CascadeCalloutKind::KillStreak | CascadeCalloutKind::MultiKill => 1.14,
     }
 }
 
@@ -151,82 +149,131 @@ fn render_cascade_callouts(
     sf: f32,
     now: Instant,
 ) {
+    if ui.cascade_callouts.is_empty() {
+        return;
+    }
     let sf = sf.max(0.01);
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let font_scale = dev.font_size_scale.max(0.1);
     let char_spacing = dev.font_char_spacing.max(0.1);
+    let style_key = char_spacing.to_bits();
     let reduced_motion = ui.app.settings_state.reduced_motion;
+    let mut ring_budget = if reduced_motion || ui.death_nameplates.len() > 8 {
+        0usize
+    } else {
+        2usize
+    };
     ui.cascade_callouts.retain_mut(|callout| {
-        let elapsed = now.duration_since(callout.start_time).as_secs_f32();
-        let Some((progress, rise, anim_scale)) =
-            floating_notice_animation(elapsed, CASCADE_CALLOUT_DURATION)
-        else {
+        let raw_elapsed = now.duration_since(callout.start_time).as_secs_f32();
+        if raw_elapsed < callout.delay_secs {
+            return true;
+        }
+        let elapsed = raw_elapsed - callout.delay_secs;
+        let emphatic = matches!(
+            callout.kind,
+            crate::app::CascadeCalloutKind::KillStreak | crate::app::CascadeCalloutKind::MultiKill
+        );
+        let Some(motion) = cascade_callout_motion(
+            elapsed,
+            crate::app::CASCADE_CALLOUT_DURATION,
+            emphatic,
+            reduced_motion,
+        ) else {
             return false;
         };
-        let screen = world_to_screen(callout.world_x, callout.world_y - rise * 1.15, input, sf);
-        if screen[0] < -200.0
-            || screen[0] > screen_w + 200.0
-            || screen[1] < -160.0
-            || screen[1] > screen_h + 160.0
+
+        let world_y =
+            callout.world_y - callout.initial_world_rise - motion.rise_progress * callout.rise_world;
+        let mut screen = world_to_screen(callout.world_x, world_y, input, sf);
+        screen[1] += callout.screen_offset_y * font_scale + motion.offset_y_px;
+        if screen[0] < -140.0
+            || screen[0] > screen_w + 140.0
+            || screen[1] < -120.0
+            || screen[1] > screen_h + 120.0
         {
             return true;
         }
-        let step_boost = 1.0 + 0.10 * f32::from(callout.chain_step.saturating_sub(1).min(5));
+        let step_boost = 1.0 + 0.05 * f32::from(callout.chain_step.saturating_sub(1).min(5));
         let kind_scale = cascade_callout_kind_scale(callout.kind);
-        let alpha = (1.0 - progress * progress).clamp(0.0, 1.0);
         let base_rgb = cascade_callout_color(callout.kind, callout.chain_step);
-        let color = [base_rgb[0], base_rgb[1], base_rgb[2], alpha];
+        let flash = motion.flash;
+        let color = [
+            base_rgb[0] + (1.0 - base_rgb[0]) * flash,
+            base_rgb[1] + (0.96 - base_rgb[1]) * flash,
+            base_rgb[2] + (0.78 - base_rgb[2]) * flash,
+            motion.alpha,
+        ];
 
-        if !reduced_motion
+        let center_x = screen[0] * sf;
+        let center_y = screen[1] * sf;
+        if let Some(ring_t) = motion.ring_t
             && callout.ring_radius > 0.0
-            && elapsed < CASCADE_RING_DURATION
+            && ring_budget > 0
             && text.remaining_instance_capacity() >= 1
         {
-            let ring_t = (elapsed / CASCADE_RING_DURATION).clamp(0.0, 1.0);
-            let ring_screen = world_to_screen(callout.world_x, callout.world_y, input, sf);
+            let eased_ring = 1.0 - (1.0 - ring_t) * (1.0 - ring_t);
+            let ring_fade = (1.0 - ring_t) * (1.0 - ring_t);
             text.push_ring(
-                [ring_screen[0] * sf, ring_screen[1] * sf],
-                callout.ring_radius * ring_t * sf,
-                [base_rgb[0], base_rgb[1], base_rgb[2], (1.0 - ring_t) * 0.85],
-                (2.6 * (1.0 - 0.4 * ring_t) * sf).max(1.0),
+                [center_x, center_y],
+                callout.ring_radius * (0.35 + 0.65 * eased_ring) * sf,
+                [base_rgb[0], base_rgb[1], base_rgb[2], ring_fade * 0.78],
+                (1.8 * (1.0 - 0.45 * ring_t) * sf).max(1.0),
             );
+            ring_budget -= 1;
         }
 
-        let font_size =
-            CASCADE_CALLOUT_FONT_SIZE * kind_scale * step_boost * anim_scale * font_scale * sf;
-        let prepared = callout
-            .prepared_label
-            .get_or_insert_with(|| text.prepare_string(&callout.label, char_spacing, 0.0));
+        let font_size = CASCADE_CALLOUT_FONT_SIZE
+            * kind_scale
+            * step_boost
+            * motion.text_scale
+            * font_scale
+            * sf;
+        let prepared = match &mut callout.prepared_label {
+            Some((cached_key, existing)) if *cached_key == style_key => existing,
+            slot => {
+                *slot = Some((
+                    style_key,
+                    text.prepare_string(&callout.label, char_spacing, 0.0),
+                ));
+                &slot.as_ref().expect("just populated").1
+            }
+        };
         let measure = prepared.measure_at(font_size);
         let icon_extra = usize::from(callout.icon.is_some());
-        let required = prepared.instance_count().saturating_add(2 + icon_extra);
+        let required = prepared.instance_count().saturating_add(1 + icon_extra);
         if text.remaining_instance_capacity() < required {
             return true;
         }
 
-        let center_x = screen[0] * sf;
-        let center_y = screen[1] * sf;
         if let Some(icon) = callout.icon {
-            let icon_diameter = font_size * 0.95;
-            let gap = 4.0 * sf;
-            let total_w = icon_diameter + gap + measure.width;
+            let icon_base = font_size * 0.95;
+            let icon_w = icon_base * motion.icon_scale[0];
+            let icon_h = icon_base * motion.icon_scale[1];
+            let gap = 2.5 * sf;
+            let total_w = icon_w + gap + measure.width;
             let row_left = center_x - total_w * 0.5;
             let icon_center = [
-                row_left + icon_diameter * 0.5,
+                row_left + icon_w * 0.5,
                 center_y - measure.height * 0.05,
             ];
-            let outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
+            let outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, motion.alpha]);
+            let icon_tint = [
+                1.0,
+                1.0 - 0.04 * flash,
+                1.0 - 0.16 * flash,
+                motion.alpha,
+            ];
             match icon {
                 crate::app::CascadeIcon::Status(NameplateStatusSprite::Troops) => {
-                    text.push_troop_icon(icon_center, icon_diameter * 0.5, alpha, outline);
+                    text.push_troop_icon(icon_center, icon_h * 0.5, motion.alpha, outline);
                 }
                 crate::app::CascadeIcon::Status(sprite) => {
-                    text.push_icon(
+                    text.push_icon_scaled(
                         sprite,
                         icon_center,
-                        icon_diameter * 0.5,
-                        [1.0, 1.0, 1.0, alpha],
+                        [icon_w * 0.5, icon_h * 0.5],
+                        icon_tint,
                         outline,
                     );
                 }
@@ -234,9 +281,9 @@ fn render_cascade_callouts(
                     if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
                         text.push_building_sprite(
                             icon_center,
-                            [icon_diameter, icon_diameter],
+                            [icon_w, icon_h],
                             uv_rect,
-                            [1.0, 1.0, 1.0, alpha],
+                            [1.0, 1.0, 1.0, motion.alpha],
                         );
                     }
                 }
@@ -244,12 +291,12 @@ fn render_cascade_callouts(
             let _ = text.push_prepared_text(
                 prepared,
                 [
-                    row_left + icon_diameter + gap,
+                    row_left + icon_w + gap,
                     center_y + measure.height * 0.35,
                 ],
                 font_size,
                 color,
-                dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+                dev_text_style(dev, sf, [0.0, 0.0, 0.0, motion.alpha]),
             );
         } else {
             let _ = text.push_prepared_text(
@@ -260,7 +307,7 @@ fn render_cascade_callouts(
                 ],
                 font_size,
                 color,
-                dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+                dev_text_style(dev, sf, [0.0, 0.0, 0.0, motion.alpha]),
             );
         }
         true
@@ -580,6 +627,9 @@ fn render_death_nameplates(
     sf: f32,
     now: Instant,
 ) {
+    if ui.death_nameplates.is_empty() {
+        return;
+    }
     let sf = sf.max(0.01);
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
@@ -649,7 +699,7 @@ fn render_death_nameplates(
         };
         let alpha = 1.0 - progress;
         let streak_scale = if ui.cascade_streak > 1 {
-            1.0 + 0.08 * f32::from(ui.cascade_streak.saturating_sub(1).min(4))
+            1.0 + 0.04 * f32::from(ui.cascade_streak.saturating_sub(1).min(4))
         } else {
             1.0
         };
@@ -686,7 +736,7 @@ fn render_death_nameplates(
             + dev.font_underlay_softness.max(0.0))
             * sf;
         let death_icon_size = DEATH_NAMEPLATE_ICON_SIZE * death_scale * sf;
-        let death_gap = 3.0 * death_scale * sf;
+        let death_gap = 2.0 * death_scale * sf;
         let death_stack_height = death_icon_size + death_gap + death_measure.height;
         let death_stack_top = -death_stack_height * 0.5;
         let death_name_baseline =
@@ -784,7 +834,11 @@ fn render_death_nameplates(
     }
 
     let reduced_motion = ui.app.settings_state.reduced_motion;
-    let mut death_vfx_budget = 48usize;
+    let mut death_vfx_budget = if ui.death_nameplates.len() > 10 {
+        12usize
+    } else {
+        24usize
+    };
     for animation in &mut ui.death_nameplates {
         let elapsed = now.duration_since(animation.start_time).as_secs_f32();
         let Some((_, eased, alpha)) = death_animation(elapsed) else {
@@ -809,7 +863,7 @@ fn render_death_nameplates(
             sf,
         );
         let icon_size = DEATH_NAMEPLATE_ICON_SIZE * death_scale;
-        let gap = 3.0 * death_scale;
+        let gap = 2.0 * death_scale;
         let rough_name_width = animation.name.chars().count() as f32 * font_size;
         let rough_width = icon_size + gap + rough_name_width.max(icon_size);
         if center[0] < -(rough_width * 0.5 + 8.0)
@@ -854,7 +908,7 @@ fn render_death_nameplates(
             let origin = world_to_screen(animation.world_x, animation.world_y, input, sf);
             let origin_px = [origin[0] * sf, origin[1] * sf];
             if animation.casualties.is_none() {
-                let base_r = (8.0 + 36.0 * b_ease) * sf;
+                let base_r = (5.0 + 22.0 * b_ease) * sf;
                 text.push_ring(
                     origin_px,
                     base_r,
@@ -864,7 +918,7 @@ fn render_death_nameplates(
                         animation.color[2].max(0.25),
                         0.88 * b_fade,
                     ],
-                    (2.4 * (1.0 - 0.35 * bt) * sf).max(1.0),
+                    (1.8 * (1.0 - 0.35 * bt) * sf).max(1.0),
                 );
                 let accent = if animation.by_nuke {
                     [1.0, 0.80, 0.22, 0.90 * b_fade]
@@ -873,23 +927,23 @@ fn render_death_nameplates(
                 };
                 text.push_ring(
                     origin_px,
-                    (base_r * 0.62).max(3.0 * sf),
+                    (base_r * 0.62).max(2.5 * sf),
                     accent,
-                    (1.5 * sf).max(1.0),
+                    (1.25 * sf).max(1.0),
                 );
             }
             if elapsed < 0.42 {
                 let ct = (elapsed / 0.42).clamp(0.0, 1.0);
                 text.push_cross(
                     origin_px,
-                    (7.0 + 16.0 * ct) * sf,
+                    (5.0 + 10.0 * ct) * sf,
                     [1.0, 0.95, 0.78, (1.0 - ct) * 0.88],
-                    (1.8 * sf).max(1.0),
+                    (1.5 * sf).max(1.0),
                 );
                 if animation.casualties.is_none() {
                     text.push_disc(
                         origin_px,
-                        (5.5 * (1.0 - ct) * sf).max(0.5),
+                        (4.0 * (1.0 - ct) * sf).max(0.5),
                         [1.0, 1.0, 1.0, (1.0 - ct) * 0.85],
                     );
                 }

@@ -11,9 +11,10 @@
 use sow_core::game::GamePhase;
 use web_time::{Duration, Instant};
 
+use super::ability_burst::AbilityBurstGate;
 use crate::app::audio::{
-    AUDIO_EVENT_STRIDE, ArsenalSoundKind, AudioCue, BuildingSoundKind,
-    PlayerSoundType, ResourceSoundKind, SpatialSoundParams, flush_audio_batch, spatial_pan_gain,
+    AUDIO_EVENT_STRIDE, ArsenalSoundKind, AudioCue, BuildingSoundKind, PlayerSoundType,
+    ResourceSoundKind, SpatialSoundParams, flush_audio_batch, spatial_pan_gain,
 };
 
 const DEPLOY_GAP: Duration = Duration::from_millis(160);
@@ -85,6 +86,7 @@ pub(crate) struct SfxDirector {
     last_trade: Option<Instant>,
     last_diplomacy: Option<Instant>,
     last_emote: Option<Instant>,
+    ability_burst: AbilityBurstGate,
     last_error: Option<Instant>,
     pending_elimination: Option<PendingElimination>,
     under_attack_active: bool,
@@ -122,6 +124,7 @@ impl Default for SfxDirector {
             last_trade: None,
             last_diplomacy: None,
             last_emote: None,
+            ability_burst: AbilityBurstGate::default(),
             last_error: None,
             pending_elimination: None,
             under_attack_active: false,
@@ -144,6 +147,7 @@ impl SfxDirector {
         self.client_active = active;
         if !active {
             self.under_attack_active = false;
+            self.ability_burst.clear();
             self.pending.clear();
         }
     }
@@ -154,6 +158,7 @@ impl SfxDirector {
         self.phase = next;
         if next != TrackedPhase::Playing {
             self.under_attack_active = false;
+            self.ability_burst.clear();
         }
         if !self.phase_initialized {
             self.phase_initialized = true;
@@ -221,15 +226,23 @@ impl SfxDirector {
         &mut self,
         now: Instant,
         commitment: f32,
-        against_enemy: bool,
+        target_archetype: u8,
+        target_owner: u16,
         spatial: SpatialSoundParams,
     ) {
         if !self.playing_allowed() || !Self::open_gap(&mut self.last_attack_order, now, ATTACK_ORDER_GAP) {
             return;
         }
+        let archetype = target_archetype & 0x03;
+        let target_variant = if target_owner == 0 {
+            ((self.seed_seq >> 3) & 0x07) as u8
+        } else {
+            (target_owner.wrapping_mul(5) & 0x07) as u8
+        };
+        let packed_subtype = (target_variant << 2) | archetype;
         self.push_spatial(
             AudioCue::AttackOrder,
-            u8::from(against_enemy),
+            packed_subtype,
             spatial,
             commitment.clamp(0.05, 1.0),
             None,
@@ -300,6 +313,26 @@ impl SfxDirector {
             severity.clamp(0.15, 1.0),
             None,
         );
+    }
+
+    /// Plays one hero ability cue per continuous stream of triggers from an owner.
+    /// Repeated procs keep the burst alive and only re-arm the cue after a quiet gap.
+    pub(crate) fn play_hero_ability(
+        &mut self,
+        now: Instant,
+        owner_id: u16,
+        family: u8,
+        spatial: Option<SpatialSoundParams>,
+    ) {
+        if !self.playing_allowed() || !self.ability_burst.should_play(owner_id, now) {
+            return;
+        }
+
+        if let Some(spatial) = spatial {
+            self.push_spatial(AudioCue::HeroAbility, family, spatial, 0.85, None);
+        } else {
+            self.push_ui(AudioCue::HeroAbility, family, 0.85, None);
+        }
     }
 
     pub(crate) fn queue_elimination(

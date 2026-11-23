@@ -393,6 +393,7 @@ impl SowApp {
                             x as f32 + 0.5,
                             y as f32 + 0.5,
                             leader_gender,
+                            true,
                             now_instant,
                         );
                     }
@@ -474,10 +475,20 @@ impl SowApp {
                                 start_time: now_instant,
                             });
                     }
-                    self.ui
-                        .app
-                        .hud_state
-                        .push_ability_notice(owner_id, my_id, owner.leader, now_instant);
+                    self.ui.app.hud_state.push_ability_notice(
+                        owner_id,
+                        my_id,
+                        owner.leader,
+                        now_instant,
+                    );
+                    let ability_spatial = tile
+                        .map(|(x, y)| self.spatial_sound_params(x as f32 + 0.5, y as f32 + 0.5));
+                    self.sfx.play_hero_ability(
+                        now_instant,
+                        owner_id,
+                        crate::app::audio::ability_cue_code(owner.leader.ability().cue()),
+                        ability_spatial,
+                    );
                 }
                 sow_core::game::GameEvent::PlayerEliminated {
                     player_id,
@@ -668,7 +679,7 @@ impl SowApp {
                             Some(crate::app::CascadeIcon::Status(
                                 sow_render::text::NameplateStatusSprite::Troops,
                             )),
-                            28.0,
+                            18.0,
                             now_instant,
                         );
                         self.sfx
@@ -693,7 +704,7 @@ impl SowApp {
                 None,
                 crate::app::CascadeCalloutKind::Capture,
                 Some(crate::app::CascadeIcon::Building(kind)),
-                28.0,
+                18.0,
                 now_instant,
             );
             self.sfx

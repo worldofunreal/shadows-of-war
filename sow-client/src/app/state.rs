@@ -677,9 +677,25 @@ pub struct CascadeCallout {
     pub kind: CascadeCalloutKind,
     pub icon: Option<CascadeIcon>,
     pub ring_radius: f32,
+    pub delay_secs: f32,
+    pub initial_world_rise: f32,
+    pub rise_world: f32,
+    pub screen_offset_y: f32,
     pub start_time: web_time::Instant,
-    pub prepared_label: Option<sow_render::text::PreparedText>,
+    pub prepared_label: Option<(u32, sow_render::text::PreparedText)>,
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct PendingKillStreakSfx {
+    pub play_at: web_time::Instant,
+    pub step: u8,
+    pub spatial: crate::app::audio::SpatialSoundParams,
+}
+
+const DEFAULT_CASCADE_CALLOUT_RISE: f32 = crate::death_nameplate::FLOATING_GOLD_RISE;
+pub const CASCADE_CALLOUT_DURATION: f32 = 1.65;
+const STREAK_SCREEN_OFFSET_Y_WITH_GOLD: f32 = 46.0;
+const STREAK_SCREEN_OFFSET_Y_NO_GOLD: f32 = 22.0;
 
 #[derive(Clone, Debug)]
 pub struct CombatStreakTracker {
@@ -881,6 +897,7 @@ pub struct UiState {
     pub building_upgrade_flashes: std::collections::HashMap<u32, web_time::Instant>,
     pub building_action_pulses: std::collections::HashMap<u32, web_time::Instant>,
     pub hovered_building: Option<(u32, web_time::Instant)>,
+    pub prev_hovered_building: Option<(u32, web_time::Instant)>,
     pub building_celebrations:
         std::collections::HashMap<u32, (sow_core::game::BuildingKind, u8, web_time::Instant)>,
     pub last_resource_notice_tick: Option<u64>,
@@ -896,6 +913,7 @@ pub struct UiState {
     pub cascade_streak: u8,
     pub cascade_last_at: Option<web_time::Instant>,
     pub cascade_callouts: Vec<CascadeCallout>,
+    pub pending_streak_sfx: [Option<PendingKillStreakSfx>; 4],
     pub combat_streaks: CombatStreakTracker,
 }
 
@@ -965,8 +983,36 @@ impl UiState {
         self.cascade_streak = 0;
         self.cascade_last_at = None;
         self.cascade_callouts.clear();
+        self.pending_streak_sfx = [None; 4];
         self.combat_streaks.reset();
         self.blast_scene.clear();
+    }
+
+    pub(crate) fn schedule_streak_sfx(
+        &mut self,
+        play_at: web_time::Instant,
+        step: u8,
+        spatial: crate::app::audio::SpatialSoundParams,
+    ) {
+        if let Some(slot) = self.pending_streak_sfx.iter_mut().find(|slot| slot.is_none()) {
+            *slot = Some(PendingKillStreakSfx {
+                play_at,
+                step,
+                spatial,
+            });
+            return;
+        }
+        if let Some(oldest) = self
+            .pending_streak_sfx
+            .iter_mut()
+            .min_by_key(|slot| slot.map_or(play_at, |item| item.play_at))
+        {
+            *oldest = Some(PendingKillStreakSfx {
+                play_at,
+                step,
+                spatial,
+            });
+        }
     }
 
     pub(crate) fn reset_kill_streaks(&mut self) {
@@ -985,6 +1031,38 @@ impl UiState {
         ring_radius: f32,
         now: web_time::Instant,
     ) -> u8 {
+        self.push_staged_cascade_callout(
+            world_x,
+            world_y,
+            label,
+            chain_override,
+            kind,
+            icon,
+            ring_radius,
+            0.0,
+            0.0,
+            DEFAULT_CASCADE_CALLOUT_RISE,
+            0.0,
+            now,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_staged_cascade_callout(
+        &mut self,
+        world_x: f32,
+        world_y: f32,
+        label: String,
+        chain_override: Option<u8>,
+        kind: CascadeCalloutKind,
+        icon: Option<CascadeIcon>,
+        ring_radius: f32,
+        delay_secs: f32,
+        initial_world_rise: f32,
+        rise_world: f32,
+        screen_offset_y: f32,
+        now: web_time::Instant,
+    ) -> u8 {
         let within_window = self
             .cascade_last_at
             .is_some_and(|last| now.duration_since(last).as_secs_f32() <= 4.5);
@@ -998,7 +1076,12 @@ impl UiState {
         self.cascade_last_at = Some(now);
 
         if self.cascade_callouts.len() >= 4 {
-            self.cascade_callouts.remove(0);
+            let evict = self
+                .cascade_callouts
+                .iter()
+                .position(|c| !matches!(c.kind, CascadeCalloutKind::KillStreak | CascadeCalloutKind::MultiKill))
+                .unwrap_or(0);
+            self.cascade_callouts.remove(evict);
         }
         self.cascade_callouts.push(CascadeCallout {
             world_x,
@@ -1008,6 +1091,10 @@ impl UiState {
             kind,
             icon,
             ring_radius,
+            delay_secs: delay_secs.max(0.0),
+            initial_world_rise,
+            rise_world,
+            screen_offset_y,
             start_time: now,
             prepared_label: None,
         });
@@ -1019,21 +1106,38 @@ impl UiState {
         wx: f32,
         wy: f32,
         gender: Option<sow_data::geo_entities::Gender>,
+        has_gold_reward: bool,
         now: web_time::Instant,
-    ) -> Option<(u8, &'static str)> {
+    ) -> Option<(u8, &'static str, f32)> {
         let (label, min_step, kind) = self.combat_streaks.record_kill(gender, now)?;
-        let ring_radius = 36.0 + 6.0 * f32::from(min_step.min(5));
-        let step = self.push_cascade_callout(
+        let ring_radius = 20.0 + 3.0 * f32::from(min_step.min(5));
+        let delay_secs = crate::death_nameplate::streak_callout_delay(has_gold_reward);
+        let initial_world_rise = if has_gold_reward {
+            crate::death_nameplate::STREAK_INITIAL_RISE_WITH_GOLD
+        } else {
+            1.0
+        };
+        let rise_world = crate::death_nameplate::GOLD_RISE_RATE * CASCADE_CALLOUT_DURATION;
+        let screen_offset_y = if has_gold_reward {
+            STREAK_SCREEN_OFFSET_Y_WITH_GOLD
+        } else {
+            STREAK_SCREEN_OFFSET_Y_NO_GOLD
+        };
+        let step = self.push_staged_cascade_callout(
             wx,
-            wy - 1.35,
+            wy,
             label.to_string(),
             Some(min_step),
             kind,
             Some(CascadeIcon::Status(sow_render::text::NameplateStatusSprite::Death)),
             ring_radius,
+            delay_secs,
+            initial_world_rise,
+            rise_world,
+            screen_offset_y,
             now,
         );
-        Some((step, label))
+        Some((step, label, delay_secs))
     }
 
     pub(crate) fn record_territory_advance(

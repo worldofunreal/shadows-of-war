@@ -18,6 +18,8 @@ thread_local! {
     static VIEWPORT_CACHE: std::cell::Cell<Option<BrowserViewport>> = const { std::cell::Cell::new(None) };
     static MOBILE_POINTER: Option<web_sys::MediaQueryList> = web_sys::window()
         .and_then(|window| window.match_media("(hover: none) and (pointer: coarse)").ok().flatten());
+    static DESKTOP_HOVER_POINTER: Option<web_sys::MediaQueryList> = web_sys::window()
+        .and_then(|window| window.match_media("(hover: hover) and (pointer: fine)").ok().flatten());
 }
 
 fn read_browser_viewport() -> BrowserViewport {
@@ -62,6 +64,13 @@ fn read_browser_viewport() -> BrowserViewport {
 
 pub(crate) fn is_mobile_pointer() -> bool {
     MOBILE_POINTER.with(|query| query.as_ref().is_some_and(|q| q.matches()))
+}
+
+/// True only on fine-pointer hover-capable devices (desktop mouse/trackpad).
+/// False on phones, iPads, and touch tablets so desktop hover effects incur zero cost there.
+pub(crate) fn supports_desktop_hover() -> bool {
+    !is_mobile_pointer()
+        && DESKTOP_HOVER_POINTER.with(|query| query.as_ref().is_some_and(|q| q.matches()))
 }
 
 fn browser_viewport() -> BrowserViewport {

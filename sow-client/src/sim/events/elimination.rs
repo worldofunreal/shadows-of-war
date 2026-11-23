@@ -27,11 +27,16 @@ impl SowApp {
         wx: f32,
         wy: f32,
         gender: Option<sow_data::geo_entities::Gender>,
+        has_gold_reward: bool,
         now_instant: web_time::Instant,
     ) {
-        if let Some((step, title)) = self.ui.record_kill_callout(wx, wy, gender, now_instant) {
-            self.sfx
-                .play_kill_streak(step, self.spatial_sound_params(wx, wy));
+        if let Some((step, title, delay_secs)) =
+            self.ui
+                .record_kill_callout(wx, wy, gender, has_gold_reward, now_instant)
+        {
+            let play_at = now_instant + web_time::Duration::from_secs_f32(delay_secs.max(0.0));
+            let spatial = self.spatial_sound_params(wx, wy);
+            self.ui.schedule_streak_sfx(play_at, step, spatial);
             let streak = self.ui.combat_streaks.kill_streak;
             if streak > self.progress.best_match_conquest_streak {
                 self.progress.best_match_conquest_streak = streak;
@@ -176,7 +181,13 @@ impl SowApp {
                     .iter()
                     .find(|p| p.id == my_id)
                     .and_then(|me| me.leader.character().gender);
-                self.record_combat_kill_feedback(wx, wy, leader_gender, now_instant);
+                self.record_combat_kill_feedback(
+                    anim_x,
+                    anim_y,
+                    leader_gender,
+                    reward_data.is_some(),
+                    now_instant,
+                );
             }
             if player_id == my_id {
                 self.ui.reset_kill_streaks();

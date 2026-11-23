@@ -386,7 +386,7 @@ impl SowApp {
                     None,
                     crate::app::CascadeCalloutKind::Capture,
                     Some(crate::app::CascadeIcon::Building(kind)),
-                    28.0,
+                    18.0,
                     now,
                 );
                 self.sfx

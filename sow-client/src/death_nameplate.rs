@@ -6,6 +6,21 @@ pub const MAX_DEATH_NAMEPLATES: usize = 64;
 pub const DEATH_NAMEPLATE_DURATION: f32 = 1.5;
 pub const GOLD_REWARD_DELAY: f32 = 0.5;
 pub const GOLD_REWARD_DURATION: f32 = 3.0;
+pub const FLOATING_GOLD_RISE: f32 = 6.5;
+pub const STREAK_AFTER_GOLD_DELAY: f32 = 0.40;
+pub const STREAK_NO_GOLD_DELAY: f32 = 0.42;
+pub const STREAK_CALLOUT_DELAY_WITH_GOLD: f32 = GOLD_REWARD_DELAY + STREAK_AFTER_GOLD_DELAY;
+pub const GOLD_RISE_RATE: f32 = FLOATING_GOLD_RISE / GOLD_REWARD_DURATION;
+pub const STREAK_INITIAL_RISE_WITH_GOLD: f32 = GOLD_RISE_RATE * STREAK_AFTER_GOLD_DELAY;
+
+#[inline]
+pub const fn streak_callout_delay(has_gold_reward: bool) -> f32 {
+    if has_gold_reward {
+        STREAK_CALLOUT_DELAY_WITH_GOLD
+    } else {
+        STREAK_NO_GOLD_DELAY
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct DeathNameplateReward {

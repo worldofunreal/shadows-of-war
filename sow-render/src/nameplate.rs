@@ -1531,6 +1531,14 @@ impl NameplateLayout {
         self.avatar_radius
     }
 
+    pub fn rank_badge_center(&self) -> ScreenPoint {
+        self.rank_center
+    }
+
+    pub fn rank_badge_diameter(&self) -> f32 {
+        self.badge_size * RANK_BADGE_SCALE
+    }
+
     pub fn badge_effect_padding(&self) -> f32 {
         self.badge_effect_padding
     }

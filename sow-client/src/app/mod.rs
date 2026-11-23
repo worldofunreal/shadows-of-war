@@ -1,4 +1,5 @@
 mod account;
+pub(crate) mod ability_burst;
 pub(crate) mod audio;
 mod bootstrap;
 mod gpu;
@@ -35,7 +36,22 @@ impl SowApp {
             crate::web_menu::publish_state(self);
         }
         self.update_upgrade_progress_sfx(now);
+        self.flush_pending_streak_sfx(now);
         self.sfx.flush_frame();
+    }
+
+    fn flush_pending_streak_sfx(&mut self, now: web_time::Instant) {
+        if self.ui.app.phase != crate::ClientPhase::Playing || self.sim.paused {
+            return;
+        }
+        for slot in &mut self.ui.pending_streak_sfx {
+            if let Some(pending) = *slot
+                && now >= pending.play_at
+            {
+                self.sfx.play_kill_streak(pending.step, pending.spatial);
+                *slot = None;
+            }
+        }
     }
 
     fn send_game_ready_if_needed(&mut self) {

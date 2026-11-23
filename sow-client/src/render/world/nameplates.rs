@@ -4,7 +4,9 @@ use crate::app::{InputState, SimState};
 use crate::render::avatars::AvatarSlots;
 use crate::render::gpu::TextRenderer;
 use crate::render::motion::{
-    EmoteMotion, emote_motion, smoothstep, spring_overshoot, troop_transfer_motion,
+    EmoteMotion, RankBadgeMotion, RankSpriteSnapshot, emote_motion, rank_badge_enter_duration,
+    rank_badge_enter_motion, rank_badge_exit_duration, rank_badge_exit_motion,
+    rank_badge_swap_delay, smoothstep, spring_overshoot, troop_transfer_motion,
 };
 use crate::theme::dev_config::DevConfig;
 use sow_core::emote::{ActiveEmote, AvatarExpression, EMOTE_DURATION_SECS, EMOTES, EmoteKind};
@@ -53,7 +55,8 @@ const STATUS_BADGE_ENTER_PREP_END: f32 = 0.15;
 const STATUS_BADGE_ENTER_POP_END: f32 = 0.58;
 const STATUS_BADGE_EXIT_PREP_END: f32 = 0.12;
 const STATUS_BADGE_EXIT_FADE_START: f32 = 0.34;
-const NAMEPLATE_RENDER_BADGE_CAPACITY: usize = NAMEPLATE_MAX_BADGES + STATUS_BADGE_COUNT;
+const NAMEPLATE_RENDER_BADGE_CAPACITY: usize = NAMEPLATE_MAX_BADGES + STATUS_BADGE_COUNT + 1;
+const MAX_RANK_VFX: usize = 6;
 const TROOP_TRANSFER_TEXT_DELAY: f32 = 0.08;
 const TROOP_TRANSFER_GLYPH_DELAY: f32 = 0.035;
 const AVATAR_TRANSITION_EXIT_SECS: f32 = 0.15;
@@ -161,6 +164,7 @@ pub(crate) struct NameplateSystem {
     emote_visuals: HashMap<u16, AvatarEmote>,
     avatar_entries: HashMap<u16, AvatarEntry>,
     badge_animations: HashMap<u16, PlayerStatusBadgeAnimations>,
+    rank_animations: RankBadgeTracker,
     emote_tick: Option<u64>,
     campaign_base_expressions: HashMap<u16, AvatarExpression>,
     campaign_base_expressions_dirty: bool,
@@ -243,6 +247,8 @@ struct FullNameplate {
     avatar_entry_age: Option<f32>,
     badges: [Option<BadgePlan>; NAMEPLATE_RENDER_BADGE_CAPACITY],
     badge_count: usize,
+    rank_vfx: [Option<RankVfxPlan>; MAX_RANK_VFX],
+    rank_vfx_count: usize,
     name: Option<TextPlan>,
     troops: Option<TroopsPlan>,
     text_style: sow_render::text::TextPaintStyle,
@@ -445,6 +451,27 @@ struct BadgePlan {
     center: [f32; 2],
     size: [f32; 2],
     tint: [f32; 4],
+    outline_glow: [f32; 4],
+}
+
+#[derive(Clone, Copy)]
+enum RankVfxPlan {
+    Disc {
+        center: [f32; 2],
+        radius: f32,
+        color: [f32; 4],
+    },
+    Ring {
+        center: [f32; 2],
+        radius: f32,
+        thickness: f32,
+        color: [f32; 4],
+    },
+    Sparkle {
+        center: [f32; 2],
+        diameter: f32,
+        color: [f32; 4],
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -655,6 +682,238 @@ impl PlayerStatusBadgeAnimations {
                 }
             }
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RankEnterAnim {
+    rank: u8,
+    started_at: Instant,
+    delay_secs: f32,
+    duration_secs: f32,
+}
+
+impl RankEnterAnim {
+    #[inline]
+    fn age_secs(self, now: Instant) -> f32 {
+        now.saturating_duration_since(self.started_at).as_secs_f32() - self.delay_secs
+    }
+
+    #[inline]
+    fn is_finished(self, now: Instant) -> bool {
+        self.age_secs(now) >= self.duration_secs
+    }
+
+    #[inline]
+    fn motion(self, now: Instant, reduced_motion: bool) -> RankBadgeMotion {
+        rank_badge_enter_motion(self.rank, self.age_secs(now), reduced_motion)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RankExitAnim {
+    rank: u8,
+    started_at: Instant,
+    duration_secs: f32,
+    from: RankSpriteSnapshot,
+}
+
+impl RankExitAnim {
+    #[inline]
+    fn age_secs(self, now: Instant) -> f32 {
+        now.saturating_duration_since(self.started_at).as_secs_f32()
+    }
+
+    #[inline]
+    fn is_finished(self, now: Instant) -> bool {
+        self.age_secs(now) >= self.duration_secs
+    }
+
+    #[inline]
+    fn motion(self, now: Instant, reduced_motion: bool) -> RankBadgeMotion {
+        rank_badge_exit_motion(self.rank, self.age_secs(now), self.from, reduced_motion)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PlayerRankBadgeAnimation {
+    player_id: u16,
+    current_rank: Option<u8>,
+    entering: Option<RankEnterAnim>,
+    exiting: Option<RankExitAnim>,
+}
+
+/// Compact podium tracker (<= 3 active + transient exits). Idle cost is one array compare + bool.
+#[derive(Default)]
+struct RankBadgeTracker {
+    observed: bool,
+    last_top_three: [Option<u16>; 3],
+    entries: Vec<PlayerRankBadgeAnimation>,
+    has_active: bool,
+}
+
+impl RankBadgeTracker {
+    fn clear(&mut self) {
+        self.observed = false;
+        self.last_top_three = [None; 3];
+        self.entries.clear();
+        self.has_active = false;
+    }
+
+    #[inline]
+    fn active_for(&self, player_id: u16) -> Option<PlayerRankBadgeAnimation> {
+        if !self.has_active {
+            return None;
+        }
+        self.entries
+            .iter()
+            .copied()
+            .find(|entry| {
+                entry.player_id == player_id && (entry.entering.is_some() || entry.exiting.is_some())
+            })
+    }
+
+    fn observe(
+        &mut self,
+        top_three: [Option<u16>; 3],
+        active_ids: &HashSet<u16>,
+        now: Instant,
+        reduced_motion: bool,
+    ) {
+        if !self.observed {
+            if top_three.iter().all(Option::is_none) {
+                return;
+            }
+            self.observed = true;
+            self.last_top_three = top_three;
+            self.entries.clear();
+            for (slot, player_id) in top_three.into_iter().enumerate() {
+                if let Some(player_id) = player_id {
+                    self.entries.push(PlayerRankBadgeAnimation {
+                        player_id,
+                        current_rank: Some((slot + 1) as u8),
+                        entering: None,
+                        exiting: None,
+                    });
+                }
+            }
+            self.has_active = false;
+            return;
+        }
+
+        if top_three == self.last_top_three && !self.has_active {
+            return;
+        }
+
+        for entry in &mut self.entries {
+            if entry
+                .entering
+                .is_some_and(|animation| animation.is_finished(now))
+            {
+                entry.entering = None;
+            }
+            if entry
+                .exiting
+                .is_some_and(|animation| animation.is_finished(now))
+            {
+                entry.exiting = None;
+            }
+        }
+
+        if top_three != self.last_top_three {
+            for entry in &mut self.entries {
+                let next_rank = rank_in_top_three(top_three, entry.player_id);
+                if next_rank == entry.current_rank {
+                    continue;
+                }
+                if let Some(old_rank) = entry.current_rank {
+                    let from = entry
+                        .entering
+                        .map_or(RankSpriteSnapshot::default(), |enter| {
+                            enter.motion(now, reduced_motion).snapshot()
+                        });
+                    if from.alpha > 0.001 {
+                        entry.exiting = Some(RankExitAnim {
+                            rank: old_rank,
+                            started_at: now,
+                            duration_secs: rank_badge_exit_duration(old_rank, reduced_motion),
+                            from,
+                        });
+                    }
+                }
+                if let Some(rank) = next_rank {
+                    if entry.exiting.is_some_and(|exiting| exiting.rank == rank) {
+                        entry.exiting = None;
+                    }
+                    let delay_secs = if entry.exiting.is_some() {
+                        rank_badge_swap_delay(rank, reduced_motion)
+                    } else {
+                        0.0
+                    };
+                    entry.entering = Some(RankEnterAnim {
+                        rank,
+                        started_at: now,
+                        delay_secs,
+                        duration_secs: rank_badge_enter_duration(rank, reduced_motion),
+                    });
+                } else {
+                    entry.entering = None;
+                }
+                entry.current_rank = next_rank;
+            }
+
+            for (slot, player_id) in top_three.into_iter().enumerate() {
+                let Some(player_id) = player_id else {
+                    continue;
+                };
+                if !active_ids.contains(&player_id)
+                    || self.entries.iter().any(|entry| entry.player_id == player_id)
+                {
+                    continue;
+                }
+                let rank = (slot + 1) as u8;
+                self.entries.push(PlayerRankBadgeAnimation {
+                    player_id,
+                    current_rank: Some(rank),
+                    entering: Some(RankEnterAnim {
+                        rank,
+                        started_at: now,
+                        delay_secs: 0.0,
+                        duration_secs: rank_badge_enter_duration(rank, reduced_motion),
+                    }),
+                    exiting: None,
+                });
+            }
+            self.last_top_three = top_three;
+        }
+
+        self.entries.retain(|entry| {
+            active_ids.contains(&entry.player_id)
+                && (entry.current_rank.is_some()
+                    || entry.entering.is_some()
+                    || entry.exiting.is_some())
+        });
+        self.has_active = self
+            .entries
+            .iter()
+            .any(|entry| entry.entering.is_some() || entry.exiting.is_some());
+    }
+}
+
+#[inline]
+fn rank_in_top_three(top_three: [Option<u16>; 3], player_id: u16) -> Option<u8> {
+    top_three
+        .iter()
+        .position(|id| *id == Some(player_id))
+        .map(|index| (index + 1) as u8)
+}
+
+#[inline]
+fn rank_badge_kind(rank: u8) -> BadgeKind {
+    match rank {
+        1 => BadgeKind::Rank1,
+        2 => BadgeKind::Rank2,
+        _ => BadgeKind::Rank3,
     }
 }
 
@@ -1355,6 +1614,7 @@ pub(super) fn render_nameplates(
             .is_some_and(|previous| snapshot.tick < previous)
     {
         system.badge_animations.clear();
+        system.rank_animations.clear();
     }
     if !tutorial_active && !system.campaign_base_expressions.is_empty() {
         system.set_campaign_base_expressions(HashMap::new());
@@ -1378,6 +1638,9 @@ pub(super) fn render_nameplates(
         crate::diag::record_startup_perf(crate::diag::StartupMetric::NameplateSample, started_at);
     }
     system.observe_status_badges(snapshot, my_id, now, reduced_motion);
+    system
+        .rank_animations
+        .observe(leaderboard_top_three, &system.active_ids, now, reduced_motion);
     let active_ids = &system.active_ids;
     system
         .avatar_entries
@@ -1395,11 +1658,12 @@ pub(super) fn render_nameplates(
     let alpha = nameplate_sample_alpha(system.sample_at, now, nameplate_sample_duration(sim));
     let inverse_alpha = 1.0 - alpha;
 
-    let (order, visuals, frame_plans, badge_animations, avatar_entries) = (
+    let (order, visuals, frame_plans, badge_animations, rank_animations, avatar_entries) = (
         &system.order,
         &mut system.visuals,
         &mut system.frame_plans,
         &mut system.badge_animations,
+        &system.rank_animations,
         &mut system.avatar_entries,
     );
     frame_plans.clear();
@@ -1537,6 +1801,7 @@ pub(super) fn render_nameplates(
             .max(layout.badge_effect_padding());
         let layout_bounds = layout.visual_bounds(center, text_padding);
         let base_extents = layout_bounds.extents_about(center);
+        let rank_animation = rank_animations.active_for(player.id);
         let fit_scale = fit_nameplate_bounds_to_land(
             layout,
             center,
@@ -1544,6 +1809,7 @@ pub(super) fn render_nameplates(
             zoom_scaled,
             base_extents,
             badge_animations.get(&player.id),
+            rank_animation,
         );
         if fit_scale <= 0.0 || !fit_scale.is_finite() {
             continue;
@@ -1601,6 +1867,7 @@ pub(super) fn render_nameplates(
             dev,
             avatars,
             badge_animations.entry(player.id).or_default(),
+            rank_animation,
             sf,
             now,
             reduced_motion,
@@ -1831,6 +2098,7 @@ fn sample_nameplates(
                 system.active_ids.clear();
                 system.visuals.clear();
                 system.badge_animations.clear();
+                system.rank_animations.clear();
                 return;
             }
         }
@@ -1848,6 +2116,7 @@ fn sample_nameplates(
         system.active_ids.clear();
         system.visuals.clear();
         system.badge_animations.clear();
+        system.rank_animations.clear();
         system.land_cache = NameplateLandCache::default();
         return;
     };
@@ -1899,6 +2168,7 @@ fn sample_nameplates(
             system.active_ids.clear();
             system.visuals.clear();
             system.badge_animations.clear();
+            system.rank_animations.clear();
             return;
         }
     }
@@ -2191,8 +2461,21 @@ fn fit_nameplate_bounds_to_land(
     zoom_scaled: f32,
     mut extents: [f32; 2],
     animations: Option<&PlayerStatusBadgeAnimations>,
+    rank_animation: Option<PlayerRankBadgeAnimation>,
 ) -> f32 {
     let badge_padding = layout.badge_effect_padding();
+
+    if let Some(rank_anim) = rank_animation
+        && rank_anim.current_rank.is_none()
+        && rank_anim.exiting.is_some()
+        && layout.avatar_radius() > 0.0
+    {
+        let rank_center = layout.rank_badge_center().0;
+        let radius = layout.rank_badge_diameter() * 0.5 + badge_padding;
+        for axis in 0..2 {
+            extents[axis] = extents[axis].max((rank_center[axis] - center.0[axis]).abs() + radius);
+        }
+    }
 
     if let Some(animations) = animations {
         for badge in layout.badges().iter().flatten() {
@@ -2259,6 +2542,7 @@ fn prepare_full_nameplate(
     dev: &DevConfig,
     avatars: &AvatarSlots,
     badge_animations: &mut PlayerStatusBadgeAnimations,
+    rank_animation: Option<PlayerRankBadgeAnimation>,
     sf: f32,
     now: Instant,
     reduced_motion: bool,
@@ -2282,7 +2566,14 @@ fn prepare_full_nameplate(
     let avatar = (layout.avatar_radius() > 0.0).then(|| {
         prepare_avatar(text, avatars, player, layout, sf, base_expression)
     });
-    let (badges, badge_count) = prepare_badges(layout, sf, badge_animations, now, reduced_motion);
+    let (badges, badge_count, rank_vfx, rank_vfx_count) = prepare_badges(
+        layout,
+        sf,
+        badge_animations,
+        rank_animation,
+        now,
+        reduced_motion,
+    );
     let name = dev.vfx_nameplate_names.then_some(TextPlan {
         position: {
             let anchor = layout.name_anchor(center);
@@ -2306,6 +2597,7 @@ fn prepare_full_nameplate(
     let instance_count = avatar
         .map_or(0, AvatarPlan::base_instance_count)
         .saturating_add(badge_count)
+        .saturating_add(rank_vfx_count)
         .saturating_add(name.map_or(0, |_| state.prepared_name.instance_count()))
         .saturating_add(troops.map_or(0, |_| {
             1usize.saturating_add(state.prepared_troops.instance_count())
@@ -2317,6 +2609,8 @@ fn prepare_full_nameplate(
         avatar_entry_age,
         badges,
         badge_count,
+        rank_vfx,
+        rank_vfx_count,
         name,
         troops,
         text_style,
@@ -2486,24 +2780,130 @@ fn apply_base_avatar_transition(
     }
 }
 
+fn push_rank_vfx(
+    vfx: &mut [Option<RankVfxPlan>; MAX_RANK_VFX],
+    vfx_count: &mut usize,
+    anchor: [f32; 2],
+    diameter_px: f32,
+    motion: RankBadgeMotion,
+) {
+    if diameter_px <= 0.0 {
+        return;
+    }
+    if let Some(disc) = motion.flash_disc
+        && disc.color[3] > 0.001
+        && *vfx_count < vfx.len()
+    {
+        vfx[*vfx_count] = Some(RankVfxPlan::Disc {
+            center: anchor,
+            radius: disc.radius * diameter_px,
+            color: disc.color,
+        });
+        *vfx_count += 1;
+    }
+    if let Some(ring) = motion.ring
+        && ring.color[3] > 0.001
+        && *vfx_count < vfx.len()
+    {
+        vfx[*vfx_count] = Some(RankVfxPlan::Ring {
+            center: anchor,
+            radius: ring.radius * diameter_px,
+            thickness: (ring.thickness * diameter_px).max(1.0),
+            color: ring.color,
+        });
+        *vfx_count += 1;
+    }
+    for sparkle in motion.sparkles.into_iter().flatten() {
+        if sparkle.scale > 0.01 && sparkle.color[3] > 0.001 && *vfx_count < vfx.len() {
+            vfx[*vfx_count] = Some(RankVfxPlan::Sparkle {
+                center: [
+                    anchor[0] + sparkle.offset[0] * diameter_px,
+                    anchor[1] + sparkle.offset[1] * diameter_px,
+                ],
+                diameter: sparkle.scale * diameter_px,
+                color: sparkle.color,
+            });
+            *vfx_count += 1;
+        }
+    }
+}
+
 fn prepare_badges(
     layout: NameplateLayout,
     sf: f32,
     animations: &mut PlayerStatusBadgeAnimations,
+    rank_animation: Option<PlayerRankBadgeAnimation>,
     now: Instant,
     reduced_motion: bool,
-) -> ([Option<BadgePlan>; NAMEPLATE_RENDER_BADGE_CAPACITY], usize) {
+) -> (
+    [Option<BadgePlan>; NAMEPLATE_RENDER_BADGE_CAPACITY],
+    usize,
+    [Option<RankVfxPlan>; MAX_RANK_VFX],
+    usize,
+) {
     let mut plans = [None; NAMEPLATE_RENDER_BADGE_CAPACITY];
+    let mut rank_vfx = [None; MAX_RANK_VFX];
+    let mut rank_vfx_count = 0;
     if layout.avatar_radius() <= 0.0 {
-        return (plans, 0);
+        return (plans, 0, rank_vfx, 0);
     }
     let avatar_center = layout.avatar_center().0;
     let mut count = 0;
+
+    // Paint exiting podium sprite before incoming badges so a newly claimed rank lands on top.
+    if let Some(exiting) = rank_animation.and_then(|animation| animation.exiting) {
+        let motion = exiting.motion(now, reduced_motion);
+        let anchor = [
+            layout.rank_badge_center().0[0] * sf,
+            layout.rank_badge_center().0[1] * sf,
+        ];
+        let diameter_px = layout.rank_badge_diameter() * sf;
+        push_rank_vfx(&mut rank_vfx, &mut rank_vfx_count, anchor, diameter_px, motion);
+        if motion.alpha > 0.001 && count < plans.len() {
+            plans[count] = Some(BadgePlan {
+                kind: rank_badge_kind(exiting.rank),
+                center: [
+                    anchor[0] + motion.offset[0] * diameter_px,
+                    anchor[1] + motion.offset[1] * diameter_px,
+                ],
+                size: [diameter_px * motion.scale[0], diameter_px * motion.scale[1]],
+                tint: [
+                    motion.color_rgb[0],
+                    motion.color_rgb[1],
+                    motion.color_rgb[2],
+                    motion.alpha,
+                ],
+                outline_glow: motion.outline_glow,
+            });
+            count += 1;
+        }
+    }
+
     for badge in layout.badges().iter().flatten() {
         let kind = badge.kind();
-        let mut size = [badge.diameter() * sf; 2];
+        let mut center = [badge.center().0[0] * sf, badge.center().0[1] * sf];
+        let diameter_px = badge.diameter() * sf;
+        let mut size = [diameter_px; 2];
         let mut tint = badge.tint();
-        if let Some(index) = status_badge_index(kind) {
+        let mut outline_glow = [0.0; 4];
+        if matches!(kind, BadgeKind::Rank1 | BadgeKind::Rank2 | BadgeKind::Rank3) {
+            if let Some(entering) = rank_animation.and_then(|animation| animation.entering) {
+                let motion = entering.motion(now, reduced_motion);
+                push_rank_vfx(&mut rank_vfx, &mut rank_vfx_count, center, diameter_px, motion);
+                if motion.alpha <= 0.001 {
+                    continue;
+                }
+                center[0] += motion.offset[0] * diameter_px;
+                center[1] += motion.offset[1] * diameter_px;
+                size[0] *= motion.scale[0];
+                size[1] *= motion.scale[1];
+                tint[0] *= motion.color_rgb[0];
+                tint[1] *= motion.color_rgb[1];
+                tint[2] *= motion.color_rgb[2];
+                tint[3] *= motion.alpha;
+                outline_glow = motion.outline_glow;
+            }
+        } else if let Some(index) = status_badge_index(kind) {
             let visual = &mut animations.badges[index];
             visual.geometry = Some(BadgeGeometry {
                 center_from_avatar: [
@@ -2520,13 +2920,16 @@ fn prepare_badges(
                 tint[3] *= motion.alpha;
             }
         }
-        plans[count] = Some(BadgePlan {
-            kind,
-            center: [badge.center().0[0] * sf, badge.center().0[1] * sf],
-            size,
-            tint,
-        });
-        count += 1;
+        if count < plans.len() {
+            plans[count] = Some(BadgePlan {
+                kind,
+                center,
+                size,
+                tint,
+                outline_glow,
+            });
+            count += 1;
+        }
     }
 
     for index in 0..STATUS_BADGE_COUNT {
@@ -2538,7 +2941,7 @@ fn prepare_badges(
             continue;
         };
         let motion = animation.values(now, reduced_motion);
-        if motion.alpha <= 0.0 {
+        if motion.alpha <= 0.0 || count >= plans.len() {
             continue;
         }
         let kind = status_badge_kind(index);
@@ -2558,10 +2961,11 @@ fn prepare_badges(
                 geometry.tint[2],
                 geometry.tint[3] * motion.alpha,
             ],
+            outline_glow: [0.0; 4],
         });
         count += 1;
     }
-    (plans, count)
+    (plans, count, rank_vfx, rank_vfx_count)
 }
 
 fn status_badge_index(kind: BadgeKind) -> Option<usize> {
@@ -2594,6 +2998,22 @@ fn paint_prepared_nameplate(
     if let Some(avatar) = plan.avatar {
         paint_prepared_avatar(text, avatar, 1.0);
     }
+    for vfx in plan.rank_vfx[..plan.rank_vfx_count].iter().flatten() {
+        match *vfx {
+            RankVfxPlan::Disc {
+                center,
+                radius,
+                color,
+            } => text.push_disc(center, radius, color),
+            RankVfxPlan::Ring {
+                center,
+                radius,
+                thickness,
+                color,
+            } => text.push_ring(center, radius, color, thickness),
+            RankVfxPlan::Sparkle { .. } => {}
+        }
+    }
     for badge in plan.badges[..plan.badge_count].iter().flatten() {
         // Every badge is a cell of the art/icons strip; none is a system emoji.
         let sprite = match badge.kind {
@@ -2607,15 +3027,39 @@ fn paint_prepared_nameplate(
             BadgeKind::Disconnected => NameplateStatusSprite::Disconnected,
         };
         if matches!(badge.kind, BadgeKind::Rank1 | BadgeKind::Rank2 | BadgeKind::Rank3) {
-            text.push_icon(
+            let mut outline = plan.emoji_outline;
+            outline.color[3] *= badge.tint[3].clamp(0.0, 1.0);
+            let glow = badge.outline_glow[3].clamp(0.0, 1.0);
+            if glow > 0.001 {
+                for channel in 0..3 {
+                    outline.color[channel] =
+                        outline.color[channel] * (1.0 - glow) + badge.outline_glow[channel] * glow;
+                }
+            }
+            text.push_icon_scaled(
                 sprite,
                 badge.center,
-                badge.size[0] * 0.5,
+                [badge.size[0] * 0.5, badge.size[1] * 0.5],
                 badge.tint,
-                plan.emoji_outline,
+                outline,
             );
         } else {
             text.push_status_sprite_scaled(sprite, badge.center, badge.size, badge.tint);
+        }
+    }
+    for vfx in plan.rank_vfx[..plan.rank_vfx_count].iter().flatten() {
+        if let RankVfxPlan::Sparkle {
+            center,
+            diameter,
+            color,
+        } = *vfx
+        {
+            text.push_status_sprite(
+                NameplateStatusSprite::UpgradeSparkle,
+                center,
+                diameter,
+                color,
+            );
         }
     }
     if let Some(name) = plan.name {

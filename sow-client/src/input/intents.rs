@@ -296,7 +296,21 @@ impl SowApp {
                         attacker_count: 1,
                     });
                 let commitment = self.ui.app.hud_state.attack_ratio.clamp(0.05, 1.0);
-                let against_enemy = attack.target_owner != 0;
+                let target_archetype = if attack.target_owner == 0 {
+                    0
+                } else {
+                    match self
+                        .sim
+                        .current_snapshot
+                        .as_ref()
+                        .and_then(|snap| snap.players.iter().find(|p| p.id == attack.target_owner))
+                        .map(|p| p.player_type)
+                    {
+                        Some(sow_core::player::PlayerType::Nation) => 2,
+                        Some(sow_core::player::PlayerType::Human) => 3,
+                        Some(sow_core::player::PlayerType::Bot) | None => 1,
+                    }
+                };
                 let wx = (self.input.last_mouse_x as f32 - self.input.camera_x)
                     / self.input.camera_zoom.max(0.001);
                 let wy = (self.input.last_mouse_y as f32 - self.input.camera_y)
@@ -304,7 +318,8 @@ impl SowApp {
                 self.sfx.play_attack_order(
                     now,
                     commitment,
-                    against_enemy,
+                    target_archetype,
+                    attack.target_owner,
                     self.spatial_sound_params(wx, wy),
                 );
                 record_attack_launch_notice(

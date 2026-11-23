@@ -56,9 +56,19 @@ pub(crate) fn render_overlays(
             zoom_scaled,
             now,
         );
-        render_building_selection_focus(text, sim, input, sf);
+        render_building_selection_focus(
+            text,
+            sim,
+            input,
+            sf,
+            ui.app.settings_state.reduced_motion,
+            now,
+        );
         if dev.vfx_world_buildings {
             render_buildings(text, snapshot, sim, ui, input, dev, sf, zoom_scaled, now);
+        } else {
+            ui.hovered_building = None;
+            ui.prev_hovered_building = None;
         }
         render_building_placement_preview(text, sim, ui, input, sf, placement_can_confirm);
         let nameplate_render_started_at = crate::diag::startup_perf_timer();
@@ -321,6 +331,8 @@ fn render_buildings(
     now: Instant,
 ) {
     if zoom_scaled < BUILDING_CULL_FLOOR {
+        ui.hovered_building = None;
+        ui.prev_hovered_building = None;
         return;
     }
     let lod = BuildingLod::for_zoom(zoom_scaled, &dev.shader_params);
@@ -369,20 +381,123 @@ fn render_buildings(
     let building_upgrade_flashes = std::mem::take(&mut ui.building_upgrade_flashes);
     let building_action_pulses = std::mem::take(&mut ui.building_action_pulses);
     let prev_hovered_building = ui.hovered_building;
+    let prev_exiting_hover = ui.prev_hovered_building;
     let selected_menu = input
         .map_context_menu
         .filter(|menu| menu.view == MapContextMenuView::BuildingDetails);
-    let desktop_hover_world = (!crate::web_canvas::is_mobile_pointer()
+    let desktop_hover_enabled = crate::web_canvas::supports_desktop_hover()
+        && matches!(input.hover_pointer, crate::app::HoverPointer::Mouse)
+        && !input.is_pointer_gesture_active()
         && input.camera_zoom > 0.0
         && input.last_mouse_x >= 0.0
-        && input.last_mouse_y >= 0.0)
-        .then(|| {
-            let [x, y] = input.screen_to_world([input.last_mouse_x as f32, input.last_mouse_y as f32]);
-            (x, y)
-        });
-    let mut new_hovered_tile: Option<u32> = None;
+        && input.last_mouse_y >= 0.0;
     let reduced_motion = ui.app.settings_state.reduced_motion;
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
+    let (next_hovered_building, next_exiting_hover) = if desktop_hover_enabled {
+        let [wx, wy] = input.screen_to_world([input.last_mouse_x as f32, input.last_mouse_y as f32]);
+        let pointer_x = input.last_mouse_x as f32 / sf;
+        let pointer_y = input.last_mouse_y as f32 / sf;
+        let mut closest: Option<(f32, u32)> = None;
+        for building in buildings {
+            if building.owner_id != my_id {
+                continue;
+            }
+            let Some(tile_idx) = building.tile_idx else {
+                continue;
+            };
+            let (fw, fh) = building.kind.footprint_dimensions();
+            let hw = fw as f32 * 0.5;
+            let hh = fh as f32 * 0.5;
+            if wx < building.bx - hw
+                || wx >= building.bx + hw
+                || wy < building.by - hh
+                || wy >= building.by + hh
+            {
+                continue;
+            }
+            let center = world_to_screen(building.bx, building.by, input, sf);
+            let dx = pointer_x - center[0];
+            let dy = pointer_y - center[1];
+            let dist_sq = dx * dx + dy * dy;
+            if closest.is_none_or(|(best_dist, best_tile)| {
+                dist_sq < best_dist || (dist_sq == best_dist && tile_idx < best_tile)
+            }) {
+                closest = Some((dist_sq, tile_idx));
+            }
+        }
+        let hovered_tile = closest.map(|(_, tile_idx)| tile_idx);
+        let (hovered, mut exiting) = if hovered_tile == prev_hovered_building.map(|(t, _)| t) {
+            (prev_hovered_building, prev_exiting_hover)
+        } else {
+            let exiting = prev_hovered_building
+                .map(|(old_tile, _)| (old_tile, now))
+                .or(prev_exiting_hover);
+            (hovered_tile.map(|tile_idx| (tile_idx, now)), exiting)
+        };
+        if let Some((exit_tile, exited_at)) = exiting {
+            let expired = now.saturating_duration_since(exited_at).as_secs_f32()
+                >= crate::render::motion::BUILDING_HOVER_EXIT_SECS;
+            if expired
+                || Some(exit_tile) == hovered_tile
+                || selected_menu.is_some_and(|menu| menu.tile_idx == exit_tile)
+            {
+                exiting = None;
+            }
+        }
+        (hovered, exiting)
+    } else {
+        (None, None)
+    };
+
+    // Desktop-only ghost hover ground rings: emitted before all building sprites so they always
+    // sit cleanly underneath building roofs with zero frame lag.
+    if desktop_hover_enabled {
+        let selected_tile = selected_menu.map(|menu| menu.tile_idx);
+        let ghost_entries = [
+            next_exiting_hover.map(|(tile, started)| (tile, started, true)),
+            next_hovered_building.map(|(tile, started)| (tile, started, false)),
+        ];
+        for entry in ghost_entries.into_iter().flatten() {
+            let (target_tile, started_at, exiting) = entry;
+            if selected_tile == Some(target_tile) {
+                continue;
+            }
+            let Some(building) = buildings
+                .iter()
+                .find(|b| b.owner_id == my_id && b.tile_idx == Some(target_tile))
+            else {
+                continue;
+            };
+            let elapsed = now.saturating_duration_since(started_at).as_secs_f32();
+            let Some(motion) =
+                crate::render::motion::building_hover_ring_motion(elapsed, exiting, reduced_motion)
+            else {
+                continue;
+            };
+            let marker_size = building_marker_size(building, zoom_scaled);
+            let building_size = building_sprite_size(marker_size, sf, building.level.max(1));
+            let (ring_center, base_radius) =
+                building_ground_ring_geometry(building.bx, building.by, building_size, input, sf);
+            if ring_center[0] + base_radius[0] < 0.0
+                || ring_center[0] - base_radius[0] > input.screen_w
+                || ring_center[1] + base_radius[1] < 0.0
+                || ring_center[1] - base_radius[1] > input.screen_h
+            {
+                continue;
+            }
+            text.push_selection_ring(
+                ring_center,
+                [base_radius[0] * motion.scale, base_radius[1] * motion.scale],
+                0.0,
+                motion.phase,
+                motion.pulse,
+                motion.acquire,
+                [0.38, 0.96, 0.78, motion.alpha],
+                [0.90, 1.0, 0.96, 0.72],
+            );
+        }
+    }
+
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
     let mut celebration_budget = 24usize;
 
@@ -422,27 +537,18 @@ fn render_buildings(
         let mut lift_y = 0.0f32;
         let mut sprite_tint = [1.0, 1.0, 1.0, alpha];
         if let Some(tile_idx) = building.tile_idx {
-            if let Some((wx, wy)) = desktop_hover_world {
-                let (fw, fh) = building.kind.footprint_dimensions();
-                let hw = (fw as f32 * 0.5).max(1.2);
-                let hh = (fh as f32 * 0.5).max(1.2);
-                if (wx - building.bx).abs() <= hw && (wy - building.by).abs() <= hh {
-                    new_hovered_tile = Some(tile_idx);
-                }
-            }
             if !reduced_motion {
-                // Desktop hover: gentle bubbly lift + subtle brightness.
-                if let Some((htile, hstart)) = prev_hovered_building
+                // Desktop hover: gentle bubbly lift + subtle brightness on selectable owned buildings.
+                if let Some((htile, hstart)) = next_hovered_building
                     && htile == tile_idx
-                    && new_hovered_tile == Some(tile_idx)
                 {
-                    let elapsed = now.duration_since(hstart).as_secs_f32();
-                    let t = (elapsed / 0.18).clamp(0.0, 1.0);
+                    let elapsed = now.saturating_duration_since(hstart).as_secs_f32();
+                    let t = (elapsed / 0.16).clamp(0.0, 1.0);
                     let wobble = (-6.0 * t).exp() * (t * 16.0).sin();
-                    let s = 1.03 + 0.05 * wobble;
+                    let s = 1.03 + 0.04 * wobble;
                     sx *= s;
                     sy *= s;
-                    lift_y -= 2.5 * sf * t;
+                    lift_y -= 2.2 * sf * t;
                     sprite_tint = [1.08, 1.08, 1.04, alpha];
                 }
                 // Queue 1: Selection — Disney squash & stretch + damped spring wobble.
@@ -842,9 +948,8 @@ fn render_buildings(
     }
     ui.building_upgrade_flashes = building_upgrade_flashes;
     ui.building_action_pulses = building_action_pulses;
-    if new_hovered_tile != ui.hovered_building.map(|(t, _)| t) {
-        ui.hovered_building = new_hovered_tile.map(|t| (t, now));
-    }
+    ui.hovered_building = next_hovered_building;
+    ui.prev_hovered_building = next_exiting_hover;
 }
 
 pub(crate) fn building_at_pointer(
@@ -1052,11 +1157,39 @@ pub(crate) fn building_screen_anchor_bottom(
     [center[0], bottom_y]
 }
 
+/// Ground-plane selection ring center and elliptical radii `[rx, ry]` in physical px.
+/// Adapts automatically to tabletop perspective foreshortening and building upgrade scale.
+fn building_ground_ring_geometry(
+    bx: f32,
+    by: f32,
+    building_size: [f32; 2],
+    input: &InputState,
+    sf: f32,
+) -> ([f32; 2], [f32; 2]) {
+    let center = input.world_to_screen([bx, by]);
+    let top_y = input.world_to_screen([bx, by - 0.5])[1];
+    let bottom_y = input.world_to_screen([bx, by + 0.5])[1];
+    let y_aspect = if input.camera_zoom > 0.001 {
+        ((bottom_y - top_y) / input.camera_zoom).clamp(0.48, 1.0)
+    } else {
+        1.0
+    };
+    // Primary luminous ring lies at `d = 0.70` inside the SDF quad; frame the building's base.
+    let visual_extent = building_size[0].max(building_size[1]);
+    let main_radius = (visual_extent * 0.64).max(15.0 * sf);
+    let quad_rx = main_radius / 0.70;
+    let quad_ry = quad_rx * y_aspect;
+    let base_shift_y = building_size[1] * 0.08 * (1.0 - y_aspect).max(0.0);
+    ([center[0], center[1] + base_shift_y], [quad_rx, quad_ry])
+}
+
 fn render_building_selection_focus(
     text: &mut TextRenderer,
     sim: &SimState,
     input: &InputState,
     sf: f32,
+    reduced_motion: bool,
+    now: Instant,
 ) {
     let Some(menu) = input
         .map_context_menu
@@ -1076,50 +1209,58 @@ fn render_building_selection_focus(
     };
 
     let zoom = input.camera_zoom;
+    let zoom_scaled = zoom / sf;
     let tile_x = menu.tile_idx % sim.map_w;
     let tile_y = menu.tile_idx / sim.map_w;
     let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
-    let geometry = placement_footprint_geometry(footprint, input);
-    let anchor_center = geometry.center;
-
-    let colors = placement_preview_colors(true, true);
-    let metrics = placement_grid_metrics(zoom, sf);
-    let elapsed = web_time::Instant::now()
-        .duration_since(menu.opened_at)
-        .as_secs_f32();
-    let expand_t = (elapsed / 0.16).clamp(0.0, 1.0);
-    let expand_scale = 0.92 + 0.08 * (1.0 - (1.0 - expand_t) * (1.0 - expand_t));
-    let breath = 0.72 + 0.28 * (elapsed * 4.0).sin().abs();
-    let scaled_size = [
-        geometry.size[0] * expand_scale,
-        geometry.size[1] * expand_scale,
-    ];
-    let scaled_top_left = [
-        geometry.center[0] - scaled_size[0] * 0.5,
-        geometry.center[1] - scaled_size[1] * 0.5,
-    ];
-    let line_color = [
-        colors.line[0],
-        colors.line[1],
-        colors.line[2],
-        colors.line[3] * breath,
-    ];
-    render_building_footprint_fill(text, scaled_top_left, scaled_size, colors.fill);
-    render_building_footprint_grid(
-        text,
-        footprint,
-        scaled_top_left,
-        scaled_size,
-        zoom,
-        metrics,
-        line_color,
-    );
+    let bx = footprint.left as f32 + footprint.width as f32 * 0.5;
+    let by = footprint.top as f32 + footprint.height as f32 * 0.5;
+    let anchor_center = input.world_to_screen([bx, by]);
 
     let snapshot_buildings = sim
         .current_snapshot
         .as_ref()
         .map(|s| s.buildings.as_slice())
         .unwrap_or(&[]);
+    let live_building = snapshot_buildings
+        .iter()
+        .find(|b| b.tile_idx == menu.tile_idx && b.kind == kind)
+        .or_else(|| snapshot_buildings.iter().find(|b| b.tile_idx == menu.tile_idx));
+    let level = live_building
+        .map(|b| b.level.max(1))
+        .unwrap_or_else(|| menu.building_level.max(1));
+    let under_construction = live_building
+        .map(|b| b.under_construction)
+        .unwrap_or(menu.building_under_construction);
+
+    let marker_size = building_footprint_marker_size(kind, zoom_scaled, 0.0);
+    let building_size = building_sprite_size(marker_size, sf, level);
+    let (ring_center, base_radius) =
+        building_ground_ring_geometry(bx, by, building_size, input, sf);
+    let elapsed = now.saturating_duration_since(menu.opened_at).as_secs_f32();
+    let motion = crate::render::motion::building_selection_ring_motion(elapsed, reduced_motion);
+    let (ring_color, core_glow) = if under_construction {
+        (
+            [0.28, 0.92, 0.92, motion.alpha],
+            [0.90, 0.99, 1.0, 0.88],
+        )
+    } else {
+        (
+            [0.22, 0.98, 0.56, motion.alpha],
+            [0.88, 1.0, 0.94, 0.92],
+        )
+    };
+    text.push_selection_ring(
+        ring_center,
+        [base_radius[0] * motion.scale, base_radius[1] * motion.scale],
+        1.0,
+        motion.phase,
+        motion.pulse,
+        motion.acquire,
+        ring_color,
+        core_glow,
+    );
+
     let tower_level = snapshot_buildings
         .iter()
         .find(|b| b.tile_idx == menu.tile_idx && b.kind == BuildingKind::Tower)

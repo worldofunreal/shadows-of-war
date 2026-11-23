@@ -5,6 +5,16 @@ import { CATEGORY_VOICE_BUDGET, CUE_REGISTRY, MAX_TOTAL_VOICES } from "./registr
 import { AUDIO_EVENT_STRIDE, AudioCue, type AudioCueId } from "./types.ts";
 
 describe("Procedural Audio Registry & Protocol", () => {
+    it("leaves HeroAbility throttling to the per-owner Rust gate", () => {
+        expect(AudioCue.HeroAbility).toBe(36);
+        const gate = new VoiceBudgetGate();
+        const definition = CUE_REGISTRY[AudioCue.HeroAbility];
+        expect(definition.cooldownMs).toBe(0);
+        expect(gate.admit(AudioCue.HeroAbility, definition, 1000)).toBe(true);
+        gate.record(definition.category, 1000);
+        expect(gate.admit(AudioCue.HeroAbility, definition, 1050)).toBe(true);
+    });
+
     it("registers every numeric AudioCue ID contiguously from 0..N-1", () => {
         const ids = Object.values(AudioCue).sort((a, b) => a - b);
         expect(ids.length).toBeGreaterThanOrEqual(45);
