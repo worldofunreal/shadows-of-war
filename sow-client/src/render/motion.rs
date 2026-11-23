@@ -407,8 +407,6 @@ pub(crate) struct RankBadgeMotion {
     /// Independent `[width, height]` scale for squash & stretch.
     pub scale: [f32; 2],
     pub alpha: f32,
-    /// RGB multiplier (`> 1.0` produces a crisp metallic gleam on impact).
-    pub color_rgb: [f32; 3],
     /// Optional brief outline glow `[r, g, b, blend_weight]`.
     pub outline_glow: [f32; 4],
     pub ring: Option<RankRingVfx>,
@@ -422,7 +420,6 @@ impl RankBadgeMotion {
             offset: [0.0; 2],
             scale: [1.0; 2],
             alpha: 1.0,
-            color_rgb: [1.0; 3],
             outline_glow: [0.0; 4],
             ring: None,
             flash_disc: None,
@@ -435,7 +432,6 @@ impl RankBadgeMotion {
             offset: [0.0; 2],
             scale: [1.0; 2],
             alpha: 0.0,
-            color_rgb: [1.0; 3],
             outline_glow: [0.0; 4],
             ring: None,
             flash_disc: None,
@@ -570,16 +566,10 @@ fn rank3_enter_motion(p: f32) -> RankBadgeMotion {
         let osc = damped_settle((p - 0.34) / 0.66, 8.5, 4.5);
         (-0.06 * osc, [1.0 + 0.14 * osc, 1.0 + 0.18 * osc], 1.0)
     };
-    let glint = if (0.26..0.62).contains(&p) {
-        (std::f32::consts::PI * ((p - 0.26) / 0.36)).sin().max(0.0)
-    } else {
-        0.0
-    };
     RankBadgeMotion {
         offset: [0.0, offset_y],
         scale,
         alpha: alpha.clamp(0.0, 1.0),
-        color_rgb: [1.0 + 0.24 * glint, 1.0 + 0.18 * glint, 1.0 + 0.08 * glint],
         outline_glow: [0.0; 4],
         ring: None,
         flash_disc: None,
@@ -635,7 +625,6 @@ fn rank2_enter_motion(p: f32) -> RankBadgeMotion {
         offset: [0.0, offset_y],
         scale,
         alpha: alpha.clamp(0.0, 1.0),
-        color_rgb: [1.0 + 0.42 * gleam, 1.0 + 0.46 * gleam, 1.0 + 0.56 * gleam],
         outline_glow: [0.85, 0.92, 1.0, 0.32 * gleam],
         ring,
         flash_disc: None,
@@ -728,7 +717,6 @@ fn rank1_enter_motion(p: f32) -> RankBadgeMotion {
         offset: [0.0, offset_y],
         scale,
         alpha: alpha.clamp(0.0, 1.0),
-        color_rgb: [1.0 + 0.85 * gleam, 1.0 + 0.68 * gleam, 1.0 + 0.24 * gleam],
         outline_glow: [1.0, 0.80, 0.22, 0.70 * gleam],
         ring,
         flash_disc,
@@ -757,7 +745,6 @@ fn rank3_exit_motion(p: f32, from: RankSpriteSnapshot) -> RankBadgeMotion {
         offset,
         scale,
         alpha: alpha.clamp(0.0, 1.0),
-        color_rgb: [1.0; 3],
         outline_glow: [0.0; 4],
         ring: None,
         flash_disc: None,
@@ -789,7 +776,6 @@ fn rank2_exit_motion(p: f32, from: RankSpriteSnapshot) -> RankBadgeMotion {
         )
     };
 
-    let dim = lerp(1.0, 0.78, smoothstep(p));
     let ring = (0.14..0.64).contains(&p).then(|| {
         let rt = (p - 0.14) / 0.50;
         let re = ease_out_cubic(rt);
@@ -805,7 +791,6 @@ fn rank2_exit_motion(p: f32, from: RankSpriteSnapshot) -> RankBadgeMotion {
         offset,
         scale,
         alpha: alpha.clamp(0.0, 1.0),
-        color_rgb: [dim; 3],
         outline_glow: [0.0; 4],
         ring,
         flash_disc: None,
@@ -853,13 +838,6 @@ fn rank1_exit_motion(p: f32, from: RankSpriteSnapshot) -> RankBadgeMotion {
     } else {
         0.0
     };
-    let cool = smoothstep((p - 0.42) / 0.58);
-    let color_rgb = [
-        lerp(1.0 + 0.45 * flare, 0.62, cool),
-        lerp(1.0 - 0.18 * flare, 0.52, cool),
-        lerp(1.0 - 0.38 * flare, 0.50, cool),
-    ];
-
     let flash_disc = (0.08..0.38).contains(&p).then(|| {
         let dt = (p - 0.08) / 0.30;
         let fade = 1.0 - dt;
@@ -889,7 +867,6 @@ fn rank1_exit_motion(p: f32, from: RankSpriteSnapshot) -> RankBadgeMotion {
         offset,
         scale,
         alpha: alpha.clamp(0.0, 1.0),
-        color_rgb,
         outline_glow: [1.0, 0.45, 0.16, 0.65 * flare],
         ring,
         flash_disc,

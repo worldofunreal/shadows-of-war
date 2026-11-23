@@ -52,7 +52,7 @@ export function renderSkinCard(skin: MenuSkinOffer, lockedAction = "", discount 
           (equipped ? "<span aria-hidden='true'>×</span>" : "") + "</button>"
         : lockedAction;
     return (
-        "<article class='sow-store__skin sow-store__skin--pattern" +
+        "<article class='sow-store__skin sow-store__skin--pattern sow-store__skin-card" +
         (skin.owned ? " is-owned" : "") +
         (equipped ? " is-equipped" : "") +
         (discountBadge ? " is-on-sale" : "") +

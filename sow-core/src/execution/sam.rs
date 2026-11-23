@@ -15,12 +15,14 @@ pub fn sam_salvo_size(level: u8) -> usize {
     usize::from(level)
 }
 
-/// Base SAM range constant.
-const SAM_MAX_RANGE: f32 = 150.0;
-
-/// SAM effective range: 150 - 480/(level+5)
+/// Effective SAM range in tiles for levels 1 through 4.
 pub fn sam_range(level: u8) -> f32 {
-    SAM_MAX_RANGE - 480.0 / (level as f32 + 5.0)
+    match level {
+        0 | 1 => 25.0,
+        2 => 32.0,
+        3 => 40.0,
+        _ => 50.0,
+    }
 }
 
 /// Orthogonal Chebyshev distance between two tile indices on a square grid.

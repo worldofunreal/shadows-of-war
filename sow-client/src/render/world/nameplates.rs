@@ -2867,12 +2867,7 @@ fn prepare_badges(
                     anchor[1] + motion.offset[1] * diameter_px,
                 ],
                 size: [diameter_px * motion.scale[0], diameter_px * motion.scale[1]],
-                tint: [
-                    motion.color_rgb[0],
-                    motion.color_rgb[1],
-                    motion.color_rgb[2],
-                    motion.alpha,
-                ],
+                tint: [1.0, 1.0, 1.0, motion.alpha],
                 outline_glow: motion.outline_glow,
             });
             count += 1;
@@ -2887,6 +2882,9 @@ fn prepare_badges(
         let mut tint = badge.tint();
         let mut outline_glow = [0.0; 4];
         if matches!(kind, BadgeKind::Rank1 | BadgeKind::Rank2 | BadgeKind::Rank3) {
+            tint[0] = 1.0;
+            tint[1] = 1.0;
+            tint[2] = 1.0;
             if let Some(entering) = rank_animation.and_then(|animation| animation.entering) {
                 let motion = entering.motion(now, reduced_motion);
                 push_rank_vfx(&mut rank_vfx, &mut rank_vfx_count, center, diameter_px, motion);
@@ -2897,9 +2895,6 @@ fn prepare_badges(
                 center[1] += motion.offset[1] * diameter_px;
                 size[0] *= motion.scale[0];
                 size[1] *= motion.scale[1];
-                tint[0] *= motion.color_rgb[0];
-                tint[1] *= motion.color_rgb[1];
-                tint[2] *= motion.color_rgb[2];
                 tint[3] *= motion.alpha;
                 outline_glow = motion.outline_glow;
             }
