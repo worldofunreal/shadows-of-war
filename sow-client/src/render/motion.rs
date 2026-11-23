@@ -258,6 +258,9 @@ pub(crate) struct SelectionRingMotion {
     pub acquire: f32,
 }
 
+pub(crate) const BUILDING_SELECTION_TAP_SECS: f32 = 0.38;
+const BUILDING_SELECTION_POP_SECS: f32 = 0.12;
+
 /// Selected building ring: crisp lock-on snap, outward acquisition ripple, dignified rotation.
 pub(crate) fn building_selection_ring_motion(
     elapsed: f32,
@@ -287,8 +290,8 @@ pub(crate) fn building_selection_ring_motion(
         1.0
     };
     let alpha = 0.96 * smoothstep((elapsed / 0.07).clamp(0.0, 1.0));
-    let acquire = if elapsed < 0.38 {
-        let u = 1.0 - (elapsed / 0.38);
+    let acquire = if elapsed < BUILDING_SELECTION_TAP_SECS {
+        let u = 1.0 - (elapsed / BUILDING_SELECTION_TAP_SECS);
         u * u
     } else {
         0.0
@@ -301,6 +304,27 @@ pub(crate) fn building_selection_ring_motion(
         phase,
         pulse,
         acquire,
+    }
+}
+
+/// One-shot shrink-pop and glow pulse for selecting a building.
+pub(crate) fn building_selection_tap_motion(elapsed: f32, reduced_motion: bool) -> (f32, f32) {
+    if reduced_motion
+        || !elapsed.is_finite()
+        || elapsed < 0.0
+        || elapsed >= BUILDING_SELECTION_TAP_SECS
+    {
+        return (1.0, 0.0);
+    }
+
+    if elapsed < BUILDING_SELECTION_POP_SECS {
+        let t = elapsed / BUILDING_SELECTION_POP_SECS;
+        (lerp(0.86, 1.08, ease_out_cubic(t)), smoothstep(t))
+    } else {
+        let t = (elapsed - BUILDING_SELECTION_POP_SECS)
+            / (BUILDING_SELECTION_TAP_SECS - BUILDING_SELECTION_POP_SECS);
+        let settle = smoothstep(t);
+        (lerp(1.08, 1.0, settle), 1.0 - settle)
     }
 }
 

@@ -1769,6 +1769,7 @@ impl SowApp {
                                 sow_core::protocol::AttackIntent {
                                     target_owner: target_player_id,
                                     troops: Some(troops),
+                                    target_tile: None,
                                 },
                             ),
                             me.alliances.contains(&target_player_id) && !target.can_retaliate,
@@ -5675,6 +5676,8 @@ fn campaign_payload(progress: &crate::player_progress::PlayerProgress) -> serde_
             serde_json::json!({
                 "id": episode.episode_id(),
                 "map_name": episode.map_id(),
+                "hero_slug": episode.featured_hero_slug(),
+                "hero_name": episode.featured_hero_name(),
                 "title": localized_text_payload(&episode.menu_title_text()),
                 "subtitle": localized_text_payload(&episode.menu_subtitle_text()),
                 "completed": completed,

@@ -49,6 +49,7 @@ impl SowApp {
         let phase = snap.phase.clone();
         self.sim.current_snapshot = Some(snap);
         self.ui.railway_render_state.reset();
+        self.ui.land_trade_popups.clear();
         self.sim.latest_local_spawn = None;
         self.input.spawn_intent_rate.reset();
         self.ui.building_placement_cache = Default::default();

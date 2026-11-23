@@ -354,6 +354,11 @@ pub fn trading_post_gold_level_weight(level: u8) -> f64 {
     [0.0, 1.0, 3.75, 7.4, 12.4, 16.0, 21.0, 27.0, 34.0][usize::from(level.min(8))]
 }
 
+/// Staged cart/train travel speed multiplier per TradingPost level (`1..=8`).
+pub fn trading_post_speed_multiplier(level: u8) -> f64 {
+    [1.0, 1.0, 1.15, 1.32, 1.52, 1.75, 2.05, 2.45, 2.90][usize::from(level.min(8))]
+}
+
 pub fn military_camp_troop_level_weight(level: u8) -> f64 {
     [0.0, 1.0, 3.5, 8.0, 15.0, 18.0, 21.0, 24.0, 28.0][usize::from(level.min(8))]
 }
@@ -489,7 +494,7 @@ pub struct BuildingAggregate {
     pub count_military_camp: u32,
     pub count_sam: u32,
     pub count_silo: u32,
-    /// Number of owned TradingPost stations connected to a City or Port over land.
+    /// Number of owned TradingPost stations connected to another building over land.
     pub railway_connections: u32,
     pub land_trade_income_weight: f64,
 }
@@ -618,7 +623,7 @@ pub fn populate_railway_connections(
         }
     }
     let mut grid: HashMap<(u16, i32, i32), Vec<Building>> = HashMap::new();
-    for &node in stations.iter().filter(|node| node.kind != BuildingKind::TradingPost) {
+    for &node in stations.iter() {
         let (x, y) = ((node.tile_idx % w) as i32, (node.tile_idx / w) as i32);
         grid.entry((node.owner_id, x / radius, y / radius)).or_default().push(node);
     }
@@ -633,26 +638,30 @@ pub fn populate_railway_connections(
             continue;
         }
         let mut checked = 0;
-        let mut best = None;
+        let mut best: Option<((bool, i32, u64), u64, u32, bool, i32)> = None;
         'cells: for (dx, dy) in [(0,0), (-1,0), (1,0), (0,-1), (0,1), (-1,-1), (1,-1), (-1,1), (1,1)] {
             let Some(nodes) = grid.get(&(post.owner_id, gx + dx, gy + dy)) else { continue };
             for &node in nodes {
                 checked += 1;
                 if checked > RAILWAY_MAX_CANDIDATES_PER_STATION { break 'cells; }
+                if node.id == post.id {
+                    continue;
+                }
                 let (bx, by) = ((node.tile_idx % w) as i32, (node.tile_idx / w) as i32);
                 let distance = (ax - bx).pow(2) + (ay - by).pow(2);
+                let rank = (node.kind == BuildingKind::TradingPost, distance, node.id);
                 if distance == 0 || distance > radius * radius
-                    || best.is_some_and(|(best_distance, best_id, _, _, _)| (distance, node.id) >= (best_distance, best_id))
+                    || best.is_some_and(|(best_rank, ..)| rank >= best_rank)
                 { continue; }
                 let Some(horizontal_first) = railway_route_is_land(
                     ax, ay, bx, by, w, h, Some(&state.map.terrain),
                 ) else { continue };
-                best = Some((distance, node.id, node.tile_idx, horizontal_first, (ax - bx).abs() + (ay - by).abs()));
+                best = Some((rank, node.id, node.tile_idx, horizontal_first, (ax - bx).abs() + (ay - by).abs()));
             }
         }
         let Some((_, to_building_id, to_tile, horizontal_first, distance)) = best else { continue };
         let level = post.level;
-        let normal_seconds = (4.0 + f64::from(distance) * 0.25) / trading_post_gold_level_weight(level).sqrt();
+        let normal_seconds = (14.0 + f64::from(distance) * 0.70) / trading_post_speed_multiplier(level);
         let per_tick = state.config.per_tick(1.0).max(f64::EPSILON);
         let period_ticks = (normal_seconds * crate::game_config::NORMAL_GAME_SPEED / per_tick)
             .ceil().clamp(1.0, f64::from(u32::MAX)) as u32;
@@ -1266,5 +1275,102 @@ mod defense_influence_tests {
                 .collect::<Vec<_>>(),
             [9, 12, 15, 18]
         );
+    }
+}
+
+#[cfg(test)]
+mod trading_post_route_tests {
+    use super::*;
+    use crate::game_config::GameConfig;
+    use crate::map::MapTile;
+
+    fn land_state(w: u32, h: u32) -> GameState {
+        let mut state = GameState::new(1, w, h, GameConfig::default());
+        for y in 0..h {
+            for x in 0..w {
+                state.map.set_owner_id(x, y, 1);
+                let ref_id = state.map.ref_id(x, y);
+                state.map.terrain[ref_id] = MapTile::from_byte(0b1000_0000);
+            }
+        }
+        state
+    }
+
+    fn station(id: u64, kind: BuildingKind, x: u32, y: u32, w: u32, level: u8) -> Building {
+        Building {
+            id,
+            owner_id: 1,
+            tile_idx: y * w + x,
+            kind,
+            level,
+            under_construction: false,
+            ticks_until_complete: 0,
+        }
+    }
+
+    #[test]
+    fn trading_post_connects_to_every_non_city_building_kind_and_fallback_post() {
+        let state = land_state(32, 32);
+        for target_kind in [
+            BuildingKind::City,
+            BuildingKind::Port,
+            BuildingKind::Tower,
+            BuildingKind::MilitaryCamp,
+            BuildingKind::SAM,
+            BuildingKind::MissileSilo,
+            BuildingKind::TradingPost,
+        ] {
+            let stations = [
+                station(10, BuildingKind::TradingPost, 8, 8, 32, 1),
+                station(20, target_kind, 18, 8, 32, 1),
+            ];
+            let links = populate_railway_connections(&stations, &[], &state, &[]);
+            let link = links
+                .iter()
+                .find(|link| link.from_building_id == 10)
+                .unwrap_or_else(|| panic!("expected link from TradingPost to {target_kind:?}"));
+            assert_eq!(link.to_building_id, 20);
+        }
+    }
+
+    #[test]
+    fn trading_post_prefers_other_buildings_over_sibling_trading_post() {
+        let state = land_state(32, 32);
+        let stations = [
+            station(1, BuildingKind::TradingPost, 8, 8, 32, 1),
+            station(2, BuildingKind::TradingPost, 12, 8, 32, 1),
+            station(3, BuildingKind::MilitaryCamp, 18, 8, 32, 1),
+        ];
+        let links = populate_railway_connections(&stations, &[], &state, &[]);
+        let post1 = links.iter().find(|link| link.from_building_id == 1).unwrap();
+        assert_eq!(post1.to_building_id, 3);
+    }
+
+    #[test]
+    fn trading_post_speed_stages_across_levels_without_changing_gold_rate() {
+        let state = land_state(32, 32);
+        let cfg = &state.config;
+        let mut prev_period = u32::MAX;
+        for level in 1..=8 {
+            let stations = [
+                station(1, BuildingKind::TradingPost, 8, 8, 32, level),
+                station(2, BuildingKind::Tower, 18, 8, 32, 1),
+            ];
+            let links = populate_railway_connections(&stations, &[], &state, &[]);
+            assert_eq!(links.len(), 1);
+            let link = links[0];
+            assert!(
+                link.period_ticks < prev_period,
+                "level {level} period {} must be faster than previous {prev_period}",
+                link.period_ticks
+            );
+            prev_period = link.period_ticks;
+            let expected_gold =
+                cfg.per_tick(f64::from(link.period_ticks))
+                    * cfg.trading_post_gold_income
+                    * trading_post_gold_level_weight(level);
+            assert!((link.cargo_gold(cfg) - expected_gold).abs() < 1e-9);
+        }
+        assert!(prev_period >= 60);
     }
 }

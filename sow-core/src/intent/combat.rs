@@ -1,12 +1,146 @@
 use crate::building::DefenseGrid;
 use crate::engine::SowEngine;
-use crate::execution::{AttackExecution, PrioritizedTile};
+use crate::execution::{
+    ATTACK_DIR_SCALE, AttackExecution, AttackFocus, PrioritizedTile, directional_bias, isqrt_u128,
+};
 use crate::game::GameState;
 use crate::map::TerrainType;
 use crate::protocol::*;
 use crate::rng::NextIntExt;
 use std::collections::BinaryHeap;
 use wyrand::WyRand;
+
+const LOCAL_BORDER_RADIUS_SQ: i64 = 32 * 32;
+const MAX_COAST_BACKSTEP: i64 = 4;
+
+fn normalize_dir_fixed(dx: i64, dy: i64) -> Option<(i32, i32)> {
+    let sx = i128::from(dx) * ATTACK_DIR_SCALE as i128;
+    let sy = i128::from(dy) * ATTACK_DIR_SCALE as i128;
+    let mag_sq = (sx * sx + sy * sy) as u128;
+    if mag_sq == 0 {
+        return None;
+    }
+    let mag = isqrt_u128(mag_sq) as i128;
+    if mag == 0 {
+        return None;
+    }
+    Some((
+        ((sx * ATTACK_DIR_SCALE as i128) / mag) as i32,
+        ((sy * ATTACK_DIR_SCALE as i128) / mag) as i32,
+    ))
+}
+
+/// Computes a deterministic local origin and unit direction vector from `player_id`'s border
+/// toward `target_tile` (`y * map_width + x`).
+pub fn compute_attack_focus(
+    game: &GameState,
+    player_id: u16,
+    target_owner: u16,
+    target_tile: u32,
+) -> Option<AttackFocus> {
+    let map_w = game.map.width;
+    let map_h = game.map.height;
+    let total_tiles = map_w.checked_mul(map_h)?;
+    if map_w == 0 || target_tile >= total_tiles {
+        return None;
+    }
+    let player = game.player(player_id)?;
+    let tx = i64::from(target_tile % map_w);
+    let ty = i64::from(target_tile / map_w);
+
+    let mut best_dist_sq = i64::MAX;
+    let mut best_border: Option<(i64, i64)> = None;
+    for raw_idx in player.border_tiles.ones() {
+        let bx = raw_idx % map_w;
+        let by = raw_idx / map_w;
+        let mut touches_target = false;
+        game.map.for_each_neighbor(bx, by, |nx, ny| {
+            if game.map.owner_id(nx, ny) == target_owner
+                && game.map.terrain[game.map.ref_id(nx, ny)].is_land()
+            {
+                touches_target = true;
+            }
+        });
+        if !touches_target {
+            continue;
+        }
+        let dx = i64::from(bx) - tx;
+        let dy = i64::from(by) - ty;
+        let dist_sq = dx * dx + dy * dy;
+        if dist_sq < best_dist_sq {
+            best_dist_sq = dist_sq;
+            best_border = Some((i64::from(bx), i64::from(by)));
+        }
+    }
+    let (best_x, best_y) = best_border?;
+
+    let mut sum_x: i64 = 0;
+    let mut sum_y: i64 = 0;
+    let mut count: i64 = 0;
+    for raw_idx in player.border_tiles.ones() {
+        let bx = i64::from(raw_idx % map_w);
+        let by = i64::from(raw_idx / map_w);
+        let dx = bx - best_x;
+        let dy = by - best_y;
+        if dx * dx + dy * dy <= LOCAL_BORDER_RADIUS_SQ {
+            sum_x += bx;
+            sum_y += by;
+            count += 1;
+        }
+    }
+    let (local_x, local_y) = if count > 0 {
+        (sum_x / count, sum_y / count)
+    } else {
+        (best_x, best_y)
+    };
+
+    let edge_dx = tx - best_x;
+    let edge_dy = ty - best_y;
+    let local_dx = tx - local_x;
+    let local_dy = ty - local_y;
+    let use_local = local_dx * edge_dx + local_dy * edge_dy > 0;
+    let (mut origin_x, mut origin_y, raw_dx, raw_dy) = if use_local {
+        (local_x, local_y, local_dx, local_dy)
+    } else {
+        (best_x, best_y, edge_dx, edge_dy)
+    };
+
+    let (dir_x, dir_y) = normalize_dir_fixed(raw_dx, raw_dy)?;
+
+    let forward_from_origin =
+        ((best_x - origin_x) * i64::from(dir_x) + (best_y - origin_y) * i64::from(dir_y))
+            / ATTACK_DIR_SCALE;
+    if forward_from_origin < 2 {
+        let mut ox = origin_x;
+        let mut oy = origin_y;
+        for step in 1..=MAX_COAST_BACKSTEP {
+            let cx = origin_x - (i64::from(dir_x) * step) / ATTACK_DIR_SCALE;
+            let cy = origin_y - (i64::from(dir_y) * step) / ATTACK_DIR_SCALE;
+            if cx < 0
+                || cy < 0
+                || cx >= i64::from(map_w)
+                || cy >= i64::from(map_h)
+                || game.map.owner_id(cx as u32, cy as u32) != player_id
+            {
+                break;
+            }
+            ox = cx;
+            oy = cy;
+        }
+        origin_x = ox;
+        origin_y = oy;
+    }
+
+    Some(AttackFocus {
+        origin_x: origin_x as i32,
+        origin_y: origin_y as i32,
+        dir_x,
+        dir_y,
+        target_x: tx as i32,
+        target_y: ty as i32,
+    })
+}
+
 pub fn merge_frontiers(
     mut a: BinaryHeap<PrioritizedTile>,
     b: BinaryHeap<PrioritizedTile>,
@@ -24,6 +158,7 @@ pub fn build_attack_frontier(
     player_id: u16,
     target_owner: u16,
     border_tiles: impl IntoIterator<Item = u32>,
+    focus: Option<AttackFocus>,
     rng: &mut WyRand,
     insert_seq_counter: &mut u32,
 ) -> BinaryHeap<PrioritizedTile> {
@@ -65,6 +200,7 @@ pub fn build_attack_frontier(
                 game.seed,
                 &game.config,
             ) as i64;
+            prio += directional_bias(focus, nx, ny);
 
             let seq = *insert_seq_counter;
             *insert_seq_counter = insert_seq_counter.wrapping_add(1);
@@ -135,6 +271,7 @@ pub fn spawn_attack_for_fleet_arrival(
         owner_id,
         target_owner,
         std::iter::once(landing_tile),
+        None,
         &mut rng,
         &mut initial_seq,
     );
@@ -161,6 +298,7 @@ pub fn spawn_attack_for_fleet_arrival(
         insert_seq_counter: initial_seq,
         rng,
         retreating: false,
+        focus: None,
     });
 }
 
@@ -329,6 +467,9 @@ impl SowEngine {
         );
 
         self.refresh_defense_grid();
+        let focus = attack
+            .target_tile
+            .and_then(|tile_idx| compute_attack_focus(&self.state, player_id, target_owner, tile_idx));
         let mut rng = WyRand::new(
             self.state
                 .seed
@@ -343,6 +484,7 @@ impl SowEngine {
             player_id,
             target_owner,
             player.border_tiles.ones(),
+            focus,
             &mut rng,
             &mut initial_seq,
         );
@@ -365,6 +507,9 @@ impl SowEngine {
 
         if let Some(i) = merge_idx {
             let ex = &mut self.attacks[i];
+            if let Some(new_focus) = focus {
+                ex.retarget_focus(new_focus);
+            }
             ex.absorb_troops(remaining, false);
             let merged = merge_frontiers(std::mem::take(&mut ex.to_conquer), fresh);
             ex.to_conquer = merged;
@@ -389,6 +534,7 @@ impl SowEngine {
             insert_seq_counter: initial_seq,
             rng,
             retreating: false,
+            focus,
         });
     }
 }
@@ -438,7 +584,7 @@ mod tests {
         let mut rng = WyRand::new(91);
         let mut sequence = 0;
         let frontier =
-            build_attack_frontier(&game, &grid, 1, 2, border.ones(), &mut rng, &mut sequence);
+            build_attack_frontier(&game, &grid, 1, 2, border.ones(), None, &mut rng, &mut sequence);
         assert_eq!(frontier.len(), 1);
 
         let influence = grid.influence(3, 3, width, 2, 1, game.seed, &game.config);
@@ -540,6 +686,7 @@ mod tests {
             intent: crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
                 target_owner: 2,
                 troops: Some(5_000.0),
+                target_tile: None,
             }),
         }]);
 
@@ -572,6 +719,7 @@ mod tests {
             crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
                 target_owner,
                 troops: Some(1_000.0),
+                target_tile: None,
             })
         };
 
@@ -644,5 +792,186 @@ mod tests {
             .betrayal_retaliation_ticks = 1;
         spawn_attack_for_fleet_arrival(&mut engine, 1, 2, 1_000.0, 10, false, 3 * width + 2);
         assert_eq!(engine.attacks.len(), 1);
+    }
+
+    #[test]
+    fn directional_wilderness_attack_expands_toward_tapped_tile() {
+        let width = 64;
+        let height = 64;
+        let mut game = GameState::new(77, width, height, GameConfig::default());
+        game.phase = GamePhase::Playing;
+        game.map.terrain.fill(MapTile::from_byte(0x80));
+        let mut player = Player::new_human(1, "P1".to_string(), [0.5; 3], &game.config);
+        player.troops = 50_000.0;
+        game.register_player(player);
+        for y in 29..=34 {
+            for x in 29..=34 {
+                game.set_tile_owner(x, y, 1);
+            }
+        }
+        let mut engine = crate::engine::SowEngine::new(game, WaterComponents::default());
+        // Tap due East of player territory
+        let target_tile = 31 * width + 55;
+        engine.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
+                target_owner: 0,
+                troops: Some(25_000.0),
+                target_tile: Some(target_tile),
+            }),
+        }]);
+        assert!(engine.attacks[0].focus.is_some());
+
+        for _ in 0..10 {
+            engine.tick();
+        }
+        let east_gains: usize = (27..=36)
+            .flat_map(|y| (35..50).map(move |x| (x, y)))
+            .filter(|&(x, y)| engine.state.map.owner_id(x, y) == 1)
+            .count();
+        let west_gains: usize = (27..=36)
+            .flat_map(|y| (15..29).map(move |x| (x, y)))
+            .filter(|&(x, y)| engine.state.map.owner_id(x, y) == 1)
+            .count();
+        assert!(
+            east_gains > west_gains * 2 && east_gains >= 6,
+            "expected directional East expansion (east={east_gains}, west={west_gains})"
+        );
+    }
+
+    #[test]
+    fn directional_attack_on_rival_player_focuses_tapped_flank_and_merges_retarget() {
+        let width = 48;
+        let height = 48;
+        let mut game = GameState::new(91, width, height, GameConfig::default());
+        game.phase = GamePhase::Playing;
+        game.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2] {
+            let mut p = Player::new_human(id, format!("P{id}"), [0.5; 3], &game.config);
+            p.troops = 50_000.0;
+            game.register_player(p);
+        }
+        // Enemy island in the middle surrounded by player 1 on North and South flanks.
+        for y in 18..=29 {
+            for x in 18..=29 {
+                game.set_tile_owner(x, y, 2);
+            }
+        }
+        for y in 14..=17 {
+            for x in 14..=33 {
+                game.set_tile_owner(x, y, 1);
+            }
+        }
+        for y in 30..=33 {
+            for x in 14..=33 {
+                game.set_tile_owner(x, y, 1);
+            }
+        }
+        let mut engine = crate::engine::SowEngine::new(game, WaterComponents::default());
+        // Tap South flank of player 2 first
+        engine.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
+                target_owner: 2,
+                troops: Some(2_000.0),
+                target_tile: Some(28 * width + 24),
+            }),
+        }]);
+        for _ in 0..4 {
+            engine.tick();
+        }
+        let south_captured = (26..=29)
+            .flat_map(|y| (18..=29).map(move |x| (x, y)))
+            .filter(|&(x, y)| engine.state.map.owner_id(x, y) == 1)
+            .count();
+        let north_captured = (18..=21)
+            .flat_map(|y| (18..=29).map(move |x| (x, y)))
+            .filter(|&(x, y)| engine.state.map.owner_id(x, y) == 1)
+            .count();
+        assert!(
+            south_captured > north_captured,
+            "expected South flank priority (south={south_captured}, north={north_captured})"
+        );
+
+        // Redirect active attack to North flank via merge
+        let prev_focus = engine.attacks[0].focus;
+        engine.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
+                target_owner: 2,
+                troops: Some(5_000.0),
+                target_tile: Some(19 * width + 24),
+            }),
+        }]);
+        assert_ne!(engine.attacks[0].focus, prev_focus);
+        let north_before = (18..=21)
+            .flat_map(|y| (18..=29).map(move |x| (x, y)))
+            .filter(|&(x, y)| engine.state.map.owner_id(x, y) == 1)
+            .count();
+        for _ in 0..8 {
+            engine.tick();
+        }
+        let north_after = (18..=21)
+            .flat_map(|y| (18..=29).map(move |x| (x, y)))
+            .filter(|&(x, y)| engine.state.map.owner_id(x, y) == 1)
+            .count();
+        assert!(
+            north_after > north_before,
+            "expected redirected attack to advance on North flank"
+        );
+    }
+
+    #[test]
+    fn directional_attack_multi_island_and_bounds_guard() {
+        let width = 128;
+        let height = 32;
+        let mut game = GameState::new(7, width, height, GameConfig::default());
+        game.phase = GamePhase::Playing;
+        game.map.terrain.fill(MapTile::from_byte(0x80));
+        let mut player = Player::new_human(1, "P1".to_string(), [0.5; 3], &game.config);
+        player.troops = 50_000.0;
+        game.register_player(player);
+        // Island A (west)
+        for y in 12..=18 {
+            for x in 8..=14 {
+                game.set_tile_owner(x, y, 1);
+            }
+        }
+        // Island B (east)
+        for y in 12..=18 {
+            for x in 96..=102 {
+                game.set_tile_owner(x, y, 1);
+            }
+        }
+
+        assert!(super::compute_attack_focus(&game, 1, 0, u32::MAX).is_none());
+
+        let mut engine = crate::engine::SowEngine::new(game, WaterComponents::default());
+        // Tap East of Island B
+        engine.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
+                target_owner: 0,
+                troops: Some(15_000.0),
+                target_tile: Some(15 * width + 115),
+            }),
+        }]);
+        for _ in 0..6 {
+            engine.tick();
+        }
+        let island_a_gains: usize = (10..=20)
+            .flat_map(|y| (1..22).map(move |x| (x, y)))
+            .filter(|&(x, y)| engine.state.map.owner_id(x, y) == 1)
+            .count()
+            .saturating_sub(49);
+        let island_b_gains: usize = (10..=20)
+            .flat_map(|y| (89..120).map(move |x| (x, y)))
+            .filter(|&(x, y)| engine.state.map.owner_id(x, y) == 1)
+            .count()
+            .saturating_sub(49);
+        assert!(
+            island_b_gains > island_a_gains,
+            "expected Island B expansion (b={island_b_gains}, a={island_a_gains})"
+        );
     }
 }

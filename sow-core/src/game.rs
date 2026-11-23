@@ -447,6 +447,11 @@ pub enum GameEvent {
         tile: u32,
         gold: f64,
     },
+    LandTradeDelivered {
+        owner_id: u16,
+        tile: u32,
+        gold: f64,
+    },
     /// A hero ability changed what happened in a situation. The effect is shown
     /// at `tile`, or as a notice alone when the action has no place on the map.
     /// `affected` names the other players the change hit, so each client shows

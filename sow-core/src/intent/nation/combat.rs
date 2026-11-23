@@ -732,6 +732,7 @@ impl SowEngine {
                                 intent: GameplayIntent::Attack(AttackIntent {
                                     target_owner: target_id,
                                     troops: Some(available),
+                                    target_tile: None,
                                 }),
                             });
                         }
@@ -1153,6 +1154,7 @@ impl SowEngine {
                                 intent: GameplayIntent::Attack(AttackIntent {
                                     target_owner,
                                     troops: Some(probe_troops),
+                                    target_tile: None,
                                 }),
                             });
                         }
@@ -1501,6 +1503,7 @@ impl SowEngine {
                             intent: GameplayIntent::Attack(AttackIntent {
                                 target_owner,
                                 troops: Some(p_send),
+                                target_tile: None,
                             }),
                         });
                     }

@@ -1445,6 +1445,7 @@ fn s4_nation_defends_when_struck() {
         intent: GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(50.0),
+            target_tile: None,
         }),
     };
     engine.apply_stamped_intent(&strike, 0);

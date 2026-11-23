@@ -1720,6 +1720,7 @@ mod tests {
             intent: crate::protocol::GameplayIntent::Attack(crate::protocol::AttackIntent {
                 target_owner: 3,
                 troops: Some(500.0),
+                target_tile: None,
             }),
         }]);
         assert_eq!(engine.attacks.len(), 1);
@@ -1802,6 +1803,7 @@ mod tests {
                 rng: wyrand::WyRand::new(id),
                 retreating: false,
                 landed: false,
+                focus: None,
             });
         }
         engine.add_fleet(WarpFleet::new(
@@ -2136,6 +2138,7 @@ mod tests {
                         insert_seq_counter: 1,
                         rng: wyrand::WyRand::new(1),
                         retreating: false,
+                        focus: None,
                     });
                     engine.execute_combat();
                     engine.execute_combat();
@@ -2257,6 +2260,7 @@ mod tests {
                     insert_seq_counter: 1,
                     rng: wyrand::WyRand::new(2),
                     retreating: false,
+                    focus: None,
                 });
                 engine.execute_combat();
             }
@@ -2458,6 +2462,7 @@ mod tests {
                             insert_seq_counter: 1,
                             rng: wyrand::WyRand::new(2),
                             retreating: false,
+                            focus: None,
                         });
                         engine.execute_combat();
                     }

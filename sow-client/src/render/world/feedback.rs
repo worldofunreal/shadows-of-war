@@ -40,6 +40,9 @@ const GOLD_REWARD_ASSIST_SIZE: f32 = 19.5;
 const GOLD_REWARD_SCALE: f32 = 0.9;
 const GOLD_REWARD_MAX_TEXT_SCALE: f32 = 1.15;
 const DEATH_GOLD_ROW_GAP: f32 = 6.0;
+const LAND_TRADE_POPUP_DURATION: f32 = 1.9;
+const LAND_TRADE_POPUP_RISE: f32 = 3.8;
+const LAND_TRADE_POPUP_SCALE: f32 = 0.78;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 const OUTGOING_ATTACK_TEXT_COLOR: [f32; 4] = [1.0; 4];
@@ -100,6 +103,7 @@ pub(crate) fn render(
     render_transport_targets(text, snapshot, sim, ui, input, dev, sf, now);
     render_transport_impacts(text, ui, input, sf, now);
     render_death_nameplates(text, ui, input, dev, avatars, sf, now);
+    render_land_trade_popups(text, ui, input, dev, sf, now);
     render_cascade_callouts(text, ui, input, dev, sf, now);
     render_attack_badges(text, snapshot, sim, ui, input, dev, avatars, sf, now);
     render_attack_launch_notices(text, ui, input, dev, sf, now);
@@ -777,8 +781,6 @@ fn render_death_nameplates(
             continue;
         }
 
-        let base_color = crate::rgb(250, 204, 21);
-        let tint = [base_color[0], base_color[1], base_color[2], alpha];
         let mut content_left = row_left;
         if is_assist {
             text.push_status_sprite(
@@ -789,21 +791,19 @@ fn render_death_nameplates(
             );
             content_left += badge_size + gap;
         }
-        text.push_sprite(
-            [content_left + coin_size * 0.5, center_px[1]],
-            [coin_size; 2],
+        push_gold_coin_and_amount(
+            text,
             coin_uv,
-            tint,
-        );
-        let _ = text.push_prepared_text(
             prepared,
-            [
-                content_left + coin_size + gap,
-                center_px[1] + measure.height * 0.35,
-            ],
+            measure,
+            content_left,
+            center_px[1],
             font_size,
-            tint,
-            dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+            coin_size,
+            gap,
+            alpha,
+            dev,
+            sf,
         );
         if let (Some(prepared), Some(measure)) = (prepared_casualties, casualty_measure) {
             let casualty_left = content_left + coin_size + gap + measure.width + casualty_separator;
@@ -1019,6 +1019,111 @@ fn render_death_nameplates(
             dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
         );
     }
+}
+
+fn push_gold_coin_and_amount(
+    text: &mut TextRenderer,
+    coin_uv: [f32; 4],
+    prepared: &sow_render::text::PreparedText,
+    measure: sow_render::text::TextMeasure,
+    content_left: f32,
+    center_y: f32,
+    font_size: f32,
+    coin_size: f32,
+    gap: f32,
+    alpha: f32,
+    dev: &DevConfig,
+    sf: f32,
+) {
+    let base_color = crate::rgb(250, 204, 21);
+    let tint = [base_color[0], base_color[1], base_color[2], alpha];
+    text.push_sprite(
+        [content_left + coin_size * 0.5, center_y],
+        [coin_size; 2],
+        coin_uv,
+        tint,
+    );
+    let _ = text.push_prepared_text(
+        prepared,
+        [content_left + coin_size + gap, center_y + measure.height * 0.35],
+        font_size,
+        tint,
+        dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+    );
+}
+
+fn render_land_trade_popups(
+    text: &mut TextRenderer,
+    ui: &mut UiState,
+    input: &InputState,
+    dev: &DevConfig,
+    sf: f32,
+    now: Instant,
+) {
+    if ui.land_trade_popups.is_empty() {
+        return;
+    }
+    let sf = sf.max(0.01);
+    let screen_w = input.screen_w / sf;
+    let screen_h = input.screen_h / sf;
+    let font_scale = dev.font_size_scale.max(0.1);
+    let char_spacing = dev.font_char_spacing.max(0.1);
+    let style_key = char_spacing.to_bits();
+    let Some(coin_uv) = text.avatar_uv(AVATAR_GOLD_SLOT) else {
+        ui.land_trade_popups.retain(|popup| {
+            now.duration_since(popup.start_time).as_secs_f32() < LAND_TRADE_POPUP_DURATION
+        });
+        return;
+    };
+
+    ui.land_trade_popups.retain_mut(|popup| {
+        let elapsed = now.duration_since(popup.start_time).as_secs_f32();
+        let Some((progress, _, scale)) = floating_notice_animation(elapsed, LAND_TRADE_POPUP_DURATION) else {
+            return false;
+        };
+        let rise = progress * LAND_TRADE_POPUP_RISE;
+        let screen = world_to_screen(popup.world_x, popup.world_y - rise, input, sf);
+        if screen[0] < -160.0
+            || screen[0] > screen_w + 160.0
+            || screen[1] < -120.0
+            || screen[1] > screen_h + 120.0
+        {
+            return true;
+        }
+        if popup.text_style_key != Some(style_key) || popup.prepared_amount.is_none() {
+            popup.prepared_amount = Some(text.prepare_string(&popup.amount, char_spacing, 0.0));
+            popup.text_style_key = Some(style_key);
+        }
+        let Some(prepared) = popup.prepared_amount.as_ref() else {
+            return true;
+        };
+        let reward_scale = font_scale * LAND_TRADE_POPUP_SCALE;
+        let font_size = GOLD_REWARD_FONT_SIZE * scale.min(GOLD_REWARD_MAX_TEXT_SCALE) * reward_scale * sf;
+        let coin_size = GOLD_REWARD_COIN_SIZE * reward_scale * sf;
+        let gap = DEATH_GOLD_ROW_GAP * 0.5 * reward_scale * sf;
+        let measure = prepared.measure_at(font_size);
+        let row_width = coin_size + gap + measure.width;
+        let center_px = [screen[0] * sf, screen[1] * sf];
+        let required = prepared.instance_count().saturating_add(1);
+        if text.remaining_instance_capacity() < required {
+            return true;
+        }
+        push_gold_coin_and_amount(
+            text,
+            coin_uv,
+            prepared,
+            measure,
+            center_px[0] - row_width * 0.5,
+            center_px[1],
+            font_size,
+            coin_size,
+            gap,
+            1.0 - progress,
+            dev,
+            sf,
+        );
+        true
+    });
 }
 
 fn prepare_death_nameplate_text(

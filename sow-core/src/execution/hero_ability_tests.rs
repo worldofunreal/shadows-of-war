@@ -304,6 +304,7 @@ fn attack_with_troops(
         intent: GameplayIntent::Attack(AttackIntent {
             target_owner,
             troops: Some(army),
+            target_tile: None,
         }),
     }]);
     let mut marks = [0; 4];
@@ -472,6 +473,7 @@ fn armistice_refund(leader: Leader, attacker: u16) -> (f64, usize) {
         GameplayIntent::Attack(AttackIntent {
             target_owner: 3 - attacker,
             troops: Some(1_000.0),
+            target_tile: None,
         }),
     );
     assert_eq!(engine.attacks.len(), 1);
@@ -658,6 +660,7 @@ fn launch_target(attacker: Leader, target: Target) -> SowEngine {
         intent: GameplayIntent::Attack(AttackIntent {
             target_owner,
             troops: Some(army),
+            target_tile: None,
         }),
     }]);
     engine
@@ -698,6 +701,7 @@ fn retreat_against(retreater: Leader, defender: Leader, target: Target) -> (f64,
         GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(1_000.0),
+            target_tile: None,
         }),
     );
     let attack_id = engine
@@ -778,6 +782,7 @@ fn lose_city(victim: Leader) -> SowEngine {
         GameplayIntent::Attack(AttackIntent {
             target_owner: 1,
             troops: Some(10_000.0),
+            target_tile: None,
         }),
     );
     // Stop the rival's army once it holds the city, so the victim keeps land to counterattack from.
@@ -1186,6 +1191,7 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                         GameplayIntent::Attack(AttackIntent {
                             target_owner: 2,
                             troops: Some(8000.0),
+                            target_tile: None,
                         }),
                     );
                     if allied_attack {
@@ -1195,6 +1201,7 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
                             GameplayIntent::Attack(AttackIntent {
                                 target_owner: 2,
                                 troops: Some(8000.0),
+                                target_tile: None,
                             }),
                         );
                         assert!(battle.attacks.iter().any(|attack| attack.owner_id == 3));
@@ -1656,6 +1663,7 @@ fn revenge(hero: Leader, delay: u32, traitor_attacks: bool) -> (i64, i64, bool, 
             GameplayIntent::Attack(AttackIntent {
                 target_owner: 1,
                 troops: Some(half),
+                target_tile: None,
             }),
         );
     }
@@ -1679,6 +1687,7 @@ fn revenge(hero: Leader, delay: u32, traitor_attacks: bool) -> (i64, i64, bool, 
         GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(half),
+            target_tile: None,
         }),
     );
     for _ in 0..10 {
@@ -1833,6 +1842,7 @@ fn crush(hero: Leader, victim: PlayerType) -> (u32, u32) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 2,
                     troops: Some(half),
+                    target_tile: None,
                 }),
             );
         }
@@ -1893,6 +1903,7 @@ fn outnumbered_tiles(attacker: Leader, rival_troops: f64) -> u32 {
         GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(5_000.0),
+            target_tile: None,
         }),
     );
     for _ in 0..20 {
@@ -1913,6 +1924,7 @@ fn cost_per_tile(leader: Leader, terrain: u8) -> (f64, Marks) {
         GameplayIntent::Attack(AttackIntent {
             target_owner: 0,
             troops: Some(10_000.0),
+            target_tile: None,
         }),
     );
     army_loss_per_tile(&mut engine, 3)
@@ -1963,6 +1975,7 @@ fn city_cost_per_tile(attacker: Leader) -> (f64, Marks) {
         GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(10_000.0),
+            target_tile: None,
         }),
     );
     army_loss_per_tile(&mut engine, 20)
@@ -2225,6 +2238,7 @@ fn tenamaxtli_empowered_flag_reaches_the_snapshot() {
             GameplayIntent::Attack(AttackIntent {
                 target_owner: 2,
                 troops: Some(5_000.0),
+                target_tile: None,
             }),
         );
         let snapshot = engine.build_snapshot();
@@ -2331,6 +2345,7 @@ fn a_mark_needs_its_target_not_just_its_hero() {
             GameplayIntent::Attack(AttackIntent {
                 target_owner: 2,
                 troops: Some(10_000.0),
+                target_tile: None,
             }),
         );
     }
@@ -2360,6 +2375,7 @@ fn burebista_defense_announces_to_the_attacker_even_from_a_bot() {
         GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(10_000.0),
+            target_tile: None,
         }),
     );
     let mut affected = None;
@@ -2643,6 +2659,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner: 2,
                         troops: Some(8000.0),
+                        target_tile: None,
                     }),
                 );
                 let id = battle.attacks[0].id;
@@ -2801,6 +2818,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner: 2,
                         troops: Some(8000.0),
+                        target_tile: None,
                     }),
                 );
                 if active && room > 0.0 {
@@ -2854,6 +2872,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             let order = GameplayIntent::Attack(AttackIntent {
                 target_owner: 3,
                 troops: Some(1000.0),
+                target_tile: None,
             });
             send(&mut e, 2, order.clone());
             let troops = e.attacks[0].troops;
@@ -2972,6 +2991,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner: defender,
                         troops: Some(10_000.0),
+                        target_tile: None,
                     }),
                 );
                 assert_eq!(battle.attacks.len(), 1);
@@ -3017,6 +3037,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                         GameplayIntent::Attack(AttackIntent {
                             target_owner: 1,
                             troops: Some(10_000.0),
+                            target_tile: None,
                         }),
                     );
                     if active {
@@ -3115,6 +3136,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner,
                         troops: Some(10_000.0),
+                        target_tile: None,
                     }),
                 );
                 assert_eq!(
@@ -3179,6 +3201,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner: 0,
                         troops: Some(10_000.0),
+                        target_tile: None,
                     }),
                 );
                 for _ in 0..40 {
@@ -3403,6 +3426,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 2,
                     troops: Some(8_000.0),
+                    target_tile: None,
                 }),
             );
             e.attacks[0]
@@ -3456,6 +3480,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner: 2,
                         troops: Some(committed),
+                        target_tile: None,
                     }),
                 );
                 battle.state.tick += elapsed_ticks;
@@ -3491,6 +3516,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                         GameplayIntent::Attack(AttackIntent {
                             target_owner: 2,
                             troops: Some(1_000.0),
+                            target_tile: None,
                         }),
                     );
                     battle.state.tick += 30;
@@ -3534,6 +3560,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner,
                         troops: Some(troops),
+                        target_tile: None,
                     }),
                 );
                 if active && target_owner == 0 {
@@ -3590,6 +3617,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner: 1,
                         troops: Some(800.0),
+                        target_tile: None,
                     }),
                 );
                 let attack = &mut battle.attacks[0];
@@ -3612,6 +3640,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                     GameplayIntent::Attack(AttackIntent {
                         target_owner: 2,
                         troops: Some(1_000.0),
+                        target_tile: None,
                     }),
                 );
                 let reserve_gain = battle.state.player(1).unwrap().troops - 1_000.0;
@@ -3651,6 +3680,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 1,
                     troops: Some(2_500.0),
+                    target_tile: None,
                 }),
             );
             if active {
@@ -3982,6 +4012,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 1,
                     troops: Some(4000.0),
+                    target_tile: None,
                 }),
             );
             if has_handover {
@@ -3993,6 +4024,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 2,
                     troops: Some(4000.0),
+                    target_tile: None,
                 }),
             );
             // Preserve the active armies while measuring only the retreat.
@@ -4045,6 +4077,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 2,
                     troops: Some(5000.0),
+                    target_tile: None,
                 }),
             );
             let attack = e.attacks.iter_mut().find(|a| a.owner_id == 3).unwrap();
@@ -4095,6 +4128,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 1,
                     troops: Some(1000.0),
+                    target_tile: None,
                 }),
             );
             for (id, x, rival_gold, expected) in [(1, 32, 600.0, 150.0), (2, 36, 2000.0, 250.0)] {
@@ -4195,6 +4229,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 2,
                     troops: Some(5_000.0),
+                    target_tile: None,
                 }),
             );
             let id = e.attacks[0].id;
@@ -4208,6 +4243,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 2,
                     troops: Some(1_000.0),
+                    target_tile: None,
                 }),
             );
             let strength = attack_strength(&e.state, 1, 2, 1_000.0);
@@ -4356,6 +4392,7 @@ fn redesigned_heroes_require_their_actual_situation() {
         GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(1_000.0),
+            target_tile: None,
         }),
     );
     let id = e.attacks[0].id;
@@ -4432,6 +4469,7 @@ fn redesigned_peter_founds_a_legal_port_during_real_conquest() {
                 GameplayIntent::Attack(AttackIntent {
                     target_owner: 2,
                     troops: Some(20_000.0),
+                    target_tile: None,
                 }),
             );
             for _ in 0..200 {
@@ -4673,6 +4711,7 @@ fn redesigned_income_stops_when_its_condition_ends_and_matches_the_hud_rate() {
         GameplayIntent::Attack(AttackIntent {
             target_owner: 1,
             troops: Some(1_000.0),
+            target_tile: None,
         }),
     );
     assert_eq!(
@@ -4813,6 +4852,7 @@ fn hero_feedback_tracks_consumption_return_timer_income_and_required_structures(
         GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(1_000.0),
+            target_tile: None,
         }),
     );
     assert_eq!(e.hero_ability_feedback(1).unwrap().state, Active);

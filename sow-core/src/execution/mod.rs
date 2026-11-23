@@ -59,7 +59,11 @@ impl PartialOrd for PrioritizedTile {
 pub const ATTACK_DIR_SCALE: i64 = 1024;
 /// Bounded angular priority penalty scale: 0° => 0, 90° => +W, 180° => +2*W.
 /// Bounded so BFS advancing (`tick * 4`) naturally widens the push without 1-tile DFS spikes.
-pub const DIRECTIONAL_ATTACK_WEIGHT: i64 = 64;
+pub const DIRECTIONAL_ATTACK_WEIGHT: i64 = 48;
+/// Bounded proximity penalty toward the tapped tile (`3` points per tile, capped at `64`),
+/// disambiguating opposite borders along the same ray without distorting forward cones.
+pub const DIRECTIONAL_DIST_STEP: i64 = 3;
+pub const DIRECTIONAL_DIST_MAX: i64 = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AttackFocus {
@@ -67,9 +71,26 @@ pub struct AttackFocus {
     pub origin_y: i32,
     pub dir_x: i32,
     pub dir_y: i32,
+    pub target_x: i32,
+    pub target_y: i32,
 }
 
-/// Deterministic integer angular penalty in `[0, 2 * DIRECTIONAL_ATTACK_WEIGHT]`.
+#[inline]
+pub(crate) fn isqrt_u128(n: u128) -> u128 {
+    if n < 2 {
+        return n;
+    }
+    let mut x = 1u128 << ((128 - n.leading_zeros()).div_ceil(2));
+    loop {
+        let next = (x + n / x) >> 1;
+        if next >= x {
+            return x;
+        }
+        x = next;
+    }
+}
+
+/// Deterministic integer directional + proximity penalty in `[0, 2 * DIRECTIONAL_ATTACK_WEIGHT + DIRECTIONAL_DIST_MAX]`.
 #[inline]
 pub fn directional_bias(focus: Option<AttackFocus>, x: u32, y: u32) -> i64 {
     let Some(focus) = focus else {
@@ -78,25 +99,32 @@ pub fn directional_bias(focus: Option<AttackFocus>, x: u32, y: u32) -> i64 {
     let vx = i64::from(x) - i64::from(focus.origin_x);
     let vy = i64::from(y) - i64::from(focus.origin_y);
     let len_sq = vx * vx + vy * vy;
-    if len_sq == 0 {
-        return 0;
-    }
-    let dx = i64::from(focus.dir_x);
-    let dy = i64::from(focus.dir_y);
-    let dir_sq = dx * dx + dy * dy;
-    if dir_sq == 0 {
-        return 0;
-    }
-    let dot = vx * dx + vy * dy;
-    let cos_sq_milli =
-        ((i128::from(dot) * i128::from(dot) * 1000) / (i128::from(len_sq) * i128::from(dir_sq)))
-            as i64;
-    let signed_cos_sq = if dot >= 0 {
-        cos_sq_milli
+    let angle_bias = if len_sq == 0 {
+        0
     } else {
-        -cos_sq_milli
+        let dx = i64::from(focus.dir_x);
+        let dy = i64::from(focus.dir_y);
+        let dir_sq = dx * dx + dy * dy;
+        if dir_sq == 0 {
+            0
+        } else {
+            let dot = vx * dx + vy * dy;
+            let cos_sq_milli = ((i128::from(dot) * i128::from(dot) * 1000)
+                / (i128::from(len_sq) * i128::from(dir_sq))) as i64;
+            let signed_cos_sq = if dot >= 0 {
+                cos_sq_milli
+            } else {
+                -cos_sq_milli
+            };
+            ((1000 - signed_cos_sq) * DIRECTIONAL_ATTACK_WEIGHT) / 1000
+        }
     };
-    ((1000 - signed_cos_sq) * DIRECTIONAL_ATTACK_WEIGHT) / 1000
+
+    let tx = i64::from(x) - i64::from(focus.target_x);
+    let ty = i64::from(y) - i64::from(focus.target_y);
+    let target_dist = isqrt_u128((tx * tx + ty * ty) as u128) as i64;
+    let dist_bias = (target_dist * DIRECTIONAL_DIST_STEP).min(DIRECTIONAL_DIST_MAX);
+    angle_bias + dist_bias
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]

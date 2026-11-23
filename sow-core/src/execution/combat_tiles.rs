@@ -2251,6 +2251,7 @@ impl SowEngine {
                                 self.state.seed,
                                 &self.state.config,
                             ) as i64;
+                            prio += crate::execution::directional_bias(execution.focus, nx, ny);
                             let seq = execution.insert_seq_counter;
                             execution.insert_seq_counter =
                                 execution.insert_seq_counter.wrapping_add(1);
@@ -2614,6 +2615,7 @@ mod tests {
             rng: WyRand::new(id),
             retreating: false,
             landed: false,
+            focus: None,
         });
     }
 
@@ -2800,6 +2802,7 @@ mod tests {
             rng: WyRand::new(1),
             retreating: false,
             landed: false,
+            focus: None,
         });
 
         engine.execute_combat_using(|_, _| 1, |_, _, _| 100.0);
@@ -3113,6 +3116,7 @@ mod tests {
                 insert_seq_counter: captures,
                 rng: WyRand::new(7),
                 retreating: false,
+                focus: None,
             });
             // Exclude setup/cloning and keep the capture count identical across rule changes.
             // Neutral tiles cost five at this troop strength; base budget is two.
@@ -3414,6 +3418,7 @@ mod tests {
                 insert_seq_counter: 48,
                 rng: WyRand::new(seed.wrapping_add(u64::from(owner_id))),
                 retreating: false,
+                focus: None,
             });
         }
         engine
@@ -3769,6 +3774,7 @@ mod tests {
             insert_seq_counter: frontier_size as u32,
             rng: WyRand::new(seed.wrapping_add(1)),
             retreating: false,
+            focus: None,
         });
         engine
     }
@@ -4205,6 +4211,7 @@ mod tests {
             insert_seq_counter: 0,
             rng: WyRand::new(1),
             retreating: false,
+            focus: None,
         });
         engine.execute_combat();
 
@@ -4296,6 +4303,7 @@ mod tests {
             insert_seq_counter: 2,
             rng: WyRand::new(88),
             retreating: false,
+            focus: None,
         });
         engine.execute_combat();
         assert_eq!(engine.state.player(2).unwrap().tile_count, 1);
@@ -4322,6 +4330,7 @@ mod tests {
             insert_seq_counter: 1,
             rng: WyRand::new(89),
             retreating: false,
+            focus: None,
         });
         engine.execute_combat();
         assert!(!engine.state.player(2).unwrap().alive);

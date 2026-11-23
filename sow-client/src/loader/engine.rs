@@ -103,6 +103,7 @@ impl SowApp {
         self.ui.transport_target_snapshot_tick = None;
         self.ui.transport_impacts.clear();
         self.ui.death_nameplates.clear();
+        self.ui.land_trade_popups.clear();
         self.ui.reset_combat_feedback();
         self.ui.attack_badge_labels.clear();
         self.ui.attack_badge_style_key = None;

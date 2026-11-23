@@ -9,12 +9,24 @@ use crate::execution::income_rates::{
 };
 use crate::game::GamePhase;
 
+struct LandTradeDelivery {
+    owner: usize,
+    tile: u32,
+    raw_gold: f64,
+}
+
+#[derive(Default)]
+struct LandTradeBatch {
+    totals: Vec<f64>,
+    deliveries: Vec<LandTradeDelivery>,
+}
+
 impl SowEngine {
-    fn collect_land_trade(&mut self) -> Option<Vec<f64>> {
+    fn collect_land_trade(&mut self) -> Option<LandTradeBatch> {
         use std::cmp::Reverse;
         let tick = self.state.tick;
         self.trade_last_delivery_tick = tick;
-        let mut payments: Option<Vec<f64>> = None;
+        let mut payments: Option<LandTradeBatch> = None;
         while let Some(&Reverse((due, index))) = self.trade_delivery_queue.peek() {
             if due > tick { break; }
             self.trade_delivery_queue.pop();
@@ -33,7 +45,16 @@ impl SowEngine {
                     }
                 } else if open {
                     let gold = link.cargo_gold(&self.state.config);
-                    payments.get_or_insert_with(|| vec![0.0; self.building_aggregates.len()])[owner] += gold;
+                    let batch = payments.get_or_insert_with(|| LandTradeBatch {
+                        totals: vec![0.0; self.building_aggregates.len()],
+                        deliveries: Vec::new(),
+                    });
+                    batch.totals[owner] += gold;
+                    batch.deliveries.push(LandTradeDelivery {
+                        owner,
+                        tile: link.from_tile,
+                        raw_gold: gold,
+                    });
                 }
             }
             self.trade_delivery_queue.push(Reverse((tick + u64::from(link.period_ticks), index)));
@@ -190,13 +211,38 @@ impl SowEngine {
             let passive_rate = diminishing_passive_income(
                 gold_ps - scaled_trade_rate, GOLD_PASSIVE_FULL_RATE_CAP, GOLD_PASSIVE_EXCESS_RATE,
             );
-            let delivered = deliveries.as_ref().and_then(|gold| gold.get(usize::from(player_id)))
-                .copied().unwrap_or(0.0);
-            let gold_income = config.per_tick(passive_rate) + if land_trade_rate > 0.0 {
-                delivered * (combined_rate - passive_rate).max(0.0)
+            let delivered = deliveries
+                .as_ref()
+                .and_then(|batch| batch.totals.get(usize::from(player_id)))
+                .copied()
+                .unwrap_or(0.0);
+            let trade_scale = if land_trade_rate > 0.0 {
+                (combined_rate - passive_rate).max(0.0)
                     / (agg.land_trade_income_weight * config.trading_post_gold_income)
-            } else { 0.0 };
+            } else {
+                0.0
+            };
+            let gold_income = config.per_tick(passive_rate) + delivered * trade_scale;
             self.state.players[idx].credit_gold(gold_income);
+            if delivered > 0.0 && trade_scale > 0.0 {
+                if let Some(batch) = deliveries.as_ref() {
+                    let owner = usize::from(player_id);
+                    for delivery in &batch.deliveries {
+                        if delivery.owner == owner {
+                            let net_gold = delivery.raw_gold * trade_scale;
+                            if net_gold > 0.0 {
+                                self.state.events.push(
+                                    crate::game::GameEvent::LandTradeDelivered {
+                                        owner_id: player_id,
+                                        tile: delivery.tile,
+                                        gold: net_gold,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
 
             let iq_gain = config.per_tick(self.state.players[idx].iq as f64 / 100.0);
             self.state.players[idx].iq_points =
@@ -336,5 +382,79 @@ mod zero_troop_bot_income_tests {
                 .iter()
                 .any(|b| { b.owner_id == 1 && b.kind == crate::game::BuildingKind::City })
         );
+    }
+
+    #[test]
+    fn land_trade_delivery_emits_event_matching_credited_gold() {
+        use crate::building::Building;
+        use crate::game::{BuildingKind, GameEvent};
+
+        let mut config = GameConfig::default();
+        config.gold_base_income = 0.0;
+        config.territory_gold_amount = 0.0;
+        let mut state = GameState::new(9, 24, 24, config.clone());
+        state.phase = GamePhase::Playing;
+        let mut player = Player::new_human(1, "Mercader".into(), [0.9, 0.7, 0.2], &config);
+        player.alive = true;
+        player.tile_count = 24 * 24;
+        player.gold = 0.0;
+        state.register_player(player);
+        for y in 0..24 {
+            for x in 0..24 {
+                state.map.set_owner_id(x, y, 1);
+                let ref_id = state.map.ref_id(x, y);
+                state.map.terrain[ref_id] = MapTile::from_byte(0b1000_0000);
+            }
+        }
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.buildings.push(Building {
+            id: 1,
+            owner_id: 1,
+            tile_idx: 8 * 24 + 6,
+            kind: BuildingKind::TradingPost,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine.buildings.push(Building {
+            id: 2,
+            owner_id: 1,
+            tile_idx: 8 * 24 + 14,
+            kind: BuildingKind::Tower,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine.building_aggregates_dirty = true;
+        engine.refresh_building_aggregates();
+        assert_eq!(engine.railway_links.len(), 1);
+        let period = engine.railway_links[0].period_ticks;
+        engine.state.events.clear();
+
+        for tick in 1..=u64::from(period) {
+            engine.state.tick = tick;
+            engine.execute_income();
+        }
+
+        let events: Vec<_> = engine
+            .state
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                GameEvent::LandTradeDelivered {
+                    owner_id,
+                    tile,
+                    gold,
+                } => Some((*owner_id, *tile, *gold)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, 1);
+        assert_eq!(events[0].1, 8 * 24 + 6);
+        let treasury = engine.state.player(1).unwrap().gold;
+        assert!((events[0].2 - treasury).abs() < 1e-6);
+        assert!(events[0].2 > 0.0);
     }
 }

@@ -438,6 +438,30 @@ impl SowApp {
                         );
                     }
                 }
+                sow_core::game::GameEvent::LandTradeDelivered {
+                    owner_id,
+                    tile,
+                    gold,
+                } => {
+                    if my_id != 0 && owner_id == my_id && gold.is_finite() && gold >= 0.5 {
+                        let map_w = self.sim.map_w.max(1);
+                        let wx = (tile % map_w) as f32 + 0.5;
+                        let wy = (tile / map_w) as f32 + 0.5;
+                        if self.ui.land_trade_popups.len() >= crate::app::MAX_LAND_TRADE_POPUPS {
+                            let overflow = self.ui.land_trade_popups.len() + 1
+                                - crate::app::MAX_LAND_TRADE_POPUPS;
+                            self.ui.land_trade_popups.drain(0..overflow);
+                        }
+                        self.ui.land_trade_popups.push(crate::app::LandTradeGoldPopup {
+                            amount: format!("+{}", crate::utils::format_number(gold)),
+                            world_x: wx,
+                            world_y: wy,
+                            start_time: now_instant,
+                            prepared_amount: None,
+                            text_style_key: None,
+                        });
+                    }
+                }
                 sow_core::game::GameEvent::AbilityTriggered {
                     owner_id,
                     tile,

@@ -457,7 +457,16 @@ impl SowApp {
         };
         self.close_map_context_menu();
         self.ui.app.hud_state.warship_move_targeting = false;
-        self.ui.app.hud_state.selected_warship_ids = vec![fleet_id];
+        if self.input.shift_pressed {
+            let ids = &mut self.ui.app.hud_state.selected_warship_ids;
+            if let Some(pos) = ids.iter().position(|id| *id == fleet_id) {
+                ids.remove(pos);
+            } else {
+                ids.push(fleet_id);
+            }
+        } else {
+            self.ui.app.hud_state.selected_warship_ids = vec![fleet_id];
+        }
         true
     }
 
@@ -1534,7 +1543,13 @@ impl SowApp {
         tile_idx: u32,
     ) -> (Option<f64>, Option<u8>) {
         match action {
-            MapMenuAction::Nuke => (None, None),
+            MapMenuAction::Nuke => (
+                Some(self.sim.engine.as_ref().map_or_else(
+                    || sow_core::game::NukeKind::AtomBomb.gold_cost(0),
+                    |engine| engine.nuclear_price(sow_core::game::NukeKind::AtomBomb),
+                )),
+                None,
+            ),
             action if let Some(kind) = action.building_kind() => {
                 let level = self.building_foundation_level(kind);
                 (Some(self.ui.app.hud_state.building_costs[kind as usize]).filter(|c| c.is_finite()), Some(level))
@@ -1669,6 +1684,7 @@ impl SowApp {
         let intent = sow_core::protocol::GameplayIntent::Attack(sow_core::protocol::AttackIntent {
             target_owner: target.owner,
             troops: Some(troops),
+            target_tile: Some(tile_idx),
         });
         if !target.is_attackable() && !target.is_allied && !target.can_betray_teammate() {
             self.add_map_feedback(crate::ui::UiText::new("hud.attack_out_of_range"));

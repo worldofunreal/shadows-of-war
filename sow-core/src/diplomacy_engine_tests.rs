@@ -486,6 +486,7 @@ mod alliance_lifecycle_tests {
                 intent: GameplayIntent::Attack(crate::protocol::AttackIntent {
                     target_owner: 2,
                     troops: Some(10.0),
+                    target_tile: None,
                 }),
             },
             0,

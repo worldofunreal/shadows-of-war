@@ -120,6 +120,7 @@ mod tests {
             intent: GameplayIntent::Attack(AttackIntent {
                 target_owner: 0,
                 troops: Some(20.0),
+                target_tile: None,
             }),
         }]);
         assert!(!original.attacks.is_empty());

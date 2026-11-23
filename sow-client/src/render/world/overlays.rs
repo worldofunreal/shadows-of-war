@@ -64,6 +64,7 @@ pub(crate) fn render_overlays(
             ui.app.settings_state.reduced_motion,
             now,
         );
+        render_warship_selection_overlays(text, snapshot, sim, ui, input, sf, now);
         if dev.vfx_world_buildings {
             render_buildings(text, snapshot, sim, ui, input, dev, sf, zoom_scaled, now);
         } else {
@@ -558,13 +559,18 @@ fn render_buildings(
                     && menu.tile_idx == tile_idx
                 {
                     let elapsed = now.duration_since(menu.opened_at).as_secs_f32();
-                    let t = (elapsed / 0.38).clamp(0.0, 1.0);
+                    let t = (elapsed / crate::render::motion::BUILDING_SELECTION_TAP_SECS)
+                        .clamp(0.0, 1.0);
+                    let (tap_scale, _) = crate::render::motion::building_selection_tap_motion(
+                        elapsed,
+                        reduced_motion,
+                    );
                     // Anticipation squash (t < 0.14) -> stretch & damped wobble.
                     let env = (-6.5 * t).exp();
                     let osc = (t * 22.0 - 0.6).sin();
                     let stretch = env * osc * 0.16;
-                    sx *= 1.0 - stretch * 0.85;
-                    sy *= 1.0 + stretch;
+                    sx *= tap_scale * (1.0 - stretch * 0.85);
+                    sy *= tap_scale * (1.0 + stretch);
                     lift_y -= (stretch.max(0.0)) * building_size[1] * 0.12;
                     sprite_tint = [1.14, 1.12, 1.04, alpha];
                 }
@@ -1071,6 +1077,118 @@ pub(crate) fn warship_at_pointer(
     closest.map(|(_, id)| id)
 }
 
+fn render_warship_selection_overlays(
+    text: &mut TextRenderer,
+    snapshot: &SimSnapshot,
+    sim: &SimState,
+    ui: &UiState,
+    input: &InputState,
+    sf: f32,
+    now: Instant,
+) {
+    let selected_ids = &ui.app.hud_state.selected_warship_ids;
+    if selected_ids.is_empty()
+        || sim.map_w == 0
+        || !input.camera_zoom.is_finite()
+        || input.camera_zoom <= 0.0
+    {
+        return;
+    }
+    let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
+    let zoom = input.camera_zoom;
+    let map_w = sim.map_w as usize;
+    let elapsed = now.elapsed().as_secs_f32();
+    let motion = crate::render::motion::building_selection_ring_motion(
+        elapsed,
+        ui.app.settings_state.reduced_motion,
+    );
+
+    for fleet in &snapshot.fleets {
+        if fleet.owner_id != my_id
+            || fleet.unit_type != sow_core::game::UnitType::Warship
+            || fleet.troops <= 0.0
+            || !selected_ids.contains(&fleet.id)
+        {
+            continue;
+        }
+        let tile = fleet.current_tile as usize;
+        let wx = (tile % map_w) as f32 + 0.5;
+        let wy = (tile / map_w) as f32 + 0.5;
+        let center = input.world_to_screen([wx, wy]);
+        let mode = fleet
+            .warship
+            .as_ref()
+            .map_or(sow_core::warp_fleet::WarshipMode::Patrolling, |w| w.mode);
+        let (ring_color, core_glow) = match mode {
+            sow_core::warp_fleet::WarshipMode::Patrolling => (
+                [0.24, 0.96, 0.58, motion.alpha],
+                [0.88, 1.0, 0.94, 0.92],
+            ),
+            sow_core::warp_fleet::WarshipMode::Holding => (
+                [0.35, 0.85, 0.98, motion.alpha],
+                [0.90, 0.98, 1.0, 0.92],
+            ),
+            sow_core::warp_fleet::WarshipMode::Retreating
+            | sow_core::warp_fleet::WarshipMode::Docked => (
+                [0.96, 0.80, 0.34, motion.alpha],
+                [1.0, 0.96, 0.85, 0.92],
+            ),
+        };
+        let r = (14.0 * sf).max(zoom * 1.1);
+        text.push_selection_ring(
+            center,
+            [r * motion.scale, r * 0.68 * motion.scale],
+            1.0,
+            motion.phase,
+            motion.pulse,
+            motion.acquire,
+            ring_color,
+            core_glow,
+        );
+
+        if mode == sow_core::warp_fleet::WarshipMode::Patrolling
+            && let Some(ws) = fleet.warship.as_ref()
+        {
+            let p_tile = ws.patrol_tile as usize;
+            let px = (p_tile % map_w) as f32 + 0.5;
+            let py = (p_tile / map_w) as f32 + 0.5;
+            let patrol_center = input.world_to_screen([px, py]);
+            text.push_ring(
+                patrol_center,
+                (18.0 * zoom).max(16.0 * sf),
+                [0.24, 0.96, 0.58, 0.22],
+                (1.2 * sf).max(1.0),
+            );
+        }
+
+        if fleet.path_cursor < fleet.path.len()
+            && let Some(&dst_tile) = fleet.path.last()
+        {
+            let d_tile = dst_tile as usize;
+            let dx = (d_tile % map_w) as f32 + 0.5;
+            let dy = (d_tile / map_w) as f32 + 0.5;
+            let dst_center = input.world_to_screen([dx, dy]);
+            text.push_ring(
+                dst_center,
+                (8.0 * sf).max(zoom * 0.7),
+                [0.96, 0.83, 0.47, 0.75],
+                (1.6 * sf).max(1.0),
+            );
+        }
+    }
+
+    if ui.app.hud_state.warship_move_targeting {
+        let px = input.last_mouse_x as f32;
+        let py = input.last_mouse_y as f32;
+        text.push_ring(
+            [px, py],
+            (14.0 * sf).max(10.0),
+            [0.96, 0.83, 0.47, 0.85],
+            (1.8 * sf).max(1.0),
+        );
+    }
+}
+
 fn nearest_building_in_cluster(
     snapshot: &SimSnapshot,
     map_w: u32,
@@ -1240,21 +1358,43 @@ fn render_building_selection_focus(
     let (ring_center, base_radius) =
         building_ground_ring_geometry(bx, by, building_size, input, sf);
     let elapsed = now.saturating_duration_since(menu.opened_at).as_secs_f32();
+    let (tap_scale, tap_glow) =
+        crate::render::motion::building_selection_tap_motion(elapsed, reduced_motion);
     let motion = crate::render::motion::building_selection_ring_motion(elapsed, reduced_motion);
     let (ring_color, core_glow) = if under_construction {
         (
-            [0.28, 0.92, 0.92, motion.alpha],
-            [0.90, 0.99, 1.0, 0.88],
+            [
+                0.28 - 0.22 * tap_glow,
+                0.92 + 0.08 * tap_glow,
+                0.92 - 0.54 * tap_glow,
+                motion.alpha,
+            ],
+            [
+                0.90 - 0.42 * tap_glow,
+                0.99 + 0.01 * tap_glow,
+                1.0 - 0.36 * tap_glow,
+                0.88 + 0.12 * tap_glow,
+            ],
         )
     } else {
         (
-            [0.22, 0.98, 0.56, motion.alpha],
-            [0.88, 1.0, 0.94, 0.92],
+            [
+                0.22 - 0.16 * tap_glow,
+                0.98 + 0.02 * tap_glow,
+                0.56 - 0.20 * tap_glow,
+                motion.alpha,
+            ],
+            [
+                0.88 - 0.36 * tap_glow,
+                1.0,
+                0.94 - 0.32 * tap_glow,
+                0.92 + 0.08 * tap_glow,
+            ],
         )
     };
     text.push_selection_ring(
         ring_center,
-        [base_radius[0] * motion.scale, base_radius[1] * motion.scale],
+        [base_radius[0] * tap_scale, base_radius[1] * tap_scale],
         1.0,
         motion.phase,
         motion.pulse,

@@ -107,6 +107,14 @@ impl CampaignId {
     pub fn advisor(self) -> Leader {
         self.0.advisor()
     }
+
+    pub fn featured_hero_slug(self) -> Option<&'static str> {
+        self.0.featured_hero_slug
+    }
+
+    pub fn featured_hero_name(self) -> Option<&'static str> {
+        self.0.featured_hero_name
+    }
 }
 
 /// One placed episode faction. Identity is stable; the display name can change independently.

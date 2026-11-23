@@ -298,6 +298,7 @@ impl SowApp {
                     crate::app::MAX_TRANSPORT_IMPACTS,
                 ),
                 death_nameplates: Vec::with_capacity(crate::app::MAX_DEATH_NAMEPLATES),
+                land_trade_popups: Vec::with_capacity(crate::app::MAX_LAND_TRADE_POPUPS),
                 attack_badge_labels: std::collections::HashMap::new(),
                 attack_badge_style_key: None,
                 attack_badge_cache_tick: None,

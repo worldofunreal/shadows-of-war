@@ -448,6 +448,18 @@ pub enum ClickMarkerKind {
     TransportOrder,
 }
 
+pub const MAX_LAND_TRADE_POPUPS: usize = 48;
+
+#[derive(Clone, Debug)]
+pub struct LandTradeGoldPopup {
+    pub amount: String,
+    pub world_x: f32,
+    pub world_y: f32,
+    pub start_time: web_time::Instant,
+    pub prepared_amount: Option<sow_render::text::PreparedText>,
+    pub text_style_key: Option<u32>,
+}
+
 #[derive(Clone, Debug)]
 pub struct AttackLaunchNotice {
     pub amount_text: String,
@@ -885,6 +897,7 @@ pub struct UiState {
     pub transport_target_snapshot_tick: Option<u64>,
     pub transport_impacts: std::collections::VecDeque<TransportImpact>,
     pub death_nameplates: Vec<DeathNameplateAnimation>,
+    pub land_trade_popups: Vec<LandTradeGoldPopup>,
     pub attack_badge_labels: std::collections::HashMap<u64, AttackBadgeLabel>,
     pub attack_badge_style_key: Option<[u32; 2]>,
     pub attack_badge_cache_tick: Option<u64>,

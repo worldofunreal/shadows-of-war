@@ -394,6 +394,7 @@ mod bot_iq_alliance_tests {
                 insert_seq_counter: 0,
                 rng: wyrand::WyRand::new(id),
                 retreating: false,
+                focus: None,
             });
         }
         engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
@@ -424,6 +425,7 @@ mod bot_iq_alliance_tests {
             insert_seq_counter: 0,
             rng: wyrand::WyRand::new(91),
             retreating: false,
+            focus: None,
         });
         engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
         engine.ai_attack_index[1].push(0);
@@ -453,6 +455,7 @@ mod bot_iq_alliance_tests {
                 insert_seq_counter: 0,
                 rng: wyrand::WyRand::new(11),
                 retreating: false,
+                focus: None,
             },
             crate::execution::AttackExecution {
                 landed: false,
@@ -465,6 +468,7 @@ mod bot_iq_alliance_tests {
                 insert_seq_counter: 0,
                 rng: wyrand::WyRand::new(12),
                 retreating: false,
+                focus: None,
             },
         ]);
         engine.ai_attack_index = vec![vec![], vec![0], vec![1]];
@@ -498,6 +502,7 @@ mod bot_iq_alliance_tests {
             insert_seq_counter: 0,
             rng: wyrand::WyRand::new(42),
             retreating: false,
+            focus: None,
         });
 
         let due_tick = ghost_retaliation_delay_ticks(&crate::game_config::AiTuning::default(), seed, 1, attack_id);
@@ -798,6 +803,7 @@ mod bot_iq_alliance_tests {
             insert_seq_counter: 0,
             rng: wyrand::WyRand::new(42),
             retreating: false,
+            focus: None,
         });
         engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
         engine.ai_attack_index[1].push(0);
@@ -830,6 +836,7 @@ mod bot_iq_alliance_tests {
             insert_seq_counter: 0,
             rng: wyrand::WyRand::new(43),
             retreating: false,
+            focus: None,
         });
         engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
         engine.ai_attack_index[1].push(0);
@@ -1188,6 +1195,7 @@ mod bot_iq_alliance_tests {
             insert_seq_counter: 0,
             rng: wyrand::WyRand::new(44),
             retreating: false,
+            focus: None,
         });
         engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
         engine.ai_attack_index[1].push(0);
@@ -1307,6 +1315,7 @@ mod bot_iq_alliance_tests {
             insert_seq_counter: 0,
             rng: wyrand::WyRand::new(42),
             retreating: false,
+            focus: None,
         });
         engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
         engine.ai_attack_index[1].push(0);

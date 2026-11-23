@@ -14,7 +14,7 @@ use std::{
 
 const SLICE: Duration = Duration::from_millis(100);
 const RESIDENT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-const CHECKPOINT_FORMAT: u32 = 6;
+const CHECKPOINT_FORMAT: u32 = 7;
 
 fn allocated_bytes<T>(values: &Vec<T>) -> u64 {
     values.capacity().saturating_mul(std::mem::size_of::<T>()) as u64
@@ -1218,6 +1218,7 @@ mod tests {
                             intent: GameplayIntent::Attack(sow_core::protocol::AttackIntent {
                                 target_owner: 0,
                                 troops: Some(20.0),
+                                target_tile: None,
                             }),
                         })
                         .collect()

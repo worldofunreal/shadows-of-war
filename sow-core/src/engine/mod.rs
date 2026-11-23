@@ -696,13 +696,16 @@ impl SowEngine {
         self.building_aggregates =
             aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
         let stations = self.buildings.iter().filter_map(|building| {
-            use crate::game::BuildingKind::{City, TradingPost, Port};
             let level = building.active_level();
-            if level == 0 || !matches!(building.kind, City | TradingPost | Port) {
+            if level == 0 {
                 return None;
             }
             Some(Building {
-                level: if building.kind == TradingPost { level } else { 1 },
+                level: if building.kind == crate::game::BuildingKind::TradingPost {
+                    level
+                } else {
+                    1
+                },
                 under_construction: false,
                 ticks_until_complete: 0,
                 ..*building
@@ -2159,6 +2162,7 @@ impl SowEngine {
                         &crate::protocol::AttackIntent {
                             target_owner: candidate.target_id,
                             troops: Some(share),
+                            target_tile: None,
                         },
                         intent_index,
                     );

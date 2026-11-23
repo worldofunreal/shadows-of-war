@@ -1228,6 +1228,70 @@ mod tests {
     }
 
     #[test]
+    fn campaign_nuke_succeeds_with_level_one_silo_and_level_four_city() {
+        use crate::campaign::{CampaignAction, CampaignUnlocks};
+        use crate::game::NukeKind;
+        use crate::map::MapTile;
+        use crate::player::Player;
+        use std::collections::HashMap;
+
+        let config = GameConfig {
+            tutorial: true,
+            buildings_enabled: true,
+            ..GameConfig::default()
+        };
+        let mut state = GameState::new(1, 32, 32, config.clone());
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        let mut player = Player::new_human(1, "Six Sky".into(), [1.0, 0.0, 0.0], &config);
+        player.gold = 5_000.0;
+        state.register_player(player);
+        let mut enemy = Player::new_human(2, "Tikal".into(), [0.5, 0.2, 0.8], &config);
+        enemy.tile_count = 1;
+        state.register_player(enemy);
+        for y in 0..16 {
+            for x in 0..16 {
+                state.map.set_owner_id(x, y, 1);
+            }
+        }
+        state.map.set_owner_id(24, 24, 2);
+
+        let mut game = SowEngine::new(state, WaterComponents::default());
+        assert!(game.set_campaign_unlocks(CampaignUnlocks {
+            buildings: HashMap::from([
+                (BuildingKind::MissileSilo, 1),
+                (BuildingKind::City, 4),
+            ]),
+            actions: vec![CampaignAction::Nuke],
+        }));
+        let silo_tile = 5 * 32 + 5;
+        let city_tile = 10 * 32 + 10;
+
+        game.apply_build_structure_intent(1, BuildingKind::MissileSilo, silo_tile);
+        game.apply_build_structure_intent(1, BuildingKind::City, city_tile);
+        assert_eq!(game.buildings.len(), 2);
+        for b in &mut game.buildings {
+            b.under_construction = false;
+            b.ticks_until_complete = 0;
+            if b.kind == BuildingKind::City {
+                b.level = 4;
+            }
+        }
+        let snapshot = game.build_snapshot();
+        assert!(snapshot.players.iter().any(|p| p.id == 1 && p.nuke_available));
+        assert!(crate::building::snapshot_has_nuclear_launch_city(
+            &snapshot.buildings,
+            1,
+            true,
+        ));
+
+        let target_tile = 24 * 32 + 24;
+        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, target_tile);
+        assert_eq!(game.projectiles.len(), 1);
+        assert_eq!(game.projectiles[0].dst_tile, target_tile);
+    }
+
+    #[test]
     fn first_city_becomes_affordable_and_is_building_within_game_time_budget() {
         let mut game = pacing_match();
         let config = game.state.config.clone();
@@ -1539,5 +1603,13 @@ mod tests {
             game.fleets[0].warship.as_ref().unwrap().mode,
             crate::warp_fleet::WarshipMode::Patrolling
         );
+
+        // Legacy single-slot CityArsenalState JSON (without warship_queue / paid_gold_bits) deserializes & migrates cleanly.
+        let legacy_json = r#"{"has_anti_nuke":false,"nuke_ready":false,"arsenal_build":{"kind":"Warship","ticks_until_complete":10,"total_ticks":50}}"#;
+        let mut legacy: crate::building::CityArsenalState = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(legacy.warship_queue_len(), 1);
+        legacy.normalize_legacy_warship();
+        assert!(legacy.arsenal_build.is_none());
+        assert_eq!(legacy.warship_queue.len(), 1);
     }
 }
