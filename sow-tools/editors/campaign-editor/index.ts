@@ -58,6 +58,7 @@
   const episodeId = /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(query.get("episode") || "")
     ? query.get("episode")
     : "boudica";
+  const episodeName = (id: string) => id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   let MAPW = 896,
     MAPH = 504;
   let terrain: Uint8Array | null = null; // Uint8Array length MAPW*MAPH, bit7 = land
@@ -89,7 +90,7 @@
     ctx = cv.getContext("2d");
   const hud = document.getElementById("hud");
   let mapImage: HTMLCanvasElement | null = null; // offscreen ImageData rendered once
-  document.getElementById("episodeLabel").textContent = episodeId;
+  document.getElementById("episodeLabel").textContent = episodeName(episodeId);
   (document.getElementById("logicLink") as HTMLAnchorElement).href =
     `logic.html?episode=${encodeURIComponent(episodeId)}`;
 
@@ -611,7 +612,7 @@
       document.getElementById("fiqn").oninput = (e) => setIq(+(e.target as HTMLInputElement).value);
       document.getElementById("del").onclick = deleteSelected;
     } else {
-      host.innerHTML = `<div class="hint">Click a tribe on the map or in the list.</div>`;
+      host.innerHTML = `<div class="hint">Select a faction or the player spawn to edit it.</div>`;
     }
   }
 
@@ -1116,7 +1117,7 @@
       roster = normalize(await res.json());
       rosterDirty = false;
       rosterExternal = false;
-      document.getElementById("rosterStatus").textContent = "Saved";
+      document.getElementById("rosterStatus").textContent = "Up to date";
       document.getElementById("rosterStatus").className = "hint";
     } catch (e) {
       const message = "Roster load failed: " + e.message;
@@ -1174,7 +1175,7 @@
         ...episodes.map((id) => {
           const option = document.createElement("option");
           option.value = id;
-          option.textContent = id.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+          option.textContent = episodeName(id);
           return option;
         }),
       );

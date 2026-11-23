@@ -275,6 +275,7 @@ async function buildShell(
   const portalBootJs = [
     `window.SOW_WS_URL = "wss://${ptrHost}/ws/";`,
     `window.SOW_MAPS_URL = "/maps";`,
+    `window.SOW_LOCAL_MAP_PREVIEW = true;`,
     `window.SOW_ASSETS_URL = "/assets";`,
     `window.SOW_DATABASE_URL = "https://${ptrHost}/api";`,
     `window.SOW_SOCIAL_SIGN_IN = false;`,

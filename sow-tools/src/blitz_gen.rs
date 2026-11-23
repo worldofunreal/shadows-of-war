@@ -246,6 +246,7 @@ fn simulate_headless(
                         intent: GameplayIntent::Attack(AttackIntent {
                             target_owner: target,
                             troops: Some(frac),
+                            target_tile: None,
                         }),
                     }]);
                 }

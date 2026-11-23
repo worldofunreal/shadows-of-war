@@ -134,15 +134,19 @@ function updateInfo() {
   const h = state.sheet.naturalHeight;
   const pos = framePos(state.frameIndex);
   const r = tileRect(w, h, state.cols, state.rows, pos.col, pos.row);
+  fileName.textContent = state.name || 'spritesheet';
   const parts = [`${w}×${h}`, `cuadrícula ${state.cols}×${state.rows}`];
   if (r && r.w > 0 && r.h > 0) {
-    parts.push(`celda ${Math.max(1, Math.round(r.w))}×${Math.max(1, Math.round(r.h))} px`);
+    tileSize.textContent = `${Math.max(1, Math.round(r.w))}×${Math.max(1, Math.round(r.h))} px`;
+    parts.push(`celda ${tileSize.textContent}`);
+  } else {
+    tileSize.textContent = '—';
   }
   parts.push(`${totalFrames()} marcos`);
   let text = parts.join(' · ');
   if (state.detectedNote) text += ` · ${state.detectedNote}`;
   infoLine.textContent = text;
-  document.title = `Sow Spritesheet Viewer — ${state.name || 'spritesheet'}`;
+  document.title = `Sow Spritesheet Viewer — ${fileName.textContent}`;
 }
 
 function updateFrameInfo() {
@@ -257,7 +261,7 @@ fileInput.addEventListener('change', () => {
   const file = fileInput.files ? fileInput.files[0] : null;
   fileInput.value = '';
   if (!file) return;
-  if (!file.type || !file.type.startsWith('image/')) {
+  if (file.type && !file.type.startsWith('image/')) {
     showError('Elige un archivo de imagen.');
     return;
   }
@@ -270,7 +274,7 @@ function onDrop(evt) {
   const files = evt.dataTransfer ? evt.dataTransfer.files : null;
   if (!files || files.length === 0) return;
   const file = files[0];
-  if (!file.type || !file.type.startsWith('image/')) {
+  if (file.type && !file.type.startsWith('image/')) {
     showError('Elige un archivo de imagen.');
     return;
   }

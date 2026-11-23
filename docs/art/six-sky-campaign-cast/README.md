@@ -1,6 +1,6 @@
 # Reparto histórico y arte conceptual: campaña de Lady Six Sky
 
-Esta investigación cubre los ocho episodios actuales `six_sky_maya_01` a `six_sky_maya_08`, sus facciones y el relato en inglés. El elenco separa a las personas nombradas en inscripciones de las ciudades que aparecen como objetivos. Los retratos de esta carpeta son conceptos visuales; no están conectados a líderes, facciones ni al paquete del juego, y no reconstruyen rostros reales.
+Esta investigación cubre los ocho episodios actuales `six_sky_maya_01` a `six_sky_maya_08`, sus facciones y el relato en inglés. El elenco separa a las personas nombradas en inscripciones de las ciudades que aparecen como objetivos. Las escenas seleccionadas ya se conectan al selector de campaña; los demás conceptos de esta carpeta quedan como repertorio documentado para futuros episodios. Ninguna imagen reconstruye un rostro real.
 
 ## Elenco recomendado
 
@@ -27,15 +27,15 @@ Esta investigación cubre los ocho episodios actuales `six_sky_maya_01` a `six_s
 | 1 — 693 | La campaña de K’inichil Kab. | Six Sky; K’inichil Kab como nombre de cautivo/entidad. | Mantener el nombre, pero evitar presentarlo con certeza como gobernante de Ucanal. |
 | 2 — 693 | Entronización del niño K’ahk’ Tiliw y campaña contra B’ital; el texto también nombra Tuub’al. | Six Sky, K’ahk’ Tiliw de cinco años. | Usar el arte infantil; B’ital y Tuub’al son entidades/lugares sin gobernante individual identificado. |
 | 3 — 695 | Yellow Rabbit y la guerra con Tikal/Calakmul. | Siyaj K’awiil (cautivo en Yellow Rabbit), Jasaw Chan K’awiil I y Yuknoom Yich’aak K’ahk’ (frente Tikal–Calakmul). | Asignar Siyaj al líder actual “Tikal lord at Yellow Rabbit”. Mantener a Jasaw como otro actor; no fusionar los dos eventos ni los cautivos. |
-| 4 — 696 | Campaña de Komkom. | Six Sky y K’ahk’ Tiliw. | Komkom es el objetivo, no un gobernante conocido. También se registra otra campaña contra Komkom en 726; indicar la fecha del episodio para evitar confusión. |
-| 5 — 697 | Campaña de Bahlam Jol. | Six Sky y K’ahk’ Tiliw. | Bahlam Jol es el nombre del lugar/entidad política; no inventar un rey para asignarle retrato. |
+| 4 — 696 | El juego presenta una campaña contra Komkom. | Six Sky; no hay un gobernante individual confirmado para este objetivo. | La cronología de Naranjo consultada asigna 696 a Ko Punteado, todavía sin identificar. Mantener Komkom como escenario del juego requiere tratar la identificación como una hipótesis del guion. |
+| 5 — 697 | El juego presenta una campaña contra Bahlam Jol. | Six Sky; no hay un gobernante individual confirmado para este objetivo. | La cronología consultada llama a la localidad de 697 “Cráneo con Orejas”, aún sin identificar. No asignar un retrato de gobernante a Bahlam Jol sin nueva evidencia. |
 | 6 — 698 | Ataque y quema de Ucanal; la captura de su rey se registra para 702. | Itzamnaaj Bahlam, rey de Ucanal; K’ahk’ Tiliw y Six Sky. | Usar Itzamnaaj Bahlam para la facción de Ucanal y fechar la captura como desenlace posterior. K’inichil Kab pertenece a otro registro y su relación geográfica es discutida. |
-| 7 — transición 726–741 | El registro de Naranjo se interrumpe después de 726; la muerte de Six Sky se sitúa en 741. | Itzamnaaj K’awiil (Dos Pilas, hasta 726) y Yuknoom Took’ K’awiil (Calakmul, hasta 731) son los rostros adecuados para los años documentados. | Mantener explícita la incertidumbre del período tardío. Yaxha está en el mapa como neutral, pero el episodio actual no representa una campaña contra esa ciudad. |
+| 7 — 714–726 | El episodio enseña a transferir recursos a Dos Pilas al final del registro monumental de Naranjo. | Six Sky como narradora; K’ahk’ Tiliw como rey de Naranjo; Itzamnaaj K’awiil y Yuknoom Took’ K’awiil como gobernantes aliados dentro de sus cronologías. | La portada destaca a K’ahk’ Tiliw adulto. El episodio conserva la voz tutorial de Six Sky y no altera la diplomacia del escenario. |
 | 8 — 744 | Tikal derrota a Naranjo tres años después de la muerte registrada de Six Sky. | Yik’in Chan K’awiil y Yax Mayuy Chan Chaahk. | El resultado histórico es la victoria de Tikal. Calakmul ya había sufrido una derrota decisiva c. 734–736; conservarlo aliado en este mapa debe marcarse como parte de la historia alternativa o revisarse. |
 
 ## Asignaciones actuales del juego
 
-En `six_sky_maya_03`–`six_sky_maya_08`, las facciones usan `leader: "caesar"` y no tienen retratos asignados. En el episodio 2 varias facciones reutilizan `lady_six_sky` como líder aunque representan reinos distintos. El elenco de arriba propone identidades por fecha donde hay evidencia y deja sin nombre personal a los objetivos cuyo gobernante no está identificado. No se modificaron los JSON ni se conectó el arte al runtime.
+Las portadas de los ocho episodios usan una figura destacada independiente de la heroína asesora `lady_six_sky`. El juego conserva a Six Sky como narradora; las identidades y avatares de facción siguen en sus datos actuales. Los episodios 4–5 conservan retrato de Six Sky porque los nombres de sus objetivos no identifican a un gobernante personal.
 
 ## Otras figuras para una ampliación
 
@@ -46,15 +46,20 @@ En `six_sky_maya_03`–`six_sky_maya_08`, las facciones usan `leader: "caesar"` 
 
 ## Arte y alcance
 
-La carpeta contiene **25 archivos WebP nuevos**: 13 conceptos hero (incluye dos edades de K’ahk’ Tiliw) y 12 atlas de avatar 2×2. Ya existían el retrato/avatar de Six Sky y el avatar de K’inichil Kab; aquí se añadió solo un concepto hero nuevo para K’inichil Kab. Los héroes son 16:9; los atlas tienen cuatro expresiones para recorte individual. Son borradores para revisión, no variantes desktop/mobile ni arte conectado al juego.
+La carpeta conserva **25 conceptos WebP**: 13 escenas hero (incluye dos edades de K’ahk’ Tiliw) y 12 atlas 2×2. El juego usa seis escenas nuevas: K’inichil Kab, K’ahk’ Tiliw niño, Siyaj K’awiil, Itzamnaaj Bahlam, K’ahk’ Tiliw adulto y Yik’in Chan K’awiil. Lady Six Sky reutiliza sus escenas actuales. Se generaron variantes verticales móviles para esas seis figuras; los atlas de Siyaj K’awiil, Itzamnaaj Bahlam, Itzamnaaj K’awiil, Yuknoom Took’ K’awiil, Yuknoom Yich’aak K’ahk’ y Yik’in Chan K’awiil alimentan el recortador de avatares existente. K’inichil Kab reutiliza su atlas instalado.
+
+Los retratos individuales de K’ahk’ Tiliw niño y adulto están en `assets/art/avatars/campaign/`; sirven a las tarjetas sin añadirlos al catálogo seleccionable. Los héroes históricos deshabilitados siguen deshabilitados. El distribuidor publica el arte de figuras del catálogo aunque estén deshabilitadas solo si un episodio las declara; los retratos de campaña se copian desde sus fuentes estáticas.
 
 Vista conjunta de los héroes: [heroes_contact_sheet.jpg](heroes_contact_sheet.jpg).
 
-El acabado 3D toma como referencia el hero existente de Six Sky, `assets/art/heroes/six_sky_desktop.webp`. Cada atlas usa el hero de su personaje como referencia visual. Para los nombres/personas sin descripción física, los rasgos son diseño artístico original; el registro respalda su nombre, fecha o papel, no su rostro.
+El acabado 3D toma como referencia el hero móvil existente de Six Sky, `assets/art/heroes/six_sky_mobile.webp`. Para las personas sin descripción física, los rasgos son diseño artístico original; el registro respalda su nombre, fecha o papel, no su rostro.
 
 ## Fuentes
 
 - Karen Bassie-Sweet, *Maya Gods of War*, University Press of Colorado: secuencia de campañas 693–698, Yellow Rabbit, Komkom, Ucanal y la cronología de Six Sky. <https://read.upcolorado.com/system/actioncallout/7/d/3/7d3e2924-457f-4f52-b054-e240a70d7980/attachment/0f2be418de53f2db50dea4b9a921cdfa.pdf>
+- Mesoweb, [“Los gobernantes de Naranjo: K’ahk’ Tiliw Chan Chaak”](https://www.mesoweb.com/es/gobernantes/naranjo/Kahk_Tiliw_Chan_Chaak.html): K’inichil Kab, B’ital, Siyaj K’awiil, Ko Punteado (696), “Cráneo con Orejas” (697), Ucanal y la cronología de K’ahk’ Tiliw.
+- Mesoweb, [“Los gobernantes de Naranjo: Yax Mayuy Chan Chaak”](https://www.mesoweb.com/es/gobernantes/naranjo/Yax_Mayuy_Chan_Chaak.html): guerra de Tikal en 744 y captura de Yax Mayuy.
+- Helmke et al., [“The Inscribed Weaving Pins of Buenavista del Cayo”](https://www.mesoweb.com/pari/publications/journal/2404/Helmke_etal.2024.pdf): llegada de Six Sky en 682 bajo la autoridad de B’ajlaj Chan K’awiil.
 - Christophe Helmke, “The heart and stomach of a king: a study of the regency of Lady Six Sky at Naranjo”: cronología, monumentos y fin del registro local en 726. <https://historiablog.org/wp-content/uploads/2024/07/01.pdf>
 - Christophe Helmke, Christian Prager y Jaime J. Awe, “A Reading of the Komkom Vase Discovered at Baking Pot, Belize”: lectura de Siyaj K’awiil capturado en Yellow Rabbit. <https://www.mesoweb.com/publications/PMP3/PMP3.s.pdf>
 - Corzo, Alvarado y Laporte, “Ucanal: un sitio asociado a la cuenca media del río Mopan”: nombres asociados a Ucanal en las estelas 22 y 24, incluidas las lecturas K’inichil-Cab y Escudo Jaguar. <https://www.asociaciontikal.com/wp-content/uploads/2016/11/16.97_-_Corzo_et_al..pdf>

@@ -436,7 +436,7 @@ terrain_art = "bun scripts/bake-peten-canopy.ts peten_yellow_rabbit"
 source_sha256 = "bc9e1d58b6426f613b20b07be6a37a6370c867b16d89af495eabc0dc1d3e093a"
 map_bin_sha256 = "ff1abee6dbbb8cf36250bf6eb1c9814e147840c2a02af2a955d02f688a2b1e35"
 map_bin_br_sha256 = "59e331e42374160e10b753225156c0b696fcd122b00ebd9c275ba7c5f02fd7be"
-thumbnail_sha256 = "6a430aadcd1213ce3212b9a783161250b136d17ada49bb50fecca02547ad5e07"
+thumbnail_sha256 = "8d29cba522f6e980595198a922ca2ff785ef9f38c694d15f4123c97edaf40cfb"
 
 [recipes.peten_komkom]
 origin_kind = "original"
@@ -451,7 +451,7 @@ terrain_art = "bun scripts/bake-peten-canopy.ts peten_komkom"
 source_sha256 = "a140ed1d5c2129c76ba314fe573a9133b84f9f39789218c8ed4484535248944d"
 map_bin_sha256 = "c27ee64b8b805b752f5622a9303f0ff3f37982c9d301a059ecd3ad04dcd648ca"
 map_bin_br_sha256 = "bdc4f633eb691d07a3b0bc6b302531d139a4e8d6060f543c29563dc005827fcb"
-thumbnail_sha256 = "9e7f7bce7d8928aca0ec04e9fb2ac49445f63040f42696de589c3c19a1280895"
+thumbnail_sha256 = "1fdd224c6937cfa1c9c7a92af0213c38ab38e64b8a4178ca0f170f5384e2e750"
 
 [recipes.peten_bahlam_jol]
 origin_kind = "original"
@@ -466,7 +466,7 @@ terrain_art = "bun scripts/bake-peten-canopy.ts peten_bahlam_jol"
 source_sha256 = "dc3ac10ef9a3b501d4e09e6bffb094147c610b86a340fbc3fe483cc81ad1eee1"
 map_bin_sha256 = "95f7fc5dcdafbe6e5a512c23c50382f93575f7cb8b65926eacd1bb3f90523034"
 map_bin_br_sha256 = "986479f4f30818e8702a6a272d3f7e54402cca1b8c8493e7dd4f9945b737b33e"
-thumbnail_sha256 = "dd617fe7e93b67e2f6753de559b324553fe9d4fe74bfe790e3c96355245a5051"
+thumbnail_sha256 = "003c45fe10617457eca7a8059e0571b7762d29b1e21aa070400c9065b4566cd5"
 
 [recipes.peten_ucanal]
 origin_kind = "original"
@@ -481,7 +481,7 @@ terrain_art = "bun scripts/bake-peten-canopy.ts peten_ucanal"
 source_sha256 = "2fa97b35b338b500995b856dab4ff488830232a29d879ac707c553aa91295cc9"
 map_bin_sha256 = "7fa50bc04f3f488f9789badba7aa5c461c9b5fadfeedf65f6599101e8beb4a60"
 map_bin_br_sha256 = "dd4f1de112667f49234aab638243cdf3ddf97371d201b0e07ed17fd043d7f4dc"
-thumbnail_sha256 = "3dc72ba0572f993b1b3561d21c23ca156dfbfabb6ff4a1385de5b2d8d7980212"
+thumbnail_sha256 = "f150739ad47d44ed735b0a5e9a82feddc4f8ae0f1ba1e114f0ddc316c2a45559"
 
 [recipes.peten_dos_pilas]
 origin_kind = "original"
@@ -496,7 +496,7 @@ terrain_art = "bun scripts/bake-peten-canopy.ts peten_dos_pilas"
 source_sha256 = "b28b0680ecff5946a4fe67ce5db54db1d84b63ed71ea9683f216a65d3d634fb3"
 map_bin_sha256 = "cb0dad6223a9fd9d03d3da17dc8a1b8619431ca2d56f65b7aa12f2aad46a9e51"
 map_bin_br_sha256 = "d0c4331d9ff9a902f7c9cd66859f7cf6b85179b481fd96b38884b24217aed82a"
-thumbnail_sha256 = "f56626ec8b459fae6b4d7a110b4642aaee1bc360126da54c4e6b10a9bd7d1ad0"
+thumbnail_sha256 = "4ffce0dd35fe0b0fd48923adf3daa1c892b89cbfe215adcf463e0a9d34bd292d"
 
 [recipes.peten_tikal]
 origin_kind = "original"
@@ -511,4 +511,4 @@ terrain_art = "bun scripts/bake-peten-canopy.ts peten_tikal"
 source_sha256 = "a099b3c704a0f703fe7b78c2c10003b31e71955ce15eecccc9509fa47da37e6d"
 map_bin_sha256 = "f40be36fab60233378dd8fa0de2090127fc4935b983fd6b25b0c7b17f5439bf5"
 map_bin_br_sha256 = "08a0d45b124e6617a1e6d9334d7159121f9a8d1af0c3d8ede6698ae721cf6e1a"
-thumbnail_sha256 = "88855a365887d59749d6ee754518072cc79b33734987ae178587da04ad098449"
+thumbnail_sha256 = "1044d6d09ca4cdc88a6f6d1c69a8815c183bae185b4d6efb7e8ccae7bff0e647"

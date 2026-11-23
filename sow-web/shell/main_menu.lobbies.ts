@@ -498,6 +498,8 @@ export function renderHome() {
 
 export function campaignEpisodeHeroSlug(episodeId: string): string {
     const id = String(episodeId || "").trim();
+    const featuredSlug = menuUi.state?.campaign?.episodes?.find((episode) => episode.id === id)?.hero_slug;
+    if (typeof featuredSlug === "string" && /^[a-z0-9_]+$/.test(featuredSlug)) return featuredSlug;
     if (id === "boudica") return "boudica";
     if (id.startsWith("tactics_") || id.startsWith("adv_tactics_")) return "sun_tzu";
     if (id.startsWith("blitz_")) return "caesar";
@@ -509,6 +511,13 @@ export function campaignEpisodeHeroSlug(episodeId: string): string {
     const leader = leaderById(candidate);
     if (leader) return leaderArtSlug(leader);
     return "boudica";
+}
+
+function campaignEpisodeHeroName(episodeId: string, heroSlug: string): string {
+    const featuredName = menuUi.state?.campaign?.episodes?.find((episode) => episode.id === episodeId)?.hero_name;
+    if (typeof featuredName === "string" && featuredName.trim()) return featuredName;
+    const leader = leaderById(heroSlug);
+    return leader ? leaderDisplayName(leader) : heroSlug;
 }
 
 const BLITZ_MAP_ROTATION = ["europe", "bajacalifornia", "southeastasia", "africa", "northamerica"];
@@ -616,8 +625,7 @@ export function updateCampaignSelection(episodeId: string): boolean {
 
     const heroSlug = campaignEpisodeHeroSlug(episodeId);
     const heroArt = campaignEpisodeHeroArt(heroSlug);
-    const heroLeader = leaderById(heroSlug);
-    const heroName = heroLeader ? leaderDisplayName(heroLeader) : heroSlug;
+    const heroName = campaignEpisodeHeroName(episodeId, heroSlug);
     const picture = featured.querySelector<HTMLPictureElement>(".sow-campaign__hero-picture");
     const source = picture && picture.querySelector<HTMLSourceElement>("source");
     const img = picture && picture.querySelector<HTMLImageElement>("img");
@@ -825,8 +833,7 @@ export function renderCampaign() {
     if (selectedEpisode) {
         const heroSlug = campaignEpisodeHeroSlug(selectedEpisode.id);
         const heroArt = campaignEpisodeHeroArt(heroSlug);
-        const heroLeader = leaderById(heroSlug);
-        const heroName = heroLeader ? leaderDisplayName(heroLeader) : heroSlug;
+        const heroName = campaignEpisodeHeroName(selectedEpisode.id, heroSlug);
         const mapName = selectedEpisode.map_name || campaignEpisodeMapName(selectedEpisode.id);
         const mapThumb = lobbyThumb({ map_name: mapName });
         const mapDisplayName = formatMapName(mapName);

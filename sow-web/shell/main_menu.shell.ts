@@ -724,16 +724,18 @@ function menuMusicSetMediaMetadata() {
     const artworkMeta = document.querySelector<HTMLMetaElement>('meta[name="sow-media-artwork"]');
     if (!artworkMeta || !artworkMeta.content) return;
     try {
-        mediaSession.metadata = new window.MediaMetadata({
-            title: "Shadows of War",
-            artwork: [
+        const artworkSrc = new window.URL(artworkMeta.content, document.baseURI).href;
+        const metadata: MediaMetadataInit = { title: "Shadows of War" };
+        if (/^(?:https?|data|blob):/i.test(artworkSrc)) {
+            metadata.artwork = [
                 {
-                    src: new window.URL(artworkMeta.content, document.baseURI).href,
+                    src: artworkSrc,
                     sizes: "192x192",
                     type: "image/png",
                 },
-            ],
-        });
+            ];
+        }
+        mediaSession.metadata = new window.MediaMetadata(metadata);
         menuMusic.mediaMetadataSet = true;
     } catch (error) {
         console.warn("[SOW MUSIC] could not set player metadata:", error);

@@ -118,10 +118,56 @@ function tree(height: number, spread: number, branches: number, foliage: Point):
     return mesh;
 }
 
+function shrub(spread: number, foliage: Point): Mesh {
+    const mesh: Mesh = { vertices: [], faces: [], colors: [], materials: [] };
+    crown(mesh, [0, 0, spread * 0.42], spread * 0.72, spread * 0.45, foliage);
+    for (let i = 0; i < 3; i++) {
+        const angle = (i + random() * 0.45) * Math.PI * 2 / 3;
+        const offset = spread * (0.36 + 0.16 * random());
+        const tint = 0.84 + 0.22 * random();
+        crown(
+            mesh,
+            [Math.cos(angle) * offset, Math.sin(angle) * offset, spread * 0.30],
+            spread * 0.48,
+            spread * 0.32,
+            [foliage[0] * tint, foliage[1] * tint, foliage[2] * tint],
+        );
+    }
+    return mesh;
+}
+
+function boulder(radius: number, stone: Point): Mesh {
+    const mesh: Mesh = { vertices: [], faces: [], colors: [], materials: [] };
+    const sides = 7;
+    const vertices: Point[] = [[0, 0, -radius * 0.25]];
+    const faces: number[][] = [];
+    for (let ring = 1; ring <= 2; ring++) {
+        const z = ring === 1 ? radius * 0.18 : radius * 0.58;
+        const ringScale = ring === 1 ? 1.0 : 0.62;
+        for (let i = 0; i < sides; i++) {
+            const angle = (i + ring * 0.35) * Math.PI * 2 / sides;
+            const r = radius * ringScale * (0.76 + 0.36 * random());
+            vertices.push([Math.cos(angle) * r, Math.sin(angle) * r, z * (0.85 + 0.28 * random())]);
+        }
+    }
+    const top = vertices.push([0, 0, radius * 0.74]) - 1;
+    for (let i = 0; i < sides; i++) {
+        const next = (i + 1) % sides;
+        faces.push([0, next + 1, i + 1], [top, 1 + sides + i, 1 + sides + next]);
+        faces.push([1 + i, 1 + next, 1 + sides + next], [1 + i, 1 + sides + next, 1 + sides + i]);
+    }
+    addPart(mesh, vertices, faces, stone);
+    return mesh;
+}
+
 const trees = [
     tree(2.7, 1.34, 5, [0.22, 0.42, 0.13]),
     tree(3.5, 1.04, 4, [0.14, 0.32, 0.15]),
     tree(1.8, 0.93, 3, [0.31, 0.46, 0.14]),
+    ...(chapter ? [
+        shrub(0.88, [0.26, 0.44, 0.15]),
+        boulder(0.95, [0.60, 0.56, 0.47]),
+    ] : []),
 ];
 
 // Broad groves leave open land along the path between the two starting positions.
@@ -138,7 +184,29 @@ for (let row = 0; row < height; row += 1.65) {
         const y = row + random() * 1.45;
         const terrain = sampleTerrain?.(x, y);
         if (terrain) {
-            if (random() > 0.54 * terrain.density ** 1.55) continue;
+            const woodsScale = "woodsScale" in terrain ? terrain.woodsScale : 1;
+            const treeProb = chapter
+                ? 0.56 * woodsScale * terrain.density ** 1.48
+                : 0.54 * terrain.density ** 1.55;
+            if (random() <= treeProb) {
+                instances.push([
+                    Math.floor(random() * 3), x, height - y,
+                    0.66 + random() * 0.68, random() * Math.PI * 2, terrain.height,
+                ]);
+            } else if (chapter && terrain.density > 0.08 && terrain.density < 0.72 && random() < 0.24 * terrain.density) {
+                // Forest-edge undergrowth softens transitions into clearings.
+                instances.push([
+                    3, x, height - y,
+                    0.72 + random() * 0.65, random() * Math.PI * 2, terrain.height - 0.05,
+                ]);
+            } else if (chapter && "boulder" in terrain && terrain.boulder > 0.15 && random() < 0.11 * terrain.boulder) {
+                // Karst limestone outcrops along hill bases and canyon flanks.
+                instances.push([
+                    4, x, height - y,
+                    0.70 + random() * 0.85, random() * Math.PI * 2, terrain.height - 0.12,
+                ]);
+            }
+            continue;
         } else {
             const clearing = Math.hypot((x - clearingX) / clearingRadiusX, (y - clearingY) / 11);
             if (clearing < 1.15 + 0.15 * random()) continue;
@@ -149,12 +217,12 @@ for (let row = 0; row < height; row += 1.65) {
             if (random() > 0.45 * density ** 1.55) continue;
         }
         instances.push([
-            Math.floor(random() * trees.length), x, height - y,
-            0.65 + random() * 0.67, random() * Math.PI * 2, terrain?.height ?? 0,
+            Math.floor(random() * 3), x, height - y,
+            0.65 + random() * 0.67, random() * Math.PI * 2, 0,
         ]);
     }
 }
-if (new Set(instances.map(([variant]) => variant)).size !== trees.length) {
+if (new Set(instances.map(([variant]) => variant).filter(v => v < 3)).size !== 3) {
     throw new Error("Petén bake must contain all three tree variants");
 }
 
@@ -181,29 +249,47 @@ scene.render.filepath = output
 scene.view_settings.view_transform = 'Standard'
 width, height = data['size']
 
-def material(name, srgb):
+def material(name, srgb, roughness=0.78):
     result = bpy.data.materials.new(name)
     result.use_nodes = True
     linear = [((c + 0.055) / 1.055) ** 2.4 if c > 0.04045 else c / 12.92 for c in srgb]
-    result.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value = (*linear, 1)
+    bsdf = result.node_tree.nodes.get('Principled BSDF')
+    bsdf.inputs['Base Color'].default_value = (*linear, 1)
+    bsdf.inputs['Roughness'].default_value = roughness
     return result
 
-ground = material('Petén ground', (0.63, 0.72, 0.38))
+ground = material('Petén ground', (0.63, 0.72, 0.38), roughness=0.88)
 nodes = ground.node_tree.nodes
 links = ground.node_tree.links
 coord = nodes.new('ShaderNodeTexCoord')
+
+# Macro meadow / savanna variation
 noise = nodes.new('ShaderNodeTexNoise')
 noise.inputs['Scale'].default_value = 10
-noise.inputs['Detail'].default_value = 3
+noise.inputs['Detail'].default_value = 4
 links.new(coord.outputs['Generated'], noise.inputs['Vector'])
+
+# Fine grass & earth micro-grain for crisp close-up texture
+micro = nodes.new('ShaderNodeTexNoise')
+micro.inputs['Scale'].default_value = 1.45
+micro.inputs['Detail'].default_value = 5
+micro.inputs['Roughness'].default_value = 0.65
+links.new(coord.outputs['Object'], micro.inputs['Vector'])
+
+meadow_mix = nodes.new('ShaderNodeMixRGB')
+meadow_mix.inputs[0].default_value = 0.24
+links.new(noise.outputs['Fac'], meadow_mix.inputs[1])
+links.new(micro.outputs['Fac'], meadow_mix.inputs[2])
+
 palette = nodes.new('ShaderNodeValToRGB')
 palette.color_ramp.elements.remove(palette.color_ramp.elements[1])
 palette.color_ramp.elements[0].position = 0.16
-palette.color_ramp.elements[0].color = (0.24, 0.37, 0.10, 1)
-palette.color_ramp.elements.new(0.54).color = (0.36, 0.46, 0.15, 1)
-palette.color_ramp.elements.new(0.78).color = (0.49, 0.48, 0.24, 1)
-links.new(noise.outputs['Fac'], palette.inputs[0])
+palette.color_ramp.elements[0].color = (0.21, 0.34, 0.09, 1)
+palette.color_ramp.elements.new(0.52).color = (0.34, 0.45, 0.14, 1)
+palette.color_ramp.elements.new(0.80).color = (0.48, 0.49, 0.23, 1)
+links.new(meadow_mix.outputs[0], palette.inputs[0])
 ground_color = palette.outputs[0]
+
 plane = bpy.data.meshes.new('Ground')
 surface = data['surface']
 if surface:
@@ -229,30 +315,53 @@ if surface:
 
     stone_noise = nodes.new('ShaderNodeTexNoise')
     stone_noise.inputs['Scale'].default_value = 0.95
-    stone_noise.inputs['Detail'].default_value = 4
+    stone_noise.inputs['Detail'].default_value = 5
     links.new(coord.outputs['Object'], stone_noise.inputs['Vector'])
     bump = nodes.new('ShaderNodeBump')
-    bump.inputs['Strength'].default_value = 0.24
+    bump.inputs['Strength'].default_value = 0.26
     bump.inputs['Distance'].default_value = 0.36
     links.new(stone_noise.outputs['Fac'], bump.inputs['Height'])
     links.new(bump.outputs['Normal'], nodes.get('Principled BSDF').inputs['Normal'])
 
+    # Deep mossy jungle floor beneath woodland canopy
+    if len(surface[0]) >= 5:
+        moss_ramp = nodes.new('ShaderNodeValToRGB')
+        moss_ramp.color_ramp.elements[0].color = (0.11, 0.21, 0.06, 1)
+        moss_ramp.color_ramp.elements[1].color = (0.19, 0.31, 0.09, 1)
+        links.new(micro.outputs['Fac'], moss_ramp.inputs['Fac'])
+        ground_color = tint(ground_color, 'CanopyFloor', [s[4] * 0.56 for s in surface], moss_ramp.outputs[0])
+
+    # Stratified karst limestone ridges
     layers = nodes.new('ShaderNodeTexWave')
     layers.bands_direction = 'Z'
     layers.inputs['Scale'].default_value = 0.20
-    layers.inputs['Distortion'].default_value = 2.0
-    layers.inputs['Detail Scale'].default_value = 2.3
+    layers.inputs['Distortion'].default_value = 2.2
+    layers.inputs['Detail Scale'].default_value = 2.4
     links.new(coord.outputs['Object'], layers.inputs['Vector'])
     weathering = nodes.new('ShaderNodeMixRGB')
-    weathering.inputs[0].default_value = 0.66
+    weathering.inputs[0].default_value = 0.64
     links.new(layers.outputs['Fac'], weathering.inputs[1])
     links.new(stone_noise.outputs['Fac'], weathering.inputs[2])
     limestone = nodes.new('ShaderNodeValToRGB')
-    limestone.color_ramp.elements[0].color = (0.35, 0.30, 0.22, 1)
-    limestone.color_ramp.elements[1].color = (0.76, 0.68, 0.54, 1)
+    limestone.color_ramp.elements[0].color = (0.33, 0.29, 0.21, 1)
+    limestone.color_ramp.elements[1].color = (0.76, 0.69, 0.55, 1)
     links.new(weathering.outputs[0], limestone.inputs['Fac'])
     ground_color = tint(ground_color, 'Limestone', [s[1] for s in surface], limestone.outputs[0])
-    ground_color = tint(ground_color, 'Worn ground', [s[2] * 0.61 for s in surface], (*data['soil'], 1))
+
+    # Warm sandy shoreline bank near water
+    if len(surface[0]) >= 6:
+        ground_color = tint(ground_color, 'Bank', [s[5] * 0.52 for s in surface], (0.58, 0.50, 0.32, 1))
+
+    # Worn jungle dirt trails
+    ground_color = tint(ground_color, 'Worn ground', [s[2] * 0.64 for s in surface], (*data['soil'], 1))
+
+    # Weathered Maya limestone sacbe causeways & mossy plaza flagstones
+    if len(surface[0]) >= 4:
+        paving = nodes.new('ShaderNodeValToRGB')
+        paving.color_ramp.elements[0].color = (0.44, 0.43, 0.30, 1)
+        paving.color_ramp.elements[1].color = (0.64, 0.59, 0.45, 1)
+        links.new(micro.outputs['Fac'], paving.inputs['Fac'])
+        ground_color = tint(ground_color, 'Stonework', [s[3] * 0.42 for s in surface], paving.outputs[0])
 else:
     plane.from_pydata([(-10, -10, 0), (width+10, -10, 0), (width+10, height+10, 0), (-10, height+10, 0)], [], [(0, 1, 2, 3)])
 links.new(ground_color, nodes.get('Principled BSDF').inputs['Base Color'])
@@ -260,32 +369,70 @@ plane.materials.append(ground)
 scene.collection.objects.link(bpy.data.objects.new('Ground', plane))
 
 meshes = []
-for index, tree in enumerate(data['trees']):
-    mesh = bpy.data.meshes.new(f'Tree {index + 1}')
-    mesh.from_pydata(tree['vertices'], [], tree['faces'])
-    for color in tree['colors']:
-        mesh.materials.append(material('Bark or foliage', color))
-    for polygon, material_index in zip(mesh.polygons, tree['materials']):
+for index, item in enumerate(data['trees']):
+    mesh = bpy.data.meshes.new(f'Prop {index + 1}')
+    mesh.from_pydata(item['vertices'], [], item['faces'])
+    for color in item['colors']:
+        mesh.materials.append(material('Prop material', color, roughness=0.84))
+    for polygon, material_index in zip(mesh.polygons, item['materials']):
         polygon.material_index = material_index
-        polygon.use_smooth = tree['colors'][material_index][1] > 0.2
+        polygon.use_smooth = index < 4 and item['colors'][material_index][1] > 0.2
     meshes.append(mesh)
 for variant, x, y, scale, rotation, z in data['instances']:
-    obj = bpy.data.objects.new('Tree', meshes[variant])
+    obj = bpy.data.objects.new('Prop', meshes[variant])
     scene.collection.objects.link(obj)
     obj.location = (x, y, z)
     obj.scale = (scale, scale, scale)
     obj.rotation_euler.z = rotation
 
-for x, y, z in data['stelae']:
-    stone = material('Carved limestone', (0.64, 0.60, 0.48))
-    bpy.ops.mesh.primitive_cube_add(size=2, location=(x, y, z + 1.1), rotation=(0, 0, -0.25))
-    stela = bpy.context.object
-    stela.scale = (0.68, 0.34, 1.22)
+# Carved Maya stelae on two-tier stepped limestone plinths with front altar stone
+plinth_mat = material('Maya limestone plinth', (0.68, 0.63, 0.51), roughness=0.88)
+stela_mat = material('Carved Maya stela', (0.76, 0.71, 0.59), roughness=0.82)
+for x, y, z, angle in data['stelae']:
+    # Lower stepped pad
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, z + 0.14), rotation=(0, 0, angle))
+    pad = bpy.context.object
+    pad.scale = (3.4, 2.8, 0.32)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    bevel = stela.modifiers.new('Rounded edges', 'BEVEL')
-    bevel.width = 0.14
+    pad.data.materials.append(plinth_mat)
+
+    # Upper plinth
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, z + 0.42), rotation=(0, 0, angle))
+    plinth = bpy.context.object
+    plinth.scale = (2.1, 1.6, 0.34)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    plinth.data.materials.append(plinth_mat)
+
+    # Standing carved monolith
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, z + 1.95), rotation=(0, 0, angle))
+    stela = bpy.context.object
+    stela.scale = (1.15, 0.52, 2.85)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    bevel = stela.modifiers.new('Bevel', 'BEVEL')
+    bevel.width = 0.12
     bevel.segments = 2
-    stela.data.materials.append(stone)
+    stela.data.materials.append(stela_mat)
+
+    # Round carved Maya altar stone in front
+    ax = x + math.sin(angle) * 1.15
+    ay = y - math.cos(angle) * 1.15
+    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.58, depth=0.36, location=(ax, ay, z + 0.34))
+    altar = bpy.context.object
+    altar.data.materials.append(stela_mat)
+
+# Stepped Maya limestone acropolis / plaza terraces
+terrace_mat = material('Maya terrace stone', (0.66, 0.61, 0.49), roughness=0.90)
+for x, y, z, tw, td, angle in data['terraces']:
+    for tier in range(2):
+        scale_f = 1.0 - tier * 0.24
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, z + 0.22 + tier * 0.42), rotation=(0, 0, angle))
+        block = bpy.context.object
+        block.scale = (tw * scale_f, td * scale_f, 0.46)
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        bevel = block.modifiers.new('Bevel', 'BEVEL')
+        bevel.width = 0.10
+        bevel.segments = 2
+        block.data.materials.append(terrace_mat)
 
 world = bpy.data.worlds.new('Skylight')
 scene.world = world
@@ -294,9 +441,9 @@ sky = world.node_tree.nodes.get('Background')
 sky.inputs['Color'].default_value = (0.74, 0.82, 1.0, 1)
 sky.inputs['Strength'].default_value = 0.56
 sun_data = bpy.data.lights.new('Sun', 'SUN')
-sun_data.energy = 2.15
+sun_data.energy = 2.25
 sun_data.color = (1.0, 0.90, 0.72)
-sun_data.angle = math.radians(6)
+sun_data.angle = math.radians(5.5)
 sun = bpy.data.objects.new('Sun', sun_data)
 scene.collection.objects.link(sun)
 sun.rotation_euler = Vector((0.57, -0.48, -0.67)).to_track_quat('-Z', 'Y').to_euler()
@@ -317,12 +464,20 @@ try {
     const render = join(directory, "render.png");
     const surface = sampleTerrain && Array.from({ length: (width + 1) * (height + 1) }, (_, i) => {
         const tile = sampleTerrain(i % (width + 1), Math.floor(i / (width + 1)));
+        if ("stone" in tile) {
+            return [tile.height, tile.rock, tile.trail, tile.stone, tile.canopy, tile.bank];
+        }
         return [tile.height, tile.rock, tile.trail];
     });
-    const stelae = chapter?.stelae?.map(([x, y]) => [x, height - y, sampleTerrain?.(x, y).height ?? 0]) ?? [];
+    const stelae = chapter?.stelae?.map(([x, y, angle]) => [
+        x, height - y, sampleTerrain?.(x, y).height ?? 0, angle ?? -0.25,
+    ]) ?? [];
+    const terraces = chapter?.terraces?.map(([x, y, tw, td, angle]) => [
+        x, height - y, sampleTerrain?.(x, y).height ?? 0, tw, td, angle,
+    ]) ?? [];
     const soil = chapter?.soil ?? [0.56, 0.37, 0.17];
-    const samples = chapter ? 16 : 24;
-    writeFileSync(scene, JSON.stringify({ size: [width, height], resolution, trees, instances, surface, stelae, soil, samples }));
+    const samples = 24;
+    writeFileSync(scene, JSON.stringify({ size: [width, height], resolution, trees, instances, surface, stelae, terraces, soil, samples }));
     const threads = process.env.PETEN_RENDER_THREADS ?? "8";
     writeFileSync(renderScript, renderScene);
     const blender = Bun.spawnSync([
@@ -358,6 +513,14 @@ try {
             mkdirSync(sourceDir, { recursive: true });
             mkdirSync(mapDir, { recursive: true });
             writeFileSync(join(sourceDir, "info.json"), JSON.stringify({ name: chapter.name, multiplayer_frequency: 0 }, null, 2) + "\n");
+            // Generate a crisp 16:9 campaign-menu thumbnail directly from the rendered terrain art.
+            const thumb = join(directory, "thumbnail.webp");
+            const encodeThumb = Bun.spawnSync([
+                "magick", render, "-gravity", "center", "-resize", "512x288^", "-extent", "512x288",
+                "-strip", "-quality", "88", thumb,
+            ], { stderr: "inherit" });
+            if (!encodeThumb.success) throw new Error(`Failed to encode thumbnail (${encodeThumb.exitCode})`);
+            writeFileSync(join(mapDir, "thumbnail.webp"), readFileSync(thumb));
         }
         writeFileSync(maskPath, readFileSync(mask));
         writeFileSync(output, readFileSync(webp));

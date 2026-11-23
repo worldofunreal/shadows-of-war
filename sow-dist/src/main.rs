@@ -1149,25 +1149,37 @@ fn site_media_ready(out: &Path) -> bool {
             .all(|(stem, _)| media.join(format!("{stem}.webp")).is_file())
 }
 
-/// The owner edits only assets/art; the tools write assets/generated. This is the
-/// single place that turns them into the published tree (/assets/shell, /assets/gameplay)
-/// used by the shell, the WASM client and the CDN. Unknown art fails the build so a
-/// dropped file can never sit unused or unpublished.
-fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Result<()> {
+fn validate_runtime_source_rasters(root: &Path) -> Result<()> {
     let building_sources = root.join("assets/art/buildings");
+    let map_sources = root.join("assets/map_sources");
     for entry in walkdir::WalkDir::new(root.join("assets")) {
         let entry = entry?;
         let ext = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or_default();
         let packed_building_png = entry.file_type().is_file()
             && ext.eq_ignore_ascii_case("png")
             && entry.path().parent() == Some(building_sources.as_path());
+        // `sow-tools import-map-source` imports lossless `<slug>/image.png` terrain masks;
+        // they stay tool-only and are never published as runtime raster art.
+        let map_source_png = entry.file_type().is_file()
+            && entry.path().file_name().is_some_and(|name| name == "image.png")
+            && entry.path().parent().and_then(|dir| dir.parent()) == Some(map_sources.as_path());
         if entry.file_type().is_file()
             && ["png", "jpg", "jpeg"].contains(&ext.to_ascii_lowercase().as_str())
             && !packed_building_png
+            && !map_source_png
         {
             bail!("source raster must be WebP: {}", entry.path().display());
         }
     }
+    Ok(())
+}
+
+/// The owner edits only assets/art; the tools write assets/generated. This is the
+/// single place that turns them into the published tree (/assets/shell, /assets/gameplay)
+/// used by the shell, the WASM client and the CDN. Unknown art fails the build so a
+/// dropped file can never sit unused or unpublished.
+fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Result<()> {
+    validate_runtime_source_rasters(root)?;
     let art = root.join("assets/art");
     if !pipeline.local_preview {
     }
@@ -1193,6 +1205,10 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
         .collect::<std::collections::BTreeSet<_>>();
     let known_hero_art_slugs = sow_core::player::Leader::all_known()
         .map(sow_core::player::Leader::art_slug)
+        .collect::<std::collections::BTreeSet<_>>();
+    let campaign_featured_art_slugs = sow_data::campaign::CAMPAIGN_EPISODES
+        .iter()
+        .filter_map(|episode| episode.featured_hero_slug)
         .collect::<std::collections::BTreeSet<_>>();
     let mut avatar_portraits = Vec::new();
     for folder in ["heroes", "nations", "tribes", "campaign"] {
@@ -1324,7 +1340,10 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
             .strip_suffix("_desktop")
             .or_else(|| stem.strip_suffix("_mobile"))
             .unwrap_or_default();
-        if known_hero_art_slugs.contains(base) && !hero_art_slugs.contains(base) {
+        if known_hero_art_slugs.contains(base)
+            && !hero_art_slugs.contains(base)
+            && !campaign_featured_art_slugs.contains(base)
+        {
             continue;
         }
         publish(&file, &format!("shell/leaders/{stem}.webp"), None)?;
@@ -7363,6 +7382,24 @@ shortArticle = true
                 );
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn validate_runtime_source_rasters_allows_map_source_masks_and_rejects_stray_pngs() -> Result<()> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        validate_runtime_source_rasters(&root)?;
+
+        let temp = tempfile::tempdir()?;
+        fs::create_dir_all(temp.path().join("assets/map_sources/bital_pass"))?;
+        fs::write(temp.path().join("assets/map_sources/bital_pass/image.png"), b"png")?;
+        fs::create_dir_all(temp.path().join("assets/art/buildings"))?;
+        fs::write(temp.path().join("assets/art/buildings/city.png"), b"png")?;
+        validate_runtime_source_rasters(temp.path())?;
+
+        fs::create_dir_all(temp.path().join("assets/art/icons"))?;
+        fs::write(temp.path().join("assets/art/icons/stray.png"), b"png")?;
+        assert!(validate_runtime_source_rasters(temp.path()).is_err());
         Ok(())
     }
 }

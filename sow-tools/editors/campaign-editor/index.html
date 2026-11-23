@@ -80,6 +80,19 @@
         margin-top: 7px;
         line-height: 1.9;
       }
+      header .nav {
+        display: flex;
+        gap: 13px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+      header .nav a {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      header .nav a:hover {
+        color: var(--accent);
+      }
       .episode-picker {
         display: inline-flex;
         align-items: center;
@@ -209,6 +222,13 @@
       }
       .btns > button {
         flex: 1;
+      }
+      .list-head {
+        padding: 10px 12px 4px;
+        color: var(--muted);
+        font-size: 9px;
+        letter-spacing: 1.8px;
+        text-transform: uppercase;
       }
       .list {
         overflow: auto;
@@ -384,46 +404,39 @@
               >Episode
               <select id="episodeSelect" aria-label="Select campaign episode"></select
             ></label>
-            · <span id="episodeLabel">boudica</span> · place factions ·
+            <span id="episodeLabel">boudica</span> — add factions to the map
+          </div>
+          <div class="nav">
             <a
               id="logicLink"
               href="logic.html"
               title="Unsaved map changes are saved before opening Story &amp; logic"
-              style="color: var(--accent); text-decoration: none"
-              >Story &amp; logic →</a
+              >Story &amp; logic</a
             >
-            · <a href="/tools/campaign-editor/atlas">Entity Atlas →</a> ·
-            <a href="/tools/campaign-editor/map-rosters" style="color: var(--accent); text-decoration: none"
-              >Map Rosters →</a
-            >
-            · <a href="/tools/campaign-editor/map-generator" style="color: var(--accent); text-decoration: none"
-              >Map Generator →</a
-            >
-            · <a href="/tools/campaign-editor/map-manager" style="color: var(--accent); text-decoration: none"
-              >Custom Maps →</a
-            >
-            · <a href="/tools/campaign-editor/sound-studio" style="color: var(--accent); text-decoration: none"
-              >Sound Studio →</a
-            >
+            <a href="/tools/campaign-editor/atlas">Entity Atlas</a>
+            <a href="/tools/campaign-editor/map-rosters">Map Rosters</a>
+            <a href="/tools/campaign-editor/map-generator">Map Generator</a>
+            <a href="/tools/campaign-editor/map-manager">Custom Maps</a>
+            <a href="/tools/campaign-editor/sound-studio">Sound Studio</a>
           </div>
         </header>
 
         <div class="group" id="selectedGroup">
           <h2>Selected</h2>
-          <div id="seleditor"><div class="hint">Click a faction on the map or in the list.</div></div>
+          <div id="seleditor"><div class="hint">Select a faction or the player spawn to edit it.</div></div>
         </div>
 
         <div class="group">
           <h2>Map</h2>
           <div class="btns">
-            <button id="addBtn">+ Add faction</button>
+            <button id="addBtn">Add faction</button>
             <button id="spawnBtn">Set player spawn</button>
           </div>
-          <label for="atlasEntityInput">Add an existing entity</label>
+          <label for="atlasEntityInput">Add from Atlas</label>
           <div class="row">
             <input
               id="atlasEntityInput"
-              placeholder="Search Atlas by name or ID"
+              placeholder="Search Atlas entities by name or ID"
               aria-label="Search Atlas entities"
             /><button id="addAtlasEntity" type="button" disabled>Add</button>
           </div>
@@ -434,20 +447,19 @@
             aria-label="Atlas search results"
           ></div>
           <div id="atlasEntityStatus" class="atlas-picker__status" role="status">
-            Type at least 2 characters to search the Atlas.
+            Type 2+ characters to search the Atlas.
           </div>
-          <label>Show</label>
           <div class="row">
             <label style="margin: 0"
-              ><input type="checkbox" id="labelsChk" checked style="width: auto" /> labels</label
+              ><input type="checkbox" id="labelsChk" checked style="width: auto" /> Labels</label
             >
             <label style="margin: 0"
-              ><input type="checkbox" id="ringsChk" checked style="width: auto" /> reach rings</label
+              ><input type="checkbox" id="ringsChk" checked style="width: auto" /> Reach rings</label
             >
           </div>
           <div class="hint">
-            <span style="color: #4b91ff">● Ally</span> · <span style="color: #ff5656">● Enemy</span> · Neutral
-            uses its own color
+            Labels show faction names; reach rings are circles around the player spawn (20–120 tiles). Ally
+            is blue, Enemy is red; Neutral uses its own color.
           </div>
           <div class="hint" id="waterhint"></div>
         </div>
@@ -455,14 +467,15 @@
         <div class="group">
           <h2>Save</h2>
           <div class="btns">
-            <button class="primary" id="exportBtn">Save</button>
+            <button class="primary" id="exportBtn">Save changes</button>
             <button id="reloadBtn">Reload saved</button>
           </div>
-          <div class="hint" id="rosterStatus" role="status">Saved</div>
+          <div class="hint" id="rosterStatus" role="status">Up to date</div>
           <label>Load a different roster</label>
           <input type="file" id="fileIn" accept=".json" />
         </div>
 
+        <div class="list-head">Factions</div>
         <div class="list" id="list"></div>
       </div>
     </div>

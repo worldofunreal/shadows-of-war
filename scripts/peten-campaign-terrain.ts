@@ -175,14 +175,26 @@ export function campaignTerrain(roster: PetenRoster, scene: Scene) {
         let plaza = 0;
         let plazaStone = 0;
         for (const [px, py, size] of scene.plazas ?? []) {
-            const d = Math.hypot(x - px, y - py);
+            const dxp = x - px;
+            const dyp = y - py;
+            const d = Math.hypot(dxp, dyp);
             plaza = Math.max(plaza, 1 - smoothstep(size - 1.2, size + 2.0, d));
-            plazaStone = Math.max(plazaStone, 1 - smoothstep(size * 0.55, size * 0.92, d + (fine - 0.5) * 0.7));
+            // Weathered Maya courtyard paving (rounded-square court broken up by grass/moss noise).
+            const courtDist = Math.max(Math.abs(dxp), Math.abs(dyp)) * 0.65 + d * 0.35;
+            const edgeNoise = (fine - 0.5) * 2.4 + (broad - 0.5) * 1.8;
+            const patch = smoothstep(0.28, 0.72, noise(x / 2.2 + salt, y / 2.2 + 51));
+            plazaStone = Math.max(
+                plazaStone,
+                (1 - smoothstep(size * 0.48, size * 0.88, courtDist + edgeNoise)) * (0.45 + 0.55 * patch),
+            );
         }
+        const roadNoise = (fine - 0.5) * 1.15 + (noise(x / 5 + 31, y / 5 + salt) - 0.5) * 1.1;
+        const roadPatch = smoothstep(0.22, 0.78, noise(x / 2.5 + 11, y / 2.5 + salt));
         const sacbeRoad = (scene.sacbe ?? 0)
-            * (1 - smoothstep(0.65, 2.2, lane + (fine - 0.5) * 0.55))
-            * smoothstep(3.5, 7.5, nearest);
-        const stone = Math.min(1, Math.max(plazaStone * 0.85, sacbeRoad * 0.92));
+            * (1 - smoothstep(0.55, 1.95, lane + roadNoise))
+            * smoothstep(3.0, 7.0, nearest)
+            * (0.45 + 0.55 * roadPatch);
+        const stone = Math.min(1, Math.max(plazaStone * 0.68, sacbeRoad * 0.78));
 
         // Keep woodland density in 0..1 like B'ital so groves are lush, while preserving clearings & routes.
         const woodland = 0.72 * broad + 0.28 * noise(x / 6 + 72, y / 6 + salt);
@@ -232,7 +244,7 @@ export function campaignTerrain(roster: PetenRoster, scene: Scene) {
             land, elevation,
             height: (visualHeight - 8) * 0.54 + Math.max(0, visualHeight - 15.5) ** 2 * 0.048 + waterDip,
             rock,
-            trail: Math.min(1, Math.max(mainTrail, secondaryTrail, plaza * 0.65) * (0.64 + fine * 0.36)),
+            trail: Math.min(1, Math.max(mainTrail, secondaryTrail, plaza * 0.42) * (0.64 + fine * 0.36)),
             stone,
             canopy,
             bank: nearWater * (0.7 + 0.3 * fine),

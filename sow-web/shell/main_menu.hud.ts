@@ -1341,7 +1341,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       : kind.toLowerCase() === "tradingpost"
         ? "trading_post"
         : kind.toLowerCase();
-    return tier ? tier.name + " · " + tier.era : SOW_t("hud.map_action_" + translationKind);
+    return tier ? tier.name : SOW_t("hud.map_action_" + translationKind);
   }
 
   function buildingIcon(kind: string, level?: number, cls?: string): string {
@@ -3912,8 +3912,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           statusIcon("arrow-up", "sow-hud__building-upgrade-arrow") +
           '<span class="sow-hud__building-upgrade-label">' +
           escapeHudText(SOW_t("hud.map_action_upgrade")) +
-          " <em>" +
-          escapeHudText(buildingLine(kind, window.SOW_LOCALE || "en")[upgrade.next_level - 1]?.name || "Lv." + upgrade.next_level) +
+          " <em>Lv." +
+          upgrade.next_level +
           "</em></span>" +
           "</span>" +
           '<span class="sow-hud__building-upgrade-meta">' +
@@ -4456,7 +4456,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     request_allies: "green",
     fleet: "cyan",
   };
-  const RING_HOLD_ACTIONS: Record<string, boolean> = { nuke: true };
+  const RING_HOLD_ACTIONS: Record<string, boolean> = {};
   const FACE_EXPRESSIONS: readonly string[] = [
     "happy",
     "calm",

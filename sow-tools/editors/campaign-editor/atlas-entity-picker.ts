@@ -82,7 +82,7 @@
       selected = null;
       onChange(null);
       if (query.length < 2) {
-        message("Type at least 2 characters to search the Atlas.");
+        message("Type 2+ characters to search the Atlas.");
         return;
       }
       try {
@@ -125,7 +125,7 @@
 
     input.addEventListener("input", render);
     input.addEventListener("focus", () => {
-      if (input.value.trim().length < 2) message("Type at least 2 characters to search the Atlas.");
+      if (input.value.trim().length < 2) message("Type 2+ characters to search the Atlas.");
       else render();
     });
     input.addEventListener("keydown", (event) => {
@@ -147,7 +147,7 @@
       clear() {
         selected = null;
         input.value = "";
-        message("Type at least 2 characters to search the Atlas.");
+        message("Type 2+ characters to search the Atlas.");
         onChange(null);
       },
     };

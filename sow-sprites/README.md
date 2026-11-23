@@ -20,8 +20,9 @@ electron .
 - **Cuadrícula**: la detección automática propone los tiles; los campos
   `cols × rows` se pueden editar, **Aplicar** los usa y **Auto** vuelve a
   detectarlos. **Swap** intercambia columnas y filas.
-- **Animación**: slider/campo de **FPS**, y los botones
-  `◀` / `▶` (Reproducir) / `▶` (Frame siguiente): cada marco cambia el sprite.
+- **Animación**: slider/campo de **FPS**; los botones
+  `◀` (Frame anterior), `▶` (Reproducir/Pausar), `▶` (Frame siguiente)
+  reproducen marco a marco: cada marco cambia el sprite.
   Space también reproduce/pausa; ← / → avanzan/retroceden un marco.
 - La vista de la hoja entera (debajo del marco actual) muestra el destello
   actual; hacer clic en una celda salta a ese marco.
