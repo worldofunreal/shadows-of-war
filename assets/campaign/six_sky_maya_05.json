@@ -1,16 +1,16 @@
 {
-  "_comment": "six_sky_maya_05: 697 CE Bahlam Jol campaign teaching attack reserve discipline (yucatan_peninsula).",
-  "map": "yucatan_peninsula",
+  "_comment": "six_sky_maya_05: 697 CE Bahlam Jol campaign teaching attack reserve discipline (peten_bahlam_jol).",
+  "map": "peten_bahlam_jol",
   "player_spawn": [
-    624,
-    904
+    106,
+    76
   ],
   "factions": [
     {
       "id": "dos_pilas",
       "name": "Dos Pilas",
-      "x": 586,
-      "y": 944,
+      "x": 68,
+      "y": 116,
       "starting_troops": 850,
       "relation": "allied",
       "color": "#a88c40",
@@ -23,8 +23,8 @@
     {
       "id": "calakmul",
       "name": "Calakmul / Kaanul",
-      "x": 602,
-      "y": 856,
+      "x": 84,
+      "y": 28,
       "starting_troops": 450,
       "relation": "allied",
       "color": "#4ca572",
@@ -37,8 +37,8 @@
     {
       "id": "bahlam_jol",
       "name": "Bahlam Jol",
-      "x": 646,
-      "y": 892,
+      "x": 128,
+      "y": 64,
       "starting_troops": 1200,
       "relation": "enemy",
       "can_request_alliance": true,

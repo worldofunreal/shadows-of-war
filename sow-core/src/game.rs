@@ -651,7 +651,15 @@ impl GameState {
     }
 
     pub fn place_spawn(&mut self, pid: u16, cx: u32, cy: u32) {
-        let r = config::SPAWN_RADIUS as i32;
+        let r = if self.config.tutorial
+            && sow_data::campaign::CAMPAIGN_EPISODES.iter().any(|episode| {
+                episode.map_id == self.config.map_name && episode.has_local_peten_map()
+            })
+        {
+            6
+        } else {
+            config::SPAWN_RADIUS as i32
+        };
         for dy in -r..=r {
             for dx in -r..=r {
                 if dx * dx + dy * dy > r * r {

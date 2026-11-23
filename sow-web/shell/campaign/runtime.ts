@@ -309,7 +309,7 @@ export function create(
                 Number((facts.resource_requests_by_target_faction_id || {})[targetFaction] || 0) -
                 Number((reference.resource_requests_by_target_faction_id || {})[targetFaction] || 0);
         } else if (trigger.type === "structure_level") {
-            const kind = String(trigger.kind || "").toLowerCase();
+            const kind = String(trigger.kind || "").replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
             // A faction-scoped trigger counts that campaign faction's buildings instead of the player's.
             const currentLevels = trigger.faction
                 ? (facts.faction_structure_levels || {})[trigger.faction] || {}
@@ -669,6 +669,7 @@ export function create(
     }
     function targetAttackPauseForStep(step: CampaignStep) {
         if (
+            step.pause_game === false ||
             !targetedFactionActionStep(step) ||
             step.trigger?.type === "contact" ||
             facts.target_action_mode !== "attack"

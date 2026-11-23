@@ -1,16 +1,16 @@
 {
-  "_comment": "six_sky_maya_07: 726-741 CE quiet stones diplomacy episode; aid Dos Pilas on the Peten network (yucatan_peninsula).",
-  "map": "yucatan_peninsula",
+  "_comment": "six_sky_maya_07: 726-741 CE quiet stones diplomacy episode; aid Dos Pilas on the Peten network (peten_dos_pilas).",
+  "map": "peten_dos_pilas",
   "player_spawn": [
-    624,
-    904
+    106,
+    76
   ],
   "factions": [
     {
       "id": "dos_pilas",
       "name": "Dos Pilas",
-      "x": 594,
-      "y": 932,
+      "x": 80,
+      "y": 94,
       "starting_troops": 1000,
       "relation": "allied",
       "color": "#a88c40",
@@ -23,8 +23,8 @@
     {
       "id": "calakmul",
       "name": "Calakmul / Kaanul",
-      "x": 602,
-      "y": 856,
+      "x": 84,
+      "y": 28,
       "starting_troops": 350,
       "relation": "allied",
       "color": "#4ca572",
@@ -37,8 +37,8 @@
     {
       "id": "yaxha",
       "name": "Yaxha",
-      "x": 598,
-      "y": 908,
+      "x": 80,
+      "y": 80,
       "starting_troops": 500,
       "relation": "neutral",
       "color": "#6f9f78",

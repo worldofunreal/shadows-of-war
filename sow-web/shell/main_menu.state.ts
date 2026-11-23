@@ -91,6 +91,7 @@ export interface MenuLobbyPlayer {
 
 export interface MenuCampaignEpisode {
     id: string;
+    map_name?: string;
     title: LocalizedText;
     subtitle: LocalizedText;
     completed: boolean;

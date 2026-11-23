@@ -30,6 +30,14 @@ impl CampaignEpisode {
     pub fn advisor(&self) -> Leader {
         Leader::of(self.advisor_id)
     }
+
+    pub fn has_local_peten_map(&self) -> bool {
+        matches!(
+            self.id,
+            "six_sky_maya_03" | "six_sky_maya_04" | "six_sky_maya_05"
+                | "six_sky_maya_06" | "six_sky_maya_07" | "six_sky_maya_08"
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,9 +109,9 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
         prerequisite: Some("six_sky_maya_02"),
         unlock_leader_id: None,
         advisor_id: "lady_six_sky",
-        map_id: "yucatan_peninsula",
-        map_width: 1040,
-        map_height: 1600,
+        map_id: "peten_yellow_rabbit",
+        map_width: 224,
+        map_height: 156,
         title: "Yellow Rabbit, Two Headlines",
         subtitle: "Naranjo · 695 CE",
         title_key: "lobbies.campaign_six_sky_maya_03_title",
@@ -117,9 +125,9 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
         prerequisite: Some("six_sky_maya_03"),
         unlock_leader_id: None,
         advisor_id: "lady_six_sky",
-        map_id: "yucatan_peninsula",
-        map_width: 1040,
-        map_height: 1600,
+        map_id: "peten_komkom",
+        map_width: 224,
+        map_height: 156,
         title: "Komkom Keeps Receipts",
         subtitle: "Naranjo · 696 CE",
         title_key: "lobbies.campaign_six_sky_maya_04_title",
@@ -133,9 +141,9 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
         prerequisite: Some("six_sky_maya_04"),
         unlock_leader_id: None,
         advisor_id: "lady_six_sky",
-        map_id: "yucatan_peninsula",
-        map_width: 1040,
-        map_height: 1600,
+        map_id: "peten_bahlam_jol",
+        map_width: 224,
+        map_height: 156,
         title: "Bahlam Jol Makes a Point",
         subtitle: "Naranjo · 697 CE",
         title_key: "lobbies.campaign_six_sky_maya_05_title",
@@ -149,9 +157,9 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
         prerequisite: Some("six_sky_maya_05"),
         unlock_leader_id: None,
         advisor_id: "lady_six_sky",
-        map_id: "yucatan_peninsula",
-        map_width: 1040,
-        map_height: 1600,
+        map_id: "peten_ucanal",
+        map_width: 224,
+        map_height: 156,
         title: "Stela 24 Has a Version",
         subtitle: "Ucanal · 698–702 CE",
         title_key: "lobbies.campaign_six_sky_maya_06_title",
@@ -165,9 +173,9 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
         prerequisite: Some("six_sky_maya_06"),
         unlock_leader_id: None,
         advisor_id: "lady_six_sky",
-        map_id: "yucatan_peninsula",
-        map_width: 1040,
-        map_height: 1600,
+        map_id: "peten_dos_pilas",
+        map_width: 224,
+        map_height: 156,
         title: "The Stones Go Quiet",
         subtitle: "Naranjo · 714–726 CE",
         title_key: "lobbies.campaign_six_sky_maya_07_title",
@@ -181,9 +189,9 @@ pub const CAMPAIGN_EPISODES: &[CampaignEpisode] = &[
         prerequisite: Some("six_sky_maya_07"),
         unlock_leader_id: None,
         advisor_id: "lady_six_sky",
-        map_id: "yucatan_peninsula",
-        map_width: 1040,
-        map_height: 1600,
+        map_id: "peten_tikal",
+        map_width: 224,
+        map_height: 156,
         title: "Tikal: The Nuclear Footnote",
         subtitle: "Alternate history · 744 CE",
         title_key: "lobbies.campaign_six_sky_maya_08_title",

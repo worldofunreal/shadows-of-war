@@ -5,7 +5,7 @@
   "require_speaker_portraits": true,
   "settings": {
     "starting_troops": 2500,
-    "starting_gold": 5000
+    "starting_gold": 6000
   },
   "entry": "six_sky_maya_07_open",
   "speakers": {
@@ -33,6 +33,17 @@
       "pause_game": true,
       "title_key": "tutorial.campaign_six_sky_maya_07_open_title",
       "body_key": "tutorial.campaign_six_sky_maya_07_open_body",
+      "host": {
+        "sprite": "six_sky_pose",
+        "enter": "slide_left",
+        "idle": "breathe",
+        "side": "left",
+        "interactive": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_07_poke_1",
+          "tutorial.campaign_six_sky_maya_07_poke_2"
+        ]
+      },
       "next": "six_sky_maya_07_transfer_target"
     },
     {
@@ -44,6 +55,13 @@
       "speaker": "six_sky",
       "pause_game": true,
       "dim_outside": true,
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true
+      },
       "marker": {
         "target": "dos_pilas"
       },
@@ -55,8 +73,7 @@
       "guide": {
         "kind": "world",
         "target": "nameplate",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "next": "six_sky_maya_07_transfer_choose",
       "unavailable_next": "six_sky_maya_07_empty_hands"
@@ -70,6 +87,12 @@
       "speaker": "six_sky",
       "pause_game": true,
       "dim_outside": true,
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "right"
+      },
       "marker": {
         "target": "dos_pilas"
       },
@@ -81,8 +104,7 @@
       "guide": {
         "kind": "ui",
         "target": "map_transfer",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "next": "six_sky_maya_07_send_aid",
       "unavailable_next": "six_sky_maya_07_empty_hands"
@@ -100,14 +122,19 @@
       },
       "next": "six_sky_maya_07_ally_reply",
       "body_key": "tutorial.campaign_six_sky_maya_07_transfer_send_body",
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "right"
+      },
       "marker": {
         "target": "dos_pilas"
       },
       "guide": {
         "kind": "ui",
         "target": "transfer_send",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "pause_game": true,
       "paused_action": "send_resources_stay_paused",
@@ -122,6 +149,11 @@
           "speaker": "dos_pilas",
           "emote": "greet",
           "emote_text_key": "tutorial.campaign_six_sky_maya_07_dos_pilas_reply"
+        },
+        {
+          "speaker": "six_sky",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_07_celebrate"
         }
       ],
       "next": "six_sky_maya_07_end"
@@ -131,16 +163,40 @@
       "type": "end",
       "speaker": "six_sky",
       "presentation": "chapter",
+      "host": {
+        "sprite": "six_sky_celebrate",
+        "enter": "pop_up",
+        "idle": "cheer",
+        "side": "left",
+        "interactive": true,
+        "confetti": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_07_poke_1",
+          "tutorial.campaign_six_sky_maya_07_poke_2"
+        ]
+      },
       "title_key": "tutorial.campaign_six_sky_maya_07_end_title",
-      "body_key": "tutorial.campaign_six_sky_maya_07_end_body"
+      "body_key": "tutorial.campaign_six_sky_maya_07_end_body",
+      "next_episode_id": "six_sky_maya_08",
+      "next_episode_key": "tutorial.campaign_six_sky_maya_07_next_ep",
+      "skip_tutorial_key": "tutorial.campaign_six_sky_maya_07_skip_tutorial"
     },
     {
       "id": "six_sky_maya_07_empty_hands",
       "type": "end",
       "speaker": "six_sky",
       "presentation": "chapter",
+      "host": {
+        "sprite": "six_sky_pose",
+        "enter": "pop_up",
+        "idle": "breathe",
+        "side": "left"
+      },
       "title_key": "tutorial.campaign_six_sky_maya_07_empty_title",
-      "body_key": "tutorial.campaign_six_sky_maya_07_empty_body"
+      "body_key": "tutorial.campaign_six_sky_maya_07_empty_body",
+      "next_episode_id": "six_sky_maya_08",
+      "next_episode_key": "tutorial.campaign_six_sky_maya_07_next_ep",
+      "skip_tutorial_key": "tutorial.campaign_six_sky_maya_07_skip_tutorial"
     }
   ]
 }

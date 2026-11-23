@@ -1,16 +1,16 @@
 {
-  "_comment": "six_sky_maya_03: 695 CE Yellow Rabbit ambush vs Siyaj K'awiil of Tikal with Calakmul & Dos Pilas allies (yucatan_peninsula).",
-  "map": "yucatan_peninsula",
+  "_comment": "six_sky_maya_03: 695 CE Yellow Rabbit ambush vs Siyaj K'awiil of Tikal with Calakmul & Dos Pilas allies (peten_yellow_rabbit).",
+  "map": "peten_yellow_rabbit",
   "player_spawn": [
-    624,
-    904
+    106,
+    76
   ],
   "factions": [
     {
       "id": "dos_pilas",
       "name": "Dos Pilas",
-      "x": 586,
-      "y": 944,
+      "x": 68,
+      "y": 116,
       "starting_troops": 700,
       "relation": "allied",
       "color": "#a88c40",
@@ -23,8 +23,8 @@
     {
       "id": "calakmul",
       "name": "Calakmul / Kaanul",
-      "x": 602,
-      "y": 856,
+      "x": 84,
+      "y": 28,
       "starting_troops": 450,
       "relation": "allied",
       "color": "#4ca572",
@@ -37,8 +37,8 @@
     {
       "id": "tikal_at_yellow_rabbit",
       "name": "Siyaj K’awiil (Yellow Rabbit)",
-      "x": 600,
-      "y": 898,
+      "x": 82,
+      "y": 70,
       "starting_troops": 1100,
       "relation": "enemy",
       "can_request_alliance": true,

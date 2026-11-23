@@ -542,7 +542,15 @@ export function campaignEpisodeMapName(episodeId: string): string {
         const idx = Math.max(0, Number(blitzMatch[1]) - 5) % BLITZ_MAP_ROTATION.length;
         return BLITZ_MAP_ROTATION[idx];
     }
-    if (id.startsWith("six_sky")) return "northamerica";
+    if (id === "six_sky_maya_01") return "peten_clearing";
+    if (id === "six_sky_maya_02") return "bital_pass";
+    if (id === "six_sky_maya_03") return "peten_yellow_rabbit";
+    if (id === "six_sky_maya_04") return "peten_komkom";
+    if (id === "six_sky_maya_05") return "peten_bahlam_jol";
+    if (id === "six_sky_maya_06") return "peten_ucanal";
+    if (id === "six_sky_maya_07") return "peten_dos_pilas";
+    if (id === "six_sky_maya_08") return "peten_tikal";
+    if (id.startsWith("six_sky")) return "peten_clearing";
     return "world";
 }
 
@@ -663,7 +671,7 @@ export function updateCampaignSelection(episodeId: string): boolean {
         statusNode.className = "sow-campaign__episode-status sow-campaign__featured-status " + statusClass;
     }
 
-    const mapName = campaignEpisodeMapName(episodeId);
+    const mapName = episode.map_name || campaignEpisodeMapName(episodeId);
     const mapThumb = featured.querySelector<HTMLImageElement>(".sow-campaign__map-thumb");
     if (mapThumb) mapThumb.src = lobbyThumb({ map_name: mapName });
     const mapLabel = featured.querySelector<HTMLElement>(".sow-campaign__meta-map strong");
@@ -700,7 +708,7 @@ function renderCampaignEpisode(
     const isNext = unlocked && !completed && episode.id === continueId;
     const title = localizedText(episode.title);
     const subtitle = localizedText(episode.subtitle);
-    const mapName = campaignEpisodeMapName(episode.id);
+    const mapName = episode.map_name || campaignEpisodeMapName(episode.id);
     const mapArt = lobbyThumb({ map_name: mapName });
     const heroSlug = campaignEpisodeHeroSlug(episode.id);
     const avatar = asset("gameplay/avatars/" + leaderArtSlug(heroSlug) + ".webp");
@@ -819,7 +827,7 @@ export function renderCampaign() {
         const heroArt = campaignEpisodeHeroArt(heroSlug);
         const heroLeader = leaderById(heroSlug);
         const heroName = heroLeader ? leaderDisplayName(heroLeader) : heroSlug;
-        const mapName = campaignEpisodeMapName(selectedEpisode.id);
+        const mapName = selectedEpisode.map_name || campaignEpisodeMapName(selectedEpisode.id);
         const mapThumb = lobbyThumb({ map_name: mapName });
         const mapDisplayName = formatMapName(mapName);
         const avatar = asset("gameplay/avatars/" + leaderArtSlug(heroSlug) + ".webp");

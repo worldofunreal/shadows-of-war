@@ -13,16 +13,16 @@ const peaks = [
     [170, 116, 22, 19, 19], [188, 105, 16, 22, 15], [204, 142, 17, 25, 24],
 ];
 
-function smoothstep(low: number, high: number, value: number) {
+export function smoothstep(low: number, high: number, value: number) {
     const t = Math.min(1, Math.max(0, (value - low) / (high - low)));
     return t * t * (3 - 2 * t);
 }
 
-function mix(a: number, b: number, t: number) {
+export function mix(a: number, b: number, t: number) {
     return a + (b - a) * t;
 }
 
-function noise(x: number, y: number) {
+export function noise(x: number, y: number) {
     const ix = Math.floor(x);
     const iy = Math.floor(y);
     const u = smoothstep(0, 1, x - ix);

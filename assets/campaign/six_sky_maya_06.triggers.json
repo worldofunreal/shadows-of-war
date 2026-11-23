@@ -5,7 +5,7 @@
   "require_speaker_portraits": true,
   "settings": {
     "starting_troops": 3000,
-    "starting_gold": 2500
+    "starting_gold": 3500
   },
   "entry": "six_sky_maya_06_open",
   "speakers": {
@@ -33,28 +33,113 @@
       "pause_game": true,
       "title_key": "tutorial.campaign_six_sky_maya_06_open_title",
       "body_key": "tutorial.campaign_six_sky_maya_06_open_body",
+      "host": {
+        "sprite": "six_sky_pose",
+        "enter": "slide_left",
+        "idle": "breathe",
+        "side": "left",
+        "interactive": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_06_poke_1",
+          "tutorial.campaign_six_sky_maya_06_poke_2"
+        ]
+      },
+      "next": "six_sky_maya_06_pick_tower"
+    },
+    {
+      "id": "six_sky_maya_06_pick_tower",
+      "type": "guide",
+      "title_key": "tutorial.campaign_six_sky_maya_06_tower_pick_title",
+      "body_key": "tutorial.campaign_six_sky_maya_06_tower_pick_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_06_tower_pick_hint",
+      "speaker": "six_sky",
+      "pause_game": true,
+      "dim_outside": true,
+      "unlocks": {
+        "buildings": {
+          "Tower": 4,
+          "TradingPost": 4,
+          "MilitaryCamp": 2,
+          "City": 2
+        }
+      },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "right"
+      },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_tower",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_tower",
+        "gesture": "tap"
+      },
+      "next": "six_sky_maya_06_build_tower"
+    },
+    {
+      "id": "six_sky_maya_06_build_tower",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_06_tower_build_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_06_tower_build_hint",
+      "trigger": {
+        "type": "tower",
+        "value": 1,
+        "scope": "total"
+      },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "pause_game": true,
+      "paused_action": "build_until_started",
+      "dim_outside": true,
       "next": "six_sky_maya_06_attack"
     },
     {
       "id": "six_sky_maya_06_attack",
       "type": "objective",
+      "attack_ratio_on_enter": 0.75,
       "title_key": "tutorial.campaign_six_sky_maya_06_attack_title",
       "hint_key": "tutorial.campaign_six_sky_maya_06_attack_hint",
-      "trigger": {
-        "type": "defeated",
-        "target": "ucanal",
-        "scope": "episode"
-      },
-      "next": "six_sky_maya_06_end",
       "body_key": "tutorial.campaign_six_sky_maya_06_attack_body",
+      "trigger": {
+        "type": "attack",
+        "target": "ucanal",
+        "value": 1,
+        "scope": "step"
+      },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true,
+        "nudge_key": "tutorial.campaign_six_sky_maya_06_attack_nudge",
+        "nudge_after_ms": 2500
+      },
       "marker": {
         "target": "ucanal"
       },
       "guide": {
         "kind": "world",
-        "target": "target_action",
-        "gesture": "tap",
-        "show_label": false
+        "target": "nameplate",
+        "gesture": "tap"
       },
       "camera": {
         "shot": "approach",
@@ -66,16 +151,76 @@
           "speaker": "ucanal",
           "emote": "threat",
           "emote_text_key": "tutorial.campaign_six_sky_maya_06_ucanal_threat"
+        },
+        {
+          "speaker": "six_sky",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_06_six_sky_reply"
         }
-      ]
+      ],
+      "next": "six_sky_maya_06_defeat"
+    },
+    {
+      "id": "six_sky_maya_06_defeat",
+      "type": "objective",
+      "title_key": "tutorial.campaign_six_sky_maya_06_defeat_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_06_defeat_hint",
+      "trigger": {
+        "type": "defeated",
+        "target": "ucanal",
+        "scope": "episode"
+      },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "cheer",
+        "side": "auto",
+        "flip_to_target": true
+      },
+      "marker": {
+        "target": "ucanal"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "exchange": [
+        {
+          "speaker": "ucanal",
+          "emote": "help",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_06_ucanal_fear"
+        },
+        {
+          "speaker": "six_sky",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_06_celebrate"
+        }
+      ],
+      "next": "six_sky_maya_06_end"
     },
     {
       "id": "six_sky_maya_06_end",
       "type": "end",
       "speaker": "six_sky",
       "presentation": "chapter",
+      "host": {
+        "sprite": "six_sky_celebrate",
+        "enter": "pop_up",
+        "idle": "cheer",
+        "side": "left",
+        "interactive": true,
+        "confetti": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_06_poke_1",
+          "tutorial.campaign_six_sky_maya_06_poke_2"
+        ]
+      },
       "title_key": "tutorial.campaign_six_sky_maya_06_end_title",
-      "body_key": "tutorial.campaign_six_sky_maya_06_end_body"
+      "body_key": "tutorial.campaign_six_sky_maya_06_end_body",
+      "next_episode_id": "six_sky_maya_07",
+      "next_episode_key": "tutorial.campaign_six_sky_maya_06_next_ep",
+      "skip_tutorial_key": "tutorial.campaign_six_sky_maya_06_skip_tutorial"
     }
   ]
 }

@@ -5,7 +5,7 @@
   "require_speaker_portraits": true,
   "settings": {
     "starting_troops": 2800,
-    "starting_gold": 2200
+    "starting_gold": 2500
   },
   "entry": "six_sky_maya_05_open",
   "speakers": {
@@ -33,6 +33,17 @@
       "pause_game": true,
       "title_key": "tutorial.campaign_six_sky_maya_05_open_title",
       "body_key": "tutorial.campaign_six_sky_maya_05_open_body",
+      "host": {
+        "sprite": "six_sky_pose",
+        "enter": "slide_left",
+        "idle": "breathe",
+        "side": "left",
+        "interactive": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_05_poke_1",
+          "tutorial.campaign_six_sky_maya_05_poke_2"
+        ]
+      },
       "next": "six_sky_maya_05_set_ratio"
     },
     {
@@ -46,6 +57,12 @@
       "pause_game": true,
       "dim_outside": true,
       "paused_action": "attack_ratio_only",
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "right"
+      },
       "trigger": {
         "type": "ui",
         "action": "attack_ratio",
@@ -55,8 +72,7 @@
       "guide": {
         "kind": "ui",
         "target": "attack_ratio",
-        "gesture": "drag",
-        "show_label": false
+        "gesture": "drag"
       },
       "next": "six_sky_maya_05_attack"
     },
@@ -65,30 +81,48 @@
       "type": "objective",
       "title_key": "tutorial.campaign_six_sky_maya_05_attack_title",
       "hint_key": "tutorial.campaign_six_sky_maya_05_attack_hint",
+      "body_key": "tutorial.campaign_six_sky_maya_05_attack_body",
       "trigger": {
         "type": "attack",
         "target": "bahlam_jol",
         "value": 1,
         "scope": "step"
       },
-      "next": "six_sky_maya_05_defeat",
-      "body_key": "tutorial.campaign_six_sky_maya_05_attack_body",
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true,
+        "nudge_key": "tutorial.campaign_six_sky_maya_05_attack_nudge",
+        "nudge_after_ms": 2500
+      },
       "marker": {
         "target": "bahlam_jol"
       },
       "guide": {
         "kind": "world",
         "target": "nameplate",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
+      },
+      "camera": {
+        "shot": "approach",
+        "to": "bahlam_jol",
+        "seconds": 1
       },
       "exchange": [
         {
           "speaker": "bahlam_jol",
           "emote": "threat",
           "emote_text_key": "tutorial.campaign_six_sky_maya_05_bahlam_jol_threat"
+        },
+        {
+          "speaker": "six_sky",
+          "emote": "greet",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_05_six_sky_reply"
         }
-      ]
+      ],
+      "next": "six_sky_maya_05_defeat"
     },
     {
       "id": "six_sky_maya_05_defeat",
@@ -100,24 +134,57 @@
         "target": "bahlam_jol",
         "scope": "episode"
       },
-      "next": "six_sky_maya_05_end",
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "cheer",
+        "side": "auto",
+        "flip_to_target": true
+      },
       "marker": {
         "target": "bahlam_jol"
       },
       "guide": {
         "kind": "world",
         "target": "target_action",
-        "gesture": "tap",
-        "show_label": false
-      }
+        "gesture": "tap"
+      },
+      "exchange": [
+        {
+          "speaker": "bahlam_jol",
+          "emote": "help",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_05_bahlam_jol_fear"
+        },
+        {
+          "speaker": "six_sky",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_05_celebrate"
+        }
+      ],
+      "next": "six_sky_maya_05_end"
     },
     {
       "id": "six_sky_maya_05_end",
       "type": "end",
       "speaker": "six_sky",
       "presentation": "chapter",
+      "host": {
+        "sprite": "six_sky_celebrate",
+        "enter": "pop_up",
+        "idle": "cheer",
+        "side": "left",
+        "interactive": true,
+        "confetti": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_05_poke_1",
+          "tutorial.campaign_six_sky_maya_05_poke_2"
+        ]
+      },
       "title_key": "tutorial.campaign_six_sky_maya_05_end_title",
-      "body_key": "tutorial.campaign_six_sky_maya_05_end_body"
+      "body_key": "tutorial.campaign_six_sky_maya_05_end_body",
+      "next_episode_id": "six_sky_maya_06",
+      "next_episode_key": "tutorial.campaign_six_sky_maya_05_next_ep",
+      "skip_tutorial_key": "tutorial.campaign_six_sky_maya_05_skip_tutorial"
     }
   ]
 }

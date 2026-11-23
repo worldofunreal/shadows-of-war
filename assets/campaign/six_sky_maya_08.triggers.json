@@ -4,8 +4,8 @@
   "text_namespace": "tutorial.campaign_",
   "require_speaker_portraits": true,
   "settings": {
-    "starting_troops": 3200,
-    "starting_gold": 3200
+    "starting_troops": 3500,
+    "starting_gold": 5000
   },
   "entry": "six_sky_maya_08_open",
   "speakers": {
@@ -33,6 +33,17 @@
       "pause_game": true,
       "title_key": "tutorial.campaign_six_sky_maya_08_open_title",
       "body_key": "tutorial.campaign_six_sky_maya_08_open_body",
+      "host": {
+        "sprite": "six_sky_pose",
+        "enter": "slide_left",
+        "idle": "breathe",
+        "side": "left",
+        "interactive": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_08_poke_1",
+          "tutorial.campaign_six_sky_maya_08_poke_2"
+        ]
+      },
       "next": "six_sky_maya_08_pick_silo"
     },
     {
@@ -58,6 +69,12 @@
           "nuke"
         ]
       },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "right"
+      },
       "trigger": {
         "type": "ui",
         "action": "dock_missile_silo",
@@ -66,8 +83,7 @@
       "guide": {
         "kind": "ui",
         "target": "dock_missile_silo",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "next": "six_sky_maya_08_build_silo"
     },
@@ -82,6 +98,13 @@
         "value": 1,
         "scope": "total"
       },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true
+      },
       "next": "six_sky_maya_08_pick_city",
       "marker": {
         "target": "player"
@@ -89,8 +112,7 @@
       "guide": {
         "kind": "world",
         "target": "build_site",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       }
     },
     {
@@ -102,6 +124,12 @@
       "speaker": "six_sky",
       "pause_game": true,
       "dim_outside": true,
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "right"
+      },
       "trigger": {
         "type": "ui",
         "action": "dock_city",
@@ -110,8 +138,7 @@
       "guide": {
         "kind": "ui",
         "target": "dock_city",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "next": "six_sky_maya_08_build_city"
     },
@@ -125,6 +152,13 @@
         "value": 1,
         "scope": "total"
       },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true
+      },
       "next": "six_sky_maya_08_wait_city",
       "marker": {
         "target": "player"
@@ -132,8 +166,7 @@
       "guide": {
         "kind": "world",
         "target": "build_site",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "pause_game": true,
       "paused_action": "build_until_started",
@@ -150,6 +183,12 @@
         "value": 1,
         "scope": "total"
       },
+      "host": {
+        "sprite": "six_sky_pose",
+        "enter": "swap_pop",
+        "idle": "breathe",
+        "side": "left"
+      },
       "next": "six_sky_maya_08_select_city",
       "marker": {
         "target": "player"
@@ -164,6 +203,12 @@
       "speaker": "six_sky",
       "pause_game": true,
       "dim_outside": true,
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto"
+      },
       "trigger": {
         "type": "building_selected",
         "kind": "City",
@@ -172,8 +217,7 @@
       "guide": {
         "kind": "world",
         "target": "upgrade_building",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "next": "six_sky_maya_08_upgrade_city"
     },
@@ -188,6 +232,12 @@
         "value": 1,
         "scope": "step"
       },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto"
+      },
       "next": "six_sky_maya_08_city_level_four",
       "marker": {
         "target": "player"
@@ -195,8 +245,7 @@
       "guide": {
         "kind": "world",
         "target": "upgrade_structure",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "pause_game": true,
       "paused_action": "upgrade_until_started",
@@ -213,6 +262,12 @@
         "value": 4,
         "scope": "total"
       },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "cheer",
+        "side": "left"
+      },
       "next": "six_sky_maya_08_open_target",
       "marker": {
         "target": "player"
@@ -227,6 +282,13 @@
       "speaker": "six_sky",
       "pause_game": true,
       "dim_outside": true,
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "point_bob",
+        "side": "auto",
+        "flip_to_target": true
+      },
       "marker": {
         "target": "tikal"
       },
@@ -238,8 +300,7 @@
       "guide": {
         "kind": "world",
         "target": "nameplate",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "next": "six_sky_maya_08_launch_nuke"
     },
@@ -253,6 +314,12 @@
         "value": 1,
         "scope": "step"
       },
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "cheer",
+        "side": "right"
+      },
       "next": "six_sky_maya_08_defeat_tikal",
       "marker": {
         "target": "tikal"
@@ -260,8 +327,7 @@
       "guide": {
         "kind": "ui",
         "target": "map_nuke",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
       },
       "pause_game": true,
       "paused_action": "launch_nuke_until_fired",
@@ -270,6 +336,8 @@
     {
       "id": "six_sky_maya_08_defeat_tikal",
       "type": "objective",
+      "pause_game": false,
+      "attack_ratio_on_enter": 0.75,
       "title_key": "tutorial.campaign_six_sky_maya_08_defeat_title",
       "hint_key": "tutorial.campaign_six_sky_maya_08_defeat_hint",
       "trigger": {
@@ -279,20 +347,38 @@
       },
       "next": "six_sky_maya_08_victory",
       "body_key": "tutorial.campaign_six_sky_maya_08_defeat_body",
+      "host": {
+        "sprite": "six_sky_pointing",
+        "enter": "swap_pop",
+        "idle": "cheer",
+        "side": "auto",
+        "flip_to_target": true,
+        "nudge_key": "tutorial.campaign_six_sky_maya_08_defeat_nudge",
+        "nudge_after_ms": 2500
+      },
       "marker": {
         "target": "tikal"
       },
       "guide": {
         "kind": "world",
         "target": "target_action",
-        "gesture": "tap",
-        "show_label": false
+        "gesture": "tap"
+      },
+      "camera": {
+        "shot": "approach",
+        "to": "tikal",
+        "seconds": 1
       },
       "exchange": [
         {
           "speaker": "tikal",
-          "emote": "threat",
+          "emote": "help",
           "emote_text_key": "tutorial.campaign_six_sky_maya_08_tikal_shock"
+        },
+        {
+          "speaker": "six_sky",
+          "emote": "celebrate",
+          "emote_text_key": "tutorial.campaign_six_sky_maya_08_celebrate"
         }
       ]
     },
@@ -301,6 +387,18 @@
       "type": "end",
       "speaker": "six_sky",
       "presentation": "chapter",
+      "host": {
+        "sprite": "six_sky_celebrate",
+        "enter": "pop_up",
+        "idle": "cheer",
+        "side": "left",
+        "interactive": true,
+        "confetti": true,
+        "poke_keys": [
+          "tutorial.campaign_six_sky_maya_08_poke_1",
+          "tutorial.campaign_six_sky_maya_08_poke_2"
+        ]
+      },
       "title_key": "tutorial.campaign_six_sky_maya_08_end_title",
       "body_key": "tutorial.campaign_six_sky_maya_08_end_body"
     }

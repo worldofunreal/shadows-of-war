@@ -1,34 +1,37 @@
 #!/usr/bin/env bun
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BITAL_SIZE, bitalTerrain, type PetenRoster } from "./bital-terrain.ts";
+import { campaignScene, campaignTerrain } from "./peten-campaign-terrain.ts";
 
 type Point = [number, number, number];
 type Mesh = { vertices: Point[]; faces: number[][]; colors: Point[]; materials: number[] };
 
 const map = process.argv[2] ?? "peten_clearing";
-if (map !== "peten_clearing" && map !== "bital_pass") {
-    throw new Error("Usage: bun scripts/bake-peten-canopy.ts [peten_clearing|bital_pass]");
+const chapter = campaignScene(map);
+if (map !== "peten_clearing" && map !== "bital_pass" && !chapter) {
+    throw new Error(`Unknown Petén map: ${map}`);
 }
 const bital = map === "bital_pass";
-const maskPath = join(import.meta.dir, "../assets/map_sources", map, "image.png");
-const episode = bital ? "six_sky_maya_02" : "six_sky_maya_01";
-const roster: PetenRoster = JSON.parse(readFileSync(join(import.meta.dir, "../assets/campaign", `${episode}.json`), "utf8"));
-const [width, height] = bital ? BITAL_SIZE : (() => {
+const sourceDir = join(import.meta.dir, "../assets/map_sources", map);
+const maskPath = join(sourceDir, "image.png");
+const episode = chapter?.episode ?? (bital ? 2 : 1);
+const roster: PetenRoster = JSON.parse(readFileSync(join(import.meta.dir, "../assets/campaign", `six_sky_maya_0${episode}.json`), "utf8"));
+const [width, height] = bital || chapter ? BITAL_SIZE : (() => {
     const mask = readFileSync(maskPath);
     return [mask.readUInt32BE(16), mask.readUInt32BE(20)] as const;
 })();
 const resolution = [width * 8, height * 8] as const;
 const [playerX, playerY] = roster.player_spawn;
-const opponentId = bital ? "bital" : "kinichil_kab";
+const opponentId = chapter?.target ?? (bital ? "bital" : "kinichil_kab");
 const opponent = roster.factions.find(({ id }) => id === opponentId);
 if (!opponent) throw new Error(`The campaign roster must include ${opponentId}`);
 const clearingX = (playerX + opponent.x) / 2;
 const clearingY = (playerY + opponent.y) / 2;
 const clearingRadiusX = Math.abs(playerX - opponent.x) / 2 + 12;
-const sampleTerrain = bital ? bitalTerrain(roster) : null;
-let seed = bital ? 0x62697461 : 0x70657465;
+const sampleTerrain = chapter ? campaignTerrain(roster, chapter) : bital ? bitalTerrain(roster) : null;
+let seed = chapter ? 0x70657465 + episode : bital ? 0x62697461 : 0x70657465;
 function random() {
     seed ^= seed << 13;
     seed ^= seed >>> 17;
@@ -167,7 +170,7 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.render.engine = 'CYCLES'
 scene.cycles.device = 'CPU'
-scene.cycles.samples = 24
+scene.cycles.samples = data['samples']
 scene.cycles.seed = 407
 scene.cycles.use_denoising = True
 scene.render.resolution_x, scene.render.resolution_y = data['resolution']
@@ -249,7 +252,7 @@ if surface:
     limestone.color_ramp.elements[1].color = (0.76, 0.68, 0.54, 1)
     links.new(weathering.outputs[0], limestone.inputs['Fac'])
     ground_color = tint(ground_color, 'Limestone', [s[1] for s in surface], limestone.outputs[0])
-    ground_color = tint(ground_color, 'Worn ground', [s[2] * 0.61 for s in surface], (0.56, 0.37, 0.17, 1))
+    ground_color = tint(ground_color, 'Worn ground', [s[2] * 0.61 for s in surface], (*data['soil'], 1))
 else:
     plane.from_pydata([(-10, -10, 0), (width+10, -10, 0), (width+10, height+10, 0), (-10, height+10, 0)], [], [(0, 1, 2, 3)])
 links.new(ground_color, nodes.get('Principled BSDF').inputs['Base Color'])
@@ -272,6 +275,17 @@ for variant, x, y, scale, rotation, z in data['instances']:
     obj.location = (x, y, z)
     obj.scale = (scale, scale, scale)
     obj.rotation_euler.z = rotation
+
+for x, y, z in data['stelae']:
+    stone = material('Carved limestone', (0.64, 0.60, 0.48))
+    bpy.ops.mesh.primitive_cube_add(size=2, location=(x, y, z + 1.1), rotation=(0, 0, -0.25))
+    stela = bpy.context.object
+    stela.scale = (0.68, 0.34, 1.22)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    bevel = stela.modifiers.new('Rounded edges', 'BEVEL')
+    bevel.width = 0.14
+    bevel.segments = 2
+    stela.data.materials.append(stone)
 
 world = bpy.data.worlds.new('Skylight')
 scene.world = world
@@ -300,15 +314,19 @@ const directory = mkdtempSync(join(tmpdir(), "sow-peten-"));
 try {
     const scene = join(directory, "scene.json");
     const renderScript = join(directory, "render.py");
-    const render = join(directory, bital ? "bital-pass.png" : "peten-canopy.png");
+    const render = join(directory, "render.png");
     const surface = sampleTerrain && Array.from({ length: (width + 1) * (height + 1) }, (_, i) => {
         const tile = sampleTerrain(i % (width + 1), Math.floor(i / (width + 1)));
         return [tile.height, tile.rock, tile.trail];
     });
-    writeFileSync(scene, JSON.stringify({ size: [width, height], resolution, trees, instances, surface }));
+    const stelae = chapter?.stelae?.map(([x, y]) => [x, height - y, sampleTerrain?.(x, y).height ?? 0]) ?? [];
+    const soil = chapter?.soil ?? [0.56, 0.37, 0.17];
+    const samples = chapter ? 16 : 24;
+    writeFileSync(scene, JSON.stringify({ size: [width, height], resolution, trees, instances, surface, stelae, soil, samples }));
+    const threads = process.env.PETEN_RENDER_THREADS ?? "8";
     writeFileSync(renderScript, renderScene);
     const blender = Bun.spawnSync([
-        "blender", "-b", "--factory-startup", "-t", "8", "--python-exit-code", "1",
+        "blender", "-b", "--factory-startup", "-t", threads, "--python-exit-code", "1",
         "--python", renderScript, "--", scene, render,
     ], { stdout: "inherit", stderr: "inherit" });
     if (!blender.success) throw new Error(`Blender exited with ${blender.exitCode}`);
@@ -316,16 +334,19 @@ try {
     if (png.subarray(1, 4).toString() !== "PNG" || png.readUInt32BE(16) !== resolution[0] || png.readUInt32BE(20) !== resolution[1]) {
         throw new Error(`Blender output must be a ${resolution[0]} × ${resolution[1]} PNG`);
     }
-    const output = join(import.meta.dir, "../sow-client/src/render/frame", bital ? "bital-pass.webp" : "peten-canopy.png");
+    const mapDir = join(import.meta.dir, "../assets/maps", map);
+    const output = chapter ? join(mapDir, "terrain.webp")
+        : join(import.meta.dir, "../sow-client/src/render/frame", bital ? "bital-pass.webp" : "peten-canopy.png");
     if (sampleTerrain) {
         // The map importer reads one terrain tile per pixel and decodes its magnitude from blue.
         const pixels = new Uint8Array(width * height * 3);
         for (let i = 0; i < width * height; i++) {
-            const { elevation } = sampleTerrain(i % width + 0.5, Math.floor(i / width) + 0.5);
-            pixels.set([190, 220, 140 + 2 * Math.round(elevation)], i * 3);
+            const tile = sampleTerrain(i % width + 0.5, Math.floor(i / width) + 0.5);
+            const blue = "land" in tile && !tile.land ? 106 : 140 + 2 * Math.round(tile.elevation);
+            pixels.set([190, 220, blue], i * 3);
         }
         const mask = join(directory, "image.png");
-        const webp = join(directory, "bital-pass.webp");
+        const webp = join(directory, "terrain.webp");
         const encodeMask = Bun.spawnSync(["magick", "ppm:-", "-strip", `PNG24:${mask}`], {
             stdin: Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), pixels]),
             stderr: "inherit",
@@ -333,6 +354,11 @@ try {
         if (!encodeMask.success) throw new Error(`Failed to encode the terrain mask (${encodeMask.exitCode})`);
         const encodeArt = Bun.spawnSync(["magick", render, "-strip", "-quality", "92", webp], { stderr: "inherit" });
         if (!encodeArt.success) throw new Error(`Failed to encode the terrain art (${encodeArt.exitCode})`);
+        if (chapter) {
+            mkdirSync(sourceDir, { recursive: true });
+            mkdirSync(mapDir, { recursive: true });
+            writeFileSync(join(sourceDir, "info.json"), JSON.stringify({ name: chapter.name, multiplayer_frequency: 0 }, null, 2) + "\n");
+        }
         writeFileSync(maskPath, readFileSync(mask));
         writeFileSync(output, readFileSync(webp));
     } else {

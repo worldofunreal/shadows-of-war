@@ -69,6 +69,7 @@ function isCachedMapAsset(pathname: string): boolean {
     return (
         pathname.includes("/assets/maps/") &&
         (pathname.endsWith("/map.bin.br") ||
+            pathname.endsWith("/terrain.webp") ||
             pathname.endsWith("/thumbnail.webp") ||
             pathname.endsWith("/catalog.bin"))
     );

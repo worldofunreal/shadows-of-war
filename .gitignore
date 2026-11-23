@@ -35,6 +35,12 @@ dump.rdb
 assets/maps/*
 !assets/maps/world/
 !assets/maps/peten_clearing/
+!assets/maps/peten_yellow_rabbit/
+!assets/maps/peten_komkom/
+!assets/maps/peten_bahlam_jol/
+!assets/maps/peten_ucanal/
+!assets/maps/peten_dos_pilas/
+!assets/maps/peten_tikal/
 !assets/maps/bital_pass/
 !assets/maps/catalog.bin
 !assets/maps/SOURCES.toml

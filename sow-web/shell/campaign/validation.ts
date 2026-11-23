@@ -130,6 +130,12 @@ export function validate(
             boudica: ["eastanglia", 1600, 900],
             six_sky_maya_01: ["peten_clearing", 176, 100],
             six_sky_maya_02: ["bital_pass", 224, 156],
+            six_sky_maya_03: ["peten_yellow_rabbit", 224, 156],
+            six_sky_maya_04: ["peten_komkom", 224, 156],
+            six_sky_maya_05: ["peten_bahlam_jol", 224, 156],
+            six_sky_maya_06: ["peten_ucanal", 224, 156],
+            six_sky_maya_07: ["peten_dos_pilas", 224, 156],
+            six_sky_maya_08: ["peten_tikal", 224, 156],
         };
         const BLITZ_MAP_SPECS: [string, number, number][] = [
             ["europe", 1600, 920],
@@ -138,11 +144,7 @@ export function validate(
             ["africa", 1532, 1600],
             ["northamerica", 1600, 824],
         ];
-        const expectedMap =
-            EPISODE_MAPS[definition.episode_id] ??
-            (/^six_sky_maya_0[1-8]$/.test(definition.episode_id)
-                ? ["yucatan_peninsula", 1040, 1600]
-                : null);
+        const expectedMap = EPISODE_MAPS[definition.episode_id];
         if (
             !object(roster) ||
             typeof roster.map !== "string" ||
