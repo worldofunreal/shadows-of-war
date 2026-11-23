@@ -659,12 +659,11 @@
 #sow-menu[data-screen="profile"] .sow-profile__match-goals {
   margin: 0 0 22px;
   padding: 16px 18px;
-  border: 1px solid color-mix(in srgb, var(--sow-tactical-accent-bright) 48%, transparent);
-  border-radius: 14px;
-  background:
-    radial-gradient(120% 130% at 0% 0%, color-mix(in srgb, var(--sow-tactical-accent) 13%, transparent), transparent 62%),
-    linear-gradient(150deg, rgba(22, 25, 32, 0.96), rgba(9, 11, 16, 0.94));
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), 0 14px 36px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top: 2px solid var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-card-shadow);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goals-head,
@@ -677,22 +676,26 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goals-head {
   margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goals-head h3 {
   margin: 0;
-  color: #fff0d2;
-  font-size: 15px;
-  font-weight: 850;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goals-head > span,
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-copy small,
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-unlocks h4 {
-  color: #9da9b9;
+  color: var(--sow-control-muted);
   font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.07em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -718,7 +721,7 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-copy strong {
   overflow: hidden;
-  color: #f3f4f6;
+  color: #f5f1e8;
   font-size: 12px;
   font-weight: 850;
   text-overflow: ellipsis;
@@ -727,12 +730,12 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-copy small {
   font-size: 9px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-copy > b {
   flex: 0 0 auto;
-  color: #fff2d4;
+  color: #f5f1e8;
   font-size: 12px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -740,16 +743,18 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-copy > b span {
-  color: #70e0ae;
+  color: var(--sow-tactical-accent-bright);
   margin-inline-start: 4px;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-meter {
   position: relative;
-  height: 5px;
+  height: 6px;
   overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--sow-tactical-track-border);
+  border-radius: var(--sow-tactical-track-radius-compact);
+  background: var(--sow-tactical-track-bg);
+  box-shadow: var(--sow-tactical-track-shadow);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-meter i,
@@ -761,22 +766,29 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-meter i {
   inset-inline-start: 0;
-  background: rgba(255, 255, 255, 0.24);
+  background: rgb(255 255 255 / 22%);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-meter b {
-  background: linear-gradient(90deg, #2dd4a0, #f2d078);
-  box-shadow: 0 0 9px rgba(45, 212, 160, 0.35);
+  background: linear-gradient(
+    90deg,
+    var(--sow-tactical-accent) 0%,
+    var(--sow-tactical-accent-bright) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 40%),
+    0 0 8px color-mix(in srgb, var(--sow-tactical-accent) 40%, transparent);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-unlocks {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgb(255 255 255 / 8%);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-unlocks h4 {
   margin: 0 0 8px;
+  color: var(--sow-tactical-accent-bright);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-unlocks ul {
@@ -787,24 +799,32 @@
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-unlocks li {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
-  color: #f8d77c;
+  color: var(--sow-tactical-accent-bright);
   font-size: 11px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__match-goal-laurel {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  object-fit: contain;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-unlocks li strong {
   overflow: hidden;
-  color: #e4e7ed;
-  font-weight: 750;
+  color: #f5f1e8;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goal-unlocks li small {
   flex: 0 0 auto;
-  color: #aab3c0;
-  font-size: 9px;
+  color: var(--sow-control-muted);
+  font-size: 9.5px;
+  font-weight: 750;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-goals-empty {
@@ -3057,12 +3077,13 @@
 }
 
 .sow-store__skin-art--leader {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sow-store__skin-art--leader img {
   width: 100%;
   height: 100%;
+  border-radius: 5px;
   object-fit: cover;
 }
 

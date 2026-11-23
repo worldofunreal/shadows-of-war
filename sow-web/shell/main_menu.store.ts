@@ -1002,6 +1002,18 @@ function renderBundleCurrencyButton(
     );
 }
 
+function storeBundleText(bundle: MenuStoreBundleOffer, field: "title" | "subtitle"): string {
+    const themeKey = String(bundle.theme_key || "")
+        .trim()
+        .toLowerCase();
+    if (themeKey) {
+        const key = "store.bundle_" + themeKey + "_" + field;
+        const translated = SOW_t(key);
+        if (translated && translated !== key) return translated;
+    }
+    return bundle[field];
+}
+
 function renderStoreBundleOfferCard(bundle: MenuStoreBundleOffer) {
     const quote = computeBundleQuote(bundle);
     if (!quote.items.length) return "";
@@ -1086,10 +1098,10 @@ function renderStoreBundleOfferCard(bundle: MenuStoreBundleOffer) {
         "</div>" +
         "<div class='sow-store__bundle-copy'>" +
         "<h3>" +
-        esc(bundle.title) +
+        esc(storeBundleText(bundle, "title")) +
         "</h3>" +
         "<p>" +
-        esc(bundle.subtitle) +
+        esc(storeBundleText(bundle, "subtitle")) +
         "</p>" +
         proratedNote +
         "</div>" +
@@ -1112,7 +1124,9 @@ function renderBundlesShowcaseSection(kindFilter?: "leader" | "skin") {
     return (
         "<section class='sow-store__section sow-store__section--bundles' aria-labelledby='sow-store-weekly-bundles'>" +
         "<div class='sow-store__section-head'>" +
-        "<h2 id='sow-store-weekly-bundles'>Weekly Value Bundles</h2>" +
+        "<h2 id='sow-store-weekly-bundles'>" +
+        esc(SOW_t("store.weekly_bundles")) +
+        "</h2>" +
         "<span>" +
         esc(SOW_t("store.ends_in", { time: offerTimeLeft(bundles[0].ends_at) })) +
         "</span>" +
@@ -1214,9 +1228,7 @@ function renderSkinsSection(skins: MenuSkinOffer[]) {
     return (
         "<section class='sow-store__section' aria-labelledby='sow-store-skins'><div class='sow-store__section-head'><h2 id='sow-store-skins'>" +
         esc(SOW_t("store.skins")) +
-        "</h2><span>" +
-        esc(SOW_t("store.territory_patterns")) +
-        "</span></div><div class='sow-store__skin-grid'>" +
+        "</h2></div><div class='sow-store__skin-grid sow-store__skin-grid--patterns'>" +
         (sorted.map(renderStoreSkinPromo).join("") ||
             "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") +
         "</div></section>"
@@ -1340,7 +1352,7 @@ export function renderPurchaseModal() {
     const itemName = bundle
         ? SOW_t("store.gems_count", { amount: bundle.gems })
         : storeBundle
-          ? storeBundle.title
+          ? storeBundleText(storeBundle, "title")
           : skin
             ? skinName(skin)
             : leaderDisplayName(leader);

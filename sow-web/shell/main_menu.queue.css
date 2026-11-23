@@ -210,6 +210,31 @@
   margin-top: auto;
 }
 
+.sow-menu__queue-action-bar .sow-menu__queue-leave-btn {
+  margin-top: 0;
+  border-color: rgb(248 113 113 / 60%);
+  color: #fecaca;
+  background:
+    radial-gradient(
+      95% 85% at 50% 20%,
+      rgb(185 28 28 / 48%) 0%,
+      rgb(90 18 24 / 50%) 100%
+    ),
+    var(--sow-tactical-surface-compact-bg);
+  box-shadow:
+    inset 0 1px 0 rgb(254 202 202 / 16%),
+    var(--sow-surface-shadow),
+    0 0 10px rgb(239 68 68 / 18%);
+}
+
+.sow-menu__queue-action-bar .sow-menu__queue-leave-btn:hover {
+  border-color: rgb(248 113 113 / 82%);
+  box-shadow:
+    inset 0 1px 0 rgb(254 202 202 / 24%),
+    var(--sow-surface-shadow),
+    0 0 14px rgb(239 68 68 / 30%);
+}
+
 .sow-menu__queue-players-card {
   position: relative;
   display: flex;
@@ -543,8 +568,10 @@
   }
 
   #sow-menu[data-screen="queue"] .sow-menu__queue-action-bar {
+    position: static;
     gap: 6px;
-    padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+    padding: 0;
+    background: none;
   }
 
   /* Lobby only, small portrait: tighter PLAYERS header, more room for the roster. */

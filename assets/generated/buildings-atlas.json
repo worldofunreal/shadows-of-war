@@ -160,16 +160,16 @@
       },
       "2": {
         "height": 128,
-        "sha256": "c8ce7041aa6464077dd611b56a638e1733e2087bcd4b7315aae48e121d5f1621",
-        "source": "port-2.png",
+        "sha256": "fca321ae3ea152b52640fffec70f1411d8250f126927ceeca8f9837b31c7a486",
+        "source": "port-2.webp",
         "width": 128,
         "x": 530,
         "y": 134
       },
       "3": {
         "height": 128,
-        "sha256": "fca321ae3ea152b52640fffec70f1411d8250f126927ceeca8f9837b31c7a486",
-        "source": "port-3.webp",
+        "sha256": "c8ce7041aa6464077dd611b56a638e1733e2087bcd4b7315aae48e121d5f1621",
+        "source": "port-3.png",
         "width": 128,
         "x": 662,
         "y": 134

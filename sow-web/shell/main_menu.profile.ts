@@ -31,6 +31,7 @@ import {
 import {
   latestMatchGoalSummary,
   markMatchGoalsViewed,
+  matchGoalChainMeta,
 } from "./main_menu.match-goals.ts";
 import { levelFromXp } from "./main_menu.shell.ts";
 import { avatarImageAttribute, setAvatarImage } from "./avatar-presentation.ts";
@@ -1632,27 +1633,13 @@ export function refreshProfileAchievements() {
 }
 
 function matchGoalChainLabel(chainId: string): string {
-  if (chainId === "series:battles") return SOW_t("profile.ach_sub_battles");
-  if (chainId === "series:victories") return SOW_t("profile.ach_sub_victories");
-  if (chainId === "series:kills" || chainId === "series:assists")
-    return SOW_t("profile.ach_sub_slaying");
-  if (chainId === "series:players")
-    return SOW_t("profile.ach_sub_commanders_defeated");
-  if (chainId === "series:empires" || chainId === "series:tribes")
-    return SOW_t("profile.ach_sub_conquest");
-  if (chainId === "series:laurels") return SOW_t("profile.ach_sub_laurels");
-  const [kind, slug] = chainId.split(":");
-  if (kind === "hero_mastery" || kind === "hero_wins") {
-    const leader = leaderById(slug);
-    const heroName = leader ? leaderDisplayName(leader) : slug.replace(/_/g, " ");
-    const category = SOW_t(
-      kind === "hero_mastery"
-        ? "profile.ach_sub_mastery"
-        : "profile.ach_sub_hero_wins",
-    );
-    return heroName + " · " + category;
+  const meta = matchGoalChainMeta(chainId);
+  if (meta.heroSlug) {
+    const leader = leaderById(meta.heroSlug);
+    const heroName = leader ? leaderDisplayName(leader) : meta.heroSlug.replace(/_/g, " ");
+    return heroName + " · " + SOW_t(meta.labelKey);
   }
-  return SOW_t("profile.achievements");
+  return SOW_t(meta.labelKey);
 }
 
 function latestMatchGoalsMarkup(
@@ -1710,7 +1697,9 @@ function latestMatchGoalsMarkup(
       const achievement = achievements.get(id);
       if (!achievement) return "";
       return (
-        "<li><span aria-hidden='true'>✦</span><strong>" +
+        "<li><img class='sow-profile__match-goal-laurel' src='" +
+        esc(currencyAsset("laurel")) +
+        "' alt='' aria-hidden='true' decoding='async'><strong>" +
         esc(achievement.localizedTitle) +
         "</strong><small>+" +
         esc(profileStat(achievement.points)) +

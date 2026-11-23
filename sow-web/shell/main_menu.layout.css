@@ -1676,6 +1676,13 @@
     row-gap: 0;
   }
 
+  #sow-menu[data-screen="home"] .sow-menu__main,
+  #sow-menu [data-screen-panel="home"].sow-menu__main,
+  #sow-menu[data-screen="queue"] .sow-menu__main,
+  #sow-menu [data-screen-panel="queue"].sow-menu__main {
+    padding-top: 8px;
+  }
+
   #sow-menu .sow-menu__nav-dock {
     width: calc(100% + 24px);
     max-width: none;

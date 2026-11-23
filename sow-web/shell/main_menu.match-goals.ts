@@ -159,6 +159,67 @@ export function latestMatchGoalSummary(receipts: MenuRewardReceipt[]): MatchGoal
     return summaries[0] || null;
 }
 
+export type MatchGoalIconKind =
+    | "hero"
+    | "laurel"
+    | "cup"
+    | "ring_attack"
+    | "attack"
+    | "defense"
+    | "spawn"
+    | "solo"
+    | "upgrade";
+
+export interface MatchGoalChainMeta {
+    labelKey: string;
+    heroSlug: string | null;
+    iconKind: MatchGoalIconKind;
+}
+
+export function matchGoalChainMeta(chainId: string): MatchGoalChainMeta {
+    if (chainId === "series:battles") {
+        return { labelKey: "profile.ach_sub_battles", heroSlug: null, iconKind: "ring_attack" };
+    }
+    if (chainId === "series:victories") {
+        return { labelKey: "profile.ach_sub_victories", heroSlug: null, iconKind: "cup" };
+    }
+    if (chainId === "series:kills" || chainId === "series:assists") {
+        return { labelKey: "profile.ach_sub_slaying", heroSlug: null, iconKind: "attack" };
+    }
+    if (chainId === "series:players") {
+        return { labelKey: "profile.ach_sub_commanders_defeated", heroSlug: null, iconKind: "attack" };
+    }
+    if (chainId === "series:empires" || chainId === "series:tribes") {
+        return { labelKey: "profile.ach_sub_conquest", heroSlug: null, iconKind: "defense" };
+    }
+    if (chainId === "series:laurels") {
+        return { labelKey: "profile.ach_sub_laurels", heroSlug: null, iconKind: "laurel" };
+    }
+    if (chainId === "series:campaign") {
+        return { labelKey: "profile.ach_sub_campaign", heroSlug: null, iconKind: "spawn" };
+    }
+    if (chainId === "series:roster") {
+        return { labelKey: "profile.ach_sub_vanguard", heroSlug: null, iconKind: "solo" };
+    }
+    const [kind, slug] = chainId.split(":");
+    if (slug && (kind === "hero_mastery" || kind === "hero_wins" || kind === "hero_recruit")) {
+        return {
+            labelKey:
+                kind === "hero_mastery"
+                    ? "profile.ach_sub_mastery"
+                    : kind === "hero_wins"
+                      ? "profile.ach_sub_hero_wins"
+                      : "profile.ach_sub_recruit",
+            heroSlug: slug,
+            iconKind: "hero",
+        };
+    }
+    if (chainId.startsWith("achievement:laurel")) {
+        return { labelKey: "profile.ach_sub_laurels", heroSlug: null, iconKind: "laurel" };
+    }
+    return { labelKey: "profile.achievements", heroSlug: null, iconKind: "upgrade" };
+}
+
 function chainForAchievement(achievement: MatchGoalAchievement): string {
     if (achievement.chainId) return achievement.chainId;
     const id = achievement.id;

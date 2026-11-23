@@ -52,13 +52,16 @@ export function renderSkinCard(skin: MenuSkinOffer, lockedAction = "", discount 
           (equipped ? "<span aria-hidden='true'>×</span>" : "") + "</button>"
         : lockedAction;
     return (
-        "<article class='sow-store__skin" + (equipped ? " is-equipped" : "") +
+        "<article class='sow-store__skin sow-store__skin--pattern" +
+        (skin.owned ? " is-owned" : "") +
+        (equipped ? " is-equipped" : "") +
         (discountBadge ? " is-on-sale" : "") +
+        "' data-skin-card='" + esc(skin.id) +
         "'><div class='sow-store__skin-art'><img " + skinIconAttributes(skin.id, asset(skin.asset_path)) +
         " alt='' width='96' height='96' loading='lazy'>" +
         (discountBadge ? "<b class='sow-store__discount'>-" + discount + "%</b>" : "") +
         "</div><div class='sow-store__skin-body'><h3>" + esc(skinName(skin)) +
-        "</h3><p>" + esc(SOW_t("store.territory_pattern")) + "</p>" + action + "</div></article>"
+        "</h3>" + action + "</div></article>"
     );
 }
 
@@ -71,7 +74,7 @@ export function renderSkinPicker(renderCard?: (skin: MenuSkinOffer) => string) {
         "<div class='sow-menu__overlay' data-menu-overlay='skin-picker'><section class='sow-menu__modal sow-skin-picker' role='dialog' aria-modal='true' aria-label='" +
         title + "'><div class='sow-menu__modal-head'><h2>" + title +
         "</h2><button class='sow-menu__icon-button' type='button' data-command='close_skin_picker' aria-label='" +
-        esc(SOW_t("menu.close")) + "'>×</button></div><div class='sow-store__skin-grid'>" +
+        esc(SOW_t("menu.close")) + "'>×</button></div><div class='sow-store__skin-grid sow-store__skin-grid--patterns'>" +
         (cards.join("") || "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") +
         "</div></section></div>"
     );

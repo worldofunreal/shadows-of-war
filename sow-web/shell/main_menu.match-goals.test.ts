@@ -5,6 +5,7 @@ import {
     latestMatchGoalSummary,
     markMatchGoalToastHandled,
     markMatchGoalsViewed,
+    matchGoalChainMeta,
     selectMatchGoalHighlights,
     type MatchGoalAchievement,
 } from "./main_menu.match-goals.ts";
@@ -161,5 +162,27 @@ describe("match goal progress", () => {
         expect(hasHandledMatchGoalToast("account-a", "match-1")).toBe(true);
         expect(hasViewedMatchGoals("account-a", "match-2")).toBe(false);
         expect(hasHandledMatchGoalToast("account-b", "match-1")).toBe(false);
+    });
+
+    test("resolves canonical chain labels and icon kinds for global, hero, and laurel goals", () => {
+        expect(matchGoalChainMeta("series:battles")).toEqual({
+            labelKey: "profile.ach_sub_battles",
+            heroSlug: null,
+            iconKind: "ring_attack",
+        });
+        expect(matchGoalChainMeta("series:victories").iconKind).toBe("cup");
+        expect(matchGoalChainMeta("series:empires").iconKind).toBe("defense");
+        expect(matchGoalChainMeta("series:laurels")).toEqual({
+            labelKey: "profile.ach_sub_laurels",
+            heroSlug: null,
+            iconKind: "laurel",
+        });
+        expect(matchGoalChainMeta("hero_recruit:boudica")).toEqual({
+            labelKey: "profile.ach_sub_recruit",
+            heroSlug: "boudica",
+            iconKind: "hero",
+        });
+        expect(matchGoalChainMeta("hero_mastery:caesar").iconKind).toBe("hero");
+        expect(matchGoalChainMeta("achievement:unknown_goal").iconKind).toBe("upgrade");
     });
 });

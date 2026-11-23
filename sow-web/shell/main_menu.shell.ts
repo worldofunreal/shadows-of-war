@@ -105,6 +105,7 @@ import {
     hasViewedMatchGoals,
     latestMatchGoalSummary,
     markMatchGoalToastHandled,
+    matchGoalChainMeta,
     selectMatchGoalHighlights,
     type MatchGoalAchievement,
     type MatchGoalHighlight,
@@ -3185,23 +3186,51 @@ function matchGoalAchievementCatalog(summary: MatchGoalSummary): Map<string, Mat
 }
 
 function matchGoalChainLabel(chainId: string): string {
-    if (chainId === "series:battles") return SOW_t("profile.ach_sub_battles");
-    if (chainId === "series:victories") return SOW_t("profile.ach_sub_victories");
-    if (chainId === "series:kills" || chainId === "series:assists")
-        return SOW_t("profile.ach_sub_slaying");
-    if (chainId === "series:players") return SOW_t("profile.ach_sub_commanders_defeated");
-    if (chainId === "series:empires" || chainId === "series:tribes")
-        return SOW_t("profile.ach_sub_conquest");
-    const [kind, slug] = chainId.split(":");
-    if (kind === "hero_mastery" || kind === "hero_wins") {
-        const leader = leaderById(slug);
-        const name = leader ? leaderDisplayName(leader) : slug.replace(/_/g, " ");
-        const category = SOW_t(
-            kind === "hero_mastery" ? "profile.ach_sub_mastery" : "profile.ach_sub_hero_wins",
-        );
-        return name + " · " + category;
+    const meta = matchGoalChainMeta(chainId);
+    if (meta.heroSlug) {
+        const leader = leaderById(meta.heroSlug);
+        const name = leader ? leaderDisplayName(leader) : meta.heroSlug.replace(/_/g, " ");
+        return name + " · " + SOW_t(meta.labelKey);
     }
-    return SOW_t("profile.achievements");
+    return SOW_t(meta.labelKey);
+}
+
+function matchGoalIconMarkup(highlight: MatchGoalHighlight): string {
+    const meta = matchGoalChainMeta(highlight.chainId);
+    if (meta.heroSlug) {
+        const hero = leaderById(meta.heroSlug);
+        const heroArt =
+            hero &&
+            hero.id.replace(/[^a-z0-9]/gi, "").toLowerCase() ===
+                meta.heroSlug.replace(/[^a-z0-9]/gi, "").toLowerCase()
+                ? leaderArtSlug(hero)
+                : "";
+        if (/^[a-z0-9_]+$/.test(heroArt)) {
+            return (
+                "<span class='sow-match-goals-toast__icon sow-match-goals-toast__icon--hero'>" +
+                "<img class='sow-match-goals-toast__avatar' " +
+                avatarImageAttribute(asset("gameplay/avatars/" + heroArt + ".webp")) +
+                " alt='' aria-hidden='true' decoding='async'>" +
+                "</span>"
+            );
+        }
+    }
+    if (meta.iconKind === "laurel") {
+        return (
+            "<span class='sow-match-goals-toast__icon sow-match-goals-toast__icon--laurel' aria-hidden='true'>" +
+            "<img class='sow-match-goals-toast__laurel' src='" +
+            esc(currencyAsset("laurel")) +
+            "' alt='' decoding='async'>" +
+            "</span>"
+        );
+    }
+    const glyphName = meta.iconKind === "hero" ? "solo" : meta.iconKind;
+    const glyph = menuIcon(glyphName, "sow-match-goals-toast__svg") || menuIcon("cup", "sow-match-goals-toast__svg");
+    return (
+        "<span class='sow-match-goals-toast__icon sow-match-goals-toast__icon--glyph' aria-hidden='true'>" +
+        glyph +
+        "</span>"
+    );
 }
 
 function dismissMatchGoalToast(): void {
@@ -3219,52 +3248,48 @@ function dismissMatchGoalToast(): void {
 
 function goalToastRow(highlight: MatchGoalHighlight): string {
     const { advance, achievement } = highlight;
+    const isUnlocked = highlight.kind === "unlock";
     const target = advance ? advance.target : highlight.target;
     const before = advance ? advance.before : highlight.progressBefore;
     const after = advance ? advance.after : highlight.progressAfter;
     const previous = advance ? advance.previous : highlight.previousTarget;
     const amount = Math.max(0, after - before);
     const span = Math.max(1, target - previous);
-    const beforePct = Math.max(0, Math.min(100, ((before - previous) / span) * 100));
-    const afterPct = Math.max(beforePct, Math.min(100, ((after - previous) / span) * 100));
-    const count =
-        highlight.kind === "unlock"
-            ? "<span class='sow-match-goals-toast__unlocked'>" +
-              esc(SOW_t("profile.match_goals_unlocked")) +
-              "</span>"
-            : "<b class='sow-match-goals-toast__count'>" +
-              esc(formatCompactNumber(Math.min(after, target))) +
-              "/" +
-              esc(formatCompactNumber(target)) +
-              " <i>+" +
-              esc(formatCompactNumber(amount)) +
-              "</i></b>";
-    const heroSlug = /^hero_(?:mastery|wins):([a-z0-9_]+)$/.exec(highlight.chainId)?.[1];
-    const hero = heroSlug ? leaderById(heroSlug) : null;
-    const heroArt =
-        hero && heroSlug && hero.id.replace(/[^a-z0-9]/gi, "").toLowerCase() === heroSlug.replace(/[^a-z0-9]/gi, "").toLowerCase()
-            ? leaderArtSlug(hero)
-            : "";
-    const icon = /^[a-z0-9_]+$/.test(heroArt)
-        ? "<span class='sow-match-goals-toast__icon'><img " +
-          avatarImageAttribute(asset("gameplay/avatars/" + heroArt + ".webp")) +
-          " alt='' aria-hidden='true'></span>"
-        : "<span class='sow-match-goals-toast__icon sow-match-goals-toast__icon--generic' aria-hidden='true'>✦</span>";
+    const beforePct = isUnlocked ? 0 : Math.max(0, Math.min(100, ((before - previous) / span) * 100));
+    const afterPct = isUnlocked ? 100 : Math.max(beforePct, Math.min(100, ((after - previous) / span) * 100));
+    const deltaPct = isUnlocked ? 100 : Math.max(0, afterPct - beforePct);
+    const status = isUnlocked
+        ? "<span class='sow-match-goals-toast__unlocked'>" +
+          esc(SOW_t("profile.match_goals_unlocked")) +
+          "</span>"
+        : "<b class='sow-match-goals-toast__count'>" +
+          esc(formatCompactNumber(Math.min(after, target))) +
+          "/" +
+          esc(formatCompactNumber(target)) +
+          " <i>+" +
+          esc(formatCompactNumber(amount)) +
+          "</i></b>";
     return (
-        "<li><div class='sow-match-goals-toast__row'>" +
-        icon +
-        "<div><small>" +
+        "<li class='sow-match-goals-toast__item" +
+        (isUnlocked ? " is-unlocked" : "") +
+        "'><div class='sow-match-goals-toast__row'>" +
+        matchGoalIconMarkup(highlight) +
+        "<div class='sow-match-goals-toast__body'>" +
+        "<div class='sow-match-goals-toast__meta'><small>" +
         esc(matchGoalChainLabel(highlight.chainId)) +
-        "</small><strong>" +
+        "</small>" +
+        status +
+        "</div><strong>" +
         esc(achievement.title) +
         "</strong></div>" +
-        count +
-        "</div><div class='sow-match-goals-toast__meter'><i style='width:" +
+        "</div><div class='sow-match-goals-toast__meter" +
+        (isUnlocked ? " is-unlocked" : "") +
+        "'><i style='width:" +
         beforePct.toFixed(2) +
         "%'></i><b style='inset-inline-start:" +
         beforePct.toFixed(2) +
         "%;width:" +
-        Math.max(0, afterPct - beforePct).toFixed(2) +
+        deltaPct.toFixed(2) +
         "%'></b></div></li>"
     );
 }
@@ -3332,19 +3357,33 @@ function showMatchGoalToast(
     toast.setAttribute("role", "status");
     toast.setAttribute("aria-live", "polite");
     toast.setAttribute("aria-atomic", "true");
+    const headerIcon = menuIcon("cup", "sow-match-goals-toast__head-svg");
+    const closeIcon = menuIcon("close", "sow-match-goals-toast__close-svg") || "×";
+    const reviewArrow =
+        "<svg class='sow-match-goals-toast__review-arrow' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14'/><path d='m13 6 6 6-6 6'/></svg>";
     toast.innerHTML =
-        "<header><strong>" +
+        "<header class='sow-match-goals-toast__head'>" +
+        "<div class='sow-match-goals-toast__title-group'>" +
+        "<span class='sow-match-goals-toast__head-badge' aria-hidden='true'>" +
+        headerIcon +
+        "</span><strong>" +
         esc(SOW_t("profile.match_goals_toast_title")) +
-        "</strong><button type='button' data-match-goals-dismiss aria-label='" +
+        "</strong></div>" +
+        "<button class='sow-menu__icon-button sow-match-goals-toast__close' type='button' data-match-goals-dismiss aria-label='" +
         esc(SOW_t("profile.match_goals_dismiss")) +
-        "'>×</button></header><ul>" +
+        "'>" +
+        closeIcon +
+        "</button></header><ul class='sow-match-goals-toast__list'>" +
         highlights.map(goalToastRow).join("") +
-        "</ul><footer><button type='button' data-match-goals-review>" +
+        "</ul><footer class='sow-match-goals-toast__foot'>" +
+        "<button class='sow-match-goals-toast__review' type='button' data-match-goals-review><span>" +
         esc(
             SOW_t("profile.match_goals_view", {
                 count: Math.max(summary.advances.length, summary.unlockedIds.length),
             }),
         ) +
+        "</span>" +
+        reviewArrow +
         "</button></footer><div class='sow-match-goals-toast__timer' aria-hidden='true'><i></i></div>";
     toast.classList.add("is-paused");
     root.appendChild(toast);
