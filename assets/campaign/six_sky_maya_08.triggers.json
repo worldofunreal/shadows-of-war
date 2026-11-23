@@ -47,10 +47,10 @@
       "unlocks": {
         "buildings": {
           "SAM": 2,
-          "Factory": 4,
+          "TradingPost": 4,
           "Tower": 4,
           "City": 4,
-          "Farm": 2,
+          "MilitaryCamp": 2,
           "Port": 2,
           "MissileSilo": 1
         },

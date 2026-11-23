@@ -471,7 +471,7 @@ impl EnclosureScratch {
 
 /// Cheap deterministic fingerprint over all Port buildings (O(buildings), ~1µs) so port caches
 /// stay valid even after direct test mutations or checkpoint restores without false invalidations
-/// from City/Farm/Factory/Tower/SAM upgrades.
+/// from City/MilitaryCamp/TradingPost/Tower/SAM upgrades.
 pub(crate) fn compute_port_fingerprint(
     buildings: &[Building],
     map_width: u32,
@@ -696,13 +696,13 @@ impl SowEngine {
         self.building_aggregates =
             aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
         let stations = self.buildings.iter().filter_map(|building| {
-            use crate::game::BuildingKind::{City, Factory, Port};
+            use crate::game::BuildingKind::{City, TradingPost, Port};
             let level = building.active_level();
-            if level == 0 || !matches!(building.kind, City | Factory | Port) {
+            if level == 0 || !matches!(building.kind, City | TradingPost | Port) {
                 return None;
             }
             Some(Building {
-                level: if building.kind == Factory { level } else { 1 },
+                level: if building.kind == TradingPost { level } else { 1 },
                 under_construction: false,
                 ticks_until_complete: 0,
                 ..*building
@@ -2359,7 +2359,7 @@ mod tests {
         };
         assert!(tutorial.set_campaign_unlocks(first_grant));
         assert!(tutorial.campaign_allows_building(crate::game::BuildingKind::City, 1));
-        assert!(!tutorial.campaign_allows_building(crate::game::BuildingKind::Factory, 1));
+        assert!(!tutorial.campaign_allows_building(crate::game::BuildingKind::TradingPost, 1));
 
         let attempted_revoke = crate::campaign::CampaignUnlocks::default();
         assert!(!tutorial.set_campaign_unlocks(attempted_revoke));

@@ -13,6 +13,7 @@ USAGE:
 
 COMMANDS:
   (no args)            Fast-build and open the native Electron/WASM game
+  dev                   Instant Electron 44 live-reload prototyping loop (CSS/TS/JSON/sprites)
   m, map                Start or restart the local campaign editor on port 8777
   l, local              Build WASM + webroot and serve it locally on port 4173
   native                Fast-build and open the native Electron/WASM game
@@ -28,6 +29,7 @@ COMMANDS:
 
 EXAMPLES:
   ./sow                # Build and open the native desktop client
+  ./sow dev            # Instant Electron 44 live-reload loop (--mobile, --wasm, --watch-rust)
   ./sow m              # Serve the campaign editor (JSON changes need no Rust rebuild)
   ./sow l              # Build and serve the local web client (Ctrl-C to stop)
   ./sow native         # Build and open the native desktop client
@@ -277,6 +279,10 @@ case "${CMD}" in
     BIN="${CARGO_TARGET_DIR}/debug/sow"
     cargo build -p sow-dist
     exec "${BIN}" "$@"
+    ;;
+  dev)
+    shift || true
+    exec bun "${ROOT}/scripts/dev-electron.ts" "$@"
     ;;
   native)
     load_dist_env

@@ -33,48 +33,48 @@
       "pause_game": true,
       "title_key": "tutorial.campaign_six_sky_maya_04_open_title",
       "body_key": "tutorial.campaign_six_sky_maya_04_open_body",
-      "next": "six_sky_maya_04_pick_factory"
+      "next": "six_sky_maya_04_pick_trading_post"
     },
     {
-      "id": "six_sky_maya_04_pick_factory",
+      "id": "six_sky_maya_04_pick_trading_post",
       "type": "guide",
-      "title_key": "tutorial.campaign_six_sky_maya_04_factory_pick_title",
-      "body_key": "tutorial.campaign_six_sky_maya_04_factory_pick_body",
-      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_pick_hint",
+      "title_key": "tutorial.campaign_six_sky_maya_04_trading_post_pick_title",
+      "body_key": "tutorial.campaign_six_sky_maya_04_trading_post_pick_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_trading_post_pick_hint",
       "speaker": "six_sky",
       "pause_game": true,
       "dim_outside": true,
       "unlocks": {
         "buildings": {
-          "Factory": 4,
-          "Farm": 2,
+          "TradingPost": 4,
+          "MilitaryCamp": 2,
           "City": 1
         }
       },
       "trigger": {
         "type": "ui",
-        "action": "dock_factory",
+        "action": "dock_trading_post",
         "scope": "step"
       },
       "guide": {
         "kind": "ui",
-        "target": "dock_factory",
+        "target": "dock_trading_post",
         "gesture": "tap",
         "show_label": false
       },
-      "next": "six_sky_maya_04_build_factory"
+      "next": "six_sky_maya_04_build_trading_post"
     },
     {
-      "id": "six_sky_maya_04_build_factory",
+      "id": "six_sky_maya_04_build_trading_post",
       "type": "objective",
-      "title_key": "tutorial.campaign_six_sky_maya_04_factory_build_title",
-      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_build_hint",
+      "title_key": "tutorial.campaign_six_sky_maya_04_trading_post_build_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_trading_post_build_hint",
       "trigger": {
-        "type": "factory",
+        "type": "trading_post",
         "value": 1,
         "scope": "total"
       },
-      "next": "six_sky_maya_04_wait_factory",
+      "next": "six_sky_maya_04_wait_trading_post",
       "marker": {
         "target": "player"
       },
@@ -89,33 +89,33 @@
       "dim_outside": true
     },
     {
-      "id": "six_sky_maya_04_wait_factory",
+      "id": "six_sky_maya_04_wait_trading_post",
       "type": "objective",
-      "title_key": "tutorial.campaign_six_sky_maya_04_factory_wait_title",
-      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_wait_hint",
+      "title_key": "tutorial.campaign_six_sky_maya_04_trading_post_wait_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_trading_post_wait_hint",
       "trigger": {
         "type": "structure_level",
-        "kind": "Factory",
+        "kind": "TradingPost",
         "value": 1,
         "scope": "total"
       },
-      "next": "six_sky_maya_04_select_factory",
+      "next": "six_sky_maya_04_select_trading_post",
       "marker": {
         "target": "player"
       }
     },
     {
-      "id": "six_sky_maya_04_select_factory",
+      "id": "six_sky_maya_04_select_trading_post",
       "type": "guide",
-      "title_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_title",
-      "body_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_body",
-      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_hint",
+      "title_key": "tutorial.campaign_six_sky_maya_04_trading_post_upgrade_title",
+      "body_key": "tutorial.campaign_six_sky_maya_04_trading_post_upgrade_body",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_trading_post_upgrade_hint",
       "speaker": "six_sky",
       "pause_game": true,
       "dim_outside": true,
       "trigger": {
         "type": "building_selected",
-        "kind": "Factory",
+        "kind": "TradingPost",
         "scope": "step"
       },
       "guide": {
@@ -124,16 +124,16 @@
         "gesture": "tap",
         "show_label": false
       },
-      "next": "six_sky_maya_04_upgrade_factory"
+      "next": "six_sky_maya_04_upgrade_trading_post"
     },
     {
-      "id": "six_sky_maya_04_upgrade_factory",
+      "id": "six_sky_maya_04_upgrade_trading_post",
       "type": "objective",
-      "title_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_title",
-      "hint_key": "tutorial.campaign_six_sky_maya_04_factory_upgrade_hint",
+      "title_key": "tutorial.campaign_six_sky_maya_04_trading_post_upgrade_title",
+      "hint_key": "tutorial.campaign_six_sky_maya_04_trading_post_upgrade_hint",
       "trigger": {
         "type": "structure_upgrade",
-        "kind": "Factory",
+        "kind": "TradingPost",
         "value": 1,
         "scope": "step"
       },

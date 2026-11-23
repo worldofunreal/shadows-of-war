@@ -882,9 +882,9 @@ fn structure_marks_leader(leader: Leader, kind: BuildingKind) -> bool {
         ) => matches!(
             (district, kind),
             (District::City, BuildingKind::City)
-                | (District::Factory, BuildingKind::Factory)
+                | (District::TradingPost, BuildingKind::TradingPost)
                 | (District::Port, BuildingKind::Port)
-                | (District::Farm, BuildingKind::Farm)
+                | (District::MilitaryCamp, BuildingKind::MilitaryCamp)
         ),
         _ => false,
     }
@@ -1045,10 +1045,10 @@ pub(crate) mod tests {
     #[test]
     fn finished_structures_show_the_mark_only_for_their_hero() {
         for (hero, kind, marks) in [
-            ("nezahualcoyotl", BuildingKind::Factory, 1),
+            ("nezahualcoyotl", BuildingKind::TradingPost, 1),
             ("nezahualcoyotl", BuildingKind::Port, 0),
             ("cleopatra", BuildingKind::Port, 1),
-            ("cleopatra", BuildingKind::Factory, 0),
+            ("cleopatra", BuildingKind::TradingPost, 0),
             ("lobengula", BuildingKind::City, 1),
             ("lobengula", BuildingKind::Tower, 0),
         ] {

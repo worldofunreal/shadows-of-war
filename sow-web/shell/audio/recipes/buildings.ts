@@ -6,9 +6,9 @@
  *   AND a signature flourish when completed:
  *     - City:        Marble foundation slam + royal civic brass & celesta
  *     - Tower:       Granite block seat + iron portcullis latch
- *     - Factory:     Forged hammer-on-anvil strike + pressurized steam hiss
+ *     - TradingPost:     Forged hammer-on-anvil strike + pressurized steam hiss
  *     - Port:        Oak dock piling thud + multi-bubble harbor splash
- *     - Farm:        Warm timber knock + acoustic Karplus-Strong harp fifth
+ *     - MilitaryCamp:        Warm timber knock + acoustic Karplus-Strong harp fifth
  *     - SAM:         Hydraulic servo + machined double brass lock + radar chime
  *     - MissileSilo: Subterranean steel blast-door slam + bunker lock
  *   `BuildingComplete` blooms with a sweeping harp glissando, D Major9 celesta,
@@ -62,7 +62,7 @@ export function synthBuildingPlace(v: VoiceRenderCtx, t: CueTrigger): void {
             playCasinoChime(v, { freq: 880.0, delay: 0.052, decay: 0.42, gain: 0.22, sparkle: 0.6, pan: 0.25 });
             break;
 
-        case BuildingAudioKind.Factory:
+        case BuildingAudioKind.TradingPost:
             // Forged blacksmith hammer-on-anvil + crisp steam hiss
             playSteelImpact(v, { heavy: false, pitch: 1.18, delay: 0.008, gain: 0.42, wetSend: 0.34 });
             playFilteredNoise(v, {
@@ -91,7 +91,7 @@ export function synthBuildingPlace(v: VoiceRenderCtx, t: CueTrigger): void {
             playCasinoChime(v, { freq: 783.99, delay: 0.032, decay: 0.28, gain: 0.16, sparkle: 0.35 });
             break;
 
-        case BuildingAudioKind.Farm:
+        case BuildingAudioKind.MilitaryCamp:
             // Warm carved timber knock + rustic acoustic harp fifth + grain brush
             playTactilePop(v, { material: "wood", pitch: 1.05, popBend: 1.16, delay: 0.006, gain: 0.44 });
             playHarpPluck(v, { freq: 293.66, delay: 0.014, decay: 0.42, gain: 0.28, pan: -0.22 });
@@ -233,7 +233,7 @@ export function synthBuildingComplete(v: VoiceRenderCtx, t: CueTrigger): void {
             goldenHall: true,
         });
         playCoinShower(v, { count: 4, delay: 0.12, spacing: 0.04, pitch: 1.08, gain: 0.22, spread: 0.55 });
-    } else if (kind === BuildingAudioKind.Factory) {
+    } else if (kind === BuildingAudioKind.TradingPost) {
         playSteelImpact(v, { heavy: false, pitch: 1.32, delay: 0.02, gain: 0.24 });
         playFilteredNoise(v, {
             color: "pink",
@@ -354,7 +354,7 @@ export function synthBuildingUpgradeProgress(v: VoiceRenderCtx, t: CueTrigger): 
     const tech =
         kind === BuildingAudioKind.SAM ||
         kind === BuildingAudioKind.MissileSilo ||
-        kind === BuildingAudioKind.Factory;
+        kind === BuildingAudioKind.TradingPost;
 
     // Warm carpenter / mason scaffold tap (rotates pitch slightly per beat for organic cadence)
     playBuffer(v, {
@@ -474,7 +474,7 @@ export function synthBuildingSelect(v: VoiceRenderCtx, t: CueTrigger): void {
 
     // Universal tactile card-open seal
     playTactilePop(v, {
-        material: kind === BuildingAudioKind.Farm || kind === BuildingAudioKind.Port ? "wood" : "stone",
+        material: kind === BuildingAudioKind.MilitaryCamp || kind === BuildingAudioKind.Port ? "wood" : "stone",
         pitch: 1.08,
         popBend: 1.16,
         gain: 0.32,
@@ -485,7 +485,7 @@ export function synthBuildingSelect(v: VoiceRenderCtx, t: CueTrigger): void {
         case BuildingAudioKind.City:
             playCasinoChime(v, { freq: 587.33, delay: 0.01, decay: 0.32, gain: 0.22, sparkle: 0.55 });
             break;
-        case BuildingAudioKind.Factory:
+        case BuildingAudioKind.TradingPost:
             playBuffer(v, {
                 buffer: v.bank.steelClash[0],
                 delay: 0.008,
@@ -498,7 +498,7 @@ export function synthBuildingSelect(v: VoiceRenderCtx, t: CueTrigger): void {
         case BuildingAudioKind.Port:
             playCasinoChime(v, { freq: 739.99, delay: 0.012, decay: 0.26, gain: 0.18, sparkle: 0.4 });
             break;
-        case BuildingAudioKind.Farm:
+        case BuildingAudioKind.MilitaryCamp:
             playHarpPluck(v, { freq: 440.0, delay: 0.01, decay: 0.32, gain: 0.22, shimmerSend: 0.38 });
             break;
         case BuildingAudioKind.SAM:

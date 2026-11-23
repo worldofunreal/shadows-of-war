@@ -34,9 +34,11 @@ pub enum Gender {
 #[serde(rename_all = "snake_case")]
 pub enum District {
     City,
-    Factory,
+    #[serde(rename = "trading_post", alias = "factory")]
+    TradingPost,
     Port,
-    Farm,
+    #[serde(rename = "military_camp", alias = "farm")]
+    MilitaryCamp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,14 +107,15 @@ pub enum Ability {
     AllyPatronage { percent: u32 },
     /// At peace, convert otherwise wasted troop production into gold.
     SurplusTreasury { troops_per_gold: u32 },
-    /// Factory levels near a ready city pay additional gold.
+    /// TradingPost levels near a ready city pay additional gold.
     GuildNetwork { gold_per_second: u32 },
     /// A lethal naval shell takes an enemy warship as a damaged prize.
     WarshipPrize { percent: u32 },
     /// Armies on either side of an alliance return without land retreat losses.
     Armistice { percent: u32 },
-    /// Upgrading a city to level two establishes a nearby farm.
-    CityFarmFounding,
+    /// Upgrading a city to level two establishes a nearby Military Camp.
+    #[serde(rename = "city_military_camp_founding", alias = "city_farm_founding")]
+    CityMilitaryCampFounding,
     /// Taking an invading rival’s tower transfers a capped share of their gold.
     CounterLevy { percent: u32, max_gold: u32 },
     /// Commit reserve troops to intercept one conquest of an allied city center.
@@ -121,7 +124,7 @@ pub enum Ability {
     RetreatHandover { percent: u32 },
     /// A captured upgraded city loses an active level, once per city.
     CityDenial,
-    /// A foreign trade arrival upgrades a farm near its home port, once per port.
+    /// A foreign trade arrival upgrades a Military Camp near its home port, once per port.
     PuntGardens,
     /// Establish a replacement city after the loss of the last active city.
     LastCityRelocation,
@@ -129,19 +132,21 @@ pub enum Ability {
     WarRegalia { troops: u32 },
     /// Recruit part of a defeated rival’s reserves after a territorial conquest.
     Reunification { percent: u32 },
-    /// A completed factory supplies discounted city upgrades within twelve tiles.
-    FactoryCityUpgradeDiscount { percent: u32 },
-    /// A land army gains troops for the active levels of each enemy factory it first captures.
-    FactoryRaid { troops_per_level: u32 },
-    /// Matching active city, factory and farm level totals boost factory gold and farm troops.
+    /// A completed Trading Post supplies discounted City upgrades within twelve tiles.
+    #[serde(rename = "trading_post_city_upgrade_discount", alias = "factory_city_upgrade_discount")]
+    TradingPostCityUpgradeDiscount { percent: u32 },
+    /// A land army gains troops for the active levels of each enemy Trading Post it first captures.
+    #[serde(rename = "trading_post_raid", alias = "factory_raid")]
+    TradingPostRaid { troops_per_level: u32 },
+    /// Matching active City, Trading Post and Military Camp levels boost Trading Post gold and Camp troops.
     ImperialStandards { percent: u32 },
     /// Taking an enemy tower demolishes a nearby lower-level tower of the same rival.
     SiegeBreach,
-    /// Losing an active farm upgrades a nearby completed city once per farm.
+    /// Losing an active Military Camp upgrades a nearby completed City once per Camp.
     CookhamExchange,
     /// A new ally with no active city finishes their oldest city under construction.
     SecondCrown,
-    /// Completing a farm upgrade halves the remaining time of a nearby city upgrade.
+    /// Completing a Military Camp upgrade halves the remaining time of a nearby City upgrade.
     KitchenPhilosophy,
     /// Recruit a share of the troops defeated when countercharging a land attack.
     MountedCapture { percent: u32 },
@@ -153,7 +158,7 @@ pub enum Ability {
     TigranesAid { max_troops: u32 },
     /// Found a free tower near a captured active city without a nearby friendly tower.
     AkkadGarrison,
-    /// A qualifying troop gift provides capped reinforcements to both farming allies.
+    /// A qualifying troop gift provides capped reinforcements to both Military Camp-owning allies.
     SharedFeast,
     /// Two allies forming their own pact renew their timed alliances with the hero.
     GreatLawOfPeace,
@@ -303,7 +308,7 @@ impl Ability {
             | Ability::ZagrosAscent { percent }
             | Ability::RegionalCommands { percent }
             | Ability::NyabingiNetwork { percent }
-            | Ability::FactoryCityUpgradeDiscount { percent }
+            | Ability::TradingPostCityUpgradeDiscount { percent }
             | Ability::ImperialStandards { percent }
             | Ability::TafaifaCouncil { percent }
             | Ability::CounterLevy { percent, .. }
@@ -311,7 +316,7 @@ impl Ability {
             Ability::CoastalFounding
             | Ability::AlliedCityGrant { .. }
             | Ability::CityTowerUpgrade
-            | Ability::CityFarmFounding
+            | Ability::CityMilitaryCampFounding
             | Ability::CityDenial
             | Ability::PuntGardens
             | Ability::LastCityRelocation
@@ -321,7 +326,7 @@ impl Ability {
             | Ability::CityIntercession { .. }
             | Ability::WarRegalia { .. }
             | Ability::TigranesAid { .. }
-            | Ability::FactoryRaid { .. }
+            | Ability::TradingPostRaid { .. }
             | Ability::SiegeBreach
             | Ability::CookhamExchange
             | Ability::SecondCrown
@@ -403,17 +408,17 @@ impl Ability {
             Ability::TafaifaCouncil { .. } => Ability::TafaifaCouncil { percent: 0 },
             Ability::TigranesAid { .. } => Ability::TigranesAid { max_troops: 0 },
             Ability::ImperialStandards { .. } => Ability::ImperialStandards { percent: 0 },
-            Ability::FactoryRaid { .. } => Ability::FactoryRaid {
+            Ability::TradingPostRaid { .. } => Ability::TradingPostRaid {
                 troops_per_level: 0,
             },
-            Ability::FactoryCityUpgradeDiscount { .. } => {
-                Ability::FactoryCityUpgradeDiscount { percent: 0 }
+            Ability::TradingPostCityUpgradeDiscount { .. } => {
+                Ability::TradingPostCityUpgradeDiscount { percent: 0 }
             }
             Ability::SurplusTreasury { .. } => Ability::SurplusTreasury { troops_per_gold: 0 },
             Ability::GuildNetwork { .. } => Ability::GuildNetwork { gold_per_second: 0 },
             Ability::CoastalFounding
             | Ability::CityTowerUpgrade
-            | Ability::CityFarmFounding
+            | Ability::CityMilitaryCampFounding
             | Ability::CityDenial
             | Ability::PuntGardens
             | Ability::LastCityRelocation
@@ -440,7 +445,7 @@ impl Ability {
             | Ability::StreltsyMuster { .. }
             | Ability::ContestedSteppe { .. }
             | Ability::ZagrosAscent { .. }
-            | Ability::FactoryRaid { .. } => Cue::Conquest,
+            | Ability::TradingPostRaid { .. } => Cue::Conquest,
             Ability::ResourceBonus { .. } => Cue::Income,
             Ability::TowerLoss { .. } | Ability::TowerRange { .. } => Cue::Tower,
             Ability::CityCapture { .. }
@@ -476,7 +481,7 @@ impl Ability {
             | Ability::LastCityRelocation
             | Ability::CookhamExchange
             | Ability::KitchenPhilosophy
-            | Ability::FactoryCityUpgradeDiscount { .. } => Cue::City,
+            | Ability::TradingPostCityUpgradeDiscount { .. } => Cue::City,
             Ability::CityEvacuation { .. }
             | Ability::RetreatHandover { .. }
             | Ability::AksumRout => Cue::Retreat,
@@ -484,7 +489,7 @@ impl Ability {
             Ability::SurplusTreasury { .. }
             | Ability::GuildNetwork { .. }
             | Ability::ImperialStandards { .. }
-            | Ability::CityFarmFounding
+            | Ability::CityMilitaryCampFounding
             | Ability::CounterLevy { .. }
             | Ability::PuntGardens => Cue::Income,
         }

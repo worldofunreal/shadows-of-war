@@ -216,7 +216,7 @@ impl SowEngine {
         }
         self.refresh_building_grid();
 
-        if self.legacy_building_rules && kind == BuildingKind::Farm {
+        if self.legacy_building_rules && kind == BuildingKind::MilitaryCamp {
             let map = &self.state.map;
             let x = target_tile % w;
             let y = target_tile / w;
@@ -252,7 +252,7 @@ impl SowEngine {
                 return;
             }
             target_tile
-        } else if kind == BuildingKind::Farm {
+        } else if kind == BuildingKind::MilitaryCamp {
             target_tile
         } else {
             let Some(spawn_idx) = crate::building::find_structure_site_near(
@@ -830,9 +830,9 @@ mod tests {
         for _ in 0..max_ticks {
             engine.execute_construction();
         }
-        engine.apply_build_structure_intent(1, BuildingKind::Factory, 10 * 32 + 17);
+        engine.apply_build_structure_intent(1, BuildingKind::TradingPost, 10 * 32 + 17);
         assert!(engine.buildings.iter().any(|b| {
-            b.kind == BuildingKind::Factory && b.tile_idx == 10 * 32 + 17 && b.level == 1
+            b.kind == BuildingKind::TradingPost && b.tile_idx == 10 * 32 + 17 && b.level == 1
         }));
         let gold = engine.state.player(1).unwrap().gold;
         engine.apply_build_structure_intent(1, BuildingKind::City, 10 * 32 + 13);
@@ -900,19 +900,19 @@ mod tests {
         game.buildings.push(building(1, BuildingKind::City, 1));
         game.buildings.push(Building {
             tile_idx: 1,
-            ..building(2, BuildingKind::Factory, 1)
+            ..building(2, BuildingKind::TradingPost, 1)
         });
         let before = game.state.player(1).unwrap().gold;
-        let expected = structure_upgrade_cost_gold(BuildingKind::Factory, 2, 1, &game.state.config);
+        let expected = structure_upgrade_cost_gold(BuildingKind::TradingPost, 2, 1, &game.state.config);
 
         game.apply_upgrade_structure_intent(1, 2);
 
-        let factory = game.buildings[1];
+        let trading_post = game.buildings[1];
         assert!((game.state.player(1).unwrap().gold - (before - expected)).abs() < 1e-9);
-        assert!(factory.under_construction);
-        assert_eq!(factory.active_level(), 1);
+        assert!(trading_post.under_construction);
+        assert_eq!(trading_post.active_level(), 1);
 
-        for _ in 0..factory.ticks_until_complete {
+        for _ in 0..trading_post.ticks_until_complete {
             game.execute_construction();
         }
         assert_eq!(game.buildings[1].active_level(), 2);
@@ -924,14 +924,14 @@ mod tests {
         assert!(game.set_campaign_unlocks(crate::campaign::CampaignUnlocks {
             buildings: std::collections::HashMap::from([
                 (BuildingKind::City, 2),
-                (BuildingKind::Factory, 2),
+                (BuildingKind::TradingPost, 2),
             ]),
             actions: vec![],
         }));
         game.buildings.push(building(1, BuildingKind::City, 1));
         game.buildings.push(Building {
             tile_idx: 1,
-            ..building(2, BuildingKind::Factory, 1)
+            ..building(2, BuildingKind::TradingPost, 1)
         });
         game.state.player_mut(1).unwrap().gold = 0.0;
 
@@ -962,9 +962,9 @@ mod tests {
     }
 
     #[test]
-    fn factory_upgrades_without_a_city_level_requirement() {
+    fn trading_post_upgrades_without_a_city_level_requirement() {
         let mut game = engine(false);
-        game.buildings.push(building(1, BuildingKind::Factory, 1));
+        game.buildings.push(building(1, BuildingKind::TradingPost, 1));
 
         game.apply_upgrade_structure_intent(1, 1);
         assert_eq!(game.buildings[0].level, 2);
@@ -972,10 +972,10 @@ mod tests {
     }
 
     #[test]
-    fn factory_build_order_has_no_city_level_requirement() {
+    fn trading_post_build_order_has_no_city_level_requirement() {
         let mut game = engine(true);
         assert!(game.set_campaign_unlocks(crate::campaign::CampaignUnlocks {
-            buildings: std::collections::HashMap::from([(BuildingKind::Factory, 1)]),
+            buildings: std::collections::HashMap::from([(BuildingKind::TradingPost, 1)]),
             actions: vec![],
         }));
         game.state.map = crate::map::GameMap::new(32, 32);
@@ -984,14 +984,14 @@ mod tests {
                 game.state.map.set_owner_id(x, y, 1);
             }
         }
-        let factory_tile = 16 * 32 + 16;
+        let trading_post_tile = 16 * 32 + 16;
         game.state.player_mut(1).unwrap().tile_count = 32 * 32;
         let gold = game.state.player(1).unwrap().gold;
 
-        game.apply_build_structure_intent(1, BuildingKind::Factory, factory_tile);
+        game.apply_build_structure_intent(1, BuildingKind::TradingPost, trading_post_tile);
 
         assert_eq!(game.buildings.len(), 1);
-        assert_eq!(game.buildings[0].kind, BuildingKind::Factory);
+        assert_eq!(game.buildings[0].kind, BuildingKind::TradingPost);
         assert!(game.state.player(1).unwrap().gold < gold);
     }
 
@@ -1007,7 +1007,7 @@ mod tests {
         game.state.player_mut(1).unwrap().gold = -1.0;
         game.buildings.push(building(1, BuildingKind::City, 1));
 
-        game.apply_build_structure_intent(1, BuildingKind::Factory, 16 * 32 + 16);
+        game.apply_build_structure_intent(1, BuildingKind::TradingPost, 16 * 32 + 16);
         game.apply_upgrade_structure_intent(1, 1);
 
         assert_eq!(game.buildings.len(), 1);
@@ -1017,7 +1017,7 @@ mod tests {
     }
 
     #[test]
-    fn farms_require_owned_lowland_and_allow_multiple_owned_plots() {
+    fn military_camps_require_owned_lowland_and_allow_multiple_owned_plots() {
         let mut game = engine(false);
         game.state.map = crate::map::GameMap::new(20, 20);
         game.state.next_building_id = 3;
@@ -1044,21 +1044,21 @@ mod tests {
         let empty_land_tile = game.state.map.ref_id(4, 12) as u32;
         let highland = game.state.map.ref_id(12, 4);
         game.state.map.terrain[highland] = crate::map::MapTile::from_byte(0x80 | 10);
-        game.apply_build_structure_intent(1, BuildingKind::Farm, unowned_tile);
+        game.apply_build_structure_intent(1, BuildingKind::MilitaryCamp, unowned_tile);
         assert_eq!(game.buildings.len(), 2);
 
-        game.apply_build_structure_intent(1, BuildingKind::Farm, highland as u32);
+        game.apply_build_structure_intent(1, BuildingKind::MilitaryCamp, highland as u32);
         assert_eq!(game.buildings.len(), 3);
         assert_eq!(game.buildings[2].tile_idx, highland as u32);
 
-        game.apply_build_structure_intent(1, BuildingKind::Farm, empty_land_tile);
+        game.apply_build_structure_intent(1, BuildingKind::MilitaryCamp, empty_land_tile);
         assert_eq!(game.buildings.len(), 4);
         assert_eq!(game.buildings[3].tile_idx, empty_land_tile);
         assert!(game.buildings[3].under_construction);
 
-        // Occupied foundations reject both another Farm and overlap with a City.
-        game.apply_build_structure_intent(1, BuildingKind::Farm, empty_land_tile);
-        game.apply_build_structure_intent(1, BuildingKind::Farm, city_a);
+        // Occupied foundations reject both another MilitaryCamp and overlap with a City.
+        game.apply_build_structure_intent(1, BuildingKind::MilitaryCamp, empty_land_tile);
+        game.apply_build_structure_intent(1, BuildingKind::MilitaryCamp, city_a);
         assert_eq!(game.buildings.len(), 4);
     }
 
@@ -1077,7 +1077,7 @@ mod tests {
         game.state.player_mut(3).unwrap().alliances.push(1);
         game.state.map.set_owner_id(4, 0, 2);
         game.state.player_mut(1).unwrap().gold = 1000.0;
-        game.add_building(building(1, BuildingKind::Factory, 4));
+        game.add_building(building(1, BuildingKind::TradingPost, 4));
         game.add_building(building(2, BuildingKind::Tower, 4));
         game.apply_building_production_intent(1, 1, CityArsenalKind::Nuke);
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
@@ -1264,11 +1264,11 @@ mod tests {
         game.add_building(building(1, BuildingKind::City, 1));
         game.add_building(Building {
             tile_idx: 1,
-            ..building(2, BuildingKind::Factory, 1)
+            ..building(2, BuildingKind::TradingPost, 1)
         });
         game.state.player_mut(1).unwrap().gold = 1_000.0;
         let config = game.state.config.clone();
-        let upgrade_cost = structure_upgrade_cost_gold(BuildingKind::Factory, 2, 1, &config);
+        let upgrade_cost = structure_upgrade_cost_gold(BuildingKind::TradingPost, 2, 1, &config);
         assert_eq!(upgrade_cost, 105.0);
 
         let gold = game.state.player(1).unwrap().gold;
@@ -1290,7 +1290,7 @@ mod tests {
         fn trace(
             troops: f64,
             tiles: u32,
-            factory_level: u8,
+            trading_post_level: u8,
             trade_ships: u32,
             include_assisted_defeat: bool,
         ) -> [f64; 4] {
@@ -1298,8 +1298,8 @@ mod tests {
             let player = game.state.player_mut(1).unwrap();
             player.troops = troops;
             player.tile_count = tiles;
-            if factory_level > 0 {
-                game.add_building(building(1, BuildingKind::Factory, factory_level));
+            if trading_post_level > 0 {
+                game.add_building(building(1, BuildingKind::TradingPost, trading_post_level));
             }
             if trade_ships > 0 {
                 game.add_building(building(2, BuildingKind::Port, 4));
@@ -1392,7 +1392,7 @@ mod tests {
     #[test]
     fn multi_upgrade_quote_matches_sequential_step_costs_and_ownership_scaling() {
         let mut sequential = engine(false);
-        sequential.buildings.push(building(1, BuildingKind::Factory, 1));
+        sequential.buildings.push(building(1, BuildingKind::TradingPost, 1));
         sequential.state.player_mut(1).unwrap().gold = 10_000.0;
         let start_gold = sequential.state.player(1).unwrap().gold;
         for _ in 0..3 {
@@ -1405,14 +1405,14 @@ mod tests {
         let sequential_spent = start_gold - sequential.state.player(1).unwrap().gold;
 
         let mut bulk = engine(false);
-        bulk.buildings.push(building(1, BuildingKind::Factory, 1));
+        bulk.buildings.push(building(1, BuildingKind::TradingPost, 1));
         bulk.state.player_mut(1).unwrap().gold = 10_000.0;
         let (bulk_quote, total_ticks, _) = bulk.structure_upgrade_to_quote(1, 4).unwrap();
         assert!((bulk_quote - sequential_spent).abs() < 1e-9);
         assert_eq!(
             total_ticks,
             (2..=4)
-                .map(|lvl| crate::building::structure_upgrade_duration_ticks(BuildingKind::Factory, lvl))
+                .map(|lvl| crate::building::structure_upgrade_duration_ticks(BuildingKind::TradingPost, lvl))
                 .sum::<u32>()
         );
     }

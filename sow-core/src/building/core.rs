@@ -26,12 +26,12 @@ pub struct RailwayLink {
 impl RailwayLink {
     pub fn cargo_gold(self, cfg: &crate::game_config::GameConfig) -> f64 {
         cfg.per_tick(f64::from(self.period_ticks))
-            * cfg.factory_gold_income
-            * factory_gold_level_weight(self.level)
+            * cfg.trading_post_gold_income
+            * trading_post_gold_level_weight(self.level)
     }
 
     pub fn weight(self) -> f64 {
-        if self.blocked { 0.0 } else { factory_gold_level_weight(self.level) }
+        if self.blocked { 0.0 } else { trading_post_gold_level_weight(self.level) }
     }
 
     pub fn is_open(self, state: &GameState) -> bool {
@@ -350,11 +350,11 @@ pub fn tower_range_for_level(
 }
 
 /// Cumulative weights multiplying the configured level-one income rates.
-pub fn factory_gold_level_weight(level: u8) -> f64 {
+pub fn trading_post_gold_level_weight(level: u8) -> f64 {
     [0.0, 1.0, 3.75, 7.4, 12.4, 16.0, 21.0, 27.0, 34.0][usize::from(level.min(8))]
 }
 
-pub fn farm_troop_level_weight(level: u8) -> f64 {
+pub fn military_camp_troop_level_weight(level: u8) -> f64 {
     [0.0, 1.0, 3.5, 8.0, 15.0, 18.0, 21.0, 24.0, 28.0][usize::from(level.min(8))]
 }
 
@@ -457,17 +457,17 @@ pub struct BuildingAggregate {
     pub camp_conquest_weight: f64,
     pub city_levels: u32,
     pub tower_levels: u32,
-    pub factory_levels: u32,
+    pub trading_post_levels: u32,
     pub port_levels: u32,
     pub port_fleet_slots: u32,
-    pub farm_levels: u32,
+    pub military_camp_levels: u32,
     pub sam_levels: u32,
     pub silo_levels: u32,
-    pub farm_troop_level_weight: f64,
-    pub farm_gold_level_weight: f64,
+    pub military_camp_troop_level_weight: f64,
+    pub military_camp_gold_level_weight: f64,
     pub port_income_level_weight: f64,
-    /// Sum of the factory's gold-specific marginal weights.
-    pub factory_income_level_weight: f64,
+    /// Sum of the Trading Post's gold-specific marginal weights.
+    pub trading_post_income_level_weight: f64,
     /// Sum of 1.5x marginal level weights across active Cities.
     pub city_income_level_weight: f64,
     /// City troop capacity continues growing beyond the level-four income cap.
@@ -479,17 +479,17 @@ pub struct BuildingAggregate {
     pub has_completed_port: bool,
     /// Ready Cities, retained for AI and railway calculations.
     pub ready_city_count: u32,
-    /// Ready factories only.
-    pub ready_factory_count: u32,
+    /// Ready trading_posts only.
+    pub ready_trading_post_count: u32,
     /// Total instances per kind, **including** under construction (for bot build quotas).
     pub count_city: u32,
     pub count_tower: u32,
-    pub count_factory: u32,
+    pub count_trading_post: u32,
     pub count_port: u32,
-    pub count_farm: u32,
+    pub count_military_camp: u32,
     pub count_sam: u32,
     pub count_silo: u32,
-    /// Number of owned Factory stations connected to a City or Port over land.
+    /// Number of owned TradingPost stations connected to a City or Port over land.
     pub railway_connections: u32,
     pub land_trade_income_weight: f64,
 }
@@ -500,9 +500,9 @@ impl BuildingAggregate {
         match kind {
             BuildingKind::City => self.count_city,
             BuildingKind::Tower => self.count_tower,
-            BuildingKind::Factory => self.count_factory,
+            BuildingKind::TradingPost => self.count_trading_post,
             BuildingKind::Port => self.count_port,
-            BuildingKind::Farm => self.count_farm,
+            BuildingKind::MilitaryCamp => self.count_military_camp,
             BuildingKind::SAM => self.count_sam,
             BuildingKind::MissileSilo => self.count_silo,
         }
@@ -514,9 +514,9 @@ impl BuildingAggregate {
         match kind {
             BuildingKind::City => self.city_levels,
             BuildingKind::Tower => self.tower_levels,
-            BuildingKind::Factory => self.factory_levels,
+            BuildingKind::TradingPost => self.trading_post_levels,
             BuildingKind::Port => self.port_levels,
-            BuildingKind::Farm => self.farm_levels,
+            BuildingKind::MilitaryCamp => self.military_camp_levels,
             BuildingKind::SAM => self.sam_levels,
             BuildingKind::MissileSilo => self.silo_levels,
         }
@@ -538,9 +538,9 @@ pub fn aggregate_buildings_per_player(
         match b.kind {
             BuildingKind::City => a.count_city += 1,
             BuildingKind::Tower => a.count_tower += 1,
-            BuildingKind::Factory => a.count_factory += 1,
+            BuildingKind::TradingPost => a.count_trading_post += 1,
             BuildingKind::Port => a.count_port += 1,
-            BuildingKind::Farm => a.count_farm += 1,
+            BuildingKind::MilitaryCamp => a.count_military_camp += 1,
             BuildingKind::SAM => a.count_sam += 1,
             BuildingKind::MissileSilo => a.count_silo += 1,
         }
@@ -563,10 +563,10 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::Tower => {
                 a.tower_levels += active_lvl as u32;
             }
-            BuildingKind::Factory => {
-                a.factory_levels += active_lvl as u32;
-                a.factory_income_level_weight += factory_gold_level_weight(active_lvl);
-                a.ready_factory_count += 1;
+            BuildingKind::TradingPost => {
+                a.trading_post_levels += active_lvl as u32;
+                a.trading_post_income_level_weight += trading_post_gold_level_weight(active_lvl);
+                a.ready_trading_post_count += 1;
             }
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
@@ -575,11 +575,11 @@ pub fn aggregate_buildings_per_player(
                 a.port_fleet_slots += super::cost::port_fleet_slots(active_lvl);
                 a.has_completed_port = true;
             }
-            BuildingKind::Farm => {
+            BuildingKind::MilitaryCamp => {
                 a.camp_conquest_weight += camp_capture_level_weight(active_lvl);
-                a.farm_levels += active_lvl as u32;
-                a.farm_troop_level_weight += farm_troop_level_weight(active_lvl);
-                a.farm_gold_level_weight += income_level_weight(active_lvl);
+                a.military_camp_levels += active_lvl as u32;
+                a.military_camp_troop_level_weight += military_camp_troop_level_weight(active_lvl);
+                a.military_camp_gold_level_weight += income_level_weight(active_lvl);
             }
             BuildingKind::SAM => a.sam_levels += u32::from(active_lvl),
             BuildingKind::MissileSilo => a.silo_levels += u32::from(active_lvl),
@@ -618,12 +618,12 @@ pub fn populate_railway_connections(
         }
     }
     let mut grid: HashMap<(u16, i32, i32), Vec<Building>> = HashMap::new();
-    for &node in stations.iter().filter(|node| node.kind != BuildingKind::Factory) {
+    for &node in stations.iter().filter(|node| node.kind != BuildingKind::TradingPost) {
         let (x, y) = ((node.tile_idx % w) as i32, (node.tile_idx / w) as i32);
         grid.entry((node.owner_id, x / radius, y / radius)).or_default().push(node);
     }
     let mut links = Vec::new();
-    for post in stations.iter().filter(|node| node.kind == BuildingKind::Factory) {
+    for post in stations.iter().filter(|node| node.kind == BuildingKind::TradingPost) {
         let (ax, ay) = ((post.tile_idx % w) as i32, (post.tile_idx / w) as i32);
         let (gx, gy) = (ax / radius, ay / radius);
         if !dirty_cells.contains(&(post.owner_id, gx, gy)) {
@@ -652,7 +652,7 @@ pub fn populate_railway_connections(
         }
         let Some((_, to_building_id, to_tile, horizontal_first, distance)) = best else { continue };
         let level = post.level;
-        let normal_seconds = (4.0 + f64::from(distance) * 0.25) / factory_gold_level_weight(level).sqrt();
+        let normal_seconds = (4.0 + f64::from(distance) * 0.25) / trading_post_gold_level_weight(level).sqrt();
         let per_tick = state.config.per_tick(1.0).max(f64::EPSILON);
         let period_ticks = (normal_seconds * crate::game_config::NORMAL_GAME_SPEED / per_tick)
             .ceil().clamp(1.0, f64::from(u32::MAX)) as u32;

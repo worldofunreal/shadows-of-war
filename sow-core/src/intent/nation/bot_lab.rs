@@ -843,7 +843,7 @@ impl serde::Serialize for S16TracePlayer<'_> {
         field!(sum_y);
         field!(tile_count);
         field!(border_tiles);
-        field!(factories);
+        field!(trading_posts);
         field!(cities);
         field!(team);
         field!(iq);
@@ -937,18 +937,18 @@ impl serde::Serialize for S16TraceConfig<'_> {
             (
                 &zero_f64,
                 &config.city_troop_income,
-                &config.farm_troop_income,
+                &config.military_camp_troop_income,
                 &config.tower_range,
                 &config.tower_priority,
                 &config.tower_strength,
-                &config.factory_gold_income,
+                &config.trading_post_gold_income,
                 &config.port_gold_income,
                 &zero_f64,
                 &config.cost_city,
                 &config.cost_tower,
-                &config.cost_factory,
+                &config.cost_trading_post,
                 &config.cost_port,
-                &config.cost_farm,
+                &config.cost_military_camp,
                 &config.structure_upgrade_scale,
                 &config.cost_scale_cap_multiplier,
             ),

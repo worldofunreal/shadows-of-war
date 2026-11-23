@@ -261,7 +261,7 @@ mod tests {
             (BuildingKind::City, 12, 16),
             (BuildingKind::City, 28, 16),
             (BuildingKind::Port, 15, 16),
-            (BuildingKind::Farm, 10, 14),
+            (BuildingKind::MilitaryCamp, 10, 14),
         ] {
             let site = nearest_structure_site(&map, owner, kind, x, y, 12, &grid)
                 .unwrap_or_else(|| panic!("{kind:?} near ({x}, {y})"));
@@ -309,8 +309,8 @@ mod tests {
     fn city_uses_four_by_four_footprint_and_other_buildings_two_by_two() {
         assert_eq!(BuildingKind::City.footprint_dimensions(), (4, 4));
         for kind in [
-            BuildingKind::Factory,
-            BuildingKind::Farm,
+            BuildingKind::TradingPost,
+            BuildingKind::MilitaryCamp,
             BuildingKind::Port,
             BuildingKind::Tower,
         ] {
@@ -322,8 +322,8 @@ mod tests {
         assert!(city.contains(10, 10));
         assert!(!city.contains(12, 10));
         for kind in [
-            BuildingKind::Factory,
-            BuildingKind::Farm,
+            BuildingKind::TradingPost,
+            BuildingKind::MilitaryCamp,
             BuildingKind::Port,
             BuildingKind::Tower,
         ] {
@@ -363,12 +363,12 @@ mod tests {
     #[test]
     fn building_grid_insert_keeps_kind_and_avoids_rebuild() {
         let mut grid = BuildingGrid::rebuild_empty(32, 32);
-        grid.insert(10 * 32 + 12, BuildingKind::Factory, 32, 32);
+        grid.insert(10 * 32 + 12, BuildingKind::TradingPost, 32, 32);
         assert!(!grid.dirty);
         let entry = grid.iter_all_in_range(12, 10, 0).next().unwrap();
         assert_eq!(
             (entry.x, entry.y, entry.kind),
-            (12, 10, BuildingKind::Factory)
+            (12, 10, BuildingKind::TradingPost)
         );
     }
 
@@ -470,7 +470,7 @@ mod tests {
                 id: 2,
                 owner_id: 1,
                 tile_idx: xy_idx(8, 8, w),
-                kind: BuildingKind::Factory,
+                kind: BuildingKind::TradingPost,
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
@@ -502,7 +502,7 @@ mod tests {
                 let expected = if kind == BuildingKind::City {
                     matches!((x, y), (2, 2) | (20, 10) | (30, 30)).then_some(click)
                 } else {
-                    let on_parent_city = (x, y) == (8, 8) && kind != BuildingKind::Factory;
+                    let on_parent_city = (x, y) == (8, 8) && kind != BuildingKind::TradingPost;
                     (on_parent_city && kind != BuildingKind::Port).then_some(click)
                 };
                 let actual = resolve_structure_spawn_tile(
@@ -640,11 +640,11 @@ mod tests {
             validate_structure_site(&map, 1, BuildingKind::Port, port_tile, &grid),
             Ok(())
         );
-        let farm_tile = xy_idx(14, 14, 20);
-        let farm_high = map.ref_id(13, 13);
-        map.terrain[farm_high] = MapTile::from_byte(0x80 | 10);
+        let military_camp_tile = xy_idx(14, 14, 20);
+        let military_camp_high = map.ref_id(13, 13);
+        map.terrain[military_camp_high] = MapTile::from_byte(0x80 | 10);
         assert_eq!(
-            validate_structure_site(&map, 1, BuildingKind::Farm, farm_tile, &grid),
+            validate_structure_site(&map, 1, BuildingKind::MilitaryCamp, military_camp_tile, &grid),
             Ok(())
         );
         map.set_owner_id(8, 8, 2);
@@ -841,7 +841,7 @@ mod tests {
         let cases = [
             (BuildingKind::City, cfg.cost_city),
             (BuildingKind::Tower, cfg.cost_tower),
-            (BuildingKind::Factory, cfg.cost_factory),
+            (BuildingKind::TradingPost, cfg.cost_trading_post),
             (BuildingKind::Port, cfg.cost_port),
         ];
         for (kind, base) in cases {

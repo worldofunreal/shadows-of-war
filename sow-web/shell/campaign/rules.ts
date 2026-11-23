@@ -38,8 +38,8 @@ export const METRICS: Record<string, string> = {
     troops: "troops",
     building: "buildings",
     city: "cities",
-    farm: "farms",
-    factory: "factories",
+    military_camp: "military_camps",
+    trading_post: "trading_posts",
     port: "ports",
     tower: "towers",
     sam: "sams",
@@ -81,11 +81,11 @@ export const WORLD_TARGETS = [
     "upgrade_structure",
 ];
 export const STRUCTURE_LEVEL_LIMITS: Record<string, number> = {
-    City: 7,
-    Farm: 4,
-    Factory: 4,
-    Tower: 7,
-    Port: 7,
+    City: 8,
+    MilitaryCamp: 8,
+    TradingPost: 8,
+    Tower: 8,
+    Port: 8,
     SAM: 4,
     MissileSilo: 4,
 };
@@ -101,12 +101,12 @@ export const BUILDING_METRIC_KINDS: Record<string, string> = {
     city: "City",
     city_level: "City",
     city_upgrade: "City",
-    farm: "Farm",
-    farm_level: "Farm",
-    farm_upgrade: "Farm",
-    factory: "Factory",
-    factory_level: "Factory",
-    factory_upgrade: "Factory",
+    military_camp: "MilitaryCamp",
+    military_camp_level: "MilitaryCamp",
+    military_camp_upgrade: "MilitaryCamp",
+    trading_post: "TradingPost",
+    trading_post_level: "TradingPost",
+    trading_post_upgrade: "TradingPost",
     tower: "Tower",
     tower_level: "Tower",
     tower_upgrade: "Tower",
@@ -315,13 +315,13 @@ export function stepCampaignRequirements(step: CampaignStep): CampaignRecord[] {
     );
     uiTargets.forEach((target) => {
         if (target === "dock_city") addBuilding("City", 1);
-        if (target === "dock_farm") addBuilding("Farm", 1);
-        if (target === "dock_factory") addBuilding("Factory", 1);
+        if (target === "dock_military_camp") addBuilding("MilitaryCamp", 1);
+        if (target === "dock_trading_post") addBuilding("TradingPost", 1);
         if (target === "dock_port") addBuilding("Port", 1);
         if (target === "dock_tower") addBuilding("Tower", 1);
         if (target === "dock_missile_silo") addBuilding("MissileSilo", 1);
         if (target === "dock_sam") addBuilding("SAM", 1);
-        if (target === "map_nuke" || target === "map_nuke_launch" || target === "factory_nuke") addAction("nuke");
+        if (target === "map_nuke" || target === "map_nuke_launch" || target === "trading_post_nuke") addAction("nuke");
         if (target === "map_fleet") addAction("transport_fleet");
         if (target === "port_warship") addAction("warship");
     });
@@ -355,10 +355,10 @@ export const UI_TARGETS: Record<string, string> = {
     hud_center_camera: '#sow-hud [data-command="center_camera"]',
     hud_inbox: '#sow-hud [data-command="toggle_inbox"]',
     dock_city: '#sow-hud [data-command="select_building"][data-kind="City"]',
-    dock_factory: '#sow-hud [data-command="select_building"][data-kind="Factory"]',
+    dock_trading_post: '#sow-hud [data-command="select_building"][data-kind="TradingPost"]',
     dock_port: '#sow-hud [data-command="select_building"][data-kind="Port"]',
     dock_tower: '#sow-hud [data-command="select_building"][data-kind="Tower"]',
-    dock_farm: '#sow-hud [data-command="select_building"][data-kind="Farm"]',
+    dock_military_camp: '#sow-hud [data-command="select_building"][data-kind="MilitaryCamp"]',
     dock_missile_silo: '#sow-hud [data-command="select_building"][data-kind="MissileSilo"]',
     dock_sam: '#sow-hud [data-command="select_building"][data-kind="SAM"]',
     hud_troops: "#sow-hud-nameplate-troops",
@@ -383,7 +383,7 @@ export const UI_TARGETS: Record<string, string> = {
     map_build_city: '#sow-hud [data-map-action="build_city"]',
     map_nuke_launch: '#sow-hud [data-map-action="nuke"]',
     port_warship: '#sow-hud [data-production-kind="Warship"]',
-    factory_nuke: '#sow-hud [data-production-kind="Nuke"], #sow-hud [data-command="select_nuke"]',
+    trading_post_nuke: '#sow-hud [data-production-kind="Nuke"], #sow-hud [data-command="select_nuke"]',
     map_back: "#sow-hud [data-map-back]",
     rankings: '#sow-hud [data-command="toggle_leaderboard"]',
     settings: '#sow-hud [data-command="toggle_settings"]',
@@ -450,7 +450,7 @@ export function guideAction(step: CampaignStep): string | null {
         return trigger.type === "territory" ? "expand" : "attack";
     }
     if (["contact", "alliance"].includes(trigger.type)) return target === "expand" ? "expand" : "contact";
-    if (["city", "farm", "factory", "port", "tower"].includes(trigger.type)) return "build";
+    if (["city", "military_camp", "trading_post", "port", "tower"].includes(trigger.type)) return "build";
     if (trigger.type === "ui") {
         if (
             trigger.action === "map_transfer" ||

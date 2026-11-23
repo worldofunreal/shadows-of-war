@@ -41,9 +41,9 @@ pub(crate) enum MapMenuAction {
     Alliance,
     BuildCity,
     BuildTower,
-    BuildFactory,
+    BuildTradingPost,
     BuildPort,
-    BuildFarm,
+    BuildMilitaryCamp,
     BuildSam,
     BuildMissileSilo,
     UpgradeStructure,
@@ -57,9 +57,9 @@ impl MapMenuAction {
         match self {
             Self::BuildCity => Some(BuildingKind::City),
             Self::BuildTower => Some(BuildingKind::Tower),
-            Self::BuildFactory => Some(BuildingKind::Factory),
+            Self::BuildTradingPost => Some(BuildingKind::TradingPost),
             Self::BuildPort => Some(BuildingKind::Port),
-            Self::BuildFarm => Some(BuildingKind::Farm),
+            Self::BuildMilitaryCamp => Some(BuildingKind::MilitaryCamp),
             Self::BuildSam => Some(BuildingKind::SAM),
             Self::BuildMissileSilo => Some(BuildingKind::MissileSilo),
             _ => None,
@@ -78,9 +78,9 @@ impl MapMenuAction {
             Self::Alliance => "alliance",
             Self::BuildCity => "build_city",
             Self::BuildTower => "build_tower",
-            Self::BuildFactory => "build_factory",
+            Self::BuildTradingPost => "build_trading_post",
             Self::BuildPort => "build_port",
-            Self::BuildFarm => "build_farm",
+            Self::BuildMilitaryCamp => "build_military_camp",
             Self::BuildSam => "build_sam",
             Self::BuildMissileSilo => "build_missile_silo",
             Self::UpgradeStructure => "upgrade_structure",
@@ -207,10 +207,10 @@ impl MapTarget {
         if self.owner == self.my_id && self.is_land {
             return vec![
                 MapMenuAction::BuildCity,
-                MapMenuAction::BuildFactory,
+                MapMenuAction::BuildTradingPost,
                 MapMenuAction::BuildPort,
                 MapMenuAction::BuildTower,
-                MapMenuAction::BuildFarm,
+                MapMenuAction::BuildMilitaryCamp,
                 MapMenuAction::BuildSam,
                 MapMenuAction::BuildMissileSilo,
             ];
@@ -841,10 +841,10 @@ impl SowApp {
                 if let Some((col, row)) = self.tile_coords(tile_idx) {
                     for action in [
                         MapMenuAction::BuildCity,
-                        MapMenuAction::BuildFactory,
+                        MapMenuAction::BuildTradingPost,
                         MapMenuAction::BuildPort,
                         MapMenuAction::BuildTower,
-                        MapMenuAction::BuildFarm,
+                        MapMenuAction::BuildMilitaryCamp,
                         MapMenuAction::BuildSam,
                 MapMenuAction::BuildMissileSilo,
                     ] {
@@ -1057,14 +1057,14 @@ impl SowApp {
             MapMenuAction::BuildTower => {
                 self.start_building_from_map_menu(sow_core::game::BuildingKind::Tower, tile_idx);
             }
-            MapMenuAction::BuildFactory => {
-                self.start_building_from_map_menu(sow_core::game::BuildingKind::Factory, tile_idx);
+            MapMenuAction::BuildTradingPost => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::TradingPost, tile_idx);
             }
             MapMenuAction::BuildPort => {
                 self.start_building_from_map_menu(sow_core::game::BuildingKind::Port, tile_idx);
             }
-            MapMenuAction::BuildFarm => {
-                self.start_building_from_map_menu(sow_core::game::BuildingKind::Farm, tile_idx);
+            MapMenuAction::BuildMilitaryCamp => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::MilitaryCamp, tile_idx);
             }
             MapMenuAction::BuildMissileSilo => {
                 self.start_building_from_map_menu(sow_core::game::BuildingKind::MissileSilo, tile_idx);

@@ -763,10 +763,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
   const BUILDING_GLYPHS: Record<string, string> = {
     city: "city",
-    factory: "factory",
+    tradingpost: "trading_post",
     port: "anchor",
     tower: "defense",
-    farm: "farm",
+    militarycamp: "military_camp",
     sam: "sam-missile",
   };
 
@@ -869,9 +869,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       '<path d="m12 3 2.2 5.2L20 10l-4.4 3.5L17 19l-5-3-5 3 1.4-5.5L4 10l5.8-1.8L12 3Z"/>',
     anchor:
       '<path d="M12 3v12M8 7a4 4 0 1 0 8 0M4 13a8 8 0 0 0 16 0M2 13h4M18 13h4"/>',
-    factory:
+    trading_post:
       '<path d="M3 21V9l6 3V8l6 4V5h6v16H3ZM17 8h1M17 11h1M7 17h2M12 17h2M17 17h1"/>',
-    farm: '<path d="M12 21V8M12 12c-4-1-6-3-6-6 4 0 6 2 6 6ZM12 15c4-1 6-3 6-6-4 0-6 2-6 6Z"/>',
+    military_camp: '<path d="M12 21V8M12 12c-4-1-6-3-6-6 4 0 6 2 6 6ZM12 15c4-1 6-3 6-6-4 0-6 2-6 6Z"/>',
     defense: '<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/>',
     range:
       '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M22 12h-3M12 22v-3M2 12h3"/>',
@@ -1327,7 +1327,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
 
   function buildingTierTitle(kind: string, level: number): string {
     const tier = buildingLine(kind, window.SOW_LOCALE || "en")[Math.max(1, level) - 1];
-    return tier ? tier.name + " · " + tier.era : SOW_t("hud.map_action_" + kind.toLowerCase());
+    const translationKind = kind.toLowerCase() === "militarycamp"
+      ? "military_camp"
+      : kind.toLowerCase() === "tradingpost"
+        ? "trading_post"
+        : kind.toLowerCase();
+    return tier ? tier.name + " · " + tier.era : SOW_t("hud.map_action_" + translationKind);
   }
 
   function buildingIcon(kind: string, level?: number, cls?: string): string {
@@ -1339,6 +1344,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         ? "SAM"
         : normalized === "missilesilo"
           ? "MissileSilo"
+          : normalized === "militarycamp"
+            ? "MilitaryCamp"
+            : normalized === "tradingpost"
+              ? "TradingPost"
           : name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
     const atlas = art && art.sprites && art.sprites[canonical];
     const sprite =
@@ -2412,10 +2421,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "        </div>" +
       "      </div>" +
       '      <div class="sow-hud__buildings-strip" id="sow-hud-buildings-strip">' +
-      ["City", "Farm", "Factory", "Port", "Tower", "SAM", "MissileSilo"].map((kind, index) => {
+      ["City", "MilitaryCamp", "TradingPost", "Port", "Tower", "SAM", "MissileSilo"].map((kind, index) => {
         const hotkey = index + 1;
         return '<button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="' +
-          kind + '" aria-label="' + escapeHudText(SOW_t("hud.map_action_" + kind.toLowerCase())) +
+          kind + '" aria-label="' + escapeHudText(SOW_t("hud.map_action_" + (kind.toLowerCase() === "militarycamp" ? "military_camp" : kind.toLowerCase() === "tradingpost" ? "trading_post" : kind.toLowerCase()))) +
           '" aria-keyshortcuts="' + hotkey + '">' +
           buildingIcon(kind) + tileCost(true) + dockHotkey(hotkey) + "</button>";
       }).join("") +
@@ -4415,10 +4424,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
   };
   const RING_BUILD_SLOTS: Record<string, number> = {
     build_city: 0,
-    build_factory: 1,
+    build_trading_post: 1,
     build_port: 2,
     build_tower: 3,
-    build_farm: 4,
+    build_military_camp: 4,
     build_sam: 5,
     build_missile_silo: 6,
   };
@@ -8739,11 +8748,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           bldText.push(
             buildingIcon("City", 1, "sow-hud__inline-icon") + " x" + hov.cities,
           );
-        if (hov.factories > 0)
+        if (hov.trading_posts > 0)
           bldText.push(
-            buildingIcon("Factory", 1, "sow-hud__inline-icon") +
+            buildingIcon("TradingPost", 1, "sow-hud__inline-icon") +
               " x" +
-              hov.factories,
+              hov.trading_posts,
           );
         if (hov.ports > 0)
           bldText.push(
@@ -8755,9 +8764,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
               " x" +
               hov.towers,
           );
-        if (hov.farms > 0)
+        if (hov.military_camps > 0)
           bldText.push(
-            buildingIcon("Farm", 1, "sow-hud__inline-icon") + " x" + hov.farms,
+            buildingIcon("MilitaryCamp", 1, "sow-hud__inline-icon") + " x" + hov.military_camps,
           );
         hudRefs!.hoverBlds.innerHTML = bldText.join(" ");
       }
@@ -9241,7 +9250,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const buildUnlocks = campaignUnlocks(hud);
       hudRefs!.buildingButtons.forEach(function (button) {
         const kind = button.dataset.kind || "";
-        const index = ["City", "Tower", "Factory", "Port", "Farm", "SAM", "MissileSilo"].indexOf(kind);
+        const index = ["City", "Tower", "TradingPost", "Port", "MilitaryCamp", "SAM", "MissileSilo"].indexOf(kind);
         const level = hud.building_levels?.[index] ?? 1;
         if (button.dataset.foundationLevel !== String(level)) {
           button.dataset.foundationLevel = String(level);
@@ -9251,7 +9260,12 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const available = campaignAllowsBuilding(buildUnlocks, kind, Math.max(1, level));
         button.hidden = !available;
         button.style.display = available ? "" : "none";
-        const cost = Number(buildingCosts[kind.toLowerCase()]);
+        const costKind = kind.toLowerCase() === "militarycamp"
+          ? "military_camp"
+          : kind.toLowerCase() === "tradingpost"
+            ? "trading_post"
+            : kind.toLowerCase();
+        const cost = Number(buildingCosts[costKind]);
         setTileCost(button, cost);
         const hasCost = Number.isFinite(cost) && cost > 0;
         const affordable = !hasCost || gold >= cost;

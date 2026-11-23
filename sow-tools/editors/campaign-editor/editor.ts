@@ -115,8 +115,8 @@
     { value: "troops", label: "Reach a troop minimum" },
     { value: "building", label: "Complete a building" },
     { value: "city", label: "Complete a city" },
-    { value: "farm", label: "Complete a farm" },
-    { value: "factory", label: "Complete a factory" },
+    { value: "military_camp", label: "Complete a military camp" },
+    { value: "trading_post", label: "Complete a trading post" },
     { value: "port", label: "Complete a port" },
     { value: "tower", label: "Complete a tower" },
     { value: "structure_upgrade", label: "Upgrade a structure" },
@@ -2079,7 +2079,7 @@
           selectField(
             "Building type",
             step.trigger.kind || "City",
-            ["City", "Farm", "Factory", "Tower", "Port"],
+            ["City", "MilitaryCamp", "TradingPost", "Tower", "Port"],
             function (value) {
               step.trigger.kind = value;
               markDirty();
@@ -2104,7 +2104,7 @@
           selectField(
             "Building type",
             step.trigger.kind || "City",
-            ["City", "Farm", "Factory", "Tower", "Port"],
+            ["City", "MilitaryCamp", "TradingPost", "Tower", "Port"],
             function (value) {
               step.trigger.kind = value;
               step.trigger.value = Math.min(Number(step.trigger.value || 1), structureLevelLimits[value]);
@@ -5565,7 +5565,7 @@
     const command = target.closest("[data-command]");
     const action = target.closest("[data-map-action]");
     const type = command && command.dataset.command;
-    const direct = action && /^build_(city|factory|port|tower|farm)$/.exec(action.dataset.mapAction);
+    const direct = action && /^build_(city|trading_post|port|tower|military_camp)$/.exec(action.dataset.mapAction);
     if (
       ![
         "select_building",

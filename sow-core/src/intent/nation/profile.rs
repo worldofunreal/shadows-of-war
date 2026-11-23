@@ -116,7 +116,7 @@ pub(super) struct AiBehaviorPolicy {
     pub(super) uses_tribe_bypass: bool,
     /// May betray bordering human allies under `maybe_betray_for_attack` (unless campaign-pinned).
     pub(super) betrays_human_allies: bool,
-    /// Prioritize City/Factory/Farm construction before Towers while economy targets are unmet.
+    /// Prioritize City/TradingPost/MilitaryCamp construction before Towers while economy targets are unmet.
     pub(super) prioritizes_economy_buildings: bool,
     /// Use regional `nation_bot_attack_order` + Terminator `walled_in_bot_targets` probe before Ghost attack loop.
     pub(super) uses_regional_nation_planning: bool,

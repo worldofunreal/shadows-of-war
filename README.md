@@ -5,7 +5,7 @@
 <h1 align="center">Shadows of War</h1>
 
 <p align="center">
-  Real-time multiplayer strategy. Lead a historic figure, build cities, factories and ports,<br />
+  Real-time multiplayer strategy. Lead a historic figure, build cities, military camps, trading posts and ports,<br />
   make and break alliances, and take the map.
 </p>
 

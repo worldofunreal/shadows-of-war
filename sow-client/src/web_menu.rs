@@ -3199,8 +3199,8 @@ fn tutorial_building_anchors(
                     .map(|([x, y], offscreen)| {
                         let key = match kind {
                             sow_core::game::BuildingKind::City => "City",
-                            sow_core::game::BuildingKind::Farm => "Farm",
-                            sow_core::game::BuildingKind::Factory => "Factory",
+                            sow_core::game::BuildingKind::MilitaryCamp => "MilitaryCamp",
+                            sow_core::game::BuildingKind::TradingPost => "TradingPost",
                             sow_core::game::BuildingKind::Tower => "Tower",
                             sow_core::game::BuildingKind::Port => "Port",
                             sow_core::game::BuildingKind::MissileSilo => "MissileSilo",
@@ -3791,8 +3791,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "attacks_by_faction_id": attacks_by_faction_id,
             "buildings": observation.seen_structures.len(),
             "cities": observation.seen_cities.len(),
-            "farms": observation.seen_buildings_by_kind.get("farms").map_or(0, |ids| ids.len()),
-            "factories": observation.seen_buildings_by_kind.get("factories").map_or(0, |ids| ids.len()),
+            "military_camps": observation.seen_buildings_by_kind.get("military_camps").map_or(0, |ids| ids.len()),
+            "trading_posts": observation.seen_buildings_by_kind.get("trading_posts").map_or(0, |ids| ids.len()),
             "ports": observation.seen_buildings_by_kind.get("ports").map_or(0, |ids| ids.len()),
             "towers": observation.seen_buildings_by_kind.get("towers").map_or(0, |ids| ids.len()),
             "sams": observation.seen_buildings_by_kind.get("sams").map_or(0, |ids| ids.len()),
@@ -3955,10 +3955,10 @@ fn build_hover_payload(
         return serde_json::Value::Null;
     };
     let mut cities = 0;
-    let mut factories = 0;
+    let mut trading_posts = 0;
     let mut ports = 0;
     let mut towers = 0;
-    let mut farms = 0;
+    let mut military_camps = 0;
     let mut sams = 0;
     for building in &snapshot.buildings {
         if building.owner_id != owner_id {
@@ -3966,20 +3966,20 @@ fn build_hover_payload(
         }
         match building.kind {
             sow_core::game::BuildingKind::City => cities += 1,
-            sow_core::game::BuildingKind::Factory => factories += 1,
+            sow_core::game::BuildingKind::TradingPost => trading_posts += 1,
             sow_core::game::BuildingKind::Port => ports += 1,
             sow_core::game::BuildingKind::Tower => towers += 1,
-            sow_core::game::BuildingKind::Farm => farms += 1,
+            sow_core::game::BuildingKind::MilitaryCamp => military_camps += 1,
             sow_core::game::BuildingKind::SAM => sams += 1,
             sow_core::game::BuildingKind::MissileSilo => {}
         }
     }
     let mut payload = player_json(player, my_pid, snapshot.total_land_tiles, None);
     payload["cities"] = serde_json::json!(cities);
-    payload["factories"] = serde_json::json!(factories);
+    payload["trading_posts"] = serde_json::json!(trading_posts);
     payload["ports"] = serde_json::json!(ports);
     payload["towers"] = serde_json::json!(towers);
-    payload["farms"] = serde_json::json!(farms);
+    payload["military_camps"] = serde_json::json!(military_camps);
     payload["sams"] = serde_json::json!(sams);
     payload
 }
@@ -4827,9 +4827,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .map(|placement| match placement.kind {
             sow_core::game::BuildingKind::City => "City",
             sow_core::game::BuildingKind::Tower => "Tower",
-            sow_core::game::BuildingKind::Factory => "Factory",
+            sow_core::game::BuildingKind::TradingPost => "TradingPost",
             sow_core::game::BuildingKind::Port => "Port",
-            sow_core::game::BuildingKind::Farm => "Farm",
+            sow_core::game::BuildingKind::MilitaryCamp => "MilitaryCamp",
             sow_core::game::BuildingKind::MissileSilo => "MissileSilo",
                             sow_core::game::BuildingKind::SAM => "SAM",
         });
@@ -5277,9 +5277,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "building_costs": {
             "city": costs[0],
             "tower": costs[1],
-            "factory": costs[2],
+            "trading_post": costs[2],
             "port": costs[3],
-            "farm": costs[4],
+            "military_camp": costs[4],
             "sam": costs[5],
             "missilesilo": costs[6],
         },

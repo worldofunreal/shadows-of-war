@@ -25,7 +25,7 @@ pub(super) fn bot_structure_target_count(
             let base = (city_equivalent.saturating_add(2) as f64) * factor;
             (base.floor() as u32).max(1)
         }
-        BuildingKind::Factory => {
+        BuildingKind::TradingPost => {
             let val = ((city_equivalent as f64) * 0.65 * factor).floor() as u32;
             if factor > 0.4 { val.max(1) } else { val }
         }
@@ -33,7 +33,7 @@ pub(super) fn bot_structure_target_count(
             let val = ((city_equivalent as f64) * 0.30 * factor).floor() as u32;
             if factor > 0.4 { val.max(1) } else { val }
         }
-        BuildingKind::Farm => {
+        BuildingKind::MilitaryCamp => {
             let val = ((city_equivalent as f64) * 0.45 * factor).floor() as u32;
             if factor > 0.4 { val.max(1) } else { val }
         }
@@ -170,7 +170,7 @@ pub(super) fn resolve_structure_from_candidates(
     None
 }
 
-pub(super) fn resolve_farm_from_candidates(
+pub(super) fn resolve_military_camp_from_candidates(
     map: &crate::map::GameMap,
     owner_id: u16,
     candidates: StructureCandidates<'_>,
@@ -183,7 +183,7 @@ pub(super) fn resolve_farm_from_candidates(
             return crate::building::validate_structure_site(
                 map,
                 owner_id,
-                BuildingKind::Farm,
+                BuildingKind::MilitaryCamp,
                 idx,
                 existing,
             )

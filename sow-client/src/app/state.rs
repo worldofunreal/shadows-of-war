@@ -729,10 +729,10 @@ pub(crate) fn structure_capture_priority(kind: sow_core::game::BuildingKind) -> 
     match kind {
         BuildingKind::City => 6,
         BuildingKind::Port => 5,
-        BuildingKind::Factory => 4,
+        BuildingKind::TradingPost => 4,
         BuildingKind::SAM | BuildingKind::MissileSilo => 3,
         BuildingKind::Tower => 2,
-        BuildingKind::Farm => 1,
+        BuildingKind::MilitaryCamp => 1,
     }
 }
 
@@ -1462,11 +1462,11 @@ mod cascade_tests {
         );
         assert!(
             structure_capture_priority(BuildingKind::Port)
-                > structure_capture_priority(BuildingKind::Factory)
+                > structure_capture_priority(BuildingKind::TradingPost)
         );
         assert!(
-            structure_capture_priority(BuildingKind::Factory)
-                > structure_capture_priority(BuildingKind::Farm)
+            structure_capture_priority(BuildingKind::TradingPost)
+                > structure_capture_priority(BuildingKind::MilitaryCamp)
         );
     }
 }

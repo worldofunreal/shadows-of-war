@@ -36,7 +36,7 @@ fn measurement(ability: Ability) -> u16 {
         Ability::GuildNetwork { .. } => 408,
         Ability::WarshipPrize { .. } => 409,
         Ability::Armistice { .. } => 410,
-        Ability::CityFarmFounding => 411,
+        Ability::CityMilitaryCampFounding => 411,
         Ability::CounterLevy { .. } => 412,
         Ability::CityIntercession { .. } => 413,
         Ability::RetreatHandover { .. } => 414,
@@ -45,8 +45,8 @@ fn measurement(ability: Ability) -> u16 {
         Ability::LastCityRelocation => 417,
         Ability::WarRegalia { .. } => 418,
         Ability::Reunification { .. } => 419,
-        Ability::FactoryCityUpgradeDiscount { .. } => 420,
-        Ability::FactoryRaid { .. } => 421,
+        Ability::TradingPostCityUpgradeDiscount { .. } => 420,
+        Ability::TradingPostRaid { .. } => 421,
         Ability::ImperialStandards { .. } => 422,
         Ability::SiegeBreach => 423,
         Ability::CookhamExchange => 425,
@@ -335,18 +335,18 @@ fn district_income(leader: Leader, district: District, resource: Resource) -> f6
             agg.city_levels = 3;
             agg.city_income_level_weight = 3.0;
         }
-        District::Factory => {
-            agg.factory_levels = 3;
-            agg.factory_income_level_weight = 3.0;
+        District::TradingPost => {
+            agg.trading_post_levels = 3;
+            agg.trading_post_income_level_weight = 3.0;
         }
         District::Port => {
             agg.port_levels = 3;
             agg.port_income_level_weight = 3.0;
         }
-        District::Farm => {
-            agg.farm_levels = 3;
-            agg.farm_troop_level_weight = 3.0;
-            agg.farm_gold_level_weight = 3.0;
+        District::MilitaryCamp => {
+            agg.military_camp_levels = 3;
+            agg.military_camp_troop_level_weight = 3.0;
+            agg.military_camp_gold_level_weight = 3.0;
         }
     }
     let cfg = GameConfig::default();
@@ -514,9 +514,9 @@ fn trade_marks(leader: Leader) -> usize {
 fn district_building(district: District) -> BuildingKind {
     match district {
         District::City => BuildingKind::City,
-        District::Factory => BuildingKind::Factory,
+        District::TradingPost => BuildingKind::TradingPost,
         District::Port => BuildingKind::Port,
-        District::Farm => BuildingKind::Farm,
+        District::MilitaryCamp => BuildingKind::MilitaryCamp,
     }
 }
 
@@ -868,14 +868,14 @@ fn every_hero_ability_changes_the_game_and_shows_its_mark() {
             Ability::CoastalFounding
             | Ability::AlliedCityGrant { .. }
             | Ability::CityTowerUpgrade
-            | Ability::CityFarmFounding
+            | Ability::CityMilitaryCampFounding
             | Ability::CityDenial
             | Ability::PuntGardens
             | Ability::LastCityRelocation
             | Ability::WarRegalia { .. }
             | Ability::Reunification { .. }
-            | Ability::FactoryCityUpgradeDiscount { .. }
-            | Ability::FactoryRaid { .. }
+            | Ability::TradingPostCityUpgradeDiscount { .. }
+            | Ability::TradingPostRaid { .. }
             | Ability::ImperialStandards { .. }
             | Ability::SiegeBreach
             | Ability::CookhamExchange
@@ -1303,7 +1303,7 @@ fn every_hero_has_a_catalog_ability() {
         let magnitude = match ability {
             Ability::CoastalFounding
             | Ability::CityTowerUpgrade
-            | Ability::CityFarmFounding
+            | Ability::CityMilitaryCampFounding
             | Ability::CityDenial
             | Ability::PuntGardens
             | Ability::LastCityRelocation
@@ -1321,7 +1321,7 @@ fn every_hero_has_a_catalog_ability() {
             | Ability::CityIntercession { troops }
             | Ability::WarRegalia { troops } => troops,
             Ability::SurplusTreasury { troops_per_gold } => troops_per_gold,
-            Ability::FactoryRaid { troops_per_level } => troops_per_level,
+            Ability::TradingPostRaid { troops_per_level } => troops_per_level,
             Ability::GuildNetwork { gold_per_second } => gold_per_second,
             Ability::TigranesAid { max_troops } => max_troops,
             _ => ability.percent(),
@@ -2489,7 +2489,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             e.execute_construction();
             (f64::from(e.buildings[1].level), owner_marks(&e)[1])
         }
-        Ability::CityFarmFounding => {
+        Ability::CityMilitaryCampFounding => {
             e.state.player_mut(1).unwrap().gold = 1_000_000.0;
             let city_tile = 16 * e.state.map.width + 16;
             send(
@@ -2505,12 +2505,12 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             for _ in 0..duration {
                 e.execute_construction();
             }
-            let farms = e
+            let military_camps = e
                 .buildings
                 .iter()
-                .filter(|b| b.kind == BuildingKind::Farm)
+                .filter(|b| b.kind == BuildingKind::MilitaryCamp)
                 .count();
-            (farms as f64, owner_marks(&e)[1])
+            (military_camps as f64, owner_marks(&e)[1])
         }
         Ability::SiegeBreach => {
             use super::hero_effects::AbilityState::{Conditional, Ready};
@@ -2555,8 +2555,8 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             use super::income_rates::imperial_standard_income;
             let active = matches!(leader.ability(), Ability::ImperialStandards { .. });
             e.add_building(make(1, 1, BuildingKind::City, 8, 16, 2, false));
-            e.add_building(make(2, 1, BuildingKind::Factory, 16, 16, 2, false));
-            e.add_building(make(3, 1, BuildingKind::Farm, 24, 16, 2, true));
+            e.add_building(make(2, 1, BuildingKind::TradingPost, 16, 16, 2, false));
+            e.add_building(make(3, 1, BuildingKind::MilitaryCamp, 24, 16, 2, true));
             e.execute_income();
             assert_eq!(e.hero_gold_per_second(1), 0.0);
             assert_eq!(owner_marks(&e)[1], 0);
@@ -2577,8 +2577,8 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 (extra_gold, extra_troops),
                 if active {
                     (
-                        cfg.factory_gold_income * (1.0 + 1.1948581737791502) * 0.25,
-                        cfg.farm_troop_income * 2.5 * 0.25,
+                        cfg.trading_post_gold_income * (1.0 + 1.1948581737791502) * 0.25,
+                        cfg.military_camp_troop_income * 2.5 * 0.25,
                     )
                 } else {
                     (0.0, 0.0)
@@ -2618,9 +2618,9 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             assert_eq!(owner_marks(&e)[1], shown);
             (extra_gold + extra_troops, shown)
         }
-        Ability::FactoryRaid { .. } => {
+        Ability::TradingPostRaid { .. } => {
             use super::hero_effects::AbilityState::{Conditional, Ready};
-            let active = matches!(leader.ability(), Ability::FactoryRaid { .. });
+            let active = matches!(leader.ability(), Ability::TradingPostRaid { .. });
             let mut battle = arena(12, 6, leader, Some(Leader::of("cleopatra")));
             for y in 0..12 {
                 for x in 6..9 {
@@ -2631,9 +2631,9 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             }
             battle.add_building(Building {
                 tile_idx: 6 * 12 + 6,
-                ..make(1, 2, BuildingKind::Factory, 6, 6, 1, true)
+                ..make(1, 2, BuildingKind::TradingPost, 6, 6, 1, true)
             });
-            let take_factory = |battle: &mut SowEngine| {
+            let take_trading_post = |battle: &mut SowEngine| {
                 battle.state.events.clear();
                 battle.state.player_mut(1).unwrap().troops = 10_000.0;
                 battle.state.player_mut(2).unwrap().troops = 2000.0;
@@ -2667,7 +2667,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                         } => Some(*troops),
                         _ => None,
                     })
-                    .expect("land attack must take the factory center");
+                    .expect("land attack must take the trading_post center");
                 let marks = owner_marks(battle)[1];
                 if !battle.attacks.is_empty() {
                     send(battle, 1, GameplayIntent::CancelAttack { attack_id: id });
@@ -2679,7 +2679,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             if active {
                 assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
             }
-            let (ordinary, no_mark) = take_factory(&mut battle);
+            let (ordinary, no_mark) = take_trading_post(&mut battle);
             assert_eq!(no_mark, 0);
             battle.state.set_tile_owner(6, 6, 2);
             battle.sync_building_ownership();
@@ -2691,7 +2691,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 battle.state.set_tile_owner(6, 6, 2);
                 assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Ready);
             }
-            let (reinforced, shown) = take_factory(&mut battle);
+            let (reinforced, shown) = take_trading_post(&mut battle);
             let gained = reinforced - ordinary;
             assert_eq!(gained, if active { 900.0 } else { 0.0 });
             if active {
@@ -2706,12 +2706,12 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             if active {
                 assert_eq!(battle.hero_ability_feedback(1).unwrap().state, Conditional);
             }
-            assert_eq!(take_factory(&mut battle), (ordinary, 0));
+            assert_eq!(take_trading_post(&mut battle), (ordinary, 0));
             (reinforced, shown)
         }
-        Ability::FactoryCityUpgradeDiscount { .. } => {
+        Ability::TradingPostCityUpgradeDiscount { .. } => {
             use super::hero_effects::AbilityState::{Conditional, Ready};
-            let active = matches!(leader.ability(), Ability::FactoryCityUpgradeDiscount { .. });
+            let active = matches!(leader.ability(), Ability::TradingPostCityUpgradeDiscount { .. });
             let city = make(1, 1, BuildingKind::Tower, 16, 16, 1, false);
             e.add_building(city);
             let full_cost = crate::building::structure_upgrade_cost_gold(
@@ -2721,9 +2721,9 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 &e.state.config,
             );
             e.state.player_mut(1).unwrap().gold = full_cost;
-            e.add_building(make(2, 2, BuildingKind::Factory, 22, 16, 1, false));
-            e.add_building(make(3, 1, BuildingKind::Factory, 16, 28, 1, true));
-            e.add_building(make(4, 1, BuildingKind::Factory, 16, 29, 1, false));
+            e.add_building(make(2, 2, BuildingKind::TradingPost, 22, 16, 1, false));
+            e.add_building(make(3, 1, BuildingKind::TradingPost, 16, 28, 1, true));
+            e.add_building(make(4, 1, BuildingKind::TradingPost, 16, 29, 1, false));
             assert_eq!(e.structure_upgrade_quote(city.id), Some((full_cost, false)));
             if active {
                 assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
@@ -3314,8 +3314,8 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 ally.troops = 1_000.0;
                 ally.max_troops = cap;
                 ally.alliances.push(1);
-                battle.add_building(make(1, 1, BuildingKind::Farm, 16, 16, 1, false));
-                battle.add_building(make(2, 2, BuildingKind::Farm, 40, 16, 1, true));
+                battle.add_building(make(1, 1, BuildingKind::MilitaryCamp, 16, 16, 1, false));
+                battle.add_building(make(2, 2, BuildingKind::MilitaryCamp, 40, 16, 1, true));
                 let gift = |battle: &mut SowEngine, troops| {
                     send(
                         battle,
@@ -3680,10 +3680,10 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             use super::hero_effects::AbilityState::{Conditional, Ready};
             let active = leader.ability() == Ability::KitchenPhilosophy;
             e.state.player_mut(1).unwrap().gold = 1_000_000.0;
-            e.add_building(make(1, 1, BuildingKind::Farm, 16, 16, 1, false));
-            e.add_building(make(2, 1, BuildingKind::Factory, 24, 16, 1, false));
-            e.add_building(make(3, 1, BuildingKind::Factory, 29, 16, 1, false));
-            e.add_building(make(4, 1, BuildingKind::Factory, 20, 16, 1, false));
+            e.add_building(make(1, 1, BuildingKind::MilitaryCamp, 16, 16, 1, false));
+            e.add_building(make(2, 1, BuildingKind::TradingPost, 24, 16, 1, false));
+            e.add_building(make(3, 1, BuildingKind::TradingPost, 29, 16, 1, false));
+            e.add_building(make(4, 1, BuildingKind::TradingPost, 20, 16, 1, false));
             send(
                 &mut e,
                 1,
@@ -3703,8 +3703,8 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             for building_id in [2, 4] {
                 send(&mut e, 1, GameplayIntent::UpgradeStructure { building_id });
             }
-            e.add_building(make(5, 1, BuildingKind::Farm, 18, 16, 1, true));
-            let mut same_tick = make(6, 1, BuildingKind::Factory, 17, 16, 2, true);
+            e.add_building(make(5, 1, BuildingKind::MilitaryCamp, 18, 16, 1, true));
+            let mut same_tick = make(6, 1, BuildingKind::TradingPost, 17, 16, 2, true);
             same_tick.ticks_until_complete = 5;
             e.add_building(same_tick);
             if active {
@@ -3714,7 +3714,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             for _ in 0..4 {
                 e.execute_construction();
             }
-            assert_eq!(owner_marks(&e)[1], 0, "new farms do not accelerate");
+            assert_eq!(owner_marks(&e)[1], 0, "new military_camps do not accelerate");
             e.execute_construction();
             assert_eq!(e.buildings[0].active_level(), 2);
             assert_eq!(e.buildings[5].active_level(), 2);
@@ -3817,14 +3817,14 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
         Ability::CookhamExchange => {
             use super::hero_effects::AbilityState::{Conditional, Ready};
             let active = leader.ability() == Ability::CookhamExchange;
-            e.add_building(make(1, 1, BuildingKind::Farm, 31, 16, 2, false));
-            e.add_building(make(2, 1, BuildingKind::Factory, 18, 16, 1, false));
-            e.add_building(make(3, 1, BuildingKind::Factory, 24, 16, 4, false));
+            e.add_building(make(1, 1, BuildingKind::MilitaryCamp, 31, 16, 2, false));
+            e.add_building(make(2, 1, BuildingKind::TradingPost, 18, 16, 1, false));
+            e.add_building(make(3, 1, BuildingKind::TradingPost, 24, 16, 4, false));
             if active {
                 assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
             }
-            e.add_building(make(4, 1, BuildingKind::Factory, 26, 16, 2, false));
-            e.add_building(make(5, 1, BuildingKind::Factory, 29, 16, 3, false));
+            e.add_building(make(4, 1, BuildingKind::TradingPost, 26, 16, 2, false));
+            e.add_building(make(5, 1, BuildingKind::TradingPost, 29, 16, 3, false));
             e.add_building(make(6, 1, BuildingKind::City, 25, 16, 1, false));
             if active {
                 assert_eq!(e.hero_ability_feedback(1).unwrap().state, Ready);
@@ -3882,9 +3882,9 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             );
             trade.state.set_tile_owner(10, 10, 1);
             trade.state.player_mut(1).unwrap().leader = leader;
-            trade.add_building(make(3, 1, BuildingKind::Farm, 10, 12, 2, false));
-            trade.add_building(make(4, 1, BuildingKind::Farm, 10, 14, 1, false));
-            trade.add_building(make(5, 1, BuildingKind::Farm, 10, 23, 1, false));
+            trade.add_building(make(3, 1, BuildingKind::MilitaryCamp, 10, 12, 2, false));
+            trade.add_building(make(4, 1, BuildingKind::MilitaryCamp, 10, 14, 1, false));
+            trade.add_building(make(5, 1, BuildingKind::MilitaryCamp, 10, 23, 1, false));
             trade.execute_trade_ships();
             assert_eq!(trade.buildings[3].level, 1);
             assert_eq!(trade.fleets.len(), 1);
@@ -3929,7 +3929,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
             use super::hero_effects::AbilityState::{Conditional, Ready};
             let denies = leader.ability() == Ability::CityDenial;
             let (x, y) = (16, 16);
-            e.add_building(make(1, 1, BuildingKind::Factory, x, y, 3, false));
+            e.add_building(make(1, 1, BuildingKind::TradingPost, x, y, 3, false));
             e.add_building(make(2, 1, BuildingKind::City, x, y, 1, false));
             e.state.player_mut(1).unwrap().gold = 1_000_000.0;
             send(
@@ -4249,7 +4249,7 @@ fn redesigned_effect(leader: Leader, situation: Ability) -> (f64, usize) {
                 }
                 Ability::GuildNetwork { .. } => {
                     e.add_building(make(1, 1, BuildingKind::City, 16, 16, 1, false));
-                    e.add_building(make(2, 1, BuildingKind::Factory, 24, 16, 1, false));
+                    e.add_building(make(2, 1, BuildingKind::TradingPost, 24, 16, 1, false));
                 }
                 _ => unreachable!(),
             }
@@ -4489,13 +4489,13 @@ fn redesigned_peter_founds_a_legal_port_during_real_conquest() {
 }
 
 #[test]
-fn natavan_founds_one_farm_at_a_legal_site_when_the_city_reaches_level_two() {
+fn natavan_founds_one_military_camp_at_a_legal_site_when_the_city_reaches_level_two() {
     use super::hero_effects::AbilityState::{Conditional, Ready};
 
     let leader = Leader::of("natavan");
     let mut engine = arena(64, 32, leader, Some(Leader::of("cleopatra")));
     engine.state.map.terrain.fill(MapTile::from_byte(0x8a));
-    // Before any City exists without a Farm district, Natavan feedback is Conditional.
+    // Before any City exists without a MilitaryCamp district, Natavan feedback is Conditional.
     assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
 
     engine.state.player_mut(1).unwrap().gold = 1_000_000.0;
@@ -4517,10 +4517,10 @@ fn natavan_founds_one_farm_at_a_legal_site_when_the_city_reaches_level_two() {
     assert_eq!(engine.buildings.len(), 1);
     engine.execute_construction();
     assert_eq!(engine.buildings.len(), 2);
-    let farm = engine.buildings[1];
-    assert_eq!(farm.kind, BuildingKind::Farm);
-    assert_eq!(farm.tile_idx, first_city_tile);
-    assert_eq!(farm.active_level(), 1);
+    let military_camp = engine.buildings[1];
+    assert_eq!(military_camp.kind, BuildingKind::MilitaryCamp);
+    assert_eq!(military_camp.tile_idx, first_city_tile);
+    assert_eq!(military_camp.active_level(), 1);
     assert_eq!(engine.state.player(1).unwrap().gold, gold_after_build);
     assert!(engine.state.events.iter().any(|event| matches!(
         event,
@@ -4530,12 +4530,12 @@ fn natavan_founds_one_farm_at_a_legal_site_when_the_city_reaches_level_two() {
             ..
         }
     )));
-    // Once all Cities have a Farm district, feedback returns to Conditional.
+    // Once all Cities have a MilitaryCamp district, feedback returns to Conditional.
     assert_eq!(engine.hero_ability_feedback(1).unwrap().state, Conditional);
     engine.refresh_building_aggregates();
-    assert_eq!(engine.building_aggregates[1].farm_levels, 1);
+    assert_eq!(engine.building_aggregates[1].military_camp_levels, 1);
 
-    // An existing City without a Farm marks Natavan as Ready.
+    // An existing City without a MilitaryCamp marks Natavan as Ready.
     let second_city_tile = 16 * 64 + 28;
     engine.add_building(Building {
         id: engine.state.next_building_id,
@@ -4682,13 +4682,13 @@ fn redesigned_income_stops_when_its_condition_ends_and_matches_the_hud_rate() {
     );
     e.state.player_mut(1).unwrap().leader = Leader::of("ewuare");
     e.add_building(redesigned_building(1, 1, BuildingKind::City, 10, 10, 1));
-    e.add_building(redesigned_building(2, 1, BuildingKind::Factory, 15, 10, 2));
+    e.add_building(redesigned_building(2, 1, BuildingKind::TradingPost, 15, 10, 2));
     assert_eq!(e.hero_gold_per_second(1), 8.0);
     e.add_building(redesigned_building(3, 1, BuildingKind::City, 10, 15, 1));
     assert_eq!(
         e.hero_gold_per_second(1),
         8.0,
-        "the same factory is counted only once"
+        "the same trading_post is counted only once"
     );
     e.buildings[0].owner_id = 2;
     e.buildings[2].owner_id = 2;
@@ -4844,7 +4844,7 @@ fn hero_feedback_tracks_consumption_return_timer_income_and_required_structures(
     assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
     e.state.player_mut(1).unwrap().leader = Leader::of("ewuare");
     assert_eq!(e.hero_ability_feedback(1).unwrap().state, Conditional);
-    e.add_building(redesigned_building(4, 1, BuildingKind::Factory, 12, 15, 1));
+    e.add_building(redesigned_building(4, 1, BuildingKind::TradingPost, 12, 15, 1));
     assert_eq!(e.hero_ability_feedback(1).unwrap().state, Active);
     e.state.player_mut(1).unwrap().leader = Leader::of("pertinax");
     e.refresh_building_aggregates();

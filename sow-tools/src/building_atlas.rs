@@ -17,10 +17,10 @@ const ART_ALPHA_CUTOFF: u8 = 8;
 /// Building art stems in `assets/art/buildings`.
 const BUILDING_KINDS: [(BuildingKind, &str); 7] = [
     (BuildingKind::City, "city"),
-    (BuildingKind::Factory, "trading-post"),
+    (BuildingKind::TradingPost, "trading-post"),
     (BuildingKind::Port, "port"),
     (BuildingKind::Tower, "tower"),
-    (BuildingKind::Farm, "military-camp"),
+    (BuildingKind::MilitaryCamp, "military-camp"),
     (BuildingKind::SAM, "sam"),
     (BuildingKind::MissileSilo, "silo"),
 ];
@@ -396,7 +396,7 @@ fn rust_registry(
             };
             if !matches!(
                 kind,
-                "City" | "Tower" | "Factory" | "Port" | "Farm" | "SAM" | "MissileSilo"
+                "City" | "Tower" | "TradingPost" | "Port" | "MilitaryCamp" | "SAM" | "MissileSilo"
             ) {
                 return Err(format!("unknown building kind in atlas: {kind}").into());
             }

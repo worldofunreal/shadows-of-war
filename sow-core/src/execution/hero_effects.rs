@@ -257,45 +257,45 @@ pub(crate) fn recruit_conquered_reserves(
     }
 }
 
-fn factory_raid_reward(
+fn trading_post_raid_reward(
     state: &GameState,
     claims: &BTreeSet<(u16, u64, u8)>,
     raider: &Player,
-    factory: Building,
+    trading_post: Building,
 ) -> f64 {
-    let Ability::FactoryRaid { troops_per_level } = raider.leader.ability() else {
+    let Ability::TradingPostRaid { troops_per_level } = raider.leader.ability() else {
         return 0.0;
     };
     if !raider.alive
-        || factory.kind != BuildingKind::Factory
-        || factory.owner_id == 0
-        || factory.owner_id == raider.id
-        || allied(state, raider.id, factory.owner_id)
-        || claims.contains(&(raider.id, factory.id, 0))
+        || trading_post.kind != BuildingKind::TradingPost
+        || trading_post.owner_id == 0
+        || trading_post.owner_id == raider.id
+        || allied(state, raider.id, trading_post.owner_id)
+        || claims.contains(&(raider.id, trading_post.id, 0))
     {
         return 0.0;
     }
-    f64::from(troops_per_level) * f64::from(factory.active_level())
+    f64::from(troops_per_level) * f64::from(trading_post.active_level())
 }
 
-pub(crate) fn raid_captured_factory(
+pub(crate) fn raid_captured_trading_post(
     state: &mut GameState,
     claims: &mut BTreeSet<(u16, u64, u8)>,
     attack: &mut AttackExecution,
-    factory: Building,
+    trading_post: Building,
 ) {
     let Some(raider) = state.player(attack.owner_id) else {
         return;
     };
-    let reward = factory_raid_reward(state, claims, raider, factory);
+    let reward = trading_post_raid_reward(state, claims, raider, trading_post);
     if reward > 0.0 {
-        claims.insert((attack.owner_id, factory.id, 0));
+        claims.insert((attack.owner_id, trading_post.id, 0));
         attack.troops += reward;
         let width = state.map.width;
         state.announce_leader_ability_to(
             attack.owner_id,
-            &[factory.owner_id],
-            Some((factory.tile_idx % width, factory.tile_idx / width)),
+            &[trading_post.owner_id],
+            Some((trading_post.tile_idx % width, trading_post.tile_idx / width)),
         );
     }
 }
@@ -499,13 +499,13 @@ impl SowEngine {
                 Ability::CoastalFounding
                     | Ability::AlliedCityGrant { .. }
                     | Ability::CityTowerUpgrade
-                    | Ability::CityFarmFounding
+                    | Ability::CityMilitaryCampFounding
                     | Ability::CityDenial
                     | Ability::PuntGardens
                     | Ability::LastCityRelocation
                     | Ability::WarRegalia { .. }
-                    | Ability::FactoryCityUpgradeDiscount { .. }
-                    | Ability::FactoryRaid { .. }
+                    | Ability::TradingPostCityUpgradeDiscount { .. }
+                    | Ability::TradingPostRaid { .. }
                     | Ability::ImperialStandards { .. }
                     | Ability::SiegeBreach
                     | Ability::CookhamExchange
@@ -618,7 +618,7 @@ impl SowEngine {
                     && max_gift >= FEAST_MIN_GIFT
                     && (ally.max_troops - ally.troops > FEAST_MIN_GIFT
                         || p.troops - max_gift < p.max_troops)
-                    && self.shared_feast_farm(owner, ally.id).is_some()
+                    && self.shared_feast_military_camp(owner, ally.id).is_some()
             })),
             Ability::ContestedSteppe { percent } => ready(
                 percent > 0
@@ -747,11 +747,11 @@ impl SowEngine {
                         .nearby_structure_upgrade(*building, BuildingKind::Tower, 20)
                         .is_some()
             })),
-            Ability::KitchenPhilosophy => ready(self.buildings.iter().any(|&farm| {
-                farm.owner_id == owner
-                    && farm.under_construction
+            Ability::KitchenPhilosophy => ready(self.buildings.iter().any(|&military_camp| {
+                military_camp.owner_id == owner
+                    && military_camp.under_construction
                     && self
-                        .kitchen_study_city(farm, farm.ticks_until_complete.max(1))
+                        .kitchen_study_city(military_camp, military_camp.ticks_until_complete.max(1))
                         .is_some()
             })),
             Ability::SiegeBreach => ready(self.buildings.iter().any(|&tower| {
@@ -763,13 +763,13 @@ impl SowEngine {
                         .siege_breach_target(owner, tower.owner_id, tower)
                         .is_some()
             })),
-            Ability::FactoryRaid { .. } => ready(self.buildings.iter().any(|&factory| {
+            Ability::TradingPostRaid { .. } => ready(self.buildings.iter().any(|&trading_post| {
                 let map = &self.state.map;
-                factory_raid_reward(&self.state, &self.hero_claims, p, factory) > 0.0
-                    && map.owner_id(factory.tile_idx % map.width, factory.tile_idx / map.width)
-                        == factory.owner_id
+                trading_post_raid_reward(&self.state, &self.hero_claims, p, trading_post) > 0.0
+                    && map.owner_id(trading_post.tile_idx % map.width, trading_post.tile_idx / map.width)
+                        == trading_post.owner_id
             })),
-            Ability::FactoryCityUpgradeDiscount { .. } => {
+            Ability::TradingPostCityUpgradeDiscount { .. } => {
                 ready(self.buildings.iter().any(|b| {
                     b.owner_id == owner
                         && b.kind.is_non_city()
@@ -781,9 +781,9 @@ impl SowEngine {
                             .is_some_and(|(cost, discounted)| discounted && p.gold >= cost)
                 }))
             }
-            Ability::CityFarmFounding => {
+            Ability::CityMilitaryCampFounding => {
                 if !self.campaign_allows_building(BuildingKind::City, 1)
-                    || !self.campaign_allows_building(BuildingKind::Farm, 1)
+                    || !self.campaign_allows_building(BuildingKind::MilitaryCamp, 1)
                 {
                     Conditional
                 } else {
@@ -796,7 +796,7 @@ impl SowEngine {
                                 .hero_foundation_near(
                                     owner,
                                     city.tile_idx,
-                                    BuildingKind::Farm,
+                                    BuildingKind::MilitaryCamp,
                                     12,
                                     grid.as_ref(),
                                 )
@@ -866,7 +866,7 @@ impl SowEngine {
                             && self.buildings.iter().any(|port| {
                                 port.owner_id == owner
                                     && port.tile_idx == fleet.src_tile
-                                    && self.punt_garden_farm(*port).is_some()
+                                    && self.punt_garden_military_camp(*port).is_some()
                             })
                     }),
             ),
@@ -876,8 +876,8 @@ impl SowEngine {
                     && !self.hero_claims.contains(&(owner, building.id, 0))
             })),
             Ability::CookhamExchange => {
-                ready(self.buildings.iter().any(|&farm| {
-                    farm.owner_id == owner && self.cookham_exchange_city(farm).is_some()
+                ready(self.buildings.iter().any(|&military_camp| {
+                    military_camp.owner_id == owner && self.cookham_exchange_city(military_camp).is_some()
                 }))
             }
             Ability::CityIntercession { .. } => {
@@ -917,9 +917,9 @@ impl SowEngine {
                 let produces = match source {
                     Source::District(district) => has(match district {
                         District::City => BuildingKind::City,
-                        District::Factory => BuildingKind::Factory,
+                        District::TradingPost => BuildingKind::TradingPost,
                         District::Port => BuildingKind::Port,
-                        District::Farm => BuildingKind::Farm,
+                        District::MilitaryCamp => BuildingKind::MilitaryCamp,
                     }),
                     Source::Territory => true,
                     Source::Alliance => !p.alliances.is_empty(),
@@ -1143,19 +1143,19 @@ impl SowEngine {
         if !target.kind.is_non_city() && target.kind != BuildingKind::City {
             return 0;
         }
-        let Some(Ability::FactoryCityUpgradeDiscount { percent }) = self
+        let Some(Ability::TradingPostCityUpgradeDiscount { percent }) = self
             .state
             .player(target.owner_id)
             .map(|owner| owner.leader.ability())
         else {
             return 0;
         };
-        if self.buildings.iter().any(|factory| {
-            factory.id != target.id
-                && factory.owner_id == target.owner_id
-                && factory.kind == BuildingKind::Factory
-                && factory.active_level() > 0
-                && nearby(target.tile_idx, factory.tile_idx, self.state.map.width, 12)
+        if self.buildings.iter().any(|trading_post| {
+            trading_post.id != target.id
+                && trading_post.owner_id == target.owner_id
+                && trading_post.kind == BuildingKind::TradingPost
+                && trading_post.active_level() > 0
+                && nearby(target.tile_idx, trading_post.tile_idx, self.state.map.width, 12)
         }) {
             percent.min(100)
         } else {
@@ -1216,7 +1216,7 @@ impl SowEngine {
         })
     }
 
-    fn shared_feast_farm(&self, owner: u16, ally: u16) -> Option<Building> {
+    fn shared_feast_military_camp(&self, owner: u16, ally: u16) -> Option<Building> {
         if !self.state.config.buildings_enabled
             || !self.resources_can_move(owner, ally)
             || self.hero_claims.contains(&(owner, u64::from(ally), 2))
@@ -1224,16 +1224,16 @@ impl SowEngine {
             return None;
         }
         let map = &self.state.map;
-        let farm = |player| {
+        let military_camp = |player| {
             self.buildings.iter().copied().find(|b| {
                 b.owner_id == player
-                    && b.kind == BuildingKind::Farm
+                    && b.kind == BuildingKind::MilitaryCamp
                     && b.active_level() > 0
                     && map.owner_id(b.tile_idx % map.width, b.tile_idx / map.width) == player
             })
         };
-        farm(ally)?;
-        farm(owner)
+        military_camp(ally)?;
+        military_camp(owner)
     }
 
     pub(crate) fn hero_shared_feast(&mut self, owner: u16, ally: u16, gift: f64) {
@@ -1245,7 +1245,7 @@ impl SowEngine {
         {
             return;
         }
-        let Some(farm) = self.shared_feast_farm(owner, ally) else {
+        let Some(military_camp) = self.shared_feast_military_camp(owner, ally) else {
             return;
         };
         let bonus = (gift / 4.0).min(500.0);
@@ -1265,7 +1265,7 @@ impl SowEngine {
             self.state.announce_leader_ability_to(
                 owner,
                 &[ally],
-                Some((farm.tile_idx % width, farm.tile_idx / width)),
+                Some((military_camp.tile_idx % width, military_camp.tile_idx / width)),
             );
         }
     }
@@ -1467,12 +1467,12 @@ impl SowEngine {
         .filter(|&site| nearby(site, center, map.width, radius))
     }
 
-    fn kitchen_study_city(&self, farm: Building, elapsed_ticks: u32) -> Option<usize> {
+    fn kitchen_study_city(&self, military_camp: Building, elapsed_ticks: u32) -> Option<usize> {
         let map = &self.state.map;
         let owned = |b: Building| {
             map.owner_id(b.tile_idx % map.width, b.tile_idx / map.width) == b.owner_id
         };
-        if farm.kind != BuildingKind::Farm || farm.level < 2 || !owned(farm) {
+        if military_camp.kind != BuildingKind::MilitaryCamp || military_camp.level < 2 || !owned(military_camp) {
             return None;
         }
         self.buildings
@@ -1480,15 +1480,15 @@ impl SowEngine {
             .enumerate()
             .filter_map(|(index, &target)| {
                 if (target.kind != BuildingKind::City && !target.kind.is_non_city())
-                    || target.id == farm.id
-                    || target.owner_id != farm.owner_id
+                    || target.id == military_camp.id
+                    || target.owner_id != military_camp.owner_id
                     || !target.under_construction
                     || target.ticks_until_complete <= elapsed_ticks
                     || !owned(target)
                 {
                     return None;
                 }
-                let distance = tile_distance_squared(farm.tile_idx, target.tile_idx, map.width);
+                let distance = tile_distance_squared(military_camp.tile_idx, target.tile_idx, map.width);
                 (distance <= 12 * 12).then_some((distance, target.id, index))
             })
             .min()
@@ -1497,7 +1497,7 @@ impl SowEngine {
     }
 
     pub(crate) fn hero_structure_ready(&mut self, building: Building) {
-        if building.kind == BuildingKind::Farm
+        if building.kind == BuildingKind::MilitaryCamp
             && self.state.config.buildings_enabled
             && self
                 .state
@@ -1563,23 +1563,23 @@ impl SowEngine {
         }
         if self.state.config.buildings_enabled
             && building.kind == BuildingKind::City
-            && self.campaign_allows_building(BuildingKind::Farm, 1)
+            && self.campaign_allows_building(BuildingKind::MilitaryCamp, 1)
             && self
                 .state
                 .player(building.owner_id)
-                .is_some_and(|p| p.alive && p.leader.ability() == Ability::CityFarmFounding)
+                .is_some_and(|p| p.alive && p.leader.ability() == Ability::CityMilitaryCampFounding)
             && !self.hero_claims.contains(&(
                 building.owner_id,
                 building.id,
                 CITY_FARM_FOUNDING_CLAIM,
             ))
         {
-            // City Farm Founding now grants a separate Farm on a legal nearby footprint.
+            // City MilitaryCamp Founding now grants a separate MilitaryCamp on a legal nearby footprint.
             self.refresh_building_grid();
             if let Some(site) = self.hero_foundation_near(
                 building.owner_id,
                 building.tile_idx,
-                BuildingKind::Farm,
+                BuildingKind::MilitaryCamp,
                 12,
                 &self.building_grid,
             ) {
@@ -1588,7 +1588,7 @@ impl SowEngine {
                     building.id,
                     CITY_FARM_FOUNDING_CLAIM,
                 ));
-                self.found_hero_structure(building.owner_id, BuildingKind::Farm, site);
+                self.found_hero_structure(building.owner_id, BuildingKind::MilitaryCamp, site);
             }
         } else if self
             .state
@@ -1625,14 +1625,14 @@ impl SowEngine {
         );
     }
 
-    fn punt_garden_farm(&self, home: Building) -> Option<usize> {
+    fn punt_garden_military_camp(&self, home: Building) -> Option<usize> {
         if home.kind != BuildingKind::Port
             || home.under_construction
             || self.hero_claims.contains(&(home.owner_id, home.id, 0))
         {
             return None;
         }
-        self.nearby_structure_upgrade(home, BuildingKind::Farm, 12)
+        self.nearby_structure_upgrade(home, BuildingKind::MilitaryCamp, 12)
     }
 
     pub(crate) fn hero_trade_arrived(&mut self, origin_id: u64) {
@@ -1647,10 +1647,10 @@ impl SowEngine {
             .state
             .player(home.owner_id)
             .is_some_and(|p| p.alive && p.leader.ability() == Ability::PuntGardens)
-            && let Some(farm) = self.punt_garden_farm(home)
+            && let Some(military_camp) = self.punt_garden_military_camp(home)
         {
             self.hero_claims.insert((home.owner_id, origin_id, 0));
-            self.hero_upgrade_structure(farm, &[]);
+            self.hero_upgrade_structure(military_camp, &[]);
         }
     }
 
@@ -1749,14 +1749,14 @@ impl SowEngine {
             .map(|(_, _, index)| index)
     }
 
-    fn cookham_exchange_city(&self, farm: Building) -> Option<usize> {
-        if farm.kind != BuildingKind::Farm
-            || farm.active_level() == 0
-            || self.hero_claims.contains(&(farm.owner_id, farm.id, 0))
+    fn cookham_exchange_city(&self, military_camp: Building) -> Option<usize> {
+        if military_camp.kind != BuildingKind::MilitaryCamp
+            || military_camp.active_level() == 0
+            || self.hero_claims.contains(&(military_camp.owner_id, military_camp.id, 0))
         {
             return None;
         }
-        self.nearby_district_upgrade(farm, 12)
+        self.nearby_district_upgrade(military_camp, 12)
     }
 
     fn aksum_rout_target(&self, owner: u16, rival: u16, city: Building) -> Option<usize> {
@@ -1827,13 +1827,13 @@ impl SowEngine {
     pub(crate) fn hero_structure_transferred(&mut self, building: Building, previous_owner: u16) {
         if !matches!(
             building.kind,
-            BuildingKind::City | BuildingKind::Tower | BuildingKind::Farm
+            BuildingKind::City | BuildingKind::Tower | BuildingKind::MilitaryCamp
         ) || previous_owner == 0
             || allied(&self.state, building.owner_id, previous_owner)
         {
             return;
         }
-        if building.kind == BuildingKind::Farm {
+        if building.kind == BuildingKind::MilitaryCamp {
             if self.state.config.buildings_enabled
                 && self.state.player(previous_owner).is_some_and(|p| {
                     p.alive && p.tile_count > 0 && p.leader.ability() == Ability::CookhamExchange
@@ -2215,7 +2215,7 @@ impl SowEngine {
                         .get(owner as usize)
                         .copied()
                         .unwrap_or_default();
-                    if agg.city_levels == 0 || agg.factory_levels == 0 {
+                    if agg.city_levels == 0 || agg.trading_post_levels == 0 {
                         return 0.0;
                     }
                 }
@@ -2252,13 +2252,13 @@ impl SowEngine {
                     .iter()
                     .filter(|b| {
                         b.owner_id == owner
-                            && b.kind == BuildingKind::Factory
+                            && b.kind == BuildingKind::TradingPost
                             && b.active_level() > 0
                     })
-                    .filter(|factory| {
+                    .filter(|trading_post| {
                         cities
                             .iter()
-                            .any(|&city| nearby(factory.tile_idx, city, self.state.map.width, 20))
+                            .any(|&city| nearby(trading_post.tile_idx, city, self.state.map.width, 20))
                     })
                     .map(|b| u32::from(b.active_level()))
                     .sum();

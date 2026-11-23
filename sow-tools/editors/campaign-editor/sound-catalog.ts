@@ -87,9 +87,9 @@ export const CATEGORY_ORDER: readonly AudioCategory[] = [
 const BUILDING_VARIANTS: readonly CueVariantSpec[] = [
   { label: "City", subtype: BuildingAudioKind.City },
   { label: "Tower", subtype: BuildingAudioKind.Tower },
-  { label: "Factory", subtype: BuildingAudioKind.Factory },
+  { label: "TradingPost", subtype: BuildingAudioKind.TradingPost },
   { label: "Port", subtype: BuildingAudioKind.Port },
-  { label: "Farm", subtype: BuildingAudioKind.Farm },
+  { label: "MilitaryCamp", subtype: BuildingAudioKind.MilitaryCamp },
   { label: "SAM", subtype: BuildingAudioKind.SAM },
   { label: "MissileSilo", subtype: BuildingAudioKind.MissileSilo },
 ];
@@ -304,7 +304,7 @@ const CUE_META: Partial<Record<AudioCueId, RawCueMeta>> = {
     variants: BUILDING_VARIANTS,
   },
   [AudioCue.ArsenalQueued]: {
-    description: "Encolar producción militar o cancelar cola en Factory/Silo/SAM.",
+    description: "Encolar producción militar o cancelar cola en TradingPost/Silo/SAM.",
     recipeFile: "recipes/buildings.ts",
     defaultIntensity: 0.7,
     burstIntervalMs: 280,

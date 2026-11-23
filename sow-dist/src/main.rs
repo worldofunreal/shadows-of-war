@@ -1251,10 +1251,13 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
     ));
     let hero_crop_dir = tempfile::tempdir().context("create temporary hero avatar crops")?;
     let mut hero_expression_crops = Vec::new();
-    for leader in sow_core::player::Leader::all() {
+    for leader in sow_core::player::Leader::all_known() {
         let base = leader.art_slug();
         let source = art.join("avatars/heroes").join(format!("{base}.webp"));
-        if !source.is_file() && !pipeline.local_preview {
+        if !source.is_file() {
+            if !leader.is_enabled() || pipeline.local_preview {
+                continue;
+            }
             bail!(
                 "hero art {base} needs one 2 x 2 sheet at {}",
                 source.display()
@@ -3544,13 +3547,13 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
                     "troops": config.city_troop_income * speed * building::income_level_weight(level.min(4)),
                     "reinforcements": building::city_upgrade_reinforcements(level, config.city_max_troops),
                 }),
-                BuildingKind::Farm => serde_json::json!({
-                    "troops": config.farm_troop_income * speed * building::farm_troop_level_weight(level),
+                BuildingKind::MilitaryCamp => serde_json::json!({
+                    "troops": config.military_camp_troop_income * speed * building::military_camp_troop_level_weight(level),
                     "capture": (building::camp_conquest_multiplier(config.camp_capture_base_points * building::camp_capture_level_weight(level)) - 1.0) * 100.0,
                 }),
-                BuildingKind::Factory => serde_json::json!({
-                    "trade": config.factory_gold_income * speed * building::factory_gold_level_weight(level),
-                    "travel": building::factory_gold_level_weight(level).sqrt(),
+                BuildingKind::TradingPost => serde_json::json!({
+                    "trade": config.trading_post_gold_income * speed * building::trading_post_gold_level_weight(level),
+                    "travel": building::trading_post_gold_level_weight(level).sqrt(),
                 }),
                 BuildingKind::Tower => serde_json::json!({
                     "range": building::tower_range_for_level(level, &config, 1.0),

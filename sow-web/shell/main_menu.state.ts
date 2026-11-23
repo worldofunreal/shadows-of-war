@@ -471,10 +471,10 @@ export interface HudLeaderboardPlayer {
     assists: number;
     rank?: number;
     cities?: number;
-    factories?: number;
+    trading_posts?: number;
     ports?: number;
     towers?: number;
-    farms?: number;
+    military_camps?: number;
     campaign_faction_id?: string;
 }
 
@@ -859,10 +859,10 @@ export interface MenuHudPayload {
         | (HudLeaderboardPlayer & {
               gold?: number;
               cities: number;
-              factories: number;
+              trading_posts: number;
               ports: number;
               towers: number;
-              farms: number;
+              military_camps: number;
           })
         | null;
 }

@@ -1275,7 +1275,7 @@ mod tests {
             campaign_accepts_alliance_requests: false,
             player_type: None,
             campaign_troop_loot_bonus: Some(900),
-            prebuilt_buildings: vec![(crate::game::BuildingKind::Farm, 1)],
+            prebuilt_buildings: vec![(crate::game::BuildingKind::MilitaryCamp, 1)],
         }];
         cfg.player_spawn = Some((8, 12));
         let engine = crate::engine::initialize_match_engine_with_water(
@@ -1307,6 +1307,6 @@ mod tests {
         assert_eq!(me.gold, 500.0);
         assert!(engine.buildings.iter().any(|b| b.owner_id == 1 && b.kind == crate::game::BuildingKind::City));
         assert!(engine.buildings.iter().any(|b| b.owner_id == 1 && b.kind == crate::game::BuildingKind::Tower));
-        assert!(engine.buildings.iter().any(|b| b.owner_id == 2 && b.kind == crate::game::BuildingKind::Farm));
+        assert!(engine.buildings.iter().any(|b| b.owner_id == 2 && b.kind == crate::game::BuildingKind::MilitaryCamp));
     }
 }

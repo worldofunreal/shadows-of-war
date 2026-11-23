@@ -385,12 +385,14 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             let kind = match raw_kind.trim().to_ascii_lowercase().as_str() {
                 "city" => sow_core::game::BuildingKind::City,
                 "tower" | "defense_tower" => sow_core::game::BuildingKind::Tower,
-                "factory" => sow_core::game::BuildingKind::Factory,
+                "tradingpost" | "trading_post" | "factory" => sow_core::game::BuildingKind::TradingPost,
                 "port" => sow_core::game::BuildingKind::Port,
-                "farm" => sow_core::game::BuildingKind::Farm,
+                "militarycamp" | "military_camp" | "farm" => sow_core::game::BuildingKind::MilitaryCamp,
+                "sam" => sow_core::game::BuildingKind::SAM,
+                "missilesilo" | "missile_silo" => sow_core::game::BuildingKind::MissileSilo,
                 _ => return None,
             };
-            prebuilt_buildings.push((kind, (*level).clamp(1, 5)));
+            prebuilt_buildings.push((kind, (*level).clamp(1, kind.max_level())));
         }
         let color = match e.color.as_deref() {
             Some(color) => parse_campaign_color(color)?,

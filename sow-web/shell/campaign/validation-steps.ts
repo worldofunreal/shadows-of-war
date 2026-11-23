@@ -429,7 +429,7 @@ export function validateSteps(context: CampaignValidationContext) {
             const triggerType = step.trigger && step.trigger.type;
             const constructionAction =
                 (triggerType === "ui" && step.trigger.action === "dock_city") ||
-                ["city", "factory", "tower"].includes(triggerType);
+                ["city", "trading_post", "tower"].includes(triggerType);
             const upgradeAction = ["building_selected", "structure_upgrade"].includes(triggerType);
             const cameraLesson =
                 ["zoom_out_complete", "camera_target", "hover", "zoom_in_complete"].includes(triggerType) ||
@@ -500,7 +500,7 @@ export function validateSteps(context: CampaignValidationContext) {
             } else if (step.paused_action === "request_resources_stay_paused") {
                 compatible = triggerType === "resource_request";
             } else if (step.paused_action === "build_until_started") {
-                compatible = ["city", "factory", "farm", "port", "tower", "sam"].includes(triggerType);
+                compatible = ["city", "trading_post", "military_camp", "port", "tower", "sam"].includes(triggerType);
             } else if (step.paused_action === "upgrade_until_started") {
                 compatible = triggerType === "structure_upgrade";
             } else if (step.paused_action === "attack_ratio_only") {
@@ -898,7 +898,7 @@ export function validateSteps(context: CampaignValidationContext) {
                     if (trigger.action === "map_menu_open" && !(step.marker && step.marker.target))
                         issue(step, "marker", "Choose whose map menu must open.");
                 } else if (trigger.type === "building_selected") {
-                    if (!["City", "Farm", "Factory", "Tower", "Port", "SAM", "MissileSilo"].includes(trigger.kind))
+                    if (!["City", "MilitaryCamp", "TradingPost", "Tower", "Port", "SAM", "MissileSilo"].includes(trigger.kind))
                         issue(step, "trigger.kind", "Choose a supported building type.");
                 } else if (trigger.type === "structure_upgrade") {
                     if (!own(STRUCTURE_LEVEL_LIMITS, trigger.kind))
@@ -921,7 +921,7 @@ export function validateSteps(context: CampaignValidationContext) {
                             "Set how close the camera must be to the zoom target.",
                         );
                 } else if (trigger.type === "structure_level") {
-                    if (!["City", "Farm", "Factory", "Tower", "Port", "SAM", "MissileSilo"].includes(trigger.kind))
+                    if (!["City", "MilitaryCamp", "TradingPost", "Tower", "Port", "SAM", "MissileSilo"].includes(trigger.kind))
                         issue(step, "trigger.kind", "Choose a supported building type.");
                     else if (
                         !Number.isInteger(trigger.value) ||

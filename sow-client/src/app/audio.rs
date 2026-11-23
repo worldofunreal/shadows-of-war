@@ -100,9 +100,9 @@ pub enum PlayerSoundType {
 pub enum BuildingSoundKind {
     City = 0,
     Tower = 1,
-    Factory = 2,
+    TradingPost = 2,
     Port = 3,
-    Farm = 4,
+    MilitaryCamp = 4,
     SAM = 5,
     MissileSilo = 6,
 }

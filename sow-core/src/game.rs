@@ -35,9 +35,11 @@ pub enum GamePhase {
 pub enum BuildingKind {
     City,
     Tower,
-    Factory,
+    #[serde(rename = "TradingPost", alias = "Factory")]
+    TradingPost,
     Port,
-    Farm,
+    #[serde(rename = "MilitaryCamp", alias = "Farm")]
+    MilitaryCamp,
     SAM,
     MissileSilo,
 }
@@ -46,17 +48,17 @@ impl BuildingKind {
     pub const ALL: [BuildingKind; 7] = [
         BuildingKind::City,
         BuildingKind::Tower,
-        BuildingKind::Factory,
+        BuildingKind::TradingPost,
         BuildingKind::Port,
-        BuildingKind::Farm,
+        BuildingKind::MilitaryCamp,
         BuildingKind::SAM,
         BuildingKind::MissileSilo,
     ];
     pub const NON_CITY: [BuildingKind; 6] = [
         BuildingKind::Tower,
-        BuildingKind::Factory,
+        BuildingKind::TradingPost,
         BuildingKind::Port,
-        BuildingKind::Farm,
+        BuildingKind::MilitaryCamp,
         BuildingKind::SAM,
         BuildingKind::MissileSilo,
     ];
@@ -69,9 +71,9 @@ impl BuildingKind {
         matches!(
             self,
             BuildingKind::Tower
-                | BuildingKind::Factory
+                | BuildingKind::TradingPost
                 | BuildingKind::Port
-                | BuildingKind::Farm
+                | BuildingKind::MilitaryCamp
                 | BuildingKind::SAM
         )
     }
@@ -80,9 +82,9 @@ impl BuildingKind {
         match self {
             BuildingKind::City => "City",
             BuildingKind::Tower => "Tower",
-            BuildingKind::Factory => "Factory",
+            BuildingKind::TradingPost => "TradingPost",
             BuildingKind::Port => "Port",
-            BuildingKind::Farm => "Farm",
+            BuildingKind::MilitaryCamp => "MilitaryCamp",
             BuildingKind::SAM => "SAM",
             BuildingKind::MissileSilo => "MissileSilo",
         }
@@ -108,9 +110,9 @@ impl BuildingKind {
         match self {
             BuildingKind::City => 20,
             BuildingKind::Tower => 50,
-            BuildingKind::Factory => 35,
+            BuildingKind::TradingPost => 35,
             BuildingKind::Port => 30,
-            BuildingKind::Farm => 25,
+            BuildingKind::MilitaryCamp => 25,
             BuildingKind::SAM => 90,
             BuildingKind::MissileSilo => 100,
         }
@@ -143,7 +145,7 @@ impl NukeKind {
     }
 }
 
-/// Strategic production queued at an eligible Port, Factory, or Tower.
+/// Strategic production queued at an eligible Port, TradingPost, or Tower.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum CityArsenalKind {

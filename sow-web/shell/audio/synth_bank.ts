@@ -13,7 +13,7 @@
  * when the `AudioContext` boots (~20–35 ms total via recursive phasor math, ~2.8 MB RAM):
  *
  *   1. Tactile Foley Micro-Buffers (pitch-shiftable at runtime via `playbackRate`):
- *        - `woodThock[3]`   Carved rosewood / oak / marimba mallet strikes (UI clicks, ports, farms)
+ *        - `woodThock[3]`   Carved rosewood / oak / marimba mallet strikes (UI clicks, ports, military_camps)
  *        - `stoneClick[2]`  Polished marble / granite latches (confirm buttons, towers, masonry)
  *        - `brassLatch[2]`  Multi-bounce machined brass switches (radials, SAM, silo arming)
  *        - `goldCoin[3]`    Measured metal-disc eigenmodes with beating doublets + tumble bounce

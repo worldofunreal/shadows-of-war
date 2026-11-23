@@ -31,10 +31,10 @@ fn building_demolition_tier_and_radius(kind: BuildingKind, level: u8) -> (f32, f
     let lvl = level.max(1) as f32;
     match kind {
         BuildingKind::City | BuildingKind::MissileSilo => (2.0, (6.8 + lvl * 0.85).min(10.5)),
-        BuildingKind::Port | BuildingKind::SAM | BuildingKind::Factory => {
+        BuildingKind::Port | BuildingKind::SAM | BuildingKind::TradingPost => {
             (1.0, (5.6 + lvl * 0.65).min(8.5))
         }
-        BuildingKind::Tower | BuildingKind::Farm => (0.0, (4.6 + lvl * 0.50).min(6.8)),
+        BuildingKind::Tower | BuildingKind::MilitaryCamp => (0.0, (4.6 + lvl * 0.50).min(6.8)),
     }
 }
 
@@ -1022,7 +1022,7 @@ mod tests {
             },
             BuildingSnapshot {
                 id: 2,
-                kind: BuildingKind::Factory,
+                kind: BuildingKind::TradingPost,
                 tile_idx: city_tile,
                 owner_id: 2,
                 level: 1,

@@ -1786,10 +1786,10 @@ impl SowEngine {
                         _ => 1.0,
                     });
 
-            let factory_raid = self.state.config.buildings_enabled
+            let trading_post_raid = self.state.config.buildings_enabled
                 && execution.target_owner != 0
                 && self.state.player(execution.owner_id).is_some_and(|player| {
-                    matches!(player.leader.ability(), Ability::FactoryRaid { .. })
+                    matches!(player.leader.ability(), Ability::TradingPostRaid { .. })
                 });
 
             let mut stale_pops = 0u32;
@@ -2294,26 +2294,26 @@ impl SowEngine {
                         );
                     }
 
-                    if factory_raid
+                    if trading_post_raid
                         && self
                             .building_grid
                             .iter_non_city_in_range(target_tile.x, target_tile.y, 0)
                             .any(|entry| {
-                                entry.kind == crate::game::BuildingKind::Factory
+                                entry.kind == crate::game::BuildingKind::TradingPost
                                     && entry.x == target_tile.x
                                     && entry.y == target_tile.y
                             })
-                        && let Some(factory) = self.buildings.iter().copied().find(|building| {
-                            building.kind == crate::game::BuildingKind::Factory
+                        && let Some(trading_post) = self.buildings.iter().copied().find(|building| {
+                            building.kind == crate::game::BuildingKind::TradingPost
                                 && building.owner_id == execution.target_owner
                                 && u64::from(building.tile_idx) == tile_idx
                         })
                     {
-                        crate::execution::hero_effects::raid_captured_factory(
+                        crate::execution::hero_effects::raid_captured_trading_post(
                             &mut self.state,
                             &mut self.hero_claims,
                             execution,
-                            factory,
+                            trading_post,
                         );
                     }
 

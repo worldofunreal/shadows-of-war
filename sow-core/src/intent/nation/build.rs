@@ -7,7 +7,7 @@ use crate::rng::NextIntExt;
 use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind};
 use super::structures::{
     PLACEMENT_ATTEMPTS, StructureCandidates, bot_structure_target_count, cheapest_gold_cost,
-    resolve_farm_from_candidates, resolve_structure_from_candidates, stack_build_decision,
+    resolve_military_camp_from_candidates, resolve_structure_from_candidates, stack_build_decision,
 };
 
 impl SowEngine {
@@ -145,7 +145,7 @@ impl SowEngine {
                         return;
                     }
                     let economy_priority_gap = slot.policy().prioritizes_economy_buildings
-                        && [BuildingKind::City, BuildingKind::Factory, BuildingKind::Farm]
+                        && [BuildingKind::City, BuildingKind::TradingPost, BuildingKind::MilitaryCamp]
                             .into_iter()
                             .any(|kind| {
                                 agg.total_structures_of_kind(kind)
@@ -154,9 +154,9 @@ impl SowEngine {
                     let mut build_order = [
                         BuildingKind::Tower,
                         BuildingKind::City,
-                        BuildingKind::Factory,
+                        BuildingKind::TradingPost,
                         BuildingKind::Port,
-                        BuildingKind::Farm,
+                        BuildingKind::MilitaryCamp,
                     ];
                     let port_target_count =
                         bot_structure_target_count(BuildingKind::Port, city_equivalent, bot_iq);
@@ -166,12 +166,12 @@ impl SowEngine {
                         if economy_priority_gap {
                             let a_unmet_economy = matches!(
                                 a,
-                                BuildingKind::City | BuildingKind::Factory | BuildingKind::Farm
+                                BuildingKind::City | BuildingKind::TradingPost | BuildingKind::MilitaryCamp
                             ) && agg.total_structures_of_kind(a)
                                 < bot_structure_target_count(a, city_equivalent, bot_iq);
                             let b_unmet_economy = matches!(
                                 b,
-                                BuildingKind::City | BuildingKind::Factory | BuildingKind::Farm
+                                BuildingKind::City | BuildingKind::TradingPost | BuildingKind::MilitaryCamp
                             ) && agg.total_structures_of_kind(b)
                                 < bot_structure_target_count(b, city_equivalent, bot_iq);
                             if a_unmet_economy != b_unmet_economy {
@@ -200,7 +200,7 @@ impl SowEngine {
                     let decisions_before_building = decisions.len();
                     for kind in build_order {
                         let Some((_, cost, _)) = self.foundation_quote(bot_id, kind) else { continue; };
-                        if kind == BuildingKind::Factory && agg.highest_city_level == 0 && !agg.has_completed_port {
+                        if kind == BuildingKind::TradingPost && agg.highest_city_level == 0 && !agg.has_completed_port {
                             continue;
                         }
                         let owned = agg.total_structures_of_kind(kind);
@@ -217,9 +217,9 @@ impl SowEngine {
                         }
                         let all_structures = agg.count_city
                             + agg.count_tower
-                            + agg.count_factory
+                            + agg.count_trading_post
                             + agg.count_port
-                            + agg.count_farm
+                            + agg.count_military_camp
                             + agg.count_sam;
                         let density = all_structures as f32 / player_tile_count.max(1) as f32;
                         let is_density_high = bot_iq >= 110 && density > 1.0 / 600.0;
@@ -292,8 +292,8 @@ impl SowEngine {
                                 border: &border_candidates,
                                 interior: &interior_candidates,
                             };
-                            let target_tile = if kind == BuildingKind::Farm && self.legacy_building_rules {
-                                resolve_farm_from_candidates(
+                            let target_tile = if kind == BuildingKind::MilitaryCamp && self.legacy_building_rules {
+                                resolve_military_camp_from_candidates(
                                     &self.state.map,
                                     bot_id,
                                     candidates,

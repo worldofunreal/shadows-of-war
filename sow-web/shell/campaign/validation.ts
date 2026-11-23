@@ -125,8 +125,8 @@ export function validate(
         const EPISODE_MAPS: Record<string, [string, number, number]> = {
             tactics_01_expand: ["europe", 1600, 920],
             tactics_02_ask_ally: ["bajacalifornia", 1356, 1600],
-            tactics_03_farm_vs_city: ["europe", 1600, 920],
-            tactics_04_factory_gold: ["southeastasia", 1600, 952],
+            tactics_03_military_camp_vs_city: ["europe", 1600, 920],
+            tactics_04_trading_post_gold: ["southeastasia", 1600, 952],
             boudica: ["eastanglia", 1600, 900],
             six_sky_maya_01: ["yucatan_peninsula", 520, 800],
         };
@@ -306,7 +306,10 @@ export function validate(
                     "Troop loot bonus must be an integer from 0 to 1,000,000.",
                 );
             if (faction.prebuilt_buildings != null) {
-                const validKinds = new Set(["city", "tower", "defense_tower", "factory", "port", "farm"]);
+                const limits: Record<string, number> = {
+                    city: 8, tower: 8, defense_tower: 8, trading_post: 8, factory: 8,
+                    port: 8, military_camp: 8, farm: 8, sam: 4, missilesilo: 4, missile_silo: 4,
+                };
                 const validList =
                     Array.isArray(faction.prebuilt_buildings) &&
                     faction.prebuilt_buildings.every(
@@ -314,10 +317,10 @@ export function validate(
                             Array.isArray(entry) &&
                             entry.length === 2 &&
                             typeof entry[0] === "string" &&
-                            validKinds.has(entry[0].trim().toLowerCase()) &&
+                            Object.hasOwn(limits, entry[0].trim().toLowerCase()) &&
                             Number.isInteger(entry[1]) &&
                             Number(entry[1]) >= 1 &&
-                            Number(entry[1]) <= 5,
+                            Number(entry[1]) <= limits[entry[0].trim().toLowerCase()],
                     );
                 if (!validList) {
                     issue(

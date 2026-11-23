@@ -162,12 +162,12 @@ impl SowEngine {
         };
         let prize = 45.0 * f64::from(agg.count_city)
             + 25.0 * f64::from(agg.city_levels)
-            + 35.0 * f64::from(agg.count_factory)
-            + 20.0 * f64::from(agg.factory_levels)
+            + 35.0 * f64::from(agg.count_trading_post)
+            + 20.0 * f64::from(agg.trading_post_levels)
             + 30.0 * f64::from(agg.count_port)
             + 15.0 * f64::from(agg.port_levels)
-            + 20.0 * f64::from(agg.count_farm)
-            + 10.0 * f64::from(agg.farm_levels);
+            + 20.0 * f64::from(agg.count_military_camp)
+            + 10.0 * f64::from(agg.military_camp_levels);
         (prize, agg.tower_levels)
     }
 
@@ -2084,9 +2084,9 @@ impl SowEngine {
             let mut score = match b.kind {
                 BuildingKind::City => 25000.0 + 10000.0 * (b.active_level() as f64),
                 BuildingKind::Tower => 5000.0 * (b.level as f64),
-                BuildingKind::Factory => 15000.0 * (b.level as f64),
+                BuildingKind::TradingPost => 15000.0 * (b.level as f64),
                 BuildingKind::Port => 10000.0 * (b.level as f64),
-                BuildingKind::Farm => 7000.0 * (b.level as f64),
+                BuildingKind::MilitaryCamp => 7000.0 * (b.level as f64),
                 BuildingKind::SAM | BuildingKind::MissileSilo => 4500.0 * (b.level as f64),
             };
 

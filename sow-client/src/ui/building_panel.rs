@@ -147,20 +147,20 @@ pub(crate) fn building_metrics(
             ];
             metrics
         }
-        BuildingKind::Factory => {
+        BuildingKind::TradingPost => {
             let mut metrics = vec![BuildingMetric::new(
                 Icon::Gold,
-                config.factory_gold_income
-                    * sow_core::building::factory_gold_level_weight(level as u8)
-                    * hero(District::Factory, Resource::Gold)
+                config.trading_post_gold_income
+                    * sow_core::building::trading_post_gold_level_weight(level as u8)
+                    * hero(District::TradingPost, Resource::Gold)
                     * per_second,
                 "+",
                 "/s",
             )];
-            if let Some(bonus) = hero_bonus(District::Factory, Resource::Troops) {
+            if let Some(bonus) = hero_bonus(District::TradingPost, Resource::Troops) {
                 metrics.push(BuildingMetric::new(
                     Icon::Troops,
-                    config.hero_factory_troop_income * level * bonus * per_second,
+                    config.hero_trading_post_troop_income * level * bonus * per_second,
                     "+",
                     "/s",
                 ));
@@ -193,12 +193,12 @@ pub(crate) fn building_metrics(
             ];
             stats
         }
-        BuildingKind::Farm => vec![
+        BuildingKind::MilitaryCamp => vec![
             BuildingMetric::new(
                 Icon::Troops,
-                config.farm_troop_income
-                    * sow_core::building::farm_troop_level_weight(level as u8)
-                    * hero(District::Farm, Resource::Troops)
+                config.military_camp_troop_income
+                    * sow_core::building::military_camp_troop_level_weight(level as u8)
+                    * hero(District::MilitaryCamp, Resource::Troops)
                     * per_second,
                 "+",
                 "/s",
@@ -426,11 +426,11 @@ impl crate::app::SowApp {
         let mut current = building_metrics(building.kind, level, leader, config);
         let seconds = |ticks: u32| f64::from(ticks) * config.tick_rate_ms as f64 / 1000.0;
         let mut next = building_metrics(building.kind, level.saturating_add(1), leader, config);
-        let trade_route = if building.kind == BuildingKind::Factory {
+        let trade_route = if building.kind == BuildingKind::TradingPost {
             snapshot.railway_links.binary_search_by_key(&building.id, |route| route.from_building_id)
                 .ok().map(|i| snapshot.railway_links[i]).filter(|route| !route.blocked)
         } else { None };
-        if building.kind == BuildingKind::Factory && trade_route.is_none() {
+        if building.kind == BuildingKind::TradingPost && trade_route.is_none() {
             for metrics in [&mut current, &mut next] {
                 metrics.retain(|metric| metric.icon != Icon::Gold);
             }

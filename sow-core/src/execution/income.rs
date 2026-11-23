@@ -194,7 +194,7 @@ impl SowEngine {
                 .copied().unwrap_or(0.0);
             let gold_income = config.per_tick(passive_rate) + if land_trade_rate > 0.0 {
                 delivered * (combined_rate - passive_rate).max(0.0)
-                    / (agg.land_trade_income_weight * config.factory_gold_income)
+                    / (agg.land_trade_income_weight * config.trading_post_gold_income)
             } else { 0.0 };
             self.state.players[idx].credit_gold(gold_income);
 

@@ -663,7 +663,7 @@ mod tests {
             id: 101,
             tile_idx: inside_tile,
             owner_id: 2,
-            kind: crate::game::BuildingKind::Factory,
+            kind: crate::game::BuildingKind::TradingPost,
             level: 4,
             under_construction: false,
             ticks_until_complete: 0,

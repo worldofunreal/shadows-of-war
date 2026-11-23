@@ -125,9 +125,9 @@ export type AudioCueId = (typeof AudioCue)[keyof typeof AudioCue];
 export const BuildingAudioKind = {
     City: 0,
     Tower: 1,
-    Factory: 2,
+    TradingPost: 2,
     Port: 3,
-    Farm: 4,
+    MilitaryCamp: 4,
     SAM: 5,
     MissileSilo: 6,
 } as const;

@@ -1573,7 +1573,7 @@ mod bot_iq_alliance_tests {
                 id: 102,
                 owner_id: 2,
                 tile_idx: 2,
-                kind: BuildingKind::Factory,
+                kind: BuildingKind::TradingPost,
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
@@ -1797,7 +1797,7 @@ mod bot_iq_alliance_tests {
         assert!(matches!(
             first_build.first().map(|decision| &decision.intent),
             Some(GameplayIntent::BuildStructure {
-                kind: BuildingKind::City | BuildingKind::Factory | BuildingKind::Farm,
+                kind: BuildingKind::City | BuildingKind::TradingPost | BuildingKind::MilitaryCamp,
                 ..
             })
         ));
@@ -1980,7 +1980,7 @@ mod bot_iq_alliance_tests {
         assert_eq!(bot_structure_target_count(BuildingKind::City, 10, 85), 1);
         assert_eq!(bot_structure_target_count(BuildingKind::Tower, 10, 85), 0);
         // Mid IQ: 50% of high-IQ quotas, deterministic floor
-        assert_eq!(bot_structure_target_count(BuildingKind::Factory, 8, 110), 2);
+        assert_eq!(bot_structure_target_count(BuildingKind::TradingPost, 8, 110), 2);
         // High IQ: full quotas
         assert_eq!(bot_structure_target_count(BuildingKind::Port, 10, 140), 3);
     }
@@ -2022,7 +2022,7 @@ mod bot_iq_alliance_tests {
             id: 2,
             owner_id: 1,
             tile_idx: city_tile,
-            kind: BuildingKind::Factory,
+            kind: BuildingKind::TradingPost,
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
@@ -2033,7 +2033,7 @@ mod bot_iq_alliance_tests {
             &crate::protocol::StampedIntent {
                 player_id: 1,
                 intent: crate::protocol::GameplayIntent::BuildStructure {
-                    kind: BuildingKind::Factory,
+                    kind: BuildingKind::TradingPost,
                     target_tile: city_tile,
                 },
             },

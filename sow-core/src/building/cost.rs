@@ -23,9 +23,9 @@ pub fn structure_build_cost_gold(kind: BuildingKind, count: u32, cfg: &GameConfi
     let base_cost = match kind {
         BuildingKind::City => cfg.cost_city,
         BuildingKind::Tower => cfg.cost_tower,
-        BuildingKind::Factory => cfg.cost_factory,
+        BuildingKind::TradingPost => cfg.cost_trading_post,
         BuildingKind::Port => cfg.cost_port,
-        BuildingKind::Farm => cfg.cost_farm,
+        BuildingKind::MilitaryCamp => cfg.cost_military_camp,
         BuildingKind::SAM => cfg.cost_sam,
         BuildingKind::MissileSilo => 375.0,
     };
@@ -45,8 +45,8 @@ pub fn structure_upgrade_cost_gold(
     }
     let prices: &[f64] = match kind {
         BuildingKind::City => &[115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0, 100_000.0],
-        BuildingKind::Farm => &[125.0, 190.0, 280.0, 360.0, 460.0, 590.0, 750.0],
-        BuildingKind::Factory => &[125.0, 165.0, 220.0, 295.0, 390.0, 520.0, 690.0],
+        BuildingKind::MilitaryCamp => &[125.0, 190.0, 280.0, 360.0, 460.0, 590.0, 750.0],
+        BuildingKind::TradingPost => &[125.0, 165.0, 220.0, 295.0, 390.0, 520.0, 690.0],
         BuildingKind::Port => &[130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0, 100_000.0],
         BuildingKind::Tower => &[100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0, 80_000.0],
         BuildingKind::SAM => &[250.0, 285.0, 325.0],
@@ -300,7 +300,7 @@ mod tests {
 
     #[test]
     fn building_lines_have_eight_levels_and_nuclear_structures_have_four() {
-        for kind in [BuildingKind::City, BuildingKind::Tower, BuildingKind::Port, BuildingKind::Farm, BuildingKind::Factory] {
+        for kind in [BuildingKind::City, BuildingKind::Tower, BuildingKind::Port, BuildingKind::MilitaryCamp, BuildingKind::TradingPost] {
             assert_eq!(kind.max_level(), 8);
         }
         for kind in [BuildingKind::SAM, BuildingKind::MissileSilo] {
@@ -314,9 +314,9 @@ mod tests {
         for (kind, expected) in [
             (BuildingKind::City, 100.0),
             (BuildingKind::Tower, 70.0),
-            (BuildingKind::Factory, 95.0),
+            (BuildingKind::TradingPost, 95.0),
             (BuildingKind::Port, 110.0),
-            (BuildingKind::Farm, 105.0),
+            (BuildingKind::MilitaryCamp, 105.0),
             (BuildingKind::SAM, 350.0),
             (BuildingKind::MissileSilo, 375.0),
         ] {
@@ -329,8 +329,8 @@ mod tests {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
             (BuildingKind::City, vec![115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0, 100_000.0]),
-            (BuildingKind::Farm, vec![125.0, 190.0, 280.0, 360.0, 460.0, 590.0, 750.0]),
-            (BuildingKind::Factory, vec![125.0, 165.0, 220.0, 295.0, 390.0, 520.0, 690.0]),
+            (BuildingKind::MilitaryCamp, vec![125.0, 190.0, 280.0, 360.0, 460.0, 590.0, 750.0]),
+            (BuildingKind::TradingPost, vec![125.0, 165.0, 220.0, 295.0, 390.0, 520.0, 690.0]),
             (BuildingKind::Port, vec![130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0, 100_000.0]),
             (BuildingKind::Tower, vec![100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0, 80_000.0]),
             (BuildingKind::SAM, vec![250.0, 285.0, 325.0]),

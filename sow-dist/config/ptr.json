@@ -52,7 +52,7 @@
   "buildings_enabled": true,
   "elimination_troop_bounty": 1000.0,
   "hero_city_gold_income": 1.1428571428571428,
-  "hero_factory_troop_income": 275.0,
+  "hero_trading_post_troop_income": 275.0,
   "hero_port_troop_income": 275.0,
   "map_control_win_percentage": 0.75,
   "max_tiles_per_tick": 4096.0,

@@ -252,6 +252,31 @@
    "territory_color": "#289494"
   },
   {
+   "id": "kinichil_kab",
+   "name": "K'inichil Kab",
+   "entity": "Naranjo Frontier",
+   "role": "nation",
+   "region": "americas",
+   "lat": 17.08,
+   "lon": -89.05,
+   "gender": "male",
+   "avatar": "kinichil_kab",
+   "hero": {
+    "enabled": false,
+    "rarity": "common",
+    "price_crowns": 500,
+    "name": "K'inichil Kab",
+    "ability": {
+     "kind": "attack_strength",
+     "against": "smaller",
+     "percent": 25
+    },
+    "card": "sow-kinichil-kab",
+    "art_slug": "kinichil_kab"
+   },
+   "territory_color": "#bd6257"
+  },
+  {
    "id": "leonidas",
    "name": "Leonidas",
    "entity": "Sparta",
@@ -8009,7 +8034,7 @@
     "name": "Semiramis",
     "ability": {
      "kind": "resource_bonus",
-     "source": {"district": "farm"},
+     "source": {"district": "military_camp"},
      "resource": "gold",
      "percent": 25
     }
@@ -8148,7 +8173,7 @@
     "name": "Nezahualcóyotl",
     "ability": {
      "kind": "resource_bonus",
-     "source": {"district": "factory"},
+     "source": {"district": "trading_post"},
      "resource": "gold",
      "percent": 50
     }
@@ -8403,7 +8428,7 @@
     "name": "Ramesses II",
     "ability": {
      "kind": "resource_bonus",
-     "source": {"district": "factory"},
+     "source": {"district": "trading_post"},
      "resource": "troops",
      "percent": 25
     }
@@ -9431,7 +9456,7 @@
     "ability": {
      "kind": "resource_bonus",
      "source": {
-      "district": "farm"
+      "district": "military_camp"
      },
      "resource": "troops",
      "percent": 25
@@ -9479,7 +9504,7 @@
     "price_crowns": 798,
     "name": "Natavan",
     "ability": {
-     "kind": "city_farm_founding"
+     "kind": "city_military_camp_founding"
     },
     "legacy_ids": ["Khurshid Banu Natavan"]
    },
@@ -9678,7 +9703,7 @@
     "price_crowns": 476,
     "name": "Nefertiti",
     "ability": {
-     "kind": "factory_city_upgrade_discount",
+     "kind": "trading_post_city_upgrade_discount",
      "percent": 35
     },
     "art_slug": "nefertiti_egypt"
@@ -9701,7 +9726,7 @@
     "price_crowns": 502,
     "name": "Spartacus",
     "ability": {
-     "kind": "factory_raid",
+     "kind": "trading_post_raid",
      "troops_per_level": 300
     }
    },

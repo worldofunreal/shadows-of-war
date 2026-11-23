@@ -170,7 +170,7 @@ impl PlacementError {
             Self::OwnLand => "hud.build_owned_land",
             Self::Occupied => "hud.build_occupied",
             Self::CoastRequired => "hud.build_coast_required",
-            Self::LowlandRequired => "hud.build_lowland_required",
+            Self::LowlandRequired => "hud.build_military_camp_lowland_required",
             Self::CityRequired => "hud.build_occupied",
         }
     }
