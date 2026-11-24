@@ -2430,7 +2430,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "        </div>" +
       "      </div>" +
       '      <div class="sow-hud__buildings-strip" id="sow-hud-buildings-strip">' +
-      ["City", "MilitaryCamp", "TradingPost", "Port", "Tower", "SAM", "MissileSilo"].map((kind, index) => {
+      ["City", "TradingPost", "Port", "Tower", "SAM", "MissileSilo"].map((kind, index) => {
         const hotkey = index + 1;
         return '<button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="' +
           kind + '" aria-label="' + escapeHudText(SOW_t("hud.map_action_" + (kind.toLowerCase() === "militarycamp" ? "military_camp" : kind.toLowerCase() === "tradingpost" ? "trading_post" : kind.toLowerCase()))) +

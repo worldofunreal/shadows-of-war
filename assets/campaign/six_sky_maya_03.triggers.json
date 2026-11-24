@@ -57,7 +57,7 @@
       "dim_outside": true,
       "unlocks": {
         "buildings": {
-          "MilitaryCamp": 2
+          "City": 2
         }
       },
       "host": {
@@ -68,12 +68,12 @@
       },
       "trigger": {
         "type": "ui",
-        "action": "dock_military_camp",
+        "action": "dock_city",
         "scope": "step"
       },
       "guide": {
         "kind": "ui",
-        "target": "dock_military_camp",
+        "target": "dock_city",
         "gesture": "tap"
       },
       "next": "six_sky_maya_03_build_camp"
@@ -84,7 +84,7 @@
       "title_key": "tutorial.campaign_six_sky_maya_03_camp_build_title",
       "hint_key": "tutorial.campaign_six_sky_maya_03_camp_build_hint",
       "trigger": {
-        "type": "military_camp",
+        "type": "city",
         "value": 1,
         "scope": "total"
       },

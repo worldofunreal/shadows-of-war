@@ -58,7 +58,6 @@
       "unlocks": {
         "buildings": {
           "TradingPost": 4,
-          "MilitaryCamp": 2,
           "City": 1
         }
       },

@@ -59,7 +59,6 @@
         "buildings": {
           "Tower": 4,
           "TradingPost": 4,
-          "MilitaryCamp": 2,
           "City": 2
         }
       },
