@@ -3576,10 +3576,38 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         }).collect::<Vec<_>>();
         (kind.as_str(), prices)
     }).collect::<std::collections::BTreeMap<_, _>>();
+    let building_alternatives = sow_core::game::BuildingKind::ALL.into_iter().map(|kind| {
+        let alternatives = (1..=kind.max_level()).map(|level| {
+            if level == 1 {
+                return 0;
+            }
+            let mut remaining = sow_core::building::structure_upgrade_cost_gold(
+                kind, level, u32::from(level - 1), &config,
+            );
+            let mut built_levels = u32::from(level - 1);
+            let mut count = 0;
+            loop {
+                let cost = sow_core::building::structure_build_cost_gold(kind, built_levels, &config);
+                if cost > remaining + 1e-9 {
+                    break;
+                }
+                remaining -= cost;
+                built_levels = built_levels.saturating_add(1);
+                count += 1;
+            }
+            count
+        }).collect::<Vec<_>>();
+        (kind.as_str(), alternatives)
+    }).collect::<std::collections::BTreeMap<_, _>>();
     use sow_core::{building, game::BuildingKind};
+    let credited_rate = |base: f64, contribution: f64, cap: f64, excess: f64| {
+        let credited = |rate| {
+            sow_core::execution::income_rates::diminishing_passive_income(rate, cap, excess)
+        };
+        (credited(base + contribution) - credited(base)).max(0.0) * config.global_speed_multiplier
+    };
     let building_effects = BuildingKind::ALL.into_iter().map(|kind| {
         let tiers = (1..=kind.max_level()).map(|level| {
-            let speed = config.global_speed_multiplier;
             let troop_capacity = if kind.grants_building_troop_capacity() {
                 config.district_max_troops * building::district_capacity_level_weight(level)
             } else {
@@ -3588,18 +3616,44 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
             match kind {
                 BuildingKind::City => serde_json::json!({
                     "reserve": config.city_max_troops * building::city_capacity_level_weight(level),
-                    "troops": config.city_troop_income * speed * building::income_level_weight(level.min(4)),
-                    "gold": config.city_gold_income * speed * building::income_level_weight(level.min(4)),
+                    "troops": credited_rate(
+                        config.troop_base_income,
+                        config.city_troop_income * building::city_income_level_weight(level),
+                        sow_core::execution::income_rates::TROOP_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::TROOP_PASSIVE_EXCESS_RATE,
+                    ),
+                    "gold": credited_rate(
+                        config.gold_base_income,
+                        config.city_gold_income * building::city_gold_level_weight(level),
+                        sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
+                    ),
                     "reinforcements": building::city_upgrade_reinforcements(level, config.city_max_troops),
                 }),
                 BuildingKind::MilitaryCamp => serde_json::json!({
-                    "troops": config.military_camp_troop_income * speed * building::military_camp_troop_level_weight(level),
+                    "troops": credited_rate(
+                        config.troop_base_income,
+                        config.military_camp_troop_income * building::military_camp_troop_level_weight(level),
+                        sow_core::execution::income_rates::TROOP_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::TROOP_PASSIVE_EXCESS_RATE,
+                    ),
+                    "gold": credited_rate(
+                        config.gold_base_income,
+                        config.military_camp_gold_income * building::military_camp_gold_level_weight(level),
+                        sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
+                    ),
                     "capture": (building::camp_conquest_multiplier(config.camp_capture_base_points.max(0.0) * building::camp_capture_level_weight(level)) - 1.0) * 100.0,
                     "reserve": troop_capacity,
                 }),
                 BuildingKind::TradingPost => serde_json::json!({
-                    "trade": config.trading_post_gold_income * speed * building::trading_post_gold_level_weight(level),
-                    "travel": building::trading_post_gold_level_weight(level).sqrt(),
+                    "trade": credited_rate(
+                        config.gold_base_income,
+                        config.trading_post_gold_income * building::trading_post_gold_level_weight(level),
+                        sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
+                    ),
+                    "travel": building::trading_post_speed_multiplier(level),
                     "reserve": troop_capacity,
                 }),
                 BuildingKind::Tower => serde_json::json!({
@@ -3612,9 +3666,19 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
                     "fleet": building::port_fleet_slots(level),
                     "docks": building::port_dock_capacity(level),
                     "repair": building::port_repair_per_second(level),
-                    "speed": f64::from(level),
-                    "gold": config.port_gold_income * speed * building::port_income_level_weight(level),
-                    "troops": config.port_troop_income * speed * building::port_income_level_weight(level),
+                    "speed": building::boat_speed_bonus_from_port_levels(u32::from(level)) * 100.0,
+                    "gold": credited_rate(
+                        config.gold_base_income,
+                        config.port_gold_income * building::port_income_level_weight(level),
+                        sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
+                    ),
+                    "troops": credited_rate(
+                        config.troop_base_income,
+                        config.port_troop_income * building::port_income_level_weight(level),
+                        sow_core::execution::income_rates::TROOP_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::TROOP_PASSIVE_EXCESS_RATE,
+                    ),
                     "reserve": troop_capacity,
                 }),
                 BuildingKind::SAM => {
@@ -3636,7 +3700,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         }).collect::<Vec<_>>();
         (kind.as_str(), tiers)
     }).collect::<std::collections::BTreeMap<_, _>>();
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "origin": site::current().origin(), "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "buildingPrices": building_prices, "buildingEffects": building_effects, "localPreview": paths.is_local_preview() }))?;
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "origin": site::current().origin(), "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "buildingPrices": building_prices, "buildingEffects": building_effects, "buildingAlternatives": building_alternatives, "localPreview": paths.is_local_preview() }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,

@@ -71,6 +71,7 @@ export async function publish(
     mapExplorer: string;
     buildingPrices?: Record<string, number[]>;
     buildingEffects?: Record<string, Record<string, number>[]>;
+    buildingAlternatives?: Record<string, number[]>;
   },
   source = import.meta.dir,
 ) {
@@ -227,6 +228,10 @@ export async function publish(
           .map(([key, value]) => `<li><span>${escape(copy.stats[key])}</span><strong>${format.format(value)}</strong><small>+${format.format(Number(value) - Number(previous[key] ?? 0))} ${escape(copy.thisLevel)}</small></li>`)
           .join("");
         const stepPrice = input.buildingPrices?.[kind]?.[index] ?? 0;
+        const alternativeCount = input.buildingAlternatives?.[kind]?.[index] ?? 0;
+        const alternative = level > 1 && alternativeCount > 0
+          ? `<small class="building-tier-alternative"><span>${escape(copy.sameGold)}</span><strong>N1 × ${format.format(alternativeCount)}</strong></small>`
+          : "";
         const priceLabel = level === 1 ? copy.build : copy.upgrade;
         const reinforcement = Number(current.reinforcements ?? 0);
         const immediate = reinforcement > 0
@@ -239,7 +244,7 @@ export async function publish(
             : kind === "City" && level === 6
               ? `<span class="building-guide-unlock">${escape(copy.industrial)}</span>`
               : "";
-        return `<li class="building-tier-card"><article><header class="building-tier-heading"><span class="building-tier-level">N${level}</span>${icon}<span class="building-tier-title"><strong>${escape(name)}</strong><small>${escape(era)}</small></span></header><div class="building-tier-price"><span>${escape(priceLabel)}</span><strong>${format.format(stepPrice)} <small>${escape(copy.gold)}</small></strong><small>${escape(copy.invested)}: ${format.format(cumulativePrice)}</small></div>${effects ? `<ul class="building-tier-effects">${effects}</ul>` : ""}${immediate || unlocks ? `<div class="building-tier-unlocks">${immediate}${unlocks}</div>` : ""}</article></li>`;
+        return `<li class="building-tier-card"><article><header class="building-tier-heading"><span class="building-tier-level">N${level}</span>${icon}<span class="building-tier-title"><strong>${escape(name)}</strong><small>${escape(era)}</small></span></header><div class="building-tier-price"><span>${escape(priceLabel)}</span><strong>${format.format(stepPrice)} <small>${escape(copy.gold)}</small></strong><small>${escape(copy.invested)}: ${format.format(cumulativePrice)}</small>${alternative}</div>${effects ? `<ul class="building-tier-effects">${effects}</ul>` : ""}${immediate || unlocks ? `<div class="building-tier-unlocks">${immediate}${unlocks}</div>` : ""}</article></li>`;
       }).join("");
       const lineName = translate("hud.map_action_" + lineTranslation[kind]);
       return `<section class="building-line-section" id="${kind.toLowerCase()}" aria-labelledby="building-title-${kind.toLowerCase()}"><header class="building-line-heading"><h2 id="building-title-${kind.toLowerCase()}">${escape(lineName)}</h2><p>${escape(buildingRole(kind, locale))}</p></header><ol class="building-tier-grid">${rows}</ol></section>`;

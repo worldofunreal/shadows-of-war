@@ -161,8 +161,8 @@ type PageLocale = {
   upgrade: string;
   invested: string;
   thisLevel: string;
+  sameGold: string;
   immediate: string;
-  road: string;
   route: string;
   railway: string;
   industrial: string;
@@ -176,7 +176,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "troop capacity", troops: "troops/s", reinforcements: "reinforcements", capture: "% conquest speed", trade: "gold/s on an active land route", travel: "× trade delivery frequency", range: "tiles of range", resistance: "capture resistance weight", fleet: "fleet slots", docks: "docks", repair: "repair/s", charges: "charges", gold: "gold/s", speed: "ship speed bonus", defense: "troop loss reduction", fire_rate: "interceptors/min" },
     intro: "New buildings start at N1. Industrial City N6 unlocks SAM batteries and missile silos.",
     note: "Prices are for one building: construction at N1, then each upgrade and total invested. Income uses Normal speed; effects show the tier total and its added benefit.",
-    level: "Level", era: "Era", build: "Build", upgrade: "Upgrade", invested: "invested", thisLevel: "added this level", immediate: "Immediate reinforcements",
+    level: "Level", era: "Era", build: "Build", upgrade: "Upgrade", invested: "invested", thisLevel: "added this level", sameGold: "Same budget", immediate: "Immediate reinforcements",
     route: "Trading Posts connect to any nearby owned building from N1; land trade income requires a valid connected route.", railway: "Roads upgrade by era: dirt tracks (N1), stone roads (N3), railways (N6), and high-speed maglev lines (N8).", industrial: "Industrial City N6 unlocks SAM batteries and missile silos.", nav: "Building lines",
   },
   es: {
@@ -185,7 +185,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "capacidad de tropas", troops: "tropas/s", reinforcements: "refuerzos", capture: "% de avance de conquista", trade: "oro/s con ruta terrestre activa", travel: "× frecuencia de entregas", range: "tiles de alcance", resistance: "resistencia a captura", fleet: "plazas de flota", docks: "atraques", repair: "reparación/s", charges: "cargas", gold: "oro/s", speed: "bono de velocidad naval", defense: "reducción de pérdidas de tropas", fire_rate: "interceptores/min" },
     intro: "Los edificios nuevos empiezan en N1. La Ciudad Industrial N6 desbloquea las baterías SAM y los silos.",
     note: "Precios para un edificio: construcción en N1, costo de cada mejora y total invertido. Ingresos a velocidad Normal; cada efecto muestra el total y lo que añade el nivel.",
-    level: "Nivel", era: "Era", build: "Construcción", upgrade: "Mejora", invested: "invertido", thisLevel: "añade este nivel", immediate: "Refuerzo inmediato",
+    level: "Nivel", era: "Era", build: "Construcción", upgrade: "Mejora", invested: "invertido", thisLevel: "añade este nivel", sameGold: "Con el mismo oro", immediate: "Refuerzo inmediato",
     route: "El Puesto comercial conecta con cualquier edificio propio cercano desde N1; el ingreso requiere una ruta terrestre conectada y válida.", railway: "Las rutas evolucionan por era: terracería (N1), calzada de piedra (N3), ferrocarril (N6) y alta velocidad (N8).", industrial: "La Ciudad Industrial N6 desbloquea baterías SAM y silos.", nav: "Líneas de edificios",
   },
   ar: {
@@ -194,7 +194,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "سعة القوات", troops: "قوات/ث", reinforcements: "تعزيزات", capture: "% سرعة الاستيلاء", trade: "ذهب/ث مع مسار بري نشط", travel: "× وتيرة التسليم التجاري", range: "مدى بالخانات", resistance: "مقاومة الاستيلاء", fleet: "سعة الأسطول", docks: "أرصفة", repair: "إصلاح/ث", charges: "شحنات", gold: "ذهب/ث", speed: "مكافأة سرعة السفن", defense: "تقليل خسائر القوات", fire_rate: "صواريخ اعتراضية/دقيقة" },
     intro: "تبدأ المباني الجديدة بالمستوى 1. تفتح المدينة الصناعية بالمستوى 6 بطاريات SAM وصوامع الصواريخ.",
     note: "الأسعار لمبنى واحد: الإنشاء عند المستوى 1، ثم تكلفة كل ترقية والإجمالي. الدخل بسرعة عادية، ويعرض كل تأثير الإجمالي وما يضيفه المستوى.",
-    level: "المستوى", era: "العصر", build: "إنشاء", upgrade: "ترقية", invested: "الإجمالي", thisLevel: "ما يضيفه المستوى", immediate: "تعزيز فوري",
+    level: "المستوى", era: "العصر", build: "إنشاء", upgrade: "ترقية", invested: "الإجمالي", thisLevel: "ما يضيفه المستوى", sameGold: "بالذهب نفسه", immediate: "تعزيز فوري",
     route: "ينشئ المركز التجاري الطرق من المستوى 1؛ ويتطلب دخل التجارة البرية مساراً صالحاً ومتصلًا.", railway: "تظهر سكك الحديد عند المستوى 6.", industrial: "تفتح المدينة الصناعية 6 بطاريات SAM وصوامع الصواريخ.", nav: "خطوط المباني",
   },
   de: {
@@ -203,7 +203,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "Truppenkapazität", troops: "Truppen/s", reinforcements: "Verstärkung", capture: "% Eroberungstempo", trade: "Gold/s bei aktiver Landroute", travel: "× Handelstransporte", range: "Reichweite in Feldern", resistance: "Eroberungswiderstand", fleet: "Flottenplätze", docks: "Liegeplätze", repair: "Reparatur/s", charges: "Ladungen", gold: "Gold/s", speed: "Schiffsgeschwindigkeitsbonus", defense: "Verringerung der Truppenverluste", fire_rate: "Abfangraketen/min" },
     intro: "Neue Gebäude beginnen auf Stufe 1. Eine Industriestadt auf Stufe 6 schaltet SAM-Batterien und Raketensilos frei.",
     note: "Preise für ein Gebäude: Bau auf Stufe 1, danach jeder Ausbau und die Gesamtsumme. Einkommen bei Normaltempo; Effekte zeigen Gesamtwert und Zuwachs.",
-    level: "Stufe", era: "Zeitalter", build: "Bau", upgrade: "Ausbau", invested: "Gesamt", thisLevel: "Zuwachs dieser Stufe", immediate: "Sofortige Verstärkung",
+    level: "Stufe", era: "Zeitalter", build: "Bau", upgrade: "Ausbau", invested: "Gesamt", thisLevel: "Zuwachs dieser Stufe", sameGold: "Für dasselbe Gold", immediate: "Sofortige Verstärkung",
     route: "Handelsposten bauen ab Stufe 1 Straßen; Handelseinkommen braucht eine gültige, verbundene Route.", railway: "Ab Stufe 6 erscheinen Eisenbahngleise.", industrial: "Industriestadt Stufe 6 schaltet SAM-Batterien und Raketensilos frei.", nav: "Gebäudelinien",
   },
   fil: {
@@ -212,7 +212,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "kapasidad ng tropa", troops: "tropa/s", reinforcements: "dagdag na tropa", capture: "% bilis ng pagsakop", trade: "ginto/s sa aktibong rutang lupa", travel: "× dalas ng kalakalan", range: "layo sa tile", resistance: "panlaban sa pagsakop", fleet: "puwesto ng plota", docks: "dungguan", repair: "ayos/s", charges: "karga", gold: "ginto/s", speed: "dagdag-bilis ng barko", defense: "pagbawas sa pagkatalo ng tropa", fire_rate: "interceptor/min" },
     intro: "Nagsisimula sa antas 1 ang mga bagong gusali. Binubuksan ng Lungsod Industriyal antas 6 ang mga SAM at silo ng misil.",
     note: "Presyo para sa isang gusali: paggawa sa antas 1, bawat upgrade at kabuuang nagastos. Kita sa Normal na bilis; ipinapakita ang kabuuan at dagdag ng antas.",
-    level: "Antas", era: "Panahon", build: "Gawa", upgrade: "Upgrade", invested: "kabuuan", thisLevel: "dagdag sa antas na ito", immediate: "Agarang dagdag na tropa",
+    level: "Antas", era: "Panahon", build: "Gawa", upgrade: "Upgrade", invested: "kabuuan", thisLevel: "dagdag sa antas na ito", sameGold: "Sa parehong ginto", immediate: "Agarang dagdag na tropa",
     route: "Gumagawa ng mga daan ang Trading Post mula antas 1; kailangan ng wastong konektadong ruta para kumita sa kalakalang panlupa.", railway: "Lilitaw ang riles sa antas 6.", industrial: "Binubuksan ng Lungsod Industriyal antas 6 ang mga SAM at silo.", nav: "Mga linya ng gusali",
   },
   fr: {
@@ -221,7 +221,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "capacité des troupes", troops: "troupes/s", reinforcements: "renforts", capture: "% vitesse de conquête", trade: "or/s avec route terrestre active", travel: "× fréquence des livraisons", range: "portée en cases", resistance: "résistance à la capture", fleet: "places de flotte", docks: "places à quai", repair: "réparation/s", charges: "charges", gold: "or/s", speed: "bonus de vitesse des navires", defense: "réduction des pertes de troupes", fire_rate: "intercepteurs/min" },
     intro: "Les nouveaux bâtiments commencent au niveau 1. La ville industrielle N6 débloque les batteries SAM et les silos.",
     note: "Prix pour un bâtiment : construction au N1, coût de chaque amélioration et total investi. Revenus à vitesse normale ; les effets montrent le total et l’apport du niveau.",
-    level: "Niveau", era: "Ère", build: "Construction", upgrade: "Amélioration", invested: "investi", thisLevel: "apport de ce niveau", immediate: "Renforts immédiats",
+    level: "Niveau", era: "Ère", build: "Construction", upgrade: "Amélioration", invested: "investi", thisLevel: "apport de ce niveau", sameGold: "Pour le même budget", immediate: "Renforts immédiats",
     route: "Les comptoirs créent des routes dès le N1 ; le revenu commercial exige une route terrestre valide et connectée.", railway: "Les voies ferrées apparaissent au N6.", industrial: "La ville industrielle N6 débloque les batteries SAM et les silos.", nav: "Lignes de bâtiments",
   },
   id: {
@@ -230,7 +230,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "kapasitas pasukan", troops: "pasukan/dtk", reinforcements: "bala bantuan", capture: "% kecepatan merebut", trade: "emas/dtk dengan rute darat aktif", travel: "× frekuensi pengiriman", range: "jangkauan petak", resistance: "ketahanan perebutan", fleet: "slot armada", docks: "dermaga", repair: "perbaikan/dtk", charges: "muatan", gold: "emas/dtk", speed: "bonus kecepatan kapal", defense: "pengurangan kehilangan pasukan", fire_rate: "interseptor/menit" },
     intro: "Bangunan baru dimulai dari level 1. Kota Industri level 6 membuka Baterai SAM dan Silo Rudal.",
     note: "Harga untuk satu bangunan: pembangunan level 1, biaya tiap upgrade, dan total investasi. Pendapatan pada kecepatan Normal; efek menunjukkan total dan tambahannya.",
-    level: "Level", era: "Era", build: "Bangun", upgrade: "Upgrade", invested: "total", thisLevel: "tambahan level ini", immediate: "Bala bantuan langsung",
+    level: "Level", era: "Era", build: "Bangun", upgrade: "Upgrade", invested: "total", thisLevel: "tambahan level ini", sameGold: "Dengan emas yang sama", immediate: "Bala bantuan langsung",
     route: "Pos Dagang membangun jalan sejak level 1; pendapatan dagang darat memerlukan rute terhubung yang valid.", railway: "Rel kereta muncul pada level 6.", industrial: "Kota Industri level 6 membuka Baterai SAM dan Silo Rudal.", nav: "Jalur bangunan",
   },
   it: {
@@ -239,7 +239,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "capacità truppe", troops: "truppe/s", reinforcements: "rinforzi", capture: "% velocità conquista", trade: "oro/s con rotta terrestre attiva", travel: "× frequenza consegne", range: "raggio in caselle", resistance: "resistenza alla conquista", fleet: "posti flotta", docks: "ormeggi", repair: "riparazione/s", charges: "cariche", gold: "oro/s", speed: "bonus velocità navale", defense: "riduzione delle perdite di truppe", fire_rate: "intercettori/min" },
     intro: "I nuovi edifici iniziano dal livello 1. La Città industriale N6 sblocca batterie SAM e silos missilistici.",
     note: "Prezzi per un edificio: costruzione al livello 1, costo di ogni upgrade e totale investito. Entrate a velocità Normale; gli effetti mostrano totale e incremento.",
-    level: "Livello", era: "Era", build: "Costruzione", upgrade: "Upgrade", invested: "investito", thisLevel: "incremento del livello", immediate: "Rinforzi immediati",
+    level: "Livello", era: "Era", build: "Costruzione", upgrade: "Upgrade", invested: "investito", thisLevel: "incremento del livello", sameGold: "Con lo stesso oro", immediate: "Rinforzi immediati",
     route: "Gli avamposti commerciali creano strade dal livello 1; il reddito richiede una rotta terrestre valida e collegata.", railway: "I binari ferroviari appaiono al livello 6.", industrial: "La Città industriale N6 sblocca batterie SAM e silos.", nav: "Linee di edifici",
   },
   ja: {
@@ -248,7 +248,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "兵力上限", troops: "兵/s", reinforcements: "即時増援", capture: "%占領速度", trade: "陸路接続中の金/s", travel: "×交易配送頻度", range: "射程マス", resistance: "占領耐性", fleet: "艦隊枠", docks: "停泊枠", repair: "修理/s", charges: "弾数", gold: "金/s", speed: "船速ボーナス", defense: "兵力損失の軽減", fire_rate: "迎撃弾/分" },
     intro: "新しい建物はレベル1から始まります。工業都市N6でSAM砲台とミサイルサイロが解放されます。",
     note: "価格は建物1つ分です。N1の建設費、各強化費、累計額を表示します。収入は通常速度、効果は累計とそのレベルの増加分です。",
-    level: "レベル", era: "時代", build: "建設", upgrade: "強化", invested: "累計", thisLevel: "このレベルの増加", immediate: "即時増援",
+    level: "レベル", era: "時代", build: "建設", upgrade: "強化", invested: "累計", thisLevel: "このレベルの増加", sameGold: "同じ予算で", immediate: "即時増援",
     route: "交易所はN1から道を作ります。陸上交易の収入には有効な接続ルートが必要です。", railway: "N6で線路が表示されます。", industrial: "工業都市N6でSAM砲台とサイロが解放されます。", nav: "建物ライン",
   },
   ko: {
@@ -257,7 +257,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "병력 수용량", troops: "병력/초", reinforcements: "즉시 증원", capture: "% 점령 속도", trade: "육상 경로 연결 시 골드/초", travel: "× 교역 배송 빈도", range: "타일 사거리", resistance: "점령 저항", fleet: "함대 슬롯", docks: "정박지", repair: "수리/초", charges: "탄약", gold: "골드/초", speed: "함선 속도 보너스", defense: "병력 손실 감소", fire_rate: "요격탄/분" },
     intro: "새 건물은 1레벨부터 시작합니다. 산업 도시 6레벨에서 SAM 포대와 미사일 사일로가 해금됩니다.",
     note: "가격은 건물 1개 기준입니다. 1레벨 건설비, 각 업그레이드 비용과 누적 비용을 표시합니다. 수입은 일반 속도, 효과는 총량과 해당 레벨의 증가량입니다.",
-    level: "레벨", era: "시대", build: "건설", upgrade: "업그레이드", invested: "누적", thisLevel: "이번 레벨 증가량", immediate: "즉시 증원",
+    level: "레벨", era: "시대", build: "건설", upgrade: "업그레이드", invested: "누적", thisLevel: "이번 레벨 증가량", sameGold: "같은 골드로", immediate: "즉시 증원",
     route: "교역소는 1레벨부터 길을 만듭니다. 육상 교역 수입에는 유효한 연결 경로가 필요합니다.", railway: "6레벨부터 철로가 표시됩니다.", industrial: "산업 도시 6레벨에서 SAM 포대와 사일로가 해금됩니다.", nav: "건물 계열",
   },
   "pt-br": {
@@ -266,7 +266,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "capacidade de tropas", troops: "tropas/s", reinforcements: "reforços", capture: "% velocidade de conquista", trade: "ouro/s com rota terrestre ativa", travel: "× frequência de entregas", range: "alcance em casas", resistance: "resistência à conquista", fleet: "vagas de frota", docks: "vagas de atracação", repair: "reparo/s", charges: "cargas", gold: "ouro/s", speed: "bônus de velocidade naval", defense: "redução de perdas de tropas", fire_rate: "interceptadores/min" },
     intro: "Novos edifícios começam no N1. Cidade Industrial N6 libera baterias SAM e silos de mísseis.",
     note: "Preços para um edifício: construção no N1, custo de cada melhoria e total investido. Renda na velocidade Normal; efeitos mostram o total e o acréscimo do nível.",
-    level: "Nível", era: "Era", build: "Construção", upgrade: "Melhoria", invested: "investido", thisLevel: "acréscimo deste nível", immediate: "Reforços imediatos",
+    level: "Nível", era: "Era", build: "Construção", upgrade: "Melhoria", invested: "investido", thisLevel: "acréscimo deste nível", sameGold: "Com o mesmo ouro", immediate: "Reforços imediatos",
     route: "Entrepostos criam estradas desde o N1; a renda comercial terrestre exige uma rota válida e conectada.", railway: "Os trilhos aparecem no N6.", industrial: "Cidade Industrial N6 libera baterias SAM e silos.", nav: "Linhas de edifícios",
   },
   ru: {
@@ -275,7 +275,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "вместимость войск", troops: "войск/с", reinforcements: "подкрепления", capture: "% скорости захвата", trade: "золота/с при активном сухопутном пути", travel: "× частота торговых доставок", range: "дальность в клетках", resistance: "сопротивление захвату", fleet: "места флота", docks: "места в доках", repair: "ремонт/с", charges: "заряды", gold: "золота/с", speed: "бонус скорости флота", defense: "снижение потерь войск", fire_rate: "перехватчиков/мин" },
     intro: "Новые здания начинаются с уровня 1. Индустриальный город 6-го уровня открывает батареи SAM и ракетные шахты.",
     note: "Цены для одного здания: постройка уровня 1, стоимость каждого улучшения и общая сумма. Доход при обычной скорости; эффекты показывают итог и прирост уровня.",
-    level: "Уровень", era: "Эпоха", build: "Постройка", upgrade: "Улучшение", invested: "всего", thisLevel: "прирост уровня", immediate: "Мгновенное подкрепление",
+    level: "Уровень", era: "Эпоха", build: "Постройка", upgrade: "Улучшение", invested: "всего", thisLevel: "прирост уровня", sameGold: "За те же деньги", immediate: "Мгновенное подкрепление",
     route: "Торговые посты прокладывают дороги уже на 1-м уровне; для сухопутного дохода нужен действующий связанный маршрут.", railway: "Железнодорожные пути появляются на уровне 6.", industrial: "Индустриальный город 6-го уровня открывает SAM и ракетные шахты.", nav: "Линии зданий",
   },
   tr: {
@@ -284,7 +284,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "asker kapasitesi", troops: "asker/sn", reinforcements: "takviye", capture: "% fetih hızı", trade: "etkin kara rotasında altın/sn", travel: "× ticaret teslimat sıklığı", range: "kare menzili", resistance: "ele geçirilme direnci", fleet: "filo yuvası", docks: "rıhtım", repair: "onarım/sn", charges: "yük", gold: "altın/sn", speed: "gemi hızı bonusu", defense: "asker kaybı azaltma", fire_rate: "önleyici/dk" },
     intro: "Yeni binalar 1. seviyeden başlar. 6. seviye Sanayi Şehri SAM bataryalarını ve füze silolarını açar.",
     note: "Fiyatlar tek bina içindir: 1. seviye inşaatı, her yükseltme ve toplam yatırım. Gelir Normal hızda; etkiler toplamı ve seviye artışını gösterir.",
-    level: "Seviye", era: "Çağ", build: "İnşa", upgrade: "Yükseltme", invested: "toplam", thisLevel: "bu seviyenin artışı", immediate: "Anında takviye",
+    level: "Seviye", era: "Çağ", build: "İnşa", upgrade: "Yükseltme", invested: "toplam", thisLevel: "bu seviyenin artışı", sameGold: "Aynı altınla", immediate: "Anında takviye",
     route: "Ticaret Karakolları 1. seviyeden itibaren yol yapar; kara ticareti geliri için geçerli ve bağlantılı rota gerekir.", railway: "Demiryolu rayları 6. seviyede görünür.", industrial: "6. seviye Sanayi Şehri SAM ve füze silolarını açar.", nav: "Bina hatları",
   },
   vi: {
@@ -293,7 +293,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "sức chứa quân", troops: "quân/giây", reinforcements: "quân tiếp viện", capture: "% tốc độ chiếm đất", trade: "vàng/giây khi có tuyến bộ hoạt động", travel: "× tần suất giao hàng", range: "tầm theo ô", resistance: "kháng chiếm đóng", fleet: "chỗ hạm đội", docks: "chỗ neo đậu", repair: "sửa/giây", charges: "lượt", gold: "vàng/giây", speed: "tăng tốc độ tàu", defense: "giảm tổn thất quân", fire_rate: "đạn đánh chặn/phút" },
     intro: "Công trình mới bắt đầu ở cấp 1. Thành phố Công nghiệp cấp 6 mở khóa trận địa SAM và hầm phóng tên lửa.",
     note: "Giá cho một công trình: xây cấp 1, chi phí từng lần nâng cấp và tổng đã đầu tư. Thu nhập ở tốc độ Normal; hiệu ứng gồm tổng và phần tăng thêm.",
-    level: "Cấp", era: "Thời đại", build: "Xây", upgrade: "Nâng cấp", invested: "tổng đầu tư", thisLevel: "tăng ở cấp này", immediate: "Quân tiếp viện tức thì",
+    level: "Cấp", era: "Thời đại", build: "Xây", upgrade: "Nâng cấp", invested: "tổng đầu tư", thisLevel: "tăng ở cấp này", sameGold: "Với cùng lượng vàng", immediate: "Quân tiếp viện tức thì",
     route: "Trạm giao thương xây đường từ cấp 1; thu nhập thương mại đường bộ cần tuyến kết nối hợp lệ.", railway: "Đường ray xuất hiện từ cấp 6.", industrial: "Thành phố Công nghiệp cấp 6 mở khóa SAM và hầm phóng tên lửa.", nav: "Các dòng công trình",
   },
   "zh-cn": {
@@ -302,7 +302,7 @@ const pageLocales: Record<string, PageLocale> = {
     stats: { reserve: "兵力容量", troops: "兵力/秒", reinforcements: "即时增援", capture: "%占领速度", trade: "陆路连接生效时的金币/秒", travel: "×贸易交付频率", range: "射程格数", resistance: "抗占领权重", fleet: "舰队位", docks: "停泊位", repair: "维修/秒", charges: "弹药", gold: "金币/秒", speed: "舰船速度加成", defense: "减少部队损失", fire_rate: "拦截弹/分钟" },
     intro: "新建筑从1级开始。工业城市达到6级后解锁SAM防空炮台和导弹发射井。",
     note: "价格按单个建筑计算：1级建造、每级升级和累计投入。收入按普通速度；效果显示总值及本级增量。",
-    level: "等级", era: "时代", build: "建造", upgrade: "升级", invested: "累计投入", thisLevel: "本级增加", immediate: "即时增援",
+    level: "等级", era: "时代", build: "建造", upgrade: "升级", invested: "累计投入", thisLevel: "本级增加", sameGold: "同样的金币可建", immediate: "即时增援",
     route: "贸易站从1级开始修路；陆上贸易收入需要有效且已连接的路线。", railway: "6级开始显示铁路轨道。", industrial: "工业城市6级解锁SAM和导弹发射井。", nav: "建筑线路",
   },
 };

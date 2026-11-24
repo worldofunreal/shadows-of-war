@@ -5997,6 +5997,10 @@ html[dir="rtl"] .sow-hud__dev-play::before {
   color: #ff9485;
 }
 
+.sow-hud__building-upgrade-cost[hidden] {
+  display: none;
+}
+
 .sow-hud__building-upgrade-meta-icon {
   display: block;
   width: 13px;

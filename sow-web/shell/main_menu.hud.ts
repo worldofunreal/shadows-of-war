@@ -3534,6 +3534,16 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     building: HudMapMenuBuilding,
     availableGold: number | undefined,
   ): void {
+    const chips = Array.isArray(building.chips) ? building.chips : [];
+    for (let i = 0; i < chips.length; i++) {
+      const valueEl = menu.querySelector<HTMLElement>(
+        '[data-chip-index="' + i + '"] [data-chip-value]',
+      );
+      const nextLabel = String(chips[i]?.label || "");
+      if (valueEl && valueEl.textContent !== nextLabel) {
+        valueEl.textContent = nextLabel;
+      }
+    }
     const construction = building.construction;
     const warshipLoader = menu.querySelector<HTMLElement>("[data-port-warship-progress]");
     if (warshipLoader) {
@@ -3553,15 +3563,30 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       );
     }
     const busy = Boolean(construction || building.under_construction);
+    const upgradeBusy = Boolean(
+      construction
+        ? construction.kind !== "Warship"
+        : building.under_construction,
+    );
     if (building.production) {
       patchBuildingProductionButtons(menu, building.production, busy, availableGold);
     }
     const upgrade = building.upgrade;
     if (!upgrade) return;
+    const levelEl = menu.querySelector<HTMLElement>("[data-card-upgrade-level]");
+    if (levelEl) {
+      const nextLvlText = "Lv." + upgrade.next_level;
+      if (levelEl.textContent !== nextLvlText) levelEl.textContent = nextLvlText;
+    }
+    const ctaLvlEl = menu.querySelector<HTMLElement>("[data-building-upgrade-level]");
+    if (ctaLvlEl) {
+      const ctaLvlText = "Lv." + upgrade.next_level;
+      if (ctaLvlEl.textContent !== ctaLvlText) ctaLvlEl.textContent = ctaLvlText;
+    }
     const costVal = Math.max(0, Math.ceil(Number(upgrade.cost) || 0));
     const costText = formatHudMetric(costVal);
     const timeText = Math.max(1, Math.ceil(Number(upgrade.seconds) || 0)) + "s";
-    const enabled = Boolean(upgrade.enabled);
+    const enabled = Boolean(upgrade.enabled) && !upgradeBusy;
     const costEl = menu.querySelector<HTMLElement>("[data-building-cost]");
     if (costEl && costEl.textContent !== costText) {
       costEl.textContent = costText;
@@ -3574,17 +3599,65 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       ".sow-hud__building-upgrade-btn:not(.is-max-offer)",
     );
     if (button) {
-      button.disabled = false;
+      button.disabled = !enabled;
+      button.classList.toggle("is-busy", upgradeBusy);
       button.classList.toggle("is-locked", !enabled);
       button.setAttribute("aria-disabled", String(!enabled));
+      const costPill = button.querySelector<HTMLElement>(
+        ".sow-hud__building-upgrade-cost",
+      );
+      if (costPill) costPill.hidden = upgradeBusy;
       const baseLabel =
         SOW_t("hud.map_action_upgrade") + " Lv." + upgrade.next_level;
-      const reason = !enabled
-        ? mapActionReason({ disabled: true, cost: upgrade.cost }, availableGold)
-        : costText + "g · " + timeText;
+      const reason = upgradeBusy
+        ? SOW_t("hud.building_in_progress") + " · " + timeText
+        : !enabled
+          ? mapActionReason({ disabled: true, cost: upgrade.cost }, availableGold)
+          : costText + "g · " + timeText;
       const accessibleLabel = reason ? baseLabel + ". " + reason : baseLabel;
       if (button.getAttribute("aria-label") !== accessibleLabel) {
         button.setAttribute("aria-label", accessibleLabel);
+      }
+    }
+    const maxButton = menu.querySelector<HTMLButtonElement>(
+      ".sow-hud__building-upgrade-btn.is-max-offer",
+    );
+    if (maxButton) {
+      const maxOffer = upgrade.max;
+      const maxEnabled = Boolean(maxOffer) && !upgradeBusy;
+      maxButton.disabled = !maxEnabled;
+      maxButton.classList.toggle("is-busy", upgradeBusy);
+      maxButton.classList.toggle("is-locked", !maxEnabled);
+      maxButton.setAttribute("aria-disabled", String(!maxEnabled));
+      const maxCostPill = maxButton.querySelector<HTMLElement>(
+        ".sow-hud__building-upgrade-cost",
+      );
+      if (maxCostPill) maxCostPill.hidden = upgradeBusy;
+      if (maxOffer) {
+        const maxCta = maxButton.querySelector<HTMLElement>("[data-building-max-cta]");
+        const maxCtaText = maxOffer.is_cap_max
+          ? SOW_t("hud.map_action_upgrade_max")
+          : "→";
+        if (maxCta && maxCta.textContent !== maxCtaText) {
+          maxCta.textContent = maxCtaText;
+        }
+        const maxLvlEl = maxButton.querySelector<HTMLElement>("[data-building-max-level]");
+        const maxLvlText = "Lv." + maxOffer.target_level;
+        if (maxLvlEl && maxLvlEl.textContent !== maxLvlText) {
+          maxLvlEl.textContent = maxLvlText;
+        }
+        const maxCostEl = maxButton.querySelector<HTMLElement>("[data-building-max-cost]");
+        const maxCostText = formatHudMetric(
+          Math.max(0, Math.ceil(Number(maxOffer.cost) || 0)),
+        );
+        if (maxCostEl && maxCostEl.textContent !== maxCostText) {
+          maxCostEl.textContent = maxCostText;
+        }
+        const maxTimeEl = maxButton.querySelector<HTMLElement>("[data-building-max-time]");
+        const maxTimeText = Math.max(1, Math.ceil(Number(maxOffer.seconds) || 0)) + "s";
+        if (maxTimeEl && maxTimeEl.textContent !== maxTimeText) {
+          maxTimeEl.textContent = maxTimeText;
+        }
       }
     }
   }
@@ -3646,7 +3719,6 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const anchorY = Number.isFinite(Number(bld && bld.anchor_y))
       ? Number(bld!.anchor_y)
       : Number(mapMenu.y || 0);
-    const anchorRadius = Math.max(20, Number(bld && bld.anchor_radius) || 28);
     const card =
       menu.querySelector<HTMLElement>(".sow-hud__building-card") || menu;
     const viewport = window.visualViewport;
@@ -3654,6 +3726,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const viewTop = (viewport && viewport.offsetTop) || 0;
     const vw = (viewport && viewport.width) || window.innerWidth || 800;
     const vh = (viewport && viewport.height) || window.innerHeight || 600;
+    const rawAnchorRadius = Math.max(20, Number(bld && bld.anchor_radius) || 28);
+    const anchorRadius = Math.min(rawAnchorRadius, Math.max(48, vh * 0.24));
     const viewportWidth = vw + "px";
     if (
       menu.style.getPropertyValue("--sow-hud-building-card-viewport-width") !==
@@ -3836,8 +3910,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const production = building.production || null;
     const hasProductionPanel = Boolean(production);
     const chips = Array.isArray(building.chips) ? building.chips : [];
-    const upgrade =
-      !underConstruction && building.upgrade ? building.upgrade : null;
+    const upgrade = building.upgrade || null;
     const session = String(mapMenu.session) + ":" + String(mapMenu.tile_idx);
     menu.dataset.session = String(mapMenu.session);
     menu.dataset.tileIdx = String(mapMenu.tile_idx);
@@ -3864,16 +3937,21 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       building.building_id ?? "",
       building.coastal ? 1 : 0,
       building.railway_connected ? 1 : 0,
-      construction
-        ? "c:" + construction.kind + ":" + construction.target_level
-        : underConstruction
-          ? "constructing"
-          : upgrade
-            ? "upgrade:" + upgrade.next_level + ":" + (upgrade.max ? upgrade.max.target_level : 0)
-            : "max",
+      production?.warship
+        ? upgrade
+          ? "u"
+          : "m"
+        : construction
+          ? "c:" + construction.kind + ":" + construction.target_level
+          : underConstruction
+            ? "constructing"
+            : upgrade
+              ? "u"
+              : "m",
+      upgrade?.max ? "max" : "single",
       chips
         .map(function (chip) {
-          return chip.icon + "=" + chip.label;
+          return chip.icon;
         })
         .join("|"),
       productionSig,
@@ -3885,9 +3963,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const chipsHtml = chips.length
         ? '<div class="sow-hud__building-card-stats">' +
           chips
-            .map(function (chip) {
+            .map(function (chip, idx) {
               const label = chip.label
-                ? '<b class="sow-hud__building-stat-value">' +
+                ? '<b class="sow-hud__building-stat-value" data-chip-value>' +
                   escapeHudText(chip.label) +
                   "</b>"
                 : "";
@@ -3896,6 +3974,8 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
                 (upgrade ? " is-gain" : "") +
                 '" data-stat-icon="' +
                 escapeHudText(chip.icon) +
+                '" data-chip-index="' +
+                idx +
                 '">' +
                 statusIcon(chip.icon, "sow-hud__building-stat-icon") +
                 label +
@@ -3912,7 +3992,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           statusIcon("arrow-up", "sow-hud__building-upgrade-arrow") +
           '<span class="sow-hud__building-upgrade-label">' +
           escapeHudText(SOW_t("hud.map_action_upgrade")) +
-          " <em>Lv." +
+          ' <em data-building-upgrade-level>Lv.' +
           upgrade.next_level +
           "</em></span>" +
           "</span>" +
@@ -3932,29 +4012,35 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
               '<span class="sow-hud__building-upgrade-cta">' +
               statusIcon("arrow-up", "sow-hud__building-upgrade-arrow") +
               '<span class="sow-hud__building-upgrade-label">' +
+              '<span data-building-max-cta>' +
               escapeHudText(
                 upgrade.max.is_cap_max
                   ? SOW_t("hud.map_action_upgrade_max")
                   : "→",
               ) +
-              " <em>Lv." +
+              "</span> " +
+              '<em data-building-max-level>Lv.' +
               upgrade.max.target_level +
               "</em></span></span>" +
               '<span class="sow-hud__building-upgrade-meta">' +
               '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-cost">' +
               hudIcon("gold", "sow-hud__building-upgrade-meta-icon") +
-              "<b>" +
-              Math.ceil(upgrade.max.cost) +
+              "<b data-building-max-cost>" +
+              escapeHudText(
+                formatHudMetric(
+                  Math.max(0, Math.ceil(Number(upgrade.max.cost) || 0)),
+                ),
+              ) +
               "</b></span>" +
               '<span class="sow-hud__building-upgrade-pill sow-hud__building-upgrade-time">' +
               statusIcon("clock", "sow-hud__building-upgrade-meta-icon") +
-              "<b>" +
-              Math.ceil(upgrade.max.seconds) +
+              "<b data-building-max-time>" +
+              Math.max(1, Math.ceil(Number(upgrade.max.seconds) || 0)) +
               "s</b></span></span></button>"
             : "")
         : "";
 
-      if (isCityFoundation || (!hasProductionPanel && underConstruction)) {
+      if (isCityFoundation || (!hasProductionPanel && underConstruction && !upgrade)) {
         // The compact world-anchored progress bar already shows the countdown on the building.
         menu.classList.add("hidden");
         menu.classList.remove("is-building-card", "has-tether");
@@ -4029,7 +4115,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         const levelBadgeHtml = upgrade
           ? "Lv." +
             level +
-            ' <span class="sow-hud__building-card-level-arrow">→</span> <em>Lv.' +
+            ' <span class="sow-hud__building-card-level-arrow">→</span> <em data-card-upgrade-level>Lv.' +
             upgrade.next_level +
             "</em>"
           : "Lv." + Math.max(1, level) + (isMax ? " · MAX" : "");
@@ -10172,6 +10258,11 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             return;
           const action = mapButton.dataset.mapAction;
           if (!action) return;
+          if (action === "upgrade_structure" || action === "upgrade_structure_max") {
+            mapButton.disabled = true;
+            mapButton.classList.add("is-locked");
+            mapButton.setAttribute("aria-disabled", "true");
+          }
           send("map_menu_action", {
             session: Number(mapMenu.dataset.session),
             tile_idx: Number(mapMenu.dataset.tileIdx),
