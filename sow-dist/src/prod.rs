@@ -1638,6 +1638,13 @@ fn assemble_release(paths: &Paths, web: &Path, binaries: &Path, version: &str) -
         &paths.root.join("sow-dist/deploy/freebsd/periodic"),
         &work.join("ops/periodic"),
     )?;
+    if !site::current().is_production() {
+        fs::rename(
+            work.join("ops/periodic/hourly/530.sow-server-generations"),
+            work.join("ops/periodic/hourly")
+                .join(site::current().periodic_generations_script()),
+        )?;
+    }
     let (relay_component, relay_manifest) = package_relay(paths, binaries, &work)?;
 
     let nginx_source = paths
@@ -2190,7 +2197,7 @@ fi"#
         }
     }
     if resolver_update.is_empty() { resolver_update.push(':'); }
-    let config_files = format!("__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database /usr/local/etc/nginx/{}sow-server-active-ws.map /usr/local/etc/nginx/{}sow-server-active-http.map {}/active-generation /usr/local/etc/periodic/hourly/530.sow-server-generations", site::current().map_prefix(), site::current().map_prefix(), site::current().release_root());
+    let config_files = format!("__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database /usr/local/etc/nginx/{}sow-server-active-ws.map /usr/local/etc/nginx/{}sow-server-active-http.map {}/active-generation /usr/local/etc/periodic/hourly/{} /etc/cron.d/{}", site::current().map_prefix(), site::current().map_prefix(), site::current().release_root(), site::current().periodic_generations_script(), site::current().cron_generations_file());
     let env_backups = if runtime_env {
         format!(r#"backup=$(sudo mktemp -d /tmp/sow-config-backup.XXXXXX)
 for f in {config_files}; do
@@ -2214,12 +2221,21 @@ old=$(sudo readlink __SITE_RELEASE_ROOT__/current 2>/dev/null || true)
 target=__TARGET__
 stage=__STAGE__
 legacy_service=false
+started_generation=
 backup=
 backup_ready=false
 rollback() {
     trap - EXIT
     set +e
     __ENV_RESTORE__
+    if [ -n "${started_generation:-}" ] && [ "${started_generation:-}" != "${previous_generation:-}" ]; then
+        sudo jexec __SITE_SERVER_JAIL__ service sow_server stop_generation "$started_generation" >/dev/null 2>&1 || true
+        if [ -n "${ws_map:-}" ] && [ -n "${http_map:-}" ]; then
+            sudo sed -i '' "/\"$started_generation\"/d" "$ws_map" "$http_map" 2>/dev/null || true
+        fi
+        sudo jexec __SITE_SERVER_JAIL__ rm -f "/usr/local/etc/sow/generations/$started_generation.env" 2>/dev/null || true
+        sudo jexec __SITE_SERVER_JAIL__ rm -rf "/var/db/sow/server/generations/$started_generation" 2>/dev/null || true
+    fi
     if [ -n "${previous_generation:-}" ] && [ -n "${http_map:-}" ]; then
         old_http_port=$(sudo awk -F '"' -v id="$previous_generation" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
         if [ -n "$old_http_port" ]; then curl -fsS --max-time 5 -X POST "http://__SITE_LOOPBACK__:$old_http_port/internal/generation-activate" >/dev/null 2>&1 || true; fi
@@ -2276,6 +2292,11 @@ if __NGINX_RELOAD__; then
         sudo install -d -o root -g wheel -m 0755 /usr/local/etc/periodic/hourly
         sudo install -o root -g wheel -m 0555 "$f" "$dest"
     done
+    cron_tmp=$(mktemp /tmp/sow-cron-generations.XXXXXX)
+    printf 'SHELL=/bin/sh\nPATH=/etc:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin\n__SITE_CRON_GENERATIONS_MINUTE__ * * * * root /usr/local/etc/periodic/hourly/__SITE_PERIODIC_GENERATIONS__ >> __SITE_LOG_DIR__/generations.log 2>&1\n' > "$cron_tmp"
+    sudo install -d -o root -g wheel -m 0755 /etc/cron.d __SITE_LOG_DIR__
+    sudo install -o root -g wheel -m 0644 "$cron_tmp" /etc/cron.d/__SITE_CRON_GENERATIONS__
+    rm -f "$cron_tmp"
     dest=/etc/periodic.conf.local
     if [ "$(sudo sysrc -n -f "$dest" weekly_certbot_enable 2>/dev/null || true)" != YES ] \
         || [ "$(sudo sysrc -n -f "$dest" weekly_certbot_deploy_hook 2>/dev/null || true)" != 'service nginx reload' ]; then
@@ -2439,6 +2460,7 @@ fn server_generation_activation(release: &Release) -> String {
     sudo jexec __SITE_SERVER_JAIL__ chmod 0600 "$env_file"
     if ! sudo jexec __SITE_SERVER_JAIL__ /usr/local/etc/rc.d/sow_server status_generation "$id"; then
         sudo jexec __SITE_SERVER_JAIL__ service sow_server start_generation "$id" "$env_file" "/srv/sow/releases/$id/bin/sow-server" || rollback
+        started_generation=$id
     fi
     i=0
     until curl -fsS --max-time 5 "http://$loopback:$http_port/maps/catalog.bin" -o /tmp/sow-catalog-"$id" \
@@ -2654,8 +2676,15 @@ fn release_map_count(release: &Release) -> Result<usize> {
     Ok(count)
 }
 
+/// Retire idle server generations once the new release passes public checks, then remove
+/// unreferenced release directories beyond the five newest. Keeping generation cleanup here
+/// (as well as in `/etc/cron.d/__SITE_CRON_GENERATIONS__`) prevents back-to-back deploys from
+/// exhausting IONOS RAM before the hourly cron runs.
 fn retain_releases(config: &Config) -> Result<()> {
     let command = r#"set -eu
+if sudo test -x /usr/local/etc/periodic/hourly/__SITE_PERIODIC_GENERATIONS__; then
+    sudo env SOW_SERVER_GENERATION_LOCKED=1 /usr/local/etc/periodic/hourly/__SITE_PERIODIC_GENERATIONS__
+fi
 current=$(sudo readlink __SITE_RELEASE_ROOT__/current)
 live=$(sudo jexec __SITE_SERVER_JAIL__ sh -c 'pids=$(pgrep -x sow-relay || true); if [ -n "$pids" ]; then procstat -b $pids; fi' | awk '{ path=$NF; prefix="/srv/sow/releases/"; suffix="/bin/sow-relay"; if (substr(path,1,length(prefix)) == prefix && substr(path,length(path)-length(suffix)+1) == suffix) print "__SITE_RELEASE_ROOT__/releases/" substr(path,length(prefix)+1,length(path)-length(prefix)-length(suffix)); }')
 server_live=$(sudo jexec __SITE_SERVER_JAIL__ sh -c 'pids=$(pgrep -x sow-server || true); if [ -n "$pids" ]; then procstat -b $pids; fi' | awk '{ path=$NF; prefix="/srv/sow/releases/"; suffix="/bin/sow-server"; if (substr(path,1,length(prefix)) == prefix && substr(path,length(path)-length(suffix)+1) == suffix) print "__SITE_RELEASE_ROOT__/releases/" substr(path,length(prefix)+1,length(path)-length(prefix)-length(suffix)); }')

@@ -163,7 +163,8 @@ usr/local/etc/nginx/snippets/security-headers.conf
 usr/local/etc/nginx/snippets/ssl-params.conf
 usr/local/etc/letsencrypt/renewal-hooks/deploy/50-sow-relay
 etc/periodic.conf.local
-usr/local/etc/periodic/hourly/530.sow-server-generations
+usr/local/etc/periodic/hourly/__SITE_PERIODIC_GENERATIONS__
+etc/cron.d/__SITE_CRON_GENERATIONS__
 etc/rc.conf
 usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-active-ws.map
 usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-active-http.map

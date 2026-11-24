@@ -206,6 +206,28 @@ impl Site {
         }
     }
 
+    /// Site-scoped hourly generation cleanup script under `/usr/local/etc/periodic/hourly`,
+    /// keeping production's original filename while ensuring PTR never overwrites it.
+    pub(crate) fn periodic_generations_script(self) -> String {
+        format!("530.{}sow-server-generations", self.map_prefix())
+    }
+
+    /// `/etc/cron.d/` file that triggers hourly generation cleanup (FreeBSD's default
+    /// `/etc/crontab` does not schedule `periodic hourly`). Kept dot-free for FreeBSD cron.
+    pub(crate) fn cron_generations_file(self) -> &'static str {
+        match self {
+            Self::Production => "sow-generations",
+            Self::Ptr => "sow-ptr-generations",
+        }
+    }
+
+    fn cron_generations_minute(self) -> &'static str {
+        match self {
+            Self::Production => "17",
+            Self::Ptr => "23",
+        }
+    }
+
     /// Every `__SITE_*__` placeholder with its value for this site.
     fn tokens(self) -> Vec<(&'static str, String)> {
         vec![
@@ -225,6 +247,9 @@ impl Site {
             ("__SITE_HTTP_NAMES__", self.http_names().to_string()),
             ("__SITE_TLS_SERVER_NAMES__", self.tls_server_names().to_string()),
             ("__SITE_MAP_PREFIX__", self.map_prefix().to_string()),
+            ("__SITE_PERIODIC_GENERATIONS__", self.periodic_generations_script()),
+            ("__SITE_CRON_GENERATIONS__", self.cron_generations_file().to_string()),
+            ("__SITE_CRON_GENERATIONS_MINUTE__", self.cron_generations_minute().to_string()),
         ]
     }
 }
@@ -282,6 +307,16 @@ mod tests {
             Site::Production.reward_audit_accounts_file()
         );
         assert_ne!(Site::Ptr.server_http_url(), Site::Production.server_http_url());
+        assert_ne!(
+            Site::Ptr.periodic_generations_script(),
+            Site::Production.periodic_generations_script()
+        );
+        assert_ne!(
+            Site::Ptr.cron_generations_file(),
+            Site::Production.cron_generations_file()
+        );
+        assert!(!Site::Ptr.cron_generations_file().contains('.'));
+        assert!(!Site::Production.cron_generations_file().contains('.'));
     }
 
     #[test]

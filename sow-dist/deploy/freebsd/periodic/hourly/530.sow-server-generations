@@ -2,39 +2,91 @@
 
 set -eu
 
+PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+export PATH
+
 if [ "${SOW_SERVER_GENERATION_LOCKED:-}" != 1 ]; then
-	exec lockf -k -t 0 /var/run/sow-server-generation.lock env SOW_SERVER_GENERATION_LOCKED=1 "$0"
+	exec lockf -k -t 60 /var/run/sow-server-generation.lock env SOW_SERVER_GENERATION_LOCKED=1 "$0"
 fi
+
+# Runs on the FreeBSD host as root because server jails omit curl; failures print to stderr and
+# exit non-zero so cron/deploy never swallow a broken cleanup path.
+command -v curl >/dev/null 2>&1 || {
+	echo "generation cleanup error: curl not found on host" >&2
+	exit 1
+}
 
 site_release_root="__SITE_RELEASE_ROOT__"
 site_server_jail="__SITE_SERVER_JAIL__"
+site_server_root="__SITE_SERVER_ROOT__"
 site_loopback="__SITE_LOOPBACK__"
 prefix="__SITE_MAP_PREFIX__"
 ws_map="/usr/local/etc/nginx/${prefix}sow-server-ws.map"
 http_map="/usr/local/etc/nginx/${prefix}sow-server-http.map"
+env_file="${site_server_root}/usr/local/etc/sow/sow.env"
 active=$(cat "${site_release_root}/active-generation" 2>/dev/null || true)
 changed=0
+failed=0
 
 [ -s "$ws_map" ] && [ -s "$http_map" ] || exit 0
+
+if [ ! -r "$env_file" ]; then
+	echo "generation cleanup error: unreadable server env file $env_file" >&2
+	exit 1
+fi
+db_url=$(awk -F= '$1 == "SOW_DB_URL" { sub(/^[^=]*=/, ""); print; exit }' "$env_file")
+db_secret=$(awk -F= '$1 == "SOW_DB_SECRET" { sub(/^[^=]*=/, ""); print; exit }' "$env_file")
+if [ -z "$db_url" ] || [ -z "$db_secret" ]; then
+	echo "generation cleanup error: missing SOW_DB_URL or SOW_DB_SECRET in $env_file" >&2
+	exit 1
+fi
 
 while read -r id ws_port; do
 	case "$id" in ''|*[!A-Za-z0-9._-]*) continue ;; esac
 	[ "$id" = "$active" ] && continue
 	http_port=$(awk -F '"' -v id="$id" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
-	[ -n "$ws_port" ] && [ -n "$http_port" ] || continue
-	if ! jexec "$site_server_jail" /usr/local/etc/rc.d/sow_server status_generation "$id" >/dev/null 2>&1; then
+	if [ -z "$ws_port" ] || [ -z "$http_port" ]; then
+		echo "generation cleanup error: missing ws/http map port for $id" >&2
+		failed=1
 		continue
 	fi
-	lobby_status=$(curl -fsS --max-time 5 "http://${site_loopback}:${http_port}/internal/generation-status" 2>/dev/null || true)
-	occupied=$(printf '%s' "$lobby_status" | sed -n 's/.*"occupied_lobbies"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
-	[ "$occupied" = 0 ] || continue
-	work_status=$(jexec "$site_server_jail" sh -c '
-		. /usr/local/etc/sow/sow.env
-		curl -fsS --max-time 10 -H "Authorization: Bearer $SOW_DB_SECRET" "$SOW_DB_URL/internal/release-work/$1"
-	' sh "$id" 2>/dev/null || true)
+	if jexec "$site_server_jail" /usr/local/etc/rc.d/sow_server status_generation "$id" >/dev/null 2>&1; then
+		if ! lobby_status=$(curl -fsS --max-time 5 "http://${site_loopback}:${http_port}/internal/generation-status"); then
+			echo "generation cleanup error: generation-status failed for $id on ${site_loopback}:${http_port}" >&2
+			failed=1
+			continue
+		fi
+		occupied=$(printf '%s' "$lobby_status" | sed -n 's/.*"occupied_lobbies"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+		if [ -z "$occupied" ]; then
+			echo "generation cleanup error: unexpected generation-status response for $id: $lobby_status" >&2
+			failed=1
+			continue
+		fi
+		[ "$occupied" = 0 ] || continue
+		running=1
+	else
+		running=0
+	fi
+	if ! work_status=$(printf 'header = "Authorization: Bearer %s"\n' "$db_secret" \
+		| curl --noproxy '*' -fsS --max-time 10 --config - "${db_url}/internal/release-work/${id}"); then
+		echo "generation cleanup error: release-work check failed for $id at $db_url" >&2
+		failed=1
+		continue
+	fi
 	pending=$(printf '%s' "$work_status" | sed -n 's/.*"outstanding_matches"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+	if [ -z "$pending" ]; then
+		echo "generation cleanup error: unexpected release-work response for $id: $work_status" >&2
+		failed=1
+		continue
+	fi
 	[ "$pending" = 0 ] || continue
-	jexec "$site_server_jail" service sow_server stop_generation "$id" || continue
+	if [ "$running" = 1 ]; then
+		if ! jexec "$site_server_jail" service sow_server stop_generation "$id"; then
+			echo "generation cleanup error: failed to stop generation $id" >&2
+			failed=1
+			continue
+		fi
+	fi
 	sed -i '' "/\"$id\"/d" "$ws_map" "$http_map"
 	jexec "$site_server_jail" rm -f "/usr/local/etc/sow/generations/$id.env"
 	jexec "$site_server_jail" rm -rf "/var/db/sow/server/generations/$id"
@@ -43,6 +95,17 @@ done <<EOF
 $(awk -F '"' '{ if ($2 != "") { port=$3; gsub(/[^0-9]/, "", port); print $2, port } }' "$ws_map")
 EOF
 
-if [ "$changed" = 1 ] && nginx -t >/dev/null 2>&1; then
-	service nginx reload >/dev/null 2>&1 || true
+if [ "$changed" = 1 ]; then
+	if nginx -t >/dev/null 2>&1; then
+		service nginx reload >/dev/null 2>&1 || {
+			echo "generation cleanup error: nginx reload failed" >&2
+			failed=1
+		}
+	else
+		nginx -t >&2 || true
+		echo "generation cleanup error: nginx config test failed" >&2
+		failed=1
+	fi
 fi
+
+exit "$failed"
