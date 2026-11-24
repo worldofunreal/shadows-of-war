@@ -26,7 +26,7 @@ let mapGenerating = false;
 let mapGenerationMap = "";
 let mapGenerationProgress = "";
 let mapUploading = false;
-const mapSourcesDir = path.join(root, "assets/map_sources");
+const mapSourcesDir = path.join(root, "assets/maps/_sources");
 const worldMapWebp = path.join(mapSourcesDir, "giantworldmap.webp");
 // Upload target from the owner's environment, e.g. SOW_MAPS_UPLOAD_TARGET=ionos:/var/db/sow/maps-uploaded
 const uploadTarget = parseUploadTarget(process.env.SOW_MAPS_UPLOAD_TARGET || "");
@@ -161,8 +161,6 @@ function staticFile(pathname) {
   }
   if (pathname.startsWith("/assets/gameplay/"))
     return safeFile(path.join(root, "assets/gameplay"), pathname.slice("/assets/gameplay/".length));
-  if (pathname.startsWith("/assets/map_sources/"))
-    return safeFile(path.join(root, "assets/map_sources"), pathname.slice("/assets/map_sources/".length));
   if (pathname.startsWith("/fonts/"))
     return safeFile(path.join(root, "sow-web/site/fonts"), pathname.slice("/fonts/".length));
   if (pathname.startsWith("/locales/")) return safeFile(distLocaleDir, pathname.slice("/locales/".length));

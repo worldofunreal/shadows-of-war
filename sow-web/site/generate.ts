@@ -200,7 +200,8 @@ export async function publish(
       City: "city", MilitaryCamp: "military_camp", TradingPost: "trading_post",
       Port: "port", Tower: "tower", SAM: "sam", MissileSilo: "missilesilo",
     };
-    const cards = BUILDING_KINDS.map((kind) => {
+    const visibleBuildingKinds = BUILDING_KINDS.filter((kind) => kind !== "MilitaryCamp");
+    const cards = visibleBuildingKinds.map((kind) => {
       const lineName = translate("hud.map_action_" + lineTranslation[kind]);
       const sprite = buildingAtlas.sprites[kind]?.[1];
       const size = buildingAtlas.cell_size;
@@ -209,7 +210,7 @@ export async function publish(
       const image = sprite ? `<span class="building-directory-icon" aria-hidden="true" style="background-image:url('/assets/gameplay/buildings/atlas.webp?v=${atlasVersion}');background-size:${100 * width / size}% ${100 * height / size}%;background-position:${100 * sprite.x / (width - size)}% ${100 * sprite.y / (height - size)}%"></span>` : "";
       return `<a class="building-directory-card" href="#${kind.toLowerCase()}">${image}<span><strong>${escape(lineName)}</strong><small>${escape(buildingRole(kind, locale))}</small></span></a>`;
     }).join("");
-    const sections = BUILDING_KINDS.map((kind) => {
+    const sections = visibleBuildingKinds.map((kind) => {
       const sprites = buildingAtlas.sprites[kind];
       const tiers = buildingLine(kind, locale);
       let cumulativePrice = 0;

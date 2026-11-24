@@ -346,7 +346,7 @@ pub fn run(args: GenerateBlitzArgs) -> Result<(), Box<dyn Error>> {
 
         let pinata_buildings = match arch {
             SawtoothArchetype::EcoRush => vec![(BuildingKind::TradingPost, 1)],
-            SawtoothArchetype::Cascade => vec![(BuildingKind::MilitaryCamp, 1)],
+            SawtoothArchetype::Cascade => vec![(BuildingKind::TradingPost, 1)],
             _ => vec![(BuildingKind::City, 1)],
         };
         let boss_buildings = match arch {
@@ -387,7 +387,7 @@ pub fn run(args: GenerateBlitzArgs) -> Result<(), Box<dyn Error>> {
                     Some(150),
                     Some(220),
                     Some((pinata1_loot as f64 * 1.15) as u32),
-                    vec![(BuildingKind::MilitaryCamp, 1)],
+                    vec![(BuildingKind::TradingPost, 1)],
                 ),
                 make_scripted_spawn(
                     "sector_boss",
@@ -472,7 +472,7 @@ pub fn run(args: GenerateBlitzArgs) -> Result<(), Box<dyn Error>> {
                 "can_attack_player": arch != SawtoothArchetype::Cascade,
                 "gold_loot_override": 220,
                 "troop_loot_bonus": (pinata1_loot as f64 * 1.15) as u32,
-                "prebuilt_buildings": [["MilitaryCamp", 1]]
+                "prebuilt_buildings": [["TradingPost", 1]]
             }),
             json!({
                 "id": "sector_boss",
@@ -555,7 +555,7 @@ pub fn run(args: GenerateBlitzArgs) -> Result<(), Box<dyn Error>> {
                     "id": "blitz_cascade_start",
                     "type": "objective",
                     "unlocks": {
-                        "buildings": { "City": 1, "MilitaryCamp": 2, "TradingPost": 2, "Tower": 2 }
+                        "buildings": { "City": 1, "TradingPost": 2, "Tower": 2 }
                     },
                     "title_key": "tutorial.blitz_obj_title",
                     "body_key": "tutorial.blitz_obj_body",

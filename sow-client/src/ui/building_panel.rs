@@ -70,14 +70,14 @@ pub(crate) fn building_metrics(
     let level_weight = sow_core::building::city_income_level_weight(level);
     let city_gold_level_weight = sow_core::building::city_gold_level_weight(level);
     let capacity_level_weight = sow_core::building::city_capacity_level_weight(level);
-    let district_capacity = config.district_max_troops
-        * sow_core::building::district_capacity_level_weight(level);
+    let district_capacity =
+        config.district_max_troops * sow_core::building::district_capacity_level_weight(level);
     let level = f64::from(level);
     let per_second = config.global_speed_multiplier;
-    let hero = |district, resource| leader.resource_bonus_multiplier(Source::District(district), resource);
-    let hero_bonus = |district, resource| {
-        leader.resource_bonus_hero_bonus(Source::District(district), resource)
-    };
+    let hero =
+        |district, resource| leader.resource_bonus_multiplier(Source::District(district), resource);
+    let hero_bonus =
+        |district, resource| leader.resource_bonus_hero_bonus(Source::District(district), resource);
     let mut metrics = match kind {
         BuildingKind::City => {
             let mut metrics = vec![
@@ -104,7 +104,8 @@ pub(crate) fn building_metrics(
                 (config.city_gold_income * hero(District::City, Resource::Gold)
                     + config.hero_city_gold_income
                         * hero_bonus(District::City, Resource::Gold).unwrap_or(0.0))
-                    * city_gold_level_weight * per_second,
+                    * city_gold_level_weight
+                    * per_second,
                 "+",
                 "/s",
             ));
@@ -144,7 +145,8 @@ pub(crate) fn building_metrics(
                 BuildingMetric::new(
                     Icon::Troops,
                     (config.port_troop_income * weight * hero(District::Port, Resource::Troops)
-                        + config.hero_port_troop_income * level.min(4.0)
+                        + config.hero_port_troop_income
+                            * level.min(4.0)
                             * hero_bonus(District::Port, Resource::Troops).unwrap_or(0.0))
                         * per_second,
                     "+",
@@ -223,7 +225,8 @@ pub(crate) fn building_metrics(
                 (sow_core::building::camp_conquest_multiplier(
                     sow_core::building::camp_capture_level_weight(level as u8)
                         * config.camp_capture_base_points.max(0.0),
-                ) - 1.0) * 100.0,
+                ) - 1.0)
+                    * 100.0,
                 "+",
                 "%",
             ),
@@ -246,13 +249,23 @@ pub(crate) fn building_metrics(
                 let cooldown = sow_core::execution::sam::sam_cooldown_ticks(level as u8, config);
                 let shots_per_minute =
                     60_000.0 / (f64::from(cooldown) * f64::from(config.tick_rate_ms));
-                stats.push(BuildingMetric::new(Icon::Shield, shots_per_minute, "", "/min"));
+                stats.push(BuildingMetric::new(
+                    Icon::Shield,
+                    shots_per_minute,
+                    "",
+                    "/min",
+                ));
             }
             stats
         }
     };
     if kind.grants_building_troop_capacity() && district_capacity > 0.0 {
-        metrics.push(BuildingMetric::new(Icon::Troops, district_capacity, "+", " cap"));
+        metrics.push(BuildingMetric::new(
+            Icon::Troops,
+            district_capacity,
+            "+",
+            " cap",
+        ));
     }
     metrics
 }
@@ -263,19 +276,23 @@ pub(crate) fn upgrade_gains(
     next: &[BuildingMetric],
 ) -> Vec<BuildingMetric> {
     next.iter()
-        .filter_map(|metric| match (
-            current.iter().find(|before| before.icon == metric.icon && before.unit == metric.unit),
-            metric.value,
-        ) {
-            (Some(before), Some(after)) => {
-                let gain = after - before.value.unwrap_or(0.0);
-                (gain.abs() > 1e-6).then_some(BuildingMetric {
-                    value: Some(gain),
-                    prefix: "+",
-                    ..*metric
-                })
+        .filter_map(|metric| {
+            match (
+                current
+                    .iter()
+                    .find(|before| before.icon == metric.icon && before.unit == metric.unit),
+                metric.value,
+            ) {
+                (Some(before), Some(after)) => {
+                    let gain = after - before.value.unwrap_or(0.0);
+                    (gain.abs() > 1e-6).then_some(BuildingMetric {
+                        value: Some(gain),
+                        prefix: "+",
+                        ..*metric
+                    })
+                }
+                _ => Some(*metric),
             }
-            _ => Some(*metric),
         })
         .collect()
 }
@@ -402,8 +419,7 @@ pub(crate) fn building_panel_layout(
 }
 
 #[allow(dead_code)]
-impl BuildingPanelLayout {
-}
+impl BuildingPanelLayout {}
 
 impl crate::app::SowApp {
     /// The open panel for your own tapped building, from the live snapshot.
@@ -423,10 +439,9 @@ impl crate::app::SowApp {
                     && building.kind == sow_core::game::BuildingKind::City
             })
             .or_else(|| {
-                snapshot
-                    .buildings
-                    .iter()
-                    .find(|building| building.tile_idx == menu.tile_idx && building.owner_id == my_id)
+                snapshot.buildings.iter().find(|building| {
+                    building.tile_idx == menu.tile_idx && building.owner_id == my_id
+                })
             })?;
         let leader = snapshot
             .players
@@ -442,9 +457,15 @@ impl crate::app::SowApp {
         let next_level = reserved_level.saturating_add(1);
         let mut next = building_metrics(building.kind, next_level, leader, config);
         let trade_route = if building.kind == BuildingKind::TradingPost {
-            snapshot.railway_links.binary_search_by_key(&building.id, |route| route.from_building_id)
-                .ok().map(|i| snapshot.railway_links[i]).filter(|route| !route.blocked)
-        } else { None };
+            snapshot
+                .railway_links
+                .binary_search_by_key(&building.id, |route| route.from_building_id)
+                .ok()
+                .map(|i| &snapshot.railway_links[i])
+                .filter(|route| route.period_ticks > 0)
+        } else {
+            None
+        };
         if let Some(route) = trade_route {
             let bonus = route.distance_bonus(self.sim.map_w);
             for metric in current.iter_mut().chain(next.iter_mut()) {
@@ -499,9 +520,12 @@ impl crate::app::SowApp {
                     player.alliances.len(),
                     leader,
                     config,
-                )) * bot_multiplier
+                ))
+                * bot_multiplier
                 + sow_core::execution::income_rates::trade_income_per_second(
-                    trade_ships, leader, config,
+                    trade_ships,
+                    leader,
+                    config,
                 )
                 + engine.hero_gold_per_second(my_id);
             let troops_total = (sow_core::execution::income_rates::troop_income_per_second(
@@ -518,16 +542,18 @@ impl crate::app::SowApp {
                 + standard_troops)
                 * bot_multiplier
                 + sow_core::execution::income_rates::trade_troops_per_second(
-                    trade_ships, leader, config,
+                    trade_ships,
+                    leader,
+                    config,
                 );
             let gold_before_building = (gold_total
                 - metric_income_rate(&current, Icon::Gold, config.global_speed_multiplier)
                     * rate_multiplier)
-            .max(0.0);
+                .max(0.0);
             let troops_before_building = (troops_total
                 - metric_income_rate(&current, Icon::Troops, config.global_speed_multiplier)
                     * rate_multiplier)
-            .max(0.0);
+                .max(0.0);
             apply_credited_income(
                 &mut current,
                 gold_before_building,
@@ -544,29 +570,33 @@ impl crate::app::SowApp {
             );
         }
         if let Some(route) = trade_route
-            && let Some(rate) = current.iter().find(|metric| metric.icon == Icon::Gold).and_then(|metric| metric.value)
+            && let Some(rate) = current
+                .iter()
+                .find(|metric| metric.icon == Icon::Gold)
+                .and_then(|metric| metric.value)
         {
-            current.push(BuildingMetric::new(Icon::Gold, rate * seconds(route.period_ticks), "+", " / trip"));
+            current.push(BuildingMetric::new(
+                Icon::Gold,
+                rate * seconds(route.period_ticks),
+                "+",
+                " / trip",
+            ));
         }
         let upgrade_ticks = |target_level| {
-            let ticks = sow_core::building::structure_upgrade_duration_ticks(
-                building.kind,
-                target_level,
-            );
+            let ticks =
+                sow_core::building::structure_upgrade_duration_ticks(building.kind, target_level);
             if config.tutorial {
                 (ticks / 2).max(1)
             } else {
                 ticks
             }
         };
-        let queued_upgrade_ticks = building
-            .under_construction
-            .then(|| {
-                (building.level.saturating_add(1)..=reserved_level)
-                    .fold(building.ticks_until_complete, |total, target_level| {
-                        total.saturating_add(upgrade_ticks(target_level))
-                    })
-            });
+        let queued_upgrade_ticks = building.under_construction.then(|| {
+            (building.level.saturating_add(1)..=reserved_level)
+                .fold(building.ticks_until_complete, |total, target_level| {
+                    total.saturating_add(upgrade_ticks(target_level))
+                })
+        });
         let snapshot_arsenal_ticks = non_warship_arsenal_ticks(building.arsenal_build);
         let engine_arsenal_ticks = self
             .sim
@@ -576,10 +606,7 @@ impl crate::app::SowApp {
             .and_then(|production| non_warship_arsenal_ticks(production.arsenal_build));
         let arsenal_ticks = snapshot_arsenal_ticks.or(engine_arsenal_ticks);
         let busy_ticks = queued_upgrade_ticks.or(arsenal_ticks);
-        let playing = matches!(
-            &snapshot.phase,
-            sow_core::game::GamePhase::Playing
-        );
+        let playing = matches!(&snapshot.phase, sow_core::game::GamePhase::Playing);
         if building.under_construction && level == 0 {
             let progress = crate::render::world::overlays::construction_progress(
                 building.kind,
@@ -630,10 +657,7 @@ impl crate::app::SowApp {
             upgrade: Some(UpgradeOffer {
                 next_level,
                 cost,
-                seconds: busy_ticks.map_or_else(
-                    || seconds(upgrade_ticks(next_level)),
-                    seconds,
-                ),
+                seconds: busy_ticks.map_or_else(|| seconds(upgrade_ticks(next_level)), seconds),
                 enabled: playing
                     && busy_ticks.is_none()
                     && cost.is_finite()
@@ -695,7 +719,13 @@ fn non_warship_arsenal_ticks(build: Option<sow_core::building::CityArsenalBuild>
 mod tests {
     use super::*;
 
-    fn test_input_state(camera_x: f32, camera_y: f32, zoom: f32, screen_w: f32, screen_h: f32) -> crate::app::InputState {
+    fn test_input_state(
+        camera_x: f32,
+        camera_y: f32,
+        zoom: f32,
+        screen_w: f32,
+        screen_h: f32,
+    ) -> crate::app::InputState {
         crate::app::InputState {
             tabletop: None,
             camera_x,
@@ -773,7 +803,8 @@ mod tests {
         let camera_x = screen_w * 0.5 - wx * zoom;
         let camera_y = screen_h * 0.5 - wy * zoom;
         let input = test_input_state(camera_x, camera_y, zoom, screen_w, screen_h);
-        let layout = building_panel_layout(BuildingKind::Port, tile_idx, map_w, &input, 1.0, screen_h);
+        let layout =
+            building_panel_layout(BuildingKind::Port, tile_idx, map_w, &input, 1.0, screen_h);
         // Without an upper bound on radius, 2x2 footprint at zoom=200 gives half=200px;
         // clamped at 24% of viewport height (172.8px), keeping the panel anchored near the building.
         let expected_max_half = screen_h * 0.24;
@@ -799,8 +830,12 @@ mod tests {
                 .iter()
                 .find(|m| m.icon == Icon::Speed && m.unit == "%")
                 .expect("speed gain chip");
-            assert_eq!(speed_chip.label(), *expected, "level {level} -> {}", level + 1);
+            assert_eq!(
+                speed_chip.label(),
+                *expected,
+                "level {level} -> {}",
+                level + 1
+            );
         }
     }
 }
-

@@ -2,6 +2,10 @@
 # Generated map folders are gitignored except the world seed and the authored Petén campaign maps.
 # Map Generator outputs share this folder for local editing and are excluded from
 # release packages unless registered here; upload them through Campaign Studio.
+# Authoring inputs live in `_sources/<map-id>`; `image.png` is a one-pixel-per-tile terrain mask.
+# Campaign backgrounds are baked to `<map-id>/terrain.webp` at 8 pixels per tile.
+# Petén Clearing additionally uses four terrain image layers. sow-dist converts
+# PNG/JPEG/WebP sources under terrain_tiles/ into optimized runtime WebP files.
 # Each folder carries info.toml with its weighted-rotation frequency
 # (OpenFront `multiplayer_frequency`; 0 = out of rotation).
 # The `[recipes.<map>]` tables below keep provenance and artifact hashes for the
@@ -97,7 +101,7 @@ thumbnail_sha256 = "044cdc8daa9d2a8c7da8083a46ca6250497bcbfa71ff7f91da776a9311ac
 
 [recipes.eastanglia]
 origin_kind = "openfront_image_frame_corrected"
-source_path = "assets/map_sources/eastanglia.webp"
+source_path = "assets/maps/_sources/eastanglia.webp"
 source_sha256 = "1c8d98a60e906f7455fa99592d35d6d719346737b2405f1d17a4459fcce352f4"
 source_upstream_sha256 = "bda748b7c90bcab287b5a2dc6f9fe8b263aeb5426138db9d4024688de9f6ebb8"
 source_correction = "Removed three disconnected inland water components >=400 source pixels; nearest 4-connected land fill."
@@ -399,25 +403,27 @@ thumbnail_sha256 = "94d9eb5d1838e65b5ac5c750bd719698a701128c8d17de37d05f78ab719e
 
 [recipes.peten_clearing]
 origin_kind = "original"
-source_path = "assets/map_sources/peten_clearing/image.png"
+source_path = "assets/maps/_sources/peten_clearing/image.png"
 source_sha256 = "6e4d3962bf68e2a389b0d36c06e56afe871506052485ea04f5bbdef04760e8c9"
 reproducible = true
 target_width = 176
 target_height = 100
-pipeline = "sow-tools import-map-source --input assets/map_sources/peten_clearing"
+pipeline = "sow-tools import-map-source --input assets/maps/_sources/peten_clearing"
 terrain_art = "bun scripts/campaign-terrain/bake.ts peten_clearing"
+terrain_tiles = "assets/maps/peten_clearing/terrain_tiles/01.png..04.png"
+terrain_tiles_layout = "row-major 2x2 [TL, TR, BL, BR]; each covers 88x50 map tiles"
 map_bin_sha256 = "ed0dd07e196195fd28188c4c0254b640f6ba0150424eb9fdc2a59c421fed471c"
 map_bin_br_sha256 = "b9c9a99c63e6419255ac277ee7da3101633805793cd499ab5d335409683cb5d2"
 thumbnail_sha256 = "c29c1d7bd90dc29f8215036be125dca9d97559a77b3dd9fd80b4ea2743693519"
 
 [recipes.bital_pass]
 origin_kind = "original"
-source_path = "assets/map_sources/bital_pass/image.png"
+source_path = "assets/maps/_sources/bital_pass/image.png"
 source_sha256 = "34c3f5e6278b7ab0e43b7683cfb03cbc0ab68cd57823a1c39acd7895254d03ea"
 reproducible = true
 target_width = 224
 target_height = 156
-pipeline = "sow-tools import-map-source --input assets/map_sources/bital_pass"
+pipeline = "sow-tools import-map-source --input assets/maps/_sources/bital_pass"
 terrain_art = "bun scripts/campaign-terrain/bake.ts bital_pass"
 map_bin_sha256 = "ba80006fa65cbb3799d39d506b8672d98283f549b70599a638f1075b1a789ce7"
 map_bin_br_sha256 = "4b50cb2cc46050e8cf19af88e9977b0f6481f24a3912f5ebbc0a4a602a4483c0"
@@ -427,11 +433,11 @@ thumbnail_sha256 = "6bbbb34ef0f5127142aaedc03d6f24acdeb5d178ae163494d035ea2e160f
 origin_kind = "original"
 base_map = "yucatan_peninsula"
 crop = [518, 828, 224, 156]
-source_path = "assets/map_sources/peten_yellow_rabbit/image.png"
+source_path = "assets/maps/_sources/peten_yellow_rabbit/image.png"
 reproducible = true
 target_width = 224
 target_height = 156
-pipeline = "sow-tools import-map-source --input assets/map_sources/peten_yellow_rabbit --min-lake-tiles 0 --min-island-pixels 0"
+pipeline = "sow-tools import-map-source --input assets/maps/_sources/peten_yellow_rabbit --min-lake-tiles 0 --min-island-pixels 0"
 terrain_art = "bun scripts/campaign-terrain/bake.ts peten_yellow_rabbit"
 source_sha256 = "bc9e1d58b6426f613b20b07be6a37a6370c867b16d89af495eabc0dc1d3e093a"
 map_bin_sha256 = "ff1abee6dbbb8cf36250bf6eb1c9814e147840c2a02af2a955d02f688a2b1e35"
@@ -442,11 +448,11 @@ thumbnail_sha256 = "8d29cba522f6e980595198a922ca2ff785ef9f38c694d15f4123c97edaf4
 origin_kind = "original"
 base_map = "yucatan_peninsula"
 crop = [518, 828, 224, 156]
-source_path = "assets/map_sources/peten_komkom/image.png"
+source_path = "assets/maps/_sources/peten_komkom/image.png"
 reproducible = true
 target_width = 224
 target_height = 156
-pipeline = "sow-tools import-map-source --input assets/map_sources/peten_komkom --min-lake-tiles 0 --min-island-pixels 0"
+pipeline = "sow-tools import-map-source --input assets/maps/_sources/peten_komkom --min-lake-tiles 0 --min-island-pixels 0"
 terrain_art = "bun scripts/campaign-terrain/bake.ts peten_komkom"
 source_sha256 = "a140ed1d5c2129c76ba314fe573a9133b84f9f39789218c8ed4484535248944d"
 map_bin_sha256 = "c27ee64b8b805b752f5622a9303f0ff3f37982c9d301a059ecd3ad04dcd648ca"
@@ -457,11 +463,11 @@ thumbnail_sha256 = "1fdd224c6937cfa1c9c7a92af0213c38ab38e64b8a4178ca0f170f5384e2
 origin_kind = "original"
 base_map = "yucatan_peninsula"
 crop = [518, 828, 224, 156]
-source_path = "assets/map_sources/peten_bahlam_jol/image.png"
+source_path = "assets/maps/_sources/peten_bahlam_jol/image.png"
 reproducible = true
 target_width = 224
 target_height = 156
-pipeline = "sow-tools import-map-source --input assets/map_sources/peten_bahlam_jol --min-lake-tiles 0 --min-island-pixels 0"
+pipeline = "sow-tools import-map-source --input assets/maps/_sources/peten_bahlam_jol --min-lake-tiles 0 --min-island-pixels 0"
 terrain_art = "bun scripts/campaign-terrain/bake.ts peten_bahlam_jol"
 source_sha256 = "dc3ac10ef9a3b501d4e09e6bffb094147c610b86a340fbc3fe483cc81ad1eee1"
 map_bin_sha256 = "95f7fc5dcdafbe6e5a512c23c50382f93575f7cb8b65926eacd1bb3f90523034"
@@ -472,11 +478,11 @@ thumbnail_sha256 = "003c45fe10617457eca7a8059e0571b7762d29b1e21aa070400c9065b456
 origin_kind = "original"
 base_map = "yucatan_peninsula"
 crop = [518, 828, 224, 156]
-source_path = "assets/map_sources/peten_ucanal/image.png"
+source_path = "assets/maps/_sources/peten_ucanal/image.png"
 reproducible = true
 target_width = 224
 target_height = 156
-pipeline = "sow-tools import-map-source --input assets/map_sources/peten_ucanal --min-lake-tiles 0 --min-island-pixels 0"
+pipeline = "sow-tools import-map-source --input assets/maps/_sources/peten_ucanal --min-lake-tiles 0 --min-island-pixels 0"
 terrain_art = "bun scripts/campaign-terrain/bake.ts peten_ucanal"
 source_sha256 = "2fa97b35b338b500995b856dab4ff488830232a29d879ac707c553aa91295cc9"
 map_bin_sha256 = "7fa50bc04f3f488f9789badba7aa5c461c9b5fadfeedf65f6599101e8beb4a60"
@@ -487,11 +493,11 @@ thumbnail_sha256 = "f150739ad47d44ed735b0a5e9a82feddc4f8ae0f1ba1e114f0ddc316c2a4
 origin_kind = "original"
 base_map = "yucatan_peninsula"
 crop = [518, 828, 224, 156]
-source_path = "assets/map_sources/peten_dos_pilas/image.png"
+source_path = "assets/maps/_sources/peten_dos_pilas/image.png"
 reproducible = true
 target_width = 224
 target_height = 156
-pipeline = "sow-tools import-map-source --input assets/map_sources/peten_dos_pilas --min-lake-tiles 0 --min-island-pixels 0"
+pipeline = "sow-tools import-map-source --input assets/maps/_sources/peten_dos_pilas --min-lake-tiles 0 --min-island-pixels 0"
 terrain_art = "bun scripts/campaign-terrain/bake.ts peten_dos_pilas"
 source_sha256 = "b28b0680ecff5946a4fe67ce5db54db1d84b63ed71ea9683f216a65d3d634fb3"
 map_bin_sha256 = "cb0dad6223a9fd9d03d3da17dc8a1b8619431ca2d56f65b7aa12f2aad46a9e51"
@@ -502,11 +508,11 @@ thumbnail_sha256 = "4ffce0dd35fe0b0fd48923adf3daa1c892b89cbfe215adcf463e0a9d34bd
 origin_kind = "original"
 base_map = "yucatan_peninsula"
 crop = [518, 828, 224, 156]
-source_path = "assets/map_sources/peten_tikal/image.png"
+source_path = "assets/maps/_sources/peten_tikal/image.png"
 reproducible = true
 target_width = 224
 target_height = 156
-pipeline = "sow-tools import-map-source --input assets/map_sources/peten_tikal --min-lake-tiles 0 --min-island-pixels 0"
+pipeline = "sow-tools import-map-source --input assets/maps/_sources/peten_tikal --min-lake-tiles 0 --min-island-pixels 0"
 terrain_art = "bun scripts/campaign-terrain/bake.ts peten_tikal"
 source_sha256 = "a099b3c704a0f703fe7b78c2c10003b31e71955ce15eecccc9509fa47da37e6d"
 map_bin_sha256 = "f40be36fab60233378dd8fa0de2090127fc4935b983fd6b25b0c7b17f5439bf5"

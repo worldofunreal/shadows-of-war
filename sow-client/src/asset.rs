@@ -2,6 +2,9 @@ use crate::ClientPhase;
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
 
+const PETEN_TERRAIN_TILE_COUNT: usize = 4;
+const PETEN_TERRAIN_TILE_DIMS: (u32, u32) = (1408, 1600);
+
 impl SowApp {
     pub(crate) fn start_terrain_art_download(&self, map: String, expected_dims: (u32, u32)) {
         let base = self.asset_config.maps_base.trim_end_matches('/');
@@ -36,6 +39,72 @@ impl SowApp {
             });
             let _ = tx.send(MapDownloadEvent::TerrainArt { session, map, result });
         });
+    }
+
+    pub(crate) fn start_peten_terrain_tiles_download(&self, map: String) {
+        use std::sync::{Arc, Mutex};
+
+        let base = self.asset_config.maps_base.trim_end_matches('/');
+        let version = crate::asset_config::AssetConfig::js_global("SOW_MAPS_CACHE_BUST")
+            .unwrap_or_default();
+        let session = self.ui.campaign_session_id;
+        let tx = self.tasks.map_tx.clone();
+        let results = Arc::new(Mutex::new(
+            (0..PETEN_TERRAIN_TILE_COUNT)
+                .map(|_| None)
+                .collect::<Vec<Option<Result<image::RgbaImage, String>>>>(),
+        ));
+
+        for index in 0..PETEN_TERRAIN_TILE_COUNT {
+            let filename = format!("{:02}.webp", index + 1);
+            let path = format!("{base}/{map}/terrain_tiles/{filename}");
+            let url = if version.is_empty() {
+                path
+            } else {
+                format!("{path}?v={version}")
+            };
+            let results = Arc::clone(&results);
+            let tx = tx.clone();
+            let map = map.clone();
+            ehttp::fetch(ehttp::Request::get(url), move |response| {
+                let result = response.and_then(|res| {
+                    if !res.ok {
+                        return Err(format!("HTTP {} for terrain tile {filename}", res.status));
+                    }
+                    use image::ImageDecoder;
+                    let decoder = image::codecs::webp::WebPDecoder::new(std::io::Cursor::new(res.bytes))
+                        .map_err(|err| err.to_string())?;
+                    if decoder.dimensions() != PETEN_TERRAIN_TILE_DIMS {
+                        return Err(format!(
+                            "invalid dimensions {:?}, expected {:?} for terrain tile {filename}",
+                            decoder.dimensions(),
+                            PETEN_TERRAIN_TILE_DIMS
+                        ));
+                    }
+                    image::DynamicImage::from_decoder(decoder)
+                        .map(image::DynamicImage::into_rgba8)
+                        .map_err(|err| err.to_string())
+                });
+
+                let completed = {
+                    let mut pending = results.lock().unwrap();
+                    pending[index] = Some(result);
+                    pending.iter().all(Option::is_some).then(|| std::mem::take(&mut *pending))
+                };
+                if let Some(completed) = completed {
+                    let result = completed
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, result)| {
+                            result
+                                .expect("all four terrain tile requests completed")
+                                .map_err(|reason| format!("tile {:02}: {reason}", index + 1))
+                        })
+                        .collect();
+                    let _ = tx.send(MapDownloadEvent::TerrainTiles { session, map, result });
+                }
+            });
+        }
     }
 
     pub(crate) fn start_map_download(&mut self, map_name: String) {
@@ -256,6 +325,19 @@ impl SowApp {
                         match result {
                             Ok(image) => self.ui.app.asset_loader.terrain_art = Some((map, image)),
                             Err(reason) => log::warn!("Terrain art unavailable for '{map}': {reason}"),
+                        }
+                    }
+                }
+                MapDownloadEvent::TerrainTiles { session, map, result } => {
+                    if session == self.ui.campaign_session_id {
+                        self.ui.app.asset_loader.terrain_tiles_in_flight = None;
+                        match result {
+                            Ok(tiles) => {
+                                self.ui.app.asset_loader.terrain_tiles = Some((map, tiles));
+                            }
+                            Err(reason) => {
+                                log::warn!("Terrain tiles unavailable for '{map}': {reason}");
+                            }
                         }
                     }
                 }

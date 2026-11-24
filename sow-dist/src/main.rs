@@ -228,7 +228,7 @@ impl Paths {
             assets_gameplay: runtime_assets.join("gameplay"),
             assets_site: root.join("assets/site"),
             assets_maps: root.join("assets/maps"),
-            map_sources: root.join("assets/map_sources"),
+            map_sources: root.join("assets/maps/_sources"),
             dist_web: root.join("dist/web"),
             dist_cg: root.join("dist/crazygames"),
             dist_poki: root.join("dist/poki"),
@@ -1151,7 +1151,8 @@ fn site_media_ready(out: &Path) -> bool {
 
 fn validate_runtime_source_rasters(root: &Path) -> Result<()> {
     let building_sources = root.join("assets/art/buildings");
-    let map_sources = root.join("assets/map_sources");
+    let map_assets = root.join("assets/maps");
+    let map_sources = root.join("assets/maps/_sources");
     for entry in walkdir::WalkDir::new(root.join("assets")) {
         let entry = entry?;
         let ext = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or_default();
@@ -1163,10 +1164,26 @@ fn validate_runtime_source_rasters(root: &Path) -> Result<()> {
         let map_source_png = entry.file_type().is_file()
             && entry.path().file_name().is_some_and(|name| name == "image.png")
             && entry.path().parent().and_then(|dir| dir.parent()) == Some(map_sources.as_path());
+        // Authored map terrain tiles are source art. copy_release_maps runs each
+        // through ArtPipeline and publishes only optimized WebP derivatives.
+        let map_terrain_tile = entry.file_type().is_file()
+            && entry
+                .path()
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                == Some("terrain_tiles")
+            && entry
+                .path()
+                .parent()
+                .and_then(Path::parent)
+                .and_then(Path::parent)
+                == Some(map_assets.as_path());
         if entry.file_type().is_file()
             && ["png", "jpg", "jpeg"].contains(&ext.to_ascii_lowercase().as_str())
             && !packed_building_png
             && !map_source_png
+            && !map_terrain_tile
         {
             bail!("source raster must be WebP: {}", entry.path().display());
         }
@@ -2367,7 +2384,53 @@ fn publish_portal_leaders(src: &Path, dst: &Path, pipeline: &ArtPipeline, leader
 /// Release builds include only maps with a recorded recipe. Map Generator output
 /// stays local until uploaded to SOW_MAPS_UPLOAD_ROOT, even though it shares the
 /// assets/maps workspace used by the authored map library.
-fn copy_release_maps(src: &Path, dst: &Path, sources_path: &Path) -> Result<()> {
+fn publish_map_terrain_tiles(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()> {
+    if !src.is_dir() {
+        return Ok(());
+    }
+    let mut entries = fs::read_dir(src)
+        .with_context(|| format!("read map terrain source {}", src.display()))?
+        .collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|entry| entry.file_name());
+    let mut published = std::collections::BTreeSet::new();
+    for entry in entries {
+        let source = entry.path();
+        if !entry.file_type()?.is_file() {
+            bail!("map terrain sources must be flat image files: {}", source.display());
+        }
+        let extension = source
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if !["webp", "png", "jpg", "jpeg"].contains(&extension.as_str()) {
+            bail!("unsupported map terrain source: {}", source.display());
+        }
+        let stem = source
+            .file_stem()
+            .context("map terrain source has no filename")?;
+        let destination = dst.join(stem).with_extension("webp");
+        let output_name = destination
+            .file_name()
+            .context("map terrain output has no filename")?
+            .to_os_string();
+        if !published.insert(output_name) {
+            bail!("duplicate map terrain output name: {}", destination.display());
+        }
+        pipeline.optimize_image(&source, &destination, "map_terrain_tile", None, None)?;
+    }
+    if published.is_empty() {
+        bail!("map terrain source directory is empty: {}", src.display());
+    }
+    Ok(())
+}
+
+fn copy_release_maps(
+    src: &Path,
+    dst: &Path,
+    sources_path: &Path,
+    pipeline: &ArtPipeline,
+) -> Result<()> {
     let sources: toml::Value = fs::read_to_string(sources_path)?
         .parse()
         .context("parse official map source catalog")?;
@@ -2399,7 +2462,13 @@ fn copy_release_maps(src: &Path, dst: &Path, sources_path: &Path) -> Result<()> 
         for name in ["map.bin", "map.bin.br"] {
             require_file(&map_dir.join(name), &format!("release map {map_id}/{name}"))?;
         }
-        copy_dir(&map_dir, &dst.join(map_id))?;
+        let out_map = dst.join(map_id);
+        copy_dir(&map_dir, &out_map)?;
+        let out_tiles = out_map.join("terrain_tiles");
+        if out_tiles.exists() {
+            fs::remove_dir_all(&out_tiles)?;
+        }
+        publish_map_terrain_tiles(&map_dir.join("terrain_tiles"), &out_tiles, pipeline)?;
     }
     fs::write(
         dst.join("catalog.bin"),
@@ -2427,6 +2496,10 @@ fn copy_portal_maps(src: &Path, dst: &Path, pipeline: &ArtPipeline) -> Result<()
         let terrain_art = entry.path().join("terrain.webp");
         if terrain_art.is_file() {
             fs::copy(&terrain_art, out_dir.join("terrain.webp"))?;
+        }
+        let terrain_tiles = entry.path().join("terrain_tiles");
+        if terrain_tiles.is_dir() {
+            copy_dir(&terrain_tiles, &out_dir.join("terrain_tiles"))?;
         }
         let custom_preview = entry.path().join("custom-preview.webp");
         if custom_preview.is_file() {
@@ -2596,19 +2669,28 @@ fn refresh_map_thumbnails(maps_root: &Path, map_sources: &Path, pipeline: &ArtPi
     Ok(())
 }
 
-fn thumbnail_cache_bust(maps_root: &Path) -> Result<String> {
-    let mut files = fs::read_dir(maps_root)?
+fn map_assets_cache_bust(maps_root: &Path) -> Result<String> {
+    let mut files = walkdir::WalkDir::new(maps_root)
+        .into_iter()
         .filter_map(|entry| entry.ok())
-        .flat_map(|entry| {
-            ["thumbnail.webp", "preview.webp", "custom-preview.webp"]
-                .map(|name| entry.path().join(name))
+        .filter(|entry| entry.file_type().is_file())
+        .map(|entry| entry.into_path())
+        .filter(|path| {
+            let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+            let in_terrain_tiles = path
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                == Some("terrain_tiles");
+            ["terrain.webp", "thumbnail.webp", "preview.webp", "custom-preview.webp"]
+                .contains(&name)
+                || (in_terrain_tiles && path.extension().is_some_and(|ext| ext == "webp"))
         })
-        .filter(|path| path.is_file())
         .collect::<Vec<_>>();
     files.sort();
     if files.is_empty() {
         bail!(
-            "no generated map thumbnails found in {}",
+            "no generated map art found in {}",
             maps_root.display()
         );
     }
@@ -4177,7 +4259,7 @@ fn landing_maps(maps: &Path, sources_path: &Path) -> Result<String> {
         .context("parse official map source catalog")?;
     let recipes = sources.get("recipes").and_then(toml::Value::as_table)
         .context("map source catalog has no recipes")?;
-    let bust = thumbnail_cache_bust(maps)?;
+    let bust = map_assets_cache_bust(maps)?;
     let entries: Vec<_> = catalog
         .entries
         .iter()
@@ -4447,10 +4529,11 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
             &paths.assets_maps,
             &maps,
             &paths.root.join("assets/maps/SOURCES.toml"),
+            paths.art_pipeline()?,
         )?;
     }
     refresh_map_thumbnails(&maps, &paths.map_sources, paths.art_pipeline()?)?;
-    let maps_cache_bust = thumbnail_cache_bust(&maps)?;
+    let maps_cache_bust = map_assets_cache_bust(&maps)?;
 
     if let Some((previous_js, previous_wasm, previous_js_br, previous_wasm_br)) = previous_artifacts
     {
@@ -4716,6 +4799,7 @@ fn package_native_web(
             &paths.assets_maps,
             &out.join("maps"),
             &paths.root.join("assets/maps/SOURCES.toml"),
+            paths.art_pipeline()?,
         )?;
         refresh_map_thumbnails(&out.join("maps"), &paths.map_sources, paths.art_pipeline()?)?;
         copy_shell(paths, out, WebTarget::Native)?;
@@ -4758,7 +4842,7 @@ fn package_native_web(
             run_wasm_opt(&out.join(&wasm_name), &paths.wasm_cache, false)?;
         }
 
-        let maps_cache_bust = thumbnail_cache_bust(&out.join("maps"))?;
+        let maps_cache_bust = map_assets_cache_bust(&out.join("maps"))?;
         export_locales(out)?;
         build_index(
             paths,
@@ -5681,7 +5765,12 @@ fn package_local_preview(
         let maps = out.join("maps");
         fs::create_dir_all(&maps)?;
         if paths.assets_maps.is_dir() {
-            copy_dir(&paths.assets_maps, &maps)?;
+            copy_release_maps(
+                &paths.assets_maps,
+                &maps,
+                &paths.root.join("assets/maps/SOURCES.toml"),
+                paths.art_pipeline()?,
+            )?;
         }
 
         let site = paths.root.join("sow-web/site");
@@ -5747,7 +5836,7 @@ fn package_local_preview(
 
     copy_shell(paths, out, WebTarget::Local)?;
     write_locales(out, Some(&paths.root))?;
-    let maps_cache_bust = thumbnail_cache_bust(&out.join("maps")).unwrap_or_else(|error| {
+    let maps_cache_bust = map_assets_cache_bust(&out.join("maps")).unwrap_or_else(|error| {
         eprintln!("⚠ Local map thumbnails: {error:#}");
         ts.to_owned()
     });
@@ -5840,7 +5929,7 @@ fn cmd_jest(paths: &Paths) -> Result<()> {
     println!("==> Building Jest bundle {version}");
     compile_wasm(paths, false)?;
     package_self(paths, &web, &version, true)?;
-    let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
+    let maps_cache_bust = map_assets_cache_bust(&web.join("maps"))?;
     package_jest(
         &web,
         &paths.dist_jest,
@@ -5860,7 +5949,7 @@ fn cmd_poki(paths: &Paths) -> Result<()> {
     println!("==> Building self-contained Poki bundle {version}");
     compile_wasm(paths, false)?;
     package_self(paths, &web, &version, true)?;
-    let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
+    let maps_cache_bust = map_assets_cache_bust(&web.join("maps"))?;
     package_poki(
         &web,
         &paths.dist_poki,
@@ -5894,7 +5983,7 @@ fn cmd_crazygames(paths: &Paths) -> Result<()> {
     println!("==> Building CrazyGames bundle {version}");
     compile_wasm(paths, false)?;
     package_self(paths, &web, &version, true)?;
-    let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
+    let maps_cache_bust = map_assets_cache_bust(&web.join("maps"))?;
     package_cg(&web, &paths.dist_cg, paths, &version, &maps_cache_bust)?;
     Ok(())
 }
@@ -7455,8 +7544,8 @@ shortArticle = true
         validate_runtime_source_rasters(&root)?;
 
         let temp = tempfile::tempdir()?;
-        fs::create_dir_all(temp.path().join("assets/map_sources/bital_pass"))?;
-        fs::write(temp.path().join("assets/map_sources/bital_pass/image.png"), b"png")?;
+        fs::create_dir_all(temp.path().join("assets/maps/_sources/bital_pass"))?;
+        fs::write(temp.path().join("assets/maps/_sources/bital_pass/image.png"), b"png")?;
         fs::create_dir_all(temp.path().join("assets/art/buildings"))?;
         fs::write(temp.path().join("assets/art/buildings/city.png"), b"png")?;
         validate_runtime_source_rasters(temp.path())?;

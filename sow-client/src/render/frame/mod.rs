@@ -22,6 +22,7 @@ fn map_shader_params(
     params: &[[f32; 4]; sow_render::shader_params::PARAM_CAPACITY],
     sf: f32,
     has_terrain_art: bool,
+    has_terrain_tiles: bool,
 ) -> [[f32; 4]; sow_render::shader_params::PARAM_CAPACITY] {
     let mut params = *params;
     if let Some(slot) = sow_render::shader_params::shader_slot("border.tribe_zoom_cutoff") {
@@ -29,6 +30,7 @@ fn map_shader_params(
     }
     if let Some(slot) = sow_render::shader_params::shader_slot("land.peten_canopy") {
         params[slot][0] = if has_terrain_art { 1.0 } else { 0.0 };
+        params[slot][1] = if has_terrain_tiles { 1.0 } else { 0.0 };
     }
     if let Some(slot) = sow_render::shader_params::shader_slot("lighting.direction") {
         let dir = params[slot];
@@ -651,6 +653,12 @@ impl SowApp {
                         .filter(|(key, _)| key == &self.sim.config.map_name)
                         .map(|(_, image)| image)
                         .filter(|_| dev.value("land.peten_canopy")[0] > 0.5);
+                    let terrain_tiles = self.ui.app.asset_loader.terrain_tiles
+                        .as_ref()
+                        .filter(|(key, _)| {
+                            self.ui.tutorial_active && key == &self.sim.config.map_name
+                        })
+                        .map(|(_, tiles)| tiles);
                     let globals = MapGlobals {
                         camera_pos: [self.input.camera_x, self.input.camera_y],
                         zoom: self.input.camera_zoom,
@@ -711,7 +719,8 @@ impl SowApp {
                         shader_params: map_shader_params(
                             &dev.shader_params,
                             sf,
-                            terrain_art.is_some(),
+                            terrain_art.is_some() || terrain_tiles.is_some(),
+                            terrain_tiles.is_some(),
                         ),
                     };
                     if let Some(mr) = self.gfx.map_renderer.as_mut() {
@@ -722,6 +731,16 @@ impl SowApp {
                                 &self.sim.config.map_name,
                                 terrain_art,
                             );
+                        }
+                        if let Some(terrain_tiles) = terrain_tiles {
+                            mr.load_terrain_tiles(
+                                &render_ctx.context,
+                                &mut render_ctx.command_encoder,
+                                &self.sim.config.map_name,
+                                terrain_tiles,
+                            );
+                        } else {
+                            mr.clear_terrain_tiles(&render_ctx.context);
                         }
                         mr.draw(
                             &mut render_ctx.command_encoder,

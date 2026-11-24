@@ -691,7 +691,7 @@
     });
   $("labels").addEventListener("change", draw);
   async function loadWorldReference() {
-    const response = await fetch("/assets/map_sources/thumbnail_frames.json", { cache: "no-store" });
+    const response = await fetch("/assets/maps/_sources/thumbnail_frames.json", { cache: "no-store" });
     if (!response.ok) throw new Error("Map source manifest unavailable");
     const manifest = await response.json(),
       source = manifest.sources && manifest.sources["giantworldmap.webp"];
@@ -714,14 +714,14 @@
         image.onload = resolve;
         image.onerror = () => reject(new Error("High-resolution world map unavailable"));
       });
-    image.src = "/assets/map_sources/giantworldmap.webp";
+    image.src = "/assets/maps/_sources/giantworldmap.webp";
     await ready;
     if (image.naturalWidth !== source.width || image.naturalHeight !== source.height)
       throw new Error("World map source dimensions do not match its manifest");
     return { image, source };
   }
   async function loadWorldIslandGuides(map) {
-    const response = await fetch("/assets/map_sources/world_island_guides.json", { cache: "no-store" });
+    const response = await fetch("/assets/maps/_sources/world_island_guides.json", { cache: "no-store" });
     if (!response.ok) throw new Error("Island guide data unavailable");
     const data = await response.json();
     if (

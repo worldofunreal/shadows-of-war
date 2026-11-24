@@ -205,7 +205,7 @@ impl MapTarget {
                 .collect();
         }
         if self.owner == self.my_id && self.is_land {
-            return vec![
+            return [
                 MapMenuAction::BuildCity,
                 MapMenuAction::BuildTradingPost,
                 MapMenuAction::BuildPort,
@@ -213,7 +213,10 @@ impl MapTarget {
                 MapMenuAction::BuildMilitaryCamp,
                 MapMenuAction::BuildSam,
                 MapMenuAction::BuildMissileSilo,
-            ];
+            ]
+            .into_iter()
+            .filter(|action| action.building_kind().is_none_or(|kind| kind.is_enabled()))
+            .collect();
         }
         if self.owner == 0 {
             let mut actions = Vec::new();
@@ -1130,6 +1133,9 @@ impl SowApp {
         kind: sow_core::game::BuildingKind,
         tile_idx: u32,
     ) {
+        if !kind.is_enabled() {
+            return;
+        }
         if self
             .ui
             .app
@@ -1955,6 +1961,9 @@ impl SowApp {
     }
 
     pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
+        if !kind.is_enabled() {
+            return;
+        }
         if self.ui.observing
             || self.ui.tutorial_camera_only
             || self.ui.app.phase != crate::ClientPhase::Playing

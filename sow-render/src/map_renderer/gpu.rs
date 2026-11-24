@@ -19,6 +19,10 @@ struct MapShaderData {
     owner_texture: gpu::TextureView,
     skin_texture: gpu::TextureView,
     terrain_art_texture: gpu::TextureView,
+    terrain_tile_0_texture: gpu::TextureView,
+    terrain_tile_1_texture: gpu::TextureView,
+    terrain_tile_2_texture: gpu::TextureView,
+    terrain_tile_3_texture: gpu::TextureView,
     skin_sampler: gpu::Sampler,
 }
 
@@ -43,6 +47,7 @@ pub struct MapRenderer {
     skin_sampler: gpu::Sampler,
     terrain_art: Option<FontAtlasTexture>,
     terrain_art_key: Option<String>,
+    terrain_tiles: Option<(String, Vec<FontAtlasTexture>)>,
     pub pipeline: gpu::RenderPipeline,
     tabletop: Option<TabletopDraw>,
     surface_format: gpu::TextureFormat,
@@ -234,7 +239,6 @@ impl MapRenderer {
             mag_filter: gpu::FilterMode::Linear,
             ..Default::default()
         });
-
         // --- Shader & pipeline ---
         let source =
             crate::shader_params::prepare_shader("MAP_", include_str!("../shaders/map.wgsl"));
@@ -276,6 +280,7 @@ impl MapRenderer {
             skin_sampler,
             terrain_art: None,
             terrain_art_key: None,
+            terrain_tiles: None,
             pipeline,
             tabletop: None,
             surface_format,
@@ -443,6 +448,54 @@ impl MapRenderer {
         texture.upload(encoder, context);
         self.terrain_art = Some(texture);
         self.terrain_art_key = Some(key.to_string());
+    }
+
+    /// Upload the four Petén Clearing art tiles as individual 2D textures.
+    pub fn load_terrain_tiles(
+        &mut self,
+        context: &gpu::Context,
+        encoder: &mut gpu::CommandEncoder,
+        key: &str,
+        tiles: &[image::RgbaImage],
+    ) {
+        if self
+            .terrain_tiles
+            .as_ref()
+            .is_some_and(|(loaded_key, _)| loaded_key == key)
+        {
+            return;
+        }
+        assert_eq!(tiles.len(), 4, "Petén Clearing needs four terrain tiles");
+        let (width, height) = tiles[0].dimensions();
+        assert!(
+            tiles.iter().all(|tile| tile.dimensions() == (width, height)),
+            "terrain tile dimensions must match"
+        );
+        let textures = tiles
+            .iter()
+            .enumerate()
+            .map(|(index, tile)| {
+                let texture = FontAtlasTexture::from_rgba(
+                    context,
+                    tile,
+                    &format!("terrain_tile_{index}"),
+                    gpu::TextureFormat::Rgba8Unorm,
+                );
+                encoder.init_texture(texture.texture);
+                texture.upload(encoder, context);
+                texture
+            })
+            .collect();
+        self.clear_terrain_tiles(context);
+        self.terrain_tiles = Some((key.to_string(), textures));
+    }
+
+    pub fn clear_terrain_tiles(&mut self, context: &gpu::Context) {
+        if let Some((_, tiles)) = self.terrain_tiles.take() {
+            for tile in tiles {
+                tile.destroy(context);
+            }
+        }
     }
 
     /// Write dirty ownership tiles to the upload buffer and copy to GPU.
@@ -889,6 +942,19 @@ impl MapRenderer {
         );
         let tabletop = self.tabletop.as_ref().filter(|_| tabletop);
         let mut rc = pass.with(tabletop.map_or(&self.pipeline, |draw| &draw.pipeline));
+        let terrain_art_view = self
+            .terrain_art
+            .as_ref()
+            .map_or(self.terrain_view, |texture| texture.view);
+        let terrain_tiles = self
+            .terrain_tiles
+            .as_ref()
+            .map_or(&[][..], |(_, tiles)| tiles.as_slice());
+        let terrain_tile_view = |index: usize| {
+            terrain_tiles
+                .get(index)
+                .map_or(terrain_art_view, |tile| tile.view)
+        };
         rc.bind(
             0,
             &MapShaderData {
@@ -898,10 +964,11 @@ impl MapRenderer {
                 terrain_texture: self.terrain_view,
                 owner_texture: self.owner_view,
                 skin_texture: self.skin_view,
-                terrain_art_texture: self
-                    .terrain_art
-                    .as_ref()
-                    .map_or(self.terrain_view, |texture| texture.view),
+                terrain_art_texture: terrain_art_view,
+                terrain_tile_0_texture: terrain_tile_view(0),
+                terrain_tile_1_texture: terrain_tile_view(1),
+                terrain_tile_2_texture: terrain_tile_view(2),
+                terrain_tile_3_texture: terrain_tile_view(3),
                 skin_sampler: self.skin_sampler,
             },
         );
@@ -929,6 +996,11 @@ impl MapRenderer {
         render_ctx.context.destroy_texture(self.skin_texture);
         render_ctx.context.destroy_buffer(self.skin_buffer);
         render_ctx.context.destroy_sampler(self.skin_sampler);
+        if let Some((_, tiles)) = self.terrain_tiles.take() {
+            for tile in tiles {
+                tile.destroy(&render_ctx.context);
+            }
+        }
         if let Some(texture) = self.terrain_art.take() {
             texture.destroy(&render_ctx.context);
         }

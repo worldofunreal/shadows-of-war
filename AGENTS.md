@@ -28,5 +28,5 @@ Workspace rules: `../AGENTS.md`. This file holds only what is specific to this g
 
 - Match return order: server confirmation, rewards, each gained level, then guidance.
 - Do not translate a campaign episode until the owner marks it finished.
-- Before map or thumbnail work, read `assets/maps/SOURCES.toml`, `assets/map_sources/thumbnail_frames.json` and the map generation code. Thumbnail work must not change playable map data.
+- Before map or thumbnail work, read `assets/maps/SOURCES.toml`, `assets/maps/_sources/thumbnail_frames.json` and the map generation code. Thumbnail work must not change playable map data.
 - Nameplates, emotes and hero sheets: keep live communication separate from betrayal and archived recordings.

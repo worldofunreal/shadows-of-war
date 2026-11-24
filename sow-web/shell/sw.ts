@@ -67,9 +67,10 @@ function isStaticUiAsset(pathname: string): boolean {
 
 function isCachedMapAsset(pathname: string): boolean {
     return (
-        pathname.includes("/assets/maps/") &&
+        pathname.includes("/maps/") &&
         (pathname.endsWith("/map.bin.br") ||
             pathname.endsWith("/terrain.webp") ||
+            (pathname.includes("/terrain_tiles/") && pathname.endsWith(".webp")) ||
             pathname.endsWith("/thumbnail.webp") ||
             pathname.endsWith("/catalog.bin"))
     );

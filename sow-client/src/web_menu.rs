@@ -4289,8 +4289,8 @@ fn building_detail_payload(
 
     let coastal = building.kind == BuildingKind::Port
         && app.structure_touches_water(BuildingKind::Port, building.tile_idx);
-    let railway_connected = snapshot.railway_links.iter().any(|link| {
-        link.from_building_id == building.id || link.to_building_id == building.id
+    let railway_connected = snapshot.railway_tracks.iter().any(|track| {
+        track.from_node_id == building.id || track.to_node_id == building.id
     });
     let visual_level = building.active_level();
 

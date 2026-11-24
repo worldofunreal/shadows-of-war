@@ -176,6 +176,11 @@ pub enum MapDownloadEvent {
         map: String,
         result: Result<image::RgbaImage, String>,
     },
+    TerrainTiles {
+        session: u32,
+        map: String,
+        result: Result<Vec<image::RgbaImage>, String>,
+    },
     /// Portal identity avatar (CrazyGames profile picture, arbitrary remote URL).
     PortalAvatarReady {
         bytes: Vec<u8>,

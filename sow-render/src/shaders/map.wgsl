@@ -69,6 +69,10 @@ var terrain_texture: texture_2d<f32>;
 var owner_texture: texture_2d<u32>;
 var skin_texture: texture_2d<f32>;
 var terrain_art_texture: texture_2d<f32>;
+var terrain_tile_0_texture: texture_2d<f32>;
+var terrain_tile_1_texture: texture_2d<f32>;
+var terrain_tile_2_texture: texture_2d<f32>;
+var terrain_tile_3_texture: texture_2d<f32>;
 var skin_sampler: sampler;
 
 struct VertexOutput {
@@ -585,7 +589,31 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     // then convert once to linear RGB before lighting, borders, and output.
     var base_srgb = clamp(terrain_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
     if is_land && globals.shader_params[__MAP_PETEN_CANOPY__].x > 0.5 {
-        base_srgb = textureSampleLevel(terrain_art_texture, skin_sampler, in.world / globals.map_size, 0.0).rgb;
+        if globals.shader_params[__MAP_PETEN_CANOPY__].y > 0.5 {
+            let chunk_size = globals.map_size / vec2<f32>(2.0, 2.0);
+            let chunk_index = min(
+                vec2<u32>(in.world / chunk_size),
+                vec2<u32>(1u, 1u)
+            );
+            let local_uv = (in.world - vec2<f32>(chunk_index) * chunk_size) / chunk_size;
+            let chunk = chunk_index.y * 2u + chunk_index.x;
+            if chunk == 0u {
+                base_srgb = textureSampleLevel(terrain_tile_0_texture, skin_sampler, local_uv, 0.0).rgb;
+            } else if chunk == 1u {
+                base_srgb = textureSampleLevel(terrain_tile_1_texture, skin_sampler, local_uv, 0.0).rgb;
+            } else if chunk == 2u {
+                base_srgb = textureSampleLevel(terrain_tile_2_texture, skin_sampler, local_uv, 0.0).rgb;
+            } else {
+                base_srgb = textureSampleLevel(terrain_tile_3_texture, skin_sampler, local_uv, 0.0).rgb;
+            }
+        } else {
+            base_srgb = textureSampleLevel(
+                terrain_art_texture,
+                skin_sampler,
+                in.world / globals.map_size,
+                0.0
+            ).rgb;
+        }
     }
     var albedo_linear = vec3<f32>(0.0);
 

@@ -33,6 +33,7 @@ dump.rdb
 
 # Server map library (large binaries): assets/maps/
 assets/maps/*
+!assets/maps/_sources/
 !assets/maps/world/
 !assets/maps/peten_clearing/
 !assets/maps/peten_yellow_rabbit/

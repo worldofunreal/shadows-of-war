@@ -16,7 +16,7 @@ if (map !== "peten_clearing" && map !== "bital_pass" && !chapter) {
 }
 const bital = map === "bital_pass";
 const repoRoot = join(import.meta.dir, "../..");
-const sourceDir = join(repoRoot, "assets/map_sources", map);
+const sourceDir = join(repoRoot, "assets/maps/_sources", map);
 const maskPath = join(sourceDir, "image.png");
 const episode = chapter?.episode ?? (bital ? 2 : 1);
 const roster: PetenRoster = JSON.parse(readFileSync(join(repoRoot, "assets/campaign", `six_sky_maya_0${episode}.json`), "utf8"));

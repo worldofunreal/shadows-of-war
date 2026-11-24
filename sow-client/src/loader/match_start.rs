@@ -290,6 +290,35 @@ impl SowApp {
         } else {
             self.ui.app.asset_loader.terrain_art = None;
         }
+        if tutorial && config.map_name == "peten_clearing" {
+            let cached_for_map = self
+                .ui
+                .app
+                .asset_loader
+                .terrain_tiles
+                .as_ref()
+                .is_some_and(|(key, _)| key == &config.map_name);
+            let already_in_flight = self
+                .ui
+                .app
+                .asset_loader
+                .terrain_tiles_in_flight
+                .as_ref()
+                .is_some_and(|(session, key)| {
+                    *session == self.ui.campaign_session_id && key == &config.map_name
+                });
+            if !cached_for_map && !already_in_flight {
+                self.ui.app.asset_loader.terrain_tiles = None;
+                self.ui.app.asset_loader.terrain_tiles_in_flight = Some((
+                    self.ui.campaign_session_id,
+                    config.map_name.clone(),
+                ));
+                self.start_peten_terrain_tiles_download(config.map_name.clone());
+            }
+        } else {
+            self.ui.app.asset_loader.terrain_tiles = None;
+            self.ui.app.asset_loader.terrain_tiles_in_flight = None;
+        }
 
         let start_msg = sow_core::protocol::ServerStartMessage {
             lobby_id: None,

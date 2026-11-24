@@ -304,6 +304,17 @@ lossless = false
 max_bytes = 32768
 recipe_version = 2
 
+[profiles.map_terrain_tile]
+format = "webp"
+max_width = 8192
+max_height = 8192
+quality = 86
+alpha = "strip"
+resample = "lanczos"
+lossless = false
+max_bytes = 4000000
+recipe_version = 1
+
 [profiles.video_poster]
 format = "webp"
 max_width = 1280
