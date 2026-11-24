@@ -196,6 +196,10 @@ pub struct Player {
     pub peak_territory_rank: Option<u16>,
     #[serde(default)]
     pub structures_built: u32,
+    /// Levels this player has constructed or paid to upgrade, by `BuildingKind`.
+    /// Capturing a structure does not change this lifetime cost-scaling counter.
+    #[serde(default)]
+    pub structure_levels_built: [u32; crate::game::BUILDING_KIND_COUNT],
 }
 
 fn default_wyrand() -> WyRand {
@@ -256,6 +260,7 @@ impl Player {
             alive_ticks: 0,
             peak_territory_rank: None,
             structures_built: 0,
+            structure_levels_built: [0; crate::game::BUILDING_KIND_COUNT],
         }
     }
     pub fn new_bot(
@@ -320,6 +325,7 @@ impl Player {
             alive_ticks: 0,
             peak_territory_rank: None,
             structures_built: 0,
+            structure_levels_built: [0; crate::game::BUILDING_KIND_COUNT],
         }
     }
     pub fn new_nation(
@@ -381,6 +387,7 @@ impl Player {
             alive_ticks: 0,
             peak_territory_rank: None,
             structures_built: 0,
+            structure_levels_built: [0; crate::game::BUILDING_KIND_COUNT],
         }
     }
 
@@ -500,6 +507,7 @@ mod avatar_identity_tests {
             nuke_cooldown_ticks: 0,
             help_calls: Vec::new(),
             help_cooldown_ticks: 0,
+            structure_levels_built: [0; crate::game::BUILDING_KIND_COUNT],
         }
     }
 

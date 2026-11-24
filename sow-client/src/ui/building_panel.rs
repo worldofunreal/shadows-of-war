@@ -63,7 +63,7 @@ pub(crate) fn building_metrics(
     }
     use sow_core::geo_entities::{District, Resource, Source};
     let level_weight = sow_core::building::income_level_weight(level.min(4));
-    let capacity_level_weight = sow_core::building::income_level_weight(level);
+    let capacity_level_weight = sow_core::building::city_capacity_level_weight(level);
     let district_capacity = config.district_max_troops
         * sow_core::building::district_capacity_level_weight(level);
     let level = f64::from(level);

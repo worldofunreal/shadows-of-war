@@ -163,8 +163,28 @@ pub(crate) fn render(
                 if !route_in_view(a, corner, b, screen_w, screen_h, width * 2.0)
                     || (dev.fog_of_war && !segment.path_tiles.iter().all(|&tile| sim.fog_visible.contains(tile)))
                 { continue; }
-                draw_track_leg(text, a, corner, width, opacity, segment.level);
-                draw_track_leg(text, corner, b, width, opacity, segment.level);
+                draw_track_leg(
+                    text,
+                    a,
+                    corner,
+                    width,
+                    opacity,
+                    segment.level,
+                    zoom_scaled,
+                    [screen_w, screen_h],
+                    snapshot.tick,
+                );
+                draw_track_leg(
+                    text,
+                    corner,
+                    b,
+                    width,
+                    opacity,
+                    segment.level,
+                    zoom_scaled,
+                    [screen_w, screen_h],
+                    snapshot.tick,
+                );
                 drawn += 1;
                 if vehicles < vehicle_limit && !segment.blocked && segment.period_ticks != 0 {
                     let elapsed = snapshot.tick.saturating_sub(segment.opened_at) % u64::from(segment.period_ticks);
@@ -172,26 +192,35 @@ pub(crate) fn render(
                     let color = snapshot.players.iter().find(|player| player.id == segment.owner_id)
                         .map(crate::render::world::nameplates::player_color).unwrap_or([0.85, 0.8, 0.66, 1.0]);
                     if segment.level >= 6 {
-                        for (car_index, &gap) in [0.0, 1.25, 2.50].iter().enumerate() {
-                            let (position, dir) = train_position(segment, phase, gap);
+                        let gaps: &[f32] = match segment.level {
+                            6 => &[0.0, 1.32, 2.64],
+                            7 => &[0.0, 1.18, 2.36, 3.54],
+                            _ => &[0.0, 1.05, 2.10, 3.15],
+                        };
+                        for (car_index, &gap) in gaps.iter().enumerate() {
+                            let (position, dir, loaded) = train_position(segment, phase, gap);
                             draw_train_car(
                                 text,
                                 input.world_to_screen(position),
                                 dir,
                                 base_vehicle_size,
+                                segment.level,
                                 car_index == 0,
+                                loaded,
                                 color,
+                                snapshot.tick,
                                 sf,
                             );
                         }
                     } else {
-                        let (position, dir) = train_position(segment, phase, 0.0);
+                        let (position, dir, loaded) = train_position(segment, phase, 0.0);
                         draw_trade_cart(
                             text,
                             input.world_to_screen(position),
                             dir,
                             base_vehicle_size,
                             segment.level,
+                            loaded,
                             color,
                             sf,
                         );
@@ -219,12 +248,92 @@ fn route_in_view(
     max_x >= -margin && min_x <= screen_w + margin && max_y >= -margin && min_y <= screen_h + margin
 }
 
-fn draw_track_leg(text: &mut TextRenderer, a: [f32; 2], b: [f32; 2], width: f32, opacity: f32, level: u8) {
+#[inline]
+fn push_axis_strip(
+    text: &mut TextRenderer,
+    center: [f32; 2],
+    horizontal: bool,
+    length: f32,
+    thickness: f32,
+    color: [f32; 4],
+) {
+    let size = if horizontal { [length, thickness] } else { [thickness, length] };
+    text.push_rect([center[0] - size[0] * 0.5, center[1] - size[1] * 0.5], size, color);
+}
+
+#[inline]
+fn offset_cross(center: [f32; 2], horizontal: bool, cross: f32) -> [f32; 2] {
+    if horizontal {
+        [center[0], center[1] + cross]
+    } else {
+        [center[0] + cross, center[1]]
+    }
+}
+
+#[inline]
+fn offset_along(center: [f32; 2], horizontal: bool, along: f32) -> [f32; 2] {
+    if horizontal {
+        [center[0] + along, center[1]]
+    } else {
+        [center[0], center[1] + along]
+    }
+}
+
+const MAX_MARKS_PER_LEG: i32 = 48;
+
+fn draw_leg_marks(
+    text: &mut TextRenderer,
+    center: [f32; 2],
+    horizontal: bool,
+    start: f32,
+    end: f32,
+    viewport_limit: f32,
+    step: f32,
+    mark_along: f32,
+    mark_cross: f32,
+    color: [f32; 4],
+) {
+    let vis_start = start.max(-8.0);
+    let vis_end = end.min(viewport_limit + 8.0);
+    if vis_end <= vis_start || step <= 0.5 {
+        return;
+    }
+    let first = ((vis_start - start) / step).ceil().max(0.0) as i32;
+    let last = ((vis_end - start) / step).floor().max(-1.0) as i32;
+    if last < first {
+        return;
+    }
+    let count = last - first + 1;
+    let stride = (count + MAX_MARKS_PER_LEG - 1) / MAX_MARKS_PER_LEG;
+    let mut index = first;
+    while index <= last {
+        let pos_along = start + index as f32 * step - if horizontal { center[0] } else { center[1] };
+        push_axis_strip(
+            text,
+            offset_along(center, horizontal, pos_along),
+            horizontal,
+            mark_along,
+            mark_cross,
+            color,
+        );
+        index += stride;
+    }
+}
+
+fn draw_track_leg(
+    text: &mut TextRenderer,
+    a: [f32; 2],
+    b: [f32; 2],
+    width: f32,
+    opacity: f32,
+    level: u8,
+    zoom_scaled: f32,
+    viewport: [f32; 2],
+    tick: u64,
+) {
     if opacity <= 0.0 || ((a[0] - b[0]).abs() + (a[1] - b[1]).abs()) < 0.5 {
         return;
     }
-    let rail_width = (width * 0.28).max(0.7);
-    let rail_offset = width * 0.4;
     let horizontal = (a[0] - b[0]).abs() >= (a[1] - b[1]).abs();
     let (start, end) = if horizontal {
         (a[0].min(b[0]), a[0].max(b[0]))
@@ -233,74 +342,129 @@ fn draw_track_leg(text: &mut TextRenderer, a: [f32; 2], b: [f32; 2], width: f32,
     };
     let length = end - start;
     let center = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+    let viewport_limit = if horizontal { viewport[0] } else { viewport[1] };
+    let detail_zoom = zoom_scaled >= 1.1;
+
     if level < 6 {
-        let (border_color, road_color, road_scale) = if level >= 3 {
-            (
-                [0.24, 0.22, 0.20, opacity * 0.65],
-                [0.54, 0.48, 0.40, opacity * 0.92],
-                1.08,
-            )
-        } else {
-            (
-                [0.28, 0.20, 0.13, opacity * 0.55],
-                [0.52, 0.37, 0.22, opacity],
-                0.95,
-            )
+        let (border_color, road_color, road_scale) = match level {
+            0 | 1 => ([0.30, 0.21, 0.13, opacity * 0.44], [0.49, 0.34, 0.20, opacity * 0.92], 0.85),
+            2 => ([0.30, 0.29, 0.17, opacity * 0.52], [0.54, 0.39, 0.22, opacity * 0.95], 0.98),
+            3 => ([0.24, 0.22, 0.20, opacity * 0.65], [0.62, 0.56, 0.47, opacity * 0.95], 1.06),
+            4 => ([0.20, 0.19, 0.19, opacity * 0.72], [0.48, 0.45, 0.41, opacity * 0.95], 1.14),
+            _ => ([0.15, 0.15, 0.17, opacity * 0.80], [0.33, 0.32, 0.32, opacity * 0.96], 1.20),
         };
-        let outer = width * road_scale * 1.32;
         let inner = width * road_scale;
-        let outer_size = if horizontal { [length, outer] } else { [outer, length] };
-        let inner_size = if horizontal { [length, inner] } else { [inner, length] };
-        text.push_rect([center[0] - outer_size[0] * 0.5, center[1] - outer_size[1] * 0.5], outer_size, border_color);
-        text.push_rect([center[0] - inner_size[0] * 0.5, center[1] - inner_size[1] * 0.5], inner_size, road_color);
+        let outer = inner * 1.32;
+        push_axis_strip(text, center, horizontal, length, outer, border_color);
+        push_axis_strip(text, center, horizontal, length, inner, road_color);
+        if detail_zoom && level == 4 {
+            draw_leg_marks(
+                text,
+                center,
+                horizontal,
+                start,
+                end,
+                viewport_limit,
+                (inner * 1.6).max(6.0),
+                (inner * 0.25).max(1.0),
+                inner * 0.82,
+                [0.28, 0.26, 0.23, opacity * 0.45],
+            );
+        } else if detail_zoom && level == 5 {
+            draw_leg_marks(
+                text,
+                center,
+                horizontal,
+                start,
+                end,
+                viewport_limit,
+                (inner * 2.2).max(8.0),
+                (inner * 0.85).max(3.0),
+                (inner * 0.18).max(0.8),
+                [0.88, 0.80, 0.56, opacity * 0.75],
+            );
+        }
         return;
     }
-    if horizontal {
-        text.push_rect(
-            [start, center[1] - width * 0.625],
-            [length, width * 1.25],
-            [
-                TRACK_BED_COLOR[0],
-                TRACK_BED_COLOR[1],
-                TRACK_BED_COLOR[2],
-                opacity * 0.42,
-            ],
+
+    let (bed_color, bed_w, rail_color, rail_offset, rail_width) = match level {
+        6 => (
+            [TRACK_BED_COLOR[0], TRACK_BED_COLOR[1], TRACK_BED_COLOR[2], opacity * 0.46],
+            width * 1.30,
+            [TRACK_RAIL_COLOR[0], TRACK_RAIL_COLOR[1], TRACK_RAIL_COLOR[2], opacity],
+            width * 0.42,
+            (width * 0.28).max(0.75),
+        ),
+        7 => (
+            [0.14, 0.15, 0.17, opacity * 0.54],
+            width * 1.38,
+            [0.78, 0.82, 0.86, opacity],
+            width * 0.44,
+            (width * 0.28).max(0.75),
+        ),
+        _ => (
+            [0.10, 0.12, 0.17, opacity * 0.72],
+            width * 1.48,
+            [0.76, 0.85, 0.94, opacity],
+            width * 0.46,
+            (width * 0.26).max(0.75),
+        ),
+    };
+    push_axis_strip(text, center, horizontal, length, bed_w, bed_color);
+    if detail_zoom {
+        let (tie_step, tie_thick, tie_span, tie_color) = match level {
+            6 => (
+                (width * 1.4).max(5.5),
+                (width * 0.30).max(1.0),
+                bed_w * 0.95,
+                [0.38, 0.25, 0.14, opacity * 0.72],
+            ),
+            7 => (
+                (width * 1.5).max(6.0),
+                (width * 0.28).max(1.0),
+                bed_w * 0.92,
+                [0.54, 0.56, 0.60, opacity * 0.66],
+            ),
+            _ => (
+                (width * 1.8).max(7.0),
+                (width * 0.26).max(0.9),
+                bed_w * 0.88,
+                [0.24, 0.78, 0.95, opacity * 0.42],
+            ),
+        };
+        draw_leg_marks(
+            text,
+            center,
+            horizontal,
+            start,
+            end,
+            viewport_limit,
+            tie_step,
+            tie_thick,
+            tie_span,
+            tie_color,
         );
-        for offset in [-rail_offset, rail_offset] {
-            text.push_rect(
-                [start, center[1] + offset - rail_width * 0.5],
-                [length, rail_width],
-                [
-                    TRACK_RAIL_COLOR[0],
-                    TRACK_RAIL_COLOR[1],
-                    TRACK_RAIL_COLOR[2],
-                    opacity,
-                ],
-            );
-        }
-    } else {
-        text.push_rect(
-            [center[0] - width * 0.625, start],
-            [width * 1.25, length],
-            [
-                TRACK_BED_COLOR[0],
-                TRACK_BED_COLOR[1],
-                TRACK_BED_COLOR[2],
-                opacity * 0.42,
-            ],
+    }
+    for offset in [-rail_offset, rail_offset] {
+        push_axis_strip(
+            text,
+            offset_cross(center, horizontal, offset),
+            horizontal,
+            length,
+            rail_width,
+            rail_color,
         );
-        for offset in [-rail_offset, rail_offset] {
-            text.push_rect(
-                [center[0] + offset - rail_width * 0.5, start],
-                [rail_width, length],
-                [
-                    TRACK_RAIL_COLOR[0],
-                    TRACK_RAIL_COLOR[1],
-                    TRACK_RAIL_COLOR[2],
-                    opacity,
-                ],
-            );
-        }
+    }
+    if level >= 8 {
+        let pulse = 0.72 + 0.16 * (tick as f32 * 0.25).sin();
+        push_axis_strip(
+            text,
+            center,
+            horizontal,
+            length,
+            (width * 0.24).max(0.8),
+            [0.24, 0.86, 1.0, opacity * pulse],
+        );
     }
 }
 
@@ -329,10 +493,12 @@ fn draw_cart_wheels(
     length: f32,
     breadth: f32,
     wheel_radius: f32,
+    single_axle: bool,
 ) {
     let wheel_color = [0.16, 0.12, 0.09, 0.98];
-    for along in [-length * 0.28, length * 0.28] {
-        for across in [-breadth * 0.50, breadth * 0.50] {
+    let axles: &[f32] = if single_axle { &[0.0] } else { &[-length * 0.28, length * 0.28] };
+    for &along in axles {
+        for across in [-breadth * 0.52, breadth * 0.52] {
             text.push_disc(
                 offset_along_dir(center, dir, along, across),
                 wheel_radius,
@@ -348,10 +514,11 @@ fn draw_trade_cart(
     dir: [f32; 2],
     base_size: f32,
     level: u8,
+    loaded: bool,
     color: [f32; 4],
     sf: f32,
 ) {
-    let scale = 1.0 + 0.05 * f32::from(level.saturating_sub(1).min(4));
+    let scale = 1.0 + 0.06 * f32::from(level.saturating_sub(1).min(4));
     let length = base_size * 1.46 * scale;
     let breadth = base_size * 0.84 * scale;
     let outline = (sf * 0.75).max(0.6);
@@ -372,15 +539,25 @@ fn draw_trade_cart(
         [0.08, 0.06, 0.04, 0.9],
         (sf * 0.5).max(0.5),
     );
-    draw_cart_wheels(text, center, dir, length, breadth, (breadth * 0.21).max(1.5));
+    let wheel_r = if level <= 1 {
+        (breadth * 0.26).max(1.8)
+    } else {
+        (breadth * 0.21).max(1.5)
+    };
+    draw_cart_wheels(text, center, dir, length, breadth, wheel_r, level <= 1);
 
-    let wood = [0.56, 0.36, 0.18, 1.0];
     let frame_border = [0.12, 0.09, 0.06, 0.96];
+    let frame_fill = match level {
+        0 | 1 => [0.54, 0.35, 0.17, 1.0],
+        2 | 3 => [0.60, 0.40, 0.21, 1.0],
+        4 => [0.50, 0.34, 0.19, 1.0],
+        _ => [0.24, 0.21, 0.19, 1.0],
+    };
     text.push_rounded_rect(
         center,
         oriented_size(length, breadth, dir),
         0.20,
-        wood,
+        frame_fill,
         frame_border,
         outline,
     );
@@ -392,32 +569,84 @@ fn draw_trade_cart(
         frame_border,
         (sf * 0.5).max(0.45),
     );
-    if level >= 3 {
-        text.push_rounded_rect(
-            offset_along_dir(center, dir, -length * 0.05, 0.0),
-            oriented_size(length * 0.62, breadth * 0.64, dir),
-            0.35,
-            [0.94, 0.90, 0.80, 0.98],
-            [0.34, 0.28, 0.20, 0.85],
-            (sf * 0.45).max(0.4),
-        );
-        text.push_rounded_rect(
-            offset_along_dir(center, dir, length * 0.22, 0.0),
-            oriented_size(length * 0.18, breadth * 0.48, dir),
-            0.25,
-            [0.98, 0.80, 0.22, 1.0],
-            [0.42, 0.28, 0.05, 0.85],
-            (sf * 0.4).max(0.35),
-        );
-    } else {
-        text.push_rounded_rect(
-            offset_along_dir(center, dir, -length * 0.06, 0.0),
-            oriented_size(length * 0.44, breadth * 0.46, dir),
-            0.22,
-            [0.98, 0.80, 0.22, 1.0],
-            [0.45, 0.30, 0.05, 0.9],
-            (sf * 0.45).max(0.4),
-        );
+
+    match level {
+        0 | 1 | 2 => {
+            if loaded {
+                text.push_rounded_rect(
+                    offset_along_dir(center, dir, -length * 0.05, 0.0),
+                    oriented_size(length * 0.48, breadth * 0.48, dir),
+                    0.24,
+                    [0.98, 0.80, 0.22, 1.0],
+                    [0.45, 0.30, 0.05, 0.92],
+                    (sf * 0.45).max(0.4),
+                );
+            } else {
+                text.push_rounded_rect(
+                    offset_along_dir(center, dir, -length * 0.05, 0.0),
+                    oriented_size(length * 0.44, breadth * 0.44, dir),
+                    0.20,
+                    [0.42, 0.28, 0.16, 0.9],
+                    [0.18, 0.12, 0.07, 0.85],
+                    (sf * 0.35).max(0.35),
+                );
+            }
+        }
+        3 => {
+            text.push_rounded_rect(
+                offset_along_dir(center, dir, -length * 0.05, 0.0),
+                oriented_size(length * 0.56, breadth * 0.52, dir),
+                0.28,
+                if loaded { [0.98, 0.82, 0.26, 1.0] } else { [0.85, 0.80, 0.70, 0.94] },
+                frame_border,
+                (sf * 0.4).max(0.35),
+            );
+        }
+        4 => {
+            text.push_rounded_rect(
+                offset_along_dir(center, dir, -length * 0.06, 0.0),
+                oriented_size(length * 0.64, breadth * 0.66, dir),
+                0.38,
+                [0.94, 0.90, 0.80, 0.98],
+                [0.34, 0.28, 0.20, 0.85],
+                (sf * 0.45).max(0.4),
+            );
+            if loaded {
+                text.push_rounded_rect(
+                    offset_along_dir(center, dir, length * 0.20, 0.0),
+                    oriented_size(length * 0.20, breadth * 0.52, dir),
+                    0.25,
+                    [0.98, 0.80, 0.22, 1.0],
+                    [0.42, 0.28, 0.05, 0.85],
+                    (sf * 0.4).max(0.35),
+                );
+            }
+        }
+        _ => {
+            text.push_rounded_rect(
+                offset_along_dir(center, dir, -length * 0.04, 0.0),
+                oriented_size(length * 0.58, breadth * 0.58, dir),
+                0.24,
+                [0.24, 0.21, 0.20, 0.98],
+                frame_border,
+                (sf * 0.4).max(0.35),
+            );
+            text.push_disc(
+                offset_along_dir(center, dir, length * 0.36, 0.0),
+                (breadth * 0.18).max(1.3),
+                [0.99, 0.88, 0.36, 0.98],
+            );
+            if loaded {
+                text.push_rounded_rect(
+                    offset_along_dir(center, dir, -length * 0.08, 0.0),
+                    oriented_size(length * 0.34, breadth * 0.38, dir),
+                    0.22,
+                    [0.98, 0.80, 0.22, 1.0],
+                    [0.42, 0.28, 0.05, 0.85],
+                    (sf * 0.35).max(0.35),
+                );
+            }
+        }
     }
 }
 
@@ -426,25 +655,93 @@ fn draw_train_car(
     center: [f32; 2],
     dir: [f32; 2],
     base_size: f32,
+    level: u8,
     is_locomotive: bool,
+    loaded: bool,
     color: [f32; 4],
+    tick: u64,
     sf: f32,
 ) {
-    let length = base_size * if is_locomotive { 1.38 } else { 1.24 };
-    let breadth = base_size * 0.68;
-    let body_color = if is_locomotive { [0.22, 0.20, 0.19, 1.0] } else { color };
+    let is_high_speed = level >= 8;
+    let is_modern = level == 7;
+    let length = base_size * if is_high_speed { 1.48 } else if is_locomotive { 1.42 } else { 1.24 };
+    let breadth = base_size * if is_high_speed { 0.64 } else { 0.68 };
+    let outline = (sf * 0.7).max(0.5);
+
+    if is_high_speed {
+        let shell_color = [0.91, 0.94, 0.98, 1.0];
+        let edge = [0.16, 0.20, 0.28, 0.95];
+        if is_locomotive {
+            text.push_rounded_rect(
+                offset_along_dir(center, dir, -length * 0.45, 0.0),
+                oriented_size(length * 0.75, breadth * 0.36, dir),
+                0.45,
+                [0.24, 0.86, 1.0, 0.22],
+                [0.0; 4],
+                0.0,
+            );
+            text.push_rounded_rect(
+                center,
+                oriented_size(length, breadth, dir),
+                0.48,
+                shell_color,
+                edge,
+                outline,
+            );
+            text.push_rounded_rect(
+                offset_along_dir(center, dir, -length * 0.08, 0.0),
+                oriented_size(length * 0.56, breadth * 0.32, dir),
+                0.3,
+                [color[0], color[1], color[2], 0.95],
+                [0.0; 4],
+                0.0,
+            );
+            text.push_rounded_rect(
+                offset_along_dir(center, dir, length * 0.26, 0.0),
+                oriented_size(length * 0.26, breadth * 0.52, dir),
+                0.45,
+                [0.22, 0.88, 1.0, 0.96],
+                [0.08, 0.14, 0.22, 0.9],
+                (sf * 0.4).max(0.35),
+            );
+        } else {
+            text.push_rounded_rect(
+                center,
+                oriented_size(length * 0.96, breadth * 0.94, dir),
+                0.28,
+                shell_color,
+                edge,
+                outline,
+            );
+            text.push_rounded_rect(
+                center,
+                oriented_size(length * 0.72, breadth * 0.40, dir),
+                0.22,
+                if loaded { [0.98, 0.82, 0.24, 0.98] } else { [0.24, 0.84, 0.98, 0.72] },
+                [0.12, 0.16, 0.24, 0.75],
+                (sf * 0.35).max(0.3),
+            );
+        }
+        return;
+    }
+
+    let body_color = if is_locomotive {
+        if is_modern { [0.22, 0.25, 0.30, 1.0] } else { [0.20, 0.18, 0.17, 1.0] }
+    } else {
+        color
+    };
     text.push_rounded_rect(
         center,
         oriented_size(length, breadth, dir),
-        0.24,
+        if is_modern { 0.32 } else { 0.22 },
         body_color,
         [0.08, 0.07, 0.06, 0.95],
-        (sf * 0.7).max(0.5),
+        outline,
     );
     if is_locomotive {
         text.push_rounded_rect(
             offset_along_dir(center, dir, -length * 0.12, 0.0),
-            oriented_size(length * 0.46, breadth * 0.62, dir),
+            oriented_size(length * 0.48, breadth * 0.62, dir),
             0.2,
             color,
             [0.08, 0.07, 0.06, 0.8],
@@ -452,22 +749,42 @@ fn draw_train_car(
         );
         text.push_disc(
             offset_along_dir(center, dir, length * 0.28, 0.0),
-            (breadth * 0.26).max(1.6),
-            [0.98, 0.82, 0.26, 0.98],
+            (breadth * 0.25).max(1.5),
+            if is_modern { [0.98, 0.95, 0.72, 0.98] } else { [0.98, 0.80, 0.24, 0.98] },
+        );
+        if !is_modern {
+            let puff_drift = (tick % 8) as f32 * 0.08;
+            for (idx, step) in [0.42, 0.78].iter().enumerate() {
+                let alpha = (0.34 - idx as f32 * 0.12).max(0.1);
+                text.push_disc(
+                    offset_along_dir(center, dir, -length * (step + puff_drift), 0.0),
+                    (breadth * (0.28 + idx as f32 * 0.08)).max(1.5),
+                    [0.86, 0.86, 0.84, alpha],
+                );
+            }
+        }
+    } else if loaded {
+        text.push_rounded_rect(
+            center,
+            oriented_size(length * 0.62, breadth * 0.46, dir),
+            0.2,
+            [0.98, 0.80, 0.22, 0.98],
+            [0.42, 0.28, 0.05, 0.85],
+            (sf * 0.35).max(0.35),
         );
     } else {
         text.push_rounded_rect(
             center,
             oriented_size(length * 0.56, breadth * 0.42, dir),
-            0.2,
-            [0.98, 0.80, 0.22, 0.95],
-            [0.40, 0.28, 0.06, 0.8],
-            (sf * 0.35).max(0.35),
+            0.18,
+            [0.24, 0.22, 0.20, 0.72],
+            [0.10, 0.09, 0.08, 0.65],
+            (sf * 0.3).max(0.3),
         );
     }
 }
 
-fn train_position(segment: &RailSegment, phase: f32, gap: f32) -> ([f32; 2], [f32; 2]) {
+fn train_position(segment: &RailSegment, phase: f32, gap: f32) -> ([f32; 2], [f32; 2], bool) {
     let cycle = segment.length * 2.0;
     let unfolded = (phase - gap).rem_euclid(cycle);
     let forward = unfolded <= segment.length;
@@ -504,6 +821,7 @@ fn train_position(segment: &RailSegment, phase: f32, gap: f32) -> ([f32; 2], [f3
             start[1] + dy * t,
         ],
         dir,
+        !forward,
     )
 }
 
@@ -514,4 +832,34 @@ fn segment_leg_length(segment: &RailSegment, first: bool) -> f32 {
         (segment.corner, segment.b)
     };
     (b[0] - a[0]).hypot(b[1] - a[1])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn train_position_distinguishes_outbound_empty_and_return_loaded_trips() {
+        let segment = RailSegment {
+            a: [0.5, 0.5],
+            corner: [10.5, 0.5],
+            b: [10.5, 5.5],
+            path_tiles: Vec::new(),
+            owner_id: 1,
+            level: 6,
+            period_ticks: 100,
+            opened_at: 0,
+            blocked: false,
+            length: 15.0,
+        };
+        let (pos_out, dir_out, loaded_out) = train_position(&segment, 5.0, 0.0);
+        assert!(!loaded_out);
+        assert_eq!(dir_out, [1.0, 0.0]);
+        assert!((pos_out[0] - 5.5).abs() < 1e-4);
+
+        let (pos_ret, dir_ret, loaded_ret) = train_position(&segment, 25.0, 0.0);
+        assert!(loaded_ret);
+        assert_eq!(dir_ret, [-1.0, 0.0]);
+        assert!((pos_ret[0] - 5.5).abs() < 1e-4);
+    }
 }

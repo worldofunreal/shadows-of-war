@@ -97,12 +97,12 @@ impl BuildingKind {
         }
     }
 
-    /// Zero means the structure is unavailable in the current era.
+    /// New structures start at level one. SAM batteries and missile silos remain locked
+    /// until the player owns an Industrial City (level six).
     pub fn foundation_level(self, city_level: u8) -> u8 {
         match self {
-            Self::City => 1,
-            Self::SAM | Self::MissileSilo => city_level.saturating_sub(5).min(3),
-            _ => city_level.saturating_sub(1).clamp(1, 7),
+            Self::SAM | Self::MissileSilo if city_level < 6 => 0,
+            _ => 1,
         }
     }
 
@@ -118,6 +118,8 @@ impl BuildingKind {
         }
     }
 }
+
+pub const BUILDING_KIND_COUNT: usize = BuildingKind::ALL.len();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]

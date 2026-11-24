@@ -330,8 +330,8 @@ impl Building {
 
 /// Tower range uses the same base, level increments, cap, and hero bonus in
 /// combat and every client range display.
-/// Widest reach a tower can have: its 24-tile cap times the strongest tower-range hero (Sun Tzu, 1.5x).
-pub(crate) const MAX_TOWER_REACH: u32 = 36;
+/// Widest reach a tower can have: its 28-tile cap times the strongest tower-range hero (Sun Tzu, 1.5x).
+pub(crate) const MAX_TOWER_REACH: u32 = 42;
 
 #[inline]
 pub fn tower_range_for_level(
@@ -345,13 +345,13 @@ pub fn tower_range_for_level(
     let base = cfg.tower_range.round().clamp(0.0, 20.0) as i32;
     let through_level_four = i32::from(level.saturating_sub(1).min(3)) * 2;
     let late_upgrade_bonus = i32::from(level.saturating_sub(4)) * 4;
-    let range = (base + through_level_four + late_upgrade_bonus).min(24);
+    let range = (base + through_level_four + late_upgrade_bonus).min(28);
     (f64::from(range) * range_multiplier).round() as i32
 }
 
 /// Cumulative weights multiplying the configured level-one income rates.
 pub fn trading_post_gold_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.75, 7.4, 12.4, 16.0, 21.0, 27.0, 34.0][usize::from(level.min(8))]
+    [0.0, 1.0, 3.75, 7.4, 12.4, 18.9, 27.4, 39.4, 56.4][usize::from(level.min(8))]
 }
 
 /// Staged cart/train travel speed multiplier per TradingPost level (`1..=8`).
@@ -360,11 +360,18 @@ pub fn trading_post_speed_multiplier(level: u8) -> f64 {
 }
 
 pub fn military_camp_troop_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.5, 8.0, 15.0, 18.0, 21.0, 24.0, 28.0][usize::from(level.min(8))]
+    [0.0, 1.0, 3.5, 8.0, 15.0, 25.0, 39.0, 59.0, 89.0][usize::from(level.min(8))]
 }
 
 pub fn port_income_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.5, 7.5, 14.0][usize::from(level.min(4))]
+    [0.0, 1.0, 3.5, 7.5, 14.0, 23.0, 36.0, 55.0, 82.0][usize::from(level.min(8))]
+}
+
+/// City capacity weights use stronger marginal gains than city income so upgrades
+/// keep the City's reserve advantage over newly built level-one structures.
+pub fn city_capacity_level_weight(level: u8) -> f64 {
+    [0.0, 1.0, 3.5, 7.25, 12.75, 20.75, 33.75, 53.75, 83.75]
+        [usize::from(level.min(8))]
 }
 
 pub fn city_upgrade_reinforcements(level: u8, base_capacity: f64) -> f64 {
@@ -381,7 +388,7 @@ pub fn city_upgrade_reinforcements(level: u8, base_capacity: f64) -> f64 {
         4 => 0.40,
         _ => return 0.0,
     };
-    let capacity_added = income_level_weight(level) - income_level_weight(level - 1);
+    let capacity_added = city_capacity_level_weight(level) - city_capacity_level_weight(level - 1);
     share * capacity_added * base_capacity
 }
 
@@ -477,7 +484,7 @@ pub struct BuildingAggregate {
     pub city_income_level_weight: f64,
     /// City troop capacity continues growing beyond the level-four income cap.
     pub city_capacity_level_weight: f64,
-    /// Port levels that can contribute to passive income, capped at level four each.
+    /// Port levels used by hero-only income bonuses, capped at level four each.
     pub port_income_levels: u32,
     /// Shared small capacity bonus from completed non-City upgrades.
     pub district_capacity_level_weight: f64,
@@ -562,7 +569,7 @@ pub fn aggregate_buildings_per_player(
                 a.highest_city_level = a.highest_city_level.max(active_lvl);
                 a.city_levels += active_lvl as u32;
                 a.city_income_level_weight += income_level_weight(active_lvl.min(4));
-                a.city_capacity_level_weight += income_level_weight(active_lvl);
+                a.city_capacity_level_weight += city_capacity_level_weight(active_lvl);
                 a.ready_city_count += 1;
             }
             BuildingKind::Tower => {

@@ -1572,19 +1572,15 @@ impl SowApp {
                     .and_then(|engine| engine.structure_upgrade_quote(building.id))
                     .map_or_else(
                         || {
-                            let owned_levels = snapshot
-                                .buildings
+                            let built_levels = snapshot
+                                .players
                                 .iter()
-                                .filter(|candidate| {
-                                    candidate.owner_id == building.owner_id
-                                        && candidate.kind == building.kind
-                                })
-                                .map(|candidate| u32::from(candidate.level))
-                                .sum();
+                                .find(|player| player.id == building.owner_id)
+                                .map_or(0, |player| player.structure_levels_built[building.kind as usize]);
                             sow_core::building::cost::structure_upgrade_cost_gold(
                                 building.kind,
                                 building.active_level().saturating_add(1),
-                                owned_levels,
+                                built_levels,
                                 &self.sim.config,
                             )
                         },
@@ -2153,12 +2149,11 @@ impl SowApp {
                 self.add_map_feedback(crate::ui::UiText::new("hud.campaign_unlock_required"));
                 return;
             }
-            let owned_levels: u32 = snapshot
-                .buildings
+            let built_levels = snapshot
+                .players
                 .iter()
-                .filter(|b| b.owner_id == owner_id && b.kind == kind)
-                .map(|b| u32::from(b.level))
-                .sum();
+                .find(|player| player.id == owner_id)
+                .map_or(0, |player| player.structure_levels_built[kind as usize]);
             let cost = self
                 .sim
                 .engine
@@ -2169,7 +2164,7 @@ impl SowApp {
                         sow_core::building::cost::structure_upgrade_cost_gold(
                             kind,
                             next_level,
-                            owned_levels,
+                            built_levels,
                             &self.sim.config,
                         )
                     },

@@ -205,6 +205,7 @@ impl SowEngine {
                         .unwrap_or(0),
                     help_calls,
                     help_cooldown_ticks,
+                    structure_levels_built: p.structure_levels_built,
                 }
             })
             .collect();

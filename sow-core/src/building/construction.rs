@@ -108,9 +108,6 @@ impl SowEngine {
                 b.ticks_until_complete -= 1;
             }
             if b.ticks_until_complete == 0 {
-                if b.level == 1 && let Some(level) = self.upgrade_targets.remove(&b.id) {
-                    b.level = level;
-                }
                 b.under_construction = false;
                 self.building_aggregates_dirty = true;
                 if b.kind == BuildingKind::Port {

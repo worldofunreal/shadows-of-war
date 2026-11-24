@@ -14,7 +14,7 @@ impl SowEngine {
     ) -> Option<(u8, f64, u32)> {
         let city_level = self.building_aggregates.get(usize::from(owner_id))
             .map_or(0, |aggregate| aggregate.highest_city_level);
-        let level = if self.campaign_unlocks.is_some() || self.legacy_building_rules {
+        let level = if self.campaign_unlocks.is_some() {
             1
         } else {
             kind.foundation_level(city_level)
@@ -23,7 +23,7 @@ impl SowEngine {
             return None;
         }
         let (cost, ticks) = crate::building::cost::structure_foundation_quote(
-            kind, level, self.reserved_kind_levels(owner_id, kind), &self.state.config,
+            kind, level, self.paid_kind_levels(owner_id, kind), &self.state.config,
         )?;
         Some((level, cost, ticks))
     }
@@ -37,13 +37,12 @@ impl SowEngine {
             .map_or(building.level, |target| target.max(building.level))
     }
 
-    /// Total effective building levels of `kind` owned by `owner_id`, including queued upgrades.
-    pub fn reserved_kind_levels(&self, owner_id: u16, kind: BuildingKind) -> u32 {
-        self.buildings
-            .iter()
-            .filter(|b| b.owner_id == owner_id && b.kind == kind)
-            .map(|b| u32::from(self.building_reserved_level(*b)))
-            .sum()
+    /// Lifetime levels of this kind that the player constructed or paid to upgrade.
+    /// Captured structures are deliberately excluded.
+    pub(crate) fn paid_kind_levels(&self, owner_id: u16, kind: BuildingKind) -> u32 {
+        self.state
+            .player(owner_id)
+            .map_or(0, |player| player.structure_levels_built[kind as usize])
     }
 
     fn tutorial_city_upgrade_free_available(&self, player_id: u16) -> bool {
@@ -115,7 +114,7 @@ impl SowEngine {
         {
             return None;
         }
-        let owned_levels = self.reserved_kind_levels(building.owner_id, building.kind);
+        let built_levels = self.paid_kind_levels(building.owner_id, building.kind);
         let free_lv2 = building.kind == BuildingKind::City
             && from_level < 2
             && self.tutorial_city_upgrade_free_available(building.owner_id);
@@ -124,7 +123,7 @@ impl SowEngine {
             building.kind,
             from_level,
             target_level,
-            owned_levels,
+            built_levels,
             free_lv2,
             discount,
             self.state.config.tutorial,
@@ -153,7 +152,7 @@ impl SowEngine {
         {
             max_allowed -= 1;
         }
-        let owned_levels = self.reserved_kind_levels(building.owner_id, building.kind);
+        let built_levels = self.paid_kind_levels(building.owner_id, building.kind);
         let free_lv2 = building.kind == BuildingKind::City
             && from_level < 2
             && self.tutorial_city_upgrade_free_available(building.owner_id);
@@ -162,7 +161,7 @@ impl SowEngine {
             building.kind,
             from_level,
             max_allowed,
-            owned_levels,
+            built_levels,
             free_lv2,
             discount,
             self.state.config.tutorial,
@@ -172,11 +171,11 @@ impl SowEngine {
     }
 
     pub(super) fn paid_structure_upgrade_quote(&self, building: Building) -> (f64, bool) {
-        let owned_levels = self.reserved_kind_levels(building.owner_id, building.kind);
+        let built_levels = self.paid_kind_levels(building.owner_id, building.kind);
         let cost = structure_upgrade_cost_gold(
             building.kind,
             building.level.saturating_add(1),
-            owned_levels,
+            built_levels,
             &self.state.config,
         );
         let discount = self.hero_city_upgrade_discount(building);
@@ -277,6 +276,8 @@ impl SowEngine {
         }
         player_mut.gold = (player_mut.gold - cost).max(0.0);
         player_mut.structures_built = player_mut.structures_built.saturating_add(1);
+        let built_levels = &mut player_mut.structure_levels_built[kind as usize];
+        *built_levels = built_levels.saturating_add(u32::from(level));
         let id = self.state.next_building_id;
         self.state.next_building_id = self.state.next_building_id.wrapping_add(1).max(1);
         if level > 1 {
@@ -289,14 +290,23 @@ impl SowEngine {
             kind,
             level: 1,
             under_construction: true,
-            ticks_until_complete: dur,
+            ticks_until_complete: if level > 1 {
+                let build_ticks = crate::building::structure_build_duration_ticks(kind);
+                if self.state.config.tutorial {
+                    (build_ticks / 2).max(1)
+                } else {
+                    build_ticks
+                }
+            } else {
+                dur
+            },
         });
         self.state.events.push(GameEvent::StructureSpawned {
             id,
             owner_id: player_id,
             tile_idx: spawn_idx,
             kind,
-            level,
+            level: 1,
         });
     }
 
@@ -349,6 +359,7 @@ impl SowEngine {
             return;
         }
 
+        let levels_bought = u32::from(target_level.saturating_sub(current_reserved));
         let Some((cost, _total_ticks, discounted)) =
             self.structure_upgrade_to_quote(building_id, target_level)
         else {
@@ -361,6 +372,8 @@ impl SowEngine {
             return;
         }
         player_mut.gold = (player_mut.gold - cost).max(0.0);
+        let built_levels = &mut player_mut.structure_levels_built[building.kind as usize];
+        *built_levels = built_levels.saturating_add(levels_bought);
 
         if extending_active_upgrade {
             if target_level > self.buildings[idx].level {

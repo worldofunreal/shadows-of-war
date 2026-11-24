@@ -64,6 +64,7 @@ const AVATAR_TRANSITION_ENTER_SECS: f32 = 0.5;
 const AVATAR_TRANSITION_CELEBRATE_SECS: f32 = 0.65;
 const INCOMING_FORCE_LOSS_ENTER_RATIO: f64 = 0.50;
 const INCOMING_FORCE_LOSS_EXIT_RATIO: f64 = 0.35;
+const ANGRY_EVENT_COOLDOWN: Duration = Duration::from_secs(3);
 
 #[derive(Clone, Debug)]
 pub(crate) struct NameplateVisualState {
@@ -169,6 +170,8 @@ pub(crate) struct NameplateSystem {
     campaign_base_expressions: HashMap<u16, AvatarExpression>,
     campaign_base_expressions_dirty: bool,
     avatar_base_tick: Option<u64>,
+    seen_attack_ids: HashSet<u64>,
+    angry_until: HashMap<u16, Instant>,
     incoming_force_at_start: HashMap<u16, f64>,
     fear_under_attack_players: HashSet<u16>,
     avatar_bases: HashMap<u16, AvatarExpression>,
@@ -176,7 +179,8 @@ pub(crate) struct NameplateSystem {
     next_avatar_transition_id: u64,
     avatar_presentations: HashMap<u16, AvatarPresentation>,
     pub(crate) avatar_revision: u64,
-    scratch_combatants: HashSet<u16>,
+    scratch_seen_attack_ids: HashSet<u64>,
+    scratch_mood_players: Vec<(u16, bool, f64)>,
     scratch_incoming_targets: HashSet<u16>,
     scratch_committed_troops: HashMap<u16, f64>,
     scratch_incoming_force_at_start: HashMap<u16, f64>,
@@ -1014,16 +1018,54 @@ impl NameplateSystem {
         now: Instant,
         reduced_motion: bool,
     ) -> bool {
-        if self.avatar_base_tick == Some(snapshot.tick) && !self.campaign_base_expressions_dirty {
+        let mut mood_players = std::mem::take(&mut self.scratch_mood_players);
+        mood_players.clear();
+        mood_players.extend(
+            snapshot
+                .players
+                .iter()
+                .map(|player| (player.id, player.alive, player.troops)),
+        );
+        let updated = self.observe_avatar_base_inputs(
+            snapshot.tick,
+            &snapshot.attacks,
+            &mood_players,
+            now,
+            reduced_motion,
+        );
+        self.scratch_mood_players = mood_players;
+        updated
+    }
+
+    fn observe_avatar_base_inputs(
+        &mut self,
+        tick: u64,
+        attacks: &[sow_core::protocol::AttackSnapshot],
+        players: &[(u16, bool, f64)],
+        now: Instant,
+        reduced_motion: bool,
+    ) -> bool {
+        if self.avatar_base_tick.is_some_and(|previous| tick < previous) {
+            self.seen_attack_ids.clear();
+            self.angry_until.clear();
+            self.incoming_force_at_start.clear();
+            self.fear_under_attack_players.clear();
+        }
+        let any_angry_expired = self.angry_until.values().any(|&until| now >= until);
+        if self.avatar_base_tick == Some(tick)
+            && !self.campaign_base_expressions_dirty
+            && !any_angry_expired
+        {
             return false;
         }
-        let mut combatants = std::mem::take(&mut self.scratch_combatants);
+        let mut next_seen_attack_ids = std::mem::take(&mut self.scratch_seen_attack_ids);
         let mut incoming_attack_targets = std::mem::take(&mut self.scratch_incoming_targets);
         let mut committed_troops = std::mem::take(&mut self.scratch_committed_troops);
-        combatants.clear();
+        next_seen_attack_ids.clear();
         incoming_attack_targets.clear();
         committed_troops.clear();
-        for attack in &snapshot.attacks {
+        let angry_deadline = now + ANGRY_EVENT_COOLDOWN;
+        for attack in attacks {
             if attack.owner_id != 0 && attack.troops.is_finite() && attack.troops > 0.0 {
                 *committed_troops.entry(attack.owner_id).or_default() += attack.troops;
             }
@@ -1034,81 +1076,91 @@ impl NameplateSystem {
                 && attack.troops > 0.0
                 && !attack.retreating
             {
-                combatants.insert(attack.owner_id);
-                combatants.insert(attack.target_owner);
+                next_seen_attack_ids.insert(attack.id);
+                if !self.seen_attack_ids.contains(&attack.id) {
+                    self.angry_until.insert(attack.owner_id, angry_deadline);
+                    self.angry_until.insert(attack.target_owner, angry_deadline);
+                }
                 incoming_attack_targets.insert(attack.target_owner);
             }
         }
+        self.angry_until.retain(|_, until| *until > now);
         let mut incoming_force_at_start = std::mem::take(&mut self.scratch_incoming_force_at_start);
         let mut fear_under_attack_players =
             std::mem::take(&mut self.scratch_fear_under_attack_players);
         incoming_force_at_start.clear();
         fear_under_attack_players.clear();
-        for player in snapshot.players.iter().filter(|player| player.alive) {
-            if !incoming_attack_targets.contains(&player.id) {
+        for &(player_id, alive, troops) in players {
+            if !alive {
+                self.angry_until.remove(&player_id);
+                continue;
+            }
+            if !incoming_attack_targets.contains(&player_id) {
                 continue;
             }
             // La fuerza enviada sigue siendo tuya; no debe parecer una baja al contraatacarte.
-            let reserve = if player.troops.is_finite() {
-                player.troops.max(0.0)
+            let reserve = if troops.is_finite() {
+                troops.max(0.0)
             } else {
                 0.0
             };
-            let current_force = reserve + committed_troops.get(&player.id).copied().unwrap_or(0.0);
+            let current_force = reserve + committed_troops.get(&player_id).copied().unwrap_or(0.0);
             let start_force = self
                 .incoming_force_at_start
-                .get(&player.id)
+                .get(&player_id)
                 .copied()
                 .unwrap_or(current_force);
-            incoming_force_at_start.insert(player.id, start_force);
+            incoming_force_at_start.insert(player_id, start_force);
             if !start_force.is_finite() || start_force <= 0.0 || !current_force.is_finite() {
                 continue;
             }
             let loss_ratio = ((start_force - current_force).max(0.0)) / start_force;
-            let threshold = if self.fear_under_attack_players.contains(&player.id) {
+            let threshold = if self.fear_under_attack_players.contains(&player_id) {
                 INCOMING_FORCE_LOSS_EXIT_RATIO
             } else {
                 INCOMING_FORCE_LOSS_ENTER_RATIO
             };
             if loss_ratio >= threshold {
-                fear_under_attack_players.insert(player.id);
+                fear_under_attack_players.insert(player_id);
             }
         }
 
         let mut avatar_bases = std::mem::take(&mut self.scratch_avatar_bases);
         avatar_bases.clear();
-        for player in &snapshot.players {
+        for &(player_id, alive, _) in players {
+            let is_angry = alive && self.angry_until.get(&player_id).is_some_and(|&until| now < until);
             let expression = self
                 .campaign_base_expressions
-                .get(&player.id)
+                .get(&player_id)
                 .copied()
-                .unwrap_or(if fear_under_attack_players.contains(&player.id) {
+                .unwrap_or(if fear_under_attack_players.contains(&player_id) {
                     AvatarExpression::Fear
-                } else if combatants.contains(&player.id) {
+                } else if is_angry {
                     AvatarExpression::Angry
                 } else {
                     AvatarExpression::Calm
                 });
-            if let Some(previous) = self.avatar_bases.get(&player.id).copied()
+            if let Some(previous) = self.avatar_bases.get(&player_id).copied()
                 && previous != expression
             {
-                self.request_avatar_transition(player.id, previous, expression, now, reduced_motion);
+                self.request_avatar_transition(player_id, previous, expression, now, reduced_motion);
             }
-            avatar_bases.insert(player.id, expression);
+            avatar_bases.insert(player_id, expression);
         }
         std::mem::swap(&mut self.avatar_bases, &mut avatar_bases);
+        std::mem::swap(&mut self.seen_attack_ids, &mut next_seen_attack_ids);
         std::mem::swap(&mut self.incoming_force_at_start, &mut incoming_force_at_start);
         std::mem::swap(
             &mut self.fear_under_attack_players,
             &mut fear_under_attack_players,
         );
-        self.scratch_combatants = combatants;
+        self.scratch_seen_attack_ids = next_seen_attack_ids;
         self.scratch_incoming_targets = incoming_attack_targets;
         self.scratch_committed_troops = committed_troops;
         self.scratch_incoming_force_at_start = incoming_force_at_start;
         self.scratch_fear_under_attack_players = fear_under_attack_players;
         self.scratch_avatar_bases = avatar_bases;
-        self.avatar_base_tick = Some(snapshot.tick);
+        self.avatar_base_tick = Some(tick);
         self.campaign_base_expressions_dirty = false;
         true
     }
@@ -3489,5 +3541,79 @@ pub(crate) fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
         player.is_campaign_faction,
     );
     [rgb[0], rgb[1], rgb[2], 1.0]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sow_core::protocol::AttackSnapshot;
+
+    fn combat_attack(id: u64, owner_id: u16, target_owner: u16, troops: f64) -> AttackSnapshot {
+        AttackSnapshot {
+            id,
+            owner_id,
+            target_owner,
+            troops,
+            retreating: false,
+            front_cx: 0.0,
+            front_cy: 0.0,
+        }
+    }
+
+    #[test]
+    fn angry_expires_after_three_seconds_and_refreshes_without_reanimating_overlap() {
+        let mut system = NameplateSystem::default();
+        let start = Instant::now();
+        let players = [(1, true, 100.0), (2, true, 100.0)];
+
+        system.observe_avatar_base_inputs(1, &[], &players, start, false);
+        assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Calm));
+
+        // First attack switches both attacker and defender Calm -> Angry once.
+        let t0 = start + Duration::from_millis(100);
+        system.observe_avatar_base_inputs(2, &[combat_attack(10, 1, 2, 20.0)], &players, t0, false);
+        assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Angry));
+        assert_eq!(system.avatar_bases.get(&2), Some(&AvatarExpression::Angry));
+        let first_transition_id = system.avatar_transitions.get(&1).expect("transition to angry").id;
+
+        // Rapid follow-up taps within 1s refresh the 3s cooldown without restarting transition.
+        let t1 = t0 + Duration::from_millis(350);
+        system.observe_avatar_base_inputs(
+            3,
+            &[combat_attack(10, 1, 2, 18.0), combat_attack(11, 1, 2, 15.0)],
+            &players,
+            t1,
+            false,
+        );
+        assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Angry));
+        assert_eq!(
+            system.avatar_transitions.get(&1).map(|t| t.id),
+            Some(first_transition_id)
+        );
+
+        // Even while attacks remain active, past t0+3s (before t1+3s) keeps Angry from tap 2.
+        let t_mid = t0 + Duration::from_secs(3) + Duration::from_millis(50);
+        system.observe_avatar_base_inputs(
+            3,
+            &[combat_attack(10, 1, 2, 10.0), combat_attack(11, 1, 2, 10.0)],
+            &players,
+            t_mid,
+            false,
+        );
+        assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Angry));
+
+        // After 3s from last new attack (same tick still active), both calm down.
+        let t_end = t1 + ANGRY_EVENT_COOLDOWN + Duration::from_millis(10);
+        let changed = system.observe_avatar_base_inputs(
+            3,
+            &[combat_attack(10, 1, 2, 10.0), combat_attack(11, 1, 2, 10.0)],
+            &players,
+            t_end,
+            false,
+        );
+        assert!(changed);
+        assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Calm));
+        assert_eq!(system.avatar_bases.get(&2), Some(&AvatarExpression::Calm));
+    }
 }
 

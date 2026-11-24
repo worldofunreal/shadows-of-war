@@ -19,7 +19,8 @@ pub const GAMEPLAY_FORMAT_VERSION: u64 = 9;
 // 13: queued multi-level upgrade target level (`UpgradeStructureTo`, `BuildingSnapshot::upgrade_target_level`).
 // 14: queued warship production (`warship_queue`, `CancelWarshipQueue`, `BuildingProductionMax`) & `PatrolWarships`.
 // 15: directional `AttackIntent::target_tile`.
-pub const LIVE_PROTOCOL_VERSION: u64 = 15;
+// 16: player snapshots include built/paid structure levels for shared cost quotes.
+pub const LIVE_PROTOCOL_VERSION: u64 = 16;
 
 /// What two builds must share to play together. The public version is left out on
 /// purpose: a server, price or menu release must not lock out store and portal clients.
@@ -649,6 +650,8 @@ pub struct PlayerSnapshot {
     pub help_calls: Vec<HelpCall>,
     #[serde(default)]
     pub help_cooldown_ticks: u32,
+    #[serde(default)]
+    pub structure_levels_built: [u32; crate::game::BUILDING_KIND_COUNT],
 }
 
 impl PlayerSnapshot {

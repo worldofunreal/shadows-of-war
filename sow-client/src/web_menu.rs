@@ -114,6 +114,8 @@ enum WebMenuCommand {
     CloseMapContextMenu,
     CompleteCampaignEpisode {
         episode_id: String,
+        #[serde(default)]
+        stay_in_campaign: bool,
     },
     ClaimCampaignHero {
         leader_id: String,
@@ -935,6 +937,10 @@ impl SowApp {
                         continue;
                     }
                     crate::store_portals::track_product_event("menu_campaign_start");
+                    if self.ui.app.phase != crate::ClientPhase::MainMenu {
+                        self.pending_campaign_exit = None;
+                        self.reset_game_session();
+                    }
                     self.ui.tutorial_marker_player_id = None;
                     self.ui.tutorial_marker_action = None;
                     self.ui.dialog_border_highlight = None;
@@ -1197,7 +1203,10 @@ impl SowApp {
                     }
                 }
                 WebMenuCommand::CloseMapContextMenu => self.close_map_context_menu(),
-                WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
+                WebMenuCommand::CompleteCampaignEpisode {
+                    episode_id,
+                    stay_in_campaign,
+                } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
                         self.ui.app.main_menu_state.error_message =
                             Some(crate::ui::UiText::new("tutorial.unavailable"));
@@ -1213,7 +1222,9 @@ impl SowApp {
                         continue;
                     }
                     if campaign.is_server_owned_tutorial() {
-                        self.begin_exit_to_main_menu();
+                        if !stay_in_campaign {
+                            self.begin_exit_to_main_menu();
+                        }
                         continue;
                     }
                     let mut progress_dirty = false;
@@ -1237,18 +1248,23 @@ impl SowApp {
                     if progress_dirty {
                         self.save_local_progress();
                     }
+                    self.pending_campaign_exit = None;
                     if already_completed {
                         self.complete_campaign_replay(campaign.episode_id());
-                        self.begin_exit_to_main_menu();
+                        if !stay_in_campaign {
+                            self.begin_exit_to_main_menu();
+                        }
                     } else if self
                         .progress
                         .pending_campaign_completions
                         .contains(campaign.episode_id())
                     {
-                        self.pending_campaign_exit = Some(campaign.episode_id().to_string());
+                        if !stay_in_campaign {
+                            self.pending_campaign_exit = Some(campaign.episode_id().to_string());
+                        }
                         self.profile_action_retry_at = Some(web_time::Instant::now());
                         self.poll_profile_actions(web_time::Instant::now());
-                    } else {
+                    } else if !stay_in_campaign {
                         self.begin_exit_to_main_menu();
                     }
                 }

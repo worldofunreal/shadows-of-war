@@ -315,11 +315,15 @@ impl SowApp {
 
         let my_player_id = self.sim.my_player_id.unwrap_or(1);
         use sow_core::game::BuildingKind;
-        let mut counts = [0u32; BuildingKind::ALL.len()];
+        let mut counts = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == my_player_id))
+            .map_or([0u32; BuildingKind::ALL.len()], |player| player.structure_levels_built);
         let mut city_level = 0;
         if let Some(snapshot) = self.sim.current_snapshot.as_ref() {
             for building in snapshot.buildings.iter().filter(|b| b.owner_id == my_player_id) {
-                counts[building.kind as usize] += u32::from(building.reserved_level());
                 if building.kind == BuildingKind::City {
                     city_level = city_level.max(building.active_level());
                 }

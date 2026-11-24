@@ -189,7 +189,7 @@ impl SowEngine {
                         }
                         let quote = |kind: BuildingKind| {
                             let level = if self.campaign_unlocks.is_some() { 1 } else { kind.foundation_level(agg.highest_city_level) };
-                            crate::building::cost::structure_foundation_quote(kind, level, agg.levels_of_kind(kind), &self.state.config)
+                            crate::building::cost::structure_foundation_quote(kind, level, self.paid_kind_levels(bot_id, kind), &self.state.config)
                                 .map_or(f64::INFINITY, |(value, _)| value)
                         };
                         let (cost_a, cost_b) = (quote(a), quote(b));
@@ -200,9 +200,6 @@ impl SowEngine {
                     let decisions_before_building = decisions.len();
                     for kind in build_order {
                         let Some((_, cost, _)) = self.foundation_quote(bot_id, kind) else { continue; };
-                        if kind == BuildingKind::TradingPost && agg.highest_city_level == 0 && !agg.has_completed_port {
-                            continue;
-                        }
                         let owned = agg.total_structures_of_kind(kind);
                         let mut target_count =
                             bot_structure_target_count(kind, city_equivalent, bot_iq);

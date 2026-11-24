@@ -2,24 +2,14 @@ use super::core::Building;
 use crate::game_config::GameConfig;
 use crate::game::BuildingKind;
 
-fn ownership_cost_multiplier(owned_levels: u32, cfg: &GameConfig) -> f64 {
-    let multiplier = 1.0 + 0.1 * (f64::from(owned_levels) + 1.0).log2();
+fn building_cost_progression_multiplier(built_levels: u32, cfg: &GameConfig) -> f64 {
+    let multiplier = 1.0 + 0.1 * (f64::from(built_levels) + 1.0).log2();
     multiplier.min(cfg.cost_scale_cap_multiplier.max(1.0))
 }
 
-/// Total effective building count (sum of levels) owned by `owner` of exact `kind`.
-/// A stacked level-3 building counts as 3 for cost scaling.
-pub fn count_kind(buildings: &[Building], owner_id: u16, kind: BuildingKind) -> u32 {
-    buildings
-        .iter()
-        .filter(|b| b.owner_id == owner_id && b.kind == kind)
-        .map(|b| b.level as u32)
-        .sum()
-}
-
-/// Gold price for a new structure, scaled by total levels of the same kind.
+/// Gold price for a new structure, scaled by levels the player has built or upgraded.
 #[inline]
-pub fn structure_build_cost_gold(kind: BuildingKind, count: u32, cfg: &GameConfig) -> f64 {
+pub fn structure_build_cost_gold(kind: BuildingKind, built_levels: u32, cfg: &GameConfig) -> f64 {
     let base_cost = match kind {
         BuildingKind::City => cfg.cost_city,
         BuildingKind::Tower => cfg.cost_tower,
@@ -29,31 +19,31 @@ pub fn structure_build_cost_gold(kind: BuildingKind, count: u32, cfg: &GameConfi
         BuildingKind::SAM => cfg.cost_sam,
         BuildingKind::MissileSilo => 375.0,
     };
-    base_cost * ownership_cost_multiplier(count, cfg)
+    base_cost * building_cost_progression_multiplier(built_levels, cfg)
 }
 
-/// Each upgrade is priced for one structure, then adjusted for additional owned levels.
+/// Each upgrade is priced for one structure, then adjusted for levels the player built or paid for.
 #[inline]
 pub fn structure_upgrade_cost_gold(
     kind: BuildingKind,
     target_level: u8,
-    owned_levels: u32,
+    built_levels: u32,
     cfg: &GameConfig,
 ) -> f64 {
     if !(2..=kind.max_level()).contains(&target_level) {
         return f64::INFINITY;
     }
     let prices: &[f64] = match kind {
-        BuildingKind::City => &[115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0, 100_000.0],
-        BuildingKind::MilitaryCamp => &[125.0, 190.0, 280.0, 360.0, 460.0, 590.0, 750.0],
-        BuildingKind::TradingPost => &[125.0, 165.0, 220.0, 295.0, 390.0, 520.0, 690.0],
-        BuildingKind::Port => &[130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0, 100_000.0],
-        BuildingKind::Tower => &[100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0, 80_000.0],
-        BuildingKind::SAM => &[250.0, 285.0, 325.0],
-        BuildingKind::MissileSilo => &[265.0, 305.0, 345.0],
+        BuildingKind::City => &[110.0, 165.0, 235.0, 350.0, 550.0, 850.0, 1_300.0],
+        BuildingKind::MilitaryCamp => &[110.0, 150.0, 210.0, 280.0, 370.0, 480.0, 620.0],
+        BuildingKind::TradingPost => &[110.0, 140.0, 180.0, 230.0, 300.0, 390.0, 510.0],
+        BuildingKind::Port => &[120.0, 190.0, 270.0, 360.0, 500.0, 700.0, 950.0],
+        BuildingKind::Tower => &[80.0, 105.0, 140.0, 185.0, 240.0, 320.0, 420.0],
+        BuildingKind::SAM => &[145.0, 150.0, 155.0],
+        BuildingKind::MissileSilo => &[150.0, 155.0, 160.0],
     };
-    let baseline = ownership_cost_multiplier(u32::from(target_level - 1), cfg);
-    let scale = ownership_cost_multiplier(owned_levels, cfg) / baseline;
+    let baseline = building_cost_progression_multiplier(u32::from(target_level - 1), cfg);
+    let scale = building_cost_progression_multiplier(built_levels, cfg) / baseline;
     prices
         .get(usize::from(target_level - 2))
         .copied()
@@ -69,18 +59,18 @@ pub fn structure_build_duration_ticks(kind: BuildingKind) -> u32 {
 pub fn structure_foundation_quote(
     kind: BuildingKind,
     level: u8,
-    owned_levels: u32,
+    built_levels: u32,
     cfg: &GameConfig,
 ) -> Option<(f64, u32)> {
     if !(1..=kind.max_level()).contains(&level) {
         return None;
     }
-    let mut cost = structure_build_cost_gold(kind, owned_levels, cfg);
+    let mut cost = structure_build_cost_gold(kind, built_levels, cfg);
     let base_ticks = structure_build_duration_ticks(kind);
     let mut ticks = if cfg.tutorial { (base_ticks / 2).max(1) } else { base_ticks };
     if level > 1 {
         let (upgrade_cost, upgrade_ticks, _) = structure_multi_upgrade_cost_and_ticks(
-            kind, 1, level, owned_levels.saturating_add(1), false, 0, cfg.tutorial, cfg,
+            kind, 1, level, built_levels.saturating_add(1), false, 0, cfg.tutorial, cfg,
         )?;
         cost += upgrade_cost;
         ticks = ticks.saturating_add(upgrade_ticks);
@@ -94,12 +84,12 @@ pub fn structure_upgrade_duration_ticks(kind: BuildingKind, target_level: u8) ->
 }
 
 /// Cumulative cost and duration for upgrading one structure from `from_level` through
-/// `target_level` (inclusive), advancing `owned_levels` by `+1` on each step.
+/// `target_level` (inclusive), advancing `built_levels` by `+1` on each step.
 pub fn structure_multi_upgrade_cost_and_ticks(
     kind: BuildingKind,
     from_level: u8,
     target_level: u8,
-    mut owned_levels: u32,
+    mut built_levels: u32,
     free_lv2_tutorial: bool,
     discount_pct: u32,
     tutorial_half_time: bool,
@@ -122,10 +112,10 @@ pub fn structure_multi_upgrade_cost_and_ticks(
         total_ticks = total_ticks.saturating_add(step_ticks);
 
         if free_lv2_tutorial && kind == BuildingKind::City && lvl == 2 {
-            owned_levels = owned_levels.saturating_add(1);
+            built_levels = built_levels.saturating_add(1);
             continue;
         }
-        let raw_cost = structure_upgrade_cost_gold(kind, lvl, owned_levels, cfg);
+        let raw_cost = structure_upgrade_cost_gold(kind, lvl, built_levels, cfg);
         if !raw_cost.is_finite() {
             return None;
         }
@@ -136,7 +126,7 @@ pub fn structure_multi_upgrade_cost_and_ticks(
             raw_cost
         };
         total_cost += step_cost;
-        owned_levels = owned_levels.saturating_add(1);
+        built_levels = built_levels.saturating_add(1);
     }
     Some((total_cost, total_ticks, any_discounted))
 }
@@ -147,7 +137,7 @@ pub fn structure_max_affordable_upgrade(
     kind: BuildingKind,
     from_level: u8,
     max_allowed_level: u8,
-    owned_levels: u32,
+    built_levels: u32,
     free_lv2_tutorial: bool,
     discount_pct: u32,
     tutorial_half_time: bool,
@@ -164,7 +154,7 @@ pub fn structure_max_affordable_upgrade(
             kind,
             from_level,
             target,
-            owned_levels,
+            built_levels,
             free_lv2_tutorial,
             discount_pct,
             tutorial_half_time,
@@ -325,26 +315,26 @@ mod tests {
     }
 
     #[test]
-    fn every_upgrade_level_applies_ownership_growth_to_its_base_price() {
+    fn every_upgrade_level_applies_built_level_growth_to_its_base_price() {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
-            (BuildingKind::City, vec![115.0, 175.0, 250.0, 4_000.0, 13_000.0, 40_000.0, 100_000.0]),
-            (BuildingKind::MilitaryCamp, vec![125.0, 190.0, 280.0, 360.0, 460.0, 590.0, 750.0]),
-            (BuildingKind::TradingPost, vec![125.0, 165.0, 220.0, 295.0, 390.0, 520.0, 690.0]),
-            (BuildingKind::Port, vec![130.0, 205.0, 295.0, 5_000.0, 16_000.0, 48_000.0, 100_000.0]),
-            (BuildingKind::Tower, vec![100.0, 140.0, 190.0, 3_000.0, 10_000.0, 32_000.0, 80_000.0]),
-            (BuildingKind::SAM, vec![250.0, 285.0, 325.0]),
-            (BuildingKind::MissileSilo, vec![265.0, 305.0, 345.0]),
+            (BuildingKind::City, vec![110.0, 165.0, 235.0, 350.0, 550.0, 850.0, 1_300.0]),
+            (BuildingKind::MilitaryCamp, vec![110.0, 150.0, 210.0, 280.0, 370.0, 480.0, 620.0]),
+            (BuildingKind::TradingPost, vec![110.0, 140.0, 180.0, 230.0, 300.0, 390.0, 510.0]),
+            (BuildingKind::Port, vec![120.0, 190.0, 270.0, 360.0, 500.0, 700.0, 950.0]),
+            (BuildingKind::Tower, vec![80.0, 105.0, 140.0, 185.0, 240.0, 320.0, 420.0]),
+            (BuildingKind::SAM, vec![145.0, 150.0, 155.0]),
+            (BuildingKind::MissileSilo, vec![150.0, 155.0, 160.0]),
         ] {
             for target_level in 2..=kind.max_level() {
-                let previous_owned_levels = u32::from(target_level - 1);
+                let previous_built_levels = u32::from(target_level - 1);
                 let upgrade =
-                    structure_upgrade_cost_gold(kind, target_level, previous_owned_levels, &cfg);
+                    structure_upgrade_cost_gold(kind, target_level, previous_built_levels, &cfg);
                 assert_eq!(upgrade, expected[usize::from(target_level - 2)]);
-                for owned_levels in [10, 100, 1_000] {
-                    let cost = structure_upgrade_cost_gold(kind, target_level, owned_levels, &cfg);
-                    let scale = structure_build_cost_gold(kind, owned_levels, &cfg)
-                        / structure_build_cost_gold(kind, previous_owned_levels, &cfg);
+                for built_levels in [10, 100, 1_000] {
+                    let cost = structure_upgrade_cost_gold(kind, target_level, built_levels, &cfg);
+                    let scale = structure_build_cost_gold(kind, built_levels, &cfg)
+                        / structure_build_cost_gold(kind, previous_built_levels, &cfg);
                     assert!((cost - upgrade * scale).abs() < 1e-9);
                 }
             }
