@@ -269,7 +269,10 @@ impl SowApp {
                 .maps
                 .insert(map_id.clone(), payload);
         }
-        if tutorial && self.ui.tutorial_campaign.has_local_peten_map() {
+        if tutorial
+            && (self.ui.tutorial_campaign.has_local_peten_map()
+                || matches!(config.map_name.as_str(), "peten_clearing" | "bital_pass"))
+        {
             let cached_for_map = self
                 .ui
                 .app

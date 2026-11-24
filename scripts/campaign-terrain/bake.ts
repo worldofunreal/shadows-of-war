@@ -2,22 +2,24 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BITAL_SIZE, bitalTerrain, type PetenRoster } from "./bital-terrain.ts";
-import { campaignScene, campaignTerrain } from "./peten-campaign-terrain.ts";
+import { BITAL_SIZE, bitalTerrain, type PetenRoster } from "./bital.ts";
+import { campaignScene, campaignTerrain } from "./maya.ts";
 
 type Point = [number, number, number];
 type Mesh = { vertices: Point[]; faces: number[][]; colors: Point[]; materials: number[] };
 
-const map = process.argv[2] ?? "peten_clearing";
+const map = process.argv[2];
+if (!map) throw new Error("Usage: bun scripts/campaign-terrain/bake.ts <map-id>");
 const chapter = campaignScene(map);
 if (map !== "peten_clearing" && map !== "bital_pass" && !chapter) {
     throw new Error(`Unknown Petén map: ${map}`);
 }
 const bital = map === "bital_pass";
-const sourceDir = join(import.meta.dir, "../assets/map_sources", map);
+const repoRoot = join(import.meta.dir, "../..");
+const sourceDir = join(repoRoot, "assets/map_sources", map);
 const maskPath = join(sourceDir, "image.png");
 const episode = chapter?.episode ?? (bital ? 2 : 1);
-const roster: PetenRoster = JSON.parse(readFileSync(join(import.meta.dir, "../assets/campaign", `six_sky_maya_0${episode}.json`), "utf8"));
+const roster: PetenRoster = JSON.parse(readFileSync(join(repoRoot, "assets/campaign", `six_sky_maya_0${episode}.json`), "utf8"));
 const [width, height] = bital || chapter ? BITAL_SIZE : (() => {
     const mask = readFileSync(maskPath);
     return [mask.readUInt32BE(16), mask.readUInt32BE(20)] as const;
@@ -489,9 +491,12 @@ try {
     if (png.subarray(1, 4).toString() !== "PNG" || png.readUInt32BE(16) !== resolution[0] || png.readUInt32BE(20) !== resolution[1]) {
         throw new Error(`Blender output must be a ${resolution[0]} × ${resolution[1]} PNG`);
     }
-    const mapDir = join(import.meta.dir, "../assets/maps", map);
-    const output = chapter ? join(mapDir, "terrain.webp")
-        : join(import.meta.dir, "../sow-client/src/render/frame", bital ? "bital-pass.webp" : "peten-canopy.png");
+    const mapDir = join(repoRoot, "assets/maps", map);
+    const output = join(mapDir, "terrain.webp");
+    mkdirSync(mapDir, { recursive: true });
+    const webp = join(directory, "terrain.webp");
+    const encodeArt = Bun.spawnSync(["magick", render, "-strip", "-quality", "92", webp], { stderr: "inherit" });
+    if (!encodeArt.success) throw new Error(`Failed to encode the terrain art (${encodeArt.exitCode})`);
     if (sampleTerrain) {
         // The map importer reads one terrain tile per pixel and decodes its magnitude from blue.
         const pixels = new Uint8Array(width * height * 3);
@@ -501,14 +506,11 @@ try {
             pixels.set([190, 220, blue], i * 3);
         }
         const mask = join(directory, "image.png");
-        const webp = join(directory, "terrain.webp");
         const encodeMask = Bun.spawnSync(["magick", "ppm:-", "-strip", `PNG24:${mask}`], {
             stdin: Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), pixels]),
             stderr: "inherit",
         });
         if (!encodeMask.success) throw new Error(`Failed to encode the terrain mask (${encodeMask.exitCode})`);
-        const encodeArt = Bun.spawnSync(["magick", render, "-strip", "-quality", "92", webp], { stderr: "inherit" });
-        if (!encodeArt.success) throw new Error(`Failed to encode the terrain art (${encodeArt.exitCode})`);
         if (chapter) {
             mkdirSync(sourceDir, { recursive: true });
             mkdirSync(mapDir, { recursive: true });
@@ -523,10 +525,8 @@ try {
             writeFileSync(join(mapDir, "thumbnail.webp"), readFileSync(thumb));
         }
         writeFileSync(maskPath, readFileSync(mask));
-        writeFileSync(output, readFileSync(webp));
-    } else {
-        writeFileSync(output, png);
     }
+    writeFileSync(output, readFileSync(webp));
 } finally {
     rmSync(directory, { recursive: true, force: true });
 }

@@ -1,7 +1,6 @@
 use crate::app::SowApp;
 use crate::render::gpu::MapGlobals;
 use blade_graphics as gpu;
-use sow_render::map_renderer::TerrainArt;
 
 mod ui;
 
@@ -647,18 +646,11 @@ impl SowApp {
                         self.input.camera_y += shake[1];
                     }
 
-                    let terrain_art = match self.sim.config.map_name.as_str() {
-                        "peten_clearing" => {
-                            Some(TerrainArt::Embedded(include_bytes!("peten-canopy.png")))
-                        }
-                        "bital_pass" => Some(TerrainArt::Embedded(include_bytes!("bital-pass.webp"))),
-                        map => self.ui.app.asset_loader.terrain_art
-                            .as_ref()
-                            .filter(|(key, _)| key == map)
-                            .map(|(_, image)| TerrainArt::Downloaded(image)),
-                    };
-                    let terrain_art =
-                        terrain_art.filter(|_| dev.value("land.peten_canopy")[0] > 0.5);
+                    let terrain_art = self.ui.app.asset_loader.terrain_art
+                        .as_ref()
+                        .filter(|(key, _)| key == &self.sim.config.map_name)
+                        .map(|(_, image)| image)
+                        .filter(|_| dev.value("land.peten_canopy")[0] > 0.5);
                     let globals = MapGlobals {
                         camera_pos: [self.input.camera_x, self.input.camera_y],
                         zoom: self.input.camera_zoom,

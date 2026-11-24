@@ -71,11 +71,6 @@ pub struct MapRenderer {
     current_pack_stamp: u32,
 }
 
-pub enum TerrainArt<'a> {
-    Embedded(&'a [u8]),
-    Downloaded(&'a image::RgbaImage),
-}
-
 const FLASH_ABILITY_BIT: u8 = 0x80;
 const FLASH_INTENSITY_MASK: u8 = !FLASH_ABILITY_BIT;
 
@@ -434,7 +429,7 @@ impl MapRenderer {
         context: &gpu::Context,
         encoder: &mut gpu::CommandEncoder,
         key: &str,
-        art: TerrainArt<'_>,
+        art: &image::RgbaImage,
     ) {
         if self.terrain_art.is_some() && self.terrain_art_key.as_deref() == Some(key) {
             return;
@@ -443,14 +438,7 @@ impl MapRenderer {
             previous.destroy(context);
         }
         let format = gpu::TextureFormat::Rgba8Unorm;
-        let texture = match art {
-            TerrainArt::Embedded(bytes) => {
-                FontAtlasTexture::from_bytes(context, bytes, "terrain_art", format)
-            }
-            TerrainArt::Downloaded(image) => {
-                FontAtlasTexture::from_rgba(context, image, "terrain_art", format)
-            }
-        };
+        let texture = FontAtlasTexture::from_rgba(context, art, "terrain_art", format);
         encoder.init_texture(texture.texture);
         texture.upload(encoder, context);
         self.terrain_art = Some(texture);

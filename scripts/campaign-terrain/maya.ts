@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import mapPreview from "../sow-tools/editors/campaign-editor/map-preview.ts";
-import { BITAL_SIZE, mix, noise, smoothstep, type PetenRoster } from "./bital-terrain.ts";
+import mapPreview from "../../sow-tools/editors/campaign-editor/map-preview.ts";
+import { BITAL_SIZE, mix, noise, smoothstep, type PetenRoster } from "./bital.ts";
 
 type Ridge = [x: number, y: number, rise: number, radiusX: number, radiusY: number];
 type PathSegment = [x1: number, y1: number, x2: number, y2: number, strength: number];

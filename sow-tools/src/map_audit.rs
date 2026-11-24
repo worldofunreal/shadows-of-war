@@ -54,8 +54,8 @@ struct SourcesManifest {
 
 #[derive(Debug, Deserialize)]
 struct RecipeRecord {
-    source_path: String,
-    source_sha256: String,
+    source_path: Option<String>,
+    source_sha256: Option<String>,
     target_width: u32,
     target_height: u32,
     reproducible: bool,
@@ -182,15 +182,26 @@ fn audit_map(
     let map_bin_sha256 = sha256(&map_bytes);
     let map_bin_br_sha256 = optional_sha256(&dir.join("map.bin.br"))?;
     let thumbnail_sha256 = optional_sha256(&dir.join("thumbnail.webp"))?;
-    let (source_present, source_hash_matches) = if let Some(record) = recipe {
-        let source_path = resolve_source_path(repo_root, Path::new(&record.source_path));
-        let source_hash = optional_sha256(&source_path)?;
-        (
-            Some(source_path.is_file()),
-            Some(source_hash.as_deref() == Some(record.source_sha256.as_str())),
-        )
-    } else {
-        (None, None)
+    let (source_present, source_hash_matches) = match recipe {
+        Some(RecipeRecord {
+            source_path: Some(source_path),
+            source_sha256: Some(expected_hash),
+            ..
+        }) => {
+            let source_path = resolve_source_path(repo_root, Path::new(source_path));
+            let source_hash = optional_sha256(&source_path)?;
+            (
+                Some(source_path.is_file()),
+                Some(source_hash.as_deref() == Some(expected_hash.as_str())),
+            )
+        }
+        Some(RecipeRecord {
+            source_path: None,
+            source_sha256: None,
+            ..
+        })
+        | None => (None, None),
+        Some(_) => (Some(false), Some(false)),
     };
     let recipe_artifacts_match = recipe.map(|record| {
         record.target_width == map.width
