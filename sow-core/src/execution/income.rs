@@ -1,11 +1,11 @@
 use crate::building::BuildingAggregate;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
-    alliance_gold_per_second, alliance_troops_per_second, gold_income_per_second,
-    diminishing_passive_income, imperial_standard_income, land_trade_gold_per_second, tafaifa_council_multiplier,
-    trade_income_per_second, trade_troops_per_second, troop_income_per_second,
     GOLD_PASSIVE_EXCESS_RATE, GOLD_PASSIVE_FULL_RATE_CAP, TROOP_PASSIVE_EXCESS_RATE,
-    TROOP_PASSIVE_FULL_RATE_CAP,
+    TROOP_PASSIVE_FULL_RATE_CAP, alliance_gold_per_second, alliance_troops_per_second,
+    diminishing_passive_income, gold_income_per_second, imperial_standard_income,
+    land_trade_gold_per_second, tafaifa_council_multiplier, trade_income_per_second,
+    trade_troops_per_second, troop_income_per_second,
 };
 use crate::game::GamePhase;
 
@@ -13,11 +13,13 @@ struct LandTradeDelivery {
     owner: usize,
     tile: u32,
     raw_gold: f64,
+    passive_scaled: bool,
 }
 
 #[derive(Default)]
 struct LandTradeBatch {
     totals: Vec<f64>,
+    fixed_totals: Vec<f64>,
     deliveries: Vec<LandTradeDelivery>,
 }
 
@@ -28,37 +30,209 @@ impl SowEngine {
         let map_width = self.state.map.width;
         self.trade_last_delivery_tick = tick;
         let mut payments: Option<LandTradeBatch> = None;
+        let mut updated_links: Option<Vec<crate::building::RailwayLink>> = None;
         while let Some(&Reverse((due, index))) = self.trade_delivery_queue.peek() {
-            if due > tick { break; }
+            if due > tick {
+                break;
+            }
             self.trade_delivery_queue.pop();
-            let Some(link) = self.railway_links.get_mut(index) else { continue };
-            let open = link.is_open(&self.state);
-            let owner = usize::from(link.owner_id);
-            if let Some(aggregate) = self.building_aggregates.get_mut(owner) {
-                if open == link.blocked {
-                    let previous_weight = link.weight(map_width);
-                    link.blocked = !open;
-                    aggregate.land_trade_income_weight += link.weight(map_width) - previous_weight;
-                    if open {
-                        aggregate.railway_connections += 1;
-                    } else {
-                        aggregate.railway_connections = aggregate.railway_connections.saturating_sub(1);
+            let Some(link) = self.railway_links.get(index).cloned() else {
+                continue;
+            };
+            let Some(mut progress) = self.trade_route_progress.get(index).copied() else {
+                continue;
+            };
+            let last_station = link.station_path.len().saturating_sub(1);
+            if last_station == 0 {
+                continue;
+            }
+            let station_index = usize::from(progress.next_station_index).min(last_station);
+            // Stop payments are made on the outward leg only, matching OpenFront.
+            if !progress.returning {
+                let station_id = link.station_path[station_index];
+                if let Ok(position) = self
+                    .trade_stations
+                    .binary_search_by_key(&station_id, |station| station.id)
+                {
+                    let station = self.trade_stations[position];
+                    if matches!(
+                        station.kind,
+                        crate::game::BuildingKind::City | crate::game::BuildingKind::Port
+                    ) {
+                        let stop_count = usize::from(link.station_stop_count);
+                        let gold = if stop_count == 0 {
+                            0.0
+                        } else {
+                            crate::building::RAILWAY_STOP_GOLD.min(
+                                crate::building::RAILWAY_STOP_GOLD_PER_TRIP_CAP / stop_count as f64,
+                            )
+                        };
+                        if gold > 0.0 {
+                            let batch = payments.get_or_insert_with(|| LandTradeBatch {
+                                totals: vec![0.0; self.building_aggregates.len()],
+                                fixed_totals: vec![0.0; self.building_aggregates.len()],
+                                deliveries: Vec::new(),
+                            });
+                            let carrier = usize::from(link.owner_id);
+                            batch.fixed_totals[carrier] += gold;
+                            batch.deliveries.push(LandTradeDelivery {
+                                owner: carrier,
+                                tile: station.tile_idx,
+                                raw_gold: gold,
+                                passive_scaled: false,
+                            });
+                            if station.owner_id != link.owner_id {
+                                let station_owner = usize::from(station.owner_id);
+                                batch.fixed_totals[station_owner] += gold;
+                                batch.deliveries.push(LandTradeDelivery {
+                                    owner: station_owner,
+                                    tile: station.tile_idx,
+                                    raw_gold: gold,
+                                    passive_scaled: false,
+                                });
+                            }
+                        }
                     }
-                } else if open {
-                    let gold = link.cargo_gold(&self.state.config, map_width);
-                    let batch = payments.get_or_insert_with(|| LandTradeBatch {
-                        totals: vec![0.0; self.building_aggregates.len()],
-                        deliveries: Vec::new(),
-                    });
-                    batch.totals[owner] += gold;
-                    batch.deliveries.push(LandTradeDelivery {
-                        owner,
-                        tile: link.from_tile,
-                        raw_gold: gold,
-                    });
                 }
             }
-            self.trade_delivery_queue.push(Reverse((tick + u64::from(link.period_ticks), index)));
+
+            if !progress.returning {
+                if station_index >= last_station {
+                    progress.cargo_loaded = self
+                        .trade_stations
+                        .binary_search_by_key(&link.to_building_id, |station| station.id)
+                        .is_ok();
+                    progress.returning = true;
+                    progress.from_station_index = last_station as u16;
+                    progress.next_station_index = 0;
+                    let (ticks, remainder) = crate::building::railway_leg_ticks(
+                        &self.state.config,
+                        &link,
+                        last_station,
+                        0,
+                        7.0,
+                        progress.tick_remainder_micros,
+                    );
+                    progress.next_arrival_tick = tick.saturating_add(ticks);
+                    progress.tick_remainder_micros = remainder;
+                } else {
+                    progress.from_station_index = station_index as u16;
+                    let next = crate::building::next_trade_stop_index(
+                        &link,
+                        &self.trade_stations,
+                        station_index,
+                    );
+                    progress.next_station_index = next as u16;
+                    let (ticks, remainder) = crate::building::railway_leg_ticks(
+                        &self.state.config,
+                        &link,
+                        station_index,
+                        next,
+                        0.0,
+                        progress.tick_remainder_micros,
+                    );
+                    progress.next_arrival_tick = tick.saturating_add(ticks);
+                    progress.tick_remainder_micros = remainder;
+                }
+            } else {
+                if station_index != 0 {
+                    // Return trips pass stations without paying them and wake only at the TP.
+                    progress.from_station_index = last_station as u16;
+                    progress.next_station_index = 0;
+                    let (ticks, remainder) = crate::building::railway_leg_ticks(
+                        &self.state.config,
+                        &link,
+                        last_station,
+                        0,
+                        7.0,
+                        progress.tick_remainder_micros,
+                    );
+                    progress.next_arrival_tick = tick.saturating_add(ticks);
+                    progress.tick_remainder_micros = remainder;
+                } else {
+                    if progress.cargo_loaded {
+                        let owner = usize::from(link.owner_id);
+                        let gold = link.cargo_gold(&self.state.config, map_width);
+                        let batch = payments.get_or_insert_with(|| LandTradeBatch {
+                            totals: vec![0.0; self.building_aggregates.len()],
+                            fixed_totals: vec![0.0; self.building_aggregates.len()],
+                            deliveries: Vec::new(),
+                        });
+                        batch.totals[owner] += gold;
+                        batch.deliveries.push(LandTradeDelivery {
+                            owner,
+                            tile: link.from_tile,
+                            raw_gold: gold,
+                            passive_scaled: true,
+                        });
+                    }
+                    progress.cargo_loaded = false;
+
+                    if let Some(pending) = self
+                        .trade_route_pending
+                        .get(index)
+                        .filter(|pending| pending.changed)
+                        .cloned()
+                    {
+                        self.trade_route_pending[index] = Default::default();
+                        if let Some(mut next) = pending.route {
+                            next.opened_at = tick;
+                            let next_progress = crate::building::initial_trade_route_progress(
+                                &self.state,
+                                &next,
+                                &self.trade_stations,
+                            );
+                            updated_links
+                                .get_or_insert_with(|| self.railway_links.as_ref().clone())
+                                [index] = next;
+                            self.trade_route_progress[index] = next_progress;
+                            self.trade_delivery_queue
+                                .push(Reverse((next_progress.next_arrival_tick, index)));
+                        } else {
+                            let mut inactive = link;
+                            inactive.distance = 0;
+                            inactive.period_ticks = 0;
+                            inactive.station_path.clear();
+                            inactive.route_path.clear();
+                            inactive.station_path_edge_distances.clear();
+                            inactive.station_stop_count = 0;
+                            updated_links
+                                .get_or_insert_with(|| self.railway_links.as_ref().clone())
+                                [index] = inactive;
+                            self.trade_route_progress[index] =
+                                crate::building::TradeRouteProgress {
+                                    next_arrival_tick: u64::MAX,
+                                    ..Default::default()
+                                };
+                        }
+                        self.railway_routes_dirty = true;
+                        self.building_aggregates_dirty = true;
+                        continue;
+                    }
+
+                    progress.returning = false;
+                    progress.from_station_index = 0;
+                    let next =
+                        crate::building::next_trade_stop_index(&link, &self.trade_stations, 0);
+                    progress.next_station_index = next as u16;
+                    let (ticks, remainder) = crate::building::railway_leg_ticks(
+                        &self.state.config,
+                        &link,
+                        0,
+                        next,
+                        7.0,
+                        progress.tick_remainder_micros,
+                    );
+                    progress.next_arrival_tick = tick.saturating_add(ticks);
+                    progress.tick_remainder_micros = remainder;
+                }
+            }
+            self.trade_route_progress[index] = progress;
+            self.trade_delivery_queue
+                .push(Reverse((progress.next_arrival_tick, index)));
+        }
+        if let Some(links) = updated_links {
+            self.railway_links = std::sync::Arc::new(links);
         }
         payments
     }
@@ -199,7 +373,8 @@ impl SowEngine {
                     self.state.players[idx].alliances.len(),
                     leader,
                     &config,
-                )) * bot_income_multiplier
+                ))
+                * bot_income_multiplier
                 + trade_income_per_second(trade_ships, leader, &config)
                 + hero_gold;
             let combined_rate = diminishing_passive_income(
@@ -210,11 +385,18 @@ impl SowEngine {
             let land_trade_rate = land_trade_gold_per_second(agg, leader, &config);
             let scaled_trade_rate = land_trade_rate * council_multiplier * bot_income_multiplier;
             let passive_rate = diminishing_passive_income(
-                gold_ps - scaled_trade_rate, GOLD_PASSIVE_FULL_RATE_CAP, GOLD_PASSIVE_EXCESS_RATE,
+                gold_ps - scaled_trade_rate,
+                GOLD_PASSIVE_FULL_RATE_CAP,
+                GOLD_PASSIVE_EXCESS_RATE,
             );
             let delivered = deliveries
                 .as_ref()
                 .and_then(|batch| batch.totals.get(usize::from(player_id)))
+                .copied()
+                .unwrap_or(0.0);
+            let fixed_delivered = deliveries
+                .as_ref()
+                .and_then(|batch| batch.fixed_totals.get(usize::from(player_id)))
                 .copied()
                 .unwrap_or(0.0);
             let trade_scale = if land_trade_rate > 0.0 {
@@ -223,23 +405,26 @@ impl SowEngine {
             } else {
                 0.0
             };
-            let gold_income = config.per_tick(passive_rate) + delivered * trade_scale;
+            let gold_income =
+                config.per_tick(passive_rate) + delivered * trade_scale + fixed_delivered;
             self.state.players[idx].credit_gold(gold_income);
-            if delivered > 0.0 && trade_scale > 0.0 {
-                if let Some(batch) = deliveries.as_ref() {
-                    let owner = usize::from(player_id);
-                    for delivery in &batch.deliveries {
-                        if delivery.owner == owner {
-                            let net_gold = delivery.raw_gold * trade_scale;
-                            if net_gold > 0.0 {
-                                self.state.events.push(
-                                    crate::game::GameEvent::LandTradeDelivered {
-                                        owner_id: player_id,
-                                        tile: delivery.tile,
-                                        gold: net_gold,
-                                    },
-                                );
-                            }
+            if let Some(batch) = deliveries.as_ref() {
+                let owner = usize::from(player_id);
+                for delivery in &batch.deliveries {
+                    if delivery.owner == owner {
+                        let net_gold = if delivery.passive_scaled {
+                            delivery.raw_gold * trade_scale
+                        } else {
+                            delivery.raw_gold
+                        };
+                        if net_gold > 0.0 {
+                            self.state
+                                .events
+                                .push(crate::game::GameEvent::LandTradeDelivered {
+                                    owner_id: player_id,
+                                    tile: delivery.tile,
+                                    gold: net_gold,
+                                });
                         }
                     }
                 }
@@ -249,7 +434,6 @@ impl SowEngine {
             self.state.players[idx].iq_points =
                 (self.state.players[idx].iq_points + iq_gain).min(500.0);
         }
-
     }
 }
 
@@ -400,6 +584,17 @@ mod zero_troop_bot_income_tests {
         player.tile_count = 24 * 24;
         player.gold = 0.0;
         state.register_player(player);
+        let mut neighbor = Player::new_human(2, "Vecino".into(), [0.2, 0.8, 0.4], &config);
+        neighbor.alive = true;
+        neighbor.tile_count = 1;
+        neighbor.gold = 0.0;
+        state.register_player(neighbor);
+        let mut other_neighbor =
+            Player::new_human(3, "Otro vecino".into(), [0.7, 0.2, 0.8], &config);
+        other_neighbor.alive = true;
+        other_neighbor.tile_count = 1;
+        other_neighbor.gold = 0.0;
+        state.register_player(other_neighbor);
         for y in 0..24 {
             for x in 0..24 {
                 state.map.set_owner_id(x, y, 1);
@@ -420,17 +615,76 @@ mod zero_troop_bot_income_tests {
         });
         engine.buildings.push(Building {
             id: 2,
-            owner_id: 1,
-            tile_idx: 8 * 24 + 14,
-            kind: BuildingKind::Tower,
+            owner_id: 2,
+            tile_idx: 8 * 24 + 10,
+            kind: BuildingKind::City,
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
         });
+        engine.buildings.push(Building {
+            id: 3,
+            owner_id: 3,
+            tile_idx: 8 * 24 + 14,
+            kind: BuildingKind::Port,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine.buildings.push(Building {
+            id: 4,
+            owner_id: 2,
+            tile_idx: 8 * 24 + 8,
+            kind: BuildingKind::TradingPost,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine.attacks.push(crate::execution::AttackExecution {
+            id: 1,
+            owner_id: 1,
+            target_owner: 2,
+            created_tick: 0,
+            troops: 1.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(1),
+            retreating: false,
+            landed: false,
+            focus: None,
+        });
         engine.building_aggregates_dirty = true;
         engine.refresh_building_aggregates();
-        assert_eq!(engine.railway_links.len(), 1);
-        let period = engine.railway_links[0].period_ticks;
+        assert_eq!(engine.railway_links.len(), 2);
+        let first_route = engine
+            .railway_links
+            .iter()
+            .find(|link| link.from_building_id == 1)
+            .unwrap();
+        assert_eq!(first_route.station_stop_count, 2);
+        let second_route = engine
+            .railway_links
+            .iter()
+            .find(|link| link.from_building_id == 4)
+            .unwrap();
+        assert!(
+            first_route
+                .station_path
+                .windows(2)
+                .any(|pair| pair == [2, 3])
+        );
+        assert!(
+            second_route
+                .station_path
+                .windows(2)
+                .any(|pair| pair == [2, 3])
+        );
+        let period = engine
+            .railway_links
+            .iter()
+            .map(|link| link.period_ticks)
+            .max()
+            .unwrap();
         engine.state.events.clear();
 
         for tick in 1..=u64::from(period) {
@@ -451,11 +705,160 @@ mod zero_troop_bot_income_tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].0, 1);
-        assert_eq!(events[0].1, 8 * 24 + 6);
+        let city_tile = 8 * 24 + 10;
+        let port_tile = 8 * 24 + 14;
+        let post_tile = 8 * 24 + 6;
+        let other_post_tile = 8 * 24 + 8;
+        assert_eq!(
+            events.len(),
+            9,
+            "period={period}, progress={:?}, events={events:?}",
+            engine.trade_route_progress
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.0 == 1
+                    && event.1 == city_tile
+                    && (event.2 - 2.0).abs() < 1e-6)
+                .count(),
+            1
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.0 == 2
+                    && event.1 == city_tile
+                    && (event.2 - 2.0).abs() < 1e-6)
+                .count(),
+            2
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.0 == 1
+                    && event.1 == port_tile
+                    && (event.2 - 2.0).abs() < 1e-6)
+                .count(),
+            1
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.0 == 2
+                    && event.1 == port_tile
+                    && (event.2 - 2.0).abs() < 1e-6)
+                .count(),
+            1
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.0 == 3
+                    && event.1 == port_tile
+                    && (event.2 - 2.0).abs() < 1e-6)
+                .count(),
+            2
+        );
+        let cargo = events
+            .iter()
+            .find(|event| event.0 == 1 && event.1 == post_tile)
+            .unwrap();
+        assert!(cargo.2 > 0.0);
+        assert!(
+            events
+                .iter()
+                .any(|event| event.0 == 2 && event.1 == other_post_tile && event.2 > 0.0)
+        );
         let treasury = engine.state.player(1).unwrap().gold;
-        assert!((events[0].2 - treasury).abs() < 1e-6);
-        assert!(events[0].2 > 0.0);
+        let carrier_events: f64 = events
+            .iter()
+            .filter(|event| event.0 == 1)
+            .map(|event| event.2)
+            .sum();
+        assert!((carrier_events - treasury).abs() < 1e-6);
+
+        let route_index = engine
+            .railway_links
+            .iter()
+            .position(|link| link.from_building_id == 1)
+            .unwrap();
+        let city_station_index = engine.railway_links[route_index]
+            .station_path
+            .iter()
+            .position(|station_id| *station_id == 2)
+            .unwrap();
+
+        engine.state.events.clear();
+        engine
+            .buildings
+            .iter_mut()
+            .find(|building| building.id == 2)
+            .unwrap()
+            .owner_id = 3;
+        engine.building_aggregates_dirty = true;
+        engine.refresh_building_aggregates();
+
+        let arrival_tick = engine.state.tick + 1;
+        let progress = &mut engine.trade_route_progress[route_index];
+        progress.from_station_index = (city_station_index - 1) as u16;
+        progress.next_station_index = city_station_index as u16;
+        progress.returning = false;
+        progress.cargo_loaded = false;
+        progress.next_arrival_tick = arrival_tick;
+        engine.trade_delivery_queue.clear();
+        engine
+            .trade_delivery_queue
+            .push(std::cmp::Reverse((arrival_tick, route_index)));
+        engine.state.tick = arrival_tick;
+        engine.execute_income();
+        assert!(engine.state.events.iter().any(|event| matches!(event,
+            GameEvent::LandTradeDelivered { owner_id: 1, tile, gold }
+                if *tile == city_tile && (*gold - 2.0).abs() < 1e-6
+        )));
+        assert!(engine.state.events.iter().any(|event| matches!(event,
+            GameEvent::LandTradeDelivered { owner_id: 3, tile, gold }
+                if *tile == city_tile && (*gold - 2.0).abs() < 1e-6
+        )));
+
+        engine.state.events.clear();
+        engine.buildings.retain(|building| building.id != 2);
+        engine.building_aggregates_dirty = true;
+        engine.refresh_building_aggregates();
+        let arrival_tick = engine.state.tick + 1;
+        let progress = &mut engine.trade_route_progress[route_index];
+        progress.from_station_index = (city_station_index - 1) as u16;
+        progress.next_station_index = city_station_index as u16;
+        progress.returning = false;
+        progress.cargo_loaded = false;
+        progress.next_arrival_tick = arrival_tick;
+        engine.trade_delivery_queue.clear();
+        engine
+            .trade_delivery_queue
+            .push(std::cmp::Reverse((arrival_tick, route_index)));
+        engine.state.tick = arrival_tick;
+        engine.execute_income();
+        assert!(!engine.state.events.iter().any(|event| matches!(event,
+            GameEvent::LandTradeDelivered { tile, .. } if *tile == city_tile
+        )));
+
+        let in_flight = engine.trade_route_progress[route_index];
+        assert_eq!(in_flight.from_station_index as usize, city_station_index);
+        assert!(!in_flight.returning);
+        engine
+            .buildings
+            .iter_mut()
+            .find(|building| building.id == 1)
+            .unwrap()
+            .owner_id = 2;
+        engine.building_aggregates_dirty = true;
+        engine.refresh_building_aggregates();
+        assert_eq!(engine.railway_links[route_index].owner_id, 2);
+        assert!(!engine.trade_route_pending[route_index].changed);
+        assert_eq!(
+            engine.trade_route_progress[route_index].from_station_index,
+            0
+        );
+        assert!(!engine.trade_route_progress[route_index].returning);
     }
 }

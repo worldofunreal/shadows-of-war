@@ -243,6 +243,25 @@ fn enforce_shared_game_speed(mut config: GameConfig) -> GameConfig {
     config
 }
 
+fn load_server_rules_from_path(path: &str) -> Result<Option<GameConfig>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("{path}: {error}")),
+    };
+    GameConfig::with_overrides(&text)
+        .map(enforce_shared_game_speed)
+        .map(Some)
+        .map_err(|error| format!("{path}: {error}"))
+}
+
+/// Validates any present server rules file at startup so a stale or malformed
+/// config never falls back silently to `GameConfig::default()`.
+pub fn validate_server_rules_at_boot() -> Result<(), String> {
+    let path = std::env::var("SOW_CONFIG_PATH").unwrap_or_else(|_| DEFAULT_CONFIG_PATH.into());
+    load_server_rules_from_path(&path).map(|_| ())
+}
+
 /// Rules for a new lobby: `GameConfig` defaults with the server config file on
 /// top. Read at every lobby creation, so an edit applies to the next match
 /// without a restart; running matches keep the rules they started with. A
@@ -251,25 +270,17 @@ fn server_rules() -> GameConfig {
     static LAST_GOOD: std::sync::Mutex<Option<GameConfig>> = std::sync::Mutex::new(None);
     let path = std::env::var("SOW_CONFIG_PATH").unwrap_or_else(|_| DEFAULT_CONFIG_PATH.into());
     let mut last_good = LAST_GOOD.lock().unwrap_or_else(|poison| poison.into_inner());
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+    match load_server_rules_from_path(&path) {
+        Ok(None) => {
             *last_good = None;
-            return GameConfig::default();
+            GameConfig::default()
         }
-        Err(error) => {
-            log::error!("[config] {path}: {error}; keeping the last good rules");
-            return last_good.clone().unwrap_or_default();
-        }
-    };
-    match GameConfig::with_overrides(&text) {
-        Ok(config) => {
-            let config = enforce_shared_game_speed(config);
+        Ok(Some(config)) => {
             *last_good = Some(config.clone());
             config
         }
         Err(error) => {
-            log::error!("[config] {path}: {error}; keeping the last good rules");
+            log::error!("[config] {error}; keeping the last good rules");
             last_good.clone().unwrap_or_default()
         }
     }
@@ -1356,6 +1367,34 @@ mod name_tests {
             super::enforce_shared_game_speed(site_rules).global_speed_multiplier,
             sow_core::game_config::NORMAL_GAME_SPEED
         );
+    }
+
+    #[test]
+    fn load_server_rules_rejects_unknown_keys_and_allows_missing_file() {
+        let missing = std::env::temp_dir().join(format!(
+            "sow-server-rules-missing-{}.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&missing);
+        assert_eq!(
+            super::load_server_rules_from_path(missing.to_str().unwrap()).unwrap(),
+            None
+        );
+
+        let path = std::env::temp_dir().join(format!(
+            "sow-server-rules-test-{}.json",
+            std::process::id()
+        ));
+        std::fs::write(&path, r#"{"hero_factory_troop_income": 275.0}"#).unwrap();
+        let err = super::load_server_rules_from_path(path.to_str().unwrap()).unwrap_err();
+        assert!(err.contains("unknown key hero_factory_troop_income"), "{err}");
+
+        std::fs::write(&path, r#"{"troop_base_income": 175.0}"#).unwrap();
+        let loaded = super::load_server_rules_from_path(path.to_str().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded.troop_base_income, 175.0);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

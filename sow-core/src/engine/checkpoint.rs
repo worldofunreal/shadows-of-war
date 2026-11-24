@@ -115,6 +115,91 @@ mod tests {
         for _ in 0..20 {
             original.tick();
         }
+        let rail_row = 3;
+        for x in 2..=14 {
+            let tile = original.state.map.ref_id(x, rail_row);
+            original.state.map.terrain[tile] = crate::map::MapTile::from_byte(0x80);
+            original.state.map.set_owner_id(x, rail_row, 1);
+        }
+        original.buildings.extend([
+            crate::building::Building {
+                id: 100_001,
+                owner_id: 1,
+                tile_idx: rail_row * 80 + 2,
+                kind: crate::game::BuildingKind::TradingPost,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+            },
+            crate::building::Building {
+                id: 100_002,
+                owner_id: 2,
+                tile_idx: rail_row * 80 + 14,
+                kind: crate::game::BuildingKind::City,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+            },
+        ]);
+        original.building_aggregates_dirty = true;
+        original.refresh_building_aggregates();
+        let active_route_index = original
+            .railway_links
+            .iter()
+            .position(|link| link.from_building_id == 100_001)
+            .expect("test Trading Post should have a route");
+        let active_path = original.railway_links[active_route_index]
+            .station_path
+            .clone();
+        let active_progress = original.trade_route_progress[active_route_index];
+        let route_tiles = crate::building::expand_path(
+            &original.railway_links[active_route_index].route_path,
+            80,
+        );
+        let added_station_tile = route_tiles
+            .iter()
+            .skip(1)
+            .take(route_tiles.len().saturating_sub(2))
+            .copied()
+            .find(|tile| {
+                !original
+                    .buildings
+                    .iter()
+                    .any(|building| building.tile_idx == *tile)
+            })
+            .expect("test route should have an unoccupied interior tile");
+        let x = added_station_tile % 80;
+        let y = added_station_tile / 80;
+        let tile = original.state.map.ref_id(x, y);
+        original.state.map.terrain[tile] = crate::map::MapTile::from_byte(0x80);
+        original.state.map.set_owner_id(x, y, 2);
+        original.buildings.push(crate::building::Building {
+            id: 100_003,
+            owner_id: 2,
+            tile_idx: added_station_tile,
+            kind: crate::game::BuildingKind::City,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        original.building_aggregates_dirty = true;
+        original.refresh_building_aggregates();
+        assert_eq!(
+            original.railway_links[active_route_index].station_path, active_path,
+            "an in-flight itinerary must not change when a station opens"
+        );
+        assert_eq!(
+            original.trade_route_progress[active_route_index],
+            active_progress
+        );
+        assert!(original.trade_route_pending[active_route_index].changed);
+        assert!(
+            original.trade_route_pending[active_route_index]
+                .route
+                .as_ref()
+                .is_some_and(|route| route.station_path != active_path)
+        );
+        assert!(!original.trade_delivery_queue.is_empty());
         original.apply_intents(&[StampedIntent {
             player_id: 1,
             intent: GameplayIntent::Attack(AttackIntent {
@@ -146,6 +231,14 @@ mod tests {
         }
         let bytes = bincode::serialize(&original).unwrap();
         let mut restored: SowEngine = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(restored.railway_links, original.railway_links);
+        assert_eq!(restored.railway_tracks, original.railway_tracks);
+        assert_eq!(restored.trade_route_progress, original.trade_route_progress);
+        assert_eq!(restored.trade_route_pending, original.trade_route_pending);
+        assert_eq!(
+            restored.trade_delivery_queue.clone().into_sorted_vec(),
+            original.trade_delivery_queue.clone().into_sorted_vec()
+        );
         assert_eq!(
             restored.state.map.ownership_revision(),
             original.state.map.ownership_revision()

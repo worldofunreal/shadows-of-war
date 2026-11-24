@@ -840,7 +840,9 @@ pub struct SimSnapshot {
     pub attacks: Vec<AttackSnapshot>,
     pub buildings: Vec<BuildingSnapshot>,
     #[serde(default)]
-    pub railway_links: Vec<crate::building::RailwayLink>,
+    pub railway_links: std::sync::Arc<Vec<crate::building::RailwayLink>>,
+    #[serde(default)]
+    pub railway_tracks: std::sync::Arc<Vec<crate::building::RailwayTrack>>,
     pub projectiles: Vec<ProjectileSnapshot>,
     #[serde(default)]
     pub nuke_alerts: Vec<NukeAlert>,

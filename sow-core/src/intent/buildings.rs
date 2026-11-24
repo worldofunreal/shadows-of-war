@@ -195,7 +195,7 @@ impl SowEngine {
         if self.state.phase != GamePhase::Playing {
             return;
         }
-        if !self.state.config.buildings_enabled {
+        if !self.state.config.buildings_enabled || !kind.is_enabled() {
             return;
         }
         let Some(player) = self.state.player(player_id) else {
@@ -342,6 +342,7 @@ impl SowEngine {
             && building.under_construction
             && building.active_level() >= 1;
         if building.owner_id != player_id
+            || !building.kind.is_enabled()
             || (building.under_construction && !extending_active_upgrade)
             || self
                 .building_productions

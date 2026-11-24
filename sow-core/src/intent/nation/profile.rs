@@ -168,6 +168,56 @@ impl AiBehaviorPolicy {
     }
 }
 
+/// Tunable weights driving Pro AI macro (ROI), timing, and spatial tactics.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct AiStrategyWeights {
+    pub(super) gold_value_weight: f64,
+    pub(super) troop_value_weight: f64,
+    pub(super) troop_cap_bonus_weight: f64,
+    pub(super) city_reserve_bonus: f64,
+    pub(super) port_naval_slot_bonus: f64,
+    pub(super) upgrade_multi_level_bias: f64,
+    pub(super) lookahead_seconds: f64,
+    pub(super) overcap_expand_ratio: f64,
+    pub(super) punish_depletion_threshold: f64,
+    pub(super) punish_depletion_mult: f64,
+    pub(super) tower_defense_priority: f64,
+    pub(super) nuclear_city_push_bonus: f64,
+    pub(super) warship_target_per_port: u32,
+}
+
+impl AiStrategyWeights {
+    pub(super) const PRO: Self = Self {
+        gold_value_weight: 28.0,
+        troop_value_weight: 0.08,
+        troop_cap_bonus_weight: 0.0025,
+        city_reserve_bonus: 35.0,
+        port_naval_slot_bonus: 24.0,
+        upgrade_multi_level_bias: 1.15,
+        lookahead_seconds: 8.0,
+        overcap_expand_ratio: 0.82,
+        punish_depletion_threshold: 0.40,
+        punish_depletion_mult: 2.2,
+        tower_defense_priority: 2.6,
+        nuclear_city_push_bonus: 3.5,
+        warship_target_per_port: 3,
+    };
+}
+
+#[inline]
+pub(super) fn is_pro_slot(
+    tier: AiTier,
+    bot_iq: u32,
+    difficulty: crate::game_config::BotDifficulty,
+    ranked_1v1: bool,
+) -> bool {
+    match tier {
+        AiTier::Ghost => !ranked_1v1 && bot_iq >= 140 || (ranked_1v1 && bot_iq >= 150),
+        AiTier::Nation => difficulty == crate::game_config::BotDifficulty::Terminator,
+        AiTier::Tribe => false,
+    }
+}
+
 /// Describes which behaviours an AI entity should run this tick.
 pub(super) struct AiSlot {
     pub(super) bot_id: u16,
@@ -183,6 +233,16 @@ impl AiSlot {
     #[inline]
     pub(super) const fn policy(&self) -> AiBehaviorPolicy {
         AiBehaviorPolicy::for_tier(self.tier)
+    }
+
+    #[inline]
+    pub(super) fn is_pro(
+        &self,
+        bot_iq: u32,
+        difficulty: crate::game_config::BotDifficulty,
+        ranked_1v1: bool,
+    ) -> bool {
+        is_pro_slot(self.tier, bot_iq, difficulty, ranked_1v1)
     }
 }
 

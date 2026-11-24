@@ -170,6 +170,7 @@ usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-active-ws.map
 usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-active-http.map
 __SITE_RELEASE_REL__/active-generation
 zroot/jails/__SITE_SERVER_JAIL__/etc/resolv.conf
+zroot/jails/__SITE_SERVER_JAIL__/usr/local/etc/sow/config.json
 zroot/jails/__SITE_SERVER_JAIL__/usr/local/etc/sow/sow.env
 zroot/jails/__SITE_SERVER_JAIL__/usr/local/etc/sow/relay.env
 zroot/jails/__SITE_SERVER_JAIL__/usr/local/etc/rc.d/sow_server

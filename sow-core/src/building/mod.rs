@@ -2,10 +2,12 @@ pub mod construction;
 pub mod core;
 pub mod cost;
 pub mod placement;
+pub mod railway;
 
 pub use core::*;
 pub use cost::*;
 pub use placement::*;
+pub use railway::*;
 
 #[cfg(test)]
 mod tests {

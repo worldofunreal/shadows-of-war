@@ -51,10 +51,8 @@ impl SowEngine {
         > = std::collections::HashMap::new();
         for r in proposed_resources {
             if self.resources_can_move(r.proposer, r.target) {
-                resource_reqs_by_target
-                    .entry(r.target)
-                    .or_default()
-                    .push(crate::protocol::ResourceRequest {
+                resource_reqs_by_target.entry(r.target).or_default().push(
+                    crate::protocol::ResourceRequest {
                         requester: r.proposer,
                         gold: r.gold,
                         troops: r.troops,
@@ -62,7 +60,8 @@ impl SowEngine {
                         pay_troops: r.pay_troops,
                         remaining_ticks: crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS
                             .saturating_sub(tick.saturating_sub(r.created_tick)),
-                    });
+                    },
+                );
             }
         }
 
@@ -98,15 +97,20 @@ impl SowEngine {
             if pid > max_pid || building.kind != crate::game::BuildingKind::MissileSilo {
                 continue;
             }
-            nuke_available_by_player[pid] |= self.nuclear_charges(building.id, building.active_level()) > 0;
+            nuke_available_by_player[pid] |=
+                self.nuclear_charges(building.id, building.active_level()) > 0;
             let wait = self.nuclear_wait_ticks(building.id);
             let current = &mut nuke_cooldown_by_player[pid];
             if wait > 0 && (*current == 0 || wait < *current) {
                 *current = wait;
             }
         }
-        let nuclear_city_level = crate::building::nuclear_city_level(self.campaign_unlocks.is_some());
-        for (available, aggregate) in nuke_available_by_player.iter_mut().zip(&self.building_aggregates) {
+        let nuclear_city_level =
+            crate::building::nuclear_city_level(self.campaign_unlocks.is_some());
+        for (available, aggregate) in nuke_available_by_player
+            .iter_mut()
+            .zip(&self.building_aggregates)
+        {
             *available &= aggregate.highest_city_level >= nuclear_city_level;
         }
 
@@ -141,9 +145,8 @@ impl SowEngine {
 
                 let name = p.name.clone();
 
-                let (alliance_requests, alliance_request_timers) = alliance_reqs_by_target
-                    .remove(&p.id)
-                    .unwrap_or_default();
+                let (alliance_requests, alliance_request_timers) =
+                    alliance_reqs_by_target.remove(&p.id).unwrap_or_default();
                 let resource_requests = resource_reqs_by_target.remove(&p.id).unwrap_or_default();
                 let help_calls = help_calls_by_target.remove(&p.id).unwrap_or_default();
                 let help_cooldown_ticks = self.help_call_cooldown_remaining(p.id);
@@ -329,7 +332,8 @@ impl SowEngine {
             fleets,
             attacks,
             buildings,
-            railway_links: self.railway_links.clone(),
+            railway_links: std::sync::Arc::clone(&self.railway_links),
+            railway_tracks: std::sync::Arc::clone(&self.railway_tracks),
             projectiles: self
                 .projectiles
                 .iter()

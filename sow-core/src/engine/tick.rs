@@ -79,21 +79,22 @@ impl SowEngine {
                 state.warship_queue.clear();
             }
             if self.state.config.tutorial {
-                self.state.events.push(crate::game::GameEvent::StructureCaptured {
-                    building_id: building.id,
-                    kind: building.kind,
-                    level: building.level,
-                    new_owner: building.owner_id,
-                    old_owner,
-                    tile_idx: building.tile_idx,
-                });
+                self.state
+                    .events
+                    .push(crate::game::GameEvent::StructureCaptured {
+                        building_id: building.id,
+                        kind: building.kind,
+                        level: building.level,
+                        new_owner: building.owner_id,
+                        old_owner,
+                        tile_idx: building.tile_idx,
+                    });
             }
             if self.state.config.tutorial
                 && !building.under_construction
-                && self
-                    .state
-                    .player(building.owner_id)
-                    .is_some_and(|p| p.player_type == crate::player::PlayerType::Human && !p.is_ai_controlled)
+                && self.state.player(building.owner_id).is_some_and(|p| {
+                    p.player_type == crate::player::PlayerType::Human && !p.is_ai_controlled
+                })
             {
                 let bonus_troops = f64::from(building.level.max(1)) * 120.0;
                 let bonus_gold = f64::from(building.level.max(1)) * 30.0;
@@ -444,7 +445,11 @@ impl SowEngine {
                 / u64::from(self.state.config.tick_rate_ms.max(1.0) as u32))
             .max(1);
             let Some(next_tick) = self.campaign_support_next_tick.get(&ally_id).copied() else {
-                let first_delay = if immediate_on_contact { 1 } else { interval_ticks };
+                let first_delay = if immediate_on_contact {
+                    1
+                } else {
+                    interval_ticks
+                };
                 self.campaign_support_next_tick
                     .insert(ally_id, self.state.tick.saturating_add(first_delay));
                 continue;
@@ -651,17 +656,12 @@ impl SowEngine {
         }
         self.playing_ticks = self.playing_ticks.saturating_add(1);
         for player in &mut self.state.players {
-            if player.has_spawned
-                && player.alive
-                && player.tile_count > 0
-                && !player.disconnected
-            {
+            if player.has_spawned && player.alive && player.tile_count > 0 && !player.disconnected {
                 player.alive_ticks = player.alive_ticks.saturating_add(1);
             }
         }
-        let tps = ((1000.0 / f64::from(self.state.config.tick_rate_ms.max(1.0)))
-            .round() as u32)
-            .max(1);
+        let tps =
+            ((1000.0 / f64::from(self.state.config.tick_rate_ms.max(1.0))).round() as u32).max(1);
         let winner_declared = self.state.winner.is_some();
         let settling_complete = self.playing_ticks >= 10 * tps;
         if !winner_declared && (!settling_complete || self.playing_ticks % tps != 0) {
@@ -699,8 +699,11 @@ impl SowEngine {
                 continue;
             }
             let rank = 1_u16.saturating_add(strictly_ahead);
-            player.peak_territory_rank =
-                Some(player.peak_territory_rank.map_or(rank, |prev| prev.min(rank)));
+            player.peak_territory_rank = Some(
+                player
+                    .peak_territory_rank
+                    .map_or(rank, |prev| prev.min(rank)),
+            );
         }
     }
 }
@@ -1180,10 +1183,14 @@ mod tests {
                         engine.state.winning_team,
                         (!tutorial && game_mode != "FFA").then_some(Team::Red)
                     );
-        assert_eq!(
-            engine.state.events.iter().any(|event| matches!(event, GameEvent::GameOver { .. })),
-            !tutorial
-        );
+                    assert_eq!(
+                        engine
+                            .state
+                            .events
+                            .iter()
+                            .any(|event| matches!(event, GameEvent::GameOver { .. })),
+                        !tutorial
+                    );
                 }
             }
         }
@@ -1305,8 +1312,23 @@ mod tests {
         assert_eq!(me.troops, 2025.0);
         // Tier 3 (+250) + revive (+150) + base 100 = 500 gold
         assert_eq!(me.gold, 500.0);
-        assert!(engine.buildings.iter().any(|b| b.owner_id == 1 && b.kind == crate::game::BuildingKind::City));
-        assert!(engine.buildings.iter().any(|b| b.owner_id == 1 && b.kind == crate::game::BuildingKind::Tower));
-        assert!(engine.buildings.iter().any(|b| b.owner_id == 2 && b.kind == crate::game::BuildingKind::MilitaryCamp));
+        assert!(
+            engine
+                .buildings
+                .iter()
+                .any(|b| b.owner_id == 1 && b.kind == crate::game::BuildingKind::City)
+        );
+        assert!(
+            engine
+                .buildings
+                .iter()
+                .any(|b| b.owner_id == 1 && b.kind == crate::game::BuildingKind::Tower)
+        );
+        assert!(
+            engine
+                .buildings
+                .iter()
+                .any(|b| b.owner_id == 2 && b.kind == crate::game::BuildingKind::MilitaryCamp)
+        );
     }
 }

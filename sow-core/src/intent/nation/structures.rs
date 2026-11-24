@@ -11,6 +11,9 @@ pub(super) fn bot_structure_target_count(
     city_equivalent: u32,
     bot_iq: u32,
 ) -> u32 {
+    if !kind.is_enabled() {
+        return 0;
+    }
     let factor = if bot_iq >= 130 {
         1.0
     } else if bot_iq >= 100 {
@@ -218,7 +221,7 @@ pub(super) fn resolve_military_camp_from_candidates(
 pub(super) fn cheapest_gold_cost(cfg: &crate::game_config::GameConfig) -> f64 {
     BuildingKind::ALL
         .into_iter()
-        .filter(|&kind| kind != BuildingKind::SAM)
+        .filter(|&kind| kind.is_enabled() && kind != BuildingKind::SAM)
         .map(|kind| structure_build_cost_gold(kind, 0, cfg))
         .fold(f64::INFINITY, f64::min)
 }

@@ -1017,7 +1017,22 @@ impl SowEngine {
                     })
                     .collect();
 
-                let trigger_met = troops >= max_troops * trigger_ratio;
+                let is_pro = slot.is_pro(
+                    bot_iq,
+                    self.state.config.bot_difficulty,
+                    self.state.config.ranked_1v1,
+                ) && !self.legacy_building_rules;
+                let pro_weights = is_pro.then(|| self.pro_weights_for(bot_id));
+                let pro_punish_ready = pro_weights.is_some_and(|w| {
+                    attackable_targets.iter().any(|&tid| {
+                        self.state.player(tid).is_some_and(|t| {
+                            t.troops < troops * 0.45
+                                && t.troops < t.max_troops * w.punish_depletion_threshold
+                        })
+                    })
+                });
+                let trigger_cap = pro_weights.map_or(trigger_ratio, |w| trigger_ratio.min(w.overcap_expand_ratio));
+                let trigger_met = troops >= max_troops * trigger_cap || pro_punish_ready;
                 let ghost_tribe_bypass = policy.uses_tribe_bypass
                     && !trigger_met
                     && defender_target.is_none()
@@ -1274,10 +1289,27 @@ impl SowEngine {
                     (0, true)
                 } else if !attackable_targets.is_empty() && troops >= max_troops * trigger_ratio {
                     let target_owner = if bot_iq >= 130 {
+                        let pro_score = |t_id: u16| {
+                            let mut s = self.ai_target_prey_score(troops, t_id);
+                            if let Some(w) = pro_weights
+                                && let Some(target) = self.state.player(t_id)
+                            {
+                                if target.troops < target.max_troops * w.punish_depletion_threshold {
+                                    s *= w.punish_depletion_mult;
+                                }
+                                let distracted = self.attacks.iter().any(|a| {
+                                    a.owner_id == t_id && a.target_owner != bot_id && !a.retreating
+                                });
+                                if distracted {
+                                    s *= 1.35;
+                                }
+                            }
+                            s
+                        };
                         let mut best_target = attackable_targets[0];
-                        let mut best_score = self.ai_target_prey_score(troops, best_target);
+                        let mut best_score = pro_score(best_target);
                         for &t_id in &attackable_targets[1..] {
-                            let score = self.ai_target_prey_score(troops, t_id);
+                            let score = pro_score(t_id);
                             if score > best_score {
                                 best_score = score;
                                 best_target = t_id;
@@ -1497,13 +1529,18 @@ impl SowEngine {
                         if !is_neutral && let Some(p_me) = self.state.player_mut(bot_id) {
                             p_me.iq_points = (p_me.iq_points - attack_cost).max(0.0);
                         }
+                        let target_tile = if is_pro {
+                            self.pro_choose_attack_target_tile(bot_id, target_owner, is_defending)
+                        } else {
+                            None
+                        };
                         decisions.push(BotDecision {
                             bot_id,
                             kind: BotDecisionKind::Attack,
                             intent: GameplayIntent::Attack(AttackIntent {
                                 target_owner,
                                 troops: Some(p_send),
-                                target_tile: None,
+                                target_tile,
                             }),
                         });
                     }

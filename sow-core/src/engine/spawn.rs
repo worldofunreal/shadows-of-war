@@ -228,7 +228,8 @@ impl SowEngine {
         let hero_leader = character.hero.as_ref().and_then(|_| {
             crate::player::Leader::all_known().find(|leader| leader.id() == character.id)
         });
-        let is_nation = character.role == crate::geo_entities::Role::Nation || hero_leader.is_some();
+        let is_nation =
+            character.role == crate::geo_entities::Role::Nation || hero_leader.is_some();
         self.spawn_ai_entity(
             character.name.clone(),
             character,
@@ -346,7 +347,11 @@ impl SowEngine {
                         tier if tier >= 3 => 1.35,
                         _ => 1.0,
                     };
-                    let revive_mult = if config.campaign_revive_boost { 1.50 } else { 1.0 };
+                    let revive_mult = if config.campaign_revive_boost {
+                        1.50
+                    } else {
+                        1.0
+                    };
                     player.troops = (player.troops * streak_mult * revive_mult).round();
                     player.troops_received = player.troops.max(0.0);
                     let bonus_gold = match config.campaign_streak_tier {
@@ -354,7 +359,11 @@ impl SowEngine {
                         2 => 150.0,
                         tier if tier >= 3 => 250.0,
                         _ => 0.0,
-                    } + if config.campaign_revive_boost { 150.0 } else { 0.0 };
+                    } + if config.campaign_revive_boost {
+                        150.0
+                    } else {
+                        0.0
+                    };
                     player.gold += bonus_gold;
                 }
                 self.state.spawn_player(player, sx, sy);
@@ -366,7 +375,8 @@ impl SowEngine {
                     }
                     self.place_prebuilt_structures(player_id, sx, sy, &prebuilt);
                     if config.campaign_streak_tier >= 3 {
-                        self.state.announce_leader_ability(player_id, Some((sx, sy)));
+                        self.state
+                            .announce_leader_ability(player_id, Some((sx, sy)));
                     }
                 }
                 log::debug!("spawn_human: scripted at ({},{})", sx, sy);
@@ -823,6 +833,9 @@ impl SowEngine {
         }
         let anchor_tile = cy * map_w + cx;
         for &(kind, raw_level) in items {
+            if !kind.is_enabled() {
+                continue;
+            }
             if kind == BuildingKind::City
                 && self
                     .buildings

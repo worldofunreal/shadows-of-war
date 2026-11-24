@@ -90,6 +90,12 @@ impl BuildingKind {
         }
     }
 
+    /// Whether this structure can currently be built, upgraded, or placed in matches.
+    #[inline]
+    pub const fn is_enabled(self) -> bool {
+        !matches!(self, Self::MilitaryCamp)
+    }
+
     pub const fn max_level(self) -> u8 {
         match self {
             Self::SAM | Self::MissileSilo => 4,
@@ -100,6 +106,9 @@ impl BuildingKind {
     /// New structures start at level one. SAM batteries and missile silos remain locked
     /// until the player owns an Industrial City (level six).
     pub fn foundation_level(self, city_level: u8) -> u8 {
+        if !self.is_enabled() {
+            return 0;
+        }
         match self {
             Self::SAM | Self::MissileSilo if city_level < 6 => 0,
             _ => 1,

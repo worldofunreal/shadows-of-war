@@ -747,13 +747,19 @@ impl SowEngine {
                         .nearby_structure_upgrade(*building, BuildingKind::Tower, 20)
                         .is_some()
             })),
-            Ability::KitchenPhilosophy => ready(self.buildings.iter().any(|&military_camp| {
-                military_camp.owner_id == owner
-                    && military_camp.under_construction
-                    && self
-                        .kitchen_study_city(military_camp, military_camp.ticks_until_complete.max(1))
-                        .is_some()
-            })),
+            Ability::KitchenPhilosophy => ready(
+                BuildingKind::MilitaryCamp.is_enabled()
+                    && self.buildings.iter().any(|&military_camp| {
+                        military_camp.owner_id == owner
+                            && military_camp.under_construction
+                            && self
+                                .kitchen_study_city(
+                                    military_camp,
+                                    military_camp.ticks_until_complete.max(1),
+                                )
+                                .is_some()
+                    }),
+            ),
             Ability::SiegeBreach => ready(self.buildings.iter().any(|&tower| {
                 let map = &self.state.map;
                 tower.kind == BuildingKind::Tower
@@ -875,11 +881,13 @@ impl SowEngine {
                     && building.active_level() > 1
                     && !self.hero_claims.contains(&(owner, building.id, 0))
             })),
-            Ability::CookhamExchange => {
-                ready(self.buildings.iter().any(|&military_camp| {
-                    military_camp.owner_id == owner && self.cookham_exchange_city(military_camp).is_some()
-                }))
-            }
+            Ability::CookhamExchange => ready(
+                BuildingKind::MilitaryCamp.is_enabled()
+                    && self.buildings.iter().any(|&military_camp| {
+                        military_camp.owner_id == owner
+                            && self.cookham_exchange_city(military_camp).is_some()
+                    }),
+            ),
             Ability::CityIntercession { .. } => {
                 ready(self.buildings.iter().any(|&city| {
                     city_guard_cost(&self.state, &self.hero_claims, p, city).is_some()
@@ -1217,7 +1225,8 @@ impl SowEngine {
     }
 
     fn shared_feast_military_camp(&self, owner: u16, ally: u16) -> Option<Building> {
-        if !self.state.config.buildings_enabled
+        if !BuildingKind::MilitaryCamp.is_enabled()
+            || !self.state.config.buildings_enabled
             || !self.resources_can_move(owner, ally)
             || self.hero_claims.contains(&(owner, u64::from(ally), 2))
         {
@@ -1472,7 +1481,11 @@ impl SowEngine {
         let owned = |b: Building| {
             map.owner_id(b.tile_idx % map.width, b.tile_idx / map.width) == b.owner_id
         };
-        if military_camp.kind != BuildingKind::MilitaryCamp || military_camp.level < 2 || !owned(military_camp) {
+        if !BuildingKind::MilitaryCamp.is_enabled()
+            || military_camp.kind != BuildingKind::MilitaryCamp
+            || military_camp.level < 2
+            || !owned(military_camp)
+        {
             return None;
         }
         self.buildings
@@ -1626,7 +1639,8 @@ impl SowEngine {
     }
 
     fn punt_garden_military_camp(&self, home: Building) -> Option<usize> {
-        if home.kind != BuildingKind::Port
+        if !BuildingKind::MilitaryCamp.is_enabled()
+            || home.kind != BuildingKind::Port
             || home.under_construction
             || self.hero_claims.contains(&(home.owner_id, home.id, 0))
         {
@@ -1750,7 +1764,8 @@ impl SowEngine {
     }
 
     fn cookham_exchange_city(&self, military_camp: Building) -> Option<usize> {
-        if military_camp.kind != BuildingKind::MilitaryCamp
+        if !BuildingKind::MilitaryCamp.is_enabled()
+            || military_camp.kind != BuildingKind::MilitaryCamp
             || military_camp.active_level() == 0
             || self.hero_claims.contains(&(military_camp.owner_id, military_camp.id, 0))
         {

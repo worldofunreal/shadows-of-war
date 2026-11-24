@@ -3179,3 +3179,164 @@ fn s19_mixed_ffa_tier_balance() {
         final_alive[0], final_alive[1], final_alive[2]
     );
 }
+
+#[test]
+fn pro_ai_beats_standard_bot_and_optimizes_economy_with_targeted_attacks() {
+    use crate::game::BuildingKind;
+
+    let mut pro_tiles_total = 0u32;
+    let mut std_tiles_total = 0u32;
+    let mut pro_score_wins = 0u32;
+    let mut saw_directional_snipe = false;
+    let mut saw_rail_connection = false;
+    let mut saw_upgrade = false;
+
+    for seed in [7u64, 19, 42] {
+        let specs = [
+            LabPlayer {
+                gold: 100.0,
+                troops: 5_000.0,
+                max_troops: 5_000.0,
+                ..LabPlayer::ghost(1, 20, 40)
+            },
+            LabPlayer {
+                gold: 100.0,
+                troops: 5_000.0,
+                max_troops: 5_000.0,
+                iq: 165,
+                ..LabPlayer::nation(2, 60, 40)
+            },
+        ];
+        let mut engine = build_lab(80, 80, "FFA", &specs);
+        // Carve a shared coastal sea along y=0..6 so Ports/Warships are legal too.
+        for y in 0..6u32 {
+            for x in 0..80u32 {
+                engine.state.map.terrain[(y * 80 + x) as usize] = crate::map::MapTile::from_byte(0);
+            }
+        }
+        engine.water = crate::water_components::WaterComponents::compute(&engine.state.map, |_| {});
+        engine.state.seed = seed;
+        engine.state.config.global_speed_multiplier = 1.0;
+        engine.state.players[0].iq_points = 0.0;
+        engine.state.players[1].iq_points = 0.0;
+
+        for _ in 0..900 {
+            engine.state.tick += 1;
+            engine.execute_income();
+            engine.execute_ai_think();
+            for intent in &engine.test_last_ai_intents {
+                if intent.player_id == 1
+                    && let GameplayIntent::Attack(att) = &intent.intent
+                    && att.target_owner == 2
+                    && att.target_tile.is_some()
+                {
+                    saw_directional_snipe = true;
+                }
+            }
+            engine.execute_construction();
+            engine.execute_projectiles();
+            engine.execute_combat();
+            engine.execute_fleets();
+            engine.refresh_building_aggregates();
+            let agg1 = engine.building_aggregates.get(1).copied().unwrap_or_default();
+            if agg1.railway_connections > 0 {
+                saw_rail_connection = true;
+            }
+            if engine
+                .buildings
+                .iter()
+                .any(|b| b.owner_id == 1 && b.level >= 2)
+            {
+                saw_upgrade = true;
+            }
+        }
+
+        let p1 = engine.state.player(1).unwrap();
+        let p2 = engine.state.player(2).unwrap();
+        pro_tiles_total += p1.tile_count;
+        std_tiles_total += p2.tile_count;
+        if p1.tile_count >= p2.tile_count {
+            pro_score_wins += 1;
+        }
+        assert!(
+            engine
+                .buildings
+                .iter()
+                .any(|b| b.owner_id == 1 && b.kind == BuildingKind::City),
+            "Pro Ghost must establish a City (seed {seed})"
+        );
+    }
+
+    assert!(saw_rail_connection, "Pro Ghost must connect a TradingPost railway");
+    assert!(saw_upgrade, "Pro Ghost must execute ROI structure upgrades");
+    assert!(
+        saw_directional_snipe,
+        "Pro Ghost must issue directional target_tile attacks against rival targets"
+    );
+    assert!(
+        pro_score_wins >= 2 && pro_tiles_total >= std_tiles_total,
+        "Pro Ghost should outperform Standard Vanilla Nation (wins {pro_score_wins}/3, tiles {pro_tiles_total} vs {std_tiles_total})"
+    );
+}
+
+#[test]
+#[ignore]
+fn pro_ai_evolutionary_weight_tournament() {
+    use super::profile::AiStrategyWeights;
+
+    let mut champion = AiStrategyWeights::PRO;
+    let mut best_win_rate = -1.0f64;
+    let mut evo_rng = wyrand::WyRand::new(0x5052_4F5F_4C45_4147);
+
+    let eval_pair = |cand: AiStrategyWeights, opp: AiStrategyWeights| -> f64 {
+        let mut wins = 0.0;
+        for seed in [11u64, 29, 53, 97] {
+            let specs = [
+                LabPlayer { gold: 100.0, ..LabPlayer::ghost(1, 20, 40) },
+                LabPlayer { gold: 100.0, ..LabPlayer::ghost(2, 60, 40) },
+            ];
+            let mut engine = build_lab(80, 80, "FFA", &specs);
+            engine.state.seed = seed;
+            engine.state.config.global_speed_multiplier = 1.0;
+            engine.test_pro_weights_by_player.insert(1, cand);
+            engine.test_pro_weights_by_player.insert(2, opp);
+            for _ in 0..800 {
+                engine.state.tick += 1;
+                engine.execute_income();
+                engine.execute_ai_think();
+                engine.execute_construction();
+                engine.execute_combat();
+            }
+            let t1 = engine.state.player(1).map_or(0, |p| p.tile_count);
+            let t2 = engine.state.player(2).map_or(0, |p| p.tile_count);
+            if t1 > t2 {
+                wins += 1.0;
+            } else if t1 == t2 {
+                wins += 0.5;
+            }
+        }
+        wins / 4.0
+    };
+
+    for generation in 0..8 {
+        let mut candidate = champion;
+        if generation > 0 {
+            let jit = |rng: &mut wyrand::WyRand, val: f64| {
+                let pct = crate::rng::NextIntExt::next_int(rng, 80, 121) as f64 / 100.0;
+                val * pct
+            };
+            candidate.gold_value_weight = jit(&mut evo_rng, champion.gold_value_weight);
+            candidate.troop_value_weight = jit(&mut evo_rng, champion.troop_value_weight);
+            candidate.lookahead_seconds = jit(&mut evo_rng, champion.lookahead_seconds).clamp(2.0, 15.0);
+            candidate.overcap_expand_ratio = jit(&mut evo_rng, champion.overcap_expand_ratio).clamp(0.65, 0.95);
+            candidate.punish_depletion_mult = jit(&mut evo_rng, champion.punish_depletion_mult).clamp(1.2, 3.5);
+        }
+        let wr = eval_pair(candidate, champion);
+        eprintln!("Gen {generation}: win_rate={wr:.2} weights={candidate:?}");
+        if wr > best_win_rate {
+            best_win_rate = wr;
+            champion = candidate;
+        }
+    }
+    assert!(best_win_rate >= 0.5);
+}

@@ -6,7 +6,8 @@ use wyrand::WyRand;
 mod build;
 mod combat;
 mod diplomacy;
-mod profile;
+mod pro_ai;
+pub(crate) mod profile;
 mod structures;
 
 use profile::{AiSlot, BotDecision, ai_profile_for, ai_tier};
@@ -260,7 +261,24 @@ impl SowEngine {
                 &mut decisions,
             );
 
-            if slot.do_attack
+            let is_pro = slot.is_pro(
+                bot_iq,
+                self.state.config.bot_difficulty,
+                self.state.config.ranked_1v1,
+            );
+            if slot.do_attack && is_pro {
+                let pid = usize::from(bot_id);
+                let owned_warships = owned_warships_by_player.get(pid).copied().unwrap_or(0);
+                let queued_warships = queued_warships_by_player.get(pid).copied().unwrap_or(0);
+                let used_slots = self.bot_naval_slots_used.get(pid).copied().unwrap_or(0);
+                self.pro_fleet_decisions(
+                    bot_id,
+                    owned_warships,
+                    queued_warships,
+                    used_slots,
+                    &mut decisions,
+                );
+            } else if slot.do_attack
                 && (self.legacy_building_rules || !structures::has_pending_build(&decisions, bot_id))
                 && !alive_warships_by_player
                     .get(usize::from(bot_id))

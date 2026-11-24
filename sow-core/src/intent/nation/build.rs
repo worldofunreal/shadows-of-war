@@ -143,15 +143,38 @@ impl SowEngine {
                     {
                         return;
                     }
+                    let is_campaign_faction = self.campaign_unlocks.is_some()
+                        || self.campaign_contact_resolved.contains(&bot_id)
+                        || self.campaign_structure_hold_ids.contains(&bot_id);
+                    if !is_campaign_faction
+                        && !self.legacy_building_rules
+                        && slot.is_pro(
+                            bot_iq,
+                            self.state.config.bot_difficulty,
+                            self.state.config.ranked_1v1,
+                        )
+                    {
+                        if let Some(decision) = self.pro_decide_structure_action(
+                            bot_id,
+                            bot_iq,
+                            player_gold,
+                            player_tile_count,
+                            agg,
+                            slot.is_under_attack,
+                        ) {
+                            if let Some(player) = self.state.player_mut(bot_id) {
+                                player.iq_points = (player.iq_points - build_cost).max(0.0);
+                            }
+                            decisions.push(decision);
+                        }
+                        return;
+                    }
                     let all_structures = agg.count_city
                         + agg.count_tower
                         + agg.count_trading_post
                         + agg.count_port
                         + agg.count_military_camp
                         + agg.count_sam;
-                    let is_campaign_faction = self.campaign_unlocks.is_some()
-                        || self.campaign_contact_resolved.contains(&bot_id)
-                        || self.campaign_structure_hold_ids.contains(&bot_id);
                     let prefers_towers_first = slot.policy().prefers_towers_first
                         && !is_campaign_faction
                         && agg.count_tower == 0;
@@ -159,7 +182,8 @@ impl SowEngine {
                         && [BuildingKind::City, BuildingKind::TradingPost, BuildingKind::MilitaryCamp]
                             .into_iter()
                             .any(|kind| {
-                                (kind != BuildingKind::TradingPost || all_structures > 0)
+                                kind.is_enabled()
+                                    && (kind != BuildingKind::TradingPost || all_structures > 0)
                                     && agg.total_structures_of_kind(kind)
                                         < bot_structure_target_count(kind, city_equivalent, bot_iq)
                             });
@@ -191,13 +215,15 @@ impl SowEngine {
                         }
                         if economy_priority_gap {
                             let is_unmet_econ = |k: BuildingKind| {
-                                matches!(
-                                    k,
-                                    BuildingKind::City
-                                        | BuildingKind::TradingPost
-                                        | BuildingKind::MilitaryCamp
-                                        | BuildingKind::Port
-                                ) && (k != BuildingKind::TradingPost || all_structures > 0)
+                                k.is_enabled()
+                                    && matches!(
+                                        k,
+                                        BuildingKind::City
+                                            | BuildingKind::TradingPost
+                                            | BuildingKind::MilitaryCamp
+                                            | BuildingKind::Port
+                                    )
+                                    && (k != BuildingKind::TradingPost || all_structures > 0)
                                     && (k != BuildingKind::Port || all_structures >= 2)
                                     && agg.total_structures_of_kind(k)
                                         < bot_structure_target_count(k, city_equivalent, bot_iq)
@@ -237,6 +263,9 @@ impl SowEngine {
                     });
                     let decisions_before_building = decisions.len();
                     for kind in build_order {
+                        if !kind.is_enabled() {
+                            continue;
+                        }
                         if kind == BuildingKind::Tower && economy_priority_gap && !prefers_towers_first {
                             continue;
                         }

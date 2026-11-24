@@ -36,20 +36,64 @@ impl Config {
     }
 }
 
+fn site_server_config_path(root: &Path, site: site::Site) -> PathBuf {
+    root.join("sow-dist/config")
+        .join(format!("{}.json", site.state_prefix()))
+}
+
+fn validate_site_server_config_text(path: &Path, text: &str) -> Result<()> {
+    if serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .is_some_and(|value| value.get("global_speed_multiplier").is_some())
+    {
+        bail!(
+            "{}: global_speed_multiplier is shared by both sites; edit sow-dist/config/game-speed.json and deploy with ./sow ptr or ./sow p",
+            path.display()
+        );
+    }
+    sow_core::game_config::GameConfig::with_overrides(text)
+        .map(|_| ())
+        .map_err(|error| anyhow::anyhow!("{}: {error}", path.display()))
+}
+
+fn audit_site_server_configs(paths: &Paths) -> Result<()> {
+    let active_site = site::current();
+    let active_path = site_server_config_path(&paths.root, active_site);
+    let active_text = fs::read_to_string(&active_path)
+        .with_context(|| format!("read {}", active_path.display()))?;
+    validate_site_server_config_text(&active_path, &active_text)?;
+
+    let prod_path = site_server_config_path(&paths.root, site::Site::Production);
+    let ptr_path = site_server_config_path(&paths.root, site::Site::Ptr);
+    if let (Ok(prod_text), Ok(ptr_text)) = (fs::read_to_string(&prod_path), fs::read_to_string(&ptr_path)) {
+        let prod_val: Result<serde_json::Value, _> = serde_json::from_str(&prod_text);
+        let ptr_val: Result<serde_json::Value, _> = serde_json::from_str(&ptr_text);
+        if let (Ok(prod_val), Ok(ptr_val)) = (prod_val, ptr_val)
+            && prod_val != ptr_val
+        {
+            println!(
+                "⚠️  {} and {} differ; deploy will ship {}",
+                prod_path.display(),
+                ptr_path.display(),
+                active_path.display()
+            );
+        }
+    }
+    Ok(())
+}
+
 /// `./sow config p|ptr`: edit the site's server rules in the repo
 /// (`sow-dist/config/<site>.json`), check them with the parser the server uses,
-/// and install them over SSH. The server reads the file at every lobby
-/// creation, so new matches use it without a restart. The repo file is the
-/// source of truth for site-specific rules. Shared speed is built from
-/// `sow-dist/config/game-speed.json` and cannot be changed here.
+/// and install them over SSH. `./sow p` and `./sow ptr` also validate and ship
+/// this file automatically so live config never goes stale. The server reads the
+/// file at every lobby creation, so new matches use it without a restart. Shared
+/// speed is built from `sow-dist/config/game-speed.json` and cannot be changed here.
 pub(crate) fn edit_server_config(root: &Path) -> Result<()> {
     use std::io::Write;
     let config = Config::load();
     let site = site::current();
     let remote = format!("{}/usr/local/etc/sow/config.json", site.server_root());
-    let local = root
-        .join("sow-dist/config")
-        .join(format!("{}.json", site.state_prefix()));
+    let local = site_server_config_path(root, site);
     if !local.exists() {
         fs::create_dir_all(local.parent().context("config dir")?)?;
         fs::write(&local, "{}\n")?;
@@ -66,17 +110,13 @@ pub(crate) fn edit_server_config(root: &Path) -> Result<()> {
             bail!("editor exited with an error; nothing was installed");
         }
         let text = fs::read_to_string(&local)?;
-        if serde_json::from_str::<serde_json::Value>(&text)
-            .ok()
-            .is_some_and(|value| value.get("global_speed_multiplier").is_some())
-        {
-            eprintln!("❌ global_speed_multiplier is shared by both sites; edit sow-dist/config/game-speed.json and deploy with ./sow ptr or ./sow p");
-            continue;
-        }
-        match sow_core::game_config::GameConfig::with_overrides(&text) {
-            Ok(_) => break text,
+        match validate_site_server_config_text(&local, &text) {
+            Ok(()) => break text,
             Err(error) => {
                 eprintln!("❌ {error}");
+                if error.to_string().contains("global_speed_multiplier") {
+                    continue;
+                }
                 eprint!("Press Enter to fix it, or Ctrl-C to cancel: ");
                 if std::io::stdin().read_line(&mut String::new())? == 0 {
                     bail!("cancelled; {} has the error and nothing was installed", local.display());
@@ -1065,6 +1105,7 @@ fn preflight(paths: &Paths, config: &Config, reuse_web: bool) -> Result<()> {
         bail!("Rust WASM standard library missing");
     }
     require_file(&paths.root.join("Cargo.toml"), "workspace Cargo.toml")?;
+    audit_site_server_configs(paths)?;
     // The blade graphics fork is gitignored, not vendored: a fresh clone has
     // no blade/ and every Rust build fails at workspace resolution. Fail fast
     // here with the one-command fix instead of mid-build.
@@ -1638,6 +1679,11 @@ fn assemble_release(paths: &Paths, web: &Path, binaries: &Path, version: &str) -
         &paths.root.join("sow-dist/deploy/freebsd/periodic"),
         &work.join("ops/periodic"),
     )?;
+    let server_config_src = site_server_config_path(&paths.root, site::current());
+    let server_config_text = fs::read_to_string(&server_config_src)
+        .with_context(|| format!("read {}", server_config_src.display()))?;
+    validate_site_server_config_text(&server_config_src, &server_config_text)?;
+    fs::write(work.join("ops/sow-config.json"), server_config_text)?;
     if !site::current().is_production() {
         fs::rename(
             work.join("ops/periodic/hourly/530.sow-server-generations"),
@@ -2197,7 +2243,7 @@ fi"#
         }
     }
     if resolver_update.is_empty() { resolver_update.push(':'); }
-    let config_files = format!("__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database /usr/local/etc/nginx/{}sow-server-active-ws.map /usr/local/etc/nginx/{}sow-server-active-http.map {}/active-generation /usr/local/etc/periodic/hourly/{} /etc/cron.d/{}", site::current().map_prefix(), site::current().map_prefix(), site::current().release_root(), site::current().periodic_generations_script(), site::current().cron_generations_file());
+    let config_files = format!("__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/config.json __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database /usr/local/etc/nginx/{}sow-server-active-ws.map /usr/local/etc/nginx/{}sow-server-active-http.map {}/active-generation /usr/local/etc/periodic/hourly/{} /etc/cron.d/{}", site::current().map_prefix(), site::current().map_prefix(), site::current().release_root(), site::current().periodic_generations_script(), site::current().cron_generations_file());
     let env_backups = if runtime_env {
         format!(r#"backup=$(sudo mktemp -d /tmp/sow-config-backup.XXXXXX)
 for f in {config_files}; do
@@ -2263,6 +2309,8 @@ fi
 __ENV_BACKUPS__
 sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_server" __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server
 sudo install -o root -g wheel -m 0555 "$target/ops/rc.d/sow_database" __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database
+sudo install -d -o root -g wheel -m 0755 __SITE_SERVER_ROOT__/usr/local/etc/sow
+sudo install -o root -g wheel -m 0644 "$target/ops/sow-config.json" __SITE_SERVER_ROOT__/usr/local/etc/sow/config.json
 link="__SITE_RELEASE_ROOT__/.current.$$"
 sudo ln -s "releases/__ID__" "$link"
 sudo mv -hf "$link" __SITE_RELEASE_ROOT__/current
@@ -2539,6 +2587,10 @@ until curl -fsS --max-time 5 http://__SITE_LOOPBACK__:25585/healthz >/dev/null; 
 done
 valkey_url=$(sudo awk -F= '$1=="SOW_VALKEY_URL"{print substr($0,index($0,"=")+1)}' __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env)
 if ! /usr/local/bin/valkey-cli -u "$valkey_url" ping | grep -q PONG; then fail "valkey ping failed"; fi
+if ! sudo test -f __SITE_SERVER_ROOT__/usr/local/etc/sow/config.json \
+    || ! sudo cmp -s __SITE_RELEASE_ROOT__/current/ops/sow-config.json __SITE_SERVER_ROOT__/usr/local/etc/sow/config.json; then
+    fail "server config.json missing or out of sync with release"
+fi
 "#,
     );
     if plan.server {
@@ -2914,5 +2966,18 @@ mod build_fingerprint_tests {
             after_game_speed,
             freebsd_build_fingerprint(root.path()).unwrap()
         );
+    }
+
+    #[test]
+    fn site_server_configs_validate_and_reject_speed_or_unknown_keys() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        for site in [crate::site::Site::Production, crate::site::Site::Ptr] {
+            let path = super::site_server_config_path(root, site);
+            let text = fs::read_to_string(&path).unwrap();
+            super::validate_site_server_config_text(&path, &text).unwrap();
+        }
+        let dummy = std::path::Path::new("dummy.json");
+        assert!(super::validate_site_server_config_text(dummy, r#"{"global_speed_multiplier": 0.2}"#).is_err());
+        assert!(super::validate_site_server_config_text(dummy, r#"{"hero_factory_troop_income": 275.0}"#).is_err());
     }
 }

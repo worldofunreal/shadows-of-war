@@ -1366,6 +1366,10 @@ async fn main() {
         log::error!("{e}");
         return;
     }
+    if let Err(e) = lobby::validate_server_rules_at_boot() {
+        log::error!("[config] startup validation failed: {e}");
+        return;
+    }
 
     let db_url =
         std::env::var("SOW_DB_URL").unwrap_or_else(|_| "http://127.0.0.1:25585".to_string());
