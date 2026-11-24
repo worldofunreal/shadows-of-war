@@ -1841,6 +1841,10 @@ mod bot_iq_alliance_tests {
             "advanced tribe (id % 10) should build structures (had {initial_count}, now {})",
             engine.buildings.len()
         );
+        let cfg = crate::game_config::GameConfig::default();
+        assert_eq!(cfg.starting_gold, 100.0);
+        assert_eq!(Player::new_bot(99, "T".into(), [0.0; 3], &cfg).gold, 75.0);
+        assert_eq!(Player::new_nation(98, "N".into(), [0.0; 3], &cfg).gold, 100.0);
     }
 
     /// Campaign faction starts with city cost, IQ 85, and construction held until contact.
@@ -1985,9 +1989,10 @@ mod bot_iq_alliance_tests {
 
     #[test]
     fn test_bot_structure_target_count_floor_is_stable() {
-        // Low IQ: factor 0.1 caps non-city kinds at 0, city at least 1
-        assert_eq!(bot_structure_target_count(BuildingKind::City, 10, 85), 1);
-        assert_eq!(bot_structure_target_count(BuildingKind::Tower, 10, 85), 0);
+        // Low IQ (Tribes): factor 0.4 gives defensive Towers and scaled economy
+        assert_eq!(bot_structure_target_count(BuildingKind::City, 10, 85), 4);
+        assert_eq!(bot_structure_target_count(BuildingKind::Tower, 10, 85), 1);
+        assert_eq!(bot_structure_target_count(BuildingKind::Tower, 1, 85), 1);
         // Mid IQ: 50% of high-IQ quotas, deterministic floor
         assert_eq!(bot_structure_target_count(BuildingKind::TradingPost, 8, 110), 2);
         // High IQ: full quotas
@@ -3648,9 +3653,24 @@ mod bot_iq_alliance_tests {
         let mut engine = tvt_aid_test_engine(5);
         engine.state.tick = 600;
 
-        // Ghost 2 & Ghost 3 send Help Calls; Ghost 4 sends a Resource Request => 3 pending for Human 1.
+        // Ghost 2 sends a Help Call at tick 600; intake pacing blocks a concurrent ask on the same tick.
         engine.trigger_help_call(2);
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 5,
+            intent: GameplayIntent::RequestResources {
+                target_player: 1,
+                gold: 50.0,
+                troops: 0.0,
+            },
+        }]);
+        assert_eq!(engine.ai_pending_requests_to_human(1), 1);
+
+        // Across spaced ticks, Ghost 3 and Ghost 4 bring pending asks up to the cap of 3.
+        engine.state.tick += u64::from(crate::diplomacy::AI_HUMAN_INTAKE_COOLDOWN_MAX_TICKS) + 1;
         engine.trigger_help_call(3);
+        assert_eq!(engine.ai_pending_requests_to_human(1), 2);
+
+        engine.state.tick += u64::from(crate::diplomacy::AI_HUMAN_INTAKE_COOLDOWN_MAX_TICKS) + 1;
         engine.apply_intents(&[crate::protocol::StampedIntent {
             player_id: 4,
             intent: GameplayIntent::RequestResources {
@@ -3662,7 +3682,10 @@ mod bot_iq_alliance_tests {
         assert_eq!(engine.ai_pending_requests_to_human(1), 3);
         assert!(!engine.ai_human_recipient_has_capacity(1));
 
-        // Ghost 5 & Ghost 6 are blocked from pushing a 4th pending AI request onto Human 1.
+        // Even once the intake pacing cooldown lapses, Ghost 5 & Ghost 6 remain blocked at 3 pending.
+        engine.state.tick += u64::from(crate::diplomacy::AI_HUMAN_INTAKE_COOLDOWN_MAX_TICKS) + 1;
+        assert!(!engine.ai_human_recipient_has_capacity(1));
+        assert!(!engine.ai_human_recipient_ready(1));
         engine.trigger_help_call(5);
         engine.apply_intents(&[crate::protocol::StampedIntent {
             player_id: 6,
@@ -3682,5 +3705,210 @@ mod bot_iq_alliance_tests {
             2
         );
         assert_eq!(engine.resource_requests_proposed.len(), 1);
+    }
+
+    #[test]
+    fn ai_emergency_asks_pace_arrivals_and_pause_after_human_response() {
+        let mut engine = tvt_aid_test_engine(5);
+        let enemy_id = 7u16;
+        for id in 2..=6 {
+            engine.state.player_mut(id).unwrap().troops = 100.0;
+        }
+
+        // Advance ticks until a first AI emergency ask arrives targeting Human 1.
+        let mut first_ask_tick = None;
+        for tick in 600u64..1200 {
+            engine.state.tick = tick;
+            let mut decisions = Vec::new();
+            for id in 2..=6 {
+                engine.nation_run_diplomacy_for_slot(
+                    (id, 135),
+                    (50.0, 50.0),
+                    &[enemy_id],
+                    false,
+                    true,
+                    &mut decisions,
+                );
+            }
+            let intents: Vec<_> = decisions
+                .into_iter()
+                .map(|d| crate::protocol::StampedIntent {
+                    player_id: d.bot_id,
+                    intent: d.intent,
+                })
+                .collect();
+            if !intents.is_empty() {
+                engine.apply_intents(&intents);
+            }
+            if engine.ai_pending_requests_to_human(1) > 0 {
+                first_ask_tick = Some(tick);
+                break;
+            }
+        }
+        let t0 = first_ask_tick.expect("an emergency ghost should eventually ask");
+        assert_eq!(
+            engine.ai_pending_requests_to_human(1),
+            1,
+            "intake pacing must prevent multiple emergency bots from bursting on the same tick"
+        );
+
+        // Inside the minimum intake pacing window, remaining ghosts must not stack a 2nd request.
+        for tick in (t0 + 1)..(t0 + u64::from(crate::diplomacy::AI_HUMAN_INTAKE_COOLDOWN_MIN_TICKS))
+        {
+            engine.state.tick = tick;
+            let mut decisions = Vec::new();
+            for id in 2..=6 {
+                engine.nation_run_diplomacy_for_slot(
+                    (id, 135),
+                    (50.0, 50.0),
+                    &[enemy_id],
+                    false,
+                    true,
+                    &mut decisions,
+                );
+            }
+            let intents: Vec<_> = decisions
+                .into_iter()
+                .map(|d| crate::protocol::StampedIntent {
+                    player_id: d.bot_id,
+                    intent: d.intent,
+                })
+                .collect();
+            if !intents.is_empty() {
+                engine.apply_intents(&intents);
+            }
+        }
+        assert_eq!(
+            engine.ai_pending_requests_to_human(1),
+            1,
+            "second ask must wait past the human intake cooldown"
+        );
+
+        // Identify the asking ghost and have Human 1 accept it later.
+        let resolve_tick = t0 + 100;
+        engine.state.tick = resolve_tick;
+        let caller_id = engine
+            .help_calls_proposed
+            .iter()
+            .find(|h| h.target == 1)
+            .map(|h| h.caller)
+            .or_else(|| {
+                engine
+                    .resource_requests_proposed
+                    .iter()
+                    .find(|r| r.target == 1)
+                    .map(|r| r.proposer)
+            })
+            .expect("pending ask must exist");
+        let accept_intent = if engine
+            .help_calls_proposed
+            .iter()
+            .any(|h| h.caller == caller_id && h.target == 1)
+        {
+            GameplayIntent::AcceptHelpCall {
+                target_player: caller_id,
+            }
+        } else {
+            GameplayIntent::AcceptResourceRequest {
+                target_player: caller_id,
+            }
+        };
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 1,
+            intent: accept_intent,
+        }]);
+        assert_eq!(engine.ai_pending_requests_to_human(1), 0);
+
+        // During the post-response breathing window, NO waiting ghost may immediately refill the inbox.
+        for tick in (resolve_tick + 1)
+            ..(resolve_tick + u64::from(crate::diplomacy::AI_HUMAN_RESPONSE_COOLDOWN_MIN_TICKS))
+        {
+            engine.state.tick = tick;
+            let mut decisions = Vec::new();
+            for id in 2..=6 {
+                engine.nation_run_diplomacy_for_slot(
+                    (id, 135),
+                    (50.0, 50.0),
+                    &[enemy_id],
+                    false,
+                    true,
+                    &mut decisions,
+                );
+            }
+            let intents: Vec<_> = decisions
+                .into_iter()
+                .map(|d| crate::protocol::StampedIntent {
+                    player_id: d.bot_id,
+                    intent: d.intent,
+                })
+                .collect();
+            if !intents.is_empty() {
+                engine.apply_intents(&intents);
+            }
+        }
+        assert_eq!(
+            engine.ai_pending_requests_to_human(1),
+            0,
+            "human must receive a quiet pause after resolving aid asks instead of instant refills"
+        );
+
+        // Resolved caller also respects the 50s post-aid grace cooldown from resolution time.
+        engine.state.tick =
+            resolve_tick + u64::from(crate::diplomacy::AI_POST_AID_COOLDOWN_TICKS) - 1;
+        assert!(!engine.can_ai_ask_for_help(caller_id));
+        engine.state.tick = resolve_tick + u64::from(crate::diplomacy::AI_POST_AID_COOLDOWN_TICKS);
+        assert!(engine.can_ai_ask_for_help(caller_id));
+    }
+
+    #[test]
+    fn ai_skips_human_for_emergency_aid_when_human_low_on_troops_or_under_attack() {
+        let mut engine = tvt_aid_test_engine(1);
+        engine.state.tick = 600;
+        assert!(engine.ai_human_recipient_ready(1));
+
+        // Below 25% troops (max_troops = 1_000 in tvt_aid_test_engine), the human is skipped.
+        engine.state.player_mut(1).unwrap().troops = 200.0;
+        assert!(!engine.ai_human_recipient_ready(1));
+        engine.trigger_help_call(2);
+        assert!(engine.help_calls_proposed.is_empty());
+
+        // Restore healthy troops, then put human under non-allied attack -> also skipped.
+        engine.state.player_mut(1).unwrap().troops = 600.0;
+        assert!(engine.ai_human_recipient_ready(1));
+        engine.attacks.push(crate::execution::AttackExecution {
+            landed: false,
+            id: 99,
+            owner_id: 3,
+            target_owner: 1,
+            created_tick: 600,
+            troops: 200.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(99),
+            retreating: false,
+            focus: None,
+        });
+        assert!(!engine.ai_human_recipient_ready(1));
+    }
+
+    #[test]
+    fn human_sending_resources_gives_ai_grace_period() {
+        let mut engine = tvt_aid_test_engine(1);
+        engine.state.tick = 600;
+        assert!(engine.can_ai_ask_for_help(2));
+
+        engine.apply_intents(&[crate::protocol::StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::SendResources {
+                target_player: 2,
+                gold: 1_000.0,
+                troops: 200.0,
+            },
+        }]);
+        engine.state.tick = 600 + 350;
+        assert!(!engine.can_ai_ask_for_help(2));
+
+        engine.state.tick = 600 + u64::from(crate::diplomacy::AI_POST_AID_COOLDOWN_TICKS);
+        assert!(engine.can_ai_ask_for_help(2));
     }
 }

@@ -277,7 +277,7 @@ impl Player {
         let leader = Leader::nth(rng.next_int(0, Leader::count() as i32) as usize)
             .expect("index drawn below the hero count");
         let starting_troops = config.starting_troops * 0.5; // ponytail: tribes get half
-        let starting_gold = 0.0;
+        let starting_gold = (config.starting_gold * 0.75).max(0.0);
         Self {
             id,
             alive: true,

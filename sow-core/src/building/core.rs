@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// Maximum Euclidean tile distance between eligible railway station buildings.
-pub const RAILWAY_LINK_DISTANCE: u32 = 36;
+pub const RAILWAY_LINK_DISTANCE: u32 = 72;
+/// ponytail: cap station candidates per post at 64; use distance-ranked cell sampling if dense cells bias route choice.
 pub const RAILWAY_MAX_CANDIDATES_PER_STATION: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,14 +25,33 @@ pub struct RailwayLink {
 }
 
 impl RailwayLink {
-    pub fn cargo_gold(self, cfg: &crate::game_config::GameConfig) -> f64 {
-        cfg.per_tick(f64::from(self.period_ticks))
-            * cfg.trading_post_gold_income
-            * trading_post_gold_level_weight(self.level)
+    pub fn route_distance(self, map_width: u32) -> u32 {
+        if map_width == 0 {
+            return 0;
+        }
+        let from_x = self.from_tile % map_width;
+        let from_y = self.from_tile / map_width;
+        let to_x = self.to_tile % map_width;
+        let to_y = self.to_tile / map_width;
+        from_x.abs_diff(to_x) + from_y.abs_diff(to_y)
     }
 
-    pub fn weight(self) -> f64 {
-        if self.blocked { 0.0 } else { trading_post_gold_level_weight(self.level) }
+    pub fn distance_bonus(self, map_width: u32) -> f64 {
+        railway_distance_bonus(self.route_distance(map_width))
+    }
+
+    pub fn cargo_gold(self, cfg: &crate::game_config::GameConfig, map_width: u32) -> f64 {
+        cfg.per_tick(f64::from(self.period_ticks))
+            * cfg.trading_post_gold_income
+            * self.weight(map_width)
+    }
+
+    pub fn weight(self, map_width: u32) -> f64 {
+        if self.blocked {
+            0.0
+        } else {
+            trading_post_gold_level_weight(self.level) * self.distance_bonus(map_width)
+        }
     }
 
     pub fn is_open(self, state: &GameState) -> bool {
@@ -43,6 +63,13 @@ impl RailwayLink {
         railway_axis_is_land_with(ax, ay, cx, cy, w, h, Some(&owned))
             && railway_axis_is_land_with(cx, cy, bx, by, w, h, Some(&owned))
     }
+}
+
+fn railway_distance_bonus(distance: u32) -> f64 {
+    // Linear premium from 1x at zero distance to almost 2x at the legal L-route maximum.
+    let max_route_distance =
+        (f64::from(RAILWAY_LINK_DISTANCE) * std::f64::consts::SQRT_2).ceil();
+    1.0 + (f64::from(distance) / max_route_distance).clamp(0.0, 1.0)
 }
 
 /// Maximum number of warships that can be queued at a single Port.
@@ -351,7 +378,8 @@ pub fn tower_range_for_level(
 
 /// Cumulative weights multiplying the configured level-one income rates.
 pub fn trading_post_gold_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.75, 7.4, 12.4, 18.9, 27.4, 39.4, 56.4][usize::from(level.min(8))]
+    [0.0, 1.0, 3.75, 8.25, 17.25, 65.25, 161.25, 353.25, 737.25]
+        [usize::from(level.min(8))]
 }
 
 /// Staged cart/train travel speed multiplier per TradingPost level (`1..=8`).
@@ -360,17 +388,19 @@ pub fn trading_post_speed_multiplier(level: u8) -> f64 {
 }
 
 pub fn military_camp_troop_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.5, 8.0, 15.0, 25.0, 39.0, 59.0, 89.0][usize::from(level.min(8))]
+    [0.0, 1.0, 3.5, 8.0, 17.0, 53.0, 125.0, 269.0, 557.0]
+        [usize::from(level.min(8))]
 }
 
 pub fn port_income_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.5, 7.5, 14.0, 23.0, 36.0, 55.0, 82.0][usize::from(level.min(8))]
+    [0.0, 1.0, 3.5, 8.0, 17.0, 49.0, 141.0, 353.0, 777.0]
+        [usize::from(level.min(8))]
 }
 
 /// City capacity weights use stronger marginal gains than city income so upgrades
 /// keep the City's reserve advantage over newly built level-one structures.
 pub fn city_capacity_level_weight(level: u8) -> f64 {
-    [0.0, 1.0, 3.5, 7.25, 12.75, 20.75, 33.75, 53.75, 83.75]
+    [0.0, 1.0, 3.5, 7.25, 13.25, 43.25, 103.25, 223.25, 463.25]
         [usize::from(level.min(8))]
 }
 
@@ -403,11 +433,11 @@ pub fn nuclear_city_level(campaign: bool) -> u8 {
 }
 
 pub fn camp_capture_level_weight(level: u8) -> f64 {
-    if level == 0 { 0.0 } else { 1.25_f64.powi(i32::from(level.min(8) - 1)) }
+    [0.0, 2.0, 4.0, 6.5, 9.5, 13.0, 16.5, 20.5, 25.0][usize::from(level.min(8))]
 }
 
 pub fn camp_conquest_multiplier(points: f64) -> f64 {
-    1.0 + 0.25 * points / (25.0 + points)
+    1.0 + points.max(0.0) / 300.0
 }
 
 pub fn player_has_nuclear_launch_city(buildings: &[Building], owner_id: u16, campaign: bool) -> bool {
@@ -442,6 +472,31 @@ fn has_nuclear_launch_city(
     buildings.into_iter().any(|(owner, kind, level)| {
         owner == owner_id && kind == BuildingKind::City && level >= nuclear_city_level(campaign)
     })
+}
+
+pub fn city_income_level_weight(level: u8) -> f64 {
+    [0.0, 1.0, 2.5, 4.75, 8.125, 14.875, 28.375, 55.375, 109.375]
+        [usize::from(level.min(8))]
+}
+
+/// Gold progression keeps N2 at its current weight, then grows 2.2x per upgrade
+/// so a higher-tier City beats two buildings of the previous tier for gold output.
+pub fn city_gold_level_weight(level: u8) -> f64 {
+    gold_upgrade_level_weight(level)
+}
+
+/// The Camp's secondary gold income follows the same upgrade curve as City gold.
+pub fn military_camp_gold_level_weight(level: u8) -> f64 {
+    gold_upgrade_level_weight(level)
+}
+
+fn gold_upgrade_level_weight(level: u8) -> f64 {
+    match level.min(8) {
+        0 => 0.0,
+        1 => 1.0,
+        2 => 2.5,
+        level => 2.5 * 2.2_f64.powi(i32::from(level - 2)),
+    }
 }
 
 pub fn income_level_weight(level: u8) -> f64 {
@@ -482,6 +537,8 @@ pub struct BuildingAggregate {
     pub trading_post_income_level_weight: f64,
     /// Sum of 1.5x marginal level weights across active Cities.
     pub city_income_level_weight: f64,
+    /// Sum of City gold weights, kept separate from troop production.
+    pub city_gold_level_weight: f64,
     /// City troop capacity continues growing beyond the level-four income cap.
     pub city_capacity_level_weight: f64,
     /// Port levels used by hero-only income bonuses, capped at level four each.
@@ -568,7 +625,8 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::City => {
                 a.highest_city_level = a.highest_city_level.max(active_lvl);
                 a.city_levels += active_lvl as u32;
-                a.city_income_level_weight += income_level_weight(active_lvl.min(4));
+                a.city_income_level_weight += city_income_level_weight(active_lvl);
+                a.city_gold_level_weight += city_gold_level_weight(active_lvl);
                 a.city_capacity_level_weight += city_capacity_level_weight(active_lvl);
                 a.ready_city_count += 1;
             }
@@ -591,7 +649,7 @@ pub fn aggregate_buildings_per_player(
                 a.camp_conquest_weight += camp_capture_level_weight(active_lvl);
                 a.military_camp_levels += active_lvl as u32;
                 a.military_camp_troop_level_weight += military_camp_troop_level_weight(active_lvl);
-                a.military_camp_gold_level_weight += income_level_weight(active_lvl);
+                a.military_camp_gold_level_weight += military_camp_gold_level_weight(active_lvl);
             }
             BuildingKind::SAM => a.sam_levels += u32::from(active_lvl),
             BuildingKind::MissileSilo => a.silo_levels += u32::from(active_lvl),
@@ -645,7 +703,7 @@ pub fn populate_railway_connections(
             continue;
         }
         let mut checked = 0;
-        let mut best: Option<((bool, i32, u64), u64, u32, bool, i32)> = None;
+        let mut best: Option<((bool, std::cmp::Reverse<i32>, u64), u64, u32, bool, i32)> = None;
         'cells: for (dx, dy) in [(0,0), (-1,0), (1,0), (0,-1), (0,1), (-1,-1), (1,-1), (-1,1), (1,1)] {
             let Some(nodes) = grid.get(&(post.owner_id, gx + dx, gy + dy)) else { continue };
             for &node in nodes {
@@ -656,14 +714,20 @@ pub fn populate_railway_connections(
                 }
                 let (bx, by) = ((node.tile_idx % w) as i32, (node.tile_idx / w) as i32);
                 let distance = (ax - bx).pow(2) + (ay - by).pow(2);
-                let rank = (node.kind == BuildingKind::TradingPost, distance, node.id);
+                let route_distance = (ax - bx).abs() + (ay - by).abs();
+                // Preserve the existing non-TP preference, then favor the more profitable long route.
+                let rank = (
+                    node.kind == BuildingKind::TradingPost,
+                    std::cmp::Reverse(route_distance),
+                    node.id,
+                );
                 if distance == 0 || distance > radius * radius
                     || best.is_some_and(|(best_rank, ..)| rank >= best_rank)
                 { continue; }
                 let Some(horizontal_first) = railway_route_is_land(
                     ax, ay, bx, by, w, h, Some(&state.map.terrain),
                 ) else { continue };
-                best = Some((rank, node.id, node.tile_idx, horizontal_first, (ax - bx).abs() + (ay - by).abs()));
+                best = Some((rank, node.id, node.tile_idx, horizontal_first, route_distance));
             }
         }
         let Some((_, to_building_id, to_tile, horizontal_first, distance)) = best else { continue };
@@ -1376,8 +1440,39 @@ mod trading_post_route_tests {
                 cfg.per_tick(f64::from(link.period_ticks))
                     * cfg.trading_post_gold_income
                     * trading_post_gold_level_weight(level);
-            assert!((link.cargo_gold(cfg) - expected_gold).abs() < 1e-9);
+            assert!(
+                (link.cargo_gold(cfg, state.map.width)
+                    - expected_gold * link.distance_bonus(state.map.width))
+                    .abs()
+                    < 1e-9
+            );
         }
         assert!(prev_period >= 60);
+    }
+
+    #[test]
+    fn military_camp_capture_scales_per_tier_and_stacks_without_cap() {
+        let base_points = crate::game_config::GameConfig::default().camp_capture_base_points;
+        let expected_pcts = [2.0, 4.0, 6.5, 9.5, 13.0, 16.5, 20.5, 25.0];
+        let mut prev_mult = 1.0;
+        for (idx, expected_pct) in expected_pcts.iter().enumerate() {
+            let level = (idx + 1) as u8;
+            let mult = camp_conquest_multiplier(camp_capture_level_weight(level) * base_points);
+            assert!(
+                mult > prev_mult,
+                "level {level} multiplier {mult} must exceed previous {prev_mult}"
+            );
+            prev_mult = mult;
+            let pct = (mult - 1.0) * 100.0;
+            assert!(
+                (pct - expected_pct).abs() < 1e-9,
+                "level {level}: expected +{expected_pct}%, got +{pct}%"
+            );
+        }
+        // Multiple N8 camps stack linearly with no ceiling.
+        let two_n8 = camp_conquest_multiplier(2.0 * camp_capture_level_weight(8) * base_points);
+        let four_n8 = camp_conquest_multiplier(4.0 * camp_capture_level_weight(8) * base_points);
+        assert!((two_n8 - 1.50).abs() < 1e-9);
+        assert!((four_n8 - 2.00).abs() < 1e-9);
     }
 }

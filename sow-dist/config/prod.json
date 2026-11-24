@@ -7,10 +7,10 @@
       "trigger": 0.4
     },
     "nation": {
-      "expand": 0.1,
-      "refuse_human_chance": 0,
-      "reserve": 0.3,
-      "trigger": 0.4
+      "expand": 0.15,
+      "refuse_human_chance": 20,
+      "reserve": 0.2,
+      "trigger": 0.45
     },
     "think_ghost": [
       1,
@@ -45,13 +45,18 @@
       "trigger": 0.75
     }
   },
+  "alliance_gold_income": 0.25,
+  "alliance_troop_income": 0.1,
   "attack_cost_enemy": 2.0,
   "attack_cost_neutral": 1.0,
   "buildings_enabled": true,
   "elimination_troop_bounty": 1000.0,
+  "hero_city_gold_income": 1.1428571428571428,
+  "hero_trading_post_troop_income": 275.0,
+  "hero_port_troop_income": 275.0,
   "map_control_win_percentage": 0.75,
-  "max_tiles_per_tick": 4096.0,
-  "max_tiles_per_tick_at_reference": 256.0,
+  "max_tiles_per_tick": 32768.0,
+  "max_tiles_per_tick_at_reference": 384.0,
   "max_tiles_per_tick_reference_troops": 25000.0,
   "momentum_divisor": 1250.0,
   "nuke_cost": 500.0,
@@ -61,5 +66,9 @@
   "tower_priority": 120.0,
   "tower_range": 6.0,
   "tower_strength": 0.05,
+  "territory_troop_amount": 0.75,
+  "trade_ship_gold_income": 0.5714285714285714,
+  "trade_troop_income": 0.1,
+  "troop_base_income": 175.0,
   "troop_upkeep_per_1000": 0.0
 }

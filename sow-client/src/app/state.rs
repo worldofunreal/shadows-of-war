@@ -721,7 +721,7 @@ pub struct CombatStreakTracker {
 
 const MULTI_KILL_WINDOW_SECS: f32 = 6.5;
 const ADVANCE_STREAK_WINDOW_SECS: f32 = 4.5;
-const INITIAL_ADVANCE_MILESTONE: u32 = 20;
+const INITIAL_ADVANCE_MILESTONE: u32 = 50;
 
 impl Default for CombatStreakTracker {
     fn default() -> Self {
@@ -784,10 +784,15 @@ fn conquest_streak_callout(
 
 fn next_advance_milestone(current: u32) -> u32 {
     match current {
-        0..=19 => INITIAL_ADVANCE_MILESTONE,
-        20..=49 => 50,
-        50..=99 => 100,
-        m => m.saturating_mul(2),
+        0..50 => 50,
+        50..100 => 100,
+        100..250 => 250,
+        250..500 => 500,
+        500..1000 => 1000,
+        1000..10000 => (current / 1000 + 1) * 1000,
+        10000..50000 => (current / 5000 + 1) * 5000,
+        50000..100000 => (current / 10000 + 1) * 10000,
+        m => m.saturating_add(25000),
     }
 }
 
@@ -1088,11 +1093,23 @@ impl UiState {
         self.cascade_streak = step;
         self.cascade_last_at = Some(now);
 
-        if self.cascade_callouts.len() >= 4 {
+        if self.cascade_callouts.len() >= 8 {
             let evict = self
                 .cascade_callouts
                 .iter()
-                .position(|c| !matches!(c.kind, CascadeCalloutKind::KillStreak | CascadeCalloutKind::MultiKill))
+                .position(|c| {
+                    !matches!(
+                        c.kind,
+                        CascadeCalloutKind::KillStreak
+                            | CascadeCalloutKind::MultiKill
+                            | CascadeCalloutKind::Advance
+                    )
+                })
+                .or_else(|| {
+                    self.cascade_callouts
+                        .iter()
+                        .position(|c| !matches!(c.kind, CascadeCalloutKind::Advance))
+                })
                 .unwrap_or(0);
             self.cascade_callouts.remove(evict);
         }
@@ -1161,7 +1178,7 @@ impl UiState {
         now: web_time::Instant,
     ) -> Option<u8> {
         let milestone = self.combat_streaks.record_advance(tiles_gained, now)?;
-        let label = format!("+{milestone}");
+        let label = format!("+{milestone} TILES");
         let step = self.push_cascade_callout(
             wx,
             wy,
@@ -1452,14 +1469,14 @@ mod cascade_tests {
         let t0 = web_time::Instant::now();
 
         assert_eq!(tracker.record_advance(12, t0), None);
-        assert_eq!(tracker.record_advance(8, t0 + Duration::from_secs(1)), Some(20));
+        assert_eq!(tracker.record_advance(8, t0 + Duration::from_secs(1)), None);
         // Crossing multiple thresholds in a single tick emits only the highest crossed milestone.
         assert_eq!(tracker.record_advance(95, t0 + Duration::from_secs(2)), Some(100));
-        assert_eq!(tracker.record_advance(85, t0 + Duration::from_secs(3)), Some(200));
+        assert_eq!(tracker.record_advance(135, t0 + Duration::from_secs(3)), Some(250));
 
-        // Idle gap resets offensive push back to 20.
-        assert_eq!(tracker.record_advance(19, t0 + Duration::from_secs(10)), None);
-        assert_eq!(tracker.record_advance(1, t0 + Duration::from_secs(11)), Some(20));
+        // Idle gap resets offensive push back to 50.
+        assert_eq!(tracker.record_advance(49, t0 + Duration::from_secs(10)), None);
+        assert_eq!(tracker.record_advance(1, t0 + Duration::from_secs(11)), Some(50));
 
         tracker.reset_kills();
         assert_eq!(tracker.kill_streak, 0);

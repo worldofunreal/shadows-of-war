@@ -21,8 +21,7 @@ impl SowEngine {
     ) {
         // ── Structure building (IQ-scaled, all bots) ─────────────────
         if slot.do_structures {
-            let current_points = self.state.player(bot_id).unwrap().iq_points;
-            if current_points >= build_cost {
+            {
                 let (player_gold, player_tile_count) = {
                     if let Some(player) = self.state.player(bot_id) {
                         (player.gold, player.tile_count)
@@ -102,7 +101,7 @@ impl SowEngine {
                                 .is_some_and(|(_, cost, _)| player_gold >= cost)
                             {
                                 if let Some(player) = self.state.player_mut(bot_id) {
-                                    player.iq_points -= build_cost;
+                                    player.iq_points = (player.iq_points - build_cost).max(0.0);
                                 }
                                 decisions.push(BotDecision {
                                     bot_id,
@@ -133,7 +132,7 @@ impl SowEngine {
                         )
                     {
                         if let Some(player) = self.state.player_mut(bot_id) {
-                            player.iq_points -= build_cost;
+                            player.iq_points = (player.iq_points - build_cost).max(0.0);
                         }
                         decisions.push(upgrade);
                         return;
@@ -144,12 +143,25 @@ impl SowEngine {
                     {
                         return;
                     }
+                    let all_structures = agg.count_city
+                        + agg.count_tower
+                        + agg.count_trading_post
+                        + agg.count_port
+                        + agg.count_military_camp
+                        + agg.count_sam;
+                    let is_campaign_faction = self.campaign_unlocks.is_some()
+                        || self.campaign_contact_resolved.contains(&bot_id)
+                        || self.campaign_structure_hold_ids.contains(&bot_id);
+                    let prefers_towers_first = slot.policy().prefers_towers_first
+                        && !is_campaign_faction
+                        && agg.count_tower == 0;
                     let economy_priority_gap = slot.policy().prioritizes_economy_buildings
                         && [BuildingKind::City, BuildingKind::TradingPost, BuildingKind::MilitaryCamp]
                             .into_iter()
                             .any(|kind| {
-                                agg.total_structures_of_kind(kind)
-                                    < bot_structure_target_count(kind, city_equivalent, bot_iq)
+                                (kind != BuildingKind::TradingPost || all_structures > 0)
+                                    && agg.total_structures_of_kind(kind)
+                                        < bot_structure_target_count(kind, city_equivalent, bot_iq)
                             });
                     let mut build_order = [
                         BuildingKind::Tower,
@@ -163,19 +175,45 @@ impl SowEngine {
                     let prioritize_ports =
                         city_equivalent >= 3 && agg.count_port < port_target_count;
                     build_order.sort_by(|&a, &b| {
+                        if prefers_towers_first && (a == BuildingKind::Tower) != (b == BuildingKind::Tower) {
+                            return if a == BuildingKind::Tower {
+                                std::cmp::Ordering::Less
+                            } else {
+                                std::cmp::Ordering::Greater
+                            };
+                        }
+                        if agg.count_city == 0 && (a == BuildingKind::City) != (b == BuildingKind::City) {
+                            return if a == BuildingKind::City {
+                                std::cmp::Ordering::Less
+                            } else {
+                                std::cmp::Ordering::Greater
+                            };
+                        }
                         if economy_priority_gap {
-                            let a_unmet_economy = matches!(
-                                a,
-                                BuildingKind::City | BuildingKind::TradingPost | BuildingKind::MilitaryCamp
-                            ) && agg.total_structures_of_kind(a)
-                                < bot_structure_target_count(a, city_equivalent, bot_iq);
-                            let b_unmet_economy = matches!(
-                                b,
-                                BuildingKind::City | BuildingKind::TradingPost | BuildingKind::MilitaryCamp
-                            ) && agg.total_structures_of_kind(b)
-                                < bot_structure_target_count(b, city_equivalent, bot_iq);
+                            let is_unmet_econ = |k: BuildingKind| {
+                                matches!(
+                                    k,
+                                    BuildingKind::City
+                                        | BuildingKind::TradingPost
+                                        | BuildingKind::MilitaryCamp
+                                        | BuildingKind::Port
+                                ) && (k != BuildingKind::TradingPost || all_structures > 0)
+                                    && (k != BuildingKind::Port || all_structures >= 2)
+                                    && agg.total_structures_of_kind(k)
+                                        < bot_structure_target_count(k, city_equivalent, bot_iq)
+                            };
+                            let a_unmet_economy = is_unmet_econ(a);
+                            let b_unmet_economy = is_unmet_econ(b);
                             if a_unmet_economy != b_unmet_economy {
                                 return b_unmet_economy.cmp(&a_unmet_economy);
+                            }
+                            if a_unmet_economy && b_unmet_economy {
+                                let count_cmp = agg
+                                    .total_structures_of_kind(a)
+                                    .cmp(&agg.total_structures_of_kind(b));
+                                if count_cmp != std::cmp::Ordering::Equal {
+                                    return count_cmp;
+                                }
                             }
                         }
                         if prioritize_ports
@@ -199,6 +237,9 @@ impl SowEngine {
                     });
                     let decisions_before_building = decisions.len();
                     for kind in build_order {
+                        if kind == BuildingKind::Tower && economy_priority_gap && !prefers_towers_first {
+                            continue;
+                        }
                         let Some((_, cost, _)) = self.foundation_quote(bot_id, kind) else { continue; };
                         let owned = agg.total_structures_of_kind(kind);
                         let mut target_count =
@@ -237,7 +278,7 @@ impl SowEngine {
                                     }),
                             ) {
                                 if let Some(p_me) = self.state.player_mut(bot_id) {
-                                    p_me.iq_points -= build_cost;
+                                    p_me.iq_points = (p_me.iq_points - build_cost).max(0.0);
                                 }
                                 decisions.push(d);
                                 break;
@@ -254,68 +295,111 @@ impl SowEngine {
                             continue;
                         }
                         if self.state.player(bot_id).is_none_or(|p| p.gold < cost) {
+                            if let Some(d) = stack_build_decision(
+                                self,
+                                bot_id,
+                                kind,
+                                player_gold,
+                                self.campaign_unlocks
+                                    .as_ref()
+                                    .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind)),
+                            ) {
+                                if let Some(p_me) = self.state.player_mut(bot_id) {
+                                    p_me.iq_points = (p_me.iq_points - build_cost).max(0.0);
+                                }
+                                decisions.push(d);
+                                break;
+                            }
                             continue;
                         }
-                        let target_tile = {
-                            let (_blocks_examined, _directory_words_examined) = {
-                                let (state, scratch) = (&mut self.state, &mut self.placement_scratch);
-                                let p = state.player_mut(bot_id).unwrap();
-                                scratch.border_scratch.clear();
-                                scratch.interior_scratch.clear();
-                                let blocks_examined = {
-                                    p.border_tiles.sample_ones(
-                                        p.bot_rng.rand() as u32,
-                                        PLACEMENT_ATTEMPTS as usize,
-                                        &mut scratch.border_scratch,
-                                    );
-                                    (0, 0)
-                                };
-                                if p.tile_count > 500 {
-                                    let cx = (p.sum_x / p.tile_count as u64) as i32;
-                                    let cy = (p.sum_y / p.tile_count as u64) as i32;
-                                    for _ in 0..PLACEMENT_ATTEMPTS {
-                                        let dx = p.bot_rng.next_int(-40, 41);
-                                        let dy = p.bot_rng.next_int(-40, 41);
-                                        scratch.interior_scratch.push((cx + dx, cy + dy));
-                                    }
-                                }
-                                blocks_examined
-                            };
-                            let border_candidates =
-                                std::mem::take(&mut self.placement_scratch.border_scratch);
-                            let interior_candidates =
-                                std::mem::take(&mut self.placement_scratch.interior_scratch);
-                            let candidates = StructureCandidates {
-                                border: &border_candidates,
-                                interior: &interior_candidates,
-                            };
-                            let target_tile = if kind == BuildingKind::MilitaryCamp && self.legacy_building_rules {
-                                resolve_military_camp_from_candidates(
+                        let mut target_tile = if kind == BuildingKind::TradingPost {
+                            let anchor = self
+                                .buildings
+                                .iter()
+                                .filter(|b| b.owner_id == bot_id && b.kind == BuildingKind::City)
+                                .chain(self.buildings.iter().filter(|b| b.owner_id == bot_id))
+                                .map(|b| b.tile_idx)
+                                .next();
+                            anchor.and_then(|tile_idx| {
+                                find_structure_site_near(
                                     &self.state.map,
                                     bot_id,
-                                    candidates,
-                                    &self.buildings,
-                                    &self.building_grid,
-                                    self.legacy_building_rules,
-                                )
-                            } else {
-                                resolve_structure_from_candidates(
-                                    &self.state.map,
-                                    bot_id,
-                                    kind,
-                                    candidates,
+                                    tile_idx,
+                                    BuildingKind::TradingPost,
                                     &self.building_grid,
                                     &mut self.placement_scratch,
                                     self.legacy_building_rules,
                                 )
-                            };
-                            self.placement_scratch.border_scratch = border_candidates;
-                            self.placement_scratch.interior_scratch = interior_candidates;
-                            target_tile
+                            })
+                        } else {
+                            None
                         };
+                        if target_tile.is_none() {
+                            target_tile = {
+                                let (_blocks_examined, _directory_words_examined) = {
+                                    let (state, scratch) = (&mut self.state, &mut self.placement_scratch);
+                                    let p = state.player_mut(bot_id).unwrap();
+                                    scratch.border_scratch.clear();
+                                    scratch.interior_scratch.clear();
+                                    let blocks_examined = {
+                                        p.border_tiles.sample_ones(
+                                            p.bot_rng.rand() as u32,
+                                            PLACEMENT_ATTEMPTS as usize,
+                                            &mut scratch.border_scratch,
+                                        );
+                                        (0, 0)
+                                    };
+                                    if p.tile_count > 0 {
+                                        if let Some((hx, hy)) = p.home {
+                                            scratch.interior_scratch.push((hx as i32, hy as i32));
+                                        }
+                                        let cx = (p.sum_x / p.tile_count as u64) as i32;
+                                        let cy = (p.sum_y / p.tile_count as u64) as i32;
+                                        let radius = if p.tile_count > 500 { 41 } else { 13 };
+                                        for _ in 0..PLACEMENT_ATTEMPTS {
+                                            let dx = p.bot_rng.next_int(-radius + 1, radius);
+                                            let dy = p.bot_rng.next_int(-radius + 1, radius);
+                                            scratch.interior_scratch.push((cx + dx, cy + dy));
+                                        }
+                                    }
+                                    blocks_examined
+                                };
+                                let border_candidates =
+                                    std::mem::take(&mut self.placement_scratch.border_scratch);
+                                let interior_candidates =
+                                    std::mem::take(&mut self.placement_scratch.interior_scratch);
+                                let candidates = StructureCandidates {
+                                    border: &border_candidates,
+                                    interior: &interior_candidates,
+                                };
+                                let resolved = if kind == BuildingKind::MilitaryCamp && self.legacy_building_rules {
+                                    resolve_military_camp_from_candidates(
+                                        &self.state.map,
+                                        bot_id,
+                                        candidates,
+                                        &self.buildings,
+                                        &self.building_grid,
+                                        self.legacy_building_rules,
+                                    )
+                                } else {
+                                    resolve_structure_from_candidates(
+                                        &self.state.map,
+                                        bot_id,
+                                        kind,
+                                        candidates,
+                                        &self.building_grid,
+                                        &mut self.placement_scratch,
+                                        self.legacy_building_rules,
+                                    )
+                                };
+                                self.placement_scratch.border_scratch = border_candidates;
+                                self.placement_scratch.interior_scratch = interior_candidates;
+                                resolved
+                            };
+                        }
                         if let Some(target_tile) = target_tile {
                             if let Some(p_me) = self.state.player_mut(bot_id) {
-                                p_me.iq_points -= build_cost;
+                                p_me.iq_points = (p_me.iq_points - build_cost).max(0.0);
                             }
                             decisions.push(BotDecision {
                                 bot_id,
@@ -336,7 +420,7 @@ impl SowEngine {
                                 .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind)),
                         ) {
                             if let Some(p_me) = self.state.player_mut(bot_id) {
-                                p_me.iq_points -= build_cost;
+                                p_me.iq_points = (p_me.iq_points - build_cost).max(0.0);
                             }
                             decisions.push(d);
                             break;
@@ -359,7 +443,7 @@ impl SowEngine {
                                 }),
                         ) {
                             if let Some(player) = self.state.player_mut(bot_id) {
-                                player.iq_points -= build_cost;
+                                player.iq_points = (player.iq_points - build_cost).max(0.0);
                             }
                             decisions.push(decision);
                         }

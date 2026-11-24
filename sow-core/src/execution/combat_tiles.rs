@@ -203,6 +203,40 @@ fn attack_pacing_multiplier(
     }
 }
 
+/// Scales PvP frontline tile budget with attacking army size above `reference_troops`,
+/// reaching 2x at 100k, ~6.3x at 1M, and 20x at 10M+ so large armies push narrow fronts.
+fn pvp_troop_speed_multiplier(effective_troops: f64, reference_troops: f64) -> f64 {
+    let ref_troops = if reference_troops.is_finite() && reference_troops > 0.0 {
+        reference_troops
+    } else {
+        25_000.0
+    };
+    if !effective_troops.is_finite() || effective_troops <= ref_troops {
+        1.0
+    } else {
+        (effective_troops / ref_troops).sqrt().clamp(1.0, 20.0)
+    }
+}
+
+/// Accelerates late-game PvP resolution once the attacker controls over 15% of map land,
+/// ramping linearly to 1.75x at 50%+ land control.
+fn endgame_conquest_multiplier(state: &GameState, owner_id: u16) -> f64 {
+    if state.total_land_tiles == 0 {
+        return 1.0;
+    }
+    let Some(player) = state.player(owner_id) else {
+        return 1.0;
+    };
+    let share = (f64::from(player.tile_count) / f64::from(state.total_land_tiles)).clamp(0.0, 1.0);
+    if share <= 0.15 {
+        1.0
+    } else if share >= 0.50 {
+        1.75
+    } else {
+        1.0 + ((share - 0.15) / (0.50 - 0.15)) * 0.75
+    }
+}
+
 /// Whether an army is empowered by an outnumbered or return-campaign situation.
 /// Shared by the strength formula and the player snapshot, so the visual and the
 /// combat can never disagree.
@@ -1732,7 +1766,13 @@ impl SowEngine {
                     .max(1.0);
                 let ratio = (5.0 * effective_troops) / defender_troops;
                 let power = (ratio * 2.0).clamp(0.01, 0.5);
-                power * adjacent * 3.0
+                power
+                    * adjacent
+                    * 3.0
+                    * pvp_troop_speed_multiplier(
+                        effective_troops,
+                        self.state.config.max_tiles_per_tick_reference_troops,
+                    )
             };
 
             // Scale budget to real time (reference baseline is a 100ms standard OpenFront tick)
@@ -1744,11 +1784,14 @@ impl SowEngine {
                 * (self.state.config.tick_rate_ms as f64 / 100.0)
                 * self.state.config.global_speed_multiplier;
             budget = budget.min(scaled_max_cap);
+            if execution.target_owner != 0 {
+                budget *= endgame_conquest_multiplier(&self.state, execution.owner_id);
+            }
             budget *= pacing_multiplier(effective_troops, execution, &self.state);
-            if execution.target_owner != 0
-                && let Some(agg) = self.building_aggregates.get(usize::from(execution.owner_id))
-            {
-                budget *= crate::building::camp_conquest_multiplier(agg.camp_conquest_weight * self.state.config.camp_capture_base_points.max(0.0));
+            if let Some(agg) = self.building_aggregates.get(usize::from(execution.owner_id)) {
+                budget *= crate::building::camp_conquest_multiplier(
+                    agg.camp_conquest_weight * self.state.config.camp_capture_base_points.max(0.0),
+                );
             }
 
             // Hero expansion-speed abilities, after the cap so long fronts keep them.
@@ -2541,8 +2584,9 @@ impl SowEngine {
 mod tests {
     use super::{
         CAPTURE_COST_VARIATION, CAPTURE_COST_VARIATION_SALT, NEUTRAL_CAPTURE_SPEED_MULTIPLIER,
-        attack_pacing_multiplier, finishing_tile_threshold, neutral_expansion_pacing_multiplier,
-        occupied_land_share, terrain_capture_speed, terrain_loss_multiplier,
+        attack_pacing_multiplier, endgame_conquest_multiplier, finishing_tile_threshold,
+        neutral_expansion_pacing_multiplier, occupied_land_share, pvp_troop_speed_multiplier,
+        terrain_capture_speed, terrain_loss_multiplier,
     };
     use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
@@ -4334,5 +4378,109 @@ mod tests {
         });
         engine.execute_combat();
         assert!(!engine.state.player(2).unwrap().alive);
+    }
+
+    #[test]
+    fn camp_conquest_accelerates_both_neutral_and_pvp_past_cap() {
+        for target_owner in [0, 2] {
+            let run = |camps: usize| {
+                let mut engine = pacing_experiment_engine_at_share(
+                    99,
+                    500_000.0,
+                    96,
+                    target_owner,
+                    None,
+                );
+                for idx in 0..camps {
+                    engine.add_building(Building {
+                        id: (idx + 1) as u64,
+                        owner_id: 1,
+                        tile_idx: 10 + idx as u32,
+                        kind: BuildingKind::MilitaryCamp,
+                        level: 8,
+                        under_construction: false,
+                        ticks_until_complete: 0,
+                    });
+                }
+                engine.refresh_building_aggregates();
+                let mut captures = 0u64;
+                for tick in 0..20 {
+                    engine.state.tick = tick;
+                    engine.state.events.clear();
+                    engine.execute_combat();
+                    captures += engine
+                        .state
+                        .events
+                        .iter()
+                        .filter(|e| matches!(e, GameEvent::TileCaptured { .. }))
+                        .count() as u64;
+                }
+                captures
+            };
+            let base = run(0);
+            let one_n8 = run(1);
+            let four_n8 = run(4);
+            assert!(
+                one_n8 > base,
+                "target={target_owner}: one N8 camp ({one_n8}) must beat baseline ({base})"
+            );
+            assert!(
+                four_n8 > one_n8,
+                "target={target_owner}: four N8 camps ({four_n8}) must beat one N8 ({one_n8}) without cap"
+            );
+        }
+    }
+
+    #[test]
+    fn pvp_troop_and_endgame_ramps_accelerate_large_armies() {
+        assert_eq!(pvp_troop_speed_multiplier(25_000.0, 25_000.0), 1.0);
+        assert_eq!(pvp_troop_speed_multiplier(100_000.0, 25_000.0), 2.0);
+        assert!((pvp_troop_speed_multiplier(1_000_000.0, 25_000.0) - 40.0_f64.sqrt()).abs() < 1e-9);
+        assert_eq!(pvp_troop_speed_multiplier(10_000_000.0, 25_000.0), 20.0);
+
+        let run = |troops: f64, share: f64| {
+            let mut engine =
+                pacing_experiment_engine_at_share(42, troops, 48, 2, Some(share));
+            engine.state.total_land_tiles = engine.state.map.width * engine.state.map.height;
+            let mut captures = 0u64;
+            for tick in 0..5 {
+                engine.state.tick = tick;
+                engine.state.events.clear();
+                engine.execute_combat();
+                captures += engine
+                    .state
+                    .events
+                    .iter()
+                    .filter(|e| matches!(e, GameEvent::TileCaptured { .. }))
+                    .count() as u64;
+            }
+            captures
+        };
+
+        let at_25k = run(25_000.0, 0.05);
+        let at_100k = run(100_000.0, 0.05);
+        let at_1m = run(1_000_000.0, 0.05);
+        let at_1m_endgame = run(1_000_000.0, 0.50);
+
+        assert!(at_100k > at_25k, "100k ({at_100k}) must beat 25k ({at_25k})");
+        assert!(at_1m > at_100k, "1M ({at_1m}) must beat 100k ({at_100k})");
+        assert!(
+            at_1m_endgame > at_1m,
+            "endgame 50% ({at_1m_endgame}) must beat early 5% ({at_1m})"
+        );
+        let mut state = at_1m_endgame_state_check(0.15);
+        assert_eq!(endgame_conquest_multiplier(&state, 1), 1.0);
+        state.player_mut(1).unwrap().tile_count = 325;
+        assert!((endgame_conquest_multiplier(&state, 1) - 1.375).abs() < 1e-9);
+        state.player_mut(1).unwrap().tile_count = 500;
+        assert_eq!(endgame_conquest_multiplier(&state, 1), 1.75);
+    }
+
+    fn at_1m_endgame_state_check(share: f64) -> GameState {
+        let mut state = GameState::new(1, 32, 32, GameConfig::default());
+        state.total_land_tiles = 1000;
+        state.register_player(Player::new_human(1, "P1".into(), [1.0; 3], &state.config));
+        state.player_mut(1).unwrap().tile_count = (1000.0 * share).round() as u32;
+        state
     }
 }

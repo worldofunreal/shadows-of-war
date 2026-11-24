@@ -61,7 +61,7 @@ fn default_military_camp_troop_income() -> f64 {
 }
 
 fn default_city_gold_income() -> f64 {
-    0.09 / NORMAL_GAME_SPEED
+    0.45 / NORMAL_GAME_SPEED
 }
 
 fn default_port_troop_income() -> f64 {
@@ -77,15 +77,15 @@ fn default_hero_structure_troop_income() -> f64 {
 }
 
 fn default_military_camp_gold_income() -> f64 {
-    0.18 / NORMAL_GAME_SPEED
+    0.25 / NORMAL_GAME_SPEED
 }
 
 fn default_port_gold_income() -> f64 {
-    0.45 / NORMAL_GAME_SPEED
+    0.95 / NORMAL_GAME_SPEED
 }
 
 fn default_trading_post_gold_income() -> f64 {
-    0.80 / NORMAL_GAME_SPEED
+    1.25 / NORMAL_GAME_SPEED
 }
 
 /// Hero-specific gold earned per game second per weighted City level.
@@ -125,7 +125,7 @@ fn default_structure_upgrade_scale() -> f64 {
 }
 
 fn default_cost_military_camp() -> f64 {
-    105.0
+    85.0
 }
 
 fn default_cost_sam() -> f64 {
@@ -435,7 +435,7 @@ pub struct GameConfig {
     /// Troop count at which the scaled cap equals `max_tiles_per_tick_at_reference` (before ceiling).
     #[serde(default = "default_max_tiles_per_tick_reference_troops")]
     pub max_tiles_per_tick_reference_troops: f64,
-    /// Tile cap at `max_tiles_per_tick_reference_troops`; doubles each 10× troops above that anchor.
+    /// Tile cap at `max_tiles_per_tick_reference_troops`; scales as `(troops / reference)^0.65` above that anchor.
     #[serde(default = "default_max_tiles_per_tick_at_reference")]
     pub max_tiles_per_tick_at_reference: f64,
     /// Troops needed to reach 1x momentum. At 2x this value you get 2x speed, etc.
@@ -698,14 +698,14 @@ impl Default for GameConfig {
             terrain_multiplier_highland: 1.5,
             terrain_multiplier_mountain: 2.5,
 
-            max_tiles_per_tick: 4096.0,
+            max_tiles_per_tick: 32_768.0,
             max_tiles_per_tick_reference_troops: 25000.0,
-            max_tiles_per_tick_at_reference: 256.0,
+            max_tiles_per_tick_at_reference: 384.0,
             momentum_divisor: 1250.0,
 
             // Economy & Income Rates
             starting_troops: 5000.0,
-            starting_gold: 85.0,
+            starting_gold: 100.0,
             gold_base_income: 1.0 / NORMAL_GAME_SPEED,
             territory_gold_amount: default_territory_gold_amount(),
             territory_gold_tiles: default_territory_gold_tiles(),
@@ -738,10 +738,10 @@ impl Default for GameConfig {
             alliance_troop_income: default_alliance_troop_income(),
             trade_troop_income: default_trade_troop_income(),
             elimination_troop_bounty: default_elimination_troop_bounty(),
-            cost_city: 100.0,
-            cost_tower: 70.0,
-            cost_trading_post: 95.0,
-            cost_port: 110.0,
+            cost_city: 80.0,
+            cost_tower: 50.0,
+            cost_trading_post: 75.0,
+            cost_port: 90.0,
             cost_military_camp: default_cost_military_camp(),
             cost_sam: default_cost_sam(),
             first_economic_structure_cost: None,
@@ -769,8 +769,8 @@ impl Default for GameConfig {
     }
 }
 
-/// Per-attack tile cap before momentum: doubles each 10× troops above `reference_troops`,
-/// anchored at `at_reference` for stacks at or below that troop count (see field docs).
+/// Per-attack tile cap before momentum: scales as `(troops / reference_troops)^0.65` above
+/// `reference_troops`, anchored at `at_reference` for stacks at or below that troop count (see field docs).
 pub fn max_tiles_cap_for_troops(troops: f64, cfg: &GameConfig) -> f64 {
     let ceiling = cfg.max_tiles_per_tick;
     let at_ref = cfg.max_tiles_per_tick_at_reference;
@@ -799,7 +799,7 @@ pub fn max_tiles_cap_for_troops(troops: f64, cfg: &GameConfig) -> f64 {
 
     let t_eff = troops.max(t0);
     let ratio = t_eff / t0;
-    let curve = at_ref * libm::pow(2.0, libm::log10(ratio));
+    let curve = at_ref * libm::pow(ratio, 0.65);
     let curve = if curve.is_finite() {
         curve
     } else {
@@ -886,5 +886,28 @@ mod tests {
 
         let loaded: GameConfig = serde_json::from_value(saved).unwrap();
         assert_eq!(loaded.map_roster_preset, None);
+    }
+
+    #[test]
+    fn max_tiles_cap_scales_into_millions_and_respects_ceiling() {
+        let cfg = GameConfig::default();
+        assert_eq!(cfg.max_tiles_per_tick, 32_768.0);
+        assert_eq!(cfg.max_tiles_per_tick_at_reference, 384.0);
+        assert_eq!(cfg.max_tiles_per_tick_reference_troops, 25_000.0);
+
+        let at_25k = max_tiles_cap_for_troops(25_000.0, &cfg);
+        let at_100k = max_tiles_cap_for_troops(100_000.0, &cfg);
+        let at_1m = max_tiles_cap_for_troops(1_000_000.0, &cfg);
+        let at_10m = max_tiles_cap_for_troops(10_000_000.0, &cfg);
+        let at_100m = max_tiles_cap_for_troops(100_000_000.0, &cfg);
+
+        assert!((at_25k - 384.0).abs() < 1e-9);
+        assert!((at_100k - 384.0 * 4.0_f64.powf(0.65)).abs() < 1e-9);
+        assert!((at_1m - 384.0 * 40.0_f64.powf(0.65)).abs() < 1e-9);
+        assert!((at_10m - 384.0 * 400.0_f64.powf(0.65)).abs() < 1e-9);
+        assert!(at_100k > at_25k * 2.0);
+        assert!(at_1m > at_100k * 4.0);
+        assert!(at_10m > at_1m * 4.0);
+        assert_eq!(at_100m, cfg.max_tiles_per_tick);
     }
 }

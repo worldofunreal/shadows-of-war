@@ -43,6 +43,11 @@ impl BuildingMetric {
                 || (self.icon == Icon::Shield && self.unit.is_empty() && value.fract() != 0.0)
             {
                 format!("{value:.2}")
+            } else if self.icon == Icon::Speed
+                && self.unit == "%"
+                && (value - value.round()).abs() > 1e-3
+            {
+                format!("{value:.1}")
             } else {
                 crate::utils::format_number(value)
             };
@@ -62,7 +67,8 @@ pub(crate) fn building_metrics(
         return Vec::new();
     }
     use sow_core::geo_entities::{District, Resource, Source};
-    let level_weight = sow_core::building::income_level_weight(level.min(4));
+    let level_weight = sow_core::building::city_income_level_weight(level);
+    let city_gold_level_weight = sow_core::building::city_gold_level_weight(level);
     let capacity_level_weight = sow_core::building::city_capacity_level_weight(level);
     let district_capacity = config.district_max_troops
         * sow_core::building::district_capacity_level_weight(level);
@@ -98,7 +104,7 @@ pub(crate) fn building_metrics(
                 (config.city_gold_income * hero(District::City, Resource::Gold)
                     + config.hero_city_gold_income
                         * hero_bonus(District::City, Resource::Gold).unwrap_or(0.0))
-                    * level_weight * per_second,
+                    * city_gold_level_weight * per_second,
                 "+",
                 "/s",
             ));
@@ -199,6 +205,15 @@ pub(crate) fn building_metrics(
                 config.military_camp_troop_income
                     * sow_core::building::military_camp_troop_level_weight(level as u8)
                     * hero(District::MilitaryCamp, Resource::Troops)
+                    * per_second,
+                "+",
+                "/s",
+            ),
+            BuildingMetric::new(
+                Icon::Gold,
+                config.military_camp_gold_income
+                    * sow_core::building::military_camp_gold_level_weight(level as u8)
+                    * hero(District::MilitaryCamp, Resource::Gold)
                     * per_second,
                 "+",
                 "/s",
@@ -315,7 +330,7 @@ pub(crate) struct UpgradeOffer {
     pub next_level: u8,
     pub cost: f64,
     pub seconds: f64,
-    /// False when gold is short; the button still answers a tap with the reason.
+    /// False while the building is busy or when the player cannot afford it.
     pub enabled: bool,
     /// Shown only when gold already covers two or more levels.
     pub max_offer: Option<MaxUpgradeOffer>,
@@ -358,19 +373,17 @@ pub(crate) fn building_panel_layout(
     kind: BuildingKind,
     tile_idx: u32,
     map_w: u32,
-    camera: [f32; 2],
-    zoom: f32,
+    input: &crate::app::InputState,
     sf: f32,
     screen_h: f32,
 ) -> BuildingPanelLayout {
-    let map_w = map_w.max(1);
-    let footprint =
-        sow_core::building::BuildingFootprint::at(kind, tile_idx % map_w, tile_idx / map_w);
-    let center = [
-        camera[0] + (footprint.left as f32 + footprint.width as f32 * 0.5) * zoom,
-        camera[1] + (footprint.top as f32 + footprint.height as f32 * 0.5) * zoom,
-    ];
-    let half = (footprint.height as f32 * 0.5 * zoom).max(24.0 * sf);
+    let sf = sf.max(0.01);
+    let (center, radius_logical) =
+        crate::render::world::overlays::building_screen_anchor_and_radius(
+            kind, tile_idx, map_w, input, sf,
+        );
+    let center = [center[0] * sf, center[1] * sf];
+    let half = radius_logical * sf;
     let gap = 8.0 * sf;
     let chip_height = 28.0 * sf;
     let button_size = [212.0 * sf, 52.0 * sf];
@@ -425,11 +438,23 @@ impl crate::app::SowApp {
         let level = building.active_level();
         let mut current = building_metrics(building.kind, level, leader, config);
         let seconds = |ticks: u32| f64::from(ticks) * config.tick_rate_ms as f64 / 1000.0;
-        let mut next = building_metrics(building.kind, level.saturating_add(1), leader, config);
+        let reserved_level = building.level.max(building.upgrade_target_level);
+        let next_level = reserved_level.saturating_add(1);
+        let mut next = building_metrics(building.kind, next_level, leader, config);
         let trade_route = if building.kind == BuildingKind::TradingPost {
             snapshot.railway_links.binary_search_by_key(&building.id, |route| route.from_building_id)
                 .ok().map(|i| snapshot.railway_links[i]).filter(|route| !route.blocked)
         } else { None };
+        if let Some(route) = trade_route {
+            let bonus = route.distance_bonus(self.sim.map_w);
+            for metric in current.iter_mut().chain(next.iter_mut()) {
+                if metric.icon == Icon::Gold && metric.unit == "/s" {
+                    if let Some(value) = metric.value.as_mut() {
+                        *value *= bonus;
+                    }
+                }
+            }
+        }
         if building.kind == BuildingKind::TradingPost && trade_route.is_none() {
             for metrics in [&mut current, &mut next] {
                 metrics.retain(|metric| metric.icon != Icon::Gold);
@@ -523,11 +548,42 @@ impl crate::app::SowApp {
         {
             current.push(BuildingMetric::new(Icon::Gold, rate * seconds(route.period_ticks), "+", " / trip"));
         }
-        if building.under_construction {
+        let upgrade_ticks = |target_level| {
+            let ticks = sow_core::building::structure_upgrade_duration_ticks(
+                building.kind,
+                target_level,
+            );
+            if config.tutorial {
+                (ticks / 2).max(1)
+            } else {
+                ticks
+            }
+        };
+        let queued_upgrade_ticks = building
+            .under_construction
+            .then(|| {
+                (building.level.saturating_add(1)..=reserved_level)
+                    .fold(building.ticks_until_complete, |total, target_level| {
+                        total.saturating_add(upgrade_ticks(target_level))
+                    })
+            });
+        let snapshot_arsenal_ticks = non_warship_arsenal_ticks(building.arsenal_build);
+        let engine_arsenal_ticks = self
+            .sim
+            .engine
+            .as_ref()
+            .and_then(|engine| engine.building_productions.get(&building.id))
+            .and_then(|production| non_warship_arsenal_ticks(production.arsenal_build));
+        let arsenal_ticks = snapshot_arsenal_ticks.or(engine_arsenal_ticks);
+        let busy_ticks = queued_upgrade_ticks.or(arsenal_ticks);
+        let playing = matches!(
+            &snapshot.phase,
+            sow_core::game::GamePhase::Playing
+        );
+        if building.under_construction && level == 0 {
             let progress = crate::render::world::overlays::construction_progress(
                 building.kind,
                 level,
-                building.reserved_level(),
                 building.ticks_until_complete,
             );
             return Some(BuildingPanel {
@@ -535,11 +591,10 @@ impl crate::app::SowApp {
                 kind: building.kind,
                 chips: current,
                 upgrade: None,
-                remaining_seconds: Some(seconds(building.ticks_until_complete)),
+                remaining_seconds: busy_ticks.map(seconds),
                 progress,
             });
         }
-        let next_level = level.saturating_add(1);
         // Maxed or campaign-locked levels hide the button, as the radial hides them.
         if next_level > building.kind.max_level()
             || next_level > self.campaign_building_max_level(building.kind)
@@ -575,27 +630,34 @@ impl crate::app::SowApp {
             upgrade: Some(UpgradeOffer {
                 next_level,
                 cost,
-                seconds: seconds(sow_core::building::structure_upgrade_duration_ticks(
-                    building.kind,
-                    next_level,
-                )),
-                enabled: cost.is_finite() && self.current_player_gold() >= cost,
-                max_offer: self.sim.engine.as_ref().and_then(|engine| {
-                    let cap = self
-                        .campaign_building_max_level(building.kind)
-                        .min(building.kind.max_level());
-                    let (target, total_cost, ticks) = engine.max_affordable_upgrade_level(
-                        building.id,
-                        self.current_player_gold(),
-                        cap,
-                    )?;
-                    (target > next_level).then(|| MaxUpgradeOffer {
-                        target_level: target,
-                        cost: total_cost,
-                        seconds: seconds(ticks),
-                        is_cap_max: target >= cap,
+                seconds: busy_ticks.map_or_else(
+                    || seconds(upgrade_ticks(next_level)),
+                    seconds,
+                ),
+                enabled: playing
+                    && busy_ticks.is_none()
+                    && cost.is_finite()
+                    && self.current_player_gold() >= cost,
+                max_offer: if !playing || busy_ticks.is_some() {
+                    None
+                } else {
+                    self.sim.engine.as_ref().and_then(|engine| {
+                        let cap = self
+                            .campaign_building_max_level(building.kind)
+                            .min(building.kind.max_level());
+                        let (target, total_cost, ticks) = engine.max_affordable_upgrade_level(
+                            building.id,
+                            self.current_player_gold(),
+                            cap,
+                        )?;
+                        (target > next_level).then(|| MaxUpgradeOffer {
+                            target_level: target,
+                            cost: total_cost,
+                            seconds: seconds(ticks),
+                            is_cap_max: target >= cap,
+                        })
                     })
-                }),
+                },
             }),
             remaining_seconds: None,
             progress: None,
@@ -609,8 +671,7 @@ impl crate::app::SowApp {
             panel.kind,
             panel.tile_idx,
             self.sim.map_w,
-            [self.input.camera_x, self.input.camera_y],
-            self.input.camera_zoom,
+            &self.input,
             crate::web_canvas::device_pixel_ratio() as f32,
             self.input.screen_h,
         );
@@ -620,6 +681,126 @@ impl crate::app::SowApp {
     /// True when (x, y) lands on the open panel's upgrade button.
     pub(crate) fn building_panel_button_at(&self, _x: f32, _y: f32) -> bool {
         false
+    }
+}
+
+#[inline]
+fn non_warship_arsenal_ticks(build: Option<sow_core::building::CityArsenalBuild>) -> Option<u32> {
+    build
+        .filter(|build| build.kind != sow_core::game::CityArsenalKind::Warship)
+        .map(|build| build.ticks_until_complete)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_input_state(camera_x: f32, camera_y: f32, zoom: f32, screen_w: f32, screen_h: f32) -> crate::app::InputState {
+        crate::app::InputState {
+            tabletop: None,
+            camera_x,
+            camera_y,
+            camera_zoom: zoom,
+            target_zoom: zoom,
+            screen_w,
+            screen_h,
+            dragging: false,
+            last_mouse_x: 0.0,
+            last_mouse_y: 0.0,
+            hover_pointer: crate::app::HoverPointer::Mouse,
+            active_touches: std::collections::HashMap::new(),
+            map_pointer_start: None,
+            last_pinch_state: None,
+            touch_pan_residual: (0.0, 0.0),
+            map_context_menu: None,
+            map_context_menu_session: 0,
+            last_right_press: None,
+            building_drag: None,
+            shift_pressed: false,
+            has_snapped_camera_to_spawn: false,
+            spawn_intent_rate: Default::default(),
+            key_pan_up: false,
+            key_pan_down: false,
+            key_pan_left: false,
+            key_pan_right: false,
+            camera_focus_target: None,
+            camera_focus_waiting_for_input_release: false,
+            tutorial_camera_focus: false,
+            camera_shot: None,
+            tutorial_zoom_in_events: 0,
+            tutorial_zoom_out_events: 0,
+            tutorial_camera_drag_events: 0,
+            tutorial_camera_key_pan_events: 0,
+            tutorial_camera_drag_recorded: false,
+            input_focused: false,
+        }
+    }
+
+    #[test]
+    fn non_warship_arsenal_ticks_ignores_port_warships() {
+        let warship = sow_core::building::CityArsenalBuild {
+            kind: sow_core::game::CityArsenalKind::Warship,
+            ticks_until_complete: 42,
+            total_ticks: 100,
+            warship_source_tile: None,
+            warship_target_tile: None,
+            paid_gold_bits: 1_000.0_f64.to_bits(),
+        };
+        let nuke = sow_core::building::CityArsenalBuild {
+            kind: sow_core::game::CityArsenalKind::Nuke,
+            ticks_until_complete: 77,
+            total_ticks: 100,
+            warship_source_tile: None,
+            warship_target_tile: None,
+            paid_gold_bits: 10_000.0_f64.to_bits(),
+        };
+        assert_eq!(non_warship_arsenal_ticks(Some(warship)), None);
+        assert_eq!(non_warship_arsenal_ticks(Some(nuke)), Some(77));
+    }
+
+    #[test]
+    fn building_panel_layout_clamps_high_zoom_offset_within_viewport() {
+        let map_w = 100u32;
+        let tile_idx = 50 * map_w + 50;
+        let [wx, wy] = crate::render::world::overlays::building_world_center(
+            BuildingKind::Port,
+            tile_idx,
+            map_w,
+        );
+        let zoom = 200.0;
+        let screen_w = 1280.0;
+        let screen_h = 720.0;
+        let camera_x = screen_w * 0.5 - wx * zoom;
+        let camera_y = screen_h * 0.5 - wy * zoom;
+        let input = test_input_state(camera_x, camera_y, zoom, screen_w, screen_h);
+        let layout = building_panel_layout(BuildingKind::Port, tile_idx, map_w, &input, 1.0, screen_h);
+        // Without an upper bound on radius, 2x2 footprint at zoom=200 gives half=200px;
+        // clamped at 24% of viewport height (172.8px), keeping the panel anchored near the building.
+        let expected_max_half = screen_h * 0.24;
+        let offset = (layout.chips_center[1] - screen_h * 0.5).abs();
+        assert!(
+            offset <= expected_max_half + 8.0 + 14.0 + 0.1,
+            "chips offset {offset} should stay bounded by capped anchor radius"
+        );
+        assert!((layout.chips_center[0] - screen_w * 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn military_camp_upgrade_gains_show_distinct_fractional_percentages() {
+        let cfg = sow_core::game_config::GameConfig::default();
+        let leader = sow_core::player::Leader::default();
+        let expected_deltas = ["+2%", "+2.5%", "+3%", "+3.5%", "+3.5%", "+4%", "+4.5%"];
+        for (idx, expected) in expected_deltas.iter().enumerate() {
+            let level = (idx + 1) as u8;
+            let current = building_metrics(BuildingKind::MilitaryCamp, level, leader, &cfg);
+            let next = building_metrics(BuildingKind::MilitaryCamp, level + 1, leader, &cfg);
+            let gains = upgrade_gains(&current, &next);
+            let speed_chip = gains
+                .iter()
+                .find(|m| m.icon == Icon::Speed && m.unit == "%")
+                .expect("speed gain chip");
+            assert_eq!(speed_chip.label(), *expected, "level {level} -> {}", level + 1);
+        }
     }
 }
 

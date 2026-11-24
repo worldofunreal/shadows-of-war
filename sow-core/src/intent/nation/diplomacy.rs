@@ -495,19 +495,19 @@ impl SowEngine {
                         other.is_live_human()
                             && other.alive
                             && self.resources_can_move(other.id, bot_id)
-                            && self.ai_human_recipient_has_capacity(other.id)
+                            && self.ai_human_recipient_ready(other.id)
                     });
 
                 let mut resource_request_target: Option<(u16, f64, f64)> = None;
                 if !can_send_help_call && !p_me.alliances.is_empty() {
-                    // Prioritize live human allies with inbox capacity first.
+                    // Prioritize live human allies ready to receive another aid ask.
                     for &ally_id in &p_me.alliances {
                         if let Some(p_ally) = self.state.player(ally_id)
                             && p_ally.alive
                             && p_ally.is_live_human()
                             && self.resources_can_move(bot_id, ally_id)
                             && self.can_send_resource_request(bot_id, ally_id)
-                            && self.ai_human_recipient_has_capacity(ally_id)
+                            && self.ai_human_recipient_ready(ally_id)
                         {
                             let ask_gold = (p_ally.gold * 0.10).floor().max(0.0);
                             let ask_troops = (p_ally.troops * 0.10).floor().max(0.0);
@@ -570,6 +570,20 @@ impl SowEngine {
                         // Stay silent this emergency cycle and respect the full 30s AI cooldown.
                         self.mark_ai_help_ask_cooldown(bot_id);
                     }
+                } else {
+                    // Stagger retries when all recipients are cooling down/full/depleted so bots
+                    // do not pool behind the gate and stampede in lockstep when a slot frees up.
+                    let tick_u32 = self.current_tick_u32();
+                    let backoff_ticks = crate::diplomacy::roll_ai_pacing_ticks(
+                        self.state.seed,
+                        bot_id,
+                        0,
+                        tick_u32,
+                        crate::diplomacy::AI_THROTTLED_RETRY_MIN_TICKS,
+                        crate::diplomacy::AI_THROTTLED_RETRY_MAX_TICKS,
+                        0x5448_524F_5454_4C45,
+                    );
+                    self.extend_ai_ask_cooldown(bot_id, None, backoff_ticks);
                 }
             }
         }

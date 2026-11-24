@@ -50,8 +50,8 @@ impl SowApp {
         my_id: u16,
     ) -> crate::player_progress::SessionDefeats {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
-        let mut captured_enemy_tiles: u32 = 0;
-        let mut last_enemy_capture_pos: Option<(f32, f32)> = None;
+        let mut captured_tiles: u32 = 0;
+        let mut last_capture_pos: Option<(f32, f32)> = None;
         let mut best_tutorial_capture: Option<(sow_core::game::BuildingKind, u8, u32)> = None;
         let now_instant = web_time::Instant::now();
         self.sfx.sync_server_phase(&snap.phase);
@@ -549,9 +549,9 @@ impl SowApp {
                     previous_owner,
                     ..
                 } => {
-                    if my_id != 0 && new_owner == my_id && previous_owner != 0 {
-                        captured_enemy_tiles = captured_enemy_tiles.saturating_add(1);
-                        last_enemy_capture_pos = Some((x as f32 + 0.5, y as f32 + 0.5));
+                    if my_id != 0 && new_owner == my_id && previous_owner != my_id {
+                        captured_tiles = captured_tiles.saturating_add(1);
+                        last_capture_pos = Some((x as f32 + 0.5, y as f32 + 0.5));
                     }
                 }
                 sow_core::game::GameEvent::AllianceRequestLifecycle {
@@ -734,10 +734,13 @@ impl SowApp {
             self.sfx
                 .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
         }
-        if let Some((wx, wy)) = last_enemy_capture_pos {
-            let _ = self
-                .ui
-                .record_territory_advance(captured_enemy_tiles, wx, wy, now_instant);
+        if let Some((wx, wy)) = last_capture_pos
+            && let Some(step) =
+                self.ui
+                    .record_territory_advance(captured_tiles, wx, wy, now_instant)
+        {
+            self.sfx
+                .play_cascade(now_instant, step, self.spatial_sound_params(wx, wy));
         }
         self.sfx.flush_tick(now_instant);
         turn_defeats

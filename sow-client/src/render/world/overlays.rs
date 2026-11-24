@@ -266,7 +266,6 @@ fn format_construction_time(ticks: u32, tick_rate_ms: f32) -> String {
 pub(crate) fn construction_progress(
     kind: BuildingKind,
     active_level: u8,
-    target_level: u8,
     ticks_until_complete: u32,
 ) -> Option<f32> {
     if ticks_until_complete == 0 {
@@ -274,15 +273,9 @@ pub(crate) fn construction_progress(
     }
 
     if active_level == 0 {
-        let total_ticks = (2..=target_level).fold(kind.construction_duration_ticks(), |ticks, level| {
-            ticks.saturating_add(sow_core::building::core::upgrade_duration_ticks(kind, level))
-        });
+        let total_ticks = kind.construction_duration_ticks();
         return (total_ticks > 0)
             .then(|| 1.0 - (ticks_until_complete as f32 / total_ticks as f32).clamp(0.0, 1.0));
-    }
-
-    if target_level <= active_level {
-        return None;
     }
 
     let duration_current =
@@ -307,7 +300,6 @@ fn building_visual_status(
     let progress = construction_progress(
         building.kind,
         active_level,
-        building.reserved_level(),
         building.ticks_until_complete,
     )?;
     Some(BuildingVisualStatus {
@@ -1261,6 +1253,36 @@ fn building_sprite_size(marker_size: [f32; 2], sf: f32, level: u8) -> [f32; 2] {
     marker_size.map(|size| size * sf * scale)
 }
 
+#[inline]
+pub(crate) fn building_world_center(kind: BuildingKind, tile_idx: u32, map_w: u32) -> [f32; 2] {
+    let map_w = map_w.max(1);
+    let footprint =
+        sow_core::building::BuildingFootprint::at(kind, tile_idx % map_w, tile_idx / map_w);
+    [
+        footprint.left as f32 + footprint.width as f32 * 0.5,
+        footprint.top as f32 + footprint.height as f32 * 0.5,
+    ]
+}
+
+pub(crate) fn building_screen_anchor_and_radius(
+    kind: BuildingKind,
+    tile_idx: u32,
+    map_w: u32,
+    input: &InputState,
+    sf: f32,
+) -> ([f32; 2], f32) {
+    let sf = sf.max(0.01);
+    let [bx, by] = building_world_center(kind, tile_idx, map_w);
+    let center = input.world_to_screen([bx, by]);
+    let (_, height) = kind.footprint_dimensions();
+    let half_h_world = height as f32 * 0.5;
+    let top_y = input.world_to_screen([bx, by - half_h_world])[1];
+    let bottom_y = input.world_to_screen([bx, by + half_h_world])[1];
+    let max_radius = (input.screen_h / sf * 0.24).max(48.0);
+    let radius = ((bottom_y - top_y) * 0.5 / sf).clamp(24.0, max_radius);
+    ([center[0] / sf, center[1] / sf], radius)
+}
+
 pub(crate) fn building_screen_anchor_bottom(
     bx: f32,
     by: f32,
@@ -1347,7 +1369,7 @@ fn render_building_selection_focus(
         .find(|b| b.tile_idx == menu.tile_idx && b.kind == kind)
         .or_else(|| snapshot_buildings.iter().find(|b| b.tile_idx == menu.tile_idx));
     let level = live_building
-        .map(|b| b.level.max(1))
+        .map(|b| b.active_level().max(1))
         .unwrap_or_else(|| menu.building_level.max(1));
     let under_construction = live_building
         .map(|b| b.under_construction)
@@ -1897,10 +1919,10 @@ fn collect_buildings(
             continue;
         }
 
-        let footprint = sow_core::building::BuildingFootprint::at(building.kind, tile_x, tile_y);
+        let [bx, by] = building_world_center(building.kind, building.tile_idx, map_w);
         out.push(RenderedBuilding {
-            bx: footprint.left as f32 + footprint.width as f32 * 0.5,
-            by: footprint.top as f32 + footprint.height as f32 * 0.5,
+            bx,
+            by,
             kind: building.kind,
             level: display_level,
             under_construction: building.under_construction,

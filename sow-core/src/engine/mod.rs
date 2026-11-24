@@ -575,6 +575,9 @@ pub struct SowEngine {
     /// AI id → tick when another Help Call or proactive Resource Request is allowed (~30s).
     #[serde(default)]
     pub ai_help_ask_cooldown_until: std::collections::HashMap<PlayerId, u32>,
+    /// Live human id → tick when another AI-originated Help Call or plain Resource Request may arrive.
+    #[serde(default)]
+    pub ai_recipient_ask_cooldown_until: std::collections::HashMap<PlayerId, u32>,
     #[serde(default)]
     pub next_help_call_id: u64,
     /// `(proposer, target, created_tick)` resource requests silently ignored by a Ghost.
@@ -730,7 +733,7 @@ impl SowEngine {
         }
         for link in &self.railway_links {
             if let Some(aggregate) = self.building_aggregates.get_mut(usize::from(link.owner_id)) {
-                aggregate.land_trade_income_weight += link.weight();
+                aggregate.land_trade_income_weight += link.weight(self.state.map.width);
                 aggregate.railway_connections += u32::from(!link.blocked);
             }
         }
@@ -791,6 +794,7 @@ impl SowEngine {
             help_calls_proposed: Vec::new(),
             help_call_cooldown_until: std::collections::HashMap::new(),
             ai_help_ask_cooldown_until: std::collections::HashMap::new(),
+            ai_recipient_ask_cooldown_until: std::collections::HashMap::new(),
             next_help_call_id: 1,
             ghost_resource_request_ignored: std::collections::BTreeSet::new(),
             campaign_unlocks,
@@ -1070,6 +1074,8 @@ impl SowEngine {
             .retain(|_, until| *until > tick);
         self.ai_help_ask_cooldown_until
             .retain(|_, until| *until > tick);
+        self.ai_recipient_ask_cooldown_until
+            .retain(|_, until| *until > tick);
         // Unanswered resource requests and trade offers lapse, so a stale price cannot be taken later.
         self.resource_requests_proposed.retain(|r| {
             tick.saturating_sub(r.created_tick) <= crate::diplomacy::RESOURCE_REQUEST_TTL_TICKS
@@ -1188,10 +1194,36 @@ impl SowEngine {
     }
 
     pub fn mark_ai_help_ask_cooldown(&mut self, ai_id: PlayerId) {
-        let until = self
-            .current_tick_u32()
-            .saturating_add(crate::diplomacy::HELP_CALL_COOLDOWN_TICKS);
-        self.ai_help_ask_cooldown_until.insert(ai_id, until);
+        self.extend_ai_ask_cooldown(ai_id, None, crate::diplomacy::HELP_CALL_COOLDOWN_TICKS);
+    }
+
+    /// Monotonically pushes an AI player's ask cooldown forward by at least `ticks`.
+    pub fn extend_ai_ask_cooldown(
+        &mut self,
+        ai_id: PlayerId,
+        target_human: Option<PlayerId>,
+        ticks: u32,
+    ) {
+        let until = self.current_tick_u32().saturating_add(ticks);
+        self.ai_help_ask_cooldown_until
+            .entry(ai_id)
+            .and_modify(|existing| *existing = (*existing).max(until))
+            .or_insert(until);
+        if let Some(target_id) = target_human {
+            self.resource_request_cooldown_until
+                .entry((ai_id, target_id))
+                .and_modify(|existing| *existing = (*existing).max(until))
+                .or_insert(until);
+        }
+    }
+
+    /// Monotonically extends the quiet/pacing cooldown before another AI may ask `human_id`.
+    pub fn extend_ai_recipient_cooldown(&mut self, human_id: PlayerId, ticks: u32) {
+        let until = self.current_tick_u32().saturating_add(ticks);
+        self.ai_recipient_ask_cooldown_until
+            .entry(human_id)
+            .and_modify(|existing| *existing = (*existing).max(until))
+            .or_insert(until);
     }
 
     /// Pending AI-originated Help Calls and non-trade Resource Requests targeting `human_id`.
@@ -1231,6 +1263,39 @@ impl SowEngine {
         !is_live_human
             || self.ai_pending_requests_to_human(target_id)
                 < crate::diplomacy::AI_MAX_PENDING_REQUESTS_PER_HUMAN
+    }
+
+    /// True when a live human has healthy reserves and is not under active attack.
+    #[inline]
+    pub fn human_can_spare_emergency_aid(&self, human_id: PlayerId) -> bool {
+        let Some(player) = self.state.player(human_id) else {
+            return false;
+        };
+        player.alive
+            && player.max_troops > 0.0
+            && !self.is_player_under_attack(human_id)
+            && (player.troops / player.max_troops)
+                >= crate::diplomacy::AI_ASK_HUMAN_MIN_TROOP_RATIO
+    }
+
+    /// True when `target_id` is ready to receive a new AI emergency ask (respects capacity,
+    /// intake/post-response pacing, and human troop affordability).
+    #[inline]
+    pub fn ai_human_recipient_ready(&self, target_id: PlayerId) -> bool {
+        let is_live_human = self
+            .state
+            .player(target_id)
+            .is_some_and(|p| p.is_live_human());
+        if !is_live_human {
+            return true;
+        }
+        let tick = self.current_tick_u32();
+        self.ai_human_recipient_has_capacity(target_id)
+            && self.human_can_spare_emergency_aid(target_id)
+            && self
+                .ai_recipient_ask_cooldown_until
+                .get(&target_id)
+                .is_none_or(|until| *until <= tick)
     }
 
     #[inline]
@@ -1338,6 +1403,7 @@ impl SowEngine {
             .retain(|h| h.caller != player_id && h.target != player_id);
         self.help_call_cooldown_until.remove(&player_id);
         self.ai_help_ask_cooldown_until.remove(&player_id);
+        self.ai_recipient_ask_cooldown_until.remove(&player_id);
         self.clear_campaign_assaults_for(player_id);
     }
 

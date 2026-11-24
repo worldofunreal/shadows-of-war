@@ -238,6 +238,13 @@ impl SowApp {
                     self.equip_skin(skin_id);
                 }
                 UiAction::ZoomIn => {
+                    if self
+                        .input
+                        .map_context_menu
+                        .is_some_and(|menu| menu.view == crate::app::MapContextMenuView::Radial)
+                    {
+                        self.close_map_context_menu();
+                    }
                     self.process_camera_zoom(
                         1.25,
                         self.input.screen_w * 0.5,
@@ -245,6 +252,13 @@ impl SowApp {
                     );
                 }
                 UiAction::ZoomOut => {
+                    if self
+                        .input
+                        .map_context_menu
+                        .is_some_and(|menu| menu.view == crate::app::MapContextMenuView::Radial)
+                    {
+                        self.close_map_context_menu();
+                    }
                     self.process_camera_zoom(
                         0.8,
                         self.input.screen_w * 0.5,

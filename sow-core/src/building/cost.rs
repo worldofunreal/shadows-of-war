@@ -33,22 +33,20 @@ pub fn structure_upgrade_cost_gold(
     if !(2..=kind.max_level()).contains(&target_level) {
         return f64::INFINITY;
     }
-    let prices: &[f64] = match kind {
-        BuildingKind::City => &[110.0, 165.0, 235.0, 350.0, 550.0, 850.0, 1_300.0],
-        BuildingKind::MilitaryCamp => &[110.0, 150.0, 210.0, 280.0, 370.0, 480.0, 620.0],
-        BuildingKind::TradingPost => &[110.0, 140.0, 180.0, 230.0, 300.0, 390.0, 510.0],
-        BuildingKind::Port => &[120.0, 190.0, 270.0, 360.0, 500.0, 700.0, 950.0],
-        BuildingKind::Tower => &[80.0, 105.0, 140.0, 185.0, 240.0, 320.0, 420.0],
-        BuildingKind::SAM => &[145.0, 150.0, 155.0],
-        BuildingKind::MissileSilo => &[150.0, 155.0, 160.0],
+    let first_upgrade_cost = match kind {
+        BuildingKind::City | BuildingKind::MilitaryCamp | BuildingKind::TradingPost => 110.0,
+        BuildingKind::Port => 120.0,
+        BuildingKind::Tower => 80.0,
+        BuildingKind::SAM => 700.0,
+        BuildingKind::MissileSilo => 750.0,
     };
     let baseline = building_cost_progression_multiplier(u32::from(target_level - 1), cfg);
-    let scale = building_cost_progression_multiplier(built_levels, cfg) / baseline;
-    prices
-        .get(usize::from(target_level - 2))
-        .copied()
-        .unwrap_or(f64::INFINITY)
-        * scale
+    let own_progression = building_cost_progression_multiplier(
+        built_levels.max(u32::from(target_level - 1)),
+        cfg,
+    );
+    let tier_cost = first_upgrade_cost * 2.0_f64.powi(i32::from(target_level - 2));
+    tier_cost * (own_progression / baseline)
 }
 
 #[inline]
@@ -302,11 +300,11 @@ mod tests {
     fn initial_building_prices_match_the_balance_table() {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
-            (BuildingKind::City, 100.0),
-            (BuildingKind::Tower, 70.0),
-            (BuildingKind::TradingPost, 95.0),
-            (BuildingKind::Port, 110.0),
-            (BuildingKind::MilitaryCamp, 105.0),
+            (BuildingKind::City, 80.0),
+            (BuildingKind::Tower, 50.0),
+            (BuildingKind::TradingPost, 75.0),
+            (BuildingKind::Port, 90.0),
+            (BuildingKind::MilitaryCamp, 85.0),
             (BuildingKind::SAM, 350.0),
             (BuildingKind::MissileSilo, 375.0),
         ] {
@@ -318,13 +316,13 @@ mod tests {
     fn every_upgrade_level_applies_built_level_growth_to_its_base_price() {
         let cfg = crate::game_config::GameConfig::default();
         for (kind, expected) in [
-            (BuildingKind::City, vec![110.0, 165.0, 235.0, 350.0, 550.0, 850.0, 1_300.0]),
-            (BuildingKind::MilitaryCamp, vec![110.0, 150.0, 210.0, 280.0, 370.0, 480.0, 620.0]),
-            (BuildingKind::TradingPost, vec![110.0, 140.0, 180.0, 230.0, 300.0, 390.0, 510.0]),
-            (BuildingKind::Port, vec![120.0, 190.0, 270.0, 360.0, 500.0, 700.0, 950.0]),
-            (BuildingKind::Tower, vec![80.0, 105.0, 140.0, 185.0, 240.0, 320.0, 420.0]),
-            (BuildingKind::SAM, vec![145.0, 150.0, 155.0]),
-            (BuildingKind::MissileSilo, vec![150.0, 155.0, 160.0]),
+            (BuildingKind::City, vec![110.0, 220.0, 440.0, 880.0, 1_760.0, 3_520.0, 7_040.0]),
+            (BuildingKind::MilitaryCamp, vec![110.0, 220.0, 440.0, 880.0, 1_760.0, 3_520.0, 7_040.0]),
+            (BuildingKind::TradingPost, vec![110.0, 220.0, 440.0, 880.0, 1_760.0, 3_520.0, 7_040.0]),
+            (BuildingKind::Port, vec![120.0, 240.0, 480.0, 960.0, 1_920.0, 3_840.0, 7_680.0]),
+            (BuildingKind::Tower, vec![80.0, 160.0, 320.0, 640.0, 1_280.0, 2_560.0, 5_120.0]),
+            (BuildingKind::SAM, vec![700.0, 1_400.0, 2_800.0]),
+            (BuildingKind::MissileSilo, vec![750.0, 1_500.0, 3_000.0]),
         ] {
             for target_level in 2..=kind.max_level() {
                 let previous_built_levels = u32::from(target_level - 1);

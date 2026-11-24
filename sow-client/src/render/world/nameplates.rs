@@ -170,8 +170,10 @@ pub(crate) struct NameplateSystem {
     campaign_base_expressions: HashMap<u16, AvatarExpression>,
     campaign_base_expressions_dirty: bool,
     avatar_base_tick: Option<u64>,
-    seen_attack_ids: HashSet<u64>,
+    last_attack_troops: HashMap<u64, f64>,
     angry_until: HashMap<u16, Instant>,
+    pending_local_attack_pulse: Option<(u16, Instant)>,
+    angry_pulse_dirty: bool,
     incoming_force_at_start: HashMap<u16, f64>,
     fear_under_attack_players: HashSet<u16>,
     avatar_bases: HashMap<u16, AvatarExpression>,
@@ -179,7 +181,8 @@ pub(crate) struct NameplateSystem {
     next_avatar_transition_id: u64,
     avatar_presentations: HashMap<u16, AvatarPresentation>,
     pub(crate) avatar_revision: u64,
-    scratch_seen_attack_ids: HashSet<u64>,
+    scratch_attack_troops: HashMap<u64, f64>,
+    scratch_angry_pulses: Vec<u16>,
     scratch_mood_players: Vec<(u16, bool, f64)>,
     scratch_incoming_targets: HashSet<u16>,
     scratch_committed_troops: HashMap<u16, f64>,
@@ -1037,6 +1040,67 @@ impl NameplateSystem {
         updated
     }
 
+    pub(crate) fn trigger_local_attack_angry(
+        &mut self,
+        player_id: u16,
+        dedupe_snapshot_pulse: bool,
+        now: Instant,
+        reduced_motion: bool,
+    ) {
+        if player_id == 0 {
+            return;
+        }
+        if dedupe_snapshot_pulse {
+            self.pending_local_attack_pulse =
+                Some((player_id, now + Duration::from_millis(1_500)));
+        }
+        self.trigger_angry_pulse(player_id, now, reduced_motion);
+    }
+
+    fn trigger_angry_pulse(&mut self, player_id: u16, now: Instant, reduced_motion: bool) {
+        if player_id == 0 {
+            return;
+        }
+        self.angry_until.insert(player_id, now + ANGRY_EVENT_COOLDOWN);
+        self.angry_pulse_dirty = true;
+        if self.campaign_base_expressions.contains_key(&player_id)
+            || self.fear_under_attack_players.contains(&player_id)
+        {
+            return;
+        }
+        let previous = self
+            .avatar_bases
+            .get(&player_id)
+            .copied()
+            .unwrap_or(AvatarExpression::Calm);
+        self.avatar_bases.insert(player_id, AvatarExpression::Angry);
+        if reduced_motion {
+            self.avatar_transitions.remove(&player_id);
+            return;
+        }
+        if previous == AvatarExpression::Angry {
+            self.avatar_transitions.insert(
+                player_id,
+                AvatarTransition {
+                    id: self.next_avatar_transition_id,
+                    from: AvatarExpression::Angry,
+                    to: AvatarExpression::Angry,
+                    stage: AvatarTransitionStage::Enter,
+                    stage_started_at: now,
+                },
+            );
+            self.next_avatar_transition_id = self.next_avatar_transition_id.wrapping_add(1);
+        } else {
+            self.request_avatar_transition(
+                player_id,
+                previous,
+                AvatarExpression::Angry,
+                now,
+                false,
+            );
+        }
+    }
+
     fn observe_avatar_base_inputs(
         &mut self,
         tick: u64,
@@ -1046,25 +1110,37 @@ impl NameplateSystem {
         reduced_motion: bool,
     ) -> bool {
         if self.avatar_base_tick.is_some_and(|previous| tick < previous) {
-            self.seen_attack_ids.clear();
+            self.last_attack_troops.clear();
             self.angry_until.clear();
+            self.pending_local_attack_pulse = None;
             self.incoming_force_at_start.clear();
             self.fear_under_attack_players.clear();
         }
+        if self
+            .pending_local_attack_pulse
+            .is_some_and(|(_, until)| now > until)
+        {
+            self.pending_local_attack_pulse = None;
+        }
         let any_angry_expired = self.angry_until.values().any(|&until| now >= until);
+        let pulse_dirty = std::mem::take(&mut self.angry_pulse_dirty);
         if self.avatar_base_tick == Some(tick)
             && !self.campaign_base_expressions_dirty
             && !any_angry_expired
+            && !pulse_dirty
         {
             return false;
         }
-        let mut next_seen_attack_ids = std::mem::take(&mut self.scratch_seen_attack_ids);
+        let mut next_attack_troops = std::mem::take(&mut self.scratch_attack_troops);
+        let mut angry_pulses = std::mem::take(&mut self.scratch_angry_pulses);
         let mut incoming_attack_targets = std::mem::take(&mut self.scratch_incoming_targets);
         let mut committed_troops = std::mem::take(&mut self.scratch_committed_troops);
-        next_seen_attack_ids.clear();
+        next_attack_troops.clear();
+        angry_pulses.clear();
         incoming_attack_targets.clear();
         committed_troops.clear();
         let angry_deadline = now + ANGRY_EVENT_COOLDOWN;
+        let mut consumed_local_pulse = false;
         for attack in attacks {
             if attack.owner_id != 0 && attack.troops.is_finite() && attack.troops > 0.0 {
                 *committed_troops.entry(attack.owner_id).or_default() += attack.troops;
@@ -1076,13 +1152,28 @@ impl NameplateSystem {
                 && attack.troops > 0.0
                 && !attack.retreating
             {
-                next_seen_attack_ids.insert(attack.id);
-                if !self.seen_attack_ids.contains(&attack.id) {
-                    self.angry_until.insert(attack.owner_id, angry_deadline);
-                    self.angry_until.insert(attack.target_owner, angry_deadline);
+                next_attack_troops.insert(attack.id, attack.troops);
+                let is_new_or_reinforced = self
+                    .last_attack_troops
+                    .get(&attack.id)
+                    .is_none_or(|&prev| attack.troops > prev + 1e-6);
+                if is_new_or_reinforced {
+                    if self
+                        .pending_local_attack_pulse
+                        .is_some_and(|(local_id, until)| local_id == attack.owner_id && now <= until)
+                    {
+                        self.angry_until.insert(attack.owner_id, angry_deadline);
+                        consumed_local_pulse = true;
+                    } else {
+                        angry_pulses.push(attack.owner_id);
+                    }
+                    angry_pulses.push(attack.target_owner);
                 }
                 incoming_attack_targets.insert(attack.target_owner);
             }
+        }
+        if consumed_local_pulse {
+            self.pending_local_attack_pulse = None;
         }
         self.angry_until.retain(|_, until| *until > now);
         let mut incoming_force_at_start = std::mem::take(&mut self.scratch_incoming_force_at_start);
@@ -1124,6 +1215,17 @@ impl NameplateSystem {
                 fear_under_attack_players.insert(player_id);
             }
         }
+        std::mem::swap(&mut self.fear_under_attack_players, &mut fear_under_attack_players);
+
+        for &pulse_id in &angry_pulses {
+            if players
+                .iter()
+                .any(|&(player_id, alive, _)| player_id == pulse_id && alive)
+            {
+                self.trigger_angry_pulse(pulse_id, now, reduced_motion);
+            }
+        }
+        self.angry_pulse_dirty = false;
 
         let mut avatar_bases = std::mem::take(&mut self.scratch_avatar_bases);
         avatar_bases.clear();
@@ -1133,7 +1235,7 @@ impl NameplateSystem {
                 .campaign_base_expressions
                 .get(&player_id)
                 .copied()
-                .unwrap_or(if fear_under_attack_players.contains(&player_id) {
+                .unwrap_or(if self.fear_under_attack_players.contains(&player_id) {
                     AvatarExpression::Fear
                 } else if is_angry {
                     AvatarExpression::Angry
@@ -1148,16 +1250,15 @@ impl NameplateSystem {
             avatar_bases.insert(player_id, expression);
         }
         std::mem::swap(&mut self.avatar_bases, &mut avatar_bases);
-        std::mem::swap(&mut self.seen_attack_ids, &mut next_seen_attack_ids);
+        std::mem::swap(&mut self.last_attack_troops, &mut next_attack_troops);
         std::mem::swap(&mut self.incoming_force_at_start, &mut incoming_force_at_start);
-        std::mem::swap(
-            &mut self.fear_under_attack_players,
-            &mut fear_under_attack_players,
-        );
-        self.scratch_seen_attack_ids = next_seen_attack_ids;
+        self.scratch_attack_troops = next_attack_troops;
+        angry_pulses.clear();
+        self.scratch_angry_pulses = angry_pulses;
         self.scratch_incoming_targets = incoming_attack_targets;
         self.scratch_committed_troops = committed_troops;
         self.scratch_incoming_force_at_start = incoming_force_at_start;
+        fear_under_attack_players.clear();
         self.scratch_fear_under_attack_players = fear_under_attack_players;
         self.scratch_avatar_bases = avatar_bases;
         self.avatar_base_tick = Some(tick);
@@ -2800,7 +2901,8 @@ fn apply_base_avatar_transition(
     let identity = sow_core::player::avatar_identity_ref(player);
     let from_content = resolve_avatar_content(text, avatars, identity, transition.from);
     let to_content = resolve_avatar_content(text, avatars, identity, transition.to);
-    if from_content == to_content {
+    let same_content = from_content == to_content;
+    if same_content && transition.stage == AvatarTransitionStage::Exit {
         avatar.content = to_content;
         return;
     }
@@ -2824,6 +2926,7 @@ fn apply_base_avatar_transition(
             *avatar = apply_emote_avatar_motion(*avatar, motion);
             avatar.alpha = 1.0;
             if allow_crossfade
+                && !same_content
                 && let AvatarContent::Sprite(from_uv) = from_content
             {
                 avatar.blend = Some((from_uv, avatar_transition_crossfade(progress)));
@@ -3561,7 +3664,7 @@ mod tests {
     }
 
     #[test]
-    fn angry_expires_after_three_seconds_and_refreshes_without_reanimating_overlap() {
+    fn angry_retriggers_on_merged_attacks_and_local_clicks_with_three_second_cooldown() {
         let mut system = NameplateSystem::default();
         let start = Instant::now();
         let players = [(1, true, 100.0), (2, true, 100.0)];
@@ -3569,51 +3672,75 @@ mod tests {
         system.observe_avatar_base_inputs(1, &[], &players, start, false);
         assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Calm));
 
-        // First attack switches both attacker and defender Calm -> Angry once.
+        // Initial combat attack animates both attacker and defender Calm -> Angry.
         let t0 = start + Duration::from_millis(100);
         system.observe_avatar_base_inputs(2, &[combat_attack(10, 1, 2, 20.0)], &players, t0, false);
         assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Angry));
         assert_eq!(system.avatar_bases.get(&2), Some(&AvatarExpression::Angry));
         let first_transition_id = system.avatar_transitions.get(&1).expect("transition to angry").id;
 
-        // Rapid follow-up taps within 1s refresh the 3s cooldown without restarting transition.
+        // Merged repeat attack against the same target (same id, troops increased) re-triggers!
         let t1 = t0 + Duration::from_millis(350);
+        system.observe_avatar_base_inputs(3, &[combat_attack(10, 1, 2, 32.0)], &players, t1, false);
+        assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Angry));
+        let merged_transition = *system
+            .avatar_transitions
+            .get(&1)
+            .expect("retriggered transition on merged attack");
+        assert_ne!(merged_transition.id, first_transition_id);
+        assert_eq!(merged_transition.stage, AvatarTransitionStage::Enter);
+
+        // Local click on wilderness triggers/re-animates at 0ms too without snapshot dedupe interference.
+        let t2 = t1 + Duration::from_millis(250);
+        system.trigger_local_attack_angry(1, false, t2, false);
+        let wilderness_id = system
+            .avatar_transitions
+            .get(&1)
+            .expect("retriggered transition on wilderness click")
+            .id;
+        assert_ne!(wilderness_id, merged_transition.id);
+
+        // Local combat click animates once at 0ms and is not double-triggered by its snapshot arrival.
+        let t3 = t2 + Duration::from_millis(250);
+        system.trigger_local_attack_angry(1, true, t3, false);
+        let click_id = system
+            .avatar_transitions
+            .get(&1)
+            .expect("retriggered transition on local combat click")
+            .id;
+        assert_ne!(click_id, wilderness_id);
         system.observe_avatar_base_inputs(
-            3,
-            &[combat_attack(10, 1, 2, 18.0), combat_attack(11, 1, 2, 15.0)],
+            4,
+            &[combat_attack(10, 1, 2, 48.0)],
             &players,
-            t1,
+            t3 + Duration::from_millis(50),
             false,
         );
-        assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Angry));
-        assert_eq!(
-            system.avatar_transitions.get(&1).map(|t| t.id),
-            Some(first_transition_id)
-        );
+        assert_eq!(system.avatar_transitions.get(&1).map(|t| t.id), Some(click_id));
 
-        // Even while attacks remain active, past t0+3s (before t1+3s) keeps Angry from tap 2.
-        let t_mid = t0 + Duration::from_secs(3) + Duration::from_millis(50);
+        // Defender (player 2) cools down 3s after t1, while player 1 stays angry until t3 + 3s.
+        let t_def_end = t1 + ANGRY_EVENT_COOLDOWN + Duration::from_millis(10);
         system.observe_avatar_base_inputs(
-            3,
-            &[combat_attack(10, 1, 2, 10.0), combat_attack(11, 1, 2, 10.0)],
+            4,
+            &[combat_attack(10, 1, 2, 10.0)],
             &players,
-            t_mid,
+            t_def_end,
             false,
         );
+        assert_eq!(system.avatar_bases.get(&2), Some(&AvatarExpression::Calm));
         assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Angry));
 
-        // After 3s from last new attack (same tick still active), both calm down.
-        let t_end = t1 + ANGRY_EVENT_COOLDOWN + Duration::from_millis(10);
+        // After 3s from player 1's last click (same tick still active), player 1 calms down too.
+        let t_end = t3 + ANGRY_EVENT_COOLDOWN + Duration::from_millis(60);
         let changed = system.observe_avatar_base_inputs(
-            3,
-            &[combat_attack(10, 1, 2, 10.0), combat_attack(11, 1, 2, 10.0)],
+            4,
+            &[combat_attack(10, 1, 2, 10.0)],
             &players,
             t_end,
             false,
         );
         assert!(changed);
         assert_eq!(system.avatar_bases.get(&1), Some(&AvatarExpression::Calm));
-        assert_eq!(system.avatar_bases.get(&2), Some(&AvatarExpression::Calm));
     }
 }
 

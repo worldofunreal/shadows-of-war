@@ -14,6 +14,21 @@ pub const RESOURCE_REQUEST_COOLDOWN_TICKS: u32 = 300;
 pub const AI_MAX_PENDING_REQUESTS_PER_HUMAN: usize = 3;
 /// Percentage chance an AI in an extreme emergency actually asks allies instead of staying silent.
 pub const AI_EMERGENCY_HELP_ASK_CHANCE_PCT: i32 = 30;
+/// Spacing between incoming AI aid asks targeting the same live human (~8s–16s at 100ms/tick).
+pub const AI_HUMAN_INTAKE_COOLDOWN_MIN_TICKS: u32 = 80;
+pub const AI_HUMAN_INTAKE_COOLDOWN_MAX_TICKS: u32 = 160;
+/// Quiet period after a live human accepts, rejects, or ignores an AI aid ask (~20s–35s).
+pub const AI_HUMAN_RESPONSE_COOLDOWN_MIN_TICKS: u32 = 200;
+pub const AI_HUMAN_RESPONSE_COOLDOWN_MAX_TICKS: u32 = 350;
+/// Per-bot grace period anchored at resolution when a live human helps or sends aid (~50s).
+pub const AI_POST_AID_COOLDOWN_TICKS: u32 = 500;
+/// Per-bot backoff anchored at resolution when a live human rejects or ignores an ask (~60s).
+pub const AI_POST_DECLINE_COOLDOWN_TICKS: u32 = 600;
+/// Staggered retry delay when an AI in emergency finds human recipients throttled (~6s–15s).
+pub const AI_THROTTLED_RETRY_MIN_TICKS: u32 = 60;
+pub const AI_THROTTLED_RETRY_MAX_TICKS: u32 = 150;
+/// Minimum troop ratio a live human must hold before AI allies ask them for emergency aid.
+pub const AI_ASK_HUMAN_MIN_TROOP_RATIO: f64 = 0.25;
 /// A resource request or trade offer left unanswered this long is withdrawn (~30s).
 pub const RESOURCE_REQUEST_TTL_TICKS: u32 = 300;
 /// Lifetime of an emote-triggered Help Call (~30s at 100ms/tick).
@@ -400,6 +415,28 @@ pub fn roll_ai_emergency_help_ask(seed: u64, ai_id: PlayerId, tick: u32) -> bool
             ^ 0x4149_4153_4B5F_484C,
     );
     rng.next_int(0, 100) < AI_EMERGENCY_HELP_ASK_CHANCE_PCT
+}
+
+/// Deterministic jittered delay (in ticks, inclusive bounds) for organic AI aid pacing.
+pub fn roll_ai_pacing_ticks(
+    seed: u64,
+    primary_id: PlayerId,
+    secondary_id: PlayerId,
+    tick: u32,
+    min_ticks: u32,
+    max_ticks: u32,
+    salt: u64,
+) -> u32 {
+    if max_ticks <= min_ticks {
+        return min_ticks;
+    }
+    let mut rng = WyRand::new(
+        seed ^ u64::from(primary_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ u64::from(secondary_id).wrapping_mul(0xD6E8_FEB8_6659_FD93)
+            ^ u64::from(tick).wrapping_mul(0xBF58_476D_1CE4_E5B9)
+            ^ salt,
+    );
+    rng.next_int(min_ticks as i32, max_ticks as i32 + 1) as u32
 }
 
 /// Betrayal only when attack logic would target an ally — not on a diplomacy timer.

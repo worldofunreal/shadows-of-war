@@ -624,8 +624,7 @@ struct HudScalarKey {
     map_menu_view: Option<MapContextMenuView>,
     map_menu_session: u64,
     map_menu_tile: u32,
-    map_menu_camera: Option<(i32, i32, i32)>,
-    building_progress_camera: Option<(i32, i32, i32)>,
+    world_hud_camera: Option<(u32, u32, u32)>,
     building_celebration_count: usize,
 }
 
@@ -2739,22 +2738,17 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         map_menu_view: map_menu.map(|menu| menu.view),
         map_menu_session: map_menu.map(|menu| menu.session).unwrap_or(0),
         map_menu_tile: map_menu.map(|menu| menu.tile_idx).unwrap_or(u32::MAX),
-        map_menu_camera: map_menu
-            .filter(|menu| menu.view == MapContextMenuView::BuildingDetails)
-            .map(|_| {
+        world_hud_camera: (hud.building_placement.is_some()
+            || map_menu.is_some()
+            || has_active_construction
+            || has_active_celebrations)
+            .then(|| {
                 (
-                    app.input.camera_x.round() as i32,
-                    app.input.camera_y.round() as i32,
-                    (app.input.camera_zoom * 100.0).round() as i32,
+                    app.input.camera_x.to_bits(),
+                    app.input.camera_y.to_bits(),
+                    app.input.camera_zoom.to_bits(),
                 )
             }),
-        building_progress_camera: (has_active_construction || has_active_celebrations).then(|| {
-            (
-                app.input.camera_x.round() as i32,
-                app.input.camera_y.round() as i32,
-                (app.input.camera_zoom * 100.0).round() as i32,
-            )
-        }),
         building_celebration_count: app.ui.building_celebrations.len(),
     };
 
@@ -4206,20 +4200,14 @@ fn building_detail_payload(
 ) -> serde_json::Value {
     use sow_core::game::{BuildingKind, CityArsenalKind};
 
-    let map_w = app.sim.map_w.max(1);
-    let footprint = sow_core::building::BuildingFootprint::at(
-        building.kind,
-        building.tile_idx % map_w,
-        building.tile_idx / map_w,
-    );
-    let zoom = app.input.camera_zoom;
-    let anchor_x = (app.input.camera_x
-        + (footprint.left as f32 + footprint.width as f32 * 0.5) * zoom)
-        / screen_scale;
-    let anchor_y = (app.input.camera_y
-        + (footprint.top as f32 + footprint.height as f32 * 0.5) * zoom)
-        / screen_scale;
-    let anchor_radius = (footprint.height as f32 * 0.5 * zoom / screen_scale).max(24.0);
+    let ([anchor_x, anchor_y], anchor_radius) =
+        crate::render::world::overlays::building_screen_anchor_and_radius(
+            building.kind,
+            building.tile_idx,
+            app.sim.map_w,
+            &app.input,
+            screen_scale,
+        );
     let panel = app
         .building_panel()
         .filter(|panel| panel.tile_idx == building.tile_idx);
@@ -4262,14 +4250,13 @@ fn building_detail_payload(
         let prog = crate::render::world::overlays::construction_progress(
             building.kind,
             building.active_level(),
-            building.reserved_level(),
             building.ticks_until_complete,
         )
         .unwrap_or(0.0);
         Some(serde_json::json!({
             "kind": building.kind.as_str(),
             "active_level": building.active_level(),
-            "target_level": building.reserved_level().max(1),
+            "target_level": building.level.max(1),
             "remaining_seconds": rem_secs,
             "progress": prog,
             "is_city_foundation": building.kind == BuildingKind::City && building.active_level() == 0,
@@ -4996,7 +4983,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     let progress = crate::render::world::overlays::construction_progress(
                         building.kind,
                         active_level,
-                        building.level,
                         building.ticks_until_complete,
                     )
                     .unwrap_or(0.0);
@@ -5015,10 +5001,14 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                             building.tile_idx,
                         )
                     } else {
-                        building.level
+                        active_level.max(1)
                     };
-                    let building_x = (building.tile_idx % map_w) as f32 + 0.5;
-                    let building_y = (building.tile_idx / map_w) as f32 + 0.5;
+                    let [building_x, building_y] =
+                        crate::render::world::overlays::building_world_center(
+                            anchor_kind,
+                            building.tile_idx,
+                            map_w,
+                        );
                     let [screen_x, screen_y] =
                         crate::render::world::overlays::building_screen_anchor_bottom(
                             building_x,
@@ -5035,7 +5025,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     serde_json::json!({
                         "tile_idx": building.tile_idx,
                         "kind": building.kind.as_str(),
-                        "level": building.reserved_level().max(1),
+                        "level": active_level.max(1),
                         "active_level": active_level,
                         "remaining_seconds": remaining_seconds,
                         "progress": progress,
@@ -5064,8 +5054,11 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     (1.0 - f64::from(arsenal.ticks_until_complete) / f64::from(total))
                         .clamp(0.0, 1.0);
                 let visual_level = building.active_level();
-                let bx = (building.tile_idx % map_w) as f32 + 0.5;
-                let by = (building.tile_idx / map_w) as f32 + 0.5;
+                let [bx, by] = crate::render::world::overlays::building_world_center(
+                    building.kind,
+                    building.tile_idx,
+                    map_w,
+                );
                 let [screen_x, screen_y] =
                     crate::render::world::overlays::building_screen_anchor_bottom(
                         bx,
@@ -5110,8 +5103,11 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     if map_w == 0 {
                         return None;
                     }
-                    let bx = (tile_idx % map_w) as f32 + 0.5;
-                    let by = (tile_idx / map_w) as f32 + 0.5;
+                    let [bx, by] = crate::render::world::overlays::building_world_center(
+                        kind,
+                        tile_idx,
+                        map_w,
+                    );
                     let [screen_x, screen_y] =
                         crate::render::world::overlays::building_screen_anchor_bottom(
                             bx,
@@ -5152,13 +5148,12 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 let progress = crate::render::world::overlays::construction_progress(
                     building.kind,
                     active_level,
-                    building.reserved_level(),
                     building.ticks_until_complete,
                 )
                 .unwrap_or(0.0);
                 serde_json::json!({
                     "kind": building.kind.as_str(),
-                    "level": building.reserved_level().max(1),
+                    "level": active_level.max(1),
                     "remaining_seconds": remaining_seconds,
                     "progress": progress,
                 })

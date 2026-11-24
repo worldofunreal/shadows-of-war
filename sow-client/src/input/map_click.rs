@@ -998,35 +998,47 @@ impl SowApp {
             );
             return;
         }
-        if action == MapMenuAction::UpgradeStructureMax {
-            if menu.view == MapContextMenuView::BuildingDetails {
-                self.upgrade_structure_max(tile_idx);
+        let keep_building_panel_open = menu.view == MapContextMenuView::BuildingDetails
+            && matches!(action, MapMenuAction::UpgradeStructure | MapMenuAction::UpgradeStructureMax);
+        if keep_building_panel_open {
+            let Some(offer) = self.building_panel().and_then(|panel| panel.upgrade) else {
+                return;
+            };
+            let available = match action {
+                MapMenuAction::UpgradeStructure => offer.enabled,
+                MapMenuAction::UpgradeStructureMax => offer.max_offer.is_some(),
+                _ => false,
+            };
+            // A stale HUD tap must never dispatch an upgrade the live state rejects.
+            if !available {
+                return;
             }
-            self.close_map_context_menu();
+        }
+        if action == MapMenuAction::UpgradeStructureMax {
+            self.upgrade_structure_max(tile_idx);
             return;
         }
-        // Close the panel after dispatching an upgrade so the map stays unobstructed
-        // for rapid follow-up upgrades on other buildings.
-        let keep_building_panel_open = false;
         if !self.map_menu_actions(tile_idx).contains(&action) {
-            self.show_map_menu_unavailable(tile_idx);
-            if !keep_building_panel_open {
-                self.close_map_context_menu();
+            if keep_building_panel_open {
+                return;
             }
+            self.show_map_menu_unavailable(tile_idx);
+            self.close_map_context_menu();
             return;
         }
         if let Some(cost) = self.map_menu_cost(action, tile_idx).0
             && (!cost.is_finite() || self.current_player_gold() < cost)
         {
+            if keep_building_panel_open {
+                return;
+            }
             let message = if cost.is_finite() {
                 format!("Need {} gold.", crate::utils::format_number(cost))
             } else {
                 "Action unavailable here.".to_string()
             };
             self.add_action_feedback(message);
-            if !keep_building_panel_open {
-                self.close_map_context_menu();
-            }
+            self.close_map_context_menu();
             return;
         }
 
@@ -1613,7 +1625,6 @@ impl SowApp {
             .as_ref()
             .and_then(|engine| engine.max_affordable_upgrade_level(id, gold, cap))
         else {
-            self.add_action_feedback("Need more gold.".to_string());
             return;
         };
         self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructureTo {

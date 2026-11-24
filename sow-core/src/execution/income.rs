@@ -25,6 +25,7 @@ impl SowEngine {
     fn collect_land_trade(&mut self) -> Option<LandTradeBatch> {
         use std::cmp::Reverse;
         let tick = self.state.tick;
+        let map_width = self.state.map.width;
         self.trade_last_delivery_tick = tick;
         let mut payments: Option<LandTradeBatch> = None;
         while let Some(&Reverse((due, index))) = self.trade_delivery_queue.peek() {
@@ -35,16 +36,16 @@ impl SowEngine {
             let owner = usize::from(link.owner_id);
             if let Some(aggregate) = self.building_aggregates.get_mut(owner) {
                 if open == link.blocked {
-                    let previous_weight = link.weight();
+                    let previous_weight = link.weight(map_width);
                     link.blocked = !open;
-                    aggregate.land_trade_income_weight += link.weight() - previous_weight;
+                    aggregate.land_trade_income_weight += link.weight(map_width) - previous_weight;
                     if open {
                         aggregate.railway_connections += 1;
                     } else {
                         aggregate.railway_connections = aggregate.railway_connections.saturating_sub(1);
                     }
                 } else if open {
-                    let gold = link.cargo_gold(&self.state.config);
+                    let gold = link.cargo_gold(&self.state.config, map_width);
                     let batch = payments.get_or_insert_with(|| LandTradeBatch {
                         totals: vec![0.0; self.building_aggregates.len()],
                         deliveries: Vec::new(),

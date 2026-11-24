@@ -118,6 +118,8 @@ pub(super) struct AiBehaviorPolicy {
     pub(super) betrays_human_allies: bool,
     /// Prioritize City/TradingPost/MilitaryCamp construction before Towers while economy targets are unmet.
     pub(super) prioritizes_economy_buildings: bool,
+    /// Prioritize initial Tower defenses before building out economy (Tribes).
+    pub(super) prefers_towers_first: bool,
     /// Use regional `nation_bot_attack_order` + Terminator `walled_in_bot_targets` probe before Ghost attack loop.
     pub(super) uses_regional_nation_planning: bool,
     /// Launch nuclear strikes (`maybe_launch_nuke`, still gated by `bot_iq >= 100`).
@@ -135,6 +137,7 @@ impl AiBehaviorPolicy {
                 uses_tribe_bypass: true,
                 betrays_human_allies: true,
                 prioritizes_economy_buildings: true,
+                prefers_towers_first: false,
                 uses_regional_nation_planning: false,
                 launches_nukes: true,
                 desperate_defense_half_reserve: true,
@@ -145,6 +148,7 @@ impl AiBehaviorPolicy {
                 uses_tribe_bypass: false,
                 betrays_human_allies: false,
                 prioritizes_economy_buildings: true,
+                prefers_towers_first: false,
                 uses_regional_nation_planning: false,
                 launches_nukes: true,
                 desperate_defense_half_reserve: true,
@@ -154,7 +158,8 @@ impl AiBehaviorPolicy {
                 uses_probabilistic_diplomacy: false,
                 uses_tribe_bypass: false,
                 betrays_human_allies: false,
-                prioritizes_economy_buildings: false,
+                prioritizes_economy_buildings: true,
+                prefers_towers_first: true,
                 uses_regional_nation_planning: false,
                 launches_nukes: false,
                 desperate_defense_half_reserve: false,

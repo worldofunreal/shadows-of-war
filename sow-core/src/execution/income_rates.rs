@@ -4,8 +4,8 @@ use crate::player::Leader;
 
 pub const GOLD_PASSIVE_FULL_RATE_CAP: f64 = 20.0;
 pub const TROOP_PASSIVE_FULL_RATE_CAP: f64 = 1_000.0;
-pub const GOLD_PASSIVE_EXCESS_RATE: f64 = 0.15;
-pub const TROOP_PASSIVE_EXCESS_RATE: f64 = 0.18;
+pub const GOLD_PASSIVE_EXCESS_RATE: f64 = 1.0;
+pub const TROOP_PASSIVE_EXCESS_RATE: f64 = 1.0;
 
 /// Applies the Normal-speed threshold to a recurring rate expressed per game-second.
 #[inline]
@@ -73,15 +73,21 @@ pub fn gold_income_per_second(
     use crate::geo_entities::{District, Resource, Source};
     cfg.gold_base_income
         + cfg.city_gold_income
-            * agg.city_income_level_weight
+            * agg.city_gold_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::City), Resource::Gold)
+        + cfg.military_camp_gold_income
+            * agg.military_camp_gold_level_weight
+            * leader.resource_bonus_multiplier(
+                Source::District(District::MilitaryCamp),
+                Resource::Gold,
+            )
         + land_trade_gold_per_second(agg, leader, cfg)
         + cfg.port_gold_income
             * agg.port_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Port), Resource::Gold)
         + hero_only_income(
             leader.resource_bonus_hero_bonus(Source::District(District::City), Resource::Gold),
-            cfg.hero_city_gold_income * agg.city_income_level_weight,
+            cfg.hero_city_gold_income * agg.city_gold_level_weight,
         )
         + territory_rate(tiles, cfg.territory_gold_amount, cfg.territory_gold_tiles)
             * leader.resource_bonus_multiplier(Source::Territory, Resource::Gold)
@@ -229,7 +235,7 @@ mod tests {
         assert!((gold_per_game_minute(cfg.gold_base_income) - 60.0 / crate::game_config::NORMAL_GAME_SPEED).abs() < 1e-9);
         assert!(
             (gold_per_game_minute(cfg.trading_post_gold_income)
-                - 60.0 * (0.80 / crate::game_config::NORMAL_GAME_SPEED))
+                - 60.0 * (1.25 / crate::game_config::NORMAL_GAME_SPEED))
                 .abs()
                 < 1e-9
         );
@@ -263,6 +269,11 @@ mod tests {
         assert!(
             ((troop_rate - cfg.troop_base_income) * cfg.global_speed_multiplier - 325.0).abs()
                 < 1e-10
+        );
+        assert!(crate::building::city_income_level_weight(8) > crate::building::city_income_level_weight(4));
+        assert_eq!(
+            diminishing_passive_income(500.0, GOLD_PASSIVE_FULL_RATE_CAP, GOLD_PASSIVE_EXCESS_RATE),
+            500.0
         );
     }
 

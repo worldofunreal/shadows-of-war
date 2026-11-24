@@ -332,6 +332,16 @@ impl SowApp {
                     self.input.camera_zoom,
                     now,
                 );
+                let my_id = self
+                    .sim
+                    .my_player_id
+                    .unwrap_or(self.ui.app.hud_state.my_player_id);
+                self.ui.nameplates.trigger_local_attack_angry(
+                    my_id,
+                    attack.target_owner != 0,
+                    now,
+                    self.ui.app.settings_state.reduced_motion,
+                );
             }
             sow_core::protocol::GameplayIntent::UpgradeStructure { building_id }
             | sow_core::protocol::GameplayIntent::UpgradeStructureTo { building_id, .. } => {

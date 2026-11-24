@@ -385,7 +385,7 @@ impl SowEngine {
                     && !(ranked_1v1 && caller_is_human && p.is_human())
                     && !(caller_is_ai
                         && p.is_live_human()
-                        && !self.ai_human_recipient_has_capacity(p.id))
+                        && !self.ai_human_recipient_ready(p.id))
             })
             .map(|p| p.id)
             .collect();
@@ -408,10 +408,63 @@ impl SowEngine {
                     call_id,
                     ghost_decided: false,
                 });
+            if caller_is_ai
+                && self
+                    .state
+                    .player(target)
+                    .is_some_and(|p| p.is_live_human())
+            {
+                self.mark_ai_recipient_intake_pacing(target, caller);
+            }
         }
         self.state
             .events
             .push(crate::game::GameEvent::HelpCallSubmitted { caller_id: caller });
+    }
+
+    fn mark_ai_recipient_intake_pacing(&mut self, human_id: u16, ai_id: u16) {
+        let tick = self.current_tick_u32();
+        let intake_ticks = crate::diplomacy::roll_ai_pacing_ticks(
+            self.state.seed,
+            human_id,
+            ai_id,
+            tick,
+            crate::diplomacy::AI_HUMAN_INTAKE_COOLDOWN_MIN_TICKS,
+            crate::diplomacy::AI_HUMAN_INTAKE_COOLDOWN_MAX_TICKS,
+            0x494E_5441_4B45_0001,
+        );
+        self.extend_ai_recipient_cooldown(human_id, intake_ticks);
+    }
+
+    fn on_human_resolved_ai_aid(&mut self, responder: u16, requester: u16, accepted: bool) {
+        let responder_is_human = self
+            .state
+            .player(responder)
+            .is_some_and(|p| p.is_live_human());
+        let requester_is_ai = self
+            .state
+            .player(requester)
+            .is_some_and(|p| !p.is_live_human());
+        if !responder_is_human || !requester_is_ai {
+            return;
+        }
+        let tick = self.current_tick_u32();
+        let pause_ticks = crate::diplomacy::roll_ai_pacing_ticks(
+            self.state.seed,
+            responder,
+            requester,
+            tick,
+            crate::diplomacy::AI_HUMAN_RESPONSE_COOLDOWN_MIN_TICKS,
+            crate::diplomacy::AI_HUMAN_RESPONSE_COOLDOWN_MAX_TICKS,
+            0x5245_5350_4F4E_5345,
+        );
+        self.extend_ai_recipient_cooldown(responder, pause_ticks);
+        let ai_grace = if accepted {
+            crate::diplomacy::AI_POST_AID_COOLDOWN_TICKS
+        } else {
+            crate::diplomacy::AI_POST_DECLINE_COOLDOWN_TICKS
+        };
+        self.extend_ai_ask_cooldown(requester, Some(responder), ai_grace);
     }
 
     /// Gold the payer can give now: the requested amount, capped at what it holds.
@@ -468,7 +521,7 @@ impl SowEngine {
         if is_plain_request
             && proposer_is_ai
             && (!self.can_ai_ask_for_help(proposer)
-                || (target_is_live_human && !self.ai_human_recipient_has_capacity(target)))
+                || (target_is_live_human && !self.ai_human_recipient_ready(target)))
         {
             return;
         }
@@ -513,13 +566,11 @@ impl SowEngine {
         let is_trade = request.is_trade();
         self.resource_requests_proposed.push(request);
         self.mark_resource_request_cooldown(proposer, target);
-        if !is_trade
-            && self
-                .state
-                .player(proposer)
-                .is_some_and(|p| !p.is_live_human())
-        {
+        if !is_trade && proposer_is_ai {
             self.mark_ai_help_ask_cooldown(proposer);
+            if target_is_live_human {
+                self.mark_ai_recipient_intake_pacing(target, proposer);
+            }
         }
         self.state
             .events
@@ -936,6 +987,16 @@ impl SowEngine {
                 let valid_amounts = (g > 0.0 || t > 0.0) && g.is_finite() && t.is_finite();
                 if valid_amounts && self.resources_can_move(sender, target) {
                     let (actual_g, actual_t) = self.transfer_resources_clamped(sender, target, g, t);
+                    if (actual_g > 0.0 || actual_t > 0.0)
+                        && self.state.player(sender).is_some_and(|p| p.is_live_human())
+                        && self.state.player(target).is_some_and(|p| !p.is_live_human())
+                    {
+                        self.extend_ai_ask_cooldown(
+                            target,
+                            Some(sender),
+                            crate::diplomacy::AI_POST_AID_COOLDOWN_TICKS,
+                        );
+                    }
                     if actual_g <= 0.0
                         && actual_t <= 0.0
                         && self
@@ -1008,10 +1069,12 @@ impl SowEngine {
                     }
                     let req = self.resource_requests_proposed.remove(pos);
                     if !self.resources_can_move(acceptor, target) {
+                        self.on_human_resolved_ai_aid(acceptor, target, false);
                         return;
                     }
                     // The acceptor pays only what fits; the rest stays with the acceptor.
                     self.transfer_resources_clamped(acceptor, target, req.gold, req.troops);
+                    self.on_human_resolved_ai_aid(acceptor, target, true);
                 }
             }
             GameplayIntent::RejectResourceRequest { target_player } => {
@@ -1022,7 +1085,10 @@ impl SowEngine {
                     .iter()
                     .position(|r| r.proposer == target && r.target == rejector)
                 {
-                    self.resource_requests_proposed.remove(pos);
+                    let removed = self.resource_requests_proposed.remove(pos);
+                    if !removed.is_trade() {
+                        self.on_human_resolved_ai_aid(rejector, target, false);
+                    }
                     self.state
                         .events
                         .push(crate::game::GameEvent::ResourceRequestRejected {
@@ -1043,6 +1109,7 @@ impl SowEngine {
                 };
                 self.help_calls_proposed.remove(pos);
                 if !self.resources_can_move(responder, caller) {
+                    self.on_human_resolved_ai_aid(responder, caller, false);
                     return;
                 }
                 let Some((gold, troops)) = self
@@ -1061,6 +1128,7 @@ impl SowEngine {
                 };
                 let (actual_g, actual_t) =
                     self.transfer_resources_clamped(responder, caller, gold, troops);
+                self.on_human_resolved_ai_aid(responder, caller, actual_g > 0.0 || actual_t > 0.0);
                 if actual_g <= 0.0
                     && actual_t <= 0.0
                     && self.state.player(responder).is_some_and(|p| {
@@ -1086,6 +1154,7 @@ impl SowEngine {
                     return;
                 };
                 self.help_calls_proposed.remove(pos);
+                self.on_human_resolved_ai_aid(responder, caller, false);
                 let is_ai_responder = self.state.player(responder).is_some_and(|p| {
                     p.is_ai_controlled || p.player_type != crate::player::PlayerType::Human
                 });
