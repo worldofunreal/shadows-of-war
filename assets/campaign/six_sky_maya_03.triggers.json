@@ -216,8 +216,7 @@
       "title_key": "tutorial.campaign_six_sky_maya_03_end_title",
       "body_key": "tutorial.campaign_six_sky_maya_03_end_body",
       "next_episode_id": "six_sky_maya_04",
-      "next_episode_key": "tutorial.campaign_six_sky_maya_03_next_ep",
-      "skip_tutorial_key": "tutorial.campaign_six_sky_maya_03_skip_tutorial"
+      "next_episode_key": "tutorial.campaign_six_sky_maya_03_next_ep"
     }
   ]
 }

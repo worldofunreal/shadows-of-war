@@ -128,7 +128,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         uid +
         '-body" aria-live="polite" aria-atomic="true"></p></div></div></div>' +
         '<div class="sow-story__actions"><div class="sow-story__choices"></div><footer class="sow-story__footer"><span class="sow-story__lines" aria-hidden="true"></span>' +
-        '<button class="sow-story__skip-tutorial" type="button" data-story-skip-tutorial hidden></button>' +
         '<button class="sow-story__continue" type="button" data-story-continue><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></button></footer></div>' +
         "</article>" +
         '<aside class="sow-story__objective" hidden>' +
@@ -162,7 +161,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         choices = find(".sow-story__choices"),
         footer = find(".sow-story__footer");
     const continueButton = find("[data-story-continue]"),
-        skipTutorialButton = find("[data-story-skip-tutorial]"),
         lines = find(".sow-story__lines");
     const objective = find(".sow-story__objective"),
         objectiveTitle = objective.querySelector<HTMLHeadingElement>("h3")!,
@@ -762,7 +760,11 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
     }
     function dismissDialog() {
         if (!model) return;
-        if (model.step.type === "choice" || model.choices.length) {
+        if (
+            model.step.type === "choice" ||
+            model.choices.length ||
+            (model.step.type === "end" && model.step.next_episode_id)
+        ) {
             triggerNudge();
             return;
         }
@@ -1172,12 +1174,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
                     (step.type === "end" ? "tutorial.complete" : "tutorial.continue"),
             ),
         );
-        skipTutorialButton.hidden = !hasNextEpisode;
-        if (hasNextEpisode)
-            setText(
-                skipTutorialButton,
-                t(step.skip_tutorial_key || "hud.leave"),
-            );
         const dismissContinues = modal && step.type !== "choice" && model.choices.length === 0;
         // Modal dialogs close through Continue or Escape; the X stays only for the non-modal guide skip.
         const dismissVisible = !modal && (step.type === "choice" || Boolean(options.onDismiss));
@@ -1461,7 +1457,6 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         if (event.timeStamp - lastAction < 220) return;
         lastAction = event.timeStamp;
         if (button.hasAttribute("data-story-choice")) options.onChoice(button.dataset.storyChoice);
-        else if (button.hasAttribute("data-story-skip-tutorial")) options.onContinue();
         else if (button.hasAttribute("data-story-continue")) {
             const nextEpisodeId = model.step && model.step.type === "end" ? model.step.next_episode_id : null;
             if (nextEpisodeId && options.onContinueNext) options.onContinueNext(String(nextEpisodeId));
@@ -1491,7 +1486,7 @@ export function mount(root: HTMLElement, options: CampaignViewOptions): Campaign
         event.stopPropagation();
         if (event.timeStamp - lastAction < 220) return;
         lastAction = event.timeStamp;
-        if (model.step.type === "choice") {
+        if (model.step.type === "choice" || (model.step.type === "end" && model.step.next_episode_id)) {
             triggerNudge();
             return;
         }

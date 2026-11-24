@@ -96,6 +96,7 @@ interface TutorialRuntime {
     nearMissOpen: boolean;
     nearMissNode: HTMLElement | null;
     pendingNextEpisode: string | null;
+    completedSessionId: number;
 }
 
 (function () {
@@ -171,6 +172,7 @@ interface TutorialRuntime {
         nearMissOpen: false,
         nearMissNode: null,
         pendingNextEpisode: null,
+        completedSessionId: 0,
     };
 
     function removeNearMissModal() {
@@ -764,6 +766,7 @@ interface TutorialRuntime {
             })
             .catch(function (reason) {
                 if (generation === runtime.generation) {
+                    runtime.completedSessionId = 0;
                     runtime.failedEpisode = episodeId;
                     showError(reason, episodeId);
                 }
@@ -1464,11 +1467,32 @@ interface TutorialRuntime {
         }
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
+            const nextEpisodeId = runtime.pendingNextEpisode;
+            runtime.pendingNextEpisode = null;
             try {
                 window.CrazyGames?.SDK?.game?.happytime?.();
             } catch {}
             trackExperience("campaign_episode_complete", { episode_id: runtime.episodeId });
-            send("complete_campaign_episode", { episode_id: runtime.episodeId });
+            send("complete_campaign_episode", {
+                episode_id: runtime.episodeId,
+                stay_in_campaign: Boolean(nextEpisodeId),
+            });
+            if (nextEpisodeId) {
+                runtime.completedSessionId =
+                    Number(tutorial.campaign_session_id) || runtime.campaignSessionId || 0;
+                runtime.active = false;
+                runtime.cameraCues = [];
+                runtime.latestHud = null;
+                if (runtime.view) runtime.view.render(null);
+                if (runtime.machine) {
+                    runtime.machine.dispose();
+                    runtime.machine = null;
+                }
+                clearStepRevealTimer();
+                syncTransferGuide(null);
+                startEpisode(nextEpisodeId, false);
+                return;
+            }
         }
     }
 
@@ -1816,6 +1840,18 @@ interface TutorialRuntime {
             if (runtime.machine && state && state.phase === "MainMenu") reset();
             return;
         }
+        if (
+            runtime.completedSessionId &&
+            Number(tutorial.campaign_session_id) === runtime.completedSessionId
+        ) {
+            return;
+        }
+        if (
+            runtime.completedSessionId &&
+            Number(tutorial.campaign_session_id) !== runtime.completedSessionId
+        ) {
+            runtime.completedSessionId = 0;
+        }
         runtime.latestHud = hud;
         if (!runtime.machine || runtime.episodeId !== tutorial.episode_id) activate(tutorial, hud);
         else update(hud);
@@ -1844,6 +1880,8 @@ interface TutorialRuntime {
         runtime.exchangeCues.clear();
         runtime.lastPreDefeatTargets = null;
         runtime.campaignSessionId = 0;
+        runtime.completedSessionId = 0;
+        runtime.pendingNextEpisode = null;
         runtime.active = false;
         runtime.starting = null;
         runtime.activating = null;

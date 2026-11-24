@@ -3587,7 +3587,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
             };
             match kind {
                 BuildingKind::City => serde_json::json!({
-                    "reserve": config.city_max_troops * building::income_level_weight(level),
+                    "reserve": config.city_max_troops * building::city_capacity_level_weight(level),
                     "troops": config.city_troop_income * speed * building::income_level_weight(level.min(4)),
                     "gold": config.city_gold_income * speed * building::income_level_weight(level.min(4)),
                     "reinforcements": building::city_upgrade_reinforcements(level, config.city_max_troops),

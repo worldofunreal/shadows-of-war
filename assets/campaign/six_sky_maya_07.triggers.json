@@ -178,8 +178,7 @@
       "title_key": "tutorial.campaign_six_sky_maya_07_end_title",
       "body_key": "tutorial.campaign_six_sky_maya_07_end_body",
       "next_episode_id": "six_sky_maya_08",
-      "next_episode_key": "tutorial.campaign_six_sky_maya_07_next_ep",
-      "skip_tutorial_key": "tutorial.campaign_six_sky_maya_07_skip_tutorial"
+      "next_episode_key": "tutorial.campaign_six_sky_maya_07_next_ep"
     },
     {
       "id": "six_sky_maya_07_empty_hands",
@@ -195,8 +194,7 @@
       "title_key": "tutorial.campaign_six_sky_maya_07_empty_title",
       "body_key": "tutorial.campaign_six_sky_maya_07_empty_body",
       "next_episode_id": "six_sky_maya_08",
-      "next_episode_key": "tutorial.campaign_six_sky_maya_07_next_ep",
-      "skip_tutorial_key": "tutorial.campaign_six_sky_maya_07_skip_tutorial"
+      "next_episode_key": "tutorial.campaign_six_sky_maya_07_next_ep"
     }
   ]
 }

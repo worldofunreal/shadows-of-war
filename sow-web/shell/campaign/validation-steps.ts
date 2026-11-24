@@ -163,7 +163,6 @@ export function validateSteps(context: CampaignValidationContext) {
             "host",
             "next_episode_id",
             "next_episode_key",
-            "skip_tutorial_key",
         ],
     };
 
@@ -617,7 +616,6 @@ export function validateSteps(context: CampaignValidationContext) {
         if (own(step, "next_episode_id") && (typeof step.next_episode_id !== "string" || !/^[a-z][a-z0-9_]{1,63}$/.test(step.next_episode_id)))
             issue(step, "next_episode_id", "Next episode ID must be a valid slug.");
         text(step, "next_episode_key", step.next_episode_key, false);
-        text(step, "skip_tutorial_key", step.skip_tutorial_key, false);
         checkEmote(step, step, "");
         if (own(step, "exchange")) {
             if (!["scene", "objective", "guide"].includes(step.type))
