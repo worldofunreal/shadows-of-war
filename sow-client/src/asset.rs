@@ -2,8 +2,15 @@ use crate::ClientPhase;
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
 
-const PETEN_TERRAIN_TILE_COUNT: usize = 4;
-const PETEN_TERRAIN_TILE_DIMS: (u32, u32) = (1408, 1600);
+const CAMPAIGN_TERRAIN_TILE_NAMES: [&str; 4] = ["01_nw", "02_ne", "03_sw", "04_se"];
+
+fn campaign_terrain_tile_dimensions(map: &str) -> Option<(u32, u32)> {
+    match map {
+        "peten_clearing" => Some((2112, 1200)),
+        "bital_pass" => Some((1792, 1248)),
+        _ => None,
+    }
+}
 
 impl SowApp {
     pub(crate) fn start_terrain_art_download(&self, map: String, expected_dims: (u32, u32)) {
@@ -41,22 +48,26 @@ impl SowApp {
         });
     }
 
-    pub(crate) fn start_peten_terrain_tiles_download(&self, map: String) {
+    pub(crate) fn start_campaign_terrain_tiles_download(&self, map: String) {
         use std::sync::{Arc, Mutex};
 
+        let Some(expected_dims) = campaign_terrain_tile_dimensions(&map) else {
+            log::warn!("No campaign terrain tile layout is registered for {map}");
+            return;
+        };
         let base = self.asset_config.maps_base.trim_end_matches('/');
         let version = crate::asset_config::AssetConfig::js_global("SOW_MAPS_CACHE_BUST")
             .unwrap_or_default();
         let session = self.ui.campaign_session_id;
         let tx = self.tasks.map_tx.clone();
         let results = Arc::new(Mutex::new(
-            (0..PETEN_TERRAIN_TILE_COUNT)
+            (0..CAMPAIGN_TERRAIN_TILE_NAMES.len())
                 .map(|_| None)
                 .collect::<Vec<Option<Result<image::RgbaImage, String>>>>(),
         ));
 
-        for index in 0..PETEN_TERRAIN_TILE_COUNT {
-            let filename = format!("{:02}.webp", index + 1);
+        for (index, tile_name) in CAMPAIGN_TERRAIN_TILE_NAMES.iter().enumerate() {
+            let filename = format!("{tile_name}.webp");
             let path = format!("{base}/{map}/terrain_tiles/{filename}");
             let url = if version.is_empty() {
                 path
@@ -74,11 +85,11 @@ impl SowApp {
                     use image::ImageDecoder;
                     let decoder = image::codecs::webp::WebPDecoder::new(std::io::Cursor::new(res.bytes))
                         .map_err(|err| err.to_string())?;
-                    if decoder.dimensions() != PETEN_TERRAIN_TILE_DIMS {
+                    if decoder.dimensions() != expected_dims {
                         return Err(format!(
                             "invalid dimensions {:?}, expected {:?} for terrain tile {filename}",
                             decoder.dimensions(),
-                            PETEN_TERRAIN_TILE_DIMS
+                            expected_dims
                         ));
                     }
                     image::DynamicImage::from_decoder(decoder)
@@ -97,8 +108,10 @@ impl SowApp {
                         .enumerate()
                         .map(|(index, result)| {
                             result
-                                .expect("all four terrain tile requests completed")
-                                .map_err(|reason| format!("tile {:02}: {reason}", index + 1))
+                                .expect("all campaign terrain tile requests completed")
+                                .map_err(|reason| {
+                                    format!("{}: {reason}", CAMPAIGN_TERRAIN_TILE_NAMES[index])
+                                })
                         })
                         .collect();
                     let _ = tx.send(MapDownloadEvent::TerrainTiles { session, map, result });

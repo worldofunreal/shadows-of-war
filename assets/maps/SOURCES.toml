@@ -4,8 +4,8 @@
 # release packages unless registered here; upload them through Campaign Studio.
 # Authoring inputs live in `_sources/<map-id>`; `image.png` is a one-pixel-per-tile terrain mask.
 # Campaign backgrounds are baked to `<map-id>/terrain.webp` at 8 pixels per tile.
-# Petén Clearing additionally uses four terrain image layers. sow-dist converts
-# PNG/JPEG/WebP sources under terrain_tiles/ into optimized runtime WebP files.
+# Petén Clearing and B’ital Pass additionally use four terrain image layers.
+# sow-dist converts PNG/JPEG/WebP sources under terrain_tiles/ into optimized runtime WebP files.
 # Each folder carries info.toml with its weighted-rotation frequency
 # (OpenFront `multiplayer_frequency`; 0 = out of rotation).
 # The `[recipes.<map>]` tables below keep provenance and artifact hashes for the
@@ -410,8 +410,8 @@ target_width = 176
 target_height = 100
 pipeline = "sow-tools import-map-source --input assets/maps/_sources/peten_clearing"
 terrain_art = "bun scripts/campaign-terrain/bake.ts peten_clearing"
-terrain_tiles = "assets/maps/peten_clearing/terrain_tiles/01.png..04.png"
-terrain_tiles_layout = "row-major 2x2 [TL, TR, BL, BR]; each covers 88x50 map tiles"
+terrain_tiles = "assets/maps/peten_clearing/terrain_tiles/01_nw.jpg..04_se.jpg"
+terrain_tiles_layout = "row-major 2x2 [NW, NE, SW, SE]; each covers 88x50 map tiles at 24 pixels per tile"
 map_bin_sha256 = "ed0dd07e196195fd28188c4c0254b640f6ba0150424eb9fdc2a59c421fed471c"
 map_bin_br_sha256 = "b9c9a99c63e6419255ac277ee7da3101633805793cd499ab5d335409683cb5d2"
 thumbnail_sha256 = "c29c1d7bd90dc29f8215036be125dca9d97559a77b3dd9fd80b4ea2743693519"
@@ -425,6 +425,8 @@ target_width = 224
 target_height = 156
 pipeline = "sow-tools import-map-source --input assets/maps/_sources/bital_pass"
 terrain_art = "bun scripts/campaign-terrain/bake.ts bital_pass"
+terrain_tiles = "assets/maps/bital_pass/terrain_tiles/01_nw.jpg..04_se.jpg"
+terrain_tiles_layout = "row-major 2x2 [NW, NE, SW, SE]; each covers 112x78 map tiles at 16 pixels per tile"
 map_bin_sha256 = "ba80006fa65cbb3799d39d506b8672d98283f549b70599a638f1075b1a789ce7"
 map_bin_br_sha256 = "4b50cb2cc46050e8cf19af88e9977b0f6481f24a3912f5ebbc0a4a602a4483c0"
 thumbnail_sha256 = "6bbbb34ef0f5127142aaedc03d6f24acdeb5d178ae163494d035ea2e160f6a9c"

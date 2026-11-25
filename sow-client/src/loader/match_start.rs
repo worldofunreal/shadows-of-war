@@ -290,7 +290,7 @@ impl SowApp {
         } else {
             self.ui.app.asset_loader.terrain_art = None;
         }
-        if tutorial && config.map_name == "peten_clearing" {
+        if tutorial && matches!(config.map_name.as_str(), "peten_clearing" | "bital_pass") {
             let cached_for_map = self
                 .ui
                 .app
@@ -313,7 +313,7 @@ impl SowApp {
                     self.ui.campaign_session_id,
                     config.map_name.clone(),
                 ));
-                self.start_peten_terrain_tiles_download(config.map_name.clone());
+                self.start_campaign_terrain_tiles_download(config.map_name.clone());
             }
         } else {
             self.ui.app.asset_loader.terrain_tiles = None;

@@ -6472,7 +6472,12 @@ fn main() -> Result<()> {
     };
 
     match cmd.as_str() {
-        "p" | "prod" | "ptr" => prod::execute(&paths, bump, backend_only, client_update),
+        "p" | "prod" | "ptr" => {
+            // PTR bumps the patch version on every deploy so a consecutive
+            // number is visible without guessing from the build hash.
+            let bump = bump || site == site::Site::Ptr;
+            prod::execute(&paths, bump, backend_only, client_update)
+        }
         "a" | "android" => prod::execute_android(&paths),
         "jest" => cmd_jest(&paths),
         "poki" => cmd_poki(&paths),

@@ -225,11 +225,20 @@ impl SowApp {
                         for prev in self.ui.last_projectiles.values() {
                             let Nuke { level } = prev.kind else { continue };
                             if level == 3 {
+                                let split_world = self
+                                    .ui
+                                    .mover_scene
+                                    .mirv_split_world(prev.owner_id, prev.split_tile);
                                 if effects {
-                                    self.ui.blast_scene.spawn_staging(prev.split_tile, width, prev.owner_id, true, current_time);
+                                    self.ui.blast_scene.spawn_staging_world(
+                                        split_world,
+                                        prev.split_tile,
+                                        prev.owner_id,
+                                        true,
+                                        current_time,
+                                    );
                                 }
-                                let (sx, sy) = crate::render::world::movers::tile_to_world(prev.split_tile, width);
-                                let [px, py] = self.input.project_board([sx, sy]);
+                                let [px, py] = self.input.project_board(split_world);
                                 self.sfx.play_mirv_split(current_time, spatial_audio.params(px, py));
                                 continue;
                             }

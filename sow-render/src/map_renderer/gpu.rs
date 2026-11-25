@@ -450,7 +450,7 @@ impl MapRenderer {
         self.terrain_art_key = Some(key.to_string());
     }
 
-    /// Upload the four Petén Clearing art tiles as individual 2D textures.
+    /// Upload four 2x2 campaign terrain art tiles as individual 2D textures.
     pub fn load_terrain_tiles(
         &mut self,
         context: &gpu::Context,
@@ -465,7 +465,7 @@ impl MapRenderer {
         {
             return;
         }
-        assert_eq!(tiles.len(), 4, "Petén Clearing needs four terrain tiles");
+        assert_eq!(tiles.len(), 4, "campaign terrain needs four 2x2 tiles");
         let (width, height) = tiles[0].dimensions();
         assert!(
             tiles.iter().all(|tile| tile.dimensions() == (width, height)),

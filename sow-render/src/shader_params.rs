@@ -1317,37 +1317,92 @@ pub static PARAMS: &[ParamDef] = &[
     ),
     // Zoom LOD: every zoom here is CSS pixels per tile, so all cutoffs share one scale.
     number!(
-        "lod.building.compact_zoom",
-        "Buildings drop badges below zoom",
+        "lod.building.sprite_zoom",
+        "Buildings show full art above zoom",
         "Zoom LOD",
-        14.0,
-        0.5,
-        100.0,
-        0.1,
-        "px/tile",
-        "LOD_BUILDING_COMPACT_ZOOM"
-    ),
-    number!(
-        "lod.building.cluster_zoom",
-        "Buildings group below zoom",
-        "Zoom LOD",
-        7.0,
-        0.5,
-        100.0,
-        0.1,
-        "px/tile",
-        "LOD_BUILDING_CLUSTER_ZOOM"
-    ),
-    number!(
-        "lod.building.group_px",
-        "Building group size",
-        "Zoom LOD",
+        10.5,
+        2.0,
         40.0,
-        8.0,
-        200.0,
+        0.5,
+        "px/tile",
+        "LOD_BUILDING_SPRITE_ZOOM"
+    ),
+    number!(
+        "lod.building.dot_zoom",
+        "Buildings become dots below zoom",
+        "Zoom LOD",
+        2.5,
+        0.0,
+        20.0,
+        0.1,
+        "px/tile",
+        "LOD_BUILDING_DOT_ZOOM"
+    ),
+    number!(
+        "lod.building.icon_px",
+        "Building badge size",
+        "Zoom LOD",
+        22.0,
+        10.0,
+        56.0,
         1.0,
         "screen px",
-        "LOD_BUILDING_GROUP_PX"
+        "LOD_BUILDING_ICON_PX"
+    ),
+    number!(
+        "lod.building.dot_px",
+        "Building dot size",
+        "Zoom LOD",
+        13.0,
+        6.0,
+        28.0,
+        0.5,
+        "screen px",
+        "LOD_BUILDING_DOT_PX"
+    ),
+    number!(
+        "lod.building.min_spacing_px",
+        "Building overlap thinning distance",
+        "Zoom LOD",
+        10.0,
+        0.0,
+        36.0,
+        0.5,
+        "screen px",
+        "LOD_BUILDING_MIN_SPACING_PX"
+    ),
+    number!(
+        "lod.building.fill_darken",
+        "Building marker fill brightness",
+        "Zoom LOD",
+        0.95,
+        0.2,
+        1.4,
+        0.02,
+        "×",
+        "TEXT_LOD_BUILDING_FILL_DARKEN"
+    ),
+    number!(
+        "lod.building.border_darken",
+        "Building marker border brightness",
+        "Zoom LOD",
+        0.22,
+        0.0,
+        1.0,
+        0.02,
+        "×",
+        "TEXT_LOD_BUILDING_BORDER_DARKEN"
+    ),
+    number!(
+        "lod.building.glyph_darken",
+        "Building marker silhouette contrast",
+        "Zoom LOD",
+        0.28,
+        0.0,
+        1.0,
+        0.02,
+        "×",
+        "TEXT_LOD_BUILDING_GLYPH_DARKEN"
     ),
     number!(
         "lod.nameplate.bot_hide_zoom",
