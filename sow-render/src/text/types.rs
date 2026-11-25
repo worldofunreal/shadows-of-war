@@ -125,6 +125,39 @@ pub const KIND_STATUS_SPRITE: f32 = 12.0;
 pub const KIND_ICON: f32 = 13.0;
 /// Procedural tactical ground selection / hover ghost ring (StarCraft-style glow + segmented arcs).
 pub const KIND_SELECTION_RING: f32 = 14.0;
+/// Procedural SDF building LOD marker (OpenFront-style geometric shape + silhouette/sprite blend).
+pub const KIND_BUILDING_MARKER: f32 = 15.0;
+
+/// Geometric SDF shape assigned to each building type in `shade_building_marker`.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuildingMarkerShape {
+    Circle = 0,
+    Triangle = 1,
+    Square = 2,
+    Pentagon = 3,
+    Hexagon = 4,
+    Octagon = 5,
+    Diamond = 6,
+}
+
+/// Parameters for one GPU-rendered OpenFront-style building LOD marker.
+#[derive(Clone, Copy, Debug)]
+pub struct BuildingMarkerInstance {
+    pub center: [f32; 2],
+    /// Visible logical diameter in physical pixels (expanded internally for halo/AA margin).
+    pub size: [f32; 2],
+    pub uv_rect: [f32; 4],
+    pub fill_color: [f32; 4],
+    pub border_color: [f32; 3],
+    pub shape: BuildingMarkerShape,
+    pub glyph_alpha: f32,
+    pub sprite_blend: f32,
+    pub icon_fill: f32,
+    pub stack_hint: bool,
+    pub under_construction: bool,
+    pub highlight_width: f32,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameplateStatusSprite {
     Request,

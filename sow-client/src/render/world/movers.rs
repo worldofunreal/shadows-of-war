@@ -75,10 +75,11 @@ pub(crate) struct NukeArcPath {
     controls: [[f32; 2]; 4],
     lengths: [f32; 17],
     bounds: [f32; 4], // min x, min y, max x, max y
-    src_tile: u32,
-    dst_tile: u32,
+    start_world: [f32; 2],
+    end_world: [f32; 2],
     map_w: u32,
     map_h: u32,
+    descending: bool,
 }
 
 impl NukeArcPath {
@@ -89,10 +90,21 @@ impl NukeArcPath {
         map_h: u32,
         min_height: f32,
     ) -> Self {
-        let start = tile_to_world(src_tile, map_w);
-        let end = tile_to_world(dst_tile, map_w);
-        let dx = end.0 - start.0;
-        let dy = end.1 - start.1;
+        let s = tile_to_world(src_tile, map_w);
+        let e = tile_to_world(dst_tile, map_w);
+        Self::from_world([s.0, s.1], [e.0, e.1], map_w, map_h, min_height, false)
+    }
+
+    pub(crate) fn from_world(
+        start: [f32; 2],
+        end: [f32; 2],
+        map_w: u32,
+        map_h: u32,
+        min_height: f32,
+        descending: bool,
+    ) -> Self {
+        let dx = end[0] - start[0];
+        let dy = end[1] - start[1];
         let distance = (dx * dx + dy * dy).sqrt();
         let height = if distance == 0.0 {
             0.0
@@ -101,18 +113,34 @@ impl NukeArcPath {
         };
         let min_y = 0.5;
         let max_y = (map_h.max(1) as f32 - 0.5).max(min_y);
-        let controls = [
-            [start.0, start.1],
+        let controls = if descending {
+            let gentle = (distance * 0.16).min(height * 0.5);
             [
-                start.0 + dx / 4.0,
-                (start.1 + dy / 4.0 - height).clamp(min_y, max_y),
-            ],
+                start,
+                [
+                    start[0] + dx * 0.32,
+                    (start[1] + dy * 0.14 - gentle).clamp(min_y, max_y),
+                ],
+                [
+                    start[0] + dx * 0.72,
+                    (start[1] + dy * 0.52 - gentle * 0.45).clamp(min_y, max_y),
+                ],
+                end,
+            ]
+        } else {
             [
-                start.0 + dx * 3.0 / 4.0,
-                (start.1 + dy * 3.0 / 4.0 - height).clamp(min_y, max_y),
-            ],
-            [end.0, end.1],
-        ];
+                start,
+                [
+                    start[0] + dx / 4.0,
+                    (start[1] + dy / 4.0 - height).clamp(min_y, max_y),
+                ],
+                [
+                    start[0] + dx * 3.0 / 4.0,
+                    (start[1] + dy * 3.0 / 4.0 - height).clamp(min_y, max_y),
+                ],
+                end,
+            ]
+        };
 
         let mut lengths = [0.0; 17];
         let mut prev = controls[0];
@@ -121,7 +149,7 @@ impl NukeArcPath {
             lengths[i] = lengths[i - 1] + (point[0] - prev[0]).hypot(point[1] - prev[1]);
             prev = point;
         }
-        let mut bounds = [start.0, start.1, start.0, start.1];
+        let mut bounds = [start[0], start[1], start[0], start[1]];
         for p in controls {
             bounds = [
                 bounds[0].min(p[0]),
@@ -134,20 +162,22 @@ impl NukeArcPath {
             controls,
             lengths,
             bounds,
-            src_tile,
-            dst_tile,
+            start_world: start,
+            end_world: end,
             map_w,
             map_h,
+            descending,
         }
     }
 
     fn rebuild(&mut self, min_height: f32) {
-        *self = Self::new(
-            self.src_tile,
-            self.dst_tile,
+        *self = Self::from_world(
+            self.start_world,
+            self.end_world,
             self.map_w,
             self.map_h,
             min_height,
+            self.descending,
         );
     }
 
@@ -230,7 +260,6 @@ struct MoverSlot {
     trail_len: u32,
     is_fleet: bool,
     is_shell: bool,
-    warhead: bool,
     arc_trail: bool,
     is_owned_warship: bool,
     health_fraction: f32,
@@ -255,6 +284,7 @@ pub struct MoverScene {
     dead_scratch: Vec<u64>,
     arc_paths: HashMap<u64, std::sync::Arc<Vec<u32>>>,
     nuke_arcs: HashMap<u64, NukeArcPath>,
+    mirv_split_origins: Vec<(u16, u32, [f32; 2], u64)>,
     player_colors: HashMap<u16, [f32; 3]>,
     last_snap_tick: u64,
     last_curve_tuning: u32,
@@ -285,6 +315,7 @@ impl MoverScene {
             dead_scratch: Vec::new(),
             arc_paths: HashMap::new(),
             nuke_arcs: HashMap::new(),
+            mirv_split_origins: Vec::new(),
             player_colors: HashMap::new(),
             last_snap_tick: u64::MAX,
             last_curve_tuning: 0,
@@ -311,6 +342,27 @@ impl MoverScene {
 
     pub fn highlight_fleet(&mut self, fleet_id: u64) {
         self.located_fleet = Some((fleet_id, web_time::Instant::now()));
+    }
+
+    pub(crate) fn mirv_split_world(&self, owner_id: u16, split_tile: u32) -> [f32; 2] {
+        let w = self.map_w.max(1);
+        let sx = split_tile % w;
+        let sy = split_tile / w;
+        if let Some(&(_, _, world_pos, _)) = self
+            .mirv_split_origins
+            .iter()
+            .rev()
+            .find(|&&(owner, tile, _, _)| {
+                owner == owner_id
+                    && (tile % w).abs_diff(sx) <= 8
+                    && (tile / w).abs_diff(sy) <= 8
+            })
+        {
+            world_pos
+        } else {
+            let (wx, wy) = tile_to_world(split_tile, w);
+            [wx, wy]
+        }
     }
 
     pub fn on_snapshot(
@@ -342,6 +394,8 @@ impl MoverScene {
         self.last_snap_tick = snap.tick;
         self.last_curve_tuning = curve_tuning;
         self.map_w = map_w.max(1);
+        self.mirv_split_origins
+            .retain(|&(_, _, _, tick)| snap.tick.saturating_sub(tick) <= 40);
         self.trail_points.clear();
         self.player_colors.clear();
         self.player_colors.reserve(snap.players.len());
@@ -460,7 +514,6 @@ impl MoverScene {
                 trail_len: 0,
                 is_fleet: true,
                 is_shell: false,
-                warhead: false,
                 arc_trail: false,
                 is_owned_warship: false,
                 health_fraction: 1.0,
@@ -557,7 +610,6 @@ impl MoverScene {
             trail_len,
             is_fleet: true,
             is_shell: false,
-            warhead: false,
             arc_trail: false,
             is_owned_warship: fleet.unit_type == UnitType::Warship && fleet.owner_id == my_id,
             health_fraction: (fleet.troops / fleet.max_health.max(1.0)).clamp(0.0, 1.0) as f32,
@@ -589,19 +641,22 @@ impl MoverScene {
 
         let (sprite, size, trail_color) = match proj.kind {
             ProjectileKind::Nuke { level } => {
-                let sprite = match level {
+                // Unify AtomBomb and descending MIRV warheads (level 4) so MIRV warheads
+                // read and trail just like standard nukes.
+                let visual_level = if level == 4 { 1 } else { level };
+                let sprite = match visual_level {
                     3.. => MoverSpriteId::Mirv,
                     2 => MoverSpriteId::HydrogenBomb,
                     _ => MoverSpriteId::AtomBomb,
                 };
-                let tc = if level >= 3 {
-                    [1.0, 0.667, 0.0, 0.95]
-                } else if level == 2 {
-                    [1.0, 0.196, 0.0, 0.92]
+                let tc = if visual_level >= 3 {
+                    [1.0, 0.55, 0.08, 0.92]
+                } else if visual_level == 2 {
+                    [1.0, 0.22, 0.04, 0.92]
                 } else {
-                    [1.0, 0.353, 0.0, 0.88]
+                    [1.0, 0.353, 0.0, 0.90]
                 };
-                (sprite, 0.65 + level as f32 * 0.12, tc)
+                (sprite, 0.65 + visual_level as f32 * 0.12, tc)
             }
             ProjectileKind::SAMMissile => (MoverSpriteId::SamMissile, 0.6, [0.39, 0.78, 1.0, 0.85]),
             ProjectileKind::Shell => (
@@ -614,9 +669,65 @@ impl MoverScene {
         let is_nuke = matches!(proj.kind, ProjectileKind::Nuke { .. });
         let key = proj.id | (1u64 << 63);
         if is_nuke {
-            self.nuke_arcs.entry(key).or_insert_with(|| {
-                NukeArcPath::new(proj.src_tile, proj.dst_tile, map_w, map_h, min_height)
-            });
+            if matches!(proj.kind, ProjectileKind::Nuke { level: 3 }) {
+                let path = self.nuke_arcs.entry(key).or_insert_with(|| {
+                    NukeArcPath::new(proj.src_tile, proj.dst_tile, map_w, map_h, min_height)
+                });
+                let split_idx = (proj.path.len() / 2)
+                    .next_multiple_of(usize::from(proj.steps_per_tick.max(1)))
+                    .min(proj.path.len().saturating_sub(1));
+                if let Some(&split_tile) = proj.path.get(split_idx) {
+                    let split_world = path.point_at(0.5);
+                    if let Some(existing) = self
+                        .mirv_split_origins
+                        .iter_mut()
+                        .find(|(owner, tile, _, _)| *owner == proj.owner_id && *tile == split_tile)
+                    {
+                        existing.2 = split_world;
+                        existing.3 = self.last_snap_tick;
+                    } else {
+                        self.mirv_split_origins.push((
+                            proj.owner_id,
+                            split_tile,
+                            split_world,
+                            self.last_snap_tick,
+                        ));
+                    }
+                }
+            } else if matches!(proj.kind, ProjectileKind::Nuke { level: 4 }) {
+                let w = map_w.max(1);
+                let sx = proj.src_tile % w;
+                let sy = proj.src_tile / w;
+                let split_world = self
+                    .mirv_split_origins
+                    .iter()
+                    .rev()
+                    .find(|&&(owner, tile, _, _)| {
+                        owner == proj.owner_id
+                            && (tile % w).abs_diff(sx) <= 8
+                            && (tile / w).abs_diff(sy) <= 8
+                    })
+                    .map(|&(_, _, pos, _)| pos);
+                self.nuke_arcs.entry(key).or_insert_with(|| {
+                    if let Some(start) = split_world {
+                        let end = tile_to_world(proj.dst_tile, map_w);
+                        NukeArcPath::from_world(
+                            start,
+                            [end.0, end.1],
+                            map_w,
+                            map_h,
+                            min_height,
+                            true,
+                        )
+                    } else {
+                        NukeArcPath::new(proj.src_tile, proj.dst_tile, map_w, map_h, min_height)
+                    }
+                });
+            } else {
+                self.nuke_arcs.entry(key).or_insert_with(|| {
+                    NukeArcPath::new(proj.src_tile, proj.dst_tile, map_w, map_h, min_height)
+                });
+            }
         } else {
             self.arc_paths
                 .insert(key, std::sync::Arc::clone(&proj.path));
@@ -655,7 +766,6 @@ impl MoverScene {
             trail_len,
             is_fleet: false,
             is_shell: matches!(proj.kind, ProjectileKind::Shell),
-            warhead: matches!(proj.kind, ProjectileKind::Nuke { level: 4 }),
             arc_trail: is_nuke,
             is_owned_warship: false,
             health_fraction: 1.0,
@@ -853,8 +963,8 @@ impl MoverScene {
             self.located_fleet = None;
         }
 
-        // At salvo density, silhouettes closer than one sector read as one formation.
-        let dense = self.nuke_arcs.len() > 128;
+        // Only engage dense culling on extreme multi-MIRV saturation (>192 arcs in flight).
+        let dense = self.nuke_arcs.len() > 192;
         let mut occupied = [0u32; 16];
         for slot in &self.slots {
             let id = &slot.id;
@@ -1004,12 +1114,12 @@ impl MoverScene {
                         let (samples, window) = if dense {
                             // Constant screen-space exhaust length even for map-spanning flights.
                             let screen_length = path.lengths[16] * params.camera_zoom;
-                            (3, (32.0 / screen_length.max(1.0)).min(0.35))
+                            (5, (64.0 / screen_length.max(1.0)).min(0.65))
                         } else {
                             let cap = arc_samples.min(12000 / self.nuke_arcs.len().max(1));
                             (
                                 adaptive_nuke_arc_samples(bounds, params.camera_zoom, cap),
-                                if slot.warhead { 0.35 } else { 1.0 },
+                                1.0,
                             )
                         };
                         sample_nuke_arc(
@@ -1219,7 +1329,6 @@ mod tests {
             trail_len: 0,
             is_fleet: false,
             is_shell: false,
-            warhead: false,
             arc_trail: true,
             is_owned_warship: false,
             health_fraction: 1.0,

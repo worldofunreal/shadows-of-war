@@ -2117,6 +2117,13 @@ impl SowEngine {
         let mut best_shots = 1;
         let mut needs_more_charges = false;
 
+        let mirv_in_flight = self.projectiles.iter().any(|p| {
+            p.active
+                && p.owner_id == bot_id
+                && matches!(p.kind, crate::game::ProjectileKind::Nuke { level: 3 | 4 })
+        });
+        let mirv_price = self.nuclear_price(NukeKind::MIRV);
+
         for b in &self.buildings {
             if b.owner_id != primary_target || b.under_construction {
                 continue;
@@ -2144,7 +2151,11 @@ impl SowEngine {
             }).take(8).count();
             let mut kind = NukeKind::AtomBomb;
             let mut shots = covering + 1;
-            if covering > 0 && nearby >= 6 && gold >= self.nuclear_price(NukeKind::MIRV) {
+            if !mirv_in_flight
+                && covering >= 2
+                && nearby >= 7
+                && gold >= mirv_price * 1.4
+            {
                 kind = NukeKind::MIRV;
                 shots = 1;
             } else if nearby >= 3 && gold >= self.nuclear_price(NukeKind::HydrogenBomb) * shots as f64 {

@@ -1,6 +1,6 @@
 use super::feedback;
 use crate::app::{InputState, MapContextMenuView, SimState, UiState};
-use crate::render::gpu::TextRenderer;
+use crate::render::gpu::{BuildingMarkerInstance, BuildingMarkerShape, TextRenderer};
 use crate::theme::dev_config::DevConfig;
 use sow_core::game::BuildingKind;
 use sow_core::protocol::SimSnapshot;
@@ -8,14 +8,17 @@ use sow_render::text::NameplateStatusSprite;
 use std::collections::{HashMap, HashSet};
 use web_time::{Duration, Instant};
 
-const BUILDING_CULL_FLOOR: f32 = 0.25;
+const BUILDING_CULL_FLOOR: f32 = 0.05;
 const BUILDING_MIN_MARKER_SIZE: f32 = 14.0;
 /// Short side, in tiles, of the standard building the Dev Tools zoom cutoffs describe.
 const BUILDING_LOD_REFERENCE_SIDE: f32 = 2.0;
-const BUILDING_ZOOM_STEPS_PER_OCTAVE: f32 = 8.0;
+/// Quantized zoom bands per octave for world-anchored spatial thinning (zero panning flicker).
+const BUILDING_ZOOM_STEPS_PER_OCTAVE: f32 = 4.0;
 const BUILDING_FOOTPRINT_FILL: f32 = 0.9;
 const BUILDING_UPGRADE_SCALES: [f32; 4] = [1.0, 1.15, 1.3, 1.5];
-const BUILDING_LEVEL_FONT_RATIO: f32 = 0.58;
+/// Cross-owner spacing ratio relative to `min_spacing_px` so frontline enemy structures stay visible.
+const BUILDING_DIFF_OWNER_SPACING_RATIO: f32 = 0.45;
+const BUILDING_MARKER_TRANSITION_RATIO: f32 = 0.65;
 const BUILDING_CELEBRATION_OFFSETS: [[f32; 2]; 4] =
     [[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]];
 
@@ -60,6 +63,7 @@ pub(crate) fn render_overlays(
             text,
             sim,
             input,
+            dev,
             sf,
             ui.app.settings_state.reduced_motion,
             now,
@@ -132,14 +136,93 @@ pub(crate) fn render_overlays(
 struct BuildingLod {
     band: i16,
     quantized_zoom: f32,
-    cluster_cell_size: f32,
-    compact_zoom: f32,
-    cluster_zoom: f32,
+    sprite_zoom: f32,
+    dot_zoom: f32,
+    icon_px: f32,
+    dot_px: f32,
+    min_spacing_px: f32,
+}
+
+#[derive(Clone, Copy)]
+struct BuildingLodMetrics {
+    /// Visible logical size in CSS pixels.
+    size_css: [f32; 2],
+    /// Inner silhouette strength (0 = pure dot shape, 1 = tactical icon badge).
+    glyph_alpha: f32,
+    /// Cross-fade factor (0 = pure SDF marker, 1 = pure world-anchored art sprite).
+    sprite_blend: f32,
+}
+
+#[inline]
+fn smoothstep_lod(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let span = edge1 - edge0;
+    if span <= 1e-5 {
+        return if x >= edge1 { 1.0 } else { 0.0 };
+    }
+    let t = ((x - edge0) / span).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+#[inline]
+fn building_marker_shape(kind: BuildingKind) -> BuildingMarkerShape {
+    match kind {
+        BuildingKind::City => BuildingMarkerShape::Circle,
+        BuildingKind::MissileSilo => BuildingMarkerShape::Triangle,
+        BuildingKind::SAM => BuildingMarkerShape::Square,
+        BuildingKind::Port => BuildingMarkerShape::Pentagon,
+        BuildingKind::TradingPost => BuildingMarkerShape::Hexagon,
+        BuildingKind::Tower => BuildingMarkerShape::Octagon,
+        BuildingKind::MilitaryCamp => BuildingMarkerShape::Diamond,
+    }
+}
+
+#[inline]
+fn building_shape_scale(kind: BuildingKind) -> f32 {
+    match kind {
+        BuildingKind::MissileSilo => 1.28,
+        BuildingKind::City => 1.22,
+        BuildingKind::Port | BuildingKind::TradingPost => 1.08,
+        BuildingKind::SAM | BuildingKind::MilitaryCamp => 1.05,
+        BuildingKind::Tower => 1.0,
+    }
+}
+
+#[inline]
+fn building_icon_fill(kind: BuildingKind) -> f32 {
+    match kind {
+        BuildingKind::MissileSilo => 0.68,
+        BuildingKind::MilitaryCamp => 0.72,
+        BuildingKind::City => 0.80,
+        _ => 0.76,
+    }
+}
+
+/// Strategic priority for deterministic overlap resolution and painter's order.
+/// Higher values win spatial thinning conflicts and render on top.
+#[inline]
+fn building_priority_rank(kind: BuildingKind) -> u8 {
+    match kind {
+        BuildingKind::MissileSilo => 6,
+        BuildingKind::City => 5,
+        BuildingKind::SAM => 4,
+        BuildingKind::Port => 3,
+        BuildingKind::TradingPost => 2,
+        BuildingKind::Tower => 1,
+        BuildingKind::MilitaryCamp => 0,
+    }
+}
+
+#[inline]
+fn building_upgrade_scale(level: u8) -> f32 {
+    BUILDING_UPGRADE_SCALES
+        .get(usize::from(level.saturating_sub(1)))
+        .copied()
+        .unwrap_or(1.5)
 }
 
 impl BuildingLod {
     /// Cutoffs come from the Dev Tools "Zoom LOD" tab and describe a standard 2×2 building;
-    /// larger footprints keep their detail proportionally longer.
+    /// larger footprints (4×4 City) keep their detailed art proportionally longer.
     fn for_zoom(
         zoom_scaled: f32,
         params: &[[f32; 4]; sow_render::shader_params::PARAM_CAPACITY],
@@ -151,62 +234,100 @@ impl BuildingLod {
         Self {
             band,
             quantized_zoom,
-            cluster_cell_size: (setting("lod.building.group_px") / quantized_zoom).max(1.0),
-            compact_zoom: setting("lod.building.compact_zoom"),
-            cluster_zoom: setting("lod.building.cluster_zoom"),
+            sprite_zoom: setting("lod.building.sprite_zoom").max(2.0),
+            dot_zoom: setting("lod.building.dot_zoom").max(0.0),
+            icon_px: setting("lod.building.icon_px").max(8.0),
+            dot_px: setting("lod.building.dot_px").max(6.0),
+            min_spacing_px: setting("lod.building.min_spacing_px").max(0.0),
         }
     }
 
-    fn detail(self, kind: BuildingKind) -> BuildingDetail {
+    fn metrics(
+        self,
+        kind: BuildingKind,
+        level: u8,
+        zoom_scaled: f32,
+        has_construction_min: bool,
+    ) -> BuildingLodMetrics {
         let (width, height) = kind.footprint_dimensions();
-        let reference_zoom =
-            width.min(height) as f32 / BUILDING_LOD_REFERENCE_SIDE * self.quantized_zoom;
-        if reference_zoom < self.cluster_zoom {
-            BuildingDetail::Cluster
-        } else if reference_zoom < self.compact_zoom {
-            BuildingDetail::Compact
+        let ref_zoom = width.min(height) as f32 / BUILDING_LOD_REFERENCE_SIDE * zoom_scaled;
+        let sprite_zoom = self.sprite_zoom;
+        let dot_zoom = self.dot_zoom.min(sprite_zoom * BUILDING_MARKER_TRANSITION_RATIO);
+        let marker_zoom = (sprite_zoom * BUILDING_MARKER_TRANSITION_RATIO).max(dot_zoom);
+        let shape_scale = building_shape_scale(kind);
+        let footprint_css = building_footprint_marker_size(
+            kind,
+            zoom_scaled,
+            if has_construction_min {
+                BUILDING_MIN_MARKER_SIZE
+            } else {
+                0.0
+            },
+        );
+        let upgrade_scale = building_upgrade_scale(level.max(1));
+        let sprite_css = [
+            footprint_css[0] * upgrade_scale,
+            footprint_css[1] * upgrade_scale,
+        ];
+        let dot_size = self.dot_px * shape_scale;
+        let icon_size = self.icon_px.max(self.dot_px) * shape_scale;
+
+        if ref_zoom >= sprite_zoom {
+            BuildingLodMetrics {
+                size_css: sprite_css,
+                glyph_alpha: 0.0,
+                sprite_blend: 1.0,
+            }
+        } else if ref_zoom >= marker_zoom {
+            let t = smoothstep_lod(marker_zoom, sprite_zoom, ref_zoom);
+            BuildingLodMetrics {
+                size_css: [
+                    icon_size + (sprite_css[0] - icon_size) * t,
+                    icon_size + (sprite_css[1] - icon_size) * t,
+                ],
+                glyph_alpha: 1.0 - t,
+                sprite_blend: t,
+            }
+        } else if ref_zoom > dot_zoom {
+            let t = ((ref_zoom - dot_zoom) / (marker_zoom - dot_zoom).max(1e-4)).clamp(0.0, 1.0);
+            let diameter = dot_size + (icon_size - dot_size) * t;
+            let glyph_alpha = if dot_zoom <= 0.001 {
+                1.0
+            } else {
+                smoothstep_lod(0.0, 0.22, t)
+            };
+            BuildingLodMetrics {
+                size_css: [diameter, diameter],
+                glyph_alpha,
+                sprite_blend: 0.0,
+            }
         } else {
-            BuildingDetail::Full
+            BuildingLodMetrics {
+                size_css: [dot_size, dot_size],
+                glyph_alpha: 0.0,
+                sprite_blend: 0.0,
+            }
         }
+    }
+
+    #[inline]
+    fn needs_spatial_thinning(self) -> bool {
+        self.min_spacing_px > 0.0 && self.quantized_zoom < self.sprite_zoom
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BuildingDetail {
-    Full,
-    Compact,
-    Cluster,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct BuildingVisualStatus {
-    progress: f32,
-    #[allow(dead_code)]
-    label: Option<String>,
-    color: [f32; 4],
-}
-
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct RenderedBuilding {
     bx: f32,
     by: f32,
     kind: BuildingKind,
     level: u8,
     under_construction: bool,
-    count: usize,
+    keep_local_progress: bool,
     owner_id: u16,
-    tile_idx: Option<u32>,
-    detail: BuildingDetail,
-    status: Option<BuildingVisualStatus>,
-}
-
-#[derive(Hash, PartialEq, Eq)]
-struct BuildingClusterKey {
-    grid_x: i32,
-    grid_y: i32,
-    owner_id: u16,
-    kind: BuildingKind,
-    level: u8,
+    tile_idx: u32,
+    owner_rgb: [f32; 3],
+    stack_hint: bool,
 }
 
 #[derive(Default)]
@@ -215,9 +336,13 @@ pub(crate) struct BuildingRenderCache {
     map_w: u32,
     lod: Option<BuildingLod>,
     player_id: u16,
-    tick_rate_ms_bits: u32,
+    fog_of_war: bool,
+    selected_tile: Option<u32>,
     buildings: Vec<RenderedBuilding>,
-    clusters: HashMap<BuildingClusterKey, (f32, f32, usize)>,
+    scratch_candidates: Vec<RenderedBuilding>,
+    spatial_heads: HashMap<(i32, i32), usize>,
+    spatial_next: Vec<usize>,
+    owner_colors: HashMap<u16, [f32; 3]>,
     city_tiles: HashSet<u32>,
     under_construction_tiles: HashSet<u32>,
     flash_tick: Option<u64>,
@@ -232,34 +357,15 @@ impl BuildingRenderCache {
         map_w: u32,
         lod: BuildingLod,
         player_id: u16,
-        tick_rate_ms_bits: u32,
+        fog_of_war: bool,
+        selected_tile: Option<u32>,
     ) -> bool {
         self.tick == Some(tick)
             && self.map_w == map_w
             && self.lod == Some(lod)
             && self.player_id == player_id
-            && self.tick_rate_ms_bits == tick_rate_ms_bits
-    }
-}
-
-fn format_construction_time(ticks: u32, tick_rate_ms: f32) -> String {
-    let tick_rate_ms = if tick_rate_ms.is_finite() && tick_rate_ms > 0.0 {
-        tick_rate_ms
-    } else {
-        100.0
-    };
-    let tenths = ((ticks as f32 * tick_rate_ms / 100.0).ceil() as u32).max(0);
-    if tenths < 600 {
-        let seconds = tenths / 10;
-        let fraction = tenths % 10;
-        if fraction == 0 {
-            format!("{}s", seconds)
-        } else {
-            format!("{}.{}s", seconds, fraction)
-        }
-    } else {
-        let total_seconds = (tenths + 9) / 10;
-        format!("{}m {:02}s", total_seconds / 60, total_seconds % 60)
+            && self.fog_of_war == fog_of_war
+            && self.selected_tile == selected_tile
     }
 }
 
@@ -281,37 +387,6 @@ pub(crate) fn construction_progress(
     let duration_current =
         sow_core::building::core::upgrade_duration_ticks(kind, active_level.saturating_add(1));
     Some(1.0 - (ticks_until_complete as f32 / duration_current as f32).clamp(0.0, 1.0))
-}
-
-fn construction_status_label(ticks_remaining: u32, tick_rate_ms: f32) -> String {
-    format_construction_time(ticks_remaining, tick_rate_ms)
-}
-
-fn building_visual_status(
-    building: &sow_core::protocol::BuildingSnapshot,
-    active_level: u8,
-    my_id: u16,
-    tick_rate_ms: f32,
-    show_label: bool,
-) -> Option<BuildingVisualStatus> {
-    if building.owner_id != my_id || !building.under_construction {
-        return None;
-    }
-    let progress = construction_progress(
-        building.kind,
-        active_level,
-        building.ticks_until_complete,
-    )?;
-    Some(BuildingVisualStatus {
-        progress,
-        label: show_label
-            .then(|| construction_status_label(building.ticks_until_complete, tick_rate_ms)),
-        color: if active_level == 0 {
-            [0.0, 0.86, 1.0, 1.0]
-        } else {
-            [1.0, 0.82, 0.22, 1.0]
-        },
-    })
 }
 
 fn render_buildings(
@@ -380,6 +455,7 @@ fn render_buildings(
     let selected_menu = input
         .map_context_menu
         .filter(|menu| menu.view == MapContextMenuView::BuildingDetails);
+    let selected_tile = selected_menu.map(|menu| menu.tile_idx);
     let desktop_hover_enabled = crate::web_canvas::supports_desktop_hover()
         && matches!(input.hover_pointer, crate::app::HoverPointer::Mouse)
         && !input.is_pointer_gesture_active()
@@ -387,40 +463,31 @@ fn render_buildings(
         && input.last_mouse_x >= 0.0
         && input.last_mouse_y >= 0.0;
     let reduced_motion = ui.app.settings_state.reduced_motion;
-    let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
+    let buildings = cached_buildings(
+        ui,
+        snapshot,
+        sim,
+        lod,
+        my_id,
+        dev.fog_of_war,
+        selected_tile,
+    );
     let (next_hovered_building, next_exiting_hover) = if desktop_hover_enabled {
         let [wx, wy] = input.screen_to_world([input.last_mouse_x as f32, input.last_mouse_y as f32]);
         let pointer_x = input.last_mouse_x as f32 / sf;
         let pointer_y = input.last_mouse_y as f32 / sf;
-        let mut closest: Option<(f32, u32)> = None;
-        for building in buildings {
-            if building.owner_id != my_id {
-                continue;
-            }
-            let Some(tile_idx) = building.tile_idx else {
-                continue;
-            };
-            let (fw, fh) = building.kind.footprint_dimensions();
-            let hw = fw as f32 * 0.5;
-            let hh = fh as f32 * 0.5;
-            if wx < building.bx - hw
-                || wx >= building.bx + hw
-                || wy < building.by - hh
-                || wy >= building.by + hh
-            {
-                continue;
-            }
-            let center = world_to_screen(building.bx, building.by, input, sf);
-            let dx = pointer_x - center[0];
-            let dy = pointer_y - center[1];
-            let dist_sq = dx * dx + dy * dy;
-            if closest.is_none_or(|(best_dist, best_tile)| {
-                dist_sq < best_dist || (dist_sq == best_dist && tile_idx < best_tile)
-            }) {
-                closest = Some((dist_sq, tile_idx));
-            }
-        }
-        let hovered_tile = closest.map(|(_, tile_idx)| tile_idx);
+        let hovered_tile = pick_owned_building_at_pointer(
+            buildings,
+            my_id,
+            zoom_scaled,
+            lod,
+            input,
+            sf,
+            pointer_x,
+            pointer_y,
+            wx,
+            wy,
+        );
         let (hovered, mut exiting) = if hovered_tile == prev_hovered_building.map(|(t, _)| t) {
             (prev_hovered_building, prev_exiting_hover)
         } else {
@@ -434,7 +501,7 @@ fn render_buildings(
                 >= crate::render::motion::BUILDING_HOVER_EXIT_SECS;
             if expired
                 || Some(exit_tile) == hovered_tile
-                || selected_menu.is_some_and(|menu| menu.tile_idx == exit_tile)
+                || selected_tile == Some(exit_tile)
             {
                 exiting = None;
             }
@@ -447,7 +514,6 @@ fn render_buildings(
     // Desktop-only ghost hover ground rings: emitted before all building sprites so they always
     // sit cleanly underneath building roofs with zero frame lag.
     if desktop_hover_enabled {
-        let selected_tile = selected_menu.map(|menu| menu.tile_idx);
         let ghost_entries = [
             next_exiting_hover.map(|(tile, started)| (tile, started, true)),
             next_hovered_building.map(|(tile, started)| (tile, started, false)),
@@ -459,7 +525,7 @@ fn render_buildings(
             }
             let Some(building) = buildings
                 .iter()
-                .find(|b| b.owner_id == my_id && b.tile_idx == Some(target_tile))
+                .find(|b| b.owner_id == my_id && b.tile_idx == target_tile)
             else {
                 continue;
             };
@@ -469,8 +535,13 @@ fn render_buildings(
             else {
                 continue;
             };
-            let marker_size = building_marker_size(building, zoom_scaled);
-            let building_size = building_sprite_size(marker_size, sf, building.level.max(1));
+            let metrics = lod.metrics(
+                building.kind,
+                building.level,
+                zoom_scaled,
+                building.keep_local_progress,
+            );
+            let building_size = [metrics.size_css[0] * sf, metrics.size_css[1] * sf];
             let (ring_center, base_radius) =
                 building_ground_ring_geometry(building.bx, building.by, building_size, input, sf);
             if ring_center[0] + base_radius[0] < 0.0
@@ -493,36 +564,34 @@ fn render_buildings(
         }
     }
 
-    let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
     let mut celebration_budget = 24usize;
+    let hovered_tile = next_hovered_building.map(|(tile, _)| tile);
 
     for building in buildings {
-        if dev.fog_of_war
-            && building.owner_id != my_id
-            && building
-                .tile_idx
-                .or_else(|| tile_at_world(building.bx, building.by, sim.map_w))
-                .is_some_and(|tile| !sim.fog_visible.contains(tile))
-        {
-            continue;
-        }
-
         let center = world_to_screen(building.bx, building.by, input, sf);
-        let marker_size = building_marker_size(building, zoom_scaled);
-        let building_size = building_sprite_size(marker_size, sf, building.level.max(1));
-        let half_width = building_size[0] * 0.5;
-        let half_height = building_size[1] * 0.5;
-        if center[0] + half_width < 0.0
-            || center[0] - half_width > screen_w
-            || center[1] + half_height < 0.0
-            || center[1] - half_height > screen_h
+        let metrics = lod.metrics(
+            building.kind,
+            building.level,
+            zoom_scaled,
+            building.keep_local_progress,
+        );
+        // Conservative CSS-pixel frustum margin (accounts for upgrade bounce and SDF halo).
+        let cull_half_w = metrics.size_css[0] * 0.75;
+        let cull_half_h = metrics.size_css[1] * 0.75;
+        if center[0] + cull_half_w < 0.0
+            || center[0] - cull_half_w > screen_w
+            || center[1] + cull_half_h < 0.0
+            || center[1] - cull_half_h > screen_h
         {
             continue;
         }
-        let marker_extent = marker_size[0].max(marker_size[1]);
+        let building_size = [metrics.size_css[0] * sf, metrics.size_css[1] * sf];
+        let marker_extent = metrics.size_css[0].max(metrics.size_css[1]);
+        let tile_idx = building.tile_idx;
+        let is_pure_sprite = metrics.sprite_blend >= 0.999;
 
         let alpha = if building.under_construction {
-            0.5
+            if is_pure_sprite { 0.5 } else { 0.85 }
         } else {
             1.0
         };
@@ -531,50 +600,52 @@ fn render_buildings(
         let mut sy = 1.0f32;
         let mut lift_y = 0.0f32;
         let mut sprite_tint = [1.0, 1.0, 1.0, alpha];
-        if let Some(tile_idx) = building.tile_idx {
-            if !reduced_motion {
-                // Desktop hover: gentle bubbly lift + subtle brightness on selectable owned buildings.
-                if let Some((htile, hstart)) = next_hovered_building
-                    && htile == tile_idx
-                {
-                    let elapsed = now.saturating_duration_since(hstart).as_secs_f32();
-                    let t = (elapsed / 0.16).clamp(0.0, 1.0);
-                    let wobble = (-6.0 * t).exp() * (t * 16.0).sin();
-                    let s = 1.03 + 0.04 * wobble;
-                    sx *= s;
-                    sy *= s;
-                    lift_y -= 2.2 * sf * t;
-                    sprite_tint = [1.08, 1.08, 1.04, alpha];
-                }
-                // Queue 1: Selection — Disney squash & stretch + damped spring wobble.
-                if let Some(menu) = selected_menu
-                    && menu.tile_idx == tile_idx
-                {
-                    let elapsed = now.duration_since(menu.opened_at).as_secs_f32();
-                    let t = (elapsed / crate::render::motion::BUILDING_SELECTION_TAP_SECS)
-                        .clamp(0.0, 1.0);
-                    let (tap_scale, _) = crate::render::motion::building_selection_tap_motion(
-                        elapsed,
-                        reduced_motion,
-                    );
-                    // Anticipation squash (t < 0.14) -> stretch & damped wobble.
-                    let env = (-6.5 * t).exp();
-                    let osc = (t * 22.0 - 0.6).sin();
-                    let stretch = env * osc * 0.16;
-                    sx *= tap_scale * (1.0 - stretch * 0.85);
-                    sy *= tap_scale * (1.0 + stretch);
-                    lift_y -= (stretch.max(0.0)) * building_size[1] * 0.12;
-                    sprite_tint = [1.14, 1.12, 1.04, alpha];
-                }
-                // Queue 2: Upgrade sent — anticipation squash then upward launch impulse.
-                if let Some(started) = building_action_pulses.get(&tile_idx) {
-                    let t = (now.duration_since(*started).as_secs_f32() / 0.32).clamp(0.0, 1.0);
-                    let env = (-5.5 * t).exp();
-                    let osc = (t * 18.0 - 0.8).sin();
-                    let stretch = env * osc * 0.20;
-                    sx *= 1.0 - stretch * 0.80;
-                    sy *= 1.0 + stretch;
-                    lift_y -= (stretch.max(0.0)) * building_size[1] * 0.18;
+        let is_hovered = hovered_tile == Some(tile_idx);
+        let is_selected = selected_tile == Some(tile_idx);
+        if !reduced_motion {
+            // Desktop hover: gentle bubbly lift + subtle brightness on selectable owned buildings.
+            if let Some((htile, hstart)) = next_hovered_building
+                && htile == tile_idx
+            {
+                let elapsed = now.saturating_duration_since(hstart).as_secs_f32();
+                let t = (elapsed / 0.16).clamp(0.0, 1.0);
+                let wobble = (-6.0 * t).exp() * (t * 16.0).sin();
+                let s = 1.03 + 0.04 * wobble;
+                sx *= s;
+                sy *= s;
+                lift_y -= 2.2 * sf * t;
+                sprite_tint = [1.08, 1.08, 1.04, alpha];
+            }
+            // Queue 1: Selection — Disney squash & stretch + damped spring wobble.
+            if let Some(menu) = selected_menu
+                && menu.tile_idx == tile_idx
+            {
+                let elapsed = now.duration_since(menu.opened_at).as_secs_f32();
+                let t = (elapsed / crate::render::motion::BUILDING_SELECTION_TAP_SECS)
+                    .clamp(0.0, 1.0);
+                let (tap_scale, _) = crate::render::motion::building_selection_tap_motion(
+                    elapsed,
+                    reduced_motion,
+                );
+                // Anticipation squash (t < 0.14) -> stretch & damped wobble.
+                let env = (-6.5 * t).exp();
+                let osc = (t * 22.0 - 0.6).sin();
+                let stretch = env * osc * 0.16;
+                sx *= tap_scale * (1.0 - stretch * 0.85);
+                sy *= tap_scale * (1.0 + stretch);
+                lift_y -= (stretch.max(0.0)) * building_size[1] * 0.12;
+                sprite_tint = [1.14, 1.12, 1.04, alpha];
+            }
+            // Queue 2: Upgrade sent — anticipation squash then upward launch impulse.
+            if let Some(started) = building_action_pulses.get(&tile_idx) {
+                let t = (now.duration_since(*started).as_secs_f32() / 0.32).clamp(0.0, 1.0);
+                let env = (-5.5 * t).exp();
+                let osc = (t * 18.0 - 0.8).sin();
+                let stretch = env * osc * 0.20;
+                sx *= 1.0 - stretch * 0.80;
+                sy *= 1.0 + stretch;
+                lift_y -= (stretch.max(0.0)) * building_size[1] * 0.18;
+                if is_pure_sprite {
                     text.push_status_sprite(
                         NameplateStatusSprite::UpgradeSparkle,
                         building_center,
@@ -582,20 +653,20 @@ fn render_buildings(
                         [0.45, 0.92, 1.0, (1.0 - t) * 0.85],
                     );
                 }
-                // Queue 3: Upgrade completed — celebratory elastic double-bounce + golden flash.
-                if let Some(started) = building_upgrade_flashes.get(&tile_idx) {
-                    let t = (now.duration_since(*started).as_secs_f32() / 0.42).clamp(0.0, 1.0);
-                    let env = (-5.0 * t).exp();
-                    let osc = (t * 18.0).sin();
-                    let bounce = 1.0 + env * osc * 0.24;
-                    sx *= bounce;
-                    sy *= bounce;
-                    lift_y -= (env * osc).max(0.0) * building_size[1] * 0.16;
-                    let flash = (1.0 - t * 1.4).max(0.0);
-                    sprite_tint[0] += 0.32 * flash;
-                    sprite_tint[1] += 0.26 * flash;
-                    sprite_tint[2] += 0.08 * flash;
-                }
+            }
+            // Queue 3: Upgrade completed — celebratory elastic double-bounce + golden flash.
+            if let Some(started) = building_upgrade_flashes.get(&tile_idx) {
+                let t = (now.duration_since(*started).as_secs_f32() / 0.42).clamp(0.0, 1.0);
+                let env = (-5.0 * t).exp();
+                let osc = (t * 18.0).sin();
+                let bounce = 1.0 + env * osc * 0.24;
+                sx *= bounce;
+                sy *= bounce;
+                lift_y -= (env * osc).max(0.0) * building_size[1] * 0.16;
+                let flash = (1.0 - t * 1.4).max(0.0);
+                sprite_tint[0] += 0.32 * flash;
+                sprite_tint[1] += 0.26 * flash;
+                sprite_tint[2] += 0.08 * flash;
             }
         }
         let animated_center = [building_center[0], building_center[1] + lift_y];
@@ -604,15 +675,42 @@ fn render_buildings(
         if let Some(uv_rect) =
             crate::render::gpu::building_sprite_uv(building.kind, building.level.max(1))
         {
-            text.push_building_sprite(
-                animated_center,
-                animated_size,
-                uv_rect,
-                sprite_tint,
-            );
+            if is_pure_sprite {
+                text.push_building_sprite(animated_center, animated_size, uv_rect, sprite_tint);
+            } else {
+                let (fill_rgb, border_rgb) = if building.under_construction {
+                    (
+                        [198.0 / 255.0, 198.0 / 255.0, 198.0 / 255.0],
+                        [115.0 / 255.0, 115.0 / 255.0, 115.0 / 255.0],
+                    )
+                } else {
+                    (building.owner_rgb, building.owner_rgb)
+                };
+                let highlight_width = if is_selected {
+                    0.072
+                } else if is_hovered {
+                    0.052
+                } else {
+                    0.0
+                };
+                text.push_building_marker(BuildingMarkerInstance {
+                    center: animated_center,
+                    size: animated_size,
+                    uv_rect,
+                    fill_color: [fill_rgb[0], fill_rgb[1], fill_rgb[2], alpha],
+                    border_color: border_rgb,
+                    shape: building_marker_shape(building.kind),
+                    glyph_alpha: metrics.glyph_alpha,
+                    sprite_blend: metrics.sprite_blend,
+                    icon_fill: building_icon_fill(building.kind),
+                    stack_hint: building.stack_hint,
+                    under_construction: building.under_construction,
+                    highlight_width,
+                });
+            }
         }
 
-        if building.kind == BuildingKind::MissileSilo {
+        if is_pure_sprite && building.kind == BuildingKind::MissileSilo {
             text.push_status_sprite(
                 NameplateStatusSprite::Radiation,
                 building_center,
@@ -621,17 +719,16 @@ fn render_buildings(
             );
         }
 
-        if building.detail == BuildingDetail::Full
-            && let Some(tile_idx) = building.tile_idx
+        if is_pure_sprite
             && let Some(started) = building_upgrade_flashes.get(&tile_idx)
         {
             let t = (now.duration_since(*started).as_secs_f32() / 0.3).clamp(0.0, 1.0);
-            let alpha = 1.0 - t;
+            let flash_alpha = 1.0 - t;
             text.push_status_sprite(
                 NameplateStatusSprite::UpgradeSparkle,
                 [center[0] * sf, center[1] * sf],
                 2.0 * marker_extent * sf * (0.5 + 0.35 * t),
-                [1.0, 0.88, 0.46, alpha],
+                [1.0, 0.88, 0.46, flash_alpha],
             );
             if building.owner_id == my_id
                 && !reduced_motion
@@ -650,38 +747,12 @@ fn render_buildings(
                                 center[1] * sf + offset[1] * radius,
                             ],
                             2.0 * sparkle_size,
-                            [1.0, 0.84, 0.36, alpha * 0.9],
+                            [1.0, 0.84, 0.36, flash_alpha * 0.9],
                         );
                     }
                     celebration_budget -= count;
                 }
             }
-        }
-
-        if (building.detail == BuildingDetail::Full || building.count > 1)
-            && let Some((icon, label)) = building_badge_label(building)
-        {
-            let level_font_size = (marker_extent * BUILDING_LEVEL_FONT_RATIO)
-                .clamp(8.0, 18.0)
-                .round()
-                * dev.font_size_scale.max(0.1);
-            let label_center = [
-                center[0] + half_width * 0.78,
-                center[1] - half_height * 0.78,
-            ];
-            push_icon_label(
-                text,
-                icon,
-                &label,
-                [
-                    label_center[0] * sf,
-                    (label_center[1] + level_font_size * 0.25) * sf,
-                ],
-                level_font_size * sf,
-                text_style,
-                dev.font_char_spacing.max(0.1),
-                crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]),
-            );
         }
     }
     // Render buildings destroyed by an active nuke or demolition through pre-wave seismic tremor,
@@ -972,57 +1043,86 @@ pub(crate) fn building_at_pointer(
         return None;
     }
 
-    let lod = DevConfig::with(|dev| BuildingLod::for_zoom(zoom_scaled, &dev.shader_params));
-    let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
+    let (lod, fog_of_war) = DevConfig::with(|dev| {
+        (
+            BuildingLod::for_zoom(zoom_scaled, &dev.shader_params),
+            dev.fog_of_war,
+        )
+    });
+    let selected_tile = input
+        .map_context_menu
+        .filter(|menu| menu.view == MapContextMenuView::BuildingDetails)
+        .map(|menu| menu.tile_idx);
+    let buildings = cached_buildings(
+        ui,
+        snapshot,
+        sim,
+        lod,
+        my_id,
+        fog_of_war,
+        selected_tile,
+    );
     let pointer_x = x as f32 / sf;
     let pointer_y = y as f32 / sf;
     let [pointer_world_x, pointer_world_y] = input.screen_to_world([x as f32, y as f32]);
-    let mut closest: Option<(f32, u32)> = None;
+    pick_owned_building_at_pointer(
+        buildings,
+        my_id,
+        zoom_scaled,
+        lod,
+        input,
+        sf,
+        pointer_x,
+        pointer_y,
+        pointer_world_x,
+        pointer_world_y,
+    )
+}
 
-    for building in buildings {
+/// WYSIWYG hit-test matching the exact painter's order (reverse scan = topmost visible icon wins).
+#[allow(clippy::too_many_arguments)]
+fn pick_owned_building_at_pointer(
+    buildings: &[RenderedBuilding],
+    my_id: u16,
+    zoom_scaled: f32,
+    lod: BuildingLod,
+    input: &InputState,
+    sf: f32,
+    pointer_x: f32,
+    pointer_y: f32,
+    pointer_world_x: f32,
+    pointer_world_y: f32,
+) -> Option<u32> {
+    for building in buildings.iter().rev() {
         if building.owner_id != my_id {
             continue;
         }
-        let center = world_to_screen(building.bx, building.by, input, sf);
-        let dx = pointer_x - center[0];
-        let dy = pointer_y - center[1];
-        let distance_sq = dx * dx + dy * dy;
-        if building.tile_idx.is_some() {
-            let (width, height) = building.kind.footprint_dimensions();
-            if pointer_world_x < building.bx - width as f32 * 0.5
-                || pointer_world_x >= building.bx + width as f32 * 0.5
-                || pointer_world_y < building.by - height as f32 * 0.5
-                || pointer_world_y >= building.by + height as f32 * 0.5
-            {
-                continue;
-            }
-        } else {
-            let size = building_marker_size(building, zoom_scaled)[0];
-            let hit_radius = (size * 0.5).max(12.0);
-            if distance_sq > hit_radius * hit_radius {
-                continue;
-            }
+        let metrics = lod.metrics(
+            building.kind,
+            building.level,
+            zoom_scaled,
+            building.keep_local_progress,
+        );
+        let (width, height) = building.kind.footprint_dimensions();
+        let in_footprint = pointer_world_x >= building.bx - width as f32 * 0.5
+            && pointer_world_x < building.bx + width as f32 * 0.5
+            && pointer_world_y >= building.by - height as f32 * 0.5
+            && pointer_world_y < building.by + height as f32 * 0.5;
+        if in_footprint {
+            return Some(building.tile_idx);
         }
-
-        let Some(tile_idx) = building.tile_idx.or_else(|| {
-            nearest_building_in_cluster(
-                snapshot,
-                sim.map_w,
-                lod.cluster_cell_size,
-                building,
-                pointer_world_x,
-                pointer_world_y,
-            )
-        }) else {
-            continue;
-        };
-        if closest.is_none_or(|(best_distance, best_tile)| {
-            distance_sq < best_distance || (distance_sq == best_distance && tile_idx < best_tile)
-        }) {
-            closest = Some((distance_sq, tile_idx));
+        if metrics.sprite_blend < 0.999 {
+            let center = world_to_screen(building.bx, building.by, input, sf);
+            let dx = pointer_x - center[0];
+            let dy = pointer_y - center[1];
+            let visual_extent = metrics.size_css[0].max(metrics.size_css[1]);
+            let hit_radius = (visual_extent * 0.5).max(12.0);
+            if dx * dx + dy * dy <= hit_radius * hit_radius {
+                return Some(building.tile_idx);
+            }
         }
     }
-    closest.map(|(_, tile_idx)| tile_idx)
+    None
 }
 
 pub(crate) fn warship_at_pointer(
@@ -1181,62 +1281,6 @@ fn render_warship_selection_overlays(
     }
 }
 
-fn nearest_building_in_cluster(
-    snapshot: &SimSnapshot,
-    map_w: u32,
-    cluster_cell_size: f32,
-    marker: &RenderedBuilding,
-    pointer_x: f32,
-    pointer_y: f32,
-) -> Option<u32> {
-    let grid_x = (marker.bx / cluster_cell_size) as i32;
-    let grid_y = (marker.by / cluster_cell_size) as i32;
-    let mut closest: Option<(f32, u32)> = None;
-
-    for building in &snapshot.buildings {
-        if building.owner_id != marker.owner_id
-            || building.kind != marker.kind
-            || building.active_level() != marker.level
-        {
-            continue;
-        }
-        let tile_x = (building.tile_idx % map_w) as f32;
-        let tile_y = (building.tile_idx / map_w) as f32;
-        if (tile_x / cluster_cell_size) as i32 != grid_x
-            || (tile_y / cluster_cell_size) as i32 != grid_y
-        {
-            continue;
-        }
-        let (world_x, world_y) =
-            crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
-        let dx = pointer_x - world_x;
-        let dy = pointer_y - world_y;
-        let distance_sq = dx * dx + dy * dy;
-        if closest.is_none_or(|(best_distance, best_tile)| {
-            distance_sq < best_distance
-                || (distance_sq == best_distance && building.tile_idx < best_tile)
-        }) {
-            closest = Some((distance_sq, building.tile_idx));
-        }
-    }
-    closest.map(|(_, tile_idx)| tile_idx)
-}
-
-fn building_marker_size(building: &RenderedBuilding, zoom_scaled: f32) -> [f32; 2] {
-    if building.tile_idx.is_some() {
-        let minimum = if building.status.is_some() {
-            BUILDING_MIN_MARKER_SIZE
-        } else {
-            0.0
-        };
-        building_footprint_marker_size(building.kind, zoom_scaled, minimum)
-    } else {
-        let size = (building_icon_size(zoom_scaled) * if building.count > 1 { 0.6 } else { 0.5 })
-            .max(BUILDING_MIN_MARKER_SIZE);
-        [size; 2]
-    }
-}
-
 fn building_footprint_marker_size(kind: BuildingKind, zoom_scaled: f32, minimum: f32) -> [f32; 2] {
     let (width, height) = kind.footprint_dimensions();
     [
@@ -1246,10 +1290,7 @@ fn building_footprint_marker_size(kind: BuildingKind, zoom_scaled: f32, minimum:
 }
 
 fn building_sprite_size(marker_size: [f32; 2], sf: f32, level: u8) -> [f32; 2] {
-    let scale = BUILDING_UPGRADE_SCALES
-        .get(usize::from(level.saturating_sub(1)))
-        .copied()
-        .unwrap_or(1.5);
+    let scale = building_upgrade_scale(level);
     marker_size.map(|size| size * sf * scale)
 }
 
@@ -1293,9 +1334,9 @@ pub(crate) fn building_screen_anchor_bottom(
 ) -> [f32; 2] {
     let center = world_to_screen(bx, by, input, sf);
     let zoom_scaled = input.camera_zoom / sf;
-    let marker_size = building_footprint_marker_size(kind, zoom_scaled, BUILDING_MIN_MARKER_SIZE);
-    let building_size = building_sprite_size(marker_size, sf, level.max(1));
-    let bottom_y = center[1] + (building_size[1] * 0.5) / sf + 6.0;
+    let lod = DevConfig::with(|dev| BuildingLod::for_zoom(zoom_scaled, &dev.shader_params));
+    let metrics = lod.metrics(kind, level.max(1), zoom_scaled, true);
+    let bottom_y = center[1] + metrics.size_css[1] * 0.5 + 6.0;
     [center[0], bottom_y]
 }
 
@@ -1329,6 +1370,7 @@ fn render_building_selection_focus(
     text: &mut TextRenderer,
     sim: &SimState,
     input: &InputState,
+    dev: &DevConfig,
     sf: f32,
     reduced_motion: bool,
     now: Instant,
@@ -1375,8 +1417,9 @@ fn render_building_selection_focus(
         .map(|b| b.under_construction)
         .unwrap_or(menu.building_under_construction);
 
-    let marker_size = building_footprint_marker_size(kind, zoom_scaled, 0.0);
-    let building_size = building_sprite_size(marker_size, sf, level);
+    let lod = BuildingLod::for_zoom(zoom_scaled, &dev.shader_params);
+    let metrics = lod.metrics(kind, level, zoom_scaled, under_construction);
+    let building_size = [metrics.size_css[0] * sf, metrics.size_css[1] * sf];
     let (ring_center, base_radius) =
         building_ground_ring_geometry(bx, by, building_size, input, sf);
     let elapsed = now.saturating_duration_since(menu.opened_at).as_secs_f32();
@@ -1757,110 +1800,52 @@ fn render_building_placement_preview(
     }
 }
 
-/// Keep cluster counts visible without overlaying building levels on the art.
-fn building_badge_label(
-    building: &RenderedBuilding,
-) -> Option<(Option<NameplateStatusSprite>, String)> {
-    if building.under_construction {
-        return None;
-    }
-    if building.level == 0 {
-        return (building.count > 1).then(|| (None, format!("× {}", building.count)));
-    }
-    if building.level == 1 && building.count == 1 {
-        return None;
-    }
-    (building.count > 1).then(|| (None, format!("× {}", building.count)))
-}
-
-/// Text centered on `center`, with an optional badge icon before it.
-/// `center[1]` is the text baseline, as in `push_string`.
-#[allow(clippy::too_many_arguments)]
-fn push_icon_label(
-    text: &mut TextRenderer,
-    icon: Option<NameplateStatusSprite>,
-    label: &str,
-    center: [f32; 2],
-    font_size: f32,
-    style: crate::render::gpu::TextPaintStyle,
-    char_spacing: f32,
-    outline: crate::render::gpu::OutlineStyle,
-) {
-    let width = if label.is_empty() {
-        0.0
-    } else {
-        text.measure_string(label, font_size, char_spacing).width
-    };
-    let (icon_px, gap) = icon_label_spacing(icon.is_some(), label, font_size);
-    let left = center[0] - (icon_px + gap + width) * 0.5;
-    if let Some(icon) = icon {
-        text.push_icon(
-            icon,
-            [left + icon_px * 0.5, center[1] - font_size * 0.3],
-            icon_px * 0.5,
-            [1.0; 4],
-            outline,
-        );
-    }
-    if !label.is_empty() {
-        text.push_string(
-            label,
-            [left + icon_px + gap + width * 0.5, center[1]],
-            font_size,
-            [1.0; 4],
-            style,
-            (0.5, char_spacing),
-        );
-    }
-}
-
-fn icon_label_spacing(has_icon: bool, label: &str, font_size: f32) -> (f32, f32) {
-    match (has_icon, label.is_empty()) {
-        (true, true) => (font_size, 0.0),
-        (true, false) => (font_size, font_size * 0.25),
-        (false, _) => (0.0, 0.0),
-    }
-}
-
-/// Letter size at which a row (`widths` measured at `font_size`, plus `gaps`) fits `max_width`.
-// ponytail: letters stop at 40% of their size; a longer row needs a wider button.
-
 fn cached_buildings<'a>(
     ui: &'a mut UiState,
     snapshot: &SimSnapshot,
-    map_w: u32,
+    sim: &SimState,
     lod: BuildingLod,
     my_id: u16,
-    tick_rate_ms: f32,
+    fog_of_war: bool,
+    selected_tile: Option<u32>,
 ) -> &'a [RenderedBuilding] {
-    let map_w = map_w.max(1);
-    let tick_rate_ms_bits = tick_rate_ms.to_bits();
+    let map_w = sim.map_w.max(1);
     let cache = &mut ui.building_render_cache;
-    if !cache.matches(snapshot.tick, map_w, lod, my_id, tick_rate_ms_bits) {
+    if !cache.matches(snapshot.tick, map_w, lod, my_id, fog_of_war, selected_tile) {
         collect_buildings(
             snapshot,
             map_w,
             lod,
             my_id,
-            tick_rate_ms,
-            &mut cache.buildings,
-            &mut cache.clusters,
-            &mut cache.city_tiles,
-            &mut cache.under_construction_tiles,
+            fog_of_war,
+            &sim.fog_visible,
+            selected_tile,
+            cache,
         );
-        cache.buildings.sort_unstable_by(|a, b| {
-            a.by.partial_cmp(&b.by)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| a.bx.partial_cmp(&b.bx).unwrap_or(std::cmp::Ordering::Equal))
-                .then_with(|| a.count.cmp(&b.count))
-        });
         cache.tick = Some(snapshot.tick);
         cache.map_w = map_w;
         cache.lod = Some(lod);
         cache.player_id = my_id;
-        cache.tick_rate_ms_bits = tick_rate_ms_bits;
+        cache.fog_of_war = fog_of_war;
+        cache.selected_tile = selected_tile;
     }
     &cache.buildings
+}
+
+#[inline]
+fn building_sort_key(
+    b: &RenderedBuilding,
+    my_id: u16,
+    selected_tile: Option<u32>,
+) -> (bool, bool, u8, u8, bool, std::cmp::Reverse<u32>) {
+    (
+        selected_tile == Some(b.tile_idx),
+        b.keep_local_progress,
+        building_priority_rank(b.kind),
+        b.level,
+        b.owner_id == my_id,
+        std::cmp::Reverse(b.tile_idx),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1869,105 +1854,151 @@ fn collect_buildings(
     map_w: u32,
     lod: BuildingLod,
     my_id: u16,
-    tick_rate_ms: f32,
-    out: &mut Vec<RenderedBuilding>,
-    clusters: &mut HashMap<BuildingClusterKey, (f32, f32, usize)>,
-    city_tiles: &mut HashSet<u32>,
-    under_construction_tiles: &mut HashSet<u32>,
+    fog_of_war: bool,
+    fog_visible: &sow_core::bitset::DenseBitSet,
+    selected_tile: Option<u32>,
+    cache: &mut BuildingRenderCache,
 ) {
+    const FALLBACK_OWNER_RGB: [f32; 3] = [0.62, 0.64, 0.68];
+
     let map_w = map_w.max(1);
-    out.clear();
-    clusters.clear();
-    city_tiles.clear();
-    under_construction_tiles.clear();
+    cache.buildings.clear();
+    cache.scratch_candidates.clear();
+    cache.city_tiles.clear();
+    cache.under_construction_tiles.clear();
+    cache.owner_colors.clear();
+
+    for player in &snapshot.players {
+        let c = super::nameplates::player_color(player);
+        cache.owner_colors.insert(player.id, [c[0], c[1], c[2]]);
+    }
+
     for building in &snapshot.buildings {
         if building.kind == BuildingKind::City {
-            city_tiles.insert(building.tile_idx);
+            cache.city_tiles.insert(building.tile_idx);
         }
         if building.under_construction {
-            under_construction_tiles.insert(building.tile_idx);
+            cache.under_construction_tiles.insert(building.tile_idx);
         }
     }
+
     for building in &snapshot.buildings {
-        if building.kind != BuildingKind::City && city_tiles.contains(&building.tile_idx) {
+        if building.kind != BuildingKind::City && cache.city_tiles.contains(&building.tile_idx) {
             continue;
         }
-        let tile_x = building.tile_idx % map_w;
-        let tile_y = building.tile_idx / map_w;
+        // Filter Fog of War BEFORE spatial thinning so hidden enemy structures never suppress
+        // visible nearby structures.
+        if fog_of_war
+            && building.owner_id != my_id
+            && !fog_visible.contains(building.tile_idx)
+        {
+            continue;
+        }
         let active_level = building.active_level();
-        let display_level = active_level;
-        let detail = lod.detail(building.kind);
         let has_active_city_build = building.kind == BuildingKind::City
             && (building.under_construction
                 || building.arsenal_build.is_some()
-                || under_construction_tiles.contains(&building.tile_idx));
+                || cache.under_construction_tiles.contains(&building.tile_idx));
         let keep_local_progress = building.owner_id == my_id
             && (building.under_construction || has_active_city_build);
-        if detail == BuildingDetail::Cluster && !keep_local_progress {
-            let (bx, by) = crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
-            let key = BuildingClusterKey {
-                grid_x: (tile_x as f32 / lod.cluster_cell_size) as i32,
-                grid_y: (tile_y as f32 / lod.cluster_cell_size) as i32,
-                owner_id: building.owner_id,
-                kind: building.kind,
-                level: display_level,
-            };
-            let entry = clusters.entry(key).or_insert((0.0, 0.0, 0));
-            entry.0 += bx;
-            entry.1 += by;
-            entry.2 += 1;
-            continue;
-        }
-
         let [bx, by] = building_world_center(building.kind, building.tile_idx, map_w);
-        out.push(RenderedBuilding {
+        let owner_rgb = cache
+            .owner_colors
+            .get(&building.owner_id)
+            .copied()
+            .unwrap_or(FALLBACK_OWNER_RGB);
+        cache.scratch_candidates.push(RenderedBuilding {
             bx,
             by,
             kind: building.kind,
-            level: display_level,
+            level: active_level,
             under_construction: building.under_construction,
-            count: 1,
+            keep_local_progress,
             owner_id: building.owner_id,
-            tile_idx: Some(building.tile_idx),
-            detail,
-            status: building_visual_status(
-                building,
-                active_level,
-                my_id,
-                tick_rate_ms,
-                detail == BuildingDetail::Full || keep_local_progress,
-            ),
+            tile_idx: building.tile_idx,
+            owner_rgb,
+            stack_hint: false,
         });
     }
 
-    for (key, (sum_x, sum_y, count)) in clusters.drain() {
-        out.push(RenderedBuilding {
-            bx: sum_x / count as f32,
-            by: sum_y / count as f32,
-            kind: key.kind,
-            level: key.level,
-            under_construction: false,
-            count,
-            owner_id: key.owner_id,
-            tile_idx: None,
-            detail: BuildingDetail::Cluster,
-            status: None,
+    // Sort descending by strategic priority: highest-priority buildings claim spatial slots first
+    // and end up at the back of `cache.buildings` after reversal so they paint on top.
+    cache.scratch_candidates.sort_unstable_by(|a, b| {
+        building_sort_key(b, my_id, selected_tile).cmp(&building_sort_key(a, my_id, selected_tile))
+    });
+
+    if !lod.needs_spatial_thinning() {
+        cache.buildings.extend(cache.scratch_candidates.drain(..));
+        // Close zoom: sort back-to-front by Y for natural isometric overlap, keeping selected last.
+        cache.buildings.sort_unstable_by(|a, b| {
+            (selected_tile == Some(a.tile_idx))
+                .cmp(&(selected_tile == Some(b.tile_idx)))
+                .then_with(|| a.by.partial_cmp(&b.by).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| a.bx.partial_cmp(&b.bx).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| a.tile_idx.cmp(&b.tile_idx))
         });
+        return;
     }
-}
 
-fn tile_at_world(x: f32, y: f32, map_w: u32) -> Option<u32> {
-    let col = x.floor() as i32;
-    let row = y.floor() as i32;
-    (col >= 0 && row >= 0).then_some((row as u32).checked_mul(map_w)?.checked_add(col as u32)?)
-}
+    // World-anchored spatial-hash thinning (3×3 neighborhood Euclidean distance check).
+    // Uses an intrusive linked list (`spatial_heads` + `spatial_next`) for zero per-bucket allocs.
+    cache.spatial_heads.clear();
+    cache.spatial_next.clear();
 
-fn building_icon_size(zoom_scaled: f32) -> f32 {
-    let size = if zoom_scaled < 10.0 {
-        zoom_scaled * 2.0
-    } else {
-        zoom_scaled * 1.6
-    };
-    size.clamp(11.0, 96.0)
+    let same_owner_dist = lod.min_spacing_px / lod.quantized_zoom;
+    let same_owner_dist_sq = same_owner_dist * same_owner_dist;
+    let diff_owner_dist = same_owner_dist * BUILDING_DIFF_OWNER_SPACING_RATIO;
+    let diff_owner_dist_sq = diff_owner_dist * diff_owner_dist;
+    let cell_size = same_owner_dist.max(1.0);
+
+    for candidate in cache.scratch_candidates.drain(..) {
+        let cell_x = (candidate.bx / cell_size).floor() as i32;
+        let cell_y = (candidate.by / cell_size).floor() as i32;
+        let must_keep = selected_tile == Some(candidate.tile_idx) || candidate.keep_local_progress;
+
+        let mut suppressed = false;
+        if !must_keep {
+            'neighbors: for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let mut idx_opt = cache.spatial_heads.get(&(cell_x + dx, cell_y + dy)).copied();
+                    while let Some(kept_idx) = idx_opt {
+                        let kept = &mut cache.buildings[kept_idx];
+                        let ddx = candidate.bx - kept.bx;
+                        let ddy = candidate.by - kept.by;
+                        let dist_sq = ddx * ddx + ddy * ddy;
+                        let same_owner = kept.owner_id == candidate.owner_id;
+                        let limit_sq = if same_owner {
+                            same_owner_dist_sq
+                        } else {
+                            diff_owner_dist_sq
+                        };
+                        if dist_sq < limit_sq {
+                            if same_owner {
+                                kept.stack_hint = true;
+                            }
+                            suppressed = true;
+                            break 'neighbors;
+                        }
+                        let next = cache.spatial_next[kept_idx];
+                        idx_opt = (next != usize::MAX).then_some(next);
+                    }
+                }
+            }
+        }
+
+        if !suppressed {
+            let kept_idx = cache.buildings.len();
+            cache.buildings.push(candidate);
+            let prev_head = cache
+                .spatial_heads
+                .insert((cell_x, cell_y), kept_idx)
+                .unwrap_or(usize::MAX);
+            cache.spatial_next.push(prev_head);
+        }
+    }
+
+    // Reverse so lowest-priority markers paint first and highest-priority (Selected, Silo, City,
+    // SAM) paint last on top.
+    cache.buildings.reverse();
 }
 

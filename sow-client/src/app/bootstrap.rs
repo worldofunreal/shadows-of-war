@@ -187,6 +187,8 @@ impl SowApp {
                 published_version_checked_at: None,
                 #[cfg(target_arch = "wasm32")]
                 published_version_check_pending: false,
+                #[cfg(target_arch = "wasm32")]
+                published_version_diff_since: None,
                 is_offline: false,
                 parked_client: None,
                 ws_connect_fail_backoff_ms,

@@ -2,10 +2,10 @@ use crate::context::RenderContext;
 use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::{AvatarAtlasTexture, FontAtlasTexture, TextAtlasImages};
 use crate::text::types::{
-    KIND_ARC, KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_GLYPH, KIND_ICON,
-    KIND_LANDING_BEACON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SELECTION_RING, KIND_SPRITE,
-    KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite, OutlineStyle, TextGlobals,
-    TextInstanceGpu, TextPaintStyle, TextShaderData,
+    BuildingMarkerInstance, KIND_ARC, KIND_BUILDING_MARKER, KIND_BUILDING_SPRITE, KIND_CROSS,
+    KIND_DISC, KIND_GLYPH, KIND_ICON, KIND_LANDING_BEACON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT,
+    KIND_SELECTION_RING, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite,
+    OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData,
 };
 use blade_graphics as gpu;
 
@@ -667,7 +667,7 @@ impl TextRenderer {
         let building_sampler = context.create_sampler(gpu::SamplerDesc {
             name: "building_atlas_pixel_sampler",
             mag_filter: gpu::FilterMode::Nearest,
-            min_filter: gpu::FilterMode::Nearest,
+            min_filter: gpu::FilterMode::Linear,
             ..Default::default()
         });
 
@@ -1117,6 +1117,44 @@ impl TextRenderer {
             underlay_offset_y: 0.0,
             underlay_softness: 0.0,
             kind: KIND_BUILDING_SPRITE,
+        });
+    }
+
+    /// Push a procedural SDF building LOD marker (OpenFront-style geometric shape with optional
+    /// silhouette glyph, density stack halo, highlight band, and smooth sprite cross-fade).
+    pub fn push_building_marker(&mut self, marker: BuildingMarkerInstance) {
+        // The SDF polygon uses radius 0.34 inside [0, 1], leaving generous room on each side
+        // for pointed shapes (triangle/diamond), density halos, highlight rings, and AA fringe.
+        const LOGICAL_QUAD_RATIO: f32 = 0.68;
+        let quad_size = [
+            marker.size[0].max(0.0) / LOGICAL_QUAD_RATIO,
+            marker.size[1].max(0.0) / LOGICAL_QUAD_RATIO,
+        ];
+        self.push_inst(TextInstanceGpu {
+            screen_pos: [
+                marker.center[0] - quad_size[0] * 0.5,
+                marker.center[1] - quad_size[1] * 0.5,
+            ],
+            size: quad_size,
+            uv_rect: marker.uv_rect,
+            content_rect: [
+                marker.shape as u8 as f32,
+                marker.glyph_alpha.clamp(0.0, 1.0),
+                marker.sprite_blend.clamp(0.0, 1.0),
+                if marker.stack_hint { 1.0 } else { 0.0 },
+            ],
+            color: marker.fill_color,
+            outline_color: [
+                marker.border_color[0],
+                marker.border_color[1],
+                marker.border_color[2],
+                if marker.under_construction { 1.0 } else { 0.0 },
+            ],
+            face_dilate: marker.icon_fill.clamp(0.35, 1.0),
+            outline_thickness: marker.highlight_width.max(0.0),
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_BUILDING_MARKER,
         });
     }
 

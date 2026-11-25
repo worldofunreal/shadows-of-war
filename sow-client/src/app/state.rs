@@ -267,6 +267,9 @@ pub struct NetState {
     pub published_version_checked_at: Option<web_time::Instant>,
     #[cfg(target_arch = "wasm32")]
     pub published_version_check_pending: bool,
+    /// When a manifest diff first showed up, so the update banner waits out the grace window.
+    #[cfg(target_arch = "wasm32")]
+    pub published_version_diff_since: Option<web_time::Instant>,
     pub is_offline: bool,
     /// Idle orchestrator socket kept through an offline match; the menu return takes it back.
     pub parked_client: Option<sow_net::client::SowClient>,

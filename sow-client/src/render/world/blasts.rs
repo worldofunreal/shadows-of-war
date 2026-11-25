@@ -339,12 +339,23 @@ impl BlastScene {
         let w = width.max(1);
         let world_x = (tile % w) as f32 + 0.5;
         let world_y = (tile / w) as f32 + 0.5;
+        self.spawn_staging_world([world_x, world_y], tile, owner, split, now);
+    }
+
+    pub fn spawn_staging_world(
+        &mut self,
+        world_pos: [f32; 2],
+        tile: u32,
+        owner: u16,
+        split: bool,
+        now: Instant,
+    ) {
         let seed = self.alloc_seed();
         Self::push_capped(
             &mut self.air_blasts,
             ActiveBlast {
-                world_x,
-                world_y,
+                world_x: world_pos[0],
+                world_y: world_pos[1],
                 tile_idx: tile,
                 owner_id: owner,
                 inner_radius: 1.0,
@@ -633,34 +644,32 @@ impl BlastScene {
         let viewport_area = params.screen_w * params.screen_h;
 
         // 1. Ground pass: scorched craters & cooling magma fissures.
+        // Keep full craters up to a tactical salvo (40); only downgrade to ThermalGlint under
+        // extreme multi-MIRV saturation, while switching shader to fast_lod above 10 for GPU speed.
         {
-            let dense = self.ground_blasts.len() > 8;
-            let mut budget = viewport_area * 0.35;
+            let fast_lod = self.ground_blasts.len() > 10;
+            let dense = self.ground_blasts.len() > 40;
+            let mut budget = viewport_area * 0.70;
             let mut occupied = [0u32; 24];
             for b in self.ground_blasts.iter().rev() {
                 let Some(mut inst) = Self::build_gpu_instance(b, params, view) else {
                     continue;
                 };
-                if dense || params.reduced_motion {
+                if fast_lod || params.reduced_motion {
                     inst.seed += 2.0;
                 }
-                if dense {
-                    let area = (inst.bound_radius * zoom * 2.0).powi(2).min(viewport_area);
-                    if area > budget {
-                        let x = inst.world_pos[0] * zoom + params.camera_x;
-                        let y = inst.world_pos[1] * zoom + params.camera_y;
-                        let col = ((x * 32.0 / params.screen_w.max(1.0)) as usize).min(31);
-                        let row = ((y * 24.0 / params.screen_h.max(1.0)) as usize).min(23);
-                        if occupied[row] & (1 << col) != 0 {
-                            continue;
-                        }
-                        occupied[row] |= 1 << col;
-                        inst.bound_radius = inst.bound_radius.min(10.0 / zoom);
-                        inst.kind = sow_render::BLAST_KIND_THERMAL_GLINT;
-                        inst.expand_dur = 0.0;
-                    } else {
-                        budget -= area;
-                    }
+                if dense
+                    && !Self::filter_dense_glint(
+                        &mut inst,
+                        &mut budget,
+                        &mut occupied,
+                        params,
+                        viewport_area,
+                        10.0 / zoom,
+                        0.0,
+                    )
+                {
+                    continue;
                 }
                 push(false, inst);
             }
@@ -683,8 +692,9 @@ impl BlastScene {
             }
 
             // 2a. Primary nuke fireballs, shockwaves, launches & MIRV splits (base air layer).
-            let nuke_dense = nuke_count > 8;
-            let mut nuke_budget = viewport_area * 0.35;
+            let nuke_fast_lod = nuke_count > 10;
+            let nuke_dense = nuke_count > 40;
+            let mut nuke_budget = viewport_area * 0.70;
             let mut nuke_occupied = [0u32; 24];
             for b in self.air_blasts.iter().rev() {
                 if !matches!(
@@ -696,26 +706,22 @@ impl BlastScene {
                 let Some(mut inst) = Self::build_gpu_instance(b, params, view) else {
                     continue;
                 };
-                if nuke_dense || params.reduced_motion {
+                if nuke_fast_lod || params.reduced_motion {
                     inst.seed += 2.0;
                 }
-                if nuke_dense && b.kind == BlastKind::NukeAir {
-                    let area = (inst.bound_radius * zoom * 2.0).powi(2).min(viewport_area);
-                    if area > nuke_budget {
-                        let x = inst.world_pos[0] * zoom + params.camera_x;
-                        let y = inst.world_pos[1] * zoom + params.camera_y;
-                        let col = ((x * 32.0 / params.screen_w.max(1.0)) as usize).min(31);
-                        let row = ((y * 24.0 / params.screen_h.max(1.0)) as usize).min(23);
-                        if nuke_occupied[row] & (1 << col) != 0 {
-                            continue;
-                        }
-                        nuke_occupied[row] |= 1 << col;
-                        inst.bound_radius = inst.bound_radius.min(15.0 / zoom);
-                        inst.kind = sow_render::BLAST_KIND_THERMAL_GLINT;
-                        inst.expand_dur = 1.0;
-                    } else {
-                        nuke_budget -= area;
-                    }
+                if nuke_dense
+                    && b.kind == BlastKind::NukeAir
+                    && !Self::filter_dense_glint(
+                        &mut inst,
+                        &mut nuke_budget,
+                        &mut nuke_occupied,
+                        params,
+                        viewport_area,
+                        15.0 / zoom,
+                        1.0,
+                    )
+                {
+                    continue;
                 }
                 push(true, inst);
             }
@@ -908,6 +914,35 @@ impl BlastScene {
                 seed: self.alloc_seed(),
             };
         }
+    }
+
+    fn filter_dense_glint(
+        inst: &mut BlastInstanceGpu,
+        budget: &mut f32,
+        occupied: &mut [u32; 24],
+        params: &BlastPackParams<'_>,
+        viewport_area: f32,
+        glint_max_radius: f32,
+        expand_dur: f32,
+    ) -> bool {
+        let zoom = params.camera_zoom.max(0.01);
+        let area = (inst.bound_radius * zoom * 2.0).powi(2).min(viewport_area);
+        if area <= *budget {
+            *budget -= area;
+            return true;
+        }
+        let x = inst.world_pos[0] * zoom + params.camera_x;
+        let y = inst.world_pos[1] * zoom + params.camera_y;
+        let col = ((x * 32.0 / params.screen_w.max(1.0)) as usize).min(31);
+        let row = ((y * 24.0 / params.screen_h.max(1.0)) as usize).min(23);
+        if occupied[row] & (1 << col) != 0 {
+            return false;
+        }
+        occupied[row] |= 1 << col;
+        inst.bound_radius = inst.bound_radius.min(glint_max_radius);
+        inst.kind = sow_render::BLAST_KIND_THERMAL_GLINT;
+        inst.expand_dur = expand_dur;
+        true
     }
 
     fn push_capped(list: &mut Vec<ActiveBlast>, blast: ActiveBlast) {

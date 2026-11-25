@@ -49,6 +49,16 @@ impl SowEngine {
         if self.state.phase != GamePhase::Playing || self.state.map.width == 0 {
             return;
         }
+        let has_nuclear_or_sam_projectiles = self.projectiles.iter().any(|p| {
+            p.active
+                && matches!(
+                    p.kind,
+                    ProjectileKind::Nuke { .. } | ProjectileKind::SAMMissile
+                )
+        });
+        if !has_nuclear_or_sam_projectiles {
+            return;
+        }
 
         let width = self.state.map.width;
         let tick = self.state.tick;

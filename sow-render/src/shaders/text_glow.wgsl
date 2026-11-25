@@ -63,6 +63,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: TextInstance) -> VertexOutput {
     if inst.kind > 10.5 && inst.kind < 11.5 { instance_scale = globals.shader_params[__TEXT_BUILDING_SIZE__].x; }
     if inst.kind > 11.5 && inst.kind < 12.5 { instance_scale = globals.shader_params[__TEXT_STATUS_SIZE__].x; }
     if inst.kind > 12.5 && inst.kind < 13.5 { instance_scale = globals.shader_params[__TEXT_EMOJI_SIZE__].x; }
+    if inst.kind > 14.5 && inst.kind < 15.5 { instance_scale = globals.shader_params[__TEXT_BUILDING_SIZE__].x; }
     let center = inst.screen_pos + inst.size * 0.5;
     let screen = center + (inst.screen_pos + local * inst.size - center) * instance_scale;
     let ndc = vec2<f32>(
@@ -405,7 +406,146 @@ fn shade_selection_ring(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(final_rgb, out_a);
 }
 
+fn rgb2hsv(c: vec3<f32>) -> vec3<f32> {
+    let k = vec4<f32>(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    let p = mix(vec4<f32>(c.bg, k.wz), vec4<f32>(c.gb, k.xy), vec4<f32>(step(c.b, c.g)));
+    let q = mix(vec4<f32>(p.xyw, c.r), vec4<f32>(c.r, p.yzx), vec4<f32>(step(p.x, c.r)));
+    let d = q.x - min(q.w, q.y);
+    let e = 1.0e-10;
+    return vec3<f32>(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+fn hsv2rgb(c: vec3<f32>) -> vec3<f32> {
+    let p = abs(fract(c.xxx + vec3<f32>(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - vec3<f32>(3.0));
+    return c.z * mix(vec3<f32>(1.0), clamp(p - vec3<f32>(1.0), vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(c.y));
+}
+
+fn scale_rgb_value(rgb: vec3<f32>, v_scale: f32) -> vec3<f32> {
+    var hsv = rgb2hsv(max(rgb, vec3<f32>(0.0)));
+    hsv.z = clamp(hsv.z * v_scale, 0.0, 1.0);
+    return hsv2rgb(hsv);
+}
+
+// Signed distance to a regular n-gon in Y-down local quad space (negative inside).
+fn sd_polygon(p: vec2<f32>, radius: f32, sides: f32, rot: f32) -> f32 {
+    let an = 3.14159265 / sides;
+    let raw_a = atan2(p.y, p.x) - rot + an;
+    let period = 2.0 * an;
+    let a = (raw_a - period * floor(raw_a / period)) - an;
+    return length(p) * cos(a) - radius * cos(an);
+}
+
+// Per-BuildingKind SDF shape (0=City, 1=MissileSilo, 2=SAM, 3=Port, 4=TradingPost, 5=Tower, 6=MilitaryCamp).
+fn building_shape_sdf(p: vec2<f32>, radius: f32, shape_id: f32) -> f32 {
+    if (shape_id < 0.5) {
+        return length(p) - radius;                                  // City -> circle
+    }
+    if (shape_id < 1.5) {
+        return sd_polygon(p, radius * 1.12, 3.0, 1.5707963);        // MissileSilo -> triangle (vertex up)
+    }
+    if (shape_id < 2.5) {
+        return sd_polygon(p, radius * 1.08, 4.0, 0.0);              // SAM -> square (flat sides)
+    }
+    if (shape_id < 3.5) {
+        return sd_polygon(p, radius * 1.04, 5.0, 1.5707963);        // Port -> pentagon (vertex up)
+    }
+    if (shape_id < 4.5) {
+        return sd_polygon(p, radius * 1.04, 6.0, 1.5707963);        // TradingPost -> hexagon (flat top)
+    }
+    if (shape_id < 5.5) {
+        return sd_polygon(p, radius * 1.02, 8.0, 0.0);              // Tower -> octagon (flat sides)
+    }
+    return sd_polygon(p, radius * 1.12, 4.0, 0.7853982);            // MilitaryCamp -> diamond
+}
+
+// Procedural SDF building LOD marker (KIND_BUILDING_MARKER = 15.0).
+// Draws an OpenFront-style player-colored polygon with crisp contrast border, optional
+// silhouette glyph extracted from building_atlas.a, density stack rim, hover/selection
+// highlight, and smooth cross-fade into the full building sprite.
+fn shade_building_marker(in: VertexOutput) -> vec4<f32> {
+    let p = in.local_uv - vec2<f32>(0.5, 0.5);
+    let base_radius = 0.34;
+    let shape_id = in.content_rect.x;
+    let glyph_alpha = clamp(in.content_rect.y, 0.0, 1.0);
+    let sprite_blend = clamp(in.content_rect.z, 0.0, 1.0);
+    let stack_hint = clamp(in.content_rect.w, 0.0, 1.0);
+    let icon_fill = clamp(in.face_dilate, 0.35, 1.0);
+    let highlight_w = max(in.outline_thickness, 0.0);
+    let under_construction = in.outline_color.a > 0.5;
+
+    // Uniform control flow: compute derivatives and sample atlas before any early return.
+    let sdf = building_shape_sdf(p, base_radius, shape_id);
+    let fw = max(fwidth(length(p)), 1e-4);
+
+    let uv_span_ratio = mix(0.68 * icon_fill, 0.68, sprite_blend);
+    let art_local = p / uv_span_ratio + vec2<f32>(0.5, 0.5);
+    let art_in_bounds = step(0.0, art_local.x) * step(art_local.x, 1.0)
+        * step(0.0, art_local.y) * step(art_local.y, 1.0);
+    let art_uv = mix(
+        in.uv_rect.xy,
+        in.uv_rect.zw,
+        clamp(art_local, vec2<f32>(0.0), vec2<f32>(1.0)),
+    );
+    let tex = textureSample(building_atlas, building_sampler, art_uv);
+
+    let fill_darken = globals.shader_params[__TEXT_LOD_BUILDING_FILL_DARKEN__].x;
+    let border_darken = globals.shader_params[__TEXT_LOD_BUILDING_BORDER_DARKEN__].x;
+    let glyph_darken = globals.shader_params[__TEXT_LOD_BUILDING_GLYPH_DARKEN__].x;
+
+    let fill_rgb = select(scale_rgb_value(in.color.rgb, fill_darken), in.color.rgb, under_construction);
+    let border_rgb = select(scale_rgb_value(in.outline_color.rgb, border_darken), in.outline_color.rgb, under_construction);
+
+    let border_w = 0.068;
+    let shape_alpha = 1.0 - smoothstep(-fw, fw, sdf);
+    let inner_mask = 1.0 - smoothstep(-fw, fw, sdf + border_w);
+    var badge_rgb = mix(border_rgb, fill_rgb, inner_mask);
+
+    // Inner silhouette glyph in mid-zoom tactical badge mode.
+    let fill_lum = dot(fill_rgb, vec3<f32>(0.299, 0.587, 0.114));
+    let glyph_rgb = select(
+        scale_rgb_value(fill_rgb, glyph_darken),
+        vec3<f32>(0.96, 0.97, 0.99),
+        fill_lum < 0.25,
+    );
+    let glyph_mask = tex.a * art_in_bounds * inner_mask * glyph_alpha;
+    badge_rgb = mix(badge_rgb, glyph_rgb, glyph_mask);
+
+    // Subtle concentric outer rim indicating dense same-owner neighbors were thinned here.
+    let stack_outer = 1.0 - smoothstep(-fw, fw, sdf - 0.064);
+    let stack_inner = 1.0 - smoothstep(-fw, fw, sdf - 0.028);
+    let stack_ring = clamp(stack_outer - stack_inner, 0.0, 1.0) * stack_hint * (1.0 - sprite_blend);
+
+    // Hover / selection highlight outline band.
+    let hl_outer = 1.0 - smoothstep(-fw, fw, sdf - highlight_w);
+    let hl_band = clamp(hl_outer - shape_alpha, 0.0, 1.0) * step(0.001, highlight_w);
+
+    let badge_a = clamp(max(shape_alpha, max(stack_ring * 0.85, hl_band)), 0.0, 1.0);
+    var marker_rgb = badge_rgb;
+    let stack_rgb = mix(fill_rgb, vec3<f32>(1.0), 0.55);
+    marker_rgb = mix(marker_rgb, stack_rgb, stack_ring * (1.0 - shape_alpha));
+    marker_rgb = mix(marker_rgb, vec3<f32>(0.96, 0.99, 1.0), hl_band);
+    let marker_out_a = badge_a * (1.0 - sprite_blend) * in.color.a;
+
+    // Cross-fade full-color building art over the fading SDF badge in the transition band.
+    let sprite_rgb = tex.rgb * globals.shader_params[__TEXT_BUILDING_TINT__].rgb;
+    let sprite_out_a = tex.a * art_in_bounds * sprite_blend * in.color.a;
+
+    let combined_a = sprite_out_a + marker_out_a * (1.0 - sprite_out_a);
+    let final_a = combined_a
+        * globals.shader_params[__TEXT_BUILDING_OPACITY__].x
+        * globals.shader_params[__TEXT_OPACITY__].x;
+    if (final_a <= 0.001) {
+        return vec4<f32>(0.0);
+    }
+    let combined_rgb = (sprite_rgb * sprite_out_a + marker_rgb * marker_out_a * (1.0 - sprite_out_a))
+        / max(combined_a, 0.0001);
+    return vec4<f32>(combined_rgb, final_a);
+}
+
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 14.5) {
+        return shade_building_marker(in);
+    }
     if (in.kind > 13.5) {
         return shade_selection_ring(in);
     }

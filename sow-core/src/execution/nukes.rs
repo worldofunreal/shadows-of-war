@@ -6,19 +6,83 @@ pub const SILO_COOLDOWN_TICKS: u32 = 90;
 
 impl SowEngine {
     fn release_mirv_warheads(&mut self, carrier: u64, owner: u16, split: u32, target: u32) {
+        use crate::rng::NextIntExt;
+
+        const MAX_MIRV_WARHEADS: usize = 28;
+        const RADIUS: i32 = 240;
+        const MIN_SPREAD: u32 = 34;
+        const MIN_SPREAD_SQ: u32 = MIN_SPREAD * MIN_SPREAD;
+
         let width = self.state.map.width;
         let height = self.state.map.height;
+        if width == 0 || height == 0 {
+            return;
+        }
         let x = target % width;
         let y = target / width;
-        use crate::rng::NextIntExt;
+        let primary_target_owner = self.state.map.owner_id(x, y);
+        let hostile_cluster = primary_target_owner != 0
+            && primary_target_owner != owner
+            && !self.players_friendly(owner, primary_target_owner);
+
         let mut rng = wyrand::WyRand::new(self.state.seed ^ carrier);
-        let mut targets = vec![target];
-        const RADIUS: i32 = 1500;
-        const MIN_SPREAD: u32 = 55;
-        let mut cells = std::collections::HashMap::<(u32, u32), Vec<u32>>::new();
-        cells.entry((x / MIN_SPREAD, y / MIN_SPREAD)).or_default().push(target);
-        for _ in 0..2_500 {
-            if targets.len() == 350 {
+        let mut targets = Vec::with_capacity(MAX_MIRV_WARHEADS);
+        targets.push(target);
+
+        let is_spaced = |targets: &[u32], tx: u32, ty: u32| -> bool {
+            !targets.iter().any(|&tile| {
+                tx.abs_diff(tile % width).pow(2) + ty.abs_diff(tile / width).pow(2)
+                    < MIN_SPREAD_SQ
+            })
+        };
+
+        // Pass 1: target hostile interior/land tiles inside the tactical blast cluster.
+        if hostile_cluster {
+            for attempt in 0..900 {
+                if targets.len() == MAX_MIRV_WARHEADS {
+                    break;
+                }
+                let dx = rng.next_int(-RADIUS, RADIUS + 1);
+                let dy = rng.next_int(-RADIUS, RADIUS + 1);
+                if dx * dx + dy * dy > RADIUS * RADIUS {
+                    continue;
+                }
+                let (Some(tx), Some(ty)) = (x.checked_add_signed(dx), y.checked_add_signed(dy))
+                else {
+                    continue;
+                };
+                if tx >= width || ty >= height {
+                    continue;
+                }
+                let idx = ty * width + tx;
+                if !self.state.map.terrain[idx as usize].is_land() {
+                    continue;
+                }
+                let tile_owner = self.state.map.owner_id(tx, ty);
+                let is_target_owner = tile_owner == primary_target_owner;
+                let is_any_hostile =
+                    tile_owner != 0 && tile_owner != owner && !self.players_friendly(owner, tile_owner);
+                if !is_target_owner && (attempt < 500 || !is_any_hostile) {
+                    continue;
+                }
+                // Prefer deep interior tiles on early samples before accepting border tiles.
+                if attempt < 350
+                    && self
+                        .state
+                        .player(tile_owner)
+                        .is_some_and(|p| p.border_tiles.contains(idx))
+                {
+                    continue;
+                }
+                if is_spaced(&targets, tx, ty) {
+                    targets.push(idx);
+                }
+            }
+        }
+
+        // Pass 2: fill any remaining cluster slots with well-spaced non-friendly tiles (or any map tile).
+        for attempt in 0..600 {
+            if targets.len() == MAX_MIRV_WARHEADS {
                 break;
             }
             let dx = rng.next_int(-RADIUS, RADIUS + 1);
@@ -26,27 +90,24 @@ impl SowEngine {
             if dx * dx + dy * dy > RADIUS * RADIUS {
                 continue;
             }
-            let (Some(tx), Some(ty)) = (x.checked_add_signed(dx), y.checked_add_signed(dy)) else {
+            let (Some(tx), Some(ty)) = (x.checked_add_signed(dx), y.checked_add_signed(dy))
+            else {
                 continue;
             };
             if tx >= width || ty >= height {
                 continue;
             }
-            let cell = (tx / MIN_SPREAD, ty / MIN_SPREAD);
-            let overlaps = (cell.1.saturating_sub(1)..=cell.1 + 1).any(|cy| {
-                (cell.0.saturating_sub(1)..=cell.0 + 1).any(|cx| {
-                    cells.get(&(cx, cy)).into_iter().flatten().any(|&tile| {
-                        tx.abs_diff(tile % width).pow(2) + ty.abs_diff(tile / width).pow(2)
-                            < MIN_SPREAD.pow(2)
-                    })
-                })
-            });
-            if !overlaps {
-                let tile = ty * width + tx;
-                targets.push(tile);
-                cells.entry(cell).or_default().push(tile);
+            let tile_owner = self.state.map.owner_id(tx, ty);
+            if attempt < 400
+                && (tile_owner == owner || self.players_friendly(owner, tile_owner))
+            {
+                continue;
+            }
+            if is_spaced(&targets, tx, ty) {
+                targets.push(ty * width + tx);
             }
         }
+
         for tile in targets {
             let id = self.state.next_projectile_id;
             self.state.next_projectile_id = id.wrapping_add(1).max(1);
@@ -266,13 +327,17 @@ impl SowEngine {
         }
 
         // Process detonations
-        let mut territory_changes = Vec::new();
-        for (dx, dy, inner, outer, owner_id) in detonations {
-            territory_changes.extend(self.detonate_nuke(dx, dy, inner, outer, owner_id));
-        }
-        let elimination_candidates = self.annex_enclosed_components(territory_changes);
-        for (victim, conqueror, x, y) in elimination_candidates {
-            self.eliminate_player(victim, conqueror, x, y, false);
+        if !detonations.is_empty() {
+            let mut territory_changes = Vec::new();
+            for (dx, dy, inner, outer, owner_id) in detonations {
+                territory_changes.extend(self.detonate_nuke(dx, dy, inner, outer, owner_id));
+            }
+            if !territory_changes.is_empty() {
+                let elimination_candidates = self.annex_enclosed_components(territory_changes);
+                for (victim, conqueror, x, y) in elimination_candidates {
+                    self.eliminate_player(victim, conqueror, x, y, false);
+                }
+            }
         }
     }
 
@@ -710,5 +775,19 @@ mod tests {
         assert!(engine.building_productions.contains_key(&202));
         assert!(!engine.silo_cooldowns.contains_key(&101));
         assert_eq!(engine.silo_cooldowns.get(&202).copied(), Some(44));
+
+        // Tactical MIRV cluster: capped at <= 28 warheads inside radius 240, favoring hostile land.
+        engine.projectiles.clear();
+        let mirv_target = 32 * 64 + 32;
+        for t in engine.state.map.terrain.iter_mut() {
+            *t = crate::map::MapTile::from_byte(0x80);
+        }
+        engine.state.map.set_owner_id(32, 32, 2);
+        engine.release_mirv_warheads(77, 1, 2 * 64 + 2, mirv_target);
+        assert!(engine.projectiles.len() > 1 && engine.projectiles.len() <= 28);
+        assert!(engine
+            .projectiles
+            .iter()
+            .all(|p| p.kind == ProjectileKind::Nuke { level: 4 }));
     }
 }
