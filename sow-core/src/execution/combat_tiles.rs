@@ -203,19 +203,24 @@ fn attack_pacing_multiplier(
     }
 }
 
-/// Scales PvP frontline tile budget with attacking army size above `reference_troops`,
-/// reaching 2x at 100k, ~6.3x at 1M, and 20x at 10M+ so large armies push narrow fronts.
-fn pvp_troop_speed_multiplier(effective_troops: f64, reference_troops: f64) -> f64 {
-    let ref_troops = if reference_troops.is_finite() && reference_troops > 0.0 {
-        reference_troops
-    } else {
-        25_000.0
-    };
-    if !effective_troops.is_finite() || effective_troops <= ref_troops {
-        1.0
-    } else {
-        (effective_troops / ref_troops).sqrt().clamp(1.0, 20.0)
+/// Scales PvP tile budget from 1x at 1k troops to 2x at 1M and 10x at 100M.
+fn pvp_troop_speed_multiplier(effective_troops: f64) -> f64 {
+    const START_TROOPS: f64 = 1_000.0;
+    const MID_TROOPS: f64 = 1_000_000.0;
+    const CAP_TROOPS: f64 = 100_000_000.0;
+    const EARLY_EXPONENT: f64 = 0.10034333188799373; // 2x over 1,000x troop growth.
+    const LATE_EXPONENT: f64 = 0.34948500216800943; // 5x over 100x troop growth.
+
+    if !effective_troops.is_finite() || effective_troops <= START_TROOPS {
+        return 1.0;
     }
+    if effective_troops <= MID_TROOPS {
+        return libm::pow(effective_troops / START_TROOPS, EARLY_EXPONENT).clamp(1.0, 2.0);
+    }
+    if effective_troops >= CAP_TROOPS {
+        return 10.0;
+    }
+    (2.0 * libm::pow(effective_troops / MID_TROOPS, LATE_EXPONENT)).clamp(2.0, 10.0)
 }
 
 /// Accelerates late-game PvP resolution once the attacker controls over 15% of map land,
@@ -1769,10 +1774,7 @@ impl SowEngine {
                 power
                     * adjacent
                     * 3.0
-                    * pvp_troop_speed_multiplier(
-                        effective_troops,
-                        self.state.config.max_tiles_per_tick_reference_troops,
-                    )
+                    * pvp_troop_speed_multiplier(effective_troops)
             };
 
             // Scale budget to real time (reference baseline is a 100ms standard OpenFront tick)
@@ -4433,10 +4435,12 @@ mod tests {
 
     #[test]
     fn pvp_troop_and_endgame_ramps_accelerate_large_armies() {
-        assert_eq!(pvp_troop_speed_multiplier(25_000.0, 25_000.0), 1.0);
-        assert_eq!(pvp_troop_speed_multiplier(100_000.0, 25_000.0), 2.0);
-        assert!((pvp_troop_speed_multiplier(1_000_000.0, 25_000.0) - 40.0_f64.sqrt()).abs() < 1e-9);
-        assert_eq!(pvp_troop_speed_multiplier(10_000_000.0, 25_000.0), 20.0);
+        assert_eq!(pvp_troop_speed_multiplier(1_000.0), 1.0);
+        assert!((pvp_troop_speed_multiplier(10_000.0) - 2.0_f64.powf(1.0 / 3.0)).abs() < 1e-9);
+        assert!((pvp_troop_speed_multiplier(1_000_000.0) - 2.0).abs() < 1e-9);
+        assert!((pvp_troop_speed_multiplier(10_000_000.0) - 2.0 * 5.0_f64.sqrt()).abs() < 1e-9);
+        assert_eq!(pvp_troop_speed_multiplier(100_000_000.0), 10.0);
+        assert_eq!(pvp_troop_speed_multiplier(1_000_000_000.0), 10.0);
 
         let run = |troops: f64, share: f64| {
             let mut engine =
