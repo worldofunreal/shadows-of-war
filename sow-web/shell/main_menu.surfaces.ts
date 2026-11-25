@@ -201,6 +201,10 @@ export function renderSettings() {
         "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'/></svg>";
     const devSvg =
         "<svg class='sow-menu__settings-row-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polyline points='16 18 22 12 16 6'/><polyline points='8 6 2 12 8 18'/></svg>";
+    const versionStamp =
+        "<div class='sow-menu__settings-version' role='note'><span class='sow-menu__settings-version-value'>" +
+        esc(window.SOW_BUILD_VERSION || "") +
+        "</span></div>";
     const auth =
         typeof window.SOW_getAuthState === "function"
             ? window.SOW_getAuthState()
@@ -374,6 +378,7 @@ export function renderSettings() {
         "</section>" +
         "</div>" +
         "</div>" +
+        versionStamp +
         "</section>" +
         "</div>"
     );

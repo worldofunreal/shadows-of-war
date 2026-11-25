@@ -118,6 +118,7 @@ declare global {
         SOW_LOCALE_VERSION: string;
         SOW_ASSET_TS: Record<string, string>;
         SOW_BUILD_TS: string;
+        SOW_BUILD_VERSION: string;
         SOW_ASSETS_URL: string;
         /** CrazyGames only: avatars and ability icons packed into sheets; cells are [sheet, x, y, side]. Elsewhere sprites are loose files. */
         SOW_SPRITE_ATLAS?: {

@@ -5,6 +5,12 @@ use web_time::{Duration, Instant};
 
 mod messages;
 
+/// How long a client-side manifest diff has to persist before the update banner
+/// appears. Portal revisions are not visible to us, so a new published build
+/// does not necessarily mean the game is ready — this absorbs propagation.
+#[cfg(target_arch = "wasm32")]
+const PUBLISHED_UPDATE_GRACE: Duration = Duration::from_secs(3 * 24 * 60 * 60);
+
 impl SowApp {
     pub fn update_net(&mut self, now: Instant) {
         self.poll_portal_intents();
@@ -14,7 +20,18 @@ impl SowApp {
             while let Ok(update_available) = self.net.published_version_rx.try_recv() {
                 self.net.published_version_check_pending = false;
                 if update_available {
-                    self.ui.update_available = true;
+                    let diff_since = self.net.published_version_diff_since.get_or_insert_with(|| {
+                        log::warn!(
+                            "Published game version is older than the local build; update banner \
+                             deferred until the difference is stable"
+                        );
+                        now
+                    });
+                    if now.duration_since(*diff_since) >= PUBLISHED_UPDATE_GRACE {
+                        self.ui.update_available = true;
+                    }
+                } else {
+                    self.net.published_version_diff_since = None;
                 }
             }
             if !self.net.published_version_check_pending
