@@ -1387,9 +1387,19 @@ export function renderPurchaseModal() {
               "</div>"
             : "";
     const body = success
-        ? "<div class='sow-menu__modal-actions'><button class='sow-menu__primary' type='button' data-command='cancel_purchase'>" +
-          esc(SOW_t("tutorial.continue")) +
-          "</button></div>"
+        ? skin
+            ? "<p class='sow-purchase-modal__equip-prompt'>" +
+              esc(SOW_t("store.equip_prompt")) +
+              "</p><div class='sow-menu__modal-actions'><button class='sow-menu__primary' type='button' data-command='equip_skin' data-skin-id='" +
+              esc(skin.id) +
+              "'>" +
+              esc(SOW_t("store.equip")) +
+              "</button><button class='sow-menu__ghost-button' type='button' data-command='cancel_purchase'>" +
+              esc(SOW_t("store.no_thanks")) +
+              "</button></div>"
+            : "<div class='sow-menu__modal-actions'><button class='sow-menu__primary' type='button' data-command='cancel_purchase'>" +
+              esc(SOW_t("tutorial.continue")) +
+              "</button></div>"
         : processing
           ? menuUi.purchaseModal.timedOut
               ? "<div class='sow-menu__modal-actions'><button class='sow-menu__primary' type='button' data-command='cancel_purchase'>" +
@@ -1415,6 +1425,7 @@ export function renderPurchaseModal() {
               summary +
               "</strong>";
     const successClass = success ? " is-success" : "";
+    const skinPurchaseClass = success && skin ? " is-skin-purchase" : "";
     const itemClass = menuUi.purchaseModal.leaderId ? " is-leader" : "";
     const phaseClass =
         (spending ? " is-spending" : processing ? " is-processing" : "") +
@@ -1427,7 +1438,9 @@ export function renderPurchaseModal() {
           heading +
           "</h2></div></div>";
     return (
-        "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal sow-purchase-modal" +
+        "<div class='sow-menu__overlay" +
+        skinPurchaseClass +
+        "' data-menu-overlay='purchase'><section class='sow-menu__modal sow-purchase-modal" +
         successClass +
         itemClass +
         phaseClass +

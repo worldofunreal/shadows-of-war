@@ -2538,6 +2538,30 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
   pointer-events: auto;
 }
 
+#sow-menu [data-menu-overlay="skin-picker"].is-closing,
+#sow-menu [data-menu-overlay="purchase"].is-skin-purchase.is-closing {
+  pointer-events: none;
+  animation: sow-menu-overlay-out 180ms ease-in both;
+}
+
+#sow-menu [data-menu-overlay="skin-picker"].is-closing .sow-menu__modal,
+#sow-menu [data-menu-overlay="purchase"].is-skin-purchase.is-closing .sow-menu__modal {
+  animation: sow-menu-modal-out 180ms ease-in both;
+}
+
+@keyframes sow-menu-overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sow-menu-modal-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
 /* Rewarded-video offer after a verified match. Continue and the video
    button share one size and style; portal rules forbid shrinking Continue. */
 .sow-menu__reward-double {
@@ -2990,6 +3014,14 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
   padding-top: 0;
 }
 
+.sow-purchase-modal__equip-prompt {
+  margin: 0;
+  color: var(--sow-muted);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
 .sow-purchase-modal.is-success .sow-purchase-modal__copy h2 {
   font-size: clamp(42px, 4.6vw, 64px);
 }
@@ -3025,6 +3057,10 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
   width: min(80%, 400px);
 }
 
+.sow-purchase-modal.is-equipping .sow-purchase-modal__art-image--skin {
+  animation: sow-purchase-skin-equip 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .sow-purchase-modal.is-success .sow-purchase-modal__visual--bundle .sow-purchase-modal__art-image--bundle {
   width: min(72%, 380px);
 }
@@ -3056,6 +3092,13 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
   100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes sow-purchase-skin-equip {
+  50% {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 24px var(--sow-tactical-accent)) brightness(1.2);
   }
 }
 
@@ -3385,9 +3428,24 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
   .sow-purchase-modal.is-success .sow-purchase-modal__copy h2,
   .sow-purchase-modal.is-success .sow-purchase-modal__effects i,
   .sow-purchase-modal__pending i,
-  .sow-purchase-modal__spend i {
+  .sow-purchase-modal__spend i,
+  #sow-menu [data-menu-overlay="skin-picker"].is-closing,
+  #sow-menu [data-menu-overlay="purchase"].is-skin-purchase.is-closing,
+  #sow-menu [data-menu-overlay="skin-picker"].is-closing .sow-menu__modal,
+  #sow-menu [data-menu-overlay="purchase"].is-skin-purchase.is-closing .sow-menu__modal,
+  #sow-menu .sow-store__skin.is-equipping,
+  .sow-purchase-modal.is-equipping .sow-purchase-modal__art-image--skin {
     animation: none;
   }
+}
+
+#sow-menu[data-reduced-motion="true"] [data-menu-overlay="skin-picker"].is-closing,
+#sow-menu[data-reduced-motion="true"] [data-menu-overlay="purchase"].is-skin-purchase.is-closing,
+#sow-menu[data-reduced-motion="true"] [data-menu-overlay="skin-picker"].is-closing .sow-menu__modal,
+#sow-menu[data-reduced-motion="true"] [data-menu-overlay="purchase"].is-skin-purchase.is-closing .sow-menu__modal,
+#sow-menu[data-reduced-motion="true"] .sow-store__skin.is-equipping,
+#sow-menu[data-reduced-motion="true"] .sow-purchase-modal.is-equipping .sow-purchase-modal__art-image--skin {
+  animation: none !important;
 }
 
 #sow-menu[data-reduced-motion="true"] .sow-menu__reward-stage,

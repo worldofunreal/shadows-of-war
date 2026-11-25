@@ -3127,6 +3127,17 @@
     inset 0 0 0 1px color-mix(in srgb, var(--sow-gold) 32%, transparent);
 }
 
+.sow-store__skin.is-equipping {
+  animation: sow-skin-equip-card 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes sow-skin-equip-card {
+  50% {
+    transform: scale(1.025);
+    filter: brightness(1.2);
+  }
+}
+
 .sow-store__skin.sow-store__skin--pattern .sow-store__skin-art {
   width: 100%;
   height: 112px;

@@ -199,6 +199,7 @@ let disconnectNoticeTimer: number | null = null;
 let disconnectNoticeDismissed = false;
 let disconnectNoticeVisible = false;
 let systemNoticeReturnFocus: HTMLElement | null = null;
+const overlayReturnFocus = new WeakMap<HTMLElement, HTMLElement>();
 let rewardAnimationTimer: number | null = null;
 let rewardAckRetryTimer: number | null = null;
 let rewardAnimationRunning = false;
@@ -1246,20 +1247,57 @@ function settingsRenderKey(): string {
     return surfaceSettingsRenderKey(deleteBusy, deleteError);
 }
 
+function removeOverlay(current: HTMLElement, key: string) {
+    current.remove();
+    if (key === "settings") lastSettingsKey = "";
+    if (key === "system-notice") {
+        const restoreFocus = systemNoticeReturnFocus;
+        systemNoticeReturnFocus = null;
+        if (restoreFocus && restoreFocus.isConnected && !root.hidden) restoreFocus.focus({ preventScroll: true });
+    }
+    if (key === "skin-picker" || (key === "purchase" && current.classList.contains("is-skin-purchase"))) {
+        let restoreFocus = overlayReturnFocus.get(current);
+        if (restoreFocus?.closest("[data-menu-overlay].is-closing")) restoreFocus = undefined;
+        if (!restoreFocus?.isConnected && key === "purchase") {
+            const skinId = current.querySelector<HTMLElement>("[data-command='equip_skin']")?.dataset.skinId;
+            if (skinId) {
+                restoreFocus =
+                    Array.from(
+                        root.querySelectorAll<HTMLElement>(
+                            "[data-menu-overlay='skin-picker']:not(.is-closing) [data-command='equip_skin'], " +
+                                "[data-screen-panel='store'] [data-command='equip_skin']",
+                        ),
+                    ).find((button) => button.dataset.skinId === skinId) || undefined;
+            }
+        }
+        overlayReturnFocus.delete(current);
+        if (restoreFocus && restoreFocus.isConnected && !root.hidden) restoreFocus.focus({ preventScroll: true });
+    }
+}
+
 function syncOverlay(key: string, markup: string) {
     const selector = "[data-menu-overlay='" + key + "']";
-    const current = root.querySelector(selector);
+    const current = root.querySelector<HTMLElement>(selector);
     if (!markup) {
         if (current) {
-            current.remove();
-            if (key === "settings") {
-                lastSettingsKey = "";
-            }
-            if (key === "system-notice") {
-                const restoreFocus = systemNoticeReturnFocus;
-                systemNoticeReturnFocus = null;
-                if (restoreFocus && restoreFocus.isConnected && !root.hidden)
-                    restoreFocus.focus({ preventScroll: true });
+            const animateClose =
+                key === "skin-picker" ||
+                (key === "purchase" && current.classList.contains("is-skin-purchase"));
+            if (animateClose && !reducedRewardMotion()) {
+                if (!current.classList.contains("is-closing")) {
+                    current.inert = true;
+                    current.setAttribute("aria-hidden", "true");
+                    current.classList.add("is-closing");
+                    const finishClose = function () {
+                        if (current.isConnected && current.classList.contains("is-closing")) removeOverlay(current, key);
+                    };
+                    current.addEventListener("animationend", function (event) {
+                        if (event.target === current && event.animationName === "sow-menu-overlay-out") finishClose();
+                    });
+                    window.setTimeout(finishClose, 240);
+                }
+            } else {
+                removeOverlay(current, key);
             }
         }
         return;
@@ -1270,6 +1308,8 @@ function syncOverlay(key: string, markup: string) {
         if (key === "settings") {
             lastSettingsKey = settingsRenderKey();
         }
+        if ((key === "skin-picker" || key === "purchase") && document.activeElement instanceof HTMLElement)
+            overlayReturnFocus.set(next, document.activeElement);
         if (key === "system-notice") {
             systemNoticeReturnFocus =
                 document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -1327,6 +1367,8 @@ function syncOverlay(key: string, markup: string) {
         return;
     }
     if (current.outerHTML !== next.outerHTML) {
+        const restoreFocus = overlayReturnFocus.get(current);
+        if (restoreFocus) overlayReturnFocus.set(next, restoreFocus);
         current.replaceWith(next);
         if (key === "system-notice") {
             const primary = next.querySelector<HTMLButtonElement>("button");
@@ -4551,8 +4593,20 @@ root.addEventListener("click", function (event) {
         const skinId = command === "unequip_skin" ? "" : target.dataset.skinId;
         if (skinId !== undefined && !menuUi.state?.store_busy) {
             if (command === "unequip_skin") playUiCue(AudioCue.UiClick, 2);
-            else playUiCue(AudioCue.UiHeroEquip);
+            else {
+                playUiCue(AudioCue.UiHeroEquip);
+                target.closest<HTMLElement>("[data-skin-card]")?.classList.add("is-equipping");
+                target.closest<HTMLElement>(".sow-purchase-modal")?.classList.add("is-equipping");
+            }
             send("equip_skin", { skin_id: skinId });
+            if (command === "equip_skin") {
+                const closePicker = menuUi.skinPickerOpen;
+                const closePurchasePrompt =
+                    menuUi.purchaseModal?.phase === "success" && menuUi.purchaseModal.skinId === skinId;
+                if (closePicker) menuUi.skinPickerOpen = false;
+                if (closePurchasePrompt) dismissPurchaseModal();
+                if (closePicker || closePurchasePrompt) render();
+            }
         }
         return;
     }
