@@ -851,6 +851,7 @@ export interface MenuHudPayload {
     leaderboard_open?: boolean;
     match_over: boolean;
     is_spectating: boolean;
+    can_continue_observing?: boolean;
     tutorial: HudTutorial;
     notifications: HudNotification[];
     map_feedback: HudMapFeedback | null;

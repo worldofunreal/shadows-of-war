@@ -10167,7 +10167,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         if (hudRefs!.endgameObserve)
           hudRefs!.endgameObserve.classList.toggle(
             "hidden",
-            isWinner || Boolean(hud.winner_name) || hud.endgame_reason === "no_winner",
+            !hud.can_continue_observing,
           );
       }
     }

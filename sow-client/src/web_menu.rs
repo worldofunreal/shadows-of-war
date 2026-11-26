@@ -619,6 +619,7 @@ struct HudScalarKey {
     launch_notice_tick: u64,
     is_spectating: bool,
     endgame_active: bool,
+    can_continue_observing: bool,
     endgame_winner: Option<u16>,
     endgame_team: Option<sow_core::protocol::Team>,
     player_endgame_stats: Option<[u64; 5]>,
@@ -2560,6 +2561,22 @@ fn endgame_active_for_player(
         })
 }
 
+fn can_player_continue_observing(
+    app: &SowApp,
+    snapshot: Option<&sow_core::protocol::SimSnapshot>,
+    me: Option<MyPlayerSummary>,
+    endgame_active: bool,
+) -> bool {
+    endgame_active
+        && !app.sim.config.ranked_1v1
+        && snapshot.is_some_and(|snapshot| {
+            snapshot.phase == sow_core::game::GamePhase::Playing
+                && snapshot.winner.is_none()
+                && snapshot.winning_team.is_none()
+                && me.is_some_and(|player| !player.alive && player.has_spawned)
+        })
+}
+
 fn endgame_stats_snapshot(app: &SowApp, player_id: u16) -> Option<[u64; 5]> {
     app.sim
         .engine
@@ -2631,6 +2648,8 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         || has_active_construction
         || has_active_celebrations;
     let endgame_active = endgame_active_for_player(app, snapshot, me);
+    let can_continue_observing =
+        can_player_continue_observing(app, snapshot, me, endgame_active);
     let player_endgame_stats = if endgame_active {
         endgame_stats_snapshot(app, my_pid)
     } else {
@@ -2712,6 +2731,7 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         },
         is_spectating: app.ui.is_spectating,
         endgame_active,
+        can_continue_observing,
         endgame_winner: snapshot.and_then(|snapshot| snapshot.winner),
         endgame_team: snapshot.and_then(|snapshot| snapshot.winning_team),
         player_endgame_stats,
@@ -5541,6 +5561,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "leaderboard_open": app.ui.show_leaderboard,
         "match_over": match_over,
         "is_spectating": app.ui.is_spectating,
+        "can_continue_observing":
+            can_player_continue_observing(app, snapshot, me, match_over),
         "tutorial": tutorial_state,
         "notifications": notifications,
         "map_feedback": map_feedback,
