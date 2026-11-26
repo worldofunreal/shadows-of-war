@@ -188,3 +188,37 @@ describe("sow-i18n game shell vs landing locale persistence", () => {
     expect(storage.get("sow_ui_locale")).toBe("en");
   });
 });
+
+describe("players route locale redirect preservation", () => {
+  test("redirects /players/<account_id> to localized /es/players/<account_id> while preserving query and hash", () => {
+    const res = runRedirectScript({
+      route: "players/",
+      pathname: "/players/0123456789abcdef0123456789abcdef",
+      search: "?tab=history",
+      hash: "#match-1",
+      storedLocale: "es",
+    });
+    expect(res.redirects).toEqual([
+      "/es/players/0123456789abcdef0123456789abcdef?tab=history#match-1",
+    ]);
+  });
+
+  test("stays put for bots and explicit en override on /players/<account_id>", () => {
+    expect(
+      runRedirectScript({
+        route: "players/",
+        pathname: "/players/0123456789abcdef0123456789abcdef",
+        storedLocale: "en",
+        languages: ["es"],
+      }).redirects,
+    ).toEqual([]);
+    expect(
+      runRedirectScript({
+        route: "players/",
+        pathname: "/players/0123456789abcdef0123456789abcdef",
+        languages: ["es"],
+        userAgent: "Discordbot/2.0",
+      }).redirects,
+    ).toEqual([]);
+  });
+});

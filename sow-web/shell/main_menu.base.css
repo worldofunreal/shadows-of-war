@@ -2204,6 +2204,12 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
   text-overflow: ellipsis;
 }
 
+.sow-menu__ranked-queue-pair {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
 .sow-menu__primary.sow-menu__quick-match {
   position: relative;
   overflow: hidden;
@@ -2228,6 +2234,26 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
     filter 160ms ease,
     box-shadow 180ms ease;
+}
+
+.sow-menu__primary.sow-menu__quick-match--ffa {
+  min-width: 174px;
+  border-color: rgba(245, 200, 112, 0.55);
+  background:
+    linear-gradient(135deg, rgba(255, 252, 230, 0.13) 0%, transparent 48%),
+    linear-gradient(135deg, #35404e, #1b2531);
+  box-shadow:
+    0 8px 22px rgba(4, 10, 18, 0.38),
+    inset 0 1px 0 rgba(255, 253, 240, 0.2),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.34);
+}
+
+.sow-menu__quick-match--ffa strong {
+  color: #f7e7c4;
+}
+
+.sow-menu__quick-match--ffa small {
+  color: rgba(247, 231, 196, 0.76);
 }
 
 .sow-menu__primary.sow-menu__quick-match:hover:not(:disabled) {
@@ -3489,270 +3515,9 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
   background: rgb(59, 130, 246);
 }
 
-/* Ranked presentation shares the reward stage, typography and native motion. */
-.sow-ranked__emblem,
-.sow-menu__ranked-result-card {
-  --rank-light: #f1cb7d;
-  --rank-glow: #c8974d;
-}
-[data-tier="unranked"],
-[data-tier="nomad"] {
-  --rank-light: #a9a9a9;
-  --rank-glow: #6b6b6b;
-}
-[data-tier="bronze"],
-[data-tier="chieftain"] {
-  --rank-light: #e8c07a;
-  --rank-glow: #b87333;
-}
-[data-tier="silver"],
-[data-tier="commander"] {
-  --rank-light: #e8ecef;
-  --rank-glow: #e87a9a;
-}
-[data-tier="governor"] {
-  --rank-light: #f7b8c4;
-  --rank-glow: #9aa3ad;
-}
-[data-tier="gold"],
-[data-tier="king"] {
-  --rank-light: #f5c542;
-  --rank-glow: #e86a1c;
-}
-[data-tier="emperor"] {
-  --rank-light: #ffd269;
-  --rank-glow: #c98a0a;
-}
-[data-tier="platinum"],
-[data-tier="sovereign"] {
-  --rank-light: #d6eaf0;
-  --rank-glow: #3aa8a0;
-}
-[data-tier="diamond"],
-[data-tier="overlord"] {
-  --rank-light: #00d4ff;
-  --rank-glow: #00a8e8;
-}
-[data-tier="master"],
-[data-tier="immortal"] {
-  --rank-light: #b06ae8;
-  --rank-glow: #8e44ad;
-}
-[data-tier="grandmaster"],
-[data-tier="deity"] {
-  --rank-light: #ffc93c;
-  --rank-glow: #ff7a1a;
-}
-.sow-ranked__emblem {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  width: 160px;
-  aspect-ratio: 1;
-  flex: 0 0 auto;
-  vertical-align: middle;
-  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--rank-glow) 25%, transparent));
-}
-.sow-ranked__emblem[data-tier="unranked"],
-.sow-ranked__emblem[data-tier="nomad"] {
-  filter: none;
-}
-.sow-ranked__emblem img,
-.sow-ranked__emblem .sow-ranked__badge-sprite {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background-repeat: no-repeat;
-  background-size: 400% 200%;
-}
-.sow-ranked__emblem b {
-  position: absolute;
-  bottom: 8%;
-  padding: 2px 9px;
-  border: 1px solid var(--rank-glow);
-  background: #12151d;
-  color: var(--rank-light);
-  border-radius: 4px;
-  font-size: 14px;
-  font-family: var(--font-display, serif);
-  line-height: 1.2;
-}
-.sow-ranked__emblem.is-missing::before {
-  content: "";
-  width: 58%;
-  height: 65%;
-  background: #343e4c;
-  clip-path: polygon(50% 0, 100% 20%, 85% 75%, 50% 100%, 15% 75%, 0 20%);
-}
-.sow-ranked__eyebrow {
-  color: #e2c78e;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-.sow-ranked__points {
-  margin: 0;
-  color: #fff6e3;
-  font-size: clamp(26px, 4.4vw, 36px);
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-  text-shadow:
-    0 3px 16px rgba(0, 0, 0, 0.75),
-    0 0 24px color-mix(in srgb, var(--rank-glow, #c8974d) 26%, transparent);
-}
-.sow-ranked__note,
-.sow-ranked__previous,
-.sow-ranked__breakdown {
-  margin: 0;
-  color: #b8c0cc;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.sow-ranked__previous {
-  color: #96a3b6;
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.sow-ranked__breakdown {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  max-width: 100%;
-}
-.sow-ranked__chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 11px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  background: rgba(255, 255, 255, 0.05);
-  color: #dbe2ee;
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  animation: sow-ranked-chip-in 280ms calc(160ms + var(--chip-idx, 0) * 60ms) cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.sow-ranked__chip.is-positive {
-  border-color: rgba(74, 222, 128, 0.36);
-  background: rgba(34, 197, 94, 0.13);
-  color: #bbf7d0;
-}
-.sow-ranked__chip.is-negative {
-  border-color: rgba(248, 113, 113, 0.34);
-  background: rgba(239, 68, 68, 0.12);
-  color: #fecaca;
-}
-.sow-ranked__chip.is-streak {
-  border-color: rgba(245, 197, 66, 0.55);
-  background: linear-gradient(180deg, rgba(245, 197, 66, 0.24), rgba(180, 125, 30, 0.18));
-  color: #fde68a;
-  box-shadow:
-    0 0 14px rgba(245, 197, 66, 0.22),
-    inset 0 1px 0 rgba(255, 245, 200, 0.24);
-}
-.sow-ranked__chip.is-protected {
-  border-color: rgba(147, 197, 253, 0.45);
-  background: rgba(59, 130, 246, 0.15);
-  color: #bfdbfe;
-}
-.sow-ranked__progress {
-  width: 100%;
-  box-sizing: border-box;
-  display: grid;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--sow-tactical-surface-border);
-  background: var(--sow-tactical-surface-subcard-bg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  text-align: start;
-}
-.sow-ranked__progress-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  color: #dde3ee;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-.sow-ranked__progress-label strong {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--rank-glow, #c8974d) 46%, rgba(255, 255, 255, 0.14));
-  background: rgba(245, 223, 171, 0.1);
-  color: var(--rank-light, #f5dfab);
-  font-size: 11.5px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.sow-ranked__track {
-  position: relative;
-  height: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  background: linear-gradient(180deg, #06090f, #111723);
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.85),
-    0 1px 0 rgba(255, 255, 255, 0.07);
-}
-.sow-ranked__track i {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--rank-glow, #b9893f) 82%, #090d14),
-    var(--rank-glow, #b9893f) 55%,
-    var(--rank-light, #ffe2a1)
-  );
-  box-shadow:
-    0 0 16px color-mix(in srgb, var(--rank-glow, #b9893f) 65%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.42);
-  transform-origin: left;
-}
-[dir="rtl"] .sow-ranked__track i {
-  transform-origin: right;
-}
-.sow-ranked__placements {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-block: 12px;
-}
-.sow-ranked__placements span {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 1px solid #58606e;
-  border-radius: 50%;
-  background: #151b25;
-  color: #bdc5d2;
-  font-size: 13px;
-  font-weight: 700;
-}
-.sow-ranked__placements .is-complete {
-  border-color: #d7b574;
-  background: radial-gradient(circle at 50% 30%, #524228, #282013);
-  color: #ffe4aa;
-  box-shadow: 0 0 14px rgba(215, 181, 116, 0.28);
-}
+/* Canonical tier tokens, emblem sprites, progress tracks, breakdown chips,
+   and dual-mode showcase styles now live in sow-ranked.css (bundled before
+   main_menu.base.css via main_menu.css). */
 .sow-ranked__actions {
   display: flex;
   width: 100%;
@@ -3997,16 +3762,6 @@ html[dir="rtl"] .sow-match-goals-toast__timer i {
 }
 .is-rank-down [data-rank-current-emblem] {
   animation: sow-reward-curtain 250ms ease-out both;
-}
-@keyframes sow-ranked-chip-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }
 @keyframes sow-ranked-crown {
   0% {

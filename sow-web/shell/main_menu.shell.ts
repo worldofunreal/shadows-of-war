@@ -17,6 +17,13 @@ import {
 } from "./avatar-presentation.ts";
 import { SOWTooltip } from "./sow-tooltip.ts";
 import {
+    copyTextToClipboard,
+    levelFromXp,
+    publicProfileUrl,
+    xpForLevel,
+} from "./sow-profile-helpers.ts";
+export { xpForLevel, levelFromXp };
+import {
     animateRankResult,
     rankEmblem,
     rankName,
@@ -115,11 +122,13 @@ applyGpuPerfTier();
 import {
     activeProfileEntry,
     bumpAchievementFlatLimit,
+    destroyGameLeaderboard,
     invalidateProfileCache,
     loadMoreProfileHistory,
     loadProfile,
     loadRankedLeaderboard,
     loadVictoryLeaderboard,
+    mountGameProfileInteractive,
     openProfile,
     popProfileNav,
     profileApi,
@@ -944,26 +953,10 @@ menuMusicCreatePlayer();
 window.addEventListener("sow:loader-ready", menuMusicStartAtLoaderEnd, { once: true });
 document.addEventListener("click", menuMusicUnlockFromClick, true);
 
-export function xpForLevel(level: number): number {
-    if (level <= 1) return 100;
-    return Math.round((100 + 11 * Math.pow(level - 1, 1.05)) / 5) * 5;
-}
-
 export function totalXpForLevel(level: number): number {
     let total = 0;
     for (let l = 1; l < level; l++) total += xpForLevel(l);
     return total;
-}
-
-export function levelFromXp(xp: number): number {
-    let level = 1;
-    let remaining = Math.max(0, Math.floor(xp));
-    while (true) {
-        const req = xpForLevel(level);
-        if (remaining < req) return level;
-        remaining -= req;
-        level += 1;
-    }
 }
 
 // Rewards hold the displayed level until its own presentation finishes. Keep a full
@@ -1597,6 +1590,8 @@ export function render(precomputedKey?: string) {
         syncScreenPanel(screen, screenChanged);
     }
     if (screen === "heroes") settleHeroesFeaturedArt();
+    if (screen === "profile") mountGameProfileInteractive(activeScreenPanel());
+    else destroyGameLeaderboard();
     syncOverlay("password", renderPasswordModal());
     syncOverlay("settings", menuUi.settingsOpen ? renderSettings() : "");
     syncOverlay("auth", menuUi.authModalOpen ? renderAuthModal() : "");
@@ -3014,12 +3009,22 @@ function rankedResultKey(state: MenuState) {
 }
 
 function rankedResultKicker(result: RankedResult) {
+    if (
+        result.queue === "RankedFFA" &&
+        Number(result.placement) > 0 &&
+        Number(result.total_contenders) >= Number(result.placement)
+    ) {
+        return SOW_t("lobbies.ranked_ffa_result", {
+            place: result.placement,
+            total: result.total_contenders,
+        });
+    }
     if (result.tier_before !== result.tier_after) {
         return result.score_after > result.score_before
             ? SOW_t("lobbies.rank_promoted")
             : SOW_t("ranked.rank_changed");
     }
-    return SOW_t("lobbies.ranked_1v1");
+    return SOW_t(result.queue === "RankedFFA" ? "lobbies.ranked_ffa" : "lobbies.ranked_1v1");
 }
 
 function presentRankedResult(result: RankedResult) {
@@ -3085,7 +3090,7 @@ function presentRankedResult(result: RankedResult) {
         removeRewardStage();
         if (play) {
             menuUi.profileOpen = menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
-            send("quick_match");
+            send(result.queue === "RankedFFA" ? "quick_match_ffa" : "quick_match");
         }
     };
     again.addEventListener("click", (event) => dismiss(event, true));
@@ -4015,17 +4020,59 @@ root.addEventListener("click", function (event) {
         }
         return;
     }
+    if (command === "ranked_overview_mode") {
+        const queue = target.dataset.rankedOverviewMode;
+        if (queue === "Ranked1v1" || queue === "RankedFFA") {
+            MenuSfx.filterChip(target);
+            menuUi.profileOverviewQueue = queue;
+            syncProfileDom();
+        }
+        return;
+    }
+    if (command === "profile_history_queue") {
+        const queue = target.dataset.historyQueue || "all";
+        MenuSfx.filterChip(target);
+        menuUi.profileHistoryQueueFilter = queue;
+        syncProfileDom();
+        return;
+    }
+    if (command === "share_profile") {
+        const accountId = target.dataset.accountId || menuUi.profileAccountId || "";
+        if (!accountId) return;
+        MenuSfx.click();
+        const origin = typeof window !== "undefined" && window.location ? window.location.origin : "https://shadowsofwar.io";
+        const url = origin + publicProfileUrl(accountId);
+        copyTextToClipboard(url).then(function (ok) {
+            if (!ok) return;
+            menuUi.profileShareCopied = true;
+            syncProfileDom();
+            setTimeout(function () {
+                menuUi.profileShareCopied = false;
+                syncProfileDom();
+            }, 2200);
+        });
+        return;
+    }
+    if (command === "ranked_board_queue") {
+        const queue = target.dataset.rankedQueue;
+        if (queue === "Ranked1v1" || queue === "RankedFFA") {
+            menuUi.profileRankedQueue = queue;
+            loadRankedLeaderboard(false, queue);
+            render();
+        }
+        return;
+    }
     if (command === "retry_ranked_board") {
         MenuSfx.click();
         loadRankedLeaderboard(true);
         return;
     }
-    if (command === "quick_match") {
+    if (command === "quick_match" || command === "quick_match_ffa") {
         MenuSfx.battleLaunch();
         flushLeaderPersist();
         target.setAttribute("disabled", "");
         menuUi.profileOpen = menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
-        send("quick_match");
+        send(command);
         return;
     }
     if (command === "open_profile") {
@@ -4072,9 +4119,6 @@ root.addEventListener("click", function (event) {
                     historyEntry.stale)
             )
                 loadMoreProfileHistory();
-        } else if (menuUi.profileTab === "victories") {
-            loadRankedLeaderboard();
-            loadVictoryLeaderboard();
         }
         return;
     }
@@ -5001,7 +5045,8 @@ root.addEventListener("click", function (event) {
     if (command === "open_browser" || command === "open_create") {
         MenuSfx.battleSubmenu();
     } else if (
-        command === "quick_match" ||
+      command === "quick_match" ||
+      command === "quick_match_ffa" ||
         command === "join_matchmaking" ||
         command === "start_private" ||
         command === "create_game"

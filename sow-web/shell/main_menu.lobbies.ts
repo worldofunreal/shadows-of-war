@@ -2219,7 +2219,8 @@ export function updateRankedQueue() {
 
 export function renderQueue() {
     const lobby = joinedLobby();
-    const rankedSearch = !!menuUi.state!.ranked_search_active && !lobby;
+    const rankedFfaSearch = !!menuUi.state!.ranked_ffa_search_active && !lobby;
+    const rankedSearch = !!menuUi.state!.ranked_search_active && !rankedFfaSearch && !lobby;
     if (rankedSearch || lobby?.kind === "Ranked1v1") {
         return (
             "<main class='sow-menu__main sow-menu__main--ranked' data-screen-panel='queue'>" +
@@ -2251,7 +2252,9 @@ export function renderQueue() {
     const elapsed = menuUi.state!.ranked_search_elapsed_secs || 0;
     const title = lobby
         ? formatMapName(lobby).toUpperCase()
-        : rankedSearch
+        : rankedFfaSearch
+          ? SOW_t("lobbies.ranked_ffa")
+          : rankedSearch
           ? SOW_t("lobbies.ranked_1v1")
           : SOW_t("lobbies.matchmaking");
     const mapThumbUrl = lobbyThumb(lobby || { map_name: "world" });
@@ -2260,10 +2263,14 @@ export function renderQueue() {
 
     const modeClass = "sow-menu__mode-chip--" + (lobby ? lobby.game_mode.toLowerCase() : "ffa");
     const modeLabel = lobby
-        ? lobby.game_mode === "Teams"
+        ? lobby.kind === "RankedFFA"
+            ? SOW_t("lobbies.ranked_ffa")
+            : lobby.game_mode === "Teams"
             ? SOW_t("lobbies.teams_red_blue")
             : gameModeLabel(lobby.game_mode)
-        : rankedSearch
+        : rankedFfaSearch
+          ? SOW_t("lobbies.ranked_ffa")
+          : rankedSearch
           ? SOW_t("lobbies.ranked_1v1")
           : SOW_t("lobbies.matchmaking");
 
@@ -2298,10 +2305,14 @@ export function renderQueue() {
             "<div class='sow-menu__queue-feedback sow-menu__queue-feedback--error'>" +
             esc(localizedText(menuUi.state!.error)) +
             "</div>";
-    } else if (rankedSearch) {
+    } else if (rankedSearch || rankedFfaSearch) {
         feedback =
             "<div class='sow-menu__queue-countdown'>" +
-            esc(SOW_t("lobbies.ranked_searching", { seconds: elapsed })) +
+            esc(
+                SOW_t(rankedFfaSearch ? "lobbies.ranked_ffa_searching" : "lobbies.ranked_searching", {
+                    seconds: elapsed,
+                }),
+            ) +
             "</div>";
     }
 
@@ -2381,7 +2392,7 @@ export function renderQueue() {
               " <span>↗</span></button>"
             : "") +
         "<button class='sow-menu__danger sow-menu__queue-leave-btn' type='button' data-command='leave_lobby'>" +
-        esc(SOW_t(rankedSearch ? "lobbies.cancel" : "lobbies.leave_lobby")) +
+        esc(SOW_t(rankedSearch || rankedFfaSearch ? "lobbies.cancel" : "lobbies.leave_lobby")) +
         " <span>×</span></button>" +
         "</div>" +
         "</section>" +
@@ -2402,7 +2413,7 @@ export function renderQueue() {
         "<div class='sow-menu__queue-roster-wrap' data-queue-roster data-roster-key='" +
         esc(rosterKey) +
         "'>" +
-        (rankedSearch
+        (rankedSearch || rankedFfaSearch
             ? "<div class='sow-menu__queue-countdown'>" + esc(SOW_t("lobbies.waiting_for_players")) + "</div>"
             : rosterHtml) +
         "</div>" +

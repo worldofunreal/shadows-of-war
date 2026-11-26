@@ -2,6 +2,8 @@
  * Source entry for the web menu styles.
  * sow-dist concatenates these files in cascade order before inlining:
  * sow-controls.css
+ * sow-ranked.css
+ * sow-profile.css
  * main_menu.base.css
  * main_menu.layout.css
  * main_menu.lobbies.css

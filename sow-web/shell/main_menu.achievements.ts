@@ -1,15 +1,39 @@
 import { avatarImageAttribute } from "./avatar-presentation.ts";
 import {
-    asset,
-    currencyAsset,
+    assetUrl as asset,
+    currencyAssetUrl as currencyAsset,
     esc,
+    getLeaderCatalog,
     leaderArtSlug,
     leaderById,
     leaderCivilization,
     leaderDisplayName,
-    menuUi,
-} from "./main_menu.core.ts";
-import type { MenuLeader } from "./main_menu.state.ts";
+} from "./sow-profile-helpers.ts";
+import type { HeroCareerStats, MenuCampaignEpisode, MenuLeader } from "./main_menu.state.ts";
+
+export interface AchievementRuntimeSnapshot {
+    account_id?: string | null;
+    leaders?: MenuLeader[] | null;
+    achievements?: unknown;
+    campaign?: { episodes?: MenuCampaignEpisode[] | null } | null;
+    profile_stats?: {
+        leader_stats?: Record<string, HeroCareerStats> | null;
+        leader_xp?: number | Record<string, number> | null;
+    } | null;
+}
+
+let achievementRuntimeProvider: (() => AchievementRuntimeSnapshot | null) | null = null;
+
+/** Injects live menu state for in-game achievements while allowing WASM-free public guest profiles. */
+export function setAchievementRuntimeProvider(
+    provider: (() => AchievementRuntimeSnapshot | null) | null,
+): void {
+    achievementRuntimeProvider = provider;
+}
+
+function getAchievementRuntime(): AchievementRuntimeSnapshot | null {
+    return achievementRuntimeProvider ? achievementRuntimeProvider() : null;
+}
 
 export interface ProfileAchievement {
     id: string;
@@ -519,7 +543,8 @@ export function getHeroOwnershipLabel(status: HeroOwnershipStatus): string {
 
 function getHeroEntriesCatalog(): { slug: string; name: string; leader: MenuLeader | null }[] {
     const bySlug = new Map<string, { slug: string; name: string; leader: MenuLeader | null }>();
-    const liveLeaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+    const runtime = getAchievementRuntime();
+    const liveLeaders = runtime && Array.isArray(runtime.leaders) ? runtime.leaders : getLeaderCatalog();
     for (const leader of liveLeaders) {
         if (!leader || !leader.slug) continue;
         const slug = String(leader.slug).toLowerCase().trim();
@@ -679,7 +704,8 @@ let cachedUnlockedRawLen = -1;
 let cachedUnlockedSet: Set<string> | null = null;
 
 function buildUnlockedSetFromMenuState(): Set<string> | null {
-    const raw = menuUi.state && menuUi.state.achievements;
+    const runtime = getAchievementRuntime();
+    const raw = runtime && runtime.achievements;
     if (!Array.isArray(raw)) return null;
     if (raw === cachedUnlockedRawRef && raw.length === cachedUnlockedRawLen && cachedUnlockedSet) {
         return cachedUnlockedSet;
@@ -723,10 +749,11 @@ export function resolveProfileAchievements(data: AchievementProfileInput): Profi
     const empiresDefeated = Math.max(0, Number(data.empires_defeated) || 0);
     const tribesDefeated = Math.max(0, Number(data.tribes_defeated) || 0);
     const laurels = Math.max(0, Number(data.laurels) || 0);
-    const isOwn = Boolean(menuUi.state && data.account_id && menuUi.state.account_id === data.account_id);
+    const runtime = getAchievementRuntime();
+    const isOwn = Boolean(runtime && data.account_id && runtime.account_id === data.account_id);
     const unlockedSet = isOwn ? buildUnlockedSetFromMenuState() : null;
-    const campaignCompleted = isOwn && menuUi.state?.campaign?.episodes
-        ? menuUi.state.campaign.episodes.filter((ep) => ep && ep.completed).length
+    const campaignCompleted = isOwn && runtime?.campaign?.episodes
+        ? runtime.campaign.episodes.filter((ep) => ep && ep.completed).length
         : 0;
 
     const leadersList = Array.isArray(data.leaders) ? data.leaders : [];
@@ -749,9 +776,9 @@ export function resolveProfileAchievements(data: AchievementProfileInput): Profi
         }
     }
 
-    if (isOwn && menuUi.state && Array.isArray(menuUi.state.leaders)) {
+    if (isOwn && runtime && Array.isArray(runtime.leaders)) {
         totalLeaderXp = 0;
-        for (const l of menuUi.state.leaders) {
+        for (const l of runtime.leaders) {
             if (!l || !l.slug) continue;
             const slug = String(l.slug).toLowerCase().trim();
             if (l.owned || l.permanently_free) ownedSet.add(slug);
@@ -1022,7 +1049,8 @@ let cachedLeadersLen = -1;
 let cachedLeaderLookupMap: Map<string, MenuLeader> | null = null;
 
 export function buildLeaderLookupMap(): Map<string, MenuLeader> {
-    const leaders = menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+    const runtime = getAchievementRuntime();
+    const leaders = runtime && Array.isArray(runtime.leaders) ? runtime.leaders : getLeaderCatalog();
     if (leaders === cachedLeadersRef && leaders.length === cachedLeadersLen && cachedLeaderLookupMap) {
         return cachedLeaderLookupMap;
     }
@@ -1064,16 +1092,17 @@ function currentHeroSummaryGenerationKey(unlockedSet: Set<string> | null): strin
 export function computeHeroAchievementSummary(leader: MenuLeader): HeroAchievementSummary {
     const slug = String(leader.slug || leader.id || "caesar").toLowerCase().trim();
     const displayName = leaderDisplayName(leader) || leader.name || slug;
+    const runtime = getAchievementRuntime();
     const stats =
         leader.stats ||
-        (menuUi.state?.profile_stats?.leader_stats && leader.name
-            ? menuUi.state.profile_stats.leader_stats[leader.name]
+        (runtime?.profile_stats?.leader_stats && leader.name
+            ? runtime.profile_stats.leader_stats[leader.name]
             : undefined) ||
-        (menuUi.state?.profile_stats?.leader_stats
-            ? menuUi.state.profile_stats.leader_stats[slug]
+        (runtime?.profile_stats?.leader_stats
+            ? runtime.profile_stats.leader_stats[slug]
             : undefined) ||
         {};
-    const xpMap = menuUi.state?.profile_stats?.leader_xp;
+    const xpMap = runtime?.profile_stats?.leader_xp;
     const xp =
         typeof leader.xp === "number"
             ? leader.xp

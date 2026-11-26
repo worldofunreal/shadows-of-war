@@ -1,4 +1,12 @@
 import { avatarPortraitPath, fillAvatarMarkup, setAvatarImage } from "../shell/avatar-presentation.ts";
+import {
+  bindPointerSpotlight,
+  esc,
+  profileApiUrl,
+  publicLeaderboardsUrl,
+  publicProfileUrl,
+} from "../shell/sow-profile-helpers.ts";
+import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation.ts";
 
 (() => {
   const $ = (selector) => document.querySelector(selector);
@@ -564,9 +572,11 @@ import { avatarPortraitPath, fillAvatarMarkup, setAvatarImage } from "../shell/a
   mapPrev?.addEventListener("click", () => selectMapIndex(activeMapIndex - 1));
   mapNext?.addEventListener("click", () => selectMapIndex(activeMapIndex + 1));
 
-  // Interactive Ranked 1v1 Cultural Leagues Showcase
+  // Interactive Ranked 1v1 & FFA Shared 10-League Cultural Showcase
+  const rankedSection = $("#ranked") as HTMLElement | null;
   const rankedStage = $("[data-ranked-stage]") as HTMLElement | null;
   const rankedPicks = $$("[data-ranked-pick]") as HTMLButtonElement[];
+  const rankedModeBtns = $$("[data-ranked-mode]") as HTMLButtonElement[];
   const rankedStageBadge = $("[data-ranked-stage-badge]") as HTMLElement | null;
   const rankedStageTitle = $("[data-ranked-stage-title]") as HTMLElement | null;
   const rankedStageCulture = $("[data-ranked-stage-culture]") as HTMLElement | null;
@@ -574,7 +584,134 @@ import { avatarPortraitPath, fillAvatarMarkup, setAvatarImage } from "../shell/a
   const rankedStageRange = $("[data-ranked-stage-range]") as HTMLElement | null;
   const rankedStageRule = $("[data-ranked-stage-rule]") as HTMLElement | null;
   const rankedStageFill = $("[data-ranked-stage-fill]") as HTMLElement | null;
-  function selectRankedPick(pick: HTMLButtonElement) {
+  const rankedLivePodium = $("[data-ranked-live-podium]") as HTMLElement | null;
+  const rankedLiveTitle = $("[data-ranked-live-title]") as HTMLElement | null;
+  const rankedLiveLink = $("[data-ranked-live-link]") as HTMLAnchorElement | null;
+  const rankedLiveGrid = $("[data-ranked-live-grid]") as HTMLElement | null;
+
+  type LandingRankedMode = "Ranked1v1" | "RankedFFA";
+  interface LandingTopEntry {
+    rank: number;
+    account_id: string;
+    handle: string;
+    score: number;
+    tier: string;
+    division: string | null;
+  }
+
+  let activeRankedMode: LandingRankedMode = "Ranked1v1";
+  let rankedSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+  const rankedPodiumCache = new Map<LandingRankedMode, LandingTopEntry[]>();
+  const rankedPodiumInFlight = new Set<LandingRankedMode>();
+
+  bindPointerSpotlight(rankedStage);
+
+  function triggerStageSwitchEffect() {
+    if (!rankedStage || prefersReducedMotion.matches) return;
+    rankedStage.classList.remove("is-switching");
+    void rankedStage.offsetWidth;
+    rankedStage.classList.add("is-switching");
+    if (rankedSwitchTimer) clearTimeout(rankedSwitchTimer);
+    rankedSwitchTimer = setTimeout(() => {
+      rankedStage.classList.remove("is-switching");
+    }, 340);
+  }
+
+  function renderLandingTopPodium(mode: LandingRankedMode, entries: LandingTopEntry[] | undefined) {
+    if (!rankedLivePodium || !rankedLiveGrid) return;
+    if (!entries || !entries.length) {
+      rankedLivePodium.hidden = true;
+      rankedLiveGrid.innerHTML = "";
+      return;
+    }
+    if (rankedLiveTitle) {
+      const modeLabel =
+        mode === "RankedFFA"
+          ? siteText("lobbies.ranked_ffa", "Ranked FFA")
+          : siteText("lobbies.ranked_1v1", "Ranked 1v1");
+      rankedLiveTitle.textContent = modeLabel + " · " + siteText("site.ranked_live_champions", "Current Top 3");
+    }
+    if (rankedLiveLink) {
+      rankedLiveLink.href = publicLeaderboardsUrl() + "?board=" + encodeURIComponent(mode);
+    }
+    rankedLiveGrid.innerHTML = entries
+      .slice(0, 3)
+      .map((entry, idx) => {
+        const tierKey = rankTier(entry.tier);
+        const rankNum = entry.rank || idx + 1;
+        const ptsText = siteText("lobbies.rank_score", "{score} pts", { score: entry.score });
+        const leagueLabel = rankName(entry.tier, entry.division);
+        return (
+          '<a class="ranked-live-podium-card" data-tier="' +
+          esc(tierKey) +
+          '" href="' +
+          esc(publicProfileUrl(entry.account_id)) +
+          '">' +
+          '<span class="ranked-live-podium-rank">#' +
+          rankNum +
+          "</span>" +
+          rankEmblem(entry.tier, entry.division) +
+          '<span class="ranked-live-podium-info">' +
+          "<strong>" +
+          esc(entry.handle) +
+          "</strong>" +
+          "<small>" +
+          esc(leagueLabel) +
+          " · " +
+          esc(ptsText) +
+          "</small>" +
+          "</span>" +
+          "</a>"
+        );
+      })
+      .join("");
+    rankedLivePodium.hidden = false;
+  }
+
+  async function loadLandingTopPodium(mode: LandingRankedMode) {
+    if (!rankedLivePodium || !rankedLiveGrid) return;
+    if (rankedPodiumCache.has(mode)) {
+      if (mode === activeRankedMode) {
+        renderLandingTopPodium(mode, rankedPodiumCache.get(mode));
+      }
+      return;
+    }
+    if (rankedPodiumInFlight.has(mode) || typeof fetch !== "function") return;
+    rankedPodiumInFlight.add(mode);
+    try {
+      const url = profileApiUrl(
+        "/seasons/current/leaderboard?queue=" + encodeURIComponent(mode) + "&limit=3",
+      );
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const data = await res.json();
+      const items = Array.isArray(data?.items) ? (data.items as LandingTopEntry[]) : [];
+      rankedPodiumCache.set(mode, items);
+      if (mode === activeRankedMode) {
+        renderLandingTopPodium(mode, items);
+      }
+    } catch {
+      // Keep podium hidden when API is unavailable offline.
+    } finally {
+      rankedPodiumInFlight.delete(mode);
+    }
+  }
+
+  function selectRankedMode(mode: LandingRankedMode) {
+    activeRankedMode = mode;
+    rankedModeBtns.forEach((btn) => {
+      const active = btn.dataset.rankedMode === mode;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", String(active));
+    });
+    if (rankedLiveLink) {
+      rankedLiveLink.href = publicLeaderboardsUrl() + "?board=" + encodeURIComponent(mode);
+    }
+    triggerStageSwitchEffect();
+    void loadLandingTopPodium(mode);
+  }
+
+  function selectRankedPick(pick: HTMLButtonElement, animate = false) {
     if (!rankedStage || !pick) return;
     const culture = pick.dataset.culture || "grandmaster";
     const badge = pick.dataset.badge || culture;
@@ -584,6 +721,7 @@ import { avatarPortraitPath, fillAvatarMarkup, setAvatarImage } from "../shell/a
     const cultureText = pick.querySelector("[data-ranked-pick-culture]")?.textContent || "";
     const lore = pick.querySelector("[data-ranked-pick-lore]")?.textContent || "";
     const rule = pick.querySelector("[data-ranked-pick-rule]")?.textContent || "";
+    if (animate) triggerStageSwitchEffect();
     rankedStage.dataset.culture = culture;
     rankedStage.dataset.badge = badge;
     if (rankedStageBadge) {
@@ -602,8 +740,30 @@ import { avatarPortraitPath, fillAvatarMarkup, setAvatarImage } from "../shell/a
       btn.setAttribute("aria-selected", String(active));
     });
   }
-  rankedPicks.forEach((pick) => pick.addEventListener("click", () => selectRankedPick(pick)));
+
+  rankedModeBtns.forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const mode = btn.dataset.rankedMode === "RankedFFA" ? "RankedFFA" : "Ranked1v1";
+      selectRankedMode(mode);
+    }),
+  );
+  rankedPicks.forEach((pick) => pick.addEventListener("click", () => selectRankedPick(pick, true)));
   const initialRankedPick = rankedPicks.find((pick) => pick.classList.contains("is-active")) || rankedPicks[0];
+
+  if (rankedSection && rankedLivePodium && typeof IntersectionObserver === "function") {
+    const podiumObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          podiumObserver.disconnect();
+          void loadLandingTopPodium(activeRankedMode);
+        }
+      },
+      { rootMargin: "220px 0px" },
+    );
+    podiumObserver.observe(rankedSection);
+  } else if (rankedSection && rankedLivePodium) {
+    void loadLandingTopPodium(activeRankedMode);
+  }
 
   function refreshLocale() {
     updateLeader(activeLeaderIndex);
@@ -611,7 +771,10 @@ import { avatarPortraitPath, fillAvatarMarkup, setAvatarImage } from "../shell/a
     syncMotion();
     if (initialRankedPick) {
       const current = rankedPicks.find((pick) => pick.classList.contains("is-active")) || initialRankedPick;
-      selectRankedPick(current);
+      selectRankedPick(current, false);
+    }
+    if (rankedPodiumCache.has(activeRankedMode)) {
+      renderLandingTopPodium(activeRankedMode, rankedPodiumCache.get(activeRankedMode));
     }
   }
   $$("[data-leader-total]").forEach((element) => {

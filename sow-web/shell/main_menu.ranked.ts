@@ -1,199 +1,51 @@
-import { asset, avatarImage, esc, formatMapName, lobbyThumb, menuUi } from "./main_menu.core.ts";
+import { avatarImage, esc, formatMapName, lobbyThumb, menuUi } from "./main_menu.core.ts";
 import { avatarImageAttribute } from "./avatar-presentation.ts";
-import type { MenuLobby, RankedLadder, RankedPointsBreakdown, RankedStep } from "./main_menu.state.ts";
+import type { MenuLobby, RankedLadder } from "./main_menu.state.ts";
 import type { ProfileRating } from "./main_menu.profile.ts";
+import {
+    rankBadgeSlot,
+    rankCulture,
+    rankEmblem,
+    rankLabel,
+    rankName,
+    rankPlacements,
+    rankProgress,
+    rankProgressMarkup,
+    rankTier,
+    rankedPointsBreakdownMarkup,
+    renderRankedOverview,
+} from "./sow-ranked-presentation.ts";
+
+export {
+    rankBadgeSlot,
+    rankCulture,
+    rankEmblem,
+    rankLabel,
+    rankName,
+    rankPlacements,
+    rankProgress,
+    rankProgressMarkup,
+    rankTier,
+    rankedPointsBreakdownMarkup,
+    renderRankedOverview,
+};
 
 // Shared presentation for queue, loader, profile and the confirmed match result.
-const TIER_KEYS: Record<string, string> = {
-    nomad: "nomad",
-    chieftain: "chieftain",
-    commander: "commander",
-    governor: "governor",
-    king: "king",
-    emperor: "emperor",
-    sovereign: "sovereign",
-    overlord: "overlord",
-    immortal: "immortal",
-    deity: "deity",
-    bronze: "bronze",
-    silver: "silver",
-    gold: "gold",
-    platinum: "platinum",
-    diamond: "diamond",
-    master: "master",
-    grandmaster: "grandmaster",
-};
-
-const TIER_BADGE_SLOT: Record<string, string> = {
-    nomad: "unranked",
-    chieftain: "bronze",
-    commander: "silver",
-    governor: "silver",
-    king: "gold",
-    emperor: "gold",
-    sovereign: "platinum",
-    overlord: "diamond",
-    immortal: "master",
-    deity: "grandmaster",
-    bronze: "bronze",
-    silver: "silver",
-    gold: "gold",
-    platinum: "platinum",
-    diamond: "diamond",
-    master: "master",
-    grandmaster: "grandmaster",
-    unranked: "unranked",
-};
-
-const BADGE_GRID_POS: Record<string, [number, number]> = {
-    unranked: [0, 0],
-    bronze: [1, 0],
-    silver: [2, 0],
-    gold: [3, 0],
-    platinum: [0, 1],
-    diamond: [1, 1],
-    master: [2, 1],
-    grandmaster: [3, 1],
-};
-
-export function rankTier(tier?: string | null): string {
-    if (!tier) return "nomad";
-    return TIER_KEYS[tier.toLowerCase()] || "nomad";
-}
-
-export function rankName(tier?: string | null, division?: string | null): string {
-    return SOW_t("ranked.tier_" + rankTier(tier)) + (division ? " " + division : "");
-}
-
-export function rankLabel(
-    rating:
-        | (Pick<ProfileRating, "tier" | "division"> &
-              Partial<Pick<ProfileRating, "score" | "placements_complete" | "games_played">>)
-        | null,
+export function rankOverview(
+    rating: ProfileRating | null,
+    ffaRating: ProfileRating | null,
+    ladder: RankedLadder | null | undefined,
+    own: boolean,
+    activeQueue: "Ranked1v1" | "RankedFFA" = "Ranked1v1",
 ): string {
-    const name = rankName(rating?.tier || "Nomad", rating?.division);
-    const score =
-        rating && typeof rating.score === "number" && Number.isFinite(rating.score)
-            ? rating.score
-            : 0;
-    return name + " · " + score;
-}
-
-export function rankEmblem(tier?: string | null, division?: string | null): string {
-    const key = rankTier(tier);
-    const slot = TIER_BADGE_SLOT[key] || "unranked";
-    const [col, row] = BADGE_GRID_POS[slot] || [0, 0];
-    const xPct = ((col / 3) * 100).toFixed(4);
-    const yPct = row * 100;
-    return (
-        "<span class='sow-ranked__emblem' data-tier='" +
-        key +
-        "' data-badge='" +
-        slot +
-        "' aria-hidden='true'><i class='sow-ranked__badge-sprite' style=\"background-image:url('" +
-        esc(asset("shell/ranked/badges.webp")) +
-        "');background-position:" +
-        xPct +
-        "% " +
-        yPct +
-        "%\"></i>" +
-        (division ? "<b>" + esc(division) + "</b>" : "") +
-        "</span>"
-    );
-}
-
-export function rankProgress(score: number, ladder?: RankedLadder | null) {
-    if (!ladder?.steps.length || !Number.isFinite(score)) return null;
-    const steps = ladder.steps;
-    let index = 0;
-    while (index + 1 < steps.length && score >= steps[index + 1].score) index++;
-    const step = steps[index];
-    const next: RankedStep | null = steps[index + 1] || null;
-    const ceiling = next ? next.score : ladder.max_score;
-    return { step, next, ceiling, remaining: Math.max(0, ceiling - score),
-        fraction: Math.max(0, Math.min(1, (score - step.score) / Math.max(1, ceiling - step.score))) };
-}
-
-export function rankProgressMarkup(score: number, ladder?: RankedLadder | null): string {
-    const progress = rankProgress(score, ladder);
-    if (!progress) return "";
-    const target = progress.next ? rankName(progress.next.tier, progress.next.division) : SOW_t("ranked.maximum");
-    return "<div class='sow-ranked__progress'><div class='sow-ranked__progress-label'><span data-rank-target>" +
-        esc(target) + "</span><strong data-rank-remaining>" + esc(Math.round(score) + " / " + progress.ceiling) +
-        "</strong></div><div class='sow-ranked__track' role='progressbar' aria-label='" + esc(target) +
-        "' aria-valuemin='0' aria-valuemax='100' aria-valuenow='" + Math.round(progress.fraction * 100) +
-        "'><i style='transform:scaleX(" + progress.fraction + ")'></i></div></div>";
-}
-
-export function rankPlacements(played: number): string {
-    const count = Math.max(0, Math.min(5, played));
-    return "<div class='sow-ranked__placements' aria-label='" + esc(SOW_t("ranked.placements", { played: count })) +
-        "'>" + Array.from({ length: 5 }, (_, index) => "<span class='" + (index < count ? "is-complete" : "") +
-            "' aria-hidden='true'>" + (index < count ? "✓" : index + 1) + "</span>").join("") +
-        "</div><p class='sow-ranked__note'>" + esc(SOW_t("ranked.placements_help")) + "</p>";
-}
-
-export function rankedPointsBreakdownMarkup(points: RankedPointsBreakdown): string {
-    if (points.protected_loss) {
-        return "";
-    }
-    const components: Array<[number, string]> = [
-        [points.base, "base"],
-        [points.opponent, "opponent"],
-        [points.league, "league"],
-        [points.streak, "streak"],
-        [points.protection, "protection"],
-        [points.limit, "limits"],
-    ];
-    const visible = components.filter(([value]) => value !== 0);
-    if (!visible.length) {
-        return "";
-    }
-    return (
-        "<p class='sow-ranked__breakdown'>" +
-        visible
-            .map(function ([value, key], idx) {
-                const tone =
-                    key === "streak" && value > 0
-                        ? "is-streak"
-                        : value > 0
-                          ? "is-positive"
-                          : "is-negative";
-                return (
-                    "<span class='sow-ranked__chip " +
-                    tone +
-                    "' style='--chip-idx:" +
-                    idx +
-                    "'>" +
-                    esc((value > 0 ? "+" : "") + value + " " + SOW_t("lobbies.rank_breakdown_" + key)) +
-                    "</span>"
-                );
-            })
-            .join(" ") +
-        "</p>"
-    );
-}
-
-export function rankOverview(rating: ProfileRating | null, ladder: RankedLadder | null | undefined, own: boolean): string {
-    const currentTier = rating?.tier || "Nomad";
-    const currentDivision = rating?.division || null;
-    const currentScore = rating && Number.isFinite(rating.score) ? rating.score : 0;
-    const heroTier = rankTier(currentTier);
-    const tiers = (ladder?.steps || []).filter((step, index, steps) => !index || step.tier !== steps[index - 1].tier);
-    return "<section class='sow-ranked__overview' data-tier='" + heroTier + "' aria-label='" + esc(SOW_t("ranked.my_rank")) + "'><div class='sow-ranked__hero'>" +
-        rankEmblem(currentTier, currentDivision) +
-        "<div class='sow-ranked__summary'><span class='sow-ranked__eyebrow'>" + esc(SOW_t("lobbies.ranked_1v1")) +
-        "</span><h2>" + esc(rankName(currentTier, currentDivision)) + "</h2>" +
-        "<p class='sow-ranked__points'>" + esc(SOW_t("lobbies.rank_score", { score: currentScore })) + "</p>" +
-        rankProgressMarkup(currentScore, ladder) +
-        "</div></div>" + (tiers.length ? "<ol class='sow-ranked__leagues'>" + tiers.map(step =>
-            "<li" + (rankTier(step.tier) === heroTier ? " class='is-current' aria-current='step'" : "") + ">" +
-            rankEmblem(step.tier) + "<strong>" + esc(rankName(step.tier)) + "</strong><small>" + esc(step.score) +
-            "</small></li>").join("") + "</ol>" : "") +
-        "<div class='sow-ranked__actions'>" + (own ? "<button type='button' class='sow-menu__primary' data-command='quick_match'>" +
-            esc(SOW_t("ranked.play")) + "</button>" : "") +
-        "<button type='button' class='sow-menu__secondary' data-command='profile_tab' data-profile-tab='victories'>" +
-            esc(SOW_t("ranked.view_board")) + "</button></div></section>";
+    return renderRankedOverview({
+        rating1v1: rating,
+        ratingFfa: ffaRating,
+        ladder,
+        own,
+        mode: "game",
+        activeQueue,
+    });
 }
 
 export function renderRankedDuel(lobby: MenuLobby | null, loading = false): string {

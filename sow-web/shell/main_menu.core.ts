@@ -1,5 +1,6 @@
 import { rankEmblem, rankLabel } from "./main_menu.ranked.ts";
 import { avatarImageAttribute } from "./avatar-presentation.ts";
+import { setLeaderCatalogProvider, setMapInfoProvider } from "./sow-profile-helpers.ts";
 import { zoomInputMode } from "./campaign/rules.ts";
 import type {
     HeroBioEntry,
@@ -92,7 +93,12 @@ interface MenuUi {
     profileAchievementSelectedTiers: Record<string, string>;
     profileData: ProfileData | null;
     rankedRating: ProfileRating | null;
+    rankedFfaRating: ProfileRating | null;
     rankedLadder: RankedLadder | null;
+    profileRankedQueue: "Ranked1v1" | "RankedFFA";
+    profileOverviewQueue: "Ranked1v1" | "RankedFFA";
+    profileHistoryQueueFilter: string;
+    profileShareCopied: boolean;
     profileHistory: ProfileMatch[];
     profileMatchDetail: ProfileMatchDetail | null;
     profileSnapshotLoading: boolean;
@@ -183,7 +189,12 @@ export const menuUi: MenuUi = {
     profileAchievementSelectedTiers: Object.create(null),
     profileData: null,
     rankedRating: null,
+    rankedFfaRating: null,
     rankedLadder: null,
+    profileRankedQueue: "Ranked1v1",
+    profileOverviewQueue: "Ranked1v1",
+    profileHistoryQueueFilter: "all",
+    profileShareCopied: false,
     profileHistory: [],
     profileMatchDetail: null,
     profileSnapshotLoading: false,
@@ -268,9 +279,10 @@ export function esc(value: unknown): string {
 
 export function renderQuickMatchButton(): string {
     const ranked = menuUi.rankedRating;
+    const rankedFfa = menuUi.rankedFfaRating;
     const rankedLabel = rankLabel(ranked);
     return (
-        "<button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match'>" +
+        "<div class='sow-menu__ranked-queue-pair'><button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match'>" +
         "<span class='sow-menu__quick-match-sheen' aria-hidden='true'></span>" +
         "<div class='sow-menu__quick-match-copy'><strong>" +
         esc(SOW_t("lobbies.ranked_1v1")) +
@@ -278,7 +290,15 @@ export function renderQuickMatchButton(): string {
         esc(rankedLabel) +
         "</small></div><span class='sow-menu__quick-match-emblem' data-ranked-emblem>" +
         rankEmblem(ranked?.tier || "Nomad", ranked?.division || null) +
-        "</span></button>"
+        "</span></button><button class='sow-menu__primary sow-menu__quick-match sow-menu__quick-match--ffa' type='button' data-command='quick_match_ffa'>" +
+        "<span class='sow-menu__quick-match-sheen' aria-hidden='true'></span>" +
+        "<div class='sow-menu__quick-match-copy'><strong>" +
+        esc(SOW_t("lobbies.ranked_ffa")) +
+        "</strong><small data-ranked-ffa-current>" +
+        esc(rankLabel(rankedFfa)) +
+        "</small></div><span class='sow-menu__quick-match-emblem' data-ranked-ffa-emblem>" +
+        rankEmblem(rankedFfa?.tier || "Nomad", rankedFfa?.division || null) +
+        "</span></button></div>"
     );
 }
 
@@ -866,6 +886,7 @@ export function currentScreen() {
 // between-match ad first; the command goes out when the ad ends.
 const MATCH_ENTRY_COMMANDS = new Set([
     "quick_match",
+    "quick_match_ffa",
     "join_lobby",
     "join_with_password",
     "join_code",
@@ -1053,3 +1074,8 @@ export function renderKey(): string {
         matches_played: state.profile_stats?.matches_played,
     });
 }
+
+setLeaderCatalogProvider(function () {
+    return menuUi.state && Array.isArray(menuUi.state.leaders) ? menuUi.state.leaders : [];
+});
+setMapInfoProvider(mapInfo);

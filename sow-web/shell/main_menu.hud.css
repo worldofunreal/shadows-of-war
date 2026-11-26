@@ -10028,3 +10028,132 @@ html[dir="rtl"] #sow-hud[data-compact="true"] .sow-hud__request-toasts {
     animation: none;
   }
 }
+
+.sow-hud__site-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.sow-hud__site-trait {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e9e2d2;
+}
+
+.sow-hud__site-trait.is-pro {
+  background: rgba(58, 178, 118, 0.22);
+  color: #8df0b8;
+}
+
+.sow-hud__site-trait.is-con {
+  background: rgba(220, 74, 74, 0.24);
+  color: #ff9c9c;
+}
+
+.sow-hud__city-districts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sow-hud__city-districts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(246, 240, 226, 0.72);
+}
+
+.sow-hud__city-district-build-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.sow-hud__city-district-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(12, 18, 24, 0.86);
+  color: #f6f0e2;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.sow-hud__city-district-btn:hover:not(:disabled) {
+  border-color: var(--sow-gold-bright);
+}
+
+.sow-hud__city-district-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sow-hud__city-district-art {
+  width: 22px;
+  height: 22px;
+}
+
+.sow-hud__city-district-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.sow-hud__city-district-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+}
+
+.sow-hud__city-district-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.sow-hud__city-district-upgrade-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(218, 178, 86, 0.45);
+  background: rgba(218, 178, 86, 0.16);
+  color: #f6e7b8;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sow-hud__city-district-upgrade-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

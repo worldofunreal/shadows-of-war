@@ -99,7 +99,7 @@
         return typeof value === "string" && options.includes(value);
     }
 
-    const MATCH_MODES = ["ranked_1v1", "custom", "campaign", "tutorial", "single_player", "other"];
+    const MATCH_MODES = ["ranked_1v1", "ranked_ffa", "custom", "campaign", "tutorial", "single_player", "other"];
     const WAIT_BUCKETS = ["under_5s", "5_15s", "15_60s", "60s_plus", "unknown"];
     const MATCH_DURATION_BUCKETS = ["under_1m", "1_5m", "5_15m", "15m_plus", "unknown"];
     const JOIN_FAILURES = [

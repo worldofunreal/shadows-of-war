@@ -193,6 +193,9 @@ export interface RankedLadder {
 
 export interface RankedResult {
     ladder?: RankedLadder | null;
+    queue?: string;
+    placement?: number;
+    total_contenders?: number;
     score_before: number;
     score_after: number;
     rating_delta: number;
@@ -364,6 +367,7 @@ export interface MenuState {
     waiting: boolean;
     ranked_matchup?: MenuLobby | null;
     ranked_search_active?: boolean;
+    ranked_ffa_search_active?: boolean;
     ranked_search_elapsed_secs?: number;
     match_preparing: boolean;
     player_name: string;
@@ -560,6 +564,31 @@ export interface HudBuildingProduction {
     };
 }
 
+export interface HudCityDistrictOption {
+    kind: string;
+    cost: number;
+    unlocked: boolean;
+    coast_required: boolean;
+    enabled: boolean;
+}
+
+export interface HudCityDistrictItem {
+    building_id: number;
+    tile_idx: number;
+    kind: string;
+    level: number;
+    max_level: number;
+    city_capped?: boolean;
+    under_construction: boolean;
+    remaining_seconds?: number | null;
+    upgrade?: {
+        next_level: number;
+        cost: number;
+        seconds: number;
+        enabled: boolean;
+    } | null;
+}
+
 export interface HudMapMenuBuilding {
     building_id?: number;
     tile_idx?: number;
@@ -571,6 +600,11 @@ export interface HudMapMenuBuilding {
     city_foundation?: boolean;
     coastal?: boolean;
     railway_connected?: boolean;
+    sam_active?: boolean;
+    nuclear_tier?: "atom" | "hydrogen" | "mirv" | null;
+    city_radius?: number | null;
+    district_options?: HudCityDistrictOption[];
+    districts?: HudCityDistrictItem[];
     anchor_x?: number;
     anchor_y?: number;
     anchor_radius?: number;
@@ -582,10 +616,21 @@ export interface HudMapMenuBuilding {
     production?: HudBuildingProduction | null;
 }
 
+export interface HudCitySiteTraits {
+    coastal: boolean;
+    mountain_bonus: boolean;
+    forest_bonus: boolean;
+    too_close_to_city: boolean;
+    initial_radius: number;
+    exclusion_radius: number;
+}
+
 export interface HudBuildingPlacement {
     pending: boolean;
     can_confirm: boolean;
     kind?: string;
+    city_id?: number | null;
+    site_traits?: HudCitySiteTraits | null;
     level?: number;
     tile_idx?: number;
     anchor_x?: number;

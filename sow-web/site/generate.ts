@@ -48,8 +48,10 @@ export function buildSiteLocaleRedirectScript(route: string, languageCodes: stri
     "for(var j=0;j<list.length;j++){var c=resolve(list[j]);if(c){target=c;break}}" +
     "}" +
     'if(!target||target==="en")return;' +
-    `var base="/"+target+"/"+${json(route)};` +
+    `var routePath="/"+${json(route)};` +
     'var cur=(window.location.pathname||"/").replace(/\\/index\\.html$/i,"/");' +
+    'var suffix=(routePath!=="/"&&cur.indexOf(routePath)===0)?cur.slice(routePath.length):"";' +
+    'var base="/"+target+routePath+suffix;' +
     "if(cur===base)return;" +
     'if(document.documentElement)document.documentElement.dataset.sowLocalePending="true";' +
     'window.location.replace(base+(window.location.search||"")+(window.location.hash||""))' +
@@ -138,7 +140,12 @@ export async function publish(
     "analytics.js",
     "sow-i18n.js",
     "sow-dropdown.js",
+    "sow-tooltip.js",
     "sow-controls.css",
+    "sow-ranked.css",
+    "sow-profile.css",
+    "leaderboards.js",
+    "player-profile.js",
     "identity-auth.js",
   ]) {
     fingerprints.set(
@@ -199,6 +206,7 @@ export async function publish(
     const lineTranslation: Record<string, string> = {
       City: "city", MilitaryCamp: "military_camp", TradingPost: "trading_post",
       Port: "port", Tower: "tower", SAM: "sam", MissileSilo: "missilesilo",
+      Farm: "farm",
     };
     const visibleBuildingKinds = BUILDING_KINDS.filter((kind) => kind !== "MilitaryCamp");
     const cards = visibleBuildingKinds.map((kind) => {
@@ -383,6 +391,14 @@ export async function publish(
         html = templates.get(route)!
           .replace('<div class="container" data-building-guide></div>', `<div class="container"><h1>${escape(t("site.buildings"))}</h1><p class="guide-lede">${escape(pageCopy.intro)}</p>${buildingGuide(code, t)}</div>`)
           .replace("<!-- BUILDINGS_FOOTER -->", footer);
+      } else if (route === "leaderboards/") {
+        title = t("site.leaderboards_title");
+        description = t("site.leaderboards_description");
+        html = templates.get(route)!.replace("<!-- LEADERBOARDS_FOOTER -->", footer);
+      } else if (route === "players/") {
+        title = t("site.players_title");
+        description = t("site.players_description");
+        html = templates.get(route)!.replace("<!-- PLAYERS_FOOTER -->", footer);
       } else if (englishOnly.has(route)) {
         // English-only pages carry their own copy; the template is the source of
         // truth so no catalog entry has to exist in fifteen languages.
@@ -417,7 +433,20 @@ export async function publish(
               languages.map((l) => l.code),
             )
           : "";
-      const bootstrap = `<script data-cfasync="false">${redirectScript}window.SOW_SITE_LOCALE = ${json(code)}; window.SOW_LOCALE_BEFORE_PAINT = true; window.SOW_LOCALE_CATALOG_VERSION = ${registry.version}; window.SOW_LOCALE_CODES = ${json(languages.map((l) => l.code))}; window.SOW_ASSET_TS = ${json(localeVersions)};</script><script data-cfasync="false" src="/sow-i18n.js?v=${fingerprints.get("/sow-i18n.js")}"></script>`;
+      const publicLeadersBootstrap =
+        route === "leaderboards/" || route === "players/"
+          ? ` window.SOW_PUBLIC_LEADERS = ${json(
+              leaders.map((h) => ({
+                id: h.id,
+                artSlug: h.artSlug,
+                legacyIds: h.legacyIds,
+                region: h.region,
+                name: text(h, "name"),
+                civilization: text(h, "civilization"),
+              })),
+            )};`
+          : "";
+      const bootstrap = `<script data-cfasync="false">${redirectScript}window.SOW_SITE_LOCALE = ${json(code)}; window.SOW_LOCALE_BEFORE_PAINT = true; window.SOW_LOCALE_CATALOG_VERSION = ${registry.version}; window.SOW_LOCALE_CODES = ${json(languages.map((l) => l.code))}; window.SOW_ASSET_TS = ${json(localeVersions)};${publicLeadersBootstrap}</script><script data-cfasync="false" src="/sow-i18n.js?v=${fingerprints.get("/sow-i18n.js")}"></script>`;
       for (const marker of ["<!-- SOW_SITE_HEADER -->", "<!-- SOW_SITE_LOCALE -->"]) {
         if (html.split(marker).length !== 2) throw Error(`Public page ${url} must contain one ${marker}`);
       }
@@ -671,7 +700,13 @@ export async function publish(
         for (const [selector, total] of Object.entries(required)) {
           if (total !== 1) throw Error(`Public page ${url} must contain one ${selector}; found ${total}`);
         }
-        if (html.includes("<!-- SOW_SITE_") || html.includes("<!-- SOW_SPRITE_") || html.includes("<!-- LEADER_"))
+        if (
+          html.includes("<!-- SOW_SITE_") ||
+          html.includes("<!-- SOW_SPRITE_") ||
+          html.includes("<!-- LEADER_") ||
+          html.includes("<!-- LEADERBOARDS_") ||
+          html.includes("<!-- PLAYERS_")
+        )
           throw Error(`Unexpanded page ${url}`);
       }
       const destination = join(out, prefix(code), route, "index.html");
@@ -705,7 +740,7 @@ export async function publish(
   const urls = languages
     .flatMap((l) =>
       routes
-        .filter((route) => l.code === "en" || !englishOnly.has(route))
+        .filter((route) => route !== "players/" && (l.code === "en" || !englishOnly.has(route)))
         .map((route) => origin + path(l.code, route)),
     )
     .concat(origin + "/play/");

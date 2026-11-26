@@ -4,16 +4,20 @@ const lines: Record<string, { en: string[]; es: string[] }> = {
     es: ["Asentamiento", "Aldea", "Pueblo", "Ciudad amurallada", "Capital", "Ciudad industrial", "Metrópolis", "Megaciudad"],
   },
   MilitaryCamp: {
-    en: ["Military Camp", "Barracks", "Garrison", "Stronghold", "Military Base", "Mobilization Center", "Command Center", "Strategic Command"],
-    es: ["Campamento militar", "Cuartel", "Guarnición", "Bastión militar", "Base militar", "Centro de movilización", "Centro de mando", "Mando estratégico"],
+    en: ["Military Camp", "Barracks", "Garrison", "Stronghold", "Missile Silo", "Hydrogen Command", "MIRV Complex", "Strategic Command"],
+    es: ["Campamento militar", "Cuartel", "Guarnición", "Bastión militar", "Silo de misiles", "Mando de hidrógeno", "Complejo MIRV", "Mando estratégico"],
+  },
+  Farm: {
+    en: ["Homestead", "Farm", "Granary", "Estate", "Agri-District", "Collectivized Farms", "Agro-Combine", "Arcology Farm"],
+    es: ["Granja", "Cultivo", "Granero", "Hacienda", "Distrito agrario", "Cooperativa agraria", "Complejo agrícola", "Arcología agraria"],
   },
   TradingPost: {
-    en: ["Trading Post", "Market", "Trade Square", "Merchant Quarter", "Trade Depot", "Freight Terminal", "Logistics Hub", "Trade Complex"],
-    es: ["Puesto comercial", "Mercado", "Plaza comercial", "Barrio mercantil", "Depósito comercial", "Terminal de carga", "Centro logístico", "Complejo comercial"],
+    en: ["Trading Post", "Market", "Blacksmith", "Merchant Quarter", "Factory", "Freight Terminal", "Logistics Hub", "Industrial Complex"],
+    es: ["Puesto comercial", "Mercado", "Herrería", "Barrio mercantil", "Fábrica", "Terminal de carga", "Centro logístico", "Complejo industrial"],
   },
   Tower: {
-    en: ["Watchtower", "Guard Tower", "Stone Tower", "Keep", "Bastion", "Artillery Bastion", "Defense Station", "Sentinel Tower"],
-    es: ["Atalaya", "Torre de guardia", "Torre de piedra", "Torreón", "Bastión", "Bastión de artillería", "Estación defensiva", "Torre centinela"],
+    en: ["Watchtower", "Guard Tower", "Stone Tower", "Keep", "SAM Bastion", "Artillery SAM", "Defense Station", "Sentinel SAM"],
+    es: ["Atalaya", "Torre de guardia", "Torre de piedra", "Torreón", "Bastión SAM", "Batería SAM", "Estación defensiva", "Torre centinela SAM"],
   },
   Port: {
     en: ["Fishing Pier", "Trading Dock", "Harbor", "Fortified Harbor", "Naval Yard", "Industrial Shipyard", "Fleet Base", "Fleet Command"],
@@ -150,7 +154,7 @@ const localizedTiers: Record<string, Partial<Record<BuildingKind, string[]>>> = 
   },
 };
 type PageLocale = {
-  roles: Record<BuildingKind, string>;
+  roles: Partial<Record<BuildingKind, string>>;
   eras: string[];
   stats: Record<string, string>;
   intro: string;
@@ -171,7 +175,7 @@ type PageLocale = {
 
 const pageLocales: Record<string, PageLocale> = {
   en: {
-    roles: { City: "Troop capacity and the nuclear launch era requirement.", Tower: "Area defense and resistance to capture.", TradingPost: "Gold income and a connected land trade network.", Port: "Fleet capacity, ship repair, maritime access, and fleet speed that stacks up to 30%.", MilitaryCamp: "Troop production and faster land conquest.", SAM: "Automatic interception of incoming nuclear weapons.", MissileSilo: "Launch capacity for atomic, hydrogen and MIRV weapons." },
+    roles: { City: "Troop capacity and expands district radius by +2 tiles per level.", Tower: "Area defense and capture resistance; activates SAM interception at Lv5+.", TradingPost: "Max gold income, connected land trade network, evolves into Factories at Lv5+.", Farm: "Balanced troop generation, light gold income, and housing.", Port: "Fleet capacity, ship repair, maritime access, and fleet speed that stacks up to 30%.", MilitaryCamp: "Max troop production, high housing, conquest speed, and launches Nukes from Lv5+.", SAM: "Automatic interception of incoming nuclear weapons.", MissileSilo: "Launch capacity for atomic, hydrogen and MIRV weapons." },
     eras: ["Tribal", "Agrarian", "Classical", "Medieval", "Early Modern", "Industrial", "Contemporary", "Future"],
     stats: { reserve: "troop capacity", troops: "troops/s", reinforcements: "reinforcements", capture: "% conquest speed", trade: "gold/s on an active land route", travel: "× trade delivery frequency", range: "tiles of range", resistance: "capture resistance weight", fleet: "fleet slots", docks: "docks", repair: "repair/s", charges: "charges", gold: "gold/s", speed: "ship speed bonus", defense: "troop loss reduction", fire_rate: "interceptors/min" },
     intro: "New buildings start at N1. Industrial City N6 unlocks SAM batteries and missile silos.",
@@ -180,7 +184,7 @@ const pageLocales: Record<string, PageLocale> = {
     route: "Trading Posts connect to any nearby owned building from N1; land trade income requires a valid connected route.", railway: "Roads upgrade by era: dirt tracks (N1), stone roads (N3), railways (N6), and high-speed maglev lines (N8).", industrial: "Industrial City N6 unlocks SAM batteries and missile silos.", nav: "Building lines",
   },
   es: {
-    roles: { City: "Capacidad de tropas y requisito de era para lanzar armas nucleares.", Tower: "Defensa de zona y resistencia a la captura.", TradingPost: "Ingresos de oro y una red comercial terrestre conectada.", Port: "Capacidad de flota, reparación de barcos, acceso marítimo y velocidad naval acumulable hasta 30%.", MilitaryCamp: "Generación de tropas y conquista terrestre más rápida.", SAM: "Intercepción automática de armas nucleares entrantes.", MissileSilo: "Capacidad para lanzar armas atómicas, de hidrógeno y MIRV." },
+    roles: { City: "Capacidad de tropas y amplía el radio de distritos +2 casillas por nivel.", Tower: "Defensa de zona; a nivel 5+ activa intercepción SAM con el mismo radio.", TradingPost: "Máximo oro por segundo y red comercial; evoluciona a Fábrica en nivel 5+.", Farm: "Generación balanceada de tropas, poco oro y alojamiento.", Port: "Capacidad de flota, reparación naval, acceso marítimo y velocidad hasta 30%.", MilitaryCamp: "Máxima producción de tropas y lanzamiento nuclear desde nivel 5+ (Atómica N5, Hidrógeno N6, MIRV N7).", SAM: "Intercepción automática de armas nucleares entrantes.", MissileSilo: "Capacidad para lanzar armas atómicas, de hidrógeno y MIRV." },
     eras: ["Tribal", "Agraria", "Clásica", "Medieval", "Moderna temprana", "Industrial", "Contemporánea", "Futura"],
     stats: { reserve: "capacidad de tropas", troops: "tropas/s", reinforcements: "refuerzos", capture: "% de avance de conquista", trade: "oro/s con ruta terrestre activa", travel: "× frecuencia de entregas", range: "tiles de alcance", resistance: "resistencia a captura", fleet: "plazas de flota", docks: "atraques", repair: "reparación/s", charges: "cargas", gold: "oro/s", speed: "bono de velocidad naval", defense: "reducción de pérdidas de tropas", fire_rate: "interceptores/min" },
     intro: "Los edificios nuevos empiezan en N1. La Ciudad Industrial N6 desbloquea las baterías SAM y los silos.",

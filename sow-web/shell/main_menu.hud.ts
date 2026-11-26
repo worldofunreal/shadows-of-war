@@ -768,6 +768,13 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     "shield",
     "range",
     "speed",
+    "lod-city",
+    "lod-tower",
+    "lod-trading-post",
+    "lod-port",
+    "lod-military-camp",
+    "lod-sam",
+    "lod-silo",
   ];
 
   const BUILDING_GLYPHS: Record<string, string> = {
@@ -1357,6 +1364,10 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             ? "MilitaryCamp"
             : normalized === "tradingpost"
               ? "TradingPost"
+              : normalized === "farm"
+                ? art && art.sprites && art.sprites["Farm"]
+                  ? "Farm"
+                  : "TradingPost"
           : name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
     const atlas = art && art.sprites && art.sprites[canonical];
     const sprite =
@@ -2430,7 +2441,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       "        </div>" +
       "      </div>" +
       '      <div class="sow-hud__buildings-strip" id="sow-hud-buildings-strip">' +
-      ["City", "TradingPost", "Port", "Tower", "SAM", "MissileSilo"].map((kind, index) => {
+      ["City"].map((kind, index) => {
         const hotkey = index + 1;
         return '<button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="' +
           kind + '" aria-label="' + escapeHudText(SOW_t("hud.map_action_" + (kind.toLowerCase() === "militarycamp" ? "military_camp" : kind.toLowerCase() === "tradingpost" ? "trading_post" : kind.toLowerCase()))) +
@@ -3925,6 +3936,46 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         ].join(":")
       : "";
 
+    const districtOptions = Array.isArray(building.district_options)
+      ? building.district_options
+      : [];
+    const districts = Array.isArray(building.districts)
+      ? building.districts
+      : [];
+    const districtSig =
+      kind === "City"
+        ? String(building.city_radius || 0) +
+          ":" +
+          districts
+            .map(function (d) {
+              return (
+                String(d.building_id) +
+                "." +
+                String(d.level) +
+                "." +
+                (d.under_construction
+                  ? "c"
+                  : d.upgrade
+                    ? String(d.upgrade.next_level)
+                    : "m") +
+                "." +
+                (d.upgrade && d.upgrade.enabled ? "1" : "0") +
+                (d.city_capped ? "x" : "")
+              );
+            })
+            .join(",") +
+          "|" +
+          districtOptions
+            .map(function (o) {
+              return (
+                o.kind +
+                (o.enabled ? "1" : "0") +
+                (o.coast_required ? "c" : "")
+              );
+            })
+            .join(",")
+        : "";
+
     const renderKey = [
       window.SOW_LOCALE || "en",
       "building_details",
@@ -3955,6 +4006,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
         })
         .join("|"),
       productionSig,
+      districtSig,
     ].join(":");
 
     if (menu.dataset.renderKey !== renderKey) {
@@ -4120,6 +4172,104 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             "</em>"
           : "Lv." + Math.max(1, level) + (isMax ? " · MAX" : "");
 
+        const cityDistrictsHtml =
+          kind === "City" &&
+          building.building_id != null &&
+          (districtOptions.length > 0 || districts.length > 0)
+            ? '<div class="sow-hud__city-districts-section">' +
+              '<div class="sow-hud__city-districts-head">' +
+              "<span>" +
+              escapeHudText(SOW_t("hud.city_build_district")) +
+              "</span>" +
+              (building.city_radius
+                ? "<span>" +
+                  escapeHudText(
+                    SOW_t("hud.city_radius_badge", {
+                      radius: String(building.city_radius),
+                    }),
+                  ) +
+                  "</span>"
+                : "") +
+              "</div>" +
+              '<div class="sow-hud__city-district-build-grid">' +
+              districtOptions
+                .map(function (opt) {
+                  const optCost = Number.isFinite(Number(opt.cost))
+                    ? Math.ceil(Number(opt.cost)).toLocaleString() + "g"
+                    : "";
+                  const optLabel = buildingTierTitle(opt.kind, 1);
+                  return (
+                    '<button type="button" class="sow-hud__city-district-btn" data-select-district="' +
+                    escapeHudText(opt.kind) +
+                    '" data-city-id="' +
+                    String(building.building_id) +
+                    '"' +
+                    (opt.enabled ? "" : " disabled") +
+                    ' title="' +
+                    escapeHudText(
+                      opt.coast_required
+                        ? optLabel + " · " + SOW_t("hud.build_coast_required")
+                        : optLabel,
+                    ) +
+                    '">' +
+                    buildingIcon(opt.kind, 1, "sow-hud__city-district-art") +
+                    "<span>" +
+                    escapeHudText(optCost) +
+                    "</span>" +
+                    "</button>"
+                  );
+                })
+                .join("") +
+              "</div>" +
+              (districts.length
+                ? '<div class="sow-hud__city-district-list">' +
+                  districts
+                    .map(function (d) {
+                      const title = buildingTierTitle(d.kind, Math.max(1, d.level));
+                      const rightHtml = d.under_construction
+                        ? "<span>" +
+                          Math.max(1, Math.ceil(Number(d.remaining_seconds) || 0)) +
+                          "s</span>"
+                        : d.upgrade
+                          ? '<button type="button" class="sow-hud__city-district-upgrade-btn" data-upgrade-building="' +
+                            String(d.building_id) +
+                            '"' +
+                            (d.upgrade.enabled ? "" : " disabled") +
+                            ">" +
+                            "↑ Lv." +
+                            String(d.upgrade.next_level) +
+                            " · " +
+                            escapeHudText(
+                              formatHudMetric(
+                                Math.max(0, Math.ceil(Number(d.upgrade.cost) || 0)),
+                              ),
+                            ) +
+                            "g</button>"
+                          : d.city_capped
+                            ? "<span>" +
+                              escapeHudText(SOW_t("hud.city_capped_badge")) +
+                              "</span>"
+                            : "<span>MAX</span>";
+                      return (
+                        '<div class="sow-hud__city-district-row">' +
+                        '<div class="sow-hud__city-district-info">' +
+                        buildingIcon(d.kind, Math.max(1, d.level), "sow-hud__inline-icon") +
+                        "<span>" +
+                        escapeHudText(title) +
+                        " Lv." +
+                        String(Math.max(1, d.level)) +
+                        "</span>" +
+                        "</div>" +
+                        rightHtml +
+                        "</div>"
+                      );
+                    })
+                    .join("") +
+                  "</div>"
+                : "") +
+              "</div>"
+            : "";
+
         card.className = "sow-hud__building-card";
         card.innerHTML =
           '<span class="sow-hud__building-card-caret" aria-hidden="true"></span>' +
@@ -4139,6 +4289,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           "</div>" +
           "</div>" +
           chipsHtml +
+          cityDistrictsHtml +
           footerHtml;
       }
       menu.replaceChildren(card);
@@ -4254,6 +4405,15 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     const canConfirm = Boolean(placement.can_confirm);
     const cost = Number(placement.cost || 0);
     const reasonKey = placement.reason || "";
+    const traits = placement.site_traits || null;
+    const traitsSig = traits
+      ? [
+          traits.coastal ? 1 : 0,
+          traits.mountain_bonus ? 1 : 0,
+          traits.forest_bonus ? 1 : 0,
+          traits.too_close_to_city ? 1 : 0,
+        ].join("")
+      : "";
     const locale = window.SOW_LOCALE || "en";
     const renderKey = [
       locale,
@@ -4263,6 +4423,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       canConfirm ? "1" : "0",
       String(cost),
       reasonKey,
+      traitsSig,
     ].join(":");
 
     overlay.classList.remove("hidden");
@@ -4272,6 +4433,46 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const reason = reasonKey ? SOW_t(reasonKey) : null;
       const cancelLabel = SOW_t("lobbies.cancel");
       const buildLabel = SOW_t("hud.build_confirm");
+      const traitPills: string[] = [];
+      if (traits) {
+        traitPills.push(
+          '<span class="sow-hud__site-trait ' +
+            (traits.coastal ? "is-pro" : "is-con") +
+            '">' +
+            escapeHudText(
+              SOW_t(
+                traits.coastal
+                  ? "hud.site_trait_coastal"
+                  : "hud.site_trait_landlocked",
+              ),
+            ) +
+            "</span>",
+        );
+        if (traits.mountain_bonus) {
+          traitPills.push(
+            '<span class="sow-hud__site-trait is-pro">' +
+              escapeHudText(SOW_t("hud.site_trait_mountain")) +
+              "</span>",
+          );
+        }
+        if (traits.forest_bonus) {
+          traitPills.push(
+            '<span class="sow-hud__site-trait">' +
+              escapeHudText(SOW_t("hud.site_trait_forest")) +
+              "</span>",
+          );
+        }
+        if (traits.too_close_to_city) {
+          traitPills.push(
+            '<span class="sow-hud__site-trait is-con">' +
+              escapeHudText(SOW_t("hud.site_trait_too_close")) +
+              "</span>",
+          );
+        }
+      }
+      const traitsHtml = traitPills.length
+        ? '<div class="sow-hud__site-traits">' + traitPills.join("") + "</div>"
+        : "";
 
       panel.innerHTML =
         '<div class="sow-hud__placement-panel-head">' +
@@ -4291,6 +4492,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
             " <b>" +
             formatEndgameExact(cost) +
             "</b></span>") +
+        traitsHtml +
         "</div>" +
         "</div>" +
         '<div class="sow-hud__placement-panel-controls">' +
@@ -9411,7 +9613,7 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
       const buildUnlocks = campaignUnlocks(hud);
       hudRefs!.buildingButtons.forEach(function (button) {
         const kind = button.dataset.kind || "";
-        const index = ["City", "Tower", "TradingPost", "Port", "MilitaryCamp", "SAM", "MissileSilo"].indexOf(kind);
+        const index = ["City", "Tower", "TradingPost", "Port", "MilitaryCamp", "SAM", "MissileSilo", "Farm"].indexOf(kind);
         const level = hud.building_levels?.[index] ?? 1;
         if (button.dataset.foundationLevel !== String(level)) {
           button.dataset.foundationLevel = String(level);
@@ -9466,7 +9668,9 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
     }
     const nuclearStrip = document.getElementById("sow-hud-nuclear-strip");
     if (nuclearStrip) {
-      const unlocked = campaignAllowsBuilding(campaignUnlocks(hud), "MissileSilo", 1);
+      const unlocked =
+        campaignAllowsBuilding(campaignUnlocks(hud), "MilitaryCamp", 5) ||
+        campaignAllowsBuilding(campaignUnlocks(hud), "MissileSilo", 1);
       nuclearStrip.style.display = isDeploying || !unlocked ? "none" : "flex";
       nuclearStrip.querySelectorAll<HTMLButtonElement>("button").forEach(function (button) {
         const cost = Number(hud.nuclear_prices?.[Number(button.dataset.nuclearIndex)]);
@@ -10218,6 +10422,29 @@ function requiredHudQuery(root: ParentNode, selector: string): HTMLElement {
           send("warship_order_patrol");
         } else if (order === "clear") {
           send("warship_clear_selection");
+        }
+        return;
+      }
+      const districtBtn = target.closest<HTMLButtonElement>("[data-select-district]");
+      if (districtBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (districtBtn.disabled) return;
+        const kind = districtBtn.dataset.selectDistrict;
+        const cityId = Number(districtBtn.dataset.cityId);
+        if (kind && Number.isSafeInteger(cityId) && cityId > 0) {
+          send("select_district", { kind, city_id: cityId });
+        }
+        return;
+      }
+      const districtUpgradeBtn = target.closest<HTMLButtonElement>("[data-upgrade-building]");
+      if (districtUpgradeBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (districtUpgradeBtn.disabled) return;
+        const buildingId = Number(districtUpgradeBtn.dataset.upgradeBuilding);
+        if (Number.isSafeInteger(buildingId) && buildingId > 0) {
+          send("upgrade_building", { building_id: buildingId });
         }
         return;
       }
