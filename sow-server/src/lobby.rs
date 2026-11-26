@@ -377,6 +377,7 @@ fn spawn_waiting_lobby(
         config.max_players = population.max_players;
         config.bot_count = population.bot_count;
         config.nation_count = population.nation_count;
+        config.team_count = population.team_count;
         config.clamp_bot_counts();
     }
 
@@ -912,22 +913,16 @@ fn join_player_inner(
         lobby.config.player_leader = leader;
     }
 
-    // Teams mode: drop the joiner into whichever team is smaller (Red on a tie).
-    // Co-op: every human joins Red (Bot Heroes are Blue, spawned engine-side).
+    // Teams mode: drop the joiner into the team with the fewest players (first
+    // team on a tie). Co-op: every human joins Red (Bot Heroes are Blue,
+    // spawned engine-side).
     let team = if sow_core::game_config::is_coop_game_mode(&lobby.game_mode) {
-        Some(Team::Red)
+        Some(Team::RED)
     } else if lobby.game_mode == "Teams" {
-        let reds = lobby
-            .players
-            .iter()
-            .filter(|p| p.team == Some(Team::Red))
-            .count();
-        let blues = lobby
-            .players
-            .iter()
-            .filter(|p| p.team == Some(Team::Blue))
-            .count();
-        Some(if blues < reds { Team::Blue } else { Team::Red })
+        Some(Team::smallest(
+            lobby.config.team_count,
+            lobby.players.iter().filter_map(|p| p.team),
+        ))
     } else {
         None
     };
@@ -1099,10 +1094,11 @@ pub fn set_player_team(
         return;
     }
     if let Some(target) = lobby.players.iter_mut().find(|p| p.player_id == target_id) {
-        target.team = match target.team {
-            Some(Team::Red) => Some(Team::Blue),
-            _ => Some(Team::Red),
-        };
+        target.team = Some(
+            target
+                .team
+                .map_or(Team::RED, |team| team.next_team(lobby.config.team_count)),
+        );
         log::info!(
             "[TEAM] Host {requester_id} moved player {target_id} to {:?} in lobby {lobby_id}",
             target.team
@@ -1991,7 +1987,7 @@ mod name_tests {
         assert_eq!(result.0, 20);
         assert_eq!(games[0].players.len(), 0);
         assert_eq!(games[1].players.len(), 1);
-        assert_eq!(games[1].players[0].team, Some(Team::Red));
+        assert_eq!(games[1].players[0].team, Some(Team::RED));
     }
 
     #[test]
@@ -2336,12 +2332,12 @@ mod name_tests {
         let mut lobby = queue_lobby(10, LobbyKind::Custom, "Teams");
         lobby.host_player_id = Some(1);
         lobby.players = vec![
-            lobby_player(1, host_tx, Some(Team::Red)),
-            lobby_player(2, target_tx, Some(Team::Red)),
+            lobby_player(1, host_tx, Some(Team::RED)),
+            lobby_player(2, target_tx, Some(Team::RED)),
         ];
         let mut games = vec![lobby];
 
         set_player_team(&mut games, 10, 1, 2);
-        assert_eq!(games[0].players[1].team, Some(Team::Blue));
+        assert_eq!(games[0].players[1].team, Some(Team::BLUE));
     }
 }

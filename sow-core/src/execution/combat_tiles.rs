@@ -203,24 +203,28 @@ fn attack_pacing_multiplier(
     }
 }
 
-/// Scales PvP tile budget from 1x at 1k troops to 2x at 1M and 10x at 100M.
+/// Scales PvP tile budget from 1x at 1k troops to 1.26x at 1M and 1.5x at 10M.
 fn pvp_troop_speed_multiplier(effective_troops: f64) -> f64 {
     const START_TROOPS: f64 = 1_000.0;
     const MID_TROOPS: f64 = 1_000_000.0;
-    const CAP_TROOPS: f64 = 100_000_000.0;
-    const EARLY_EXPONENT: f64 = 0.10034333188799373; // 2x over 1,000x troop growth.
-    const LATE_EXPONENT: f64 = 0.34948500216800943; // 5x over 100x troop growth.
+    const CAP_TROOPS: f64 = 10_000_000.0;
+    const MID_MULTIPLIER: f64 = 1.26;
+    const CAP_MULTIPLIER: f64 = 1.5;
+    const EARLY_EXPONENT: f64 = 0.03345684837252097; // 1.26x over 1,000x troop growth.
+    const LATE_EXPONENT: f64 = 0.07572071393811833; // 1.26x to 1.5x over 10x troop growth.
 
     if !effective_troops.is_finite() || effective_troops <= START_TROOPS {
         return 1.0;
     }
     if effective_troops <= MID_TROOPS {
-        return libm::pow(effective_troops / START_TROOPS, EARLY_EXPONENT).clamp(1.0, 2.0);
+        return libm::pow(effective_troops / START_TROOPS, EARLY_EXPONENT)
+            .clamp(1.0, MID_MULTIPLIER);
     }
     if effective_troops >= CAP_TROOPS {
-        return 10.0;
+        return CAP_MULTIPLIER;
     }
-    (2.0 * libm::pow(effective_troops / MID_TROOPS, LATE_EXPONENT)).clamp(2.0, 10.0)
+    (MID_MULTIPLIER * libm::pow(effective_troops / MID_TROOPS, LATE_EXPONENT))
+        .clamp(MID_MULTIPLIER, CAP_MULTIPLIER)
 }
 
 /// Accelerates late-game PvP resolution once the attacker controls over 15% of map land,
@@ -3039,14 +3043,14 @@ mod tests {
             let mut engine = finishing_fixture(2, &victim_tiles, &[(1, 9, 10)]);
             match protection {
                 "same_team" => {
-                    engine.state.player_mut(1).unwrap().team = Some(Team::Blue);
-                    engine.state.player_mut(2).unwrap().team = Some(Team::Blue);
+                    engine.state.player_mut(1).unwrap().team = Some(Team::BLUE);
+                    engine.state.player_mut(2).unwrap().team = Some(Team::BLUE);
                 }
                 "allied" => engine.state.player_mut(1).unwrap().alliances.push(2),
                 "hold_last_tile" => {
                     engine.campaign_assault = Some(crate::engine::CampaignAssaultState {
                         root_target: 2,
-                        team: Team::Red,
+                        team: Team::RED,
                         include_allies: true,
                         preserve_relation: false,
                         hold_last_tile: true,
@@ -4309,7 +4313,7 @@ mod tests {
         let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
         engine.campaign_assault = Some(crate::engine::CampaignAssaultState {
             root_target: 2,
-            team: crate::protocol::Team::Red,
+            team: crate::protocol::Team::RED,
             include_allies: true,
             preserve_relation: false,
             hold_last_tile: true,
@@ -4393,6 +4397,8 @@ mod tests {
                     target_owner,
                     None,
                 );
+                // This experiment measures the configured camp bonus; the shared default is off.
+                engine.state.config.camp_capture_base_points = 3.0;
                 for idx in 0..camps {
                     engine.add_building(Building {
                         id: (idx + 1) as u64,
@@ -4436,11 +4442,16 @@ mod tests {
     #[test]
     fn pvp_troop_and_endgame_ramps_accelerate_large_armies() {
         assert_eq!(pvp_troop_speed_multiplier(1_000.0), 1.0);
-        assert!((pvp_troop_speed_multiplier(10_000.0) - 2.0_f64.powf(1.0 / 3.0)).abs() < 1e-9);
-        assert!((pvp_troop_speed_multiplier(1_000_000.0) - 2.0).abs() < 1e-9);
-        assert!((pvp_troop_speed_multiplier(10_000_000.0) - 2.0 * 5.0_f64.sqrt()).abs() < 1e-9);
-        assert_eq!(pvp_troop_speed_multiplier(100_000_000.0), 10.0);
-        assert_eq!(pvp_troop_speed_multiplier(1_000_000_000.0), 10.0);
+        assert!((pvp_troop_speed_multiplier(10_000.0) - 1.26_f64.powf(1.0 / 3.0)).abs() < 1e-9);
+        assert!((pvp_troop_speed_multiplier(1_000_000.0) - 1.26).abs() < 1e-9);
+        assert!(
+            (pvp_troop_speed_multiplier(5_000_000.0) - 1.26 * 5.0_f64.powf(0.07572071393811833))
+                .abs()
+                < 1e-9
+        );
+        assert!((pvp_troop_speed_multiplier(10_000_000.0) - 1.5).abs() < 1e-9);
+        assert_eq!(pvp_troop_speed_multiplier(100_000_000.0), 1.5);
+        assert_eq!(pvp_troop_speed_multiplier(1_000_000_000.0), 1.5);
 
         let run = |troops: f64, share: f64| {
             let mut engine =

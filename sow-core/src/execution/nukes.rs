@@ -643,8 +643,8 @@ mod tests {
             match relation {
                 "allied" => engine.state.player_mut(1).unwrap().alliances.push(2),
                 "teammate" => {
-                    engine.state.player_mut(1).unwrap().team = Some(Team::Blue);
-                    engine.state.player_mut(2).unwrap().team = Some(Team::Blue);
+                    engine.state.player_mut(1).unwrap().team = Some(Team::BLUE);
+                    engine.state.player_mut(2).unwrap().team = Some(Team::BLUE);
                 }
                 _ => {}
             }

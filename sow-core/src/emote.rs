@@ -326,8 +326,8 @@ mod tests {
             engine.state.register_player(player);
         }
         engine.state.player_mut(1).unwrap().alliances.push(2);
-        engine.state.player_mut(1).unwrap().team = Some(crate::protocol::Team::Red);
-        engine.state.player_mut(3).unwrap().team = Some(crate::protocol::Team::Red);
+        engine.state.player_mut(1).unwrap().team = Some(crate::protocol::Team::RED);
+        engine.state.player_mut(3).unwrap().team = Some(crate::protocol::Team::RED);
         let snapshot = engine.build_snapshot();
         assert!(is_recipient(&snapshot.players, 1, 1));
         assert!(is_recipient(&snapshot.players, 2, 1));

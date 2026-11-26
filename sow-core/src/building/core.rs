@@ -1389,7 +1389,17 @@ mod trading_post_route_tests {
 
     #[test]
     fn military_camp_capture_scales_per_tier_and_stacks_without_cap() {
-        let base_points = crate::game_config::GameConfig::default().camp_capture_base_points;
+        let default_points = crate::game_config::GameConfig::default().camp_capture_base_points;
+        assert_eq!(default_points, 0.0);
+        for level in 1..=8 {
+            assert_eq!(
+                camp_conquest_multiplier(camp_capture_level_weight(level) * default_points),
+                1.0
+            );
+        }
+
+        // Explicitly configured games retain the camp capture scaling behavior.
+        let base_points = 3.0;
         let expected_pcts = [2.0, 4.0, 6.5, 9.5, 13.0, 16.5, 20.5, 25.0];
         let mut prev_mult = 1.0;
         for (idx, expected_pct) in expected_pcts.iter().enumerate() {

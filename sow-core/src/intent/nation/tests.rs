@@ -1655,8 +1655,8 @@ mod bot_iq_alliance_tests {
     #[test]
     fn test_team_alliance_prohibited() {
         let mut engine = test_engine_two_players(42);
-        engine.state.player_mut(1).unwrap().team = Some(crate::protocol::Team::Red);
-        engine.state.player_mut(2).unwrap().team = Some(crate::protocol::Team::Red);
+        engine.state.player_mut(1).unwrap().team = Some(crate::protocol::Team::RED);
+        engine.state.player_mut(2).unwrap().team = Some(crate::protocol::Team::RED);
         engine.state.player_mut(1).unwrap().iq_points = 500.0;
 
         let stamped = crate::protocol::StampedIntent {
@@ -2185,8 +2185,8 @@ mod bot_iq_alliance_tests {
         use crate::protocol::{GameplayIntent, Team};
 
         let mut engine = test_engine_two_players(42);
-        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
-        engine.state.player_mut(2).unwrap().team = Some(Team::Red);
+        engine.state.player_mut(1).unwrap().team = Some(Team::RED);
+        engine.state.player_mut(2).unwrap().team = Some(Team::RED);
         engine.state.player_mut(1).unwrap().troops = 1_000.0;
         engine.state.player_mut(1).unwrap().max_troops = 1_000.0;
         engine.state.player_mut(1).unwrap().iq_points = 50.0;
@@ -2383,22 +2383,22 @@ mod bot_iq_alliance_tests {
         let config = engine.state.config.clone();
         let mut second_attacker =
             Player::new_bot(3, "Roman reserve".into(), [1.0, 0.0, 0.0], &config);
-        second_attacker.team = Some(Team::Red);
+        second_attacker.team = Some(Team::RED);
         second_attacker.tile_count = 5;
         engine.state.register_player(second_attacker);
         let mut defeated_attacker =
             Player::new_bot(4, "Defeated Roman force".into(), [1.0, 0.0, 0.0], &config);
-        defeated_attacker.team = Some(Team::Red);
+        defeated_attacker.team = Some(Team::RED);
         defeated_attacker.tile_count = 5;
         defeated_attacker.alive = false;
         engine.state.register_player(defeated_attacker);
         let mut unlisted_attacker =
             Player::new_bot(5, "Unlisted force".into(), [1.0, 0.0, 0.0], &config);
-        unlisted_attacker.team = Some(Team::Red);
+        unlisted_attacker.team = Some(Team::RED);
         unlisted_attacker.tile_count = 5;
         engine.state.register_player(unlisted_attacker);
-        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
-        engine.state.player_mut(2).unwrap().team = Some(Team::Blue);
+        engine.state.player_mut(1).unwrap().team = Some(Team::RED);
+        engine.state.player_mut(2).unwrap().team = Some(Team::BLUE);
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
         engine.state.player_mut(1).unwrap().alliances.push(2);
         engine.state.player_mut(2).unwrap().alliances.push(1);
@@ -2419,7 +2419,7 @@ mod bot_iq_alliance_tests {
             Some(&CampaignRelation::Neutral)
         );
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 2, false, false, None, false),
+            engine.activate_campaign_assault(Team::RED, 2, false, false, None, false),
             2
         );
         assert_eq!(
@@ -2454,7 +2454,7 @@ mod bot_iq_alliance_tests {
 
         let mut engine = test_engine_two_players(52);
         let config = engine.state.config.clone();
-        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
+        engine.state.player_mut(1).unwrap().team = Some(Team::RED);
         engine.state.player_mut(1).unwrap().troops = 300.0;
         engine.state.player_mut(1).unwrap().max_troops = 1000.0;
         {
@@ -2466,7 +2466,7 @@ mod bot_iq_alliance_tests {
         }
 
         let mut blue_ally = Player::new_bot(3, "Blue ally".into(), [0.1, 0.4, 0.9], &config);
-        blue_ally.team = Some(Team::Blue);
+        blue_ally.team = Some(Team::BLUE);
         blue_ally.tile_count = 1;
         blue_ally.max_troops = 2000.0;
         blue_ally.alliances.push(2);
@@ -2497,7 +2497,7 @@ mod bot_iq_alliance_tests {
             .insert(1, "suetonius_paulinus".into());
         engine.campaign_assault_force_ids.insert(1);
         let activated =
-            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 3)), false);
+            engine.activate_campaign_assault(Team::RED, 2, false, true, Some((2.0, 3)), false);
         assert_eq!(activated, 1);
         assert_eq!(
             engine.campaign_assault_targets.get(&1),
@@ -2525,7 +2525,7 @@ mod bot_iq_alliance_tests {
 
         let attack_count = engine.attacks.len();
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 3)), false),
+            engine.activate_campaign_assault(Team::RED, 2, false, true, Some((2.0, 3)), false),
             1
         );
         assert_eq!(
@@ -2709,7 +2709,7 @@ mod bot_iq_alliance_tests {
 
         for id in 1..=5 {
             let mut roman = Player::new_bot(id, format!("Roman {id}"), [0.9, 0.1, 0.1], &config);
-            roman.team = Some(Team::Red);
+            roman.team = Some(Team::RED);
             roman.troops = 3_000.0;
             roman.max_troops = 3_000.0;
             roman.tile_count = 1;
@@ -2731,7 +2731,7 @@ mod bot_iq_alliance_tests {
         state.register_player(boudica);
         state.map.terrain[9] = MapTile::from_byte(0xC0);
         state.map.set_owner_id(9, 0, 6);
-        for (id, team) in [(7, Some(Team::Blue)), (8, None), (9, Some(Team::Red))] {
+        for (id, team) in [(7, Some(Team::BLUE)), (8, None), (9, Some(Team::RED))] {
             let mut ally = Player::new_bot(id, format!("Ally {id}"), [0.2, 0.5, 1.0], &config);
             ally.team = team;
             ally.tile_count = 1;
@@ -2783,7 +2783,7 @@ mod bot_iq_alliance_tests {
             .insert(13, crate::protocol::CampaignRelation::Enemy);
 
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 6, false, true, Some((2.0, 3)), false),
+            engine.activate_campaign_assault(Team::RED, 6, false, true, Some((2.0, 3)), false),
             5
         );
         assert_eq!(
@@ -2849,7 +2849,7 @@ mod bot_iq_alliance_tests {
             .fill(crate::map::MapTile::from_byte(0x80));
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
         engine.state.player_mut(2).unwrap().team = None;
-        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
+        engine.state.player_mut(1).unwrap().team = Some(Team::RED);
         engine
             .campaign_faction_ids
             .insert(1, "legio_xiv_gemina".into());
@@ -2857,7 +2857,7 @@ mod bot_iq_alliance_tests {
         engine.kill_player(1);
 
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), true),
+            engine.activate_campaign_assault(Team::RED, 2, false, true, Some((2.0, 10)), true),
             1
         );
         let reserves: Vec<_> = engine
@@ -2871,7 +2871,7 @@ mod bot_iq_alliance_tests {
         assert!(engine.campaign_assault.as_ref().unwrap().hold_last_tile);
         let before = engine.state.players.len();
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false),
+            engine.activate_campaign_assault(Team::RED, 2, false, true, Some((2.0, 10)), false),
             1
         );
         assert_eq!(
@@ -2894,8 +2894,8 @@ mod bot_iq_alliance_tests {
         let mut human = Player::new_human(3, "Boudica".into(), [0.0, 0.0, 1.0], &config);
         human.tile_count = 1;
         engine.state.register_player(human);
-        engine.state.player_mut(1).unwrap().team = Some(Team::Blue);
-        engine.state.player_mut(2).unwrap().team = Some(Team::Red);
+        engine.state.player_mut(1).unwrap().team = Some(Team::BLUE);
+        engine.state.player_mut(2).unwrap().team = Some(Team::RED);
         engine.state.player_mut(1).unwrap().alliances.push(3);
         engine.state.player_mut(3).unwrap().alliances.push(1);
         engine.campaign_faction_ids.extend([
@@ -2908,7 +2908,7 @@ mod bot_iq_alliance_tests {
         engine.campaign_support_next_tick.insert(1, 100);
 
         assert_eq!(
-            engine.activate_campaign_assault(Team::Blue, 2, true, false, None, false),
+            engine.activate_campaign_assault(Team::BLUE, 2, true, false, None, false),
             1
         );
         assert_eq!(engine.campaign_assault_targets.get(&1), Some(&vec![2]));
@@ -2929,8 +2929,8 @@ mod bot_iq_alliance_tests {
         use crate::protocol::{CampaignRelation, Team};
 
         let mut engine = test_engine_two_players(42);
-        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
-        engine.state.player_mut(2).unwrap().team = Some(Team::Blue);
+        engine.state.player_mut(1).unwrap().team = Some(Team::RED);
+        engine.state.player_mut(2).unwrap().team = Some(Team::BLUE);
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
         engine.campaign_relations.insert(1, CampaignRelation::Enemy);
         engine.campaign_assault_targets.insert(1, vec![2]);
@@ -2959,17 +2959,17 @@ mod bot_iq_alliance_tests {
         use crate::protocol::{CampaignRelation, Team};
 
         let mut engine = test_engine_two_players(45);
-        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
-        engine.state.player_mut(2).unwrap().team = Some(Team::Blue);
+        engine.state.player_mut(1).unwrap().team = Some(Team::RED);
+        engine.state.player_mut(2).unwrap().team = Some(Team::BLUE);
         let config = engine.state.config.clone();
         let mut ally = Player::new_human(3, "Ally".into(), [0.2, 0.5, 1.0], &config);
-        ally.team = Some(Team::Blue);
+        ally.team = Some(Team::BLUE);
         engine.state.register_player(ally);
         engine.campaign_relations.insert(1, CampaignRelation::Enemy);
         engine.campaign_assault_targets.insert(1, vec![2, 3]);
         engine.campaign_assault = Some(CampaignAssaultState {
             root_target: 2,
-            team: Team::Red,
+            team: Team::RED,
             include_allies: true,
             preserve_relation: false,
             hold_last_tile: false,
@@ -3023,13 +3023,13 @@ mod bot_iq_alliance_tests {
         state.map.terrain[1] = MapTile::from_byte(0x20);
         state.map.terrain[2] = MapTile::from_byte(0xC0);
         let mut attacker = Player::new_bot(1, "Roman fleet".into(), [1.0, 0.0, 0.0], &config);
-        attacker.team = Some(Team::Red);
+        attacker.team = Some(Team::RED);
         attacker.troops = 1000.0;
         attacker.max_troops = 1000.0;
         attacker.tile_count = 1;
         attacker.border_insert(0);
         let mut target = Player::new_human(2, "Boudica".into(), [0.2, 0.5, 1.0], &config);
-        target.team = Some(Team::Blue);
+        target.team = Some(Team::BLUE);
         target.tile_count = 1;
         target.border_insert(2);
         state.register_player(attacker);
@@ -3070,13 +3070,13 @@ mod bot_iq_alliance_tests {
         state.phase = GamePhase::Playing;
         state.map.terrain.fill(MapTile::from_byte(0xC0));
         let mut attacker = Player::new_bot(1, "Roman army".into(), [1.0, 0.0, 0.0], &config);
-        attacker.team = Some(Team::Red);
+        attacker.team = Some(Team::RED);
         attacker.troops = 1000.0;
         attacker.max_troops = 1000.0;
         attacker.tile_count = 1;
         attacker.border_insert(0);
         let mut target = Player::new_human(2, "Boudica".into(), [0.2, 0.5, 1.0], &config);
-        target.team = Some(Team::Blue);
+        target.team = Some(Team::BLUE);
         target.tile_count = 1;
         target.border_insert(2);
         state.register_player(attacker);
@@ -3109,8 +3109,8 @@ mod bot_iq_alliance_tests {
         use crate::protocol::{CampaignRelation, Team};
 
         let mut engine = test_engine_two_players(42);
-        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
-        engine.state.player_mut(2).unwrap().team = Some(Team::Red);
+        engine.state.player_mut(1).unwrap().team = Some(Team::RED);
+        engine.state.player_mut(2).unwrap().team = Some(Team::RED);
         let config = crate::game_config::GameConfig::default();
         let mut boudica = Player::new_human(3, "Boudica".into(), [0.2, 0.5, 1.0], &config);
         boudica.troops = 200.0;
@@ -3523,7 +3523,7 @@ mod bot_iq_alliance_tests {
         human.gold = 100_000.0;
         human.troops = 5_000.0;
         human.max_troops = 10_000.0;
-        add_player(human, 2, 2, Some(Team::Red));
+        add_player(human, 2, 2, Some(Team::RED));
 
         // Players 2..=1+ghost_count: Ghost allies on Red team
         for i in 0..ghost_count {
@@ -3531,13 +3531,13 @@ mod bot_iq_alliance_tests {
             let mut ghost = Player::new_human(id, format!("Ghost{id}"), [0.8, 0.2, 0.2], &config);
             ghost.is_ai_controlled = true;
             ghost.alliances.push(1);
-            add_player(ghost, 3 + u32::from(i), 2, Some(Team::Red));
+            add_player(ghost, 3 + u32::from(i), 2, Some(Team::RED));
         }
 
         // Hostile enemy on Blue team adjacent to Ghosts
         let enemy_id = 2 + ghost_count;
         let enemy = Player::new_bot(enemy_id, "Enemy".into(), [0.1, 0.4, 0.9], &config);
-        add_player(enemy, 3, 3, Some(Team::Blue));
+        add_player(enemy, 3, 3, Some(Team::BLUE));
 
         game.player_lookup = lookup;
         if let Some(human) = game.players.get_mut(0) {

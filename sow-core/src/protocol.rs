@@ -514,10 +514,158 @@ pub struct ServerStartMessage {
     pub relay_host: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
-pub enum Team {
-    Red,
-    Blue,
+/// A multiplayer team, numbered from 0. Team 0 is Red and team 1 is Blue, so
+/// two-team games keep their names, colors and encoded bytes.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Team(u8);
+
+impl Team {
+    pub const RED: Team = Team(0);
+    pub const BLUE: Team = Team(1);
+    /// Most teams one match can use.
+    pub const MAX_TEAMS: u8 = 32;
+
+    pub fn from_index(index: u8) -> Option<Team> {
+        (index < Self::MAX_TEAMS).then_some(Team(index))
+    }
+
+    pub fn index(self) -> usize {
+        usize::from(self.0)
+    }
+
+    /// Name used in JSON and logs: "Red", "Blue", then "Team 3" onward.
+    pub fn name(self) -> String {
+        match self.0 {
+            0 => "Red".to_string(),
+            1 => "Blue".to_string(),
+            n => format!("Team {}", n + 1),
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Team> {
+        match name {
+            "Red" => Some(Team::RED),
+            "Blue" => Some(Team::BLUE),
+            _ => name
+                .strip_prefix("Team ")?
+                .parse::<u8>()
+                .ok()
+                .filter(|number| (3..=Self::MAX_TEAMS).contains(number))
+                .map(|number| Team(number - 1)),
+        }
+    }
+
+    /// The team with the fewest members among `team_count` teams. The lowest
+    /// index wins a tie, so the first team fills first.
+    pub fn smallest(team_count: u8, members: impl IntoIterator<Item = Team>) -> Team {
+        let mut counts = vec![0usize; usize::from(team_count.clamp(1, Self::MAX_TEAMS))];
+        for team in members {
+            if let Some(count) = counts.get_mut(team.index()) {
+                *count += 1;
+            }
+        }
+        let index = counts
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, count)| **count)
+            .map_or(0, |(index, _)| index);
+        Team(index as u8)
+    }
+
+    /// The team after this one in a `team_count` match, wrapping to the first.
+    pub fn next_team(self, team_count: u8) -> Team {
+        Team((self.0 + 1) % team_count.clamp(1, Self::MAX_TEAMS))
+    }
+}
+
+impl std::fmt::Debug for Team {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name())
+    }
+}
+
+impl Serialize for Team {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.name())
+        } else {
+            // Binary formats get the enum variant index that bincode wrote before.
+            serializer.serialize_u32(u32::from(self.0))
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Team {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        if deserializer.is_human_readable() {
+            let name = String::deserialize(deserializer)?;
+            Team::parse(&name).ok_or_else(|| D::Error::custom(format!("unknown team {name:?}")))
+        } else {
+            let index = u32::deserialize(deserializer)?;
+            u8::try_from(index)
+                .ok()
+                .and_then(Team::from_index)
+                .ok_or_else(|| D::Error::custom("team index out of range"))
+        }
+    }
+}
+
+#[cfg(test)]
+mod team_tests {
+    use super::*;
+
+    #[test]
+    fn red_and_blue_keep_their_bytes_and_names() {
+        assert_eq!(
+            bincode::serialize(&Team::RED).unwrap(),
+            bincode::serialize(&0u32).unwrap()
+        );
+        assert_eq!(
+            bincode::serialize(&Team::BLUE).unwrap(),
+            bincode::serialize(&1u32).unwrap()
+        );
+        assert_eq!(serde_json::to_string(&Team::RED).unwrap(), "\"Red\"");
+        assert_eq!(serde_json::to_string(&Team::BLUE).unwrap(), "\"Blue\"");
+    }
+
+    #[test]
+    fn every_team_round_trips_in_json_and_binary() {
+        for index in 0..Team::MAX_TEAMS {
+            let team = Team::from_index(index).unwrap();
+            let json = serde_json::to_string(&team).unwrap();
+            assert_eq!(serde_json::from_str::<Team>(&json).unwrap(), team);
+            let bytes = bincode::serialize(&team).unwrap();
+            assert_eq!(bincode::deserialize::<Team>(&bytes).unwrap(), team);
+        }
+        assert_eq!(serde_json::to_string(&Team(2)).unwrap(), "\"Team 3\"");
+    }
+
+    #[test]
+    fn new_members_join_the_smallest_team_lowest_index_first() {
+        let members = [Team::RED, Team::RED, Team(2), Team::BLUE];
+        assert_eq!(Team::smallest(4, members), Team(3));
+        assert_eq!(Team::smallest(2, []), Team::RED);
+        assert_eq!(Team::smallest(2, [Team::RED]), Team::BLUE);
+    }
+
+    #[test]
+    fn next_team_wraps_within_the_match() {
+        assert_eq!(Team::RED.next_team(2), Team::BLUE);
+        assert_eq!(Team::BLUE.next_team(2), Team::RED);
+        assert_eq!(Team(2).next_team(3), Team::RED);
+        assert_eq!(Team::RED.next_team(4), Team::BLUE);
+    }
+
+    #[test]
+    fn rejects_indexes_and_names_outside_the_range() {
+        assert_eq!(Team::from_index(Team::MAX_TEAMS), None);
+        assert_eq!(Team::parse("Team 2"), None);
+        assert_eq!(Team::parse("Team 33"), None);
+        assert_eq!(Team::parse("team 3"), None);
+        assert_eq!(Team::parse("Team 32"), Some(Team(31)));
+        assert!(serde_json::from_str::<Team>("\"Green\"").is_err());
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -3662,23 +3662,23 @@ mod relay_worker_tests {
     #[test]
     fn an_ai_team_victory_uses_a_registered_teammate_for_the_verified_result() {
         let mut red_human = registered_human();
-        red_human.team = Some(sow_core::protocol::Team::Red);
+        red_human.team = Some(sow_core::protocol::Team::RED);
         let mut blue_human = ReplayStartPlayer {
             player_id: 8,
             ..registered_human()
         };
-        blue_human.team = Some(sow_core::protocol::Team::Blue);
+        blue_human.team = Some(sow_core::protocol::Team::BLUE);
         let ai = ReplayStartPlayer {
             player_id: 99,
             database_account_id: None,
             leader: sow_core::player::Leader::default(),
-            team: Some(sow_core::protocol::Team::Red),
+            team: Some(sow_core::protocol::Team::RED),
             is_internal: true,
         };
         assert_eq!(
             verified_winner_identity(
                 Some(ai.player_id),
-                Some(sow_core::protocol::Team::Red),
+                Some(sow_core::protocol::Team::RED),
                 &[red_human, blue_human, ai],
                 false,
                 true

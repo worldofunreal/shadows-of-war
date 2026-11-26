@@ -773,16 +773,7 @@ impl SowEngine {
                         && self.state.map.owner_id(x, y) == 0
                     {
                         // Clear old tiles and buildings for this player
-                        let w = self.state.map.width;
-                        let mut to_clear = Vec::new();
-                        for (i, &owner) in self.state.map.owner_states().iter().enumerate() {
-                            if owner == pid {
-                                to_clear.push(i as u32);
-                            }
-                        }
-                        for i in to_clear {
-                            self.state.set_tile_owner(i % w, i / w, 0);
-                        }
+                        self.state.clear_player_tiles(pid);
                         let had_defense_post = self.buildings.iter().any(|b| {
                             b.owner_id == pid && b.kind == crate::game::BuildingKind::Tower
                         });

@@ -10,6 +10,10 @@ fn default_game_mode() -> String {
     "FFA".to_string()
 }
 
+fn default_team_count() -> u8 {
+    2
+}
+
 fn default_max_tiles_per_tick_reference_troops() -> f64 {
     1000.0
 }
@@ -53,7 +57,7 @@ fn default_city_troop_income() -> f64 {
 }
 
 fn default_camp_capture_base_points() -> f64 {
-    3.0
+    0.0
 }
 
 fn default_military_camp_troop_income() -> f64 {
@@ -348,6 +352,7 @@ const MATCH_OWNED_KEYS: &[&str] = &[
     "map_name",
     "map_roster_preset",
     "game_mode",
+    "team_count",
     "map_width",
     "map_height",
     "random_spawn",
@@ -415,6 +420,9 @@ pub struct GameConfig {
     /// Whether this is "FFA", "Teams", etc.
     #[serde(default = "default_game_mode")]
     pub game_mode: String,
+    /// Number of teams in a "Teams" match, from 2 to `Team::MAX_TEAMS`.
+    #[serde(default = "default_team_count")]
+    pub team_count: u8,
     /// Physical width of the map grid in tiles.
     pub map_width: u32,
     /// Physical height of the map grid in tiles.
@@ -716,6 +724,7 @@ impl Default for GameConfig {
             map_name: crate::maps::DEFAULT_MAP_KEY.to_string(),
             map_roster_preset: None,
             game_mode: "FFA".to_string(),
+            team_count: 2,
             map_width: 1000,
             map_height: 800,
             random_spawn: false,

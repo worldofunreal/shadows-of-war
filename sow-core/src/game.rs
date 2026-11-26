@@ -752,6 +752,21 @@ impl GameState {
         self.set_tile_owner_inner(x, y, new_owner, None);
     }
 
+    /// Hands every tile owned by `pid` back to nobody.
+    pub(crate) fn clear_player_tiles(&mut self, pid: u16) {
+        let w = self.map.width;
+        let owned: Vec<u32> = self
+            .map
+            .owner_states()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &owner)| (owner == pid).then_some(i as u32))
+            .collect();
+        for i in owned {
+            self.set_tile_owner(i % w, i / w, 0);
+        }
+    }
+
     pub(crate) fn set_tile_owner_for_execution(
         &mut self,
         x: u32,

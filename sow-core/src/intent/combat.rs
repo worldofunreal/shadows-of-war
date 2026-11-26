@@ -708,7 +708,7 @@ mod tests {
         game.map.terrain.fill(MapTile::from_byte(0x80));
         for id in [1, 2] {
             let mut player = Player::new_human(id, format!("P{id}"), [0.5; 3], &game.config);
-            player.team = Some(Team::Red);
+            player.team = Some(Team::RED);
             player.troops = 20_000.0;
             game.register_player(player);
         }
@@ -774,7 +774,7 @@ mod tests {
         game.map.terrain.fill(MapTile::from_byte(0x80));
         for id in [1, 2] {
             let mut player = Player::new_human(id, format!("P{id}"), [0.5; 3], &game.config);
-            player.team = Some(Team::Red);
+            player.team = Some(Team::RED);
             player.troops = 20_000.0;
             game.register_player(player);
         }

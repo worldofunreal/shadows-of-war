@@ -272,7 +272,7 @@ impl SowEngine {
             }
             // Bot Heroes form the opposing team in co-op.
             if crate::game_config::is_coop_game_mode(&config.game_mode) {
-                player.team = Some(crate::protocol::Team::Blue);
+                player.team = Some(crate::protocol::Team::BLUE);
             }
             player
         } else {
@@ -398,23 +398,7 @@ impl SowEngine {
             return;
         }
 
-        // OF teamSpawnArea parity (GameImpl.ts:960 + per-map manifests): each
-        // team owns a map half (Team {Red, Blue} → Red left, Blue right) and
-        // EVERY member spawns inside it — the zone is the cohesion, the
-        // member floor is the separation. Ring/anchor path kept as fallback.
-        let spawn_point = self
-            .filler_spawn_point(&mut rng, team.as_ref(), is_ai_controlled)
-            .or_else(|| {
-                team.as_ref()
-                    .map(|t| self.team_spawn_area(t))
-                    .and_then(|area| self.find_spawn_in_area(&mut rng, area))
-            })
-            .or_else(|| {
-                team.as_ref()
-                    .and_then(|t| self.team_centroid(t))
-                    .and_then(|(cx, cy)| self.find_valid_spawn_near(&mut rng, cx, cy, 12, 36))
-            })
-            .or_else(|| self.find_valid_spawn(&mut rng));
+        let spawn_point = self.team_member_spawn(&mut rng, team.as_ref(), is_ai_controlled);
 
         if let Some((sx, sy)) = spawn_point {
             let mut player = Player::new_human(player_id, name, color, &config);
@@ -550,7 +534,7 @@ impl SowEngine {
                     let mut nation = Player::new_nation(bot_id, s.name.clone(), s.color, &config);
                     if crate::game_config::is_coop_game_mode(&config.game_mode) && s.team.is_none()
                     {
-                        nation.team = Some(crate::protocol::Team::Blue);
+                        nation.team = Some(crate::protocol::Team::BLUE);
                     }
                     nation
                 }
@@ -648,16 +632,152 @@ impl SowEngine {
         log::info!("spawn_scripted: placed {}/{}", placed, spawns.len());
     }
 
-    /// OF teamSpawnArea parity (GameImpl.ts:960 + per-map manifests): each
-    /// team owns a map half — `Team {Red, Blue}` → Red left, Blue right — and
-    /// every member spawns inside it (2 teams → left/right halves, the same
-    /// split OF's manifests hand-author).
+    /// OF teamSpawnArea parity (GameImpl.ts:960): each team owns one zone of
+    /// the map and every member spawns inside it.
     pub(crate) fn team_spawn_area(&self, team: &crate::protocol::Team) -> (u32, u32, u32, u32) {
         let (w, h) = (self.state.map.width, self.state.map.height);
-        let half = w / 2;
-        match team {
-            crate::protocol::Team::Red => (0, 0, half, h),
-            crate::protocol::Team::Blue => (half, 0, w - half, h),
+        Self::team_zones(w, h, self.state.config.team_count)
+            .get(team.index())
+            .copied()
+            .unwrap_or((0, 0, 0, 0))
+    }
+
+    /// Spawn zones `(x, y, width, height)` for `team_count` teams. A rectangle
+    /// that holds n teams is cut across its longer side into parts for n / 2
+    /// teams and the rest. Two teams keep the original left and right halves.
+    pub(crate) fn team_zones(width: u32, height: u32, team_count: u8) -> Vec<(u32, u32, u32, u32)> {
+        let team_count = team_count.clamp(1, crate::protocol::Team::MAX_TEAMS);
+        if team_count == 2 {
+            let half = width / 2;
+            return vec![(0, 0, half, height), (half, 0, width - half, height)];
+        }
+        let mut zones = Vec::with_capacity(usize::from(team_count));
+        Self::split_zone((0, 0, width, height), usize::from(team_count), &mut zones);
+        zones
+    }
+
+    fn split_zone(zone: (u32, u32, u32, u32), teams: usize, out: &mut Vec<(u32, u32, u32, u32)>) {
+        if teams <= 1 {
+            out.push(zone);
+            return;
+        }
+        let (x, y, w, h) = zone;
+        let near = teams / 2;
+        let cut = if w >= h {
+            (u64::from(w) * near as u64 / teams as u64) as u32
+        } else {
+            (u64::from(h) * near as u64 / teams as u64) as u32
+        };
+        let (first, second) = if w >= h {
+            ((x, y, cut, h), (x + cut, y, w - cut, h))
+        } else {
+            ((x, y, w, cut), (x, y + cut, w, h - cut))
+        };
+        Self::split_zone(first, near, out);
+        Self::split_zone(second, teams - near, out);
+    }
+
+    /// Ticks between deployment-phase follow checks, and how far a bot may
+    /// drift from its team's centroid before it moves back to the team.
+    pub(crate) const FOLLOW_PERIOD_TICKS: u64 = 10;
+    const FOLLOW_DISTANCE: i64 = 40;
+
+    /// Where a team member lands: a band around its teammates once some are
+    /// placed, else the free land nearest the team inside its zone, else a
+    /// random spot in the zone, else anywhere.
+    pub(crate) fn team_member_spawn(
+        &self,
+        rng: &mut wyrand::WyRand,
+        team: Option<&crate::protocol::Team>,
+        is_ai_controlled: bool,
+    ) -> Option<(u32, u32)> {
+        self.filler_spawn_point(rng, team, is_ai_controlled)
+            .or_else(|| team.and_then(|t| self.team_near_spawn(t)))
+            .or_else(|| {
+                team.map(|t| self.team_spawn_area(t))
+                    .and_then(|area| self.find_spawn_in_area(rng, area))
+            })
+            .or_else(|| self.find_valid_spawn(rng))
+    }
+
+    /// Free land nearest the team's centroid that lies in its zone and keeps
+    /// the member floor. Rings grow outward from the centroid. ponytail: ring
+    /// search capped at 120 tiles; past that, the zone sampler takes over.
+    fn team_near_spawn(&self, team: &crate::protocol::Team) -> Option<(u32, u32)> {
+        let (cx, cy) = self.team_centroid(team)?;
+        let (ax, ay, aw, ah) = self.team_spawn_area(team);
+        let (zx, zy) = (i64::from(ax), i64::from(ay));
+        let (ex, ey) = (i64::from(ax + aw), i64::from(ay + ah));
+        let (cx, cy) = (i64::from(cx), i64::from(cy));
+        let reach = i64::from(aw.max(ah)).min(120);
+        for r in 0..=reach {
+            for d in -r..=r {
+                for (x, y) in [
+                    (cx + d, cy - r),
+                    (cx + d, cy + r),
+                    (cx - r, cy + d),
+                    (cx + r, cy + d),
+                ] {
+                    if x < zx || y < zy || x >= ex || y >= ey {
+                        continue;
+                    }
+                    let (ux, uy) = (x as u32, y as u32);
+                    if self.state.map.owner_id(ux, uy) == 0
+                        && self.state.map.terrain[self.state.map.ref_id(ux, uy)].is_land()
+                        && self.home_clear(ux, uy)
+                    {
+                        return Some((ux, uy));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Deployment-phase bots stay with their team. A placed bot more than
+    /// `FOLLOW_DISTANCE` from its team's centroid (a teammate moved their spawn)
+    /// moves to free land near the team, but only when that is closer than
+    /// where it stands. Every client makes the same moves.
+    pub(crate) fn follow_team_in_deploy(&mut self, now: u64) {
+        use wyrand::WyRand;
+        let seed = self.state.seed;
+        let movers: Vec<(u16, crate::protocol::Team)> = self
+            .state
+            .players
+            .iter()
+            .filter(|p| p.is_ai_controlled && p.has_spawned)
+            .filter_map(|p| p.team.map(|team| (p.id, team)))
+            .collect();
+        for (pid, team) in movers {
+            let Some((cx, cy)) = self.team_centroid(&team) else {
+                continue;
+            };
+            let Some(home) = self
+                .state
+                .players
+                .iter()
+                .find(|p| p.id == pid)
+                .and_then(|p| p.home)
+            else {
+                continue;
+            };
+            let gap = |(x, y): (u32, u32)| {
+                let (dx, dy) = (i64::from(x) - i64::from(cx), i64::from(y) - i64::from(cy));
+                dx * dx + dy * dy
+            };
+            let here = gap(home);
+            if here <= Self::FOLLOW_DISTANCE * Self::FOLLOW_DISTANCE {
+                continue;
+            }
+            let mut rng = WyRand::new(seed.wrapping_add(u64::from(pid)).wrapping_add(now));
+            let spot = self
+                .filler_spawn_point(&mut rng, Some(&team), true)
+                .or_else(|| self.team_near_spawn(&team));
+            let Some(spot) = spot.filter(|&s| gap(s) < here) else {
+                continue;
+            };
+            self.state.clear_player_tiles(pid);
+            self.state.place_spawn(pid, spot.0, spot.1);
         }
     }
 
@@ -900,5 +1020,91 @@ impl SowEngine {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod team_deploy_tests {
+    use super::*;
+    use crate::game::GameState;
+    use crate::game_config::GameConfig;
+    use crate::player::Player;
+    use crate::protocol::Team;
+    use crate::water_components::WaterComponents;
+
+    fn overlaps(a: (u32, u32, u32, u32), b: (u32, u32, u32, u32)) -> bool {
+        a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3
+    }
+
+    #[test]
+    fn two_teams_keep_the_original_halves() {
+        assert_eq!(
+            SowEngine::team_zones(100, 50, 2),
+            vec![(0, 0, 50, 50), (50, 0, 50, 50)]
+        );
+    }
+
+    #[test]
+    fn every_team_count_tiles_the_map_without_overlap() {
+        let (w, h) = (300, 200);
+        for count in 2..=Team::MAX_TEAMS {
+            let zones = SowEngine::team_zones(w, h, count);
+            assert_eq!(zones.len(), usize::from(count), "{count} teams");
+            let area: u64 = zones
+                .iter()
+                .map(|&(_, _, zw, zh)| u64::from(zw) * u64::from(zh))
+                .sum();
+            assert_eq!(area, u64::from(w) * u64::from(h), "{count} teams");
+            for (i, &zone) in zones.iter().enumerate() {
+                assert!(zone.2 > 0 && zone.3 > 0, "{count} teams: empty {zone:?}");
+                assert!(zone.0 + zone.2 <= w && zone.1 + zone.3 <= h);
+                assert!(zones[i + 1..].iter().all(|&other| !overlaps(zone, other)));
+            }
+        }
+    }
+
+    #[test]
+    fn bot_drifting_from_its_team_is_spawned_back_next_to_it() {
+        let config = GameConfig {
+            game_mode: "Teams".to_string(),
+            team_count: 2,
+            ..Default::default()
+        };
+        let mut state = GameState::new(7, 120, 60, config.clone());
+        let cluster = [10u32, 12, 14, 16];
+        for (id, x) in (1u16..).zip(cluster.into_iter().chain([100])) {
+            let mut bot = Player::new_human(id, format!("Bot{id}"), [1.0; 3], &config);
+            bot.is_ai_controlled = true;
+            bot.team = Some(Team::RED);
+            state.register_player(bot);
+            state.place_spawn(id, x, 30);
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let (cx, cy) = engine.team_centroid(&Team::RED).expect("team has tiles");
+        engine.follow_team_in_deploy(1);
+
+        let home = |engine: &SowEngine, id: u16| {
+            engine
+                .state
+                .players
+                .iter()
+                .find(|p| p.id == id)
+                .and_then(|p| p.home)
+                .expect("placed bot has a home")
+        };
+        for (id, x) in (1u16..).zip(cluster) {
+            assert_eq!(home(&engine, id), (x, 30), "bot {id} near its team stays");
+        }
+        let (hx, hy) = home(&engine, 5);
+        let (dx, dy) = (i64::from(hx) - i64::from(cx), i64::from(hy) - i64::from(cy));
+        assert!(
+            dx * dx + dy * dy <= 40 * 40,
+            "bot 5 landed at {hx},{hy}, team centroid {cx},{cy}"
+        );
+        assert_eq!(
+            engine.state.map.owner_id(100, 30),
+            0,
+            "old spawn tiles freed"
+        );
     }
 }

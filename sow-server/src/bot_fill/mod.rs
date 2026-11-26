@@ -412,22 +412,15 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
 
             let (dummy_tx, _dummy_rx) = mpsc::channel::<Vec<u8>>(8);
 
-            // Teams: drop the ghost into whichever team is smaller (Red on a tie),
-            // mirroring join_player. Co-op: ghosts are human-side → Red.
+            // Teams: drop the ghost into the team with the fewest players (first
+            // team on a tie), mirroring join_player. Co-op: ghosts are human-side → Red.
             let team = if sow_core::game_config::is_coop_game_mode(&g.game_mode) {
-                Some(Team::Red)
+                Some(Team::RED)
             } else if g.game_mode == "Teams" {
-                let reds = g
-                    .players
-                    .iter()
-                    .filter(|p| p.team == Some(Team::Red))
-                    .count();
-                let blues = g
-                    .players
-                    .iter()
-                    .filter(|p| p.team == Some(Team::Blue))
-                    .count();
-                Some(if blues < reds { Team::Blue } else { Team::Red })
+                Some(Team::smallest(
+                    g.config.team_count,
+                    g.players.iter().filter_map(|p| p.team),
+                ))
             } else {
                 None
             };

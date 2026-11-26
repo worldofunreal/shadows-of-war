@@ -1388,7 +1388,7 @@ mod tests {
         let players = (1u16..=3)
             .map(|id| PlayerInfo {
                 id,
-                team: Some(if id == 2 { Team::Blue } else { Team::Red }),
+                team: Some(if id == 2 { Team::BLUE } else { Team::RED }),
                 ..template.clone()
             })
             .collect::<Vec<_>>();

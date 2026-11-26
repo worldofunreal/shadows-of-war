@@ -1762,4 +1762,61 @@ mod tests {
         );
         assert_eq!(crate::building::cart_stop_multiplier(BuildingKind::Tower), 0.25);
     }
+
+    #[test]
+    fn city_district_kind_limit_scales_at_levels_one_four_and_eight() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 64, 64, config.clone());
+        state.phase = GamePhase::Playing;
+        let mut player = Player::new_human(1, "Builder".into(), [1.0, 0.0, 0.0], &config);
+        player.gold = 100_000.0;
+        player.tile_count = 64 * 64;
+        state.register_player(player);
+        for y in 0..64 {
+            for x in 0..64 {
+                state.map.set_owner_id(x, y, 1);
+            }
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.add_building(Building {
+            id: 100,
+            owner_id: 1,
+            tile_idx: 20 * 64 + 20,
+            kind: BuildingKind::City,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
+        engine.refresh_building_grid();
+
+        // City Lv1..3 allows max 1 of each district kind.
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, 20 * 64 + 24);
+        assert_eq!(engine.buildings.len(), 2);
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, 20 * 64 + 26);
+        assert_eq!(engine.buildings.len(), 2);
+
+        // City Lv4..7 unlocks 2 of each district kind, and blocks a 3rd.
+        engine
+            .buildings
+            .iter_mut()
+            .find(|b| b.kind == BuildingKind::City)
+            .unwrap()
+            .level = 4;
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, 20 * 64 + 26);
+        assert_eq!(engine.buildings.len(), 3);
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, 24 * 64 + 20);
+        assert_eq!(engine.buildings.len(), 3);
+
+        // City Lv8 unlocks 3 of each district kind, and blocks a 4th.
+        engine
+            .buildings
+            .iter_mut()
+            .find(|b| b.kind == BuildingKind::City)
+            .unwrap()
+            .level = 8;
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, 24 * 64 + 20);
+        assert_eq!(engine.buildings.len(), 4);
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, 16 * 64 + 20);
+        assert_eq!(engine.buildings.len(), 4);
+    }
 }

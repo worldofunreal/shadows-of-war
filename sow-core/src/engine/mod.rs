@@ -2474,7 +2474,7 @@ impl SowEngine {
         let spawn = self
             .nearest_free_land(cx, cy)
             .or_else(|| self.find_valid_spawn(&mut WyRand::new(self.state.seed ^ u64::from(id))))?;
-        let (name, color) = if team == crate::protocol::Team::Red {
+        let (name, color) = if team == crate::protocol::Team::RED {
             ("Roman Reserve", [0.85, 0.12, 0.12])
         } else {
             ("Campaign Reserve", [0.18, 0.42, 0.82])
@@ -3275,8 +3275,8 @@ mod tests {
                 y: faction.y,
                 color: [0.8, 0.2, 0.2],
                 team: match faction.team.as_deref() {
-                    Some("Red") => Some(Team::Red),
-                    Some("Blue") => Some(Team::Blue),
+                    Some("Red") => Some(Team::RED),
+                    Some("Blue") => Some(Team::BLUE),
                     _ => None,
                 },
                 leader: faction
@@ -3451,7 +3451,7 @@ mod tests {
             roman_forces.iter().copied().collect()
         );
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 1, false, true, Some((2.0, 3)), false,),
+            engine.activate_campaign_assault(Team::RED, 1, false, true, Some((2.0, 3)), false,),
             4
         );
         let targets = &engine.campaign_assault.as_ref().unwrap().target_ids;
@@ -4027,7 +4027,7 @@ mod tests {
         for p in spawn_nations("Coop") {
             assert_eq!(
                 p.team,
-                Some(crate::protocol::Team::Blue),
+                Some(crate::protocol::Team::BLUE),
                 "Co-op nation {} wrong team {:?}",
                 p.id,
                 p.team
@@ -4196,13 +4196,13 @@ mod tests {
 
         let mut red =
             crate::player::Player::new_human(1, "Red".into(), [1.0, 0.2, 0.2], &state.config);
-        red.team = Some(Team::Red);
+        red.team = Some(Team::RED);
         red.tile_count = 55;
         red.alive = true;
 
         let mut blue =
             crate::player::Player::new_human(2, "Blue".into(), [0.2, 0.5, 1.0], &state.config);
-        blue.team = Some(Team::Blue);
+        blue.team = Some(Team::BLUE);
         blue.tile_count = 10;
         blue.alive = true;
 
@@ -4212,7 +4212,7 @@ mod tests {
         let mut engine = SowEngine::new(state, WaterComponents::default());
         engine.check_team_winner(50);
 
-        assert_eq!(engine.state.winning_team, Some(Team::Red));
+        assert_eq!(engine.state.winning_team, Some(Team::RED));
         assert_eq!(engine.state.winner, Some(1));
     }
 }

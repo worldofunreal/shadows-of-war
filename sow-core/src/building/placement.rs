@@ -165,6 +165,7 @@ pub enum PlacementError {
     CityRequired,
     TooCloseToCity,
     OutsideCityRange,
+    CityDistrictLimit,
 }
 
 impl PlacementError {
@@ -178,6 +179,7 @@ impl PlacementError {
             Self::CityRequired => "hud.build_occupied",
             Self::TooCloseToCity => "hud.build_too_close_to_city",
             Self::OutsideCityRange => "hud.build_outside_city_range",
+            Self::CityDistrictLimit => "hud.build_city_district_limit",
         }
     }
 }
@@ -282,6 +284,17 @@ pub fn validate_city_spacing(
     Ok(())
 }
 
+/// Maximum number of districts of the same kind allowed within one City's radius.
+#[inline]
+pub const fn city_district_kind_limit(city_level: u8) -> u32 {
+    match city_level {
+        0 => 0,
+        1..=3 => 1,
+        4..=7 => 2,
+        _ => 3,
+    }
+}
+
 pub fn validate_district_city_range(
     owner_id: u16,
     x: u32,
@@ -297,6 +310,36 @@ pub fn validate_district_city_range(
     });
     if covered {
         Ok(())
+    } else {
+        Err(PlacementError::OutsideCityRange)
+    }
+}
+
+/// Validates that `(x, y)` lies inside an owned active City's radius and that at least one
+/// covering owned City still has capacity for another district of `kind`.
+pub fn validate_district_city_placement(
+    owner_id: u16,
+    x: u32,
+    y: u32,
+    cities: &[CityAnchor],
+    required_city_id: Option<u64>,
+    cfg: &GameConfig,
+    count_kind_in_city: impl Fn(CityAnchor) -> u32,
+) -> Result<(), PlacementError> {
+    let mut covered_any = false;
+    for &city in cities {
+        if city.owner_id == owner_id
+            && required_city_id.is_none_or(|id| city.id == id)
+            && city_covers_coord(city, x, y, cfg)
+        {
+            covered_any = true;
+            if count_kind_in_city(city) < city_district_kind_limit(city.active_level) {
+                return Ok(());
+            }
+        }
+    }
+    if covered_any {
+        Err(PlacementError::CityDistrictLimit)
     } else {
         Err(PlacementError::OutsideCityRange)
     }
@@ -534,7 +577,25 @@ pub fn validate_match_structure_site(
     if kind == BuildingKind::City {
         validate_city_spacing(x, y, cities, cfg)
     } else {
-        validate_district_city_range(owner_id, x, y, cities, required_city_id, cfg)
+        validate_district_city_placement(
+            owner_id,
+            x,
+            y,
+            cities,
+            required_city_id,
+            cfg,
+            |city| {
+                let radius = city_construction_radius(city.active_level, cfg);
+                existing
+                    .iter_non_city_in_range(city.x, city.y, radius)
+                    .filter(|b| {
+                        b.kind == kind
+                            && city_covers_coord(city, b.x, b.y, cfg)
+                            && map.owner_id(b.x, b.y) == owner_id
+                    })
+                    .count() as u32
+            },
+        )
     }
 }
 

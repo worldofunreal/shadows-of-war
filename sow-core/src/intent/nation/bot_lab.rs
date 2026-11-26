@@ -1488,7 +1488,7 @@ fn s5_enclosed_coastal_ghost_breaks_out_by_sea() {
     // Ocean everywhere except two islands:
     //   Blue island (team BLUE): ghost + ally packed side by side (top-left)
     //   Red island: lone enemy nation (bottom-right)
-    let blue_team = Some(Team::Blue);
+    let blue_team = Some(Team::BLUE);
     let mk = |id: u16, kind, ai: bool, iq: u32, x: u32, y: u32, team| {
         let mut p = if kind == PlayerType::Human {
             Player::new_human(
@@ -2245,8 +2245,8 @@ fn naval_world_nearby_tribe_precedes_distant_neutral_voyages() {
             player.has_spawned = true;
             player.gold = 0.0;
             player.team = match id {
-                1 | 2 => Some(Team::Red),
-                4 => Some(Team::Blue),
+                1 | 2 => Some(Team::RED),
+                4 => Some(Team::BLUE),
                 _ => None,
             };
             if id == 1 {
@@ -2440,7 +2440,7 @@ fn s13_team_members_spawn_clustered() {
             player_id: id,
             name: format!("B{id}"),
             color: [0.2, 0.5, 1.0],
-            team: Some(Team::Blue),
+            team: Some(Team::BLUE),
             leader: crate::player::Leader::of("caesar"),
             skin_style: 0,
             is_ai_controlled: false,
@@ -2451,7 +2451,7 @@ fn s13_team_members_spawn_clustered() {
             player_id: id,
             name: format!("R{id}"),
             color: [1.0, 0.2, 0.2],
-            team: Some(Team::Red),
+            team: Some(Team::RED),
             leader: crate::player::Leader::of("boudica"),
             skin_style: 0,
             is_ai_controlled: false,
@@ -2870,13 +2870,13 @@ fn s17_spawning_phase_team_ghosts_in_zone() {
     // Register players WITHOUT positions — the live world-map shape.
     let mut lookup: Vec<Option<usize>> = vec![None];
     let roster: Vec<(u16, Option<Team>, bool)> = vec![
-        (1, Some(Team::Blue), true),
-        (2, Some(Team::Blue), true),
-        (3, Some(Team::Blue), true),
-        (4, Some(Team::Blue), true),
-        (5, Some(Team::Red), true),
-        (6, Some(Team::Red), true),
-        (7, Some(Team::Red), false), // real human, red team
+        (1, Some(Team::BLUE), true),
+        (2, Some(Team::BLUE), true),
+        (3, Some(Team::BLUE), true),
+        (4, Some(Team::BLUE), true),
+        (5, Some(Team::RED), true),
+        (6, Some(Team::RED), true),
+        (7, Some(Team::RED), false), // real human, red team
     ];
     for (i, (id, team, ai)) in roster.iter().enumerate() {
         let mut p = Player::new_human(
@@ -2960,7 +2960,7 @@ fn s18_world_map_team_spawn_zones() {
 
     let mut lookup: Vec<Option<usize>> = vec![None];
     let mut id = 1u16;
-    for (team, n) in [(Team::Red, 8u32), (Team::Blue, 8)] {
+    for (team, n) in [(Team::RED, 8u32), (Team::BLUE, 8)] {
         for _ in 0..n {
             let mut p = Player::new_human(
                 id,
@@ -3059,13 +3059,14 @@ fn s18_world_map_team_spawn_zones() {
         red.0,
         blue.0
     );
-    // A balled team hugs one spot: bbox diagonal tiny vs the half's size.
+    // Grouped, not scattered: bots gather within the follow radius (40 tiles)
+    // of their team centroid, so the bbox diagonal stays under 2·√2·40.
+    let grouped = 2.0 * 2f64.sqrt() * 40.0;
     assert!(
-        red.1 >= mw as f64 * 0.15 && blue.1 >= mw as f64 * 0.15,
-        "S18 FAIL: balled up — red spread {:.0}, blue spread {:.0} (half is {:.0} wide)",
+        red.1 <= grouped && blue.1 <= grouped,
+        "S18 FAIL: scattered — red spread {:.0}, blue spread {:.0} (limit {grouped:.0})",
         red.1,
-        blue.1,
-        half
+        blue.1
     );
 }
 

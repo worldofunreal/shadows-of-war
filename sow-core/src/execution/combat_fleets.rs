@@ -1531,7 +1531,7 @@ mod tests {
         state.map.terrain.fill(MapTile::from_byte(0x20));
         for id in 1..=4 {
             let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
-            player.team = Some(if id <= 2 { Team::Blue } else { Team::Red });
+            player.team = Some(if id <= 2 { Team::BLUE } else { Team::RED });
             player.troops = 10_000.0;
             player.max_troops = 20_000.0;
             state.register_player(player);
@@ -1577,7 +1577,7 @@ mod tests {
         state.map.terrain.fill(MapTile::from_byte(0x20));
         for id in [1, 2] {
             let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
-            player.team = Some(Team::Blue);
+            player.team = Some(Team::BLUE);
             player.troops = 10_000.0;
             state.register_player(player);
         }
@@ -1695,7 +1695,7 @@ mod tests {
             let (mut engine, _) = invasion_in_transit(3);
             match status {
                 "allied" => engine.state.player_mut(3).unwrap().alliances.push(1),
-                "same_team" => engine.state.player_mut(3).unwrap().team = Some(Team::Blue),
+                "same_team" => engine.state.player_mut(3).unwrap().team = Some(Team::BLUE),
                 "dead" => engine.state.player_mut(3).unwrap().alive = false,
                 "missing" => engine.state.player_lookup[3] = None,
                 _ => unreachable!(),
@@ -1953,7 +1953,7 @@ mod tests {
         engine.state.player_mut(3).unwrap().alliances.push(1);
         engine.campaign_assault = Some(crate::engine::CampaignAssaultState {
             root_target: 3,
-            team: Team::Blue,
+            team: Team::BLUE,
             include_allies: false,
             preserve_relation: true,
             hold_last_tile: false,
@@ -2071,8 +2071,8 @@ mod tests {
                 state.map.terrain.fill(MapTile::from_byte(0x20));
 
                 for (id, team) in [
-                    (1, Team::Blue),
-                    (2, if same_team { Team::Blue } else { Team::Red }),
+                    (1, Team::BLUE),
+                    (2, if same_team { Team::BLUE } else { Team::RED }),
                 ] {
                     let mut player =
                         Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
@@ -2200,7 +2200,7 @@ mod tests {
                 },
             );
             state.map.terrain.fill(MapTile::from_byte(0x20));
-            for (id, team) in [(1, Team::Blue), (2, Team::Red)] {
+            for (id, team) in [(1, Team::BLUE), (2, Team::RED)] {
                 let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
                 player.gold = 0.0;
                 player.has_spawned = true;
@@ -2318,8 +2318,8 @@ mod tests {
         };
         let mut victim = Player::new_human(2, "Victim".into(), [1.0; 3], &state.config);
         if case == "same-team" {
-            captor.team = Some(Team::Blue);
-            victim.team = Some(Team::Blue);
+            captor.team = Some(Team::BLUE);
+            victim.team = Some(Team::BLUE);
         } else if case == "allied" {
             captor.alliances.push(2);
         }
@@ -2592,7 +2592,7 @@ mod tests {
                 "assault" => {
                     engine.campaign_assault = Some(crate::engine::CampaignAssaultState {
                         root_target: 2,
-                        team: Team::Red,
+                        team: Team::RED,
                         include_allies: true,
                         preserve_relation: false,
                         hold_last_tile: true,

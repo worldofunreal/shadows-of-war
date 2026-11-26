@@ -164,32 +164,28 @@ impl SowEngine {
                     .collect();
                 for pid in due {
                     let mut rng = WyRand::new(seed.wrapping_add(pid as u64).wrapping_add(now));
-                    // OF teamSpawnArea parity: team ghosts spawn inside their
-                    // map half (Red left, Blue right) — zone is cohesion, the
-                    // member floor is separation. Ring/anchor are fallbacks
-                    // only when the zone can't place them. (The world-map
-                    // path lands here: random_spawn=false, so spawn_human
-                    // never places anyone.)
+                    // Team ghosts group with their team (filler bands around its
+                    // centroid, else its zone); other players take any free
+                    // land. (The world-map path lands here: random_spawn=false,
+                    // so spawn_human never places anyone.)
                     let team = self
                         .state
                         .players
                         .iter()
                         .find(|p| p.id == pid)
                         .and_then(|p| p.team);
-                    let spawn_point = team
-                        .as_ref()
-                        .map(|t| self.team_spawn_area(t))
-                        .and_then(|area| self.find_spawn_in_area(&mut rng, area))
-                        .or_else(|| {
-                            team.as_ref().and_then(|t| self.team_centroid(t)).and_then(
-                                |(cx, cy)| self.find_valid_spawn_near(&mut rng, cx, cy, 12, 36),
-                            )
-                        })
-                        .or_else(|| self.find_valid_spawn(&mut rng));
+                    let spawn_point = match team {
+                        Some(t) => self.team_member_spawn(&mut rng, Some(&t), true),
+                        None => self.find_valid_spawn(&mut rng),
+                    };
                     if let Some((sx, sy)) = spawn_point {
                         self.state.place_spawn(pid, sx, sy);
                     }
                 }
+            }
+
+            if self.state.tick % Self::FOLLOW_PERIOD_TICKS == 0 {
+                self.follow_team_in_deploy(self.state.tick);
             }
 
             if self.state.tick >= end_tick {
@@ -206,17 +202,18 @@ impl SowEngine {
                 for pid in unspawned {
                     use wyrand::WyRand;
                     let mut rng = WyRand::new(self.state.seed.wrapping_add(pid as u64));
-                    // Teamed stragglers (incl. real humans) land in their
-                    // team's half too — the team must not split at spawn.
-                    let spawn_point = self
+                    // Teamed stragglers (incl. real humans) land with their
+                    // team too — the team must not split at spawn.
+                    let (team, is_ai) = self
                         .state
                         .players
                         .iter()
                         .find(|p| p.id == pid)
-                        .and_then(|p| p.team)
-                        .map(|t| self.team_spawn_area(&t))
-                        .and_then(|area| self.find_spawn_in_area(&mut rng, area))
-                        .or_else(|| self.find_valid_spawn(&mut rng));
+                        .map_or((None, false), |p| (p.team, p.is_ai_controlled));
+                    let spawn_point = match team {
+                        Some(t) => self.team_member_spawn(&mut rng, Some(&t), is_ai),
+                        None => self.find_valid_spawn(&mut rng),
+                    };
                     if let Some((sx, sy)) = spawn_point {
                         self.state.place_spawn(pid, sx, sy);
                         log::info!("Auto-spawned missing player {} at {}, {}", pid, sx, sy);
@@ -748,7 +745,7 @@ mod tests {
         state.register_player(ally);
 
         let mut roman = Player::new_human(3, milestone.into(), [1.0; 3], &config);
-        roman.team = Some(Team::Blue);
+        roman.team = Some(Team::BLUE);
         state.register_player(roman);
 
         let mut engine = SowEngine::new(state, WaterComponents::default());
@@ -1012,7 +1009,7 @@ mod tests {
                 let mut state = GameState::new(42, 10, 10, config);
                 state.total_land_tiles = 100;
                 for (id, team, tiles) in
-                    [(1, Team::Blue, 50), (3, Team::Red, 25), (2, Team::Red, 25)]
+                    [(1, Team::BLUE, 50), (3, Team::RED, 25), (2, Team::RED, 25)]
                 {
                     let mut player =
                         Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
@@ -1030,7 +1027,7 @@ mod tests {
                 assert_eq!(engine.state.winner, Some(if mode == "FFA" { 1 } else { 2 }));
                 assert_eq!(
                     engine.state.winning_team,
-                    (mode != "FFA").then_some(Team::Red)
+                    (mode != "FFA").then_some(Team::RED)
                 );
             }
         }
@@ -1058,9 +1055,9 @@ mod tests {
 
                 if mode == "Teams" || crate::game_config::is_coop_game_mode(mode) {
                     for (id, team, tiles) in [
-                        (1, Team::Red, 40),
-                        (3, Team::Red, leading_tiles - 40),
-                        (2, Team::Blue, 99 - leading_tiles),
+                        (1, Team::RED, 40),
+                        (3, Team::RED, leading_tiles - 40),
+                        (2, Team::BLUE, 99 - leading_tiles),
                     ] {
                         let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &config);
                         player.team = Some(team);
@@ -1088,7 +1085,7 @@ mod tests {
                 if mode == "Teams" || crate::game_config::is_coop_game_mode(mode) {
                     assert_eq!(
                         engine.state.winning_team,
-                        expected_winner.map(|_| Team::Red)
+                        expected_winner.map(|_| Team::RED)
                     );
                 }
             }
@@ -1157,7 +1154,7 @@ mod tests {
                     let mut state = GameState::new(42, 10, 10, config);
                     state.total_land_tiles = 100;
                     for (id, team, tiles) in
-                        [(1, Team::Red, red_tiles), (2, Team::Blue, blue_tiles)]
+                        [(1, Team::RED, red_tiles), (2, Team::BLUE, blue_tiles)]
                     {
                         let mut player =
                             Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
@@ -1182,7 +1179,7 @@ mod tests {
                     assert_eq!(engine.state.winner, (!tutorial).then_some(1));
                     assert_eq!(
                         engine.state.winning_team,
-                        (!tutorial && game_mode != "FFA").then_some(Team::Red)
+                        (!tutorial && game_mode != "FFA").then_some(Team::RED)
                     );
                     assert_eq!(
                         engine
@@ -1265,7 +1262,7 @@ mod tests {
             x: 16,
             y: 12,
             color: [0.85, 0.33, 0.31],
-            team: Some(Team::Red),
+            team: Some(Team::RED),
             leader: Leader::of("ragnar"),
             troops: Some(400.0),
             iq: Some(60),

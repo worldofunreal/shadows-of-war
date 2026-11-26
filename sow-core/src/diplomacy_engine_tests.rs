@@ -49,7 +49,7 @@ mod alliance_lifecycle_tests {
         let config = engine.state.config.clone();
 
         let mut trinovantes = Player::new_bot(3, "Trinovantes".into(), [0.2; 3], &config);
-        trinovantes.team = Some(Team::Blue);
+        trinovantes.team = Some(Team::BLUE);
         trinovantes.tile_count = 1;
         trinovantes.troops = 1_000.0;
         trinovantes.max_troops = 1_000.0;
@@ -62,7 +62,7 @@ mod alliance_lifecycle_tests {
             .insert(3, CampaignRelation::Allied);
 
         let mut camulodunum = Player::new_bot(4, "Camulodunum".into(), [0.8, 0.2, 0.2], &config);
-        camulodunum.team = Some(Team::Red);
+        camulodunum.team = Some(Team::RED);
         camulodunum.tile_count = 1;
         camulodunum.troops = 100.0;
         camulodunum.max_troops = 100.0;
@@ -73,7 +73,7 @@ mod alliance_lifecycle_tests {
         engine.campaign_relations.insert(4, CampaignRelation::Enemy);
 
         assert_eq!(
-            engine.activate_campaign_assault(Team::Blue, 4, false, false, None, false),
+            engine.activate_campaign_assault(Team::BLUE, 4, false, false, None, false),
             1
         );
         for _ in 0..300 {
@@ -215,7 +215,7 @@ mod alliance_lifecycle_tests {
 
         let config = engine.state.config.clone();
         let mut roman = Player::new_bot(3, "Roman force".into(), [0.8, 0.2, 0.2], &config);
-        roman.team = Some(Team::Red);
+        roman.team = Some(Team::RED);
         roman.tile_count = 1;
         roman.max_troops = 1_000.0;
         roman.border_insert(0);
@@ -227,7 +227,7 @@ mod alliance_lifecycle_tests {
         engine.campaign_assault_force_ids.insert(3);
 
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 1, false, true, Some((2.0, 3)), false),
+            engine.activate_campaign_assault(Team::RED, 1, false, true, Some((2.0, 3)), false),
             1
         );
         assert_eq!(

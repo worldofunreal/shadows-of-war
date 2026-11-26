@@ -13,6 +13,7 @@ pub struct MatchmakingPopulation {
     pub max_players: u32,
     pub bot_count: u32,
     pub nation_count: u32,
+    pub team_count: u8,
 }
 
 pub fn roll(
@@ -45,11 +46,17 @@ fn roll_with_limits(
     let bot_count = GameConfig::max_tribe_bots();
     // Public FFA/Teams stay Tribes-only; Co-op Bot Heroes are resolved at start from human_side_players.
     let nation_count = 0;
+    let team_count = if game_mode == "Teams" {
+        roll_team_count(max_players, rng)
+    } else {
+        2
+    };
 
     MatchmakingPopulation {
         max_players,
         bot_count,
         nation_count,
+        team_count,
     }
 }
 
@@ -78,6 +85,12 @@ fn roll_human_capacity(
         players -= players % 2;
     }
     players.clamp(minimum_players, maximum_players)
+}
+
+/// Teams matches draw 2..=32 teams; every team keeps at least two seats.
+fn roll_team_count(max_players: u32, rng: &mut impl Rng) -> u8 {
+    let most = (max_players / 2).clamp(2, u32::from(sow_core::protocol::Team::MAX_TEAMS));
+    rng.gen_range(2..=most) as u8
 }
 
 #[cfg(test)]
@@ -128,6 +141,20 @@ mod tests {
                     .contains(&population.max_players)
             );
         }
+    }
+
+    #[test]
+    fn teams_draw_two_to_thirty_two_teams_with_two_seats_each() {
+        let mut rng = StdRng::seed_from_u64(37);
+        let map = map(420_244);
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..1_000 {
+            let population = roll(Some(&map), "Teams", &mut rng);
+            assert!((2..=32).contains(&population.team_count));
+            assert!(u32::from(population.team_count) * 2 <= population.max_players);
+            seen.insert(population.team_count);
+        }
+        assert!(seen.len() > 10, "team count roll is not varied: {seen:?}");
     }
 
     #[test]
