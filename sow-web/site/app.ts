@@ -575,6 +575,9 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
   // Interactive Ranked 1v1 & FFA Shared 10-League Cultural Showcase
   const rankedSection = $("#ranked") as HTMLElement | null;
   const rankedStage = $("[data-ranked-stage]") as HTMLElement | null;
+  const rankedRail = $("[data-ranked-rail]") as HTMLElement | null;
+  const rankedPrev = $("[data-ranked-prev]") as HTMLButtonElement | null;
+  const rankedNext = $("[data-ranked-next]") as HTMLButtonElement | null;
   const rankedPicks = $$("[data-ranked-pick]") as HTMLButtonElement[];
   const rankedModeBtns = $$("[data-ranked-mode]") as HTMLButtonElement[];
   const rankedStageBadge = $("[data-ranked-stage-badge]") as HTMLElement | null;
@@ -583,9 +586,9 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
   const rankedStageLore = $("[data-ranked-stage-lore]") as HTMLElement | null;
   const rankedStageRange = $("[data-ranked-stage-range]") as HTMLElement | null;
   const rankedStageRule = $("[data-ranked-stage-rule]") as HTMLElement | null;
+  const rankedStageCounter = $("[data-ranked-stage-counter]") as HTMLElement | null;
   const rankedStageFill = $("[data-ranked-stage-fill]") as HTMLElement | null;
   const rankedLivePodium = $("[data-ranked-live-podium]") as HTMLElement | null;
-  const rankedLiveTitle = $("[data-ranked-live-title]") as HTMLElement | null;
   const rankedLiveLink = $("[data-ranked-live-link]") as HTMLAnchorElement | null;
   const rankedLiveGrid = $("[data-ranked-live-grid]") as HTMLElement | null;
 
@@ -620,16 +623,9 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
   function renderLandingTopPodium(mode: LandingRankedMode, entries: LandingTopEntry[] | undefined) {
     if (!rankedLivePodium || !rankedLiveGrid) return;
     if (!entries || !entries.length) {
-      rankedLivePodium.hidden = true;
       rankedLiveGrid.innerHTML = "";
+      rankedLivePodium.hidden = !rankedPodiumCache.has("Ranked1v1") && !rankedPodiumCache.has("RankedFFA");
       return;
-    }
-    if (rankedLiveTitle) {
-      const modeLabel =
-        mode === "RankedFFA"
-          ? siteText("lobbies.ranked_ffa", "Ranked FFA")
-          : siteText("lobbies.ranked_1v1", "Ranked 1v1");
-      rankedLiveTitle.textContent = modeLabel + " · " + siteText("site.ranked_live_champions", "Current Top 3");
     }
     if (rankedLiveLink) {
       rankedLiveLink.href = publicLeaderboardsUrl() + "?board=" + encodeURIComponent(mode);
@@ -641,6 +637,11 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
         const rankNum = entry.rank || idx + 1;
         const ptsText = siteText("lobbies.rank_score", "{score} pts", { score: entry.score });
         const leagueLabel = rankName(entry.tier, entry.division);
+        const rawHandle = String(entry.handle || "");
+        const tagMatch = rawHandle.match(/^(.*?)(#[0-9a-fA-F]{4})$/);
+        const nameHtml = tagMatch
+          ? "<strong>" + esc(tagMatch[1]) + '</strong><span class="ranked-live-tag">' + esc(tagMatch[2]) + "</span>"
+          : "<strong>" + esc(rawHandle) + "</strong>";
         return (
           '<a class="ranked-live-podium-card" data-tier="' +
           esc(tierKey) +
@@ -652,9 +653,9 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
           "</span>" +
           rankEmblem(entry.tier, entry.division) +
           '<span class="ranked-live-podium-info">' +
-          "<strong>" +
-          esc(entry.handle) +
-          "</strong>" +
+          '<span class="ranked-live-podium-name">' +
+          nameHtml +
+          "</span>" +
           "<small>" +
           esc(leagueLabel) +
           " · " +
@@ -707,12 +708,36 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
     if (rankedLiveLink) {
       rankedLiveLink.href = publicLeaderboardsUrl() + "?board=" + encodeURIComponent(mode);
     }
-    triggerStageSwitchEffect();
     void loadLandingTopPodium(mode);
   }
 
-  function selectRankedPick(pick: HTMLButtonElement, animate = false) {
+  let activeRankedIndex = Math.max(
+    0,
+    rankedPicks.findIndex((pick) => pick.classList.contains("is-active")),
+  );
+  let rankedDragMoved = false;
+
+  function centerRankedPickInRail(pick: HTMLButtonElement, smooth: boolean) {
+    if (!rankedRail || !pick) return;
+    const cardRect = pick.getBoundingClientRect();
+    const railRect = rankedRail.getBoundingClientRect();
+    if (!railRect.width || !cardRect.width) return;
+    const delta = cardRect.left + cardRect.width / 2 - (railRect.left + railRect.width / 2);
+    if (Math.abs(delta) < 1) return;
+    if (typeof rankedRail.scrollBy === "function") {
+      rankedRail.scrollBy({
+        left: delta,
+        behavior: smooth && !prefersReducedMotion.matches ? "smooth" : "auto",
+      });
+    } else {
+      rankedRail.scrollLeft += delta;
+    }
+  }
+
+  function selectRankedPick(pick: HTMLButtonElement, animate = false, scrollRail = true) {
     if (!rankedStage || !pick) return;
+    const pickIndex = rankedPicks.indexOf(pick);
+    if (pickIndex >= 0) activeRankedIndex = pickIndex;
     const culture = pick.dataset.culture || "grandmaster";
     const badge = pick.dataset.badge || culture;
     const range = pick.dataset.range || "";
@@ -733,12 +758,23 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
     if (rankedStageLore) rankedStageLore.textContent = lore;
     if (rankedStageRange) rankedStageRange.textContent = range;
     if (rankedStageRule) rankedStageRule.textContent = rule;
+    if (rankedStageCounter && rankedPicks.length) {
+      rankedStageCounter.textContent = `${activeRankedIndex + 1} / ${rankedPicks.length}`;
+    }
     if (rankedStageFill) rankedStageFill.style.transform = `scaleX(${fraction})`;
     rankedPicks.forEach((btn) => {
       const active = btn === pick;
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-selected", String(active));
     });
+    if (scrollRail) centerRankedPickInRail(pick, animate);
+  }
+
+  function stepRankedPick(delta: number) {
+    if (!rankedPicks.length) return;
+    const nextIdx = (activeRankedIndex + delta + rankedPicks.length) % rankedPicks.length;
+    const nextPick = rankedPicks[nextIdx];
+    if (nextPick) selectRankedPick(nextPick, true, true);
   }
 
   rankedModeBtns.forEach((btn) =>
@@ -747,8 +783,58 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
       selectRankedMode(mode);
     }),
   );
-  rankedPicks.forEach((pick) => pick.addEventListener("click", () => selectRankedPick(pick, true)));
-  const initialRankedPick = rankedPicks.find((pick) => pick.classList.contains("is-active")) || rankedPicks[0];
+  rankedPicks.forEach((pick) =>
+    pick.addEventListener("click", (event) => {
+      if (rankedDragMoved) {
+        event.preventDefault();
+        return;
+      }
+      selectRankedPick(pick, true, true);
+    }),
+  );
+  rankedPrev?.addEventListener("click", () => stepRankedPick(-1));
+  rankedNext?.addEventListener("click", () => stepRankedPick(1));
+  rankedRail?.addEventListener("keydown", (event) => {
+    const rtl = document.documentElement.dir === "rtl" ? -1 : 1;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      stepRankedPick(-rtl);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      stepRankedPick(rtl);
+    }
+  });
+  if (rankedRail) {
+    let dragActive = false;
+    let dragStartX = 0;
+    let dragScrollLeft = 0;
+    rankedRail.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "mouse" || event.button !== 0) return;
+      dragActive = true;
+      rankedDragMoved = false;
+      dragStartX = event.clientX;
+      dragScrollLeft = rankedRail.scrollLeft;
+      rankedRail.classList.add("is-dragging");
+    });
+    window.addEventListener("pointermove", (event) => {
+      if (!dragActive) return;
+      const dx = event.clientX - dragStartX;
+      if (Math.abs(dx) >= 6) rankedDragMoved = true;
+      if (rankedDragMoved) rankedRail.scrollLeft = dragScrollLeft - dx;
+    });
+    const endDrag = () => {
+      if (!dragActive) return;
+      dragActive = false;
+      rankedRail.classList.remove("is-dragging");
+      setTimeout(() => {
+        rankedDragMoved = false;
+      }, 40);
+    };
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+  }
+  const initialRankedPick = rankedPicks[activeRankedIndex] || rankedPicks[0];
+  if (initialRankedPick) centerRankedPickInRail(initialRankedPick, false);
 
   if (rankedSection && rankedLivePodium && typeof IntersectionObserver === "function") {
     const podiumObserver = new IntersectionObserver(
@@ -771,7 +857,7 @@ import { rankEmblem, rankName, rankTier } from "../shell/sow-ranked-presentation
     syncMotion();
     if (initialRankedPick) {
       const current = rankedPicks.find((pick) => pick.classList.contains("is-active")) || initialRankedPick;
-      selectRankedPick(current, false);
+      selectRankedPick(current, false, false);
     }
     if (rankedPodiumCache.has(activeRankedMode)) {
       renderLandingTopPodium(activeRankedMode, rankedPodiumCache.get(activeRankedMode));

@@ -1509,6 +1509,7 @@ export function render(precomputedKey?: string) {
     }
     renderPending = false;
     const screen = currentScreen();
+    if (screen !== "home") menuUi.rankedQueuePickerOpen = false;
     if (screen !== "heroes") menuUi.skinPickerOpen = false;
     if (screen !== "heroes" && screen !== "store") {
         menuUi.heroInfoOpen = false;
@@ -3407,7 +3408,8 @@ function showMatchGoalToast(
     toast.setAttribute("aria-live", "polite");
     toast.setAttribute("aria-atomic", "true");
     const headerIcon = menuIcon("cup", "sow-match-goals-toast__head-svg");
-    const closeIcon = menuIcon("close", "sow-match-goals-toast__close-svg") || "×";
+    const closeIcon =
+        "<svg class='sow-match-goals-toast__close-svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M18 6 6 18M6 6l12 12'/></svg>";
     const reviewArrow =
         "<svg class='sow-match-goals-toast__review-arrow' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14'/><path d='m13 6 6 6-6 6'/></svg>";
     toast.innerHTML =
@@ -3418,7 +3420,7 @@ function showMatchGoalToast(
         "</span><strong>" +
         esc(SOW_t("profile.match_goals_toast_title")) +
         "</strong></div>" +
-        "<button class='sow-menu__icon-button sow-match-goals-toast__close' type='button' data-match-goals-dismiss aria-label='" +
+        "<button class='sow-match-goals-toast__close' type='button' data-match-goals-dismiss aria-label='" +
         esc(SOW_t("profile.match_goals_dismiss")) +
         "'>" +
         closeIcon +
@@ -3847,6 +3849,13 @@ root.addEventListener("click", function (event) {
         return;
     }
     const targetElement = clickedElement.closest("[data-command]");
+    if (menuUi.rankedQueuePickerOpen && !clickedElement.closest(".sow-home__ranked-dock")) {
+        menuUi.rankedQueuePickerOpen = false;
+        if (!(targetElement instanceof HTMLElement)) {
+            render();
+            return;
+        }
+    }
     if (!(targetElement instanceof HTMLElement) || !root.contains(targetElement)) return;
     const target = targetElement;
     const command = target.dataset.command;
@@ -4067,12 +4076,36 @@ root.addEventListener("click", function (event) {
         loadRankedLeaderboard(true);
         return;
     }
+    if (command === "toggle_ranked_queue_picker") {
+        MenuSfx.tactileStep();
+        menuUi.rankedQueuePickerOpen = !menuUi.rankedQueuePickerOpen;
+        render();
+        return;
+    }
+    if (command === "select_ranked_queue") {
+        const nextQueue = target.dataset.queue === "RankedFFA" ? "RankedFFA" : "Ranked1v1";
+        MenuSfx.filterChip(target);
+        menuUi.selectedRankedQueue = nextQueue;
+        menuUi.rankedQueuePickerOpen = false;
+        try {
+            window.localStorage?.setItem("sow_ranked_queue", nextQueue);
+        } catch {}
+        render();
+        return;
+    }
     if (command === "quick_match" || command === "quick_match_ffa") {
         MenuSfx.battleLaunch();
         flushLeaderPersist();
+        menuUi.rankedQueuePickerOpen = false;
         target.setAttribute("disabled", "");
         menuUi.profileOpen = menuUi.storeOpen = menuUi.heroesOpen = menuUi.campaignOpen = false;
-        send(command);
+        const outgoing =
+            target.dataset.useSelectedQueue === "1"
+                ? menuUi.selectedRankedQueue === "RankedFFA"
+                    ? "quick_match_ffa"
+                    : "quick_match"
+                : command;
+        send(outgoing);
         return;
     }
     if (command === "open_profile") {

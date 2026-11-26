@@ -1070,20 +1070,35 @@
     padding-bottom: 2px;
   }
 
+  #sow-menu[data-screen="home"] .sow-menu__ranked-dock-shell,
+  #sow-menu [data-screen-panel="home"] .sow-menu__ranked-dock-shell {
+    width: min(100%, 336px);
+    align-items: stretch;
+  }
+
   #sow-menu[data-screen="home"] .sow-menu__ranked-queue-pair,
   #sow-menu [data-screen-panel="home"] .sow-menu__ranked-queue-pair {
-    flex-direction: column;
-    width: min(100%, 312px);
+    flex-direction: row;
+    width: 100%;
     margin-inline: auto;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__mode-selector,
+  #sow-menu [data-screen-panel="home"] .sow-menu__mode-selector {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    min-height: 54px;
+    padding: 7px 10px;
   }
 
   #sow-menu[data-screen="home"] .sow-menu__quick-match,
   #sow-menu [data-screen-panel="home"] .sow-menu__quick-match {
-    width: min(100%, 312px);
-    min-width: 0;
-    margin-inline: auto;
-    min-height: 58px;
-    padding: 10px 18px;
+    width: auto;
+    min-width: 104px;
+    margin-inline: 0;
+    min-height: 54px;
+    padding: 8px 16px;
   }
 
   #sow-menu[data-screen="browser"] .sow-menu__main,
@@ -1557,31 +1572,29 @@
 
   #sow-menu[data-screen="home"] .sow-menu__ranked-queue-pair,
   #sow-menu [data-screen-panel="home"] .sow-menu__ranked-queue-pair {
-    width: min(100%, 470px);
+    width: auto;
+    max-width: 100%;
+  }
+
+  #sow-menu[data-screen="home"] .sow-menu__mode-selector,
+  #sow-menu [data-screen-panel="home"] .sow-menu__mode-selector {
+    min-width: 158px;
+    min-height: 48px;
+    padding: 6px 10px;
   }
 
   #sow-menu[data-screen="home"] .sow-menu__quick-match,
   #sow-menu [data-screen-panel="home"] .sow-menu__quick-match {
     flex: 0 0 auto;
     width: auto;
-    min-width: clamp(192px, 20vw, 236px);
+    min-width: 102px;
     max-width: 100%;
-    min-height: 52px;
-    padding: 7px 14px;
-  }
-
-  #sow-menu[data-screen="home"] .sow-menu__ranked-queue-pair .sow-menu__quick-match,
-  #sow-menu [data-screen-panel="home"] .sow-menu__ranked-queue-pair .sow-menu__quick-match {
-    flex: 1 1 0;
-    min-width: 0;
+    min-height: 48px;
+    padding: 6px 16px;
   }
 
   #sow-menu[data-screen="home"] .sow-menu__quick-match strong {
-    font-size: 12.5px;
-  }
-
-  #sow-menu[data-screen="home"] .sow-menu__quick-match small {
-    font-size: 9px;
+    font-size: 14px;
   }
 }
 

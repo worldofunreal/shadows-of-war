@@ -1,4 +1,9 @@
-import { BUILDING_KINDS, buildingLine, buildingPageText, buildingRole } from "../shell/building-lines.ts";
+import { buildingPageText } from "../shell/building-lines.ts";
+import {
+  renderBuildingCodex,
+  type BuildingMetaEntry,
+  type CityFoundationsMeta,
+} from "../shell/sow-buildings-view.ts";
 // Public-site publisher. Bun's native HTML rewriter keeps translation and URL
 // changes on parsed elements; all pages use the game's exported catalogs.
 import { createHash } from "node:crypto";
@@ -74,6 +79,9 @@ export async function publish(
     buildingPrices?: Record<string, number[]>;
     buildingEffects?: Record<string, Record<string, number>[]>;
     buildingAlternatives?: Record<string, number[]>;
+    buildingMeta?: Record<string, BuildingMetaEntry>;
+    buildingDurations?: Record<string, number[]>;
+    cityFoundations?: CityFoundationsMeta;
   },
   source = import.meta.dir,
 ) {
@@ -144,8 +152,10 @@ export async function publish(
     "sow-controls.css",
     "sow-ranked.css",
     "sow-profile.css",
+    "sow-buildings.css",
     "leaderboards.js",
     "player-profile.js",
+    "buildings.js",
     "identity-auth.js",
   ]) {
     fingerprints.set(
@@ -197,70 +207,20 @@ export async function publish(
   const buildingAtlas = routes.includes("buildings/")
     ? JSON.parse(await read(join(out, "assets/gameplay/buildings/atlas.json")))
     : null;
-  const atlasVersion = buildingAtlas ? createHash("sha256")
-    .update(await readFile(join(out, "assets/gameplay/buildings/atlas.webp")))
-    .digest("hex").slice(0, 10) : "";
-  const buildingGuide = (locale: string, translate: (key: string) => string) => {
-    const copy = buildingPageText(locale);
-    const format = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
-    const lineTranslation: Record<string, string> = {
-      City: "city", MilitaryCamp: "military_camp", TradingPost: "trading_post",
-      Port: "port", Tower: "tower", SAM: "sam", MissileSilo: "missilesilo",
-      Farm: "farm",
-    };
-    const visibleBuildingKinds = BUILDING_KINDS.filter((kind) => kind !== "MilitaryCamp");
-    const cards = visibleBuildingKinds.map((kind) => {
-      const lineName = translate("hud.map_action_" + lineTranslation[kind]);
-      const sprite = buildingAtlas.sprites[kind]?.[1];
-      const size = buildingAtlas.cell_size;
-      const width = buildingAtlas.atlas_width;
-      const height = buildingAtlas.atlas_height;
-      const image = sprite ? `<span class="building-directory-icon" aria-hidden="true" style="background-image:url('/assets/gameplay/buildings/atlas.webp?v=${atlasVersion}');background-size:${100 * width / size}% ${100 * height / size}%;background-position:${100 * sprite.x / (width - size)}% ${100 * sprite.y / (height - size)}%"></span>` : "";
-      return `<a class="building-directory-card" href="#${kind.toLowerCase()}">${image}<span><strong>${escape(lineName)}</strong><small>${escape(buildingRole(kind, locale))}</small></span></a>`;
-    }).join("");
-    const sections = visibleBuildingKinds.map((kind) => {
-      const sprites = buildingAtlas.sprites[kind];
-      const tiers = buildingLine(kind, locale);
-      let cumulativePrice = 0;
-      const rows = tiers.map(({ name, era }, index) => {
-        const level = index + 1;
-        const sprite = sprites?.[level] ?? sprites?.[Object.keys(sprites).length];
-        cumulativePrice += input.buildingPrices?.[kind]?.[index] ?? 0;
-        const size = buildingAtlas.cell_size;
-        const width = buildingAtlas.atlas_width;
-        const height = buildingAtlas.atlas_height;
-        const icon = sprite ? `<span aria-hidden="true" class="building-guide-icon" style="background-image:url('/assets/gameplay/buildings/atlas.webp?v=${atlasVersion}');background-size:${100 * width / size}% ${100 * height / size}%;background-position:${100 * sprite.x / (width - size)}% ${100 * sprite.y / (height - size)}%"></span>` : "";
-        const current = input.buildingEffects?.[kind]?.[index] ?? {};
-        const previous = input.buildingEffects?.[kind]?.[index - 1] ?? {};
-        const effects = Object.entries(current)
-          .filter(([key, value]) => key !== "reinforcements" && copy.stats[key] && value > 0)
-          .map(([key, value]) => `<li><span>${escape(copy.stats[key])}</span><strong>${format.format(value)}</strong><small>+${format.format(Number(value) - Number(previous[key] ?? 0))} ${escape(copy.thisLevel)}</small></li>`)
-          .join("");
-        const stepPrice = input.buildingPrices?.[kind]?.[index] ?? 0;
-        const alternativeCount = input.buildingAlternatives?.[kind]?.[index] ?? 0;
-        const alternative = level > 1 && alternativeCount > 0
-          ? `<small class="building-tier-alternative"><span>${escape(copy.sameGold)}</span><strong>N1 × ${format.format(alternativeCount)}</strong></small>`
-          : "";
-        const priceLabel = level === 1 ? copy.build : copy.upgrade;
-        const reinforcement = Number(current.reinforcements ?? 0);
-        const immediate = reinforcement > 0
-          ? `<span class="building-guide-unlock"><b>${escape(copy.immediate)}</b> +${format.format(reinforcement)}</span>`
-          : "";
-        const unlocks = kind === "TradingPost" && level === 1
-          ? `<span class="building-guide-unlock">${escape(copy.route)}</span>`
-          : kind === "TradingPost" && level === 6
-            ? `<span class="building-guide-unlock">${escape(copy.railway)}</span>`
-            : kind === "City" && level === 6
-              ? `<span class="building-guide-unlock">${escape(copy.industrial)}</span>`
-              : "";
-        return `<li class="building-tier-card"><article><header class="building-tier-heading"><span class="building-tier-level">N${level}</span>${icon}<span class="building-tier-title"><strong>${escape(name)}</strong><small>${escape(era)}</small></span></header><div class="building-tier-price"><span>${escape(priceLabel)}</span><strong>${format.format(stepPrice)} <small>${escape(copy.gold)}</small></strong><small>${escape(copy.invested)}: ${format.format(cumulativePrice)}</small>${alternative}</div>${effects ? `<ul class="building-tier-effects">${effects}</ul>` : ""}${immediate || unlocks ? `<div class="building-tier-unlocks">${immediate}${unlocks}</div>` : ""}</article></li>`;
-      }).join("");
-      const lineName = translate("hud.map_action_" + lineTranslation[kind]);
-      return `<section class="building-line-section" id="${kind.toLowerCase()}" aria-labelledby="building-title-${kind.toLowerCase()}"><header class="building-line-heading"><h2 id="building-title-${kind.toLowerCase()}">${escape(lineName)}</h2><p>${escape(buildingRole(kind, locale))}</p></header><ol class="building-tier-grid">${rows}</ol></section>`;
-    }).join("");
-    return `<nav class="building-directory" aria-label="${escape(copy.nav)}">${cards}</nav><p class="building-guide-note">${escape(copy.note)}</p><div class="building-guide">${sections}</div>`;
-  };
-  const english = localPreview ? JSON.parse(await read(join(out, "locales", "en"))).strings : undefined;
+  const atlasVersion = buildingAtlas
+    ? createHash("sha256")
+        .update(await readFile(join(out, "assets/gameplay/buildings/atlas.webp")))
+        .digest("hex")
+        .slice(0, 10)
+    : "";
+  const badgeAtlasVersion =
+    routes.includes("buildings/") && (await fileExists("assets/gameplay/icons/nameplate_status_atlas.webp"))
+      ? createHash("sha256")
+          .update(await readFile(join(out, "assets/gameplay/icons/nameplate_status_atlas.webp")))
+          .digest("hex")
+          .slice(0, 10)
+      : "";
+  const english = JSON.parse(await read(join(out, "locales", "en"))).strings;
   let count = 0;
   for (const language of languages) {
     const code = language.code;
@@ -369,7 +329,7 @@ export async function publish(
             const artImage = mobileArt
               ? `<img class="leader-directory-art" src="${mobileArt}" alt="" width="900" height="1600" loading="lazy" decoding="async">`
               : "";
-            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}">${artImage}<img class="leader-directory-avatar" src="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-ability">${escape(f.ability)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
+            return `<a class="leader-directory-card" data-leader-directory-card data-leader-id="${escape(h.id)}" data-name="${escape(f.name)}" data-civ="${escape(f.civilization)}" aria-label="${escape(t("site.inspect_leader", { name: f.name }))}" href="${path(code, `leaders/${h.id}/`)}">${artImage}<img class="leader-directory-avatar" src="/assets/gameplay/avatars/${escape(h.artSlug)}.webp" alt="" width="128" height="128" loading="lazy" decoding="async"><span class="leader-directory-copy"><span class="leader-directory-civilization">${escape(f.civilization)}</span><span class="leader-directory-name">${escape(f.name)}</span><span class="leader-directory-action">${escape(t("site.view_profile"))} <span aria-hidden="true">→</span></span></span></a>`;
           })
           .join("\n");
         html = indexTemplate
@@ -387,9 +347,24 @@ export async function publish(
       } else if (route === "buildings/") {
         title = `${t("site.buildings")} | Shadows of War`;
         const pageCopy = buildingPageText(code);
-        description = pageCopy.note.slice(0, 155);
+        description = pageCopy.intro.slice(0, 155).trim();
+        const codexHtml = renderBuildingCodex({
+          locale: code,
+          translate: t,
+          atlas: buildingAtlas,
+          atlasUrl: `/assets/gameplay/buildings/atlas.webp${atlasVersion ? `?v=${atlasVersion}` : ""}`,
+          badgeAtlasUrl: `/assets/gameplay/icons/nameplate_status_atlas.webp${badgeAtlasVersion ? `?v=${badgeAtlasVersion}` : ""}`,
+          homeHref: path(code, ""),
+          playHref: "/play/",
+          buildingPrices: input.buildingPrices,
+          buildingEffects: input.buildingEffects,
+          buildingAlternatives: input.buildingAlternatives,
+          buildingMeta: input.buildingMeta,
+          buildingDurations: input.buildingDurations,
+          cityFoundations: input.cityFoundations,
+        });
         html = templates.get(route)!
-          .replace('<div class="container" data-building-guide></div>', `<div class="container"><h1>${escape(t("site.buildings"))}</h1><p class="guide-lede">${escape(pageCopy.intro)}</p>${buildingGuide(code, t)}</div>`)
+          .replace('<div class="container" data-building-guide></div>', `<div class="container">${codexHtml}</div>`)
           .replace("<!-- BUILDINGS_FOOTER -->", footer);
       } else if (route === "leaderboards/") {
         title = t("site.leaderboards_title");
@@ -442,6 +417,7 @@ export async function publish(
                 legacyIds: h.legacyIds,
                 region: h.region,
                 name: text(h, "name"),
+                enName: String(english?.heroes?.[`leader_${h.id}_name`] || text(h, "name")),
                 civilization: text(h, "civilization"),
               })),
             )};`

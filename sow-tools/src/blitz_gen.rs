@@ -294,7 +294,7 @@ fn make_scripted_spawn(
         x: pos.0,
         y: pos.1,
         color,
-        team: Some(Team::Red),
+        team: Some(Team::RED),
         leader,
         troops: Some(f64::from(troops)),
         iq: Some(iq),

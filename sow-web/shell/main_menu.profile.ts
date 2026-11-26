@@ -260,25 +260,33 @@ function applyProfileSnapshot(id: string, data: ProfileData) {
             (data.ratings || []).find(function (rating) {
                 return rating.queue === "RankedFFA" && rating.mode === "FFA";
             }) || null;
-        const rankLabel = root.querySelector<HTMLElement>("[data-ranked-current]");
-        if (rankLabel) {
-            const rating = menuUi.rankedRating;
-            rankLabel.textContent = rankLabelText(rating);
-            const emblem = root.querySelector<HTMLElement>("[data-ranked-emblem]");
-            if (emblem)
-                emblem.innerHTML = rankEmblem(
-                    rating?.tier || "Nomad",
-                    rating?.division || null,
-                );
+        const activeQueue = menuUi.selectedRankedQueue === "RankedFFA" ? "RankedFFA" : "Ranked1v1";
+        const activeRating = activeQueue === "RankedFFA" ? menuUi.rankedFfaRating : menuUi.rankedRating;
+        const activeLabel = root.querySelector<HTMLElement>("[data-ranked-active-current]");
+        if (activeLabel) activeLabel.textContent = rankLabelText(activeRating);
+        const activeEmblem = root.querySelector<HTMLElement>("[data-ranked-active-emblem]");
+        if (activeEmblem) {
+            activeEmblem.innerHTML = rankEmblem(
+                activeRating?.tier || "Nomad",
+                activeRating?.division || null,
+            );
         }
-        const ffaLabel = root.querySelector<HTMLElement>("[data-ranked-ffa-current]");
-        if (ffaLabel) ffaLabel.textContent = rankLabelText(menuUi.rankedFfaRating);
-        const ffaEmblem = root.querySelector<HTMLElement>("[data-ranked-ffa-emblem]");
-        if (ffaEmblem) {
-            const ffaRating = menuUi.rankedFfaRating;
-            ffaEmblem.innerHTML = rankEmblem(
-                ffaRating?.tier || "Nomad",
-                ffaRating?.division || null,
+        const opt1Label = root.querySelector<HTMLElement>("[data-ranked-opt-current='Ranked1v1']");
+        if (opt1Label) opt1Label.textContent = rankLabelText(menuUi.rankedRating);
+        const opt1Emblem = root.querySelector<HTMLElement>("[data-ranked-opt-emblem='Ranked1v1']");
+        if (opt1Emblem) {
+            opt1Emblem.innerHTML = rankEmblem(
+                menuUi.rankedRating?.tier || "Nomad",
+                menuUi.rankedRating?.division || null,
+            );
+        }
+        const optFfaLabel = root.querySelector<HTMLElement>("[data-ranked-opt-current='RankedFFA']");
+        if (optFfaLabel) optFfaLabel.textContent = rankLabelText(menuUi.rankedFfaRating);
+        const optFfaEmblem = root.querySelector<HTMLElement>("[data-ranked-opt-emblem='RankedFFA']");
+        if (optFfaEmblem) {
+            optFfaEmblem.innerHTML = rankEmblem(
+                menuUi.rankedFfaRating?.tier || "Nomad",
+                menuUi.rankedFfaRating?.division || null,
             );
         }
     }

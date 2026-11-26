@@ -2067,39 +2067,46 @@ function renderQueueRoster(lobby: MenuLobby | null) {
     if (!players.length) return "";
 
     if (lobby && lobby.game_mode === "Teams") {
-        const redPlayers = players.filter(function (player) {
-            return player.team === "Red";
-        });
-        const bluePlayers = players.filter(function (player) {
-            return player.team !== "Red";
-        });
+        // Red and Blue always get a column with localized labels; other teams
+        // follow in first-seen order under their server names. No team → Blue.
+        const teamOf = function (player: MenuLobbyPlayer) {
+            return player.team ?? "Blue";
+        };
+        const teams = ["Red", "Blue"];
+        for (const player of players) {
+            if (!teams.includes(teamOf(player))) teams.push(teamOf(player));
+        }
         return (
             "" +
             "<div class='sow-menu__teams-roster'>" +
-            "<div class='sow-menu__team-col sow-menu__team-col--red'>" +
-            "<div class='sow-menu__team-header'><span class='sow-menu__team-dot sow-menu__team-dot--red'></span>" +
-            esc(SOW_t("lobbies.red_team", { count: redPlayers.length })) +
-            "</div>" +
-            "<div class='sow-menu__team-list'>" +
-            redPlayers
-                .map(function (player) {
-                    return renderQueuePlayerRow(player, lobby);
+            teams
+                .map(function (team) {
+                    const members = players.filter(function (player) {
+                        return teamOf(player) === team;
+                    });
+                    const slug = team === "Red" ? "red" : team === "Blue" ? "blue" : "other";
+                    const title =
+                        team === "Red"
+                            ? SOW_t("lobbies.red_team", { count: members.length })
+                            : team === "Blue"
+                              ? SOW_t("lobbies.blue_team", { count: members.length })
+                              : team + " (" + members.length + ")";
+                    return (
+                        "<div class='sow-menu__team-col sow-menu__team-col--" + slug + "'>" +
+                        "<div class='sow-menu__team-header'><span class='sow-menu__team-dot sow-menu__team-dot--" + slug + "'></span>" +
+                        esc(title) +
+                        "</div>" +
+                        "<div class='sow-menu__team-list'>" +
+                        members
+                            .map(function (player) {
+                                return renderQueuePlayerRow(player, lobby);
+                            })
+                            .join("") +
+                        "</div>" +
+                        "</div>"
+                    );
                 })
                 .join("") +
-            "</div>" +
-            "</div>" +
-            "<div class='sow-menu__team-col sow-menu__team-col--blue'>" +
-            "<div class='sow-menu__team-header'><span class='sow-menu__team-dot sow-menu__team-dot--blue'></span>" +
-            esc(SOW_t("lobbies.blue_team", { count: bluePlayers.length })) +
-            "</div>" +
-            "<div class='sow-menu__team-list'>" +
-            bluePlayers
-                .map(function (player) {
-                    return renderQueuePlayerRow(player, lobby);
-                })
-                .join("") +
-            "</div>" +
-            "</div>" +
             "</div>"
         );
     }

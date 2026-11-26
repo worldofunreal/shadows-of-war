@@ -86,7 +86,7 @@ export interface MenuLobbyPlayer {
     download_progress: number;
     leader: string | null;
     player_id: number;
-    team: "Red" | "Blue" | null;
+    team: string | null;
 }
 
 export interface MenuCampaignEpisode {
@@ -486,7 +486,7 @@ export interface HudLeaderboardPlayer {
 }
 
 export interface HudLeaderboardTeam {
-    team: "Red" | "Blue";
+    team: string;
     tile_count: number;
     territory_pct: number;
     members: number;
@@ -567,6 +567,9 @@ export interface HudBuildingProduction {
 export interface HudCityDistrictOption {
     kind: string;
     cost: number;
+    count?: number;
+    limit?: number;
+    at_limit?: boolean;
     unlocked: boolean;
     coast_required: boolean;
     enabled: boolean;
@@ -859,7 +862,7 @@ export interface MenuHudPayload {
     dev_tools: HudDevTools;
     is_winner: boolean;
     winner_name: string;
-    winning_team?: "Red" | "Blue" | null;
+    winning_team?: string | null;
     featured_skin: { id: string; name: string; asset_path: string; cost_gems: number } | null;
     player_leader: string | null;
     /** The local hero's art slug (portrait and ability icon files are named by it, not by the hero id). */
@@ -878,7 +881,7 @@ export interface MenuHudPayload {
     leaderboard?: HudLeaderboardPlayer[];
     team_leaderboard?: HudLeaderboardTeam[];
     territory_goal?: number;
-    local_team?: "Red" | "Blue" | null;
+    local_team?: string | null;
     match_clock_seconds?: number;
     endgame_reason?: string;
     inbox?: HudInboxRequest[];

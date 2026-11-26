@@ -3355,6 +3355,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "sow-controls.css",
             "sow-ranked.css",
             "sow-profile.css",
+            "sow-buildings.css",
             "main_menu.base.css",
             "main_menu.layout.css",
             "main_menu.lobbies.css",
@@ -3601,6 +3602,10 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
             paths.shell.join("sow-profile.css"),
             out.join("sow-profile.css"),
         )?;
+        fs::copy(
+            paths.shell.join("sow-buildings.css"),
+            out.join("sow-buildings.css"),
+        )?;
     }
     fs::create_dir_all(out.join("sdk"))?;
     for bridge in ["store_portals", "poki_portals", "jest_portals"] {
@@ -3740,6 +3745,9 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
                         sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
                         sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
                     ),
+                    "radius": building::city_construction_radius(level, &config),
+                    "exclusion": building::city_exclusion_radius(level, &config),
+                    "district_limit": building::city_district_kind_limit(level),
                     "reinforcements": building::city_upgrade_reinforcements(level, config.city_max_troops),
                 }),
                 BuildingKind::MilitaryCamp => serde_json::json!({
@@ -3829,7 +3837,46 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         }).collect::<Vec<_>>();
         (kind.as_str(), tiers)
     }).collect::<std::collections::BTreeMap<_, _>>();
-    serde_json::to_writer(&mut metadata, &serde_json::json!({ "origin": site::current().origin(), "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "buildingPrices": building_prices, "buildingEffects": building_effects, "buildingAlternatives": building_alternatives, "localPreview": paths.is_local_preview() }))?;
+    let building_meta = BuildingKind::ALL.into_iter().map(|kind| {
+        let meta = serde_json::json!({
+            "cartBonusPct": (building::cart_stop_multiplier(kind) * 100.0).round(),
+            "isDistrict": matches!(
+                kind,
+                BuildingKind::Farm
+                    | BuildingKind::TradingPost
+                    | BuildingKind::Port
+                    | BuildingKind::Tower
+                    | BuildingKind::MilitaryCamp
+            ),
+            "coastalOnly": kind == BuildingKind::Port,
+            "maxLevel": kind.max_level(),
+        });
+        (kind.as_str(), meta)
+    }).collect::<std::collections::BTreeMap<_, _>>();
+    let building_durations = BuildingKind::ALL.into_iter().map(|kind| {
+        let durations = (1..=kind.max_level()).map(|level| {
+            let ticks = if level == 1 {
+                building::structure_build_duration_ticks(kind)
+            } else {
+                building::structure_upgrade_duration_ticks(kind, level)
+            };
+            ((f64::from(ticks) * f64::from(config.tick_rate_ms) / 1000.0) * 10.0).round() / 10.0
+        }).collect::<Vec<_>>();
+        (kind.as_str(), durations)
+    }).collect::<std::collections::BTreeMap<_, _>>();
+    let city_foundations = serde_json::json!({
+        "baseRadius": building::city_construction_radius(1, &config),
+        "maxRadius": building::city_construction_radius(8, &config),
+        "radiusStep": config.city_radius_per_level,
+        "minExclusion": building::city_exclusion_radius(1, &config),
+        "maxExclusion": building::city_exclusion_radius(8, &config),
+        "districtCaps": [
+            building::city_district_kind_limit(1),
+            building::city_district_kind_limit(4),
+            building::city_district_kind_limit(8),
+        ],
+    });
+    serde_json::to_writer(&mut metadata, &serde_json::json!({ "origin": site::current().origin(), "leaders": leaders, "pages": PUBLIC_SITE_PAGES, "englishOnly": ENGLISH_ONLY_PAGES, "biographies": biographies, "mapExplorer": map_explorer, "buildingPrices": building_prices, "buildingEffects": building_effects, "buildingAlternatives": building_alternatives, "buildingMeta": building_meta, "buildingDurations": building_durations, "cityFoundations": city_foundations, "localPreview": paths.is_local_preview() }))?;
     run("bun", &[
         "run", paths.root.join("sow-web/site/generate.ts").to_str().context("site generator path")?,
         out.to_str().context("site output path")?,
@@ -4662,6 +4709,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         ("analytics.ts", "analytics.js", "iife"),
         ("app.ts", "app.js", "iife"),
         ("site-chrome.ts", "site-chrome.js", "iife"),
+        ("buildings.ts", "buildings.js", "iife"),
         ("leaderboards.ts", "leaderboards.js", "iife"),
         ("player-profile.ts", "player-profile.js", "iife"),
         ("identity-auth.ts", "identity-auth.js", "esm"),
@@ -5936,6 +5984,7 @@ fn package_local_preview(
     for (source, destination, format) in [
         ("app.ts", "app.js", "iife"),
         ("site-chrome.ts", "site-chrome.js", "iife"),
+        ("buildings.ts", "buildings.js", "iife"),
         ("leaderboards.ts", "leaderboards.js", "iife"),
         ("player-profile.ts", "player-profile.js", "iife"),
         ("identity-auth.ts", "identity-auth.js", "esm"),
@@ -6986,6 +7035,8 @@ shortArticle = true
             "8d227b8f9e6140d39e3381a1829e1db3.txt",
             "leaderboards/index.html",
             "leaderboards.ts",
+            "buildings/index.html",
+            "buildings.ts",
             "players/index.html",
             "player-profile.ts",
             "privacy/index.html",
@@ -7011,6 +7062,9 @@ shortArticle = true
             "sow-controls.css",
             "sow-ranked.css",
             "sow-profile.css",
+            "sow-buildings.css",
+            "sow-icons.ts",
+            "sow-buildings-view.ts",
             "sow-profile-helpers.ts",
             "sow-ranked-presentation.ts",
             "sow-leaderboard-view.ts",

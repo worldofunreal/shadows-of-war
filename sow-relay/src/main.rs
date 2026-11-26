@@ -532,7 +532,7 @@ enum Participation {
     Closed { turn: u64, reason: ExitReason },
 }
 
-const RECONNECT_GRACE: Duration = Duration::from_secs(60);
+const RECONNECT_GRACE: Duration = Duration::from_secs(10);
 
 struct MatchTracker {
     player_accounts: HashMap<u16, String>,
@@ -2836,7 +2836,7 @@ mod tests {
         assert_eq!(tracker.participant_closures()[0].turn_number, 41);
         let now = Instant::now();
         tracker.disconnect(2, now);
-        assert!(tracker.reconnect(2, now + Duration::from_secs(59)));
+        assert!(tracker.reconnect(2, now + Duration::from_secs(9)));
         tracker.disconnect(2, now);
         assert_eq!(tracker.expired(now + RECONNECT_GRACE), vec![2]);
         assert!(!tracker.reconnect(2, now + RECONNECT_GRACE));

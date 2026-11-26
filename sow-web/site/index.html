@@ -440,51 +440,15 @@
           <header class="section-head">
             <p class="eyebrow" data-i18n="site.ranked_eyebrow">Ranked</p>
             <h2>
-              <span data-i18n="site.ranked_heading">From clay</span>
-              <em data-i18n="site.ranked_heading_em">to hubris.</em>
+              <span data-i18n="site.ranked_heading">Two ladders.</span>
+              <em data-i18n="site.ranked_heading_em">Ten leagues.</em>
             </h2>
             <p data-i18n="site.ranked_summary">
-              Ranked 1v1 and Ranked FFA keep separate ladders, yet both climb the same ten leagues from 0 to 10,000 points. Bring a lantern; honest rivals are rare.
+              Ranked 1v1 and Ranked FFA track separate ratings from 0 to 10,000 points across the same ten leagues.
             </p>
           </header>
 
-          <div class="ranked-mode-switcher" role="tablist" aria-label="Ranked modes" data-ranked-mode-switcher>
-            <button
-              type="button"
-              class="ranked-mode-btn is-active"
-              role="tab"
-              aria-selected="true"
-              data-ranked-mode="Ranked1v1"
-            >
-              <strong>
-                <span data-i18n="lobbies.ranked_1v1">Ranked 1v1</span>
-                <em class="ranked-mode-pill">0 – 10,000 pts</em>
-              </strong>
-              <span data-i18n="site.ranked_mode_1v1_desc">
-                Pure duel ladder. No allies to blame, no truce to hide behind, only two armies and the map.
-              </span>
-            </button>
-            <button
-              type="button"
-              class="ranked-mode-btn"
-              role="tab"
-              aria-selected="false"
-              data-ranked-mode="RankedFFA"
-            >
-              <strong>
-                <span data-i18n="lobbies.ranked_ffa">Ranked FFA</span>
-                <em class="ranked-mode-pill">0 – 10,000 pts</em>
-              </strong>
-              <span data-i18n="site.ranked_mode_ffa_desc">
-                Every ruler at the table claims to want peace while eyeing your borders. Separate ladder, identical leagues.
-              </span>
-            </button>
-          </div>
-
-          <p class="ranked-shared-banner" data-i18n="site.ranked_shared_leagues_note">
-            Ranked 1v1 tests pure duel skill; Ranked FFA throws you into a crowded table. Separate ratings, same ten leagues.
-          </p>
-
+          <div class="ranked-showcase">
           <article class="ranked-stage" data-ranked-stage data-culture="grandmaster" data-badge="deity">
             <div class="ranked-stage-pattern" aria-hidden="true"></div>
             <div class="ranked-stage-emblem-wrap">
@@ -501,6 +465,7 @@
               <div class="ranked-stage-meta">
                 <span class="ranked-stage-points" data-ranked-stage-range>9,000 – 10,000</span>
                 <span class="ranked-stage-rule" data-ranked-stage-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+                <span class="ranked-stage-counter" data-ranked-stage-counter aria-hidden="true">10 / 10</span>
               </div>
               <h3 class="ranked-stage-title" data-ranked-stage-title data-i18n="ranked.tier_deity">Deity</h3>
               <p class="ranked-stage-culture" data-ranked-stage-culture data-i18n="site.ranked_culture_grandmaster">Grandmaster · Imperial Dragon</p>
@@ -519,100 +484,129 @@
               </div>
               <div class="ranked-stage-actions">
                 <a class="button ranked-stage-cta" href="/play/" data-i18n="site.ranked_play_cta">Play Ranked</a>
-                <a class="button button-outline" href="/leaderboards/" data-i18n="site.view_leaderboards">View Leaderboards</a>
               </div>
             </div>
           </article>
 
-          <div class="ranked-rail" role="tablist" aria-label="Ranked leagues" data-ranked-rail>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="nomad" data-culture="unranked" data-badge="nomad" data-range="0 – 999" data-fraction="0.08" data-safe="true">
-              <i class="ranked-rail-sprite" data-badge="nomad" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_nomad">Nomad</strong>
-              <small>0</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_unranked">Unranked · Raw Stone</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_unranked">No banners, no flattering titles, only a slab of rock. Honestly, a clay jar would be more honest.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+          <div class="ranked-carousel" data-ranked-carousel>
+            <button type="button" class="ranked-nav-btn ranked-nav-btn--prev" data-ranked-prev aria-label="Previous league">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
             </button>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="chieftain" data-culture="bronze" data-badge="chieftain" data-range="1,000 – 1,999" data-fraction="0.18" data-safe="true">
-              <i class="ranked-rail-sprite" data-badge="chieftain" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_chieftain">Chieftain</strong>
-              <small>1,000</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_bronze">Bronze · Egyptian Desert</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_bronze">Hot sand and cheap bronze. Half the generals here conquer dunes that belong to nobody.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
-            </button>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="commander" data-culture="silver" data-badge="commander" data-range="2,000 – 2,999" data-fraction="0.28" data-safe="true">
-              <i class="ranked-rail-sprite" data-badge="commander" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_commander">Commander</strong>
-              <small>2,000</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_silver">Silver · Japanese Sakura</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_silver">Very calm under falling petals until someone loses a border tile and forgets every proverb.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
-            </button>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="governor" data-culture="silver" data-badge="governor" data-range="3,000 – 3,999" data-fraction="0.38" data-safe="true">
-              <i class="ranked-rail-sprite" data-badge="governor" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_governor">Governor</strong>
-              <small>3,000</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_silver">Silver · Japanese Sakura</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_silver">Very calm under falling petals until someone loses a border tile and forgets every proverb.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
-            </button>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="king" data-culture="gold" data-badge="king" data-range="4,000 – 4,999" data-fraction="0.48" data-safe="true">
-              <i class="ranked-rail-sprite" data-badge="king" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_king">King</strong>
-              <small>4,000</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_gold">Gold · Aztec Sun</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_gold">Shiny metal for people who enjoy being stared at. The sun warms a beggar just as well, and charges no tax.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
-            </button>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="emperor" data-culture="gold" data-badge="emperor" data-range="5,000 – 5,999" data-fraction="0.58" data-safe="false">
-              <i class="ranked-rail-sprite" data-badge="emperor" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_emperor">Emperor</strong>
-              <small>5,000</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_gold">Gold · Aztec Sun</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_gold">Shiny metal for people who enjoy being stared at. The sun warms a beggar just as well, and charges no tax.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
-            </button>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="sovereign" data-culture="platinum" data-badge="sovereign" data-range="6,000 – 6,999" data-fraction="0.68" data-safe="false">
-              <i class="ranked-rail-sprite" data-badge="sovereign" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_sovereign">Sovereign</strong>
-              <small>6,000</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_platinum">Platinum · Nordic Ice</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_platinum">Cold wind, stiff pride, and frostbite. Men march across glaciers merely to argue over snow.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
-            </button>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="overlord" data-culture="diamond" data-badge="overlord" data-range="7,000 – 7,999" data-fraction="0.78" data-safe="false">
-              <i class="ranked-rail-sprite" data-badge="overlord" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_overlord">Overlord</strong>
-              <small>7,000</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_diamond">Diamond · Cyber Neon</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_diamond">Blinding lights to hide the same old human greed. A polished cage still keeps no peace.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
-            </button>
-            <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="immortal" data-culture="master" data-badge="immortal" data-range="8,000 – 8,999" data-fraction="0.88" data-safe="false">
-              <i class="ranked-rail-sprite" data-badge="immortal" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_immortal">Immortal</strong>
-              <small>8,000</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_master">Master · Arcane Citadel</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_master">Tall violet towers where scholars trade simple maps for riddles. Wisdom still costs less than masonry.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
-            </button>
-            <button type="button" class="ranked-rail-btn is-active" role="tab" aria-selected="true" data-ranked-pick data-tier="deity" data-culture="grandmaster" data-badge="deity" data-range="9,000 – 10,000" data-fraction="1" data-safe="false">
-              <i class="ranked-rail-sprite" data-badge="deity" aria-hidden="true"></i>
-              <strong data-ranked-pick-title data-i18n="ranked.tier_deity">Deity</strong>
-              <small>9,000+</small>
-              <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_grandmaster">Grandmaster · Imperial Dragon</span>
-              <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_grandmaster">Golden robes and a paper dragon. Step aside, Your Majesty, you are blocking the sun.</span>
-              <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+            <div class="ranked-rail" role="tablist" aria-label="Ranked leagues" data-ranked-rail>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="nomad" data-culture="unranked" data-badge="nomad" data-range="0 – 999" data-fraction="0.08" data-safe="true">
+                <em class="ranked-rail-numeral" aria-hidden="true">I</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="nomad"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_nomad">Nomad</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_unranked">Unranked · Raw Stone</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_unranked">No banners, no flattering titles, only a slab of rock. Honestly, a clay jar would be more honest.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+              </button>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="chieftain" data-culture="bronze" data-badge="chieftain" data-range="1,000 – 1,999" data-fraction="0.18" data-safe="true">
+                <em class="ranked-rail-numeral" aria-hidden="true">II</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="chieftain"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_chieftain">Chieftain</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_bronze">Bronze · Egyptian Desert</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_bronze">Hot sand and cheap bronze. Half the generals here conquer dunes that belong to nobody.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+              </button>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="commander" data-culture="silver" data-badge="commander" data-range="2,000 – 2,999" data-fraction="0.28" data-safe="true">
+                <em class="ranked-rail-numeral" aria-hidden="true">III</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="commander"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_commander">Commander</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_silver">Silver · Japanese Sakura</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_silver">Very calm under falling petals until someone loses a border tile and forgets every proverb.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+              </button>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="governor" data-culture="silver" data-badge="governor" data-range="3,000 – 3,999" data-fraction="0.38" data-safe="true">
+                <em class="ranked-rail-numeral" aria-hidden="true">IV</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="governor"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_governor">Governor</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_silver">Silver · Japanese Sakura</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_silver">Very calm under falling petals until someone loses a border tile and forgets every proverb.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+              </button>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="king" data-culture="gold" data-badge="king" data-range="4,000 – 4,999" data-fraction="0.48" data-safe="true">
+                <em class="ranked-rail-numeral" aria-hidden="true">V</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="king"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_king">King</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_gold">Gold · Aztec Sun</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_gold">Shiny metal for people who enjoy being stared at. The sun warms a beggar just as well, and charges no tax.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_safe">0 – 4,999 pts · Safe climb</span>
+              </button>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="emperor" data-culture="gold" data-badge="emperor" data-range="5,000 – 5,999" data-fraction="0.58" data-safe="false">
+                <em class="ranked-rail-numeral" aria-hidden="true">VI</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="emperor"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_emperor">Emperor</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_gold">Gold · Aztec Sun</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_gold">Shiny metal for people who enjoy being stared at. The sun warms a beggar just as well, and charges no tax.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+              </button>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="sovereign" data-culture="platinum" data-badge="sovereign" data-range="6,000 – 6,999" data-fraction="0.68" data-safe="false">
+                <em class="ranked-rail-numeral" aria-hidden="true">VII</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="sovereign"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_sovereign">Sovereign</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_platinum">Platinum · Nordic Ice</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_platinum">Cold wind, stiff pride, and frostbite. Men march across glaciers merely to argue over snow.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+              </button>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="overlord" data-culture="diamond" data-badge="overlord" data-range="7,000 – 7,999" data-fraction="0.78" data-safe="false">
+                <em class="ranked-rail-numeral" aria-hidden="true">VIII</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="overlord"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_overlord">Overlord</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_diamond">Diamond · Cyber Neon</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_diamond">Blinding lights to hide the same old human greed. A polished cage still keeps no peace.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+              </button>
+              <button type="button" class="ranked-rail-btn" role="tab" aria-selected="false" data-ranked-pick data-tier="immortal" data-culture="master" data-badge="immortal" data-range="8,000 – 8,999" data-fraction="0.88" data-safe="false">
+                <em class="ranked-rail-numeral" aria-hidden="true">IX</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="immortal"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_immortal">Immortal</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_master">Master · Arcane Citadel</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_master">Tall violet towers where scholars trade simple maps for riddles. Wisdom still costs less than masonry.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+              </button>
+              <button type="button" class="ranked-rail-btn is-active" role="tab" aria-selected="true" data-ranked-pick data-tier="deity" data-culture="grandmaster" data-badge="deity" data-range="9,000 – 10,000" data-fraction="1" data-safe="false">
+                <em class="ranked-rail-numeral" aria-hidden="true">X</em>
+                <span class="ranked-rail-crest" aria-hidden="true"><i class="ranked-rail-sprite" data-badge="deity"></i></span>
+                <strong data-ranked-pick-title data-i18n="ranked.tier_deity">Deity</strong>
+                <span hidden data-ranked-pick-culture data-i18n="site.ranked_culture_grandmaster">Grandmaster · Imperial Dragon</span>
+                <span hidden data-ranked-pick-lore data-i18n="site.ranked_lore_grandmaster">Golden robes and a paper dragon. Step aside, Your Majesty, you are blocking the sun.</span>
+                <span hidden data-ranked-pick-rule data-i18n="site.ranked_rule_comp">5,000+ pts · Competitive</span>
+              </button>
+            </div>
+            <button type="button" class="ranked-nav-btn ranked-nav-btn--next" data-ranked-next aria-label="Next league">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
             </button>
           </div>
 
           <div class="ranked-live-podium" data-ranked-live-podium hidden>
             <div class="ranked-live-podium-head">
-              <h3 data-ranked-live-title data-i18n="site.ranked_live_champions">Current Top 3</h3>
+              <div class="ranked-live-tabs" role="tablist" aria-label="Ranked top players" data-ranked-mode-switcher>
+                <button
+                  type="button"
+                  class="ranked-live-tab is-active"
+                  role="tab"
+                  aria-selected="true"
+                  data-ranked-mode="Ranked1v1"
+                  data-i18n="lobbies.ranked_1v1"
+                >
+                  Ranked 1v1
+                </button>
+                <button
+                  type="button"
+                  class="ranked-live-tab"
+                  role="tab"
+                  aria-selected="false"
+                  data-ranked-mode="RankedFFA"
+                  data-i18n="lobbies.ranked_ffa"
+                >
+                  Ranked FFA
+                </button>
+              </div>
               <a href="/leaderboards/" data-ranked-live-link data-i18n="site.view_leaderboards">View Leaderboards</a>
             </div>
             <div class="ranked-live-podium-grid" data-ranked-live-grid></div>
+          </div>
           </div>
         </div>
       </section>
@@ -643,9 +637,9 @@
         <div class="container">
           <header class="section-head">
             <p class="eyebrow" data-i18n="site.game_systems">Game systems</p>
-            <h2><span data-i18n="site.matches">How matches</span> <em data-i18n="site.work">work.</em></h2>
+            <h2><span data-i18n="site.matches">Rules of</span> <em data-i18n="site.work">battle.</em></h2>
             <p data-i18n="site.rules_summary">
-              Land control wins, buildings generate resources, terrain punishes attackers, modes rotate.
+              Take territory to win, build cities and ports to fund your armies, use terrain for defense, and adapt as modes rotate.
             </p>
           </header>
           <div class="faq-list">

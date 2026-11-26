@@ -97,6 +97,8 @@ interface MenuUi {
     rankedLadder: RankedLadder | null;
     profileRankedQueue: "Ranked1v1" | "RankedFFA";
     profileOverviewQueue: "Ranked1v1" | "RankedFFA";
+    selectedRankedQueue: "Ranked1v1" | "RankedFFA";
+    rankedQueuePickerOpen: boolean;
     profileHistoryQueueFilter: string;
     profileShareCopied: boolean;
     profileHistory: ProfileMatch[];
@@ -150,6 +152,17 @@ interface MenuUi {
     swapConfirmAd: boolean;
 }
 
+function readStoredRankedQueue(): "Ranked1v1" | "RankedFFA" {
+    try {
+        if (typeof window !== "undefined" && window.localStorage) {
+            return window.localStorage.getItem("sow_ranked_queue") === "RankedFFA"
+                ? "RankedFFA"
+                : "Ranked1v1";
+        }
+    } catch {}
+    return "Ranked1v1";
+}
+
 export const menuUi: MenuUi = {
     state: null,
     lastRaw: "",
@@ -193,6 +206,8 @@ export const menuUi: MenuUi = {
     rankedLadder: null,
     profileRankedQueue: "Ranked1v1",
     profileOverviewQueue: "Ranked1v1",
+    selectedRankedQueue: readStoredRankedQueue(),
+    rankedQueuePickerOpen: false,
     profileHistoryQueueFilter: "all",
     profileShareCopied: false,
     profileHistory: [],
@@ -278,27 +293,76 @@ export function esc(value: unknown): string {
 }
 
 export function renderQuickMatchButton(): string {
-    const ranked = menuUi.rankedRating;
-    const rankedFfa = menuUi.rankedFfaRating;
-    const rankedLabel = rankLabel(ranked);
+    const queue = menuUi.selectedRankedQueue === "RankedFFA" ? "RankedFFA" : "Ranked1v1";
+    const r1v1 = menuUi.rankedRating;
+    const rFfa = menuUi.rankedFfaRating;
+    const activeRating = queue === "RankedFFA" ? rFfa : r1v1;
+    const activeTitle = queue === "RankedFFA" ? SOW_t("lobbies.ranked_ffa") : SOW_t("lobbies.ranked_1v1");
+    const activeLabel = rankLabel(activeRating);
+    const pickerOpen = Boolean(menuUi.rankedQueuePickerOpen);
+    const checkSvg =
+        "<svg class='sow-menu__ranked-opt-check' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polyline points='20 6 9 17 4 12'/></svg>";
+    const optionMarkup = (optQueue: "Ranked1v1" | "RankedFFA", rating: ProfileRating | null) => {
+        const selected = queue === optQueue;
+        const title = optQueue === "RankedFFA" ? SOW_t("lobbies.ranked_ffa") : SOW_t("lobbies.ranked_1v1");
+        return (
+            "<button type='button' role='menuitemradio' aria-checked='" +
+            selected +
+            "' class='sow-menu__ranked-option" +
+            (selected ? " is-selected" : "") +
+            "' data-command='select_ranked_queue' data-queue='" +
+            optQueue +
+            "'>" +
+            "<span class='sow-menu__ranked-option-emblem' data-ranked-opt-emblem='" +
+            optQueue +
+            "'>" +
+            rankEmblem(rating?.tier || "Nomad", rating?.division || null) +
+            "</span>" +
+            "<span class='sow-menu__ranked-option-copy'><strong>" +
+            esc(title) +
+            "</strong><small data-ranked-opt-current='" +
+            optQueue +
+            "'>" +
+            esc(rankLabel(rating)) +
+            "</small></span>" +
+            (selected ? checkSvg : "") +
+            "</button>"
+        );
+    };
     return (
-        "<div class='sow-menu__ranked-queue-pair'><button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match'>" +
+        "<div class='sow-menu__ranked-dock-shell" +
+        (pickerOpen ? " is-picker-open" : "") +
+        "'>" +
+        "<div class='sow-menu__ranked-popover' role='menu' aria-label='" +
+        esc(SOW_t("profile.ranked_modes")) +
+        "'" +
+        (pickerOpen ? "" : " hidden") +
+        ">" +
+        optionMarkup("Ranked1v1", r1v1) +
+        optionMarkup("RankedFFA", rFfa) +
+        "</div>" +
+        "<div class='sow-menu__ranked-queue-pair'>" +
+        "<button class='sow-menu__mode-selector' type='button' data-command='toggle_ranked_queue_picker' aria-haspopup='menu' aria-expanded='" +
+        pickerOpen +
+        "'>" +
+        "<span class='sow-menu__quick-match-emblem' data-ranked-active-emblem>" +
+        rankEmblem(activeRating?.tier || "Nomad", activeRating?.division || null) +
+        "</span>" +
+        "<span class='sow-menu__mode-selector-copy'><strong data-ranked-active-title>" +
+        esc(activeTitle) +
+        "</strong><small data-ranked-active-current>" +
+        esc(activeLabel) +
+        "</small></span>" +
+        "<svg class='sow-menu__mode-selector-chevron' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><polyline points='18 15 12 9 6 15'/></svg>" +
+        "</button>" +
+        "<button class='sow-menu__primary sow-menu__quick-match' type='button' data-command='quick_match' data-use-selected-queue='1'>" +
         "<span class='sow-menu__quick-match-sheen' aria-hidden='true'></span>" +
-        "<div class='sow-menu__quick-match-copy'><strong>" +
-        esc(SOW_t("lobbies.ranked_1v1")) +
-        "</strong><small data-ranked-current>" +
-        esc(rankedLabel) +
-        "</small></div><span class='sow-menu__quick-match-emblem' data-ranked-emblem>" +
-        rankEmblem(ranked?.tier || "Nomad", ranked?.division || null) +
-        "</span></button><button class='sow-menu__primary sow-menu__quick-match sow-menu__quick-match--ffa' type='button' data-command='quick_match_ffa'>" +
-        "<span class='sow-menu__quick-match-sheen' aria-hidden='true'></span>" +
-        "<div class='sow-menu__quick-match-copy'><strong>" +
-        esc(SOW_t("lobbies.ranked_ffa")) +
-        "</strong><small data-ranked-ffa-current>" +
-        esc(rankLabel(rankedFfa)) +
-        "</small></div><span class='sow-menu__quick-match-emblem' data-ranked-ffa-emblem>" +
-        rankEmblem(rankedFfa?.tier || "Nomad", rankedFfa?.division || null) +
-        "</span></button></div>"
+        "<strong>" +
+        esc(SOW_t("lobbies.play")) +
+        "</strong>" +
+        "</button>" +
+        "</div>" +
+        "</div>"
     );
 }
 
@@ -1072,6 +1136,8 @@ export function renderKey(): string {
         daily_swaps_used: state.daily_swaps_used,
         weekly_swaps_used: state.weekly_swaps_used,
         matches_played: state.profile_stats?.matches_played,
+        ranked_queue: menuUi.selectedRankedQueue,
+        ranked_picker: menuUi.rankedQueuePickerOpen,
     });
 }
 

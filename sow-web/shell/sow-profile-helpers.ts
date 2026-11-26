@@ -6,6 +6,7 @@ export interface PublicLeaderCatalogEntry {
     legacyIds?: string[];
     region?: string;
     name?: string;
+    enName?: string;
     civilization?: string;
     slug?: string;
     art_slug?: string;
@@ -155,38 +156,40 @@ export function getLeaderCatalog(): MenuLeader[] {
 
 function normalizeLeaderKey(value: unknown): string {
     return String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\u0142/gi, "l")
         .replace(/[^a-z0-9]/gi, "")
         .toLowerCase();
 }
 
-/** Resolves a leader entry by id, legacy id, slug, or art slug. */
+/** Resolves a leader entry by id, legacy id, slug, art slug, or localized/English name. */
 export function leaderById(id: unknown): MenuLeader {
     const leaders = getLeaderCatalog();
     const wanted = normalizeLeaderKey(id);
     if (wanted) {
         const found = leaders.find(function (leader) {
-            const raw = leader as MenuLeader & { legacyIds?: string[]; artSlug?: string };
+            const raw = leader as MenuLeader & { legacyIds?: string[]; artSlug?: string; enName?: string };
             if (normalizeLeaderKey(leader.id) === wanted) return true;
             if (normalizeLeaderKey(leader.slug) === wanted) return true;
             if (normalizeLeaderKey(leader.art_slug) === wanted) return true;
+            if (normalizeLeaderKey(leader.name) === wanted) return true;
+            if (normalizeLeaderKey(raw.enName) === wanted) return true;
             if (Array.isArray(raw.legacyIds) && raw.legacyIds.some((leg) => normalizeLeaderKey(leg) === wanted)) {
                 return true;
             }
             return false;
         });
         if (found) return found;
-        const cleanSlug = String(id || "")
-            .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-            .toLowerCase()
-            .replace(/[^a-z0-9_]/g, "");
-        if (cleanSlug) {
+        const rawLabel = String(id || "").trim();
+        if (rawLabel) {
             return {
-                id: String(id),
-                slug: cleanSlug,
-                art_slug: cleanSlug,
-                name: String(id),
-                civilization_key: "heroes.leader_" + cleanSlug + "_civilization",
-                perk_key: "site.leader_" + cleanSlug + "_description",
+                id: rawLabel,
+                slug: "",
+                art_slug: "random",
+                name: rawLabel,
+                civilization_key: "",
+                perk_key: "",
             };
         }
     }
@@ -196,16 +199,9 @@ export function leaderById(id: unknown): MenuLeader {
 /** Extracts the portrait/art slug for a leader object or string identifier. */
 export function leaderArtSlug(leader: MenuLeader | string | null | undefined): string {
     if (typeof leader === "string") {
-        const wanted = normalizeLeaderKey(leader);
-        const found = getLeaderCatalog().find(function (candidate) {
-            return [candidate.id, candidate.slug, candidate.art_slug].some(
-                (value) => normalizeLeaderKey(value) === wanted,
-            );
-        });
-        if (found) return String(found.art_slug || found.slug || leader);
-        return leaderById(leader).art_slug || String(leader);
+        return leaderById(leader).art_slug || "random";
     }
-    return String((leader && (leader.art_slug || leader.slug)) || "");
+    return String((leader && (leader.art_slug || leader.slug)) || "random");
 }
 
 /** Returns the localized display name for a commander. */

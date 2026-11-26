@@ -3,22 +3,37 @@
   <head>
     <meta charset="utf-8" />
     <!-- SOW_SITE_LOCALE -->
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a1015" />
     <title>Buildings | Shadows of War</title>
-    <meta name="description" content="Building lines, eras and upgrade benefits in Shadows of War." />
+    <meta name="description" content="Building lines, City and District foundations, and upgrade stats in Shadows of War." />
     <link rel="canonical" href="https://shadowsofwar.io/buildings/" />
-    <link rel="icon" href="/sow.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Buildings | Shadows of War" />
+    <meta property="og:description" content="Building lines, City and District foundations, and upgrade stats in Shadows of War." />
+    <meta property="og:url" content="https://shadowsofwar.io/buildings/" />
+    <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Buildings | Shadows of War" />
+    <meta name="twitter:description" content="Building lines, City and District foundations, and upgrade stats in Shadows of War." />
+    <meta name="twitter:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp" />
+    <link rel="icon" type="image/svg+xml" href="/sow.svg" />
     <link rel="stylesheet" href="/fonts/fonts.css" />
+    <link rel="stylesheet" href="/sow-controls.css" />
+    <link rel="stylesheet" href="/sow-buildings.css" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body class="guide-page">
+  <body class="guide-page buildings-page">
     <!-- SOW_SITE_HEADER -->
     <main class="guide-main">
-      <section class="guide-section section-rule">
+      <section class="landing-section buildings-section">
         <div class="container" data-building-guide></div>
       </section>
     </main>
     <!-- BUILDINGS_FOOTER -->
-    <script src="/site-chrome.js"></script>
+    <script data-cfasync="false" src="/sow-tooltip.js"></script>
+    <script data-cfasync="false" src="/site-chrome.js"></script>
+    <script src="/analytics.js"></script>
+    <script data-cfasync="false" src="/buildings.js"></script>
   </body>
 </html>

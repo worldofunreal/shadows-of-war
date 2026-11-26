@@ -4131,10 +4131,12 @@ html[dir="rtl"] .leader-arrow {
   display: block;
   overflow: hidden;
   aspect-ratio: 0.69;
-  border: 1px solid rgb(255 255 255 / 13%);
-  border-radius: 9px;
+  border: 1px solid var(--sow-tactical-surface-border);
+  border-top-color: var(--sow-tactical-surface-accent-border);
+  border-radius: var(--sow-tactical-surface-radius-compact);
   color: var(--ink);
-  background: var(--surface);
+  background: var(--sow-tactical-panel-base);
+  box-shadow: var(--sow-tactical-card-shadow);
   text-decoration: none;
   transition:
     border-color 0.18s ease,
@@ -4143,8 +4145,10 @@ html[dir="rtl"] .leader-arrow {
 }
 .leader-directory-card:hover,
 .leader-directory-card:focus-visible {
-  border-color: var(--orange);
-  box-shadow: 0 0 20px rgb(255 174 28 / 17%), 0 8px 24px rgb(0 0 0 / 35%);
+  border-color: var(--sow-tactical-surface-accent-border);
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--sow-tactical-accent) 16%, transparent),
+    var(--sow-tactical-card-shadow);
   transform: translateY(-2px);
 }
 .leader-directory-art,
@@ -4166,7 +4170,7 @@ html[dir="rtl"] .leader-arrow {
 .leader-directory-avatar {
   display: none;
 }
-.leader-directory-card:hover .leader-directory-art {
+.leader-directory-card:is(:hover, :focus-visible) .leader-directory-art {
   transform: scale(1.035);
 }
 .leader-directory-copy {
@@ -4176,16 +4180,16 @@ html[dir="rtl"] .leader-arrow {
   display: grid;
   gap: 6px;
   padding: 18px 14px 14px;
-  background: linear-gradient(180deg, transparent, rgb(5 8 11 / 78%) 20%);
+  border-top: 1px solid var(--sow-tactical-surface-accent-border-soft);
+  background: var(--sow-tactical-surface-card-bg);
+  box-shadow: var(--sow-tactical-surface-highlight);
 }
 .leader-directory-name {
-  order: 1;
   color: #fff;
   font: 800 clamp(17px, 1.35vw, 21px)/1.08 var(--font-display);
   text-wrap: balance;
 }
 .leader-directory-civilization {
-  order: 0;
   overflow: hidden;
   color: var(--orange-soft);
   font-size: 9px;
@@ -4195,18 +4199,8 @@ html[dir="rtl"] .leader-arrow {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.leader-directory-ability {
-  order: 2;
-  display: -webkit-box;
-  overflow: hidden;
-  color: rgb(255 255 255 / 76%);
-  font-size: 11px;
-  line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
 .leader-directory-action {
-  order: 3;
+  order: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4286,8 +4280,8 @@ html[dir="rtl"] .leader-arrow {
     aspect-ratio: auto;
     min-height: 96px;
     padding: 8px;
-    border-radius: 8px;
-    background: linear-gradient(145deg, var(--surface-2), var(--surface));
+    border-radius: var(--sow-tactical-surface-radius-compact);
+    background: var(--sow-tactical-surface-card-bg);
   }
   .leader-directory-card::after,
   .leader-directory-art {
@@ -4309,7 +4303,9 @@ html[dir="rtl"] .leader-arrow {
     flex-direction: column;
     gap: 3px;
     padding: 0;
+    border-top: 0;
     background: none;
+    box-shadow: none;
   }
   .leader-directory-name {
     order: 0;
@@ -4325,9 +4321,6 @@ html[dir="rtl"] .leader-arrow {
     font-weight: 400;
     letter-spacing: 0;
     text-transform: none;
-  }
-  .leader-directory-ability {
-    -webkit-line-clamp: 1;
   }
   .leader-directory-action {
     justify-content: flex-start;
@@ -4350,208 +4343,7 @@ html[dir="rtl"] .leader-arrow {
 }
 
 /* Ranked showcase styles live in shared ../shell/sow-ranked.css */
-
-
-
-.building-guide {
-  display: grid;
-  gap: clamp(1.5rem, 4vw, 3rem);
-  margin-block-start: clamp(1.5rem, 3vw, 2.5rem);
-}
-
-.building-directory {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
-  gap: 12px;
-  margin: clamp(1.5rem, 3vw, 2.5rem) 0 1rem;
-}
-.building-directory-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
-  align-items: center;
-  gap: 14px;
-  min-height: 112px;
-  padding: 14px 16px;
-  overflow: hidden;
-  border: 1px solid rgb(213 174 103 / 24%);
-  border-radius: 12px;
-  color: var(--ink);
-  background: linear-gradient(145deg, #17191f, #111216 82%);
-  text-decoration: none;
-  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease, background .18s ease;
-}
-.building-directory-card:hover,
-.building-directory-card:focus-visible {
-  border-color: var(--orange);
-  box-shadow: 0 0 20px var(--orange-wash);
-  transform: translateY(-2px);
-  background: linear-gradient(145deg, #22252e, rgb(245 197 66 / 18%));
-}
-.building-directory-card:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
-.building-directory-card > span:last-child { display: grid; gap: 7px; min-width: 0; }
-.building-directory-card strong { font-size: 1rem; line-height: 1.2; }
-.building-directory-card small { color: var(--muted); font-size: .82rem; line-height: 1.4; }
-.building-directory-icon {
-  width: 76px;
-  height: 76px;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 5px 8px rgb(0 0 0 / 38%));
-}
-.building-guide-note {
-  margin: 1rem 0 0;
-  padding: 14px 17px;
-  border: 1px solid rgb(213 174 103 / 22%);
-  border-inline-start: 3px solid var(--orange);
-  border-radius: 0 10px 10px 0;
-  color: var(--muted);
-  background: linear-gradient(90deg, var(--orange-wash), var(--surface));
-  line-height: 1.55;
-}
-.building-line-section { scroll-margin-top: 24px; }
-.building-line-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem 2rem;
-  padding: 0 0 .9rem;
-  border-block-end: 1px solid rgb(213 174 103 / 25%);
-}
-.building-line-heading h2 { margin: 0; }
-.building-line-heading p {
-  max-width: 42rem;
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.5;
-}
-.building-tier-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 238px), 1fr));
-  gap: 12px;
-  margin: 1rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-.building-tier-card { min-width: 0; }
-.building-tier-card article {
-  display: grid;
-  align-content: start;
-  min-height: 100%;
-  padding: 14px;
-  border: 1px solid rgb(213 174 103 / 20%);
-  border-radius: 11px;
-  background: linear-gradient(155deg, #17191f, rgb(9 10 13 / 98%) 88%);
-  box-shadow: 0 8px 22px rgb(0 0 0 / 12%);
-}
-.building-tier-heading {
-  display: grid;
-  grid-template-columns: auto 52px minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
-  min-height: 58px;
-}
-.building-tier-level {
-  padding: 4px 7px;
-  border: 1px solid rgb(245 179 80 / 45%);
-  border-radius: 6px;
-  color: var(--orange-soft);
-  background: var(--orange-wash);
-  font-size: .75rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.building-guide-icon {
-  display: block;
-  width: 52px;
-  height: 52px;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 4px 7px rgb(0 0 0 / 36%));
-}
-.building-tier-title { display: grid; gap: 4px; min-width: 0; }
-.building-tier-title strong { font-size: .95rem; line-height: 1.25; }
-.building-tier-title small { color: var(--muted); font-size: .77rem; }
-.building-tier-price {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 4px 10px;
-  margin-block: 12px 9px;
-  padding: 9px 10px;
-  border: 1px solid rgb(213 174 103 / 16%);
-  border-radius: 8px;
-  background: rgb(0 0 0 / 13%);
-  font-variant-numeric: tabular-nums;
-}
-.building-tier-price > span { color: var(--muted); font-size: .78rem; }
-.building-tier-price > strong { color: var(--orange-soft); font-size: 1rem; }
-.building-tier-price > strong small { color: var(--muted); font-size: .7rem; font-weight: 600; }
-.building-tier-price > small { grid-column: 1 / -1; color: var(--muted); font-size: .75rem; }
-.building-tier-effects {
-  display: grid;
-  gap: 5px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.building-tier-effects li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 1px 8px;
-  padding: 5px 1px;
-  border-block-end: 1px solid rgb(255 255 255 / 6%);
-  font-size: .8rem;
-}
-.building-tier-effects li > span { color: var(--muted); }
-.building-tier-effects li > strong { font-variant-numeric: tabular-nums; text-align: end; }
-.building-tier-effects li > small {
-  grid-column: 1 / -1;
-  color: var(--orange-soft);
-  font-size: .72rem;
-  line-height: 1.35;
-}
-.building-tier-unlocks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-block-start: 10px;
-}
-.building-guide-unlock {
-  display: inline-block;
-  padding: 5px 7px;
-  border: 1px solid rgb(105 180 169 / 28%);
-  border-radius: 6px;
-  color: var(--ink);
-  background: rgb(43 119 108 / 20%);
-  font-size: .72rem;
-  line-height: 1.35;
-}
-
-@media (max-width: 700px) {
-  .building-directory { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-  .building-directory-card { grid-template-columns: 54px minmax(0, 1fr); gap: 9px; min-height: 92px; padding: 10px; }
-  .building-directory-icon { width: 54px; height: 54px; }
-  .building-directory-card strong { font-size: .9rem; }
-  .building-directory-card small { font-size: .73rem; }
-  .building-line-heading { display: grid; gap: 7px; }
-  .building-tier-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-  .building-tier-card article { padding: 10px; }
-  .building-tier-heading { grid-template-columns: auto 42px minmax(0, 1fr); gap: 6px; }
-  .building-guide-icon { width: 42px; height: 42px; }
-  .building-tier-title strong { font-size: .84rem; }
-  .building-tier-price { gap: 3px 6px; padding: 8px; }
-}
-@media (max-width: 440px) {
-  .building-directory { grid-template-columns: 1fr; }
-  .building-tier-grid { grid-template-columns: 1fr; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .building-directory-card { transition: none; }
-  .building-directory-card:hover,
-  .building-directory-card:focus-visible { transform: none; }
-}
+/* Building codex styles live in shared ../shell/sow-buildings.css */
 
 /* ==========================================================================
    Public Leaderboards & Player Profile Pages (shared .sow-profile-host--site)

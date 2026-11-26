@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
     isValidAccountId,
+    leaderArtSlug,
+    leaderAvatarUrl,
+    leaderById,
+    leaderDisplayName,
     publicProfileUrl,
     setLeaderCatalogProvider,
 } from "./sow-profile-helpers.ts";
@@ -219,6 +223,23 @@ describe("shared public profile helpers & URL routing", () => {
         expect(isValidAccountId("bot-01")).toBe(false);
         expect(isValidAccountId("../etc/passwd")).toBe(false);
         expect(isValidAccountId("")).toBe(false);
+    });
+
+    test("resolves accented and English leader names to canonical art slugs without 404 or missing-key slugs", () => {
+        setLeaderCatalogProvider(() => [
+            { id: "bolivar", artSlug: "bolivar", name: "Simón Bolívar", enName: "Simón Bolívar" },
+            { id: "kaahumanu_hawaii", artSlug: "kaahumanu_hawaii", name: "Kaʻahumanu", enName: "Kaʻahumanu" },
+            { id: "boleslaw_ii", artSlug: "boleslaw_ii", name: "Bolesław II", enName: "Bolesław II" },
+            { id: "cyrus_the_great", artSlug: "cyrus_the_great", name: "Ciro el Grande", enName: "Cyrus" },
+            { id: "salote_tupou_iii", artSlug: "salote_tupou_iii", name: "Sālote III", enName: "Sālote III" },
+        ]);
+        expect(leaderById("Simón Bolívar").id).toBe("bolivar");
+        expect(leaderArtSlug("Simón Bolívar")).toBe("bolivar");
+        expect(leaderAvatarUrl("Kaʻahumanu")).toBe("/assets/gameplay/avatars/kaahumanu_hawaii.webp");
+        expect(leaderById("Bolesław II").art_slug).toBe("boleslaw_ii");
+        expect(leaderById("Cyrus").id).toBe("cyrus_the_great");
+        expect(leaderDisplayName(leaderById("Sālote III"))).toBe("Sālote III");
+        expect(leaderAvatarUrl("UnknownLeaderXYZ")).toBe("/assets/gameplay/avatars/random.webp");
     });
 
     test("formats publicProfileUrl cleanly for prod vs localhost and localized prefixes", () => {
