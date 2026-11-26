@@ -173,13 +173,21 @@ fn placement_own(cell: vec2<i32>) -> bool {
 }
 
 // ── Procedural biome noise (render-only, no per-tile biome data) ─────────────
-// Cheap sin-free hash + value noise. Two octaves max so the full-screen pass
-// stays inside the mobile/WebGL fragment budget. Everything below is gated by
-// the biome/wave flags so an idle effect costs nothing.
+// Structured noise toolkit: domain-warped moisture for organic regions, voronoi
+// for discrete tree crowns, ridged multifractal for mountain/volcanic crests.
+// Octaves are unrolled and the voronoi neighborhood is a constant 3x3, so the
+// full-screen pass stays inside the mobile/WebGL fragment budget. Every effect
+// below is gated by the biome/wave flags and by its biome weight, so a pixel only
+// pays for the biome it actually belongs to.
 fn biome_hash(p: vec2<f32>) -> f32 {
-    var q = fract(p * vec2<f32>(0.1031, 0.1030));
-    q = q + dot(q, q.yx + 33.33);
-    return fract((q.x + q.y) * q.x);
+    return fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453123);
+}
+
+fn biome_hash22(p: vec2<f32>) -> vec2<f32> {
+    return fract(sin(vec2<f32>(
+        dot(p, vec2<f32>(127.1, 311.7)),
+        dot(p, vec2<f32>(269.5, 183.3))
+    )) * 43758.5453123);
 }
 
 fn biome_vnoise(p: vec2<f32>) -> f32 {
@@ -191,6 +199,39 @@ fn biome_vnoise(p: vec2<f32>) -> f32 {
     let c = biome_hash(i + vec2<f32>(0.0, 1.0));
     let d = biome_hash(i + vec2<f32>(1.0, 1.0));
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+// Ridged multifractal (2 octaves, unrolled): sharp crests for rock and volcanoes.
+fn biome_ridged(p: vec2<f32>) -> f32 {
+    var n = biome_vnoise(p);
+    n = 1.0 - abs(2.0 * n - 1.0);
+    var v = 0.62 * n * n;
+    n = biome_vnoise(p * 2.13 + vec2<f32>(3.1, 8.2));
+    n = 1.0 - abs(2.0 * n - 1.0);
+    v += 0.38 * n * n;
+    return v;
+}
+
+// Voronoi F1 distance + per-cell random (constant 3x3 neighborhood). Each cell is
+// a tree crown / rock clump; the random value varies hue per clump.
+fn biome_voronoi(p: vec2<f32>) -> vec2<f32> {
+    let i = floor(p);
+    let f = fract(p);
+    var best = 8.0;
+    var rnd = 0.0;
+    for (var y = -1; y <= 1; y = y + 1) {
+        for (var x = -1; x <= 1; x = x + 1) {
+            let cell = vec2<f32>(f32(x), f32(y));
+            let r = biome_hash22(i + cell);
+            let d = cell + r - f;
+            let dist = dot(d, d);
+            if (dist < best) {
+                best = dist;
+                rnd = r.x;
+            }
+        }
+    }
+    return vec2<f32>(sqrt(best), rnd);
 }
 
 fn world_to_hex(world_pos: vec2<f32>) -> vec2<i32> {

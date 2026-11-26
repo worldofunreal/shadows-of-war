@@ -4,7 +4,7 @@ use crate::text::texture::{AvatarAtlasTexture, FontAtlasTexture, TextAtlasImages
 use crate::text::types::{
     BuildingMarkerInstance, KIND_ARC, KIND_BUILDING_MARKER, KIND_BUILDING_SPRITE, KIND_CROSS,
     KIND_DISC, KIND_GLYPH, KIND_ICON, KIND_LANDING_BEACON, KIND_RECT, KIND_RING, KIND_ROUNDED_RECT,
-    KIND_SELECTION_RING, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite,
+    KIND_ROUTE, KIND_SELECTION_RING, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite,
     OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData,
 };
 use blade_graphics as gpu;
@@ -1245,6 +1245,46 @@ impl TextRenderer {
         });
     }
 
+    /// Push one road or railway polyline leg from `a` to `b` (physical pixels).
+    /// `prev_start` / `next_end` are the far ends of the neighbouring legs, so the
+    /// shader splits each turn between them and draws every pixel once.
+    /// `along` is the route distance at `a`, so patterns run on across turns.
+    pub fn push_route(
+        &mut self,
+        a: [f32; 2],
+        b: [f32; 2],
+        prev_start: Option<[f32; 2]>,
+        next_end: Option<[f32; 2]>,
+        along: f32,
+        half_width: f32,
+        level: u8,
+        opacity: f32,
+        seconds: f32,
+    ) {
+        if (a[0] - b[0]).abs() + (a[1] - b[1]).abs() < 0.5 || half_width <= 0.0 {
+            return;
+        }
+        // Road, drop shadow (`shade_route`: max(hw * 0.22, 1)) and AA margin.
+        let extent = half_width + (half_width * 0.22).max(1.0) + 1.5;
+        let lo = [a[0].min(b[0]) - extent, a[1].min(b[1]) - extent];
+        let hi = [a[0].max(b[0]) + extent, a[1].max(b[1]) + extent];
+        let prev = prev_start.map_or([0.0; 2], |p| [p[0] - a[0], p[1] - a[1]]);
+        let next = next_end.map_or([0.0; 2], |p| [p[0] - b[0], p[1] - b[1]]);
+        self.push_inst(TextInstanceGpu {
+            screen_pos: lo,
+            size: [hi[0] - lo[0], hi[1] - lo[1]],
+            uv_rect: [a[0] - lo[0], a[1] - lo[1], b[0] - lo[0], b[1] - lo[1]],
+            content_rect: [prev[0], prev[1], next[0], next[1]],
+            color: [1.0, 1.0, 1.0, opacity],
+            outline_color: [along, half_width, f32::from(level), seconds],
+            face_dilate: 0.0,
+            outline_thickness: 0.0,
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_ROUTE,
+        });
+    }
+
     /// Push a filled rounded rectangle with an optional inward outline.
     /// `size` and `outline_thickness` are physical pixels; `corner_radius_ratio` is
     /// relative to the shorter side.
@@ -1315,20 +1355,27 @@ impl TextRenderer {
         }
     }
 
-    pub fn draw(
+    /// Upload the queued instances once before drawing multiple ordered ranges.
+    pub fn prepare_draw(&self, context: &gpu::Context) {
+        self.write_buffers(context);
+    }
+
+    /// Draw an already uploaded range of instances. Call [`prepare_draw`](Self::prepare_draw)
+    /// after queuing instances and before the first range.
+    pub fn draw_range(
         &mut self,
         encoder: &mut gpu::CommandEncoder,
         target_view: gpu::TextureView,
         screen_size: [f32; 2],
         shader_params: &[[f32; 4]; crate::shader_params::PARAM_CAPACITY],
-        context: &gpu::Context,
+        range: std::ops::Range<usize>,
     ) {
-        let glyph_count = self.upload_instances.len() as u32;
+        let start = range.start.min(self.upload_instances.len());
+        let end = range.end.min(self.upload_instances.len()).max(start);
+        let glyph_count = (end - start) as u32;
         if glyph_count == 0 {
             return;
         }
-
-        self.write_buffers(context);
 
         let mut pass = encoder.render(
             "text_pass",
@@ -1362,8 +1409,32 @@ impl TextRenderer {
 
         let mut rc = pass.with(&self.pipeline);
         rc.bind(0, &shader_data);
-        rc.bind_vertex(0, self.buffer.at(0));
+        let instance_offset = start * std::mem::size_of::<TextInstanceGpu>();
+        rc.bind_vertex(0, self.buffer.at(instance_offset as u64));
         rc.draw(0, 6, 0, glyph_count);
+    }
+
+    pub fn draw(
+        &mut self,
+        encoder: &mut gpu::CommandEncoder,
+        target_view: gpu::TextureView,
+        screen_size: [f32; 2],
+        shader_params: &[[f32; 4]; crate::shader_params::PARAM_CAPACITY],
+        context: &gpu::Context,
+    ) {
+        let glyph_count = self.upload_instances.len();
+        if glyph_count == 0 {
+            return;
+        }
+
+        self.prepare_draw(context);
+        self.draw_range(
+            encoder,
+            target_view,
+            screen_size,
+            shader_params,
+            0..glyph_count,
+        );
     }
 
     pub fn destroy(&mut self, render_ctx: &RenderContext) {

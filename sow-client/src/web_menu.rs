@@ -4520,9 +4520,30 @@ fn building_detail_payload(
         } else {
             false
         };
+        let limit = sow_core::building::city_district_kind_limit(city_level);
         let options: Vec<serde_json::Value> = BuildingKind::ACTIVE_DISTRICTS
             .iter()
             .map(|&kind| {
+                let count = if city_level > 0 {
+                    snapshot
+                        .buildings
+                        .iter()
+                        .filter(|d| {
+                            d.id != building.id
+                                && d.owner_id == my_id
+                                && d.kind == kind
+                                && sow_core::building::city_covers_coord(
+                                    anchor,
+                                    d.tile_idx % map_w,
+                                    d.tile_idx / map_w,
+                                    &app.sim.config,
+                                )
+                        })
+                        .count() as u32
+                } else {
+                    0
+                };
+                let at_limit = city_level >= 1 && count >= limit;
                 let cost = app.ui.app.hud_state.building_costs[kind as usize];
                 let unlocked = app.campaign_building_max_level(kind) >= 1;
                 let coastal_ok = kind != BuildingKind::Port || has_coastal_site;
@@ -4530,9 +4551,12 @@ fn building_detail_payload(
                 serde_json::json!({
                     "kind": kind.as_str(),
                     "cost": cost,
+                    "count": count,
+                    "limit": limit,
+                    "at_limit": at_limit,
                     "unlocked": unlocked,
                     "coast_required": kind == BuildingKind::Port && !has_coastal_site,
-                    "enabled": !under_construction && city_level >= 1 && unlocked && coastal_ok && affordable,
+                    "enabled": !under_construction && city_level >= 1 && !at_limit && unlocked && coastal_ok && affordable,
                 })
             })
             .collect();

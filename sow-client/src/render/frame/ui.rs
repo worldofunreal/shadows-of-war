@@ -347,6 +347,7 @@ impl SowApp {
         }
 
         let placement_can_confirm = self.building_placement_can_confirm();
+        let mut foreground_text_start = None;
         if let Some(text) = &mut self.gfx.text_renderer {
             text.begin_frame();
             if let Some(render_ctx) = &self.gfx.render_ctx {
@@ -354,7 +355,7 @@ impl SowApp {
             }
             if self.ui.app.phase == ClientPhase::Playing {
                 let overlays_started_at = crate::diag::startup_perf_timer();
-                crate::render::world::render_overlays(
+                foreground_text_start = crate::render::world::render_overlays(
                     text,
                     &self.gfx.avatars,
                     &self.sim,
@@ -390,16 +391,59 @@ impl SowApp {
         let Some(mut render_ctx) = self.gfx.render_ctx.take() else {
             return;
         };
+        let deferred_nuke_trails = self
+            .gfx
+            .mover_renderer
+            .as_ref()
+            .is_some_and(crate::render::gpu::MoverRenderer::has_nuke_trails);
+        let mut nuke_trails_drawn = false;
         if let Some(text) = &mut self.gfx.text_renderer {
             let text_draw_started_at = crate::diag::startup_perf_timer();
             crate::theme::dev_config::DevConfig::with(|dev| {
-                text.draw(
-                    &mut render_ctx.command_encoder,
-                    frame.texture_view(),
-                    [self.input.screen_w, self.input.screen_h],
-                    &dev.shader_params,
-                    &render_ctx.context,
-                );
+                let screen_size = [self.input.screen_w, self.input.screen_h];
+                if deferred_nuke_trails && let Some(foreground_start) = foreground_text_start {
+                    let text_count = text.instance_count();
+                    text.prepare_draw(&render_ctx.context);
+                    text.draw_range(
+                        &mut render_ctx.command_encoder,
+                        frame.texture_view(),
+                        screen_size,
+                        &dev.shader_params,
+                        0..foreground_start,
+                    );
+                    if let Some(movers) = self.gfx.mover_renderer.as_ref() {
+                        let globals = crate::render::gpu::MoverGlobals {
+                            camera_pos: [self.input.camera_x, self.input.camera_y],
+                            zoom: self.input.camera_zoom,
+                            sprite_count: 0,
+                            screen_size,
+                            trail_count: 0,
+                            _pad: 0.0,
+                            shader_params: dev.shader_params,
+                        };
+                        movers.draw_nuke_trails(
+                            &mut render_ctx.command_encoder,
+                            frame.texture_view(),
+                            globals,
+                        );
+                        nuke_trails_drawn = true;
+                    }
+                    text.draw_range(
+                        &mut render_ctx.command_encoder,
+                        frame.texture_view(),
+                        screen_size,
+                        &dev.shader_params,
+                        foreground_start..text_count,
+                    );
+                } else {
+                    text.draw(
+                        &mut render_ctx.command_encoder,
+                        frame.texture_view(),
+                        screen_size,
+                        &dev.shader_params,
+                        &render_ctx.context,
+                    );
+                }
             });
             if let Some(started_at) = text_draw_started_at {
                 crate::diag::record_startup_perf(
@@ -407,6 +451,26 @@ impl SowApp {
                     started_at,
                 );
             }
+        }
+        if deferred_nuke_trails && !nuke_trails_drawn {
+            crate::theme::dev_config::DevConfig::with(|dev| {
+                if let Some(movers) = self.gfx.mover_renderer.as_ref() {
+                    let globals = crate::render::gpu::MoverGlobals {
+                        camera_pos: [self.input.camera_x, self.input.camera_y],
+                        zoom: self.input.camera_zoom,
+                        sprite_count: 0,
+                        screen_size: [self.input.screen_w, self.input.screen_h],
+                        trail_count: 0,
+                        _pad: 0.0,
+                        shader_params: dev.shader_params,
+                    };
+                    movers.draw_nuke_trails(
+                        &mut render_ctx.command_encoder,
+                        frame.texture_view(),
+                        globals,
+                    );
+                }
+            });
         }
         render_ctx.command_encoder.present(frame);
         let submit_started_at = crate::diag::startup_perf_timer();

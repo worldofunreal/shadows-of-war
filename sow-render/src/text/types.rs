@@ -127,6 +127,8 @@ pub const KIND_ICON: f32 = 13.0;
 pub const KIND_SELECTION_RING: f32 = 14.0;
 /// Procedural SDF building LOD marker (OpenFront-style geometric shape + silhouette/sprite blend).
 pub const KIND_BUILDING_MARKER: f32 = 15.0;
+/// Procedural road or railway leg, styled by level in `shade_route`.
+pub const KIND_ROUTE: f32 = 16.0;
 
 /// Geometric SDF shape assigned to each building type in `shade_building_marker`.
 #[repr(u8)]

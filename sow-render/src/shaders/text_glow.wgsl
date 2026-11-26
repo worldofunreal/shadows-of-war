@@ -551,7 +551,217 @@ fn shade_building_marker(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(combined_rgb, final_a);
 }
 
+// ── Roads and railways (KIND_ROUTE = 16) ─────────────────────────────────────
+// One quad per polyline leg; the whole look is procedural, so a leg costs one
+// instance at every zoom and level. CPU packing (TextRenderer::push_route):
+//   uv_rect       = [a.xy, b.xy] leg ends in quad-local pixels
+//   content_rect  = [previous leg start - a, next leg end - b] (zero = none)
+//   outline_color = [route distance at a (px), half width (px), level, seconds]
+// Neighbouring legs split each corner along its bisector, so every pixel is
+// shaded once and turns have neither a seam nor doubled alpha.
+fn route_hash(p: vec2<f32>) -> f32 {
+    var q = fract(p * vec2<f32>(0.1031, 0.1030));
+    q += dot(q, q.yx + 33.33);
+    return fract((q.x + q.y) * q.x);
+}
+
+fn route_noise(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let w = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(route_hash(i), route_hash(i + vec2<f32>(1.0, 0.0)), w.x),
+        mix(route_hash(i + vec2<f32>(0.0, 1.0)), route_hash(i + vec2<f32>(1.0, 1.0)), w.x),
+        w.y,
+    );
+}
+
+// Anti-aliased band: 1 inside `half`, 0 outside, `px` wide edge.
+fn route_band(dist: f32, half: f32, px: f32) -> f32 {
+    return 1.0 - smoothstep(half - px, half + px, dist);
+}
+
+// Vector from the nearest point of segment a→b to p.
+fn route_offset(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
+    let ab = b - a;
+    let t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+    return p - (a + ab * t);
+}
+
+// Offset from the nearest point of this leg or its neighbours.
+fn route_nearest(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, prev: vec2<f32>, next: vec2<f32>) -> vec2<f32> {
+    var q = route_offset(p, a, b);
+    if (dot(prev, prev) > 0.0) {
+        let o = route_offset(p, a + prev, a);
+        if (dot(o, o) < dot(q, q)) { q = o; }
+    }
+    if (dot(next, next) > 0.0) {
+        let o = route_offset(p, b, b + next);
+        if (dot(o, o) < dot(q, q)) { q = o; }
+    }
+    return q;
+}
+
+// Levels 1-5: footpath, cart road, stone causeway, paved road, highway.
+// Inputs are in half-widths: `along` the route, `x` signed across, `r` from the centre line.
+// Returns surface colour and the edge radius (ragged for dirt).
+fn route_road(level: i32, along: f32, x: f32, r: f32, px: f32, light: f32, detail: f32) -> vec4<f32> {
+    let grain = route_noise(vec2<f32>(along * 1.7, x * 2.0));
+    var rgb = vec3<f32>(0.0);
+    var edge = 1.0;
+    if (level <= 2) {
+        let cart = select(0.0, 1.0, level == 2);
+        edge = 1.0 + (route_noise(vec2<f32>(along * 0.9, sign(x) * 7.0)) - 0.5) * mix(0.32, 0.16, cart) * detail;
+        rgb = mix(
+            mix(vec3<f32>(0.33, 0.22, 0.12), vec3<f32>(0.44, 0.32, 0.18), cart),
+            mix(vec3<f32>(0.45, 0.32, 0.18), vec3<f32>(0.57, 0.43, 0.27), cart),
+            grain,
+        );
+        let rut = route_band(abs(r - 0.45), mix(0.08, 0.11, cart), px);
+        rgb *= 1.0 - rut * mix(0.22, 0.34, cart) * detail;
+        if (level <= 1) {
+            let grass = smoothstep(0.55, 0.8, route_noise(vec2<f32>(along * 2.3, x * 3.1))) * smoothstep(0.3, 0.9, r);
+            rgb = mix(rgb, vec3<f32>(0.19, 0.26, 0.10), grass * 0.85 * detail);
+        } else {
+            let g = vec2<f32>(along * 2.0, x * 3.0);
+            let f = (fract(g) - 0.5) * vec2<f32>(1.0, 0.66);
+            let pebble = step(0.8, route_hash(floor(g) + 17.0)) * route_band(length(f), 0.2, px * 3.0);
+            rgb = mix(rgb, vec3<f32>(0.68, 0.62, 0.52), pebble * detail);
+            rgb *= 1.0 - 0.16 * smoothstep(0.78, 0.95, r) * detail;
+        }
+    } else if (level == 3) {
+        // Raised limestone causeway: running-bond blocks and a lit curb.
+        let v = (clamp(x, -1.0, 1.0) + 1.0) * 1.5;
+        let row = min(floor(v), 2.0);
+        let u = along * 1.1 + row * 0.5;
+        let f = vec2<f32>(fract(u), fract(v));
+        let joint = min(min(f.x, 1.0 - f.x) / 1.1, min(f.y, 1.0 - f.y) / 1.5);
+        let stone = mix(vec3<f32>(0.64, 0.59, 0.48), vec3<f32>(0.80, 0.75, 0.63), route_hash(vec2<f32>(floor(u), row) + 3.0))
+            * (0.92 + 0.08 * grain);
+        rgb = mix(stone, stone * 0.55, route_band(joint, 0.045, px) * detail);
+        let curb = smoothstep(0.80 - px, 0.80 + px, r);
+        rgb = mix(rgb, vec3<f32>(0.84, 0.80, 0.70) * (1.0 + 0.35 * light * detail), curb);
+    } else if (level == 4) {
+        // Paved road: gravel shoulders, white edge lines, dashed centre.
+        rgb = vec3<f32>(0.26, 0.26, 0.27) * (0.9 + 0.2 * grain);
+        let shoulder = smoothstep(0.80 - px, 0.80 + px, r);
+        rgb = mix(rgb, vec3<f32>(0.47, 0.42, 0.33) * (0.9 + 0.2 * grain), shoulder);
+        let edge_line = route_band(abs(r - 0.70), 0.045, px);
+        let dash = route_band(r, 0.05, px) * step(fract(along * 0.35), 0.5);
+        rgb = mix(rgb, vec3<f32>(0.86, 0.85, 0.80), max(edge_line, dash) * detail);
+    } else {
+        // Highway: dark asphalt, concrete median, dashed lanes, solid edges.
+        rgb = vec3<f32>(0.15, 0.15, 0.17) * (0.9 + 0.2 * grain);
+        rgb = mix(rgb, vec3<f32>(0.30, 0.30, 0.31), smoothstep(0.88 - px, 0.88 + px, r));
+        let edge_line = route_band(abs(r - 0.82), 0.04, px);
+        let lane = route_band(abs(r - 0.47), 0.035, px) * step(fract(along * 0.3), 0.45);
+        rgb = mix(rgb, vec3<f32>(0.88, 0.88, 0.84), max(edge_line, lane) * detail);
+        rgb = mix(rgb, vec3<f32>(0.95, 0.74, 0.22), route_band(abs(r - 0.15), 0.025, px) * detail);
+        rgb = mix(rgb, vec3<f32>(0.64, 0.64, 0.62) * (1.0 + 0.4 * light), route_band(r, 0.09, px));
+    }
+    // Embankment: the side facing the light is brighter, the far side darker.
+    rgb *= 1.0 + 0.22 * light * smoothstep(0.6, 1.0, r) * detail;
+    return vec4<f32>(rgb, edge);
+}
+
+// Levels 6-8: steam railway, electric railway, maglev guideway.
+fn route_rail(level: i32, along: f32, x: f32, r: f32, px: f32, light: f32, detail: f32, time: f32) -> vec3<f32> {
+    let grain = route_hash(floor(vec2<f32>(along * 7.0, x * 7.0)));
+    if (level >= 8) {
+        let cyan = vec3<f32>(0.25, 0.85, 1.0);
+        var rgb = vec3<f32>(0.07, 0.08, 0.11) + 0.10 * (1.0 - r) * (0.5 + 0.5 * light);
+        rgb = mix(rgb, cyan, route_band(abs(r - 0.86), 0.04, px) * 0.9 * detail);
+        rgb = mix(rgb, vec3<f32>(0.03, 0.04, 0.06), route_band(r, 0.22, px) * detail);
+        let phase = fract(along * 0.22 - time * 0.8);
+        let pulse = smoothstep(0.0, 0.08, phase) * (1.0 - smoothstep(0.08, 0.3, phase));
+        rgb += cyan * (exp(-(r * r) / 0.008) * 0.9 + pulse * (1.0 - smoothstep(0.0, 0.6, r)) * 0.8);
+        return rgb;
+    }
+    var rgb = vec3<f32>(0.0);
+    var rail_dark = vec3<f32>(0.0);
+    var rail_bright = vec3<f32>(0.0);
+    if (level <= 6) {
+        // Steam era: brown gravel ballast, timber ties, iron rails.
+        rgb = mix(vec3<f32>(0.27, 0.25, 0.23), vec3<f32>(0.43, 0.40, 0.36), grain);
+        let tie = step(fract(along * 1.05), 0.36) * route_band(r, 0.80, px);
+        let wood = vec3<f32>(0.33, 0.20, 0.10) * (0.8 + 0.35 * route_noise(vec2<f32>(along * 8.0, x * 1.5)));
+        rgb = mix(rgb, wood, tie * detail);
+        rail_dark = vec3<f32>(0.24, 0.23, 0.22);
+        rail_bright = vec3<f32>(0.70, 0.66, 0.60);
+    } else {
+        // Electric era: grey ballast, concrete sleepers, polished steel, catenary.
+        rgb = mix(vec3<f32>(0.33, 0.34, 0.35), vec3<f32>(0.46, 0.47, 0.48), grain);
+        let sleeper = step(fract(along * 1.3), 0.28) * route_band(r, 0.74, px);
+        rgb = mix(rgb, vec3<f32>(0.62, 0.62, 0.60), sleeper * detail);
+        let pole = step(fract(along * 0.16), 0.05) * smoothstep(0.86, 0.9, r) * step(x, 0.0);
+        rgb = mix(rgb, vec3<f32>(0.16, 0.17, 0.19), pole * detail);
+        rail_dark = vec3<f32>(0.50, 0.54, 0.58);
+        rail_bright = vec3<f32>(0.96, 0.98, 1.0);
+    }
+    let rail_r = 0.46;
+    let rail_half = 0.075;
+    let s = clamp((r - rail_r) / rail_half, -1.0, 1.0);
+    let rail = route_band(abs(r - rail_r), rail_half, px);
+    let head = mix(rail_dark, rail_bright, smoothstep(0.1, 0.9, light * s) * 0.8 + 0.1);
+    rgb = mix(rgb, head, rail);
+    if (level >= 7) {
+        rgb *= 1.0 - 0.35 * route_band(r, 0.025, px) * detail;
+    }
+    rgb *= 1.0 + 0.25 * light * smoothstep(0.75, 1.0, r) * detail;
+    return rgb;
+}
+
+fn shade_route(in: VertexOutput) -> vec4<f32> {
+    let p = in.local_uv * in.quad_size;
+    let a = in.uv_rect.xy;
+    let b = in.uv_rect.zw;
+    let prev = in.content_rect.xy;
+    let next = in.content_rect.zw;
+    let len = max(length(b - a), 1e-3);
+    let dir = (b - a) / len;
+    if (dot(prev, prev) > 0.0 && dot(p - a, dir - normalize(prev)) < 0.0) {
+        return vec4<f32>(0.0);
+    }
+    if (dot(next, next) > 0.0 && dot(p - b, dir + normalize(next)) >= 0.0) {
+        return vec4<f32>(0.0);
+    }
+    let hw = max(in.outline_color.y, 0.5);
+    let q = route_nearest(p, a, b, prev, next);
+    let d = length(q);
+    let r = d / hw;
+    let px = 1.0 / hw;
+    let along = (in.outline_color.x + clamp(dot(p - a, dir), 0.0, len)) / hw;
+    let x = dot(p - a, vec2<f32>(-dir.y, dir.x)) / hw;
+    let detail = smoothstep(1.5, 4.0, hw);
+    let n = select(vec2<f32>(0.0), q / d, d > 1e-4);
+    let light = dot(n, vec2<f32>(-0.6, -0.8));
+    let level = i32(in.outline_color.z + 0.5);
+
+    var rgb = vec3<f32>(0.0);
+    var edge = 1.0;
+    if (level >= 6) {
+        rgb = route_rail(level, along, x, r, px, light, detail, in.outline_color.w);
+    } else {
+        let road = route_road(level, along, x, r, px, light, detail);
+        rgb = road.rgb;
+        edge = road.w;
+    }
+    let cov = route_band(r, edge, px);
+    // Soft drop shadow toward the bottom right, under the road only.
+    let shadow_off = vec2<f32>(max(hw * 0.22, 1.0));
+    let ds = length(route_nearest(p - shadow_off, a, b, prev, next)) / hw;
+    let shadow = (1.0 - smoothstep(0.85, 1.3, ds)) * (0.12 + 0.03 * f32(level)) * (1.0 - cov);
+    let alpha = cov + shadow;
+    if (alpha <= 1e-4) {
+        return vec4<f32>(0.0);
+    }
+    return vec4<f32>(rgb * cov / alpha, alpha * in.color.a * globals.shader_params[__TEXT_OPACITY__].x);
+}
+
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 15.5) {
+        return shade_route(in);
+    }
     if (in.kind > 14.5) {
         return shade_building_marker(in);
     }

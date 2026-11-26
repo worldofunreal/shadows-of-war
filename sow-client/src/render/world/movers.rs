@@ -11,6 +11,13 @@ const MIN_TRANSPORT_SCREEN_PX: f32 = 12.0;
 const FLEET_LOCATE_DURATION_SECS: f32 = 3.0;
 const FLEET_LOCATE_RING_SEGMENTS: usize = 24;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TrailMode {
+    Normal,
+    NukeArc,
+    WarshipRoute,
+}
+
 #[inline]
 pub fn world_to_tile(wx: f32, wy: f32) -> (i32, i32) {
     (wx.floor() as i32, wy.floor() as i32)
@@ -25,16 +32,47 @@ pub fn tile_to_world(tile: u32, map_w: u32) -> (f32, f32) {
     (wx, wy)
 }
 
+fn closest_point_on_path(points: &[[f32; 2]], head: [f32; 2]) -> (usize, [f32; 2]) {
+    let mut closest_segment = 0;
+    let mut closest_point = points[0];
+    let mut closest_distance = f32::INFINITY;
+    for segment in (0..points.len() - 1).rev() {
+        let from = points[segment];
+        let to = points[segment + 1];
+        let delta = [to[0] - from[0], to[1] - from[1]];
+        let length_sq = delta[0] * delta[0] + delta[1] * delta[1];
+        let progress = if length_sq > 0.000001 {
+            (((head[0] - from[0]) * delta[0] + (head[1] - from[1]) * delta[1]) / length_sq)
+                .clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let point = [from[0] + delta[0] * progress, from[1] + delta[1] * progress];
+        let dx = head[0] - point[0];
+        let dy = head[1] - point[1];
+        let distance = dx * dx + dy * dy;
+        if distance < closest_distance {
+            closest_segment = segment;
+            closest_point = point;
+            closest_distance = distance;
+        }
+    }
+    (closest_segment, closest_point)
+}
+
 #[inline]
 pub(crate) fn fleet_world_pos(fleet: &FleetSnapshot, map_w: u32) -> (f32, f32) {
     let w = map_w.max(1);
     if matches!(
         fleet.unit_type,
-        UnitType::TransportShip | UnitType::TradeShip
+        UnitType::TransportShip | UnitType::TradeShip | UnitType::Warship
     ) && fleet.path_cursor > 0
         && !fleet.path.is_empty()
     {
-        let from_idx = fleet.path_cursor.saturating_sub(1).min(fleet.path.len() - 1);
+        let from_idx = fleet
+            .path_cursor
+            .saturating_sub(1)
+            .min(fleet.path.len() - 1);
         let (from_x, from_y) = tile_to_world(fleet.path[from_idx], w);
         let (to_x, to_y) = fleet
             .path
@@ -580,7 +618,7 @@ impl MoverScene {
         let (curr_x, curr_y) = fleet_world_pos(fleet, map_w);
         let (prev_x, prev_y, progress) = if matches!(
             fleet.unit_type,
-            UnitType::TransportShip | UnitType::TradeShip
+            UnitType::TransportShip | UnitType::TradeShip | UnitType::Warship
         ) && fleet.path_cursor > 0
             && !fleet.path.is_empty()
         {
@@ -835,12 +873,29 @@ impl MoverScene {
         color: [f32; 4],
         fade_tail: bool,
         thermal: bool,
+        mode: TrailMode,
         trail_length: f32,
         tail_fade: f32,
     ) {
         if points.is_empty() || trail_length <= 0.0 {
             return;
         }
+        let mut clipped_storage = [[0.0; 2]; TRAIL_CAP + 1];
+        let points = if mode == TrailMode::WarshipRoute && points.len() > 1 {
+            let (segment, clipped_head) = closest_point_on_path(points, head);
+            let mut clipped_len = 0;
+            for point in &points[..=segment] {
+                clipped_storage[clipped_len] = *point;
+                clipped_len += 1;
+            }
+            if clipped_storage[clipped_len - 1] != clipped_head {
+                clipped_storage[clipped_len] = clipped_head;
+                clipped_len += 1;
+            }
+            &clipped_storage[..clipped_len]
+        } else {
+            points
+        };
         let count = ((points.len() as f32 * trail_length.clamp(0.0, 1.0)).ceil() as usize)
             .clamp(1, points.len());
         let points = &points[points.len() - count..];
@@ -858,7 +913,7 @@ impl MoverScene {
                 let fade = (i + 1) as f32 / points.len() as f32;
                 segment_color[3] = (segment_color[3] * (1.0 + (fade - 1.0) * tail_fade)).max(0.0);
             }
-            renderer.push_trail_segment(TrailSegmentGpu {
+            let segment = TrailSegmentGpu {
                 p0: prev,
                 p1: *pt,
                 width: if thermal {
@@ -867,18 +922,28 @@ impl MoverScene {
                     width
                 },
                 color: segment_color,
-            });
+            };
+            if mode == TrailMode::NukeArc {
+                renderer.push_nuke_trail_segment(segment);
+            } else {
+                renderer.push_trail_segment(segment);
+            }
             prev = *pt;
         }
         if prev == head {
             return;
         }
-        renderer.push_trail_segment(TrailSegmentGpu {
+        let segment = TrailSegmentGpu {
             p0: prev,
             p1: head,
             width,
             color,
-        });
+        };
+        if mode == TrailMode::NukeArc {
+            renderer.push_nuke_trail_segment(segment);
+        } else {
+            renderer.push_trail_segment(segment);
+        }
     }
 
     fn arc_visible(
@@ -947,7 +1012,6 @@ impl MoverScene {
         let projectile_scale = setting("mover.projectile.scale", 1.0);
         let nuke_scale = setting("mover.nuke.scale", 1.0);
         let sam_scale = setting("mover.sam.scale", 1.0);
-        renderer.begin_frame();
         self.launch_pulses
             .retain(|pulse| pulse.started.elapsed().as_secs_f32() < 0.6);
         if params.trails_enabled {
@@ -1175,6 +1239,7 @@ impl MoverScene {
                                 slot.trail_color,
                                 true,
                                 true,
+                                TrailMode::NukeArc,
                                 trail_length,
                                 tail_fade,
                             );
@@ -1194,6 +1259,11 @@ impl MoverScene {
                         locate_highlight_color(slot.trail_color, locate_strength),
                         slot.is_fleet,
                         false,
+                        if slot.sprite == MoverSpriteId::Warship {
+                            TrailMode::WarshipRoute
+                        } else {
+                            TrailMode::Normal
+                        },
                         trail_length,
                         tail_fade,
                     );
@@ -1227,6 +1297,7 @@ impl MoverScene {
                     [1.0, 0.92, 0.68, 0.72 * locate_strength],
                     false,
                     false,
+                    TrailMode::Normal,
                     1.0,
                     1.0,
                 );
@@ -1263,6 +1334,7 @@ impl MoverScene {
                         status_color,
                         false,
                         false,
+                        TrailMode::Normal,
                         1.0,
                         0.0,
                     );
@@ -1290,6 +1362,7 @@ impl MoverScene {
                                 ],
                                 false,
                                 false,
+                                TrailMode::Normal,
                                 1.0,
                                 0.0,
                             );

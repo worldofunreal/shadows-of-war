@@ -65,6 +65,7 @@ pub struct MoverRenderer {
     sampler: gpu::Sampler,
     sprite_upload: Vec<MoverInstanceGpu>,
     trail_upload: Vec<TrailSegmentGpu>,
+    nuke_trail_upload: Vec<TrailSegmentGpu>,
 }
 
 impl MoverRenderer {
@@ -183,6 +184,7 @@ impl MoverRenderer {
             sampler,
             sprite_upload: Vec::with_capacity(4096),
             trail_upload: Vec::with_capacity(8192),
+            nuke_trail_upload: Vec::with_capacity(4096),
         }
     }
 
@@ -194,6 +196,7 @@ impl MoverRenderer {
     pub fn begin_frame(&mut self) {
         self.sprite_upload.clear();
         self.trail_upload.clear();
+        self.nuke_trail_upload.clear();
     }
 
     pub fn push_sprite(&mut self, inst: MoverInstanceGpu) {
@@ -203,8 +206,14 @@ impl MoverRenderer {
     }
 
     pub fn push_trail_segment(&mut self, seg: TrailSegmentGpu) {
-        if self.trail_upload.len() < MAX_TRAIL_SEGMENTS {
+        if self.trail_upload.len() + self.nuke_trail_upload.len() < MAX_TRAIL_SEGMENTS {
             self.trail_upload.push(seg);
+        }
+    }
+
+    pub fn push_nuke_trail_segment(&mut self, seg: TrailSegmentGpu) {
+        if self.trail_upload.len() + self.nuke_trail_upload.len() < MAX_TRAIL_SEGMENTS {
+            self.nuke_trail_upload.push(seg);
         }
     }
 
@@ -218,14 +227,29 @@ impl MoverRenderer {
             // ponytail: only sync active slice to avoid massive WASM/WebGL overhead
             context.sync_buffer(self.sprite_buffer, 0, bytes.len() as u64);
         }
-        if !self.trail_upload.is_empty() {
-            let bytes = bytemuck::cast_slice(&self.trail_upload);
+        let trail_count = self.trail_upload.len() + self.nuke_trail_upload.len();
+        if trail_count > 0 {
             let dst = self.trail_buffer.data();
+            let regular_bytes = bytemuck::cast_slice(&self.trail_upload);
+            let nuke_bytes = bytemuck::cast_slice(&self.nuke_trail_upload);
             unsafe {
-                std::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
+                if !regular_bytes.is_empty() {
+                    std::ptr::copy_nonoverlapping(regular_bytes.as_ptr(), dst, regular_bytes.len());
+                }
+                if !nuke_bytes.is_empty() {
+                    std::ptr::copy_nonoverlapping(
+                        nuke_bytes.as_ptr(),
+                        dst.add(regular_bytes.len()),
+                        nuke_bytes.len(),
+                    );
+                }
             }
             // ponytail: only sync active slice to avoid massive WASM/WebGL overhead
-            context.sync_buffer(self.trail_buffer, 0, bytes.len() as u64);
+            context.sync_buffer(
+                self.trail_buffer,
+                0,
+                (trail_count * std::mem::size_of::<TrailSegmentGpu>()) as u64,
+            );
         }
     }
 
@@ -237,6 +261,14 @@ impl MoverRenderer {
             trail.p0 = tabletop.project(trail.p0);
             trail.p1 = tabletop.project(trail.p1);
         }
+        for trail in &mut self.nuke_trail_upload {
+            trail.p0 = tabletop.project(trail.p0);
+            trail.p1 = tabletop.project(trail.p1);
+        }
+    }
+
+    pub fn has_nuke_trails(&self) -> bool {
+        !self.nuke_trail_upload.is_empty()
     }
 
     pub fn draw(
@@ -248,11 +280,16 @@ impl MoverRenderer {
     ) {
         let sprite_count = self.sprite_upload.len() as u32;
         let trail_count = self.trail_upload.len() as u32;
-        if sprite_count == 0 && trail_count == 0 {
+        let nuke_trail_count = self.nuke_trail_upload.len() as u32;
+        if sprite_count == 0 && trail_count == 0 && nuke_trail_count == 0 {
             return;
         }
 
         self.write_buffers(context);
+
+        if sprite_count == 0 && trail_count == 0 {
+            return;
+        }
 
         let mut pass = encoder.render(
             "mover_pass",
@@ -291,6 +328,42 @@ impl MoverRenderer {
             rc.bind_vertex(0, self.sprite_buffer.at(0));
             rc.draw(0, VERTS_PER_QUAD, 0, sprite_count);
         }
+    }
+
+    pub fn draw_nuke_trails(
+        &self,
+        encoder: &mut gpu::CommandEncoder,
+        target_view: gpu::TextureView,
+        globals: MoverGlobals,
+    ) {
+        let trail_count = self.nuke_trail_upload.len() as u32;
+        if trail_count == 0 {
+            return;
+        }
+
+        let mut pass = encoder.render(
+            "nuke_trail_pass",
+            gpu::RenderTargetSet {
+                colors: &[gpu::RenderTarget {
+                    view: target_view,
+                    init_op: gpu::InitOp::Load,
+                    finish_op: gpu::FinishOp::Store,
+                }],
+                depth_stencil: None,
+            },
+        );
+        let trail_data = MoverTrailShaderData {
+            globals: MoverGlobals {
+                sprite_count: 0,
+                trail_count,
+                ..globals
+            },
+        };
+        let mut rc = pass.with(&self.trail_pipeline);
+        rc.bind(0, &trail_data);
+        let trail_offset = self.trail_upload.len() * std::mem::size_of::<TrailSegmentGpu>();
+        rc.bind_vertex(0, self.trail_buffer.at(trail_offset as u64));
+        rc.draw(0, VERTS_PER_QUAD, 0, trail_count);
     }
 
     pub fn destroy(&mut self, render_ctx: &RenderContext) {

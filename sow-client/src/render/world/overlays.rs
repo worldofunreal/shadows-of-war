@@ -38,14 +38,15 @@ pub(crate) fn render_overlays(
     sf: f32,
     now: Instant,
     placement_can_confirm: bool,
-) {
+) -> Option<usize> {
     let Some(snapshot) = sim.current_snapshot.as_ref() else {
-        return;
+        return None;
     };
     let sf = sf.max(0.01);
     let zoom_scaled = input.camera_zoom / sf;
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
     let leaderboard_top_three = ui.leaderboard_top_three;
+    let mut foreground_start = None;
 
     DevConfig::with(|dev| {
         super::railways::render(
@@ -76,6 +77,7 @@ pub(crate) fn render_overlays(
             ui.prev_hovered_building = None;
         }
         render_building_placement_preview(text, sim, ui, input, sf, placement_can_confirm);
+        foreground_start = Some(text.instance_count());
         let nameplate_render_started_at = crate::diag::startup_perf_timer();
         super::nameplates::render_nameplates(
             text,
@@ -130,6 +132,7 @@ pub(crate) fn render_overlays(
         ui.tutorial_marker_action = None;
         ui.dialog_border_highlight = None;
     }
+    foreground_start
 }
 
 #[derive(Clone, Copy, PartialEq)]

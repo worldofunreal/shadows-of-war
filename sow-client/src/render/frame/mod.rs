@@ -108,6 +108,10 @@ impl SowApp {
             return;
         }
 
+        if let Some(mover_renderer) = self.gfx.mover_renderer.as_mut() {
+            mover_renderer.begin_frame();
+        }
+
         let sf = wanted.as_ref().map(|v| v.scale_factor).unwrap_or(1.0);
         crate::viewport::Viewport::from_configured(self, sf).sync_to_app(self);
 

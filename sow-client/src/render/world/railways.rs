@@ -11,19 +11,23 @@ use std::collections::HashMap;
 use web_time::Instant;
 
 const MAX_RENDERED_TRAINS: usize = 60;
-const TRACK_BED_COLOR: [f32; 3] = [0.12, 0.11, 0.10];
-const TRACK_RAIL_COLOR: [f32; 3] = [0.63, 0.54, 0.40];
+/// Full road width in tiles per level (1 footpath … 5 highway, 6 steam … 8 maglev).
+const ROUTE_WIDTH_TILES: [f32; 8] = [0.20, 0.26, 0.32, 0.36, 0.46, 0.38, 0.42, 0.46];
 
 struct RailSegment {
     key: (u64, u64),
     points: Vec<[f32; 2]>,
     path_tiles: Vec<u32>,
+    length: f32,
     level: u8,
 }
 
 struct RailTrainRoute {
     points: Vec<[f32; 2]>,
     path_tiles: Vec<u32>,
+    track_keys: Vec<(u64, u64)>,
+    /// Track levels along the route: (end as a fraction of the route, level).
+    track_levels: Vec<(f32, u8)>,
     owner_id: u16,
     level: u8,
     period_ticks: u32,
@@ -52,6 +56,8 @@ pub(crate) struct RailwayRenderState {
     cached_preview_key: Option<(BuildingKind, u32, usize, usize)>,
     cached_preview: RailPlacementPreview,
     cached_ghost_points: Vec<Vec<[f32; 2]>>,
+    city_levels_hash: u64,
+    epoch: Option<Instant>,
     pub(crate) hovered_segment: Option<usize>,
 }
 
@@ -75,7 +81,16 @@ impl RailwayRenderState {
             fog_changed || !std::sync::Arc::ptr_eq(&self.railway_tracks, &snapshot.railway_tracks);
         let links_dirty =
             fog_changed || !std::sync::Arc::ptr_eq(&self.railway_links, &snapshot.railway_links);
-        if !tracks_dirty && !links_dirty {
+        let city_levels_hash = snapshot
+            .buildings
+            .iter()
+            .filter(|b| b.kind == BuildingKind::City)
+            .fold(0xcbf2_9ce4_8422_2325_u64, |hash, b| {
+                (hash ^ b.id.rotate_left(8) ^ u64::from(b.level)).wrapping_mul(0x0100_0000_01b3)
+            });
+        let cities_dirty = city_levels_hash != self.city_levels_hash;
+        self.city_levels_hash = city_levels_hash;
+        if !tracks_dirty && !links_dirty && !cities_dirty {
             return;
         }
         self.fog_of_war = fog_of_war;
@@ -108,28 +123,13 @@ impl RailwayRenderState {
                 self.track_index_by_key.insert(key, index);
                 self.segments.push(RailSegment {
                     key,
+                    length: polyline_length(&points),
                     points,
                     path_tiles,
                     level: 1,
                 });
             }
             self.seen.resize(self.segments.len(), 0);
-        }
-
-        if tracks_dirty || links_dirty {
-            self.railway_links.clone_from(&snapshot.railway_links);
-            for segment in &mut self.segments {
-                segment.level = 1;
-            }
-            for route in snapshot.railway_links.iter() {
-                for pair in route.station_path.windows(2) {
-                    if let Some(&seg_idx) = self.track_index_by_key.get(&track_key(pair[0], pair[1]))
-                    {
-                        let level = &mut self.segments[seg_idx].level;
-                        *level = (*level).max(route.level);
-                    }
-                }
-            }
         }
 
         if links_dirty {
@@ -155,14 +155,20 @@ impl RailwayRenderState {
                 };
                 let index = self.train_routes.len();
                 assign_chunks(&mut self.train_cells, index, &link.route_path, map_w);
-                for pair in link.station_path.windows(2) {
-                    let key = track_key(pair[0], pair[1]);
+                let track_keys: Vec<_> = link
+                    .station_path
+                    .windows(2)
+                    .map(|pair| track_key(pair[0], pair[1]))
+                    .collect();
+                for &key in &track_keys {
                     self.routes_by_track_key.entry(key).or_default().push(index);
                 }
                 self.train_routes.push(RailTrainRoute {
                     length: polyline_length(&points),
                     points,
                     path_tiles,
+                    track_keys,
+                    track_levels: Vec::new(),
                     owner_id: link.owner_id,
                     level: link.level,
                     period_ticks: link.period_ticks,
@@ -170,6 +176,88 @@ impl RailwayRenderState {
                 });
             }
             self.train_seen.resize(self.train_routes.len(), 0);
+        }
+
+        self.railway_links.clone_from(&snapshot.railway_links);
+        self.assign_levels(&snapshot.buildings);
+    }
+
+    /// Track level for drawing. Every track inherits the best City it reaches
+    /// without passing through another City, so a City upgrade restyles all
+    /// tracks out to the next City. Tracks that reach no City keep the level of
+    /// the best Trading Post route that runs on them.
+    fn assign_levels(&mut self, buildings: &[sow_core::protocol::BuildingSnapshot]) {
+        for segment in &mut self.segments {
+            segment.level = 1;
+        }
+        for route in self.railway_links.iter() {
+            for pair in route.station_path.windows(2) {
+                if let Some(&seg_idx) = self.track_index_by_key.get(&track_key(pair[0], pair[1])) {
+                    let level = &mut self.segments[seg_idx].level;
+                    *level = (*level).max(route.level);
+                }
+            }
+        }
+
+        let cities: HashMap<u64, u8> = buildings
+            .iter()
+            .filter(|b| b.kind == BuildingKind::City && b.level > 0)
+            .map(|b| (b.id, b.level))
+            .collect();
+        let mut by_node: HashMap<u64, Vec<usize>> = HashMap::new();
+        for (index, segment) in self.segments.iter().enumerate() {
+            by_node.entry(segment.key.0).or_default().push(index);
+            by_node.entry(segment.key.1).or_default().push(index);
+        }
+        // Flood each stretch of track between Cities; it takes the best City on its border.
+        let mut visited = vec![false; self.segments.len()];
+        let mut stretch = Vec::new();
+        for start in 0..self.segments.len() {
+            if visited[start] {
+                continue;
+            }
+            visited[start] = true;
+            stretch.clear();
+            stretch.push(start);
+            let mut best = 0;
+            let mut next = 0;
+            while let Some(&index) = stretch.get(next) {
+                next += 1;
+                let (from, to) = self.segments[index].key;
+                for node in [from, to] {
+                    if let Some(&level) = cities.get(&node) {
+                        best = best.max(level);
+                        continue;
+                    }
+                    for &other in by_node.get(&node).into_iter().flatten() {
+                        if !visited[other] {
+                            visited[other] = true;
+                            stretch.push(other);
+                        }
+                    }
+                }
+            }
+            if best > 0 {
+                for &index in &stretch {
+                    self.segments[index].level = best;
+                }
+            }
+        }
+
+        for route in &mut self.train_routes {
+            route.track_levels.clear();
+            let mut total = 0.0;
+            for key in &route.track_keys {
+                if let Some(&index) = self.track_index_by_key.get(key) {
+                    total += self.segments[index].length;
+                    route.track_levels.push((total, self.segments[index].level));
+                }
+            }
+            if total > 0.0 {
+                for (end, _) in &mut route.track_levels {
+                    *end /= total;
+                }
+            }
         }
     }
 }
@@ -234,7 +322,7 @@ pub(crate) fn render(
     dev: &DevConfig,
     sf: f32,
     zoom_scaled: f32,
-    _now: Instant,
+    now: Instant,
 ) {
     let state = &mut ui.railway_render_state;
     let min_zoom = dev.railway_min_zoom.max(0.01);
@@ -279,6 +367,10 @@ pub(crate) fn render(
     let width = dev.railway_track_width.clamp(0.5, 6.0) * sf.max(0.01);
     let opacity = dev.railway_opacity.clamp(0.0, 1.0)
         * ((zoom_scaled - min_zoom) / min_zoom).clamp(0.25, 1.0);
+    let seconds = now
+        .duration_since(*state.epoch.get_or_insert(now))
+        .as_secs_f32()
+        % 600.0;
     let base_vehicle_size =
         dev.train_size.clamp(3.0, 24.0) * sf.max(0.01) * (zoom_scaled * 0.16).clamp(0.9, 1.45);
     if zoom_scaled >= min_zoom {
@@ -301,23 +393,20 @@ pub(crate) fn render(
                     {
                         continue;
                     }
-                    for pair in segment.points.windows(2) {
-                        let a = input.world_to_screen(pair[0]);
-                        let b = input.world_to_screen(pair[1]);
-                        if route_in_view(a, a, b, screen_w, screen_h, width * 2.0) {
-                            draw_track_leg(
-                                text,
-                                a,
-                                b,
-                                width,
-                                opacity,
-                                segment.level,
-                                zoom_scaled,
-                                [screen_w, screen_h],
-                                snapshot.tick,
-                            );
-                        }
-                    }
+                    let full_width = (input.camera_zoom
+                        * ROUTE_WIDTH_TILES[usize::from(segment.level.clamp(1, 8) - 1)])
+                    .max(width * (1.0 + 0.08 * f32::from(segment.level)))
+                    .min(20.0 * sf.max(0.01));
+                    draw_route(
+                        text,
+                        input,
+                        &segment.points,
+                        full_width * 0.5,
+                        segment.level,
+                        opacity,
+                        [screen_w, screen_h],
+                        seconds,
+                    );
                 }
             }
         }
@@ -409,8 +498,16 @@ pub(crate) fn render(
                     .find(|player| player.id == route.owner_id)
                     .map(crate::render::world::nameplates::player_color)
                     .unwrap_or([0.85, 0.8, 0.66, 1.0]);
-                if route.level >= 6 {
-                    let gaps: &[f32] = match route.level {
+                // Vehicles match the track under the lead car, not the Trading Post.
+                let lead = phase.rem_euclid(route.length * 2.0);
+                let fraction = lead.min(route.length * 2.0 - lead) / route.length.max(1e-3);
+                let level = route
+                    .track_levels
+                    .iter()
+                    .find(|&&(end, _)| fraction <= end)
+                    .map_or(route.level, |&(_, level)| level);
+                if level >= 6 {
+                    let gaps: &[f32] = match level {
                         6 => &[0.0, 1.32, 2.64],
                         7 => &[0.0, 1.18, 2.36, 3.54],
                         _ => &[0.0, 1.05, 2.10, 3.15],
@@ -423,7 +520,7 @@ pub(crate) fn render(
                             input.world_to_screen(position),
                             dir,
                             base_vehicle_size,
-                            route.level,
+                            level,
                             car_index == 0,
                             loaded,
                             color,
@@ -439,7 +536,7 @@ pub(crate) fn render(
                         input.world_to_screen(position),
                         dir,
                         base_vehicle_size,
-                        route.level,
+                        level,
                         loaded,
                         color,
                         sf,
@@ -766,15 +863,6 @@ fn push_axis_strip(
 }
 
 #[inline]
-fn offset_cross(center: [f32; 2], horizontal: bool, cross: f32) -> [f32; 2] {
-    if horizontal {
-        [center[0], center[1] + cross]
-    } else {
-        [center[0] + cross, center[1]]
-    }
-}
-
-#[inline]
 fn offset_along(center: [f32; 2], horizontal: bool, along: f32) -> [f32; 2] {
     if horizontal {
         [center[0] + along, center[1]]
@@ -825,190 +913,45 @@ fn draw_leg_marks(
     }
 }
 
-fn draw_track_leg(
+/// Queues one shader-styled instance per leg of a track polyline.
+fn draw_route(
     text: &mut TextRenderer,
-    a: [f32; 2],
-    b: [f32; 2],
-    width: f32,
-    opacity: f32,
+    input: &InputState,
+    points: &[[f32; 2]],
+    half_width: f32,
     level: u8,
-    zoom_scaled: f32,
+    opacity: f32,
     viewport: [f32; 2],
-    tick: u64,
+    seconds: f32,
 ) {
-    if opacity <= 0.0 || ((a[0] - b[0]).abs() + (a[1] - b[1]).abs()) < 0.5 {
+    if opacity <= 0.0 || points.len() < 2 {
         return;
     }
-    let horizontal = (a[0] - b[0]).abs() >= (a[1] - b[1]).abs();
-    let (start, end) = if horizontal {
-        (a[0].min(b[0]), a[0].max(b[0]))
-    } else {
-        (a[1].min(b[1]), a[1].max(b[1]))
-    };
-    let length = end - start;
-    let center = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
-    let viewport_limit = if horizontal { viewport[0] } else { viewport[1] };
-    let macro_lod = zoom_scaled < 0.75;
-    let detail_zoom = zoom_scaled >= 1.35 && text.remaining_instance_capacity() > 6_000;
-
-    if level < 6 {
-        let (border_color, road_color, road_scale) = match level {
-            0 | 1 => (
-                [0.30, 0.21, 0.13, opacity * 0.44],
-                [0.49, 0.34, 0.20, opacity * 0.92],
-                0.85,
-            ),
-            2 => (
-                [0.30, 0.29, 0.17, opacity * 0.52],
-                [0.54, 0.39, 0.22, opacity * 0.95],
-                0.98,
-            ),
-            3 => (
-                [0.24, 0.22, 0.20, opacity * 0.65],
-                [0.62, 0.56, 0.47, opacity * 0.95],
-                1.06,
-            ),
-            4 => (
-                [0.20, 0.19, 0.19, opacity * 0.72],
-                [0.48, 0.45, 0.41, opacity * 0.95],
-                1.14,
-            ),
-            _ => (
-                [0.15, 0.15, 0.17, opacity * 0.80],
-                [0.33, 0.32, 0.32, opacity * 0.96],
-                1.20,
-            ),
-        };
-        let inner = width * road_scale;
-        if macro_lod {
-            push_axis_strip(text, center, horizontal, length, inner, road_color);
-            return;
-        }
-        let outer = inner * 1.32;
-        push_axis_strip(text, center, horizontal, length, outer, border_color);
-        push_axis_strip(text, center, horizontal, length, inner, road_color);
-        if detail_zoom && level == 4 {
-            draw_leg_marks(
-                text,
-                center,
-                horizontal,
-                start,
-                end,
-                viewport_limit,
-                (inner * 1.6).max(6.0),
-                (inner * 0.25).max(1.0),
-                inner * 0.82,
-                [0.28, 0.26, 0.23, opacity * 0.45],
-            );
-        } else if detail_zoom && level == 5 {
-            draw_leg_marks(
-                text,
-                center,
-                horizontal,
-                start,
-                end,
-                viewport_limit,
-                (inner * 2.2).max(8.0),
-                (inner * 0.85).max(3.0),
-                (inner * 0.18).max(0.8),
-                [0.88, 0.80, 0.56, opacity * 0.75],
-            );
-        }
-        return;
-    }
-
-    let (bed_color, bed_w, rail_color, rail_offset, rail_width) = match level {
-        6 => (
-            [
-                TRACK_BED_COLOR[0],
-                TRACK_BED_COLOR[1],
-                TRACK_BED_COLOR[2],
-                opacity * 0.46,
-            ],
-            width * 1.30,
-            [
-                TRACK_RAIL_COLOR[0],
-                TRACK_RAIL_COLOR[1],
-                TRACK_RAIL_COLOR[2],
+    let margin = half_width * 2.0 + 4.0;
+    let mut along = 0.0;
+    let mut prev = None;
+    let mut a = input.world_to_screen(points[0]);
+    let mut rest = points[1..]
+        .iter()
+        .map(|&point| input.world_to_screen(point))
+        .peekable();
+    while let Some(b) = rest.next() {
+        if route_in_view(a, a, b, viewport[0], viewport[1], margin) {
+            text.push_route(
+                a,
+                b,
+                prev,
+                rest.peek().copied(),
+                along,
+                half_width,
+                level,
                 opacity,
-            ],
-            width * 0.42,
-            (width * 0.28).max(0.75),
-        ),
-        7 => (
-            [0.14, 0.15, 0.17, opacity * 0.54],
-            width * 1.38,
-            [0.78, 0.82, 0.86, opacity],
-            width * 0.44,
-            (width * 0.28).max(0.75),
-        ),
-        _ => (
-            [0.10, 0.12, 0.17, opacity * 0.72],
-            width * 1.48,
-            [0.76, 0.85, 0.94, opacity],
-            width * 0.46,
-            (width * 0.26).max(0.75),
-        ),
-    };
-    if macro_lod {
-        push_axis_strip(text, center, horizontal, length, bed_w * 0.85, rail_color);
-        return;
-    }
-    push_axis_strip(text, center, horizontal, length, bed_w, bed_color);
-    if detail_zoom {
-        let (tie_step, tie_thick, tie_span, tie_color) = match level {
-            6 => (
-                (width * 1.4).max(5.5),
-                (width * 0.30).max(1.0),
-                bed_w * 0.95,
-                [0.38, 0.25, 0.14, opacity * 0.72],
-            ),
-            7 => (
-                (width * 1.5).max(6.0),
-                (width * 0.28).max(1.0),
-                bed_w * 0.92,
-                [0.54, 0.56, 0.60, opacity * 0.66],
-            ),
-            _ => (
-                (width * 1.8).max(7.0),
-                (width * 0.26).max(0.9),
-                bed_w * 0.88,
-                [0.24, 0.78, 0.95, opacity * 0.42],
-            ),
-        };
-        draw_leg_marks(
-            text,
-            center,
-            horizontal,
-            start,
-            end,
-            viewport_limit,
-            tie_step,
-            tie_thick,
-            tie_span,
-            tie_color,
-        );
-    }
-    for offset in [-rail_offset, rail_offset] {
-        push_axis_strip(
-            text,
-            offset_cross(center, horizontal, offset),
-            horizontal,
-            length,
-            rail_width,
-            rail_color,
-        );
-    }
-    if level >= 8 {
-        let pulse = 0.72 + 0.16 * (tick as f32 * 0.25).sin();
-        push_axis_strip(
-            text,
-            center,
-            horizontal,
-            length,
-            (width * 0.24).max(0.8),
-            [0.24, 0.86, 1.0, opacity * pulse],
-        );
+                seconds,
+            );
+        }
+        along += (b[0] - a[0]).hypot(b[1] - a[1]);
+        prev = Some(a);
+        a = b;
     }
 }
 
@@ -1503,6 +1446,7 @@ mod tests {
                 key: (1, 2),
                 points: vec![[5.5, 10.5], [30.5, 10.5]],
                 path_tiles: Vec::new(),
+                length: 25.0,
                 level: 1,
             }],
             ..Default::default()

@@ -296,13 +296,29 @@ fn placement_site_status(
     if query.kind == sow_core::game::BuildingKind::City {
         sow_core::building::validate_city_spacing(x, y, &cities, query.config)
     } else {
-        sow_core::building::validate_district_city_range(
+        sow_core::building::validate_district_city_placement(
             query.my_id,
             x,
             y,
             &cities,
             query.city_id,
             query.config,
+            |city| {
+                query
+                    .buildings
+                    .iter()
+                    .filter(|b| {
+                        b.owner_id == query.my_id
+                            && b.kind == query.kind
+                            && sow_core::building::city_covers_coord(
+                                city,
+                                b.tile_idx % query.map_w,
+                                b.tile_idx / query.map_w,
+                                query.config,
+                            )
+                    })
+                    .count() as u32
+            },
         )
     }
 }

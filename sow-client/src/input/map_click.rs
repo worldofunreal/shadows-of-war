@@ -1527,6 +1527,25 @@ impl SowApp {
                 self.spatial_sound_params(x, y),
             );
             self.ui.app.hud_state.building_placement = None;
+            if let Some(city_id) = placement.city_id
+                && self.sim.map_w > 0
+                && let Some(city_tile) = self.sim.current_snapshot.as_ref().and_then(|snap| {
+                    snap.buildings
+                        .iter()
+                        .find(|b| b.id == city_id && b.kind == sow_core::game::BuildingKind::City)
+                        .map(|b| b.tile_idx)
+                })
+            {
+                let cx = (city_tile % self.sim.map_w) as f32 + 0.5;
+                let cy = (city_tile / self.sim.map_w) as f32 + 0.5;
+                let [sx, sy] = self.input.world_to_screen([cx, cy]);
+                self.set_map_context_menu(
+                    f64::from(sx),
+                    f64::from(sy),
+                    city_tile,
+                    MapContextMenuView::BuildingDetails,
+                );
+            }
         } else {
             self.ui
                 .app
